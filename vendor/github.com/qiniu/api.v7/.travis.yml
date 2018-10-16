@@ -1,0 +1,19 @@
+language: go
+go:
+  - 1.7
+  - 1.8
+  - master
+env:
+  global:
+    - QINIU_KODO_TEST=1
+    - QINIU_ACCESS_KEY="QWYn5TFQsLLU1pL5MFEmX3s5DmHdUThav9WyOWOm"
+    - QINIU_SECRET_KEY="Bxckh6FA-Fbs9Yt3i3cbKVK22UPBmAOHJcL95pGz"
+    - QINIU_TEST_BUCKET="gosdk"
+    - QINIU_TEST_DOMAIN="gosdk.qiniudn.com"
+
+install:
+  - export QINIU_SRC=$HOME/gopath/src
+  - mkdir -p $QINIU_SRC/github.com/qiniu
+  - export TRAVIS_BUILD_DIR=$QINIU_SRC/github.com/qiniu/api.v7
+  - cd $TRAVIS_BUILD_DIR
+  - go get github.com/qiniu/x
