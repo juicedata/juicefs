@@ -1,0 +1,10 @@
+language: go
+install:
+  - export QINIU_SRC=$HOME/gopath/src
+  - mkdir -p $QINIU_SRC/qiniupkg.com
+  - mv $QINIU_SRC/github.com/qiniu/x $QINIU_SRC/qiniupkg.com/x
+  - export TRAVIS_BUILD_DIR=$QINIU_SRC/qiniupkg.com/x
+  - cd $TRAVIS_BUILD_DIR
+  - go get golang.org/x/net/context
+  - go get github.com/stretchr/testify/assert
+  
