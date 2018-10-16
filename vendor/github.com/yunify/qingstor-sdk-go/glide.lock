@@ -1,0 +1,32 @@
+hash: 08f9d9c9c14c4e5927e38688e6bab5bc44b5cb920d05b2523de680a115f5a6b7
+updated: 2017-11-25T11:24:10.452444+08:00
+imports:
+- name: github.com/DATA-DOG/godog
+  version: 272624afcc2fc5f818ce069e2e417e7b4fa8bb6c
+  subpackages:
+  - colors
+  - gherkin
+- name: github.com/pengsrc/go-shared
+  version: b98065a377794d577e2a0e32869378b9ce4b8952
+  subpackages:
+  - buffer
+  - check
+  - convert
+  - log
+  - reopen
+- name: gopkg.in/yaml.v2
+  version: 287cf08546ab5e7e37d55a84f7ed3fd1db036de5
+  repo: https://github.com/go-yaml/yaml.git
+testImports:
+- name: github.com/davecgh/go-spew
+  version: 6d212800a42e8ab5c146b8ace3490ee17e5225f9
+  subpackages:
+  - spew
+- name: github.com/pmezard/go-difflib
+  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  subpackages:
+  - difflib
+- name: github.com/stretchr/testify
+  version: 69483b4bd14f5845b5a1e55bca19e954e827f1d0
+  subpackages:
+  - assert
