@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -237,5 +239,5 @@ func newKS3(endpoint, accessKey, secretKey string) ObjectStorage {
 }
 
 func init() {
-	RegisterStorage("ks3", newKS3)
+	register("ks3", newKS3)
 }

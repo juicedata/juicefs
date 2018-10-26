@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -153,5 +155,5 @@ func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 }
 
 func init() {
-	RegisterStorage("oss", newOSS)
+	register("oss", newOSS)
 }

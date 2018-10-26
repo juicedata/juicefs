@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -119,5 +121,5 @@ func newMem(endpoint, accesskey, secretkey string) ObjectStorage {
 }
 
 func init() {
-	RegisterStorage("mem", newMem)
+	register("mem", newMem)
 }

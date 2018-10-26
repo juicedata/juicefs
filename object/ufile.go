@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -283,5 +285,5 @@ func newUFile(endpoint, accessKey, secretKey string) ObjectStorage {
 }
 
 func init() {
-	RegisterStorage("ufile", newUFile)
+	register("ufile", newUFile)
 }

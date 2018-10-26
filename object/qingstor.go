@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -14,7 +16,6 @@ import (
 )
 
 type qingstor struct {
-	defaultObjectStorage
 	bucket *qs.Bucket
 }
 
@@ -235,5 +236,5 @@ func newQingStor(endpoint, accessKey, secretKey string) ObjectStorage {
 }
 
 func init() {
-	RegisterStorage("qingstor", newQingStor)
+	register("qingstor", newQingStor)
 }

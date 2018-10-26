@@ -1,9 +1,10 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package main
 
 import (
 	"flag"
 	"net/url"
-	"os"
 	"osync/object"
 	"osync/utils"
 	"strings"
@@ -11,11 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var srcURI = flag.String("src", "", "source")
-var dstURI = flag.String("dst", "", "destination")
 var start = flag.String("start", "", "the start of keys to sync")
+var end = flag.String("end", "", "the last keys to sync")
 
-var version = flag.Bool("V", false, "show version")
 var debug = flag.Bool("v", false, "turn on debug log")
 var quiet = flag.Bool("q", false, "change log level to ERROR")
 
@@ -26,27 +25,31 @@ func createStorage(uri string) object.ObjectStorage {
 	if err != nil {
 		logger.Fatalf("Can't parse %s: %s", uri, err.Error())
 	}
-	secretKey, _ := u.User.Password()
-	objStorage := object.CreateStorage(strings.ToLower(u.Scheme), u.Host, u.User.Username(), secretKey)
+	user := u.User
+	var accessKey, secretKey string
+	if user != nil {
+		accessKey = user.Username()
+		secretKey, _ = user.Password()
+	}
+	endpoint := u.Host
+	if u.Scheme == "file" {
+		endpoint = u.Path
+	}
+	objStorage := object.CreateStorage(strings.ToLower(u.Scheme), endpoint, accessKey, secretKey)
 	if objStorage == nil {
 		logger.Fatalf("Invalid storage type: %s", u.Scheme)
 	}
 	return objStorage
 }
 
-var defaultEndpoint string
-var defaultURI *url.URL
-var defaultKey string
-var defaultSecret string
-var maxUploads int
-
-func init() {
-	defaultEndpoint = os.Getenv("endpoint")
-	defaultURI, _ = url.ParseRequestURI(defaultEndpoint)
-}
-
 func main() {
 	flag.Parse()
+	args := flag.Args()
+	if len(args) != 2 {
+		println("osync [options] SRC DST")
+		return
+	}
+
 	if *debug {
 		utils.SetLogLevel(logrus.DebugLevel)
 	} else if *quiet {
@@ -54,7 +57,7 @@ func main() {
 	}
 	utils.InitLoggers(false)
 
-	src := createStorage(*srcURI)
-	dst := createStorage(*dstURI)
-	SyncAll(src, dst, *start)
+	src := createStorage(args[0])
+	dst := createStorage(args[1])
+	Sync(src, dst, *start, *end)
 }
