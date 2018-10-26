@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -115,5 +117,5 @@ func newB2(endpoint, account, key string) ObjectStorage {
 }
 
 func init() {
-	RegisterStorage("b2", newB2)
+	register("b2", newB2)
 }

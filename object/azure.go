@@ -1,10 +1,11 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/url"
 	"strings"
@@ -13,51 +14,45 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
-type abs struct {
+type wasb struct {
 	defaultObjectStorage
 	container *storage.Container
 	marker    string
 }
 
-func (b *abs) String() string {
+func (b *wasb) String() string {
 	return fmt.Sprintf("wasb://%s", b.container.Name)
 }
 
-func (b *abs) Create() error {
+func (b *wasb) Create() error {
 	_, err := b.container.CreateIfNotExists(&storage.CreateContainerOptions{})
 	return err
 }
 
-func (b *abs) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	blob := b.container.GetBlobReference(key)
+	var end int64
 	if limit > 0 {
-		return blob.GetRange(&storage.GetBlobRangeOptions{
-			Range: &storage.BlobRange{
-				Start: uint64(off),
-				End:   uint64(off + limit - 1),
-			},
-		})
+		end = off + limit - 1
 	}
-	r, err := blob.Get(nil)
-	if err != nil {
-		return nil, err
-	}
-	if off > 0 {
-		io.CopyN(ioutil.Discard, r, off)
-	}
-	return r, nil
+	return blob.GetRange(&storage.GetBlobRangeOptions{
+		Range: &storage.BlobRange{
+			Start: uint64(off),
+			End:   uint64(end),
+		},
+	})
 }
 
-func (b *abs) Put(key string, data io.Reader) error {
+func (b *wasb) Put(key string, data io.Reader) error {
 	return b.container.GetBlobReference(key).CreateBlockBlobFromReader(data, nil)
 }
 
-func (b *abs) Copy(dst, src string) error {
+func (b *wasb) Copy(dst, src string) error {
 	uri := b.container.GetBlobReference(src).GetURL()
 	return b.container.GetBlobReference(dst).Copy(uri, nil)
 }
 
-func (b *abs) Exists(key string) error {
+func (b *wasb) Exists(key string) error {
 	ok, err := b.container.GetBlobReference(key).Exists()
 	if !ok {
 		err = errors.New("Not existed")
@@ -65,7 +60,7 @@ func (b *abs) Exists(key string) error {
 	return err
 }
 
-func (b *abs) Delete(key string) error {
+func (b *wasb) Delete(key string) error {
 	ok, err := b.container.GetBlobReference(key).DeleteIfExists(nil)
 	if !ok {
 		err = errors.New("Not existed")
@@ -73,7 +68,7 @@ func (b *abs) Delete(key string) error {
 	return err
 }
 
-func (b *abs) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (b *wasb) List(prefix, marker string, limit int64) ([]*Object, error) {
 	if marker != "" {
 		if b.marker == "" {
 			// last page
@@ -101,7 +96,9 @@ func (b *abs) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
-func newAbs(endpoint, account, key string) ObjectStorage {
+// TODO: support multipart upload
+
+func newWabs(endpoint, account, key string) ObjectStorage {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		log.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
@@ -114,9 +111,9 @@ func newAbs(endpoint, account, key string) ObjectStorage {
 	}
 	service := client.GetBlobService()
 	container := service.GetContainerReference(name)
-	return &abs{container: container}
+	return &wasb{container: container}
 }
 
 func init() {
-	RegisterStorage("wasb", newAbs)
+	register("wasb", newWabs)
 }

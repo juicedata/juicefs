@@ -433,7 +433,7 @@ type StorageTransferServiceServer interface {
 	ResumeTransferOperation(context.Context, *ResumeTransferOperationRequest) (*google_protobuf1.Empty, error)
 }
 
-func RegisterStorageTransferServiceServer(s *grpc.Server, srv StorageTransferServiceServer) {
+func registerTransferServiceServer(s *grpc.Server, srv StorageTransferServiceServer) {
 	s.RegisterService(&_StorageTransferService_serviceDesc, srv)
 }
 

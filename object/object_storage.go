@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -89,7 +91,7 @@ type Register func(endpoint, accessKey, secretKey string) ObjectStorage
 
 var storages = make(map[string]Register)
 
-func RegisterStorage(name string, register Register) {
+func register(name string, register Register) {
 	storages[name] = register
 }
 

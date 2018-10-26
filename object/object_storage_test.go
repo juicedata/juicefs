@@ -176,7 +176,7 @@ func TestMem(t *testing.T) {
 }
 
 func TestQingStor(t *testing.T) {
-	s := newQingStor("https://cfs-test-tmp1.pek3a.qingstor.com",
+	s := newQingStor("https://test.pek3a.qingstor.com",
 		os.Getenv("QY_ACCESS_KEY"), os.Getenv("QY_SECRET_KEY"))
 	testStorage(t, s)
 }
@@ -191,110 +191,70 @@ func TestS3(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) {
-	s := newOSS("https://cfs-test-tmp1.oss-us-west-1.aliyuncs.com",
+	s := newOSS("https://test.oss-us-west-1.aliyuncs.com",
 		os.Getenv("OSS_ACCESS_KEY"), os.Getenv("OSS_SECRET_KEY"))
 	testStorage(t, s)
 }
 
 func TestUFile(t *testing.T) {
-	ufile := newUFile("https://cfs-test-tmp-2.us-ca.ufileos.com",
+	ufile := newUFile("https://test.us-ca.ufileos.com",
 		os.Getenv("UCLOUD_PUBLIC_KEY"), os.Getenv("UCLOUD_PRIVATE_KEY"))
 	testStorage(t, ufile)
 }
 
 func TestGS(t *testing.T) {
 	os.Setenv("GOOGLE_CLOUD_PROJECT", "davies-test")
-	gs := newGS("https://jfs-test-2.us-west1.googleapi.com", "", "")
+	gs := newGS("https://test.us-west1.googleapi.com", "", "")
 	testStorage(t, gs)
 }
 
 func TestQiniu(t *testing.T) {
-	qiniu := newQiniu("https://jfs-test2.cn-east-1-s3.qiniu.com",
+	qiniu := newQiniu("https://test.cn-east-1-s3.qiniu.com",
 		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
 	testStorage(t, qiniu)
-	qiniu = newQiniu("https://jfs-test-tmp.cn-north-1-s3.qiniu.com",
+	qiniu = newQiniu("https://test.cn-north-1-s3.qiniu.com",
 		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
 	testStorage(t, qiniu)
-}
-
-func TestReplicated(t *testing.T) {
-	s1 := newMem("", "", "")
-	s2 := newMem("", "", "")
-
-	rep := NewReplicated(s1, s2)
-	testStorage(t, rep)
-
-	// test healing
-	s2.Put("/a", bytes.NewBuffer([]byte("a")))
-	if r, e := rep.Get("/a", 0, 1); e != nil {
-		t.Fatalf("Fail to get /a")
-	} else if s, _ := ioutil.ReadAll(r); string(s) != "a" {
-		t.Fatalf("Fail to get /a")
-	}
-	if s1.Exists("/a") == nil {
-		t.Fatalf("a should not be in s1")
-	}
-	if r, e := rep.Get("/a", 0, -1); e != nil {
-		t.Fatalf("Fail to get /a")
-	} else if s, _ := ioutil.ReadAll(r); string(s) != "a" {
-		t.Fatalf("Fail to get /a")
-	}
-	if s1.Exists("/a") != nil {
-		t.Fatalf("a should be in s1")
-	}
-
-	// test sync
-	s1.Put("b", bytes.NewBuffer([]byte("a")))
-	s2.Put("c", bytes.NewBuffer(make([]byte, 15<<20)))
-	r := rep.(*Replicated)
-	r.Backfill("b")
-	if s2.Exists("b") == nil {
-		t.Fatalf("b should not be in s2")
-	}
-	r.Backfill("c")
-	if s1.Exists("c") != nil {
-		t.Fatalf("c should be in s1")
-	}
 }
 
 func TestKS3(t *testing.T) {
-	ks3 := newKS3("https://jfs-temp4.kss.ksyun.com",
+	ks3 := newKS3("https://test.kss.ksyun.com",
 		os.Getenv("KS3_ACCESS_KEY"), os.Getenv("KS3_SECRET_KEY"))
 	testStorage(t, ks3)
 }
 
 func TestCOS(t *testing.T) {
-	cos := newCOS("https://jfstest1-1252455339.cos.ap-beijing.myqcloud.com",
+	cos := newCOS("https://test-1234.cos.ap-beijing.myqcloud.com",
 		os.Getenv("COS_ACCESS_KEY"), os.Getenv("COS_SECRET_KEY"))
 	testStorage(t, cos)
 }
 
 func TestAzure(t *testing.T) {
-	abs := newAbs("https://test-chunk.core.chinacloudapi.cn",
+	abs := newWabs("https://test-chunk.core.chinacloudapi.cn",
 		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"))
 	testStorage(t, abs)
 }
 
 func TestNOS(t *testing.T) {
-	nos := newNOS("https://jfs-test.nos-eastchina1.126.net",
+	nos := newNOS("https://test.nos-eastchina1.126.net",
 		os.Getenv("NOS_ACCESS_KEY"), os.Getenv("NOS_SECRET_KEY"))
 	testStorage(t, nos)
 }
 
 func TestMSS(t *testing.T) {
-	mss := newMSS("https://jfstest.mtmss.com",
+	mss := newMSS("https://test.mtmss.com",
 		os.Getenv("MSS_ACCESS_KEY"), os.Getenv("MSS_SECRET_KEY"))
 	testStorage(t, mss)
 }
 
 func TestJSS(t *testing.T) {
-	jss := newJSS("https://jfstest.s3.cn-north-1.jcloudcs.com",
+	jss := newJSS("https://test.s3.cn-north-1.jcloudcs.com",
 		os.Getenv("JSS_ACCESS_KEY"), os.Getenv("JSS_SECRET_KEY"))
 	testStorage(t, jss)
 }
 
 func TestSpeedy(t *testing.T) {
-	cos := newSpeedy("https://jfs-test.oss-cn-beijing.speedycloud.org",
+	cos := newSpeedy("https://test.oss-cn-beijing.speedycloud.org",
 		os.Getenv("SPEEDY_ACCESS_KEY"), os.Getenv("SPEEDY_SECRET_KEY"))
 	testStorage(t, cos)
 }
@@ -305,16 +265,16 @@ func TestDisk(t *testing.T) {
 }
 
 func TestB2(t *testing.T) {
-	b := newB2("https://jfs-test.backblaze.com", os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"))
+	b := newB2("https://test.backblaze.com", os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"))
 	testStorage(t, b)
 }
 
 func TestSpace(t *testing.T) {
-	b := newSpace("https://jfs-test.nyc3.digitaloceanspaces.com", os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"))
+	b := newSpace("https://test.nyc3.digitaloceanspaces.com", os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"))
 	testStorage(t, b)
 }
 
 func TestBOS(t *testing.T) {
-	b := newBOS("https://jfs-test.su.bcebos.com", os.Getenv("BOS_ACCESS_KEY"), os.Getenv("BOS_SECRET_KEY"))
+	b := newBOS("https://test.su.bcebos.com", os.Getenv("BOS_ACCESS_KEY"), os.Getenv("BOS_SECRET_KEY"))
 	testStorage(t, b)
 }
