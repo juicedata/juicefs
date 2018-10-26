@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -123,5 +125,5 @@ func newQiniu(endpoint, accessKey, secretKey string) ObjectStorage {
 }
 
 func init() {
-	RegisterStorage("qiniu", newQiniu)
+	register("qiniu", newQiniu)
 }

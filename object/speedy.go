@@ -1,3 +1,5 @@
+// Copyright (C) 2018-present Juicedata Inc.
+
 package object
 
 import (
@@ -20,7 +22,6 @@ func (s *speedy) String() string {
 	return fmt.Sprintf("speedy://%s", uri.Host)
 }
 
-// TODO: Create
 func (s *speedy) Create() error {
 	uri, _ := url.ParseRequestURI(s.endpoint)
 	parts := strings.SplitN(uri.Host, ".", 2)
@@ -102,5 +103,5 @@ func newSpeedy(endpoint, accessKey, secretKey string) ObjectStorage {
 }
 
 func init() {
-	RegisterStorage("speedy", newSpeedy)
+	register("speedy", newSpeedy)
 }
