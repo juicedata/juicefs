@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"jfs/mount/storage/utils"
+	"osync/utils"
 )
 
 type filestore struct {
