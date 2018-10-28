@@ -11,7 +11,7 @@ osync [options] SRC DST
 SRC and DST must be an URI of the following object storage:
 
 - file: local files
-- s3: Amazone S3
+- s3: Amazon S3
 - gcs: Google Cloud Storage
 - wasb: Windows Azure Blob Storage
 - oss: Aliyun OSS
