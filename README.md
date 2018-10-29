@@ -1,11 +1,19 @@
-# osync
+# juicesync
 
 Sync object storage between clouds.
+
+# Install
+
+After installed Go-1.9+
+
+```
+go get github.com/juicedata/juicesync
+```
 
 # Usage
 
 ```
-osync [options] SRC DST
+juicesync [options] SRC DST
 ```
 
 SRC and DST must be an URI of the following object storage:
