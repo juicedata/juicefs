@@ -7,10 +7,11 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"osync/object"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/juicedata/juicesync/object"
 )
 
 // The max number of key per listing request
