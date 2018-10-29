@@ -2,6 +2,7 @@ package object
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -53,7 +54,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	if d, e := get(s, "/test", 4, 2); d != "o" {
 		// OSS fail
-		t.Errorf("out-of-range get: 'o', but got %v, error:%s", d, e)
+		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
 	}
 
 	if err := s.Copy("/test2", "/test"); err != nil {
@@ -175,13 +176,24 @@ func TestMem(t *testing.T) {
 	testStorage(t, m)
 }
 
+func TestDisk(t *testing.T) {
+	s := newDisk("/tmp/abc", "", "")
+	testStorage(t, s)
+}
+
 func TestQingStor(t *testing.T) {
+	if os.Getenv("QY_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	s := newQingStor("https://test.pek3a.qingstor.com",
 		os.Getenv("QY_ACCESS_KEY"), os.Getenv("QY_SECRET_KEY"))
 	testStorage(t, s)
 }
 
 func TestS3(t *testing.T) {
+	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
+		t.SkipNow()
+	}
 	s := newS3("https://cfs-test-tmp1.s3-us-west-2.amazonaws.com",
 		os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"))
 	testStorage(t, s)
@@ -191,24 +203,36 @@ func TestS3(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) {
+	if os.Getenv("OSS_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	s := newOSS("https://test.oss-us-west-1.aliyuncs.com",
 		os.Getenv("OSS_ACCESS_KEY"), os.Getenv("OSS_SECRET_KEY"))
 	testStorage(t, s)
 }
 
 func TestUFile(t *testing.T) {
+	if os.Getenv("UCLOUD_PUBLIC_KEY") == "" {
+		t.SkipNow()
+	}
 	ufile := newUFile("https://test.us-ca.ufileos.com",
 		os.Getenv("UCLOUD_PUBLIC_KEY"), os.Getenv("UCLOUD_PRIVATE_KEY"))
 	testStorage(t, ufile)
 }
 
 func TestGS(t *testing.T) {
+	if os.Getenv("GOOGLE_CLOUD_PROJECT") == "" {
+		t.SkipNow()
+	}
 	os.Setenv("GOOGLE_CLOUD_PROJECT", "davies-test")
 	gs := newGS("https://test.us-west1.googleapi.com", "", "")
 	testStorage(t, gs)
 }
 
 func TestQiniu(t *testing.T) {
+	if os.Getenv("QINIU_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	qiniu := newQiniu("https://test.cn-east-1-s3.qiniu.com",
 		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
 	testStorage(t, qiniu)
@@ -218,63 +242,89 @@ func TestQiniu(t *testing.T) {
 }
 
 func TestKS3(t *testing.T) {
+	if os.Getenv("KS3_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	ks3 := newKS3("https://test.kss.ksyun.com",
 		os.Getenv("KS3_ACCESS_KEY"), os.Getenv("KS3_SECRET_KEY"))
 	testStorage(t, ks3)
 }
 
 func TestCOS(t *testing.T) {
-	cos := newCOS("https://test-1234.cos.ap-beijing.myqcloud.com",
+	if os.Getenv("COS_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
+	cos := newCOS(
+		fmt.Sprintf("https://test-%s.cos.ap-beijing.myqcloud.com", os.Getenv("COS_APPID")),
 		os.Getenv("COS_ACCESS_KEY"), os.Getenv("COS_SECRET_KEY"))
 	testStorage(t, cos)
 }
 
 func TestAzure(t *testing.T) {
+	if os.Getenv("AZURE_STORAGE_ACCOUNT") == "" {
+		t.SkipNow()
+	}
 	abs := newWabs("https://test-chunk.core.chinacloudapi.cn",
 		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"))
 	testStorage(t, abs)
 }
 
 func TestNOS(t *testing.T) {
+	if os.Getenv("NOS_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	nos := newNOS("https://test.nos-eastchina1.126.net",
 		os.Getenv("NOS_ACCESS_KEY"), os.Getenv("NOS_SECRET_KEY"))
 	testStorage(t, nos)
 }
 
 func TestMSS(t *testing.T) {
+	if os.Getenv("MSS_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	mss := newMSS("https://test.mtmss.com",
 		os.Getenv("MSS_ACCESS_KEY"), os.Getenv("MSS_SECRET_KEY"))
 	testStorage(t, mss)
 }
 
 func TestJSS(t *testing.T) {
+	if os.Getenv("JSS_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	jss := newJSS("https://test.s3.cn-north-1.jcloudcs.com",
 		os.Getenv("JSS_ACCESS_KEY"), os.Getenv("JSS_SECRET_KEY"))
 	testStorage(t, jss)
 }
 
 func TestSpeedy(t *testing.T) {
+	if os.Getenv("SPEEDY_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	cos := newSpeedy("https://test.oss-cn-beijing.speedycloud.org",
 		os.Getenv("SPEEDY_ACCESS_KEY"), os.Getenv("SPEEDY_SECRET_KEY"))
 	testStorage(t, cos)
 }
 
-func TestDisk(t *testing.T) {
-	s := newDisk("/tmp/abc", "", "")
-	testStorage(t, s)
-}
-
 func TestB2(t *testing.T) {
+	if os.Getenv("B2_ACCOUNT_ID") == "" {
+		t.SkipNow()
+	}
 	b := newB2("https://test.backblaze.com", os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"))
 	testStorage(t, b)
 }
 
 func TestSpace(t *testing.T) {
+	if os.Getenv("SPACE_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	b := newSpace("https://test.nyc3.digitaloceanspaces.com", os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"))
 	testStorage(t, b)
 }
 
 func TestBOS(t *testing.T) {
+	if os.Getenv("BOS_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
 	b := newBOS("https://test.su.bcebos.com", os.Getenv("BOS_ACCESS_KEY"), os.Getenv("BOS_SECRET_KEY"))
 	testStorage(t, b)
 }
