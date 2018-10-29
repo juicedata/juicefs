@@ -11,7 +11,7 @@ import (
 	"math/rand"
 	"time"
 
-	"osync/utils"
+	"github.com/juicedata/juicesync/utils"
 )
 
 var logger = utils.GetLogger("osync")

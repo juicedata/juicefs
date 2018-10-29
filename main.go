@@ -5,9 +5,10 @@ package main
 import (
 	"flag"
 	"net/url"
-	"osync/object"
-	"osync/utils"
 	"strings"
+
+	"github.com/juicedata/juicesync/object"
+	"github.com/juicedata/juicesync/utils"
 
 	"github.com/sirupsen/logrus"
 )
