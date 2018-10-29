@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"osync/utils"
+	"github.com/juicedata/juicesync/utils"
 )
 
 type filestore struct {

@@ -15,8 +15,9 @@ import (
 
 var start = flag.String("start", "", "the start of keys to sync")
 var end = flag.String("end", "", "the last keys to sync")
+var threads = flag.Int("p", 50, "number of concurrent threads")
 
-var debug = flag.Bool("v", false, "turn on debug log")
+var verbose = flag.Bool("v", false, "turn on debug log")
 var quiet = flag.Bool("q", false, "change log level to ERROR")
 
 var logger = utils.GetLogger("osync")
@@ -51,7 +52,7 @@ func main() {
 		return
 	}
 
-	if *debug {
+	if *verbose {
 		utils.SetLogLevel(logrus.DebugLevel)
 	} else if *quiet {
 		utils.SetLogLevel(logrus.ErrorLevel)
