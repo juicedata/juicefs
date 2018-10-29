@@ -82,6 +82,12 @@
   version = "v0.2.1"
 
 [[projects]]
+  name = "github.com/mattn/go-isatty"
+  packages = ["."]
+  revision = "6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c"
+  version = "v0.0.4"
+
+[[projects]]
   name = "github.com/pengsrc/go-shared"
   packages = ["buffer","check","convert","log","reopen"]
   revision = "b98065a377794d577e2a0e32869378b9ce4b8952"
@@ -191,6 +197,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "cbc2e89dc04db03ae6e35724488c66de66efb4984f30ac8a52cdf7be11e7ad6b"
+  inputs-digest = "0ecb12d024b5d2dcfc370a817719bc61e9ca0d651f559c82a0b97d498a99514c"
   solver-name = "gps-cdcl"
   solver-version = 1

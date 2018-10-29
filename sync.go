@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicesync/object"
+	"github.com/mattn/go-isatty"
 )
 
 // The max number of key per listing request
@@ -19,11 +21,10 @@ const MaxResults = 10240
 const maxBlock = 10 << 20
 
 var (
-	ReplicateThreads = 50
-	found            uint64
-	missing          uint64
-	copied           uint64
-	failed           uint64
+	found   uint64
+	missing uint64
+	copied  uint64
+	failed  uint64
 )
 
 // Iterate on all the keys that starts at marker from object storage.
@@ -63,8 +64,13 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 	return out, nil
 }
 
-func replicate(src, dst object.ObjectStorage, key string) error {
-	in, e := src.Get(key, 0, maxBlock)
+func replicate(src, dst object.ObjectStorage, obj *object.Object) error {
+	key := obj.Key
+	firstBlock := -1
+	if obj.Size > maxBlock {
+		firstBlock = maxBlock
+	}
+	in, e := src.Get(key, 0, int64(firstBlock))
 	if e != nil {
 		if src.Exists(key) != nil {
 			return nil
@@ -76,7 +82,7 @@ func replicate(src, dst object.ObjectStorage, key string) error {
 	if err != nil {
 		return err
 	}
-	if len(data) < maxBlock {
+	if firstBlock == -1 {
 		return dst.Put(key, bytes.NewReader(data))
 	}
 
@@ -107,24 +113,25 @@ func replicate(src, dst object.ObjectStorage, key string) error {
 
 // sync comparing all the ordered keys from two object storage, replicate the missed ones.
 func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Object) {
-	todo := make(chan string, 1024)
+	todo := make(chan *object.Object, 1024)
 	wg := sync.WaitGroup{}
-	for i := 0; i < ReplicateThreads; i++ {
+	for i := 0; i < *threads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for {
-				key, ok := <-todo
+				obj, ok := <-todo
 				if !ok {
 					break
 				}
-				logger.Debugf("replicating %s", key)
-				if err := replicate(src, dst, key); err != nil {
-					logger.Warningf("Failed to replicate %s from %s to %s: %s", key, src, dst, err.Error())
+				start := time.Now()
+				if err := replicate(src, dst, obj); err != nil {
+					logger.Warningf("Failed to replicate %s from %s to %s: %s", obj.Key, src, dst, err.Error())
 					atomic.AddUint64(&failed, 1)
 				} else {
 					atomic.AddUint64(&copied, 1)
 				}
+				logger.Debugf("copied %s in %s", obj.Key, time.Now().Sub(start))
 			}
 		}()
 	}
@@ -151,7 +158,7 @@ OUT:
 			}
 		}
 		if obj.Key < dstkey || !hasMore {
-			todo <- obj.Key
+			todo <- obj
 			atomic.AddUint64(&missing, 1)
 		}
 	}
@@ -160,10 +167,30 @@ OUT:
 }
 
 func showProgress() {
+	var lastCopied uint64
+	var lastTime time.Time = time.Now()
 	for {
-		logger.Infof("Found: %d, missing: %d, copied: %d, failed: %d", atomic.LoadUint64(&found),
-			atomic.LoadUint64(&missing)-atomic.LoadUint64(&copied), atomic.LoadUint64(&copied), atomic.LoadUint64(&failed))
-		time.Sleep(time.Second)
+		same := atomic.LoadUint64(&found) - atomic.LoadUint64(&missing)
+		var width uint64 = 80
+		a := width * same / found
+		b := width * copied / found
+		var bar [80]byte
+		var i uint64
+		for i = 0; i < width; i++ {
+			if i < a {
+				bar[i] = '='
+			} else if i < a+b {
+				bar[i] = '+'
+			} else {
+				bar[i] = ' '
+			}
+		}
+		now := time.Now()
+		fps := float64(copied-lastCopied) / now.Sub(lastTime).Seconds()
+		lastCopied = copied
+		lastTime = now
+		fmt.Printf("[%s] %d%%  %.1f per second          \r", string(bar[:]), (found-missing+copied)*100/found, fps)
+		time.Sleep(time.Millisecond * 300)
 	}
 }
 
@@ -179,9 +206,12 @@ func Sync(src, dst object.ObjectStorage, marker, end string) error {
 		return err
 	}
 
-	go showProgress()
+	tty := isatty.IsTerminal(os.Stdout.Fd())
+	if tty && !*verbose && !*quiet {
+		go showProgress()
+	}
 	doSync(src, dst, cha, chb)
-	logger.Infof("Finished: found: %d, missing: %d, copied: %d, failed: %d", atomic.LoadUint64(&found),
-		atomic.LoadUint64(&missing)-atomic.LoadUint64(&copied), atomic.LoadUint64(&copied), atomic.LoadUint64(&failed))
+	logger.Infof("found: %d, copied: %d, failed: %d", atomic.LoadUint64(&found),
+		atomic.LoadUint64(&copied), atomic.LoadUint64(&failed))
 	return nil
 }
