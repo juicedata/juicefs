@@ -147,7 +147,7 @@ OUT:
 			break
 		}
 		atomic.AddUint64(&found, 1)
-		for hasMore && dstobj != nil && obj.Key > dstobj.Key {
+		for hasMore && (dstobj == nil || obj.Key > dstobj.Key) {
 			var ok bool
 			dstobj, ok = <-dstkeys
 			if !ok {
