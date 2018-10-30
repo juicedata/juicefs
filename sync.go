@@ -21,10 +21,11 @@ const MaxResults = 10240
 const maxBlock = 10 << 20
 
 var (
-	found   uint64
-	missing uint64
-	copied  uint64
-	failed  uint64
+	found       uint64
+	missing     uint64
+	copied      uint64
+	copiedBytes uint64
+	failed      uint64
 )
 
 // Iterate on all the keys that starts at marker from object storage.
@@ -130,8 +131,9 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 					atomic.AddUint64(&failed, 1)
 				} else {
 					atomic.AddUint64(&copied, 1)
+					atomic.AddUint64(&copiedBytes, uint64(obj.Size))
 				}
-				logger.Debugf("copied %s in %s", obj.Key, time.Now().Sub(start))
+				logger.Debugf("copied %s %d bytes in %s", obj.Key, obj.Size, time.Now().Sub(start))
 			}
 		}()
 	}
@@ -167,9 +169,13 @@ OUT:
 }
 
 func showProgress() {
-	var lastCopied uint64
+	var lastCopied, lastBytes uint64
 	var lastTime time.Time = time.Now()
 	for {
+		if found == 0 {
+			time.Sleep(time.Millisecond * 10)
+			continue
+		}
 		same := atomic.LoadUint64(&found) - atomic.LoadUint64(&missing)
 		var width uint64 = 80
 		a := width * same / found
@@ -187,9 +193,10 @@ func showProgress() {
 		}
 		now := time.Now()
 		fps := float64(copied-lastCopied) / now.Sub(lastTime).Seconds()
+		bw := float64(copiedBytes-lastBytes) / now.Sub(lastTime).Seconds() / 1024 / 1024
 		lastCopied = copied
 		lastTime = now
-		fmt.Printf("[%s] %d%%  %.1f per second          \r", string(bar[:]), (found-missing+copied)*100/found, fps)
+		fmt.Printf("[%s] %d%%  %.1f/s %.2f MB/s         \r", string(bar[:]), (found-missing+copied)*100/found, fps, bw)
 		time.Sleep(time.Millisecond * 300)
 	}
 }
@@ -211,7 +218,7 @@ func Sync(src, dst object.ObjectStorage, marker, end string) error {
 		go showProgress()
 	}
 	doSync(src, dst, cha, chb)
-	logger.Infof("found: %d, copied: %d, failed: %d", atomic.LoadUint64(&found),
-		atomic.LoadUint64(&copied), atomic.LoadUint64(&failed))
+	logger.Infof("found: %d, copied: %d, failed: %d                                      ",
+		atomic.LoadUint64(&found), atomic.LoadUint64(&copied), atomic.LoadUint64(&failed))
 	return nil
 }
