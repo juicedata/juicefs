@@ -51,7 +51,7 @@ func createStorage(uri string) object.ObjectStorage {
 	}
 	name := strings.ToLower(u.Scheme)
 	endpoint := u.Host
-	if u.Scheme == "file" {
+	if name == "file" {
 		endpoint = u.Path
 	} else if supportHTTPS(name, endpoint) {
 		endpoint = "https://" + endpoint
@@ -59,11 +59,14 @@ func createStorage(uri string) object.ObjectStorage {
 		endpoint = "http://" + endpoint
 	}
 
-	objStorage := object.CreateStorage(name, endpoint, accessKey, secretKey)
-	if objStorage == nil {
+	store := object.CreateStorage(name, endpoint, accessKey, secretKey)
+	if store == nil {
 		logger.Fatalf("Invalid storage type: %s", u.Scheme)
 	}
-	return objStorage
+	if name != "file" && len(u.Path) > 1 {
+		store = object.WithPrefix(store, u.Path[1:])
+	}
+	return store
 }
 
 func main() {
