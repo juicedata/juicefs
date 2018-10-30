@@ -4,6 +4,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"strings"
 
@@ -51,6 +54,7 @@ func main() {
 		println("osync [options] SRC DST")
 		return
 	}
+	go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", 6070), nil)
 
 	if *verbose {
 		utils.SetLogLevel(logrus.DebugLevel)
