@@ -77,7 +77,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("Mtime of key should be within 10 seconds")
 		}
 	} else {
-		t.Fatalf("list failed", err2.Error())
+		t.Fatalf("list failed: %s", err2.Error())
 	}
 
 	objs, err2 = s.List("", "/test", 10240)
@@ -96,12 +96,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("Mtime of key should be within 10 seconds")
 		}
 	} else {
-		t.Fatalf("list2 failed", err2.Error())
+		t.Fatalf("list2 failed: %s", err2.Error())
 	}
 
 	objs, err2 = s.List("", "/test2", 1)
 	if err2 != nil {
-		t.Fatalf("list3 failed", err2.Error())
+		t.Fatalf("list3 failed: %s", err2.Error())
 	} else if len(objs) != 0 {
 		t.Fatalf("list3 should not return anything, but got %d", len(objs))
 	}
