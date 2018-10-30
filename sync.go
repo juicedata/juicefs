@@ -138,7 +138,7 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 		}()
 	}
 
-	dstkey := ""
+	var dstobj *object.Object
 	hasMore := true
 OUT:
 	for obj := range srckeys {
@@ -147,19 +147,19 @@ OUT:
 			break
 		}
 		atomic.AddUint64(&found, 1)
-		for hasMore && obj.Key > dstkey {
-			dstobj, ok := <-dstkeys
+		for hasMore && dstobj != nil && obj.Key > dstobj.Key {
+			var ok bool
+			dstobj, ok = <-dstkeys
 			if !ok {
 				hasMore = false
 			} else if dstobj == nil {
 				// Listing failed, stop
 				logger.Errorf("Listing failed, stop replicating, waiting for pending ones")
 				break OUT
-			} else {
-				dstkey = dstobj.Key
 			}
 		}
-		if obj.Key < dstkey || !hasMore {
+		// FIXME: there is a race when source is modified during coping
+		if !hasMore || obj.Key < dstobj.Key || obj.Key == dstobj.Key && obj.Mtime > dstobj.Mtime {
 			todo <- obj
 			atomic.AddUint64(&missing, 1)
 		}
