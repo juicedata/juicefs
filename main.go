@@ -25,6 +25,19 @@ var quiet = flag.Bool("q", false, "change log level to ERROR")
 
 var logger = utils.GetLogger("osync")
 
+func supportHTTPS(name, endpoint string) bool {
+	if name == "ufile" {
+		return !(strings.Contains(endpoint, ".internal-") || strings.HasSuffix(endpoint, ".ucloud.cn"))
+	} else if name == "oss" {
+		return !(strings.Contains(endpoint, ".vpc100-oss") || strings.Contains(endpoint, "internal.aliyuncs.com"))
+	} else if name == "jss" {
+		// the internal endpoint does not support HTTPS
+		return false
+	} else {
+		return true
+	}
+}
+
 func createStorage(uri string) object.ObjectStorage {
 	u, err := url.Parse(uri)
 	if err != nil {
@@ -36,11 +49,17 @@ func createStorage(uri string) object.ObjectStorage {
 		accessKey = user.Username()
 		secretKey, _ = user.Password()
 	}
+	name := strings.ToLower(u.Scheme)
 	endpoint := u.Host
 	if u.Scheme == "file" {
 		endpoint = u.Path
+	} else if supportHTTPS(name, endpoint) {
+		endpoint = "https://" + endpoint
+	} else {
+		endpoint = "http://" + endpoint
 	}
-	objStorage := object.CreateStorage(strings.ToLower(u.Scheme), endpoint, accessKey, secretKey)
+
+	objStorage := object.CreateStorage(name, endpoint, accessKey, secretKey)
 	if objStorage == nil {
 		logger.Fatalf("Invalid storage type: %s", u.Scheme)
 	}
