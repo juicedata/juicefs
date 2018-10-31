@@ -14,7 +14,7 @@ import (
 	"github.com/juicedata/juicesync/utils"
 )
 
-var logger = utils.GetLogger("osync")
+var logger = utils.GetLogger("juicesync")
 
 type Object struct {
 	Key   string
