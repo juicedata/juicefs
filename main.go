@@ -23,7 +23,7 @@ var threads = flag.Int("p", 50, "number of concurrent threads")
 var verbose = flag.Bool("v", false, "turn on debug log")
 var quiet = flag.Bool("q", false, "change log level to ERROR")
 
-var logger = utils.GetLogger("osync")
+var logger = utils.GetLogger("juicesync")
 
 func supportHTTPS(name, endpoint string) bool {
 	if name == "ufile" {
@@ -73,7 +73,7 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 2 {
-		println("osync [options] SRC DST")
+		println("juicesync [options] SRC DST")
 		return
 	}
 	go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", 6070), nil)
