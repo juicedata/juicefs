@@ -1,6 +1,10 @@
 # juicesync
 
-Sync object storage between clouds.
+Juicesync is a tool to move your data in object storage between any clouds or regions.
+
+# How it works?
+
+juicesync will scan all the keys from two object stores, and comparing them in ascending order to find out missing or outdated keys, then download them from the source and upload them to the destination in parallel.
 
 # Install
 
@@ -8,6 +12,7 @@ After installed Go-1.9+
 
 ```
 go get github.com/juicedata/juicesync
+$HOME/go/bin/juicesync
 ```
 
 # Usage
@@ -33,6 +38,10 @@ SRC and DST must be an URI of the following object storage:
 - b2: Backblaze B2
 - space: Digital Ocean Space
 
+SRC and DST should be in the following format:
+
+NAME://[ACCESS_KEY:SECRET_KEY]BUCKET.ENDPOINT[/PREFIX]
+
 Some examples:
 
 - file://Users/me/code/
@@ -41,3 +50,10 @@ Some examples:
 - gcs://my-bucket.us-west1.googleapi.com/
 - oss://test.oss-us-west-1.aliyuncs.com
 - cos://test-1234.cos.ap-beijing.myqcloud.com
+
+Note:
+
+- S3: The access key and secret key for S3 could be provided by AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or IAM role.
+- COS: The AppID should be part of the bucket name.
+- GCS: The machine should be authorized to access Google Cloud Storage.
+
