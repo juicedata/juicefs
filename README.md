@@ -15,11 +15,24 @@ go get github.com/juicedata/juicesync
 $HOME/go/bin/juicesync
 ```
 
+We assume your GOPATH is `$HOME/go`. How to set GOPATH? Please visit [The
+official document](https://github.com/golang/go/wiki/SettingGOPATH)
+
 # Usage
 
 ```
 juicesync [options] SRC DST
 ```
+Options:
+  -end string
+    	the last keys to sync
+  -p int
+    	number of concurrent threads (default 50)
+  -q	change log level to ERROR
+  -start string
+    	the start of keys to sync
+  -v	turn on debug log
+  --help show the usage
 
 SRC and DST must be an URI of the following object storage:
 
@@ -40,11 +53,11 @@ SRC and DST must be an URI of the following object storage:
 
 SRC and DST should be in the following format:
 
-NAME://[ACCESS_KEY:SECRET_KEY]BUCKET.ENDPOINT[/PREFIX]
+NAME://[ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]
 
 Some examples:
 
-- file://Users/me/code/
+- file:///Users/me/code/
 - s3://my-bucket.us-east1.amazonaws.com/
 - s3://access-key:secret-key-id@my-bucket.us-west2.s3.amazonaws.com/prefix
 - gcs://my-bucket.us-west1.googleapi.com/
