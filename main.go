@@ -8,6 +8,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/juicedata/juicesync/object"
@@ -39,6 +40,14 @@ func supportHTTPS(name, endpoint string) bool {
 }
 
 func createStorage(uri string) object.ObjectStorage {
+	if !strings.Contains(uri, "://") {
+		var e error
+		uri, e = filepath.Abs(uri)
+		if e != nil {
+			logger.Fatalf("invalid path: %s", e.Error())
+		}
+		uri = "file://" + uri
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		logger.Fatalf("Can't parse %s: %s", uri, err.Error())
