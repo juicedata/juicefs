@@ -22,7 +22,7 @@ official document](https://github.com/golang/go/wiki/SettingGOPATH)
 
 ```
 juicesync [options] SRC DST
-```
+
 Options:
   -end string
     	the last keys to sync
@@ -33,6 +33,7 @@ Options:
     	the start of keys to sync
   -v	turn on debug log
   --help show the usage
+```
 
 SRC and DST must be an URI of the following object storage:
 
@@ -53,10 +54,11 @@ SRC and DST must be an URI of the following object storage:
 
 SRC and DST should be in the following format:
 
-NAME://[ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]
+[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]
 
 Some examples:
 
+- local/path
 - file:///Users/me/code/
 - s3://my-bucket.us-east1.amazonaws.com/
 - s3://access-key:secret-key-id@my-bucket.us-west2.s3.amazonaws.com/prefix
@@ -66,7 +68,8 @@ Some examples:
 
 Note:
 
+- It's recommended to run juicesync in the target region to have better performance.
 - S3: The access key and secret key for S3 could be provided by AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or IAM role.
 - COS: The AppID should be part of the bucket name.
 - GCS: The machine should be authorized to access Google Cloud Storage.
-
+- Qiniu: The S3 endpoint should be used for Qiniu, for example, abc.cn-north-1-s3.qiniu.com
