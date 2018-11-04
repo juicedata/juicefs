@@ -27,8 +27,7 @@ func (q *qiniu) String() string {
 }
 
 func (q *qiniu) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	// S3ForcePathStyle = true
-	return q.s3client.Get("/"+key, off, limit)
+	return q.s3client.Get(key, off, limit)
 }
 
 func (q *qiniu) Put(key string, in io.Reader) error {
@@ -102,9 +101,6 @@ func newQiniu(endpoint, accessKey, secretKey string) ObjectStorage {
 	bucket := hostParts[0]
 	endpoint = hostParts[1]
 	region := endpoint[:strings.LastIndex(endpoint, "-")]
-	if region == "cn-east-1" {
-		endpoint = "api-s3.qiniu.com"
-	}
 	awsConfig := &aws.Config{
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
 		Endpoint:         &endpoint,
