@@ -134,8 +134,8 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 				} else {
 					atomic.AddUint64(&copied, 1)
 					atomic.AddUint64(&copiedBytes, uint64(obj.Size))
+					logger.Debugf("copied %s %d bytes in %s", obj.Key, obj.Size, time.Now().Sub(start))
 				}
-				logger.Debugf("copied %s %d bytes in %s", obj.Key, obj.Size, time.Now().Sub(start))
 			}
 		}()
 	}
