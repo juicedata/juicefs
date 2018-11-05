@@ -3,10 +3,14 @@
 package object
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -26,7 +30,40 @@ func (q *qiniu) String() string {
 	return fmt.Sprintf("qiniu://%s", q.bucket)
 }
 
+func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
+	if os.Getenv("QINIU_DOMAIN") == "" {
+		return nil, errors.New("Please export QINIU_DOMAIN to download keys with prefix '/'")
+	}
+	baseUrl := kodo.MakeBaseUrl(os.Getenv("QINIU_DOMAIN"), key)
+	url := q.b.Conn.MakePrivateUrl(baseUrl, nil)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC().Format(http.TimeFormat)
+	req.Header.Add("Date", now)
+	if off > 0 || limit > 0 {
+		if limit > 0 {
+			req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", off, off+limit-1))
+		} else {
+			req.Header.Add("Range", fmt.Sprintf("bytes=%d-", off))
+		}
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 && resp.StatusCode != 206 {
+		return nil, fmt.Errorf("Status code: %d", resp.StatusCode)
+	}
+	return resp.Body, nil
+}
+
 func (q *qiniu) Get(key string, off, limit int64) (io.ReadCloser, error) {
+	// S3 SDK cannot get objects with prefix "/" in the key
+	if strings.HasPrefix(key, "/") {
+		return q.download(key, off, limit)
+	}
 	return q.s3client.Get(key, off, limit)
 }
 
