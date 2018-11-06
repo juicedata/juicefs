@@ -18,6 +18,12 @@ $HOME/go/bin/juicesync
 We assume your GOPATH is `$HOME/go`. How to set GOPATH? Please visit [The
 official document](https://github.com/golang/go/wiki/SettingGOPATH)
 
+# Upgrade
+
+```
+go get -u github.com/juicedata/juicesync
+```
+
 # Usage
 
 ```
