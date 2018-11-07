@@ -31,12 +31,13 @@ var (
 
 // Iterate on all the keys that starts at marker from object storage.
 func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
+	start := time.Now()
 	objs, err := store.List("", marker, MaxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
 	}
-	logger.Debugf("found %d object from %s", len(objs), store)
+	logger.Debugf("found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
 	out := make(chan *object.Object, MaxResults)
 	go func() {
 		lastkey := ""
