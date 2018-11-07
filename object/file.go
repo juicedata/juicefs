@@ -18,7 +18,9 @@ import (
 )
 
 type filestore struct {
-	dir string
+	dir        string
+	lastListed string
+	listing    chan *Object
 }
 
 func (d *filestore) String() string {
@@ -174,23 +176,39 @@ func readDirNames(dirname string) ([]string, error) {
 }
 
 func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) {
-	var objs []*Object
-	Walk(d.dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && info.Size() > 0 {
-			key := path[len(d.dir):]
-			if key > marker && strings.HasPrefix(key, prefix) {
-				t := int(info.ModTime().Unix())
-				objs = append(objs, &Object{key, info.Size(), t, t})
-				if len(objs) == int(limit) {
-					return errors.New("enough")
+	if marker != d.lastListed || d.listing == nil {
+		listed := make(chan *Object, 10240)
+		go func() {
+			Walk(d.dir, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
 				}
-			}
+				key := path[len(d.dir):]
+				if key >= marker && strings.HasPrefix(key, prefix) && !info.IsDir() && info.Size() > 0 {
+					t := int(info.ModTime().Unix())
+					listed <- &Object{key, info.Size(), t, t}
+				}
+				return nil
+			})
+			close(listed)
+		}()
+		d.listing = listed
+	}
+	var objs []*Object
+	for len(objs) < int(limit) {
+		obj := <-d.listing
+		if obj == nil {
+			break
 		}
-		return nil
-	})
+		if obj.Key >= marker {
+			objs = append(objs, obj)
+		}
+	}
+	if len(objs) > 0 {
+		d.lastListed = objs[len(objs)-1].Key
+	} else {
+		d.listing = nil
+	}
 	return objs, nil
 }
 
