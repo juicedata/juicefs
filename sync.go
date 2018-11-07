@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,7 +44,10 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 		for len(objs) > 0 {
 			for _, obj := range objs {
 				key := obj.Key
-				if key != "" && key <= lastkey {
+				if obj.Size == 0 || strings.HasSuffix(key, "/") {
+					continue
+				}
+				if key <= lastkey {
 					logger.Fatalf("The keys are out of order: %q >= %q", lastkey, key)
 				}
 				if end != "" && key >= end {
