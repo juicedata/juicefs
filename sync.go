@@ -58,8 +58,9 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 				out <- obj
 			}
 			marker = lastkey
+			start = time.Now()
 			objs, err = store.List("", marker, MaxResults)
-			logger.Debugf("found %d object from %s", len(objs), store)
+			logger.Debugf("found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
 			if err != nil {
 				// Telling that the listing has failed
 				out <- nil
