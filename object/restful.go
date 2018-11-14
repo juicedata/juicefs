@@ -47,7 +47,7 @@ func init() {
 			},
 			DisableCompression: true,
 		},
-		Timeout: time.Minute, // 100kBps for 4MB,
+		Timeout: time.Hour,
 	}
 }
 
