@@ -18,8 +18,11 @@ import (
 )
 
 // The max number of key per listing request
-const MaxResults = 10240
-const maxBlock = 10 << 20
+const (
+	maxResults      = 10240
+	defaultPartSize = 5 << 20
+	maxBlock        = defaultPartSize * 2
+)
 
 var (
 	found       uint64
@@ -27,18 +30,19 @@ var (
 	copied      uint64
 	copiedBytes uint64
 	failed      uint64
+	concurrent  chan int
 )
 
 // Iterate on all the keys that starts at marker from object storage.
 func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
 	start := time.Now()
-	objs, err := store.List("", marker, MaxResults)
+	objs, err := store.List("", marker, maxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
 	}
 	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
-	out := make(chan *object.Object, MaxResults)
+	out := make(chan *object.Object, maxResults)
 	go func() {
 		lastkey := ""
 	END:
@@ -59,7 +63,7 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 			}
 			marker = lastkey
 			start = time.Now()
-			objs, err = store.List("", marker, MaxResults)
+			objs, err = store.List("", marker, maxResults)
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
 			if err != nil {
 				// Telling that the listing has failed
@@ -73,7 +77,11 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 	return out, nil
 }
 
-func replicate(src, dst object.ObjectStorage, obj *object.Object) error {
+func copy(src, dst object.ObjectStorage, obj *object.Object) error {
+	concurrent <- 1
+	defer func() {
+		<-concurrent
+	}()
 	key := obj.Key
 	firstBlock := -1
 	if obj.Size > maxBlock {
@@ -120,10 +128,99 @@ func replicate(src, dst object.ObjectStorage, obj *object.Object) error {
 	return dst.Put(key, f)
 }
 
-// sync comparing all the ordered keys from two object storage, replicate the missed ones.
+func try(n int, f func() error) (err error) {
+	for i := 0; i < n; i++ {
+		err = f()
+		if err == nil {
+			return
+		}
+		time.Sleep(time.Second * time.Duration(i*i))
+	}
+	return
+}
+
+func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
+	if obj.Size < maxBlock {
+		return try(3, func() error {
+			return copy(src, dst, obj)
+		})
+	}
+	upload, err := dst.CreateMultipartUpload(obj.Key)
+	if err != nil {
+		return try(3, func() error {
+			return copy(src, dst, obj)
+		})
+	}
+	partSize := int64(upload.MinPartSize)
+	if partSize == 0 {
+		partSize = defaultPartSize
+	}
+	if obj.Size > partSize*int64(upload.MaxCount) {
+		partSize = obj.Size / int64(upload.MaxCount)
+		partSize = ((partSize-1)>>20 + 1) << 20 // align to MB
+	}
+	n := int((obj.Size-1)/partSize) + 1
+	key := obj.Key
+	logger.Debugf("Copying object %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
+	parts := make([]*object.Part, n)
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func(num int) {
+			sz := partSize
+			if num == n-1 {
+				sz = obj.Size - int64(num)*partSize
+			}
+			var err error
+			concurrent <- 1
+			defer func() {
+				<-concurrent
+			}()
+			data := make([]byte, sz)
+			err = try(3, func() error {
+				r, err := src.Get(key, int64(num)*partSize, int64(sz))
+				if err != nil {
+					return nil
+				}
+				_, err = io.ReadFull(r, data)
+				return err
+			})
+			if err == nil {
+				err = try(3, func() error {
+					// PartNumber starts from 1
+					parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, data)
+					return err
+				})
+			}
+			if err != nil {
+				errs <- fmt.Errorf("part %d: %s", num, err.Error())
+				logger.Warningf("Failed to copy %s part %d: %s", key, num, err.Error())
+			} else {
+				errs <- nil
+				logger.Debugf("Copied %s part %d", key, num)
+			}
+		}(i)
+	}
+	for i := 0; i < n; i++ {
+		if err = <-errs; err != nil {
+			break
+		}
+	}
+	if err == nil {
+		err = try(3, func() error {
+			return dst.CompleteUpload(key, upload.UploadID, parts)
+		})
+	}
+	if err != nil {
+		dst.AbortUpload(key, upload.UploadID)
+		return fmt.Errorf("multipart: %s", err.Error())
+	}
+	return nil
+}
+
 func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Object) {
 	todo := make(chan *object.Object, 10240)
 	wg := sync.WaitGroup{}
+	concurrent = make(chan int, *threads)
 	for i := 0; i < *threads; i++ {
 		wg.Add(1)
 		go func() {
@@ -134,16 +231,10 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 					break
 				}
 				start := time.Now()
-				var err error
-				for t := 0; t < 3; t++ {
-					err = replicate(src, dst, obj)
-					if err == nil {
-						break
-					}
-				}
+				err := copyInParallel(src, dst, obj)
 				if err != nil {
 					atomic.AddUint64(&failed, 1)
-					logger.Errorf("Failed to replicate %s: %s", obj.Key, err.Error())
+					logger.Errorf("Failed to copy %s: %s", obj.Key, err.Error())
 				} else {
 					atomic.AddUint64(&copied, 1)
 					atomic.AddUint64(&copiedBytes, uint64(obj.Size))
@@ -158,7 +249,7 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 OUT:
 	for obj := range srckeys {
 		if obj == nil {
-			logger.Errorf("Listing failed, stop replicating, waiting for pending ones")
+			logger.Errorf("Listing failed, stop syncing, waiting for pending ones")
 			break
 		}
 		atomic.AddUint64(&found, 1)
@@ -169,7 +260,7 @@ OUT:
 				hasMore = false
 			} else if dstobj == nil {
 				// Listing failed, stop
-				logger.Errorf("Listing failed, stop replicating, waiting for pending ones")
+				logger.Errorf("Listing failed, stop syncing, waiting for pending ones")
 				break OUT
 			}
 		}
@@ -185,7 +276,7 @@ OUT:
 
 func showProgress() {
 	var lastCopied, lastBytes uint64
-	var lastTime time.Time = time.Now()
+	var lastTime = time.Now()
 	for {
 		if found == 0 {
 			time.Sleep(time.Millisecond * 10)
