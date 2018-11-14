@@ -37,7 +37,7 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
 	}
-	logger.Debugf("found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
+	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
 	out := make(chan *object.Object, MaxResults)
 	go func() {
 		lastkey := ""
@@ -60,7 +60,7 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 			marker = lastkey
 			start = time.Now()
 			objs, err = store.List("", marker, MaxResults)
-			logger.Debugf("found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
+			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
 			if err != nil {
 				// Telling that the listing has failed
 				out <- nil
@@ -134,13 +134,20 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 					break
 				}
 				start := time.Now()
-				if err := replicate(src, dst, obj); err != nil {
-					logger.Warningf("Failed to replicate %s from %s to %s: %s", obj.Key, src, dst, err.Error())
+				var err error
+				for t := 0; t < 3; t++ {
+					err = replicate(src, dst, obj)
+					if err == nil {
+						break
+					}
+				}
+				if err != nil {
 					atomic.AddUint64(&failed, 1)
+					logger.Errorf("Failed to replicate %s: %s", obj.Key, err.Error())
 				} else {
 					atomic.AddUint64(&copied, 1)
 					atomic.AddUint64(&copiedBytes, uint64(obj.Size))
-					logger.Debugf("copied %s %d bytes in %s", obj.Key, obj.Size, time.Now().Sub(start))
+					logger.Debugf("Copied %s (%d bytes) in %s", obj.Key, obj.Size, time.Now().Sub(start))
 				}
 			}
 		}()
@@ -212,7 +219,7 @@ func showProgress() {
 
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, marker, end string) error {
-	logger.Infof("syncing between %s and %s (starting from %q)", src, dst, marker)
+	logger.Infof("Syncing between %s and %s (starting from %q)", src, dst, marker)
 	cha, err := Iterate(src, marker, end)
 	if err != nil {
 		return err
@@ -228,6 +235,6 @@ func Sync(src, dst object.ObjectStorage, marker, end string) error {
 	}
 	doSync(src, dst, cha, chb)
 	println()
-	logger.Infof("found: %d, copied: %d, failed: %d", atomic.LoadUint64(&found), atomic.LoadUint64(&copied), atomic.LoadUint64(&failed))
+	logger.Infof("Found: %d, copied: %d, failed: %d", atomic.LoadUint64(&found), atomic.LoadUint64(&copied), atomic.LoadUint64(&failed))
 	return nil
 }
