@@ -8,6 +8,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,8 +18,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var start = flag.String("start", "", "the start of keys to sync")
-var end = flag.String("end", "", "the last keys to sync")
+var start = flag.String("start", "", "the first key to sync")
+var end = flag.String("end", "", "the last key to sync")
 var threads = flag.Int("p", 50, "number of concurrent threads")
 
 var verbose = flag.Bool("v", false, "turn on debug log")
@@ -79,6 +80,12 @@ func createStorage(uri string) object.ObjectStorage {
 }
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: juicesync [options] SRC DST\n")
+		fmt.Fprintln(os.Stderr, "\tSRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]\n")
+		fmt.Fprintln(os.Stderr, "Options:")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 2 {
