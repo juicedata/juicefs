@@ -204,11 +204,27 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
-	uri, _ := url.ParseRequestURI(endpoint)
+	uri, err := url.ParseRequestURI(endpoint)
+	if err != nil {
+		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err.Error())
+	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
-	hostParts := strings.Split(uri.Host, ".")
+	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucket := hostParts[0]
-	region := hostParts[1][3:]
+	endpoint = hostParts[1]
+	if strings.HasPrefix(endpoint, "s3-") || strings.HasPrefix(endpoint, "s3.") {
+		endpoint = endpoint[3:]
+	}
+	if strings.HasPrefix(endpoint, "dualstack") {
+		endpoint = endpoint[len("dualstack."):]
+	}
+	if endpoint == "amazonaws.com" {
+		endpoint = "us-east-1." + endpoint
+	}
+	region := strings.Split(endpoint, ".")[0]
+	if region == "external-1" {
+		region = "us-east-1"
+	}
 
 	awsConfig := &aws.Config{
 		Region:     &region,
