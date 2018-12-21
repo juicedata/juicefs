@@ -81,8 +81,8 @@ func createStorage(uri string) object.ObjectStorage {
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: juicesync [options] SRC DST\n")
-		fmt.Fprintln(os.Stderr, "\tSRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]\n")
+		fmt.Fprintln(os.Stderr, "Usage: juicesync [options] SRC DST")
+		fmt.Fprintln(os.Stderr, "\tSRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]")
 		fmt.Fprintln(os.Stderr, "Options:")
 		flag.PrintDefaults()
 	}
