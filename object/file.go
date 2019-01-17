@@ -250,12 +250,14 @@ func (d *filestore) CompleteUpload(key string, uploadID string, parts []*Part) e
 			return e
 		}
 		defer r.Close()
-		d, e := ioutil.ReadAll(r)
-		if e != nil {
+		if _, e := io.Copy(f, r); e != nil {
 			return e
 		}
-		if _, e := f.Write(d); e != nil {
-			return e
+	}
+	fs, err := ioutil.ReadDir(uploadID)
+	if err == nil {
+		for _, f := range fs {
+			os.Remove(filepath.Join(uploadID, f.Name()))
 		}
 	}
 	return nil
