@@ -222,13 +222,18 @@ func (d *filestore) UploadPart(key string, uploadID string, num int, body []byte
 	return &Part{Num: num, ETag: path}, ioutil.WriteFile(path, body, os.FileMode(0700))
 }
 
-func (d *filestore) AbortUpload(key string, uploadID string) {
+func (d *filestore) cleanup(uploadID string) {
 	fs, err := ioutil.ReadDir(uploadID)
 	if err == nil {
 		for _, f := range fs {
 			os.Remove(filepath.Join(uploadID, f.Name()))
 		}
 	}
+	os.Remove(uploadID)
+}
+
+func (d *filestore) AbortUpload(key string, uploadID string) {
+	d.cleanup(uploadID)
 }
 
 func (d *filestore) CompleteUpload(key string, uploadID string, parts []*Part) error {
@@ -254,12 +259,7 @@ func (d *filestore) CompleteUpload(key string, uploadID string, parts []*Part) e
 			return e
 		}
 	}
-	fs, err := ioutil.ReadDir(uploadID)
-	if err == nil {
-		for _, f := range fs {
-			os.Remove(filepath.Join(uploadID, f.Name()))
-		}
-	}
+	d.cleanup(uploadID)
 	return nil
 }
 
