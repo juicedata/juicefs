@@ -81,3 +81,7 @@
 [[constraint]]
   name = "github.com/ks3sdklib/aws-sdk-go"
   revision = "dafab05ad142797d6787c3b33df0cd59c29bc9dc"
+
+[[constraint]]
+  name = "github.com/pkg/sftp"
+  revision = "a713b07e6d90e1831d7fefcb69f1310edb3783ae"

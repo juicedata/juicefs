@@ -11,9 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/juicedata/juicesync/object"
 	"github.com/juicedata/juicesync/utils"
+	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/sirupsen/logrus"
 )
@@ -42,6 +44,28 @@ func supportHTTPS(name, endpoint string) bool {
 
 func createStorage(uri string) object.ObjectStorage {
 	if !strings.Contains(uri, "://") {
+		if strings.Contains(uri, ":") {
+			var user string
+			if strings.Contains(uri, "@") {
+				parts := strings.Split(uri, "@")
+				user = parts[0]
+				uri = parts[1]
+			}
+			var pass string
+			if strings.Contains(user, ":") {
+				parts := strings.Split(uri, ":")
+				user = parts[0]
+				pass = parts[1]
+			} else {
+				fmt.Print("Enter Password: ")
+				bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
+				if err != nil {
+					logger.Fatalf("Read password: %s", err.Error())
+				}
+				pass = string(bytePassword)
+			}
+			return object.CreateStorage("sftp", uri, user, pass)
+		}
 		var e error
 		uri, e = filepath.Abs(uri)
 		if e != nil {
