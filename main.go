@@ -53,7 +53,7 @@ func createStorage(uri string) object.ObjectStorage {
 			}
 			var pass string
 			if strings.Contains(user, ":") {
-				parts := strings.Split(uri, ":")
+				parts := strings.Split(user, ":")
 				user = parts[0]
 				pass = parts[1]
 			} else {

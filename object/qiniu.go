@@ -3,7 +3,6 @@
 package object
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,9 +30,6 @@ func (q *qiniu) String() string {
 }
 
 func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
-	if os.Getenv("QINIU_DOMAIN") == "" {
-		return nil, errors.New("Please export QINIU_DOMAIN to download keys with prefix '/'")
-	}
 	baseUrl := kodo.MakeBaseUrl(os.Getenv("QINIU_DOMAIN"), key)
 	url := q.b.Conn.MakePrivateUrl(baseUrl, nil)
 	req, err := http.NewRequest("GET", url, nil)
@@ -61,8 +57,11 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (q *qiniu) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	// S3 SDK cannot get objects with prefix "/" in the key
-	if strings.HasPrefix(key, "/") {
+	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
 		return q.download(key, off, limit)
+	}
+	for strings.HasPrefix(key, "/") {
+		key = key[1:]
 	}
 	return q.s3client.Get(key, off, limit)
 }
@@ -113,11 +112,13 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
 		return nil, err
 	}
 	n := len(entries)
-	objs := make([]*Object, n)
+	objs := make([]*Object, 0, n)
 	for i := 0; i < n; i++ {
 		entry := entries[i]
 		mtime := int(entry.PutTime / 10000000)
-		objs[i] = &Object{entry.Key, entry.Fsize, mtime, mtime}
+		if entry.Key != "" {
+			objs = append(objs, &Object{entry.Key, entry.Fsize, mtime, mtime})
+		}
 	}
 	return objs, nil
 }

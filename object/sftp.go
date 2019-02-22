@@ -250,7 +250,6 @@ func (f *sftpStore) List(prefix, marker string, limit int64) ([]*Object, error) 
 				if strings.HasPrefix(key, "/") {
 					key = key[1:]
 				}
-				println("find", path, key, prefix)
 				info := w.Stat()
 				if key != "" && key >= marker && strings.HasPrefix(key, prefix) && !info.IsDir() && info.Size() > 0 {
 					t := int(info.ModTime().Unix())
