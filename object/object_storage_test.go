@@ -328,3 +328,11 @@ func TestBOS(t *testing.T) {
 	b := newBOS("https://test.su.bcebos.com", os.Getenv("BOS_ACCESS_KEY"), os.Getenv("BOS_SECRET_KEY"))
 	testStorage(t, b)
 }
+
+func TestSftp(t *testing.T) {
+	if os.Getenv("SFTP_HOST") == "" {
+		t.SkipNow()
+	}
+	b := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
+	testStorage(t, b)
+}

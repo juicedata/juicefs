@@ -44,6 +44,7 @@ Options:
 SRC and DST must be an URI of the following object storage:
 
 - file: local files
+- sftp: FTP via SSH
 - s3: Amazon S3
 - gcs: Google Cloud Storage
 - wasb: Windows Azure Blob Storage
@@ -65,6 +66,7 @@ SRC and DST should be in the following format:
 Some examples:
 
 - local/path
+- user@host:path
 - file:///Users/me/code/
 - s3://my-bucket.us-east1.amazonaws.com/
 - s3://access-key:secret-key-id@my-bucket.us-west2.s3.amazonaws.com/prefix
