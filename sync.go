@@ -268,7 +268,7 @@ OUT:
 			}
 		}
 		// FIXME: there is a race when source is modified during coping
-		if !hasMore || obj.Key < dstobj.Key || obj.Key == dstobj.Key && obj.Mtime > dstobj.Mtime {
+		if !hasMore || obj.Key < dstobj.Key || *update && obj.Key == dstobj.Key && obj.Mtime > dstobj.Mtime {
 			todo <- obj
 			atomic.AddUint64(&missing, 1)
 		}
