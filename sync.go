@@ -231,7 +231,10 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 					break
 				}
 				start := time.Now()
-				err := copyInParallel(src, dst, obj)
+				var err error
+				if !*dry {
+					err = copyInParallel(src, dst, obj)
+				}
 				if err != nil {
 					atomic.AddUint64(&failed, 1)
 					logger.Errorf("Failed to copy %s: %s", obj.Key, err.Error())
