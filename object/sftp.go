@@ -199,7 +199,7 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if err := c.sftpClient.MkdirAll(filepath.Dir(p)); err != nil {
 		return err
 	}
-	ff, err := c.sftpClient.Create(p + ".tmp")
+	ff, err := c.sftpClient.OpenFile(p+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		return err
 	}
@@ -255,6 +255,9 @@ func (s sortFI) Less(i, j int) bool {
 }
 
 func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) {
+	if path == "" {
+		path = "."
+	}
 	infos, err := c.ReadDir(path)
 	if err != nil {
 		return
