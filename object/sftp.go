@@ -207,6 +207,10 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	_, err = io.Copy(ff, in)
 	if err == nil {
 		err = c.sftpClient.Rename(p+".tmp", p)
+		if err != nil {
+			c.sftpClient.Remove(p)
+			err = c.sftpClient.Rename(p+".tmp", p)
+		}
 	}
 	return err
 }
