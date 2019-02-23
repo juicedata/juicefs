@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -198,12 +199,15 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if err := c.sftpClient.MkdirAll(filepath.Dir(p)); err != nil {
 		return err
 	}
-	ff, err := c.sftpClient.Create(p)
+	ff, err := c.sftpClient.Create(p + ".tmp")
 	if err != nil {
 		return err
 	}
 	defer ff.Close()
 	_, err = io.Copy(ff, in)
+	if err == nil {
+		err = c.sftpClient.Rename(p+".tmp", p)
+	}
 	return err
 }
 
@@ -234,7 +238,49 @@ func (f *sftpStore) Delete(key string) error {
 	return c.sftpClient.Remove(f.path(key))
 }
 
+type sortFI []os.FileInfo
+
+func (s sortFI) Len() int      { return len(s) }
+func (s sortFI) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s sortFI) Less(i, j int) bool {
+	name1 := s[i].Name()
+	if s[i].IsDir() {
+		name1 += "/"
+	}
+	name2 := s[j].Name()
+	if s[j].IsDir() {
+		name2 += "/"
+	}
+	return name1 < name2
+}
+
+func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) {
+	infos, err := c.ReadDir(path)
+	if err != nil {
+		return
+	}
+	sort.Sort(sortFI(infos))
+	for _, fi := range infos {
+		p := path + "/" + fi.Name()
+		key := p[len(f.root):]
+		if strings.HasPrefix(key, "/") {
+			key = key[1:]
+		}
+		if key >= marker {
+			if fi.IsDir() {
+				f.find(c, p, marker, out)
+			} else if fi.Size() > 0 {
+				t := int(fi.ModTime().Unix())
+				out <- &Object{key, fi.Size(), t, t}
+			}
+		}
+	}
+}
+
 func (f *sftpStore) List(prefix, marker string, limit int64) ([]*Object, error) {
+	if limit > 1000 {
+		limit = 1000
+	}
 	if marker != f.lastListed || f.listing == nil {
 		c, err := f.getSftpConnection()
 		if err != nil {
@@ -243,19 +289,7 @@ func (f *sftpStore) List(prefix, marker string, limit int64) ([]*Object, error) 
 		listed := make(chan *Object, 10240)
 		go func() {
 			defer f.putSftpConnection(&c, nil)
-			w := c.sftpClient.Walk(filepath.Join(f.root))
-			for w.Step() {
-				path := w.Path()
-				key := path[len(f.root):]
-				if strings.HasPrefix(key, "/") {
-					key = key[1:]
-				}
-				info := w.Stat()
-				if key != "" && key >= marker && strings.HasPrefix(key, prefix) && !info.IsDir() && info.Size() > 0 {
-					t := int(info.ModTime().Unix())
-					listed <- &Object{key, info.Size(), t, t}
-				}
-			}
+			f.find(c.sftpClient, f.root, marker, listed)
 			close(listed)
 		}()
 		f.listing = listed

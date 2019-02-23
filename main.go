@@ -23,6 +23,7 @@ import (
 var start = flag.String("start", "", "the first key to sync")
 var end = flag.String("end", "", "the last key to sync")
 var threads = flag.Int("p", 50, "number of concurrent threads")
+var dry = flag.Bool("dry", false, "don't copy file")
 
 var verbose = flag.Bool("v", false, "turn on debug log")
 var quiet = flag.Bool("q", false, "change log level to ERROR")
