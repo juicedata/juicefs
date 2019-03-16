@@ -58,6 +58,7 @@ SRC and DST must be an URI of the following object storage:
 - qiniu: Qiniu
 - b2: Backblaze B2
 - space: Digital Ocean Space
+- obs: Huawei Object Storage Service
 
 SRC and DST should be in the following format:
 
@@ -73,6 +74,7 @@ Some examples:
 - gcs://my-bucket.us-west1.googleapi.com/
 - oss://test.oss-us-west-1.aliyuncs.com
 - cos://test-1234.cos.ap-beijing.myqcloud.com
+- obs://test.obs.cn-north-1.myhwclouds.com
 
 Note:
 
