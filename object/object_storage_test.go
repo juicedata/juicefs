@@ -336,3 +336,11 @@ func TestSftp(t *testing.T) {
 	b := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
 	testStorage(t, b)
 }
+
+func TestOBS(t *testing.T) {
+	if os.Getenv("OBS_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
+	b := newObs("https://test.obs.cn-north-1.myhwclouds.com", os.Getenv("OBS_ACCESS_KEY"), os.Getenv("OBS_SECRET_KEY"))
+	testStorage(t, b)
+}
