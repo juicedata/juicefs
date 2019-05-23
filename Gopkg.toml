@@ -85,3 +85,7 @@
 [[constraint]]
   name = "github.com/pkg/sftp"
   revision = "a713b07e6d90e1831d7fefcb69f1310edb3783ae"
+
+[[constraint]]
+  name = 	"github.com/huaweicloud/huaweicloud-sdk-go-obs"
+  revision = "3a9e1f8023d564b6f02ed9028ead77fc4603db54"
