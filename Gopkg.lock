@@ -151,6 +151,13 @@
   version = "v2.0.0"
 
 [[projects]]
+  digest = "1:c1ae0e61ebd4ce810da78f83a71eba641edc2845efda470637a168b0b5eb3872"
+  name = "github.com/huaweicloud/huaweicloud-sdk-go-obs"
+  packages = ["obs"]
+  pruneopts = ""
+  revision = "3a9e1f8023d564b6f02ed9028ead77fc4603db54"
+
+[[projects]]
   digest = "1:6f49eae0c1e5dab1dafafee34b207aeb7a42303105960944828c2079b92fc88e"
   name = "github.com/jmespath/go-jmespath"
   packages = ["."]
@@ -506,6 +513,7 @@
     "github.com/baidubce/bce-sdk-go/bce",
     "github.com/baidubce/bce-sdk-go/services/bos",
     "github.com/baidubce/bce-sdk-go/services/bos/api",
+    "github.com/huaweicloud/huaweicloud-sdk-go-obs/obs",
     "github.com/ks3sdklib/aws-sdk-go/aws",
     "github.com/ks3sdklib/aws-sdk-go/aws/credentials",
     "github.com/ks3sdklib/aws-sdk-go/service/s3",

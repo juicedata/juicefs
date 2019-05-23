@@ -3,11 +3,12 @@ package object
 import (
 	"bytes"
 	"fmt"
-	"huawei/obs"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"strings"
+
+	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 )
 
 type obsClient struct {
