@@ -236,6 +236,11 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 				if *deleteSrc && obj.Size == 0 {
 					if !*dry {
 						err = src.Delete(obj.Key)
+						if err != nil {
+							// slow down
+							time.Sleep(time.Millisecond * 100)
+							err = src.Delete(obj.Key)
+						}
 					}
 					if err == nil {
 						atomic.AddUint64(&deleted, 1)
