@@ -30,6 +30,7 @@ var (
 	copied      uint64
 	copiedBytes uint64
 	failed      uint64
+	deleted     uint64
 	concurrent  chan int
 )
 
@@ -232,6 +233,17 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 				}
 				start := time.Now()
 				var err error
+				if *deleteSrc && obj.Size == 0 {
+					if !*dry {
+						err = src.Delete(obj.Key)
+					}
+					if err == nil {
+						atomic.AddUint64(&deleted, 1)
+					} else {
+						atomic.AddUint64(&failed, 1)
+					}
+					continue
+				}
 				if !*dry {
 					err = copyInParallel(src, dst, obj)
 				}
@@ -271,6 +283,9 @@ OUT:
 		if !hasMore || obj.Key < dstobj.Key || *update && obj.Key == dstobj.Key && obj.Mtime > dstobj.Mtime {
 			todo <- obj
 			atomic.AddUint64(&missing, 1)
+		} else if *deleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size && dstobj.Mtime >= obj.Mtime {
+			obj.Size = 0
+			todo <- obj
 		}
 	}
 	close(todo)
@@ -286,7 +301,7 @@ func showProgress() {
 			continue
 		}
 		same := atomic.LoadUint64(&found) - atomic.LoadUint64(&missing)
-		var width uint64 = 80
+		var width uint64 = 45
 		a := width * same / found
 		b := width * copied / found
 		var bar [80]byte
@@ -306,7 +321,7 @@ func showProgress() {
 		lastCopied = copied
 		lastBytes = copiedBytes
 		lastTime = now
-		fmt.Printf("[%s] \t%d \t%d%% \t%.0f/s \t%.0f MB/s         \r", string(bar[:]), found, (found-missing+copied)*100/found, fps, bw)
+		fmt.Printf("[%s] % 8d % 2d%% % 4.0f/s % 4.1f MB/s \r", string(bar[:]), found, (found-missing+copied)*100/found, fps, bw)
 		time.Sleep(time.Millisecond * 300)
 	}
 }
@@ -329,6 +344,6 @@ func Sync(src, dst object.ObjectStorage, marker, end string) error {
 	}
 	doSync(src, dst, cha, chb)
 	println()
-	logger.Infof("Found: %d, copied: %d, failed: %d", atomic.LoadUint64(&found), atomic.LoadUint64(&copied), atomic.LoadUint64(&failed))
+	logger.Infof("Found: %d, copied: %d, deleted: %d, failed: %d", found, copied, deleted, failed)
 	return nil
 }
