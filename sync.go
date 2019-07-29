@@ -283,7 +283,7 @@ OUT:
 		if !hasMore || obj.Key < dstobj.Key || *update && obj.Key == dstobj.Key && obj.Mtime > dstobj.Mtime {
 			todo <- obj
 			atomic.AddUint64(&missing, 1)
-		} else if *deleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size && dstobj.Mtime >= obj.Mtime {
+		} else if *deleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
 			obj.Size = 0
 			todo <- obj
 		}
