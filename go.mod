@@ -11,7 +11,7 @@ require (
 	github.com/dgrijalva/jwt-go v3.0.0+incompatible // indirect
 	github.com/go-ini/ini v1.28.2 // indirect
 	github.com/googleapis/gax-go v2.0.0+incompatible // indirect
-	github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190128072727-3a9e1f8023d5
+	github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5
 	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
@@ -34,3 +34,5 @@ require (
 	gopkg.in/yaml.v2 v2.2.1 // indirect
 	qiniupkg.com/x v7.0.7+incompatible // indirect
 )
+
+go 1.13

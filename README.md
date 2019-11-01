@@ -18,6 +18,23 @@ $HOME/go/bin/juicesync
 We assume your GOPATH is `$HOME/go`. How to set GOPATH? Please visit [The
 official document](https://github.com/golang/go/wiki/SettingGOPATH)
 
+# Develop
+
+* If you're using Go 1.13
+
+	```
+	go build
+	```
+	
+* If you're using Go >= 1.11, < 1.13
+
+	```
+	export GO111MODULE=on
+	go build
+	```
+	
+* If you're using Go < 1.11, use classic `$GOPATH` + `vendor` to build.
+
 # Upgrade
 
 ```
