@@ -36,6 +36,8 @@ github.com/googleapis/gax-go/v2 v2.0.4 h1:hU4mGcQI4DaAYW+IbTun+2qEZVFxK0ySjQLTbS
 github.com/googleapis/gax-go/v2 v2.0.4/go.mod h1:0Wqv26UfaUD9n4G6kQubkQ+KchISgw+vpHVxEJEs9eg=
 github.com/hashicorp/golang-lru v0.5.0 h1:CL2msUPvZTLb5O648aiLNJw3hnBxN2+1Jq8rCOH9wdo=
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
+github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5 h1:9cpB9emicKlvo6mRm/fYEcTkiM8SPgJ+gTc/GXQH6V8=
+github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5/go.mod h1:l7VUhRbTKCzdOacdT4oWCwATKyvZqUOlOqr0Ous3k4s=
 github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190128072727-3a9e1f8023d5 h1:zgY/mMV5GeAyVI/7GJ1I6KPAWUQ5rPywrVpT/JO6LOY=
 github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190128072727-3a9e1f8023d5/go.mod h1:l7VUhRbTKCzdOacdT4oWCwATKyvZqUOlOqr0Ous3k4s=
 github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190128072727-3a9e1f8023d564b6f02ed9028ead77fc4603db54/go.mod h1:l7VUhRbTKCzdOacdT4oWCwATKyvZqUOlOqr0Ous3k4s=
