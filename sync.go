@@ -239,13 +239,21 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 				}
 				start := time.Now()
 				var err error
-				if *deleteSrc && obj.Size == 0 {
+				if obj.Size <= 0 {
 					if !*dry {
-						err = src.Delete(obj.Key)
-						if err != nil {
-							// slow down
-							time.Sleep(time.Millisecond * 100)
-							err = src.Delete(obj.Key)
+						err = try(2, func() error {
+							if *deleteSrc && obj.Size == 0 {
+								return src.Delete(obj.Key)
+							} else if *deleteDst && obj.Size == -1 {
+								return dst.Delete(obj.Key)
+							} else {
+								return nil
+							}
+						})
+						if *deleteSrc {
+							logger.Debugf("Delete %s from %s", obj.Key, src)
+						} else if *deleteDst {
+							logger.Debugf("Delete %s from %s", obj.Key, dst)
 						}
 					}
 					if err == nil {
@@ -276,17 +284,23 @@ OUT:
 	for obj := range srckeys {
 		if obj == nil {
 			logger.Errorf("Listing failed, stop syncing, waiting for pending ones")
+			hasMore = false
 			break
 		}
 		atomic.AddUint64(&found, 1)
 		for hasMore && (dstobj == nil || obj.Key > dstobj.Key) {
 			var ok bool
+			if *deleteDst && dstobj != nil && dstobj.Key < obj.Key {
+				dstobj.Size = -1
+				todo <- dstobj
+			}
 			dstobj, ok = <-dstkeys
 			if !ok {
 				hasMore = false
 			} else if dstobj == nil {
 				// Listing failed, stop
 				logger.Errorf("Listing failed, stop syncing, waiting for pending ones")
+				hasMore = false
 				break OUT
 			}
 		}
@@ -297,6 +311,21 @@ OUT:
 		} else if *deleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
 			obj.Size = 0
 			todo <- obj
+		}
+		if dstobj != nil && dstobj.Key == obj.Key {
+			dstobj = nil
+		}
+	}
+	if *deleteDst && hasMore {
+		if dstobj != nil {
+			dstobj.Size = -1
+			todo <- dstobj
+		}
+		for obj := range dstkeys {
+			if obj != nil {
+				obj.Size = -1
+				todo <- obj
+			}
 		}
 	}
 	close(todo)
