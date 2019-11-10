@@ -17,7 +17,6 @@ require (
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
 	github.com/kurin/blazer v0.2.1
 	github.com/mattn/go-isatty v0.0.4
-	github.com/pengsrc/go-shared v0.1.1 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/sftp v1.10.0
 	github.com/qiniu/api.v7 v7.1.0+incompatible
@@ -25,13 +24,13 @@ require (
 	github.com/satori/uuid v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
-	github.com/yunify/qingstor-sdk-go v2.2.12+incompatible
+	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible
+	github.com/yunify/qingstor-sdk-go/v3 v3.1.1 // indirect
 	golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f
 	golang.org/x/net v0.0.0-20190522155817-f3200d17e092
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
 	golang.org/x/sys v0.0.0-20190522044717-8097e1b27ff5 // indirect
 	google.golang.org/api v0.5.0
-	gopkg.in/yaml.v2 v2.2.1 // indirect
 	qiniupkg.com/x v7.0.7+incompatible // indirect
 )
 
