@@ -8,6 +8,14 @@ juicesync will scan all the keys from two object stores, and comparing them in a
 
 # Install
 
+## With Homebrew
+
+```sh
+brew install juicedata/tap/juicesync
+```
+
+## With go
+
 After installed Go-1.9+
 
 ```
@@ -25,14 +33,14 @@ official document](https://github.com/golang/go/wiki/SettingGOPATH)
 	```
 	go build
 	```
-	
+
 * If you're using Go >= 1.11, < 1.13
 
 	```
 	export GO111MODULE=on
 	go build
 	```
-	
+
 * If you're using Go < 1.11, use classic `$GOPATH` + `vendor` to build.
 
 # Upgrade
