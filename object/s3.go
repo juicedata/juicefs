@@ -208,26 +208,10 @@ func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
 	if err != nil {
 		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err.Error())
 	}
-	ssl := strings.ToLower(uri.Scheme) == "https"
-	hostParts := strings.SplitN(uri.Host, ".", 2)
-	bucket := hostParts[0]
-	endpoint = hostParts[1]
-	if strings.HasPrefix(endpoint, "s3-") || strings.HasPrefix(endpoint, "s3.") {
-		endpoint = endpoint[3:]
-	}
-	if strings.HasPrefix(endpoint, "dualstack") {
-		endpoint = endpoint[len("dualstack."):]
-	}
-	if endpoint == "amazonaws.com" {
-		endpoint = "us-east-1." + endpoint
-	}
-	region := strings.Split(endpoint, ".")[0]
-	if region == "external-1" {
-		region = "us-east-1"
-	}
 
+	ssl := strings.ToLower(uri.Scheme) == "https"
 	awsConfig := &aws.Config{
-		Region:     &region,
+		Region:     aws.String("us-east-1"), // requires region...
 		DisableSSL: aws.Bool(!ssl),
 		HTTPClient: httpClient,
 	}
@@ -235,6 +219,44 @@ func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
 	}
 
+	var (
+		region string
+		bucket string
+	)
+	if !strings.Contains(uri.Host, ".s3") {
+		// take uri.Host as bucketname
+		bucket = uri.Host
+		// try to figure out the region of this bucket
+		service := s3.New(session.New(awsConfig))
+		result, err := service.GetBucketLocation(&s3.GetBucketLocationInput{
+			Bucket: aws.String(bucket),
+		})
+		if err != nil {
+			logger.Fatalf("Can't guess your region for bucket %s: %s", bucket, err.Error())
+		}
+		region = *result.LocationConstraint
+	} else {
+		// use uri.Host as endpoint
+		// to get region in endpoint
+		hostParts := strings.SplitN(uri.Host, ".s3", 2)
+		bucket = hostParts[0]
+		endpoint = "s3" + hostParts[1]
+		if strings.HasPrefix(endpoint, "s3-") || strings.HasPrefix(endpoint, "s3.") {
+			endpoint = endpoint[3:]
+		}
+		if strings.HasPrefix(endpoint, "dualstack") {
+			endpoint = endpoint[len("dualstack."):]
+		}
+		if endpoint == "amazonaws.com" {
+			endpoint = "us-east-1." + endpoint
+		}
+		region = strings.Split(endpoint, ".")[0]
+		if region == "external-1" {
+			region = "us-east-1"
+		}
+	}
+
+	awsConfig.Region = aws.String(region)
 	ses := session.New(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
 	return &s3client{bucket, s3.New(ses), ses}
 }
