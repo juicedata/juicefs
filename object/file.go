@@ -94,6 +94,11 @@ func (d *filestore) Delete(key string) error {
 	return os.Remove(d.path(key))
 }
 
+func isSymlinkAndDir(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
+}
+
 // walk recursively descends path, calling w.
 func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 	err := walkFn(path, info, nil)
@@ -115,7 +120,7 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 
 	for _, name := range names {
 		filename := filepath.Join(path, name)
-		fileInfo, err := os.Lstat(filename)
+		fileInfo, err := os.Stat(filename)
 		if err != nil {
 			if err := walkFn(filename, fileInfo, err); err != nil && err != filepath.SkipDir {
 				return err
@@ -139,7 +144,7 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 // large directories Walk can be inefficient.
 // Walk does not follow symbolic links.
 func Walk(root string, walkFn filepath.WalkFunc) error {
-	info, err := os.Lstat(root)
+	info, err := os.Stat(root)
 	if err != nil {
 		err = walkFn(root, nil, err)
 	} else {
@@ -165,7 +170,7 @@ func readDirNames(dirname string) ([]string, error) {
 	}
 	names := make([]string, len(fi))
 	for i := range fi {
-		if fi[i].IsDir() {
+		if fi[i].IsDir() || isSymlinkAndDir(filepath.Join(dirname, fi[i].Name())) {
 			names[i] = fi[i].Name() + "/"
 		} else {
 			names[i] = fi[i].Name()
