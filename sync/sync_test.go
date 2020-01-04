@@ -1,11 +1,12 @@
 // Copyright (C) 2018-present Juicedata Inc.
-package main
+package sync
 
 import (
 	"bytes"
 	"reflect"
 	"testing"
 
+	"github.com/juicedata/juicesync/config"
 	"github.com/juicedata/juicesync/object"
 )
 
@@ -37,22 +38,34 @@ func TestIterator(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
+	config := &config.Config{
+		Start:     "",
+		End:       "",
+		Threads:   50,
+		Update:    false,
+		Dry:       false,
+		DeleteSrc: false,
+		DeleteDst: false,
+		Verbose:   false,
+		Quiet:     false,
+	}
+
 	a := object.CreateStorage("mem", "", "", "")
 	a.Put("a", bytes.NewReader([]byte("a")))
 	a.Put("b", bytes.NewReader([]byte("a")))
+
 	b := object.CreateStorage("mem", "", "", "")
 	b.Put("aa", bytes.NewReader([]byte("a")))
 
-	err := Sync(a, b, "", "")
-	if err != nil {
+	if err := Sync(a, b, config); err != nil {
 		t.FailNow()
 	}
 	if copied != 2 {
 		t.Errorf("should copy 2 keys, but got %d", copied)
 		t.FailNow()
 	}
-	err = Sync(b, a, "", "")
-	if err != nil {
+
+	if err := Sync(b, a, config); err != nil {
 		t.FailNow()
 	}
 	if copied != 3 {
@@ -66,8 +79,7 @@ func TestSync(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = Sync(a, b, "", "")
-	if err != nil {
+	if err := Sync(a, b, config); err != nil {
 		t.FailNow()
 	}
 	if copied != 3 {

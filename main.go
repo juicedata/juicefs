@@ -3,7 +3,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -13,35 +12,27 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/juicedata/juicesync/config"
 	"github.com/juicedata/juicesync/object"
+	"github.com/juicedata/juicesync/sync"
 	"github.com/juicedata/juicesync/utils"
-	"golang.org/x/crypto/ssh/terminal"
-
+	"github.com/juicedata/juicesync/versioninfo"
 	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
+	"golang.org/x/crypto/ssh/terminal"
 )
-
-var start = flag.String("start", "", "the first key to sync")
-var end = flag.String("end", "", "the last key to sync")
-var threads = flag.Int("p", 50, "number of concurrent threads")
-var update = flag.Bool("u", false, "update existing file if the source is newer")
-var dry = flag.Bool("dry", false, "don't copy file")
-var deleteSrc = flag.Bool("deleteSrc", false, "delete objects from source after synced")
-var deleteDst = flag.Bool("deleteDst", false, "delete extraneous objects from destination")
-
-var verbose = flag.Bool("v", false, "turn on debug log")
-var quiet = flag.Bool("q", false, "change log level to ERROR")
 
 var logger = utils.GetLogger("juicesync")
 
 func supportHTTPS(name, endpoint string) bool {
-	if name == "ufile" {
+	switch name {
+	case "ufile":
 		return !(strings.Contains(endpoint, ".internal-") || strings.HasSuffix(endpoint, ".ucloud.cn"))
-	} else if name == "oss" {
+	case "oss":
 		return !(strings.Contains(endpoint, ".vpc100-oss") || strings.Contains(endpoint, "internal.aliyuncs.com"))
-	} else if name == "jss" {
-		// the internal endpoint does not support HTTPS
+	case "jss":
 		return false
-	} else {
+	default:
 		return true
 	}
 }
@@ -107,29 +98,109 @@ func createStorage(uri string) object.ObjectStorage {
 	return store
 }
 
-func main() {
-	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: juicesync [options] SRC DST")
-		fmt.Fprintln(os.Stderr, "\tSRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]")
-		fmt.Fprintln(os.Stderr, "Options:")
-		flag.PrintDefaults()
-	}
-	flag.Parse()
-	args := flag.Args()
-	if len(args) != 2 {
-		println("juicesync [options] SRC DST")
-		return
-	}
-	go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", 6070), nil)
+func run(c *cli.Context) error {
+	config := config.NewConfigFromCli(c)
+	go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", config.HTTPPort), nil)
 
-	if *verbose {
+	if config.Verbose {
 		utils.SetLogLevel(logrus.DebugLevel)
-	} else if *quiet {
+	} else if config.Quiet {
 		utils.SetLogLevel(logrus.ErrorLevel)
 	}
 	utils.InitLoggers(false)
 
-	src := createStorage(args[0])
-	dst := createStorage(args[1])
-	Sync(src, dst, *start, *end)
+	src := createStorage(c.Args().Get(0))
+	dst := createStorage(c.Args().Get(1))
+	return sync.Sync(src, dst, config)
+}
+
+func main() {
+	cli.VersionFlag = &cli.BoolFlag{
+		Name: "version", Aliases: []string{"V"},
+		Usage: "print only the version",
+	}
+	cli.VersionPrinter = func(c *cli.Context) {
+		fmt.Println(versioninfo.Version())
+	}
+
+	app := cli.NewApp()
+	app.Name = versioninfo.NAME
+	app.Usage = versioninfo.USAGE
+	app.Version = versioninfo.VERSION
+	app.Flags = []cli.Flag{
+		&cli.StringFlag{
+			Name:    "start",
+			Aliases: []string{"s"},
+			Value:   "",
+			Usage:   "the first key to sync",
+			EnvVars: []string{"JUICESYNC_START"},
+		},
+		&cli.StringFlag{
+			Name:    "end",
+			Aliases: []string{"e"},
+			Value:   "",
+			Usage:   "the last key to sync",
+			EnvVars: []string{"JUICESYNC_END"},
+		},
+		&cli.IntFlag{
+			Name:    "threads",
+			Aliases: []string{"p"},
+			Value:   50,
+			Usage:   "number of concurrent threads",
+			EnvVars: []string{"JUICESYNC_THREADS"},
+		},
+		&cli.IntFlag{
+			Name:    "http-port",
+			Value:   6070,
+			Usage:   "http port to listen to",
+			EnvVars: []string{"JUICESYNC_HTTP_PORT"},
+		},
+		&cli.BoolFlag{
+			Name:    "update",
+			Aliases: []string{"u"},
+			Usage:   "update existing file if the source is newer",
+			EnvVars: []string{"JUICESYNC_UPDATE"},
+		},
+		&cli.BoolFlag{
+			Name:    "dry",
+			Usage:   "don't copy file",
+			EnvVars: []string{"JUICESYNC_DRY"},
+		},
+		&cli.BoolFlag{
+			Name:    "delete-src",
+			Aliases: []string{"deleteSrc"},
+			Usage:   "delete objects from source after synced",
+			EnvVars: []string{"JUICESYNC_DELETE_SRC"},
+		},
+		&cli.BoolFlag{
+			Name:    "delete-dst",
+			Aliases: []string{"deleteDst"},
+			Usage:   "delete extraneous objects from destination",
+			EnvVars: []string{"JUICESYNC_DELETE_DST"},
+		},
+		&cli.BoolFlag{
+			Name:    "verbose",
+			Aliases: []string{"v"},
+			Usage:   "turn on debug log",
+			EnvVars: []string{"JUICESYNC_VERBOSE"},
+		},
+		&cli.BoolFlag{
+			Name:    "quiet",
+			Aliases: []string{"q"},
+			Usage:   "change log level to ERROR",
+			EnvVars: []string{"JUICESYNC_QUIET"},
+		},
+	}
+	app.Action = func(c *cli.Context) error {
+		if c.Args().Len() != 2 {
+			logger.Errorf(versioninfo.USAGE)
+			return nil
+		}
+		return run(c)
+	}
+
+	err := app.Run(os.Args)
+	if err != nil {
+		logger.Fatalf("Error running juicesync: %v", err.Error())
+	}
 }
