@@ -1,6 +1,6 @@
 // Copyright (C) 2018-present Juicedata Inc.
 
-package main
+package sync
 
 import (
 	"bytes"
@@ -12,7 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/juicedata/juicesync/config"
 	"github.com/juicedata/juicesync/object"
+	"github.com/juicedata/juicesync/utils"
 	"github.com/mattn/go-isatty"
 )
 
@@ -33,6 +35,8 @@ var (
 	deleted     uint64
 	concurrent  chan int
 )
+
+var logger = utils.GetLogger("juicesync")
 
 // Iterate on all the keys that starts at marker from object storage.
 func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
@@ -81,7 +85,7 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 	return out, nil
 }
 
-func copy(src, dst object.ObjectStorage, obj *object.Object) error {
+func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
 	concurrent <- 1
 	defer func() {
 		<-concurrent
@@ -146,13 +150,13 @@ func try(n int, f func() error) (err error) {
 func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 	if obj.Size < maxBlock {
 		return try(3, func() error {
-			return copy(src, dst, obj)
+			return copyObject(src, dst, obj)
 		})
 	}
 	upload, err := dst.CreateMultipartUpload(obj.Key)
 	if err != nil {
 		return try(3, func() error {
-			return copy(src, dst, obj)
+			return copyObject(src, dst, obj)
 		})
 	}
 	partSize := int64(upload.MinPartSize)
@@ -221,11 +225,11 @@ func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 	return nil
 }
 
-func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Object) {
+func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Object, config *config.Config) {
 	todo := make(chan *object.Object, 10240)
 	wg := sync.WaitGroup{}
-	concurrent = make(chan int, *threads)
-	for i := 0; i < *threads; i++ {
+	concurrent = make(chan int, config.Threads)
+	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -237,8 +241,8 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 				start := time.Now()
 				var err error
 				if obj.Size == markDelete {
-					if *deleteSrc {
-						if *dry {
+					if config.DeleteSrc {
+						if config.Dry {
 							logger.Debugf("Will delete %s from %s", obj.Key, src)
 							continue
 						}
@@ -252,8 +256,8 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 							atomic.AddUint64(&failed, 1)
 						}
 					}
-					if *deleteDst {
-						if *dry {
+					if config.DeleteDst {
+						if config.Dry {
 							logger.Debugf("Will delete %s from %s", obj.Key, dst)
 							continue
 						}
@@ -269,7 +273,7 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 					}
 					continue
 				}
-				if *dry {
+				if config.Dry {
 					logger.Debugf("Will copy %s (%d bytes)", obj.Key, obj.Size)
 					continue
 				}
@@ -298,7 +302,7 @@ OUT:
 		atomic.AddUint64(&found, 1)
 		for hasMore && (dstobj == nil || obj.Key > dstobj.Key) {
 			var ok bool
-			if *deleteDst && dstobj != nil && dstobj.Key < obj.Key {
+			if config.DeleteDst && dstobj != nil && dstobj.Key < obj.Key {
 				dstobj.Size = markDelete
 				todo <- dstobj
 			}
@@ -313,10 +317,10 @@ OUT:
 			}
 		}
 		// FIXME: there is a race when source is modified during coping
-		if !hasMore || obj.Key < dstobj.Key || *update && obj.Key == dstobj.Key && obj.Mtime > dstobj.Mtime {
+		if !hasMore || obj.Key < dstobj.Key || config.Update && obj.Key == dstobj.Key && obj.Mtime > dstobj.Mtime {
 			todo <- obj
 			atomic.AddUint64(&missing, 1)
-		} else if *deleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
+		} else if config.DeleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
 			obj.Size = markDelete
 			todo <- obj
 		}
@@ -324,7 +328,7 @@ OUT:
 			dstobj = nil
 		}
 	}
-	if *deleteDst && hasMore {
+	if config.DeleteDst && hasMore {
 		if dstobj != nil {
 			dstobj.Size = markDelete
 			todo <- dstobj
@@ -375,7 +379,8 @@ func showProgress() {
 }
 
 // Sync syncs all the keys between to object storage
-func Sync(src, dst object.ObjectStorage, start, end string) error {
+func Sync(src, dst object.ObjectStorage, config *config.Config) error {
+	start, end := config.Start, config.End
 	logger.Infof("Syncing from %s to %s", src, dst)
 	if start != "" {
 		logger.Infof("first key: %q", start)
@@ -383,21 +388,22 @@ func Sync(src, dst object.ObjectStorage, start, end string) error {
 	if end != "" {
 		logger.Infof("last key: %q", end)
 	}
-	cha, err := Iterate(src, start, end)
+
+	srcCh, err := Iterate(src, start, end)
 	if err != nil {
 		return err
 	}
-	chb, err := Iterate(dst, start, end)
+
+	dstCh, err := Iterate(dst, start, end)
 	if err != nil {
 		return err
 	}
 
 	tty := isatty.IsTerminal(os.Stdout.Fd())
-	if tty && !*verbose && !*quiet {
+	if tty && !config.Verbose && !config.Quiet {
 		go showProgress()
 	}
-	doSync(src, dst, cha, chb)
-	println()
+	doSync(src, dst, srcCh, dstCh, config)
 	logger.Infof("Found: %d, copied: %d, deleted: %d, failed: %d", found, copied, deleted, failed)
 	return nil
 }
