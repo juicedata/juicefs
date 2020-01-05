@@ -368,13 +368,19 @@ func showProgress() {
 }
 
 // Sync syncs all the keys between to object storage
-func Sync(src, dst object.ObjectStorage, marker, end string) error {
-	logger.Infof("Syncing between %s and %s (starting from %q)", src, dst, marker)
-	cha, err := Iterate(src, marker, end)
+func Sync(src, dst object.ObjectStorage, start, end string) error {
+	logger.Infof("Syncing from %s to %s", src, dst)
+	if start != "" {
+		logger.Infof("first key: %q", start)
+	}
+	if end != "" {
+		logger.Infof("last key: %q", end)
+	}
+	cha, err := Iterate(src, start, end)
 	if err != nil {
 		return err
 	}
-	chb, err := Iterate(dst, marker, end)
+	chb, err := Iterate(dst, start, end)
 	if err != nil {
 		return err
 	}
