@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,6 +21,7 @@ const (
 	maxResults      = 10240
 	defaultPartSize = 5 << 20
 	maxBlock        = defaultPartSize * 2
+	markDelete      = -1
 )
 
 var (
@@ -50,10 +50,6 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 		for len(objs) > 0 {
 			for _, obj := range objs {
 				key := obj.Key
-				if obj.Size == 0 && (strings.HasSuffix(key, "/") || strings.HasSuffix(key, "$")) {
-					logger.Debugf("skip directory marker: %s", key)
-					continue
-				}
 				if key <= lastkey {
 					logger.Fatalf("The keys are out of order: %q >= %q", lastkey, key)
 				}
@@ -240,33 +236,44 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 				}
 				start := time.Now()
 				var err error
-				if obj.Size <= 0 {
-					if !*dry {
-						err = try(2, func() error {
-							if *deleteSrc && obj.Size == 0 {
-								return src.Delete(obj.Key)
-							} else if *deleteDst && obj.Size == -1 {
-								return dst.Delete(obj.Key)
-							} else {
-								return nil
-							}
-						})
-						if *deleteSrc {
-							logger.Debugf("Delete %s from %s", obj.Key, src)
-						} else if *deleteDst {
-							logger.Debugf("Delete %s from %s", obj.Key, dst)
+				if obj.Size == markDelete {
+					if *deleteSrc {
+						if *dry {
+							logger.Debugf("Will delete %s from %s", obj.Key, src)
+							continue
+						}
+						if err = try(3, func() error {
+							return src.Delete(obj.Key)
+						}); err == nil {
+							logger.Debugf("Deleted %s from %s", obj.Key, src)
+							atomic.AddUint64(&deleted, 1)
+						} else {
+							logger.Errorf("Failed to delete %s from %s: %s", obj.Key, src, err.Error())
+							atomic.AddUint64(&failed, 1)
 						}
 					}
-					if err == nil {
-						atomic.AddUint64(&deleted, 1)
-					} else {
-						atomic.AddUint64(&failed, 1)
+					if *deleteDst {
+						if *dry {
+							logger.Debugf("Will delete %s from %s", obj.Key, dst)
+							continue
+						}
+						if err = try(3, func() error {
+							return dst.Delete(obj.Key)
+						}); err == nil {
+							logger.Debugf("Deleted %s from %s", obj.Key, dst)
+							atomic.AddUint64(&deleted, 1)
+						} else {
+							logger.Errorf("Failed to delete %s from %s: %s", obj.Key, dst, err.Error())
+							atomic.AddUint64(&failed, 1)
+						}
 					}
 					continue
 				}
-				if !*dry {
-					err = copyInParallel(src, dst, obj)
+				if *dry {
+					logger.Debugf("Will copy %s (%d bytes)", obj.Key, obj.Size)
+					continue
 				}
+				err = copyInParallel(src, dst, obj)
 				if err != nil {
 					atomic.AddUint64(&failed, 1)
 					logger.Errorf("Failed to copy %s: %s", obj.Key, err.Error())
@@ -292,7 +299,7 @@ OUT:
 		for hasMore && (dstobj == nil || obj.Key > dstobj.Key) {
 			var ok bool
 			if *deleteDst && dstobj != nil && dstobj.Key < obj.Key {
-				dstobj.Size = -1
+				dstobj.Size = markDelete
 				todo <- dstobj
 			}
 			dstobj, ok = <-dstkeys
@@ -310,7 +317,7 @@ OUT:
 			todo <- obj
 			atomic.AddUint64(&missing, 1)
 		} else if *deleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
-			obj.Size = 0
+			obj.Size = markDelete
 			todo <- obj
 		}
 		if dstobj != nil && dstobj.Key == obj.Key {
@@ -319,12 +326,12 @@ OUT:
 	}
 	if *deleteDst && hasMore {
 		if dstobj != nil {
-			dstobj.Size = -1
+			dstobj.Size = markDelete
 			todo <- dstobj
 		}
 		for obj := range dstkeys {
 			if obj != nil {
-				obj.Size = -1
+				obj.Size = markDelete
 				todo <- obj
 			}
 		}
