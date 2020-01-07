@@ -169,6 +169,26 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	} else {
 		t.Logf("%s does not support multipart upload: %s", s, err.Error())
 	}
+
+	// Copy empty objects
+	defer s.Delete("/empty")
+	defer s.Delete("/empty1")
+	if err := s.Put("/empty", bytes.NewReader([]byte{})); err != nil {
+		t.Fatalf("PUT empty object failed: %s", err.Error())
+	}
+	if err := s.Copy("/empty1", "/empty"); err != nil {
+		t.Fatalf("Copy empty object failed: %s", err)
+	}
+
+	// Copy `/` suffixed object
+	defer s.Delete("/slash/")
+	defer s.Delete("/slash1/")
+	if err := s.Put("/slash/", bytes.NewReader([]byte{})); err != nil {
+		t.Fatalf("PUT `/` suffixed object failed: %s", err.Error())
+	}
+	if err := s.Copy("/slash1/", "/slash/"); err != nil {
+		t.Fatalf("Copy `/` suffixed object failed: %s", err)
+	}
 }
 
 func TestMem(t *testing.T) {
