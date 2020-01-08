@@ -35,6 +35,16 @@ func TestIterator(t *testing.T) {
 		t.Errorf("result wrong: %s", keys)
 		t.FailNow()
 	}
+
+	// Single object
+	s := object.CreateStorage("mem", "", "", "")
+	s.Put("a", bytes.NewReader([]byte("a")))
+	ch, _ = Iterate(s, "", "")
+	keys = collectAll(ch)
+	if !reflect.DeepEqual(keys, []string{"a"}) {
+		t.Errorf("result wrong: %s", keys)
+		t.FailNow()
+	}
 }
 
 func TestSync(t *testing.T) {

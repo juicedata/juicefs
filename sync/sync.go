@@ -41,6 +41,7 @@ var logger = utils.GetLogger("juicesync")
 // Iterate on all the keys that starts at marker from object storage.
 func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
 	start := time.Now()
+	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List("", marker, maxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
@@ -49,22 +50,25 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
 	out := make(chan *object.Object, maxResults)
 	go func() {
-		lastkey := ""
+		var lastkey string
+		var continuing bool
 	END:
 		for len(objs) > 0 {
 			for _, obj := range objs {
 				key := obj.Key
-				if key <= lastkey {
-					logger.Fatalf("The keys are out of order: %q >= %q", lastkey, key)
-				}
-				if end != "" && key >= end {
+				if (end != "" || continuing) && key >= end {
 					break END
+				}
+				if continuing && key <= lastkey {
+					logger.Fatalf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
 				}
 				lastkey = key
 				out <- obj
 			}
 			marker = lastkey
+			continuing = true
 			start = time.Now()
+			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			objs, err = store.List("", marker, maxResults)
 			for err != nil {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
@@ -388,6 +392,7 @@ func Sync(src, dst object.ObjectStorage, config *config.Config) error {
 	if end != "" {
 		logger.Infof("last key: %q", end)
 	}
+	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
 	srcCh, err := Iterate(src, start, end)
 	if err != nil {
