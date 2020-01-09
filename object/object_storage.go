@@ -98,6 +98,7 @@ func register(name string, register Register) {
 func CreateStorage(name, endpoint, accessKey, secretKey string) ObjectStorage {
 	f, ok := storages[name]
 	if ok {
+		logger.Debugf("Creating %s storage at endpoint %s", name, endpoint)
 		return f(endpoint, accessKey, secretKey)
 	}
 	panic(fmt.Sprintf("invalid storage: %s", name))

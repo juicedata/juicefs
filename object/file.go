@@ -22,21 +22,28 @@ const (
 )
 
 type filestore struct {
-	dir        string
+	root       string
 	lastListed string
 	listing    chan *Object
 }
 
 func (d *filestore) String() string {
-	return "file://" + d.dir
+	return "file://" + d.root
 }
 
 func (d *filestore) Create() error {
-	return os.MkdirAll(d.dir, os.FileMode(0700))
+	fi, err := os.Stat(d.root)
+	if err == nil && !fi.IsDir() {
+		return nil
+	}
+	if !strings.HasSuffix(d.root, dirSuffix) {
+		d.root += dirSuffix
+	}
+	return os.MkdirAll(d.root, os.FileMode(0700))
 }
 
 func (d *filestore) path(key string) string {
-	return filepath.Join(d.dir, key)
+	return filepath.Join(d.root, key)
 }
 
 func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -151,7 +158,7 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 // and directories are filtered by walkFn. The files are walked in lexical
 // order, which makes the output deterministic but means that for very
 // large directories Walk can be inefficient.
-// Walk does not follow symbolic links.
+// Walk always follow symbolic links.
 func Walk(root string, walkFn filepath.WalkFunc) error {
 	info, err := os.Stat(root)
 	if err != nil {
@@ -193,11 +200,11 @@ func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) 
 	if marker != d.lastListed || d.listing == nil {
 		listed := make(chan *Object, 10240)
 		go func() {
-			Walk(d.dir, func(path string, info os.FileInfo, err error) error {
+			Walk(d.root, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
-				key := path[len(d.dir):]
+				key := path[len(d.root):]
 				if key >= marker && strings.HasPrefix(key, prefix) && !info.IsDir() {
 					t := int(info.ModTime().Unix())
 					listed <- &Object{key, info.Size(), t, t}
@@ -282,10 +289,7 @@ func (d *filestore) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func newDisk(endpoint, accesskey, secretkey string) ObjectStorage {
-	if !strings.HasSuffix(endpoint, dirSuffix) {
-		endpoint += dirSuffix
-	}
-	store := &filestore{dir: endpoint}
+	store := &filestore{root: endpoint}
 	return store
 }
 
