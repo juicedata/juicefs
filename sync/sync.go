@@ -50,23 +50,23 @@ func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
 	out := make(chan *object.Object, maxResults)
 	go func() {
-		var lastkey string
-		var continuing bool
+		lastkey := ""
+		first := true
 	END:
 		for len(objs) > 0 {
 			for _, obj := range objs {
 				key := obj.Key
-				if (end != "" || continuing) && key >= end {
-					break END
-				}
-				if continuing && key <= lastkey {
+				if !first && key <= lastkey {
 					logger.Fatalf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
+				}
+				if end != "" && key >= end {
+					break END
 				}
 				lastkey = key
 				out <- obj
+				first = false
 			}
 			marker = lastkey
-			continuing = true
 			start = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			objs, err = store.List("", marker, maxResults)
