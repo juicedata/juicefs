@@ -24,9 +24,11 @@ $HOME/go/bin/juicesync
 ```
 
 We assume your GOPATH is `$HOME/go`. How to set GOPATH? Please visit [The
-official document](https://github.com/golang/go/wiki/SettingGOPATH)
+official document](https://github.com/golang/go/wiki/SettingGOPATH).
 
 # Develop
+
+We use go mod to manage modules, if not sure how to use this, refer to [The official document](https://github.com/golang/go/wiki/Modules).
 
 * If you're using Go 1.13
 
@@ -41,8 +43,6 @@ official document](https://github.com/golang/go/wiki/SettingGOPATH)
 	go build
 	```
 
-* If you're using Go < 1.11, use classic `$GOPATH` + `vendor` to build.
-
 # Upgrade
 
 ```
@@ -52,18 +52,33 @@ go get -u github.com/juicedata/juicesync
 # Usage
 
 ```
-juicesync [options] SRC DST
+$ juicesync -h
+NAME:
+   juicesync - Usage: juicesync [options] SRC DST
+    SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]
 
-Options:
-  -end string
-    	the last keys to sync
-  -p int
-    	number of concurrent threads (default 50)
-  -q	change log level to ERROR
-  -start string
-    	the start of keys to sync
-  -v	turn on debug log
-  --help show the usage
+USAGE:
+   juicesync [global options] command [command options] [arguments...]
+
+VERSION:
+   v0.0.5-4-gdd37495
+
+COMMANDS:
+   help, h  Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --start value, -s value    the first key to sync [$JUICESYNC_START]
+   --end value, -e value      the last key to sync [$JUICESYNC_END]
+   --threads value, -p value  number of concurrent threads (default: 50) [$JUICESYNC_THREADS]
+   --http-port value          http port to listen to (default: 6070) [$JUICESYNC_HTTP_PORT]
+   --update, -u               update existing file if the source is newer (default: false) [$JUICESYNC_UPDATE]
+   --dry                      don't copy file (default: false) [$JUICESYNC_DRY]
+   --delete-src, --deleteSrc  delete objects from source after synced (default: false) [$JUICESYNC_DELETE_SRC]
+   --delete-dst, --deleteDst  delete extraneous objects from destination (default: false) [$JUICESYNC_DELETE_DST]
+   --verbose, -v              turn on debug log (default: false) [$JUICESYNC_VERBOSE]
+   --quiet, -q                change log level to ERROR (default: false) [$JUICESYNC_QUIET]
+   --help, -h                 show help (default: false)
+   --version, -V              print only the version (default: false)
 ```
 
 SRC and DST must be an URI of the following object storage:
