@@ -4,7 +4,7 @@ Juicesync is a tool to move your data in object storage between any clouds or re
 
 # How it works?
 
-juicesync will scan all the keys from two object stores, and comparing them in ascending order to find out missing or outdated keys, then download them from the source and upload them to the destination in parallel.
+Juicesync will scan all the keys from two object stores, and comparing them in ascending order to find out missing or outdated keys, then download them from the source and upload them to the destination in parallel.
 
 # Install
 
@@ -14,17 +14,9 @@ juicesync will scan all the keys from two object stores, and comparing them in a
 brew install juicedata/tap/juicesync
 ```
 
-## With go
+## Download binary release
 
-After installed Go-1.9+
-
-```
-go get github.com/juicedata/juicesync
-$HOME/go/bin/juicesync
-```
-
-We assume your GOPATH is `$HOME/go`. How to set GOPATH? Please visit [The
-official document](https://github.com/golang/go/wiki/SettingGOPATH).
+From [here](https://github.com/juicedata/juicesync/releases)
 
 # Develop
 
@@ -45,9 +37,8 @@ We use go mod to manage modules, if not sure how to use this, refer to [The offi
 
 # Upgrade
 
-```
-go get -u github.com/juicedata/juicesync
-```
+* Use Homebrew to upgrade or
+* Download a new version from [release page](https://github.com/juicedata/juicesync/releases)
 
 # Usage
 
