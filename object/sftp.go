@@ -325,15 +325,35 @@ func newSftp(endpoint, user, pass string) ObjectStorage {
 	for strings.HasSuffix(root, "/") {
 		root = root[:len(root)-1]
 	}
+
+	config := &ssh.ClientConfig{
+		User:            user,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         time.Second * 3,
+	}
+
+	if pass != "" {
+		config.Auth = append(config.Auth, ssh.Password(pass))
+	}
+
+	if privateKeyPath := os.Getenv("SSH_PRIVATE_KEY_PATH"); privateKeyPath != "" {
+		key, err := ioutil.ReadFile(privateKeyPath)
+		if err != nil {
+			logger.Fatalf("unable to read private key, error: %v", err)
+		}
+
+		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			logger.Fatalf("unable to parse private key, error: %v", err)
+		}
+
+		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
+	}
+
 	return &sftpStore{
-		host: parts[0],
-		root: root,
-		config: &ssh.ClientConfig{
-			User:            user,
-			Auth:            []ssh.AuthMethod{ssh.Password(pass)},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			Timeout:         time.Second * 3,
-		},
+		host:   parts[0],
+		root:   root,
+		config: config,
 	}
 }
 
