@@ -410,5 +410,8 @@ func Sync(src, dst object.ObjectStorage, config *config.Config) error {
 	}
 	doSync(src, dst, srcCh, dstCh, config)
 	logger.Infof("Found: %d, copied: %d, deleted: %d, failed: %d", found, copied, deleted, failed)
+	if failed > 0 {
+		return fmt.Errorf("Failed to copy %d objects", failed)
+	}
 	return nil
 }
