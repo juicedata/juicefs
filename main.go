@@ -201,6 +201,6 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		logger.Fatalf("Error running juicesync: %v", err.Error())
+		logger.Fatalf("Error running juicesync: %s", err)
 	}
 }
