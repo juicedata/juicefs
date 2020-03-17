@@ -25,7 +25,7 @@ func TestIterator(t *testing.T) {
 	m.Put("aa", bytes.NewReader([]byte("a")))
 	m.Put("c", bytes.NewReader([]byte("a")))
 
-	ch, _ := Iterate(m, "a", "c")
+	ch, _ := iterate(m, "a", "c")
 	keys := collectAll(ch)
 	if len(keys) != 2 {
 		t.Errorf("length should be 2, but got %d", len(keys))
@@ -39,7 +39,7 @@ func TestIterator(t *testing.T) {
 	// Single object
 	s := object.CreateStorage("mem", "", "", "")
 	s.Put("a", bytes.NewReader([]byte("a")))
-	ch, _ = Iterate(s, "", "")
+	ch, _ = iterate(s, "", "")
 	keys = collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{"a"}) {
 		t.Errorf("result wrong: %s", keys)
