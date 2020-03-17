@@ -56,18 +56,29 @@ func TestSync(t *testing.T) {
 		Dry:       false,
 		DeleteSrc: false,
 		DeleteDst: false,
+		Exclude:   []string{"ab.*"},
+		Include:   []string{"[a|b].*"},
 		Verbose:   false,
 		Quiet:     false,
 	}
 
 	a := object.CreateStorage("mem", "", "", "")
 	a.Put("a", bytes.NewReader([]byte("a")))
-	a.Put("b", bytes.NewReader([]byte("a")))
+	a.Put("ab", bytes.NewReader([]byte("ab")))
+	a.Put("abc", bytes.NewReader([]byte("abc")))
 
 	b := object.CreateStorage("mem", "", "", "")
-	b.Put("aa", bytes.NewReader([]byte("a")))
+	b.Put("ba", bytes.NewReader([]byte("ba")))
 
 	if err := Sync(a, b, config); err != nil {
+		t.FailNow()
+	}
+	if copied != 1 {
+		t.Errorf("should copy 1 keys, but got %d", copied)
+		t.FailNow()
+	}
+
+	if err := Sync(b, a, config); err != nil {
 		t.FailNow()
 	}
 	if copied != 2 {
@@ -75,24 +86,21 @@ func TestSync(t *testing.T) {
 		t.FailNow()
 	}
 
-	if err := Sync(b, a, config); err != nil {
-		t.FailNow()
-	}
-	if copied != 3 {
-		t.Errorf("should copy 3 keys, but got %d", copied)
-		t.FailNow()
-	}
-
 	akeys, _ := a.List("", "", 4)
 	bkeys, _ := b.List("", "", 4)
-	if !reflect.DeepEqual(akeys, bkeys) {
+
+	if !reflect.DeepEqual(akeys[0], bkeys[0]) {
+		t.FailNow()
+	}
+	if !reflect.DeepEqual(akeys[len(akeys)-1], bkeys[len(bkeys)-1]) {
 		t.FailNow()
 	}
 
 	if err := Sync(a, b, config); err != nil {
 		t.FailNow()
 	}
-	if copied != 3 {
+	if copied != 2 {
+		t.Errorf("should copy 2 keys, but got %d", copied)
 		t.FailNow()
 	}
 }
