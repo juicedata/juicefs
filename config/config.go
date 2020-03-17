@@ -13,6 +13,8 @@ type Config struct {
 	Dry       bool
 	DeleteSrc bool
 	DeleteDst bool
+	Exclude   []string
+	Include   []string
 	Verbose   bool
 	Quiet     bool
 }
@@ -27,6 +29,8 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Dry:       c.Bool("dry"),
 		DeleteSrc: c.Bool("delete-src"),
 		DeleteDst: c.Bool("delete-dst"),
+		Exclude:   c.StringSlice("exclude"),
+		Include:   c.StringSlice("include"),
 		Verbose:   c.Bool("verbose"),
 		Quiet:     c.Bool("quiet"),
 	}

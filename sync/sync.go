@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,8 +39,8 @@ var (
 
 var logger = utils.GetLogger("juicesync")
 
-// Iterate on all the keys that starts at marker from object storage.
-func Iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
+// iterate on all the keys that starts at marker from object storage.
+func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
 	start := time.Now()
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List("", marker, maxResults)
@@ -382,6 +383,51 @@ func showProgress() {
 	}
 }
 
+func compileExp(patterns []string) []*regexp.Regexp {
+	var rs []*regexp.Regexp
+	for _, p := range patterns {
+		r, err := regexp.CompilePOSIX(p)
+		if err != nil {
+			logger.Fatalf("invalid regular expression `%s`: %s", p, err)
+		}
+		rs = append(rs, r)
+	}
+	return rs
+}
+
+func findAny(s string, ps []*regexp.Regexp) bool {
+	for _, p := range ps {
+		if p.FindString(s) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func filter(keys <-chan *object.Object, include, exclude []string) <-chan *object.Object {
+	inc := compileExp(include)
+	exc := compileExp(exclude)
+	r := make(chan *object.Object)
+	go func() {
+		for o := range keys {
+			if o == nil {
+				break
+			}
+			if findAny(o.Key, exc) {
+				logger.Debugf("exclude %s", o.Key)
+				continue
+			}
+			if len(inc) > 0 && !findAny(o.Key, inc) {
+				logger.Debugf("%s is not included", o.Key)
+				continue
+			}
+			r <- o
+		}
+		close(r)
+	}()
+	return r
+}
+
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, config *config.Config) error {
 	start, end := config.Start, config.End
@@ -394,14 +440,18 @@ func Sync(src, dst object.ObjectStorage, config *config.Config) error {
 	}
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
-	srcCh, err := Iterate(src, start, end)
+	srcCh, err := iterate(src, start, end)
 	if err != nil {
 		return err
 	}
 
-	dstCh, err := Iterate(dst, start, end)
+	dstCh, err := iterate(dst, start, end)
 	if err != nil {
 		return err
+	}
+	if config.Exclude != nil {
+		srcCh = filter(srcCh, config.Include, config.Exclude)
+		dstCh = filter(dstCh, config.Include, config.Exclude)
 	}
 
 	tty := isatty.IsTerminal(os.Stdout.Fd())
