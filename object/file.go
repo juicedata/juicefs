@@ -25,6 +25,7 @@ type filestore struct {
 	root       string
 	lastListed string
 	listing    chan *Object
+	listerr    error
 }
 
 func (d *filestore) String() string {
@@ -200,7 +201,7 @@ func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) 
 	if marker != d.lastListed || d.listing == nil {
 		listed := make(chan *Object, 10240)
 		go func() {
-			Walk(d.root, func(path string, info os.FileInfo, err error) error {
+			d.listerr = Walk(d.root, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
@@ -225,11 +226,13 @@ func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) 
 			objs = append(objs, obj)
 		}
 	}
-	if len(objs) > 0 {
-		d.lastListed = objs[len(objs)-1].Key
-	} else {
+	if len(objs) == 0 {
 		d.listing = nil
+		err := d.listerr
+		d.listerr = nil
+		return nil, err
 	}
+	d.lastListed = objs[len(objs)-1].Key
 	return objs, nil
 }
 
