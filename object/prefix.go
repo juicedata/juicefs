@@ -33,10 +33,6 @@ func (p *withPrefix) Put(key string, in io.Reader) error {
 	return p.os.Put(p.prefix+key, in)
 }
 
-func (p *withPrefix) Copy(dst, src string) error {
-	return p.os.Copy(p.prefix+dst, p.prefix+src)
-}
-
 func (p *withPrefix) Exists(key string) error {
 	return p.os.Exists(p.prefix + key)
 }

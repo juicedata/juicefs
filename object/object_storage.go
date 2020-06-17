@@ -46,7 +46,6 @@ type ObjectStorage interface {
 	Create() error
 	Get(key string, off, limit int64) (io.ReadCloser, error)
 	Put(key string, in io.Reader) error
-	Copy(dst, src string) error
 	Exists(key string) error
 	Delete(key string) error
 	List(prefix, marker string, limit int64) ([]*Object, error)
