@@ -57,10 +57,6 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
 	}
 
-	if err := s.Copy("/test2", "/test"); err != nil {
-		t.Fatalf("copy failed: %s", err)
-	}
-
 	objs, err2 := s.List("", "", 1)
 	if err2 == nil {
 		if len(objs) != 1 {
@@ -176,18 +172,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("/empty", bytes.NewReader([]byte{})); err != nil {
 		t.Fatalf("PUT empty object failed: %s", err.Error())
 	}
-	if err := s.Copy("/empty1", "/empty"); err != nil {
-		t.Fatalf("Copy empty object failed: %s", err)
-	}
 
 	// Copy `/` suffixed object
 	defer s.Delete("/slash/")
 	defer s.Delete("/slash1/")
 	if err := s.Put("/slash/", bytes.NewReader([]byte{})); err != nil {
 		t.Fatalf("PUT `/` suffixed object failed: %s", err.Error())
-	}
-	if err := s.Copy("/slash1/", "/slash/"); err != nil {
-		t.Fatalf("Copy `/` suffixed object failed: %s", err)
 	}
 }
 

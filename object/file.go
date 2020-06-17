@@ -60,6 +60,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 	}
 	if limit > 0 {
+		defer f.Close()
 		buf := make([]byte, limit)
 		if n, err := f.Read(buf); err != nil {
 			return nil, err
