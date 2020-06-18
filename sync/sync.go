@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -96,6 +97,17 @@ func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
 		<-concurrent
 	}()
 	key := obj.Key
+	if strings.HasPrefix(src.String(), "file://") || strings.HasPrefix(dst.String(), "file://") {
+		in, e := src.Get(key, 0, -1)
+		if e != nil {
+			if src.Exists(key) != nil {
+				return nil
+			}
+			return e
+		}
+		defer in.Close()
+		return dst.Put(key, in)
+	}
 	firstBlock := -1
 	if obj.Size > maxBlock {
 		firstBlock = maxBlock
