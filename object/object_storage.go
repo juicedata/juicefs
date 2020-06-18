@@ -3,12 +3,9 @@
 package object
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"math/rand"
 	"time"
 
 	"github.com/juicedata/juicesync/utils"
@@ -43,7 +40,6 @@ type PendingPart struct {
 
 type ObjectStorage interface {
 	String() string
-	Create() error
 	Get(key string, off, limit int64) (io.ReadCloser, error)
 	Put(key string, in io.Reader) error
 	Exists(key string) error
@@ -101,44 +97,4 @@ func CreateStorage(name, endpoint, accessKey, secretKey string) ObjectStorage {
 		return f(endpoint, accessKey, secretKey)
 	}
 	panic(fmt.Sprintf("invalid storage: %s", name))
-}
-
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-
-func randSeq(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
-}
-
-func DoTesting(store ObjectStorage) error {
-	rand.Seed(int64(time.Now().UnixNano()))
-	key := "testing/" + randSeq(10)
-	data := make([]byte, 100)
-	rand.Read(data)
-	if err := store.Put(key, bytes.NewBuffer(data)); err != nil {
-		if err := store.Create(); err != nil {
-			return fmt.Errorf("Failed to create %s: %s", store, err.Error())
-		}
-		if err := store.Put(key, bytes.NewBuffer(data)); err != nil {
-			time.Sleep(time.Second * 3)
-			err = store.Put(key, bytes.NewBuffer(data))
-			return fmt.Errorf("Failed to put: %v", err)
-		}
-	}
-	p, err := store.Get(key, 0, -1)
-	if err != nil {
-		return fmt.Errorf("Failed to get: %v", err)
-	}
-	data2, err := ioutil.ReadAll(p)
-	p.Close()
-	if !bytes.Equal(data, data2) {
-		return fmt.Errorf("Read wrong data")
-	}
-	if err = store.Delete(key); err != nil {
-		return fmt.Errorf("Failed to delete: %v", err)
-	}
-	return nil
 }

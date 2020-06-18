@@ -20,14 +20,6 @@ func (s *obsClient) String() string {
 	return fmt.Sprintf("obs://%s", s.bucket)
 }
 
-func (s *obsClient) Create() error {
-	input := &obs.CreateBucketInput{
-		Bucket: s.bucket,
-	}
-	_, err := s.c.CreateBucket(input)
-	return err
-}
-
 func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params := &obs.GetObjectInput{}
 	params.Bucket = s.bucket

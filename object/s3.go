@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -25,21 +24,6 @@ type s3client struct {
 
 func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s", s.bucket)
-}
-
-func (s *s3client) Create() error {
-	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeBucketAlreadyExists:
-				err = nil
-			case s3.ErrCodeBucketAlreadyOwnedByYou:
-				err = nil
-			}
-		}
-	}
-	return err
 }
 
 func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {

@@ -4,18 +4,15 @@ package object
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
 	"golang.org/x/oauth2/google"
 
-	sapi "cloud.google.com/go/storage"
 	storage "google.golang.org/api/storage/v1"
 )
 
@@ -31,38 +28,6 @@ type gs struct {
 
 func (g *gs) String() string {
 	return fmt.Sprintf("gs://%s", g.bucket)
-}
-
-func (g *gs) Create() error {
-	// check if the bucket is already exists
-	if _, err := g.List("", "", 1); err == nil {
-		return nil
-	}
-
-	ctx := context.Background()
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if projectID == "" {
-		cred, err := google.FindDefaultCredentials(ctx)
-		if err == nil {
-			projectID = cred.ProjectID
-		}
-	}
-	if projectID == "" {
-		return errors.New("GOOGLE_CLOUD_PROJECT environment variable must be set")
-	}
-
-	client, err := sapi.NewClient(ctx)
-	if err != nil {
-		return err
-	}
-
-	bucket := client.Bucket(g.bucket)
-	attr := &sapi.BucketAttrs{StorageClass: "regional", Location: g.region}
-	err = bucket.Create(ctx, projectID, attr)
-	if err != nil && strings.Contains(err.Error(), "You already own this bucket") {
-		err = nil
-	}
-	return err
 }
 
 func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {

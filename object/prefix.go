@@ -17,10 +17,6 @@ func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
 }
 
-func (p *withPrefix) Create() error {
-	return p.os.Create()
-}
-
 func (p *withPrefix) String() string {
 	return fmt.Sprintf("%s/%s", p.os, p.prefix)
 }

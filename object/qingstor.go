@@ -23,14 +23,6 @@ func (q *qingstor) String() string {
 	return fmt.Sprintf("qingstor://%s", *q.bucket.Properties.BucketName)
 }
 
-func (q *qingstor) Create() error {
-	_, err := q.bucket.Put()
-	if err != nil && strings.Contains(err.Error(), "bucket_already_exists") {
-		err = nil
-	}
-	return err
-}
-
 func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	input := &qs.GetObjectInput{}
 	if off > 0 || limit > 0 {

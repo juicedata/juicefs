@@ -23,10 +23,6 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 }
 
 func testStorage(t *testing.T, s ObjectStorage) {
-	if err := s.Create(); err != nil {
-		t.Fatalf("Can't create bucket %s: %s", s, err.Error())
-	}
-
 	s = WithPrefix(s, "unit-test")
 	defer s.Delete("/test")
 	defer s.Delete("/test2")

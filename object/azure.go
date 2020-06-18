@@ -24,11 +24,6 @@ func (b *wasb) String() string {
 	return fmt.Sprintf("wasb://%s", b.container.Name)
 }
 
-func (b *wasb) Create() error {
-	_, err := b.container.CreateIfNotExists(&storage.CreateContainerOptions{})
-	return err
-}
-
 func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	blob := b.container.GetBlobReference(key)
 	var end int64

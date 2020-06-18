@@ -79,10 +79,6 @@ func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 
-func (q *qiniu) Copy(dst, src string) error {
-	return q.b.Copy(context.Background(), src, dst)
-}
-
 func (q *qiniu) Exists(key string) error {
 	_, err := q.b.Stat(context.Background(), key)
 	return err
