@@ -21,11 +21,6 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s", o.bucket.BucketName)
 }
 
-func (o *ossClient) Create() error {
-	// no error if bucket is already created
-	return o.bucket.Client.CreateBucket(o.bucket.BucketName)
-}
-
 func (o *ossClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if off > 0 || limit > 0 {
 		var r string

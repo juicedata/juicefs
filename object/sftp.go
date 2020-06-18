@@ -146,15 +146,6 @@ func (f *sftpStore) String() string {
 	return fmt.Sprintf("%s@%s:%s", f.config.User, f.host, f.root)
 }
 
-func (f *sftpStore) Create() error {
-	c, err := f.getSftpConnection()
-	if err != nil {
-		return err
-	}
-	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.MkdirAll(f.root)
-}
-
 func (f *sftpStore) path(key string) string {
 	return filepath.Join(f.root, key)
 }

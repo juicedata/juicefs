@@ -28,10 +28,6 @@ func (m *memStore) String() string {
 	return "memstore"
 }
 
-func (m *memStore) Create() error {
-	return nil
-}
-
 func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	m.Lock()
 	defer m.Unlock()

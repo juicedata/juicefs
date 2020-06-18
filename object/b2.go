@@ -23,10 +23,6 @@ func (c *b2client) String() string {
 	return fmt.Sprintf("b2://%s", c.bucket.Name())
 }
 
-func (c *b2client) Create() error {
-	return nil
-}
-
 func (c *b2client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	obj := c.bucket.Object(key)
 	if _, err := obj.Attrs(ctx); err != nil {
