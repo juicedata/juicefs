@@ -61,12 +61,14 @@ func createStorage(uri string) object.ObjectStorage {
 			}
 			return object.CreateStorage("sftp", uri, user, pass)
 		}
-		var e error
-		uri, e = filepath.Abs(uri)
-		if e != nil {
-			logger.Fatalf("invalid path: %s", e.Error())
+		fullpath, err := filepath.Abs(uri)
+		if err != nil {
+			logger.Fatalf("invalid path: %s", err.Error())
 		}
-		uri = "file://" + uri
+		if strings.HasSuffix(uri, "/") {
+			fullpath += "/"
+		}
+		uri = "file://" + fullpath
 	}
 	u, err := url.Parse(uri)
 	if err != nil {
@@ -82,6 +84,7 @@ func createStorage(uri string) object.ObjectStorage {
 	endpoint := u.Host
 	if name == "file" {
 		endpoint = u.Path
+	} else if name == "hdfs" {
 	} else if supportHTTPS(name, endpoint) {
 		endpoint = "https://" + endpoint
 	} else {

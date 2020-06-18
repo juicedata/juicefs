@@ -350,3 +350,11 @@ func TestOBS(t *testing.T) {
 	b := newObs("https://test.obs.cn-north-1.myhwclouds.com", os.Getenv("OBS_ACCESS_KEY"), os.Getenv("OBS_SECRET_KEY"))
 	testStorage(t, b)
 }
+
+func TestHDFS(t *testing.T) {
+	if os.Getenv("HDFS_ADDR") == "" {
+		t.Skip()
+	}
+	dfs := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
+	testStorage(t, dfs)
+}
