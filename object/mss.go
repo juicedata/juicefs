@@ -50,29 +50,6 @@ func mssSigner(req *http.Request, accessKey, secretKey, signName string) {
 	req.Header.Add("Authorization", token)
 }
 
-func (c *mss) Create() error {
-	uri, _ := url.ParseRequestURI(c.endpoint)
-	parts := strings.SplitN(uri.Host, ".", 2)
-	uri.Host = parts[1]
-	uri.Path = fmt.Sprintf("/%s/", parts[0])
-	req, err := http.NewRequest("PUT", uri.String(), nil)
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC().Format(http.TimeFormat)
-	req.Header.Add("Date", now)
-	mssSigner(req, c.accessKey, c.secretKey, c.signName)
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer cleanup(resp)
-	if resp.StatusCode != 201 && resp.StatusCode != 200 && resp.StatusCode != 409 {
-		return parseError(resp)
-	}
-	return nil
-}
-
 func (c *mss) Copy(dst, src string) error {
 	uri, _ := url.ParseRequestURI(c.endpoint)
 	bucket := strings.Split(uri.Host, ".")[0]

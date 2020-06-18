@@ -15,7 +15,6 @@ import (
 	noslogger "github.com/NetEase-Object-Storage/nos-golang-sdk/logger"
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/model"
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/nosclient"
-	"github.com/NetEase-Object-Storage/nos-golang-sdk/nosconst"
 )
 
 type nos struct {
@@ -26,19 +25,6 @@ type nos struct {
 
 func (s *nos) String() string {
 	return fmt.Sprintf("nos://%s", s.bucket)
-}
-
-func (s *nos) Create() error {
-	_, err := s.List("", "", 1)
-	if err == nil {
-		return nil
-	}
-	// TODO: support other region
-	err = s.client.CreateBucket(s.bucket, nosconst.HZ, nosconst.PRIVATE)
-	if err != nil {
-		return fmt.Errorf("Cannot create bucket %s: %s", s.bucket, err.Error())
-	}
-	return nil
 }
 
 func (s *nos) Get(key string, off, limit int64) (io.ReadCloser, error) {

@@ -5,13 +5,11 @@ package object
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/juicedata/juicesync/utils"
@@ -22,6 +20,7 @@ const (
 )
 
 type filestore struct {
+	defaultObjectStorage
 	root       string
 	lastListed string
 	listing    chan *Object
@@ -30,17 +29,6 @@ type filestore struct {
 
 func (d *filestore) String() string {
 	return "file://" + d.root
-}
-
-func (d *filestore) Create() error {
-	fi, err := os.Stat(d.root)
-	if err == nil && !fi.IsDir() {
-		return nil
-	}
-	if !strings.HasSuffix(d.root, dirSuffix) {
-		d.root += dirSuffix
-	}
-	return os.MkdirAll(d.root, os.FileMode(0700))
 }
 
 func (d *filestore) path(key string) string {
@@ -237,64 +225,8 @@ func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) 
 	return objs, nil
 }
 
-func (d *filestore) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	dir, err := ioutil.TempDir("", "multipart")
-	return &MultipartUpload{UploadID: dir, MinPartSize: 1 << 20, MaxCount: 1000}, err
-}
-
-func (d *filestore) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	path := filepath.Join(uploadID, strconv.Itoa(num))
-	return &Part{Num: num, ETag: path}, ioutil.WriteFile(path, body, os.FileMode(0700))
-}
-
-func (d *filestore) cleanup(uploadID string) {
-	fs, err := ioutil.ReadDir(uploadID)
-	if err == nil {
-		for _, f := range fs {
-			os.Remove(filepath.Join(uploadID, f.Name()))
-		}
-	}
-	os.Remove(uploadID)
-}
-
-func (d *filestore) AbortUpload(key string, uploadID string) {
-	d.cleanup(uploadID)
-}
-
-func (d *filestore) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	p := d.path(key)
-	if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0700)); err != nil {
-		return err
-	}
-	f, err := os.Create(p)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	for i, p := range parts {
-		if i+1 != int(p.Num) {
-			return fmt.Errorf("unexpected num %d", p.Num)
-		}
-		r, e := os.Open(p.ETag)
-		if e != nil {
-			return e
-		}
-		defer r.Close()
-		if _, e := io.Copy(f, r); e != nil {
-			return e
-		}
-	}
-	d.cleanup(uploadID)
-	return nil
-}
-
-func (d *filestore) ListUploads(marker string) ([]*PendingPart, string, error) {
-	return nil, "", nil
-}
-
-func newDisk(endpoint, accesskey, secretkey string) ObjectStorage {
-	store := &filestore{root: endpoint}
-	return store
+func newDisk(root, accesskey, secretkey string) ObjectStorage {
+	return &filestore{root: root}
 }
 
 func init() {

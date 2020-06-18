@@ -22,29 +22,6 @@ func (s *speedy) String() string {
 	return fmt.Sprintf("speedy://%s", uri.Host)
 }
 
-func (s *speedy) Create() error {
-	uri, _ := url.ParseRequestURI(s.endpoint)
-	parts := strings.SplitN(uri.Host, ".", 2)
-	uri.Host = parts[1]
-	uri.Path = fmt.Sprintf("/%s/", parts[0])
-	req, err := http.NewRequest("PUT", uri.String(), nil)
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC().Format(http.TimeFormat)
-	req.Header.Add("Date", now)
-	s.signer(req, s.accessKey, s.secretKey, s.signName)
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer cleanup(resp)
-	if resp.StatusCode != 201 && resp.StatusCode != 200 && resp.StatusCode != 409 {
-		return parseError(resp)
-	}
-	return nil
-}
-
 func (s *speedy) List(prefix, marker string, limit int64) ([]*Object, error) {
 	uri, _ := url.ParseRequestURI(s.endpoint)
 

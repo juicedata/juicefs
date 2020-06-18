@@ -70,18 +70,6 @@ func cosSigner(req *http.Request, accessKey, secretKey, signName string) {
 	req.Header.Add("Authorization", auth)
 }
 
-func (c *COS) Create() error {
-	resp, err := c.request("PUT", "", nil, nil)
-	if err != nil {
-		return err
-	}
-	defer cleanup(resp)
-	if resp.StatusCode != 201 && resp.StatusCode != 200 && resp.StatusCode != 409 {
-		return parseError(resp)
-	}
-	return nil
-}
-
 func (c *COS) Copy(dst, src string) error {
 	uri, _ := url.ParseRequestURI(c.endpoint)
 	source := fmt.Sprintf("%s/%s", uri.Host, src)

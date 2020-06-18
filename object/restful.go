@@ -120,10 +120,6 @@ func parseError(resp *http.Response) error {
 	return fmt.Errorf("status: %v, message: %s", resp.StatusCode, string(data))
 }
 
-func (c *RestfulStorage) Create() error {
-	return errors.New("not implemented")
-}
-
 func (s *RestfulStorage) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	headers := make(map[string]string)
 	if off > 0 || limit > 0 {

@@ -24,14 +24,6 @@ func (q *bosclient) String() string {
 	return fmt.Sprintf("bos://%s", q.bucket)
 }
 
-func (q *bosclient) Create() error {
-	_, err := q.c.PutBucket(q.bucket)
-	if err != nil && strings.Contains(err.Error(), "BucketAlreadyExists") {
-		err = nil
-	}
-	return err
-}
-
 func (q *bosclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	var r *api.GetObjectResult
 	var err error
