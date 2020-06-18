@@ -8,6 +8,7 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20170925032315-6fe16293d6b7
 	github.com/aws/aws-sdk-go v1.12.10
 	github.com/baidubce/bce-sdk-go v0.0.0-20180401121131-aa0c7bd66b01
+	github.com/colinmarc/hdfs v1.1.3
 	github.com/dgrijalva/jwt-go v3.0.0+incompatible // indirect
 	github.com/go-ini/ini v1.28.2 // indirect
 	github.com/googleapis/gax-go v2.0.0+incompatible // indirect
