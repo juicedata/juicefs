@@ -15,13 +15,17 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/qiniu/api.v7/kodo"
+
+	"github.com/qiniu/api.v7/v7/auth"
+	"github.com/qiniu/api.v7/v7/storage"
 	"golang.org/x/net/context"
 )
 
 type qiniu struct {
 	s3client
-	b      *kodo.Bucket
+	mac    *auth.Credentials
+	bucket string
+	bm     *storage.BucketManager
 	marker string
 }
 
@@ -30,8 +34,8 @@ func (q *qiniu) String() string {
 }
 
 func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
-	baseUrl := kodo.MakeBaseUrl(os.Getenv("QINIU_DOMAIN"), key)
-	url := q.b.Conn.MakePrivateUrl(baseUrl, nil)
+	deadline := time.Now().Add(time.Second * 3600).Unix()
+	url := storage.MakePrivateURL(q.mac, os.Getenv("QINIU_DOMAIN"), key, deadline)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -71,8 +75,13 @@ func (q *qiniu) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	var ret kodo.PutRet
-	return q.b.Put(context.Background(), &ret, key, body, vlen, nil)
+	putPolicy := storage.PutPolicy{
+		Scope: q.bucket + ":" + key,
+	}
+	upToken := putPolicy.UploadToken(q.mac)
+	var ret storage.PutRet
+	uploader := storage.NewFormUploader(nil)
+	return uploader.Put(context.Background(), &ret, upToken, key, body, vlen, nil)
 }
 
 func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
@@ -80,7 +89,7 @@ func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 }
 
 func (q *qiniu) Exists(key string) error {
-	_, err := q.b.Stat(context.Background(), key)
+	_, err := q.bm.Stat(q.bucket, key)
 	return err
 }
 
@@ -88,7 +97,7 @@ func (q *qiniu) Delete(key string) error {
 	if err := q.Exists(key); err != nil {
 		return err
 	}
-	return q.b.Delete(context.Background(), key)
+	return q.bm.Delete(q.bucket, key)
 }
 
 func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
@@ -98,7 +107,7 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
 		// last page
 		return nil, nil
 	}
-	entries, _, markerOut, err := q.b.List(context.Background(), prefix, "", q.marker, int(limit))
+	entries, _, markerOut, _, err := q.bm.ListFiles(q.bucket, prefix, "", q.marker, int(limit))
 	q.marker = markerOut
 	if len(entries) > 0 || err == io.EOF {
 		// ignore error if returned something
@@ -147,11 +156,9 @@ func newQiniu(endpoint, accessKey, secretKey string) ObjectStorage {
 	sess := session.New(awsConfig)
 	s3client := s3client{bucket, s3.New(sess), sess}
 
-	zone := regions[region]
-	kodo.SetMac(accessKey, secretKey)
-	c := kodo.New(zone, nil)
-	b := c.Bucket(bucket)
-	return &qiniu{s3client, &b, ""}
+	mac := auth.New(accessKey, secretKey)
+	bm := storage.NewBucketManager(mac, nil)
+	return &qiniu{s3client, mac, bucket, bm, ""}
 }
 
 func init() {
