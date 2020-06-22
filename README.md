@@ -1,5 +1,7 @@
 # juicesync
 
+![build](https://github.com/juicedata/juicesync/workflows/build/badge.svg) ![release](https://github.com/juicedata/juicesync/workflows/release/badge.svg)
+
 Juicesync is a tool to move your data in object storage between any clouds or regions.
 
 # How it works?
