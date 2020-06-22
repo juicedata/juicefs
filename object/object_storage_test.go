@@ -25,7 +25,6 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 func testStorage(t *testing.T, s ObjectStorage) {
 	s = WithPrefix(s, "unit-test")
 	defer s.Delete("/test")
-	defer s.Delete("/test2")
 	k := "/large"
 	defer s.Delete(k)
 
@@ -59,7 +58,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("List should return 1 keys, but got %d", len(objs))
 		}
 		if objs[0].Key != "/test" {
-			t.Fatalf("First key shold be /test, but got %s", objs[0].Key)
+			t.Fatalf("First key should be /test, but got %s", objs[0].Key)
 		}
 		if !strings.Contains(s.String(), "encrypted") && objs[0].Size != 5 {
 			t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size)
@@ -70,25 +69,6 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	} else {
 		t.Fatalf("list failed: %s", err2.Error())
-	}
-
-	objs, err2 = s.List("", "/test", 10240)
-	if err2 == nil {
-		if len(objs) != 1 {
-			t.Fatalf("List should return 2 keys, but got %d", len(objs))
-		}
-		if objs[0].Key != "/test2" {
-			t.Fatalf("Second key shold be /test2")
-		}
-		if !strings.Contains(s.String(), "encrypted") && objs[0].Size != 5 {
-			t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size)
-		}
-		now := int(time.Now().Unix())
-		if objs[0].Mtime < now-10 || objs[0].Mtime > now+10 {
-			t.Fatalf("Mtime of key should be within 10 seconds")
-		}
-	} else {
-		t.Fatalf("list2 failed: %s", err2.Error())
 	}
 
 	objs, err2 = s.List("", "/test2", 1)
@@ -164,14 +144,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 	// Copy empty objects
 	defer s.Delete("/empty")
-	defer s.Delete("/empty1")
 	if err := s.Put("/empty", bytes.NewReader([]byte{})); err != nil {
 		t.Fatalf("PUT empty object failed: %s", err.Error())
 	}
 
 	// Copy `/` suffixed object
 	defer s.Delete("/slash/")
-	defer s.Delete("/slash1/")
 	if err := s.Put("/slash/", bytes.NewReader([]byte{})); err != nil {
 		t.Fatalf("PUT `/` suffixed object failed: %s", err.Error())
 	}
@@ -183,7 +161,7 @@ func TestMem(t *testing.T) {
 }
 
 func TestDisk(t *testing.T) {
-	s := newDisk("/tmp/abc", "", "")
+	s := newDisk("/tmp/abc/", "", "")
 	testStorage(t, s)
 }
 
