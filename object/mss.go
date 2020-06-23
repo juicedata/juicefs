@@ -94,6 +94,9 @@ func (c *mss) List(prefix, marker string, limit int64) ([]*Object, error) {
 	if resp.StatusCode != 200 {
 		return nil, parseError(resp)
 	}
+	if resp.ContentLength <= 0 || resp.ContentLength > (1<<31) {
+		return nil, fmt.Errorf("invalid content length: %d", resp.ContentLength)
+	}
 	data := make([]byte, resp.ContentLength)
 	if _, err := io.ReadFull(resp.Body, data); err != nil {
 		return nil, err

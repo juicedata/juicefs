@@ -54,6 +54,9 @@ func ufileSigner(req *http.Request, accessKey, secretKey, signName string) {
 
 func (u *ufile) parseResp(resp *http.Response, out interface{}) error {
 	defer resp.Body.Close()
+	if resp.ContentLength <= 0 || resp.ContentLength > (1<<31) {
+		return fmt.Errorf("invalid content length: %d", resp.ContentLength)
+	}
 	data := make([]byte, resp.ContentLength)
 	if _, err := io.ReadFull(resp.Body, data); err != nil {
 		return err
