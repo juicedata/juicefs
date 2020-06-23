@@ -115,6 +115,7 @@ Note:
 - S3: The access key and secret key for S3 could be provided by AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or IAM role.
 - COS: The AppID should be part of the bucket name.
 - GCS: The machine should be authorized to access Google Cloud Storage.
+- OSS: The credential can be provided by RAM role.
 - Qiniu:
   The S3 endpoint should be used for Qiniu, for example, abc.cn-north-1-s3.qiniu.com.
   If there are keys starting with "/", the domain should be provided as QINIU_DOMAIN.

@@ -4,10 +4,14 @@ package object
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
@@ -129,6 +133,47 @@ func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, result.NextKeyMarker, nil
 }
 
+type stsCred struct {
+	AccessKeyId     string
+	AccessKeySecret string
+	Expiration      string
+	SecurityToken   string
+	LastUpdated     string
+	Code            string
+}
+
+func fetchStsCred() (*stsCred, error) {
+	url := "http://100.100.100.200/latest/meta-data/Ram/security-credentials/"
+	req, _ := http.NewRequest("GET", url, nil)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	d, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	role := string(d)
+	req, err = http.NewRequest("GET", url+role, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err = httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	d, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var cred stsCred
+	err = json.Unmarshal(d, &cred)
+	if err != nil {
+		return nil, err
+	}
+	return &cred, nil
+}
+
 func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
@@ -138,14 +183,48 @@ func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 	bucketName := hostParts[0]
 	domain := uri.Scheme + "://" + hostParts[1]
 
-	client, err := oss.New(domain, accessKey, secretKey)
+	var client *oss.Client
+	if accessKey != "" {
+		client, err = oss.New(domain, accessKey, secretKey)
+	} else {
+		cred, err := fetchStsCred()
+		if err != nil {
+			logger.Fatalf("No credential provided for OSS")
+		}
+		client, err = oss.New(domain, cred.AccessKeyId, cred.AccessKeySecret,
+			oss.SecurityToken(cred.SecurityToken))
+		go func() {
+			for {
+				cred, err := fetchStsCred()
+				if err == nil {
+					client.Config.AccessKeyID = cred.AccessKeyId
+					client.Config.AccessKeySecret = cred.AccessKeySecret
+					client.Config.SecurityToken = cred.SecurityToken
+					logger.Debugf("Refreshed STS, will be expired at %s", cred.Expiration)
+					expire, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
+					if err == nil {
+						time.Sleep(expire.Sub(time.Now()) / 2)
+					}
+				}
+			}
+		}()
+	}
 	if err != nil {
 		logger.Fatalf("Cannot create OSS client with endpoint %s: %s", endpoint, err)
 	}
+
+	client.Config.Timeout = 10
+	client.Config.RetryTimes = 1
+	client.Config.HTTPTimeout.ConnectTimeout = time.Second * 2   // 30s
+	client.Config.HTTPTimeout.ReadWriteTimeout = time.Second * 5 // 60s
+	client.Config.HTTPTimeout.HeaderTimeout = time.Second * 5    // 60s
+	client.Config.HTTPTimeout.LongTimeout = time.Second * 30     // 300s
+
 	bucket, err := client.Bucket(bucketName)
 	if err != nil {
 		logger.Fatalf("Cannot create bucket %s: %s", bucketName, err)
 	}
+
 	return &ossClient{client: client, bucket: bucket}
 }
 
