@@ -51,7 +51,7 @@ func createStorage(uri string) object.ObjectStorage {
 				parts := strings.Split(user, ":")
 				user = parts[0]
 				pass = parts[1]
-			} else {
+			} else if os.Getenv("SSH_PRIVATE_KEY_PATH") == "" {
 				fmt.Print("Enter Password: ")
 				bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
 				if err != nil {
