@@ -416,8 +416,8 @@ OUT:
 }
 
 func showProgress() {
-	var lastCopied, lastBytes uint64
-	var lastTime = time.Now()
+	var lastCopied, lastBytes []uint64
+	var lastTime []time.Time
 	for {
 		if found == 0 {
 			time.Sleep(time.Millisecond * 10)
@@ -439,12 +439,21 @@ func showProgress() {
 			}
 		}
 		now := time.Now()
-		fps := float64(copied-lastCopied) / now.Sub(lastTime).Seconds()
-		bw := float64(copiedBytes-lastBytes) / now.Sub(lastTime).Seconds() / 1024 / 1024
-		lastCopied = copied
-		lastBytes = copiedBytes
-		lastTime = now
-		fmt.Printf("[%s] % 8d % 2d%% % 4.0f/s % 4.1f MB/s \r", string(bar[:]), found, (found-missing+copied)*100/found, fps, bw)
+		lastCopied = append(lastCopied, copied)
+		lastBytes = append(lastBytes, copiedBytes)
+		lastTime = append(lastTime, now)
+		for len(lastTime) > 18 { // 5 seconds
+			lastCopied = lastCopied[1:]
+			lastBytes = lastBytes[1:]
+			lastTime = lastTime[1:]
+		}
+		if len(lastTime) > 1 {
+			n := len(lastTime) - 1
+			d := lastTime[n].Sub(lastTime[0]).Seconds()
+			fps := float64(lastCopied[n]-lastCopied[0]) / d
+			bw := float64(lastBytes[n]-lastBytes[0]) / d / 1024 / 1024
+			fmt.Printf("[%s] % 8d % 2d%% % 4.1f/s % 4.1f MB/s \r", string(bar[:]), found, (found-missing+copied)*100/found, fps, bw)
+		}
 		time.Sleep(time.Millisecond * 300)
 	}
 }
