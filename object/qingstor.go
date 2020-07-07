@@ -144,6 +144,10 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
+func (q *qingstor) ListAll(prefix, marker string) (<-chan *Object, error) {
+	return nil, notSupported
+}
+
 func (q *qingstor) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	r, err := q.bucket.InitiateMultipartUpload(key, nil)
 	if err != nil {

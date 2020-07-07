@@ -55,13 +55,11 @@ func (c *conn) closed() error {
 
 type sftpStore struct {
 	defaultObjectStorage
-	host       string
-	root       string
-	config     *ssh.ClientConfig
-	lastListed string
-	listing    chan *Object
-	poolMu     sync.Mutex
-	pool       []*conn
+	host   string
+	root   string
+	config *ssh.ClientConfig
+	poolMu sync.Mutex
+	pool   []*conn
 }
 
 // Open a new connection to the SFTP server.
@@ -256,6 +254,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 	}
 	infos, err := c.ReadDir(path)
 	if err != nil {
+		logger.Errorf("readdir %s: %s", path, err)
 		return
 	}
 	sort.Sort(sortFI(infos))
@@ -276,38 +275,21 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 }
 
 func (f *sftpStore) List(prefix, marker string, limit int64) ([]*Object, error) {
-	if limit > 1000 {
-		limit = 1000
+	return nil, notSupported
+}
+
+func (f *sftpStore) ListAll(prefix, marker string) (<-chan *Object, error) {
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return nil, err
 	}
-	if marker != f.lastListed || f.listing == nil {
-		c, err := f.getSftpConnection()
-		if err != nil {
-			return nil, err
-		}
-		listed := make(chan *Object, 10240)
-		go func() {
-			defer f.putSftpConnection(&c, nil)
-			f.find(c.sftpClient, f.root, marker, listed)
-			close(listed)
-		}()
-		f.listing = listed
-	}
-	var objs []*Object
-	for len(objs) < int(limit) {
-		obj := <-f.listing
-		if obj == nil {
-			break
-		}
-		if obj.Key >= marker {
-			objs = append(objs, obj)
-		}
-	}
-	if len(objs) > 0 {
-		f.lastListed = objs[len(objs)-1].Key
-	} else {
-		f.listing = nil
-	}
-	return objs, nil
+	listed := make(chan *Object, 10240)
+	go func() {
+		defer f.putSftpConnection(&c, nil)
+		f.find(c.sftpClient, filepath.Join(f.root, prefix), marker, listed)
+		close(listed)
+	}()
+	return listed, nil
 }
 
 func newSftp(endpoint, user, pass string) ObjectStorage {

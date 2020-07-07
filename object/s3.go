@@ -115,6 +115,10 @@ func (s *s3client) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
+func (s *s3client) ListAll(prefix, marker string) (<-chan *Object, error) {
+	return nil, notSupported
+}
+
 func (s *s3client) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket: &s.bucket,

@@ -104,6 +104,10 @@ func (s *obsClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 	return objs, nil
 }
 
+func (s *obsClient) ListAll(prefix, marker string) (<-chan *Object, error) {
+	return nil, notSupported
+}
+
 func (s *obsClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	params := &obs.InitiateMultipartUploadInput{}
 	params.Bucket = s.bucket

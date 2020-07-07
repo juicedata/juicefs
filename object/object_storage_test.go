@@ -22,6 +22,24 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 	return string(data), nil
 }
 
+func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]*Object, error) {
+	r, err := s.List(prefix, marker, 100)
+	if err == nil {
+		return r, nil
+	}
+	ch, err := s.ListAll(prefix, marker)
+	if err == nil {
+		objs := make([]*Object, 0)
+		for obj := range ch {
+			if len(objs) < int(limit) {
+				objs = append(objs, obj)
+			}
+		}
+		return objs, nil
+	}
+	return nil, err
+}
+
 func testStorage(t *testing.T, s ObjectStorage) {
 	s = WithPrefix(s, "unit-test")
 	defer s.Delete("/test")
@@ -52,7 +70,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
 	}
 
-	objs, err2 := s.List("", "", 1)
+	objs, err2 := listAll(s, "", "", 1)
 	if err2 == nil {
 		if len(objs) != 1 {
 			t.Fatalf("List should return 1 keys, but got %d", len(objs))
@@ -71,7 +89,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("list failed: %s", err2.Error())
 	}
 
-	objs, err2 = s.List("", "/test2", 1)
+	objs, err2 = listAll(s, "", "/test2", 1)
 	if err2 != nil {
 		t.Fatalf("list3 failed: %s", err2.Error())
 	} else if len(objs) != 0 {

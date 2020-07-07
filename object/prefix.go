@@ -50,6 +50,28 @@ func (p *withPrefix) List(prefix, marker string, limit int64) ([]*Object, error)
 	return objs, err
 }
 
+func (p *withPrefix) ListAll(prefix, marker string) (<-chan *Object, error) {
+	if marker != "" {
+		marker = p.prefix + marker
+	}
+	r, err := p.os.ListAll(p.prefix+prefix, marker)
+	if err != nil {
+		return r, err
+	}
+	r2 := make(chan *Object, 10240)
+	ln := len(p.prefix)
+	go func() {
+		for o := range r {
+			if o != nil {
+				o.Key = o.Key[ln:]
+			}
+			r2 <- o
+		}
+		close(r2)
+	}()
+	return r2, nil
+}
+
 func (p *withPrefix) Chtimes(path string, mtime time.Time) error {
 	if mc, ok := p.os.(MtimeChanger); ok {
 		return mc.Chtimes(p.prefix+path, mtime)

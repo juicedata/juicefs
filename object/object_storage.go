@@ -45,6 +45,7 @@ type ObjectStorage interface {
 	Exists(key string) error
 	Delete(key string) error
 	List(prefix, marker string, limit int64) ([]*Object, error)
+	ListAll(prefix, marker string) (<-chan *Object, error)
 	CreateMultipartUpload(key string) (*MultipartUpload, error)
 	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
 	AbortUpload(key string, uploadID string)
@@ -95,6 +96,10 @@ func (s defaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 }
 
 func (s defaultObjectStorage) List(prefix, marker string, limit int64) ([]*Object, error) {
+	return nil, notSupported
+}
+
+func (s defaultObjectStorage) ListAll(prefix, marker string) (<-chan *Object, error) {
 	return nil, notSupported
 }
 
