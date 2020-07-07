@@ -362,12 +362,20 @@ OUT:
 			hasMore = false
 			break
 		}
+		if !config.Dirs && obj.Size == 0 && strings.HasSuffix(obj.Key, "/") {
+			// ignore directories
+			continue
+		}
 		atomic.AddUint64(&found, 1)
 		for hasMore && (dstobj == nil || obj.Key > dstobj.Key) {
 			var ok bool
 			if config.DeleteDst && dstobj != nil && dstobj.Key < obj.Key {
-				dstobj.Size = markDelete
-				todo <- dstobj
+				if !config.Dirs && dstobj.Size == 0 && strings.HasSuffix(dstobj.Key, "/") {
+					// ignore
+				} else {
+					dstobj.Size = markDelete
+					todo <- dstobj
+				}
 			}
 			dstobj, ok = <-dstkeys
 			if !ok {
