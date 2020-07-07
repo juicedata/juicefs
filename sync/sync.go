@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/juicedata/juicesync/config"
 	"github.com/juicedata/juicesync/object"
@@ -26,6 +27,7 @@ const (
 	defaultPartSize = 5 << 20
 	maxBlock        = defaultPartSize * 2
 	markDelete      = -1
+	markCopyPerms   = -2
 )
 
 var (
@@ -290,8 +292,21 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 					}
 					continue
 				}
+
 				if config.Dry {
 					logger.Debugf("Will copy %s (%d bytes)", obj.Key, obj.Size)
+					continue
+				}
+				if config.Perms && obj.Size == markCopyPerms {
+					fi := (*object.File)(unsafe.Pointer(obj))
+					if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
+						logger.Warnf("Chmod %s to %d: %s", obj.Key, err)
+					}
+					if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
+						logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
+					}
+					atomic.AddUint64(&copied, 1)
+					logger.Debugf("Copied permissions for %s in %s", obj.Key, time.Now().Sub(start))
 					continue
 				}
 				err = copyInParallel(src, dst, obj)
@@ -303,6 +318,15 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 						err := mc.Chtimes(obj.Key, obj.Mtime)
 						if err != nil {
 							logger.Warnf("Update mtime of %s: %s", obj.Key, err)
+						}
+					}
+					if config.Perms {
+						fi := (*object.File)(unsafe.Pointer(obj))
+						if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
+							logger.Warnf("Chmod %s to %o: %s", obj.Key, fi.Mode, err)
+						}
+						if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
+							logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
 						}
 					}
 					atomic.AddUint64(&copied, 1)
@@ -347,6 +371,13 @@ OUT:
 		} else if config.DeleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
 			obj.Size = markDelete
 			todo <- obj
+		} else if config.Perms {
+			f1 := (*object.File)(unsafe.Pointer(obj))
+			f2 := (*object.File)(unsafe.Pointer(dstobj))
+			if f2.Mode != f1.Mode || f2.Owner != f1.Owner || f2.Group != f1.Group {
+				obj.Size = markCopyPerms
+				todo <- obj
+			}
 		}
 		if dstobj != nil && dstobj.Key == obj.Key {
 			dstobj = nil

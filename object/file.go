@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/juicedata/juicesync/utils"
 )
@@ -197,7 +198,9 @@ func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) 
 				}
 				key := path[len(d.root):]
 				if key >= marker && strings.HasPrefix(key, prefix) && !info.IsDir() {
-					listed <- &Object{key, info.Size(), info.ModTime()}
+					owner, group := getOwnerGroup(info)
+					f := &File{Object{key, info.Size(), info.ModTime()}, owner, group, info.Mode()}
+					listed <- (*Object)(unsafe.Pointer(f))
 				}
 				return nil
 			})
@@ -227,6 +230,16 @@ func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) 
 
 func (d *filestore) Chtimes(path string, mtime time.Time) error {
 	return os.Chtimes(filepath.Join(d.root, path), mtime, mtime)
+}
+
+func (d *filestore) Chmod(path string, mode os.FileMode) error {
+	return os.Chmod(filepath.Join(d.root, path), mode)
+}
+
+func (d *filestore) Chown(path string, owner, group string) error {
+	uid := lookupUser(owner)
+	gid := lookupGroup(group)
+	return os.Chown(filepath.Join(d.root, path), uid, gid)
 }
 
 func newDisk(root, accesskey, secretkey string) ObjectStorage {

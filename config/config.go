@@ -10,6 +10,7 @@ type Config struct {
 	Threads   int
 	HTTPPort  int
 	Update    bool
+	Perms     bool
 	Dry       bool
 	DeleteSrc bool
 	DeleteDst bool
@@ -26,6 +27,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Threads:   c.Int("threads"),
 		HTTPPort:  c.Int("http-port"),
 		Update:    c.Bool("update"),
+		Perms:     c.Bool("perms"),
 		Dry:       c.Bool("dry"),
 		DeleteSrc: c.Bool("delete-src"),
 		DeleteDst: c.Bool("delete-dst"),

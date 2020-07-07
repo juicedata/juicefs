@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/juicedata/juicesync/utils"
@@ -53,6 +54,18 @@ type ObjectStorage interface {
 
 type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error
+}
+type File struct {
+	Object
+	Owner string
+	Group string
+	Mode  os.FileMode
+}
+
+type FileSystem interface {
+	MtimeChanger
+	Chmod(path string, mode os.FileMode) error
+	Chown(path string, owner, group string) error
 }
 
 var notSupported = errors.New("not supported")
