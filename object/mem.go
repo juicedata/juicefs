@@ -57,6 +57,17 @@ func (m *memStore) Put(key string, in io.Reader) error {
 	return nil
 }
 
+func (m *memStore) Chtimes(key string, mtime time.Time) error {
+	m.Lock()
+	defer m.Unlock()
+	obj, ok := m.objects[key]
+	if !ok {
+		return errors.New("not found")
+	}
+	obj.Updated = mtime
+	return nil
+}
+
 func (m *memStore) Copy(dst, src string) error {
 	d, err := m.Get(src, 0, -1)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/juicedata/juicesync/utils"
 )
@@ -224,7 +225,12 @@ func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) 
 	return objs, nil
 }
 
+func (d *filestore) Chtimes(path string, mtime time.Time) error {
+	return os.Chtimes(filepath.Join(d.root, path), mtime, mtime)
+}
+
 func newDisk(root, accesskey, secretkey string) ObjectStorage {
+	os.MkdirAll(root, 0755)
 	return &filestore{root: root}
 }
 

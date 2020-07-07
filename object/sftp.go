@@ -206,12 +206,13 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (s *sftpStore) Copy(dst, src string) error {
-	r, err := s.Get(src, 0, -1)
+func (f *sftpStore) Chtimes(path string, mtime time.Time) error {
+	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
 	}
-	return s.Put(dst, r)
+	defer f.putSftpConnection(&c, err)
+	return c.sftpClient.Chtimes(path, mtime, mtime)
 }
 
 func (f *sftpStore) Exists(key string) error {

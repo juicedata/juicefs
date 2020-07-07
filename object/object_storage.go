@@ -51,6 +51,10 @@ type ObjectStorage interface {
 	ListUploads(marker string) ([]*PendingPart, string, error)
 }
 
+type MtimeChanger interface {
+	Chtimes(path string, mtime time.Time) error
+}
+
 var notSupported = errors.New("not supported")
 
 type defaultObjectStorage struct{}
