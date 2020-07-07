@@ -37,7 +37,7 @@ func supportHTTPS(name, endpoint string) bool {
 	}
 }
 
-func createStorage(uri string) object.ObjectStorage {
+func createStorage(uri string, conf *config.Config) object.ObjectStorage {
 	if !strings.Contains(uri, "://") {
 		if strings.Contains(uri, ":") {
 			var user string
@@ -95,6 +95,12 @@ func createStorage(uri string) object.ObjectStorage {
 	if store == nil {
 		logger.Fatalf("Invalid storage type: %s", u.Scheme)
 	}
+	if conf.Perms {
+		if _, ok := store.(object.FileSystem); !ok {
+			logger.Warnf("%s is not a file system, can not preserve permissions", store)
+			conf.Perms = false
+		}
+	}
 	if name != "file" && len(u.Path) > 1 {
 		store = object.WithPrefix(store, u.Path[1:])
 	}
@@ -112,8 +118,8 @@ func run(c *cli.Context) error {
 	}
 	utils.InitLoggers(false)
 
-	src := createStorage(c.Args().Get(0))
-	dst := createStorage(c.Args().Get(1))
+	src := createStorage(c.Args().Get(0), config)
+	dst := createStorage(c.Args().Get(1), config)
 	return sync.Sync(src, dst, config)
 }
 
@@ -158,6 +164,10 @@ func main() {
 			Name:    "update",
 			Aliases: []string{"u"},
 			Usage:   "update existing file if the source is newer",
+		},
+		&cli.BoolFlag{
+			Name:  "perms",
+			Usage: "preserve permissions",
 		},
 		&cli.BoolFlag{
 			Name:  "dry",

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/colinmarc/hdfs"
 )
@@ -116,7 +117,9 @@ func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error)
 					return nil
 				}
 				if !info.IsDir() {
-					listed <- &Object{key, info.Size(), info.ModTime()}
+					hinfo := info.(*hdfs.FileInfo)
+					f := &File{Object{key, info.Size(), info.ModTime()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
+					listed <- (*Object)(unsafe.Pointer(f))
 				}
 				return nil
 			})
@@ -146,6 +149,14 @@ func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error)
 
 func (h *hdfsclient) Chtimes(path string, mtime time.Time) error {
 	return h.c.Chtimes(path, mtime, mtime)
+}
+
+func (h *hdfsclient) Chmod(path string, mode os.FileMode) error {
+	return h.c.Chmod(path, mode)
+}
+
+func (h *hdfsclient) Chown(path string, owner, group string) error {
+	return h.c.Chown(path, owner, group)
 }
 
 // TODO: multipart upload
