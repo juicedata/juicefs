@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/colinmarc/hdfs"
 )
@@ -141,6 +142,10 @@ func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error)
 	}
 	h.lastListed = objs[len(objs)-1].Key
 	return objs, nil
+}
+
+func (h *hdfsclient) Chtimes(path string, mtime time.Time) error {
+	return h.c.Chtimes(path, mtime, mtime)
 }
 
 // TODO: multipart upload
