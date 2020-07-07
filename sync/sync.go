@@ -46,6 +46,22 @@ var logger = utils.GetLogger("juicesync")
 func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
 	start := time.Now()
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
+	if ch, err := store.ListAll("", marker); err == nil {
+		if end == "" {
+			return ch, err
+		}
+		ch2 := make(chan *object.Object)
+		go func() {
+			for o := range ch {
+				if o == nil || o.Key >= end {
+					break
+				}
+				ch2 <- o
+			}
+			close(ch2)
+		}()
+		return ch2, nil
+	}
 	objs, err := store.List("", marker, maxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
@@ -300,7 +316,7 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 				if config.Perms && obj.Size == markCopyPerms {
 					fi := (*object.File)(unsafe.Pointer(obj))
 					if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
-						logger.Warnf("Chmod %s to %d: %s", obj.Key, err)
+						logger.Warnf("Chmod %s to %d: %s", obj.Key, fi.Mode, err)
 					}
 					if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
 						logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
