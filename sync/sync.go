@@ -299,6 +299,12 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 					atomic.AddUint64(&failed, 1)
 					logger.Errorf("Failed to copy %s: %s", obj.Key, err.Error())
 				} else {
+					if mc, ok := dst.(object.MtimeChanger); ok {
+						err := mc.Chtimes(obj.Key, obj.Mtime)
+						if err != nil {
+							logger.Warnf("Update mtime of %s: %s", obj.Key, err)
+						}
+					}
 					atomic.AddUint64(&copied, 1)
 					atomic.AddUint64(&copiedBytes, uint64(obj.Size))
 					logger.Debugf("Copied %s (%d bytes) in %s", obj.Key, obj.Size, time.Now().Sub(start))
@@ -334,7 +340,8 @@ OUT:
 			}
 		}
 		// FIXME: there is a race when source is modified during coping
-		if !hasMore || obj.Key < dstobj.Key || config.Update && obj.Key == dstobj.Key && obj.Mtime.After(dstobj.Mtime) {
+		if !hasMore || obj.Key < dstobj.Key ||
+			obj.Key == dstobj.Key && (obj.Size != dstobj.Size || config.Update && obj.Mtime.After(dstobj.Mtime)) {
 			todo <- obj
 			atomic.AddUint64(&missing, 1)
 		} else if config.DeleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {

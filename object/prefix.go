@@ -5,6 +5,7 @@ package object
 import (
 	"fmt"
 	"io"
+	"time"
 )
 
 type withPrefix struct {
@@ -47,6 +48,13 @@ func (p *withPrefix) List(prefix, marker string, limit int64) ([]*Object, error)
 		obj.Key = obj.Key[ln:]
 	}
 	return objs, err
+}
+
+func (p *withPrefix) Chtimes(path string, mtime time.Time) error {
+	if mc, ok := p.os.(MtimeChanger); ok {
+		return mc.Chtimes(p.prefix+path, mtime)
+	}
+	return nil
 }
 
 func (p *withPrefix) CreateMultipartUpload(key string) (*MultipartUpload, error) {
