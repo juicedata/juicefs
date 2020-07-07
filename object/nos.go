@@ -112,12 +112,11 @@ func (s *nos) List(prefix, marker string, limit int64) ([]*Object, error) {
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		var unix int
 		mtime, err := time.Parse("2006-01-02T15:04:05 +0800", o.LastModified)
 		if err == nil {
-			unix = int(mtime.Add(-8 * time.Hour).Unix())
+			mtime = mtime.Add(-8 * time.Hour)
 		}
-		objs[i] = &Object{o.Key, o.Size, unix, unix}
+		objs[i] = &Object{o.Key, o.Size, mtime}
 	}
 	return objs, nil
 }

@@ -108,8 +108,7 @@ func (c *mss) List(prefix, marker string, limit int64) ([]*Object, error) {
 	}
 	objs := make([]*Object, len(out.Contents))
 	for i, item := range out.Contents {
-		mtime := int(item.LastModified.Unix())
-		objs[i] = &Object{item.Key, item.Size, mtime, mtime}
+		objs[i] = &Object{item.Key, item.Size, item.LastModified}
 	}
 	return objs, nil
 }

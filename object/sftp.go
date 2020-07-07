@@ -268,8 +268,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 			if fi.IsDir() {
 				f.find(c, p, marker, out)
 			} else if fi.Size() > 0 {
-				t := int(fi.ModTime().Unix())
-				out <- &Object{key, fi.Size(), t, t}
+				out <- &Object{key, fi.Size(), fi.ModTime()}
 			}
 		}
 	}

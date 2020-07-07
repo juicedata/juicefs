@@ -63,8 +63,8 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if !strings.Contains(s.String(), "encrypted") && objs[0].Size != 5 {
 			t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size)
 		}
-		now := int(time.Now().Unix())
-		if objs[0].Mtime < now-10 || objs[0].Mtime > now+10 {
+		now := time.Now()
+		if objs[0].Mtime.Before(now.Add(-10*time.Second)) || objs[0].Mtime.After(now.Add(time.Second*10)) {
 			t.Fatalf("Mtime of key should be within 10 seconds")
 		}
 	} else {

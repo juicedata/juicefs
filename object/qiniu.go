@@ -120,9 +120,8 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
 	objs := make([]*Object, 0, n)
 	for i := 0; i < n; i++ {
 		entry := entries[i]
-		mtime := int(entry.PutTime / 10000000)
 		if entry.Key > prefix {
-			objs = append(objs, &Object{entry.Key, entry.Fsize, mtime, mtime})
+			objs = append(objs, &Object{entry.Key, entry.Fsize, time.Unix(entry.PutTime/10000000, 0)})
 		}
 	}
 	return objs, nil

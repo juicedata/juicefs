@@ -83,7 +83,7 @@ func (c *b2client) List(prefix, marker string, limit int64) ([]*Object, error) {
 		attr, err := objects[i].Attrs(ctx)
 		if err == nil {
 			// attr.LastModified is not correct
-			objs[i] = &Object{attr.Name, attr.Size, int(attr.UploadTimestamp.Unix()), int(attr.UploadTimestamp.Unix())}
+			objs[i] = &Object{attr.Name, attr.Size, attr.UploadTimestamp}
 		}
 	}
 	return objs, nil
