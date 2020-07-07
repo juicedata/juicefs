@@ -150,12 +150,13 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 		}
 		prefix = "/" + prefix
 		h.walk(root, func(path string, info os.FileInfo, err error) error {
-			if info == nil {
-				return nil // workaround
-			}
 			if err != nil {
-				logger.Errorf("list %s: %s", path, err)
-				listed <- nil
+				if err == io.EOF {
+					err = nil // ignore
+				} else {
+					logger.Errorf("list %s: %s", path, err)
+					listed <- nil
+				}
 				return err
 			}
 			if !strings.HasPrefix(path, prefix) {
