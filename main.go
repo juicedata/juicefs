@@ -146,7 +146,7 @@ func main() {
 		&cli.IntFlag{
 			Name:    "threads",
 			Aliases: []string{"p"},
-			Value:   50,
+			Value:   10,
 			Usage:   "number of concurrent threads",
 		},
 		&cli.IntFlag{
