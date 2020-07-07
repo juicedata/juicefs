@@ -16,11 +16,8 @@ import (
 
 type hdfsclient struct {
 	defaultObjectStorage
-	addr       string
-	c          *hdfs.Client
-	lastListed string
-	listing    chan *Object
-	listerr    error
+	addr string
+	c    *hdfs.Client
 }
 
 func (h *hdfsclient) String() string {
@@ -90,61 +87,47 @@ func (h *hdfsclient) Delete(key string) error {
 }
 
 func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error) {
-	if marker != h.lastListed || h.listing == nil {
-		listed := make(chan *Object, 10240)
-		go func() {
-			root := "/" + prefix
-			_, err := h.c.Stat(root)
-			if err != nil && err.(*os.PathError).Err == os.ErrNotExist {
-				root = filepath.Dir(root)
+	return nil, notSupported
+}
+
+func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
+	listed := make(chan *Object, 10240)
+	go func() {
+		root := "/" + prefix
+		_, err := h.c.Stat(root)
+		if err != nil && err.(*os.PathError).Err == os.ErrNotExist {
+			root = filepath.Dir(root)
+		}
+		prefix = "/" + prefix
+		h.c.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if info == nil {
+				return nil // workaround
 			}
-			prefix = "/" + prefix
-			h.listerr = h.c.Walk(root, func(path string, info os.FileInfo, err error) error {
-				if info == nil {
-					return nil // workaround
-				}
-				if err != nil {
-					return err
-				}
-				if !strings.HasPrefix(path, prefix) {
-					if info.IsDir() {
-						return filepath.SkipDir
-					}
-					return nil
-				}
-				key := path[1:]
-				if key < marker {
-					return nil
-				}
-				if !info.IsDir() {
-					hinfo := info.(*hdfs.FileInfo)
-					f := &File{Object{key, info.Size(), info.ModTime()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
-					listed <- (*Object)(unsafe.Pointer(f))
+			if err != nil {
+				logger.Errorf("list %s: %s", path, err)
+				listed <- nil
+				return err
+			}
+			if !strings.HasPrefix(path, prefix) {
+				if info.IsDir() {
+					return filepath.SkipDir
 				}
 				return nil
-			})
-			close(listed)
-		}()
-		h.listing = listed
-	}
-	var objs []*Object
-	for len(objs) < int(limit) {
-		obj := <-h.listing
-		if obj == nil {
-			break
-		}
-		if obj.Key >= marker {
-			objs = append(objs, obj)
-		}
-	}
-	if len(objs) == 0 {
-		h.listing = nil
-		err := h.listerr
-		h.listerr = nil
-		return nil, err
-	}
-	h.lastListed = objs[len(objs)-1].Key
-	return objs, nil
+			}
+			key := path[1:]
+			if key < marker {
+				return nil
+			}
+			if !info.IsDir() {
+				hinfo := info.(*hdfs.FileInfo)
+				f := &File{Object{key, info.Size(), info.ModTime()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
+				listed <- (*Object)(unsafe.Pointer(f))
+			}
+			return nil
+		})
+		close(listed)
+	}()
+	return listed, nil
 }
 
 func (h *hdfsclient) Chtimes(path string, mtime time.Time) error {

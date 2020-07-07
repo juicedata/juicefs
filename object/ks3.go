@@ -115,6 +115,10 @@ func (s *ks3) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
+func (s *ks3) ListAll(prefix, marker string) (<-chan *Object, error) {
+	return nil, notSupported
+}
+
 func (s *ks3) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket: &s.bucket,

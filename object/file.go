@@ -23,10 +23,7 @@ const (
 
 type filestore struct {
 	defaultObjectStorage
-	root       string
-	lastListed string
-	listing    chan *Object
-	listerr    error
+	root string
 }
 
 func (d *filestore) String() string {
@@ -189,43 +186,29 @@ func readDirNames(dirname string) ([]string, error) {
 }
 
 func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) {
-	if marker != d.lastListed || d.listing == nil {
-		listed := make(chan *Object, 10240)
-		go func() {
-			d.listerr = Walk(d.root, func(path string, info os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-				key := path[len(d.root):]
-				if key >= marker && strings.HasPrefix(key, prefix) && !info.IsDir() {
-					owner, group := getOwnerGroup(info)
-					f := &File{Object{key, info.Size(), info.ModTime()}, owner, group, info.Mode()}
-					listed <- (*Object)(unsafe.Pointer(f))
-				}
-				return nil
-			})
-			close(listed)
-		}()
-		d.listing = listed
-	}
-	var objs []*Object
-	for len(objs) < int(limit) {
-		obj := <-d.listing
-		if obj == nil {
-			break
-		}
-		if obj.Key >= marker {
-			objs = append(objs, obj)
-		}
-	}
-	if len(objs) == 0 {
-		d.listing = nil
-		err := d.listerr
-		d.listerr = nil
-		return nil, err
-	}
-	d.lastListed = objs[len(objs)-1].Key
-	return objs, nil
+	return nil, notSupported
+}
+
+func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
+	listed := make(chan *Object, 10240)
+	go func() {
+		Walk(d.root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				listed <- nil
+				logger.Errorf("list %s: %s", path, err)
+				return err
+			}
+			key := path[len(d.root):]
+			if key >= marker && strings.HasPrefix(key, prefix) && !info.IsDir() {
+				owner, group := getOwnerGroup(info)
+				f := &File{Object{key, info.Size(), info.ModTime()}, owner, group, info.Mode()}
+				listed <- (*Object)(unsafe.Pointer(f))
+			}
+			return nil
+		})
+		close(listed)
+	}()
+	return listed, nil
 }
 
 func (d *filestore) Chtimes(path string, mtime time.Time) error {
