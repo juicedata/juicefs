@@ -99,8 +99,7 @@ func (s *obsClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		mtime := int(o.LastModified.Unix())
-		objs[i] = &Object{o.Key, o.Size, mtime, mtime}
+		objs[i] = &Object{o.Key, o.Size, o.LastModified}
 	}
 	return objs, nil
 }

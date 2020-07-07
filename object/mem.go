@@ -15,7 +15,7 @@ import (
 
 type Obj struct {
 	Data    []byte
-	Updated int
+	Updated time.Time
 }
 
 type memStore struct {
@@ -53,7 +53,7 @@ func (m *memStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.objects[key] = &Obj{data, int(time.Now().Unix())}
+	m.objects[key] = &Obj{data, time.Now()}
 	return nil
 }
 
@@ -100,7 +100,7 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for k := range m.objects {
 		if strings.HasPrefix(k, prefix) && k > marker {
 			obj := m.objects[k]
-			objs = append(objs, &Object{k, int64(len(obj.Data)), obj.Updated, obj.Updated})
+			objs = append(objs, &Object{k, int64(len(obj.Data)), obj.Updated})
 		}
 	}
 	sort.Sort(sortObject(objs))
