@@ -72,9 +72,7 @@ func (o *ossClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		o := result.Objects[i]
-		mtime := int(o.LastModified.Unix())
-		// TODO: ctime
-		objs[i] = &Object{o.Key, o.Size, mtime, mtime}
+		objs[i] = &Object{o.Key, o.Size, o.LastModified}
 	}
 	return objs, nil
 }

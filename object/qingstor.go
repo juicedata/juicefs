@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/yunify/qingstor-sdk-go/config"
 	qs "github.com/yunify/qingstor-sdk-go/service"
@@ -138,7 +139,7 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]*Object, error) {
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		k := out.Keys[i]
-		objs[i] = &Object{(*k.Key), *k.Size, int(k.Created.Unix()), *k.Modified}
+		objs[i] = &Object{(*k.Key), *k.Size, time.Unix(int64(*k.Modified), 0)}
 	}
 	return objs, nil
 }

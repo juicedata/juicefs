@@ -16,8 +16,7 @@ var logger = utils.GetLogger("juicesync")
 type Object struct {
 	Key   string
 	Size  int64
-	Ctime int // Unix seconds
-	Mtime int // Unix seconds
+	Mtime time.Time // Unix seconds
 }
 
 type MultipartUpload struct {

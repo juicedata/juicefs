@@ -89,9 +89,8 @@ func (g *gs) List(prefix, marker string, limit int64) ([]*Object, error) {
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		item := objects.Items[i]
-		ctime, _ := time.Parse(time.RFC3339, item.TimeCreated)
 		mtime, _ := time.Parse(time.RFC3339, item.Updated)
-		objs[i] = &Object{item.Name, int64(item.Size), int(ctime.Unix()), int(mtime.Unix())}
+		objs[i] = &Object{item.Name, int64(item.Size), mtime}
 	}
 	return objs, nil
 }

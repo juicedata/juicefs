@@ -115,8 +115,7 @@ func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error)
 					return nil
 				}
 				if !info.IsDir() {
-					t := int(info.ModTime().Unix())
-					listed <- &Object{key, info.Size(), t, t}
+					listed <- &Object{key, info.Size(), info.ModTime()}
 				}
 				return nil
 			})
