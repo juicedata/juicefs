@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unsafe"
@@ -90,6 +91,55 @@ func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error)
 	return nil, notSupported
 }
 
+func (h *hdfsclient) walk(path string, walkFn filepath.WalkFunc) error {
+	file, err := h.c.Open(path)
+	var info os.FileInfo
+	if file != nil {
+		info = file.Stat()
+	}
+
+	err = walkFn(path, info, err)
+	if err != nil {
+		if info != nil && info.IsDir() && err == filepath.SkipDir {
+			return nil
+		}
+
+		return err
+	}
+
+	if info == nil || !info.IsDir() {
+		return nil
+	}
+
+	infos, err := file.Readdir(0)
+	if err != nil {
+		return walkFn(path, info, err)
+	}
+
+	// make sure they are ordered in full path
+	names := make([]string, len(infos))
+	for i, info := range infos {
+		if info.IsDir() {
+			names[i] = info.Name() + "/"
+		} else {
+			names[i] = info.Name()
+		}
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		if strings.HasSuffix(name, "/") {
+			name = name[:len(name)-1]
+		}
+		err = h.walk(filepath.ToSlash(filepath.Join(path, name)), walkFn)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 	listed := make(chan *Object, 10240)
 	go func() {
@@ -99,7 +149,7 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 			root = filepath.Dir(root)
 		}
 		prefix = "/" + prefix
-		h.c.Walk(root, func(path string, info os.FileInfo, err error) error {
+		h.walk(root, func(path string, info os.FileInfo, err error) error {
 			if info == nil {
 				return nil // workaround
 			}
