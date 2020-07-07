@@ -62,19 +62,28 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	p := d.path(key)
 
 	if strings.HasSuffix(key, dirSuffix) {
-		return os.MkdirAll(p, os.FileMode(0700))
+		return os.MkdirAll(p, os.FileMode(0755))
 	}
 
-	if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0700)); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0755)); err != nil {
 		return err
 	}
-	f, err := os.Create(p)
+	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer os.Remove(tmp)
 	_, err = io.Copy(f, in)
-	return err
+	if err != nil {
+		f.Close()
+		return err
+	}
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+	return os.Rename(tmp, p)
 }
 
 func (d *filestore) Copy(dst, src string) error {
@@ -199,11 +208,19 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 				return err
 			}
 			key := path[len(d.root):]
-			if key >= marker && strings.HasPrefix(key, prefix) && !info.IsDir() {
-				owner, group := getOwnerGroup(info)
-				f := &File{Object{key, info.Size(), info.ModTime()}, owner, group, info.Mode()}
-				listed <- (*Object)(unsafe.Pointer(f))
+			if !strings.HasPrefix(key, prefix) || key < marker {
+				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
+					return filepath.SkipDir
+				}
+				return nil
 			}
+			owner, group := getOwnerGroup(info)
+			f := &File{Object{key, info.Size(), info.ModTime()}, owner, group, info.Mode()}
+			if info.IsDir() {
+				f.Key += "/"
+				f.Size = 0
+			}
+			listed <- (*Object)(unsafe.Pointer(f))
 			return nil
 		})
 		close(listed)

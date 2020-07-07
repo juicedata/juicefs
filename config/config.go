@@ -14,6 +14,7 @@ type Config struct {
 	Dry       bool
 	DeleteSrc bool
 	DeleteDst bool
+	Dirs      bool
 	Exclude   []string
 	Include   []string
 	Verbose   bool
@@ -28,6 +29,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		HTTPPort:  c.Int("http-port"),
 		Update:    c.Bool("update"),
 		Perms:     c.Bool("perms"),
+		Dirs:      c.Bool("dirs"),
 		Dry:       c.Bool("dry"),
 		DeleteSrc: c.Bool("delete-src"),
 		DeleteDst: c.Bool("delete-dst"),
