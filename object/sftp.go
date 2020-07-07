@@ -185,23 +185,29 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	defer f.putSftpConnection(&c, err)
 
 	p := f.path(key)
+	if strings.HasSuffix(p, dirSuffix) {
+		return c.sftpClient.MkdirAll(p)
+	}
 	if err := c.sftpClient.MkdirAll(filepath.Dir(p)); err != nil {
 		return err
 	}
-	ff, err := c.sftpClient.OpenFile(p+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
+
+	ff, err := c.sftpClient.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		return err
 	}
-	defer ff.Close()
+	defer c.sftpClient.Remove(tmp)
 	_, err = io.Copy(ff, in)
-	if err == nil {
-		err = c.sftpClient.Rename(p+".tmp", p)
-		if err != nil {
-			c.sftpClient.Remove(p)
-			err = c.sftpClient.Rename(p+".tmp", p)
-		}
+	if err != nil {
+		ff.Close()
+		return err
 	}
-	return err
+	err = ff.Close()
+	if err != nil {
+		return err
+	}
+	return c.sftpClient.Rename(tmp, p)
 }
 
 func (f *sftpStore) Chtimes(path string, mtime time.Time) error {
@@ -261,15 +267,15 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 	for _, fi := range infos {
 		p := path + "/" + fi.Name()
 		key := p[len(f.root):]
-		if strings.HasPrefix(key, "/") {
-			key = key[1:]
-		}
 		if key >= marker {
 			if fi.IsDir() {
-				f.find(c, p, marker, out)
+				out <- &Object{key + "/", 0, fi.ModTime()}
 			} else if fi.Size() > 0 {
 				out <- &Object{key, fi.Size(), fi.ModTime()}
 			}
+		}
+		if fi.IsDir() && (key >= marker || strings.HasPrefix(marker, key)) {
+			f.find(c, p, marker, out)
 		}
 	}
 }
@@ -295,9 +301,6 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan *Object, error) {
 func newSftp(endpoint, user, pass string) ObjectStorage {
 	parts := strings.Split(endpoint, ":")
 	root := parts[1]
-	for strings.HasSuffix(root, "/") {
-		root = root[:len(root)-1]
-	}
 
 	config := &ssh.ClientConfig{
 		User:            user,

@@ -50,32 +50,35 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (h *hdfsclient) Put(key string, in io.Reader) error {
 	path := "/" + key
-	f, err := h.c.CreateFile(path, 3, 128<<20, 0755)
+	if strings.HasSuffix(path, dirSuffix) {
+		return h.c.MkdirAll(path, os.FileMode(0755))
+	}
+	tmp := filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+".tmp")
+	f, err := h.c.CreateFile(tmp, 3, 128<<20, 0755)
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
 			h.c.MkdirAll(filepath.Dir(path), 0755)
-			f, err = h.c.CreateFile(path, 3, 128<<20, 0755)
+			f, err = h.c.CreateFile(tmp, 3, 128<<20, 0755)
 		}
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrExist {
-			h.c.Remove(path)
-			f, err = h.c.CreateFile(path, 3, 128<<20, 0755)
+			h.c.Remove(tmp)
+			f, err = h.c.CreateFile(tmp, 3, 128<<20, 0755)
 		}
 		if err != nil {
 			return err
 		}
 	}
-	f.Write(nil)
+	defer h.c.Remove(tmp)
 	_, err = io.Copy(f, in)
-	if err != nil && err != io.EOF {
+	if err != nil {
 		f.Close()
-		h.c.Remove(path)
 		return err
 	}
 	err = f.Close()
 	if err != nil {
-		h.c.Remove(path)
+		return err
 	}
-	return err
+	return h.c.Rename(tmp, path)
 }
 
 func (h *hdfsclient) Exists(key string) error {
@@ -148,7 +151,6 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 		if err != nil && err.(*os.PathError).Err == os.ErrNotExist {
 			root = filepath.Dir(root)
 		}
-		prefix = "/" + prefix
 		h.walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				if err == io.EOF {
@@ -159,21 +161,20 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 				}
 				return err
 			}
-			if !strings.HasPrefix(path, prefix) {
-				if info.IsDir() {
+			key := path[1:]
+			if !strings.HasPrefix(key, prefix) || key < marker {
+				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
 					return filepath.SkipDir
 				}
 				return nil
 			}
-			key := path[1:]
-			if key < marker {
-				return nil
+			hinfo := info.(*hdfs.FileInfo)
+			f := &File{Object{key, info.Size(), info.ModTime()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
+			if info.IsDir() {
+				f.Key += "/"
+				f.Size = 0
 			}
-			if !info.IsDir() {
-				hinfo := info.(*hdfs.FileInfo)
-				f := &File{Object{key, info.Size(), info.ModTime()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
-				listed <- (*Object)(unsafe.Pointer(f))
-			}
+			listed <- (*Object)(unsafe.Pointer(f))
 			return nil
 		})
 		close(listed)

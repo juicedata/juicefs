@@ -173,6 +173,10 @@ func main() {
 			Usage: "preserve permissions",
 		},
 		&cli.BoolFlag{
+			Name:  "dirs",
+			Usage: "Sync directories or holders",
+		},
+		&cli.BoolFlag{
 			Name:  "dry",
 			Usage: "don't copy file",
 		},
