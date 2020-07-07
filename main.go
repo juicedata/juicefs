@@ -118,6 +118,9 @@ func run(c *cli.Context) error {
 	}
 	utils.InitLoggers(false)
 
+	if strings.HasSuffix(c.Args().Get(0), "/") != strings.HasSuffix(c.Args().Get(1), "/") {
+		logger.Fatalf("SRC and DST should both end with '/' or not!")
+	}
 	src := createStorage(c.Args().Get(0), config)
 	dst := createStorage(c.Args().Get(1), config)
 	return sync.Sync(src, dst, config)
