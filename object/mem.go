@@ -5,27 +5,34 @@ package object
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 )
 
-type Obj struct {
-	Data    []byte
-	Updated time.Time
+type obj struct {
+	data  []byte
+	mtime time.Time
+	mode  os.FileMode
+	owner string
+	group string
 }
 
 type memStore struct {
 	sync.Mutex
 	defaultObjectStorage
-	objects map[string]*Obj
+	name    string
+	objects map[string]*obj
 }
 
 func (m *memStore) String() string {
-	return "memstore"
+	return fmt.Sprintf("mem://%s", m.name)
 }
 
 func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -35,7 +42,7 @@ func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if !ok {
 		return nil, errors.New("not exists")
 	}
-	data := d.Data[off:]
+	data := d.data[off:]
 	if limit > 0 && limit < int64(len(data)) {
 		data = data[:limit]
 	}
@@ -53,7 +60,30 @@ func (m *memStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.objects[key] = &Obj{data, time.Now()}
+	m.objects[key] = &obj{data: data, mtime: time.Now()}
+	return nil
+}
+
+func (m *memStore) Chmod(key string, mode os.FileMode) error {
+	m.Lock()
+	defer m.Unlock()
+	obj, ok := m.objects[key]
+	if !ok {
+		return errors.New("not found")
+	}
+	obj.mode = mode
+	return nil
+}
+
+func (m *memStore) Chown(key string, owner, group string) error {
+	m.Lock()
+	defer m.Unlock()
+	obj, ok := m.objects[key]
+	if !ok {
+		return errors.New("not found")
+	}
+	obj.owner = owner
+	obj.group = group
 	return nil
 }
 
@@ -64,7 +94,7 @@ func (m *memStore) Chtimes(key string, mtime time.Time) error {
 	if !ok {
 		return errors.New("not found")
 	}
-	obj.Updated = mtime
+	obj.mtime = mtime
 	return nil
 }
 
@@ -111,7 +141,8 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for k := range m.objects {
 		if strings.HasPrefix(k, prefix) && k > marker {
 			obj := m.objects[k]
-			objs = append(objs, &Object{k, int64(len(obj.Data)), obj.Updated})
+			f := &File{Object{k, int64(len(obj.data)), obj.mtime}, obj.owner, obj.group, obj.mode}
+			objs = append(objs, (*Object)(unsafe.Pointer(f)))
 		}
 	}
 	sort.Sort(sortObject(objs))
@@ -123,7 +154,7 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 
 func newMem(endpoint, accesskey, secretkey string) ObjectStorage {
 	store := &memStore{}
-	store.objects = make(map[string]*Obj)
+	store.objects = make(map[string]*obj)
 	return store
 }
 

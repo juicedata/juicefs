@@ -52,7 +52,8 @@ func TestSync(t *testing.T) {
 		Start:     "",
 		End:       "",
 		Threads:   50,
-		Update:    false,
+		Update:    true,
+		Perms:     true,
 		Dry:       false,
 		DeleteSrc: false,
 		DeleteDst: false,
@@ -62,12 +63,12 @@ func TestSync(t *testing.T) {
 		Quiet:     false,
 	}
 
-	a := object.CreateStorage("mem", "", "", "")
+	a := object.CreateStorage("mem", "a", "", "")
 	a.Put("a", bytes.NewReader([]byte("a")))
 	a.Put("ab", bytes.NewReader([]byte("ab")))
 	a.Put("abc", bytes.NewReader([]byte("abc")))
 
-	b := object.CreateStorage("mem", "", "", "")
+	b := object.CreateStorage("mem", "b", "", "")
 	b.Put("ba", bytes.NewReader([]byte("ba")))
 
 	if err := Sync(a, b, config); err != nil {
