@@ -15,6 +15,9 @@ import (
 	"github.com/colinmarc/hdfs"
 )
 
+var superuser = "hdfs"
+var supergroup = "supergroup"
+
 type hdfsclient struct {
 	defaultObjectStorage
 	addr string
@@ -174,6 +177,12 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 			}
 			hinfo := info.(*hdfs.FileInfo)
 			f := &File{Object{key, info.Size(), info.ModTime()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
+			if f.Owner == superuser {
+				f.Owner = "root"
+			}
+			if f.Group == supergroup {
+				f.Group = "root"
+			}
 			// stickybit from HDFS is different than golang
 			if f.Mode&01000 != 0 {
 				f.Mode &= ^os.FileMode(01000)
@@ -200,16 +209,27 @@ func (h *hdfsclient) Chmod(key string, mode os.FileMode) error {
 }
 
 func (h *hdfsclient) Chown(key string, owner, group string) error {
+	if owner == "root" {
+		owner = superuser
+	}
+	if group == "root" {
+		group = supergroup
+	}
 	return h.c.Chown(h.path(key), owner, group)
 }
-
-// TODO: multipart upload
 
 func newHDFS(addr, user, sk string) ObjectStorage {
 	c, err := hdfs.NewForUser(addr, user)
 	if err != nil {
 		logger.Fatalf("new HDFS client %s: %s", addr, err)
 	}
+	if os.Getenv("HADOOP_SUPER_USER") != "" {
+		superuser = os.Getenv("HADOOP_SUPER_USER")
+	}
+	if os.Getenv("HADOOP_SUPER_GROUP") != "" {
+		supergroup = os.Getenv("HADOOP_SUPER_GROUP")
+	}
+
 	return &hdfsclient{addr: addr, c: c}
 }
 
