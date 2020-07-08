@@ -54,22 +54,26 @@ USAGE:
    juicesync [global options] command [command options] [arguments...]
 
 VERSION:
-   v0.0.5-4-gdd37495
+   v0.2.0-16-g6ab22e6
 
 COMMANDS:
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --start value, -s value    the first key to sync [$JUICESYNC_START]
-   --end value, -e value      the last key to sync [$JUICESYNC_END]
-   --threads value, -p value  number of concurrent threads (default: 50) [$JUICESYNC_THREADS]
-   --http-port value          http port to listen to (default: 6070) [$JUICESYNC_HTTP_PORT]
-   --update, -u               update existing file if the source is newer (default: false) [$JUICESYNC_UPDATE]
-   --dry                      don't copy file (default: false) [$JUICESYNC_DRY]
-   --delete-src, --deleteSrc  delete objects from source after synced (default: false) [$JUICESYNC_DELETE_SRC]
-   --delete-dst, --deleteDst  delete extraneous objects from destination (default: false) [$JUICESYNC_DELETE_DST]
-   --verbose, -v              turn on debug log (default: false) [$JUICESYNC_VERBOSE]
-   --quiet, -q                change log level to ERROR (default: false) [$JUICESYNC_QUIET]
+   --start KEY, -s KEY        the first KEY to sync
+   --end KEY, -e KEY          the last KEY to sync
+   --threads value, -p value  number of concurrent threads (default: 10)
+   --http-port PORT           HTTP PORT to listen to (default: 6070)
+   --update, -u               update existing file if the source is newer (default: false)
+   --perms                    preserve permissions (default: false)
+   --dirs                     Sync directories or holders (default: false)
+   --dry                      don't copy file (default: false)
+   --delete-src, --deleteSrc  delete objects from source after synced (default: false)
+   --delete-dst, --deleteDst  delete extraneous objects from destination (default: false)
+   --exclude PATTERN          exclude keys containing PATTERN (POSIX regular expressions)
+   --include PATTERN          only include keys containing PATTERN (POSIX regular expressions)
+   --verbose, -v              turn on debug log (default: false)
+   --quiet, -q                change log level to ERROR (default: false)
    --help, -h                 show help (default: false)
    --version, -V              print only the version (default: false)
 ```
@@ -79,6 +83,7 @@ SRC and DST must be an URI of the following object storage:
 - file: local files
 - sftp: FTP via SSH
 - s3: Amazon S3
+- hdfs: Hadoop File System (HDFS)
 - gcs: Google Cloud Storage
 - wasb: Windows Azure Blob Storage
 - oss: Aliyun OSS
@@ -102,6 +107,7 @@ Some examples:
 - local/path
 - user@host:path
 - file:///Users/me/code/
+- hdfs://hdfs@namenode:9000/user/
 - s3://my-bucket.us-east1.amazonaws.com/
 - s3://access-key:secret-key-id@my-bucket.us-west2.s3.amazonaws.com/prefix
 - gcs://my-bucket.us-west1.googleapi.com/
@@ -119,4 +125,4 @@ Note:
 - Qiniu:
   The S3 endpoint should be used for Qiniu, for example, abc.cn-north-1-s3.qiniu.com.
   If there are keys starting with "/", the domain should be provided as QINIU_DOMAIN.
-- sftp: if your target machine uses SSH certificates instead of password, you should pass the path to your private key file to the environment variable `SSH_PRIVATE_KEY_PATH`, like ` SSH_PRIVATE_KEY_PATH=/home/someuser/.ssh/id_rsa juicesync [src] [dst]`, and then leave password empty.
+- sftp: if your target machine uses SSH certificates instead of password, you should pass the path to your private key file to the environment variable `SSH_PRIVATE_KEY_PATH`, like ` SSH_PRIVATE_KEY_PATH=/home/someuser/.ssh/id_rsa juicesync [src] [dst]`.
