@@ -25,8 +25,12 @@ func (h *hdfsclient) String() string {
 	return fmt.Sprintf("hdfs://%s", h.addr)
 }
 
+func (h *hdfsclient) path(key string) string {
+	return "/" + key
+}
+
 func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	f, err := h.c.Open("/" + key)
+	f, err := h.c.Open(h.path(key))
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +53,7 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (h *hdfsclient) Put(key string, in io.Reader) error {
-	path := "/" + key
+	path := h.path(key)
 	if strings.HasSuffix(path, dirSuffix) {
 		return h.c.MkdirAll(path, os.FileMode(0755))
 	}
@@ -82,12 +86,12 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 }
 
 func (h *hdfsclient) Exists(key string) error {
-	_, err := h.c.Stat("/" + key)
+	_, err := h.c.Stat(h.path(key))
 	return err
 }
 
 func (h *hdfsclient) Delete(key string) error {
-	return h.c.Remove("/" + key)
+	return h.c.Remove(h.path(key))
 }
 
 func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error) {
@@ -146,7 +150,7 @@ func (h *hdfsclient) walk(path string, walkFn filepath.WalkFunc) error {
 func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 	listed := make(chan *Object, 10240)
 	go func() {
-		root := "/" + prefix
+		root := h.path(prefix)
 		_, err := h.c.Stat(root)
 		if err != nil && err.(*os.PathError).Err == os.ErrNotExist {
 			root = filepath.Dir(root)
@@ -185,16 +189,16 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 	return listed, nil
 }
 
-func (h *hdfsclient) Chtimes(path string, mtime time.Time) error {
-	return h.c.Chtimes(path, mtime, mtime)
+func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
+	return h.c.Chtimes(h.path(key), mtime, mtime)
 }
 
-func (h *hdfsclient) Chmod(path string, mode os.FileMode) error {
-	return h.c.Chmod(path, mode)
+func (h *hdfsclient) Chmod(key string, mode os.FileMode) error {
+	return h.c.Chmod(h.path(key), mode)
 }
 
-func (h *hdfsclient) Chown(path string, owner, group string) error {
-	return h.c.Chown(path, owner, group)
+func (h *hdfsclient) Chown(key string, owner, group string) error {
+	return h.c.Chown(h.path(key), owner, group)
 }
 
 // TODO: multipart upload
