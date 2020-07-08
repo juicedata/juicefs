@@ -322,7 +322,7 @@ func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Objec
 						logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
 					}
 					atomic.AddUint64(&copied, 1)
-					logger.Debugf("Copied permissions for %s in %s", obj.Key, time.Now().Sub(start))
+					logger.Debugf("Copied permissions %s:%s:%s for %s in %s", obj.Key, fi.Owner, fi.Group, fi.Mode, time.Now().Sub(start))
 					continue
 				}
 				err = copyInParallel(src, dst, obj)
