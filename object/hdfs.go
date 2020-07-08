@@ -177,6 +177,11 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 			}
 			hinfo := info.(*hdfs.FileInfo)
 			f := &File{Object{key, info.Size(), info.ModTime()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
+			// stickybit from HDFS is different than golang
+			if f.Mode&01000 != 0 {
+				f.Mode &= 01000
+				f.Mode |= os.ModeSticky
+			}
 			if info.IsDir() {
 				f.Key += "/"
 				f.Size = 0
