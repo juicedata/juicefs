@@ -161,10 +161,10 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 				}
 				return err
 			}
-			key := path[1:]
-			if key == "" && info.IsDir() {
+			if path == root && info.IsDir() {
 				return nil // ignore root
 			}
+			key := path[1:]
 			if !strings.HasPrefix(key, prefix) || key < marker {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
 					return filepath.SkipDir
