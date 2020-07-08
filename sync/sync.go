@@ -389,7 +389,7 @@ OUT:
 		}
 		// FIXME: there is a race when source is modified during coping
 		if !hasMore || obj.Key < dstobj.Key ||
-			obj.Key == dstobj.Key && (obj.Size != dstobj.Size || config.Update && obj.Mtime.After(dstobj.Mtime)) {
+			obj.Key == dstobj.Key && (obj.Size != dstobj.Size || config.Update && obj.Mtime.Unix() > dstobj.Mtime.Unix()) {
 			todo <- obj
 			atomic.AddUint64(&missing, 1)
 		} else if config.DeleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
