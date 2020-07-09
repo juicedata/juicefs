@@ -188,9 +188,11 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 				f.Mode &= ^os.FileMode(01000)
 				f.Mode |= os.ModeSticky
 			}
-			if info.IsDir() && (path != root || !strings.HasSuffix(root, "/")) {
-				f.Key += "/"
+			if info.IsDir() {
 				f.Size = 0
+				if path != root || !strings.HasSuffix(root, "/") {
+					f.Key += "/"
+				}
 			}
 			listed <- (*Object)(unsafe.Pointer(f))
 			return nil
