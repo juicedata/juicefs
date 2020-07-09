@@ -216,9 +216,11 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 			}
 			owner, group := getOwnerGroup(info)
 			f := &File{Object{key, info.Size(), info.ModTime()}, owner, group, info.Mode()}
-			if info.IsDir() && (f.Key != "" || !strings.HasSuffix(d.root, "/")) {
-				f.Key += "/"
+			if info.IsDir() {
 				f.Size = 0
+				if f.Key != "" || !strings.HasSuffix(d.root, "/") {
+					f.Key += "/"
+				}
 			}
 			listed <- (*Object)(unsafe.Pointer(f))
 			return nil
