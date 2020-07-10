@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go v1.12.10
 	github.com/baidubce/bce-sdk-go v0.0.0-20180401121131-aa0c7bd66b01
 	github.com/baiyubin/aliyun-sts-go-sdk v0.0.0-20180326062324-cfa1a18b161f // indirect
-	github.com/colinmarc/hdfs v1.1.3
+	github.com/colinmarc/hdfs/v2 v2.1.1
 	github.com/dgrijalva/jwt-go v3.0.0+incompatible // indirect
 	github.com/dnaeon/go-vcr v1.0.1 // indirect
 	github.com/go-ini/ini v1.28.2 // indirect
