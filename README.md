@@ -107,7 +107,7 @@ Some examples:
 - local/path
 - user@host:path
 - file:///Users/me/code/
-- hdfs://hdfs@namenode:9000/user/
+- hdfs://hdfs@namenode1:9000,namenode2:9000/user/
 - s3://my-bucket.us-east1.amazonaws.com/
 - s3://access-key:secret-key-id@my-bucket.us-west2.s3.amazonaws.com/prefix
 - gcs://my-bucket.us-west1.googleapi.com/
