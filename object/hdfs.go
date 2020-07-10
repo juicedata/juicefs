@@ -12,7 +12,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/colinmarc/hdfs"
+	"github.com/colinmarc/hdfs/v2"
 )
 
 var superuser = "hdfs"
@@ -221,7 +221,10 @@ func (h *hdfsclient) Chown(key string, owner, group string) error {
 }
 
 func newHDFS(addr, user, sk string) ObjectStorage {
-	c, err := hdfs.NewForUser(addr, user)
+	c, err := hdfs.NewClient(hdfs.ClientOptions{
+		Addresses: strings.Split(addr, ","),
+		User:      user,
+	})
 	if err != nil {
 		logger.Fatalf("new HDFS client %s: %s", addr, err)
 	}
