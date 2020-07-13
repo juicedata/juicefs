@@ -210,13 +210,13 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	return c.sftpClient.Rename(tmp, p)
 }
 
-func (f *sftpStore) Chtimes(path string, mtime time.Time) error {
+func (f *sftpStore) Chtimes(key string, mtime time.Time) error {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
 	}
 	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.Chtimes(path, mtime, mtime)
+	return c.sftpClient.Chtimes(f.path(key), mtime, mtime)
 }
 
 func (f *sftpStore) Exists(key string) error {
