@@ -2,7 +2,7 @@
 
 ![build](https://github.com/juicedata/juicesync/workflows/build/badge.svg) ![release](https://github.com/juicedata/juicesync/workflows/release/badge.svg)
 
-Juicesync is a tool to move your data in object storage between any clouds or regions.
+Juicesync is a tool to move your data in object storage between any clouds or regions, also support local file, sftp and HDFS.
 
 # How it works?
 
