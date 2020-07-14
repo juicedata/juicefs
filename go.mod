@@ -25,7 +25,6 @@ require (
 	github.com/pkg/sftp v1.10.0
 	github.com/qiniu/api.v7 v7.1.0+incompatible // indirect
 	github.com/qiniu/api.v7/v7 v7.5.0
-	github.com/qiniu/x v7.0.8+incompatible // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/satori/uuid v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.0.3
