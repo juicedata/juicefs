@@ -70,7 +70,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
 	}
 
-	objs, err2 := listAll(s, "", "", 1)
+	objs, err2 := listAll(s, "", "/", 1)
 	if err2 == nil {
 		if len(objs) != 1 {
 			t.Fatalf("List should return 1 keys, but got %d", len(objs))
