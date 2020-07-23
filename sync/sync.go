@@ -86,6 +86,12 @@ func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 				out <- obj
 				first = false
 			}
+			// Corner case: the func parameter `marker` is an empty string("") and exactly
+			// one object which key is an empty string("") returned by the List() method.
+			if lastkey == "" {
+				break END
+			}
+
 			marker = lastkey
 			start = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
