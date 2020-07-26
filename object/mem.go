@@ -139,7 +139,7 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 
 	objs := make([]*Object, 0)
 	for k := range m.objects {
-		if strings.HasPrefix(k, prefix) && k > marker {
+		if strings.HasPrefix(k, prefix) && k >= marker {
 			obj := m.objects[k]
 			f := &File{Object{k, int64(len(obj.data)), obj.mtime}, obj.owner, obj.group, obj.mode}
 			objs = append(objs, (*Object)(unsafe.Pointer(f)))
@@ -153,7 +153,9 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 }
 
 func newMem(endpoint, accesskey, secretkey string) ObjectStorage {
-	store := &memStore{}
+	store := &memStore{
+		name: endpoint,
+	}
 	store.objects = make(map[string]*obj)
 	return store
 }

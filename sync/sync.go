@@ -45,7 +45,7 @@ var logger = utils.GetLogger("juicesync")
 // iterate on all the keys that starts at marker from object storage.
 func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
 	start := time.Now()
-	logger.Debugf("Listing objects from %s marker %q", store, marker)
+	logger.Debugf("Listing objects from %s start %q end %q", store, marker, end)
 	if ch, err := store.ListAll("", marker); err == nil {
 		if end == "" {
 			return ch, err
@@ -62,56 +62,51 @@ func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 		}()
 		return ch2, nil
 	}
-	objs, err := store.List("", marker, maxResults)
-	if err != nil {
-		logger.Errorf("Can't list %s: %s", store, err.Error())
-		return nil, err
-	}
-	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
+
 	out := make(chan *object.Object, maxResults)
 	go func() {
 		lastkey := ""
 		first := true
 	END:
-		for len(objs) > 0 {
-			for _, obj := range objs {
+		for true {
+			start = time.Now()
+			logger.Debugf("Listing objects from %s marker %q", store, marker)
+			objs, err := store.List("", marker, maxResults)
+			if err != nil {
+				logger.Errorf("Can't list %s: %s", store, err.Error())
+				return
+			}
+			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
+			// For non-first loop, the marker is lastkey which always exists but need to be skipped
+			if len(objs) == 0 || (!first && len(objs) == 1) {
+				break END
+			}
+			for i, obj := range objs {
+				if !first && i == 0 {
+					// Skip marker which has already been synced as lastkey
+					continue
+				}
 				key := obj.Key
-				if !first && key <= lastkey {
-					logger.Fatalf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
+				if lastkey != "" && !first && key <= lastkey {
+					logger.Fatalf("The keys are out of order: expected %q (marker) <= %q (last) < %q (current)", marker, lastkey, key)
+				}
+				lastkey = key
+				out <- obj
+				// Very special case to sync a single empty key
+				if first && end == "" && key == "" {
+					break END
 				}
 				if end != "" && key >= end {
 					break END
 				}
-				lastkey = key
-				out <- obj
 				first = false
 			}
-			// Corner case: the func parameter `marker` is an empty string("") and exactly
-			// one object which key is an empty string("") returned by the List() method.
-			if lastkey == "" {
-				break END
-			}
-
 			marker = lastkey
-			start = time.Now()
-			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			objs, err = store.List("", marker, maxResults)
-			for err != nil {
-				logger.Warnf("Fail to list: %s, retry again", err.Error())
-				// slow down
-				time.Sleep(time.Millisecond * 100)
-				objs, err = store.List("", marker, maxResults)
-			}
-			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
-			if err != nil {
-				// Telling that the listing has failed
-				out <- nil
-				logger.Errorf("Fail to list after %s: %s", marker, err.Error())
-				break
-			}
+
 		}
 		close(out)
 	}()
+
 	return out, nil
 }
 

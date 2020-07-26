@@ -42,3 +42,5 @@ require (
 )
 
 go 1.13
+
+replace github.com/juicedata/juicesync => ./
