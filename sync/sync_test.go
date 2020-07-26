@@ -25,29 +25,33 @@ func TestIterator(t *testing.T) {
 	m.Put("aa", bytes.NewReader([]byte("a")))
 	m.Put("c", bytes.NewReader([]byte("a")))
 
-	ch, _ := iterate(m, "a", "c")
+	ch, _ := iterate(m, "a", "b")
 	keys := collectAll(ch)
-	if len(keys) != 2 {
-		t.Errorf("length should be 2, but got %d", len(keys))
+	if len(keys) != 3 {
+		t.Errorf("length should be 3, but got %d", len(keys))
 		t.FailNow()
 	}
-	if !reflect.DeepEqual(keys, []string{"aa", "b"}) {
+	if !reflect.DeepEqual(keys, []string{"a", "aa", "b"}) {
 		t.Errorf("result wrong: %s", keys)
 		t.FailNow()
 	}
+}
 
+func TestIeratorSingleEmptyKey(t *testing.T) {
 	// Single object
 	s := object.CreateStorage("mem", "", "", "")
-	s.Put("a", bytes.NewReader([]byte("a")))
-	ch, _ = iterate(s, "", "")
-	keys = collectAll(ch)
-	if !reflect.DeepEqual(keys, []string{"a"}) {
+	s.Put("", bytes.NewReader([]byte("a")))
+	ch, _ := iterate(s, "", "")
+	keys := collectAll(ch)
+	if !reflect.DeepEqual(keys, []string{""}) {
 		t.Errorf("result wrong: %s", keys)
 		t.FailNow()
 	}
 }
 
 func TestSync(t *testing.T) {
+	// utils.SetLogLevel(logrus.DebugLevel)
+
 	config := &config.Config{
 		Start:     "",
 		End:       "",
