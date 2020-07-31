@@ -90,7 +90,7 @@ func (g *gs) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for i := 0; i < n; i++ {
 		item := objects.Items[i]
 		mtime, _ := time.Parse(time.RFC3339, item.Updated)
-		objs[i] = &Object{item.Name, int64(item.Size), mtime}
+		objs[i] = &Object{item.Name, int64(item.Size), mtime, strings.HasSuffix(item.Name, "/")}
 	}
 	return objs, nil
 }

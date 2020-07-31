@@ -85,7 +85,7 @@ func (q *bosclient) List(prefix, marker string, limit int64) ([]*Object, error) 
 		k := out.Contents[i]
 		println(k.LastModified)
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
-		objs[i] = &Object{k.Key, int64(k.Size), mod}
+		objs[i] = &Object{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/")}
 	}
 	return objs, nil
 }

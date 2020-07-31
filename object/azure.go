@@ -86,7 +86,7 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for i := 0; i < n; i++ {
 		blob := resp.Blobs[i]
 		mtime := time.Time(blob.Properties.LastModified)
-		objs[i] = &Object{blob.Name, int64(blob.Properties.ContentLength), mtime}
+		objs[i] = &Object{blob.Name, int64(blob.Properties.ContentLength), mtime, strings.HasSuffix(blob.Name, "/")}
 	}
 	return objs, nil
 }
