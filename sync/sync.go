@@ -368,8 +368,9 @@ OUT:
 			hasMore = false
 			break
 		}
-		if !config.Dirs && obj.Size == 0 && strings.HasSuffix(obj.Key, "/") {
+		if !config.Dirs && obj.IsDir {
 			// ignore directories
+			logger.Debug("Ignore directory ", obj.Key)
 			continue
 		}
 		atomic.AddUint64(&found, 1)

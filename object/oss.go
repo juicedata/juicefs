@@ -72,7 +72,7 @@ func (o *ossClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		o := result.Objects[i]
-		objs[i] = &Object{o.Key, o.Size, o.LastModified}
+		objs[i] = &Object{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }

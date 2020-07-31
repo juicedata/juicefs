@@ -116,7 +116,7 @@ func (s *nos) List(prefix, marker string, limit int64) ([]*Object, error) {
 		if err == nil {
 			mtime = mtime.Add(-8 * time.Hour)
 		}
-		objs[i] = &Object{o.Key, o.Size, mtime}
+		objs[i] = &Object{o.Key, o.Size, mtime, strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }

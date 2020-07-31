@@ -103,7 +103,7 @@ func (u *ufile) List(prefix, marker string, limit int64) ([]*Object, error) {
 	}
 	objs := make([]*Object, len(out.DataSet))
 	for i, item := range out.DataSet {
-		objs[i] = &Object{item.FileName, item.Size, time.Unix(int64(item.ModifyTime), 0)}
+		objs[i] = &Object{item.FileName, item.Size, time.Unix(int64(item.ModifyTime), 0), strings.HasSuffix(item.FileName, "/")}
 	}
 	return objs, nil
 }

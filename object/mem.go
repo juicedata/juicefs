@@ -141,7 +141,7 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for k := range m.objects {
 		if strings.HasPrefix(k, prefix) && k > marker {
 			obj := m.objects[k]
-			f := &File{Object{k, int64(len(obj.data)), obj.mtime}, obj.owner, obj.group, obj.mode}
+			f := &File{Object{k, int64(len(obj.data)), obj.mtime, strings.HasSuffix(k, "/")}, obj.owner, obj.group, obj.mode}
 			objs = append(objs, (*Object)(unsafe.Pointer(f)))
 		}
 	}

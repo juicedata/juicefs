@@ -37,6 +37,12 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	finfo := f.Stat()
+	if finfo.IsDir() {
+		return ioutil.NopCloser(bytes.NewBuffer([]byte{})), nil
+	}
+
 	if off > 0 {
 		if _, err := f.Seek(off, io.SeekStart); err != nil {
 			f.Close()
@@ -176,7 +182,7 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 				return nil
 			}
 			hinfo := info.(*hdfs.FileInfo)
-			f := &File{Object{key, info.Size(), info.ModTime()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
+			f := &File{Object{key, info.Size(), info.ModTime(), info.IsDir()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
 			if f.Owner == superuser {
 				f.Owner = "root"
 			}
