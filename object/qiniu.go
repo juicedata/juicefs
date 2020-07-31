@@ -121,7 +121,7 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for i := 0; i < n; i++ {
 		entry := entries[i]
 		if entry.Key > prefix {
-			objs = append(objs, &Object{entry.Key, entry.Fsize, time.Unix(entry.PutTime/10000000, 0)})
+			objs = append(objs, &Object{entry.Key, entry.Fsize, time.Unix(entry.PutTime/10000000, 0), strings.HasSuffix(entry.Key, "/")})
 		}
 	}
 	return objs, nil

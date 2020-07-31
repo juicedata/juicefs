@@ -139,7 +139,7 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]*Object, error) {
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		k := out.Keys[i]
-		objs[i] = &Object{(*k.Key), *k.Size, time.Unix(int64(*k.Modified), 0)}
+		objs[i] = &Object{(*k.Key), *k.Size, time.Unix(int64(*k.Modified), 0), strings.HasSuffix(*k.Key, "/")}
 	}
 	return objs, nil
 }

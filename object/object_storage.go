@@ -18,6 +18,7 @@ type Object struct {
 	Key   string
 	Size  int64
 	Mtime time.Time // Unix seconds
+	IsDir bool
 }
 
 type MultipartUpload struct {
