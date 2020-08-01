@@ -38,6 +38,10 @@ func (m *memStore) String() string {
 func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	m.Lock()
 	defer m.Unlock()
+	// Minimum length is 1.
+	if key == "" {
+		return nil, errors.New("object key cannot be empty")
+	}
 	d, ok := m.objects[key]
 	if !ok {
 		return nil, errors.New("not exists")
@@ -52,6 +56,10 @@ func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 func (m *memStore) Put(key string, in io.Reader) error {
 	m.Lock()
 	defer m.Unlock()
+	// Minimum length is 1.
+	if key == "" {
+		return errors.New("object key cannot be empty")
+	}
 	_, ok := m.objects[key]
 	if ok {
 		return errors.New("can't overwrite")
