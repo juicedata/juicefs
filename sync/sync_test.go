@@ -47,6 +47,28 @@ func TestIterator(t *testing.T) {
 	}
 }
 
+// Single object
+func TestIeratorSingleEmptyKey(t *testing.T) {
+	// utils.SetLogLevel(logrus.DebugLevel)
+
+	// Construct mem storage
+	s := object.CreateStorage("mem", "", "", "")
+	err := s.Put("abc", bytes.NewReader([]byte("abc")))
+	if err != nil {
+		t.Errorf("Put error: %q", err)
+		t.FailNow()
+	}
+
+	// Simulate command line prefix in SRC or DST
+	s = object.WithPrefix(s, "abc")
+	ch, _ := iterate(s, "", "")
+	keys := collectAll(ch)
+	if !reflect.DeepEqual(keys, []string{""}) {
+		t.Errorf("result wrong: %s", keys)
+		t.FailNow()
+	}
+}
+
 func TestSync(t *testing.T) {
 	config := &config.Config{
 		Start:     "",
