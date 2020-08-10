@@ -4,17 +4,15 @@ package object
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 	"unsafe"
-
-	"github.com/juicedata/juicesync/utils"
 )
 
 const (
@@ -31,7 +29,29 @@ func (d *filestore) String() string {
 }
 
 func (d *filestore) path(key string) string {
-	return filepath.Join(d.root, key)
+	if strings.HasSuffix(d.root, dirSuffix) {
+		return filepath.Join(d.root, key)
+	}
+	return d.root + key
+}
+
+func (d *filestore) Head(key string) (*Object, error) {
+	p := d.path(key)
+
+	fi, err := os.Stat(p)
+	if err != nil {
+		return nil, err
+	}
+	size := fi.Size()
+	if fi.IsDir() {
+		size = 0
+	}
+	return &Object{
+		key,
+		size,
+		fi.ModTime(),
+		fi.IsDir(),
+	}, nil
 }
 
 func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -104,16 +124,9 @@ func (d *filestore) Copy(dst, src string) error {
 	return d.Put(dst, r)
 }
 
-func (d *filestore) Exists(key string) error {
-	if utils.Exists(d.path(key)) {
-		return nil
-	}
-	return errors.New("not exists")
-}
-
 func (d *filestore) Delete(key string) error {
-	if d.Exists(key) != nil {
-		return errors.New("not exists")
+	if _, err := d.Head(key); err != nil {
+		return err
 	}
 	return os.Remove(d.path(key))
 }
@@ -211,25 +224,51 @@ func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) 
 func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 	listed := make(chan *Object, 10240)
 	go func() {
-		Walk(d.root, func(path string, info os.FileInfo, err error) error {
+		var walkRoot string
+		if strings.HasSuffix(d.root, dirSuffix) {
+			walkRoot = d.root
+		} else {
+			// If the root is not ends with `/`, we'll list the directory root resides.
+			walkRoot = path.Dir(d.root)
+		}
+
+		Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				listed <- nil
 				logger.Errorf("list %s: %s", path, err)
 				return err
 			}
+
+			if !strings.HasPrefix(path, d.root) {
+				if info.IsDir() && path != walkRoot {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
 			key := path[len(d.root):]
-			if !strings.HasPrefix(key, prefix) || key < marker {
+			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
 					return filepath.SkipDir
 				}
 				return nil
 			}
 			owner, group := getOwnerGroup(info)
-			f := &File{Object{key, info.Size(), info.ModTime(), info.IsDir()}, owner, group, info.Mode()}
+			f := &File{
+				Object{
+					key,
+					info.Size(),
+					info.ModTime(),
+					info.IsDir(),
+				},
+				owner,
+				group,
+				info.Mode(),
+			}
 			if info.IsDir() {
 				f.Size = 0
-				if f.Key != "" || !strings.HasSuffix(d.root, "/") {
-					f.Key += "/"
+				if f.Key != "" || !strings.HasSuffix(d.root, dirSuffix) {
+					f.Key += dirSuffix
 				}
 			}
 			listed <- (*Object)(unsafe.Pointer(f))
@@ -241,21 +280,35 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 }
 
 func (d *filestore) Chtimes(path string, mtime time.Time) error {
-	return os.Chtimes(filepath.Join(d.root, path), mtime, mtime)
+	p := d.path(path)
+	return os.Chtimes(p, mtime, mtime)
 }
 
 func (d *filestore) Chmod(path string, mode os.FileMode) error {
-	return os.Chmod(filepath.Join(d.root, path), mode)
+	p := d.path(path)
+	return os.Chmod(p, mode)
 }
 
 func (d *filestore) Chown(path string, owner, group string) error {
+	p := d.path(path)
 	uid := lookupUser(owner)
 	gid := lookupGroup(group)
-	return os.Chown(filepath.Join(d.root, path), uid, gid)
+	return os.Chown(p, uid, gid)
 }
 
 func newDisk(root, accesskey, secretkey string) ObjectStorage {
-	os.MkdirAll(root, 0755)
+	if strings.HasSuffix(root, dirSuffix) {
+		logger.Debugf("Ensure dicectory %s", root)
+		if err := os.MkdirAll(root, 0755); err != nil {
+			logger.Fatalf("Creating directory %s failed: %q", root, err)
+		}
+	} else {
+		dir := path.Dir(root)
+		logger.Debugf("Ensure dicectory %s", dir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			logger.Fatalf("Creating directory %s failed: %q", dir, err)
+		}
+	}
 	return &filestore{root: root}
 }
 

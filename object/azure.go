@@ -24,6 +24,21 @@ func (b *wasb) String() string {
 	return fmt.Sprintf("wasb://%s", b.container.Name)
 }
 
+func (b *wasb) Head(key string) (*Object, error) {
+	blob := b.container.GetBlobReference(key)
+	err := blob.GetProperties(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Object{
+		blob.Name,
+		blob.Properties.ContentLength,
+		time.Time(blob.Properties.LastModified),
+		strings.HasSuffix(blob.Name, "/"),
+	}, nil
+}
+
 func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	blob := b.container.GetBlobReference(key)
 	var end int64
@@ -45,14 +60,6 @@ func (b *wasb) Put(key string, data io.Reader) error {
 func (b *wasb) Copy(dst, src string) error {
 	uri := b.container.GetBlobReference(src).GetURL()
 	return b.container.GetBlobReference(dst).Copy(uri, nil)
-}
-
-func (b *wasb) Exists(key string) error {
-	ok, err := b.container.GetBlobReference(key).Exists()
-	if !ok {
-		err = errors.New("Not existed")
-	}
-	return err
 }
 
 func (b *wasb) Delete(key string) error {
@@ -86,7 +93,12 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for i := 0; i < n; i++ {
 		blob := resp.Blobs[i]
 		mtime := time.Time(blob.Properties.LastModified)
-		objs[i] = &Object{blob.Name, int64(blob.Properties.ContentLength), mtime, strings.HasSuffix(blob.Name, "/")}
+		objs[i] = &Object{
+			blob.Name,
+			int64(blob.Properties.ContentLength),
+			mtime,
+			strings.HasSuffix(blob.Name, "/"),
+		}
 	}
 	return objs, nil
 }

@@ -30,6 +30,22 @@ func (g *gs) String() string {
 	return fmt.Sprintf("gs://%s", g.bucket)
 }
 
+func (g *gs) Head(key string) (*Object, error) {
+	req := g.service.Get(g.bucket, key)
+	obj, err := req.Do()
+	if err != nil {
+		return nil, err
+	}
+
+	mtime, _ := time.Parse(time.RFC3339, obj.Updated)
+	return &Object{
+		key,
+		int64(obj.Size),
+		mtime,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	req := g.service.Get(g.bucket, key)
 	header := req.Header()
@@ -58,13 +74,8 @@ func (g *gs) Copy(dst, src string) error {
 	return err
 }
 
-func (g *gs) Exists(key string) error {
-	_, err := g.Get(key, 0, 1)
-	return err
-}
-
 func (g *gs) Delete(key string) error {
-	if err := g.Exists(key); err != nil {
+	if _, err := g.Head(key); err != nil {
 		return err
 	}
 	return g.service.Delete(g.bucket, key).Do()

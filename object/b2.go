@@ -23,6 +23,20 @@ func (c *b2client) String() string {
 	return fmt.Sprintf("b2://%s", c.bucket.Name())
 }
 
+func (c *b2client) Head(key string) (*Object, error) {
+	attr, err := c.bucket.Object(key).Attrs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Object{
+		attr.Name,
+		attr.Size,
+		attr.UploadTimestamp,
+		strings.HasSuffix(attr.Name, "/"),
+	}, nil
+}
+
 func (c *b2client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	obj := c.bucket.Object(key)
 	if _, err := obj.Attrs(ctx); err != nil {
@@ -51,13 +65,8 @@ func (c *b2client) Copy(dst, src string) error {
 	return c.Put(dst, in)
 }
 
-func (c *b2client) Exists(key string) error {
-	_, err := c.bucket.Object(key).Attrs(ctx)
-	return err
-}
-
 func (c *b2client) Delete(key string) error {
-	if err := c.Exists(key); err != nil {
+	if _, err := c.Head(key); err != nil {
 		return err
 	}
 	return c.bucket.Object(key).Delete(ctx)
@@ -83,7 +92,12 @@ func (c *b2client) List(prefix, marker string, limit int64) ([]*Object, error) {
 		attr, err := objects[i].Attrs(ctx)
 		if err == nil {
 			// attr.LastModified is not correct
-			objs[i] = &Object{attr.Name, attr.Size, attr.UploadTimestamp, strings.HasSuffix(attr.Name, "/")}
+			objs[i] = &Object{
+				attr.Name,
+				attr.Size,
+				attr.UploadTimestamp,
+				strings.HasSuffix(attr.Name, "/"),
+			}
 		}
 	}
 	return objs, nil

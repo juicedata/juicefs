@@ -35,6 +35,31 @@ func (m *memStore) String() string {
 	return fmt.Sprintf("mem://%s", m.name)
 }
 
+func (m *memStore) Head(key string) (*Object, error) {
+	m.Lock()
+	defer m.Unlock()
+	// Minimum length is 1.
+	if key == "" {
+		return nil, errors.New("object key cannot be empty")
+	}
+	obj, ok := m.objects[key]
+	if !ok {
+		return nil, errors.New("not exists")
+	}
+	f := &File{
+		Object{
+			key,
+			int64(len(obj.data)),
+			obj.mtime,
+			strings.HasSuffix(key, "/"),
+		},
+		obj.owner,
+		obj.group,
+		obj.mode,
+	}
+	return (*Object)(unsafe.Pointer(f)), nil
+}
+
 func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -114,16 +139,6 @@ func (m *memStore) Copy(dst, src string) error {
 	return m.Put(dst, d)
 }
 
-func (m *memStore) Exists(key string) error {
-	m.Lock()
-	defer m.Unlock()
-	_, ok := m.objects[key]
-	if !ok {
-		return errors.New("not exists")
-	}
-	return nil
-}
-
 func (m *memStore) Delete(key string) error {
 	m.Lock()
 	defer m.Unlock()
@@ -149,7 +164,17 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for k := range m.objects {
 		if strings.HasPrefix(k, prefix) && k > marker {
 			obj := m.objects[k]
-			f := &File{Object{k, int64(len(obj.data)), obj.mtime, strings.HasSuffix(k, "/")}, obj.owner, obj.group, obj.mode}
+			f := &File{
+				Object{
+					k,
+					int64(len(obj.data)),
+					obj.mtime,
+					strings.HasSuffix(k, "/"),
+				},
+				obj.owner,
+				obj.group,
+				obj.mode,
+			}
 			objs = append(objs, (*Object)(unsafe.Pointer(f)))
 		}
 	}

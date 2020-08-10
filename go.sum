@@ -9,8 +9,8 @@ github.com/Azure/go-autorest v8.4.0+incompatible/go.mod h1:r+4oMnoxhatjLLJ6zxSWA
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05 h1:NEPjpPSOSDDmnix+VANw/CfUs1fAorLIaz/IFz2eQ2o=
 github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05/go.mod h1:0N5CbwYI/8V1T6YOEwkgMvLmiGDNn661vLutBZQrC2c=
-github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20170925032315-6fe16293d6b7 h1:uHceyjNJ6fFv1Vv2zOrB7Qm8VnVjQ/TuJ8mwV7pHPKk=
-github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20170925032315-6fe16293d6b7/go.mod h1:T/Aws4fEfogEE9v+HPhhw+CntffsBHJ8nXQCwKr0/g8=
+github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible h1:90Z2Cp7EqcbaYfVwVjmQoK8kgoFPz+doQlujcwe1BRg=
+github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible/go.mod h1:T/Aws4fEfogEE9v+HPhhw+CntffsBHJ8nXQCwKr0/g8=
 github.com/aws/aws-sdk-go v1.12.10 h1:ihg0UOujHVcFciyc6zs/q5VLhoG1K+oDLqgpCxkAh04=
 github.com/aws/aws-sdk-go v1.12.10/go.mod h1:ZRmQr0FajVIyZ4ZzBYKG5P3ZqPz9IHG41ZoMu1ADI3k=
 github.com/baidubce/bce-sdk-go v0.0.0-20180401121131-aa0c7bd66b01 h1:pmQ6WjFOHtNL0IHsLB0r3fOyRQ6KK/CfZ9dDI7ugZnU=
@@ -196,6 +196,7 @@ golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2 h1:z99zHgr7hKfrUcX/KsoJk5
 golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.2 h1:tW2bmiBqwgJj/UpqtC8EpXEZVYOwU0yG4iWbprSVAcs=
 golang.org/x/text v0.3.2/go.mod h1:bEr9sfX3Q8Zfm5fL9x+3itogRgK3+ptLWKqgva+5dAk=
+golang.org/x/time v0.0.0-20181108054448-85acf8d2951c h1:fqgJT0MGcGpPgpWU7VRdRjuArfcOvC4AoJmILihzhDg=
 golang.org/x/time v0.0.0-20181108054448-85acf8d2951c/go.mod h1:tRJNPiyCQ0inRvYxbN9jk5I+vvW/OXSQhTDSoE431IQ=
 golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=
 golang.org/x/tools v0.0.0-20190114222345-bf090417da8b/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=

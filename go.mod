@@ -5,7 +5,7 @@ require (
 	github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible
 	github.com/Azure/go-autorest v8.4.0+incompatible // indirect
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
-	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20170925032315-6fe16293d6b7
+	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
 	github.com/aws/aws-sdk-go v1.12.10
 	github.com/baidubce/bce-sdk-go v0.0.0-20180401121131-aa0c7bd66b01
 	github.com/baiyubin/aliyun-sts-go-sdk v0.0.0-20180326062324-cfa1a18b161f // indirect

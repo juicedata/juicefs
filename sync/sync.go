@@ -43,32 +43,52 @@ var (
 var logger = utils.GetLogger("juicesync")
 
 // iterate on all the keys that starts at marker from object storage.
-func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Object, error) {
-	start := time.Now()
-	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	if ch, err := store.ListAll("", marker); err == nil {
-		if end == "" {
-			return ch, err
+func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Object, error) {
+	startTime := time.Now()
+	logger.Debugf("Iterating objects from %s start %q", store, start)
+
+	out := make(chan *object.Object, maxResults)
+
+	// As the result of object storage's List method doesn't include the marker key,
+	// we try List the marker key separately.
+	if start != "" {
+		if obj, err := store.Head(start); err == nil {
+			logger.Debugf("Found start key: %s from %s in %s", start, store, time.Now().Sub(startTime))
+			out <- obj
 		}
-		ch2 := make(chan *object.Object)
+	}
+
+	if ch, err := store.ListAll("", start); err == nil {
+		if end == "" {
+			go func() {
+				for obj := range ch {
+					out <- obj
+				}
+				close(out)
+			}()
+			return out, nil
+		}
+
 		go func() {
-			for o := range ch {
-				if o == nil || o.Key >= end {
+			for obj := range ch {
+				if obj != nil && obj.Key > end {
 					break
 				}
-				ch2 <- o
+				out <- obj
 			}
-			close(ch2)
+			close(out)
 		}()
-		return ch2, nil
+		return out, nil
 	}
+
+	marker := start
+	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List("", marker, maxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
 	}
-	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
-	out := make(chan *object.Object, maxResults)
+	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(startTime))
 	go func() {
 		lastkey := ""
 		first := true
@@ -79,10 +99,11 @@ func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 				if !first && key <= lastkey {
 					logger.Fatalf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
 				}
-				if end != "" && key >= end {
+				if end != "" && key > end {
 					break END
 				}
 				lastkey = key
+				logger.Debugf("key: %s", key)
 				out <- obj
 				first = false
 			}
@@ -93,7 +114,7 @@ func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 			}
 
 			marker = lastkey
-			start = time.Now()
+			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			objs, err = store.List("", marker, maxResults)
 			for err != nil {
@@ -102,7 +123,7 @@ func iterate(store object.ObjectStorage, marker, end string) (<-chan *object.Obj
 				time.Sleep(time.Millisecond * 100)
 				objs, err = store.List("", marker, maxResults)
 			}
-			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(start))
+			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(startTime))
 			if err != nil {
 				// Telling that the listing has failed
 				out <- nil
@@ -124,7 +145,7 @@ func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
 	if strings.HasPrefix(src.String(), "file://") || strings.HasPrefix(dst.String(), "file://") {
 		in, e := src.Get(key, 0, -1)
 		if e != nil {
-			if src.Exists(key) != nil {
+			if _, err := src.Head(key); err != nil {
 				return nil
 			}
 			return e
@@ -138,7 +159,7 @@ func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
 	}
 	in, e := src.Get(key, 0, int64(firstBlock))
 	if e != nil {
-		if src.Exists(key) != nil {
+		if _, err := src.Head(key); err != nil {
 			return nil
 		}
 		return e
@@ -377,8 +398,9 @@ OUT:
 		for hasMore && (dstobj == nil || obj.Key > dstobj.Key) {
 			var ok bool
 			if config.DeleteDst && dstobj != nil && dstobj.Key < obj.Key {
-				if !config.Dirs && dstobj.Size == 0 && strings.HasSuffix(dstobj.Key, "/") {
+				if !config.Dirs && dstobj.IsDir {
 					// ignore
+					logger.Debug("Ignore deleting dst directory ", dstobj.Key)
 				} else {
 					dstobj.Size = markDelete
 					todo <- dstobj

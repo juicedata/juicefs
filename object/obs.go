@@ -20,6 +20,23 @@ func (s *obsClient) String() string {
 	return fmt.Sprintf("obs://%s", s.bucket)
 }
 
+func (s *obsClient) Head(key string) (*Object, error) {
+	params := &obs.GetObjectMetadataInput{
+		Bucket: s.bucket,
+		Key:    key,
+	}
+	r, err := s.c.GetObjectMetadata(params)
+	if err != nil {
+		return nil, err
+	}
+	return &Object{
+		key,
+		r.ContentLength,
+		r.LastModified,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params := &obs.GetObjectInput{}
 	params.Bucket = s.bucket
@@ -65,16 +82,8 @@ func (s *obsClient) Copy(dst, src string) error {
 	return err
 }
 
-func (s *obsClient) Exists(key string) error {
-	params := &obs.GetObjectMetadataInput{}
-	params.Bucket = s.bucket
-	params.Key = key
-	_, err := s.c.GetObjectMetadata(params)
-	return err
-}
-
 func (s *obsClient) Delete(key string) error {
-	if err := s.Exists(key); err != nil {
+	if _, err := s.Head(key); err != nil {
 		return err
 	}
 	params := obs.DeleteObjectInput{}
