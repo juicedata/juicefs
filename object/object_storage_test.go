@@ -11,7 +11,7 @@ import (
 )
 
 func get(s ObjectStorage, k string, off, limit int64) (string, error) {
-	r, err := s.Get("/test", off, limit)
+	r, err := s.Get(k, off, limit)
 	if err != nil {
 		return "", err
 	}
@@ -23,7 +23,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 }
 
 func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]*Object, error) {
-	r, err := s.List(prefix, marker, 100)
+	r, err := s.List(prefix, marker, limit)
 	if err == nil {
 		return r, nil
 	}
@@ -103,13 +103,13 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	defer f.Close()
 	if err := s.Put("/file", f); err != nil {
 		t.Fatalf("failed to put from file")
-	} else if s.Exists("/file") != nil {
+	} else if _, err := s.Head("/file"); err != nil {
 		t.Fatalf("/file should exists")
 	} else {
 		s.Delete("/file")
 	}
 
-	if err := s.Exists("/test"); err != nil {
+	if _, err := s.Head("/test"); err != nil {
 		t.Fatalf("check exists failed: %s", err.Error())
 	}
 

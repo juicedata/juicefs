@@ -41,9 +41,9 @@ type PendingPart struct {
 
 type ObjectStorage interface {
 	String() string
+	Head(key string) (*Object, error)
 	Get(key string, off, limit int64) (io.ReadCloser, error)
 	Put(key string, in io.Reader) error
-	Exists(key string) error
 	Delete(key string) error
 	List(prefix, marker string, limit int64) ([]*Object, error)
 	ListAll(prefix, marker string) (<-chan *Object, error)

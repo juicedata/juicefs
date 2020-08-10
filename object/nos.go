@@ -27,6 +27,28 @@ func (s *nos) String() string {
 	return fmt.Sprintf("nos://%s", s.bucket)
 }
 
+func (s *nos) Head(key string) (*Object, error) {
+	objectRequest := &model.ObjectRequest{
+		Bucket: s.bucket,
+		Object: key,
+	}
+	r, err := s.client.GetObjectMetaData(objectRequest)
+	if err != nil {
+		return nil, err
+	}
+	lastModified := r.Metadata["Last-Modified"]
+	if lastModified == "" {
+		return nil, fmt.Errorf("cannot get last modified time")
+	}
+	mtime, _ := time.Parse(time.RFC1123, lastModified)
+	return &Object{
+		key,
+		r.ContentLength,
+		mtime,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (s *nos) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params := &model.GetObjectRequest{Bucket: s.bucket, Object: key}
 	if off > 0 || limit > 0 {
@@ -77,17 +99,8 @@ func (s *nos) Copy(dst, src string) error {
 	return s.client.CopyObject(params)
 }
 
-func (s *nos) Exists(key string) error {
-	r, err := s.Get(key, 0, 1)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-	return nil
-}
-
 func (s *nos) Delete(key string) error {
-	if err := s.Exists(key); err != nil {
+	if _, err := s.Head(key); err != nil {
 		return err
 	}
 	param := model.ObjectRequest{

@@ -26,6 +26,25 @@ func (s *ks3) String() string {
 	return fmt.Sprintf("ks3://%s", s.bucket)
 }
 
+func (s *ks3) Head(key string) (*Object, error) {
+	param := s3.HeadObjectInput{
+		Bucket: &s.bucket,
+		Key:    &key,
+	}
+
+	r, err := s.s3.HeadObject(&param)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Object{
+		key,
+		*r.ContentLength,
+		*r.LastModified,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (s *ks3) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
@@ -74,17 +93,8 @@ func (s *ks3) Copy(dst, src string) error {
 	return err
 }
 
-func (s *ks3) Exists(key string) error {
-	param := s3.HeadObjectInput{
-		Bucket: &s.bucket,
-		Key:    &key,
-	}
-	_, err := s.s3.HeadObject(&param)
-	return err
-}
-
 func (s *ks3) Delete(key string) error {
-	if err := s.Exists(key); err != nil {
+	if _, err := s.Head(key); err != nil {
 		return err
 	}
 	param := s3.DeleteObjectInput{

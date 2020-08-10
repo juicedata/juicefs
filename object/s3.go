@@ -26,6 +26,23 @@ func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s", s.bucket)
 }
 
+func (s *s3client) Head(key string) (*Object, error) {
+	param := s3.HeadObjectInput{
+		Bucket: &s.bucket,
+		Key:    &key,
+	}
+	r, err := s.s3.HeadObject(&param)
+	if err != nil {
+		return nil, err
+	}
+	return &Object{
+		key,
+		*r.ContentLength,
+		*r.LastModified,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
@@ -74,17 +91,8 @@ func (s *s3client) Copy(dst, src string) error {
 	return err
 }
 
-func (s *s3client) Exists(key string) error {
-	param := s3.HeadObjectInput{
-		Bucket: &s.bucket,
-		Key:    &key,
-	}
-	_, err := s.s3.HeadObject(&param)
-	return err
-}
-
 func (s *s3client) Delete(key string) error {
-	if err := s.Exists(key); err != nil {
+	if _, err := s.Head(key); err != nil {
 		return err
 	}
 	param := s3.DeleteObjectInput{
@@ -110,7 +118,12 @@ func (s *s3client) List(prefix, marker string, limit int64) ([]*Object, error) {
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &Object{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
+		objs[i] = &Object{
+			*o.Key,
+			*o.Size,
+			*o.LastModified,
+			strings.HasSuffix(*o.Key, "/"),
+		}
 	}
 	return objs, nil
 }

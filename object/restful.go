@@ -120,6 +120,29 @@ func parseError(resp *http.Response) error {
 	return fmt.Errorf("status: %v, message: %s", resp.StatusCode, string(data))
 }
 
+func (s *RestfulStorage) Head(key string) (*Object, error) {
+	resp, err := s.request("HEAD", key, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup(resp)
+	if resp.StatusCode != 200 {
+		return nil, parseError(resp)
+	}
+
+	lastModified := resp.Header.Get("Last-Modified")
+	if lastModified == "" {
+		return nil, fmt.Errorf("cannot get last modified time")
+	}
+	mtime, _ := time.Parse(time.RFC1123, lastModified)
+	return &Object{
+		key,
+		resp.ContentLength,
+		mtime,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (s *RestfulStorage) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	headers := make(map[string]string)
 	if off > 0 || limit > 0 {
@@ -164,21 +187,8 @@ func (s *RestfulStorage) Copy(dst, src string) error {
 	return s.Put(dst, bytes.NewReader(d))
 }
 
-func (s *RestfulStorage) Exists(key string) error {
-	resp, err := s.request("HEAD", key, nil, nil)
-	if err != nil {
-		return err
-	}
-	defer cleanup(resp)
-	if resp.StatusCode != 200 {
-		return parseError(resp)
-	}
-	return nil
-}
-
 func (s *RestfulStorage) Delete(key string) error {
-	err := s.Exists(key)
-	if err != nil {
+	if _, err := s.Head(key); err != nil {
 		return err
 	}
 

@@ -24,6 +24,20 @@ func (q *bosclient) String() string {
 	return fmt.Sprintf("bos://%s", q.bucket)
 }
 
+func (q *bosclient) Head(key string) (*Object, error) {
+	r, err := q.c.GetObjectMeta(q.bucket, key)
+	if err != nil {
+		return nil, err
+	}
+	mtime, _ := time.Parse(time.RFC1123, r.LastModified)
+	return &Object{
+		key,
+		r.ContentLength,
+		mtime,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (q *bosclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	var r *api.GetObjectResult
 	var err error
@@ -58,13 +72,8 @@ func (q *bosclient) Copy(dst, src string) error {
 	return err
 }
 
-func (q *bosclient) Exists(key string) error {
-	_, err := q.c.GetObjectMeta(q.bucket, key)
-	return err
-}
-
 func (q *bosclient) Delete(key string) error {
-	if err := q.Exists(key); err != nil {
+	if _, err := q.Head(key); err != nil {
 		return err
 	}
 	return q.c.DeleteObject(q.bucket, key)
