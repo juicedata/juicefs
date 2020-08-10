@@ -59,6 +59,21 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
+func (q *qiniu) Head(key string) (*Object, error) {
+	r, err := q.bm.Stat(q.bucket, key)
+	if err != nil {
+		return nil, err
+	}
+
+	mtime := time.Unix(0, r.PutTime*100)
+	return &Object{
+		key,
+		r.Fsize,
+		mtime,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (q *qiniu) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	// S3 SDK cannot get objects with prefix "/" in the key
 	if strings.HasPrefix(key, "/") && os.Getenv("QINIU_DOMAIN") != "" {
@@ -88,13 +103,8 @@ func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 
-func (q *qiniu) Exists(key string) error {
-	_, err := q.bm.Stat(q.bucket, key)
-	return err
-}
-
 func (q *qiniu) Delete(key string) error {
-	if err := q.Exists(key); err != nil {
+	if _, err := q.Head(key); err != nil {
 		return err
 	}
 	return q.bm.Delete(q.bucket, key)
@@ -121,7 +131,12 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
 	for i := 0; i < n; i++ {
 		entry := entries[i]
 		if entry.Key > prefix {
-			objs = append(objs, &Object{entry.Key, entry.Fsize, time.Unix(entry.PutTime/10000000, 0), strings.HasSuffix(entry.Key, "/")})
+			objs = append(objs, &Object{
+				entry.Key,
+				entry.Fsize,
+				time.Unix(0, entry.PutTime * 100),
+				strings.HasSuffix(entry.Key, "/"),
+			})
 		}
 	}
 	return objs, nil

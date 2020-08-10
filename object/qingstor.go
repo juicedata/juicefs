@@ -24,6 +24,20 @@ func (q *qingstor) String() string {
 	return fmt.Sprintf("qingstor://%s", *q.bucket.Properties.BucketName)
 }
 
+func (q *qingstor) Head(key string) (*Object, error) {
+	r, err := q.bucket.HeadObject(key, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Object{
+		key,
+		*r.ContentLength,
+		*r.LastModified,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	input := &qs.GetObjectInput{}
 	if off > 0 || limit > 0 {
@@ -108,13 +122,8 @@ func (q *qingstor) Copy(dst, src string) error {
 	return nil
 }
 
-func (q *qingstor) Exists(key string) error {
-	_, err := q.bucket.HeadObject(key, nil)
-	return err
-}
-
 func (q *qingstor) Delete(key string) error {
-	if err := q.Exists(key); err != nil {
+	if _, err := q.Head(key); err != nil {
 		return err
 	}
 	_, err := q.bucket.DeleteObject(key)
@@ -139,7 +148,12 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]*Object, error) {
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		k := out.Keys[i]
-		objs[i] = &Object{(*k.Key), *k.Size, time.Unix(int64(*k.Modified), 0), strings.HasSuffix(*k.Key, "/")}
+		objs[i] = &Object{
+			*k.Key,
+			*k.Size,
+			time.Unix(int64(*k.Modified), 0),
+			strings.HasSuffix(*k.Key, "/"),
+		}
 	}
 	return objs, nil
 }

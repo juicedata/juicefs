@@ -32,6 +32,44 @@ func (h *hdfsclient) path(key string) string {
 	return "/" + key
 }
 
+func (h *hdfsclient) Head(key string) (*Object, error) {
+	info, err := h.c.Stat(h.path(key))
+	if err != nil {
+		return nil, err
+	}
+
+	hinfo := info.(*hdfs.FileInfo)
+	f := &File{
+		Object{
+			key,
+			info.Size(),
+			info.ModTime(),
+			info.IsDir(),
+		},
+		hinfo.Owner(),
+		hinfo.OwnerGroup(),
+		info.Mode(),
+	}
+	if f.Owner == superuser {
+		f.Owner = "root"
+	}
+	if f.Group == supergroup {
+		f.Group = "root"
+	}
+	// stickybit from HDFS is different than golang
+	if f.Mode&01000 != 0 {
+		f.Mode &= ^os.FileMode(01000)
+		f.Mode |= os.ModeSticky
+	}
+	if info.IsDir() {
+		f.Size = 0
+		if !strings.HasSuffix(f.Key, "/") {
+			f.Key += "/"
+		}
+	}
+	return (*Object)(unsafe.Pointer(f)), nil
+}
+
 func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	f, err := h.c.Open(h.path(key))
 	if err != nil {
@@ -92,11 +130,6 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 		return err
 	}
 	return h.c.Rename(tmp, path)
-}
-
-func (h *hdfsclient) Exists(key string) error {
-	_, err := h.c.Stat(h.path(key))
-	return err
 }
 
 func (h *hdfsclient) Delete(key string) error {
@@ -182,7 +215,17 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 				return nil
 			}
 			hinfo := info.(*hdfs.FileInfo)
-			f := &File{Object{key, info.Size(), info.ModTime(), info.IsDir()}, hinfo.Owner(), hinfo.OwnerGroup(), info.Mode()}
+			f := &File{
+				Object{
+					key,
+					info.Size(),
+					info.ModTime(),
+					info.IsDir(),
+				},
+				hinfo.Owner(),
+				hinfo.OwnerGroup(),
+				info.Mode(),
+			}
 			if f.Owner == superuser {
 				f.Owner = "root"
 			}

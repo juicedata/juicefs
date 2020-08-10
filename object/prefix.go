@@ -22,16 +22,21 @@ func (p *withPrefix) String() string {
 	return fmt.Sprintf("%s/%s", p.os, p.prefix)
 }
 
+func (p *withPrefix) Head(key string) (*Object, error) {
+	obj, err := p.os.Head(p.prefix + key)
+	if err != nil {
+		return nil, err
+	}
+	obj.Key = obj.Key[len(p.prefix):]
+	return obj, nil
+}
+
 func (p *withPrefix) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return p.os.Get(p.prefix+key, off, limit)
 }
 
 func (p *withPrefix) Put(key string, in io.Reader) error {
 	return p.os.Put(p.prefix+key, in)
-}
-
-func (p *withPrefix) Exists(key string) error {
-	return p.os.Exists(p.prefix + key)
 }
 
 func (p *withPrefix) Delete(key string) error {

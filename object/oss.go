@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,27 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s", o.bucket.BucketName)
 }
 
+func (o *ossClient) Head(key string) (*Object, error) {
+	r, err := o.bucket.GetObjectMeta(key)
+	if err != nil {
+		return nil, err
+	}
+
+	lastModified := r.Get("Last-Modified")
+	if lastModified == "" {
+		return nil, fmt.Errorf("cannot get last modified time")
+	}
+	contentLength := r.Get("Content-Length")
+	mtime, _ := time.Parse(time.RFC1123, lastModified)
+	size, _ := strconv.ParseInt(contentLength, 10, 64)
+	return &Object{
+		key,
+		size,
+		mtime,
+		strings.HasSuffix(key, "/"),
+	}, nil
+}
+
 func (o *ossClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if off > 0 || limit > 0 {
 		var r string
@@ -33,7 +55,7 @@ func (o *ossClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		} else {
 			r = fmt.Sprintf("%d-", off)
 		}
-		return o.bucket.GetObject(key, oss.NormalizedRange(r))
+		return o.bucket.GetObject(key, oss.NormalizedRange(r), oss.RangeBehavior("standard"))
 	}
 	return o.bucket.GetObject(key)
 }
@@ -47,13 +69,8 @@ func (o *ossClient) Copy(dst, src string) error {
 	return err
 }
 
-func (o *ossClient) Exists(key string) error {
-	_, err := o.bucket.GetObjectDetailedMeta(key)
-	return err
-}
-
 func (o *ossClient) Delete(key string) error {
-	if err := o.Exists(key); err != nil {
+	if _, err := o.Head(key); err != nil {
 		return err
 	}
 	return o.bucket.DeleteObject(key)

@@ -148,6 +148,30 @@ func (f *sftpStore) path(key string) string {
 	return filepath.Join(f.root, key)
 }
 
+func (f *sftpStore) Head(key string) (*Object, error) {
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer f.putSftpConnection(&c, err)
+
+	info, err := c.sftpClient.Stat(f.path(key))
+	if err != nil {
+		return nil, err
+	}
+
+	objKey, size := key, info.Size()
+	if info.IsDir() {
+		objKey, size = key+"/", 0
+	}
+	return &Object{
+		objKey,
+		size,
+		info.ModTime(),
+		info.IsDir(),
+	}, nil
+}
+
 func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
@@ -227,16 +251,6 @@ func (f *sftpStore) Chtimes(key string, mtime time.Time) error {
 	return c.sftpClient.Chtimes(f.path(key), mtime, mtime)
 }
 
-func (f *sftpStore) Exists(key string) error {
-	c, err := f.getSftpConnection()
-	if err != nil {
-		return err
-	}
-	defer f.putSftpConnection(&c, err)
-	_, e := c.sftpClient.Stat(f.path(key))
-	return e
-}
-
 func (f *sftpStore) Delete(key string) error {
 	c, err := f.getSftpConnection()
 	if err != nil {
@@ -273,14 +287,14 @@ func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan *Object
 	for _, fi := range infos {
 		p := path + "/" + fi.Name()
 		key := p[len(f.root):]
-		if key >= marker {
+		if key > marker {
 			if fi.IsDir() {
 				out <- &Object{key + "/", 0, fi.ModTime(), true}
 			} else {
 				out <- &Object{key, fi.Size(), fi.ModTime(), false}
 			}
 		}
-		if fi.IsDir() && (key >= marker || strings.HasPrefix(marker, key)) {
+		if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
 			f.doFind(c, p, marker, out)
 		}
 	}
@@ -291,22 +305,48 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 		path = "."
 	}
 
-	if marker != "" {
-		f.doFind(c, path, marker, out)
-		return
-	}
-
-	// try the file with file path `path` as an object
 	fi, err := c.Stat(path)
 	if err != nil {
-		logger.Errorf("Stat %s error: %s", path, err)
+		logger.Errorf("Stat %s error: %q", path, err)
 		return
 	}
-	if fi.IsDir() {
-		out <- &Object{"", 0, fi.ModTime(), true}
+	if fi.IsDir() && strings.HasSuffix(path, "/") {
+		if marker == "" {
+			out <- &Object{"", 0, fi.ModTime(), true}
+		}
 		f.doFind(c, path, marker, out)
 	} else {
-		out <- &Object{"", fi.Size(), fi.ModTime(), false}
+		// As files or dirs in the same directory of file `path` resides
+		// may have prefix `path`, we should list the directory.
+		dir := filepath.Dir(path)
+		infos, err := c.ReadDir(dir)
+		if err != nil {
+			logger.Errorf("readdir %s: %s", dir, err)
+			return
+		}
+
+		sort.Sort(sortFI(infos))
+		for _, fi := range infos {
+			p := dir + "/" + fi.Name()
+			if !strings.HasPrefix(p, f.root) {
+				if p > f.root {
+					break
+				}
+				continue
+			}
+
+			key := p[len(f.root):]
+			if key > marker || marker == "" {
+				if fi.IsDir() {
+					out <- &Object{key + "/", 0, fi.ModTime(), true}
+				} else {
+					out <- &Object{key, fi.Size(), fi.ModTime(), false}
+				}
+			}
+			if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
+				f.doFind(c, p, marker, out)
+			}
+		}
 	}
 }
 
