@@ -27,6 +27,7 @@ var httpClient *http.Client
 func init() {
 	httpClient = &http.Client{
 		Transport: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
 			TLSHandshakeTimeout:   time.Second * 20,
 			ResponseHeaderTimeout: time.Second * 30,
 			IdleConnTimeout:       time.Second * 60,
