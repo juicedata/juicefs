@@ -134,7 +134,7 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
 			objs = append(objs, &Object{
 				entry.Key,
 				entry.Fsize,
-				time.Unix(0, entry.PutTime * 100),
+				time.Unix(0, entry.PutTime*100),
 				strings.HasSuffix(entry.Key, "/"),
 			})
 		}
