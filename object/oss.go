@@ -8,13 +8,19 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+)
+
+const (
+	ossDefaultRegionID = "cn-hangzhou"
 )
 
 type ossClient struct {
@@ -161,6 +167,45 @@ type stsCred struct {
 	Code            string
 }
 
+func fetch(url string) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.ReadAll(resp.Body)
+}
+
+func fetchStsToken() (*stsCred, error) {
+	if cred, err := fetchStsCred(); err == nil {
+		return cred, nil
+	}
+
+	// EMR MetaService: https://help.aliyun.com/document_detail/43966.html
+	url := "http://127.0.0.1:10011/"
+	token, err := fetch(url + "role-security-token")
+	if err != nil {
+		return nil, err
+	}
+	accessKey, err := fetch(url + "role-access-key-id")
+	if err != nil {
+		return nil, err
+	}
+	secretKey, err := fetch(url + "role-access-key-secret")
+	if err != nil {
+		return nil, err
+	}
+	return &stsCred{
+		SecurityToken:   string(token),
+		AccessKeyId:     string(accessKey),
+		AccessKeySecret: string(secretKey),
+		Expiration:      time.Now().Add(time.Hour * 24 * 100).Format("2006-01-02T15:04:05Z"),
+	}, nil
+}
+
 func fetchStsCred() (*stsCred, error) {
 	url := "http://100.100.100.200/latest/meta-data/Ram/security-credentials/"
 	req, _ := http.NewRequest("GET", url, nil)
@@ -193,6 +238,46 @@ func fetchStsCred() (*stsCred, error) {
 	return &cred, nil
 }
 
+func autoEndpoint(bucketName, accessKey, secretKey, securityToken string) (string, error) {
+	var client *oss.Client
+	var err error
+
+	regionID := ossDefaultRegionID
+	if rid := os.Getenv("ALICLOUD_REGION_ID"); rid != "" {
+		regionID = rid
+	}
+	defaultEndpoint := fmt.Sprintf("https://oss-%s.aliyuncs.com", regionID)
+
+	if securityToken == "" {
+		if client, err = oss.New(defaultEndpoint, accessKey, secretKey); err != nil {
+			return "", err
+		}
+	} else {
+		if client, err = oss.New(defaultEndpoint, accessKey, secretKey,
+			oss.SecurityToken(securityToken)); err != nil {
+			return "", err
+		}
+	}
+
+	result, err := client.ListBuckets(oss.Prefix(bucketName), oss.MaxKeys(1))
+	if err != nil {
+		return "", err
+	}
+	if len(result.Buckets) == 0 {
+		return "", fmt.Errorf("cannot list bucket %q using endpoint %q", bucketName, defaultEndpoint)
+	}
+
+	bucketLocation := result.Buckets[0].Location
+	// try oss internal endpoint
+	if conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s-internal.aliyuncs.com:http",
+		bucketLocation), time.Second*3); err == nil {
+		conn.Close()
+		return fmt.Sprintf("http://%s-internal.aliyuncs.com", bucketLocation), nil
+	}
+
+	return fmt.Sprintf("https://%s.aliyuncs.com", bucketLocation), nil
+}
+
 func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
@@ -200,21 +285,45 @@ func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucketName := hostParts[0]
-	domain := uri.Scheme + "://" + hostParts[1]
+
+	var domain string
+	if len(hostParts) > 1 {
+		domain = uri.Scheme + "://" + hostParts[1]
+	}
+
+	securityToken := ""
+	if accessKey == "" {
+		// try environment variable
+		accessKey = os.Getenv("ALICLOUD_ACCESS_KEY_ID")
+		secretKey = os.Getenv("ALICLOUD_ACCESS_KEY_SECRET")
+		securityToken = os.Getenv("SECURITY_TOKEN")
+
+		if accessKey == "" {
+			if cred, err := fetchStsToken(); err != nil {
+				logger.Fatalf("No credential provided for OSS")
+			} else {
+				accessKey = cred.AccessKeyId
+				secretKey = cred.AccessKeySecret
+				securityToken = cred.SecurityToken
+			}
+		}
+	}
+
+	if domain == "" {
+		if domain, err = autoEndpoint(bucketName, accessKey, secretKey, securityToken); err != nil {
+			logger.Fatalf("Unable to get endpoint of bucket %s: %s", bucketName, err)
+		}
+		logger.Debugf("Use endpoint %q", domain)
+	}
 
 	var client *oss.Client
-	if accessKey != "" {
+	if securityToken == "" {
 		client, err = oss.New(domain, accessKey, secretKey)
 	} else {
-		cred, err := fetchStsCred()
-		if err != nil {
-			logger.Fatalf("No credential provided for OSS")
-		}
-		client, err = oss.New(domain, cred.AccessKeyId, cred.AccessKeySecret,
-			oss.SecurityToken(cred.SecurityToken))
+		client, err = oss.New(domain, accessKey, secretKey, oss.SecurityToken(securityToken))
 		go func() {
 			for {
-				cred, err := fetchStsCred()
+				cred, err := fetchStsToken()
 				if err == nil {
 					client.Config.AccessKeyID = cred.AccessKeyId
 					client.Config.AccessKeySecret = cred.AccessKeySecret

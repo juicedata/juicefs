@@ -204,11 +204,15 @@ func TestS3(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) {
-	if os.Getenv("OSS_ACCESS_KEY") == "" {
+	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
-	s := newOSS("https://test.oss-us-west-1.aliyuncs.com",
-		os.Getenv("OSS_ACCESS_KEY"), os.Getenv("OSS_SECRET_KEY"))
+	bucketName := "test"
+	if b := os.Getenv("OSS_TEST_BUCKET"); b != "" {
+		bucketName = b
+	}
+	s := newOSS(fmt.Sprintf("https://%s", bucketName),
+		os.Getenv("ALICLOUD_ACCESS_KEY_ID"), os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"))
 	testStorage(t, s)
 }
 
