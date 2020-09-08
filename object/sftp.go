@@ -144,7 +144,14 @@ func (f *sftpStore) String() string {
 	return fmt.Sprintf("%s@%s:%s", f.config.User, f.host, f.root)
 }
 
+// always preserve suffix `/` for directory key
 func (f *sftpStore) path(key string) string {
+	if key == "" {
+		return f.root
+	}
+	if strings.HasSuffix(key, dirSuffix) {
+		return filepath.Join(f.root, key) + dirSuffix
+	}
 	return filepath.Join(f.root, key)
 }
 
@@ -285,7 +292,7 @@ func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan *Object
 
 	sort.Sort(sortFI(infos))
 	for _, fi := range infos {
-		p := path + "/" + fi.Name()
+		p := path + fi.Name()
 		key := p[len(f.root):]
 		if key > marker {
 			if fi.IsDir() {
@@ -295,22 +302,18 @@ func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan *Object
 			}
 		}
 		if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
-			f.doFind(c, p, marker, out)
+			f.doFind(c, p+dirSuffix, marker, out)
 		}
 	}
 }
 
 func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) {
-	if path == "" {
-		path = "."
-	}
-
-	fi, err := c.Stat(path)
-	if err != nil {
-		logger.Errorf("Stat %s error: %q", path, err)
-		return
-	}
-	if fi.IsDir() && strings.HasSuffix(path, "/") {
+	if strings.HasSuffix(path, dirSuffix) {
+		fi, err := c.Stat(path)
+		if err != nil {
+			logger.Errorf("Stat %s error: %q", path, err)
+			return
+		}
 		if marker == "" {
 			out <- &Object{"", 0, fi.ModTime(), true}
 		}
@@ -318,7 +321,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 	} else {
 		// As files or dirs in the same directory of file `path` resides
 		// may have prefix `path`, we should list the directory.
-		dir := filepath.Dir(path)
+		dir := filepath.Dir(path) + dirSuffix
 		infos, err := c.ReadDir(dir)
 		if err != nil {
 			logger.Errorf("readdir %s: %s", dir, err)
@@ -327,7 +330,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 
 		sort.Sort(sortFI(infos))
 		for _, fi := range infos {
-			p := dir + "/" + fi.Name()
+			p := dir + fi.Name()
 			if !strings.HasPrefix(p, f.root) {
 				if p > f.root {
 					break
@@ -344,7 +347,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 				}
 			}
 			if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
-				f.doFind(c, p, marker, out)
+				f.doFind(c, p+dirSuffix, marker, out)
 			}
 		}
 	}
@@ -362,7 +365,8 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan *Object, error) {
 	listed := make(chan *Object, 10240)
 	go func() {
 		defer f.putSftpConnection(&c, nil)
-		f.find(c.sftpClient, filepath.Join(f.root, prefix), marker, listed)
+
+		f.find(c.sftpClient, f.path(prefix), marker, listed)
 		close(listed)
 	}()
 	return listed, nil
@@ -370,7 +374,12 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan *Object, error) {
 
 func newSftp(endpoint, user, pass string) ObjectStorage {
 	parts := strings.Split(endpoint, ":")
-	root := parts[1]
+	root := filepath.Clean(parts[1])
+	// append suffix `/` removed by filepath.Clean()
+	// `.` is a directory, add `/`
+	if strings.HasSuffix(parts[1], dirSuffix) || root == "." {
+		root = root + dirSuffix
+	}
 
 	config := &ssh.ClientConfig{
 		User:            user,
@@ -396,11 +405,33 @@ func newSftp(endpoint, user, pass string) ObjectStorage {
 		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
 	}
 
-	return &sftpStore{
+	f := &sftpStore{
 		host:   parts[0],
 		root:   root,
 		config: config,
 	}
+
+	c, err := f.getSftpConnection()
+	if err != nil {
+		logger.Errorf("getSftpConnection failed: %s", err)
+		return nil
+	}
+	defer f.putSftpConnection(&c, err)
+
+	if strings.HasSuffix(root, dirSuffix) {
+		logger.Debugf("Ensure dicectory %s", root)
+		if err := c.sftpClient.MkdirAll(root); err != nil {
+			logger.Fatalf("Creating directory %s failed: %q", root, err)
+		}
+	} else {
+		dir := filepath.Dir(root)
+		logger.Debugf("Ensure dicectory %s", dir)
+		if err := c.sftpClient.MkdirAll(dir); err != nil {
+			logger.Fatalf("Creating directory %s failed: %q", dir, err)
+		}
+	}
+
+	return f
 }
 
 func init() {

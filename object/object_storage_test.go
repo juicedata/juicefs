@@ -66,7 +66,6 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("expect ll, but got %v, error:%s", d, e)
 	}
 	if d, e := get(s, "/test", 4, 2); d != "o" {
-		// OSS fail
 		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
 	}
 
