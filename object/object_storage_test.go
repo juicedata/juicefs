@@ -195,10 +195,7 @@ func TestS3(t *testing.T) {
 	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
-	s := newS3("https://cfs-test-tmp1.s3-us-west-2.amazonaws.com",
-		os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"))
-	testStorage(t, s)
-	s = newS3("https://jfs-test-tmp.s3.cn-north-1.amazonaws.com.cn",
+	s := newS3(fmt.Sprintf("https://%s", os.Getenv("S3_TEST_BUCKET")),
 		os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"))
 	testStorage(t, s)
 }
@@ -256,12 +253,12 @@ func TestKS3(t *testing.T) {
 }
 
 func TestCOS(t *testing.T) {
-	if os.Getenv("COS_ACCESS_KEY") == "" {
+	if os.Getenv("COS_SECRETID") == "" {
 		t.SkipNow()
 	}
 	cos := newCOS(
-		fmt.Sprintf("https://test-%s.cos.ap-beijing.myqcloud.com", os.Getenv("COS_APPID")),
-		os.Getenv("COS_ACCESS_KEY"), os.Getenv("COS_SECRET_KEY"))
+		fmt.Sprintf("https://%s", os.Getenv("COS_TEST_BUCKET")),
+		os.Getenv("COS_SECRETID"), os.Getenv("COS_SECRETKEY"))
 	testStorage(t, cos)
 }
 
@@ -327,10 +324,11 @@ func TestSpace(t *testing.T) {
 }
 
 func TestBOS(t *testing.T) {
-	if os.Getenv("BOS_ACCESS_KEY") == "" {
+	if os.Getenv("BDCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b := newBOS("https://test.su.bcebos.com", os.Getenv("BOS_ACCESS_KEY"), os.Getenv("BOS_SECRET_KEY"))
+	b := newBOS(fmt.Sprintf("https://%s", os.Getenv("BOS_TEST_BUCKET")),
+		os.Getenv("BDCLOUD_ACCESS_KEY"), os.Getenv("BDCLOUD_SECRET_KEY"))
 	testStorage(t, b)
 }
 
@@ -343,10 +341,11 @@ func TestSftp(t *testing.T) {
 }
 
 func TestOBS(t *testing.T) {
-	if os.Getenv("OBS_ACCESS_KEY") == "" {
+	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b := newObs("https://test.obs.cn-north-1.myhwclouds.com", os.Getenv("OBS_ACCESS_KEY"), os.Getenv("OBS_SECRET_KEY"))
+	b := newOBS(fmt.Sprintf("https://%s", os.Getenv("OBS_TEST_BUCKET")),
+		os.Getenv("HWCLOUD_ACCESS_KEY"), os.Getenv("HWCLOUD_SECRET_KEY"))
 	testStorage(t, b)
 }
 

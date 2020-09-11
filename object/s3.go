@@ -8,13 +8,17 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
+
+const awsDefaultRegion = "us-east-1"
 
 type s3client struct {
 	bucket string
@@ -203,43 +207,70 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, *result.NextKeyMarker, nil
 }
 
-func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
-	uri, err := url.ParseRequestURI(endpoint)
-	if err != nil {
-		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err.Error())
-	}
-
-	ssl := strings.ToLower(uri.Scheme) == "https"
+func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
 	awsConfig := &aws.Config{
-		Region:     aws.String("us-east-1"), // requires region...
-		DisableSSL: aws.Bool(!ssl),
 		HTTPClient: httpClient,
 	}
 	if accessKey != "" {
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
 	}
 
-	var (
-		region string
-		bucket string
-	)
-	if !strings.Contains(uri.Host, ".s3") {
-		// take uri.Host as bucketname
-		bucket = uri.Host
-		// try to figure out the region of this bucket
-		service := s3.New(session.New(awsConfig))
-		result, err := service.GetBucketLocation(&s3.GetBucketLocationInput{
-			Bucket: aws.String(bucket),
-		})
-		if err != nil {
-			logger.Fatalf("Can't guess your region for bucket %s: %s", bucket, err.Error())
-		}
-		region = *result.LocationConstraint
+	var regions []string
+	if r := os.Getenv("AWS_DEFAULT_REGION"); r != "" {
+		regions = []string{r}
 	} else {
-		// use uri.Host as endpoint
-		// to get region in endpoint
-		hostParts := strings.SplitN(uri.Host, ".s3", 2)
-		bucket = hostParts[0]
+		regions = []string{"us-east-1", "cn-north-1"}
+	}
+
+	var (
+		err     error
+		ses     *session.Session
+		service *s3.S3
+		result  *s3.GetBucketLocationOutput
+	)
+	for _, r := range regions {
+		// try to get bucket location
+		awsConfig.Region = aws.String(r)
+		ses, err = session.NewSession(awsConfig)
+		if err != nil {
+			return "", fmt.Errorf("fail to create aws session: %s", err)
+		}
+		service = s3.New(ses)
+		result, err = service.GetBucketLocation(&s3.GetBucketLocationInput{
+			Bucket: aws.String(bucketName),
+		})
+		if err == nil {
+			logger.Debugf("Get location of bucket %q from region %q endpoint success: %s",
+				bucketName, r, *result.LocationConstraint)
+			return *result.LocationConstraint, nil
+		}
+		if err1, ok := err.(awserr.Error); ok {
+			// InvalidAccessKeyId means the credentials is not for this region
+			if err1.Code() != "InvalidAccessKeyId" {
+				return "", err
+			}
+		}
+		logger.Debugf("Fail to get location of bucket %q from region %q endpoint: %s", bucketName, r, err)
+	}
+	return "", err
+}
+
+func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
+	uri, err := url.ParseRequestURI(endpoint)
+	if err != nil {
+		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err.Error())
+	}
+	hostParts := strings.SplitN(uri.Host, ".", 2)
+	bucketName := hostParts[0]
+
+	var region string
+	if len(hostParts) == 1 { // take endpoint as bucketname
+		if region, err = autoS3Region(bucketName, accessKey, secretKey); err != nil {
+			logger.Fatalf("Can't guess your region for bucket %s: %s", bucketName, err)
+		}
+	} else { // get region in endpoint
+		hostParts = strings.SplitN(uri.Host, ".s3", 2)
+		bucketName = hostParts[0]
 		endpoint = "s3" + hostParts[1]
 		if strings.HasPrefix(endpoint, "s3-") || strings.HasPrefix(endpoint, "s3.") {
 			endpoint = endpoint[3:]
@@ -256,9 +287,21 @@ func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
 		}
 	}
 
-	awsConfig.Region = aws.String(region)
-	ses := session.New(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
-	return &s3client{bucket, s3.New(ses), ses}
+	ssl := strings.ToLower(uri.Scheme) == "https"
+	awsConfig := &aws.Config{
+		Region:     aws.String(region),
+		DisableSSL: aws.Bool(!ssl),
+		HTTPClient: httpClient,
+	}
+	if accessKey != "" {
+		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
+	}
+
+	ses, err := session.NewSession(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
+	if err != nil {
+		logger.Fatalf("Fail to create aws session: %s", err)
+	}
+	return &s3client{bucketName, s3.New(ses), ses}
 }
 
 func init() {

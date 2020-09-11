@@ -19,9 +19,7 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
-const (
-	ossDefaultRegionID = "cn-hangzhou"
-)
+const ossDefaultRegionID = "cn-hangzhou"
 
 type ossClient struct {
 	client *oss.Client
@@ -238,7 +236,7 @@ func fetchStsCred() (*stsCred, error) {
 	return &cred, nil
 }
 
-func autoEndpoint(bucketName, accessKey, secretKey, securityToken string) (string, error) {
+func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (string, error) {
 	var client *oss.Client
 	var err error
 
@@ -310,7 +308,7 @@ func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 	}
 
 	if domain == "" {
-		if domain, err = autoEndpoint(bucketName, accessKey, secretKey, securityToken); err != nil {
+		if domain, err = autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken); err != nil {
 			logger.Fatalf("Unable to get endpoint of bucket %s: %s", bucketName, err)
 		}
 		logger.Debugf("Use endpoint %q", domain)
