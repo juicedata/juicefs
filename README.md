@@ -100,7 +100,7 @@ SRC and DST must be an URI of the following object storage:
 
 SRC and DST should be in the following format:
 
-[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]
+[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]
 
 Some examples:
 
@@ -108,23 +108,31 @@ Some examples:
 - user@host:path
 - file:///Users/me/code/
 - hdfs://hdfs@namenode1:9000,namenode2:9000/user/
-- s3://my-bucket.us-east1.amazonaws.com/
-- s3://access-key:secret-key-id@my-bucket.us-west2.s3.amazonaws.com/prefix
+- s3://my-bucket/
+- s3://access-key:secret-key-id@my-bucket/prefix
 - gcs://my-bucket.us-west1.googleapi.com/
-- oss://test.oss-us-west-1.aliyuncs.com
-- cos://test-1234.cos.ap-beijing.myqcloud.com
-- obs://test.obs.cn-north-1.myhwclouds.com
+- oss://test
+- cos://test-1234
+- obs://my-bucket
+- bos://my-bucket
 
 Note:
 
 - It's recommended to run juicesync in the target region to have better performance.
-- S3: The access key and secret key for S3 could be provided by AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or IAM role.
-- COS: The AppID should be part of the bucket name.
+- Auto discover endpoint for bucket of S3, OSS, COS, OBS, BOS, `SRC` and `DST` can use format `NAME://[ACCESS_KEY:SECRET_KEY@]BUCKET[/PREFIX]` . `ACCESS_KEY` and `SECRET_KEY` can be provided by corresponding environment variables (see below).
+- S3: 
+  * The access key and secret key for S3 could be provided by `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, or *IAM* role.
+- COS: 
+  * The AppID should be part of the bucket name.
+  * The credential can be provided by environment variable `COS_SECRETID` and `COS_SECRETKEY`.
 - GCS: The machine should be authorized to access Google Cloud Storage.
 - OSS:
-  The credential can be provided by environment variable `ALICLOUD_ACCESS_KEY_ID` and `ALICLOUD_ACCESS_KEY_SECRET` , RAM role, [EMR MetaService](https://help.aliyun.com/document_detail/43966.html).
-  The command line argument support `oss://[ACCESS_KEY:SECRET_KEY@]BUCKET[/PREFIX]` , the credential must have `oss:ListBuckets` permission.
+  * The credential can be provided by environment variable `ALICLOUD_ACCESS_KEY_ID` and `ALICLOUD_ACCESS_KEY_SECRET` , RAM role, [EMR MetaService](https://help.aliyun.com/document_detail/43966.html).
+- OBS:
+  * The credential can be provided by environment variable `HWCLOUD_ACCESS_KEY` and `HWCLOUD_SECRET_KEY` .
+- BOS:
+  * The credential can be provided by environment variable `BDCLOUD_ACCESS_KEY` and `BDCLOUD_SECRET_KEY` .
 - Qiniu:
   The S3 endpoint should be used for Qiniu, for example, abc.cn-north-1-s3.qiniu.com.
-  If there are keys starting with "/", the domain should be provided as QINIU_DOMAIN.
+  If there are keys starting with "/", the domain should be provided as `QINIU_DOMAIN`.
 - sftp: if your target machine uses SSH certificates instead of password, you should pass the path to your private key file to the environment variable `SSH_PRIVATE_KEY_PATH`, like ` SSH_PRIVATE_KEY_PATH=/home/someuser/.ssh/id_rsa juicesync [src] [dst]`.

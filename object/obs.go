@@ -6,10 +6,13 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 )
+
+const obsDefaultRegion = "cn-north-1"
 
 type obsClient struct {
 	bucket string
@@ -183,18 +186,64 @@ func (s *obsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func newObs(endpoint, accessKey, secretKey string) ObjectStorage {
-	uri, _ := url.ParseRequestURI(endpoint)
+func autoOBSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
+	region := obsDefaultRegion
+	if r := os.Getenv("HWCLOUD_DEFAULT_REGION"); r != "" {
+		region = r
+	}
+	endpoint := fmt.Sprintf("https://obs.%s.myhuaweicloud.com", region)
+
+	obsCli, err := obs.New(accessKey, secretKey, endpoint)
+	if err != nil {
+		return "", err
+	}
+	defer obsCli.Close()
+
+	result, err := obsCli.ListBuckets(&obs.ListBucketsInput{QueryLocation: true})
+	if err != nil {
+		return "", err
+	}
+	for _, bucket := range result.Buckets {
+		if bucket.Name == bucketName {
+			logger.Debugf("Get location of bucket %q: %s", bucketName, bucket.Location)
+			return fmt.Sprintf("obs.%s.myhuaweicloud.com", bucket.Location), nil
+		}
+	}
+	return "", fmt.Errorf("bucket %q does not exist", bucketName)
+}
+
+func newOBS(endpoint, accessKey, secretKey string) ObjectStorage {
+	uri, err := url.ParseRequestURI(endpoint)
+	if err != nil {
+		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err)
+	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
-	bucket := hostParts[0]
-	endpoint = fmt.Sprintf("%s://%s", uri.Scheme, hostParts[1])
+	bucketName := hostParts[0]
+	if len(hostParts) > 1 {
+		endpoint = fmt.Sprintf("%s://%s", uri.Scheme, hostParts[1])
+	}
+
+	if accessKey == "" {
+		accessKey = os.Getenv("HWCLOUD_ACCESS_KEY")
+		secretKey = os.Getenv("HWCLOUD_SECRET_KEY")
+	}
+
+	if len(hostParts) == 1 {
+		if endpoint, err = autoOBSEndpoint(bucketName, accessKey, secretKey); err != nil {
+			logger.Fatalf("Cannot get location of bucket %q: %s", bucketName, err)
+		}
+		if !strings.HasPrefix(endpoint, "http") {
+			endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
+		}
+	}
+
 	c, err := obs.New(accessKey, secretKey, endpoint)
 	if err != nil {
-		logger.Fatalf(err.Error())
+		logger.Fatalf("Fail to initialize OBS: %s", err)
 	}
-	return &obsClient{bucket, c}
+	return &obsClient{bucketName, c}
 }
 
 func init() {
-	register("obs", newObs)
+	register("obs", newOBS)
 }

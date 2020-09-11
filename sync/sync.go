@@ -103,7 +103,7 @@ func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Obje
 					break END
 				}
 				lastkey = key
-				logger.Debugf("key: %s", key)
+				// logger.Debugf("key: %s", key)
 				out <- obj
 				first = false
 			}

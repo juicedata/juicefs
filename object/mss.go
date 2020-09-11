@@ -16,6 +16,23 @@ import (
 	"time"
 )
 
+type Contents struct {
+	Key          string
+	Size         int64
+	LastModified time.Time
+}
+
+// ListObjectsOutput presents output for ListObjects.
+type ListBucketResult struct {
+	Contents       []*Contents
+	IsTruncated    bool
+	Prefix         string
+	Marker         string
+	MaxKeys        string
+	NextMarker     string
+	CommonPrefixes string
+}
+
 type mss struct {
 	RestfulStorage
 }
