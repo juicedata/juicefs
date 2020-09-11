@@ -10,9 +10,12 @@ import (
 	"time"
 
 	"github.com/juicedata/juicesync/utils"
+	"github.com/juicedata/juicesync/versioninfo"
 )
 
 var logger = utils.GetLogger("juicesync")
+
+var UserAgent = fmt.Sprintf("juicesync/%s", versioninfo.Version())
 
 type Object struct {
 	Key   string

@@ -4,252 +4,212 @@ package object
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
+	"os"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
 type COS struct {
-	RestfulStorage
+	c        *cos.Client
+	endpoint string
 }
 
-func hmacWithSha1(key string, d []byte) string {
-	h := hmac.New(sha1.New, []byte(key))
-	h.Write(d)
-	return hex.EncodeToString(h.Sum(nil))
+func (c *COS) String() string {
+	return fmt.Sprintf("cos://%s", strings.Split(c.endpoint, ".")[0])
 }
 
-func buildParams(req *http.Request) (string, string) {
-	keys := make([]string, 0)
-	query := req.URL.Query()
-	for k := range query {
-		keys = append(keys, k)
+func (c *COS) Head(key string) (*Object, error) {
+	resp, err := c.c.Object.Head(ctx, key, nil)
+	if err != nil {
+		return nil, err
 	}
-	sort.Strings(keys)
-	paramNames := strings.Join(keys, ";")
-	values := make([]string, 0)
-	for _, k := range keys {
-		values = append(values, k+"="+url.QueryEscape(query[k][0]))
+
+	header := resp.Header
+	var size int64
+	if val, ok := header["Content-Length"]; ok {
+		if length, err := strconv.ParseInt(val[0], 10, 64); err == nil {
+			size = length
+		}
 	}
-	params := strings.Join(values, "&")
-	return paramNames, params
+	var mtime time.Time
+	if val, ok := header["Last-Modified"]; ok {
+		mtime, _ = time.Parse(time.RFC1123, val[0])
+	}
+
+	return &Object{key, size, mtime, strings.HasSuffix(key, "/")}, nil
 }
 
-func cosSigner(req *http.Request, accessKey, secretKey, signName string) {
-	now := time.Now().Unix()
-	signtime := fmt.Sprintf("%d;%d", now, now+3600)
-	header := "host"
+func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
+	params := &cos.ObjectGetOptions{}
+	if off > 0 || limit > 0 {
+		var r string
+		if limit > 0 {
+			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
+		} else {
+			r = fmt.Sprintf("bytes=%d-", off)
+		}
+		params.Range = r
+	}
+	resp, err := c.c.Object.Get(ctx, key, params)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Body, nil
+}
 
-	signKey := hmacWithSha1(secretKey, []byte(signtime))
-	headers := fmt.Sprintf("host=%s", req.Host)
-	httpString := fmt.Sprintf("%s\n%s\n%s\n%s\n", strings.ToLower(req.Method), req.URL.Path,
-		"", headers)
-	h := sha1.New()
-	h.Write([]byte(httpString))
-	sha1Hex := hex.EncodeToString(h.Sum(nil))
-	toSign := fmt.Sprintf("sha1\n%s\n%s\n", signtime, sha1Hex)
-	sign := hmacWithSha1(signKey, []byte(toSign))
-	auth := strings.Join([]string{
-		"q-sign-algorithm=sha1",
-		"q-ak=" + accessKey,
-		"q-sign-time=" + signtime,
-		"q-key-time=" + signtime,
-		"q-header-list=" + header,
-		"q-url-param-list=" + "",
-		"q-signature=" + sign,
-	}, "&")
-	req.Header.Add("Authorization", auth)
+func (c *COS) Put(key string, in io.Reader) error {
+	_, err := c.c.Object.Put(ctx, key, in, nil)
+	return err
 }
 
 func (c *COS) Copy(dst, src string) error {
-	uri, _ := url.ParseRequestURI(c.endpoint)
-	source := fmt.Sprintf("%s/%s", uri.Host, src)
-	resp, err := c.request("PUT", dst, nil, map[string]string{
-		"x-cos-copy-source": source,
-	})
-	if err != nil {
-		return err
-	}
-	defer cleanup(resp)
-	if resp.StatusCode != 201 && resp.StatusCode != 200 {
-		return parseError(resp)
-	}
-	return nil
+	source := fmt.Sprintf("%s/%s", c.endpoint, src)
+	_, _, err := c.c.Object.Copy(ctx, dst, source, nil)
+	return err
 }
 
-func (c *COS) parseResult(resp *http.Response, out interface{}) error {
-	defer resp.Body.Close()
-	if resp.ContentLength <= 0 || resp.ContentLength > (1<<31) {
-		return fmt.Errorf("invalid content length: %d", resp.ContentLength)
-	}
-	data := make([]byte, resp.ContentLength)
-	if _, err := io.ReadFull(resp.Body, data); err != nil {
+func (c *COS) Delete(key string) error {
+	if _, err := c.Head(key); err != nil {
 		return err
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("status: %v, message: %s", resp.StatusCode, string(data))
-	}
-	err := xml.Unmarshal(data, out)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type Contents struct {
-	Key          string
-	Size         int64
-	LastModified time.Time
-}
-
-// ListObjectsOutput presents output for ListObjects.
-type ListBucketResult struct {
-	Contents       []*Contents
-	IsTruncated    bool
-	Prefix         string
-	Marker         string
-	MaxKeys        string
-	NextMarker     string
-	CommonPrefixes string
+	_, err := c.c.Object.Delete(ctx, key)
+	return err
 }
 
 func (c *COS) List(prefix, marker string, limit int64) ([]*Object, error) {
-	if limit > 1000 {
-		limit = 1000
+	param := cos.BucketGetOptions{
+		Prefix:  prefix,
+		Marker:  marker,
+		MaxKeys: int(limit),
 	}
-	path := fmt.Sprintf("?prefix=%s&marker=%s&max-keys=%d", prefix, marker, limit)
-	resp, err := c.request("GET", path, nil, nil)
+	resp, _, err := c.c.Bucket.Get(ctx, &param)
+	for err == nil && len(resp.Contents) == 0 && resp.IsTruncated {
+		param.Marker = resp.NextMarker
+		resp, _, err = c.c.Bucket.Get(ctx, &param)
+	}
 	if err != nil {
 		return nil, err
 	}
-	var out ListBucketResult
-	if err := c.parseResult(resp, &out); err != nil {
-		return nil, err
-	}
-	objs := make([]*Object, len(out.Contents))
-	for i, item := range out.Contents {
-		objs[i] = &Object{
-			item.Key,
-			item.Size,
-			item.LastModified,
-			strings.HasSuffix(item.Key, "/"),
-		}
+	n := len(resp.Contents)
+	objs := make([]*Object, n)
+	for i := 0; i < n; i++ {
+		o := resp.Contents[i]
+		t, _ := time.Parse(time.RFC3339, o.LastModified)
+		objs[i] = &Object{o.Key, int64(o.Size), t, strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }
 
-type cosInitiateMultipartUploadResult struct {
-	Bucket   string
-	Key      string
-	UploadId string
+func (c *COS) ListAll(prefix, marker string) (<-chan *Object, error) {
+	return nil, notSupported
 }
 
 func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	resp, err := c.request("POST", key+"?uploads", nil, nil)
+	resp, _, err := c.c.Object.InitiateMultipartUpload(ctx, key, nil)
 	if err != nil {
 		return nil, err
 	}
-	var out cosInitiateMultipartUploadResult
-	if err := c.parseResult(resp, &out); err != nil {
-		return nil, err
-	}
-	return &MultipartUpload{UploadID: out.UploadId, MinPartSize: 1 << 20, MaxCount: 10000}, nil
+	return &MultipartUpload{UploadID: resp.UploadID, MinPartSize: 5 << 20, MaxCount: 10000}, nil
 }
 
-func (c *COS) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
-	path := fmt.Sprintf("%s?uploadId=%s&partNumber=%d", key, uploadID, num)
-	resp, err := c.request("PUT", path, bytes.NewReader(data), nil)
+func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+	resp, err := c.c.Object.UploadPart(ctx, key, uploadID, num, bytes.NewReader(body), nil)
 	if err != nil {
 		return nil, err
 	}
-	defer cleanup(resp)
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("UploadPart: %s", parseError(resp).Error())
-	}
-	etags := resp.Header["Etag"]
-	if len(etags) < 1 {
-		return nil, errors.New("No ETag")
-	}
-	return &Part{Num: num, Size: len(data), ETag: strings.Trim(etags[0], "\"")}, nil
+	return &Part{Num: num, ETag: resp.Header.Get("Etag")}, nil
 }
 
 func (c *COS) AbortUpload(key string, uploadID string) {
-	c.request("DELETE", key+"?uploadId="+uploadID, nil, nil)
-}
-
-type cosPart struct {
-	PartNumber int
-	ETag       string
-}
-
-type CompleteMultipartUpload struct {
-	Part []cosPart
+	c.c.Object.AbortMultipartUpload(ctx, key, uploadID)
 }
 
 func (c *COS) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	param := CompleteMultipartUpload{
-		Part: make([]cosPart, len(parts)),
+	var cosParts []cos.Object
+	for i := range parts {
+		cosParts = append(cosParts, cos.Object{Key: key, ETag: parts[i].ETag, PartNumber: parts[i].Num})
 	}
-	for i, p := range parts {
-		param.Part[i] = cosPart{p.Num, p.ETag}
-	}
-	body, _ := xml.Marshal(param)
-	resp, err := c.request("POST", key+"?uploadId="+uploadID, bytes.NewReader(body), nil)
-	if err != nil {
-		return err
-	}
-	defer cleanup(resp)
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("CompleteMultipart: %s", parseError(resp).Error())
-	}
-	return nil
-}
-
-type cosUpload struct {
-	Key       string
-	UploadID  string
-	Initiated time.Time
-}
-
-type cosListMultipartUploadsResult struct {
-	Bucket        string
-	KeyMarker     string
-	NextKeyMarker string
-	Upload        []cosUpload
+	_, _, err := c.c.Object.CompleteMultipartUpload(ctx, key, uploadID, &cos.CompleteMultipartUploadOptions{Parts: cosParts})
+	return err
 }
 
 func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
-	resp, err := c.request("GET", "?uploads&key-marker="+marker, nil, nil)
+	input := &cos.ListMultipartUploadsOptions{
+		KeyMarker: marker,
+	}
+	result, _, err := c.c.Bucket.ListMultipartUploads(ctx, input)
 	if err != nil {
 		return nil, "", err
 	}
-	var out cosListMultipartUploadsResult
-	if err := c.parseResult(resp, &out); err != nil {
-		return nil, "", err
+	parts := make([]*PendingPart, len(result.Uploads))
+	for i, u := range result.Uploads {
+		t, _ := time.Parse(time.RFC3339, u.Initiated)
+		parts[i] = &PendingPart{u.Key, u.UploadID, t}
 	}
-	parts := make([]*PendingPart, len(out.Upload))
-	for i, u := range out.Upload {
-		parts[i] = &PendingPart{u.Key, u.UploadID, u.Initiated}
+	return parts, result.NextKeyMarker, nil
+}
+
+func autoCOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
+	client := cos.NewClient(nil, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  accessKey,
+			SecretKey: secretKey,
+		},
+	})
+	client.UserAgent = UserAgent
+	s, _, err := client.Service.Get(ctx)
+	if err != nil {
+		return "", err
 	}
-	return parts, out.NextKeyMarker, nil
+
+	for _, b := range s.Buckets {
+		// fmt.Printf("%#v\n", b)
+		if b.Name == bucketName {
+			return fmt.Sprintf("https://%s.cos.%s.myqcloud.com", b.Name, b.Region), nil
+		}
+	}
+
+	return "", fmt.Errorf("bucket %q doesnot exist", bucketName)
 }
 
 func newCOS(endpoint, accessKey, secretKey string) ObjectStorage {
-	return &COS{RestfulStorage{
-		endpoint:  endpoint,
-		accessKey: accessKey,
-		secretKey: secretKey,
-		signer:    cosSigner,
-	}}
+	uri, err := url.ParseRequestURI(endpoint)
+	if err != nil {
+		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err)
+	}
+	hostParts := strings.SplitN(uri.Host, ".", 2)
+
+	if accessKey == "" {
+		accessKey = os.Getenv("COS_SECRETID")
+		secretKey = os.Getenv("COS_SECRETKEY")
+	}
+
+	if len(hostParts) == 1 {
+		if endpoint, err = autoCOSEndpoint(hostParts[0], accessKey, secretKey); err != nil {
+			logger.Fatalf("Unable to get endpoint of bucket %s: %s", hostParts[0], err)
+		}
+		if uri, err = url.ParseRequestURI(endpoint); err != nil {
+			logger.Fatalf("Invalid endpoint %s: %s", endpoint, err)
+		}
+		logger.Debugf("Use endpoint %q", endpoint)
+	}
+
+	b := &cos.BaseURL{BucketURL: uri}
+	client := cos.NewClient(b, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  accessKey,
+			SecretKey: secretKey,
+		},
+	})
+	client.UserAgent = UserAgent
+	return &COS{client, uri.Host}
 }
 
 func init() {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 	"github.com/baidubce/bce-sdk-go/services/bos"
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
 )
+
+const bosDefaultRegion = "bj"
 
 type bosclient struct {
 	defaultObjectStorage
@@ -92,7 +95,6 @@ func (q *bosclient) List(prefix, marker string, limit int64) ([]*Object, error) 
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		k := out.Contents[i]
-		println(k.LastModified)
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
 		objs[i] = &Object{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/")}
 	}
@@ -148,6 +150,25 @@ func (q *bosclient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, result.NextKeyMarker, nil
 }
 
+func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
+	region := bosDefaultRegion
+	if r := os.Getenv("BDCLOUD_DEFAULT_REGION"); r != "" {
+		region = r
+	}
+
+	endpoint := fmt.Sprintf("https://%s.bcebos.com", region)
+	bosCli, err := bos.NewClient(accessKey, secretKey, endpoint)
+	if err != nil {
+		return "", err
+	}
+
+	if location, err := bosCli.GetBucketLocation(bucketName); err != nil {
+		return "", err
+	} else {
+		return fmt.Sprintf("%s.bcebos.com", location), nil
+	}
+}
+
 func newBOS(endpoint, accessKey, secretKey string) ObjectStorage {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
@@ -155,7 +176,25 @@ func newBOS(endpoint, accessKey, secretKey string) ObjectStorage {
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucketName := hostParts[0]
-	endpoint = fmt.Sprintf("https://%s", hostParts[1])
+	if len(hostParts) > 1 {
+		endpoint = fmt.Sprintf("https://%s", hostParts[1])
+	}
+
+	if accessKey == "" {
+		accessKey = os.Getenv("BDCLOUD_ACCESS_KEY")
+		secretKey = os.Getenv("BDCLOUD_SECRET_KEY")
+	}
+
+	if len(hostParts) == 1 {
+		if endpoint, err = autoBOSEndpoint(bucketName, accessKey, secretKey); err != nil {
+			logger.Fatalf("Fail to get location of bucket %q: %s", bucketName, err)
+		}
+		if !strings.HasPrefix(endpoint, "http") {
+			endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
+		}
+		logger.Debugf("Use endpoint: %s", endpoint)
+	}
+
 	bosClient, err := bos.NewClient(accessKey, secretKey, endpoint)
 	return &bosclient{bucket: bucketName, c: bosClient}
 }

@@ -29,6 +29,7 @@ require (
 	github.com/satori/uuid v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.0.3
 	github.com/smartystreets/goconvey v1.6.4 // indirect
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
 	github.com/urfave/cli/v2 v2.1.1
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible
