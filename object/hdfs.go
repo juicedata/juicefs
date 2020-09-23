@@ -199,6 +199,7 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 	}
 	_, err = h.c.Stat(root)
 	if err != nil && err.(*os.PathError).Err == os.ErrNotExist {
+		close(listed)
 		return listed, nil // return empty list
 	}
 	go func() {
