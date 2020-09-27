@@ -245,8 +245,8 @@ func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
 			return *result.LocationConstraint, nil
 		}
 		if err1, ok := err.(awserr.Error); ok {
-			// InvalidAccessKeyId means the credentials is not for this region
-			if err1.Code() != "InvalidAccessKeyId" {
+			// continue to try other regions if the credentials are invalid, otherwise stop trying.
+			if errCode := err1.Code(); errCode != "InvalidAccessKeyId" && errCode != "InvalidToken" {
 				return "", err
 			}
 		}
