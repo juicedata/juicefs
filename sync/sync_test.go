@@ -70,6 +70,8 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
+	// utils.SetLogLevel(logrus.DebugLevel)
+
 	config := &config.Config{
 		Start:     "",
 		End:       "",
@@ -93,6 +95,7 @@ func TestSync(t *testing.T) {
 	b := object.CreateStorage("mem", "b", "", "")
 	b.Put("ba", bytes.NewReader([]byte("ba")))
 
+	// Copy "a" from mem://a to mem://b
 	if err := Sync(a, b, config); err != nil {
 		t.FailNow()
 	}
@@ -101,14 +104,18 @@ func TestSync(t *testing.T) {
 		t.FailNow()
 	}
 
+	// Now a: {"a", "ab", "abc"}, b: {"a", "ba"}
+	// Copy "ba" from mem://b to mem://a
 	if err := Sync(b, a, config); err != nil {
 		t.FailNow()
 	}
+	// 1 copy occured, `copied` incresed 1
 	if copied != 2 {
 		t.Errorf("should copy 2 keys, but got %d", copied)
 		t.FailNow()
 	}
 
+	// Now a: {"a", "ab", "abc", "ba"}, b: {"a", "ba"}
 	akeys, _ := a.List("", "", 4)
 	bkeys, _ := b.List("", "", 4)
 
@@ -122,8 +129,22 @@ func TestSync(t *testing.T) {
 	if err := Sync(a, b, config); err != nil {
 		t.FailNow()
 	}
+	// No copy occured, `copied` isn't change
 	if copied != 2 {
 		t.Errorf("should copy 2 keys, but got %d", copied)
+		t.FailNow()
+	}
+
+	// Test --force-update option
+	config.ForceUpdate = true
+	// Forcibly copy {"a", "ba"} from mem://a to mem://b.
+	// As mem:// doesn't allow overwrite, this call should fail and
+	// variable `failed` should be 2
+	if err := Sync(a, b, config); err == nil {
+		t.FailNow()
+	}
+	if failed != 2 {
+		t.Errorf("should fail to copy 2 keys, but got %d", failed)
 		t.FailNow()
 	}
 }
