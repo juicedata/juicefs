@@ -169,6 +169,11 @@ func main() {
 			Usage:   "update existing file if the source is newer",
 		},
 		&cli.BoolFlag{
+			Name:    "force-update",
+			Aliases: []string{"f"},
+			Usage:   "always update existing file",
+		},
+		&cli.BoolFlag{
 			Name:  "perms",
 			Usage: "preserve permissions",
 		},

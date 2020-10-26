@@ -186,7 +186,7 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 }
 
 func newMem(endpoint, accesskey, secretkey string) ObjectStorage {
-	store := &memStore{}
+	store := &memStore{name: endpoint}
 	store.objects = make(map[string]*obj)
 	return store
 }

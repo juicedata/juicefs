@@ -8,7 +8,7 @@ var (
 	REVISION     = "HEAD"
 	REVISIONDATE = "now"
 	USAGE        = `Usage: juicesync [options] SRC DST
-    SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]`
+    SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`
 )
 
 func Version() string {
