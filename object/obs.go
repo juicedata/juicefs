@@ -1,3 +1,5 @@
+// Copyright (C) 2019-present Juicedata Inc.
+
 package object
 
 import (
