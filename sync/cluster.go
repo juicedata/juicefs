@@ -208,7 +208,12 @@ func launchWorker(address string, config *config.Config, wg *sync.WaitGroup) {
 			cmd := exec.Command("rsync", "-au", path, host+":"+rpath)
 			err := cmd.Run()
 			if err != nil {
-				logger.Errorf("copy to %s: %s", host, err)
+				// fallback to scp
+				cmd = exec.Command("scp", path, host+":"+rpath)
+				err = cmd.Run()
+			}
+			if err != nil {
+				logger.Errorf("copy juicesync to %s: %s", host, err)
 				return
 			}
 			// launch juicesync
