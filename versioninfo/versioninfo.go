@@ -7,7 +7,7 @@ var (
 	VERSION      = "unknown"
 	REVISION     = "HEAD"
 	REVISIONDATE = "now"
-	USAGE        = `Usage: juicesync [options] SRC DST
+	USAGE        = `juicesync [options] SRC DST
     SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`
 )
 
