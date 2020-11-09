@@ -31,12 +31,12 @@ const (
 )
 
 var (
-	found       uint64
-	missing     uint64
-	copied      uint64
-	copiedBytes uint64
-	failed      uint64
-	deleted     uint64
+	found       int64
+	missing     int64
+	copied      int64
+	copiedBytes int64
+	failed      int64
+	deleted     int64
 	concurrent  chan int
 )
 
@@ -287,97 +287,114 @@ func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 	return nil
 }
 
-func doSync(src, dst object.ObjectStorage, srckeys, dstkeys <-chan *object.Object, config *config.Config) {
-	todo := make(chan *object.Object, 10240)
-	wg := sync.WaitGroup{}
-	concurrent = make(chan int, config.Threads)
-	for i := 0; i < config.Threads; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				obj, ok := <-todo
-				if !ok {
-					break
-				}
-				start := time.Now()
-				var err error
-				if obj.Size == markDelete {
-					if config.DeleteSrc {
-						if config.Dry {
-							logger.Debugf("Will delete %s from %s", obj.Key, src)
-							continue
-						}
-						if err = try(3, func() error {
-							return src.Delete(obj.Key)
-						}); err == nil {
-							logger.Debugf("Deleted %s from %s", obj.Key, src)
-							atomic.AddUint64(&deleted, 1)
-						} else {
-							logger.Errorf("Failed to delete %s from %s: %s", obj.Key, src, err.Error())
-							atomic.AddUint64(&failed, 1)
-						}
-					}
-					if config.DeleteDst {
-						if config.Dry {
-							logger.Debugf("Will delete %s from %s", obj.Key, dst)
-							continue
-						}
-						if err = try(3, func() error {
-							return dst.Delete(obj.Key)
-						}); err == nil {
-							logger.Debugf("Deleted %s from %s", obj.Key, dst)
-							atomic.AddUint64(&deleted, 1)
-						} else {
-							logger.Errorf("Failed to delete %s from %s: %s", obj.Key, dst, err.Error())
-							atomic.AddUint64(&failed, 1)
-						}
-					}
-					continue
-				}
-
+func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *config.Config) {
+	for {
+		obj, ok := <-todo
+		if !ok {
+			break
+		}
+		start := time.Now()
+		var err error
+		if obj.Size == markDelete {
+			if config.DeleteSrc {
 				if config.Dry {
-					logger.Debugf("Will copy %s (%d bytes)", obj.Key, obj.Size)
+					logger.Debugf("Will delete %s from %s", obj.Key, src)
 					continue
 				}
-				if config.Perms && obj.Size == markCopyPerms {
-					fi := (*object.File)(unsafe.Pointer(obj))
-					if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
-						logger.Warnf("Chmod %s to %d: %s", obj.Key, fi.Mode, err)
-					}
-					if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
-						logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
-					}
-					atomic.AddUint64(&copied, 1)
-					logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner, fi.Group, fi.Mode, obj.Key, time.Now().Sub(start))
-					continue
-				}
-				err = copyInParallel(src, dst, obj)
-				if err != nil {
-					atomic.AddUint64(&failed, 1)
-					logger.Errorf("Failed to copy %s: %s", obj.Key, err.Error())
+				if err = try(3, func() error {
+					return src.Delete(obj.Key)
+				}); err == nil {
+					logger.Debugf("Deleted %s from %s", obj.Key, src)
+					atomic.AddInt64(&deleted, 1)
 				} else {
-					if mc, ok := dst.(object.MtimeChanger); ok {
-						err := mc.Chtimes(obj.Key, obj.Mtime)
-						if err != nil {
-							logger.Warnf("Update mtime of %s: %s", obj.Key, err)
-						}
-					}
-					if config.Perms {
-						fi := (*object.File)(unsafe.Pointer(obj))
-						if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
-							logger.Warnf("Chmod %s to %o: %s", obj.Key, fi.Mode, err)
-						}
-						if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
-							logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
-						}
-					}
-					atomic.AddUint64(&copied, 1)
-					atomic.AddUint64(&copiedBytes, uint64(obj.Size))
-					logger.Debugf("Copied %s (%d bytes) in %s", obj.Key, obj.Size, time.Now().Sub(start))
+					logger.Errorf("Failed to delete %s from %s: %s", obj.Key, src, err.Error())
+					atomic.AddInt64(&failed, 1)
 				}
 			}
-		}()
+			if config.DeleteDst {
+				if config.Dry {
+					logger.Debugf("Will delete %s from %s", obj.Key, dst)
+					continue
+				}
+				if err = try(3, func() error {
+					return dst.Delete(obj.Key)
+				}); err == nil {
+					logger.Debugf("Deleted %s from %s", obj.Key, dst)
+					atomic.AddInt64(&deleted, 1)
+				} else {
+					logger.Errorf("Failed to delete %s from %s: %s", obj.Key, dst, err.Error())
+					atomic.AddInt64(&failed, 1)
+				}
+			}
+			continue
+		}
+
+		if config.Dry {
+			logger.Debugf("Will copy %s (%d bytes)", obj.Key, obj.Size)
+			continue
+		}
+		if config.Perms && obj.Size == markCopyPerms {
+			fi := (*object.File)(unsafe.Pointer(obj))
+			if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
+				logger.Warnf("Chmod %s to %d: %s", obj.Key, fi.Mode, err)
+			}
+			if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
+				logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
+			}
+			atomic.AddInt64(&copied, 1)
+			logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner, fi.Group, fi.Mode, obj.Key, time.Now().Sub(start))
+			continue
+		}
+		err = copyInParallel(src, dst, obj)
+		if err != nil {
+			atomic.AddInt64(&failed, 1)
+			logger.Errorf("Failed to copy %s: %s", obj.Key, err.Error())
+		} else {
+			if mc, ok := dst.(object.MtimeChanger); ok {
+				err := mc.Chtimes(obj.Key, obj.Mtime)
+				if err != nil {
+					logger.Warnf("Update mtime of %s: %s", obj.Key, err)
+				}
+			}
+			if config.Perms {
+				fi := (*object.File)(unsafe.Pointer(obj))
+				if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
+					logger.Warnf("Chmod %s to %o: %s", obj.Key, fi.Mode, err)
+				}
+				if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
+					logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
+				}
+			}
+			atomic.AddInt64(&copied, 1)
+			atomic.AddInt64(&copiedBytes, int64(obj.Size))
+			logger.Debugf("Copied %s (%d bytes) in %s", obj.Key, obj.Size, time.Now().Sub(start))
+		}
+	}
+}
+
+func producer(todo chan *object.Object, src, dst object.ObjectStorage, config *config.Config) {
+	start, end := config.Start, config.End
+	logger.Infof("Syncing from %s to %s", src, dst)
+	if start != "" {
+		logger.Infof("first key: %q", start)
+	}
+	if end != "" {
+		logger.Infof("last key: %q", end)
+	}
+	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
+
+	srckeys, err := iterate(src, start, end)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	dstkeys, err := iterate(dst, start, end)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	if config.Exclude != nil {
+		srckeys = filter(srckeys, config.Include, config.Exclude)
+		dstkeys = filter(dstkeys, config.Include, config.Exclude)
 	}
 
 	var dstobj *object.Object
@@ -394,7 +411,7 @@ OUT:
 			logger.Debug("Ignore directory ", obj.Key)
 			continue
 		}
-		atomic.AddUint64(&found, 1)
+		atomic.AddInt64(&found, 1)
 		for hasMore && (dstobj == nil || obj.Key > dstobj.Key) {
 			var ok bool
 			if config.DeleteDst && dstobj != nil && dstobj.Key < obj.Key {
@@ -421,7 +438,7 @@ OUT:
 			obj.Key == dstobj.Key && (config.ForceUpdate || obj.Size != dstobj.Size ||
 				config.Update && obj.Mtime.Unix() > dstobj.Mtime.Unix()) {
 			todo <- obj
-			atomic.AddUint64(&missing, 1)
+			atomic.AddInt64(&missing, 1)
 		} else if config.DeleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
 			obj.Size = markDelete
 			todo <- obj
@@ -450,23 +467,22 @@ OUT:
 		}
 	}
 	close(todo)
-	wg.Wait()
 }
 
 func showProgress() {
-	var lastCopied, lastBytes []uint64
+	var lastCopied, lastBytes []int64
 	var lastTime []time.Time
 	for {
 		if found == 0 {
 			time.Sleep(time.Millisecond * 10)
 			continue
 		}
-		same := atomic.LoadUint64(&found) - atomic.LoadUint64(&missing)
-		var width uint64 = 45
+		same := atomic.LoadInt64(&found) - atomic.LoadInt64(&missing)
+		var width int64 = 45
 		a := width * same / found
 		b := width * copied / found
 		var bar [80]byte
-		var i uint64
+		var i int64
 		for i = 0; i < width; i++ {
 			if i < a {
 				bar[i] = '='
@@ -543,35 +559,44 @@ func filter(keys <-chan *object.Object, include, exclude []string) <-chan *objec
 
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, config *config.Config) error {
-	start, end := config.Start, config.End
-	logger.Infof("Syncing from %s to %s", src, dst)
-	if start != "" {
-		logger.Infof("first key: %q", start)
+	var bufferSize = 10240
+	if config.Manager != "" {
+		bufferSize = 100
 	}
-	if end != "" {
-		logger.Infof("last key: %q", end)
-	}
-	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
-
-	srcCh, err := iterate(src, start, end)
-	if err != nil {
-		return err
-	}
-
-	dstCh, err := iterate(dst, start, end)
-	if err != nil {
-		return err
-	}
-	if config.Exclude != nil {
-		srcCh = filter(srcCh, config.Include, config.Exclude)
-		dstCh = filter(dstCh, config.Include, config.Exclude)
+	todo := make(chan *object.Object, bufferSize)
+	wg := sync.WaitGroup{}
+	concurrent = make(chan int, config.Threads)
+	for i := 0; i < config.Threads; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker(todo, src, dst, config)
+		}()
 	}
 
-	tty := isatty.IsTerminal(os.Stdout.Fd())
-	if tty && !config.Verbose && !config.Quiet {
-		go showProgress()
+	if config.Manager == "" {
+		go producer(todo, src, dst, config)
+		tty := isatty.IsTerminal(os.Stdout.Fd())
+		if tty && !config.Verbose && !config.Quiet {
+			go showProgress()
+		}
+		if config.Workers != nil {
+			addr := startManager(todo)
+			launchWorker(addr, config, &wg)
+		}
+	} else {
+		// start fetcher
+		go fetchJobs(todo, config)
+		go func() {
+			for {
+				sendStats(config.Manager)
+				time.Sleep(time.Second)
+			}
+		}()
 	}
-	doSync(src, dst, srcCh, dstCh, config)
+
+	wg.Wait()
+
 	logger.Infof("Found: %d, copied: %d, deleted: %d, failed: %d", found, copied, deleted, failed)
 	if failed > 0 {
 		return fmt.Errorf("Failed to copy %d objects", failed)
