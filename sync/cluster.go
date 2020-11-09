@@ -268,5 +268,6 @@ func fetchJobs(todo chan *object.Object, config *config.Config) {
 			todo <- obj
 		}
 	}
+	sendStats(config.Manager)
 	close(todo)
 }
