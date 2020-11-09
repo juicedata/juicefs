@@ -72,6 +72,11 @@ func (h *hdfsclient) Head(key string) (*Object, error) {
 	return (*Object)(unsafe.Pointer(f)), nil
 }
 
+type withCloser struct {
+	io.Reader
+	io.Closer
+}
+
 func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	f, err := h.c.Open(h.path(key))
 	if err != nil {
@@ -90,13 +95,7 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 	}
 	if limit > 0 {
-		defer f.Close()
-		buf := make([]byte, limit)
-		if n, err := f.Read(buf); err != nil {
-			return nil, err
-		} else {
-			return ioutil.NopCloser(bytes.NewBuffer(buf[:n])), nil
-		}
+		return withCloser{io.LimitReader(f, limit), f}, nil
 	}
 	return f, nil
 }
