@@ -18,6 +18,8 @@ type Config struct {
 	Dirs        bool
 	Exclude     []string
 	Include     []string
+	Manager     string
+	Workers     []string
 	Verbose     bool
 	Quiet       bool
 }
@@ -37,6 +39,8 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		DeleteDst:   c.Bool("delete-dst"),
 		Exclude:     c.StringSlice("exclude"),
 		Include:     c.StringSlice("include"),
+		Workers:     c.StringSlice("worker"),
+		Manager:     c.String("manager"),
 		Verbose:     c.Bool("verbose"),
 		Quiet:       c.Bool("quiet"),
 	}
