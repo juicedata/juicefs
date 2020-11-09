@@ -47,14 +47,14 @@ We use go mod to manage modules, if not sure how to use this, refer to [The offi
 ```
 $ juicesync -h
 NAME:
-   juicesync - Usage: juicesync [options] SRC DST
-    SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET.ENDPOINT[/PREFIX]
+   juicesync - rsync for cloud storage
 
 USAGE:
-   juicesync [global options] command [command options] [arguments...]
+   juicesync [options] SRC DST
+    SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]
 
 VERSION:
-   v0.2.0-16-g6ab22e6
+   v0.5.0-1-gce9968c
 
 COMMANDS:
    help, h  Shows a list of commands or help for one command
@@ -65,6 +65,7 @@ GLOBAL OPTIONS:
    --threads value, -p value  number of concurrent threads (default: 10)
    --http-port PORT           HTTP PORT to listen to (default: 6070)
    --update, -u               update existing file if the source is newer (default: false)
+   --force-update, -f         always update existing file (default: false)
    --perms                    preserve permissions (default: false)
    --dirs                     Sync directories or holders (default: false)
    --dry                      don't copy file (default: false)
@@ -72,6 +73,8 @@ GLOBAL OPTIONS:
    --delete-dst, --deleteDst  delete extraneous objects from destination (default: false)
    --exclude PATTERN          exclude keys containing PATTERN (POSIX regular expressions)
    --include PATTERN          only include keys containing PATTERN (POSIX regular expressions)
+   --manager value            manager address
+   --worker value             hosts (seperated by comma) to launch worker
    --verbose, -v              turn on debug log (default: false)
    --quiet, -q                change log level to ERROR (default: false)
    --help, -h                 show help (default: false)

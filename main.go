@@ -137,8 +137,10 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = versioninfo.NAME
-	app.Usage = versioninfo.USAGE
+	app.Usage = "rsync for cloud storage"
+	app.UsageText = versioninfo.USAGE
 	app.Version = versioninfo.VERSION
+	app.Copyright = "AGPLv3"
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:    "start",
