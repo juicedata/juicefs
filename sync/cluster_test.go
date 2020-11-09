@@ -1,3 +1,5 @@
+// Copyright (C) 2020-present Juicedata Inc.
+
 package sync
 
 import (
