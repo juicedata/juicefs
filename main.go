@@ -203,6 +203,14 @@ func main() {
 			Name:  "include",
 			Usage: "only include keys containing `PATTERN` (POSIX regular expressions)",
 		},
+		&cli.StringFlag{
+			Name:  "manager",
+			Usage: "manager address",
+		},
+		&cli.StringSliceFlag{
+			Name:  "worker",
+			Usage: "hosts (seperated by comma) to launch worker",
+		},
 		&cli.BoolFlag{
 			Name:    "verbose",
 			Aliases: []string{"v"},
