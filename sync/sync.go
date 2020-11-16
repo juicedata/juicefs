@@ -602,6 +602,8 @@ func Sync(src, dst object.ObjectStorage, config *config.Config) error {
 	}
 	if config.Manager == "" {
 		logger.Infof("Found: %d, copied: %d, deleted: %d, failed: %d", found, copied, deleted, failed)
+	} else {
+		sendStats(config.Manager)
 	}
 	return nil
 }
