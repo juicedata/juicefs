@@ -249,7 +249,7 @@ func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 			err = try(3, func() error {
 				r, err := src.Get(key, int64(num)*partSize, int64(sz))
 				if err != nil {
-					return nil
+					return err
 				}
 				_, err = io.ReadFull(r, data)
 				return err
