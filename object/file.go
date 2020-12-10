@@ -234,6 +234,11 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 
 		Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
+				// skip broken symbolic link
+				if fi, err1 := os.Lstat(path); err1 == nil && fi.Mode()&os.ModeSymlink != 0 {
+					logger.Warnf("skip unreachable symlink: %s (%s)", path, err)
+					return nil
+				}
 				listed <- nil
 				logger.Errorf("list %s: %s", path, err)
 				return err
