@@ -17,6 +17,10 @@ import (
 	"unsafe"
 
 	"github.com/colinmarc/hdfs/v2"
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
+	krb "gopkg.in/jcmturner/gokrb5.v7/client"
+	"gopkg.in/jcmturner/gokrb5.v7/config"
+	"gopkg.in/jcmturner/gokrb5.v7/credentials"
 )
 
 var superuser = "hdfs"
@@ -284,21 +288,80 @@ func (h *hdfsclient) Chown(key string, owner, group string) error {
 	return h.c.Chown(h.path(key), owner, group)
 }
 
-func newHDFS(addr, username, sk string) ObjectStorage {
-	if username == "" {
-		username = os.Getenv("HADOOP_USER_NAME")
+// borrowed from https://github.com/colinmarc/hdfs/blob/13aa9393bb9244d3a47ebbf95a49d5f70998a787/cmd/hdfs/kerberos.go
+func getKerberosClient() (*krb.Client, error) {
+	configPath := os.Getenv("KRB5_CONFIG")
+	if configPath == "" {
+		configPath = "/etc/krb5.conf"
 	}
-	if username == "" {
-		current, err := user.Current()
-		if err != nil {
-			logger.Fatalf("get current user: %s", err)
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine the ccache location from the environment, falling back to the
+	// default location.
+	ccachePath := os.Getenv("KRB5CCNAME")
+	if strings.Contains(ccachePath, ":") {
+		if strings.HasPrefix(ccachePath, "FILE:") {
+			ccachePath = strings.SplitN(ccachePath, ":", 2)[1]
+		} else {
+			return nil, fmt.Errorf("unusable ccache: %s", ccachePath)
 		}
-		username = current.Username
+	} else if ccachePath == "" {
+		u, err := user.Current()
+		if err != nil {
+			return nil, err
+		}
+
+		ccachePath = fmt.Sprintf("/tmp/krb5cc_%s", u.Uid)
 	}
-	c, err := hdfs.NewClient(hdfs.ClientOptions{
-		Addresses: strings.Split(addr, ","),
-		User:      username,
-	})
+
+	ccache, err := credentials.LoadCCache(ccachePath)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := krb.NewClientFromCCache(ccache, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+func newHDFS(addr, username, sk string) ObjectStorage {
+	conf, err := hadoopconf.LoadFromEnvironment()
+	if err != nil {
+		logger.Fatalf("Problem loading configuration: %s", err)
+	}
+
+	options := hdfs.ClientOptionsFromConf(conf)
+	if addr != "" {
+		options.Addresses = strings.Split(addr, ",")
+	}
+
+	if options.KerberosClient != nil {
+		options.KerberosClient, err = getKerberosClient()
+		if err != nil {
+			logger.Fatalf("Problem with kerberos authentication: %s", err)
+		}
+	} else {
+		if username == "" {
+			username = os.Getenv("HADOOP_USER_NAME")
+		}
+		if username == "" {
+			current, err := user.Current()
+			if err != nil {
+				logger.Fatalf("get current user: %s", err)
+			}
+			username = current.Username
+		}
+		options.User = username
+	}
+
+	c, err := hdfs.NewClient(options)
 	if err != nil {
 		logger.Fatalf("new HDFS client %s: %s", addr, err)
 	}
