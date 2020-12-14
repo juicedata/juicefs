@@ -40,6 +40,7 @@ require (
 	google.golang.org/api v0.5.0
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
+	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
 )
 
 go 1.13
