@@ -113,6 +113,7 @@ Some examples:
 - hdfs://hdfs@namenode1:9000,namenode2:9000/user/
 - s3://my-bucket/
 - s3://access-key:secret-key-id@my-bucket/prefix
+- wasb://account-name:account-key@my-container/prefix
 - gcs://my-bucket.us-west1.googleapi.com/
 - oss://test
 - cos://test-1234
@@ -125,12 +126,14 @@ Note:
 - Auto discover endpoint for bucket of S3, OSS, COS, OBS, BOS, `SRC` and `DST` can use format `NAME://[ACCESS_KEY:SECRET_KEY@]BUCKET[/PREFIX]` . `ACCESS_KEY` and `SECRET_KEY` can be provided by corresponding environment variables (see below).
 - S3: 
   * The access key and secret key for S3 could be provided by `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, or *IAM* role.
-- COS: 
-  * The AppID should be part of the bucket name.
-  * The credential can be provided by environment variable `COS_SECRETID` and `COS_SECRETKEY`.
+- Wasb(Windows Azure Storage Blob)
+  * The account name and account key can be provided as [connection string](https://docs.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string#configure-a-connection-string-for-an-azure-storage-account) by `AZURE_STORAGE_CONNECTION_STRING`.
 - GCS: The machine should be authorized to access Google Cloud Storage.
 - OSS:
   * The credential can be provided by environment variable `ALICLOUD_ACCESS_KEY_ID` and `ALICLOUD_ACCESS_KEY_SECRET` , RAM role, [EMR MetaService](https://help.aliyun.com/document_detail/43966.html).
+- COS:
+  * The AppID should be part of the bucket name.
+  * The credential can be provided by environment variable `COS_SECRETID` and `COS_SECRETKEY`.
 - OBS:
   * The credential can be provided by environment variable `HWCLOUD_ACCESS_KEY` and `HWCLOUD_SECRET_KEY` .
 - BOS:

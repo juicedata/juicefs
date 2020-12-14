@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -105,14 +106,78 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]*Object, error) {
 
 // TODO: support multipart upload
 
-func newWabs(endpoint, account, key string) ObjectStorage {
+func autoWasbEndpoint(containerName, accountName, accountKey string, useHTTPS bool) (string, error) {
+	baseURLs := []string{"core.windows.net", "core.chinacloudapi.cn"}
+	endpoint := ""
+	for _, baseURL := range baseURLs {
+		client, err := storage.NewClient(accountName, accountKey, baseURL, "2017-04-17", useHTTPS)
+		if err != nil {
+			log.Fatalf("Failed to create client: %v", err)
+		}
+		blobService := client.GetBlobService()
+		resp, err := blobService.ListContainers(storage.ListContainersParameters{Prefix: containerName, MaxResults: 1})
+		if err != nil {
+			logger.Debugf("Try to list containers at %s failed: %s", baseURL, err)
+			continue
+		}
+		if len(resp.Containers) == 1 {
+			endpoint = baseURL
+			break
+		}
+	}
+
+	if endpoint == "" {
+		return "", fmt.Errorf("fail to get endpoint for container %s", containerName)
+	}
+	return endpoint, nil
+}
+
+func newWabs(endpoint, accountName, accountKey string) ObjectStorage {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		log.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
+
+	scheme := ""
+	domain := ""
+	// Connection string support: DefaultEndpointsProtocol=[http|https];AccountName=***;AccountKey=***;EndpointSuffix=[core.windows.net|core.chinacloudapi.cn]
+	if connString := os.Getenv("AZURE_STORAGE_CONNECTION_STRING"); connString != "" {
+		items := strings.Split(connString, ";")
+		for _, item := range items {
+			if item = strings.TrimSpace(item); item == "" {
+				continue
+			}
+			parts := strings.SplitN(item, "=", 2)
+			if len(parts) != 2 {
+				logger.Fatalf("Invalid connection string item: %s", item)
+			}
+			// Arguments from command line take precedence
+			if parts[0] == "DefaultEndpointsProtocol" && scheme == "" {
+				scheme = parts[1]
+			} else if parts[0] == "AccountName" && accountName == "" {
+				accountName = parts[1]
+			} else if parts[0] == "AccountKey" && accountKey == "" {
+				accountKey = parts[1]
+			} else if parts[0] == "EndpointSuffix" && domain == "" {
+				domain = parts[1]
+			}
+		}
+	}
+	if scheme == "" {
+		scheme = "https"
+	}
 	name := hostParts[0]
-	client, err := storage.NewClient(account, key, hostParts[1], "2017-04-17", true)
+	if len(hostParts) > 1 {
+		// Arguments from command line take precedence
+		domain = hostParts[1]
+	} else if domain == "" {
+		if domain, err = autoWasbEndpoint(name, accountName, accountKey, scheme == "https"); err != nil {
+			logger.Fatalf("Unable to get endpoint of container %s: %s", name, err)
+		}
+	}
+
+	client, err := storage.NewClient(accountName, accountKey, domain, "2017-04-17", scheme == "https")
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
