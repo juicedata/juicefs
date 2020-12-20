@@ -32,7 +32,7 @@ const (
 
 var (
 	found       int64
-	missing     int64
+	todo        int64
 	copied      int64
 	copiedBytes int64
 	failed      int64
@@ -372,7 +372,14 @@ func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *con
 	}
 }
 
-func producer(todo chan *object.Object, src, dst object.ObjectStorage, config *config.Config) {
+func deleteFromDst(tasks chan *object.Object, dstobj *object.Object) {
+	dstobj.Size = markDelete
+	tasks <- dstobj
+	atomic.AddInt64(&found, 1)
+	atomic.AddInt64(&todo, 1)
+}
+
+func producer(tasks chan *object.Object, src, dst object.ObjectStorage, config *config.Config) {
 	start, end := config.Start, config.End
 	logger.Infof("Syncing from %s to %s", src, dst)
 	if start != "" {
@@ -419,8 +426,7 @@ OUT:
 					// ignore
 					logger.Debug("Ignore deleting dst directory ", dstobj.Key)
 				} else {
-					dstobj.Size = markDelete
-					todo <- dstobj
+					deleteFromDst(tasks, dstobj)
 				}
 			}
 			dstobj, ok = <-dstkeys
@@ -437,17 +443,19 @@ OUT:
 		if !hasMore || obj.Key < dstobj.Key ||
 			obj.Key == dstobj.Key && (config.ForceUpdate || obj.Size != dstobj.Size ||
 				config.Update && obj.Mtime.Unix() > dstobj.Mtime.Unix()) {
-			todo <- obj
-			atomic.AddInt64(&missing, 1)
+			tasks <- obj
+			atomic.AddInt64(&todo, 1)
 		} else if config.DeleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
 			obj.Size = markDelete
-			todo <- obj
+			tasks <- obj
+			atomic.AddInt64(&todo, 1)
 		} else if config.Perms {
 			f1 := (*object.File)(unsafe.Pointer(obj))
 			f2 := (*object.File)(unsafe.Pointer(dstobj))
 			if f2.Mode != f1.Mode || f2.Owner != f1.Owner || f2.Group != f1.Group {
 				obj.Size = markCopyPerms
-				todo <- obj
+				tasks <- obj
+				atomic.AddInt64(&todo, 1)
 			}
 		}
 		if dstobj != nil && dstobj.Key == obj.Key {
@@ -456,31 +464,29 @@ OUT:
 	}
 	if config.DeleteDst && hasMore {
 		if dstobj != nil {
-			dstobj.Size = markDelete
-			todo <- dstobj
+			deleteFromDst(tasks, dstobj)
 		}
 		for obj := range dstkeys {
 			if obj != nil {
-				obj.Size = markDelete
-				todo <- obj
+				deleteFromDst(tasks, obj)
 			}
 		}
 	}
-	close(todo)
+	close(tasks)
 }
 
 func showProgress() {
-	var lastCopied, lastBytes []int64
+	var lastDone, lastBytes []int64
 	var lastTime []time.Time
 	for {
 		if found == 0 {
 			time.Sleep(time.Millisecond * 10)
 			continue
 		}
-		same := atomic.LoadInt64(&found) - atomic.LoadInt64(&missing)
+		same := atomic.LoadInt64(&found) - atomic.LoadInt64(&todo)
 		var width int64 = 45
 		a := width * same / found
-		b := width * copied / found
+		b := width * (copied + deleted + failed) / found
 		var bar [80]byte
 		var i int64
 		for i = 0; i < width; i++ {
@@ -493,20 +499,20 @@ func showProgress() {
 			}
 		}
 		now := time.Now()
-		lastCopied = append(lastCopied, copied)
+		lastDone = append(lastDone, copied+deleted+failed)
 		lastBytes = append(lastBytes, copiedBytes)
 		lastTime = append(lastTime, now)
 		for len(lastTime) > 18 { // 5 seconds
-			lastCopied = lastCopied[1:]
+			lastDone = lastDone[1:]
 			lastBytes = lastBytes[1:]
 			lastTime = lastTime[1:]
 		}
 		if len(lastTime) > 1 {
 			n := len(lastTime) - 1
 			d := lastTime[n].Sub(lastTime[0]).Seconds()
-			fps := float64(lastCopied[n]-lastCopied[0]) / d
+			fps := float64(lastDone[n]-lastDone[0]) / d
 			bw := float64(lastBytes[n]-lastBytes[0]) / d / 1024 / 1024
-			fmt.Printf("[%s] % 8d % 2d%% % 4.1f/s % 4.1f MB/s \r", string(bar[:]), found, (found-missing+copied)*100/found, fps, bw)
+			fmt.Printf("[%s] % 8d % 2d%% % 4.1f/s % 4.1f MB/s \r", string(bar[:]), found, (found-todo+copied+deleted+failed)*100/found, fps, bw)
 		}
 		time.Sleep(time.Millisecond * 300)
 	}
