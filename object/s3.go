@@ -261,28 +261,45 @@ func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
 		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err.Error())
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
-	bucketName := hostParts[0]
 
-	var region string
+	var (
+		bucketName string
+		region string
+		ep string
+	)
+
 	if len(hostParts) == 1 { // take endpoint as bucketname
+		bucketName = hostParts[0]
 		if region, err = autoS3Region(bucketName, accessKey, secretKey); err != nil {
 			logger.Fatalf("Can't guess your region for bucket %s: %s", bucketName, err)
 		}
 	} else { // get region in endpoint
-		hostParts = strings.SplitN(uri.Host, ".s3", 2)
-		bucketName = hostParts[0]
-		endpoint = "s3" + hostParts[1]
-		if strings.HasPrefix(endpoint, "s3-") || strings.HasPrefix(endpoint, "s3.") {
-			endpoint = endpoint[3:]
-		}
-		if strings.HasPrefix(endpoint, "dualstack") {
-			endpoint = endpoint[len("dualstack."):]
-		}
-		if endpoint == "amazonaws.com" {
-			endpoint = "us-east-1." + endpoint
-		}
-		region = strings.Split(endpoint, ".")[0]
-		if region == "external-1" {
+		if strings.Contains(uri.Host, ".amazonaws.com") {
+			// standard s3
+			// [BUCKET].s3-[REGION].[REST_OF_ENDPOINT]
+			// [BUCKET].s3.[REGION].amazonaws.com[.cn]
+			hostParts = strings.SplitN(uri.Host, ".s3", 2)
+			bucketName = hostParts[0]
+			endpoint = "s3" + hostParts[1]
+			if strings.HasPrefix(endpoint, "s3-") || strings.HasPrefix(endpoint, "s3.") {
+				endpoint = endpoint[3:]
+			}
+			if strings.HasPrefix(endpoint, "dualstack") {
+				endpoint = endpoint[len("dualstack."):]
+			}
+			if endpoint == "amazonaws.com" {
+				endpoint = "us-east-1." + endpoint
+			}
+			region = strings.Split(endpoint, ".")[0]
+			if region == "external-1" {
+				region = "us-east-1"
+			}
+		} else {
+			// compatible s3
+			// [BUCKET].[ENDPOINT]
+			hostParts := strings.SplitN(uri.Host, ".", 2)
+			bucketName = hostParts[0]
+			ep = hostParts[1]
 			region = "us-east-1"
 		}
 	}
@@ -295,6 +312,10 @@ func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
 	}
 	if accessKey != "" {
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
+	}
+	if ep != "" {
+		awsConfig.Endpoint = aws.String(ep)
+		awsConfig.S3ForcePathStyle = aws.Bool(true)
 	}
 
 	ses, err := session.NewSession(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
