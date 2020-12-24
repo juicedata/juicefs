@@ -22,6 +22,7 @@ type Config struct {
 	Include     []string
 	Manager     string
 	Workers     []string
+	BWLimit     int
 	Verbose     bool
 	Quiet       bool
 }
@@ -43,6 +44,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Include:     c.StringSlice("include"),
 		Workers:     c.StringSlice("worker"),
 		Manager:     c.String("manager"),
+		BWLimit:     c.Int("bwlimit"),
 		Verbose:     c.Bool("verbose"),
 		Quiet:       c.Bool("quiet"),
 	}

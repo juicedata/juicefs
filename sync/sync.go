@@ -18,6 +18,7 @@ import (
 	"github.com/juicedata/juicesync/config"
 	"github.com/juicedata/juicesync/object"
 	"github.com/juicedata/juicesync/utils"
+	"github.com/juju/ratelimit"
 	"github.com/mattn/go-isatty"
 )
 
@@ -38,6 +39,7 @@ var (
 	failed      int64
 	deleted     int64
 	concurrent  chan int
+	limiter     *ratelimit.Bucket
 )
 
 var logger = utils.GetLogger("juicesync")
@@ -137,6 +139,9 @@ func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Obje
 }
 
 func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
+	if limiter != nil {
+		limiter.Wait(obj.Size)
+	}
 	concurrent <- 1
 	defer func() {
 		<-concurrent
@@ -241,6 +246,9 @@ func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 				sz = obj.Size - int64(num)*partSize
 			}
 			var err error
+			if limiter != nil {
+				limiter.Wait(sz)
+			}
 			concurrent <- 1
 			defer func() {
 				<-concurrent
@@ -572,6 +580,10 @@ func Sync(src, dst object.ObjectStorage, config *config.Config) error {
 	todo := make(chan *object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
+	if config.BWLimit > 0 {
+		bps := float64(config.BWLimit*(1<<20)/8) * 0.85 // 15% overhead
+		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
+	}
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
