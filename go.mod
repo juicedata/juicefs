@@ -16,6 +16,7 @@ require (
 	github.com/googleapis/gax-go v2.0.0+incompatible // indirect
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5
 	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 // indirect
+	github.com/juju/ratelimit v1.0.1
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
 	github.com/kurin/blazer v0.2.1
