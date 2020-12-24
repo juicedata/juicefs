@@ -213,6 +213,11 @@ func main() {
 			Name:  "worker",
 			Usage: "hosts (seperated by comma) to launch worker",
 		},
+		&cli.IntFlag{
+			Name:  "bwlimit",
+			Value: 0,
+			Usage: "limit bandwidth in Mbps (default: unlimited)",
+		},
 		&cli.BoolFlag{
 			Name:    "verbose",
 			Aliases: []string{"v"},
