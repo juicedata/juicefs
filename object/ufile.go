@@ -7,6 +7,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +51,53 @@ func ufileSigner(req *http.Request, accessKey, secretKey, signName string) {
 	sig := base64.StdEncoding.EncodeToString(h.Sum(nil))
 	token := signName + " " + accessKey + ":" + sig
 	req.Header.Add("Authorization", token)
+}
+
+func (u *ufile) Create() error {
+	uri, _ := url.ParseRequestURI(u.endpoint)
+	parts := strings.Split(uri.Host, ".")
+	name := parts[0]
+	region := parts[1] // www.cn-bj.ufileos.com
+	if region == "ufile" {
+		region = parts[2] // www.ufile.cn-north-02.ucloud.cn
+	}
+	if strings.HasPrefix(region, "internal") {
+		// www.internal-hk-01.ufileos.cn
+		// www.internal-cn-gd-02.ufileos.cn
+		ps := strings.Split(region, "-")
+		region = strings.Join(ps[1:len(ps)-1], "-")
+	}
+
+	query := url.Values{}
+	query.Add("Action", "CreateBucket")
+	query.Add("BucketName", name)
+	query.Add("PublicKey", u.accessKey)
+	query.Add("Region", region)
+
+	// generate signature
+	toSign := fmt.Sprintf("ActionCreateBucketBucketName%sPublicKey%sRegion%s",
+		name, u.accessKey, region)
+	h := sha1.New()
+	h.Write([]byte(toSign))
+	h.Write([]byte(u.secretKey))
+	sig := hex.EncodeToString(h.Sum(nil))
+	query.Add("Signature", sig)
+
+	req, err := http.NewRequest("GET", "https://api.ucloud.cn/?"+query.Encode(), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	err = parseError(resp)
+	if strings.Contains(err.Error(), "duplicate bucket name") ||
+		strings.Contains(err.Error(), "CreateBucketResponse") {
+		err = nil
+	}
+	return err
 }
 
 func (u *ufile) parseResp(resp *http.Response, out interface{}) error {

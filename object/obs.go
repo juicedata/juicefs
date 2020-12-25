@@ -18,11 +18,25 @@ const obsDefaultRegion = "cn-north-1"
 
 type obsClient struct {
 	bucket string
+	region string
 	c      *obs.ObsClient
 }
 
 func (s *obsClient) String() string {
 	return fmt.Sprintf("obs://%s", s.bucket)
+}
+
+func (s *obsClient) Create() error {
+	params := &obs.CreateBucketInput{}
+	params.Bucket = s.bucket
+	params.Location = s.region
+	_, err := s.c.CreateBucket(params)
+	if err != nil {
+		if obsError, ok := err.(obs.ObsError); ok && obsError.Code == "BucketAlreadyOwnedByYou" {
+			err = nil
+		}
+	}
+	return err
 }
 
 func (s *obsClient) Head(key string) (*Object, error) {
@@ -230,6 +244,7 @@ func newOBS(endpoint, accessKey, secretKey string) ObjectStorage {
 		secretKey = os.Getenv("HWCLOUD_SECRET_KEY")
 	}
 
+	var region string
 	if len(hostParts) == 1 {
 		if endpoint, err = autoOBSEndpoint(bucketName, accessKey, secretKey); err != nil {
 			logger.Fatalf("Cannot get location of bucket %q: %s", bucketName, err)
@@ -237,13 +252,15 @@ func newOBS(endpoint, accessKey, secretKey string) ObjectStorage {
 		if !strings.HasPrefix(endpoint, "http") {
 			endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
 		}
+	} else {
+		region = strings.Split(hostParts[1], ".")[1]
 	}
 
 	c, err := obs.New(accessKey, secretKey, endpoint)
 	if err != nil {
 		logger.Fatalf("Fail to initialize OBS: %s", err)
 	}
-	return &obsClient{bucketName, c}
+	return &obsClient{bucketName, region, c}
 }
 
 func init() {

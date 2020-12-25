@@ -27,6 +27,14 @@ func (q *bosclient) String() string {
 	return fmt.Sprintf("bos://%s", q.bucket)
 }
 
+func (q *bosclient) Create() error {
+	_, err := q.c.PutBucket(q.bucket)
+	if err != nil && strings.Contains(err.Error(), "BucketAlreadyExists") {
+		err = nil
+	}
+	return err
+}
+
 func (q *bosclient) Head(key string) (*Object, error) {
 	r, err := q.c.GetObjectMeta(q.bucket, key)
 	if err != nil {

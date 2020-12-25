@@ -1,7 +1,7 @@
 module github.com/juicedata/juicesync
 
 require (
-	cloud.google.com/go v0.39.0 // indirect
+	cloud.google.com/go v0.39.0
 	github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible
 	github.com/Azure/go-autorest v8.4.0+incompatible // indirect
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05

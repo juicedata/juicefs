@@ -44,6 +44,7 @@ type PendingPart struct {
 
 type ObjectStorage interface {
 	String() string
+	Create() error
 	Head(key string) (*Object, error)
 	Get(key string, off, limit int64) (io.ReadCloser, error)
 	Put(key string, in io.Reader) error
