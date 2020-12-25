@@ -8,19 +8,20 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
+	"cloud.google.com/go/compute/metadata"
 	"golang.org/x/oauth2/google"
-
-	storage "google.golang.org/api/storage/v1"
+	"google.golang.org/api/storage/v1"
 )
 
 var ctx = context.Background()
 
 type gs struct {
 	defaultObjectStorage
-	service   *storage.ObjectsService
+	service   *storage.Service
 	bucket    string
 	region    string
 	pageToken string
@@ -30,8 +31,39 @@ func (g *gs) String() string {
 	return fmt.Sprintf("gs://%s", g.bucket)
 }
 
+func (g *gs) Create() error {
+	// check if the bucket is already exists
+	if objs, err := g.List("", "", 1); err == nil && len(objs) > 0 {
+		return nil
+	}
+
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if projectID == "" {
+		projectID, _ = metadata.ProjectID()
+	}
+	if projectID == "" {
+		cred, err := google.FindDefaultCredentials(context.Background())
+		if err == nil {
+			projectID = cred.ProjectID
+		}
+	}
+	if projectID == "" {
+		log.Fatalf("GOOGLE_CLOUD_PROJECT environment variable must be set")
+	}
+
+	_, err := g.service.Buckets.Insert(projectID, &storage.Bucket{
+		Id:           g.bucket,
+		StorageClass: "regional",
+		Location:     g.region,
+	}).Do()
+	if err != nil && strings.Contains(err.Error(), "You already own this bucket") {
+		return nil
+	}
+	return err
+}
+
 func (g *gs) Head(key string) (*Object, error) {
-	req := g.service.Get(g.bucket, key)
+	req := g.service.Objects.Get(g.bucket, key)
 	obj, err := req.Do()
 	if err != nil {
 		return nil, err
@@ -47,7 +79,7 @@ func (g *gs) Head(key string) (*Object, error) {
 }
 
 func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	req := g.service.Get(g.bucket, key)
+	req := g.service.Objects.Get(g.bucket, key)
 	header := req.Header()
 	if off > 0 || limit > 0 {
 		if limit > 0 {
@@ -65,24 +97,21 @@ func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (g *gs) Put(key string, data io.Reader) error {
 	obj := &storage.Object{Name: key}
-	_, err := g.service.Insert(g.bucket, obj).Media(data).Do()
+	_, err := g.service.Objects.Insert(g.bucket, obj).Media(data).Do()
 	return err
 }
 
 func (g *gs) Copy(dst, src string) error {
-	_, err := g.service.Copy(g.bucket, src, g.bucket, dst, nil).Do()
+	_, err := g.service.Objects.Copy(g.bucket, src, g.bucket, dst, nil).Do()
 	return err
 }
 
 func (g *gs) Delete(key string) error {
-	if _, err := g.Head(key); err != nil {
-		return err
-	}
-	return g.service.Delete(g.bucket, key).Do()
+	return g.service.Objects.Delete(g.bucket, key).Do()
 }
 
 func (g *gs) List(prefix, marker string, limit int64) ([]*Object, error) {
-	call := g.service.List(g.bucket).Prefix(prefix).MaxResults(limit)
+	call := g.service.Objects.List(g.bucket).Prefix(prefix).MaxResults(limit)
 	if marker != "" {
 		if g.pageToken == "" {
 			// last page
@@ -122,7 +151,7 @@ func newGS(endpoint, accessKey, secretKey string) ObjectStorage {
 	if err != nil {
 		log.Fatalf("Failed to create service: %v", err)
 	}
-	return &gs{service: service.Objects, bucket: bucket, region: region}
+	return &gs{service: service, bucket: bucket, region: region}
 }
 
 func init() {

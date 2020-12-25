@@ -43,6 +43,10 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]*Object, er
 }
 
 func testStorage(t *testing.T, s ObjectStorage) {
+	if err := s.Create(); err != nil {
+		t.Fatalf("Can't create bucket %s: %s", s, err)
+	}
+
 	s = WithPrefix(s, "unit-test")
 	defer s.Delete("/test")
 	k := "/large"

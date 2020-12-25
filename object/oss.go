@@ -30,6 +30,15 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s", o.bucket.BucketName)
 }
 
+func (o *ossClient) Create() error {
+	err := o.bucket.Client.CreateBucket(o.bucket.BucketName)
+	// ignore error if bucket is already created
+	if err != nil && strings.Contains(err.Error(), "BucketAlreadyExists") {
+		err = nil
+	}
+	return err
+}
+
 func (o *ossClient) Head(key string) (*Object, error) {
 	r, err := o.bucket.GetObjectMeta(key)
 	if err != nil {

@@ -22,6 +22,10 @@ func (p *withPrefix) String() string {
 	return fmt.Sprintf("%s/%s", p.os, p.prefix)
 }
 
+func (p *withPrefix) Create() error {
+	return p.os.Create()
+}
+
 func (p *withPrefix) Head(key string) (*Object, error) {
 	obj, err := p.os.Head(p.prefix + key)
 	if err != nil {
