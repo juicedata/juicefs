@@ -4,6 +4,7 @@ require (
 	cloud.google.com/go v0.39.0
 	github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible
 	github.com/Azure/go-autorest v8.4.0+incompatible // indirect
+	github.com/IBM/ibm-cos-sdk-go v1.6.0
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
 	github.com/aws/aws-sdk-go v1.12.10
@@ -15,17 +16,15 @@ require (
 	github.com/go-ini/ini v1.28.2 // indirect
 	github.com/googleapis/gax-go v2.0.0+incompatible // indirect
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5
-	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 // indirect
 	github.com/juju/ratelimit v1.0.1
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
 	github.com/kurin/blazer v0.2.1
 	github.com/mattn/go-isatty v0.0.4
 	github.com/onsi/ginkgo v1.13.0 // indirect
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.10.0
-	github.com/qiniu/api.v7 v7.1.0+incompatible // indirect
-	github.com/qiniu/api.v7/v7 v7.5.0
+	github.com/qiniu/api.v7/v7 v7.8.0
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/satori/uuid v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.0.3
