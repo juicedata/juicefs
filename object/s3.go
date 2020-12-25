@@ -30,6 +30,21 @@ func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s", s.bucket)
 }
 
+func (s *s3client) Create() error {
+	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case s3.ErrCodeBucketAlreadyExists:
+				err = nil
+			case s3.ErrCodeBucketAlreadyOwnedByYou:
+				err = nil
+			}
+		}
+	}
+	return err
+}
+
 func (s *s3client) Head(key string) (*Object, error) {
 	param := s3.HeadObjectInput{
 		Bucket: &s.bucket,
@@ -264,8 +279,8 @@ func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	var (
 		bucketName string
-		region string
-		ep string
+		region     string
+		ep         string
 	)
 
 	if len(hostParts) == 1 { // take endpoint as bucketname

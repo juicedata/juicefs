@@ -24,6 +24,14 @@ func (q *qingstor) String() string {
 	return fmt.Sprintf("qingstor://%s", *q.bucket.Properties.BucketName)
 }
 
+func (q *qingstor) Create() error {
+	_, err := q.bucket.Put()
+	if err != nil && strings.Contains(err.Error(), "bucket_already_exists") {
+		err = nil
+	}
+	return err
+}
+
 func (q *qingstor) Head(key string) (*Object, error) {
 	r, err := q.bucket.HeadObject(key, nil)
 	if err != nil {

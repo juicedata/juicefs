@@ -25,6 +25,16 @@ func (c *COS) String() string {
 	return fmt.Sprintf("cos://%s", strings.Split(c.endpoint, ".")[0])
 }
 
+func (c *COS) Create() error {
+	_, err := c.c.Bucket.Put(ctx, nil)
+	if err != nil {
+		if e, ok := err.(*cos.ErrorResponse); ok && e.Code == "BucketAlreadyOwnedByYou" {
+			err = nil
+		}
+	}
+	return err
+}
+
 func (c *COS) Head(key string) (*Object, error) {
 	resp, err := c.c.Object.Head(ctx, key, nil)
 	if err != nil {
