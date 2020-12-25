@@ -15,17 +15,15 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-
-	"github.com/qiniu/api.v7/v7/auth"
+	"github.com/qiniu/api.v7/v7/auth/qbox"
 	"github.com/qiniu/api.v7/v7/storage"
-	"golang.org/x/net/context"
 )
 
 type qiniu struct {
 	s3client
-	mac    *auth.Credentials
-	bucket string
 	bm     *storage.BucketManager
+	mac    *qbox.Mac
+	cfg    *storage.Config
 	marker string
 }
 
@@ -82,7 +80,8 @@ func (q *qiniu) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	for strings.HasPrefix(key, "/") {
 		key = key[1:]
 	}
-	return q.s3client.Get(key, off, limit)
+	// S3ForcePathStyle = true
+	return q.s3client.Get("/"+key, off, limit)
 }
 
 func (q *qiniu) Put(key string, in io.Reader) error {
@@ -90,13 +89,11 @@ func (q *qiniu) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	putPolicy := storage.PutPolicy{
-		Scope: q.bucket + ":" + key,
-	}
+	putPolicy := storage.PutPolicy{Scope: q.bucket + ":" + key}
 	upToken := putPolicy.UploadToken(q.mac)
+	formUploader := storage.NewFormUploader(q.cfg)
 	var ret storage.PutRet
-	uploader := storage.NewFormUploader(nil)
-	return uploader.Put(context.Background(), &ret, upToken, key, body, vlen, nil)
+	return formUploader.Put(ctx, &ret, upToken, key, body, vlen, nil)
 }
 
 func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
@@ -104,20 +101,23 @@ func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 }
 
 func (q *qiniu) Delete(key string) error {
-	if _, err := q.Head(key); err != nil {
-		return err
-	}
 	return q.bm.Delete(q.bucket, key)
 }
 
 func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
+	if limit > 1000 {
+		limit = 1000
+	}
 	if marker == "" {
 		q.marker = ""
 	} else if q.marker == "" {
 		// last page
 		return nil, nil
 	}
-	entries, _, markerOut, _, err := q.bm.ListFiles(q.bucket, prefix, "", q.marker, int(limit))
+	entries, _, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, "", q.marker, int(limit))
+	for err == nil && len(entries) == 0 && hasNext {
+		entries, _, markerOut, hasNext, err = q.bm.ListFiles(q.bucket, prefix, "", markerOut, int(limit))
+	}
 	q.marker = markerOut
 	if len(entries) > 0 || err == io.EOF {
 		// ignore error if returned something
@@ -127,26 +127,21 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
 		return nil, err
 	}
 	n := len(entries)
-	objs := make([]*Object, 0, n)
+	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		entry := entries[i]
-		if entry.Key > prefix {
-			objs = append(objs, &Object{
-				entry.Key,
-				entry.Fsize,
-				time.Unix(0, entry.PutTime*100),
-				strings.HasSuffix(entry.Key, "/"),
-			})
-		}
+		mtime := entry.PutTime / 10000000
+		objs[i] = &Object{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/")}
 	}
 	return objs, nil
 }
 
-var regions = map[string]int{
-	"cn-east-1":  0,
-	"cn-north-1": 1,
-	"cn-south-1": 2,
-	"us-west-1":  3,
+var publicRegions = map[string]*storage.Zone{
+	"cn-east-1":      &storage.ZoneHuadong,
+	"cn-north-1":     &storage.ZoneHuabei,
+	"cn-south-1":     &storage.ZoneHuanan,
+	"us-west-1":      &storage.ZoneBeimei,
+	"ap-southeast-1": &storage.ZoneXinjiapo,
 }
 
 func newQiniu(endpoint, accessKey, secretKey string) ObjectStorage {
@@ -157,22 +152,50 @@ func newQiniu(endpoint, accessKey, secretKey string) ObjectStorage {
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucket := hostParts[0]
 	endpoint = hostParts[1]
-	region := endpoint[:strings.LastIndex(endpoint, "-")]
+	var region string
+	if strings.HasPrefix(endpoint, "s3") {
+		// private region
+		region = endpoint[strings.Index(endpoint, "-")+1 : strings.Index(endpoint, ".")]
+	} else if strings.HasPrefix(endpoint, "qvm-") {
+		region = "cn-east-1" // internal
+	} else if strings.HasPrefix(endpoint, "qvm-z1") {
+		region = "cn-north-1"
+	} else {
+		region = endpoint[:strings.LastIndex(endpoint, "-")]
+	}
 	awsConfig := &aws.Config{
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
 		Endpoint:         &endpoint,
 		Region:           &region,
-		DisableSSL:       aws.Bool(false),
+		DisableSSL:       aws.Bool(uri.Scheme == "http"),
 		S3ForcePathStyle: aws.Bool(true),
 		HTTPClient:       httpClient,
 	}
-
 	sess := session.New(awsConfig)
 	s3client := s3client{bucket, s3.New(sess), sess}
 
-	mac := auth.New(accessKey, secretKey)
-	bm := storage.NewBucketManager(mac, nil)
-	return &qiniu{s3client, mac, bucket, bm, ""}
+	cfg := storage.Config{
+		UseHTTPS: uri.Scheme == "https",
+	}
+	zone, ok := publicRegions[region]
+	if !ok {
+		domain := strings.SplitN(endpoint, "-", 2)[1]
+		zone = &storage.Zone{
+			RsHost:     "rs-" + domain,
+			RsfHost:    "rsf-" + domain,
+			ApiHost:    "api-" + domain,
+			IovipHost:  "io-" + domain,
+			SrcUpHosts: []string{"up-" + domain},
+		}
+	} else if strings.HasPrefix(endpoint, "qvm-z1") {
+		zone.SrcUpHosts = []string{"free-qvm-z1-zz.qiniup.com"}
+	} else if strings.HasPrefix(endpoint, "qvm-") {
+		zone.SrcUpHosts = []string{"free-qvm-z0-xs.qiniup.com"}
+	}
+	cfg.Zone = zone
+	mac := qbox.NewMac(accessKey, secretKey)
+	bucketManager := storage.NewBucketManager(mac, &cfg)
+	return &qiniu{s3client, bucketManager, mac, &cfg, ""}
 }
 
 func init() {
