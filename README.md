@@ -100,6 +100,7 @@ SRC and DST must be an URI of the following object storage:
 - b2: Backblaze B2
 - space: Digital Ocean Space
 - obs: Huawei Object Storage Service
+- oos: CTYun OOS
 
 SRC and DST should be in the following format:
 
