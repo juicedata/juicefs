@@ -362,3 +362,12 @@ func TestHDFS(t *testing.T) {
 	dfs := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
 	testStorage(t, dfs)
 }
+
+func TestOOS(t *testing.T) {
+	if os.Getenv("OOS_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
+	b := newOOS(fmt.Sprintf("https://%s", os.Getenv("OOS_TEST_BUCKET")),
+		os.Getenv("OOS_ACCESS_KEY"), os.Getenv("OOS_SECRET_KEY"))
+	testStorage(t, b)
+}
