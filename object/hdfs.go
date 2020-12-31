@@ -18,9 +18,9 @@ import (
 
 	"github.com/colinmarc/hdfs/v2"
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
-	krb "gopkg.in/jcmturner/gokrb5.v7/client"
-	"gopkg.in/jcmturner/gokrb5.v7/config"
-	"gopkg.in/jcmturner/gokrb5.v7/credentials"
+	krb "github.com/jcmturner/gokrb5/v8/client"
+	"github.com/jcmturner/gokrb5/v8/config"
+	"github.com/jcmturner/gokrb5/v8/credentials"
 )
 
 var superuser = "hdfs"
@@ -288,7 +288,7 @@ func (h *hdfsclient) Chown(key string, owner, group string) error {
 	return h.c.Chown(h.path(key), owner, group)
 }
 
-// borrowed from https://github.com/colinmarc/hdfs/blob/13aa9393bb9244d3a47ebbf95a49d5f70998a787/cmd/hdfs/kerberos.go
+// borrowed from https://github.com/colinmarc/hdfs/blob/master/cmd/hdfs/kerberos.go
 func getKerberosClient() (*krb.Client, error) {
 	configPath := os.Getenv("KRB5_CONFIG")
 	if configPath == "" {
@@ -323,7 +323,7 @@ func getKerberosClient() (*krb.Client, error) {
 		return nil, err
 	}
 
-	client, err := krb.NewClientFromCCache(ccache, cfg)
+	client, err := krb.NewFromCCache(ccache, cfg)
 	if err != nil {
 		return nil, err
 	}
