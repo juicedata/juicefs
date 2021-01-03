@@ -225,7 +225,7 @@ var ks3Regions = map[string]string{
 	"sgp":         "SINGAPORE",
 }
 
-func newKS3(endpoint, accessKey, secretKey string) ObjectStorage {
+func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, _ := url.ParseRequestURI(endpoint)
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
@@ -247,9 +247,9 @@ func newKS3(endpoint, accessKey, secretKey string) ObjectStorage {
 		Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
 	}
 
-	return &ks3{bucket, s3.New(awsConfig), nil}
+	return &ks3{bucket, s3.New(awsConfig), nil}, nil
 }
 
 func init() {
-	register("ks3", newKS3)
+	Register("ks3", newKS3)
 }

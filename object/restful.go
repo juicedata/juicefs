@@ -60,7 +60,7 @@ func cleanup(response *http.Response) {
 }
 
 type RestfulStorage struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	endpoint  string
 	accessKey string
 	secretKey string

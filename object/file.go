@@ -4,6 +4,7 @@ package object
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -20,7 +21,7 @@ const (
 )
 
 type filestore struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	root string
 }
 
@@ -301,22 +302,22 @@ func (d *filestore) Chown(path string, owner, group string) error {
 	return os.Chown(p, uid, gid)
 }
 
-func newDisk(root, accesskey, secretkey string) ObjectStorage {
+func newDisk(root, accesskey, secretkey string) (ObjectStorage, error) {
 	if strings.HasSuffix(root, dirSuffix) {
 		logger.Debugf("Ensure dicectory %s", root)
 		if err := os.MkdirAll(root, 0755); err != nil {
-			logger.Fatalf("Creating directory %s failed: %q", root, err)
+			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
 		}
 	} else {
 		dir := path.Dir(root)
 		logger.Debugf("Ensure dicectory %s", dir)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			logger.Fatalf("Creating directory %s failed: %q", dir, err)
+			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
 		}
 	}
-	return &filestore{root: root}
+	return &filestore{root: root}, nil
 }
 
 func init() {
-	register("file", newDisk)
+	Register("file", newDisk)
 }

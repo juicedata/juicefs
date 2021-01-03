@@ -229,10 +229,10 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, *result.NextKeyMarker, nil
 }
 
-func newQingStor(endpoint, accessKey, secretKey string) ObjectStorage {
+func newQingStor(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 3)
 	bucketName := hostParts[0]
@@ -240,7 +240,7 @@ func newQingStor(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	conf, err := config.New(accessKey, secretKey)
 	if err != nil {
-		logger.Fatalf("Can't load config: %s", err.Error())
+		return nil, fmt.Errorf("Can't load config: %s", err.Error())
 	}
 	conf.Protocol = uri.Scheme
 	if uri.Scheme == "http" {
@@ -251,9 +251,9 @@ func newQingStor(endpoint, accessKey, secretKey string) ObjectStorage {
 	conf.Connection = httpClient
 	qsService, _ := qs.Init(conf)
 	bucket, _ := qsService.Bucket(bucketName, zone)
-	return &qingstor{bucket: bucket}
+	return &qingstor{bucket: bucket}, nil
 }
 
 func init() {
-	register("qingstor", newQingStor)
+	Register("qingstor", newQingStor)
 }

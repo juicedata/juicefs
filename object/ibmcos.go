@@ -215,7 +215,7 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func newIBMCOS(endpoint, apiKey, serviceInstanceID string) ObjectStorage {
+func newIBMCOS(endpoint, apiKey, serviceInstanceID string) (ObjectStorage, error) {
 	uri, _ := url.ParseRequestURI(endpoint)
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
@@ -230,9 +230,9 @@ func newIBMCOS(endpoint, apiKey, serviceInstanceID string) ObjectStorage {
 		WithS3ForcePathStyle(true)
 	sess := session.Must(session.NewSession())
 	client := s3.New(sess, conf)
-	return &ibmcos{bucket, client}
+	return &ibmcos{bucket, client}, nil
 }
 
 func init() {
-	register("ibmcos", newIBMCOS)
+	Register("ibmcos", newIBMCOS)
 }

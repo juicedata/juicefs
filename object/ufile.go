@@ -252,10 +252,10 @@ func (u *ufile) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, out.NextMarker, nil
 }
 
-func newUFile(endpoint, accessKey, secretKey string) ObjectStorage {
-	return &ufile{RestfulStorage{defaultObjectStorage{}, endpoint, accessKey, secretKey, "UCloud", ufileSigner}}
+func newUFile(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	return &ufile{RestfulStorage{DefaultObjectStorage{}, endpoint, accessKey, secretKey, "UCloud", ufileSigner}}, nil
 }
 
 func init() {
-	register("ufile", newUFile)
+	Register("ufile", newUFile)
 }

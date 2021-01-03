@@ -18,7 +18,7 @@ import (
 )
 
 type nos struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	bucket string
 	client *nosclient.NosClient
 }
@@ -134,10 +134,10 @@ func (s *nos) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
-func newNOS(endpoint, accessKey, secretKey string) ObjectStorage {
+func newNOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucket := hostParts[0]
@@ -156,9 +156,9 @@ func newNOS(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	nosClient, _ := nosclient.New(conf)
 
-	return &nos{bucket: bucket, client: nosClient}
+	return &nos{bucket: bucket, client: nosClient}, nil
 }
 
 func init() {
-	register("nos", newNOS)
+	Register("nos", newNOS)
 }

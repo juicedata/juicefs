@@ -26,7 +26,7 @@ type obj struct {
 
 type memStore struct {
 	sync.Mutex
-	defaultObjectStorage
+	DefaultObjectStorage
 	name    string
 	objects map[string]*obj
 }
@@ -185,12 +185,12 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
-func newMem(endpoint, accesskey, secretkey string) ObjectStorage {
+func newMem(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
 	store := &memStore{name: endpoint}
 	store.objects = make(map[string]*obj)
-	return store
+	return store, nil
 }
 
 func init() {
-	register("mem", newMem)
+	Register("mem", newMem)
 }

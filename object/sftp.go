@@ -54,7 +54,7 @@ func (c *conn) closed() error {
 }
 
 type sftpStore struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	host   string
 	root   string
 	config *ssh.ClientConfig
@@ -372,7 +372,7 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan *Object, error) {
 	return listed, nil
 }
 
-func newSftp(endpoint, user, pass string) ObjectStorage {
+func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	parts := strings.Split(endpoint, ":")
 	root := filepath.Clean(parts[1])
 	// append suffix `/` removed by filepath.Clean()
@@ -394,12 +394,12 @@ func newSftp(endpoint, user, pass string) ObjectStorage {
 	if privateKeyPath := os.Getenv("SSH_PRIVATE_KEY_PATH"); privateKeyPath != "" {
 		key, err := ioutil.ReadFile(privateKeyPath)
 		if err != nil {
-			logger.Fatalf("unable to read private key, error: %v", err)
+			return nil, fmt.Errorf("unable to read private key, error: %v", err)
 		}
 
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
-			logger.Fatalf("unable to parse private key, error: %v", err)
+			return nil, fmt.Errorf("unable to parse private key, error: %v", err)
 		}
 
 		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
@@ -414,26 +414,26 @@ func newSftp(endpoint, user, pass string) ObjectStorage {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		logger.Errorf("getSftpConnection failed: %s", err)
-		return nil
+		return nil, err
 	}
 	defer f.putSftpConnection(&c, err)
 
 	if strings.HasSuffix(root, dirSuffix) {
 		logger.Debugf("Ensure dicectory %s", root)
 		if err := c.sftpClient.MkdirAll(root); err != nil {
-			logger.Fatalf("Creating directory %s failed: %q", root, err)
+			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
 		}
 	} else {
 		dir := filepath.Dir(root)
 		logger.Debugf("Ensure dicectory %s", dir)
 		if err := c.sftpClient.MkdirAll(dir); err != nil {
-			logger.Fatalf("Creating directory %s failed: %q", dir, err)
+			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
 		}
 	}
 
-	return f
+	return f, nil
 }
 
 func init() {
-	register("sftp", newSftp)
+	Register("sftp", newSftp)
 }

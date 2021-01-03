@@ -76,51 +76,51 @@ type FileSystem interface {
 
 var notSupported = errors.New("not supported")
 
-type defaultObjectStorage struct{}
+type DefaultObjectStorage struct{}
 
-func (s defaultObjectStorage) Create() error {
+func (s DefaultObjectStorage) Create() error {
 	return nil
 }
 
-func (s defaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
 
-func (s defaultObjectStorage) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
 	return nil, notSupported
 }
 
-func (s defaultObjectStorage) AbortUpload(key string, uploadID string) {}
+func (s DefaultObjectStorage) AbortUpload(key string, uploadID string) {}
 
-func (s defaultObjectStorage) CompleteUpload(key string, uploadID string, parts []*Part) error {
+func (s DefaultObjectStorage) CompleteUpload(key string, uploadID string, parts []*Part) error {
 	return notSupported
 }
 
-func (s defaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string, error) {
+func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return nil, "", nil
 }
 
-func (s defaultObjectStorage) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s DefaultObjectStorage) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return nil, notSupported
 }
 
-func (s defaultObjectStorage) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (s DefaultObjectStorage) ListAll(prefix, marker string) (<-chan *Object, error) {
 	return nil, notSupported
 }
 
-type Register func(endpoint, accessKey, secretKey string) ObjectStorage
+type Creator func(bucket, accessKey, secretKey string) (ObjectStorage, error)
 
-var storages = make(map[string]Register)
+var storages = make(map[string]Creator)
 
-func register(name string, register Register) {
+func Register(name string, register Creator) {
 	storages[name] = register
 }
 
-func CreateStorage(name, endpoint, accessKey, secretKey string) ObjectStorage {
+func CreateStorage(name, endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	f, ok := storages[name]
 	if ok {
 		logger.Debugf("Creating %s storage at endpoint %s", name, endpoint)
 		return f(endpoint, accessKey, secretKey)
 	}
-	panic(fmt.Sprintf("invalid storage: %s", name))
+	return nil, fmt.Errorf("invalid storage: %s", name)
 }

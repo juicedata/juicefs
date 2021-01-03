@@ -37,7 +37,7 @@ func TestFsFile(t *testing.T) {
 		"xyz/",
 		"xyz/xyz.txt",
 	}
-	s0 := newDisk("/tmp/abc/unit-test/", "", "")
+	s0, _ := newDisk("/tmp/abc/unit-test/", "", "")
 	// initialize directory tree
 	for _, key := range keys {
 		if err := s0.Put(key, bytes.NewReader([]byte{})); err != nil {
@@ -55,7 +55,7 @@ func TestFsFile(t *testing.T) {
 		}
 	}()
 
-	s := newDisk("/tmp/abc/unit-test/x/", "", "")
+	s, _ := newDisk("/tmp/abc/unit-test/x/", "", "")
 	objs, err := listAll(s, "", "", 100)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
@@ -65,7 +65,7 @@ func TestFsFile(t *testing.T) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	s = newDisk("/tmp/abc/unit-test/x", "", "")
+	s, _ = newDisk("/tmp/abc/unit-test/x", "", "")
 	objs, err = listAll(s, "", "", 100)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
@@ -75,7 +75,7 @@ func TestFsFile(t *testing.T) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	s = newDisk("/tmp/abc/unit-test/xy", "", "")
+	s, _ = newDisk("/tmp/abc/unit-test/xy", "", "")
 	objs, err = listAll(s, "", "", 100)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
@@ -93,7 +93,7 @@ func TestFsSftp(t *testing.T) {
 		t.SkipNow()
 	}
 	sftpUser, sftpPass := os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS")
-	s0 := newSftp(sftpHost, sftpUser, sftpPass)
+	s0, _ := newSftp(sftpHost, sftpUser, sftpPass)
 
 	keys := []string{
 		"x/",
@@ -119,7 +119,7 @@ func TestFsSftp(t *testing.T) {
 		}
 	}()
 
-	s := newSftp(sftpHost+"x/", sftpUser, sftpPass)
+	s, _ := newSftp(sftpHost+"x/", sftpUser, sftpPass)
 	objs, err := listAll(s, "", "", 100)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
@@ -129,7 +129,7 @@ func TestFsSftp(t *testing.T) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	s = newSftp(sftpHost+"x", sftpUser, sftpPass)
+	s, _ = newSftp(sftpHost+"x", sftpUser, sftpPass)
 	objs, err = listAll(s, "", "", 100)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
@@ -139,7 +139,7 @@ func TestFsSftp(t *testing.T) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	s = newSftp(sftpHost+"xy", sftpUser, sftpPass)
+	s, _ = newSftp(sftpHost+"xy", sftpUser, sftpPass)
 	objs, err = listAll(s, "", "", 100)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
