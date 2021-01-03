@@ -37,7 +37,7 @@ func supportHTTPS(name, endpoint string) bool {
 	}
 }
 
-func createStorage(uri string, conf *config.Config) object.ObjectStorage {
+func createStorage(uri string, conf *config.Config) (object.ObjectStorage, error) {
 	if !strings.Contains(uri, "://") {
 		if strings.Contains(uri, ":") {
 			var user string
@@ -91,9 +91,9 @@ func createStorage(uri string, conf *config.Config) object.ObjectStorage {
 		endpoint = "http://" + endpoint
 	}
 
-	store := object.CreateStorage(name, endpoint, accessKey, secretKey)
-	if store == nil {
-		logger.Fatalf("Invalid storage type: %s", u.Scheme)
+	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey)
+	if err != nil {
+		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
 	}
 	if conf.Perms {
 		if _, ok := store.(object.FileSystem); !ok {
@@ -102,9 +102,9 @@ func createStorage(uri string, conf *config.Config) object.ObjectStorage {
 		}
 	}
 	if name != "file" && len(u.Path) > 1 {
-		store = object.WithPrefix(store, u.Path[1:])
+		store, _ = object.WithPrefix(store, u.Path[1:])
 	}
-	return store
+	return store, nil
 }
 
 func run(c *cli.Context) error {
@@ -121,8 +121,14 @@ func run(c *cli.Context) error {
 	if strings.HasSuffix(c.Args().Get(0), "/") != strings.HasSuffix(c.Args().Get(1), "/") {
 		logger.Fatalf("SRC and DST should both end with '/' or not!")
 	}
-	src := createStorage(c.Args().Get(0), config)
-	dst := createStorage(c.Args().Get(1), config)
+	src, err := createStorage(c.Args().Get(0), config)
+	if err != nil {
+		return err
+	}
+	dst, err := createStorage(c.Args().Get(1), config)
+	if err != nil {
+		return err
+	}
 	return sync.Sync(src, dst, config)
 }
 

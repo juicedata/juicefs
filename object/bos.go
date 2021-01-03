@@ -18,7 +18,7 @@ import (
 const bosDefaultRegion = "bj"
 
 type bosclient struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	bucket string
 	c      *bos.Client
 }
@@ -177,10 +177,10 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	}
 }
 
-func newBOS(endpoint, accessKey, secretKey string) ObjectStorage {
+func newBOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucketName := hostParts[0]
@@ -195,7 +195,7 @@ func newBOS(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	if len(hostParts) == 1 {
 		if endpoint, err = autoBOSEndpoint(bucketName, accessKey, secretKey); err != nil {
-			logger.Fatalf("Fail to get location of bucket %q: %s", bucketName, err)
+			return nil, fmt.Errorf("Fail to get location of bucket %q: %s", bucketName, err)
 		}
 		if !strings.HasPrefix(endpoint, "http") {
 			endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
@@ -204,9 +204,9 @@ func newBOS(endpoint, accessKey, secretKey string) ObjectStorage {
 	}
 
 	bosClient, err := bos.NewClient(accessKey, secretKey, endpoint)
-	return &bosclient{bucket: bucketName, c: bosClient}
+	return &bosclient{bucket: bucketName, c: bosClient}, nil
 }
 
 func init() {
-	register("bos", newBOS)
+	Register("bos", newBOS)
 }

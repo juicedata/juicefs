@@ -599,7 +599,10 @@ func Sync(src, dst object.ObjectStorage, config *config.Config) error {
 			go showProgress()
 		}
 		if config.Workers != nil {
-			addr := startManager(todo)
+			addr, err := startManager(todo)
+			if err != nil {
+				return err
+			}
 			launchWorker(addr, config, &wg)
 		}
 	} else {

@@ -144,10 +144,10 @@ var publicRegions = map[string]*storage.Zone{
 	"ap-southeast-1": &storage.ZoneXinjiapo,
 }
 
-func newQiniu(endpoint, accessKey, secretKey string) ObjectStorage {
+func newQiniu(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucket := hostParts[0]
@@ -195,9 +195,9 @@ func newQiniu(endpoint, accessKey, secretKey string) ObjectStorage {
 	cfg.Zone = zone
 	mac := qbox.NewMac(accessKey, secretKey)
 	bucketManager := storage.NewBucketManager(mac, &cfg)
-	return &qiniu{s3client, bucketManager, mac, &cfg, ""}
+	return &qiniu{s3client, bucketManager, mac, &cfg, ""}, nil
 }
 
 func init() {
-	register("qiniu", newQiniu)
+	Register("qiniu", newQiniu)
 }

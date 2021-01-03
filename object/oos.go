@@ -40,10 +40,10 @@ func (s *oos) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, err
 }
 
-func newOOS(endpoint, accessKey, secretKey string) ObjectStorage {
+func newOOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
@@ -57,13 +57,13 @@ func newOOS(endpoint, accessKey, secretKey string) ObjectStorage {
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(true),
 		// HTTPClient:       httpClient,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
+		Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
 	}
 
 	ses := session.New(awsConfig)
-	return &oos{s3client{bucket, s3.New(ses), ses}}
+	return &oos{s3client{bucket, s3.New(ses), ses}}, nil
 }
 
 func init() {
-	register("oos", newOOS)
+	Register("oos", newOOS)
 }

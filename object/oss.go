@@ -285,10 +285,10 @@ func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (st
 	return fmt.Sprintf("https://%s.aliyuncs.com", bucketLocation), nil
 }
 
-func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
+func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucketName := hostParts[0]
@@ -307,7 +307,7 @@ func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 
 		if accessKey == "" {
 			if cred, err := fetchStsToken(); err != nil {
-				logger.Fatalf("No credential provided for OSS")
+				return nil, fmt.Errorf("No credential provided for OSS")
 			} else {
 				accessKey = cred.AccessKeyId
 				secretKey = cred.AccessKeySecret
@@ -318,7 +318,7 @@ func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	if domain == "" {
 		if domain, err = autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken); err != nil {
-			logger.Fatalf("Unable to get endpoint of bucket %s: %s", bucketName, err)
+			return nil, fmt.Errorf("Unable to get endpoint of bucket %s: %s", bucketName, err)
 		}
 		logger.Debugf("Use endpoint %q", domain)
 	}
@@ -345,7 +345,7 @@ func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 		}()
 	}
 	if err != nil {
-		logger.Fatalf("Cannot create OSS client with endpoint %s: %s", endpoint, err)
+		return nil, fmt.Errorf("Cannot create OSS client with endpoint %s: %s", endpoint, err)
 	}
 
 	client.Config.Timeout = 10
@@ -357,12 +357,12 @@ func newOSS(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	bucket, err := client.Bucket(bucketName)
 	if err != nil {
-		logger.Fatalf("Cannot create bucket %s: %s", bucketName, err)
+		return nil, fmt.Errorf("Cannot create bucket %s: %s", bucketName, err)
 	}
 
-	return &ossClient{client: client, bucket: bucket}
+	return &ossClient{client: client, bucket: bucket}, nil
 }
 
 func init() {
-	register("oss", newOSS)
+	Register("oss", newOSS)
 }

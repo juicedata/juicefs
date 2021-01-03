@@ -135,7 +135,7 @@ func (c *mss) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
-func newMSS(endpoint, accessKey, secretKey string) ObjectStorage {
+func newMSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	qs := &mss{RestfulStorage{
 		endpoint:  endpoint,
 		accessKey: accessKey,
@@ -143,9 +143,9 @@ func newMSS(endpoint, accessKey, secretKey string) ObjectStorage {
 		signName:  "AWS",
 		signer:    mssSigner,
 	}}
-	return qs
+	return qs, nil
 }
 
 func init() {
-	register("mss", newMSS)
+	Register("mss", newMSS)
 }

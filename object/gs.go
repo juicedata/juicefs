@@ -20,7 +20,7 @@ import (
 var ctx = context.Background()
 
 type gs struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	service   *storage.Service
 	bucket    string
 	region    string
@@ -135,10 +135,10 @@ func (g *gs) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
-func newGS(endpoint, accessKey, secretKey string) ObjectStorage {
+func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
@@ -151,9 +151,9 @@ func newGS(endpoint, accessKey, secretKey string) ObjectStorage {
 	if err != nil {
 		log.Fatalf("Failed to create service: %v", err)
 	}
-	return &gs{service: service, bucket: bucket, region: region}
+	return &gs{service: service, bucket: bucket, region: region}, nil
 }
 
 func init() {
-	register("gs", newGS)
+	Register("gs", newGS)
 }

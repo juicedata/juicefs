@@ -5,7 +5,6 @@ package object
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"strings"
 
@@ -13,7 +12,7 @@ import (
 )
 
 type b2client struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	client *b2.Client
 	bucket *b2.Bucket
 	cursor *b2.Cursor
@@ -103,16 +102,16 @@ func (c *b2client) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
-func newB2(endpoint, account, key string) ObjectStorage {
+func newB2(endpoint, account, key string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.Split(uri.Host, ".")
 	bucketName := hostParts[0]
 	client, err := b2.NewClient(ctx, account, key, b2.Transport(httpClient.Transport))
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		return nil, fmt.Errorf("Failed to create client: %v", err)
 	}
 	bucket, err := client.Bucket(ctx, bucketName)
 	if err != nil {
@@ -120,12 +119,12 @@ func newB2(endpoint, account, key string) ObjectStorage {
 			Type: "allPrivate",
 		})
 		if err != nil {
-			log.Fatalf("Failed to create bucket: %v", err)
+			return nil, fmt.Errorf("Failed to create bucket: %v", err)
 		}
 	}
-	return &b2client{client: client, bucket: bucket}
+	return &b2client{client: client, bucket: bucket}, nil
 }
 
 func init() {
-	register("b2", newB2)
+	Register("b2", newB2)
 }

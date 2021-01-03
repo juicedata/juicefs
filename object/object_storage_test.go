@@ -47,7 +47,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
 	}
 
-	s = WithPrefix(s, "unit-test")
+	s, _ = WithPrefix(s, "unit-test")
 	defer s.Delete("/test")
 	k := "/large"
 	defer s.Delete(k)
@@ -179,12 +179,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 }
 
 func TestMem(t *testing.T) {
-	m := newMem("", "", "")
+	m, _ := newMem("", "", "")
 	testStorage(t, m)
 }
 
 func TestDisk(t *testing.T) {
-	s := newDisk("/tmp/abc/", "", "")
+	s, _ := newDisk("/tmp/abc/", "", "")
 	testStorage(t, s)
 }
 
@@ -192,7 +192,7 @@ func TestQingStor(t *testing.T) {
 	if os.Getenv("QY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	s := newQingStor("https://test.pek3a.qingstor.com",
+	s, _ := newQingStor("https://test.pek3a.qingstor.com",
 		os.Getenv("QY_ACCESS_KEY"), os.Getenv("QY_SECRET_KEY"))
 	testStorage(t, s)
 }
@@ -201,7 +201,7 @@ func TestS3(t *testing.T) {
 	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
-	s := newS3(fmt.Sprintf("https://%s", os.Getenv("S3_TEST_BUCKET")),
+	s, _ := newS3(fmt.Sprintf("https://%s", os.Getenv("S3_TEST_BUCKET")),
 		os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"))
 	testStorage(t, s)
 }
@@ -214,7 +214,7 @@ func TestOSS(t *testing.T) {
 	if b := os.Getenv("OSS_TEST_BUCKET"); b != "" {
 		bucketName = b
 	}
-	s := newOSS(fmt.Sprintf("https://%s", bucketName),
+	s, _ := newOSS(fmt.Sprintf("https://%s", bucketName),
 		os.Getenv("ALICLOUD_ACCESS_KEY_ID"), os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"))
 	testStorage(t, s)
 }
@@ -223,7 +223,7 @@ func TestUFile(t *testing.T) {
 	if os.Getenv("UCLOUD_PUBLIC_KEY") == "" {
 		t.SkipNow()
 	}
-	ufile := newUFile("https://test.us-ca.ufileos.com",
+	ufile, _ := newUFile("https://test.us-ca.ufileos.com",
 		os.Getenv("UCLOUD_PUBLIC_KEY"), os.Getenv("UCLOUD_PRIVATE_KEY"))
 	testStorage(t, ufile)
 }
@@ -233,7 +233,7 @@ func TestGS(t *testing.T) {
 		t.SkipNow()
 	}
 	os.Setenv("GOOGLE_CLOUD_PROJECT", "davies-test")
-	gs := newGS("https://test.us-west1.googleapi.com", "", "")
+	gs, _ := newGS("https://test.us-west1.googleapi.com", "", "")
 	testStorage(t, gs)
 }
 
@@ -241,10 +241,10 @@ func TestQiniu(t *testing.T) {
 	if os.Getenv("QINIU_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	qiniu := newQiniu("https://test.cn-east-1-s3.qiniu.com",
+	qiniu, _ := newQiniu("https://test.cn-east-1-s3.qiniu.com",
 		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
 	testStorage(t, qiniu)
-	qiniu = newQiniu("https://test.cn-north-1-s3.qiniu.com",
+	qiniu, _ = newQiniu("https://test.cn-north-1-s3.qiniu.com",
 		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
 	testStorage(t, qiniu)
 }
@@ -253,7 +253,7 @@ func TestKS3(t *testing.T) {
 	if os.Getenv("KS3_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	ks3 := newKS3("https://test.kss.ksyun.com",
+	ks3, _ := newKS3("https://test.kss.ksyun.com",
 		os.Getenv("KS3_ACCESS_KEY"), os.Getenv("KS3_SECRET_KEY"))
 	testStorage(t, ks3)
 }
@@ -262,7 +262,7 @@ func TestCOS(t *testing.T) {
 	if os.Getenv("COS_SECRETID") == "" {
 		t.SkipNow()
 	}
-	cos := newCOS(
+	cos, _ := newCOS(
 		fmt.Sprintf("https://%s", os.Getenv("COS_TEST_BUCKET")),
 		os.Getenv("COS_SECRETID"), os.Getenv("COS_SECRETKEY"))
 	testStorage(t, cos)
@@ -272,7 +272,7 @@ func TestAzure(t *testing.T) {
 	if os.Getenv("AZURE_STORAGE_ACCOUNT") == "" {
 		t.SkipNow()
 	}
-	abs := newWabs("https://test-chunk.core.chinacloudapi.cn",
+	abs, _ := newWabs("https://test-chunk.core.chinacloudapi.cn",
 		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"))
 	testStorage(t, abs)
 }
@@ -281,7 +281,7 @@ func TestNOS(t *testing.T) {
 	if os.Getenv("NOS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	nos := newNOS("https://test.nos-eastchina1.126.net",
+	nos, _ := newNOS("https://test.nos-eastchina1.126.net",
 		os.Getenv("NOS_ACCESS_KEY"), os.Getenv("NOS_SECRET_KEY"))
 	testStorage(t, nos)
 }
@@ -290,7 +290,7 @@ func TestMSS(t *testing.T) {
 	if os.Getenv("MSS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	mss := newMSS("https://test.mtmss.com",
+	mss, _ := newMSS("https://test.mtmss.com",
 		os.Getenv("MSS_ACCESS_KEY"), os.Getenv("MSS_SECRET_KEY"))
 	testStorage(t, mss)
 }
@@ -299,7 +299,7 @@ func TestJSS(t *testing.T) {
 	if os.Getenv("JSS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	jss := newJSS("https://test.s3.cn-north-1.jcloudcs.com",
+	jss, _ := newJSS("https://test.s3.cn-north-1.jcloudcs.com",
 		os.Getenv("JSS_ACCESS_KEY"), os.Getenv("JSS_SECRET_KEY"))
 	testStorage(t, jss)
 }
@@ -308,7 +308,7 @@ func TestSpeedy(t *testing.T) {
 	if os.Getenv("SPEEDY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	cos := newSpeedy("https://test.oss-cn-beijing.speedycloud.org",
+	cos, _ := newSpeedy("https://test.oss-cn-beijing.speedycloud.org",
 		os.Getenv("SPEEDY_ACCESS_KEY"), os.Getenv("SPEEDY_SECRET_KEY"))
 	testStorage(t, cos)
 }
@@ -317,7 +317,7 @@ func TestB2(t *testing.T) {
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
 	}
-	b := newB2("https://test.backblaze.com", os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"))
+	b, _ := newB2("https://test.backblaze.com", os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"))
 	testStorage(t, b)
 }
 
@@ -325,7 +325,7 @@ func TestSpace(t *testing.T) {
 	if os.Getenv("SPACE_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b := newSpace("https://test.nyc3.digitaloceanspaces.com", os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"))
+	b, _ := newSpace("https://test.nyc3.digitaloceanspaces.com", os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"))
 	testStorage(t, b)
 }
 
@@ -333,7 +333,7 @@ func TestBOS(t *testing.T) {
 	if os.Getenv("BDCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b := newBOS(fmt.Sprintf("https://%s", os.Getenv("BOS_TEST_BUCKET")),
+	b, _ := newBOS(fmt.Sprintf("https://%s", os.Getenv("BOS_TEST_BUCKET")),
 		os.Getenv("BDCLOUD_ACCESS_KEY"), os.Getenv("BDCLOUD_SECRET_KEY"))
 	testStorage(t, b)
 }
@@ -342,7 +342,7 @@ func TestSftp(t *testing.T) {
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
-	b := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
+	b, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
 	testStorage(t, b)
 }
 
@@ -350,7 +350,7 @@ func TestOBS(t *testing.T) {
 	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b := newOBS(fmt.Sprintf("https://%s", os.Getenv("OBS_TEST_BUCKET")),
+	b, _ := newOBS(fmt.Sprintf("https://%s", os.Getenv("OBS_TEST_BUCKET")),
 		os.Getenv("HWCLOUD_ACCESS_KEY"), os.Getenv("HWCLOUD_SECRET_KEY"))
 	testStorage(t, b)
 }
@@ -359,7 +359,7 @@ func TestHDFS(t *testing.T) {
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.Skip()
 	}
-	dfs := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
+	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
 	testStorage(t, dfs)
 }
 
@@ -367,7 +367,7 @@ func TestOOS(t *testing.T) {
 	if os.Getenv("OOS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b := newOOS(fmt.Sprintf("https://%s", os.Getenv("OOS_TEST_BUCKET")),
+	b, _ := newOOS(fmt.Sprintf("https://%s", os.Getenv("OOS_TEST_BUCKET")),
 		os.Getenv("OOS_ACCESS_KEY"), os.Getenv("OOS_SECRET_KEY"))
 	testStorage(t, b)
 }

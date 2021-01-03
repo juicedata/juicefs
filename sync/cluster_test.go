@@ -12,7 +12,10 @@ import (
 func TestCluster(t *testing.T) {
 	// manager
 	todo := make(chan *object.Object, 100)
-	addr := startManager(todo)
+	addr, err := startManager(todo)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sendStats(addr)
 	// worker
 	var conf config.Config

@@ -19,7 +19,7 @@ func collectAll(c <-chan *object.Object) []string {
 }
 
 func TestIterator(t *testing.T) {
-	m := object.CreateStorage("mem", "", "", "")
+	m, _ := object.CreateStorage("mem", "", "", "")
 	m.Put("a", bytes.NewReader([]byte("a")))
 	m.Put("b", bytes.NewReader([]byte("a")))
 	m.Put("aa", bytes.NewReader([]byte("a")))
@@ -37,7 +37,7 @@ func TestIterator(t *testing.T) {
 	}
 
 	// Single object
-	s := object.CreateStorage("mem", "", "", "")
+	s, _ := object.CreateStorage("mem", "", "", "")
 	s.Put("a", bytes.NewReader([]byte("a")))
 	ch, _ = iterate(s, "", "")
 	keys = collectAll(ch)
@@ -52,7 +52,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 	// utils.SetLogLevel(logrus.DebugLevel)
 
 	// Construct mem storage
-	s := object.CreateStorage("mem", "", "", "")
+	s, _ := object.CreateStorage("mem", "", "", "")
 	err := s.Put("abc", bytes.NewReader([]byte("abc")))
 	if err != nil {
 		t.Errorf("Put error: %q", err)
@@ -60,7 +60,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 	}
 
 	// Simulate command line prefix in SRC or DST
-	s = object.WithPrefix(s, "abc")
+	s, _ = object.WithPrefix(s, "abc")
 	ch, _ := iterate(s, "", "")
 	keys := collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{""}) {
@@ -87,12 +87,12 @@ func TestSync(t *testing.T) {
 		Quiet:     false,
 	}
 
-	a := object.CreateStorage("mem", "a", "", "")
+	a, _ := object.CreateStorage("mem", "a", "", "")
 	a.Put("a", bytes.NewReader([]byte("a")))
 	a.Put("ab", bytes.NewReader([]byte("ab")))
 	a.Put("abc", bytes.NewReader([]byte("abc")))
 
-	b := object.CreateStorage("mem", "b", "", "")
+	b, _ := object.CreateStorage("mem", "b", "", "")
 	b.Put("ba", bytes.NewReader([]byte("ba")))
 
 	// Copy "a" from mem://a to mem://b
