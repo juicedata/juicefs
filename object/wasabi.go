@@ -40,10 +40,10 @@ func (s *wasabi) Create() error {
 	return err
 }
 
-func newWasabi(endpoint, accessKey, secretKey string) ObjectStorage {
+func newWasabi(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
@@ -61,9 +61,9 @@ func newWasabi(endpoint, accessKey, secretKey string) ObjectStorage {
 	}
 
 	ses := session.New(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
-	return &wasabi{s3client{bucket, s3.New(ses), ses}}
+	return &wasabi{s3client{bucket, s3.New(ses), ses}}, nil
 }
 
 func init() {
-	register("wasabi", newWasabi)
+	Register("wasabi", newWasabi)
 }

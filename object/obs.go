@@ -228,10 +228,10 @@ func autoOBSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	return "", fmt.Errorf("bucket %q does not exist", bucketName)
 }
 
-func newOBS(endpoint, accessKey, secretKey string) ObjectStorage {
+func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucketName := hostParts[0]
@@ -247,7 +247,7 @@ func newOBS(endpoint, accessKey, secretKey string) ObjectStorage {
 	var region string
 	if len(hostParts) == 1 {
 		if endpoint, err = autoOBSEndpoint(bucketName, accessKey, secretKey); err != nil {
-			logger.Fatalf("Cannot get location of bucket %q: %s", bucketName, err)
+			return nil, fmt.Errorf("Cannot get location of bucket %q: %s", bucketName, err)
 		}
 		if !strings.HasPrefix(endpoint, "http") {
 			endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
@@ -258,11 +258,11 @@ func newOBS(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	c, err := obs.New(accessKey, secretKey, endpoint)
 	if err != nil {
-		logger.Fatalf("Fail to initialize OBS: %s", err)
+		return nil, fmt.Errorf("Fail to initialize OBS: %s", err)
 	}
-	return &obsClient{bucketName, region, c}
+	return &obsClient{bucketName, region, c}, nil
 }
 
 func init() {
-	register("obs", newOBS)
+	Register("obs", newOBS)
 }

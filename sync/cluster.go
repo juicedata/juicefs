@@ -110,7 +110,7 @@ func findLocalIP() (string, error) {
 	return "", errors.New("are you connected to the network?")
 }
 
-func startManager(tasks chan *object.Object) string {
+func startManager(tasks chan *object.Object) (string, error) {
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []*object.Object
 		obj, ok := <-tasks
@@ -164,38 +164,37 @@ func startManager(tasks chan *object.Object) string {
 	})
 	l, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
-		logger.Fatalf("listen: %s", err)
+		return "", fmt.Errorf("listen: %s", err)
 	}
 	logger.Infof("Listen at %s", l.Addr())
 	go http.Serve(l, nil)
 	ip, err := findLocalIP()
 	if err != nil {
-		logger.Fatalf("find local ip: %s", err)
+		return "", fmt.Errorf("find local ip: %s", err)
 	}
 	ps := strings.Split(l.Addr().String(), ":")
 	port := ps[len(ps)-1]
-	return fmt.Sprintf("%s:%s", ip, port)
+	return fmt.Sprintf("%s:%s", ip, port), nil
 }
 
-func findSelfPath() string {
+func findSelfPath() (string, error) {
 	program := os.Args[0]
 	if strings.Contains(program, "/") {
 		path, err := filepath.Abs(program)
 		if err != nil {
-			logger.Fatalf("resolve path %s: %s", program, err)
+			return "", fmt.Errorf("resolve path %s: %s", program, err)
 		}
-		return path
+		return path, nil
 	}
 	for _, searchPath := range strings.Split(os.Getenv("PATH"), ":") {
 		if searchPath != "" {
 			p := filepath.Join(searchPath, program)
 			if _, err := os.Stat(p); err == nil {
-				return p
+				return p, nil
 			}
 		}
 	}
-	logger.Fatalf("can't find path for %s", program)
-	panic("")
+	return "", fmt.Errorf("can't find path for %s", program)
 }
 
 func launchWorker(address string, config *config.Config, wg *sync.WaitGroup) {
@@ -205,10 +204,14 @@ func launchWorker(address string, config *config.Config, wg *sync.WaitGroup) {
 		go func(host string) {
 			defer wg.Done()
 			// copy
-			path := findSelfPath()
+			path, err := findSelfPath()
+			if err != nil {
+				logger.Errorf("find self path: %s", err)
+				return
+			}
 			rpath := "/tmp/juicesync"
 			cmd := exec.Command("rsync", "-au", path, host+":"+rpath)
-			err := cmd.Run()
+			err = cmd.Run()
 			if err != nil {
 				// fallback to scp
 				cmd = exec.Command("scp", path, host+":"+rpath)

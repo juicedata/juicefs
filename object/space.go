@@ -40,7 +40,7 @@ func (s *space) Create() error {
 	return err
 }
 
-func newSpace(endpoint, accessKey, secretKey string) ObjectStorage {
+func newSpace(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, _ := url.ParseRequestURI(endpoint)
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")
@@ -58,9 +58,9 @@ func newSpace(endpoint, accessKey, secretKey string) ObjectStorage {
 	}
 
 	ses := session.New(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
-	return &space{s3client{bucket, s3.New(ses), ses}}
+	return &space{s3client{bucket, s3.New(ses), ses}}, nil
 }
 
 func init() {
-	register("space", newSpace)
+	Register("space", newSpace)
 }

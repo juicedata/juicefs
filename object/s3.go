@@ -270,10 +270,10 @@ func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
 	return "", err
 }
 
-func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
+func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err.Error())
+		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err.Error())
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 
@@ -286,7 +286,7 @@ func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
 	if len(hostParts) == 1 { // take endpoint as bucketname
 		bucketName = hostParts[0]
 		if region, err = autoS3Region(bucketName, accessKey, secretKey); err != nil {
-			logger.Fatalf("Can't guess your region for bucket %s: %s", bucketName, err)
+			return nil, fmt.Errorf("Can't guess your region for bucket %s: %s", bucketName, err)
 		}
 	} else { // get region in endpoint
 		if strings.Contains(uri.Host, ".amazonaws.com") {
@@ -335,11 +335,11 @@ func newS3(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	ses, err := session.NewSession(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
 	if err != nil {
-		logger.Fatalf("Fail to create aws session: %s", err)
+		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
-	return &s3client{bucketName, s3.New(ses), ses}
+	return &s3client{bucketName, s3.New(ses), ses}, nil
 }
 
 func init() {
-	register("s3", newS3)
+	Register("s3", newS3)
 }

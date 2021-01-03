@@ -71,16 +71,16 @@ func (s *speedy) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
-func newSpeedy(endpoint, accessKey, secretKey string) ObjectStorage {
+func newSpeedy(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	return &speedy{RestfulStorage{
 		endpoint:  endpoint,
 		accessKey: accessKey,
 		secretKey: secretKey,
 		signName:  "AWS",
 		signer:    sign,
-	}}
+	}}, nil
 }
 
 func init() {
-	register("speedy", newSpeedy)
+	Register("speedy", newSpeedy)
 }

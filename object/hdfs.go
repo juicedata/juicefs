@@ -24,7 +24,7 @@ var superuser = "hdfs"
 var supergroup = "supergroup"
 
 type hdfsclient struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	addr string
 	c    *hdfs.Client
 }
@@ -285,10 +285,10 @@ func (h *hdfsclient) Chown(key string, owner, group string) error {
 	return h.c.Chown(h.path(key), owner, group)
 }
 
-func newHDFS(addr, username, sk string) ObjectStorage {
+func newHDFS(addr, username, sk string) (ObjectStorage, error) {
 	conf, err := hadoopconf.LoadFromEnvironment()
 	if err != nil {
-		logger.Fatalf("Problem loading configuration: %s", err)
+		return nil, fmt.Errorf("Problem loading configuration: %s", err)
 	}
 
 	options := hdfs.ClientOptionsFromConf(conf)
@@ -299,7 +299,7 @@ func newHDFS(addr, username, sk string) ObjectStorage {
 	if options.KerberosClient != nil {
 		options.KerberosClient, err = getKerberosClient()
 		if err != nil {
-			logger.Fatalf("Problem with kerberos authentication: %s", err)
+			return nil, fmt.Errorf("Problem with kerberos authentication: %s", err)
 		}
 	} else {
 		if username == "" {
@@ -308,7 +308,7 @@ func newHDFS(addr, username, sk string) ObjectStorage {
 		if username == "" {
 			current, err := user.Current()
 			if err != nil {
-				logger.Fatalf("get current user: %s", err)
+				return nil, fmt.Errorf("get current user: %s", err)
 			}
 			username = current.Username
 		}
@@ -317,7 +317,7 @@ func newHDFS(addr, username, sk string) ObjectStorage {
 
 	c, err := hdfs.NewClient(options)
 	if err != nil {
-		logger.Fatalf("new HDFS client %s: %s", addr, err)
+		return nil, fmt.Errorf("new HDFS client %s: %s", addr, err)
 	}
 	if os.Getenv("HADOOP_SUPER_USER") != "" {
 		superuser = os.Getenv("HADOOP_SUPER_USER")
@@ -326,9 +326,9 @@ func newHDFS(addr, username, sk string) ObjectStorage {
 		supergroup = os.Getenv("HADOOP_SUPER_GROUP")
 	}
 
-	return &hdfsclient{addr: addr, c: c}
+	return &hdfsclient{addr: addr, c: c}, nil
 }
 
 func init() {
-	register("hdfs", newHDFS)
+	Register("hdfs", newHDFS)
 }

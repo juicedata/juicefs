@@ -189,10 +189,10 @@ func autoCOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	return "", fmt.Errorf("bucket %q doesnot exist", bucketName)
 }
 
-func newCOS(endpoint, accessKey, secretKey string) ObjectStorage {
+func newCOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		logger.Fatalf("Invalid endpoint %s: %s", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 
@@ -203,10 +203,10 @@ func newCOS(endpoint, accessKey, secretKey string) ObjectStorage {
 
 	if len(hostParts) == 1 {
 		if endpoint, err = autoCOSEndpoint(hostParts[0], accessKey, secretKey); err != nil {
-			logger.Fatalf("Unable to get endpoint of bucket %s: %s", hostParts[0], err)
+			return nil, fmt.Errorf("Unable to get endpoint of bucket %s: %s", hostParts[0], err)
 		}
 		if uri, err = url.ParseRequestURI(endpoint); err != nil {
-			logger.Fatalf("Invalid endpoint %s: %s", endpoint, err)
+			return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 		}
 		logger.Debugf("Use endpoint %q", endpoint)
 	}
@@ -219,9 +219,9 @@ func newCOS(endpoint, accessKey, secretKey string) ObjectStorage {
 		},
 	})
 	client.UserAgent = UserAgent
-	return &COS{client, uri.Host}
+	return &COS{client, uri.Host}, nil
 }
 
 func init() {
-	register("cos", newCOS)
+	Register("cos", newCOS)
 }

@@ -16,7 +16,7 @@ import (
 )
 
 type wasb struct {
-	defaultObjectStorage
+	DefaultObjectStorage
 	container *storage.Container
 	marker    string
 }
@@ -137,10 +137,10 @@ func autoWasbEndpoint(containerName, accountName, accountKey string, useHTTPS bo
 	return endpoint, nil
 }
 
-func newWabs(endpoint, accountName, accountKey string) ObjectStorage {
+func newWabs(endpoint, accountName, accountKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		log.Fatalf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 
@@ -155,7 +155,7 @@ func newWabs(endpoint, accountName, accountKey string) ObjectStorage {
 			}
 			parts := strings.SplitN(item, "=", 2)
 			if len(parts) != 2 {
-				logger.Fatalf("Invalid connection string item: %s", item)
+				return nil, fmt.Errorf("Invalid connection string item: %s", item)
 			}
 			// Arguments from command line take precedence
 			if parts[0] == "DefaultEndpointsProtocol" && scheme == "" {
@@ -178,7 +178,7 @@ func newWabs(endpoint, accountName, accountKey string) ObjectStorage {
 		domain = hostParts[1]
 	} else if domain == "" {
 		if domain, err = autoWasbEndpoint(name, accountName, accountKey, scheme == "https"); err != nil {
-			logger.Fatalf("Unable to get endpoint of container %s: %s", name, err)
+			return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", name, err)
 		}
 	}
 
@@ -188,9 +188,9 @@ func newWabs(endpoint, accountName, accountKey string) ObjectStorage {
 	}
 	service := client.GetBlobService()
 	container := service.GetContainerReference(name)
-	return &wasb{container: container}
+	return &wasb{container: container}, nil
 }
 
 func init() {
-	register("wasb", newWabs)
+	Register("wasb", newWabs)
 }
