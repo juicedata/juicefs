@@ -23,6 +23,7 @@ type Config struct {
 	Manager     string
 	Workers     []string
 	BWLimit     int
+	NoHTTPS     bool
 	Verbose     bool
 	Quiet       bool
 }
