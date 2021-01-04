@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
@@ -32,9 +33,13 @@ func supportHTTPS(name, endpoint string) bool {
 		return !(strings.Contains(endpoint, ".vpc100-oss") || strings.Contains(endpoint, "internal.aliyuncs.com"))
 	case "jss":
 		return false
-	default:
-		return true
+	case "s3":
+		ps := strings.SplitN(endpoint, ".", 2)
+		if len(ps) > 1 && net.ParseIP(ps[1]) != nil {
+			return false
+		}
 	}
+	return true
 }
 
 func createStorage(uri string, conf *config.Config) (object.ObjectStorage, error) {
@@ -85,7 +90,7 @@ func createStorage(uri string, conf *config.Config) (object.ObjectStorage, error
 	if name == "file" {
 		endpoint = u.Path
 	} else if name == "hdfs" {
-	} else if supportHTTPS(name, endpoint) {
+	} else if !conf.NoHTTPS && supportHTTPS(name, endpoint) {
 		endpoint = "https://" + endpoint
 	} else {
 		endpoint = "http://" + endpoint
@@ -221,8 +226,11 @@ func main() {
 		},
 		&cli.IntFlag{
 			Name:  "bwlimit",
-			Value: 0,
 			Usage: "limit bandwidth in Mbps (default: unlimited)",
+		},
+		&cli.BoolFlag{
+			Name:  "no-https",
+			Usage: "donot use HTTPS",
 		},
 		&cli.BoolFlag{
 			Name:    "verbose",
