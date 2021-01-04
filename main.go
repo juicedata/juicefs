@@ -34,7 +34,7 @@ func supportHTTPS(name, endpoint string) bool {
 	case "jss":
 		return false
 	case "s3":
-		ps := strings.SplitN(endpoint, ".", 2)
+		ps := strings.SplitN(strings.Split(endpoint, ":")[0], ".", 2)
 		if len(ps) > 1 && net.ParseIP(ps[1]) != nil {
 			return false
 		}

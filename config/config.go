@@ -46,6 +46,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Workers:     c.StringSlice("worker"),
 		Manager:     c.String("manager"),
 		BWLimit:     c.Int("bwlimit"),
+		NoHTTPS:     c.Bool("no-https"),
 		Verbose:     c.Bool("verbose"),
 		Quiet:       c.Bool("quiet"),
 	}
