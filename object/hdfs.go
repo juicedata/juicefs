@@ -144,7 +144,11 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 }
 
 func (h *hdfsclient) Delete(key string) error {
-	return h.c.Remove(h.path(key))
+	err := h.c.Remove(h.path(key))
+	if err != nil && os.IsNotExist(err) {
+		err = nil
+	}
+	return err
 }
 
 func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error) {

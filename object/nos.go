@@ -100,9 +100,6 @@ func (s *nos) Copy(dst, src string) error {
 }
 
 func (s *nos) Delete(key string) error {
-	if _, err := s.Head(key); err != nil {
-		return err
-	}
 	param := model.ObjectRequest{
 		Bucket: s.bucket,
 		Object: key,

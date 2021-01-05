@@ -131,9 +131,6 @@ func (q *qingstor) Copy(dst, src string) error {
 }
 
 func (q *qingstor) Delete(key string) error {
-	if _, err := q.Head(key); err != nil {
-		return err
-	}
 	_, err := q.bucket.DeleteObject(key)
 	return err
 }

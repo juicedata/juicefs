@@ -84,9 +84,6 @@ func (q *bosclient) Copy(dst, src string) error {
 }
 
 func (q *bosclient) Delete(key string) error {
-	if _, err := q.Head(key); err != nil {
-		return err
-	}
 	return q.c.DeleteObject(q.bucket, key)
 }
 

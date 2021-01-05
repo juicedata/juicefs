@@ -189,10 +189,6 @@ func (s *RestfulStorage) Copy(dst, src string) error {
 }
 
 func (s *RestfulStorage) Delete(key string) error {
-	if _, err := s.Head(key); err != nil {
-		return err
-	}
-
 	resp, err := s.request("DELETE", key, nil, nil)
 	if err != nil {
 		return err

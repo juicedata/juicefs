@@ -126,10 +126,11 @@ func (d *filestore) Copy(dst, src string) error {
 }
 
 func (d *filestore) Delete(key string) error {
-	if _, err := d.Head(key); err != nil {
-		return err
+	err := os.Remove(d.path(key))
+	if err != nil && os.IsNotExist(err) {
+		err = nil
 	}
-	return os.Remove(d.path(key))
+	return err
 }
 
 func isSymlinkAndDir(path string) bool {

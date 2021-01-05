@@ -264,7 +264,11 @@ func (f *sftpStore) Delete(key string) error {
 		return err
 	}
 	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.Remove(f.path(key))
+	err = c.sftpClient.Remove(f.path(key))
+	if err != nil && os.IsNotExist(err) {
+		err = nil
+	}
+	return err
 }
 
 type sortFI []os.FileInfo

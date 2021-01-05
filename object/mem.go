@@ -142,10 +142,6 @@ func (m *memStore) Copy(dst, src string) error {
 func (m *memStore) Delete(key string) error {
 	m.Lock()
 	defer m.Unlock()
-	_, ok := m.objects[key]
-	if !ok {
-		return errors.New("not exists")
-	}
 	delete(m.objects, key)
 	return nil
 }

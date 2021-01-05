@@ -83,9 +83,6 @@ func (o *ossClient) Copy(dst, src string) error {
 }
 
 func (o *ossClient) Delete(key string) error {
-	if _, err := o.Head(key); err != nil {
-		return err
-	}
 	return o.bucket.DeleteObject(key)
 }
 

@@ -122,7 +122,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("delete failed: %s", err)
 	}
 
-	if err := s.Delete("/test"); err == nil {
+	if err := s.Delete("/test"); err != nil {
 		t.Fatalf("delete non exists: %v", err)
 	}
 
