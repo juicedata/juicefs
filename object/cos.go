@@ -86,9 +86,6 @@ func (c *COS) Copy(dst, src string) error {
 }
 
 func (c *COS) Delete(key string) error {
-	if _, err := c.Head(key); err != nil {
-		return err
-	}
 	_, err := c.c.Object.Delete(ctx, key)
 	return err
 }

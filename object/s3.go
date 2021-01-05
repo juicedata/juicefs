@@ -111,9 +111,6 @@ func (s *s3client) Copy(dst, src string) error {
 }
 
 func (s *s3client) Delete(key string) error {
-	if _, err := s.Head(key); err != nil {
-		return err
-	}
 	param := s3.DeleteObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
