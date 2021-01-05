@@ -3,7 +3,6 @@
 package object
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -69,11 +68,7 @@ func (b *wasb) Copy(dst, src string) error {
 }
 
 func (b *wasb) Delete(key string) error {
-	ok, err := b.container.GetBlobReference(key).DeleteIfExists(nil)
-	if !ok {
-		err = errors.New("Not existed")
-	}
-	return err
+	return b.container.GetBlobReference(key).Delete(nil)
 }
 
 func (b *wasb) List(prefix, marker string, limit int64) ([]*Object, error) {

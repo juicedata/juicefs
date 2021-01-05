@@ -102,9 +102,6 @@ func (s *obsClient) Copy(dst, src string) error {
 }
 
 func (s *obsClient) Delete(key string) error {
-	if _, err := s.Head(key); err != nil {
-		return err
-	}
 	params := obs.DeleteObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key

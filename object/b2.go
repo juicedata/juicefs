@@ -65,9 +65,6 @@ func (c *b2client) Copy(dst, src string) error {
 }
 
 func (c *b2client) Delete(key string) error {
-	if _, err := c.Head(key); err != nil {
-		return err
-	}
 	return c.bucket.Object(key).Delete(ctx)
 }
 
