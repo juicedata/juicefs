@@ -1,0 +1,16 @@
+*.o
+*.sw[po]
+ltmain.sh
+*.orig
+*.rej
+.deps
+.dirstamp
+.vscode
+.idea
+fstests/secfs.test
+!fstests/Makefile
+jfs
+juicefs
+dist/
+*.rdb
+.release-env

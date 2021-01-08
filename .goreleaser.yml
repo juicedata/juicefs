@@ -1,0 +1,38 @@
+project_name: juicefs
+env:
+  - GO111MODULE=on
+  - GOPROXY=https://gocenter.io
+before:
+  hooks:
+    - go mod download
+builds:
+  - id: juicefs-darwin
+    env:
+      - CGO_ENABLED=1
+      - CC=o64-clang
+      - CXX=o64-clang++
+    ldflags: -s -w -X main.VERSION={{.Version}} -X main.REVISION={{.ShortCommit}} -X main.REVISIONDATE={{.CommitDate}}
+    main: ./cmd
+    goos:
+      - darwin
+    goarch:
+      - amd64
+  - id: juicefs-linux
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w -X main.VERSION={{.Version}} -X main.REVISION={{.ShortCommit}} -X main.REVISIONDATE={{.CommitDate}}
+    main: ./cmd
+    goos:
+      - linux
+    goarch:
+      - amd64
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
