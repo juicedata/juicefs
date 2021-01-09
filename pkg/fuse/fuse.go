@@ -46,19 +46,19 @@ func NewJFS() *JFS {
 	}
 }
 
-func (fs *JFS) replyEntry(out *fuse.EntryOut, entry *meta.Entry) fuse.Status {
-	out.NodeId = uint64(entry.Inode)
+func (fs *JFS) replyEntry(out *fuse.EntryOut, e *meta.Entry) fuse.Status {
+	out.NodeId = uint64(e.Inode)
 	out.Generation = 1
 	out.SetAttrTimeout(fs.attrTimeout)
-	if entry.Attr.Typ == meta.TypeDirectory {
+	if e.Attr.Typ == meta.TypeDirectory {
 		out.SetEntryTimeout(fs.direntryTimeout)
 	} else {
 		out.SetEntryTimeout(fs.entryTimeout)
 	}
-	if vfs.IsSpecialNode(entry.Inode) {
+	if vfs.IsSpecialNode(e.Inode) {
 		out.SetAttrTimeout(time.Hour)
 	}
-	attrToStat(entry.Inode, entry.Attr, &out.Attr)
+	attrToStat(e.Inode, e.Attr, &out.Attr)
 	return 0
 }
 
@@ -368,7 +368,7 @@ func (fs *JFS) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.Di
 			break
 		}
 		if e.Attr.Full {
-			vfs.UpdateEntry(e)
+			vfs.UpdateLength(e.Inode, e.Attr)
 			fs.replyEntry(eo, e)
 		} else {
 			eo.Ino = uint64(e.Inode)

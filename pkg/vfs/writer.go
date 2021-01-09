@@ -35,14 +35,14 @@ type FileWriter interface {
 	Flush(ctx meta.Context) syscall.Errno
 	Close(ctx meta.Context) syscall.Errno
 	GetLength() uint64
-	Truncate(maxfleng uint64)
+	Truncate(length uint64)
 }
 
 type DataWriter interface {
 	Open(inode Ino, fleng uint64) FileWriter
 	Flush(ctx meta.Context, inode Ino) syscall.Errno
 	GetLength(inode Ino) uint64
-	Truncate(inode Ino, maxfleng uint64)
+	Truncate(inode Ino, length uint64)
 }
 
 type sliceWriter struct {
