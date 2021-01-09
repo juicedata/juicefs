@@ -32,8 +32,6 @@ type handle struct {
 	children []*meta.Entry
 
 	// for file
-	length     uint64
-	mode       uint8
 	locks      uint8
 	flockOwner uint64 // kernel 3.1- does not pass lock_owner in release()
 	reader     FileReader
@@ -51,11 +49,14 @@ type handle struct {
 }
 
 func (h *handle) addOp(ctx Context) {
+	h.Lock()
+	defer h.Unlock()
 	h.ops = append(h.ops, ctx)
 }
 
 func (h *handle) removeOp(ctx Context) {
 	h.Lock()
+	defer h.Unlock()
 	for i, c := range h.ops {
 		if c == ctx {
 			h.ops[i] = h.ops[len(h.ops)-1]
@@ -63,13 +64,14 @@ func (h *handle) removeOp(ctx Context) {
 			break
 		}
 	}
-	h.Unlock()
 }
 
 func (h *handle) cancelOp(pid uint32) {
 	if pid == 0 {
 		return
 	}
+	h.Lock()
+	defer h.Unlock()
 	for _, c := range h.ops {
 		if c.Pid() == pid || c.Pid() > 0 && c.Duration() > time.Second {
 			c.Cancel()
@@ -86,11 +88,8 @@ func (h *handle) Rlock(ctx Context) bool {
 		}
 	}
 	h.readers++
-	if h.reader == nil {
-		h.reader = reader.Open(h.inode, h.length)
-	}
-	h.addOp(ctx)
 	h.Unlock()
+	h.addOp(ctx)
 	return true
 }
 
@@ -115,11 +114,8 @@ func (h *handle) Wlock(ctx Context) bool {
 	}
 	h.writers--
 	h.writing = 1
-	if h.writer == nil {
-		h.writer = writer.Open(h.inode, h.length)
-	}
-	h.addOp(ctx)
 	h.Unlock()
+	h.addOp(ctx)
 	return true
 }
 
@@ -186,25 +182,14 @@ func releaseHandle(inode Ino, fh uint64) {
 	}
 }
 
-func updateHandleLength(inode Ino, length uint64) {
-	hanleLock.Lock()
-	for _, h := range handles[inode] {
-		h.Lock()
-		h.length = length
-		h.Unlock()
-	}
-	hanleLock.Unlock()
-}
-
 func newFileHandle(mode uint8, inode Ino, length uint64) uint64 {
 	h := newHandle(inode)
 	h.Lock()
 	defer h.Unlock()
-	h.length = length
-	h.mode = mode
-	if mode == modeRead {
+	if mode&modeRead != 0 {
 		h.reader = reader.Open(inode, length)
-	} else if mode == modeWrite {
+	}
+	if mode&modeWrite != 0 {
 		h.writer = writer.Open(inode, length)
 	}
 	return h.fh
