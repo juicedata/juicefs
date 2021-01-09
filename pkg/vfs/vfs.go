@@ -92,13 +92,7 @@ func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscal
 	if err != 0 {
 		return
 	}
-	if attr.Typ == meta.TypeFile {
-		maxfleng := writer.GetLength(inode)
-		if maxfleng > attr.Length {
-			attr.Length = maxfleng
-		}
-		updateHandleLength(inode, attr.Length)
-	}
+	UpdateLength(inode, attr)
 	entry = &meta.Entry{Inode: inode, Attr: attr}
 	return
 }
@@ -115,13 +109,7 @@ func GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, err syscall
 	if err != 0 {
 		return
 	}
-	if attr.Typ == meta.TypeFile {
-		maxfleng := writer.GetLength(ino)
-		if maxfleng > attr.Length {
-			attr.Length = maxfleng
-		}
-		updateHandleLength(ino, attr.Length)
-	}
+	UpdateLength(ino, attr)
 	entry = &meta.Entry{Inode: ino, Attr: attr}
 	return
 }
@@ -295,6 +283,7 @@ func Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *meta.Entr
 	var attr = &Attr{}
 	err = m.Link(ctx, ino, newparent, newname, attr)
 	if err == 0 {
+		UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return
@@ -310,14 +299,12 @@ func Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
 	return
 }
 
-func UpdateEntry(e *meta.Entry) {
-	attr := e.Attr
+func UpdateLength(inode Ino, attr *meta.Attr) {
 	if attr.Full && attr.Typ == meta.TypeFile {
-		maxfleng := writer.GetLength(e.Inode)
-		if maxfleng > attr.Length {
-			attr.Length = maxfleng
+		length := writer.GetLength(inode)
+		if length > attr.Length {
+			attr.Length = length
 		}
-		updateHandleLength(e.Inode, attr.Length)
 	}
 }
 
@@ -447,10 +434,7 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 		return
 	}
 
-	maxfleng := writer.GetLength(ino)
-	if maxfleng > attr.Length {
-		attr.Length = maxfleng
-	}
+	UpdateLength(ino, attr)
 	fh = newFileHandle(oflags, ino, attr.Length)
 	entry = &meta.Entry{Inode: ino, Attr: attr}
 	return
@@ -471,61 +455,12 @@ func Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Attr) (err s
 		return
 	}
 	writer.Flush(ctx, ino)
-	var flags uint8
-	trycnt := 0
-	if attr == nil {
-		attr = &Attr{}
-	}
-	for {
-		err = m.Truncate(ctx, ino, flags, uint64(size), attr)
-		if err == syscall.ENOTSUP {
-			err = m.GetAttr(ctx, ino, attr)
-			if err == 0 {
-				fleng := attr.Length
-				logger.Debugf("fill zero %d-%d", fleng, size)
-				w := writer.Open(ino, fleng)
-				block := make([]byte, 1<<17)
-				for fleng < uint64(size) {
-					n := uint64(len(block))
-					if fleng+n > uint64(size) {
-						n = uint64(size) - fleng
-					}
-					err = w.Write(ctx, fleng, block[:n])
-					if err != 0 {
-						err = syscall.EIO
-						break
-					}
-					fleng += n
-				}
-				if fleng == uint64(size) {
-					err = w.Close(ctx)
-				} else {
-					w.Close(ctx)
-				}
-			}
-			if err != 0 {
-				err = syscall.EINTR // retry
-			}
-		}
-		if err == 0 || err == syscall.EROFS || err == syscall.EACCES || err == syscall.EPERM || err == syscall.ENOENT || err == syscall.ENOSPC || err == syscall.EINTR {
-			break
-		} else {
-			trycnt++
-			if trycnt >= 30 {
-				break
-			}
-			t := 1 + (trycnt-1)*300
-			if trycnt > 30 {
-				t = 10000
-			}
-			time.Sleep(time.Millisecond * time.Duration(t))
-		}
-	}
+	err = m.Truncate(ctx, ino, 0, uint64(size), attr)
 	if err != 0 {
 		return
 	}
-	updateHandleLength(ino, uint64(size))
 	writer.Truncate(ino, uint64(size))
+	reader.Truncate(ino, uint64(size))
 	return 0
 }
 
@@ -606,7 +541,7 @@ func Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err s
 		err = syscall.EFBIG
 		return
 	}
-	if h.mode == modeWrite {
+	if h.reader == nil {
 		err = syscall.EACCES
 		return
 	}
@@ -641,7 +576,7 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 		err = syscall.EFBIG
 		return
 	}
-	if h.mode == modeRead {
+	if h.writer == nil {
 		err = syscall.EACCES
 		return
 	}
@@ -661,18 +596,7 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 	if err != 0 {
 		return
 	}
-
-	h.Lock()
-	var newfleng uint64
-	if off+size > h.length {
-		newfleng = off + size
-		h.length = newfleng
-	}
-	h.Unlock()
-	if newfleng > 0 {
-		writer.Truncate(ino, newfleng)
-		updateHandleLength(ino, newfleng)
-	}
+	reader.Truncate(ino, writer.GetLength(ino))
 	return
 }
 
@@ -695,7 +619,7 @@ func Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh uint64) (
 		err = syscall.EFBIG
 		return
 	}
-	if h.mode == modeRead {
+	if h.writer == nil {
 		err = syscall.EACCES
 		return
 	}
@@ -711,9 +635,7 @@ func Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh uint64) (
 }
 
 func doFsync(ctx Context, h *handle) (err syscall.Errno) {
-	h.Lock()
-	if h.writer != nil && (h.mode != modeRead) {
-		h.Unlock()
+	if h.writer != nil {
 		if !h.Wlock(ctx) {
 			return syscall.EINTR
 		}
@@ -724,8 +646,6 @@ func doFsync(ctx Context, h *handle) (err syscall.Errno) {
 		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 			err = syscall.EBADF
 		}
-	} else {
-		h.Unlock()
 	}
 	return err
 }
@@ -741,10 +661,7 @@ func Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err syscall.Errno
 		return
 	}
 
-	h.Lock()
-	locks := h.locks
-	if h.writer != nil && (h.mode != modeRead) {
-		h.Unlock()
+	if h.writer != nil {
 		if !h.Wlock(ctx) {
 			h.cancelOp(ctx.Pid())
 			err = syscall.EINTR
@@ -757,10 +674,12 @@ func Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err syscall.Errno
 		}
 		h.removeOp(ctx)
 		h.Wunlock()
-		h.Lock()
 	} else if h.reader != nil {
 		h.cancelOp(ctx.Pid())
 	}
+
+	h.Lock()
+	locks := h.locks
 	h.Unlock()
 	if locks&2 != 0 {
 		m.Setlk(ctx, ino, lockOwner, false, syscall.F_UNLCK, 0, 0x7FFFFFFFFFFFFFFF, 0)
