@@ -27,7 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	. "github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 
@@ -121,7 +120,7 @@ func (r *redisMeta) Init(format Format) error {
 	}
 
 	// root inode
-	var attr meta.Attr
+	var attr Attr
 	attr.Flags = 0
 	attr.Typ = TypeDirectory
 	attr.Mode = 0777
@@ -1172,7 +1171,7 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	return 0
 }
 
-func (r *redisMeta) buildSlice(ss []*slice) []meta.Slice {
+func (r *redisMeta) buildSlice(ss []*slice) []Slice {
 	var root *slice
 	for _, s := range ss {
 		if root != nil {
@@ -1183,7 +1182,7 @@ func (r *redisMeta) buildSlice(ss []*slice) []meta.Slice {
 		root = s
 	}
 	var pos uint32
-	var chunks []meta.Slice
+	var chunks []Slice
 	root.visit(func(s *slice) {
 		if s.pos > pos {
 			chunks = append(chunks, Slice{0, s.pos - pos, 0, s.pos - pos})
