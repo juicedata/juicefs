@@ -71,7 +71,8 @@ type FileReader interface {
 }
 
 type DataReader interface {
-	Open(inode Ino, fleng uint64) FileReader
+	Open(inode Ino, length uint64) FileReader
+	Truncate(inode Ino, length uint64)
 }
 
 type frange struct {
@@ -298,6 +299,7 @@ type fileReader struct {
 	r    *dataReader
 }
 
+// protected by f
 func (f *fileReader) newSlice(block *frange) *sliceReader {
 	s := &sliceReader{}
 	s.file = f
@@ -498,6 +500,7 @@ func (f *fileReader) splitRange(block *frange) []uint64 {
 	return ranges
 }
 
+// protected by f
 func (f *fileReader) readAhead(block *frange) {
 	f.visit(func(r *sliceReader) {
 		if r.state.valid() && r.block.off <= block.off && r.block.end() > block.off {
@@ -639,6 +642,12 @@ func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, sys
 	return f.waitForIO(ctx, reqs, buf)
 }
 
+func (f *fileReader) Truncate(length uint64) {
+	f.Lock()
+	f.length = length
+	f.Unlock()
+}
+
 func (f *fileReader) visit(fn func(s *sliceReader)) {
 	var next *sliceReader
 	for s := f.slices; s != nil; s = next {
@@ -690,11 +699,11 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 	}
 }
 
-func (r *dataReader) Open(inode Ino, len uint64) FileReader {
+func (r *dataReader) Open(inode Ino, length uint64) FileReader {
 	f := &fileReader{
 		r:      r,
 		inode:  inode,
-		length: len,
+		length: length,
 	}
 	f.last = &(f.slices)
 
@@ -704,6 +713,23 @@ func (r *dataReader) Open(inode Ino, len uint64) FileReader {
 	r.files[inode] = f
 	r.Unlock()
 	return f
+}
+
+func (r *dataReader) Truncate(inode Ino, length uint64) {
+	// r could be hold inside f, so Unlock r first to avoid deadlock
+	r.Lock()
+	var fs []*fileReader
+	f := r.files[inode]
+	for f != nil {
+		fs = append(fs, f)
+		f = f.next
+	}
+	r.Unlock()
+	for _, f := range fs {
+		f.Lock()
+		f.length = length
+		f.Unlock()
+	}
 }
 
 func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {
