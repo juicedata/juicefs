@@ -170,7 +170,7 @@ func (s *sliceReader) run() {
 	length := f.length
 	f.Unlock()
 	var chunks []meta.Slice
-	err := f.r.m.Read(inode, indx, &chunks)
+	err := f.r.m.Read(meta.Background, inode, indx, &chunks)
 	f.Lock()
 	if s.state != BUSY || f.err != 0 || f.closing {
 		s.done(0, 0)
