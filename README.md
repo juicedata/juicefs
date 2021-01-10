@@ -43,7 +43,7 @@ You can download precompiled binaries from [releases page](https://github.com/ju
 You need install [Go](https://golang.org) first, then run following commands:
 
 ```bash
-$ git clone git@github.com:juicedata/juicefs.git
+$ git clone https://github.com/juicedata/juicefs.git
 $ make
 ```
 
