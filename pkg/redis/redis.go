@@ -315,12 +315,6 @@ func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	if err == nil {
 		r.parseAttr(a, attr)
-		if attr.Typ == TypeDirectory && r.conf.Strict {
-			cnt, err := r.rdb.HLen(c, r.entryKey(inode)).Result()
-			if err == nil {
-				attr.Nlink = uint32(cnt + 2)
-			}
-		}
 	}
 	return errno(err)
 }
@@ -602,6 +596,9 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 		}
 
 		now := time.Now()
+		if _type == TypeDirectory {
+			patt.Nlink++
+		}
 		patt.Mtime = now.Unix()
 		patt.Mtimensec = uint32(now.Nanosecond())
 		patt.Ctime = now.Unix()
@@ -760,6 +757,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOTDIR
 		}
 		now := time.Now()
+		pattr.Nlink--
 		pattr.Mtime = now.Unix()
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
@@ -798,7 +796,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 	if err != nil {
 		return errno(err)
 	}
-	_, ino := r.parseEntry(buf)
+	typ, ino := r.parseEntry(buf)
 	if parentSrc == parentDst && nameSrc == nameDst {
 		if inode != nil {
 			*inode = ino
@@ -903,6 +901,10 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		r.parseAttr([]byte(rs[2].(string)), &iattr)
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
+		if typ == TypeDirectory && parentSrc != parentDst {
+			sattr.Nlink--
+			dattr.Nlink++
+		}
 		if attr != nil {
 			*attr = iattr
 		}
@@ -911,12 +913,13 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			pipe.HDel(c, r.entryKey(parentSrc), nameSrc)
 			pipe.Set(c, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
 			if dino > 0 {
-				if tattr.Nlink > 0 {
+				if dtyp != TypeDirectory && tattr.Nlink > 0 {
 					pipe.Set(c, r.inodeKey(dino), r.marshal(&tattr), 0)
 				} else {
 					if dtyp == TypeDirectory {
 						// pipe.Del(c, r.entryKey(dino))
 						pipe.Del(c, r.inodeKey(dino))
+						dattr.Nlink--
 					} else if dtyp == TypeSymlink {
 						pipe.Del(c, r.symKey(dino))
 						pipe.Del(c, r.inodeKey(dino))
