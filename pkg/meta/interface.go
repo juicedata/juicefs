@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	ChunkSize   = 1 << 26 // 64M
-	DeleteChunk = 1000
+	ChunkSize    = 1 << 26 // 64M
+	DeleteChunk  = 1000
+	CompactChunk = 1001
 )
 
 const (
@@ -127,7 +128,7 @@ type Meta interface {
 	Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno
 	Open(ctx Context, inode Ino, flags uint8, attr *Attr) syscall.Errno
 	Close(ctx Context, inode Ino) syscall.Errno
-	Read(inode Ino, indx uint32, chunks *[]Slice) syscall.Errno
+	Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno
 	NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno
 	Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno
 

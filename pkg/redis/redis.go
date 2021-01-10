@@ -65,6 +65,7 @@ type redisMeta struct {
 	sid          int64
 	openFiles    map[Ino]int
 	removedFiles map[Ino]bool
+	compacting   map[uint64]bool
 	msgCallbacks *msgCallbacks
 }
 
@@ -86,6 +87,7 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		rdb:          redis.NewClient(opt),
 		openFiles:    make(map[Ino]int),
 		removedFiles: make(map[Ino]bool),
+		compacting:   make(map[uint64]bool),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -112,7 +114,27 @@ func (r *redisMeta) Init(format Format) error {
 	if err != nil {
 		logger.Fatalf("json: %s", err)
 	}
-	return r.rdb.Set(c, "setting", data, 0).Err()
+	err = r.rdb.Set(c, "setting", data, 0).Err()
+	if err != nil {
+		return err
+	}
+
+	// root inode
+	var attr Attr
+	attr.Flags = 0
+	attr.Typ = TypeDirectory
+	attr.Mode = 0777
+	attr.Uid = 0
+	attr.Uid = 0
+	ts := time.Now().Unix()
+	attr.Atime = ts
+	attr.Mtime = ts
+	attr.Ctime = ts
+	attr.Nlink = 2
+	attr.Length = 4 << 10
+	attr.Rdev = 0
+	r.rdb.Set(c, r.inodeKey(1), r.marshal(&attr), 0)
+	return nil
 }
 
 func (r *redisMeta) Load() (*Format, error) {
@@ -144,7 +166,7 @@ func (r *redisMeta) newMsg(mid uint32, args ...interface{}) error {
 	if ok {
 		return cb(args...)
 	}
-	panic("not callback for " + strconv.Itoa(int(mid)))
+	return fmt.Errorf("message %d is not supported", mid)
 }
 
 var c = context.TODO()
@@ -1152,31 +1174,42 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	return 0
 }
 
-func (r *redisMeta) Read(inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
+func (r *redisMeta) buildSlice(ss []*slice) []Slice {
+	var root *slice
+	for _, s := range ss {
+		if root != nil {
+			var right *slice
+			s.left, right = root.cut(s.pos)
+			_, s.right = right.cut(s.pos + s.len)
+		}
+		root = s
+	}
+	var pos uint32
+	var chunks []Slice
+	root.visit(func(s *slice) {
+		if s.pos > pos {
+			chunks = append(chunks, Slice{0, s.pos - pos, 0, s.pos - pos})
+			pos = s.pos
+		}
+		chunks = append(chunks, Slice{s.chunkid, s.size, s.off, s.len})
+		pos += s.len
+	})
+	return chunks
+}
+
+func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
 	vals, err := r.rdb.LRange(c, r.chunkKey(inode, indx), 0, 1000000).Result()
 	if err != nil {
 		return errno(err)
 	}
-	var root *slice
-	for _, val := range vals {
-		rb := utils.ReadBuffer([]byte(val))
-		pos := rb.Get32()
-		chunkid := rb.Get64()
-		cleng := rb.Get32()
-		soff := rb.Get32()
-		slen := rb.Get32()
-		s := newSlice(pos, chunkid, cleng, soff, slen)
-		if root != nil {
-			var right *slice
-			s.left, right = root.cut(pos)
-			_, s.right = right.cut(pos + slen)
-		}
-		root = s
+	ss := make([]*slice, len(vals))
+	for i, val := range vals {
+		ss[i] = r.parseSlice([]byte(val))
 	}
-	root.visit(func(s *slice) {
-		*chunks = append(*chunks, Slice{s.chunkid, s.cleng, s.off, s.len})
-	})
-	// TODO: compact
+	*chunks = r.buildSlice(ss)
+	if len(vals) >= 5 {
+		go r.compact(inode, indx)
+	}
 	return 0
 }
 
@@ -1216,14 +1249,18 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		w.Put32(slice.Off)
 		w.Put32(slice.Len)
 
+		var rpush *redis.IntCmd
 		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.RPush(c, r.chunkKey(inode, indx), w.Bytes())
+			rpush = pipe.RPush(c, r.chunkKey(inode, indx), w.Bytes())
 			pipe.Set(c, r.inodeKey(inode), r.marshal(&attr), 0)
 			if added > 0 {
 				pipe.IncrBy(c, usedSpace, added)
 			}
 			return nil
 		})
+		if err == nil && rpush.Val() == 20 {
+			go r.compact(inode, indx)
+		}
 		return err
 	}, r.inodeKey(inode), r.chunkKey(inode, indx))
 }
@@ -1315,6 +1352,94 @@ func (r *redisMeta) deleteChunks(inode Ino, start, end, maxchunk uint64) {
 		}
 	}
 	r.rdb.ZRem(c, delchunks, r.delChunks(inode, start, end, maxchunk))
+}
+
+func (r *redisMeta) parseSlice(buf []byte) *slice {
+	rb := utils.ReadBuffer(buf)
+	pos := rb.Get32()
+	chunkid := rb.Get64()
+	size := rb.Get32()
+	off := rb.Get32()
+	len := rb.Get32()
+	return newSlice(pos, chunkid, size, off, len)
+}
+
+func (r *redisMeta) compact(inode Ino, indx uint32) {
+	// avoid too many or duplicated compaction
+	r.Lock()
+	k := uint64(inode) + (uint64(indx) << 32)
+	if len(r.compacting) > 10 || r.compacting[k] {
+		r.Unlock()
+		return
+	}
+	r.compacting[k] = true
+	r.Unlock()
+	defer func() {
+		r.Lock()
+		delete(r.compacting, k)
+		r.Unlock()
+	}()
+
+	vals, err := r.rdb.LRange(c, r.chunkKey(inode, indx), 0, 100).Result()
+	if err != nil {
+		return
+	}
+	chunkid, err := r.rdb.Incr(c, "nextchunk").Uint64()
+	if err != nil {
+		return
+	}
+
+	ss := make([]*slice, len(vals))
+	for i, val := range vals {
+		ss[i] = r.parseSlice([]byte(val))
+	}
+	chunks := r.buildSlice(ss)
+	var size uint32
+	for _, s := range chunks {
+		size += s.Len
+	}
+	// TODO: skip first few large slices
+	logger.Debugf("compact %d %d %d %d", inode, indx, len(vals), len(chunks))
+	err = r.newMsg(CompactChunk, chunks, chunkid)
+	if err != nil {
+		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(vals), err)
+		return
+	}
+	errno := r.txn(func(tx *redis.Tx) error {
+		vals2, err := tx.LRange(c, r.chunkKey(inode, indx), 0, int64(len(vals))).Result()
+		if err != nil {
+			return err
+		}
+		if len(vals2) != len(vals) {
+			return fmt.Errorf("chunks changed")
+		}
+		for i, val := range vals2 {
+			if val != vals[i] {
+				return fmt.Errorf("slice %d changed", i)
+			}
+		}
+
+		w := utils.NewBuffer(24)
+		w.Put32(0)
+		w.Put64(chunkid)
+		w.Put32(size)
+		w.Put32(0)
+		w.Put32(size)
+		_, err = tx.Pipelined(c, func(pipe redis.Pipeliner) error {
+			pipe.LTrim(c, r.chunkKey(inode, indx), int64(len(vals)), -1)
+			pipe.LPush(c, r.chunkKey(inode, indx), w.Bytes())
+			return nil
+		})
+		return err
+	}, r.chunkKey(inode, indx))
+	if errno != 0 {
+		// TODO: tracking deletion of chunks
+		logger.Warnf("update compacted chunk: %s", err)
+		err = r.newMsg(DeleteChunk, chunkid, size)
+		if err != nil {
+			logger.Warnf("delete not used chunk %d (%d bytes): %s", chunkid, size, err)
+		}
+	}
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
