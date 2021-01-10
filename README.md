@@ -1,8 +1,8 @@
 <p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="https://github.com/juicedata/juicefs/raw/main/docs/images/juicefs-logo.png" width="50%" /></a></p>
 <p align="center">
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
-    <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
+    <a href="README_CN.md">中文</a>
 </p>
 
 **JuiceFS** is an open-source POSIX file system built on top of [Redis](https://redis.io) and object storage (e.g. Amazon S3), designed and optimized for cloud native environment. By using the widely adopted Redis and S3 as the persistent storage, JuiceFS serves as a stateless middleware to enable many applications to share data easily.
@@ -10,8 +10,7 @@
 The highlighted features are:
 
 - **Fully POSIX-compatible**: JuiceFS is a fully POSIX-compatible file system. Existing applications can work with it without any changes. See [pjdfstest result](#posix-compatibility) below.
-- **Strong Consistency**: All confirmed changes made to your data will be reflected in different machines immediately.
-- **Outstanding Performance**: The latency can be as low as a few microseconds and the throughput can be expanded to nearly unlimited. See [benchmark result](#performance-benchmark) below.
+- **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. See [benchmark result](#performance-benchmark) below.
 - **Cloud Native**: By utilize cloud object storage, you could scaling storage and compute independently, a.k.a. disaggregated storage and compute architecture.
 - **Sharing**: JuiceFS is a shared file storage can be read and write by many clients.
 - **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
