@@ -132,7 +132,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 
 ## Roadmap
 
-- Data compaction
 - Kubernetes CSI driver
 - Stabilize storage format
 - Hadoop SDK

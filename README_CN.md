@@ -130,7 +130,6 @@ JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还
 
 ## 产品路线图
 
-- 数据碎片整理
 - Kubernetes CSI 驱动
 - 稳定存储格式
 - Hadoop 客户端
