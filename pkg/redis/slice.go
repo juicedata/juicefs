@@ -17,7 +17,7 @@ package redis
 
 type slice struct {
 	chunkid uint64
-	cleng   uint32
+	size    uint32
 	off     uint32
 	len     uint32
 	pos     uint32
@@ -32,7 +32,7 @@ func newSlice(pos uint32, chunkid uint64, cleng, off, len uint32) *slice {
 	s := &slice{}
 	s.pos = pos
 	s.chunkid = chunkid
-	s.cleng = cleng
+	s.size = cleng
 	s.off = off
 	s.len = len
 	s.left = nil
@@ -52,7 +52,7 @@ func (s *slice) cut(pos uint32) (left, right *slice) {
 		return left, s
 	} else if pos < s.pos+s.len {
 		l := pos - s.pos
-		right = newSlice(pos, s.chunkid, s.cleng, s.off+l, s.len-l)
+		right = newSlice(pos, s.chunkid, s.size, s.off+l, s.len-l)
 		right.right = s.right
 		s.len = l
 		s.right = nil

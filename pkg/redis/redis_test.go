@@ -32,10 +32,10 @@ func TestRedisClient(t *testing.T) {
 		t.Skip()
 	}
 	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error { return nil })
+	m.Init(meta.Format{Name: "test"})
 	ctx := meta.Background
 	var parent, inode meta.Ino
 	var attr = &meta.Attr{}
-	m.GetAttr(ctx, 1, attr) // init
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
 		t.Fatalf("mkdir %s", st)
 	}
@@ -88,16 +88,16 @@ func TestRedisClient(t *testing.T) {
 		t.Fatalf("write end: %s", st)
 	}
 	var chunks []meta.Slice
-	if st := m.Read(inode, 0, &chunks); st != 0 {
+	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(chunks) != 1 || chunks[0].Chunkid != chunkid || chunks[0].Size != 100 {
+	if len(chunks) != 2 || chunks[0].Chunkid != 0 || chunks[0].Size != 100 || chunks[1].Chunkid != chunkid || chunks[1].Size != 100 {
 		t.Fatalf("chunks: %v", chunks)
 	}
 	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 100, 50); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
-	if st := m.Read(inode, 0, &chunks); st != 0 {
+	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
 	if len(chunks) != 3 || chunks[1].Chunkid != 0 || chunks[1].Len != 50 || chunks[2].Chunkid != chunkid || chunks[2].Len != 50 {
@@ -210,5 +210,56 @@ func TestRedisClient(t *testing.T) {
 	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir: %s", st)
+	}
+}
+
+func TestCompaction(t *testing.T) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1:6379/8", &conf)
+	if err != nil {
+		t.Logf("redis is not available: %s", err)
+		t.Skip()
+	}
+	m.Init(meta.Format{Name: "test"})
+	done := make(chan bool, 1)
+	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+		select {
+		case done <- true:
+		default:
+		}
+		return nil
+	})
+	ctx := meta.Background
+	var inode meta.Ino
+	var attr = &meta.Attr{}
+	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
+		t.Fatalf("create file %s", st)
+	}
+	defer m.Unlink(ctx, 1, "f")
+	for i := 0; i < 50; i++ {
+		if st := m.Write(ctx, inode, 0, uint32(i*100), meta.Slice{uint64(i) + 1, 100, 0, 100}); st != 0 {
+			t.Fatalf("write %d: %s", i, st)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	<-done
+	var chunks []meta.Slice
+	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
+		t.Fatalf("read 0: %s", st)
+	}
+	if len(chunks) > 20 {
+		t.Fatalf("inode %d should be compacted, but have %d slices", inode, len(chunks))
+	}
+	<-done
+	// wait for it to update chunks
+	time.Sleep(time.Millisecond * 5)
+	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
+		t.Fatalf("read 0: %s", st)
+	}
+	if len(chunks) > 1 {
+		t.Fatalf("inode %d should be compacted after read, but have %d slices", inode, len(chunks))
+	}
+	if chunks[0].Size != 5000 {
+		t.Fatalf("size of slice should be 5000, but got %d", chunks[0].Size)
 	}
 }
