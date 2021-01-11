@@ -133,6 +133,7 @@ func (r *redisMeta) Init(format Format) error {
 	attr.Nlink = 2
 	attr.Length = 4 << 10
 	attr.Rdev = 0
+	attr.Parent = 1
 	r.rdb.Set(c, r.inodeKey(1), r.marshal(&attr), 0)
 	return nil
 }
@@ -249,12 +250,15 @@ func (r *redisMeta) parseAttr(buf []byte, attr *Attr) {
 	attr.Nlink = rb.Get32()
 	attr.Length = rb.Get64()
 	attr.Rdev = rb.Get32()
+	if rb.Left() >= 8 {
+		attr.Parent = Ino(rb.Get64())
+	}
 	attr.Full = true
 	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }
 
 func (r *redisMeta) marshal(attr *Attr) []byte {
-	w := utils.NewBuffer(36 + 24 + 4)
+	w := utils.NewBuffer(36 + 24 + 4 + 8)
 	w.Put8(attr.Flags)
 	w.Put16((uint16(attr.Typ) << 12) | (attr.Mode & 0xfff))
 	w.Put32(attr.Uid)
@@ -268,6 +272,7 @@ func (r *redisMeta) marshal(attr *Attr) []byte {
 	w.Put32(attr.Nlink)
 	w.Put64(attr.Length)
 	w.Put32(attr.Rdev)
+	w.Put64(uint64(attr.Parent))
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
 }
@@ -318,23 +323,6 @@ func (r *redisMeta) Access(ctx Context, inode Ino, modemask uint16) syscall.Errn
 
 func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	a, err := r.rdb.Get(c, r.inodeKey(inode)).Bytes()
-	if inode == 1 && err == redis.Nil {
-		// root inode
-		attr.Flags = 0
-		attr.Typ = TypeDirectory
-		attr.Mode = 0777
-		attr.Uid = 0
-		attr.Uid = 0
-		ts := time.Now().Unix()
-		attr.Atime = ts
-		attr.Mtime = ts
-		attr.Ctime = ts
-		attr.Nlink = 2
-		attr.Length = 4 << 10
-		attr.Rdev = 0
-		r.rdb.Set(c, r.inodeKey(inode), r.marshal(attr), 0)
-		return 0
-	}
 	if err == nil {
 		r.parseAttr(a, attr)
 	}
@@ -597,6 +585,7 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 			attr.Rdev = rdev
 		}
 	}
+	attr.Parent = parent
 
 	*inode = ino
 	return r.txn(func(tx *redis.Tx) error {
@@ -921,6 +910,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		dattr.Ctime = now.Unix()
 		dattr.Ctimensec = uint32(now.Nanosecond())
 		r.parseAttr([]byte(rs[2].(string)), &iattr)
+		iattr.Parent = parentDst
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		if typ == TypeDirectory && parentSrc != parentDst {
@@ -1024,9 +1014,27 @@ func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr
 }
 
 func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+	var attr Attr
+	if err := r.GetAttr(ctx, inode, &attr); err != 0 {
+		return err
+	}
 	vals, err := r.rdb.HGetAll(c, r.entryKey(inode)).Result()
 	if err != nil {
 		return errno(err)
+	}
+	*entries = []*Entry{
+		{
+			Inode: inode,
+			Name:  []byte("."),
+			Attr:  &Attr{Typ: TypeDirectory},
+		},
+	}
+	if attr.Parent > 0 {
+		*entries = append(*entries, &Entry{
+			Inode: attr.Parent,
+			Name:  []byte(".."),
+			Attr:  &Attr{Typ: TypeDirectory},
+		})
 	}
 	for name, val := range vals {
 		typ, inode := r.parseEntry([]byte(val))

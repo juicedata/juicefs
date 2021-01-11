@@ -64,6 +64,7 @@ type Attr struct {
 	Nlink     uint32
 	Length    uint64
 	Rdev      uint32
+	Parent    Ino // for Directory
 	Full      bool
 }
 

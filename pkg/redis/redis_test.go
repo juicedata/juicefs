@@ -64,8 +64,10 @@ func TestRedisClient(t *testing.T) {
 	var entries []*meta.Entry
 	if st := m.Readdir(ctx, parent, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
-	} else if len(entries) != 1 {
+	} else if len(entries) != 3 {
 		t.Fatalf("entries: %d", len(entries))
+	} else if string(entries[0].Name) != "." || string(entries[1].Name) != ".." || string(entries[2].Name) != "f" {
+		t.Fatalf("entries: %+v", entries)
 	}
 	if st := m.Rename(ctx, parent, "f", 1, "f2", &inode, attr); st != 0 {
 		t.Fatalf("rename f %s", st)
