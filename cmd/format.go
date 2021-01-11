@@ -143,6 +143,9 @@ func format(c *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)
 	}
+	if !m.IsConfigSafe() {
+		logger.Warn("The configuration of your Redis server might be unsafe for storing metadata, please check https://github.com/juicedata/juicefs/issues/16 for detail.")
+	}
 
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Please give it a name")

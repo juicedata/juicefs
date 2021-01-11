@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+
 	. "github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -71,6 +72,8 @@ type redisMeta struct {
 	msgCallbacks *msgCallbacks
 }
 
+var _ Meta = &redisMeta{}
+
 type msgCallbacks struct {
 	sync.Mutex
 	callbacks map[uint32]MsgCallback
@@ -84,9 +87,10 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 	if opt.Password == "" && os.Getenv("REDIS_PASSWD") != "" {
 		opt.Password = os.Getenv("REDIS_PASSWD")
 	}
+	rdb := redis.NewClient(opt)
 	m := &redisMeta{
 		conf:         conf,
-		rdb:          redis.NewClient(opt),
+		rdb:          rdb,
 		openFiles:    make(map[Ino]int),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
@@ -1747,4 +1751,16 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 		}
 	}
 	return err
+}
+
+func (r *redisMeta) IsConfigSafe() bool {
+	rawInfo, err := r.rdb.Info(c).Result()
+	if err != nil {
+		return false
+	}
+	redisInfo, err := parseRedisInfo(rawInfo)
+	if err != nil {
+		return false
+	}
+	return redisInfo.metRequirement()
 }
