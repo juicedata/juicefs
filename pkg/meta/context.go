@@ -15,7 +15,13 @@
 
 package meta
 
+import "strconv"
+
 type Ino uint64
+
+func (i Ino) String() string {
+	return strconv.FormatUint(uint64(i), 10)
+}
 
 type Context interface {
 	Gid() uint32
