@@ -119,6 +119,7 @@ It shows JuiceFS can provide significantly more metadata IOPS than the other two
 - Azure Blob Storage
 - Alibaba Cloud Object Storage Service (OSS)
 - Tencent Cloud Object Storage (COS)
+- QingStor Object Storage
 - Ceph RGW
 - MinIO
 - Local disk

@@ -118,6 +118,7 @@ Result: PASS
 - 微软云存储
 - 阿里云 OSS
 - 腾讯云 COS
+- 青云QingStor 对象存储
 - Ceph RGW
 - MinIO
 - 本地目录
