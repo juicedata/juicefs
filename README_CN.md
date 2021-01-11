@@ -149,7 +149,7 @@ JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还
 
 ## 社区
 
-欢迎加入 [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ) 跟我们的团队和其他社区成员交流。
+欢迎加入 [Discussion](https://github.com/juicedata/juicefs/discussions) 和 [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ) 跟我们的团队和其他社区成员交流。
 
 ## 使用量收集
 
