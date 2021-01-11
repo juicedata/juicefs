@@ -37,16 +37,17 @@ import (
 )
 
 func fixObjectSize(s int) int {
+	const min, max = 64, 16 << 10
 	var bits uint
 	for s > 1 {
 		bits++
-		s /= 2
+		s >>= 1
 	}
 	s = s << bits
-	if s < 64 {
-		s = 64
-	} else if s > 16<<10 {
-		s = 16 << 10
+	if s < min {
+		s = min
+	} else if s > max {
+		s = max
 	}
 	return s
 }
