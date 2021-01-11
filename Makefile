@@ -13,7 +13,7 @@ SHELL = /bin/sh
 juicefs: Makefile cmd/*.go pkg/*/*.go
 	go build -ldflags="$(LDFLAGS)"  -o juicefs ./cmd
 
-.PHONY: snapshot release
+.PHONY: snapshot release test
 snapshot:
 	docker run --rm --privileged \
 		-e PRIVATE_KEY=${PRIVATE_KEY} \
@@ -32,3 +32,6 @@ release:
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-w /go/src/github.com/juicedata/juicefs \
 		goreng/golang-cross:latest release --rm-dist
+
+test:
+	go test ./pkg/... ./cmd/...

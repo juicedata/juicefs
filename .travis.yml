@@ -18,7 +18,7 @@ before_script:
   - make
   - sudo make -C fstests setup
 script:
-  - go test ./pkg/...
+  - make test
   - sudo DURATION=${DURATION} make -C fstests ${TEST_SUITE}
   - make -C fstests flock
 after_failure:
