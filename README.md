@@ -2,7 +2,7 @@
 <p align="center">
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
-    <a href="README_CN.md">中文</a>
+    <a href="README_CN.md"><img alt="Chinese Docs" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-informational" /></a>
 </p>
 
 **JuiceFS** is an open-source POSIX file system built on top of [Redis](https://redis.io) and object storage (e.g. Amazon S3), designed and optimized for cloud native environment. By using the widely adopted Redis and S3 as the persistent storage, JuiceFS serves as a stateless middleware to enable many applications to share data easily.
@@ -174,7 +174,7 @@ The design of JuiceFS was inspired by [Google File System](https://research.goog
 
 ### Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](#supported-object-storage) first. If you couldn't found it, try [reporting issue](#reporting-issues) to the community.
+JuiceFS already supported many object storage, please check [the list](#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue to [juicesync](https://github.com/juicedata/juicesync).
 
 ### Can I use Redis cluster?
 
