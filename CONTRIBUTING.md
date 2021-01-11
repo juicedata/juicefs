@@ -14,6 +14,10 @@
 - If you see any code which clearly violates the style guide, please fix it and send a pull request.
 - Every new source file must begin with a license header.
 
+## Sign the CLA
+
+Before you can contribute to JuiceFS, you will need to sign the [Contributor License Agreement](https://cla-assistant.io/juicedata/juicefs). There're a CLA assistant to guide you when you first time submit a pull request.
+
 ## What is a Good PR
 
 - Presence of unit tests
