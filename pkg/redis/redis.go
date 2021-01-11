@@ -139,7 +139,7 @@ func (r *redisMeta) Init(format Format) error {
 }
 
 func (r *redisMeta) Load() (*Format, error) {
-	body, err := r.rdb.Get(c, "setting").Result()
+	body, err := r.rdb.Get(c, "setting").Bytes()
 	if err == redis.Nil {
 		return nil, fmt.Errorf("no volume found")
 	}
@@ -147,7 +147,7 @@ func (r *redisMeta) Load() (*Format, error) {
 		return nil, err
 	}
 	var format Format
-	err = json.Unmarshal([]byte(body), &format)
+	err = json.Unmarshal(body, &format)
 	if err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
@@ -173,19 +173,19 @@ func (r *redisMeta) newMsg(mid uint32, args ...interface{}) error {
 var c = context.TODO()
 
 func (r *redisMeta) sessionKey(sid int64) string {
-	return fmt.Sprintf("session%d", r.sid)
+	return "session" + strconv.FormatInt(sid, 10)
 }
 
 func (r *redisMeta) symKey(inode Ino) string {
-	return fmt.Sprintf("s%d", inode)
+	return "s" + inode.String()
 }
 
 func (r *redisMeta) inodeKey(inode Ino) string {
-	return fmt.Sprintf("i%d", inode)
+	return "i" + inode.String()
 }
 
 func (r *redisMeta) entryKey(parent Ino) string {
-	return fmt.Sprintf("d%d", parent)
+	return "d" + parent.String()
 }
 
 func (r *redisMeta) chunkKey(inode Ino, indx uint32) string {
@@ -193,11 +193,11 @@ func (r *redisMeta) chunkKey(inode Ino, indx uint32) string {
 }
 
 func (r *redisMeta) xattrKey(inode Ino) string {
-	return fmt.Sprintf("x%d", inode)
+	return "x" + inode.String()
 }
 
 func (r *redisMeta) flockKey(inode Ino) string {
-	return fmt.Sprintf("lockf%d", inode)
+	return "lockf" + inode.String()
 }
 
 func (r *redisMeta) ownerKey(owner uint64) string {
@@ -205,7 +205,7 @@ func (r *redisMeta) ownerKey(owner uint64) string {
 }
 
 func (r *redisMeta) plockKey(inode Ino) string {
-	return fmt.Sprintf("lockp%d", inode)
+	return "lockp" + inode.String()
 }
 
 func (r *redisMeta) nextInode() (Ino, error) {
