@@ -2,18 +2,19 @@
 <p align="center">
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
+    <a href="README.md"><img alt="English Docs" src="https://img.shields.io/badge/docs-English-informational" /></a>
 </p>
 
 **JuiceFS** 是一个建立在 [Redis](https://redis.io) 和 S3 等对象存储之上的开源 POSIX 文件系统。它是为云原生环境设计，通过把元数据和数据分别持久化到 Redis 和对象存储中，它相当于一个无状态的中间件，帮助各种应用通过标准的文件系统接口来共享数据。
 
 主要特性有：
 
-- **完整 POSIX 兼容**: 已有应用可以无缝对接；
-- **极致的性能**: 毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模）；
-- **云原生**: 完全弹性，很容易实现存储和计算分离架构；
-- **共享**: 可以被多个客户端同时读写；
-- **文件锁**: 支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
-- **数据压缩**: 默认使用 [LZ4](https://lz4.github.io/lz4) 压缩数据，节省存储空间。
+- **完整 POSIX 兼容**：已有应用可以无缝对接；
+- **极致的性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模）；
+- **云原生**：完全弹性，很容易实现存储和计算分离架构；
+- **共享**：可以被多个客户端同时读写；
+- **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
+- **数据压缩**：默认使用 [LZ4](https://lz4.github.io/lz4) 压缩数据，节省存储空间。
 
 ---
 
@@ -148,7 +149,7 @@ JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还
 
 ## 社区
 
-欢迎加入 [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ) 跟我们的团队和其他社区成员交流，。
+欢迎加入 [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ) 跟我们的团队和其他社区成员交流。
 
 ## 使用量收集
 
