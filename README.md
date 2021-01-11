@@ -150,7 +150,7 @@ Thank you for your contribution! Please refer to the [CONTRIBUTING.md](CONTRIBUT
 
 ## Community
 
-Welcome to join our [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ) to connect with JuiceFS team members and other users.
+Welcome to join the [Discussion](https://github.com/juicedata/juicefs/discussions) and the [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ) to connect with JuiceFS team members and other users.
 
 ## Usage Tracking
 

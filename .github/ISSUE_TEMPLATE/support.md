@@ -8,8 +8,10 @@ labels: kind/support
 <!--
 STOP -- PLEASE READ!
 
-GitHub is not the right place for support requests.
+GitHub issue is not the right place for support requests.
 
-You can post your question on the [JuiceFS Slack](https://juicefs.slack.com/).
+If you're looking for help, check the [Discussion](https://github.com/juicedata/juicefs/discussions).
+
+You can also post your question on the [Discussion](https://github.com/juicedata/juicefs/discussions) or the [JuiceFS Slack](https://juicefs.slack.com/).
 -->
 
