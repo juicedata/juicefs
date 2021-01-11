@@ -9,10 +9,10 @@
 
 The highlighted features are:
 
-- **Fully POSIX-compatible**: JuiceFS is a fully POSIX-compatible file system. Existing applications can work with it without any changes. See [pjdfstest result](#posix-compatibility) below.
+- **Fully POSIX-compatible**: JuiceFS is a fully POSIX-compatible file system. Existing applications can work with it without any change. See [pjdfstest result](#posix-compatibility) below.
 - **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. See [benchmark result](#performance-benchmark) below.
-- **Cloud Native**: By utilize cloud object storage, you could scaling storage and compute independently, a.k.a. disaggregated storage and compute architecture.
-- **Sharing**: JuiceFS is a shared file storage can be read and write by many clients.
+- **Cloud Native**: By utilizing cloud object storage, you can scale storage and compute independently, a.k.a. disaggregated storage and compute architecture.
+- **Sharing**: JuiceFS is a shared file storage that can be read and written by many clients.
 - **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
 - **Data Compression**: By default JuiceFS uses [LZ4](https://lz4.github.io/lz4) to compress all your data, you could also use [Zstandard](https://facebook.github.io/zstd) instead.
 
@@ -26,11 +26,11 @@ The highlighted features are:
 
 ![JuiceFS Architecture](docs/images/juicefs-arch.png)
 
-JuiceFS relies on Redis to store file system metadata. Redis is a fast, open-source, in-memory key-value data store and very suitable for store the metadata. All the data will store into object storage through JuiceFS client.
+JuiceFS relies on Redis to store file system metadata. Redis is a fast, open-source, in-memory key-value data store and very suitable for storing the metadata. All the data will store into object storage through JuiceFS client.
 
 ![JuiceFS Storage Format](docs/images/juicefs-storage-format.png)
 
-The storage format of one file in JuiceFS consists of three levels. The first level called **"Chunk"**. Each chunk has fixed size, currently it is 64MiB and cannot be changed. The second level called **"Slice"**. The slice size is variable. A chunk may have multiple slices. The third level called **"Block"**. Like chunk, it's size is fixed. By default one block is 4MiB and you could modify it when format a volume (see following section). At last, the block will be compressed and encrypted (optional) store into object storage.
+The storage format of one file in JuiceFS consists of three levels. The first level called **"Chunk"**. Each chunk has fixed size, currently it is 64MiB and cannot be changed. The second level called **"Slice"**. The slice size is variable. A chunk may have multiple slices. The third level called **"Block"**. Like chunk, its size is fixed. By default one block is 4MiB and you could modify it when formatting a volume (see following section). At last, the block will be compressed and encrypted (optional) store into object storage.
 
 ## Getting Started
 
