@@ -744,7 +744,7 @@ func GetXattr(ctx Context, ino Ino, name string, size uint32) (value []byte, err
 	defer func() { logit(ctx, "getxattr (%d,%s,%d): %s (%d)", ino, name, size, strerr(err), len(value)) }()
 
 	if IsSpecialNode(ino) {
-		err = syscall.EPERM
+		err = syscall.ENODATA
 		return
 	}
 	if len(name) > xattrMaxName {
