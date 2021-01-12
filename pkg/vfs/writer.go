@@ -357,8 +357,8 @@ func (f *fileWriter) Flush(ctx meta.Context) syscall.Errno {
 func (f *fileWriter) Close(ctx meta.Context) syscall.Errno {
 	defer func() {
 		f.Lock()
-		f.w.free(f)
 		f.Unlock()
+		f.w.free(f)
 	}()
 	return f.Flush(ctx)
 }
