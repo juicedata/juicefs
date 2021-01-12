@@ -10,7 +10,9 @@ on:
     branches:
     - main
     paths:
-    - '**.go'  
+    - '**.yml'
+    - '**.go'
+    - 'Makefile'
 
 jobs:
   build:
