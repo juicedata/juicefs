@@ -21,15 +21,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"strings"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/juicedata/juicesync/object"
 )
 
 // redisStore stores data chunks into Redis.
 type redisStore struct {
-	object.DefaultObjectStorage
 	rdb *redis.Client
 }
 
@@ -39,12 +36,8 @@ func (r *redisStore) String() string {
 	return fmt.Sprintf("redis://%s", r.rdb.Options().Addr)
 }
 
-func (r *redisStore) Head(key string) (*object.Object, error) {
-	v, err := r.rdb.Get(c, key).Bytes()
-	if err != nil {
-		return nil, err
-	}
-	return &object.Object{Key: key, Size: int64(len(v)), IsDir: strings.HasSuffix(key, "/")}, nil
+func (r *redisStore) Create() error {
+	return nil
 }
 
 func (r *redisStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -71,7 +64,7 @@ func (r *redisStore) Delete(key string) error {
 	return r.rdb.Del(c, key).Err()
 }
 
-func newRedis(url, user, passwd string) (object.ObjectStorage, error) {
+func newRedis(url, user, passwd string) (ObjectStorage, error) {
 	opt, err := redis.ParseURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", url, err)
@@ -83,9 +76,9 @@ func newRedis(url, user, passwd string) (object.ObjectStorage, error) {
 		opt.Password = passwd
 	}
 	rdb := redis.NewClient(opt)
-	return &redisStore{object.DefaultObjectStorage{}, rdb}, nil
+	return &redisStore{rdb}, nil
 }
 
 func init() {
-	object.Register("redis", newRedis)
+	register("redis", newRedis)
 }

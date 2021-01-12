@@ -29,9 +29,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/redis"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicesync/object"
+	obj "github.com/juicedata/juicesync/object"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -166,7 +167,7 @@ func format(c *cli.Context) error {
 		format.Bucket += "/"
 	}
 
-	object.UserAgent = "JuiceFS-" + Version()
+	obj.UserAgent = "JuiceFS-" + Version()
 
 	blob, err := createStorage(&format)
 	if err != nil {
