@@ -151,8 +151,8 @@ func mount(c *cli.Context) error {
 		return store.Remove(chunkid, int(length))
 	}))
 	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
-		chunkid := args[0].(uint64)
-		slices := args[1].([]meta.Slice)
+		slices := args[0].([]meta.Slice)
+		chunkid := args[1].(uint64)
 		return compact(chunkConf, store, slices, chunkid)
 	}))
 

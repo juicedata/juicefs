@@ -1266,7 +1266,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			}
 			return nil
 		})
-		if err == nil && rpush.Val() == 20 {
+		if err == nil && rpush.Val()%20 == 0 {
 			go r.compact(inode, indx)
 		}
 		return err
@@ -1388,7 +1388,7 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		r.Unlock()
 	}()
 
-	vals, err := r.rdb.LRange(c, r.chunkKey(inode, indx), 0, 100).Result()
+	vals, err := r.rdb.LRange(c, r.chunkKey(inode, indx), 0, 200).Result()
 	if err != nil {
 		return
 	}
@@ -1414,12 +1414,12 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		return
 	}
 	errno := r.txn(func(tx *redis.Tx) error {
-		vals2, err := tx.LRange(c, r.chunkKey(inode, indx), 0, int64(len(vals))).Result()
+		vals2, err := tx.LRange(c, r.chunkKey(inode, indx), 0, int64(len(vals)-1)).Result()
 		if err != nil {
 			return err
 		}
 		if len(vals2) != len(vals) {
-			return fmt.Errorf("chunks changed")
+			return fmt.Errorf("chunks changed: %d %d", len(vals2), len(vals))
 		}
 		for i, val := range vals2 {
 			if val != vals[i] {
@@ -1447,6 +1447,8 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		if err != nil {
 			logger.Warnf("delete not used chunk %d (%d bytes): %s", chunkid, size, err)
 		}
+	} else if r.rdb.LLen(c, r.chunkKey(inode, indx)).Val() > 10 {
+		go r.compact(inode, indx)
 	}
 }
 
