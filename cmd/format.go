@@ -53,12 +53,12 @@ func fixObjectSize(s int) int {
 	return s
 }
 
-func createStorage(fmt *meta.Format) (object.ObjectStorage, error) {
-	blob, err := object.CreateStorage(strings.ToLower(fmt.Storage), fmt.Bucket, fmt.AccessKey, fmt.SecretKey)
+func createStorage(format *meta.Format) (object.ObjectStorage, error) {
+	blob, err := object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
 	if err != nil {
 		return nil, err
 	}
-	return object.WithPrefix(blob, fmt.Name+"/")
+	return object.WithPrefix(blob, format.Name+"/")
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
