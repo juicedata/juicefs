@@ -28,9 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
-
-	"github.com/juicedata/juicesync/object"
 )
 
 const chunkSize = 1 << 26 // 64M

@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicesync/object"
 	"github.com/sirupsen/logrus"
 )
 
@@ -104,7 +104,7 @@ func TestAsyncStore(t *testing.T) {
 	conf.UploadLimit = 0
 	_ = NewCachedStore(mem, conf)
 	time.Sleep(time.Millisecond * 10) // wait for scan to finish
-	if _, err := mem.Head("chunks/0/0/123_0_4"); err != nil {
+	if _, err := mem.Get("chunks/0/0/123_0_4", 0, -1); err != nil {
 		t.Fatalf("staging object should be upload")
 	}
 }
