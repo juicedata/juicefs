@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -345,12 +346,10 @@ func errno(err error) syscall.Errno {
 
 func (r *redisMeta) txn(txf func(tx *redis.Tx) error, keys ...string) syscall.Errno {
 	var err error
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 50; i++ {
 		err = r.rdb.Watch(c, txf, keys...)
-		if err == nil {
-			return 0
-		}
 		if err == redis.TxFailedErr {
+			time.Sleep(time.Microsecond * 100 * time.Duration(rand.Int()%(i+1)))
 			continue
 		}
 		return errno(err)
@@ -1230,6 +1229,7 @@ func (r *redisMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32,
 }
 
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+
 	return r.txn(func(tx *redis.Tx) error {
 		// TODO: refcount for chunkid
 		var attr Attr
@@ -1270,7 +1270,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			go r.compact(inode, indx)
 		}
 		return err
-	}, r.inodeKey(inode), r.chunkKey(inode, indx))
+	}, r.inodeKey(inode))
 }
 
 func (r *redisMeta) delChunks(inode Ino, start, end, maxchunkid uint64) string {
