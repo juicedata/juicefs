@@ -6,7 +6,11 @@ on:
     - main
     paths:
     - '**.go'
-
+  pull_request:
+    branches:
+    - main
+    paths:
+    - '**.go'  
 
 jobs:
   build:
