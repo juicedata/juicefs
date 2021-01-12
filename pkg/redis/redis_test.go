@@ -265,3 +265,42 @@ func TestCompaction(t *testing.T) {
 		t.Fatalf("size of slice should be 5000, but got %d", chunks[0].Size)
 	}
 }
+
+func TestConcurrentWrite(t *testing.T) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1/9", &conf)
+	if err != nil {
+		t.Logf("redis is not available: %s", err)
+		t.Skip()
+	}
+	m.Init(meta.Format{Name: "test"})
+	ctx := meta.Background
+	var inode meta.Ino
+	var attr = &meta.Attr{}
+	m.Unlink(ctx, 1, "f")
+	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
+		t.Fatalf("create file %s", st)
+	}
+	defer m.Unlink(ctx, 1, "f")
+
+	var errno syscall.Errno
+	var g sync.WaitGroup
+	for i := 0; i <= 8; i++ {
+		g.Add(1)
+		go func(indx uint32) {
+			defer g.Done()
+			for j := 0; j < 1000; j++ {
+				var slice = meta.Slice{1, 100, 0, 100}
+				st := m.Write(ctx, inode, indx, 0, slice)
+				if st != 0 {
+					errno = st
+					break
+				}
+			}
+		}(uint32(i))
+	}
+	g.Wait()
+	if errno != 0 {
+		t.Fatal()
+	}
+}
