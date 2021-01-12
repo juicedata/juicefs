@@ -44,6 +44,6 @@ jobs:
       run: make test
 
     - name: Run all tests
-      run: sudo make -C fstests all
+      run: make -C fstests fsx xattrs flock healthcheck
 
 
