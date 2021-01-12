@@ -45,6 +45,7 @@ JuiceFS 中的文件格式，如下图所示。一个文件首先被拆分成固
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git
+$ cd juicefs
 $ make
 ```
 
