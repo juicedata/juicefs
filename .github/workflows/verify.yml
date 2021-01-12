@@ -1,0 +1,49 @@
+name: verify
+
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - '**.go'
+  pull_request:
+    branches:
+    - main
+    paths:
+    - '**.yml'
+    - '**.go'
+    - 'Makefile'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.13.x'
+      id: go
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install g++-multilib libacl1-dev attr redis-server
+
+    - name: Build linux target
+      run: |
+        export GOPATH=$HOME/go
+        make
+
+    - name: Set up for fstests
+      run: sudo make -C fstests setup
+
+    - name: Unit tests
+      run: make test
+
+    - name: Run all tests
+      run: make -C fstests fsx xattrs flock healthcheck
+
+
