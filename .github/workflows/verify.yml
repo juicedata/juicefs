@@ -43,10 +43,7 @@ jobs:
     - name: Unit tests
       run: make test
 
-    - name: Run fsx
-      run: sudo make -C fstests fsx
-
-    - name: Run flock tests
-      run: make -C fstests flock
+    - name: Run all tests
+      run: sudo make -C fstests all
 
 
