@@ -44,6 +44,7 @@ You need install [Go](https://golang.org) first, then run following commands:
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git
+$ cd juicefs
 $ make
 ```
 
