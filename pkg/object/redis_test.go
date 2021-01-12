@@ -19,10 +19,18 @@ import (
 	"bytes"
 	"io/ioutil"
 	"testing"
+
+	"github.com/alicebob/miniredis"
 )
 
 func TestRedisStore(t *testing.T) {
-	s, err := newRedis("redis://127.0.0.1:6379/10", "", "")
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+	url := "redis://" + mr.Addr() + "/10"
+	s, err := newRedis(url, "", "")
 	if err != nil {
 		t.Fatalf("create: %s", err)
 	}
