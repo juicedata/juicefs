@@ -371,3 +371,11 @@ func TestOOS(t *testing.T) {
 		os.Getenv("OOS_ACCESS_KEY"), os.Getenv("OOS_SECRET_KEY"))
 	testStorage(t, b)
 }
+
+func TestScw(t *testing.T) {
+	if os.Getenv("SCW_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
+	b, _ := newScw(fmt.Sprintf("https://%s", os.Getenv("SCW_TEST_BUCKET")), os.Getenv("SCW_ACCESS_KEY"), os.Getenv("SCW_SECRET_KEY"))
+	testStorage(t, b)
+}
