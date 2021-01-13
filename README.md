@@ -95,6 +95,17 @@ Files=235, Tests=8813, 233 wallclock secs ( 2.77 usr  0.38 sys +  2.57 cusr  3.9
 Result: PASS
 ```
 
+Besides the things covered by pjdfstests, JuiceFS provides:
+
+- Open-after-close consistency, once a file is closed, the following open and read can see the data written before close. Within same mount point, read can see all data written before it.
+- Rename and all other metadata operations are atomic guaranteed by Redis transaction.
+- Open files remain accessible after unlink from same mount point.
+- Mmap is supported (tested with fsx).
+- Fallocate with punch hole support.
+- Extended attributes (xattr).
+- BSD lock (flock).
+- POSIX record lock (fcntl).
+
 ## Performance Benchmark
 
 ### Throughput
