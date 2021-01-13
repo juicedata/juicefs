@@ -279,7 +279,7 @@ func (c *wChunk) WriteAt(p []byte, off int64) (n int, err error) {
 	// Fill previous blocks with zeros
 	if c.length < int(off) {
 		zeros := make([]byte, int(off)-c.length)
-		c.WriteAt(zeros, int64(c.length))
+		_, _ = c.WriteAt(zeros, int64(c.length))
 	}
 
 	for n < len(p) {
@@ -706,7 +706,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
 	}
 	store.fetcher = newPrefetcher(config.Prefetch, func(key string) {
-		store.Get(key)
+		_, _ = store.Get(key)
 	})
 	go store.uploadStaging()
 	return store

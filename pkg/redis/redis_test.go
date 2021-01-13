@@ -24,6 +24,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
+// nolint:errcheck
 func TestRedisClient(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1:6379/7", &conf)
@@ -32,7 +33,7 @@ func TestRedisClient(t *testing.T) {
 		t.Skip()
 	}
 	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error { return nil })
-	m.Init(meta.Format{Name: "test"})
+	_ = m.Init(meta.Format{Name: "test"})
 	ctx := meta.Background
 	var parent, inode meta.Ino
 	var attr = &meta.Attr{}
@@ -72,7 +73,9 @@ func TestRedisClient(t *testing.T) {
 	if st := m.Rename(ctx, parent, "f", 1, "f2", &inode, attr); st != 0 {
 		t.Fatalf("rename f %s", st)
 	}
-	defer m.Unlink(ctx, 1, "f2")
+	defer func() {
+		_ = m.Unlink(ctx, 1, "f2")
+	}()
 	if st := m.Lookup(ctx, 1, "f2", &inode, attr); st != 0 {
 		t.Fatalf("lookup f2: %s", st)
 	}
@@ -222,7 +225,7 @@ func TestCompaction(t *testing.T) {
 		t.Logf("redis is not available: %s", err)
 		t.Skip()
 	}
-	m.Init(meta.Format{Name: "test"})
+	_ = m.Init(meta.Format{Name: "test"})
 	done := make(chan bool, 1)
 	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 		select {
@@ -237,7 +240,9 @@ func TestCompaction(t *testing.T) {
 	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
-	defer m.Unlink(ctx, 1, "f")
+	defer func() {
+		_ = m.Unlink(ctx, 1, "f")
+	}()
 	for i := 0; i < 50; i++ {
 		if st := m.Write(ctx, inode, 0, uint32(i*100), meta.Slice{Chunkid: uint64(i) + 1, Size: 100, Len: 100}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
@@ -280,16 +285,14 @@ func TestConcurrentWrite(t *testing.T) {
 		return nil
 	})
 	_ = m.Init(meta.Format{Name: "test"})
-	if err != nil {
-		t.Fatalf("Failed to initialize meta: %s", err)
-	}
 	ctx := meta.Background
 	var inode meta.Ino
 	var attr = &meta.Attr{}
-	m.Unlink(ctx, 1, "f")
+	_ = m.Unlink(ctx, 1, "f")
 	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
+	// nolint:errcheck
 	defer m.Unlink(ctx, 1, "f")
 
 	var errno syscall.Errno

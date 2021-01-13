@@ -135,7 +135,11 @@ func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.
 		go s.flushData()
 	} else if int(s.slen) >= f.w.blockSize {
 		if s.id > 0 {
-			s.writer.FlushTo(int(s.slen))
+			err := s.writer.FlushTo(int(s.slen))
+			if err != nil {
+				logger.Warnf("write: chunk: %d off: %d %s", s.id, off, err)
+				return syscall.EIO
+			}
 		} else if int(off) <= f.w.blockSize {
 			go s.prepareID(ctx, false)
 		}
