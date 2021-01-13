@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"math/rand"
 	"os"
 	"strconv"
@@ -59,8 +60,9 @@ type RedisConfig struct {
 
 type redisMeta struct {
 	sync.Mutex
-	conf *RedisConfig
-	rdb  *redis.Client
+	conf    *RedisConfig
+	rdb     *redis.Client
+	txlocks [1024]sync.Mutex // Pessimistic locks to reduce conflict on Redis
 
 	sid          int64
 	openFiles    map[Ino]int
@@ -345,6 +347,11 @@ func errno(err error) syscall.Errno {
 
 func (r *redisMeta) txn(txf func(tx *redis.Tx) error, keys ...string) syscall.Errno {
 	var err error
+	var khash = fnv.New32()
+	_, _ = khash.Write([]byte(keys[0]))
+	l := &r.txlocks[int(khash.Sum32())%len(r.txlocks)]
+	l.Lock()
+	defer l.Unlock()
 	for i := 0; i < 50; i++ {
 		err = r.rdb.Watch(c, txf, keys...)
 		if err == redis.TxFailedErr {
@@ -1228,7 +1235,6 @@ func (r *redisMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32,
 }
 
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-
 	return r.txn(func(tx *redis.Tx) error {
 		// TODO: refcount for chunkid
 		var attr Attr

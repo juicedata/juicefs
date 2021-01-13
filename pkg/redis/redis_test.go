@@ -273,7 +273,13 @@ func TestConcurrentWrite(t *testing.T) {
 		t.Logf("redis is not available: %s", err)
 		t.Skip()
 	}
-	err = m.Init(meta.Format{Name: "test"})
+	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+		return nil
+	})
+	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+		return nil
+	})
+	_ = m.Init(meta.Format{Name: "test"})
 	if err != nil {
 		t.Fatalf("Failed to initialize meta: %s", err)
 	}
@@ -288,7 +294,7 @@ func TestConcurrentWrite(t *testing.T) {
 
 	var errno syscall.Errno
 	var g sync.WaitGroup
-	for i := 0; i <= 8; i++ {
+	for i := 0; i <= 20; i++ {
 		g.Add(1)
 		go func(indx uint32) {
 			defer g.Done()
