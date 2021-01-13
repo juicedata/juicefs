@@ -10,6 +10,12 @@ LDFLAGS = -s -w -X main.REVISION=$(REVISION) \
 			-X main.VERSION=$(VERSION)
 SHELL = /bin/sh
 
+ifdef STATIC
+	LDFLAGS += -linkmode external -extldflags '-static'
+	CC = /usr/bin/musl-gcc
+	export CC
+endif
+
 juicefs: Makefile cmd/*.go pkg/*/*.go
 	go build -ldflags="$(LDFLAGS)"  -o juicefs ./cmd
 
