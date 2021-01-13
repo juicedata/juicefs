@@ -42,6 +42,6 @@ func getDiskUsage(path string) (uint64, uint64, uint64, uint64) {
 func changeMode(dir string, st os.FileInfo, mode os.FileMode) {
 	sst := st.Sys().(*syscall.Stat_t)
 	if os.Getuid() == int(sst.Uid) {
-		os.Chmod(dir, mode)
+		_ = os.Chmod(dir, mode)
 	}
 }

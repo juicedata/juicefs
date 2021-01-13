@@ -1073,7 +1073,9 @@ func (r *redisMeta) cleanStaleSession(sid int64) {
 	}
 	for _, sinode := range inodes {
 		inode, _ := strconv.Atoi(sinode)
-		r.deleteInode(Ino(inode))
+		if err := r.deleteInode(Ino(inode)); err != nil {
+			logger.Errorf("Failed to delete inode %d: %s", inode, err)
+		}
 	}
 	if len(inodes) == 0 {
 		r.rdb.Del(c, r.sessionKey(sid))
@@ -1347,7 +1349,7 @@ func (r *redisMeta) deleteChunks(inode Ino, start, end, maxchunk uint64) {
 					r.rdb.ZAdd(c, delchunks, &redis.Z{Score: float64(now.Unix()), Member: key})
 					return
 				}
-				r.txn(func(tx *redis.Tx) error {
+				_ = r.txn(func(tx *redis.Tx) error {
 					val, err := tx.LRange(c, r.chunkKey(inode, indx+uint32(j)), 0, 1).Result()
 					if err != nil {
 						return err

@@ -257,7 +257,7 @@ func (c *wChunk) WriteAt(p []byte, off int64) (n int, err error) {
 	// Fill previous blocks with zeros
 	if c.length < int(off) {
 		zeros := make([]byte, int(off)-c.length)
-		c.WriteAt(zeros, int64(c.length))
+		_, _ = c.WriteAt(zeros, int64(c.length))
 	}
 
 	for n < len(p) {
@@ -649,7 +649,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		}
 		p := NewOffPage(size)
 		defer p.Release()
-		store.load(key, p, true)
+		_ = store.load(key, p, true)
 	})
 	go store.uploadStaging()
 	return store

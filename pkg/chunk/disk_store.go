@@ -91,7 +91,7 @@ func (s *diskStore) chunkPath(chunkid uint64) string {
 
 func NewDiskStore(dir string) ChunkStore {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		os.Mkdir(dir, 0755)
+		_ = os.Mkdir(dir, 0755)
 	}
 	return &diskStore{dir}
 }

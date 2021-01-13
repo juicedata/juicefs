@@ -28,11 +28,11 @@ func TestExpand(t *testing.T) {
 		t.FailNow()
 	}
 
-	os.Mkdir("/tmp/aaa1", 0755)
-	os.Mkdir("/tmp/aaa2", 0755)
-	os.Mkdir("/tmp/aaa3", 0755)
-	os.Mkdir("/tmp/aaa3/jfscache", 0755)
-	os.Mkdir("/tmp/aaa3/jfscache/jfs", 0755)
+	_ = os.Mkdir("/tmp/aaa1", 0755)
+	_ = os.Mkdir("/tmp/aaa2", 0755)
+	_ = os.Mkdir("/tmp/aaa3", 0755)
+	_ = os.Mkdir("/tmp/aaa3/jfscache", 0755)
+	_ = os.Mkdir("/tmp/aaa3/jfscache/jfs", 0755)
 
 	rs = expandDir("/tmp/aaa*/jfscache/jfs")
 	if len(rs) != 3 || rs[0] != "/tmp/aaa1/jfscache/jfs" {

@@ -46,6 +46,7 @@ func testStore(t *testing.T, store ChunkStore) {
 	if err := writer.Finish(size); err != nil {
 		t.Fatalf("finish fail: %s", err)
 	}
+	// nolint:errcheck
 	defer store.Remove(1, size)
 
 	reader := store.NewReader(1, size)
@@ -91,6 +92,7 @@ func TestUncompressedStore(t *testing.T) {
 	testStore(t, store)
 }
 
+// nolint:errcheck
 func TestAsyncStore(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "")
 	conf := defaultConf
