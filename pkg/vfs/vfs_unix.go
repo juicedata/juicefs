@@ -19,6 +19,8 @@ package vfs
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -102,30 +104,38 @@ func Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
 }
 
 func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64) string {
-	s := ""
+	var sb strings.Builder
 	if set&meta.SetAttrMode != 0 {
-		s += fmt.Sprintf("mode=%s:0%04o;", smode(uint16(mode)), (mode & 07777))
+		sb.WriteString(fmt.Sprintf("mode=%s:0%04o;", smode(uint16(mode)), mode&07777))
 	}
 	if set&meta.SetAttrUID != 0 {
-		s += fmt.Sprintf("uid=%d;", uid)
+		sb.WriteString(fmt.Sprintf("uid=%d;", uid))
 	}
 	if set&meta.SetAttrGID != 0 {
-		s += fmt.Sprintf("gid=%d;", gid)
+		sb.WriteString(fmt.Sprintf("gid=%d;", gid))
 	}
+
+	var atimeStr string
 	if (set&meta.SetAttrAtime) != 0 && atime < 0 {
-		s += fmt.Sprintf("atime=NOW;")
+		atimeStr = "NOW"
 	} else if set&meta.SetAttrAtime != 0 {
-		s += fmt.Sprintf("atime=%d;", atime)
+		atimeStr = strconv.FormatInt(atime, 10)
 	}
+	sb.WriteString("atime=" + atimeStr + ";")
+
+	var mtimeStr string
 	if (set&meta.SetAttrMtime) != 0 && mtime < 0 {
-		s += fmt.Sprintf("mtime=NOW;")
+		mtimeStr = "NOW"
 	} else if set&meta.SetAttrMtime != 0 {
-		s += fmt.Sprintf("mtime=%d;", mtime)
+		mtimeStr = strconv.FormatInt(mtime, 10)
 	}
+	sb.WriteString("mtime=" + mtimeStr + ";")
+
 	if (set & meta.SetAttrSize) != 0 {
-		s += fmt.Sprintf("size=%d;", size)
+		sizeStr := strconv.FormatUint(size, 10)
+		sb.WriteString("size=" + sizeStr + ";")
 	}
-	return s
+	return sb.String()
 }
 
 func SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
