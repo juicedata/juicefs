@@ -78,7 +78,6 @@ func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscal
 	var attr = &Attr{}
 	if parent == rootID {
 		if nleng == 2 && name[0] == '.' && name[1] == '.' {
-			nleng = 1
 			name = name[:1]
 		}
 		n := getInternalNodeByName(name)

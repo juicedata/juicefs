@@ -230,23 +230,6 @@ func (s *sliceReader) run() {
 	}
 }
 
-func (s *sliceReader) invalidate() {
-	switch s.state {
-	case NEW:
-	case BUSY:
-		s.state = REFRESH
-		// TODO: interrupt reader
-	case READY:
-		if s.refs > 0 {
-			s.state = NEW
-			go s.run()
-		} else {
-			s.state = INVALID
-			s.delete() // nobody wants it anymore, so delete it
-		}
-	}
-}
-
 func (s *sliceReader) drop() {
 	if s.state <= BREAK {
 		if s.refs == 0 {

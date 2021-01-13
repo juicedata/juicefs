@@ -41,8 +41,9 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func MakeDaemon() {
-	godaemon.MakeDaemon(&godaemon.DaemonAttr{})
+func MakeDaemon() error {
+	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{})
+	return err
 }
 
 func installHandler(mp string) {
@@ -55,9 +56,9 @@ func installHandler(mp string) {
 			<-signalChan
 			go func() {
 				if runtime.GOOS == "linux" {
-					exec.Command("umount", mp, "-l").Run()
+					_ = exec.Command("umount", mp, "-l").Run()
 				} else if runtime.GOOS == "darwin" {
-					exec.Command("diskutil", "umount", "force", mp).Run()
+					_ = exec.Command("diskutil", "umount", "force", mp).Run()
 				}
 			}()
 			go func() {
@@ -71,12 +72,12 @@ func installHandler(mp string) {
 func mount(c *cli.Context) error {
 	go func() {
 		for port := 6060; port < 6100; port++ {
-			http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+			_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
 		}
 	}()
 	go func() {
 		for port := 6070; port < 6100; port++ {
-			agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+			_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
 		}
 	}()
 	if c.Bool("trace") {
@@ -141,7 +142,9 @@ func mount(c *cli.Context) error {
 	logger.Infof("mount volume %s at %s", format.Name, mp)
 
 	if c.Bool("d") {
-		MakeDaemon()
+		if err := MakeDaemon(); err != nil {
+			logger.Fatalf("Failed to make daemon: %s", err)
+		}
 	}
 
 	store := chunk.NewCachedStore(blob, chunkConf)

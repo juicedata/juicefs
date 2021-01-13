@@ -85,7 +85,7 @@ func TestRedisClient(t *testing.T) {
 	if st := m.NewChunk(ctx, inode, 0, 0, &chunkid); st != 0 {
 		t.Fatalf("write chunk: %s", st)
 	}
-	var s = meta.Slice{chunkid, 100, 0, 100}
+	var s = meta.Slice{Chunkid: chunkid, Size: 100, Len: 100}
 	if st := m.Write(ctx, inode, 0, 100, s); st != 0 {
 		t.Fatalf("write end: %s", st)
 	}
@@ -239,7 +239,7 @@ func TestCompaction(t *testing.T) {
 	}
 	defer m.Unlink(ctx, 1, "f")
 	for i := 0; i < 50; i++ {
-		if st := m.Write(ctx, inode, 0, uint32(i*100), meta.Slice{uint64(i) + 1, 100, 0, 100}); st != 0 {
+		if st := m.Write(ctx, inode, 0, uint32(i*100), meta.Slice{Chunkid: uint64(i) + 1, Size: 100, Len: 100}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
 		time.Sleep(time.Millisecond)
@@ -273,7 +273,10 @@ func TestConcurrentWrite(t *testing.T) {
 		t.Logf("redis is not available: %s", err)
 		t.Skip()
 	}
-	m.Init(meta.Format{Name: "test"})
+	err = m.Init(meta.Format{Name: "test"})
+	if err != nil {
+		t.Fatalf("Failed to initialize meta: %s", err)
+	}
 	ctx := meta.Background
 	var inode meta.Ino
 	var attr = &meta.Attr{}
@@ -290,7 +293,7 @@ func TestConcurrentWrite(t *testing.T) {
 		go func(indx uint32) {
 			defer g.Done()
 			for j := 0; j < 1000; j++ {
-				var slice = meta.Slice{1, 100, 0, 100}
+				var slice = meta.Slice{Chunkid: 1, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
 					errno = st

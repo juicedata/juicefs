@@ -230,21 +230,6 @@ func (cache *cacheStore) stagePath(key string) string {
 	return filepath.Join(cache.dir, stagingDir, key)
 }
 
-// flush cached block into disk
-func (cache *cacheStore) flush() {
-	for {
-		w := <-cache.pending
-		path := cache.cachePath(w.key)
-		if cache.capacity > 0 && cache.flushPage(path, w.page.Data) == nil {
-			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
-		}
-		cache.Lock()
-		delete(cache.pages, w.key)
-		cache.Unlock()
-		w.page.Release()
-	}
-}
-
 func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	cache.Lock()
 	defer cache.Unlock()
