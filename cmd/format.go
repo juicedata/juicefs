@@ -89,7 +89,10 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 		return fmt.Errorf("Failed to get: %s", err)
 	}
 	data2, err := ioutil.ReadAll(p)
-	p.Close()
+	_ = p.Close()
+	if err != nil {
+		return err
+	}
 	if !bytes.Equal(data, data2) {
 		return fmt.Errorf("Read wrong data")
 	}

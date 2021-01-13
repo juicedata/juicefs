@@ -190,7 +190,7 @@ func (c *chunkWriter) commitThread() {
 		f.Unlock()
 
 		if err == 0 {
-			var ss = meta.Slice{s.id, s.length, s.soff, s.slen}
+			var ss = meta.Slice{Chunkid: s.id, Size: s.length, Off: s.soff, Len: s.slen}
 			err = f.w.m.Write(meta.Background, f.inode, c.indx, s.off, ss)
 		}
 
@@ -368,9 +368,7 @@ func (f *fileWriter) GetLength() uint64 {
 func (f *fileWriter) Truncate(length uint64) {
 	f.Lock()
 	defer f.Unlock()
-	if length < f.length {
-		// TODO: truncate write buffer
-	}
+	// TODO: truncate write buffer if length < f.length
 	f.length = length
 }
 

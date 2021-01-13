@@ -24,13 +24,10 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicefs/pkg/vfs"
+	vfs "github.com/juicedata/juicefs/pkg/vfs"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
-
-var logger = utils.GetLogger("juicefs")
 
 type JFS struct {
 	fuse.RawFileSystem
@@ -259,7 +256,7 @@ func (fs *JFS) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (fuse.R
 func (fs *JFS) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	vfs.Release(ctx, Ino(in.NodeId), in.Fh)
+	_ = vfs.Release(ctx, Ino(in.NodeId), in.Fh)
 }
 
 func (fs *JFS) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (written uint32, code fuse.Status) {
@@ -405,7 +402,9 @@ func (fs *JFS) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.Statf
 }
 
 func Main(conf *vfs.Config, options string, attrcacheto_, entrycacheto_, direntrycacheto_ float64) error {
-	syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19)
+	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
+		return err
+	}
 
 	imp := NewJFS()
 	imp.attrTimeout = time.Millisecond * time.Duration(attrcacheto_*1000)
