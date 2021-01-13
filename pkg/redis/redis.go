@@ -28,10 +28,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	. "github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-
-	"github.com/go-redis/redis/v8"
 )
 
 /*
@@ -1441,11 +1440,26 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		return err
 	}, r.chunkKey(inode, indx))
 	if errno != 0 {
-		// TODO: tracking deletion of chunks
-		logger.Warnf("update compacted chunk: %s", err)
+		logger.Infof("update compacted chunk %d (%d bytes): %s", chunkid, size, err)
 		err = r.newMsg(DeleteChunk, chunkid, size)
 		if err != nil {
-			logger.Warnf("delete not used chunk %d (%d bytes): %s", chunkid, size, err)
+			logger.Warnf("delete unused chunk %d (%d bytes): %s", chunkid, size, err)
+			// track the unused chunk
+			w := utils.NewBuffer(24)
+			w.Put32(0)
+			w.Put64(chunkid)
+			w.Put32(size)
+			w.Put32(0)
+			w.Put32(size)
+			_, err = r.rdb.Pipelined(c, func(pipe redis.Pipeliner) error {
+				pipe.RPush(c, r.chunkKey(0, 0), w.Bytes())
+				key := r.delChunks(0, 0, uint64(size), chunkid)
+				r.rdb.ZAdd(c, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: key})
+				return nil
+			})
+			if err != nil {
+				logger.Warnf("compacted chunk %d (%d bytes) will be lost", chunkid, size)
+			}
 		}
 	} else if r.rdb.LLen(c, r.chunkKey(inode, indx)).Val() > 10 {
 		go r.compact(inode, indx)
