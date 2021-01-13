@@ -43,7 +43,6 @@ import (
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
 	Sessions: sessions -> [ $sid -> heartbeat ]
 	Removed chunks: delchunks -> [($inode,$start,$end,$maxchunk) -> seconds]
-	Removed slices: delslices -> [(id,size)]
 */
 
 var logger = utils.GetLogger("juicefs")
@@ -1455,7 +1454,7 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 			_, err = r.rdb.Pipelined(c, func(pipe redis.Pipeliner) error {
 				pipe.RPush(c, r.chunkKey(0, 0), w.Bytes())
 				key := r.delChunks(0, 0, uint64(size), chunkid)
-				r.rdb.ZAdd(c, delchunks, &redis.Z{float64(time.Now().Unix()), key})
+				r.rdb.ZAdd(c, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: key})
 				return nil
 			})
 			if err != nil {
