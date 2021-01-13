@@ -191,4 +191,4 @@ JuiceFS already supported many object storage, please check [the list](#supporte
 
 ### Can I use Redis cluster?
 
-The simple answer is no. JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, which is not well supported in cluster mode.
+The simple answer is no. JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, which is not well supported in cluster mode. Sentinal or other HA solution for Redis are needed.
