@@ -301,7 +301,7 @@ func TestConcurrentWrite(t *testing.T) {
 		g.Add(1)
 		go func(indx uint32) {
 			defer g.Done()
-			for j := 0; j < 1000; j++ {
+			for j := 0; j < 100; j++ {
 				var slice = meta.Slice{Chunkid: 1, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
