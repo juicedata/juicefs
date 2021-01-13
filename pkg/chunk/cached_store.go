@@ -70,19 +70,6 @@ func (c *rChunk) index(off int) int {
 	return off / c.store.conf.BlockSize
 }
 
-func (c *rChunk) loadPage(ctx context.Context, indx int) (b *Page, err error) {
-	key := c.key(indx)
-	var block []byte
-	for i := 0; i < 3 && block == nil; i++ {
-		block, err = c.store.Get(key)
-		time.Sleep(time.Second * time.Duration(i*i))
-	}
-	if err != nil {
-		return nil, err
-	}
-	return NewPage(block), nil
-}
-
 func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err error) {
 	p := page.Data
 	if len(p) == 0 {
@@ -132,53 +119,44 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}
 	}
 
-	if !c.store.shouldCache(len(p)) {
-		if c.store.seekable && boff > 0 && len(p) <= blockSize/4 {
-			// partial read
-			st := time.Now()
-			in, err := c.store.storage.Get(key, int64(boff), int64(len(p)))
-			used := time.Since(st)
-			logger.Debugf("GET %s RANGE(%d,%d) (%s, %.3fs)", key, boff, len(p), err, used.Seconds())
-			if used > SlowRequest {
-				logger.Infof("slow request: GET %s (%s, %.3fs)", key, err, used.Seconds())
-			}
-			c.store.fetcher.fetch(key)
-			if err == nil {
-				defer in.Close()
-				return io.ReadFull(in, p)
-			}
+	if c.store.seekable && boff > 0 && len(p) <= blockSize/4 {
+		// partial read
+		st := time.Now()
+		in, err := c.store.storage.Get(key, int64(boff), int64(len(p)))
+		used := time.Since(st)
+		logger.Debugf("GET %s RANGE(%d,%d) (%s, %.3fs)", key, boff, len(p), err, used.Seconds())
+		if used > SlowRequest {
+			logger.Infof("slow request: GET %s (%s, %.3fs)", key, err, used.Seconds())
 		}
-		block, err := c.store.group.Execute(key, func() (*Page, error) {
-			tmp := page
-			if boff > 0 || len(p) < blockSize {
-				tmp = NewOffPage(blockSize)
-			} else {
-				tmp.Acquire()
-			}
-			tmp.Acquire()
-			err := withTimeout(func() error {
-				defer tmp.Release()
-				return c.store.load(key, tmp, c.store.shouldCache(blockSize))
-			}, c.store.conf.GetTimeout)
-			return tmp, err
-		})
-		defer block.Release()
-		if err != nil {
-			return 0, err
+		c.store.fetcher.fetch(key)
+		if err == nil {
+			defer in.Close()
+			return io.ReadFull(in, p)
 		}
-		if block != page {
-			copy(p, block.Data[boff:])
-		}
-		return len(p), nil
 	}
 
-	block, err := c.loadPage(ctx, indx)
+	block, err := c.store.group.Execute(key, func() (*Page, error) {
+		tmp := page
+		if boff > 0 || len(p) < blockSize {
+			tmp = NewOffPage(blockSize)
+		} else {
+			tmp.Acquire()
+		}
+		tmp.Acquire()
+		err := withTimeout(func() error {
+			defer tmp.Release()
+			return c.store.load(key, tmp, c.store.shouldCache(blockSize))
+		}, c.store.conf.GetTimeout)
+		return tmp, err
+	})
+	defer block.Release()
 	if err != nil {
 		return 0, err
 	}
-	defer block.Release()
-	n = copy(p, block.Data[boff:])
-	return n, nil
+	if block != page {
+		copy(p, block.Data[boff:])
+	}
+	return len(p), nil
 }
 
 func (c *rChunk) delete(indx int) error {
@@ -639,47 +617,6 @@ func (store *cachedStore) load(key string, page *Page, cache bool) (err error) {
 	return nil
 }
 
-func (store *cachedStore) Get(key string) (result []byte, err error) {
-	err = withTimeout(func() error {
-		var boff, limit int
-		if strings.Contains(key, ",") {
-			parts := strings.SplitN(key, ",", 3)
-			key = parts[0]
-			boff, _ = strconv.Atoi(parts[1])
-			limit, _ = strconv.Atoi(parts[2])
-		}
-		size := parseObjOrigSize(key)
-		if size == 0 || size > store.conf.BlockSize {
-			logger.Fatalf("Invalid key: %s", key)
-		}
-		if limit == 0 {
-			limit = size
-		}
-		r, err := store.bcache.load(key)
-		if err == nil {
-			// TODO: use page
-			block := make([]byte, limit)
-			n, err := r.ReadAt(block, int64(boff))
-			r.Close()
-			if err == nil {
-				result = block
-				return nil
-			}
-			if f, ok := r.(*os.File); ok {
-				logger.Errorf("short chunk %s: %d < %d", key, n, size)
-				os.Remove(f.Name())
-			}
-		}
-		block := make([]byte, size)
-		err = store.load(key, NewPage(block), true)
-		if err == nil {
-			result = block[boff : boff+limit]
-		}
-		return err
-	}, store.conf.GetTimeout)
-	return result, err
-}
-
 // NewCachedStore create a cached store.
 func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 	compressor := utils.NewCompressor(config.Compress)
@@ -706,7 +643,13 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
 	}
 	store.fetcher = newPrefetcher(config.Prefetch, func(key string) {
-		store.Get(key)
+		size := parseObjOrigSize(key)
+		if size == 0 || size > store.conf.BlockSize {
+			return
+		}
+		p := NewOffPage(size)
+		defer p.Release()
+		store.load(key, p, true)
 	})
 	go store.uploadStaging()
 	return store
