@@ -62,16 +62,6 @@ func (p *Page) Slice(off, len int) *Page {
 	return np
 }
 
-func (p *Page) isOffHeap() bool {
-	if p.offheap {
-		return true
-	}
-	if p.dep != nil {
-		return p.dep.isOffHeap()
-	}
-	return false
-}
-
 // Acquire increase the refcount
 func (p *Page) Acquire() {
 	atomic.AddInt32(&p.refs, 1)
