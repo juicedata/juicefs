@@ -152,20 +152,20 @@ func (cache *cacheStore) flushPage(path string, data []byte) error {
 	_, err = f.Write(data)
 	if err != nil {
 		logger.Infof("Write to cache file %s: %s", tmp, err)
-		f.Close()
-		os.Remove(tmp)
+		_ = f.Close()
+		_ = os.Remove(tmp)
 		return err
 	}
 	err = f.Close()
 	if err != nil {
 		logger.Infof("Close cache file %s: %s", tmp, err)
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	err = os.Rename(tmp, path)
 	if err != nil {
 		logger.Infof("Rename cache file %s -> %s: %s", tmp, path, err)
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 	}
 	return err
 }
@@ -178,9 +178,9 @@ func (cache *cacheStore) createDir(dir string) {
 		if filepath.Dir(dir) != dir {
 			cache.createDir(filepath.Dir(dir))
 		}
-		os.Mkdir(dir, mode)
+		_ = os.Mkdir(dir, mode)
 		// umask may remove some permisssions
-		os.Chmod(dir, mode)
+		_ = os.Chmod(dir, mode)
 	} else if strings.HasPrefix(dir, cache.dir) && err == nil && st.Mode() != mode {
 		changeMode(dir, st, mode)
 	}
@@ -197,8 +197,8 @@ func (cache *cacheStore) remove(key string) {
 	}
 	cache.Unlock()
 	if path != "" {
-		os.Remove(path)
-		os.Remove(cache.stagePath(key))
+		_ = os.Remove(path)
+		_ = os.Remove(cache.stagePath(key))
 	}
 }
 
@@ -363,7 +363,7 @@ func (c *cacheStore) scanCached() {
 
 	cachePrefix := filepath.Join(c.dir, cacheDir)
 	logger.Debugf("Scan %s to find cached blocks", cachePrefix)
-	filepath.Walk(cachePrefix, func(path string, fi os.FileInfo, err error) error {
+	_ = filepath.Walk(cachePrefix, func(path string, fi os.FileInfo, err error) error {
 		if fi != nil {
 			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
 				if fi.ModTime().Before(oneMinAgo) {
@@ -401,7 +401,7 @@ func (cache *cacheStore) scanStaging() map[string]string {
 	stagingBlocks := make(map[string]string)
 	stagingPrefix := filepath.Join(cache.dir, stagingDir)
 	logger.Debugf("Scan %s to find staging blocks", stagingPrefix)
-	filepath.Walk(stagingPrefix, func(path string, fi os.FileInfo, err error) error {
+	_ = filepath.Walk(stagingPrefix, func(path string, fi os.FileInfo, err error) error {
 		if fi != nil {
 			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
 				if fi.ModTime().Before(oneMinAgo) {
@@ -433,7 +433,7 @@ type cacheManager struct {
 
 func keyHash(s string) uint32 {
 	hash := fnv.New32()
-	hash.Write([]byte(s))
+	_, _ = hash.Write([]byte(s))
 	return hash.Sum32()
 }
 

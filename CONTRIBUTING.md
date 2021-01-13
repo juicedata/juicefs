@@ -13,6 +13,7 @@
 - Use `go fmt` to format your code before committing. You can find information in editor support for Go tools in ["IDEs and Plugins for Go"](https://github.com/golang/go/wiki/IDEsAndTextEditorPlugins).
 - If you see any code which clearly violates the style guide, please fix it and send a pull request.
 - Every new source file must begin with a license header.
+- Install [pre-commit](https://pre-commit.com/) and use it to set up a pre-commit hook for static analysis. Just run `pre-commit install` in the root of the repo.
 
 ## Sign the CLA
 
