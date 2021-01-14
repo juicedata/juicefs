@@ -35,6 +35,7 @@ func init() {
 			Dial: func(network string, address string) (net.Conn, error) {
 				separator := strings.LastIndex(address, ":")
 				host := address[:separator]
+				port := address[separator:]
 				ips, err := resolver.Fetch(host)
 				if err != nil {
 					return nil, err
@@ -44,7 +45,11 @@ func init() {
 				}
 				ip := ips[rand.Intn(len(ips))]
 				dialer := &net.Dialer{Timeout: time.Second * 10}
-				return dialer.Dial("tcp", ip.String()+address[separator:])
+				address = ip.String()
+				if port != "" {
+					address = net.JoinHostPort(address, port[1:])
+				}
+				return dialer.Dial(network, address)
 			},
 			DisableCompression: true,
 		},
