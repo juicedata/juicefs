@@ -38,6 +38,8 @@ func supportHTTPS(name, endpoint string) bool {
 		if len(ps) > 1 && net.ParseIP(ps[1]) != nil {
 			return false
 		}
+	case "minio":
+		return false
 	}
 	return true
 }
