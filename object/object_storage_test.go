@@ -379,3 +379,11 @@ func TestScw(t *testing.T) {
 	b, _ := newScw(fmt.Sprintf("https://%s", os.Getenv("SCW_TEST_BUCKET")), os.Getenv("SCW_ACCESS_KEY"), os.Getenv("SCW_SECRET_KEY"))
 	testStorage(t, b)
 }
+
+func TestMinIO(t *testing.T) {
+	if os.Getenv("MINIO_TEST_BUCKET") == "" {
+		t.SkipNow()
+	}
+	b, _ := newMinio(fmt.Sprintf("http://%s", os.Getenv("MINIO_TEST_BUCKET")), "", "")
+	testStorage(t, b)
+}
