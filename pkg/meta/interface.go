@@ -107,7 +107,7 @@ type Slice struct {
 }
 
 type Meta interface {
-	Init(format Format) error
+	Init(format Format, force bool) error
 	Load() (*Format, error)
 
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno

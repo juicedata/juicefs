@@ -104,14 +104,19 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 	return m, nil
 }
 
-func (r *redisMeta) Init(format Format) error {
+func (r *redisMeta) Init(format Format, force bool) error {
 	body, err := r.rdb.Get(c, "setting").Result()
 	if err != nil && err != redis.Nil {
 		return err
 	}
 	if err == nil {
-		return fmt.Errorf("this volume is already formated as: %s", body)
+		if !force {
+			return fmt.Errorf("this volume is already formated as: %s", body)
+		} else {
+			logger.Warnf("Existing volume is overwrited: %s", body)
+		}
 	}
+
 	data, err := json.MarshalIndent(format, "", "")
 	if err != nil {
 		logger.Fatalf("json: %s", err)
