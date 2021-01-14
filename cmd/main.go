@@ -81,18 +81,31 @@ func main() {
 }
 
 func handleSysMountArgs() ([]string, error) {
+	optionToCmdFlag := map[string]string{
+		"attrcacheto":        "attrcacheto",
+		"entrycacheto":       "entrycacheto",
+		"direntrycacheto":    "direntrycacheto",
+		"get-timeout":        "getTimeout",
+		"put-timeout":        "putTimeout",
+		"ioretries":          "ioretries",
+		"max-uploads":        "maxUpload",
+		"buffer-size":        "bufferSize",
+		"prefetch":           "prefetch",
+		"writeback":          "writeback",
+		"cache-dir":          "cacheDir",
+		"cache-size":         "cacheSize",
+		"free-space-ratio":   "freeSpace",
+		"cache-partial-only": "partialOnly",
+		"no-usage-report":    "no-usage-report",
+	}
 	newArgs := []string{"juicefs", "mount", "-d"}
 	mountOptions := os.Args[3:]
-	badOptions := []string{"_netdev", "rw", "defaults", "remount"}
-	cmdFlagsLookup := make(map[string]bool, 20)
+	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
+	cmdFlagsLookup := make(map[string]bool, 20)
 	for _, f := range mountFlags().Flags {
 		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
-			if _, ok := f.(*cli.BoolFlag); ok {
-				cmdFlagsLookup[names[0]] = true
-			} else {
-				cmdFlagsLookup[names[0]] = false
-			}
+			_, cmdFlagsLookup[names[0]] = f.(*cli.BoolFlag)
 		}
 	}
 
@@ -109,16 +122,21 @@ func handleSysMountArgs() ([]string, error) {
 		opts := strings.Split(option, ",")
 		for _, opt := range opts {
 			opt = strings.TrimSpace(opt)
-			if opt == "" || stringContains(badOptions, opt) {
+			if opt == "" || stringContains(sysOptions, opt) {
 				continue
 			}
+			// Lower case option name is preferred, but if it's the same as flag name, we also accept it
 			if strings.Contains(opt, "=") {
 				fields := strings.SplitN(opt, "=", 2)
-				if isBool, ok := cmdFlagsLookup[fields[0]]; ok && !isBool {
+				if flagName, ok := optionToCmdFlag[fields[0]]; ok {
+					newArgs = append(newArgs, fmt.Sprintf("--%s=%s", flagName, fields[1]))
+				} else if isBool, ok := cmdFlagsLookup[fields[0]]; ok && !isBool {
 					newArgs = append(newArgs, fmt.Sprintf("--%s=%s", fields[0], fields[1]))
 				} else {
 					fuseOptions = append(fuseOptions, opt)
 				}
+			} else if flagName, ok := optionToCmdFlag[opt]; ok {
+				newArgs = append(newArgs, fmt.Sprintf("--%s", flagName))
 			} else if isBool, ok := cmdFlagsLookup[opt]; ok && isBool {
 				newArgs = append(newArgs, fmt.Sprintf("--%s", opt))
 			} else {
