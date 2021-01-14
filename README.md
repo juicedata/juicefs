@@ -68,6 +68,12 @@ It will create a volume with default settings. If there Redis server is not runn
 
 As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--accesskey` and `--secretkey`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
 
+To use MinIO as object store, it could be specified as:
+
+```bash
+$ ./juicefs format --storage minio --bucket http://1.2.3.4:9000/mybucket --accesskey XXX --secretkey XXX localhost test
+```
+
 ### Mount a volume
 
 Once a volume is formated, your can mount it to a directory, which is called *mount point*.

@@ -69,6 +69,12 @@ $ ./juicefs format localhost test
 
 JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket`、`--accesskey` 和 `--secretkey` 来指定。它默认会使用本地目录来模拟一个对象存储用于测试，详细的参数请看 `./juicefs format -h`。
 
+如果使用 MinIO 来存数据，可以这么写：
+
+```bash
+$ ./juicefs format --storage minio --bucket http://1.2.3.4:9000/mybucket --accesskey XXX --secretkey XXX localhost test
+```
+
 ### 挂载
 
 一旦文件系统格式化好了，你可以把它挂载成一个目录，这个目录叫做 *挂载点*。
