@@ -33,7 +33,7 @@ func TestRedisClient(t *testing.T) {
 		t.Skip()
 	}
 	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error { return nil })
-	_ = m.Init(meta.Format{Name: "test"})
+	_ = m.Init(meta.Format{Name: "test"}, true)
 	ctx := meta.Background
 	var parent, inode meta.Ino
 	var attr = &meta.Attr{}
@@ -225,7 +225,7 @@ func TestCompaction(t *testing.T) {
 		t.Logf("redis is not available: %s", err)
 		t.Skip()
 	}
-	_ = m.Init(meta.Format{Name: "test"})
+	_ = m.Init(meta.Format{Name: "test"}, true)
 	done := make(chan bool, 1)
 	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 		select {
@@ -284,7 +284,7 @@ func TestConcurrentWrite(t *testing.T) {
 	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(meta.Format{Name: "test"})
+	_ = m.Init(meta.Format{Name: "test"}, true)
 	ctx := meta.Background
 	var inode meta.Ino
 	var attr = &meta.Attr{}
