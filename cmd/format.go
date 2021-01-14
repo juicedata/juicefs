@@ -182,7 +182,7 @@ func format(c *cli.Context) error {
 		return err
 	}
 
-	err = m.Init(format)
+	err = m.Init(format, c.Bool("force"))
 	if err != nil {
 		logger.Fatalf("format: %s", err)
 		return err
@@ -236,6 +236,11 @@ func formatFlags() *cli.Command {
 			&cli.StringFlag{
 				Name:  "secretkey",
 				Usage: "Secret key for object storage",
+			},
+
+			&cli.StringFlag{
+				Name:  "force",
+				Usage: "overwrite existing format",
 			},
 		},
 		Action: format,
