@@ -112,6 +112,8 @@ github.com/juicedata/juicesync v0.6.3-0.20210105123925-2af95f8a8472 h1:4IWRyIhlk
 github.com/juicedata/juicesync v0.6.3-0.20210105123925-2af95f8a8472/go.mod h1:PTOFdso2hrHXU4RctCWgbSysCclKAjcAU311/z55lUE=
 github.com/juicedata/juicesync v0.6.3-0.20210114024648-941ff49f2eb3 h1:JRC/u/wKZvL1Et7vQ5G3uOdy5xWuEYPa/sdnwYt7TmI=
 github.com/juicedata/juicesync v0.6.3-0.20210114024648-941ff49f2eb3/go.mod h1:PTOFdso2hrHXU4RctCWgbSysCclKAjcAU311/z55lUE=
+github.com/juicedata/juicesync v0.6.3-0.20210114082630-137546625adb h1:McFNPTytOPZcE0WvRigKg1TQW8s9sJUaIxcogwpPpIY=
+github.com/juicedata/juicesync v0.6.3-0.20210114082630-137546625adb/go.mod h1:PTOFdso2hrHXU4RctCWgbSysCclKAjcAU311/z55lUE=
 github.com/juju/ratelimit v1.0.1 h1:+7AIFJVQ0EQgq/K9+0Krm7m530Du7tIz0METWzN0RgY=
 github.com/juju/ratelimit v1.0.1/go.mod h1:qapgC/Gy+xNh9UxzV13HGGl/6UXNN+ct+vwSgWNm/qk=
 github.com/keybase/go-ps v0.0.0-20190827175125-91aafc93ba19/go.mod h1:hY+WOq6m2FpbvyrI93sMaypsttvaIL5nhVR92dTMUcQ=
