@@ -13,6 +13,5 @@ require (
 	github.com/juicedata/juicesync v0.6.3-0.20210114024648-941ff49f2eb3
 	github.com/sirupsen/logrus v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
-	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible
 	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
 )
