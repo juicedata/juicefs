@@ -16,9 +16,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	_ "net/http/pprof"
 	"os"
+	"strings"
 
 	_ "github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -63,8 +65,86 @@ func main() {
 		},
 	}
 
+	// Called via mount or fstab.
+	if strings.HasSuffix(os.Args[0], "/mount.juicefs") {
+		if newArgs, err := handleSysMountArgs(); err != nil {
+			log.Fatal(err)
+		} else {
+			os.Args = newArgs
+		}
+	}
+
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func handleSysMountArgs() ([]string, error) {
+	newArgs := []string{"juicefs", "mount", "-d"}
+	mountOptions := os.Args[3:]
+	badOptions := []string{"_netdev", "rw", "defaults", "remount"}
+	cmdFlagsLookup := make(map[string]bool, 20)
+	fuseOptions := make([]string, 0, 20)
+	for _, f := range mountFlags().Flags {
+		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
+			if _, ok := f.(*cli.BoolFlag); ok {
+				cmdFlagsLookup[names[0]] = true
+			} else {
+				cmdFlagsLookup[names[0]] = false
+			}
+		}
+	}
+
+	parseFlag := false
+	for _, option := range mountOptions {
+		if option == "-o" {
+			parseFlag = true
+			continue
+		}
+		if !parseFlag {
+			continue
+		}
+
+		opts := strings.Split(option, ",")
+		for _, opt := range opts {
+			opt = strings.TrimSpace(opt)
+			if opt == "" || stringContains(badOptions, opt) {
+				continue
+			}
+			if strings.Contains(opt, "=") {
+				fields := strings.SplitN(opt, "=", 2)
+				if isBool, ok := cmdFlagsLookup[fields[0]]; ok && !isBool {
+					newArgs = append(newArgs, fmt.Sprintf("--%s=%s", fields[0], fields[1]))
+				} else {
+					fuseOptions = append(fuseOptions, opt)
+				}
+			} else if isBool, ok := cmdFlagsLookup[opt]; ok && isBool {
+				newArgs = append(newArgs, fmt.Sprintf("--%s", opt))
+			} else {
+				fuseOptions = append(fuseOptions, opt)
+				if opt == "debug" {
+					tmpArgs := []string{"juicefs", "--debug", "mount", "-d"}
+					newArgs = append(tmpArgs, newArgs[3:]...)
+				}
+			}
+		}
+
+		parseFlag = false
+	}
+	if len(fuseOptions) > 0 {
+		newArgs = append(newArgs, "-o", strings.Join(fuseOptions, ","))
+	}
+	newArgs = append(newArgs, os.Args[1], os.Args[2])
+	logger.Debug("Parsed mount args: ", strings.Join(newArgs, " "))
+	return newArgs, nil
+}
+
+func stringContains(s []string, e string) bool {
+	for _, item := range s {
+		if item == e {
+			return true
+		}
+	}
+	return false
 }
