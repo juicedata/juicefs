@@ -102,6 +102,7 @@ SRC and DST must be an URI of the following object storage:
 - obs: Huawei Object Storage Service
 - oos: CTYun OOS
 - scw: Scaleway Object Storage
+- minio: MinIO
 
 SRC and DST should be in the following format:
 
@@ -121,6 +122,7 @@ Some examples:
 - cos://test-1234
 - obs://my-bucket
 - bos://my-bucket
+- minio://myip:9000/bucket
 
 Note:
 
@@ -146,3 +148,5 @@ Note:
 - sftp: if your target machine uses SSH certificates instead of password, you should pass the path to your private key file to the environment variable `SSH_PRIVATE_KEY_PATH`, like ` SSH_PRIVATE_KEY_PATH=/home/someuser/.ssh/id_rsa juicesync [src] [dst]`.
 - Scaleway:
   * The credential can be provided by environment variable `SCW_ACCESS_KEY` and `SCW_SECRET_KEY` .
+- MinIO:
+  * The credential can be provided by environment variable `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` .
