@@ -72,7 +72,11 @@ JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket
 如果使用 MinIO 来存数据，可以这么写：
 
 ```bash
-$ ./juicefs format --storage minio --bucket http://1.2.3.4:9000/mybucket --accesskey XXX --secretkey XXX localhost test
+$ ./juicefs format --storage minio \
+   --bucket http://1.2.3.4:9000/mybucket \
+   --accesskey XXX \
+   --secretkey XXX \
+   localhost test
 ```
 
 ### 挂载

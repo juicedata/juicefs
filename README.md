@@ -71,7 +71,11 @@ As JuiceFS relies on object storage to store data, you can specify a object stor
 To use MinIO as object store, it could be specified as:
 
 ```bash
-$ ./juicefs format --storage minio --bucket http://1.2.3.4:9000/mybucket --accesskey XXX --secretkey XXX localhost test
+$ ./juicefs format --storage minio \
+   --bucket http://1.2.3.4:9000/mybucket \
+   --accesskey XXX \
+   --secretkey XXX \
+   localhost test
 ```
 
 ### Mount a volume
