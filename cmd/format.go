@@ -238,7 +238,7 @@ func formatFlags() *cli.Command {
 				Usage: "Secret key for object storage",
 			},
 
-			&cli.StringFlag{
+			&cli.BoolFlag{
 				Name:  "force",
 				Usage: "overwrite existing format",
 			},
