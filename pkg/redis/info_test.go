@@ -217,5 +217,14 @@ func TestParseRedisInfo(t *testing.T) {
 		if info.version != "6.1.240" {
 			t.Fatalf("Expect %s, got %q", "6.1.240", info.version)
 		}
+		if info.aofEnabled {
+			t.Fatalf("Expect %t, got %t", false, true)
+		}
+		if info.clusterEnabled {
+			t.Fatalf("Expect %t, got %t", false, true)
+		}
+		if info.maxMemoryPolicy != "allkeys-lru" {
+			t.Fatalf("Expect %s, got %s", "allkeys-lru", info.maxMemoryPolicy)
+		}
 	})
 }
