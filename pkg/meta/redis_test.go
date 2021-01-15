@@ -13,15 +13,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package redis
+package meta
 
 import (
 	"sync"
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/juicedata/juicefs/pkg/meta"
 )
 
 // nolint:errcheck
@@ -32,11 +30,11 @@ func TestRedisClient(t *testing.T) {
 		t.Logf("redis is not available: %s", err)
 		t.Skip()
 	}
-	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error { return nil })
-	_ = m.Init(meta.Format{Name: "test"}, true)
-	ctx := meta.Background
-	var parent, inode meta.Ino
-	var attr = &meta.Attr{}
+	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var parent, inode Ino
+	var attr = &Attr{}
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
 		t.Fatalf("mkdir %s", st)
 	}
@@ -53,7 +51,7 @@ func TestRedisClient(t *testing.T) {
 	}
 	attr.Mtime = 2
 	attr.Uid = 1
-	if st := m.SetAttr(ctx, inode, meta.SetAttrMtime|meta.SetAttrUID, 0, attr); st != 0 {
+	if st := m.SetAttr(ctx, inode, SetAttrMtime|SetAttrUID, 0, attr); st != 0 {
 		t.Fatalf("setattr file %s", st)
 	}
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
@@ -62,7 +60,7 @@ func TestRedisClient(t *testing.T) {
 	if attr.Mtime != 2 || attr.Uid != 1 {
 		t.Fatalf("mtime:%d uid:%d", attr.Mtime, attr.Uid)
 	}
-	var entries []*meta.Entry
+	var entries []*Entry
 	if st := m.Readdir(ctx, parent, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	} else if len(entries) != 3 {
@@ -88,11 +86,11 @@ func TestRedisClient(t *testing.T) {
 	if st := m.NewChunk(ctx, inode, 0, 0, &chunkid); st != 0 {
 		t.Fatalf("write chunk: %s", st)
 	}
-	var s = meta.Slice{Chunkid: chunkid, Size: 100, Len: 100}
+	var s = Slice{Chunkid: chunkid, Size: 100, Len: 100}
 	if st := m.Write(ctx, inode, 0, 100, s); st != 0 {
 		t.Fatalf("write end: %s", st)
 	}
-	var chunks []meta.Slice
+	var chunks []Slice
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
@@ -225,18 +223,18 @@ func TestCompaction(t *testing.T) {
 		t.Logf("redis is not available: %s", err)
 		t.Skip()
 	}
-	_ = m.Init(meta.Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, true)
 	done := make(chan bool, 1)
-	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+	m.OnMsg(CompactChunk, func(args ...interface{}) error {
 		select {
 		case done <- true:
 		default:
 		}
 		return nil
 	})
-	ctx := meta.Background
-	var inode meta.Ino
-	var attr = &meta.Attr{}
+	ctx := Background
+	var inode Ino
+	var attr = &Attr{}
 	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
@@ -244,13 +242,13 @@ func TestCompaction(t *testing.T) {
 		_ = m.Unlink(ctx, 1, "f")
 	}()
 	for i := 0; i < 50; i++ {
-		if st := m.Write(ctx, inode, 0, uint32(i*100), meta.Slice{Chunkid: uint64(i) + 1, Size: 100, Len: 100}); st != 0 {
+		if st := m.Write(ctx, inode, 0, uint32(i*100), Slice{Chunkid: uint64(i) + 1, Size: 100, Len: 100}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
 		time.Sleep(time.Millisecond)
 	}
 	<-done
-	var chunks []meta.Slice
+	var chunks []Slice
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
@@ -278,16 +276,16 @@ func TestConcurrentWrite(t *testing.T) {
 		t.Logf("redis is not available: %s", err)
 		t.Skip()
 	}
-	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
 	})
-	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+	m.OnMsg(CompactChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(meta.Format{Name: "test"}, true)
-	ctx := meta.Background
-	var inode meta.Ino
-	var attr = &meta.Attr{}
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var inode Ino
+	var attr = &Attr{}
 	_ = m.Unlink(ctx, 1, "f")
 	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
@@ -302,7 +300,7 @@ func TestConcurrentWrite(t *testing.T) {
 		go func(indx uint32) {
 			defer g.Done()
 			for j := 0; j < 100; j++ {
-				var slice = meta.Slice{Chunkid: 1, Size: 100, Len: 100}
+				var slice = Slice{Chunkid: 1, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
 					errno = st
