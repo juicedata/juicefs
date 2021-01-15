@@ -17,6 +17,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"log"
 	_ "net/http/pprof"
 	"os"
@@ -165,4 +166,14 @@ func stringContains(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+func setLoggerLevel(c *cli.Context) {
+	if c.Bool("trace") {
+		utils.SetLogLevel(logrus.TraceLevel)
+	} else if c.Bool("debug") {
+		utils.SetLogLevel(logrus.DebugLevel)
+	} else if c.Bool("quiet") {
+		utils.SetLogLevel(logrus.WarnLevel)
+	}
 }
