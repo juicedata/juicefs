@@ -717,6 +717,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
 			pipe.HDel(c, r.entryKey(parent), name)
 			pipe.Set(c, r.inodeKey(parent), r.marshal(&pattr), 0)
+			pipe.Del(c, r.xattrKey(inode))
 			if attr.Nlink > 0 {
 				pipe.Set(c, r.inodeKey(inode), r.marshal(&attr), 0)
 			} else {
@@ -804,6 +805,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			pipe.HDel(c, r.entryKey(parent), name)
 			pipe.Set(c, r.inodeKey(parent), r.marshal(&pattr), 0)
 			pipe.Del(c, r.inodeKey(inode))
+			pipe.Del(c, r.xattrKey(inode))
 			// pipe.Del(c, r.entryKey(inode))
 			pipe.IncrBy(c, totalInodes, -1)
 			return nil
