@@ -82,7 +82,7 @@ func mount(c *cli.Context) error {
 	setLoggerLevel(c)
 	if !c.Bool("nosyslog") {
 		// The default log to syslog is only in daemon mode.
-		utils.InitLoggers(c.Bool("b"))
+		utils.InitLoggers(c.Bool("d"))
 	}
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and mountpoint are required")
