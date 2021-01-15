@@ -805,6 +805,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			pipe.HDel(c, r.entryKey(parent), name)
 			pipe.Set(c, r.inodeKey(parent), r.marshal(&pattr), 0)
 			pipe.Del(c, r.inodeKey(inode))
+			pipe.Del(c, r.xattrKey(inode))
 			// pipe.Del(c, r.entryKey(inode))
 			pipe.IncrBy(c, totalInodes, -1)
 			return nil
