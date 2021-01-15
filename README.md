@@ -65,17 +65,17 @@ Assume you have a Redis server running locally, we can create a volume called `t
 $ ./juicefs format localhost test
 ```
 
-It will create a volume with default settings. If there Redis server is not running locally, the address could be specifed using URL, for example, `redis://username:password@host:6379/1`.
+It will create a volume with default settings. If there Redis server is not running locally, the address could be specifed using URL, for example, `redis://user:password@host:6379/1`.
 
-As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--accesskey` and `--secretkey`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
+As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--access-key` and `--secret-key`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
 
 To use MinIO as object store, it could be specified as:
 
 ```bash
 $ ./juicefs format --storage minio \
    --bucket http://1.2.3.4:9000/mybucket \
-   --accesskey XXX \
-   --secretkey XXX \
+   --access-key XXX \
+   --secret-key XXX \
    localhost test
 ```
 

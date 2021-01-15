@@ -18,11 +18,11 @@ package main
 import "fmt"
 
 var (
-	VERSION      = "dev"
-	REVISION     = "HEAD"
-	REVISIONDATE = "now"
+	version      = "dev"
+	revision     = "HEAD"
+	revisionDate = "now"
 )
 
 func Version() string {
-	return fmt.Sprintf("%v (%v %v)", VERSION, REVISIONDATE, REVISION)
+	return fmt.Sprintf("%v (%v %v)", version, revisionDate, revision)
 }

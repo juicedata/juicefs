@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -79,9 +80,9 @@ func mount(c *cli.Context) error {
 		}
 	}()
 	setLoggerLevel(c)
-	if !c.Bool("nosyslog") {
+	if !c.Bool("no-syslog") {
 		// The default log to syslog is only in daemon mode.
-		utils.InitLoggers(c.Bool("d"))
+		utils.InitLoggers(c.Bool("background"))
 	}
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and mountpoint are required")
@@ -115,18 +116,18 @@ func mount(c *cli.Context) error {
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
 
-		GetTimeout:  time.Second * time.Duration(c.Int("getTimeout")),
-		PutTimeout:  time.Second * time.Duration(c.Int("putTimeout")),
-		MaxUpload:   c.Int("maxUpload"),
+		GetTimeout:  time.Second * time.Duration(c.Int("get-timeout")),
+		PutTimeout:  time.Second * time.Duration(c.Int("put-timeout")),
+		MaxUpload:   c.Int("max-upload"),
 		AsyncUpload: c.Bool("writeback"),
 		Prefetch:    c.Int("prefetch"),
-		BufferSize:  c.Int("bufferSize") << 20,
+		BufferSize:  c.Int("buffer-size") << 20,
 
-		CacheDir:       c.String("cacheDir"),
-		CacheSize:      int64(c.Int("cacheSize")),
-		FreeSpace:      float32(c.Float64("freeRatio")),
+		CacheDir:       filepath.Join(c.String("cache-dir"), format.UUID),
+		CacheSize:      int64(c.Int("cache-size")),
+		FreeSpace:      float32(c.Float64("free-space")),
 		CacheMode:      os.FileMode(0600),
-		CacheFullBlock: !c.Bool("partialOnly"),
+		CacheFullBlock: !c.Bool("partial-only"),
 		AutoCreate:     true,
 	}
 	blob, err := createStorage(format)
@@ -136,7 +137,7 @@ func mount(c *cli.Context) error {
 	logger.Infof("Data use %s", blob)
 	logger.Infof("mount volume %s at %s", format.Name, mp)
 
-	if c.Bool("d") {
+	if c.Bool("background") {
 		if err := MakeDaemon(); err != nil {
 			logger.Fatalf("Failed to make daemon: %s", err)
 		}
@@ -175,7 +176,7 @@ func mount(c *cli.Context) error {
 	if !c.Bool("no-usage-report") {
 		go reportUsage(m)
 	}
-	err = fuse.Main(conf, c.String("o"), c.Float64("attrcacheto"), c.Float64("entrycacheto"), c.Float64("direntrycacheto"))
+	err = fuse.Main(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}
@@ -199,51 +200,57 @@ func mountFlags() *cli.Command {
 		Action:    mount,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
-				Name:  "d",
-				Usage: "run in background",
+				Name:    "d",
+				Aliases: []string{"background"},
+				Usage:   "run in background",
 			},
+			&cli.BoolFlag{
+				Name:  "no-syslog",
+				Usage: "disable syslog",
+			},
+
 			&cli.StringFlag{
 				Name:  "o",
 				Usage: "other fuse options",
 			},
 			&cli.Float64Flag{
-				Name:  "attrcacheto",
+				Name:  "attr-cache",
 				Value: 1.0,
 				Usage: "attributes cache timeout in seconds",
 			},
 			&cli.Float64Flag{
-				Name:  "entrycacheto",
+				Name:  "entry-cache",
 				Value: 1.0,
 				Usage: "file entry cache timeout in seconds",
 			},
 			&cli.Float64Flag{
-				Name:  "direntrycacheto",
+				Name:  "dir-entry-cache",
 				Value: 1.0,
 				Usage: "dir entry cache timeout in seconds",
 			},
 
 			&cli.IntFlag{
-				Name:  "getTimeout",
+				Name:  "get-timeout",
 				Value: 60,
 				Usage: "the max number of seconds to download an object",
 			},
 			&cli.IntFlag{
-				Name:  "putTimeout",
+				Name:  "put-timeout",
 				Value: 60,
 				Usage: "the max number of seconds to upload an object",
 			},
 			&cli.IntFlag{
-				Name:  "ioretries",
+				Name:  "io-retries",
 				Value: 30,
 				Usage: "number of retries after network failure",
 			},
 			&cli.IntFlag{
-				Name:  "maxUpload",
+				Name:  "max-upload",
 				Value: 20,
 				Usage: "number of connections to upload",
 			},
 			&cli.IntFlag{
-				Name:  "bufferSize",
+				Name:  "buffer-size",
 				Value: 300,
 				Usage: "total read/write buffering in MB",
 			},
@@ -258,28 +265,28 @@ func mountFlags() *cli.Command {
 				Usage: "Upload objects in background",
 			},
 			&cli.StringFlag{
-				Name:  "cacheDir",
+				Name:  "cache-dir",
 				Value: defaultCacheDir,
 				Usage: "directory to cache object",
 			},
 			&cli.IntFlag{
-				Name:  "cacheSize",
+				Name:  "cache-size",
 				Value: 1 << 10,
 				Usage: "size of cached objects in MiB",
 			},
 			&cli.Float64Flag{
-				Name:  "freeSpace",
+				Name:  "free-space",
 				Value: 0.1,
 				Usage: "min free space (ratio)",
 			},
 			&cli.BoolFlag{
-				Name:  "partialOnly",
+				Name:  "partial-only",
 				Usage: "cache only random/small read",
 			},
 
 			&cli.BoolFlag{
 				Name:  "no-usage-report",
-				Usage: "do not send usage report to juicefs.io",
+				Usage: "do not send usage report",
 			},
 		},
 	}

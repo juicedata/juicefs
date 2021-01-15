@@ -95,6 +95,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	}
 	err = store.Delete(key)
 	if err != nil {
+		// it's OK to don't have delete permission
 		fmt.Printf("Failed to delete: %s", err)
 	}
 	return nil
@@ -141,9 +142,9 @@ func format(c *cli.Context) error {
 		UUID:        uuid.New().String(),
 		Storage:     c.String("storage"),
 		Bucket:      c.String("bucket"),
-		AccessKey:   c.String("accesskey"),
-		SecretKey:   c.String("secretkey"),
-		BlockSize:   fixObjectSize(c.Int("blockSize")),
+		AccessKey:   c.String("access-key"),
+		SecretKey:   c.String("secret-key"),
+		BlockSize:   fixObjectSize(c.Int("block-size")),
 		Compression: c.String("compress"),
 	}
 	if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
@@ -168,13 +169,11 @@ func format(c *cli.Context) error {
 	logger.Infof("Data uses %s", blob)
 	if err := test(blob); err != nil {
 		logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
-		return err
 	}
 
 	err = m.Init(format, c.Bool("force"))
 	if err != nil {
 		logger.Fatalf("format: %s", err)
-		return err
 	}
 	if format.SecretKey != "" {
 		format.SecretKey = "removed"
@@ -189,7 +188,6 @@ func formatFlags() *cli.Command {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			logger.Fatalf("%v", err)
-			return nil
 		}
 		defaultBucket = path.Join(homeDir, ".juicefs", "local")
 	}
@@ -199,14 +197,14 @@ func formatFlags() *cli.Command {
 		ArgsUsage: "REDIS-URL NAME",
 		Flags: []cli.Flag{
 			&cli.IntFlag{
-				Name:  "blockSize",
+				Name:  "block-size",
 				Value: 4096,
 				Usage: "size of block in KiB",
 			},
 			&cli.StringFlag{
 				Name:  "compress",
 				Value: "lz4",
-				Usage: "compression algorithm",
+				Usage: "compression algorithm (lz4, zstd, none)",
 			},
 			&cli.StringFlag{
 				Name:  "storage",
@@ -219,12 +217,12 @@ func formatFlags() *cli.Command {
 				Usage: "A bucket URL to store data",
 			},
 			&cli.StringFlag{
-				Name:  "accesskey",
-				Usage: "Access key for object storage",
+				Name:  "access-key",
+				Usage: "Access key for object storage (env ACCESS_KEY)",
 			},
 			&cli.StringFlag{
-				Name:  "secretkey",
-				Usage: "Secret key for object storage",
+				Name:  "secret-key",
+				Usage: "Secret key for object storage (env SECRET_KEY)",
 			},
 
 			&cli.BoolFlag{
