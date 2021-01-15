@@ -134,6 +134,19 @@ Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs
 
 It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](docs/mdtest.md).
 
+### Analyze performance
+
+There is a virtual file called `.accesslog` in the root of JuiceFS to show all the operations and the time they takes, for example:
+
+```bash
+$ cat /jfs/.accesslog
+2021.01.15 08:26:11.003330 [uid:0,gid:0,pid:4403] write (17669,8666,4993160): OK <0.000010>
+2021.01.15 08:26:11.003473 [uid:0,gid:0,pid:4403] write (17675,198,997439): OK <0.000014>
+2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
+```
+
+The last number on each line is the time (in seconds) current operation takes. We can use this to debug and analyze performance issues. We will provide more tools to analyze it.
+
 ## Supported Object Storage
 
 - Amazon S3
