@@ -11,7 +11,6 @@ require (
 	github.com/hanwen/go-fuse/v2 v2.0.4-0.20210104155004-09a3c381714c
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/juicedata/juicesync v0.6.3-0.20210114082630-137546625adb
-	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
 	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
