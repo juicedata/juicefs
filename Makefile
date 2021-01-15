@@ -19,6 +19,9 @@ endif
 juicefs: Makefile cmd/*.go pkg/*/*.go
 	go build -ldflags="$(LDFLAGS)"  -o juicefs ./cmd
 
+juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
+	go build -tags ceph -ldflags="$(LDFLAGS)"  -o juicefs.ceph ./cmd
+
 .PHONY: snapshot release test
 snapshot:
 	docker run --rm --privileged \
