@@ -13,7 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package redis
+package meta
 
 import (
 	"context"
@@ -31,7 +31,6 @@ import (
 
 	"github.com/go-redis/redis/v8"
 
-	. "github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -54,6 +53,7 @@ const totalInodes = "totalInodes"
 const delchunks = "delchunks"
 const allSessions = "sessions"
 
+// RedisConfig is config for Redis client.
 type RedisConfig struct {
 	Strict  bool // update ctime
 	Retries int
@@ -79,6 +79,7 @@ type msgCallbacks struct {
 	callbacks map[uint32]MsgCallback
 }
 
+// NewRedisMeta return a meta store using Redis.
 func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 	opt, err := redis.ParseURL(url)
 	if err != nil {
@@ -119,9 +120,8 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	if err == nil {
 		if !force {
 			return fmt.Errorf("this volume is already formated as: %s", body)
-		} else {
-			logger.Warnf("Existing volume is overwrited: %s", body)
 		}
+		logger.Warnf("Existing volume is overwrited: %s", body)
 	}
 
 	data, err := json.MarshalIndent(format, "", "")

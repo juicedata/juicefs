@@ -34,7 +34,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/redis"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
@@ -102,8 +101,8 @@ func mount(c *cli.Context) error {
 	}
 
 	logger.Infof("Meta address: %s", addr)
-	var rc = redis.RedisConfig{Retries: 10, Strict: true}
-	m, err := redis.NewRedisMeta(addr, &rc)
+	var rc = meta.RedisConfig{Retries: 10, Strict: true}
+	m, err := meta.NewRedisMeta(addr, &rc)
 	if err != nil {
 		logger.Fatalf("Meta: %s", err)
 	}

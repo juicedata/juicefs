@@ -30,7 +30,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	"github.com/juicedata/juicefs/pkg/redis"
 	obj "github.com/juicedata/juicesync/object"
 	"github.com/urfave/cli/v2"
 )
@@ -128,8 +127,8 @@ func format(c *cli.Context) error {
 		addr = "redis://" + addr
 	}
 	logger.Infof("Meta address: %s", addr)
-	var rc = redis.RedisConfig{Retries: 10}
-	m, err := redis.NewRedisMeta(addr, &rc)
+	var rc = meta.RedisConfig{Retries: 10}
+	m, err := meta.NewRedisMeta(addr, &rc)
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)
 	}
