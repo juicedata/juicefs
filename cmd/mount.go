@@ -37,7 +37,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/redis"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -80,14 +79,11 @@ func mount(c *cli.Context) error {
 			_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
 		}
 	}()
-	if c.Bool("trace") {
-		utils.SetLogLevel(logrus.TraceLevel)
-	} else if c.Bool("debug") {
-		utils.SetLogLevel(logrus.DebugLevel)
-	} else if c.Bool("quiet") {
-		utils.SetLogLevel(logrus.ErrorLevel)
+	setLoggerLevel(c)
+	if !c.Bool("nosyslog") {
+		// The default log to syslog is only in daemon mode.
+		utils.InitLoggers(c.Bool("d"))
 	}
-	utils.InitLoggers(!c.Bool("nosyslog") && !c.Bool("trace") && (c.Bool("background") || !c.Bool("debug")))
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and mountpoint are required")
 	}

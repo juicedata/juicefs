@@ -31,9 +31,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/redis"
-	"github.com/juicedata/juicefs/pkg/utils"
 	obj "github.com/juicedata/juicesync/object"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -121,15 +119,7 @@ func test(store object.ObjectStorage) error {
 }
 
 func format(c *cli.Context) error {
-	if c.Bool("trace") {
-		utils.SetLogLevel(logrus.TraceLevel)
-	} else if c.Bool("debug") {
-		utils.SetLogLevel(logrus.DebugLevel)
-	} else if c.Bool("quiet") {
-		utils.SetLogLevel(logrus.ErrorLevel)
-		utils.InitLoggers(!c.Bool("nosyslog"))
-	}
-
+	setLoggerLevel(c)
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and name are required")
 	}
