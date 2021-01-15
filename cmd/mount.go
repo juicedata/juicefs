@@ -86,8 +86,8 @@ func mount(c *cli.Context) error {
 		utils.SetLogLevel(logrus.DebugLevel)
 	} else if c.Bool("quiet") {
 		utils.SetLogLevel(logrus.ErrorLevel)
-		utils.InitLoggers(!c.Bool("nosyslog"))
 	}
+	utils.InitLoggers(!c.Bool("nosyslog") && !c.Bool("trace") && (c.Bool("background") || !c.Bool("debug")))
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and mountpoint are required")
 	}
