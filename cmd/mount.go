@@ -111,9 +111,6 @@ func mount(c *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("Meta: %s", err)
 	}
-	if !m.IsConfigSafe() {
-		logger.Warn("The configuration of your Redis server might be unsafe for storing metadata, please check https://github.com/juicedata/juicefs/issues/16 for detail.")
-	}
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)

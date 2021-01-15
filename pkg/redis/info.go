@@ -25,6 +25,8 @@ type version struct {
 	major, minor, patch int
 }
 
+var oldestSupportedVer = version{2, 2, 0}
+
 func parseVersion(v string) (ver version, err error) {
 	parts := strings.SplitN(v, ".", 3)
 	if len(parts) != 3 {
@@ -43,20 +45,24 @@ func parseVersion(v string) (ver version, err error) {
 	return
 }
 
-func (ver version) notOlderThan(major, minor, patch int) bool {
-	if ver.major < major {
-		return false
-	}
-	if ver.major > major {
+func (ver version) olderThan(v2 version) bool {
+	if ver.major < v2.major {
 		return true
 	}
-	if ver.minor < minor {
+	if ver.major > v2.major {
 		return false
 	}
-	if ver.minor > minor {
+	if ver.minor < v2.minor {
 		return true
 	}
-	return ver.patch >= patch
+	if ver.minor > v2.minor {
+		return false
+	}
+	return ver.patch < v2.patch
+}
+
+func (ver version) String() string {
+	return fmt.Sprintf("%d.%d.%d", ver.major, ver.minor, ver.patch)
 }
 
 type redisInfo struct {
@@ -100,13 +106,24 @@ func parseRedisInfo(rawInfo string) (info redisInfo, err error) {
 	return
 }
 
-func (ri redisInfo) metRequirement() bool {
-	version, err := parseVersion(ri.version)
-	if err != nil {
-		return false
+func (ri redisInfo) checkServerConfig() {
+	logger.Info("Checking Redis server configuration")
+	if !ri.aofEnabled {
+		logger.Warnf("AOF is not enabled, you may lose data if Redis is not shutdown properly.")
 	}
-	return ri.aofEnabled &&
-		!ri.clusterEnabled &&
-		ri.maxMemoryPolicy == "noeviction" &&
-		version.notOlderThan(2, 2, 0)
+	if ri.clusterEnabled {
+		logger.Warnf("Redis cluster is not supported, make sure it's not enabled.")
+	}
+	if ri.maxMemoryPolicy != "noeviction" {
+		logger.Warnf("maxmemory_policy is %q, please set it to 'noeviction'.", ri.maxMemoryPolicy)
+	}
+	ver, err := parseVersion(ri.version)
+	if err != nil {
+		logger.Warnf("Failed to parse Redis server version: %q", ver)
+	} else {
+		if ver.olderThan(oldestSupportedVer) {
+			logger.Warnf("Redis version should not be older than %s", oldestSupportedVer)
+		}
+	}
+	logger.Info("Redis server configuration checked")
 }

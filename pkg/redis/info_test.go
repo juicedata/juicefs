@@ -17,23 +17,41 @@ package redis
 
 import "testing"
 
-func TestInfoMetRequirement(t *testing.T) {
-	var info redisInfo
-	if info.metRequirement() {
-		t.Fatal("All requirements met, but metRequirement returns false")
+func TestOlderThan(t *testing.T) {
+	v := version{2, 2, 10}
+	if !v.olderThan(version{6, 2, 0}) {
+		t.Fatal("Expect true, got false.")
 	}
-	info.aofEnabled = true
-	if info.metRequirement() {
-		t.Fatal("All requirements met, but metRequirement returns false")
+	if !v.olderThan(version{2, 2, 12}) {
+		t.Fatal("Expect true, got false.")
 	}
-	info.maxMemoryPolicy = "noeviction"
-	if info.metRequirement() {
-		t.Fatal("All requirements met, but metRequirement returns false")
+	if v.olderThan(v) {
+		t.Fatal("Expect false, got true.")
 	}
-	info.version = "6.2.10"
-	if !info.metRequirement() {
-		t.Fatal("Not all requirements met, but metRequirement returns true")
+	if v.olderThan(version{}) {
+		t.Fatal("Expect false, got true.")
 	}
+}
+
+func TestParseVersion(t *testing.T) {
+	t.Run("Should return error for invalid version", func(t *testing.T) {
+		invalidVers := []string{"", "2.sadf.1", "3"}
+		for _, v := range invalidVers {
+			_, err := parseVersion(v)
+			if err == nil {
+				t.Fail()
+			}
+		}
+	})
+	t.Run("Should parse version", func(t *testing.T) {
+		ver, err := parseVersion("6.2.19")
+		if err != nil {
+			t.Fatalf("Failed to parse a valid version: %s", err)
+		}
+		if !(ver.major == 6 && ver.minor == 2 && ver.patch == 19) {
+			t.Fatalf("Expect %s, got %s", "6.2.19", ver)
+		}
+	})
 }
 
 func TestParseRedisInfo(t *testing.T) {

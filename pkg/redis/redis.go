@@ -98,6 +98,9 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 			callbacks: make(map[uint32]MsgCallback),
 		},
 	}
+	if err := m.checkServerConfig(); err != nil {
+		return nil, err
+	}
 	m.sid, err = m.rdb.Incr(c, "nextsession").Result()
 	if err != nil {
 		return nil, fmt.Errorf("create session: %s", err)
@@ -1753,14 +1756,15 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	return err
 }
 
-func (r *redisMeta) IsConfigSafe() bool {
+func (r *redisMeta) checkServerConfig() error {
 	rawInfo, err := r.rdb.Info(c).Result()
 	if err != nil {
-		return false
+		return err
 	}
 	redisInfo, err := parseRedisInfo(rawInfo)
 	if err != nil {
-		return false
+		return err
 	}
-	return redisInfo.metRequirement()
+	redisInfo.checkServerConfig()
+	return nil
 }

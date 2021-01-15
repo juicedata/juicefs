@@ -142,8 +142,4 @@ type Meta interface {
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
 
 	OnMsg(mtype uint32, cb MsgCallback)
-
-	// IsConfigSafe returns true if the configuration of the meta server
-	// met the persistence requirement for storing metadata.
-	IsConfigSafe() bool
 }
