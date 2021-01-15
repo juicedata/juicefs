@@ -1646,7 +1646,7 @@ func (r *redisMeta) updateLocks(ls []plock, nl plock) []plock {
 			ls = ls[:len(ls)-1]
 		} else {
 			if i+1 < len(ls) && ls[i].ltype == ls[i+1].ltype && ls[i].end == ls[i+1].start {
-				// combine continous range
+				// combine continuous range
 				ls[i].end = ls[i+1].end
 				ls[i+1].start = ls[i+1].end
 			}

@@ -94,7 +94,7 @@ type sliceReader struct {
 	state      sstate
 	page       *chunk.Page
 	need       uint64
-	currentpos uint32
+	currentPos uint32
 	modified   time.Time
 	refs       uint16
 	cond       *utils.Cond
@@ -188,7 +188,7 @@ func (s *sliceReader) run() {
 		}
 	}
 
-	s.currentpos = 0
+	s.currentPos = 0
 	if s.block.off > length {
 		s.need = 0
 		s.state = READY
@@ -213,12 +213,12 @@ func (s *sliceReader) run() {
 	}
 	if n == int(need) {
 		s.state = READY
-		s.currentpos = uint32(n)
+		s.currentPos = uint32(n)
 		s.file.tried = 0
 		s.modified = time.Now()
 		s.done(0, 0)
 	} else {
-		s.currentpos = 0 // start again from beginning
+		s.currentPos = 0 // start again from beginning
 		err = syscall.EIO
 		f.tried++
 		// ind.r.m.InvalidateChunkCache(inode, chindx)
@@ -546,7 +546,7 @@ func (f *fileReader) shouldStop() bool {
 func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, syscall.Errno) {
 	for _, req := range reqs {
 		s := req.s
-		for s.state != READY && uint64(s.currentpos) < req.end() {
+		for s.state != READY && uint64(s.currentPos) < req.end() {
 			if s.cond.WaitWithTimeout(time.Millisecond * 10) {
 				if ctx.Canceled() {
 					return 0, syscall.EINTR

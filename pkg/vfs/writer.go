@@ -80,7 +80,7 @@ func (s *sliceWriter) prepareID(ctx meta.Context, retry bool) {
 			break
 		}
 		f.Unlock()
-		logger.Debugf("meta is not availble: %s", st)
+		logger.Debugf("meta is not available: %s", st)
 		time.Sleep(time.Millisecond * 100)
 		f.Lock()
 	}
