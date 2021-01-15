@@ -23,7 +23,9 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -44,6 +46,18 @@ import (
 func MakeDaemon() error {
 	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{})
 	return err
+}
+
+func expandFilePath(path string) (string, error) {
+	if len(path) == 0 || path[0] != '~' {
+		return path, nil
+	}
+
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(usr.HomeDir, path[1:]), nil
 }
 
 func installHandler(mp string) {
@@ -99,6 +113,10 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("MOUNTPOINT is required")
 	}
 	mp := c.Args().Get(1)
+	mp, err := expandFilePath(mp)
+	if err != nil {
+		logger.Fatalf("invalid path for MOUNTPOINT %s", err)
+	}
 	if !utils.Exists(mp) {
 		if err := os.MkdirAll(mp, 0777); err != nil {
 			logger.Fatalf("create %s: %s", mp, err)
