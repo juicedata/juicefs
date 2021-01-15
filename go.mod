@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/DataDog/zstd v1.4.5
 	github.com/VividCortex/godaemon v0.0.0-20201215173923-eda977734e72
+	github.com/ceph/go-ceph v0.4.0
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/google/gops v0.3.13
 	github.com/google/uuid v1.1.1
