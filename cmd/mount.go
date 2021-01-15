@@ -178,8 +178,7 @@ func mount(c *cli.Context) error {
 	}
 	err = fuse.Main(conf, c.String("o"), c.Float64("attrcacheto"), c.Float64("entrycacheto"), c.Float64("direntrycacheto"))
 	if err != nil {
-		logger.Errorf("%s", err)
-		os.Exit(1)
+		logger.Fatalf("fuse: %s", err)
 	}
 	return nil
 }
