@@ -25,9 +25,12 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	vfs "github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/juicedata/juicesync/utils"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
+
+var logger = utils.GetLogger("juicefs")
 
 type JFS struct {
 	fuse.RawFileSystem
@@ -403,7 +406,7 @@ func (fs *JFS) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.Statf
 
 func Main(conf *vfs.Config, options string, attrcacheto_, entrycacheto_, direntrycacheto_ float64) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
-		return err
+		logger.Warnf("setpriority: %s", err)
 	}
 
 	imp := NewJFS()
