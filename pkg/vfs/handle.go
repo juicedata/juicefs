@@ -30,6 +30,9 @@ type handle struct {
 
 	// for dir
 	children []*meta.Entry
+	index    map[string]int
+	pid      uint32
+	expire   time.Time
 
 	// for file
 	locks      uint8
@@ -77,6 +80,37 @@ func (h *handle) cancelOp(pid uint32) {
 			c.Cancel()
 		}
 	}
+}
+
+// protected by h
+func (h *handle) buildIndex() {
+	h.index = make(map[string]int, len(h.children))
+	for i, e := range h.children {
+		h.index[string(e.Name)] = i
+	}
+	d := time.Millisecond * 100
+	if len(h.children) > 10000 {
+		d = time.Microsecond * 10 * time.Duration(len(h.children)) // 10us per child
+	}
+	h.expire = time.Now().Add(d)
+}
+
+func (h *handle) lookup(name string) *meta.Entry {
+	h.Lock()
+	defer h.Unlock()
+	if h.index == nil || time.Now().After(h.expire) {
+		return nil
+	}
+	if i, ok := h.index[name]; ok {
+		return h.children[i]
+	}
+	return nil
+}
+
+func (h *handle) invalidate() {
+	h.Lock()
+	defer h.Unlock()
+	h.index = nil
 }
 
 func (h *handle) Rlock(ctx Context) bool {
@@ -159,6 +193,28 @@ func findHandle(inode Ino, fh uint64) *handle {
 		if f.fh == fh {
 			return f
 		}
+	}
+	return nil
+}
+
+func lookupFromOpenDir(ctx Context, inode Ino, name string) *meta.Entry {
+	hanleLock.Lock()
+	for _, f := range handles[inode] {
+		if f.pid == ctx.Pid() {
+			hanleLock.Unlock()
+			return f.lookup(name)
+		}
+	}
+	hanleLock.Unlock()
+	return nil
+}
+
+func invalidateOpenDir(ctx Context, inode Ino) *meta.Entry {
+	hanleLock.Lock()
+	fs := handles[inode]
+	hanleLock.Unlock()
+	for _, f := range fs {
+		f.invalidate()
 	}
 	return nil
 }

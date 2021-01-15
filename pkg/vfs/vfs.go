@@ -87,12 +87,15 @@ func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscal
 		}
 
 	}
-	err = m.Lookup(ctx, parent, name, &inode, attr)
-	if err != 0 {
-		return
+	entry = lookupFromOpenDir(ctx, parent, name)
+	if entry == nil {
+		err = m.Lookup(ctx, parent, name, &inode, attr)
+		if err != 0 {
+			return
+		}
+		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
 	UpdateLength(inode, attr)
-	entry = &meta.Entry{Inode: inode, Attr: attr}
 	return
 }
 
@@ -173,6 +176,9 @@ func Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		return
 	}
 	err = m.Unlink(ctx, parent, name)
+	if err == 0 {
+		invalidateOpenDir(ctx, parent)
+	}
 	return
 }
 
@@ -211,6 +217,9 @@ func Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		return
 	}
 	err = m.Rmdir(ctx, parent, name)
+	if err == 0 {
+		invalidateOpenDir(ctx, parent)
+	}
 	return
 }
 
@@ -259,6 +268,9 @@ func Rename(ctx Context, parent Ino, name string, newparent Ino, newname string)
 	}
 
 	err = m.Rename(ctx, parent, name, newparent, newname, nil, nil)
+	if err == 0 {
+		invalidateOpenDir(ctx, parent)
+	}
 	return
 }
 
@@ -318,15 +330,19 @@ func Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (
 	defer h.Unlock()
 
 	if h.children == nil || off == 0 {
+		h.Unlock()
 		var inodes []*meta.Entry
 		err = m.Readdir(ctx, ino, 1, &inodes)
 		if err == syscall.EACCES {
 			err = m.Readdir(ctx, ino, 0, &inodes)
 		}
+		h.Lock()
 		if err != 0 {
 			return
 		}
 		h.children = inodes
+		h.pid = ctx.Pid()
+		h.buildIndex()
 		if ino == rootID {
 			// add internal nodes
 			for _, node := range internalNodes {
