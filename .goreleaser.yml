@@ -6,7 +6,7 @@ before:
   hooks:
     - go mod download
 builds:
-  - id: juicefs-darwin
+  - id: juicefs-darwin-amd64
     env:
       - CGO_ENABLED=1
       - CC=o64-clang
@@ -17,7 +17,7 @@ builds:
       - darwin
     goarch:
       - amd64
-  - id: juicefs-linux
+  - id: juicefs-linux-amd64
     env:
       - CGO_ENABLED=1
     ldflags: -s -w -X main.VERSION={{.Version}} -X main.REVISION={{.ShortCommit}} -X main.REVISIONDATE={{.CommitDate}}
@@ -26,6 +26,15 @@ builds:
       - linux
     goarch:
       - amd64
+  - id: juicefs-linux-arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+    ldflags: -s -w -X main.VERSION={{.Version}} -X main.REVISION={{.ShortCommit}} -X main.REVISIONDATE={{.CommitDate}}
+    main: ./cmd
+    goos:
+      - linux
+    goarch:
       - arm64
 checksum:
   name_template: 'checksums.txt'
