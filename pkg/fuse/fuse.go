@@ -429,11 +429,6 @@ func Main(conf *vfs.Config, options string, attrcacheto_, entrycacheto_, direntr
 	for _, n := range strings.Split(options, ",") {
 		if n == "allow_other" || n == "allow_root" {
 			opt.AllowOther = true
-		} else if strings.HasPrefix(n, "fsname=") {
-			opt.FsName = n[len("fsname="):]
-			if runtime.GOOS == "darwin" {
-				opt.Options = append(opt.Options, "volname="+n[len("fsname="):])
-			}
 		} else if n == "nonempty" {
 		} else if n == "debug" {
 			opt.Debug = true
@@ -444,6 +439,7 @@ func Main(conf *vfs.Config, options string, attrcacheto_, entrycacheto_, direntr
 	opt.Options = append(opt.Options, "default_permissions")
 	if runtime.GOOS == "darwin" {
 		opt.Options = append(opt.Options, "fssubtype=juicefs")
+		opt.Options = append(opt.Options, "volname="+conf.Format.Name)
 		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
 		imp.cacheMode = 2
 	}
