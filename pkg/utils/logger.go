@@ -15,9 +15,11 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	glog "log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -37,29 +39,31 @@ type logHandle struct {
 }
 
 func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
-	// Mon Jan 2 15:04:05 -0700 MST 2006
-	timestamp := ""
 	lvl := e.Level
 	if l.lvl != nil {
 		lvl = *l.lvl
 	}
 
 	const timeFormat = "2006/01/02 15:04:05.000000"
-	timestamp = e.Time.Format(timeFormat)
+	timestamp := e.Time.Format(timeFormat)
 
-	str := fmt.Sprintf("%v %s[%d] <%v>: %v",
-		timestamp,
-		l.name,
-		os.Getpid(),
-		strings.ToUpper(lvl.String()),
-		e.Message)
+	var sb bytes.Buffer
+	sb.WriteString(timestamp)
+	sb.WriteRune(' ')
+	sb.WriteString(l.name)
+	sb.WriteRune('[')
+	sb.WriteString(strconv.Itoa(os.Getpid()))
+	sb.WriteString("] <")
+	sb.WriteString(strings.ToUpper(lvl.String()))
+	sb.WriteString(">: ")
+	sb.WriteString(e.Message)
 
 	if len(e.Data) != 0 {
-		str += " " + fmt.Sprint(e.Data)
+		sb.WriteString(" " + fmt.Sprint(e.Data))
 	}
 
-	str += "\n"
-	return []byte(str), nil
+	sb.WriteRune('\n')
+	return sb.Bytes(), nil
 }
 
 // for aws.Logger
