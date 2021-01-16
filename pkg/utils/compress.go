@@ -35,9 +35,9 @@ type Compressor interface {
 func NewCompressor(algr string) Compressor {
 	algr = strings.ToLower(algr)
 	if algr == "zstd" {
-		return &ZStandard{ZSTD_LEVEL}
+		return ZStandard{ZSTD_LEVEL}
 	} else if algr == "lz4" {
-		return &LZ4{}
+		return LZ4{}
 	} else if algr == "none" || algr == "" {
 		return noOp{}
 	}
@@ -67,9 +67,9 @@ type ZStandard struct {
 	level int
 }
 
-func (n *ZStandard) Name() string            { return "Zstd" }
-func (n *ZStandard) CompressBound(l int) int { return zstd.CompressBound(l) }
-func (n *ZStandard) Compress(dst, src []byte) (int, error) {
+func (n ZStandard) Name() string            { return "Zstd" }
+func (n ZStandard) CompressBound(l int) int { return zstd.CompressBound(l) }
+func (n ZStandard) Compress(dst, src []byte) (int, error) {
 	d, err := zstd.CompressLevel(dst, src, n.level)
 	if err != nil {
 		return 0, err
@@ -79,7 +79,7 @@ func (n *ZStandard) Compress(dst, src []byte) (int, error) {
 	}
 	return len(d), err
 }
-func (n *ZStandard) Decompress(dst, src []byte) (int, error) {
+func (n ZStandard) Decompress(dst, src []byte) (int, error) {
 	d, err := zstd.Decompress(dst, src)
 	if err != nil {
 		return 0, err
