@@ -404,7 +404,7 @@ func (fs *JFS) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.Statf
 	return 0
 }
 
-func Main(conf *vfs.Config, options string, attrcacheto_, entrycacheto_, direntrycacheto_ float64) error {
+func Main(conf *vfs.Config, options string, attrcacheto_, entrycacheto_, direntrycacheto_ float64, xattrs bool) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
 		logger.Warnf("setpriority: %s", err)
 	}
@@ -420,7 +420,7 @@ func Main(conf *vfs.Config, options string, attrcacheto_, entrycacheto_, direntr
 	opt.SingleThreaded = false
 	opt.MaxBackground = 50
 	opt.EnableLocks = true
-	opt.DisableXAttrs = false
+	opt.DisableXAttrs = !xattrs
 	opt.IgnoreSecurityLabels = true
 	opt.MaxWrite = 1 << 20
 	opt.MaxReadAhead = 1 << 20
