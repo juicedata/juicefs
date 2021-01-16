@@ -94,6 +94,14 @@ func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscal
 			return
 		}
 		entry = &meta.Entry{Inode: inode, Attr: attr}
+	} else {
+		inode = entry.Inode
+		if !entry.Attr.Full {
+			err = m.GetAttr(ctx, entry.Inode, entry.Attr)
+			if err != 0 {
+				return
+			}
+		}
 	}
 	UpdateLength(inode, attr)
 	return
@@ -332,6 +340,7 @@ func Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (
 	if h.children == nil || off == 0 {
 		h.Unlock()
 		var inodes []*meta.Entry
+		// prefetch attributes for cache
 		err = m.Readdir(ctx, ino, 1, &inodes)
 		if err == syscall.EACCES {
 			err = m.Readdir(ctx, ino, 0, &inodes)
@@ -342,7 +351,6 @@ func Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (
 		}
 		h.children = inodes
 		h.pid = ctx.Pid()
-		h.buildIndex()
 		if ino == rootID {
 			// add internal nodes
 			for _, node := range internalNodes {

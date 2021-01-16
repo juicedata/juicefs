@@ -1071,8 +1071,8 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 		rs, _ := r.rdb.MGet(c, keys...).Result()
 		for i, re := range rs {
 			if re != nil {
-				if a, ok := re.([]byte); ok {
-					r.parseAttr(a, (*entries)[i].Attr)
+				if a, ok := re.(string); ok {
+					r.parseAttr([]byte(a), (*entries)[i].Attr)
 				}
 			}
 		}

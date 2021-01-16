@@ -98,8 +98,11 @@ func (h *handle) buildIndex() {
 func (h *handle) lookup(name string) *meta.Entry {
 	h.Lock()
 	defer h.Unlock()
-	if h.index == nil || time.Now().After(h.expire) {
+	if time.Now().After(h.expire) {
 		return nil
+	}
+	if h.index == nil {
+		h.buildIndex()
 	}
 	if i, ok := h.index[name]; ok {
 		return h.children[i]
@@ -110,7 +113,7 @@ func (h *handle) lookup(name string) *meta.Entry {
 func (h *handle) invalidate() {
 	h.Lock()
 	defer h.Unlock()
-	h.index = nil
+	h.expire = time.Time{}
 }
 
 func (h *handle) Rlock(ctx Context) bool {
