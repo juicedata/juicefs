@@ -960,7 +960,6 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					pipe.Set(c, r.inodeKey(dino), r.marshal(&tattr), 0)
 				} else {
 					if dtyp == TypeDirectory {
-						// pipe.Del(c, r.entryKey(dino))
 						pipe.Del(c, r.inodeKey(dino))
 						dattr.Nlink--
 					} else if dtyp == TypeSymlink {
@@ -977,6 +976,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 						}
 					}
 					pipe.IncrBy(c, totalInodes, -1)
+					pipe.Del(c, r.xattrKey(dino))
 				}
 				pipe.HDel(c, r.entryKey(parentDst), nameDst)
 			}
