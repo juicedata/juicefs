@@ -85,8 +85,8 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", url, err)
 	}
-	if opt.Password == "" && os.Getenv("REDIS_PASSWD") != "" {
-		opt.Password = os.Getenv("REDIS_PASSWD")
+	if opt.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
+		opt.Password = os.Getenv("REDIS_PASSWORD")
 	}
 	rdb := redis.NewClient(opt)
 	m := &redisMeta{

@@ -17,13 +17,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"log"
 	_ "net/http/pprof"
 	"os"
 	"strings"
 
-	_ "github.com/juicedata/juicefs/pkg/object"
+	"github.com/sirupsen/logrus"
+
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
@@ -55,10 +55,6 @@ func main() {
 				Name:  "trace",
 				Usage: "enable trace log",
 			},
-			&cli.BoolFlag{
-				Name:  "nosyslog",
-				Usage: "disable syslog",
-			},
 		},
 		Commands: []*cli.Command{
 			formatFlags(),
@@ -83,21 +79,9 @@ func main() {
 
 func handleSysMountArgs() ([]string, error) {
 	optionToCmdFlag := map[string]string{
-		"attrcacheto":        "attrcacheto",
-		"entrycacheto":       "entrycacheto",
-		"direntrycacheto":    "direntrycacheto",
-		"get-timeout":        "getTimeout",
-		"put-timeout":        "putTimeout",
-		"ioretries":          "ioretries",
-		"max-uploads":        "maxUpload",
-		"buffer-size":        "bufferSize",
-		"prefetch":           "prefetch",
-		"writeback":          "writeback",
-		"cache-dir":          "cacheDir",
-		"cache-size":         "cacheSize",
-		"free-space-ratio":   "freeSpace",
-		"cache-partial-only": "partialOnly",
-		"no-usage-report":    "no-usage-report",
+		"attrcacheto":     "attr-cache",
+		"entrycacheto":    "entry-cache",
+		"direntrycacheto": "dir-entry-cache",
 	}
 	newArgs := []string{"juicefs", "mount", "-d"}
 	mountOptions := os.Args[3:]
