@@ -72,9 +72,8 @@ type redisInfo struct {
 	version         string
 }
 
-func parseRedisInfo(rawInfo string) (info redisInfo, err error) {
+func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 	lines := strings.Split(strings.TrimSpace(rawInfo), "\n")
-	var nTargetsRemains = 4
 	for _, l := range lines {
 		l = strings.TrimSpace(l)
 		if l == "" || strings.HasPrefix(l, "#") {
@@ -84,46 +83,31 @@ func parseRedisInfo(rawInfo string) (info redisInfo, err error) {
 		key, val := kvPair[0], kvPair[1]
 		switch key {
 		case "aof_enabled":
-			info.aofEnabled = val != "0"
-			nTargetsRemains--
+			info.aofEnabled = val == "1"
+			if val == "0" {
+				logger.Warnf("AOF is not enabled, you may lose data if Redis is not shutdown properly.")
+			}
 		case "cluster_enabled":
-			info.clusterEnabled = val != "0"
-			nTargetsRemains--
+			info.clusterEnabled = val == "1"
+			if val != "0" {
+				logger.Warnf("Redis cluster is not supported, some operation may fail unexpected.")
+			}
 		case "maxmemory_policy":
 			info.maxMemoryPolicy = val
-			nTargetsRemains--
+			if val != "noeviction" {
+				logger.Warnf("maxmemory_policy is %q, please set it to 'noeviction'.", val)
+			}
 		case "redis_version":
 			info.version = val
-			nTargetsRemains--
+			ver, err := parseVersion(val)
+			if err != nil {
+				logger.Warnf("Failed to parse Redis server version: %q", ver)
+			} else {
+				if ver.olderThan(oldestSupportedVer) {
+					logger.Warnf("Redis version should not be older than %s", oldestSupportedVer)
+				}
+			}
 		}
-		if nTargetsRemains == 0 {
-			break
-		}
-	}
-	if nTargetsRemains > 0 {
-		err = fmt.Errorf("parseRedisInfo: not all fields found")
 	}
 	return
-}
-
-func (ri redisInfo) checkServerConfig() {
-	logger.Info("Checking Redis server configuration")
-	if !ri.aofEnabled {
-		logger.Warnf("AOF is not enabled, you may lose data if Redis is not shutdown properly.")
-	}
-	if ri.clusterEnabled {
-		logger.Warnf("Redis cluster is not supported, make sure it's not enabled.")
-	}
-	if ri.maxMemoryPolicy != "noeviction" {
-		logger.Warnf("maxmemory_policy is %q, please set it to 'noeviction'.", ri.maxMemoryPolicy)
-	}
-	ver, err := parseVersion(ri.version)
-	if err != nil {
-		logger.Warnf("Failed to parse Redis server version: %q", ver)
-	} else {
-		if ver.olderThan(oldestSupportedVer) {
-			logger.Warnf("Redis version should not be older than %s", oldestSupportedVer)
-		}
-	}
-	logger.Info("Redis server configuration checked")
 }
