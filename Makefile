@@ -5,9 +5,9 @@ all: juicefs
 REVISION := $(shell git rev-parse --short HEAD || unknown)
 REVISIONDATE := $(shell git log -1 --pretty=format:'%ad' --date short)
 VERSION := $(shell git describe --tags --match 'v*' | sed -e 's/^v//' -e 's/-g[0-9a-f]\{7,\}$$//')
-LDFLAGS = -s -w -X main.REVISION=$(REVISION) \
-		        -X main.REVISIONDATE=$(REVISIONDATE) \
-			-X main.VERSION=$(VERSION)
+LDFLAGS = -s -w -X main.revision=$(REVISION) \
+		        -X main.revisionDate=$(REVISIONDATE) \
+			-X main.version=$(VERSION)
 SHELL = /bin/sh
 
 ifdef STATIC

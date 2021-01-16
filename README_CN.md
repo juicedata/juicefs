@@ -66,17 +66,17 @@ $ make
 $ ./juicefs format localhost test
 ```
 
-它会使用默认参数来格式化。如果 Redis 服务不在本地，你可以像这样完整填写它的地址：`redis://username:password@host:6379/1`。
+它会使用默认参数来格式化。如果 Redis 服务不在本地，你可以像这样完整填写它的地址：`redis://user:password@host:6379/1`。Redis 密码可以通过环境变量 `REDIS_PASSWORD` 来指定，避免暴露在命令行选项中。
 
-JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket`、`--accesskey` 和 `--secretkey` 来指定。它默认会使用本地目录来模拟一个对象存储用于测试，详细的参数请看 `./juicefs format -h`。
+JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket`、`--access-key` 和 `--secret-key` 来指定。它默认会使用本地目录来模拟一个对象存储用于测试，详细的参数请看 `./juicefs format -h`。
 
 如果使用 MinIO 来存数据，可以这么写：
 
 ```bash
 $ ./juicefs format --storage minio \
    --bucket http://1.2.3.4:9000/mybucket \
-   --accesskey XXX \
-   --secretkey XXX \
+   --access-key XXX \
+   --secret-key XXX \
    localhost test
 ```
 
