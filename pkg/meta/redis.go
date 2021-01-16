@@ -111,15 +111,29 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 }
 
 func (r *redisMeta) Init(format Format, force bool) error {
-	body, err := r.rdb.Get(c, "setting").Result()
+	body, err := r.rdb.Get(c, "setting").Bytes()
 	if err != nil && err != redis.Nil {
 		return err
 	}
 	if err == nil {
-		if !force {
-			return fmt.Errorf("this volume is already formated as: %s", body)
+		var old Format
+		err = json.Unmarshal(body, &old)
+		if err != nil {
+			logger.Fatalf("existing format is broken: %s", err)
 		}
-		logger.Warnf("Existing volume is overwrited: %s", body)
+		if force {
+			old.SecretKey = "removed"
+			logger.Warnf("Existing volume will be overwrited: %+v", old)
+		} else {
+			// only AccessKey and SecretKey can be safely updated.
+			old.AccessKey = format.AccessKey
+			old.SecretKey = format.SecretKey
+			if format != old {
+				old.SecretKey = ""
+				format.SecretKey = ""
+				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
+			}
+		}
 	}
 
 	data, err := json.MarshalIndent(format, "", "")
