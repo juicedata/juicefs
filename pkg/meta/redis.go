@@ -1762,9 +1762,8 @@ func (r *redisMeta) checkServerConfig() {
 		logger.Warnf("parse info: %s", err)
 		return
 	}
-	redisInfo, err := parseRedisInfo(rawInfo)
+	_, err = checkRedisInfo(rawInfo)
 	if err != nil {
 		logger.Warnf("parse info: %s", err)
 	}
-	redisInfo.checkServerConfig()
 }
