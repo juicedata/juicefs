@@ -177,7 +177,7 @@ func mount(c *cli.Context) error {
 	if !c.Bool("no-usage-report") {
 		go reportUsage(m)
 	}
-	err = fuse.Main(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"))
+	err = fuse.Main(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}
@@ -228,6 +228,10 @@ func mountFlags() *cli.Command {
 				Name:  "dir-entry-cache",
 				Value: 1.0,
 				Usage: "dir entry cache timeout in seconds",
+			},
+			&cli.BoolFlag{
+				Name:  "enable-xattr",
+				Usage: "enable extended attributes (xattr)",
 			},
 
 			&cli.IntFlag{
