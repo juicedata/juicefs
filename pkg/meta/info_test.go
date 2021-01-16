@@ -55,14 +55,6 @@ func TestParseVersion(t *testing.T) {
 }
 
 func TestParseRedisInfo(t *testing.T) {
-	t.Run("Should return error for invalid inputs", func(t *testing.T) {
-		invalidInputs := []string{"", "# Server"}
-		for _, input := range invalidInputs {
-			if _, err := parseRedisInfo(input); err == nil {
-				t.Fatal("Expect error, get nil")
-			}
-		}
-	})
 	t.Run("Should parse the fields we are interested in", func(t *testing.T) {
 		input := `# Server
 	redis_version:6.1.240
@@ -228,7 +220,7 @@ func TestParseRedisInfo(t *testing.T) {
 
 		# Keyspace
 	db0:keys=1125326,expires=5,avg_ttl=321749445601195`
-		info, err := parseRedisInfo(input)
+		info, err := checkRedisInfo(input)
 		if err != nil {
 			t.Fatalf("Failed to parse redis info: %s", err)
 		}
