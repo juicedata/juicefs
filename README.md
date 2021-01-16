@@ -65,7 +65,7 @@ Assume you have a Redis server running locally, we can create a volume called `t
 $ ./juicefs format localhost test
 ```
 
-It will create a volume with default settings. If there Redis server is not running locally, the address could be specifed using URL, for example, `redis://user:password@host:6379/1`.
+It will create a volume with default settings. If there Redis server is not running locally, the address could be specifed using URL, for example, `redis://user:password@host:6379/1`, the password can also be specified by environment variable `REDIS_PASSWORD` to hide it from command line options.
 
 As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--access-key` and `--secret-key`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
 

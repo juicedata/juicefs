@@ -32,12 +32,13 @@ import (
 
 	"github.com/VividCortex/godaemon"
 	"github.com/google/gops/agent"
+	"github.com/urfave/cli/v2"
+
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/urfave/cli/v2"
 )
 
 func MakeDaemon() error {
@@ -118,16 +119,16 @@ func mount(c *cli.Context) error {
 
 		GetTimeout:  time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:  time.Second * time.Duration(c.Int("put-timeout")),
-		MaxUpload:   c.Int("max-upload"),
+		MaxUpload:   c.Int("max-uploads"),
 		AsyncUpload: c.Bool("writeback"),
 		Prefetch:    c.Int("prefetch"),
 		BufferSize:  c.Int("buffer-size") << 20,
 
 		CacheDir:       filepath.Join(c.String("cache-dir"), format.UUID),
 		CacheSize:      int64(c.Int("cache-size")),
-		FreeSpace:      float32(c.Float64("free-space")),
+		FreeSpace:      float32(c.Float64("free-space-ratio")),
 		CacheMode:      os.FileMode(0600),
-		CacheFullBlock: !c.Bool("partial-only"),
+		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
 	}
 	blob, err := createStorage(format)
@@ -245,7 +246,7 @@ func mountFlags() *cli.Command {
 				Usage: "number of retries after network failure",
 			},
 			&cli.IntFlag{
-				Name:  "max-upload",
+				Name:  "max-uploads",
 				Value: 20,
 				Usage: "number of connections to upload",
 			},
@@ -275,12 +276,12 @@ func mountFlags() *cli.Command {
 				Usage: "size of cached objects in MiB",
 			},
 			&cli.Float64Flag{
-				Name:  "free-space",
+				Name:  "free-space-ratio",
 				Value: 0.1,
 				Usage: "min free space (ratio)",
 			},
 			&cli.BoolFlag{
-				Name:  "partial-only",
+				Name:  "cache-partial-only",
 				Usage: "cache only random/small read",
 			},
 
