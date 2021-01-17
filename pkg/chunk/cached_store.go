@@ -655,8 +655,8 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 	return store
 }
 
-func (c *cachedStore) shouldCache(size int) bool {
-	return size < c.conf.BlockSize || c.conf.CacheFullBlock
+func (store *cachedStore) shouldCache(size int) bool {
+	return size < store.conf.BlockSize || store.conf.CacheFullBlock
 }
 
 func parseObjOrigSize(key string) int {
@@ -665,21 +665,21 @@ func parseObjOrigSize(key string) int {
 	return l
 }
 
-func (s *cachedStore) uploadStaging() {
-	staging := s.bcache.scanStaging()
+func (store *cachedStore) uploadStaging() {
+	staging := store.bcache.scanStaging()
 	for key, path := range staging {
-		s.currentUpload <- true
+		store.currentUpload <- true
 		go func(key, stagingPath string) {
 			defer func() {
-				<-s.currentUpload
+				<-store.currentUpload
 			}()
 			block, err := ioutil.ReadFile(stagingPath)
 			if err != nil {
 				logger.Errorf("open %s: %s", stagingPath, err)
 				return
 			}
-			buf := make([]byte, s.compressor.CompressBound(len(block)))
-			n, err := s.compressor.Compress(buf, block)
+			buf := make([]byte, store.compressor.CompressBound(len(block)))
+			n, err := store.compressor.Compress(buf, block)
 			if err != nil {
 				logger.Errorf("compress chunk %s: %s", stagingPath, err)
 				return
@@ -692,7 +692,7 @@ func (s *cachedStore) uploadStaging() {
 			}
 			try := 0
 			for {
-				err := s.storage.Put(key, bytes.NewReader(compressed))
+				err := store.storage.Put(key, bytes.NewReader(compressed))
 				if err == nil {
 					break
 				}
@@ -700,22 +700,22 @@ func (s *cachedStore) uploadStaging() {
 				try++
 				time.Sleep(time.Second * time.Duration(try*try))
 			}
-			s.bcache.uploaded(key, len(block))
+			store.bcache.uploaded(key, len(block))
 			os.Remove(stagingPath)
 		}(key, path)
 	}
 }
 
-func (s *cachedStore) NewReader(chunkid uint64, length int) Reader {
-	return chunkForRead(chunkid, length, s)
+func (store *cachedStore) NewReader(chunkid uint64, length int) Reader {
+	return chunkForRead(chunkid, length, store)
 }
 
-func (s *cachedStore) NewWriter(chunkid uint64) Writer {
-	return chunkForWrite(chunkid, s)
+func (store *cachedStore) NewWriter(chunkid uint64) Writer {
+	return chunkForWrite(chunkid, store)
 }
 
-func (s *cachedStore) Remove(chunkid uint64, length int) error {
-	r := chunkForRead(chunkid, length, s)
+func (store *cachedStore) Remove(chunkid uint64, length int) error {
+	r := chunkForRead(chunkid, length, store)
 	return r.Remove()
 }
 
