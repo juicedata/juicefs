@@ -430,8 +430,6 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 					zeroChunks = append(zeroChunks, uint32(i))
 				}
 			}
-		} else {
-			// those chunks will be found and deleted
 		}
 		t.Length = length
 		now := time.Now()
