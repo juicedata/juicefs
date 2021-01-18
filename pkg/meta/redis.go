@@ -126,6 +126,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
 			// only AccessKey and SecretKey can be safely updated.
+			format.UUID = old.UUID
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
 			if format != old {
