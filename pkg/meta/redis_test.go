@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"fmt"
 	"sync"
 	"syscall"
 	"testing"
@@ -312,5 +313,53 @@ func TestConcurrentWrite(t *testing.T) {
 	g.Wait()
 	if errno != 0 {
 		t.Fatal()
+	}
+}
+
+// nolint:errcheck
+func TestTruncateAndDelete(t *testing.T) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	if err != nil {
+		t.Logf("redis is not available: %s", err)
+		t.Skip()
+	}
+	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+		return nil
+	})
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var inode Ino
+	var attr = &Attr{}
+	m.Unlink(ctx, 1, "f")
+	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
+		t.Fatalf("create file %s", st)
+	}
+	defer m.Unlink(ctx, 1, "f")
+	if st := m.Write(ctx, inode, 0, 100, Slice{1, 100, 0, 100}); st != 0 {
+		t.Fatalf("write file %s", st)
+	}
+	if st := m.Truncate(ctx, inode, 0, 200<<20, attr); st != 0 {
+		t.Fatalf("truncate file %s", st)
+	}
+	if st := m.Truncate(ctx, inode, 0, (10<<40)+10, attr); st != 0 {
+		t.Fatalf("truncate file %s", st)
+	}
+	r := m.(*redisMeta)
+	keys, _, _ := r.rdb.Scan(c, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
+	if len(keys) != 5 {
+		for _, k := range keys {
+			println("key", k)
+		}
+		t.Fatalf("number of chunks: %d != 5", len(keys))
+	}
+	m.Close(ctx, inode)
+	if st := m.Unlink(ctx, 1, "f"); st != 0 {
+		t.Fatalf("unlink file %s", st)
+	}
+	time.Sleep(time.Millisecond * 10)
+	keys, _, _ = r.rdb.Scan(c, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
+	if len(keys) != 0 {
+		t.Fatalf("number of chunks: %d != 0", len(keys))
 	}
 }
