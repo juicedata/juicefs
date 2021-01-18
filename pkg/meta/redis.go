@@ -1003,7 +1003,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 							pipe.Set(c, r.inodeKey(dino), r.marshal(&tattr), 0)
 							pipe.SAdd(c, r.sessionKey(r.sid), strconv.Itoa(int(dino)))
 						} else {
-							pipe.ZAdd(c, delchunks, &redis.Z{Score: float64(now.Unix()), Member: inode.String()})
+							pipe.ZAdd(c, delchunks, &redis.Z{Score: float64(now.Unix()), Member: dino.String()})
 							pipe.Del(c, r.inodeKey(dino))
 							pipe.IncrBy(c, usedSpace, -align4K(tattr.Length))
 						}
@@ -1026,7 +1026,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 				r.removedFiles[dino] = true
 				r.Unlock()
 			} else {
-				go r.deleteChunks(dino, inode.String())
+				go r.deleteChunks(dino, dino.String())
 			}
 		}
 		return err
