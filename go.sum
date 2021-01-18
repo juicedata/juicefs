@@ -111,6 +111,10 @@ github.com/jmespath/go-jmespath v0.3.0 h1:OS12ieG61fsCg5+qLJ+SsW9NicxNkg3b25OyT2
 github.com/jmespath/go-jmespath v0.3.0/go.mod h1:9QtRXoHjLGCJ5IBSaohpXITPlowMeeYCZ7fLUTSywik=
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
+github.com/juicedata/godaemon v0.0.0-20201215173923-eda977734e72 h1:JjGhjAtHA3UQiz3QqrIh31t1LlPI6R54aDrBWSPjfQo=
+github.com/juicedata/godaemon v0.0.0-20201215173923-eda977734e72/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
+github.com/juicedata/godaemon v0.0.0-20210118074000-659b6681b236 h1:py4S1ZTRfz5hIvrhu83YSw7t0Z621+VrmmZBqSkQn5c=
+github.com/juicedata/godaemon v0.0.0-20210118074000-659b6681b236/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
 github.com/juicedata/juicesync v0.6.3-0.20210105123925-2af95f8a8472 h1:4IWRyIhlkU2+0UhJcVdLfwjxnBMSj91TIgDN/2E0ikM=
 github.com/juicedata/juicesync v0.6.3-0.20210105123925-2af95f8a8472/go.mod h1:PTOFdso2hrHXU4RctCWgbSysCclKAjcAU311/z55lUE=
 github.com/juicedata/juicesync v0.6.3-0.20210114024648-941ff49f2eb3 h1:JRC/u/wKZvL1Et7vQ5G3uOdy5xWuEYPa/sdnwYt7TmI=
