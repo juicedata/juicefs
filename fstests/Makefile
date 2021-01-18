@@ -19,7 +19,7 @@ setup:
 	redis-server &
 	mkdir -p /jfs
 	../juicefs format -storage mem localhost unittest
-	../juicefs mount --no-usage-report --enable-xattr localhost /jfs &
+	../juicefs mount -d --no-usage-report --enable-xattr localhost /jfs
 
 healthcheck:
 	pgrep juicefs

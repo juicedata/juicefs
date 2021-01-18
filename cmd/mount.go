@@ -30,8 +30,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/VividCortex/godaemon"
 	"github.com/google/gops/agent"
+	"github.com/juicedata/godaemon"
 	"github.com/urfave/cli/v2"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -41,8 +41,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
-func MakeDaemon() error {
-	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{})
+func MakeDaemon(onExit func(int) error) error {
+	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
 	return err
 }
 
@@ -136,10 +136,26 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	logger.Infof("mount volume %s at %s", format.Name, mp)
+	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
 
 	if c.Bool("background") {
-		if err := MakeDaemon(); err != nil {
+		err := MakeDaemon(func(stage int) error {
+			if stage != 0 {
+				return nil
+			}
+			for {
+				time.Sleep(time.Millisecond * 50)
+				st, err := os.Stat(mp)
+				if err == nil {
+					if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == 1 {
+						logger.Infof("\033[92mOK\033[0m, %s is ready at %s", format.Name, mp)
+						break
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
 			logger.Fatalf("Failed to make daemon: %s", err)
 		}
 	}
