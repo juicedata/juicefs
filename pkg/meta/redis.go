@@ -69,6 +69,7 @@ type redisMeta struct {
 	openFiles    map[Ino]int
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
+	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 }
 
@@ -95,6 +96,7 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		openFiles:    make(map[Ino]int),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
+		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -625,9 +627,15 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 }
 
 func (r *redisMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
-	buf, err := r.rdb.Get(c, r.symKey(inode)).Bytes()
+	if target, ok := r.symlinks.Load(inode); ok {
+		*path = target.([]byte)
+		r.Unlock()
+		return 0
+	}
+	target, err := r.rdb.Get(c, r.symKey(inode)).Bytes()
 	if err == nil {
-		*path = buf
+		*path = target
+		r.symlinks.Store(inode, target)
 	}
 	return errno(err)
 }
