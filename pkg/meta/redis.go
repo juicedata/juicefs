@@ -43,7 +43,7 @@ import (
 	Flock: lockf$inode -> { $sid_$owner -> ltype }
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
 	Sessions: sessions -> [ $sid -> heartbeat ]
-	Removed chunks: delchunks -> [($inode,$start,$end,$maxchunk) -> seconds]
+	Removed chunks: delchunks -> [$inode -> seconds]
 */
 
 var logger = utils.GetLogger("juicefs")
