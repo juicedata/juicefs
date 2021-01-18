@@ -20,6 +20,7 @@ import (
 	"os"
 )
 
+// Min returns min of 2 int
 func Min(a, b int) int {
 	if a < b {
 		return a
@@ -27,11 +28,13 @@ func Min(a, b int) int {
 	return b
 }
 
+// Exists checks if the file/folder in given path exists
 func Exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
+// CopyFile copies file in src path to dst path
 func CopyFile(dst, src string) error {
 	in, err := os.Open(src)
 	if err != nil {
