@@ -24,7 +24,7 @@ import (
 
 var slabs = make(map[uintptr][]byte)
 var used int64
-var slabsMutex sync.Mutex
+var slabsMutex sync.RWMutex
 
 // Alloc returns size bytes memory from Go heap.
 func Alloc(size int) []byte {
@@ -54,8 +54,8 @@ func Free(buf []byte) {
 // UsedMemory returns the memory used
 // function is thread safe
 func UsedMemory() int64 {
-	slabsMutex.Lock()
-	defer slabsMutex.Unlock()
+	slabsMutex.RLock()
+	defer slabsMutex.RUnlock()
 	return used
 }
 
