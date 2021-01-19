@@ -1523,7 +1523,7 @@ func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte)
 	var err error
 	*vbuff, err = r.rdb.HGet(c, r.xattrKey(inode), name).Bytes()
 	if err == redis.Nil {
-		err = syscall.ENODATA
+		err = ENOATTR
 	}
 	return errno(err)
 }
@@ -1549,7 +1549,7 @@ func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) 
 func (r *redisMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	n, err := r.rdb.HDel(c, r.xattrKey(inode), name).Result()
 	if n == 0 {
-		err = syscall.ENODATA
+		err = ENOATTR
 	}
 	return errno(err)
 }
