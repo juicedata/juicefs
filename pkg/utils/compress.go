@@ -23,8 +23,10 @@ import (
 	"github.com/hungys/go-lz4"
 )
 
+// ZSTD_LEVEL compression level used by Zstd
 const ZSTD_LEVEL = 1 // fastest
 
+// Compressor interface to be implemented by a compression algo
 type Compressor interface {
 	Name() string
 	CompressBound(int) int
@@ -32,6 +34,7 @@ type Compressor interface {
 	Decompress(dst, src []byte) (int, error)
 }
 
+// NewCompressor returns a struct implementing Compressor interface
 func NewCompressor(algr string) Compressor {
 	algr = strings.ToLower(algr)
 	if algr == "zstd" {
@@ -63,12 +66,19 @@ func (n noOp) Decompress(dst, src []byte) (int, error) {
 	return len(src), nil
 }
 
+// ZStandard struct implements Compressor interface
+// implementaion is based on zstd library
 type ZStandard struct {
 	level int
 }
 
-func (n ZStandard) Name() string            { return "Zstd" }
+// Name returns name of the algorithm Zstd
+func (n ZStandard) Name() string { return "Zstd" }
+
+// CompressBound max size of compressed data
 func (n ZStandard) CompressBound(l int) int { return zstd.CompressBound(l) }
+
+// Compress using Zstd
 func (n ZStandard) Compress(dst, src []byte) (int, error) {
 	d, err := zstd.CompressLevel(dst, src, n.level)
 	if err != nil {
@@ -79,6 +89,8 @@ func (n ZStandard) Compress(dst, src []byte) (int, error) {
 	}
 	return len(d), err
 }
+
+// Decompress using Zstd
 func (n ZStandard) Decompress(dst, src []byte) (int, error) {
 	d, err := zstd.Decompress(dst, src)
 	if err != nil {
@@ -90,13 +102,22 @@ func (n ZStandard) Decompress(dst, src []byte) (int, error) {
 	return len(d), err
 }
 
+// LZ4 struct implements Compressor interface
+// implementaion is based on LZ4 library
 type LZ4 struct{}
 
-func (l LZ4) Name() string               { return "LZ4" }
+// Name returns name of the algorithm LZ4
+func (l LZ4) Name() string { return "LZ4" }
+
+// CompressBound max size of compressed data
 func (l LZ4) CompressBound(size int) int { return lz4.CompressBound(size) }
+
+// Compress using LZ4 algorithm
 func (l LZ4) Compress(dst, src []byte) (int, error) {
 	return lz4.CompressDefault(src, dst)
 }
+
+// Decompress using LZ4 algorithm
 func (l LZ4) Decompress(dst, src []byte) (int, error) {
 	return lz4.DecompressSafe(src, dst)
 }

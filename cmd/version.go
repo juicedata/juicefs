@@ -23,6 +23,8 @@ var (
 	revisionDate = "now"
 )
 
+// Version prints version in format - `VERSION (REVISIONDATE REVISION)`
+// value is assigned in Makefile
 func Version() string {
 	return fmt.Sprintf("%v (%v %v)", version, revisionDate, revision)
 }

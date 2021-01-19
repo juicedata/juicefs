@@ -67,7 +67,7 @@ func (l *logHandle) Log(args ...interface{}) {
 	l.Debugln(args...)
 }
 
-func NewLogger(name string) *logHandle {
+func newLogger(name string) *logHandle {
 	l := &logHandle{name: name}
 	l.Out = os.Stderr
 	l.Formatter = l
@@ -79,6 +79,7 @@ func NewLogger(name string) *logHandle {
 	return l
 }
 
+// GetLogger returns a logger mapped to `name`
 func GetLogger(name string) *logHandle {
 	mu.Lock()
 	defer mu.Unlock()
@@ -86,11 +87,12 @@ func GetLogger(name string) *logHandle {
 	if logger, ok := loggers[name]; ok {
 		return logger
 	}
-	logger := NewLogger(name)
+	logger := newLogger(name)
 	loggers[name] = logger
 	return logger
 }
 
+// GetStdLogger returns standard golang logger
 func GetStdLogger(l *logHandle, lvl logrus.Level) *glog.Logger {
 	mu.Lock()
 	defer mu.Unlock()
@@ -101,6 +103,7 @@ func GetStdLogger(l *logHandle, lvl logrus.Level) *glog.Logger {
 	return glog.New(w, "", 0)
 }
 
+// SetLogLevel sets Level to all the loggers in the map
 func SetLogLevel(lvl logrus.Level) {
 	for _, logger := range loggers {
 		logger.Level = lvl
