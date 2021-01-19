@@ -50,6 +50,16 @@ func (g *gs) Create() error {
 	if projectID == "" {
 		log.Fatalf("GOOGLE_CLOUD_PROJECT environment variable must be set")
 	}
+	// Guess region when region is not provided
+	if g.region == "" {
+		zone, err := metadata.Zone()
+		if err == nil && len(zone) > 2 {
+			g.region = zone[:len(zone)-2]
+		}
+		if g.region == "" {
+			log.Fatalf("Could not guess region to create bucket")
+		}
+	}
 
 	_, err := g.service.Buckets.Insert(projectID, &storage.Bucket{
 		Id:           g.bucket,
@@ -142,7 +152,10 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
-	region := hostParts[1]
+	var region string
+	if len(hostParts) > 1 {
+		region = hostParts[1]
+	}
 	client, err := google.DefaultClient(ctx)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
