@@ -629,7 +629,6 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 func (r *redisMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
 	if target, ok := r.symlinks.Load(inode); ok {
 		*path = target.([]byte)
-		r.Unlock()
 		return 0
 	}
 	target, err := r.rdb.Get(c, r.symKey(inode)).Bytes()
