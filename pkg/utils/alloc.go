@@ -26,10 +26,7 @@ var slabs = make(map[uintptr][]byte)
 var used int64
 var slabsMutex sync.Mutex
 
-// Alloc allocates memory for page returns slice of byte of lenght `size`
-// adds page entry in slabs map
-// adds `size` `used` memory
-// function is thread safe
+// Alloc returns size bytes memory from Go heap.
 func Alloc(size int) []byte {
 	b := make([]byte, size)
 	ptr := unsafe.Pointer(&b[0])
@@ -40,9 +37,7 @@ func Alloc(size int) []byte {
 	return b
 }
 
-// Free removes entry of page from slabs map
-// removes `size` from `used` memory
-// function is thread safe
+// Free returns memory to Go heap.
 func Free(buf []byte) {
 	// buf could be zero when writing
 	p := unsafe.Pointer(&buf[:1][0])

@@ -20,15 +20,14 @@ import (
 	"unsafe"
 )
 
-// Buffer struct containing slice of byte
-// it has methods append and remove bytes based on datatype and byte ordring
+// Buffer is a buffer to read/write integers.
 type Buffer struct {
 	endian binary.ByteOrder
 	off    int
 	buf    []byte
 }
 
-// NewBuffer utility to create *Buffer of given size
+// NewBuffer returns a buffer with sz number of bytes.
 func NewBuffer(sz uint32) *Buffer {
 	return FromBuffer(make([]byte, sz))
 }
