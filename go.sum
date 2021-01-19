@@ -2,6 +2,8 @@ cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMT
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.39.0 h1:UgQP9na6OTfp4dsAiz/eFpFA1C6tPdH5wiRdi19tuMw=
 cloud.google.com/go v0.39.0/go.mod h1:rVLT6fkc8chs9sfPtFc1SBH6em7n+ZoXaG+87tDISts=
+github.com/Arvintian/scs-go-sdk v1.0.0 h1:2Hll7bcEc8co8v5/2Ibzo410fW4QnTnhkq1NOASd8vc=
+github.com/Arvintian/scs-go-sdk v1.0.0/go.mod h1:DMIkwn27iuTIo9o7INj3L/bcA7bW6QwljWC3ZpxjkXw=
 github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible h1:UanIfAyKxwQgLNfs8LIVfWsSB6JaA0Bj5grnEldOFok=
 github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
 github.com/Azure/go-autorest v8.4.0+incompatible h1:L0lfRrBLK26wwXV0pkmu7D2w1n2VBU6QaH0DXGLvnzA=

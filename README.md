@@ -103,6 +103,7 @@ SRC and DST must be an URI of the following object storage:
 - oos: CTYun OOS
 - scw: Scaleway Object Storage
 - minio: MinIO
+- scs: Sina Cloud Storage
 
 SRC and DST should be in the following format:
 
@@ -123,6 +124,7 @@ Some examples:
 - obs://my-bucket
 - bos://my-bucket
 - minio://myip:9000/bucket
+- scs://access-key:secret-key-id@my-bucket.sinacloud.net/prefix
 
 Note:
 
