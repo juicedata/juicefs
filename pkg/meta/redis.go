@@ -330,14 +330,11 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		return errno(err)
 	}
 	_, ino := r.parseEntry(buf)
-	a, err := r.rdb.Get(c, r.inodeKey(ino)).Bytes()
-	if err == nil && attr != nil {
-		r.parseAttr(a, attr)
-		if attr.Typ == TypeDirectory && r.conf.Strict {
-			cnt, err := r.rdb.HLen(c, r.entryKey(ino)).Result()
-			if err == nil {
-				attr.Nlink = uint32(cnt + 2)
-			}
+	if attr != nil {
+		var a []byte
+		a, err = r.rdb.Get(c, r.inodeKey(ino)).Bytes()
+		if err == nil {
+			r.parseAttr(a, attr)
 		}
 	}
 	if inode != nil {
@@ -671,9 +668,12 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 	}
 	attr.Parent = parent
 
-	*inode = ino
+	if inode != nil {
+		*inode = ino
+	}
 	return r.txn(func(tx *redis.Tx) error {
 		var patt Attr
+		// TODO: pipe
 		a, err := tx.Get(c, r.inodeKey(parent)).Bytes()
 		if err != nil {
 			return err
@@ -727,7 +727,7 @@ func (r *redisMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cum
 
 func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno {
 	err := r.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
-	if err == 0 {
+	if err == 0 && inode != nil {
 		r.Lock()
 		r.openFiles[*inode] = 1
 		r.Unlock()
@@ -746,6 +746,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	return r.txn(func(tx *redis.Tx) error {
+		// TODO: pipe
 		rs, _ := tx.MGet(c, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil || rs[1] == nil {
 			return redis.Nil
@@ -836,6 +837,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	return r.txn(func(tx *redis.Tx) error {
+		// TODO: pipe
 		a, err := tx.Get(c, r.inodeKey(parent)).Bytes()
 		if err != nil {
 			return err
@@ -1118,6 +1120,7 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 	}
 	if plus != 0 {
 		var keys []string
+		// TODO: paging
 		for _, e := range *entries {
 			keys = append(keys, r.inodeKey(e.Inode))
 		}
