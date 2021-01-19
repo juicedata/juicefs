@@ -304,6 +304,7 @@ func UpdateLength(inode Ino, attr *meta.Attr) {
 		if length > attr.Length {
 			attr.Length = length
 		}
+		reader.Truncate(inode, attr.Length)
 	}
 }
 
