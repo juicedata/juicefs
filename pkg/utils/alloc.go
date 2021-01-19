@@ -26,6 +26,7 @@ var slabs = make(map[uintptr][]byte)
 var used int64
 var slabsMutex sync.Mutex
 
+// Alloc returns size bytes memory from Go heap.
 func Alloc(size int) []byte {
 	b := make([]byte, size)
 	ptr := unsafe.Pointer(&b[0])
@@ -36,6 +37,7 @@ func Alloc(size int) []byte {
 	return b
 }
 
+// Free returns memory to Go heap.
 func Free(buf []byte) {
 	// buf could be zero when writing
 	p := unsafe.Pointer(&buf[:1][0])
@@ -49,6 +51,8 @@ func Free(buf []byte) {
 	slabsMutex.Unlock()
 }
 
+// UsedMemory returns the memory used
+// function is thread safe
 func UsedMemory() int64 {
 	slabsMutex.Lock()
 	defer slabsMutex.Unlock()
