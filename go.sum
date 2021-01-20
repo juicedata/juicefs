@@ -2,6 +2,8 @@ cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMT
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.39.0 h1:UgQP9na6OTfp4dsAiz/eFpFA1C6tPdH5wiRdi19tuMw=
 cloud.google.com/go v0.39.0/go.mod h1:rVLT6fkc8chs9sfPtFc1SBH6em7n+ZoXaG+87tDISts=
+github.com/Arvintian/scs-go-sdk v1.0.0 h1:2Hll7bcEc8co8v5/2Ibzo410fW4QnTnhkq1NOASd8vc=
+github.com/Arvintian/scs-go-sdk v1.0.0/go.mod h1:DMIkwn27iuTIo9o7INj3L/bcA7bW6QwljWC3ZpxjkXw=
 github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible h1:UanIfAyKxwQgLNfs8LIVfWsSB6JaA0Bj5grnEldOFok=
 github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
 github.com/Azure/go-autorest v8.4.0+incompatible h1:L0lfRrBLK26wwXV0pkmu7D2w1n2VBU6QaH0DXGLvnzA=
@@ -121,6 +123,8 @@ github.com/juicedata/juicesync v0.6.3-0.20210114024648-941ff49f2eb3 h1:JRC/u/wKZ
 github.com/juicedata/juicesync v0.6.3-0.20210114024648-941ff49f2eb3/go.mod h1:PTOFdso2hrHXU4RctCWgbSysCclKAjcAU311/z55lUE=
 github.com/juicedata/juicesync v0.6.3-0.20210114082630-137546625adb h1:McFNPTytOPZcE0WvRigKg1TQW8s9sJUaIxcogwpPpIY=
 github.com/juicedata/juicesync v0.6.3-0.20210114082630-137546625adb/go.mod h1:PTOFdso2hrHXU4RctCWgbSysCclKAjcAU311/z55lUE=
+github.com/juicedata/juicesync v0.6.3-0.20210120011208-a1a683df28e7 h1:JdNEoXKToxFyC+jLjwSPXxqgFc+Oo7cxJSpE93O99MI=
+github.com/juicedata/juicesync v0.6.3-0.20210120011208-a1a683df28e7/go.mod h1:Oilm81Y0Y8QEcYao2MvsbDvV8p0Br5OtDrJFRLbFJfU=
 github.com/juju/ratelimit v1.0.1 h1:+7AIFJVQ0EQgq/K9+0Krm7m530Du7tIz0METWzN0RgY=
 github.com/juju/ratelimit v1.0.1/go.mod h1:qapgC/Gy+xNh9UxzV13HGGl/6UXNN+ct+vwSgWNm/qk=
 github.com/keybase/go-ps v0.0.0-20190827175125-91aafc93ba19/go.mod h1:hY+WOq6m2FpbvyrI93sMaypsttvaIL5nhVR92dTMUcQ=
