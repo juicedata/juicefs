@@ -1281,7 +1281,7 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	}
 	ss := make([]*slice, len(vals))
 	for i, val := range vals {
-		ss[i] = r.parseSlice([]byte(val))
+		ss[i] = parseSlice([]byte(val))
 	}
 	*chunks = buildSlice(ss)
 	if len(vals) >= 5 {
@@ -1415,7 +1415,7 @@ func (r *redisMeta) deleteChunks(inode Ino, tracking string) {
 	r.rdb.ZRem(c, delchunks, tracking)
 }
 
-func (r *redisMeta) parseSlice(buf []byte) *slice {
+func parseSlice(buf []byte) *slice {
 	rb := utils.ReadBuffer(buf)
 	pos := rb.Get32()
 	chunkid := rb.Get64()
@@ -1452,9 +1452,10 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 
 	ss := make([]*slice, len(vals))
 	for i, val := range vals {
-		ss[i] = r.parseSlice([]byte(val))
+		ss[i] = parseSlice([]byte(val))
 	}
 	chunks := buildSlice(ss)
+
 	var size uint32
 	for _, s := range chunks {
 		size += s.Len
