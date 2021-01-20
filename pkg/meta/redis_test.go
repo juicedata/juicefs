@@ -21,7 +21,48 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
+
+func encodeSlices(size int) []string {
+	w := utils.NewBuffer(24)
+	w.Put32(0)
+	w.Put64(1014)
+	w.Put32(122)
+	w.Put32(0)
+	w.Put32(122)
+	v := string(w.Bytes())
+	vals := make([]string, size)
+	for i := range vals {
+		vals[i] = v
+	}
+	return vals
+}
+
+func BenchmarkReadSlices(b *testing.B) {
+	cases := []struct {
+		desc string
+		size int
+	}{
+		{"small", 4},
+		{"mid", 64},
+		{"large", 1024},
+	}
+	for _, c := range cases {
+		b.Run(c.desc, func(b *testing.B) {
+			vals := encodeSlices(c.size)
+			b.ResetTimer()
+			var slices []*slice
+			for i := 0; i < b.N; i++ {
+				slices = readSlices(vals)
+			}
+			if len(slices) != len(vals) {
+				b.Fail()
+			}
+		})
+	}
+}
 
 // nolint:errcheck
 func TestRedisClient(t *testing.T) {

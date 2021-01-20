@@ -15,6 +15,8 @@
 
 package meta
 
+import "github.com/juicedata/juicefs/pkg/utils"
+
 type slice struct {
 	chunkid uint64
 	size    uint32
@@ -38,6 +40,15 @@ func newSlice(pos uint32, chunkid uint64, cleng, off, len uint32) *slice {
 	s.left = nil
 	s.right = nil
 	return s
+}
+
+func (s *slice) read(buf []byte) {
+	rb := utils.ReadBuffer(buf)
+	s.pos = rb.Get32()
+	s.chunkid = rb.Get64()
+	s.size = rb.Get32()
+	s.off = rb.Get32()
+	s.len = rb.Get32()
 }
 
 func (s *slice) cut(pos uint32) (left, right *slice) {

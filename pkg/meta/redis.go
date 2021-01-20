@@ -1251,7 +1251,7 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	return 0
 }
 
-func (r *redisMeta) buildSlice(ss []*slice) []Slice {
+func buildSlice(ss []*slice) []Slice {
 	var root *slice
 	for _, s := range ss {
 		if root != nil {
@@ -1279,11 +1279,8 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	if err != nil {
 		return errno(err)
 	}
-	ss := make([]*slice, len(vals))
-	for i, val := range vals {
-		ss[i] = r.parseSlice([]byte(val))
-	}
-	*chunks = r.buildSlice(ss)
+	ss := readSlices(vals)
+	*chunks = buildSlice(ss)
 	if len(vals) >= 5 {
 		go r.compact(inode, indx)
 	}
@@ -1415,16 +1412,6 @@ func (r *redisMeta) deleteChunks(inode Ino, tracking string) {
 	r.rdb.ZRem(c, delchunks, tracking)
 }
 
-func (r *redisMeta) parseSlice(buf []byte) *slice {
-	rb := utils.ReadBuffer(buf)
-	pos := rb.Get32()
-	chunkid := rb.Get64()
-	size := rb.Get32()
-	off := rb.Get32()
-	len := rb.Get32()
-	return newSlice(pos, chunkid, size, off, len)
-}
-
 func (r *redisMeta) compact(inode Ino, indx uint32) {
 	// avoid too many or duplicated compaction
 	r.Lock()
@@ -1450,11 +1437,8 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		return
 	}
 
-	ss := make([]*slice, len(vals))
-	for i, val := range vals {
-		ss[i] = r.parseSlice([]byte(val))
-	}
-	chunks := r.buildSlice(ss)
+	ss := readSlices(vals)
+	chunks := buildSlice(ss)
 	var size uint32
 	for _, s := range chunks {
 		size += s.Len
@@ -1517,6 +1501,17 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 	} else if r.rdb.LLen(c, r.chunkKey(inode, indx)).Val() > 10 {
 		go r.compact(inode, indx)
 	}
+}
+
+func readSlices(vals []string) []*slice {
+	slices := make([]slice, len(vals))
+	ss := make([]*slice, len(vals))
+	for i, val := range vals {
+		s := &slices[i]
+		s.read([]byte(val))
+		ss[i] = s
+	}
+	return ss
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
