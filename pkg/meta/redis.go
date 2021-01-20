@@ -1251,7 +1251,7 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	return 0
 }
 
-func (r *redisMeta) buildSlice(ss []*slice) []Slice {
+func buildSlice(ss []*slice) []Slice {
 	var root *slice
 	for _, s := range ss {
 		if root != nil {
@@ -1283,7 +1283,7 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	for i, val := range vals {
 		ss[i] = r.parseSlice([]byte(val))
 	}
-	*chunks = r.buildSlice(ss)
+	*chunks = buildSlice(ss)
 	if len(vals) >= 5 {
 		go r.compact(inode, indx)
 	}
@@ -1454,7 +1454,7 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 	for i, val := range vals {
 		ss[i] = r.parseSlice([]byte(val))
 	}
-	chunks := r.buildSlice(ss)
+	chunks := buildSlice(ss)
 	var size uint32
 	for _, s := range chunks {
 		size += s.Len
