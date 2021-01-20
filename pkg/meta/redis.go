@@ -1412,16 +1412,6 @@ func (r *redisMeta) deleteChunks(inode Ino, tracking string) {
 	r.rdb.ZRem(c, delchunks, tracking)
 }
 
-func parseSlice(buf []byte) *slice {
-	rb := utils.ReadBuffer(buf)
-	pos := rb.Get32()
-	chunkid := rb.Get64()
-	size := rb.Get32()
-	off := rb.Get32()
-	len := rb.Get32()
-	return newSlice(pos, chunkid, size, off, len)
-}
-
 func (r *redisMeta) compact(inode Ino, indx uint32) {
 	// avoid too many or duplicated compaction
 	r.Lock()
@@ -1514,9 +1504,12 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 }
 
 func readSlices(vals []string) []*slice {
+	slices := make([]slice, len(vals))
 	ss := make([]*slice, len(vals))
 	for i, val := range vals {
-		ss[i] = parseSlice([]byte(val))
+		s := &slices[i]
+		s.read([]byte(val))
+		ss[i] = s
 	}
 	return ss
 }
