@@ -1279,7 +1279,8 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	if err != nil {
 		return errno(err)
 	}
-	*chunks = readSlices(vals)
+	ss := readSlices(vals)
+	*chunks = buildSlice(ss)
 	if len(vals) >= 5 {
 		go r.compact(inode, indx)
 	}
@@ -1446,7 +1447,8 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		return
 	}
 
-	chunks := readSlices(vals)
+	ss := readSlices(vals)
+	chunks := buildSlice(ss)
 	var size uint32
 	for _, s := range chunks {
 		size += s.Len
@@ -1511,13 +1513,12 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 	}
 }
 
-func readSlices(vals []string) []Slice {
+func readSlices(vals []string) []*slice {
 	ss := make([]*slice, len(vals))
 	for i, val := range vals {
 		ss[i] = parseSlice([]byte(val))
 	}
-	chunks := buildSlice(ss)
-	return chunks
+	return ss
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
