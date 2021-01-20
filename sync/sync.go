@@ -44,6 +44,21 @@ var (
 
 var logger = utils.GetLogger("juicesync")
 
+// human readable bytes size
+func formatSize(bytes uint64) string {
+	units := [7]string{" ", "K", "M", "G", "T", "P", "E"}
+	if bytes < 1024 {
+		return fmt.Sprintf("%v B", bytes)
+	}
+	z := 0
+	v := float64(bytes)
+	for v > 1024.0 {
+		z++
+		v /= 1024.0
+	}
+	return fmt.Sprintf("%.3f %siB", v, units[z])
+}
+
 // iterate on all the keys that starts at marker from object storage.
 func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Object, error) {
 	startTime := time.Now()
@@ -622,7 +637,7 @@ func Sync(src, dst object.ObjectStorage, config *config.Config) error {
 		return fmt.Errorf("Failed to copy %d objects", failed)
 	}
 	if config.Manager == "" {
-		logger.Infof("Found: %d, copied: %d, deleted: %d, failed: %d", found, copied, deleted, failed)
+		logger.Infof("Found: %d, copied: %d, deleted: %d, failed: %d, transferred: %s", found, copied, deleted, failed, formatSize(uint64(copiedBytes)))
 	} else {
 		sendStats(config.Manager)
 	}
