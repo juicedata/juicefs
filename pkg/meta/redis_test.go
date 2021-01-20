@@ -357,7 +357,7 @@ func TestTruncateAndDelete(t *testing.T) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink file %s", st)
 	}
-	time.Sleep(time.Millisecond * 10)
+	time.Sleep(time.Millisecond * 100)
 	keys, _, _ = r.rdb.Scan(c, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
 	if len(keys) != 0 {
 		t.Fatalf("number of chunks: %d != 0", len(keys))
