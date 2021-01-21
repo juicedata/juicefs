@@ -363,7 +363,7 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	var err error
 
 	entryKey := r.entryKey(parent)
-	if len(r.shaLookup) > 0 {
+	if len(r.shaLookup) > 0 && attr != nil {
 		var res interface{}
 		res, err = r.rdb.EvalSha(c, r.shaLookup, []string{entryKey, name}).Result()
 		if err != nil {
@@ -390,17 +390,13 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 			return errno(err)
 		}
 		_, foundIno = r.parseEntry(buf)
-		encodedAttr, err = r.rdb.Get(c, r.inodeKey(foundIno)).Bytes()
+		if attr != nil {
+			encodedAttr, err = r.rdb.Get(c, r.inodeKey(foundIno)).Bytes()
+		}
 	}
 
 	if err == nil && attr != nil {
 		r.parseAttr(encodedAttr, attr)
-		if attr.Typ == TypeDirectory && r.conf.Strict {
-			cnt, err := r.rdb.HLen(c, r.entryKey(foundIno)).Result()
-			if err == nil {
-				attr.Nlink = uint32(cnt + 2)
-			}
-		}
 	}
 	if inode != nil {
 		*inode = foundIno
