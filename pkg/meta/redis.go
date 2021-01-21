@@ -53,6 +53,30 @@ const totalInodes = "totalInodes"
 const delchunks = "delchunks"
 const allSessions = "sessions"
 
+const scriptLookup = `
+local parse = function(buf, idx, pos)
+	return bit.lshift(string.byte(buf, idx), pos)
+end
+
+local buf = redis.call('HGET', KEYS[1], KEYS[2])
+if not buf then
+       return false
+end
+if string.len(buf) ~= 9 then
+       return {err=string.format("Invalid entry data: %s", buf)}
+end
+buf = string.sub(buf, 2)
+local ino =  parse(buf, 1, 56) +
+             parse(buf, 2, 48) +
+             parse(buf, 3, 40) +
+             parse(buf, 4, 32) +
+             parse(buf, 5, 24) +
+             parse(buf, 6, 16) +
+             parse(buf, 7, 8) +
+             parse(buf, 8, 0)
+return {ino, redis.call('GET', "i" .. tostring(ino))}
+`
+
 // RedisConfig is config for Redis client.
 type RedisConfig struct {
 	Strict  bool // update ctime
@@ -325,14 +349,20 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 }
 
 func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	buf, err := r.rdb.HGet(c, r.entryKey(parent), name).Bytes()
+	entryKey := r.entryKey(parent)
+
+	res, err := r.rdb.Eval(c, scriptLookup, []string{entryKey, name}).Result()
 	if err != nil {
 		return errno(err)
 	}
-	_, ino := r.parseEntry(buf)
-	a, err := r.rdb.Get(c, r.inodeKey(ino)).Bytes()
-	if err == nil && attr != nil {
-		r.parseAttr(a, attr)
+	vals, _ := res.([]interface{})
+	returnedIno, _ := vals[0].(int64)
+	returnedAttr, _ := vals[1].(string)
+	logger.Debugf("Received %q %d %s", vals, returnedIno, returnedAttr)
+
+	ino := Ino(returnedIno)
+	if attr != nil {
+		r.parseAttr([]byte(returnedAttr), attr)
 		if attr.Typ == TypeDirectory && r.conf.Strict {
 			cnt, err := r.rdb.HLen(c, r.entryKey(ino)).Result()
 			if err == nil {
