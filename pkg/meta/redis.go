@@ -53,6 +53,8 @@ const totalInodes = "totalInodes"
 const delchunks = "delchunks"
 const allSessions = "sessions"
 
+var shaLookup string
+
 const scriptLookup = `
 local parse = function(buf, idx, pos)
 	return bit.lshift(string.byte(buf, idx), pos)
@@ -125,6 +127,13 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 			callbacks: make(map[uint32]MsgCallback),
 		},
 	}
+
+	shaLookup, err = m.rdb.ScriptLoad(c, scriptLookup).Result()
+	if err != nil {
+		logger.Infof("Failed to load scriptLookup: %v", err)
+		shaLookup = ""
+	}
+
 	m.checkServerConfig()
 	m.sid, err = m.rdb.Incr(c, "nextsession").Result()
 	if err != nil {
@@ -349,29 +358,53 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 }
 
 func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	var foundIno Ino
+	var encodedAttr []byte
+	var err error
+
 	entryKey := r.entryKey(parent)
-
-	res, err := r.rdb.Eval(c, scriptLookup, []string{entryKey, name}).Result()
-	if err != nil {
-		return errno(err)
+	if len(shaLookup) > 0 {
+		var res interface{}
+		res, err = r.rdb.EvalSha(c, shaLookup, []string{entryKey, name}).Result()
+		if err != nil {
+			return errno(err)
+		}
+		invalidScriptRes := fmt.Errorf("invalid script result: %v", res)
+		vals, ok := res.([]interface{})
+		if !ok {
+			return errno(invalidScriptRes)
+		}
+		returnedIno, ok := vals[0].(int64)
+		if !ok {
+			return errno(invalidScriptRes)
+		}
+		returnedAttr, ok := vals[1].(string)
+		if !ok {
+			return errno(invalidScriptRes)
+		}
+		foundIno = Ino(returnedIno)
+		encodedAttr = []byte(returnedAttr)
+	} else {
+		var buf []byte
+		buf, err = r.rdb.HGet(c, r.entryKey(parent), name).Bytes()
+		if err != nil {
+			return errno(err)
+		}
+		_, foundIno = r.parseEntry(buf)
+		encodedAttr, err = r.rdb.Get(c, r.inodeKey(foundIno)).Bytes()
 	}
-	vals, _ := res.([]interface{})
-	returnedIno, _ := vals[0].(int64)
-	returnedAttr, _ := vals[1].(string)
-	logger.Debugf("Received %q %d %s", vals, returnedIno, returnedAttr)
 
-	ino := Ino(returnedIno)
-	if attr != nil {
-		r.parseAttr([]byte(returnedAttr), attr)
+	if err == nil && attr != nil {
+		r.parseAttr(encodedAttr, attr)
 		if attr.Typ == TypeDirectory && r.conf.Strict {
-			cnt, err := r.rdb.HLen(c, r.entryKey(ino)).Result()
+			cnt, err := r.rdb.HLen(c, r.entryKey(foundIno)).Result()
 			if err == nil {
 				attr.Nlink = uint32(cnt + 2)
 			}
 		}
 	}
 	if inode != nil {
-		*inode = ino
+		*inode = foundIno
 	}
 	return errno(err)
 }
