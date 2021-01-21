@@ -53,6 +53,30 @@ const totalInodes = "totalInodes"
 const delchunks = "delchunks"
 const allSessions = "sessions"
 
+const scriptLookup = `
+local parse = function(buf, idx, pos)
+	return bit.lshift(string.byte(buf, idx), pos)
+end
+
+local buf = redis.call('HGET', KEYS[1], KEYS[2])
+if not buf then
+       return false
+end
+if string.len(buf) ~= 9 then
+       return {err=string.format("Invalid entry data: %s", buf)}
+end
+buf = string.sub(buf, 2)
+local ino =  parse(buf, 1, 56) +
+             parse(buf, 2, 48) +
+             parse(buf, 3, 40) +
+             parse(buf, 4, 32) +
+             parse(buf, 5, 24) +
+             parse(buf, 6, 16) +
+             parse(buf, 7, 8) +
+             parse(buf, 8, 0)
+return {ino, redis.call('GET', "i" .. tostring(ino))}
+`
+
 // RedisConfig is config for Redis client.
 type RedisConfig struct {
 	Strict  bool // update ctime
@@ -71,6 +95,8 @@ type redisMeta struct {
 	compacting   map[uint64]bool
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
+
+	shaLookup string // The SHA returned by Redis for the loaded `scriptLookup`
 }
 
 var _ Meta = &redisMeta{}
@@ -101,6 +127,13 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 			callbacks: make(map[uint32]MsgCallback),
 		},
 	}
+
+	m.shaLookup, err = m.rdb.ScriptLoad(c, scriptLookup).Result()
+	if err != nil {
+		logger.Infof("Failed to load scriptLookup: %v", err)
+		m.shaLookup = ""
+	}
+
 	m.checkServerConfig()
 	m.sid, err = m.rdb.Incr(c, "nextsession").Result()
 	if err != nil {
@@ -325,23 +358,52 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 }
 
 func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	buf, err := r.rdb.HGet(c, r.entryKey(parent), name).Bytes()
-	if err != nil {
-		return errno(err)
+	var foundIno Ino
+	var encodedAttr []byte
+	var err error
+
+	entryKey := r.entryKey(parent)
+	if len(r.shaLookup) > 0 {
+		var res interface{}
+		res, err = r.rdb.EvalSha(c, r.shaLookup, []string{entryKey, name}).Result()
+		if err != nil {
+			return errno(err)
+		}
+		vals, ok := res.([]interface{})
+		if !ok {
+			return errno(fmt.Errorf("invalid script result: %v", res))
+		}
+		returnedIno, ok := vals[0].(int64)
+		if !ok {
+			return errno(fmt.Errorf("invalid script result: %v", res))
+		}
+		returnedAttr, ok := vals[1].(string)
+		if !ok {
+			return errno(fmt.Errorf("invalid script result: %v", res))
+		}
+		foundIno = Ino(returnedIno)
+		encodedAttr = []byte(returnedAttr)
+	} else {
+		var buf []byte
+		buf, err = r.rdb.HGet(c, r.entryKey(parent), name).Bytes()
+		if err != nil {
+			return errno(err)
+		}
+		_, foundIno = r.parseEntry(buf)
+		encodedAttr, err = r.rdb.Get(c, r.inodeKey(foundIno)).Bytes()
 	}
-	_, ino := r.parseEntry(buf)
-	a, err := r.rdb.Get(c, r.inodeKey(ino)).Bytes()
+
 	if err == nil && attr != nil {
-		r.parseAttr(a, attr)
+		r.parseAttr(encodedAttr, attr)
 		if attr.Typ == TypeDirectory && r.conf.Strict {
-			cnt, err := r.rdb.HLen(c, r.entryKey(ino)).Result()
+			cnt, err := r.rdb.HLen(c, r.entryKey(foundIno)).Result()
 			if err == nil {
 				attr.Nlink = uint32(cnt + 2)
 			}
 		}
 	}
 	if inode != nil {
-		*inode = ino
+		*inode = foundIno
 	}
 	return errno(err)
 }
