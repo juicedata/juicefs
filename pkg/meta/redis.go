@@ -53,8 +53,6 @@ const totalInodes = "totalInodes"
 const delchunks = "delchunks"
 const allSessions = "sessions"
 
-var shaLookup string
-
 const scriptLookup = `
 local parse = function(buf, idx, pos)
 	return bit.lshift(string.byte(buf, idx), pos)
@@ -97,6 +95,8 @@ type redisMeta struct {
 	compacting   map[uint64]bool
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
+
+	shaLookup string // The SHA returned by Redis for the loaded `scriptLookup`
 }
 
 var _ Meta = &redisMeta{}
@@ -128,10 +128,10 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		},
 	}
 
-	shaLookup, err = m.rdb.ScriptLoad(c, scriptLookup).Result()
+	m.shaLookup, err = m.rdb.ScriptLoad(c, scriptLookup).Result()
 	if err != nil {
 		logger.Infof("Failed to load scriptLookup: %v", err)
-		shaLookup = ""
+		m.shaLookup = ""
 	}
 
 	m.checkServerConfig()
@@ -363,24 +363,23 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	var err error
 
 	entryKey := r.entryKey(parent)
-	if len(shaLookup) > 0 {
+	if len(r.shaLookup) > 0 {
 		var res interface{}
-		res, err = r.rdb.EvalSha(c, shaLookup, []string{entryKey, name}).Result()
+		res, err = r.rdb.EvalSha(c, r.shaLookup, []string{entryKey, name}).Result()
 		if err != nil {
 			return errno(err)
 		}
-		invalidScriptRes := fmt.Errorf("invalid script result: %v", res)
 		vals, ok := res.([]interface{})
 		if !ok {
-			return errno(invalidScriptRes)
+			return errno(fmt.Errorf("invalid script result: %v", res))
 		}
 		returnedIno, ok := vals[0].(int64)
 		if !ok {
-			return errno(invalidScriptRes)
+			return errno(fmt.Errorf("invalid script result: %v", res))
 		}
 		returnedAttr, ok := vals[1].(string)
 		if !ok {
-			return errno(invalidScriptRes)
+			return errno(fmt.Errorf("invalid script result: %v", res))
 		}
 		foundIno = Ino(returnedIno)
 		encodedAttr = []byte(returnedAttr)
