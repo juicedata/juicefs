@@ -91,6 +91,10 @@ After that you can access the volume just like a local directory.
 
 To get all options, just run `./juicefs mount -h`.
 
+### Kubernetes
+
+There is a [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver) to use JuiceFS in Kubernetes easily.
+
 ## POSIX Compatibility
 
 JuiceFS passed all of the 8813 tests in latest [pjdfstest](https://github.com/pjd/pjdfstest).
