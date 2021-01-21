@@ -115,6 +115,9 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 	if opt.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
 		opt.Password = os.Getenv("REDIS_PASSWORD")
 	}
+	opt.MaxRetries = conf.Retries
+	opt.MinRetryBackoff = time.Millisecond * 100
+	opt.MaxRetryBackoff = time.Minute * 1
 	rdb := redis.NewClient(opt)
 	m := &redisMeta{
 		conf:         conf,
@@ -128,14 +131,14 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		},
 	}
 
-	m.shaLookup, err = m.rdb.ScriptLoad(c, scriptLookup).Result()
+	m.shaLookup, err = m.rdb.ScriptLoad(Background, scriptLookup).Result()
 	if err != nil {
 		logger.Infof("Failed to load scriptLookup: %v", err)
 		m.shaLookup = ""
 	}
 
 	m.checkServerConfig()
-	m.sid, err = m.rdb.Incr(c, "nextsession").Result()
+	m.sid, err = m.rdb.Incr(Background, "nextsession").Result()
 	if err != nil {
 		return nil, fmt.Errorf("create session: %s", err)
 	}
@@ -146,7 +149,7 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 }
 
 func (r *redisMeta) Init(format Format, force bool) error {
-	body, err := r.rdb.Get(c, "setting").Bytes()
+	body, err := r.rdb.Get(Background, "setting").Bytes()
 	if err != nil && err != redis.Nil {
 		return err
 	}
@@ -176,7 +179,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	if err != nil {
 		logger.Fatalf("json: %s", err)
 	}
-	err = r.rdb.Set(c, "setting", data, 0).Err()
+	err = r.rdb.Set(Background, "setting", data, 0).Err()
 	if err != nil {
 		return err
 	}
@@ -196,12 +199,12 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	attr.Length = 4 << 10
 	attr.Rdev = 0
 	attr.Parent = 1
-	r.rdb.Set(c, r.inodeKey(1), r.marshal(&attr), 0)
+	r.rdb.Set(Background, r.inodeKey(1), r.marshal(&attr), 0)
 	return nil
 }
 
 func (r *redisMeta) Load() (*Format, error) {
-	body, err := r.rdb.Get(c, "setting").Bytes()
+	body, err := r.rdb.Get(Background, "setting").Bytes()
 	if err == redis.Nil {
 		return nil, fmt.Errorf("no volume found")
 	}
@@ -231,8 +234,6 @@ func (r *redisMeta) newMsg(mid uint32, args ...interface{}) error {
 	}
 	return fmt.Errorf("message %d is not supported", mid)
 }
-
-var c = context.TODO()
 
 func (r *redisMeta) sessionKey(sid int64) string {
 	return "session" + strconv.FormatInt(sid, 10)
@@ -271,9 +272,9 @@ func (r *redisMeta) plockKey(inode Ino) string {
 }
 
 func (r *redisMeta) nextInode() (Ino, error) {
-	ino, err := r.rdb.Incr(c, "nextinode").Uint64()
+	ino, err := r.rdb.Incr(Background, "nextinode").Uint64()
 	if ino == 1 {
-		ino, err = r.rdb.Incr(c, "nextinode").Uint64()
+		ino, err = r.rdb.Incr(Background, "nextinode").Uint64()
 	}
 	return Ino(ino), err
 }
@@ -348,6 +349,8 @@ func align4K(length uint64) int64 {
 
 func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	*totalspace = 1 << 50
+	c, cancel := context.WithTimeout(ctx, time.Millisecond*300)
+	defer cancel()
 	used, _ := r.rdb.IncrBy(c, usedSpace, 0).Result()
 	used = ((used >> 16) + 1) << 16 // aligned to 64K
 	*availspace = *totalspace - uint64(used)
@@ -365,8 +368,11 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	entryKey := r.entryKey(parent)
 	if len(r.shaLookup) > 0 && attr != nil {
 		var res interface{}
-		res, err = r.rdb.EvalSha(c, r.shaLookup, []string{entryKey, name}).Result()
+		res, err = r.rdb.EvalSha(ctx, r.shaLookup, []string{entryKey, name}).Result()
 		if err != nil {
+			if strings.Contains(err.Error(), "NOSCRIPT") {
+				r.shaLookup = ""
+			}
 			return errno(err)
 		}
 		vals, ok := res.([]interface{})
@@ -385,13 +391,13 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		encodedAttr = []byte(returnedAttr)
 	} else {
 		var buf []byte
-		buf, err = r.rdb.HGet(c, r.entryKey(parent), name).Bytes()
+		buf, err = r.rdb.HGet(ctx, entryKey, name).Bytes()
 		if err != nil {
 			return errno(err)
 		}
 		_, foundIno = r.parseEntry(buf)
 		if attr != nil {
-			encodedAttr, err = r.rdb.Get(c, r.inodeKey(foundIno)).Bytes()
+			encodedAttr, err = r.rdb.Get(ctx, r.inodeKey(foundIno)).Bytes()
 		}
 	}
 
@@ -409,9 +415,22 @@ func (r *redisMeta) Access(ctx Context, inode Ino, modemask uint16) syscall.Errn
 }
 
 func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	var c context.Context = ctx
+	if inode == 1 {
+		var cancel func()
+		c, cancel = context.WithTimeout(ctx, time.Millisecond*300)
+		defer cancel()
+	}
 	a, err := r.rdb.Get(c, r.inodeKey(inode)).Bytes()
 	if err == nil {
 		r.parseAttr(a, attr)
+	}
+	if err != nil && inode == 1 {
+		err = nil
+		attr.Typ = TypeDirectory
+		attr.Mode = 0777
+		attr.Nlink = 2
+		attr.Length = 4 << 10
 	}
 	return errno(err)
 }
@@ -430,7 +449,7 @@ func errno(err error) syscall.Errno {
 	return syscall.EIO
 }
 
-func (r *redisMeta) txn(txf func(tx *redis.Tx) error, keys ...string) syscall.Errno {
+func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) syscall.Errno {
 	var err error
 	var khash = fnv.New32()
 	_, _ = khash.Write([]byte(keys[0]))
@@ -438,7 +457,7 @@ func (r *redisMeta) txn(txf func(tx *redis.Tx) error, keys ...string) syscall.Er
 	l.Lock()
 	defer l.Unlock()
 	for i := 0; i < 50; i++ {
-		err = r.rdb.Watch(c, txf, keys...)
+		err = r.rdb.Watch(ctx, txf, keys...)
 		if err == redis.TxFailedErr {
 			time.Sleep(time.Microsecond * 100 * time.Duration(rand.Int()%(i+1)))
 			continue
@@ -449,9 +468,9 @@ func (r *redisMeta) txn(txf func(tx *redis.Tx) error, keys ...string) syscall.Er
 }
 
 func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	return r.txn(func(tx *redis.Tx) error {
+	return r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
-		a, err := tx.Get(c, r.inodeKey(inode)).Bytes()
+		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
 		}
@@ -467,7 +486,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 				var cursor uint64
 				var keys []string
 				for {
-					keys, cursor, err = tx.Scan(c, cursor, fmt.Sprintf("c%d_*", inode), 10000).Result()
+					keys, cursor, err = tx.Scan(ctx, cursor, fmt.Sprintf("c%d_*", inode), 10000).Result()
 					if err != nil {
 						return err
 					}
@@ -497,8 +516,8 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		t.Mtimensec = uint32(now.Nanosecond())
 		t.Ctime = now.Unix()
 		t.Ctimensec = uint32(now.Nanosecond())
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.Set(c, r.inodeKey(inode), r.marshal(&t), 0)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&t), 0)
 			if length > old {
 				// zero out from old to length
 				w := utils.NewBuffer(24)
@@ -511,7 +530,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 				} else {
 					w.Put32(uint32(length - old))
 				}
-				pipe.RPush(c, r.chunkKey(inode, uint32(old/ChunkSize)), w.Bytes())
+				pipe.RPush(ctx, r.chunkKey(inode, uint32(old/ChunkSize)), w.Bytes())
 				w = utils.NewBuffer(24)
 				w.Put32(0)
 				w.Put64(0)
@@ -519,7 +538,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 				w.Put32(0)
 				w.Put32(ChunkSize)
 				for _, indx := range zeroChunks {
-					pipe.RPush(c, r.chunkKey(inode, indx), w.Bytes())
+					pipe.RPush(ctx, r.chunkKey(inode, indx), w.Bytes())
 				}
 				if length > (old/ChunkSize+1)*ChunkSize && length%ChunkSize > 0 {
 					w := utils.NewBuffer(24)
@@ -528,10 +547,10 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 					w.Put32(0)
 					w.Put32(0)
 					w.Put32(uint32(length % ChunkSize))
-					pipe.RPush(c, r.chunkKey(inode, uint32(length/ChunkSize)), w.Bytes())
+					pipe.RPush(ctx, r.chunkKey(inode, uint32(length/ChunkSize)), w.Bytes())
 				}
 			}
-			pipe.IncrBy(c, usedSpace, align4K(length)-align4K(old))
+			pipe.IncrBy(ctx, usedSpace, align4K(length)-align4K(old))
 			return nil
 		})
 		if err == nil {
@@ -569,9 +588,9 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	return r.txn(func(tx *redis.Tx) error {
+	return r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
-		a, err := tx.Get(c, r.inodeKey(inode)).Bytes()
+		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
 		}
@@ -594,8 +613,8 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		now := time.Now()
 		t.Ctime = now.Unix()
 		t.Ctimensec = uint32(now.Nanosecond())
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.Set(c, r.inodeKey(inode), r.marshal(&t), 0)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&t), 0)
 			if mode&(fallocZeroRange|fallocPunchHole) != 0 {
 				if off+size > old {
 					size = old - off
@@ -613,12 +632,12 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 					w.Put32(0)
 					w.Put32(0)
 					w.Put32(uint32(l))
-					pipe.RPush(c, r.chunkKey(inode, indx), w.Bytes())
+					pipe.RPush(ctx, r.chunkKey(inode, indx), w.Bytes())
 					off += l
 					size -= l
 				}
 			}
-			pipe.IncrBy(c, usedSpace, align4K(length)-align4K(old))
+			pipe.IncrBy(ctx, usedSpace, align4K(length)-align4K(old))
 			return nil
 		})
 		return err
@@ -626,9 +645,9 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 }
 
 func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	return r.txn(func(tx *redis.Tx) error {
+	return r.txn(ctx, func(tx *redis.Tx) error {
 		var cur Attr
-		a, err := tx.Get(c, r.inodeKey(inode)).Bytes()
+		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
 		}
@@ -673,8 +692,8 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 		}
 		cur.Ctime = now.Unix()
 		cur.Ctimensec = uint32(now.Nanosecond())
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.Set(c, r.inodeKey(inode), r.marshal(&cur), 0)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&cur), 0)
 			return nil
 		})
 		if err == nil {
@@ -689,7 +708,7 @@ func (r *redisMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno
 		*path = target.([]byte)
 		return 0
 	}
-	target, err := r.rdb.Get(c, r.symKey(inode)).Bytes()
+	target, err := r.rdb.Get(ctx, r.symKey(inode)).Bytes()
 	if err == nil {
 		*path = target
 		r.symlinks.Store(inode, target)
@@ -729,9 +748,9 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 	attr.Parent = parent
 
 	*inode = ino
-	return r.txn(func(tx *redis.Tx) error {
+	return r.txn(ctx, func(tx *redis.Tx) error {
 		var patt Attr
-		a, err := tx.Get(c, r.inodeKey(parent)).Bytes()
+		a, err := tx.Get(ctx, r.inodeKey(parent)).Bytes()
 		if err != nil {
 			return err
 		}
@@ -740,7 +759,7 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 			return syscall.ENOTDIR
 		}
 
-		err = tx.HGet(c, r.entryKey(parent), name).Err()
+		err = tx.HGet(ctx, r.entryKey(parent), name).Err()
 		if err != nil && err != redis.Nil {
 			return err
 		} else if err == nil {
@@ -762,16 +781,16 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.HSet(c, r.entryKey(parent), name, r.packEntry(_type, ino))
-			pipe.Set(c, r.inodeKey(parent), r.marshal(&patt), 0)
-			pipe.Set(c, r.inodeKey(ino), r.marshal(attr), 0)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, r.entryKey(parent), name, r.packEntry(_type, ino))
+			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&patt), 0)
+			pipe.Set(ctx, r.inodeKey(ino), r.marshal(attr), 0)
 			if _type == TypeSymlink {
-				pipe.Set(c, r.symKey(ino), path, 0)
+				pipe.Set(ctx, r.symKey(ino), path, 0)
 			} else if _type == TypeFile {
-				pipe.IncrBy(c, usedSpace, align4K(0))
+				pipe.IncrBy(ctx, usedSpace, align4K(0))
 			}
-			pipe.Incr(c, totalInodes)
+			pipe.Incr(ctx, totalInodes)
 			return nil
 		})
 		return err
@@ -793,7 +812,7 @@ func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cu
 }
 
 func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	buf, err := r.rdb.HGet(c, r.entryKey(parent), name).Bytes()
+	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
 	if err != nil {
 		return errno(err)
 	}
@@ -802,8 +821,8 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.EPERM
 	}
 
-	return r.txn(func(tx *redis.Tx) error {
-		rs, _ := tx.MGet(c, r.inodeKey(parent), r.inodeKey(inode)).Result()
+	return r.txn(ctx, func(tx *redis.Tx) error {
+		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil || rs[1] == nil {
 			return redis.Nil
 		}
@@ -821,7 +840,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 
-		buf, err := tx.HGet(c, r.entryKey(parent), name).Bytes()
+		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
 		if err != nil {
 			return err
 		}
@@ -838,28 +857,28 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			r.Unlock()
 		}
 
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.HDel(c, r.entryKey(parent), name)
-			pipe.Set(c, r.inodeKey(parent), r.marshal(&pattr), 0)
-			pipe.Del(c, r.xattrKey(inode))
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HDel(ctx, r.entryKey(parent), name)
+			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			pipe.Del(ctx, r.xattrKey(inode))
 			if attr.Nlink > 0 {
-				pipe.Set(c, r.inodeKey(inode), r.marshal(&attr), 0)
+				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 			} else {
 				switch _type {
 				case TypeSymlink:
-					pipe.Del(c, r.symKey(inode))
-					pipe.Del(c, r.inodeKey(inode))
+					pipe.Del(ctx, r.symKey(inode))
+					pipe.Del(ctx, r.inodeKey(inode))
 				case TypeFile:
 					if opened {
-						pipe.Set(c, r.inodeKey(inode), r.marshal(&attr), 0)
-						pipe.SAdd(c, r.sessionKey(r.sid), strconv.Itoa(int(inode)))
+						pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
+						pipe.SAdd(ctx, r.sessionKey(r.sid), strconv.Itoa(int(inode)))
 					} else {
-						pipe.ZAdd(c, delchunks, &redis.Z{Score: float64(now.Unix()), Member: inode.String()})
-						pipe.Del(c, r.inodeKey(inode))
-						pipe.IncrBy(c, usedSpace, -align4K(attr.Length))
+						pipe.ZAdd(ctx, delchunks, &redis.Z{Score: float64(now.Unix()), Member: inode.String()})
+						pipe.Del(ctx, r.inodeKey(inode))
+						pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
 					}
 				}
-				pipe.IncrBy(c, totalInodes, -1)
+				pipe.IncrBy(ctx, totalInodes, -1)
 			}
 			return nil
 		})
@@ -883,7 +902,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	buf, err := r.rdb.HGet(c, r.entryKey(parent), name).Bytes()
+	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
 	if err != nil {
 		return errno(err)
 	}
@@ -892,8 +911,8 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.ENOTDIR
 	}
 
-	return r.txn(func(tx *redis.Tx) error {
-		a, err := tx.Get(c, r.inodeKey(parent)).Bytes()
+	return r.txn(ctx, func(tx *redis.Tx) error {
+		a, err := tx.Get(ctx, r.inodeKey(parent)).Bytes()
 		if err != nil {
 			return err
 		}
@@ -909,7 +928,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
-		buf, err := tx.HGet(c, r.entryKey(parent), name).Bytes()
+		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
 		if err != nil {
 			return err
 		}
@@ -918,20 +937,20 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOTDIR
 		}
 
-		cnt, err := tx.HLen(c, r.entryKey(inode)).Result()
+		cnt, err := tx.HLen(ctx, r.entryKey(inode)).Result()
 		if err != nil {
 			return err
 		}
 		if cnt > 0 {
 			return syscall.ENOTEMPTY
 		}
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.HDel(c, r.entryKey(parent), name)
-			pipe.Set(c, r.inodeKey(parent), r.marshal(&pattr), 0)
-			pipe.Del(c, r.inodeKey(inode))
-			pipe.Del(c, r.xattrKey(inode))
-			// pipe.Del(c, r.entryKey(inode))
-			pipe.IncrBy(c, totalInodes, -1)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HDel(ctx, r.entryKey(parent), name)
+			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			pipe.Del(ctx, r.inodeKey(inode))
+			pipe.Del(ctx, r.xattrKey(inode))
+			// pipe.Del(ctx, r.entryKey(inode))
+			pipe.IncrBy(ctx, totalInodes, -1)
 			return nil
 		})
 		return err
@@ -939,7 +958,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
-	buf, err := r.rdb.HGet(c, r.entryKey(parentSrc), nameSrc).Bytes()
+	buf, err := r.rdb.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 	if err != nil {
 		return errno(err)
 	}
@@ -950,7 +969,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		}
 		return 0
 	}
-	buf, err = r.rdb.HGet(c, r.entryKey(parentDst), nameDst).Bytes()
+	buf, err = r.rdb.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
 	if err != nil && err != redis.Nil {
 		return errno(err)
 	}
@@ -966,8 +985,8 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		}
 	}
 
-	return r.txn(func(tx *redis.Tx) error {
-		buf, err = tx.HGet(c, r.entryKey(parentDst), nameDst).Bytes()
+	return r.txn(ctx, func(tx *redis.Tx) error {
+		buf, err = tx.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
 		if err != nil && err != redis.Nil {
 			return err
 		}
@@ -979,7 +998,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 				return syscall.EAGAIN
 			}
 			if typ1 == TypeDirectory {
-				cnt, err := tx.HLen(c, r.entryKey(dino)).Result()
+				cnt, err := tx.HLen(ctx, r.entryKey(dino)).Result()
 				if err != nil {
 					return err
 				}
@@ -987,7 +1006,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					return syscall.ENOTEMPTY
 				}
 			} else {
-				a, err := tx.Get(c, r.inodeKey(dino)).Bytes()
+				a, err := tx.Get(ctx, r.inodeKey(dino)).Bytes()
 				if err != nil {
 					return err
 				}
@@ -1007,7 +1026,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			dino = 0
 		}
 
-		buf, err := tx.HGet(c, r.entryKey(parentSrc), nameSrc).Bytes()
+		buf, err := tx.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 		if err != nil {
 			return err
 		}
@@ -1016,7 +1035,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			return syscall.EAGAIN
 		}
 
-		rs, _ := tx.MGet(c, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
+		rs, _ := tx.MGet(ctx, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return redis.Nil
 		}
@@ -1050,39 +1069,39 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			*attr = iattr
 		}
 
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.HDel(c, r.entryKey(parentSrc), nameSrc)
-			pipe.Set(c, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HDel(ctx, r.entryKey(parentSrc), nameSrc)
+			pipe.Set(ctx, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
 			if dino > 0 {
 				if dtyp != TypeDirectory && tattr.Nlink > 0 {
-					pipe.Set(c, r.inodeKey(dino), r.marshal(&tattr), 0)
+					pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 				} else {
 					if dtyp == TypeDirectory {
-						pipe.Del(c, r.inodeKey(dino))
+						pipe.Del(ctx, r.inodeKey(dino))
 						dattr.Nlink--
 					} else if dtyp == TypeSymlink {
-						pipe.Del(c, r.symKey(dino))
-						pipe.Del(c, r.inodeKey(dino))
+						pipe.Del(ctx, r.symKey(dino))
+						pipe.Del(ctx, r.inodeKey(dino))
 					} else if dtyp == TypeFile {
 						if opened {
-							pipe.Set(c, r.inodeKey(dino), r.marshal(&tattr), 0)
-							pipe.SAdd(c, r.sessionKey(r.sid), strconv.Itoa(int(dino)))
+							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
+							pipe.SAdd(ctx, r.sessionKey(r.sid), strconv.Itoa(int(dino)))
 						} else {
-							pipe.ZAdd(c, delchunks, &redis.Z{Score: float64(now.Unix()), Member: dino.String()})
-							pipe.Del(c, r.inodeKey(dino))
-							pipe.IncrBy(c, usedSpace, -align4K(tattr.Length))
+							pipe.ZAdd(ctx, delchunks, &redis.Z{Score: float64(now.Unix()), Member: dino.String()})
+							pipe.Del(ctx, r.inodeKey(dino))
+							pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
 						}
 					}
-					pipe.IncrBy(c, totalInodes, -1)
-					pipe.Del(c, r.xattrKey(dino))
+					pipe.IncrBy(ctx, totalInodes, -1)
+					pipe.Del(ctx, r.xattrKey(dino))
 				}
-				pipe.HDel(c, r.entryKey(parentDst), nameDst)
+				pipe.HDel(ctx, r.entryKey(parentDst), nameDst)
 			}
-			pipe.HSet(c, r.entryKey(parentDst), nameDst, buf)
+			pipe.HSet(ctx, r.entryKey(parentDst), nameDst, buf)
 			if parentDst != parentSrc {
-				pipe.Set(c, r.inodeKey(parentDst), r.marshal(&dattr), 0)
+				pipe.Set(ctx, r.inodeKey(parentDst), r.marshal(&dattr), 0)
 			}
-			pipe.Set(c, r.inodeKey(ino), r.marshal(&iattr), 0)
+			pipe.Set(ctx, r.inodeKey(ino), r.marshal(&iattr), 0)
 			return nil
 		})
 		if err == nil && dino > 0 && dtyp == TypeFile {
@@ -1099,8 +1118,8 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 }
 
 func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	return r.txn(func(tx *redis.Tx) error {
-		rs, _ := tx.MGet(c, r.inodeKey(parent), r.inodeKey(inode)).Result()
+	return r.txn(ctx, func(tx *redis.Tx) error {
+		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil || rs[1] == nil {
 			return redis.Nil
 		}
@@ -1122,17 +1141,17 @@ func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		iattr.Nlink++
 
-		err := tx.HGet(c, r.entryKey(parent), name).Err()
+		err := tx.HGet(ctx, r.entryKey(parent), name).Err()
 		if err != nil && err != redis.Nil {
 			return err
 		} else if err == nil {
 			return syscall.EEXIST
 		}
 
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.HSet(c, r.entryKey(parent), name, r.packEntry(iattr.Typ, inode))
-			pipe.Set(c, r.inodeKey(parent), r.marshal(&pattr), 0)
-			pipe.Set(c, r.inodeKey(inode), r.marshal(&iattr), 0)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, r.entryKey(parent), name, r.packEntry(iattr.Typ, inode))
+			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&iattr), 0)
 			return nil
 		})
 		if err == nil && attr != nil {
@@ -1147,7 +1166,7 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 	if err := r.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
 	}
-	vals, err := r.rdb.HGetAll(c, r.entryKey(inode)).Result()
+	vals, err := r.rdb.HGetAll(ctx, r.entryKey(inode)).Result()
 	if err != nil {
 		return errno(err)
 	}
@@ -1178,7 +1197,7 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 		for _, e := range *entries {
 			keys = append(keys, r.inodeKey(e.Inode))
 		}
-		rs, _ := r.rdb.MGet(c, keys...).Result()
+		rs, _ := r.rdb.MGet(ctx, keys...).Result()
 		for i, re := range rs {
 			if re != nil {
 				if a, ok := re.(string); ok {
@@ -1191,7 +1210,8 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 }
 
 func (r *redisMeta) cleanStaleSession(sid int64) {
-	inodes, err := r.rdb.LRange(c, r.sessionKey(sid), 0, 1000).Result()
+	var ctx = Background
+	inodes, err := r.rdb.LRange(ctx, r.sessionKey(sid), 0, 1000).Result()
 	if err != nil {
 		return
 	}
@@ -1202,22 +1222,23 @@ func (r *redisMeta) cleanStaleSession(sid int64) {
 		}
 	}
 	if len(inodes) == 0 {
-		r.rdb.Del(c, r.sessionKey(sid))
-		r.rdb.ZRem(c, allSessions, strconv.Itoa(int(sid)))
+		r.rdb.Del(ctx, r.sessionKey(sid))
+		r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
 	}
 }
 
 func (r *redisMeta) cleanStaleSessions() {
 	now := time.Now()
+	var ctx = Background
 	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -10).Unix())), Count: 100}
-	staleSessions, _ := r.rdb.ZRangeByScore(c, allSessions, rng).Result()
+	staleSessions, _ := r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
 	for _, ssid := range staleSessions {
 		sid, _ := strconv.Atoi(ssid)
 		r.cleanStaleSession(int64(sid))
 	}
 
 	rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
-	staleSessions, err := r.rdb.ZRangeByScore(c, allSessions, rng).Result()
+	staleSessions, err := r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
 	if err != nil || len(staleSessions) == 0 {
 		return
 	}
@@ -1228,16 +1249,16 @@ func (r *redisMeta) cleanStaleSessions() {
 	var cursor uint64
 	var keys []string
 	for {
-		keys, cursor, err = r.rdb.Scan(c, cursor, "lock*", 1000).Result()
+		keys, cursor, err = r.rdb.Scan(ctx, cursor, "lock*", 1000).Result()
 		if err != nil || len(keys) == 0 {
 			break
 		}
 		for _, k := range keys {
-			owners, _ := r.rdb.HKeys(c, k).Result()
+			owners, _ := r.rdb.HKeys(ctx, k).Result()
 			for _, o := range owners {
 				p := strings.Split(o, "_")[0]
 				if _, ok := sids[p]; ok {
-					err = r.rdb.HDel(c, k, o).Err()
+					err = r.rdb.HDel(ctx, k, o).Err()
 					logger.Infof("cleanup lock on %s from session %s: %s", k, p, err)
 				}
 			}
@@ -1248,7 +1269,7 @@ func (r *redisMeta) cleanStaleSessions() {
 func (r *redisMeta) refreshSession() {
 	for {
 		now := time.Now()
-		r.rdb.ZAdd(c, allSessions, &redis.Z{Score: float64(now.Unix()), Member: strconv.Itoa(int(r.sid))})
+		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(now.Unix()), Member: strconv.Itoa(int(r.sid))})
 		go r.cleanStaleSessions()
 		time.Sleep(time.Minute)
 	}
@@ -1256,7 +1277,8 @@ func (r *redisMeta) refreshSession() {
 
 func (r *redisMeta) deleteInode(inode Ino) error {
 	var attr Attr
-	a, err := r.rdb.Get(c, r.inodeKey(inode)).Bytes()
+	var ctx = Background
+	a, err := r.rdb.Get(ctx, r.inodeKey(inode)).Bytes()
 	if err == redis.Nil {
 		return nil
 	}
@@ -1264,10 +1286,10 @@ func (r *redisMeta) deleteInode(inode Ino) error {
 		return err
 	}
 	r.parseAttr(a, &attr)
-	_, err = r.rdb.TxPipelined(c, func(pipe redis.Pipeliner) error {
-		pipe.ZAdd(c, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: inode.String()})
-		pipe.Del(c, r.inodeKey(inode))
-		pipe.IncrBy(c, usedSpace, -align4K(attr.Length))
+	_, err = r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.ZAdd(ctx, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: inode.String()})
+		pipe.Del(ctx, r.inodeKey(inode))
+		pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
 		return nil
 	})
 	if err == nil {
@@ -1299,7 +1321,7 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 			delete(r.removedFiles, inode)
 			go func() {
 				if err := r.deleteInode(inode); err == nil {
-					r.rdb.SRem(c, r.sessionKey(r.sid), strconv.Itoa(int(inode)))
+					r.rdb.SRem(ctx, r.sessionKey(r.sid), strconv.Itoa(int(inode)))
 				}
 			}()
 		}
@@ -1333,7 +1355,7 @@ func buildSlice(ss []*slice) []Slice {
 }
 
 func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
-	vals, err := r.rdb.LRange(c, r.chunkKey(inode, indx), 0, 1000000).Result()
+	vals, err := r.rdb.LRange(ctx, r.chunkKey(inode, indx), 0, 1000000).Result()
 	if err != nil {
 		return errno(err)
 	}
@@ -1346,7 +1368,7 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 }
 
 func (r *redisMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
-	cid, err := r.rdb.Incr(c, "nextchunk").Uint64()
+	cid, err := r.rdb.Incr(ctx, "nextchunk").Uint64()
 	if err == nil {
 		*chunkid = cid
 	}
@@ -1354,10 +1376,10 @@ func (r *redisMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32,
 }
 
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	return r.txn(func(tx *redis.Tx) error {
+	return r.txn(ctx, func(tx *redis.Tx) error {
 		// TODO: refcount for chunkid
 		var attr Attr
-		a, err := tx.Get(c, r.inodeKey(inode)).Bytes()
+		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
 		}
@@ -1382,11 +1404,11 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		w.Put32(slice.Len)
 
 		var rpush *redis.IntCmd
-		_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-			rpush = pipe.RPush(c, r.chunkKey(inode, indx), w.Bytes())
-			pipe.Set(c, r.inodeKey(inode), r.marshal(&attr), 0)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			rpush = pipe.RPush(ctx, r.chunkKey(inode, indx), w.Bytes())
+			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 			if added > 0 {
-				pipe.IncrBy(c, usedSpace, added)
+				pipe.IncrBy(ctx, usedSpace, added)
 			}
 			return nil
 		})
@@ -1400,7 +1422,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 func (r *redisMeta) cleanupChunks() {
 	for {
 		now := time.Now()
-		members, _ := r.rdb.ZRangeByScore(c, delchunks, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(time.Hour).Unix())), Count: 1000}).Result()
+		members, _ := r.rdb.ZRangeByScore(Background, delchunks, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(time.Hour).Unix())), Count: 1000}).Result()
 		for _, member := range members {
 			ps := strings.Split(member, ":")
 			inode, _ := strconv.Atoi(ps[0])
@@ -1412,8 +1434,9 @@ func (r *redisMeta) cleanupChunks() {
 
 func (r *redisMeta) deleteChunks(inode Ino, tracking string) {
 	var rs []*redis.StringSliceCmd
+	var ctx = Background
 	for {
-		keys, _, err := r.rdb.Scan(c, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
+		keys, _, err := r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
 		if err != nil {
 			return
 		}
@@ -1422,9 +1445,9 @@ func (r *redisMeta) deleteChunks(inode Ino, tracking string) {
 		}
 		p := r.rdb.Pipeline()
 		for _, k := range keys {
-			rs = append(rs, p.LRange(c, k, 0, 1000))
+			rs = append(rs, p.LRange(ctx, k, 0, 1000))
 		}
-		vals, err := p.Exec(c)
+		vals, err := p.Exec(ctx)
 		if err != nil {
 			logger.Errorf("delete chunk of %d: %s", inode, err)
 			return
@@ -1445,14 +1468,14 @@ func (r *redisMeta) deleteChunks(inode Ino, tracking string) {
 					err = r.newMsg(DeleteChunk, chunkid, cleng)
 				}
 				if err == nil {
-					err = r.txn(func(tx *redis.Tx) error {
-						val, err := tx.LRange(c, r.chunkKey(inode, uint32(indx)), 0, 0).Result()
+					err = r.txn(ctx, func(tx *redis.Tx) error {
+						val, err := tx.LRange(ctx, r.chunkKey(inode, uint32(indx)), 0, 0).Result()
 						if err != nil {
 							return err
 						}
 						if len(val) == 1 && val[0] == cs {
-							_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-								pipe.LPop(c, r.chunkKey(inode, uint32(indx)))
+							_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+								pipe.LPop(ctx, r.chunkKey(inode, uint32(indx)))
 								return nil
 							})
 							return err
@@ -1467,7 +1490,7 @@ func (r *redisMeta) deleteChunks(inode Ino, tracking string) {
 			}
 		}
 	}
-	r.rdb.ZRem(c, delchunks, tracking)
+	r.rdb.ZRem(ctx, delchunks, tracking)
 }
 
 func (r *redisMeta) compact(inode Ino, indx uint32) {
@@ -1486,11 +1509,12 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		r.Unlock()
 	}()
 
-	vals, err := r.rdb.LRange(c, r.chunkKey(inode, indx), 0, 200).Result()
+	var ctx = Background
+	vals, err := r.rdb.LRange(ctx, r.chunkKey(inode, indx), 0, 200).Result()
 	if err != nil {
 		return
 	}
-	chunkid, err := r.rdb.Incr(c, "nextchunk").Uint64()
+	chunkid, err := r.rdb.Incr(ctx, "nextchunk").Uint64()
 	if err != nil {
 		return
 	}
@@ -1508,8 +1532,8 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(vals), err)
 		return
 	}
-	errno := r.txn(func(tx *redis.Tx) error {
-		vals2, err := tx.LRange(c, r.chunkKey(inode, indx), 0, int64(len(vals)-1)).Result()
+	errno := r.txn(ctx, func(tx *redis.Tx) error {
+		vals2, err := tx.LRange(ctx, r.chunkKey(inode, indx), 0, int64(len(vals)-1)).Result()
 		if err != nil {
 			return err
 		}
@@ -1528,9 +1552,9 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		w.Put32(size)
 		w.Put32(0)
 		w.Put32(size)
-		_, err = tx.Pipelined(c, func(pipe redis.Pipeliner) error {
-			pipe.LTrim(c, r.chunkKey(inode, indx), int64(len(vals)), -1)
-			pipe.LPush(c, r.chunkKey(inode, indx), w.Bytes())
+		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.LTrim(ctx, r.chunkKey(inode, indx), int64(len(vals)), -1)
+			pipe.LPush(ctx, r.chunkKey(inode, indx), w.Bytes())
 			return nil
 		})
 		return err
@@ -1547,16 +1571,16 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 			w.Put32(size)
 			w.Put32(0)
 			w.Put32(size)
-			_, err = r.rdb.Pipelined(c, func(pipe redis.Pipeliner) error {
-				pipe.RPush(c, r.chunkKey(0, 0), w.Bytes())
-				r.rdb.ZAdd(c, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: "0"})
+			_, err = r.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.RPush(ctx, r.chunkKey(0, 0), w.Bytes())
+				r.rdb.ZAdd(ctx, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: "0"})
 				return nil
 			})
 			if err != nil {
 				logger.Warnf("compacted chunk %d (%d bytes) will be lost", chunkid, size)
 			}
 		}
-	} else if r.rdb.LLen(c, r.chunkKey(inode, indx)).Val() > 10 {
+	} else if r.rdb.LLen(ctx, r.chunkKey(inode, indx)).Val() > 10 {
 		go r.compact(inode, indx)
 	}
 }
@@ -1574,7 +1598,7 @@ func readSlices(vals []string) []*slice {
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
 	var err error
-	*vbuff, err = r.rdb.HGet(c, r.xattrKey(inode), name).Bytes()
+	*vbuff, err = r.rdb.HGet(ctx, r.xattrKey(inode), name).Bytes()
 	if err == redis.Nil {
 		err = ENOATTR
 	}
@@ -1582,7 +1606,7 @@ func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte)
 }
 
 func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
-	vals, err := r.rdb.HKeys(c, r.xattrKey(inode)).Result()
+	vals, err := r.rdb.HKeys(ctx, r.xattrKey(inode)).Result()
 	if err != nil {
 		return errno(err)
 	}
@@ -1595,12 +1619,12 @@ func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 }
 
 func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) syscall.Errno {
-	_, err := r.rdb.HSet(c, r.xattrKey(inode), name, value).Result()
+	_, err := r.rdb.HSet(ctx, r.xattrKey(inode), name, value).Result()
 	return errno(err)
 }
 
 func (r *redisMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
-	n, err := r.rdb.HDel(c, r.xattrKey(inode), name).Result()
+	n, err := r.rdb.HDel(ctx, r.xattrKey(inode), name).Result()
 	if n == 0 {
 		err = ENOATTR
 	}
@@ -1610,13 +1634,13 @@ func (r *redisMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Err
 func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	lkey := r.ownerKey(owner)
 	if ltype == syscall.F_UNLCK {
-		_, err := r.rdb.HDel(c, r.flockKey(inode), lkey).Result()
+		_, err := r.rdb.HDel(ctx, r.flockKey(inode), lkey).Result()
 		return errno(err)
 	}
 	var err syscall.Errno
 	for {
-		err = r.txn(func(tx *redis.Tx) error {
-			owners, err := tx.HGetAll(c, r.flockKey(inode)).Result()
+		err = r.txn(ctx, func(tx *redis.Tx) error {
+			owners, err := tx.HGetAll(ctx, r.flockKey(inode)).Result()
 			if err != nil {
 				return err
 			}
@@ -1626,8 +1650,8 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 						return syscall.EAGAIN
 					}
 				}
-				_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-					pipe.HSet(c, r.flockKey(inode), lkey, "R")
+				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					pipe.HSet(ctx, r.flockKey(inode), lkey, "R")
 					return nil
 				})
 				return err
@@ -1636,8 +1660,8 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			if len(owners) > 0 {
 				return syscall.EAGAIN
 			}
-			_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-				pipe.HSet(c, r.flockKey(inode), lkey, "W")
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.HSet(ctx, r.flockKey(inode), lkey, "W")
 				return nil
 			})
 			return err
@@ -1748,7 +1772,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 		return 0
 	}
 	lkey := r.ownerKey(owner)
-	owners, err := r.rdb.HGetAll(c, r.plockKey(inode)).Result()
+	owners, err := r.rdb.HGetAll(ctx, r.plockKey(inode)).Result()
 	if err != nil {
 		return errno(err)
 	}
@@ -1783,9 +1807,9 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	var err syscall.Errno
 	lock := plock{ltype, pid, start, end}
 	for {
-		err = r.txn(func(tx *redis.Tx) error {
+		err = r.txn(ctx, func(tx *redis.Tx) error {
 			if ltype == syscall.F_UNLCK {
-				d, err := tx.HGet(c, r.plockKey(inode), lkey).Result()
+				d, err := tx.HGet(ctx, r.plockKey(inode), lkey).Result()
 				if err != nil {
 					return err
 				}
@@ -1794,17 +1818,17 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 					return nil
 				}
 				ls = r.updateLocks(ls, lock)
-				_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
+				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					if len(ls) == 0 {
-						pipe.HDel(c, r.plockKey(inode), lkey)
+						pipe.HDel(ctx, r.plockKey(inode), lkey)
 					} else {
-						pipe.HSet(c, r.plockKey(inode), lkey, r.dumpLocks(ls))
+						pipe.HSet(ctx, r.plockKey(inode), lkey, r.dumpLocks(ls))
 					}
 					return nil
 				})
 				return err
 			}
-			owners, err := tx.HGetAll(c, r.plockKey(inode)).Result()
+			owners, err := tx.HGetAll(ctx, r.plockKey(inode)).Result()
 			if err != nil {
 				return err
 			}
@@ -1820,8 +1844,8 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				}
 			}
 			ls = r.updateLocks(ls, lock)
-			_, err = tx.TxPipelined(c, func(pipe redis.Pipeliner) error {
-				pipe.HSet(c, r.plockKey(inode), lkey, r.dumpLocks(ls))
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.HSet(ctx, r.plockKey(inode), lkey, r.dumpLocks(ls))
 				return nil
 			})
 			return err
@@ -1843,7 +1867,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 }
 
 func (r *redisMeta) checkServerConfig() {
-	rawInfo, err := r.rdb.Info(c).Result()
+	rawInfo, err := r.rdb.Info(Background).Result()
 	if err != nil {
 		logger.Warnf("parse info: %s", err)
 		return
