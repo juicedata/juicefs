@@ -90,6 +90,11 @@ $ ./juicefs mount -d localhost ~/jfs
 
 挂载之后你可以像使用本地盘一样使用它，详细的挂载参数，请运行 `./juicefs mount -h`。
 
+
+### Kubernetes
+
+JuiceFS 提供 [K8S CSI 驱动](https://github.com/juicedata/juicefs-csi-driver) 来简化部署.
+
 ## POSIX 兼容性测试
 
 JuiceFS 通过了 [pjdfstest](https://github.com/pjd/pjdfstest) 最新版所有 8813 项兼容性测试。
