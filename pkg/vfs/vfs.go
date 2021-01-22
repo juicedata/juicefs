@@ -34,9 +34,6 @@ const (
 	maxName     = 255
 	maxSymlink  = 4096
 	maxFileSize = meta.ChunkSize << 31
-
-	modeRead  = 1
-	modeWrite = 2
 )
 
 type StorageConfig struct {
