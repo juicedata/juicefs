@@ -1167,10 +1167,6 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 	if err := r.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
 	}
-	vals, err := r.rdb.HGetAll(ctx, r.entryKey(inode)).Result()
-	if err != nil {
-		return errno(err)
-	}
 	*entries = []*Entry{
 		{
 			Inode: inode,
@@ -1185,26 +1181,47 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 			Attr:  &Attr{Typ: TypeDirectory},
 		})
 	}
+	vals, err := r.rdb.HGetAll(ctx, r.entryKey(inode)).Result()
+	if err != nil {
+		return errno(err)
+	}
+	newEntries := make([]Entry, len(vals))
+	newAttrs := make([]Attr, len(newEntries))
+	var i int
 	for name, val := range vals {
 		typ, inode := r.parseEntry([]byte(val))
-		*entries = append(*entries, &Entry{
-			Inode: inode,
-			Name:  []byte(name),
-			Attr:  &Attr{Typ: typ},
-		})
+		ent := newEntries[i]
+		ent.Inode = inode
+		ent.Name = []byte(name)
+		attr := newAttrs[i]
+		attr.Typ = typ
+		ent.Attr = &attr
+		*entries = append(*entries, &ent)
+		i++
 	}
 	if plus != 0 {
-		var keys []string
-		for _, e := range *entries {
-			keys = append(keys, r.inodeKey(e.Inode))
+		batchSize := 4096
+		if batchSize > len(*entries) {
+			batchSize = len(*entries)
 		}
-		rs, _ := r.rdb.MGet(ctx, keys...).Result()
-		for i, re := range rs {
-			if re != nil {
-				if a, ok := re.(string); ok {
-					r.parseAttr([]byte(a), (*entries)[i].Attr)
+		keysBatch := make([]string, 0, batchSize)
+		for i := 0; i < len(*entries); i += batchSize {
+			end := i + batchSize
+			if end > len(*entries) {
+				end = len(*entries)
+			}
+			for _, e := range (*entries)[i:end] {
+				keysBatch = append(keysBatch, r.inodeKey(e.Inode))
+			}
+			rs, _ := r.rdb.MGet(ctx, keysBatch...).Result()
+			for j, re := range rs {
+				if re != nil {
+					if a, ok := re.(string); ok {
+						r.parseAttr([]byte(a), (*entries)[i+j].Attr)
+					}
 				}
 			}
+			keysBatch = keysBatch[:0]
 		}
 	}
 	return 0
