@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
+ * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
  * This program is free software: you can use, redistribute, and/or modify
  * it under the terms of the GNU Affero General Public License, version 3
@@ -166,7 +166,7 @@ func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 	if fs.logBuffer == nil {
 		return
 	}
-	now := time.Now()
+	now := Now()
 	cmd := fmt.Sprintf(format, args...)
 	ts := now.Format("2006.01.02 15:04:05.000000")
 	used := ctx.Duration()
@@ -307,7 +307,7 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16) (err syscal
 	if err != 0 {
 		return err
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_W, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
 	if err != 0 {
 		return err
 	}
@@ -328,7 +328,7 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_W, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
 	if err != 0 {
 		return err
 	}
@@ -348,7 +348,7 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string) (
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, oldfi.inode, MODE_MASK_W, oldfi.attr)
+	err = fs.m.Access(ctx, oldfi.inode, mMaskW, oldfi.attr)
 	if err != 0 {
 		return
 	}
@@ -356,7 +356,7 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string) (
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, newfi.inode, MODE_MASK_W, newfi.attr)
+	err = fs.m.Access(ctx, newfi.inode, mMaskW, newfi.attr)
 	if err != 0 {
 		return
 	}
@@ -377,7 +377,7 @@ func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err
 		// external link
 		rel = target
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_W, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
 	if err != 0 {
 		return
 	}
@@ -393,7 +393,7 @@ func (fs *FileSystem) Readlink(ctx meta.Context, link string) (path []byte, err 
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_R, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskR, fi.attr)
 	if err != 0 {
 		return
 	}
@@ -402,9 +402,9 @@ func (fs *FileSystem) Readlink(ctx meta.Context, link string) (path []byte, err 
 }
 
 const (
-	MODE_MASK_R = 4
-	MODE_MASK_W = 2
-	MODE_MASK_X = 1
+	mMaskR = 4
+	mMaskW = 2
+	mMaskX = 1
 )
 
 func (fs *FileSystem) Truncate(ctx meta.Context, path string, length uint64) (err syscall.Errno) {
@@ -415,7 +415,7 @@ func (fs *FileSystem) Truncate(ctx meta.Context, path string, length uint64) (er
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_W, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
 	if err != 0 {
 		return
 	}
@@ -431,7 +431,7 @@ func (fs *FileSystem) SetXattr(ctx meta.Context, p string, name string, value []
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_W, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
 	if err != 0 {
 		return
 	}
@@ -447,7 +447,7 @@ func (fs *FileSystem) GetXattr(ctx meta.Context, p string, name string) (result 
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_R, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskR, fi.attr)
 	if err != 0 {
 		return
 	}
@@ -463,7 +463,7 @@ func (fs *FileSystem) ListXattr(ctx meta.Context, p string) (names []byte, err s
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_R, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskR, fi.attr)
 	if err != 0 {
 		return
 	}
@@ -479,7 +479,7 @@ func (fs *FileSystem) RemoveXattr(ctx meta.Context, p string, name string) (err 
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_W, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
 	if err != 0 {
 		return
 	}
@@ -496,7 +496,7 @@ func (fs *FileSystem) lookup(ctx meta.Context, p string, followLastSymlink bool)
 			continue
 		}
 		if i > 0 {
-			if err := fs.m.Access(ctx, parent, MODE_MASK_X, attr); err != 0 {
+			if err := fs.m.Access(ctx, parent, mMaskX, attr); err != 0 {
 				return nil, err
 			}
 		}
@@ -556,7 +556,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16) (f *File, 
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, MODE_MASK_W, fi.attr)
+	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
 	if err != 0 {
 		return
 	}
@@ -613,7 +613,7 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Chmod").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chmod (%s,%o): %s", f.path, mode, errstr(err)) }()
-	err = f.fs.m.Access(ctx, f.inode, MODE_MASK_W, f.info.attr)
+	err = f.fs.m.Access(ctx, f.inode, mMaskW, f.info.attr)
 	if err != 0 {
 		return err
 	}
@@ -655,7 +655,7 @@ func (f *File) Utime(ctx meta.Context, atime, mtime int64) (err syscall.Errno) {
 	}
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Utime (%s,%d,%d): %s", f.path, atime, mtime, errstr(err)) }()
-	err = f.fs.m.Access(ctx, f.inode, MODE_MASK_W, f.info.attr)
+	err = f.fs.m.Access(ctx, f.inode, mMaskW, f.info.attr)
 	if err != 0 {
 		return err
 	}
@@ -817,7 +817,7 @@ func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err sysca
 	defer f.Unlock()
 	fi = f.dircache
 	if fi == nil {
-		err = f.fs.m.Access(ctx, f.inode, MODE_MASK_R, f.info.attr)
+		err = f.fs.m.Access(ctx, f.inode, mMaskR, f.info.attr)
 		if err != 0 {
 			return nil, err
 		}
@@ -851,7 +851,7 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 	f.Lock()
 	defer f.Unlock()
 	if f.entries == nil {
-		err = f.fs.m.Access(ctx, f.inode, MODE_MASK_R, f.info.attr)
+		err = f.fs.m.Access(ctx, f.inode, mMaskR, f.info.attr)
 		if err != 0 {
 			return nil, err
 		}
