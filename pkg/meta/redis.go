@@ -411,8 +411,38 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	return errno(err)
 }
 
-func (r *redisMeta) Access(ctx Context, inode Ino, modemask uint16) syscall.Errno {
-	return 0 // handled by kernel
+func (r *redisMeta) accessMode(attr *Attr, uid uint32, gid uint32) uint8 {
+	if uid == 0 {
+		return 0x7
+	}
+	mode := attr.Mode
+	if uid == attr.Uid {
+		return uint8(mode>>6) & 7
+	}
+	if gid == attr.Gid {
+		return uint8(mode>>3) & 7
+	}
+	return uint8(mode & 7)
+}
+
+func (r *redisMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
+	if ctx.Uid() == 0 {
+		return 0
+	}
+
+	if attr == nil {
+		attr = &Attr{}
+		err := r.GetAttr(ctx, inode, attr)
+		if err != 0 {
+			return err
+		}
+	}
+
+	mode := r.accessMode(attr, ctx.Uid(), ctx.Gid())
+	if mode&mmask != mmask {
+		return syscall.EACCES
+	}
+	return 0
 }
 
 func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {

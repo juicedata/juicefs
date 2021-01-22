@@ -370,15 +370,6 @@ func Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, fl
 
 	var inode Ino
 	var attr = &Attr{}
-	var oflags uint8
-	switch flags & O_ACCMODE {
-	case syscall.O_RDONLY:
-		oflags |= modeRead
-	case syscall.O_WRONLY:
-		oflags |= modeWrite
-	case syscall.O_RDWR:
-		oflags |= modeRead | modeWrite
-	}
 	err = m.Create(ctx, parent, name, mode&07777, cumask, &inode, attr)
 	if runtime.GOOS == "darwin" && err == syscall.ENOENT {
 		err = syscall.EACCES
@@ -387,7 +378,7 @@ func Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, fl
 		return
 	}
 
-	fh = newFileHandle(oflags, inode, 0)
+	fh = newFileHandle(inode, 0, flags)
 	entry = &meta.Entry{Inode: inode, Attr: attr}
 	return
 }
@@ -417,25 +408,13 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 		return
 	}
 
-	var oflags uint8
-	switch flags & O_ACCMODE {
-	case syscall.O_RDONLY:
-		oflags |= modeRead
-	case syscall.O_WRONLY:
-		oflags |= modeWrite
-	case syscall.O_RDWR:
-		oflags |= modeRead | modeWrite
-	default:
-		err = syscall.EINVAL
-		return
-	}
-	err = m.Open(ctx, ino, oflags, attr)
+	err = m.Open(ctx, ino, uint8(flags), attr)
 	if err != 0 {
 		return
 	}
 
 	UpdateLength(ino, attr)
-	fh = newFileHandle(oflags, ino, attr.Length)
+	fh = newFileHandle(ino, attr.Length, flags)
 	entry = &meta.Entry{Inode: ino, Attr: attr}
 	return
 }
