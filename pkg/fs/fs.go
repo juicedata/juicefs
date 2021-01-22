@@ -114,12 +114,6 @@ func AttrToFileInfo(inode Ino, attr *Attr) *FileStat {
 	return &FileStat{inode: inode, attr: attr}
 }
 
-func newFileInfo(name string, inode Ino, attr *Attr) *FileStat {
-	fi := AttrToFileInfo(inode, attr)
-	fi.name = name
-	return fi
-}
-
 type Config struct {
 	vfs.Config
 	AccessLog string
@@ -160,7 +154,7 @@ func NewFileSystem(conf *Config, m meta.Meta, d chunk.ChunkStore) *FileSystem {
 		if err != nil {
 			logger.Errorf("Open access log %s: %s", conf.AccessLog, err)
 		} else {
-			os.Chmod(conf.AccessLog, 0666)
+			_ = os.Chmod(conf.AccessLog, 0666)
 			fs.logBuffer = make(chan string, 1024)
 			go fs.flushLog(f, fs.logBuffer, conf.AccessLog)
 		}
@@ -209,7 +203,8 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 			continue
 		}
 		lastcheck = time.Now()
-		fi, err := f.Stat()
+		var fi os.FileInfo
+		fi, err = f.Stat()
 		if fi.Size() > rotateAccessLog {
 			f.Close()
 			fi, err = os.Stat(path)
@@ -217,14 +212,14 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 				tmp := fmt.Sprintf("%s.%p", path, fs)
 				if os.Rename(path, tmp) == nil {
 					for i := 6; i > 0; i-- {
-						os.Rename(path+"."+strconv.Itoa(i), path+"."+strconv.Itoa(i+1))
+						_ = os.Rename(path+"."+strconv.Itoa(i), path+"."+strconv.Itoa(i+1))
 					}
-					os.Rename(tmp, path+".1")
+					_ = os.Rename(tmp, path+".1")
 				} else {
 					fi, err = os.Stat(path)
 					if err == nil && fi.Size() > rotateAccessLog*7 {
 						logger.Infof("can't rename %s, truncate it", path)
-						os.Truncate(path, 0)
+						_ = os.Truncate(path, 0)
 					}
 				}
 			}
@@ -233,7 +228,7 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 				logger.Errorf("open %s: %s", path, err)
 				break
 			}
-			os.Chmod(path, 0666)
+			_ = os.Chmod(path, 0666)
 		}
 	}
 }
@@ -243,7 +238,7 @@ func (fs *FileSystem) StatFS(ctx meta.Context) (totalspace uint64, availspace ui
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "StatFS (): (%d,%d)", totalspace, availspace) }()
 	var iused, iavail uint64
-	fs.m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
+	_ = fs.m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
 	return
 }
 
@@ -268,8 +263,6 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 			if err != 0 {
 				return
 			}
-		} else {
-			go fs.m.Open(meta.Background, fi.inode, uint8(flags), nil)
 		}
 	}
 
@@ -682,11 +675,11 @@ func (f *File) Seek(ctx meta.Context, offset int64, whence int) (int64, error) {
 	f.Lock()
 	defer f.Unlock()
 	switch whence {
-	case os.SEEK_SET:
+	case io.SeekStart:
 		f.offset = offset
-	case os.SEEK_CUR:
+	case io.SeekCurrent:
 		f.offset += offset
-	case os.SEEK_END:
+	case io.SeekEnd:
 		f.offset = f.info.Size() + offset
 	}
 	return f.offset, nil
