@@ -171,7 +171,7 @@ func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 	ts := now.Format("2006.01.02 15:04:05.000000")
 	used := ctx.Duration()
 	cmd += fmt.Sprintf(" <%.6f>", used.Seconds())
-	line := fmt.Sprintf("%s: uid:%d gid:%d pid:%d cmd: %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd)
+	line := fmt.Sprintf("%s: [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd)
 	select {
 	case fs.logBuffer <- line:
 	default:
