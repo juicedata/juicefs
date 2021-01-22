@@ -16,7 +16,9 @@
 package fuse
 
 import (
+	"context"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -30,6 +32,7 @@ type Attr = meta.Attr
 type Context = vfs.LogContext
 
 type fuseContext struct {
+	context.Context
 	start    time.Time
 	header   *fuse.InHeader
 	canceled bool
@@ -44,6 +47,7 @@ var contextPool = sync.Pool{
 
 func newContext(cancel <-chan struct{}, header *fuse.InHeader) *fuseContext {
 	ctx := contextPool.Get().(*fuseContext)
+	ctx.Context = context.Background()
 	ctx.start = time.Now()
 	ctx.canceled = false
 	ctx.cancel = cancel
@@ -85,4 +89,12 @@ func (c *fuseContext) Canceled() bool {
 	default:
 		return false
 	}
+}
+
+func (c *fuseContext) Err() error {
+	return syscall.EINTR
+}
+
+func (c *fuseContext) Done() <-chan struct{} {
+	return c.cancel
 }

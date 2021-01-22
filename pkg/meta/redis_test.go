@@ -387,7 +387,7 @@ func TestTruncateAndDelete(t *testing.T) {
 		t.Fatalf("truncate file %s", st)
 	}
 	r := m.(*redisMeta)
-	keys, _, _ := r.rdb.Scan(c, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
+	keys, _, _ := r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
 	if len(keys) != 5 {
 		for _, k := range keys {
 			println("key", k)
@@ -399,7 +399,7 @@ func TestTruncateAndDelete(t *testing.T) {
 		t.Fatalf("unlink file %s", st)
 	}
 	time.Sleep(time.Millisecond * 100)
-	keys, _, _ = r.rdb.Scan(c, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
+	keys, _, _ = r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
 	if len(keys) != 0 {
 		t.Fatalf("number of chunks: %d != 0", len(keys))
 	}
