@@ -372,6 +372,7 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		if err != nil {
 			if strings.Contains(err.Error(), "NOSCRIPT") {
 				r.shaLookup = ""
+				return r.Lookup(ctx, parent, name, inode, attr)
 			}
 			return errno(err)
 		}
