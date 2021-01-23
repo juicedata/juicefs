@@ -205,7 +205,7 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 		lastcheck = time.Now()
 		var fi os.FileInfo
 		fi, err = f.Stat()
-		if fi.Size() > rotateAccessLog {
+		if err == nil && fi.Size() > rotateAccessLog {
 			f.Close()
 			fi, err = os.Stat(path)
 			if err == nil && fi.Size() > rotateAccessLog {
