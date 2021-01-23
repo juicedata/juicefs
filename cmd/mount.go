@@ -124,12 +124,15 @@ func mount(c *cli.Context) error {
 		Prefetch:    c.Int("prefetch"),
 		BufferSize:  c.Int("buffer-size") << 20,
 
-		CacheDir:       filepath.Join(c.String("cache-dir"), format.UUID),
+		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
 		FreeSpace:      float32(c.Float64("free-space-ratio")),
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
+	}
+	if chunkConf.CacheDir != "memory" {
+		chunkConf.CacheDir = filepath.Join(chunkConf.CacheDir, format.UUID)
 	}
 	blob, err := createStorage(format)
 	if err != nil {
