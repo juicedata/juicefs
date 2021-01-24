@@ -1200,7 +1200,7 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 		i++
 	}
 	if plus != 0 {
-		batchSize := 4096
+		batchSize := 40960
 		if batchSize > len(*entries) {
 			batchSize = len(*entries)
 		}
