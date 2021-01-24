@@ -1200,29 +1200,45 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 		i++
 	}
 	if plus != 0 {
-		batchSize := 40960
+		batchSize := 4096
 		if batchSize > len(*entries) {
 			batchSize = len(*entries)
 		}
-		keysBatch := make([]string, 0, batchSize)
-		for i := 0; i < len(*entries); i += batchSize {
-			end := i + batchSize
-			if end > len(*entries) {
-				end = len(*entries)
+		nEntries := len(*entries)
+		indexCh := make(chan int, 10)
+		go func() {
+			for i := 0; i < nEntries; i += batchSize {
+				indexCh <- i
 			}
-			for _, e := range (*entries)[i:end] {
-				keysBatch = append(keysBatch, r.inodeKey(e.Inode))
-			}
-			rs, _ := r.rdb.MGet(ctx, keysBatch...).Result()
-			for j, re := range rs {
-				if re != nil {
-					if a, ok := re.(string); ok {
-						r.parseAttr([]byte(a), (*entries)[i+j].Attr)
+			close(indexCh)
+		}()
+		var wg sync.WaitGroup
+		for i := 0; i < 2; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				keysBatch := make([]string, 0, batchSize)
+				for idx := range indexCh {
+					end := idx + batchSize
+					if end > len(*entries) {
+						end = len(*entries)
 					}
+					for _, e := range (*entries)[idx:end] {
+						keysBatch = append(keysBatch, r.inodeKey(e.Inode))
+					}
+					rs, _ := r.rdb.MGet(ctx, keysBatch...).Result()
+					for j, re := range rs {
+						if re != nil {
+							if a, ok := re.(string); ok {
+								r.parseAttr([]byte(a), (*entries)[idx+j].Attr)
+							}
+						}
+					}
+					keysBatch = keysBatch[:0]
 				}
-			}
-			keysBatch = keysBatch[:0]
+			}()
 		}
+		wg.Wait()
 	}
 	return 0
 }
