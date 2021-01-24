@@ -1581,7 +1581,6 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 	}()
 
 	var ctx = Background
-	logger.Infof("compacting %d %d", inode, indx)
 	vals, err := r.rdb.LRange(ctx, r.chunkKey(inode, indx), 0, 200).Result()
 	if err != nil {
 		return
@@ -1627,10 +1626,14 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, r.chunkKey(inode, indx), int64(len(vals)), -1)
 			pipe.LPush(ctx, r.chunkKey(inode, indx), w.Bytes())
+			for _, v := range vals2 {
+				pipe.RPush(ctx, r.chunkKey(0, 0), v)
+			}
 			return nil
 		})
 		return err
 	}, r.chunkKey(inode, indx))
+
 	if errno != 0 {
 		logger.Infof("update compacted chunk %d (%d bytes): %s", chunkid, size, err)
 		err = r.newMsg(DeleteChunk, chunkid, size)
@@ -1645,15 +1648,27 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 			w.Put32(size)
 			_, err = r.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.RPush(ctx, r.chunkKey(0, 0), w.Bytes())
-				r.rdb.ZAdd(ctx, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: "0"})
+				r.rdb.ZAdd(ctx, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: "0:1024"})
 				return nil
 			})
 			if err != nil {
 				logger.Warnf("compacted chunk %d (%d bytes) will be lost", chunkid, size)
 			}
 		}
-	} else if r.rdb.LLen(ctx, r.chunkKey(inode, indx)).Val() > 10 {
-		go r.compact(inode, indx)
+	} else {
+		for _, s := range ss {
+			err = r.newMsg(DeleteChunk, s.chunkid, s.size)
+			if err != nil {
+				logger.Warnf("delete chunk %d (%d bytes): %s, will retry", s.chunkid, s.size, err)
+			}
+		}
+		if r.rdb.LLen(ctx, r.chunkKey(inode, indx)).Val() > 5 {
+			go func() {
+				// avoid concurrent compacting
+				time.Sleep(time.Millisecond * 10)
+				r.compact(inode, indx)
+			}()
+		}
 	}
 }
 
