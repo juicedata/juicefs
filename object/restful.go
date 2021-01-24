@@ -23,8 +23,18 @@ import (
 
 var resolver = dnscache.New(time.Minute)
 var httpClient *http.Client
+var supportIPv6 = false
+
+func checkIPv6() {
+	l, err := net.Listen("tcp", "[::1]:0")
+	if err == nil {
+		supportIPv6 = true
+		l.Close()
+	}
+}
 
 func init() {
+	go checkIPv6()
 	httpClient = &http.Client{
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
@@ -39,6 +49,14 @@ func init() {
 				ips, err := resolver.Fetch(host)
 				if err != nil {
 					return nil, err
+				}
+				if !supportIPv6 {
+					for i := range ips {
+						if ips[i].To4() == nil {
+							ips[i] = ips[len(ips)-1]
+							ips = ips[:len(ips)-1]
+						}
+					}
 				}
 				if len(ips) == 0 {
 					return nil, fmt.Errorf("No such host: %s", host)
