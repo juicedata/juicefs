@@ -147,8 +147,8 @@ func NewFileSystem(conf *Config, m meta.Meta, d chunk.ChunkStore) *FileSystem {
 		m:      m,
 		conf:   &conf.Config,
 		reader: vfs.NewDataReader(&conf.Config, m, d),
+		writer: vfs.NewDataWriter(&conf.Config, m, d),
 	}
-	fs.writer = vfs.NewDataWriter(&conf.Config, m, d)
 	if conf.AccessLog != "" {
 		f, err := os.OpenFile(conf.AccessLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
