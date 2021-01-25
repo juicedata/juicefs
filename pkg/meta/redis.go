@@ -1089,7 +1089,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 							pipe.SAdd(ctx, r.sessionKey(r.sid), strconv.Itoa(int(dino)))
 						} else {
-							pipe.ZAdd(ctx, delchunks, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, attr.Length)})
+							pipe.ZAdd(ctx, delchunks, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, dattr.Length)})
 							pipe.Del(ctx, r.inodeKey(dino))
 							pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
 						}
@@ -1561,6 +1561,9 @@ func (r *redisMeta) deleteChunks(inode Ino, length uint64, tracking string) {
 			}
 		}
 	}
+	if tracking == "" {
+		tracking = inode.String() + ":" + strconv.Itoa(int(indx))
+	}
 	_ = r.rdb.ZRem(ctx, delchunks, tracking)
 }
 
@@ -1609,11 +1612,11 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 			return err
 		}
 		if len(vals2) != len(vals) {
-			return fmt.Errorf("chunks changed: %d %d", len(vals2), len(vals))
+			return syscall.EINVAL
 		}
 		for i, val := range vals2 {
 			if val != vals[i] {
-				return fmt.Errorf("slice %d changed", i)
+				return syscall.EINVAL
 			}
 		}
 
@@ -1635,7 +1638,7 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 	}, r.chunkKey(inode, indx))
 
 	if errno != 0 {
-		logger.Infof("update compacted chunk %d (%d bytes): %s", chunkid, size, err)
+		logger.Debugf("update compacted chunk %d (%d bytes): %s", chunkid, size, errno)
 		err = r.newMsg(DeleteChunk, chunkid, size)
 		if err != nil {
 			logger.Warnf("delete unused chunk %d (%d bytes): %s", chunkid, size, err)
@@ -1664,7 +1667,7 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		}
 		if r.rdb.LLen(ctx, r.chunkKey(inode, indx)).Val() > 5 {
 			go func() {
-				// avoid concurrent compacting
+				// wait for the current compaction to finish
 				time.Sleep(time.Millisecond * 10)
 				r.compact(inode, indx)
 			}()
