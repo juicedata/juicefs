@@ -1450,6 +1450,10 @@ func (r *redisMeta) cleanupLeakedChunks() {
 	var err error
 	for {
 		ckeys, cursor, err = r.rdb.Scan(ctx, cursor, "c*", 1000).Result()
+		if err != nil {
+			logger.Errorf("scan all chunks: %s", err)
+			break
+		}
 		var ikeys []string
 		var rs []*redis.IntCmd
 		p := r.rdb.Pipeline()
