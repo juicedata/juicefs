@@ -17,6 +17,7 @@ package vfs
 
 import (
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -182,14 +183,17 @@ func releaseHandle(inode Ino, fh uint64) {
 	}
 }
 
-func newFileHandle(mode uint8, inode Ino, length uint64) uint64 {
+func newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
 	h := newHandle(inode)
 	h.Lock()
 	defer h.Unlock()
-	if mode&modeRead != 0 {
+	switch flags & O_ACCMODE {
+	case syscall.O_RDONLY:
 		h.reader = reader.Open(inode, length)
-	}
-	if mode&modeWrite != 0 {
+	case syscall.O_WRONLY:
+		h.writer = writer.Open(inode, length)
+	case syscall.O_RDWR:
+		h.reader = reader.Open(inode, length)
 		h.writer = writer.Open(inode, length)
 	}
 	return h.fh

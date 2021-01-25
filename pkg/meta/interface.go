@@ -111,7 +111,7 @@ type Meta interface {
 	Load() (*Format, error)
 
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno
-	Access(ctx Context, inode Ino, modemask uint16) syscall.Errno
+	Access(ctx Context, inode Ino, modemask uint8, attr *Attr) syscall.Errno
 	Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	SetAttr(ctx Context, inode Ino, set uint16, sggidclearmode uint8, attr *Attr) syscall.Errno

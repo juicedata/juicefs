@@ -83,23 +83,23 @@ func accessTest(attr *Attr, mmode uint16, uid uint32, gid uint32) syscall.Errno 
 
 func Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
 	defer func() { logit(ctx, "access (%d,0x%X): %s", ino, mask, strerr(err)) }()
-	var mmode uint16
+	var mmask uint16
 	if mask&unix.R_OK != 0 {
-		mmode |= MODE_MASK_R
+		mmask |= MODE_MASK_R
 	}
 	if mask&unix.W_OK != 0 {
-		mmode |= MODE_MASK_W
+		mmask |= MODE_MASK_W
 	}
 	if mask&unix.X_OK != 0 {
-		mmode |= MODE_MASK_X
+		mmask |= MODE_MASK_X
 	}
 	if IsSpecialNode(ino) {
 		node := getInternalNode(ino)
-		err = accessTest(node.attr, mmode, ctx.Uid(), ctx.Gid())
+		err = accessTest(node.attr, mmask, ctx.Uid(), ctx.Gid())
 		return
 	}
 
-	err = m.Access(ctx, ino, mmode)
+	err = m.Access(ctx, ino, uint8(mmask), nil)
 	return
 }
 
