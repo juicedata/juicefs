@@ -1218,7 +1218,7 @@ func (r *redisMeta) cleanStaleSession(sid int64) {
 		return
 	}
 	for _, sinode := range inodes {
-		inode, _ := strconv.Atoi(sinode)
+		inode, _ := strconv.ParseInt(sinode, 10, 0)
 		if err := r.deleteInode(Ino(inode)); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
 		}
@@ -1430,12 +1430,12 @@ func (r *redisMeta) cleanupChunks() {
 		members, _ := r.rdb.ZRangeByScore(Background, delchunks, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(time.Hour).Unix())), Count: 1000}).Result()
 		for _, member := range members {
 			ps := strings.Split(member, ":")
-			inode, _ := strconv.Atoi(ps[0])
-			var length int
+			inode, _ := strconv.ParseInt(ps[0], 10, 0)
+			var length int64 = 1 << 30
 			if len(ps) == 2 {
-				length, _ = strconv.Atoi(ps[1])
+				length, _ = strconv.ParseInt(ps[1], 10, 0)
 			} else if len(ps) > 2 {
-				length, _ = strconv.Atoi(ps[2])
+				length, _ = strconv.ParseInt(ps[2], 10, 0)
 			}
 			r.deleteChunks(Ino(inode), uint64(length), member)
 		}
@@ -1462,7 +1462,7 @@ func (r *redisMeta) cleanupLeakedChunks() {
 			if len(ps) != 2 {
 				continue
 			}
-			ino, _ := strconv.Atoi(ps[0][1:])
+			ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
 			ikeys = append(ikeys, k)
 			rs = append(rs, p.Exists(ctx, r.inodeKey(Ino(ino))))
 		}
@@ -1476,7 +1476,7 @@ func (r *redisMeta) cleanupLeakedChunks() {
 				key := ikeys[i]
 				logger.Debugf("found leaked chunk %s", key)
 				ps := strings.Split(key, "_")
-				ino, _ := strconv.Atoi(ps[0][1:])
+				ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
 				indx, _ := strconv.Atoi(ps[1])
 				_ = r.deleteChunk(Ino(ino), uint32(indx))
 			}
@@ -1541,7 +1541,7 @@ func (r *redisMeta) deleteChunks(inode Ino, length uint64, tracking string) {
 		p := r.rdb.Pipeline()
 		var rs []*redis.IntCmd
 		var keys []string
-		for i := 0; uint64(indx)*ChunkSize <= length && i < 1000; i++ {
+		for i := 0; uint64(indx)*ChunkSize < length && i < 1000; i++ {
 			key := r.chunkKey(inode, indx)
 			keys = append(keys, key)
 			rs = append(rs, p.LLen(ctx, key))
@@ -1633,41 +1633,16 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, r.chunkKey(inode, indx), int64(len(vals)), -1)
 			pipe.LPush(ctx, r.chunkKey(inode, indx), w.Bytes())
-			for _, v := range vals2 {
-				pipe.RPush(ctx, r.chunkKey(0, 0), v)
-			}
 			return nil
 		})
 		return err
 	}, r.chunkKey(inode, indx))
 
 	if errno != 0 {
-		logger.Debugf("update compacted chunk %d (%d bytes): %s", chunkid, size, errno)
-		err = r.newMsg(DeleteChunk, chunkid, size)
-		if err != nil {
-			logger.Warnf("delete unused chunk %d (%d bytes): %s", chunkid, size, err)
-			// track the unused chunk
-			w := utils.NewBuffer(24)
-			w.Put32(0)
-			w.Put64(chunkid)
-			w.Put32(size)
-			w.Put32(0)
-			w.Put32(size)
-			_, err = r.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.RPush(ctx, r.chunkKey(0, 0), w.Bytes())
-				r.rdb.ZAdd(ctx, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: "0:1024"})
-				return nil
-			})
-			if err != nil {
-				logger.Warnf("compacted chunk %d (%d bytes) will be lost", chunkid, size)
-			}
-		}
+		r.deleteSlice(ctx, chunkid, size)
 	} else {
 		for _, s := range ss {
-			err = r.newMsg(DeleteChunk, s.chunkid, s.size)
-			if err != nil {
-				logger.Warnf("delete chunk %d (%d bytes): %s, will retry", s.chunkid, s.size, err)
-			}
+			r.deleteSlice(ctx, s.chunkid, s.size)
 		}
 		if r.rdb.LLen(ctx, r.chunkKey(inode, indx)).Val() > 5 {
 			go func() {
@@ -1675,6 +1650,28 @@ func (r *redisMeta) compact(inode Ino, indx uint32) {
 				time.Sleep(time.Millisecond * 10)
 				r.compact(inode, indx)
 			}()
+		}
+	}
+}
+
+func (r *redisMeta) deleteSlice(ctx Context, chunkid uint64, size uint32) {
+	err := r.newMsg(DeleteChunk, chunkid, size)
+	if err != nil {
+		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
+		// track the unused chunk
+		w := utils.NewBuffer(24)
+		w.Put32(0)
+		w.Put64(chunkid)
+		w.Put32(size)
+		w.Put32(0)
+		w.Put32(size)
+		_, err = r.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.RPush(ctx, r.chunkKey(0, 0), w.Bytes())
+			r.rdb.ZAdd(ctx, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: "0:1024"})
+			return nil
+		})
+		if err != nil {
+			logger.Warnf("chunk %d (%d bytes) will be lost", chunkid, size)
 		}
 	}
 }
