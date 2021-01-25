@@ -99,6 +99,6 @@ func (c *fuseContext) Err() error {
 	return syscall.EINTR
 }
 
-func (c *fuseContext) Done() <-chan struct{} {
-	return c.cancel
-}
+// func (c *fuseContext) Done() <-chan struct{} {
+// 	return c.cancel
+// }
