@@ -267,6 +267,15 @@ func TestCompaction(t *testing.T) {
 	}
 	_ = m.Init(Format{Name: "test"}, true)
 	done := make(chan bool, 1)
+	var l sync.Mutex
+	deleted := make(map[uint64]int)
+	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+		l.Lock()
+		chunkid := args[0].(uint64)
+		deleted[chunkid] = 1
+		l.Unlock()
+		return nil
+	})
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
 		select {
 		case done <- true:
@@ -308,6 +317,12 @@ func TestCompaction(t *testing.T) {
 	}
 	if chunks[0].Size != 5000 {
 		t.Fatalf("size of slice should be 5000, but got %d", chunks[0].Size)
+	}
+	l.Lock()
+	deletes := len(deleted)
+	l.Unlock()
+	if deletes < 40 {
+		t.Fatalf("deleted chunks %d is less then 40", deletes)
 	}
 }
 
@@ -388,11 +403,11 @@ func TestTruncateAndDelete(t *testing.T) {
 	}
 	r := m.(*redisMeta)
 	keys, _, _ := r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
-	if len(keys) != 5 {
+	if len(keys) != 3 {
 		for _, k := range keys {
 			println("key", k)
 		}
-		t.Fatalf("number of chunks: %d != 5", len(keys))
+		t.Fatalf("number of chunks: %d != 3", len(keys))
 	}
 	m.Close(ctx, inode)
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
@@ -400,7 +415,8 @@ func TestTruncateAndDelete(t *testing.T) {
 	}
 	time.Sleep(time.Millisecond * 100)
 	keys, _, _ = r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
-	if len(keys) != 0 {
-		t.Fatalf("number of chunks: %d != 0", len(keys))
+	// the last chunk will be found and deleted
+	if len(keys) != 1 {
+		t.Fatalf("number of chunks: %d != 1", len(keys))
 	}
 }
