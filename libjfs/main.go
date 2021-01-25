@@ -1,3 +1,18 @@
+/*
+ * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
+ *
+ * This program is free software: you can use, redistribute, and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3
+ * or later ("AGPL"), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package main
 
 // #cgo linux LDFLAGS: -ldl
@@ -16,7 +31,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
@@ -37,7 +51,6 @@ import (
 )
 
 var (
-	once          sync.Once
 	filesLock     sync.Mutex
 	openFiles     = make(map[int]*fwrapper)
 	minFreeHandle = 1
@@ -62,6 +75,7 @@ func errno(err error) int {
 type wrapper struct {
 	*fs.FileSystem
 	ctx        meta.Context
+	m          *mapping
 	user       string
 	superuser  string
 	supergroup string
@@ -76,26 +90,14 @@ func (w *wrapper) lookupUid(name string) uint32 {
 	if name == w.superuser {
 		return 0
 	}
-	u, _ := user.Lookup(name)
-	if u != nil {
-		uid, _ := strconv.Atoi(u.Uid)
-		return uint32(uid)
-	}
-	// FIXME: hash
-	return 0
+	return uint32(w.m.lookupUser(name))
 }
 
 func (w *wrapper) lookupGid(group string) uint32 {
 	if group == w.supergroup {
 		return 0
 	}
-	g, _ := user.LookupGroup(group)
-	if g != nil {
-		gid, _ := strconv.Atoi(g.Gid)
-		return uint32(gid)
-	}
-	// FIXME: hash
-	return 0
+	return uint32(w.m.lookupGroup(group))
 }
 
 func (w *wrapper) lookupGids(groups string) []uint32 {
@@ -109,13 +111,7 @@ func (w *wrapper) lookupGids(groups string) []uint32 {
 func (w *wrapper) uid2name(uid uint32) string {
 	name := w.superuser
 	if uid > 0 {
-		u, _ := user.LookupId(strconv.Itoa(int(uid)))
-		if u != nil {
-			name = u.Username
-			if len(name) > 49 {
-				name = name[:49]
-			}
-		}
+		name = w.m.lookupUserID(int(uid))
 	}
 	return name
 }
@@ -123,13 +119,7 @@ func (w *wrapper) uid2name(uid uint32) string {
 func (w *wrapper) gid2name(gid uint32) string {
 	group := w.supergroup
 	if gid > 0 {
-		g, _ := user.LookupGroupId(strconv.Itoa(int(gid)))
-		if g != nil {
-			group = g.Name
-			if len(group) > 49 {
-				group = group[:49]
-			}
-		}
+		group = w.m.lookupGroupID(int(gid))
 	}
 	return group
 }
@@ -164,7 +154,7 @@ func freeHandle(fd int) {
 }
 
 type javaConf struct {
-	MetaUrl        string `json:"meta"`
+	MetaURL        string `json:"meta"`
 	CacheDir       string `json:"cacheDir"`
 	CacheSize      int64  `json:"cacheSize"`
 	FreeSpace      string `json:"freeSpace"`
@@ -187,16 +177,19 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 	defer fslock.Unlock()
 	ws := activefs[name]
 	var jfs *fs.FileSystem
+	var m *mapping
 	if len(ws) > 0 {
 		jfs = ws[0].FileSystem
+		m = ws[0].m
 	} else {
+		m = newMapping(name)
 		jfs = f()
 		if jfs == nil {
 			return 0
 		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
-	w := &wrapper{jfs, nil, user, superuser, supergroup}
+	w := &wrapper{jfs, nil, m, user, superuser, supergroup}
 	w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
 	// root is a normal user in Hadoop, but super user in POSIX (ignored in GUID mapping)
 	// woraround: lookup it here to create a bidirectional mapping
@@ -248,7 +241,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		}
 		utils.InitLoggers(false)
 
-		addr := jConf.MetaUrl
+		addr := jConf.MetaURL
 		if !strings.Contains(addr, "://") {
 			addr = "redis://" + addr
 		}
@@ -300,18 +293,17 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			length := args[1].(uint32)
 			return store.Remove(chunkid, int(length))
 		}))
-		// m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
-		// 	slices := args[0].([]meta.Slice)
-		// 	chunkid := args[1].(uint64)
-		// 	return compact(chunkConf, store, slices, chunkid)
-		// }))
+		m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
+			slices := args[0].([]meta.Slice)
+			chunkid := args[1].(uint64)
+			return vfs.Compact(chunkConf, store, slices, chunkid)
+		}))
 
 		conf := &vfs.Config{
 			Meta: &meta.Config{
 				IORetries: 10,
 			},
 			Format: format,
-			// Version: Version(),
 			Primary: &vfs.StorageConfig{
 				Name:      format.Storage,
 				Endpoint:  format.Bucket,
