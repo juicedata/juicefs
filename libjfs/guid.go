@@ -34,17 +34,6 @@ type pwent struct {
 	name string
 }
 
-type sortPwent []pwent
-
-func (s sortPwent) Len() int      { return len(s) }
-func (s sortPwent) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s sortPwent) Less(i, j int) bool {
-	if s[i].id == s[j].id {
-		return s[i].name < s[j].name
-	}
-	return s[i].id < s[j].id
-}
-
 func genAllUids() []pwent {
 	cgoMutex.Lock()
 	defer cgoMutex.Unlock()
@@ -112,14 +101,10 @@ func newMapping(salt string) *mapping {
 }
 
 func (m *mapping) genGuid(name string) int {
-	dig := md5.New()
-	dig.Write([]byte(m.salt))
-	dig.Write([]byte(name))
-	dig.Write([]byte(m.salt))
-	digest := dig.Sum(nil)
+	digest := md5.Sum([]byte(m.salt + name + m.salt))
 	a := binary.LittleEndian.Uint64(digest[0:8])
 	b := binary.LittleEndian.Uint64(digest[8:16])
-	return int((a ^ b))
+	return int(uint32(a ^ b))
 }
 
 func (m *mapping) lookupUser(name string) int {

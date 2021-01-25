@@ -225,7 +225,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			go func() {
 				for port := 6060; port < 6100; port++ {
 					logger.Debugf("listen at 127.0.0.1:%d", port)
-					http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+					_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
 				}
 			}()
 		} else if os.Getenv("JUICEFS_LOGLEVEL") != "" {
@@ -695,7 +695,6 @@ func jfs_listdir(pid int, h uintptr, cpath *C.char, offset int, buf uintptr, buf
 		}
 		freeHandle(int(h))
 		w = fw.w
-		h = uintptr(unsafe.Pointer(w))
 		f = fw.File
 		ctx = w.withPid(pid)
 	} else {
