@@ -109,7 +109,7 @@ func (m *mapping) genGuid(name string) int {
 
 func (m *mapping) lookupUser(name string) int {
 	m.Lock()
-	defer m.Lock()
+	defer m.Unlock()
 	var id int
 	if id, ok := m.usernames[name]; ok {
 		return id
@@ -127,7 +127,7 @@ func (m *mapping) lookupUser(name string) int {
 
 func (m *mapping) lookupGroup(name string) int {
 	m.Lock()
-	defer m.Lock()
+	defer m.Unlock()
 	var id int
 	if id, ok := m.groups[name]; ok {
 		return id
@@ -145,7 +145,7 @@ func (m *mapping) lookupGroup(name string) int {
 
 func (m *mapping) lookupUserID(id int) string {
 	m.Lock()
-	defer m.Lock()
+	defer m.Unlock()
 	if name, ok := m.userIDs[id]; ok {
 		return name
 	}
@@ -164,7 +164,7 @@ func (m *mapping) lookupUserID(id int) string {
 
 func (m *mapping) lookupGroupID(id int) string {
 	m.Lock()
-	defer m.Lock()
+	defer m.Unlock()
 	if name, ok := m.groupIDs[id]; ok {
 		return name
 	}

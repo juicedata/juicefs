@@ -254,6 +254,10 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 
 	if flags != 0 && !fi.IsDir() {
 		if ctx.Uid() != 0 {
+			err = fs.m.Access(ctx, fi.inode, uint8(flags), nil)
+			if err != 0 {
+				return nil, err
+			}
 			err = fs.m.Open(ctx, fi.inode, uint8(flags), nil)
 			if err != 0 {
 				return
@@ -323,7 +327,7 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
+	err = fs.m.Access(ctx, parent.inode, mMaskW, parent.attr)
 	if err != 0 {
 		return err
 	}
@@ -332,6 +336,18 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	} else {
 		err = fs.m.Unlink(ctx, parent.inode, path.Base(p))
 	}
+	return
+}
+
+func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Rmr").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() { fs.log(l, "Rmr (%s): %s", p, errstr(err)) }()
+	parent, err := fs.lookup(ctx, path.Dir(p), true)
+	if err != 0 {
+		return
+	}
+	err = fs.m.Rmr(ctx, parent.inode, path.Base(p))
 	return
 }
 
@@ -608,9 +624,8 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Chmod").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chmod (%s,%o): %s", f.path, mode, errstr(err)) }()
-	err = f.fs.m.Access(ctx, f.inode, mMaskW, f.info.attr)
-	if err != 0 {
-		return err
+	if ctx.Uid() != f.info.attr.Uid {
+		return syscall.EACCES
 	}
 	var attr = Attr{Mode: mode}
 	err = f.fs.m.SetAttr(ctx, f.inode, meta.SetAttrMode, 0, &attr)
@@ -877,6 +892,6 @@ func (f *File) Summary(ctx meta.Context, depth uint8, maxentries uint32) (s *met
 		f.fs.log(l, "Summary (%s): %s (%d,%d,%d,%d)", f.path, errstr(err), s.Length, s.Size, s.Files, s.Dirs)
 	}()
 	s = &meta.Summary{}
-	// err = f.fs.m.Summary(ctx, f.inode, depth, maxentries, s)
+	err = f.fs.m.Summary(ctx, f.inode, s)
 	return
 }

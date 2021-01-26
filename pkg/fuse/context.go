@@ -95,6 +95,10 @@ func (c *fuseContext) Canceled() bool {
 	}
 }
 
+func (c *fuseContext) WithValue(k, v interface{}) {
+	c.Context = context.WithValue(c.Context, k, v)
+}
+
 func (c *fuseContext) Err() error {
 	return syscall.EINTR
 }

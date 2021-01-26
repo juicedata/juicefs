@@ -26,12 +26,15 @@ func (i Ino) String() string {
 	return strconv.FormatUint(uint64(i), 10)
 }
 
+type CtxKey string
+
 type Context interface {
 	context.Context
 	Gid() uint32
 	Gids() []uint32
 	Uid() uint32
 	Pid() uint32
+	WithValue(k, v interface{})
 	Cancel()
 	Canceled() bool
 }
@@ -46,6 +49,9 @@ func (ctx emptyContext) Uid() uint32    { return 0 }
 func (ctx emptyContext) Pid() uint32    { return 1 }
 func (ctx emptyContext) Cancel()        {}
 func (ctx emptyContext) Canceled() bool { return false }
+func (ctx emptyContext) WithValue(k, v interface{}) {
+	ctx.Context = context.WithValue(ctx.Context, k, v)
+}
 
 var Background Context = emptyContext{context.Background()}
 
@@ -76,6 +82,10 @@ func (c *myContext) Cancel() {}
 
 func (c *myContext) Canceled() bool {
 	return false
+}
+
+func (c *myContext) WithValue(k, v interface{}) {
+	c.Context = context.WithValue(c.Context, k, v)
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {

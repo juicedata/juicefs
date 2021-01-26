@@ -83,7 +83,9 @@ type wrapper struct {
 
 func (w *wrapper) withPid(pid int) meta.Context {
 	// mapping Java Thread ID to global one
-	return meta.NewContext(w.ctx.Pid()*1000+uint32(pid), w.ctx.Uid(), w.ctx.Gids())
+	ctx := meta.NewContext(w.ctx.Pid()*1000+uint32(pid), w.ctx.Uid(), w.ctx.Gids())
+	ctx.WithValue(meta.CtxKey("behavior"), "Hadoop")
+	return ctx
 }
 
 func (w *wrapper) lookupUid(name string) uint32 {
@@ -313,6 +315,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Chunk:     &chunkConf,
 			AccessLog: jConf.AccessLog,
 		}
+		logger.Infof("conf: %+v", conf)
 		jfs, err := fs.NewFileSystem(conf, m, store)
 		if err != nil {
 			logger.Errorf("Initialize failed: %s", err)
@@ -441,8 +444,7 @@ func jfs_rmr(pid int, h uintptr, cpath *C.char) int {
 	if w == nil {
 		return -int(syscall.EINVAL)
 	}
-	return -int(syscall.ENOTSUP)
-	// return errno(w.Rmr(w.withPid(pid), C.GoString(cpath)))
+	return errno(w.Rmr(w.withPid(pid), C.GoString(cpath)))
 }
 
 //export jfs_rename
@@ -586,26 +588,26 @@ func jfs_lstat1(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 }
 
 //export jfs_summary
-// func jfs_summary(pid int, h uintptr, cpath *C.char, buf uintptr) int {
-// 	w := F(h)
-// 	if w == nil {
-// 		return -int(syscall.EINVAL)
-// 	}
-// 	ctx := w.withPid(pid)
-// 	f, err := w.Open(ctx, C.GoString(cpath), 0)
-// 	if err != 0 {
-// 		return errno(err)
-// 	}
-// 	summary, err := f.Summary(ctx, 0, 1)
-// 	if err != 0 {
-// 		return errno(err)
-// 	}
-// 	wb := utils.NewNativeBuffer(toBuf(buf, 24))
-// 	wb.Put64(summary.Length)
-// 	wb.Put64(summary.Files)
-// 	wb.Put64(summary.Dirs)
-// 	return 24
-// }
+func jfs_summary(pid int, h uintptr, cpath *C.char, buf uintptr) int {
+	w := F(h)
+	if w == nil {
+		return -int(syscall.EINVAL)
+	}
+	ctx := w.withPid(pid)
+	f, err := w.Open(ctx, C.GoString(cpath), 0)
+	if err != 0 {
+		return errno(err)
+	}
+	summary, err := f.Summary(ctx, 0, 1)
+	if err != 0 {
+		return errno(err)
+	}
+	wb := utils.NewNativeBuffer(toBuf(buf, 24))
+	wb.Put64(summary.Length)
+	wb.Put64(summary.Files)
+	wb.Put64(summary.Dirs)
+	return 24
+}
 
 //export jfs_statvfs
 func jfs_statvfs(pid int, h uintptr, buf uintptr) int {

@@ -15,8 +15,43 @@
 
 package fs
 
-import "testing"
+import (
+	"testing"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/vfs"
+)
+
+// nolint:errcheck
 func TestFileSystem(t *testing.T) {
-
+	m, err := meta.NewRedisMeta("redis://127.0.0.1:6379/10", &meta.RedisConfig{})
+	if err != nil {
+		t.Logf("redis is not available: %s", err)
+		t.Skip()
+	}
+	format := meta.Format{
+		Name:      "test",
+		BlockSize: 4096,
+	}
+	_ = m.Init(format, true)
+	var conf = vfs.Config{
+		Meta: &meta.Config{},
+		Chunk: &chunk.Config{
+			BlockSize: 4096,
+		},
+	}
+	store := chunk.NewDiskStore("/tmp")
+	fs, err := NewFileSystem(&conf, m, store)
+	ctx := meta.Background
+	if _, err := fs.Create(ctx, "/hello", 0644); err != 0 {
+		t.Fatalf("create /hello: %s", err)
+	}
+	defer fs.Delete(ctx, "/hello")
+	if _, err := fs.Stat(ctx, "/hello"); err != 0 {
+		t.Fatalf("stat /hello: %s", err)
+	}
+	if err := fs.Delete(ctx, "/hello"); err != 0 {
+		t.Fatalf("delete /hello: %s", err)
+	}
 }
