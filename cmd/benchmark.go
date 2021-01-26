@@ -172,6 +172,10 @@ func benchmark(c *cli.Context) error {
 	smallFileSize := c.Float64("smallfile-file-size")
 	smallFileCount := c.Int("smallfile-count")
 
+	if c.NArg() > 0 {
+		dest = c.Args().Get(0)
+	}
+
 	dest = filepath.Join(dest, fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
 	if _, err := os.Stat(dest); os.IsNotExist(err) {
 		err = os.MkdirAll(dest, 0o755)
