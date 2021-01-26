@@ -63,30 +63,10 @@ public class JuiceFileSystem extends FilterFileSystem {
     private synchronized static void patchDistCpChecksum() {
         if (distcpPatched)
             return;
-        ClassPool classPool = ClassPool.getDefault();
-        try {
-            String clsName = "org.apache.hadoop.tools.mapred.RetriableFileCopyCommand";
-            CtClass copyClass = classPool.get(clsName);
-            CtMethod method = copyClass.getDeclaredMethod("compareCheckSums");
-            method.insertBefore(
-                    "if (sourceFS.getFileStatus(source).getBlockSize() != targetFS.getFileStatus(target).getBlockSize()) {return ;}");
-            byte[] bytecode = copyClass.toBytecode();
-            ClassDefinition definition = new ClassDefinition(Class.forName(clsName), bytecode);
-            RedefineClassAgent.redefineClasses(definition);
-            copyClass.detach();
-        } catch (NotFoundException | ClassNotFoundException e) {
-        } catch (NoClassDefFoundError e) {
-            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-            if (stackTrace.length > 1) {
-                StackTraceElement element = stackTrace[stackTrace.length - 1];
-                if (element.getClassName().contains("DistCp")) {
-                    LOG.warn(
-                            "Please add tools.jar to classpath to skip checksum check for files with different block sizes.");
-                }
-            }
-        } catch (Throwable e) {
-            LOG.warn("patch distcp failed!", e);
-        }
+        PatchUtil.patchBefore("org.apache.hadoop.tools.mapred.RetriableFileCopyCommand",
+                "compareCheckSums",
+                null,
+                "if (sourceFS.getFileStatus(source).getBlockSize() != targetFS.getFileStatus(target).getBlockSize()) {return ;}");
         distcpPatched = true;
     }
 
