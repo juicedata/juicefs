@@ -107,11 +107,10 @@ type Slice struct {
 }
 
 type Summary struct {
-	Length  uint64
-	Size    uint64
-	Files   uint64
-	Dirs    uint64
-	Entries map[string]*Summary
+	Length uint64
+	Size   uint64
+	Files  uint64
+	Dirs   uint64
 }
 
 type Meta interface {
@@ -149,7 +148,8 @@ type Meta interface {
 	Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
 
-	// Summary(ctx Context, inode Ino, depth uint8, maxentries uint32, summary *Summary) syscall.Errno
+	Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno
+	Rmr(ctx Context, inode Ino, name string) syscall.Errno
 
 	OnMsg(mtype uint32, cb MsgCallback)
 }

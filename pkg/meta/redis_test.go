@@ -84,6 +84,9 @@ func TestRedisClient(t *testing.T) {
 	if st := m.Lookup(ctx, 1, "d", &parent, attr); st != 0 {
 		t.Fatalf("lookup dir: %s", st)
 	}
+	if st := m.Access(ctx, parent, 4, attr); st != 0 {
+		t.Fatalf("access dir: %s", st)
+	}
 	if st := m.Create(ctx, parent, "f", 0650, 022, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
