@@ -15,6 +15,7 @@
 
 package com.juicefs;
 
+import java.net.URI;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -52,9 +53,10 @@ import static org.junit.Assert.assertArrayEquals;
 public class JuiceFileSystemTest extends TestCase {
     FsShell shell;
     FileSystem fs;
+    Configuration cfg;
 
     public void setUp() throws Exception {
-        Configuration cfg = new Configuration();
+        cfg = new Configuration();
         cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
         Thread.currentThread().interrupt();
         fs = FileSystem.get(cfg);
@@ -126,8 +128,16 @@ public class JuiceFileSystemTest extends TestCase {
         assertEquals(0, shell.run(new String[] { "-cat", "/hello" }));
 
         fs.setPermission(new Path("/hello"), new FsPermission((short) 0000));
+        UserGroupInformation ugi =
+            UserGroupInformation.createUserForTesting("nobody", new String[]{"nogroup"});
+        FileSystem fs2 = ugi.doAs(new PrivilegedExceptionAction<FileSystem>() {
+            @Override
+            public FileSystem run() throws Exception {
+                return FileSystem.get(new URI("jfs://dev"), cfg);
+            }
+        });
         try {
-            in = fs.open(new Path("/hello"));
+            in = fs2.open(new Path("/hello"));
             assertEquals(in, null);
         } catch (IOException e) {
             fs.setPermission(new Path("/hello"), new FsPermission((short) 0644));
@@ -166,8 +176,16 @@ public class JuiceFileSystemTest extends TestCase {
     public void testCreateWithoutPermission() throws Exception {
         assertTrue(fs.mkdirs(new Path("/noperm")));
         fs.setPermission(new Path("/noperm"), new FsPermission((short) 0555));
+        UserGroupInformation ugi =
+            UserGroupInformation.createUserForTesting("nobody", new String[]{"nogroup"});
+        FileSystem fs2 = ugi.doAs(new PrivilegedExceptionAction<FileSystem>() {
+            @Override
+            public FileSystem run() throws Exception {
+                return FileSystem.get(new URI("jfs://dev"), cfg);
+            }
+        });
         try {
-            fs.create(new Path("/noperm/a/file"));
+            fs2.create(new Path("/noperm/a/file"));
             throw new Exception("create should fail");
         } catch (IOException e) {
         }
