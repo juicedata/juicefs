@@ -12,6 +12,7 @@ require (
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/juicedata/godaemon v0.0.0-20210118074000-659b6681b236
 	github.com/juicedata/juicesync v0.6.3-0.20210124085431-dc40ea723a9e
+	github.com/mattn/go-isatty v0.0.4
 	github.com/ncw/swift v1.0.53
 	github.com/sirupsen/logrus v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
