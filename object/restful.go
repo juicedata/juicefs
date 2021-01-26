@@ -23,18 +23,9 @@ import (
 
 var resolver = dnscache.New(time.Minute)
 var httpClient *http.Client
-var supportIPv6 = false
-
-func checkIPv6() {
-	l, err := net.Listen("tcp", "[::1]:0")
-	if err == nil {
-		supportIPv6 = true
-		l.Close()
-	}
-}
 
 func init() {
-	go checkIPv6()
+	rand.Seed(time.Now().Unix())
 	httpClient = &http.Client{
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
@@ -50,24 +41,25 @@ func init() {
 				if err != nil {
 					return nil, err
 				}
-				if !supportIPv6 {
-					for i := range ips {
-						if ips[i].To4() == nil {
-							ips[i] = ips[len(ips)-1]
-							ips = ips[:len(ips)-1]
-						}
-					}
-				}
 				if len(ips) == 0 {
 					return nil, fmt.Errorf("No such host: %s", host)
 				}
-				ip := ips[rand.Intn(len(ips))]
+				var conn net.Conn
+				n := len(ips)
+				first := rand.Intn(n)
 				dialer := &net.Dialer{Timeout: time.Second * 10}
-				address = ip.String()
-				if port != "" {
-					address = net.JoinHostPort(address, port[1:])
+				for i := 0; i < n; i++ {
+					ip := ips[(first+i)%n]
+					address = ip.String()
+					if port != "" {
+						address = net.JoinHostPort(address, port[1:])
+					}
+					conn, err = dialer.Dial(network, address)
+					if err == nil {
+						return conn, nil
+					}
 				}
-				return dialer.Dial(network, address)
+				return nil, err
 			},
 			DisableCompression: true,
 		},
