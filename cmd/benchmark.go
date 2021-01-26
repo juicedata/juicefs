@@ -221,12 +221,16 @@ func benchmark(c *cli.Context) error {
 	smallFileTest := newBenchmark(filepath.Join(dest, "smallfile"), smallFileSize, blockSize, smallFileCount)
 	timeTaken, _ = smallFileTest.WriteFileTest()
 	fmt.Printf("\rWritten %d small files (%.2f KiB): %.1f files/s, %.1f ms for each file\n", smallFileTest.count, smallFileTest.fileSizeMiB*1024, float64(smallFileTest.count)/sum(timeTaken), sum(timeTaken)*1000/float64(smallFileTest.count))
+
+	purgeCmd = exec.Command(purgeCmd.Path, purgeCmd.Args[1:]...)
 	if err := purgeCmd.Run(); err != nil {
 		return err
 	}
 
 	timeTaken, _ = smallFileTest.ReadFileTest()
 	fmt.Printf("\rRead %d small files (%.2f KiB): %.1f files/s, %.1f ms for each file\n", smallFileTest.count, smallFileTest.fileSizeMiB*1024, float64(smallFileTest.count)/sum(timeTaken), sum(timeTaken)*1000/float64(smallFileTest.count))
+
+	purgeCmd = exec.Command(purgeCmd.Path, purgeCmd.Args[1:]...)
 	if err := purgeCmd.Run(); err != nil {
 		return err
 	}
