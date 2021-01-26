@@ -19,7 +19,7 @@ The highlighted features are:
 
 ---
 
-[Architecture](#architecture) | [Getting Started](#getting-started) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Command Reference](docs/command_reference.md) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
+[Architecture](#architecture) | [Getting Started](#getting-started) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
 
 ---
 
@@ -178,7 +178,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 ## Roadmap
 
 - Stabilize storage format
-- Hadoop SDK
 - S3 gateway
 - Windows client
 - Encryption at rest
