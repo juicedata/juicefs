@@ -42,7 +42,7 @@ func TestFileSystem(t *testing.T) {
 		},
 	}
 	store := chunk.NewDiskStore("/tmp")
-	fs, err := NewFileSystem(&conf, m, store)
+	fs, _ := NewFileSystem(&conf, m, store)
 	ctx := meta.Background
 	if _, err := fs.Create(ctx, "/hello", 0644); err != 0 {
 		t.Fatalf("create /hello: %s", err)
