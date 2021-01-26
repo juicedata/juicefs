@@ -173,7 +173,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 
 ## Roadmap
 
-- Kubernetes CSI driver
 - Stabilize storage format
 - Hadoop SDK
 - S3 gateway

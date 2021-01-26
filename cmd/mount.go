@@ -16,7 +16,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -124,12 +123,15 @@ func mount(c *cli.Context) error {
 		Prefetch:    c.Int("prefetch"),
 		BufferSize:  c.Int("buffer-size") << 20,
 
-		CacheDir:       filepath.Join(c.String("cache-dir"), format.UUID),
+		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
 		FreeSpace:      float32(c.Float64("free-space-ratio")),
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
+	}
+	if chunkConf.CacheDir != "memory" {
+		chunkConf.CacheDir = filepath.Join(chunkConf.CacheDir, format.UUID)
 	}
 	blob, err := createStorage(format)
 	if err != nil {
@@ -169,7 +171,7 @@ func mount(c *cli.Context) error {
 	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
 		slices := args[0].([]meta.Slice)
 		chunkid := args[1].(uint64)
-		return compact(chunkConf, store, slices, chunkid)
+		return vfs.Compact(chunkConf, store, slices, chunkid)
 	}))
 
 	conf := &vfs.Config{
@@ -311,62 +313,4 @@ func mountFlags() *cli.Command {
 			},
 		},
 	}
-}
-
-func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int) error {
-	buf := page.Data
-	read := 0
-	reader := store.NewReader(s.Chunkid, int(s.Size))
-	for read < len(buf) {
-		p := page.Slice(read, len(buf)-read)
-		n, err := reader.ReadAt(context.Background(), p, off+int(s.Off))
-		p.Release()
-		if n == 0 && err != nil {
-			return err
-		}
-		read += n
-		off += n
-	}
-	return nil
-}
-
-func compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chunkid uint64) error {
-	writer := store.NewWriter(chunkid)
-	defer writer.Abort()
-
-	var pos int
-	for i, s := range slices {
-		if s.Chunkid == 0 {
-			_, err := writer.WriteAt(make([]byte, int(s.Len)), int64(pos))
-			if err != nil {
-				return err
-			}
-			pos += int(s.Len)
-			continue
-		}
-		var read int
-		for read < int(s.Len) {
-			l := utils.Min(conf.BlockSize, int(s.Len)-read)
-			p := chunk.NewOffPage(l)
-			if err := readSlice(store, &s, p, read); err != nil {
-				logger.Infof("can't compact chunk %d, retry later, read %d: %s", chunkid, i, err)
-				p.Release()
-				return err
-			}
-			_, err := writer.WriteAt(p.Data, int64(pos+read))
-			p.Release()
-			if err != nil {
-				logger.Errorf("can't compact chunk %d, retry later, write: %s", chunkid, err)
-				return err
-			}
-			read += l
-			if pos+read >= conf.BlockSize {
-				if err = writer.FlushTo(pos + read); err != nil {
-					panic(err)
-				}
-			}
-		}
-		pos += int(s.Len)
-	}
-	return writer.Finish(pos)
 }
