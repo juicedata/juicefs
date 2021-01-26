@@ -13,7 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.juicefs;
+package com.juicefs.utils;
 
 import com.google.common.collect.Lists;
 import junit.framework.TestCase;

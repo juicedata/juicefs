@@ -15,7 +15,6 @@
 
 package com.juicefs.utils;
 
-import com.juicefs.RedefineClassAgent;
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;

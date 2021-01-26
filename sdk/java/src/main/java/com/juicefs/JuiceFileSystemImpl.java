@@ -28,8 +28,6 @@ import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 
-import com.juicefs.metrics.JuiceFSInstrumentation;
-import com.juicefs.utils.*;
 import com.kenai.jffi.internal.StubLoader;
 import org.apache.hadoop.util.DirectBufferPool;
 import sun.nio.ch.DirectBuffer;
@@ -62,6 +60,8 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.Progressable;
 
+import com.juicefs.metrics.JuiceFSInstrumentation;
+import com.juicefs.utils.*;
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
  *****************************************************************/

@@ -14,7 +14,6 @@
  */
 package com.juicefs;
 
-import com.juicefs.utils.PatchUtil;
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
@@ -33,6 +32,9 @@ import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.net.URI;
 
+import com.juicefs.utils.PatchUtil;
+import com.juicefs.utils.RedefineClassAgent;
+
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
  *****************************************************************/
@@ -50,41 +52,6 @@ public class JuiceFileSystem extends FilterFileSystem {
         jcl = new JarClassLoader();
         String path = JuiceFileSystem.class.getProtectionDomain().getCodeSource().getLocation().getPath();
         jcl.add(path); // Load jar file
-
-        boolean runInImpala = false;
-        String className = "org.apache.impala.common.FileSystemUtil";
-
-        try {
-            Class.forName(className);
-            runInImpala = true;
-        } catch (ClassNotFoundException ignored) {
-        }
-
-        if (runInImpala) {
-
-            try {
-                ClassPool classPool = ClassPool.getDefault();
-                CtClass fsUtil = classPool.get(className);
-                CtClass fsClass = classPool.get("org.apache.hadoop.fs.FileSystem");
-                CtMethod method = fsUtil.getDeclaredMethod("isLocalFileSystem", new CtClass[]{fsClass});
-                method.insertBefore("if (fs instanceof com.juicefs.JuiceFileSystem) return true;");
-                byte[] bytecode = fsUtil.toBytecode();
-
-                ClassDefinition definition = new ClassDefinition(Class.forName(className), bytecode);
-                RedefineClassAgent.redefineClasses(definition);
-                fsUtil.detach();
-                fsClass.detach();
-            } catch (NotFoundException | ClassNotFoundException e) {
-                throw new RuntimeException("Impala version was incompatible. so only read was supported!", e);
-            } catch (NoClassDefFoundError e) {
-                if (e.getMessage().contains("VirtualMachine"))
-                    throw new NoClassDefFoundError(
-                            "You should add tools.jar to impala classpath, you can find it in $JAVA_HOME/lib");
-                throw e;
-            } catch (Exception e) {
-                throw new RuntimeException("Unknown exception, so only read was supported!", e);
-            }
-        }
 
         PatchUtil.patchBefore("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableFsDataOutputStream",
                 "waitUntilLeaseIsRevoked",
