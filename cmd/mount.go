@@ -185,7 +185,7 @@ func mount(c *cli.Context) error {
 			Name:      format.Storage,
 			Endpoint:  format.Bucket,
 			AccessKey: format.AccessKey,
-			SecretKey: format.AccessKey,
+			SecretKey: format.SecretKey,
 		},
 		Chunk: &chunkConf,
 	}
