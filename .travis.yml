@@ -21,6 +21,12 @@ script:
   - make test
   - sudo DURATION=${DURATION} make -C fstests ${TEST_SUITE}
   - make -C fstests flock
+  - make -C sdk/java/libjfs
+  - cd sdk/java
+  - sudo `which mvn` compile -B --quiet || sudo `which mvn` compile -B --quiet
+  - sudo chmod 777 /jfs/tmp
+  - sudo `which mvn` test -B
+  - sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet  
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 notifications:
