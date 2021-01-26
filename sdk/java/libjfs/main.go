@@ -315,7 +315,6 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Chunk:     &chunkConf,
 			AccessLog: jConf.AccessLog,
 		}
-		logger.Infof("conf: %+v", conf)
 		jfs, err := fs.NewFileSystem(conf, m, store)
 		if err != nil {
 			logger.Errorf("Initialize failed: %s", err)
