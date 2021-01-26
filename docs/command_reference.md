@@ -55,25 +55,25 @@ juicefs format [command options] REDIS-URL NAME
 
 ### Options
 
-`--block-size value`
+`--block-size value`\
 size of block in KiB (default: 4096)
 
-`--compress value`
+`--compress value`\
 compression algorithm (lz4, zstd, none) (default: "lz4")
 
-`--storage value`
+`--storage value`\
 Object storage type (e.g. s3, gcs, oss, cos) (default: "file")
 
-`--bucket value`
+`--bucket value`\
 A bucket URL to store data (default: `"$HOME/.juicefs/local"`)
 
-`--access-key value`
+`--access-key value`\
 Access key for object storage (env `ACCESS_KEY`)
 
-`--secret-key value`
+`--secret-key value`\
 Secret key for object storage (env `SECRET_KEY`)
 
-`--force`
+`--force`\
 overwrite existing format (default: false)
 
 ## juicefs mount
@@ -90,61 +90,61 @@ juicefs mount [command options] REDIS-URL MOUNTPOINT
 
 ### Options
 
-`-d, --background`
+`-d, --background`\
 run in background (default: false)
 
-`--no-syslog`
+`--no-syslog`\
 disable syslog (default: false)
 
-`-o value`
+`-o value`\
 other FUSE options
 
-`--attr-cache value`
+`--attr-cache value`\
 attributes cache timeout in seconds (default: 1)
 
-`--entry-cache value`
+`--entry-cache value`\
 file entry cache timeout in seconds (default: 1)
 
-`--dir-entry-cache value`
+`--dir-entry-cache value`\
 dir entry cache timeout in seconds (default: 1)
 
-`--enable-xattr`
+`--enable-xattr`\
 enable extended attributes (xattr) (default: false)
 
-`--get-timeout value`
+`--get-timeout value`\
 the max number of seconds to download an object (default: 60)
 
-`--put-timeout value`
+`--put-timeout value`\
 the max number of seconds to upload an object (default: 60)
 
-`--io-retries value`
+`--io-retries value`\
 number of retries after network failure (default: 30)
 
-`--max-uploads value`
+`--max-uploads value`\
 number of connections to upload (default: 20)
 
-`--buffer-size value`
+`--buffer-size value`\
 total read/write buffering in MiB (default: 300)
 
-`--prefetch value`
+`--prefetch value`\
 prefetch N blocks in parallel (default: 3)
 
-`--writeback`
+`--writeback`\
 Upload objects in background (default: false)
 
-`--cache-dir value`
+`--cache-dir value`\
 directory to cache object (default: `"$HOME/.juicefs/cache"`)
 
-`--cache-size value`
+`--cache-size value`\
 size of cached objects in MiB (default: 1024)
 
-`--free-space-ratio value`
+`--free-space-ratio value`\
 min free space (ratio) (default: 0.1)
 
-`--cache-partial-only`
+`--cache-partial-only`\
 cache only random/small read (default: false)
 
-`--no-usage-report`
+`--no-usage-report`\
 do not send usage report (default: false)
 
 ## juicefs benchmark
@@ -161,17 +161,17 @@ juicefs benchmark [command options] [arguments...]
 
 ### Options
 
-`--dest value`
+`--dest value`\
 path to run benchmark (default: `"/jfs/benchmark"`)
 
-`--block-size value`
+`--block-size value`\
 block size in MiB (default: 1)
 
-`--bigfile-file-size value`
+`--bigfile-file-size value`\
 size of big file in MiB (default: 1024)
 
-`--smallfile-file-size value`
+`--smallfile-file-size value`\
 size of small file in MiB (default: 0.1)
 
-`--smallfile-count value`
+`--smallfile-count value`\
 number of small files (default: 100)
