@@ -19,7 +19,7 @@ The highlighted features are:
 
 ---
 
-[Architecture](#architecture) | [Getting Started](#getting-started) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Command Reference](docs/command_reference.md) [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
+[Architecture](#architecture) | [Getting Started](#getting-started) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Command Reference](docs/command_reference.md) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
 
 ---
 
@@ -93,7 +93,7 @@ To get all options, just run `./juicefs mount -h`.
 
 ### Command Reference
 
-There is a [command reference](docs/command_reference.md) to dee all options of the subcommand.
+There is a [command reference](docs/command_reference.md) to see all options of the subcommand.
 
 ### Kubernetes
 
