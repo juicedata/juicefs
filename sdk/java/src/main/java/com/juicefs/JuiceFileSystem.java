@@ -47,7 +47,6 @@ public class JuiceFileSystem extends FilterFileSystem {
     private static boolean fileChecksumEnabled = false;
     private static boolean distcpPatched = false;
 
-    // to bypass impala insert check
     static {
         jcl = new JarClassLoader();
         String path = JuiceFileSystem.class.getProtectionDomain().getCodeSource().getLocation().getPath();
