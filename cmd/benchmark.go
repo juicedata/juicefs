@@ -107,7 +107,7 @@ func (bm *Benchmark) ReadFileTest() ([]float64, float64) {
 		if costs, err := bm.readOneFile(filename, blockSize, blockCount); err == nil {
 			timeTaken = append(timeTaken, costs...)
 		} else {
-			logger.Fatal("Failed to read file %s: %s", filename, err)
+			logger.Fatalf("Failed to read file %s: %s", filename, err)
 		}
 	}
 	totalSizeMiB := bm.fileSizeMiB * float64(len(bm.filenames))
@@ -128,7 +128,7 @@ func (bm *Benchmark) WriteFileTest() ([]float64, float64) {
 			timeTaken = append(timeTaken, costs...)
 			bm.filenames = append(bm.filenames, filename)
 		} else {
-			logger.Fatal("Failed to write file %s: %s", filename, err)
+			logger.Fatalf("Failed to write file %s: %s", filename, err)
 		}
 	}
 	totalSizeMiB := bm.fileSizeMiB * float64(bm.count)
