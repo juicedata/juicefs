@@ -22,8 +22,6 @@ public class NodesFetcherBuilder {
             fetcher = new YarnNodesFetcher(jfsName);
         } else if (urls.contains("service/presto")) {
             fetcher = new PrestoNodesFetcher(jfsName);
-        } else if (urls.contains("clusters/get?cluster_name")) {
-            fetcher = new DatabricksNodesFetcher(jfsName);
         } else if (urls.contains("/json")) {
             fetcher = new SparkNodesFetcher(jfsName);
         } else if (urls.contains("api/v1/applications")) {
