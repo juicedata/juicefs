@@ -14,3 +14,5 @@ juicefs
 dist/
 *.rdb
 .release-env
+*.so
+libjfs.h

@@ -54,6 +54,7 @@ type Config struct {
 	Version    string
 	Mountpoint string
 	Prefix     string
+	AccessLog  string
 }
 
 var (
