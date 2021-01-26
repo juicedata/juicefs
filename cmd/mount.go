@@ -230,7 +230,7 @@ func mountFlags() *cli.Command {
 
 			&cli.StringFlag{
 				Name:  "o",
-				Usage: "other fuse options",
+				Usage: "other FUSE options",
 			},
 			&cli.Float64Flag{
 				Name:  "attr-cache",
@@ -275,7 +275,7 @@ func mountFlags() *cli.Command {
 			&cli.IntFlag{
 				Name:  "buffer-size",
 				Value: 300,
-				Usage: "total read/write buffering in MB",
+				Usage: "total read/write buffering in MiB",
 			},
 			&cli.IntFlag{
 				Name:  "prefetch",
