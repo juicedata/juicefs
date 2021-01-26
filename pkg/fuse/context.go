@@ -67,6 +67,10 @@ func (c *fuseContext) Gid() uint32 {
 	return uint32(c.header.Gid)
 }
 
+func (c *fuseContext) Gids() []uint32 {
+	return []uint32{c.header.Gid}
+}
+
 func (c *fuseContext) Pid() uint32 {
 	return uint32(c.header.Pid)
 }
