@@ -36,7 +36,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 
-	"github.com/google/gops/agent"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
@@ -99,11 +98,6 @@ func gateway(ctx *cli.Context) error {
 			http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
 		}
 	}()
-	go func() {
-		for port := 6070; port < 6100; port++ {
-			agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
-		}
-	}()
 
 	minio.StartGateway(ctx, &GateWay{ctx})
 	return nil
@@ -156,13 +150,11 @@ func (n *jfsObjects) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (n *jfsObjects) StorageInfo(ctx context.Context, _ bool) minio.StorageInfo {
-	total, avail := n.jfs.StatFS(mctx)
+func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {
 	sinfo := minio.StorageInfo{}
-	sinfo.Used = []uint64{total - avail}
 	sinfo.Backend.Type = minio.BackendGateway
 	sinfo.Backend.GatewayOnline = true
-	return sinfo
+	return sinfo, nil
 }
 
 func jfsToObjectErr(ctx context.Context, err error, params ...string) error {
@@ -252,7 +244,7 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	return jfsToObjectErr(ctx, err, bucket)
 }
 
-func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
+func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, options minio.BucketOptions) error {
 	if !n.isValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
@@ -333,10 +325,10 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 
 func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
 		f, err := n.jfs.Open(mctx, n.path(bucket, prefixDir), 0)
 		if err != 0 {
-			return fs.IsNotExist(err), nil
+			return fs.IsNotExist(err), nil, false
 		}
 		defer f.Close(mctx)
 		fis, err := f.Readdir(mctx, 0)
@@ -344,7 +336,7 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			return
 		}
 		if len(fis) == 2 {
-			return true, nil
+			return true, nil, false
 		}
 		root := n.path(bucket, prefixDir) == "/"
 		for _, fi := range fis[2:] {
@@ -357,7 +349,7 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 				entries = append(entries, fi.Name())
 			}
 		}
-		return false, minio.FilterMatchingPrefix(entries, prefixEntry)
+		return false, minio.FilterMatchingPrefix(entries, prefixEntry), false
 	}
 
 	// Return list factory instance.
@@ -394,7 +386,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		return obj, jfsToObjectErr(ctx, err, bucket, object)
 	}
 
-	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
+	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), nil, nil, getObjectInfo, getObjectInfo)
 }
 
 // ListObjectsV2 lists all blobs in JFS bucket filtered by prefix
@@ -421,7 +413,7 @@ func (n *jfsObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 	return loi, err
 }
 
-func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string) (err error) {
+func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, options minio.ObjectOptions) (info minio.ObjectInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
@@ -436,18 +428,18 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string) (e
 		}
 		p = path.Dir(p)
 	}
-	return nil
+	return minio.ObjectInfo{}, nil
 }
 
-func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) (errs []error, err error) {
-	if err = n.checkBucket(ctx, bucket); err != nil {
+func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
+	if err := n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
 	errs = make([]error, len(objects))
 	for idx, object := range objects {
-		errs[idx] = n.DeleteObject(ctx, bucket, object)
+		_, errs[idx] = n.DeleteObject(ctx, bucket, object.ObjectName, minio.ObjectOptions{})
 	}
-	return errs, nil
+	return nil, nil
 }
 
 type fReader struct {
@@ -816,7 +808,8 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	} else {
 		f.Close(mctx)
 	}
-	err = n.jfs.Concat(mctx, tmp, ps)
+	// FIXME
+	// err = n.jfs.Concat(mctx, tmp, ps)
 	if err != nil {
 		err = jfsToObjectErr(ctx, err, bucket, object)
 		logger.Errorf("merge parts %s: %s", uploadID, err)
@@ -861,10 +854,10 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	}, nil
 }
 
-func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) (err error) {
+func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, option minio.ObjectOptions) (err error) {
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
 	}
-	err = n.jfs.Rmr(mctx, n.upath(bucket, uploadID))
+	// err = n.jfs.Rmr(mctx, n.upath(bucket, uploadID))
 	return jfsToObjectErr(ctx, err, bucket, object, uploadID)
 }
