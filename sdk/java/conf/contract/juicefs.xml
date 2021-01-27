@@ -5,7 +5,7 @@
 	</property>
 	<property>
 		<name>fs.jfs.impl</name>
-		<value>com.juicefs.JuiceFileSystem</value>
+		<value>io.juicefs.JuiceFileSystem</value>
 	</property>
 	<property>
 		<name>juicefs.names</name>
