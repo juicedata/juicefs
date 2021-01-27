@@ -433,29 +433,31 @@ func benchmarkReaddir(b *testing.B, n int) {
 	}
 	ctx := Background
 	var inode Ino
-	m.Rmr(ctx, 1, fmt.Sprintf("largedir%d", n))
-	m.Mkdir(ctx, 1, fmt.Sprintf("largedir%d", n), 0755, 0, 0, &inode, nil)
-	var g sync.WaitGroup
-	for i := 0; i < 3; i++ {
-		g.Add(1)
-		go func(i int) {
-			for j := 0; j < n/3; j++ {
-				m.Mkdir(ctx, inode, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil)
-			}
-			g.Done()
-		}(i)
+	dname := fmt.Sprintf("largedir%d", n)
+	var es []*Entry
+	if m.Lookup(ctx, 1, dname, &inode, nil) == 0 && m.Readdir(ctx, inode, 0, &es) == 0 && len(es) == n+2 {
+	} else {
+		m.Rmr(ctx, 1, dname)
+		m.Mkdir(ctx, 1, dname, 0755, 0, 0, &inode, nil)
+		for j := 0; j < n; j++ {
+			m.Create(ctx, inode, fmt.Sprintf("d%d", j), 0755, 0, nil, nil)
+		}
 	}
-	g.Wait()
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var entries []*Entry
 		if e := m.Readdir(ctx, inode, 1, &entries); e != 0 {
 			b.Fatalf("readdir: %s", e)
 		}
-		if len(entries) != n/3*3+2 {
-			b.Fatalf("files: %d != %d", len(entries), n/3*3+2)
+		if len(entries) != n+2 {
+			b.Fatalf("files: %d != %d", len(entries), n+2)
 		}
 	}
+}
+
+func BenchmarkReaddir10(b *testing.B) {
+	benchmarkReaddir(b, 10)
 }
 
 func BenchmarkReaddir1k(b *testing.B) {
