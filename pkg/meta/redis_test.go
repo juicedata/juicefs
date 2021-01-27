@@ -423,3 +423,49 @@ func TestTruncateAndDelete(t *testing.T) {
 		t.Fatalf("number of chunks: %d != 1", len(keys))
 	}
 }
+
+func benchmarkReaddir(b *testing.B, n int) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	if err != nil {
+		b.Logf("redis is not available: %s", err)
+		b.Skip()
+	}
+	ctx := Background
+	var inode Ino
+	m.Rmr(ctx, 1, fmt.Sprintf("largedir%d", n))
+	m.Mkdir(ctx, 1, fmt.Sprintf("largedir%d", n), 0755, 0, 0, &inode, nil)
+	var g sync.WaitGroup
+	for i := 0; i < 3; i++ {
+		g.Add(1)
+		go func(i int) {
+			for j := 0; j < n/3; j++ {
+				m.Mkdir(ctx, inode, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil)
+			}
+			g.Done()
+		}(i)
+	}
+	g.Wait()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var entries []*Entry
+		if e := m.Readdir(ctx, inode, 1, &entries); e != 0 {
+			b.Fatalf("readdir: %s", e)
+		}
+		if len(entries) != n/3*3+2 {
+			b.Fatalf("files: %d != %d", len(entries), n/3*3+2)
+		}
+	}
+}
+
+func BenchmarkReaddir1k(b *testing.B) {
+	benchmarkReaddir(b, 1000)
+}
+
+func BenchmarkReaddir100k(b *testing.B) {
+	benchmarkReaddir(b, 100000)
+}
+
+func BenchmarkReaddir10m(b *testing.B) {
+	benchmarkReaddir(b, 10000000)
+}
