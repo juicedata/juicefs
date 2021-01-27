@@ -40,10 +40,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install g++-multilib libacl1-dev attr redis-server
 
-    - name: Check version
-      run: |
-        make check-version
-
     - name: Build linux target
       run: |
         export GOPATH=$HOME/go
