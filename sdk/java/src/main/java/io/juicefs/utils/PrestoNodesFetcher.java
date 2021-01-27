@@ -24,22 +24,22 @@ import java.util.Set;
 
 public class PrestoNodesFetcher extends NodesFetcher {
 
-    public PrestoNodesFetcher(String jfsName) {
-        super(jfsName);
-    }
+  public PrestoNodesFetcher(String jfsName) {
+    super(jfsName);
+  }
 
-    // url like "http://hadoop01:8000/v1/service/presto"
-    @Override
-    protected Set<String> parseNodes(String response) throws Exception {
-        Set<String> result = new HashSet<>();
-        JSONArray nodes = new JSONObject(response).getJSONArray("services");
-        for (Object node : nodes) {
-            JSONObject nodeProperties = ((JSONObject) node).getJSONObject("properties");
-            if (nodeProperties.getString("coordinator").equals("false")) {
-                String http = nodeProperties.getString("http");
-                result.add(new URL(http).getHost());
-            }
-        }
-        return result;
+  // url like "http://hadoop01:8000/v1/service/presto"
+  @Override
+  protected Set<String> parseNodes(String response) throws Exception {
+    Set<String> result = new HashSet<>();
+    JSONArray nodes = new JSONObject(response).getJSONArray("services");
+    for (Object node : nodes) {
+      JSONObject nodeProperties = ((JSONObject) node).getJSONObject("properties");
+      if (nodeProperties.getString("coordinator").equals("false")) {
+        String http = nodeProperties.getString("http");
+        result.add(new URL(http).getHost());
+      }
     }
+    return result;
+  }
 }

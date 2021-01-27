@@ -14,8 +14,40 @@
  */
 package io.juicefs;
 
+import com.kenai.jffi.internal.StubLoader;
+import io.juicefs.metrics.JuiceFSInstrumentation;
+import io.juicefs.utils.ConsistentHash;
+import io.juicefs.utils.NodesFetcher;
+import io.juicefs.utils.NodesFetcherBuilder;
+import jnr.ffi.LibraryLoader;
+import jnr.ffi.Memory;
+import jnr.ffi.Pointer;
+import jnr.ffi.Runtime;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.permission.FsAction;
+import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.io.DataOutputBuffer;
+import org.apache.hadoop.io.MD5Hash;
+import org.apache.hadoop.security.AccessControlException;
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.util.DataChecksum;
+import org.apache.hadoop.util.DirectBufferPool;
+import org.apache.hadoop.util.Progressable;
+import org.apache.hadoop.util.VersionInfo;
+import org.json.JSONObject;
+import sun.nio.ch.DirectBuffer;
+
 import java.io.*;
-import java.lang.reflect.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
@@ -26,38 +58,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
 import java.util.zip.GZIPInputStream;
 
-import com.kenai.jffi.internal.StubLoader;
-import io.juicefs.utils.ConsistentHash;
-import io.juicefs.utils.NodesFetcher;
-import io.juicefs.utils.NodesFetcherBuilder;
-import org.apache.hadoop.util.DirectBufferPool;
-import sun.nio.ch.DirectBuffer;
-
-import org.json.JSONObject;
-
-import jnr.ffi.LibraryLoader;
-import jnr.ffi.Pointer;
-import jnr.ffi.Memory;
-import jnr.ffi.Runtime;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.util.VersionInfo;
-import org.apache.hadoop.classification.InterfaceAudience;
-import org.apache.hadoop.classification.InterfaceStability;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.*;
-import org.apache.hadoop.fs.permission.FsAction;
-import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.io.DataOutputBuffer;
-import org.apache.hadoop.io.MD5Hash;
-import org.apache.hadoop.security.AccessControlException;
-import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.util.DataChecksum;
-import org.apache.hadoop.util.Progressable;
-
-import io.juicefs.metrics.JuiceFSInstrumentation;
-import io.juicefs.utils.*;
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
  *****************************************************************/
@@ -202,7 +202,7 @@ public class JuiceFileSystemImpl extends FileSystem {
         if (stat != null) {
           FsPermission perm = stat.getPermission();
           return new AccessControlException(String.format("Permission denied: user=%s, path=\"%s\":%s:%s:%s%s", user, p,
-              stat.getOwner(), stat.getGroup(), stat.isDirectory() ? "d" : "-", perm));
+                  stat.getOwner(), stat.getGroup(), stat.isDirectory() ? "d" : "-", perm));
         }
       } catch (Exception e) {
         LOG.warn("fail to generate better error message", e);
@@ -300,11 +300,11 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     lib = loadLibrary();
     JSONObject obj = new JSONObject();
-    String[] keys = new String[] {"meta",};
+    String[] keys = new String[]{"meta",};
     for (String key : keys) {
       obj.put(key, getConf(conf, key, ""));
     }
-    String[] bkeys = new String[] { "debug", "writeback", "opencache" };
+    String[] bkeys = new String[]{"debug", "writeback", "opencache"};
     for (String key : bkeys) {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
@@ -345,7 +345,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (withStreamCapability) {
       try {
         constructor = Class.forName("io.juicefs.JuiceFileSystemImpl$BufferedFSOutputStreamWithStreamCapabilities")
-            .getConstructor(OutputStream.class, Integer.TYPE, String.class);
+                .getConstructor(OutputStream.class, Integer.TYPE, String.class);
       } catch (ClassNotFoundException | NoSuchMethodException e) {
         throw new RuntimeException(e);
       }
@@ -369,7 +369,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       setStorageIds = clazz.getMethod("setStorageIds", String[].class);
     } catch (ClassNotFoundException e) {
       throw new IllegalStateException(
-          "Hadoop version was incompatible, current hadoop version is:\t" + VersionInfo.getVersion());
+              "Hadoop version was incompatible, current hadoop version is:\t" + VersionInfo.getVersion());
     } catch (NoSuchMethodException e) {
       setStorageIds = null;
     }
@@ -576,9 +576,9 @@ public class JuiceFileSystemImpl extends FileSystem {
       return new BlockLocation[0];
     }
     if (cacheReplica <= 0) {
-      String[] name = new String[] { "localhost:50010" };
-      String[] host = new String[] { "localhost" };
-      return new BlockLocation[] { new BlockLocation(name, host, 0L, file.getLen()) };
+      String[] name = new String[]{"localhost:50010"};
+      String[] host = new String[]{"localhost"};
+      return new BlockLocation[]{new BlockLocation(name, host, 0L, file.getLen())};
     }
     if (file.getLen() <= start + len) {
       len = file.getLen() - start;
@@ -835,7 +835,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
-  private Map<String,FileSystem> fsCache = new HashMap<String, FileSystem>();
+  private Map<String, FileSystem> fsCache = new HashMap<String, FileSystem>();
 
   private FileSystem getFileSystem(Path path) throws IOException {
     URI uri = path.toUri();
@@ -858,7 +858,7 @@ public class JuiceFileSystemImpl extends FileSystem {
         LOG.error(e.getMessage(), e);
       }
     }
-    synchronized(this) {
+    synchronized (this) {
       FileSystem fs = fsCache.get(key);
       if (fs == null) {
         fs = FileSystem.newInstance(uri, getConf());
@@ -990,7 +990,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   static class BufferedFSOutputStreamWithStreamCapabilities extends BufferedFSOutputStream
-      implements StreamCapabilities {
+          implements StreamCapabilities {
     public BufferedFSOutputStreamWithStreamCapabilities(OutputStream out) {
       super(out);
     }
@@ -1019,7 +1019,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
-      short replication, long blockSize, Progressable progress) throws IOException {
+                                   short replication, long blockSize, Progressable progress) throws IOException {
     statistics.incrementWriteOps(1);
     while (true) {
       int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort());
@@ -1055,7 +1055,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flag,
-      int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
+                                               int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
     statistics.incrementWriteOps(1);
     int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort());
     while (fd == EEXIST) {
@@ -1076,13 +1076,13 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (withStreamCapability) {
       try {
         return new FSDataOutputStream(
-            (OutputStream) constructor.newInstance(out, checkBufferSize(bufferSize), hflushMethod), statistics, startPosition);
+                (OutputStream) constructor.newInstance(out, checkBufferSize(bufferSize), hflushMethod), statistics, startPosition);
       } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
         throw new RuntimeException(e);
       }
     } else {
       return new FSDataOutputStream(new BufferedFSOutputStream(out, checkBufferSize(bufferSize), hflushMethod),
-          statistics, startPosition);
+              statistics, startPosition);
     }
   }
 
@@ -1277,10 +1277,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     String group = buf.getString(28 + user.length() + 1);
     assert (30 + user.length() + group.length() == size);
     if (readlink && ((mode >> 27) & 1) == 1) {
-      return new FileStatus(length, isdir, 1, blocksize, mtime, mtime+inode, perm, user, group,
-          getLinkTarget(p), p);
+      return new FileStatus(length, isdir, 1, blocksize, mtime, mtime + inode, perm, user, group,
+              getLinkTarget(p), p);
     } else {
-      return new FileStatus(length, isdir, 1, blocksize, mtime, mtime+inode, perm, user, group, p);
+      return new FileStatus(length, isdir, 1, blocksize, mtime, mtime + inode, perm, user, group, p);
     }
   }
 
@@ -1295,7 +1295,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       throw new FileNotFoundException(f.toString());
     }
     if (r == ENOTDIR) {
-      return new FileStatus[] { getFileStatus(f) };
+      return new FileStatus[]{getFileStatus(f)};
     }
 
     FileStatus[] results;
@@ -1494,7 +1494,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public void setTimes(Path p, long mtime, long atime) throws IOException {
     statistics.incrementWriteOps(1);
     int r = lib.jfs_utime(Thread.currentThread().getId(), handle, normalizePath(p), mtime >= 0 ? mtime : -1,
-        atime >= 0 ? atime : -1);
+            atime >= 0 ? atime : -1);
     if (r != 0)
       throw error(r, p);
   }
@@ -1526,7 +1526,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       mode = 2;
     }
     int r = lib.jfs_setXattr(Thread.currentThread().getId(), handle, normalizePath(path), name, buf, value.length,
-        mode);
+            mode);
     if (r < 0)
       throw error(r, path);
   }

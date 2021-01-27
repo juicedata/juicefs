@@ -25,49 +25,49 @@ import java.util.Set;
 
 // "http://hadoop01:4040/api/v1/applications/";
 public class SparkThriftNodesFetcher extends NodesFetcher {
-    private static final Log LOG = LogFactory.getLog(SparkThriftNodesFetcher.class);
+  private static final Log LOG = LogFactory.getLog(SparkThriftNodesFetcher.class);
 
-    public SparkThriftNodesFetcher(String jfsName) {
-        super(jfsName);
-    }
+  public SparkThriftNodesFetcher(String jfsName) {
+    super(jfsName);
+  }
 
-    @Override
-    public Set<String> getNodes(String[] urls) {
-        if (urls == null || urls.length == 0) {
-            return null;
-        }
-        for (String url : urls) {
-            try {
-                JSONArray appArrays = new JSONArray(doGet(url));
-                if (appArrays.length() > 0) {
-                    String id = appArrays.getJSONObject(0).getString("id");
-                    url = url.endsWith("/") ? url : url + "/";
-                    return parseNodes(doGet(url + id + "/allexecutors"));
-                }
-            } catch (Throwable e) {
-                LOG.warn("fetch from spark thrift server failed!", e);
-            }
-        }
-        return null;
+  @Override
+  public Set<String> getNodes(String[] urls) {
+    if (urls == null || urls.length == 0) {
+      return null;
     }
+    for (String url : urls) {
+      try {
+        JSONArray appArrays = new JSONArray(doGet(url));
+        if (appArrays.length() > 0) {
+          String id = appArrays.getJSONObject(0).getString("id");
+          url = url.endsWith("/") ? url : url + "/";
+          return parseNodes(doGet(url + id + "/allexecutors"));
+        }
+      } catch (Throwable e) {
+        LOG.warn("fetch from spark thrift server failed!", e);
+      }
+    }
+    return null;
+  }
 
-    @Override
-    protected Set<String> parseNodes(String response) throws Exception {
-        if (response == null) {
-            return null;
-        }
-        Set<String> res = new HashSet<>();
-        for (Object item : new JSONArray(response)) {
-            JSONObject obj = (JSONObject) item;
-            String id = obj.getString("id");
-            boolean isActive = obj.getBoolean("isActive");
-            String hostPort = obj.getString("hostPort");
-            boolean isBlacklisted = obj.getBoolean("isBlacklisted");
-            String[] hAp = hostPort.split(":");
-            if (hAp.length > 0 && !"driver".equals(id) && isActive && !isBlacklisted) {
-                res.add(hAp[0]);
-            }
-        }
-        return res;
+  @Override
+  protected Set<String> parseNodes(String response) throws Exception {
+    if (response == null) {
+      return null;
     }
+    Set<String> res = new HashSet<>();
+    for (Object item : new JSONArray(response)) {
+      JSONObject obj = (JSONObject) item;
+      String id = obj.getString("id");
+      boolean isActive = obj.getBoolean("isActive");
+      String hostPort = obj.getString("hostPort");
+      boolean isBlacklisted = obj.getBoolean("isBlacklisted");
+      String[] hAp = hostPort.split(":");
+      if (hAp.length > 0 && !"driver".equals(id) && isActive && !isBlacklisted) {
+        res.add(hAp[0]);
+      }
+    }
+    return res;
+  }
 }

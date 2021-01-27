@@ -20,15 +20,15 @@ import org.apache.hadoop.ipc.CallerContext;
 
 public class CallerContextUtil {
 
-    public static void setContext(String context) throws Exception {
-        CallerContext current = CallerContext.getCurrent();
-        CallerContext.Builder builder;
-        if (current == null || !current.isContextValid()) {
-            builder = new CallerContext.Builder(context);
-            CallerContext.setCurrent(builder.build());
-        } else if (current.getSignature() == null && !current.getContext().endsWith("_" + context)) {
-            builder = new CallerContext.Builder(current.getContext() + "_" + context);
-            CallerContext.setCurrent(builder.build());
-        }
+  public static void setContext(String context) throws Exception {
+    CallerContext current = CallerContext.getCurrent();
+    CallerContext.Builder builder;
+    if (current == null || !current.isContextValid()) {
+      builder = new CallerContext.Builder(context);
+      CallerContext.setCurrent(builder.build());
+    } else if (current.getSignature() == null && !current.getContext().endsWith("_" + context)) {
+      builder = new CallerContext.Builder(current.getContext() + "_" + context);
+      CallerContext.setCurrent(builder.build());
     }
+  }
 }

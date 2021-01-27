@@ -21,6 +21,6 @@ import org.apache.hadoop.fs.contract.AbstractFSContract;
 public class TestDelete extends AbstractContractDeleteTest {
   @Override
   protected AbstractFSContract createContract(Configuration conf) {
-      return new JuiceFSContract(conf);
+    return new JuiceFSContract(conf);
   }
 }

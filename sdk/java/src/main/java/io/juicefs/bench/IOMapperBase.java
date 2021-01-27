@@ -49,138 +49,138 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class IOMapperBase<T> extends Configured
         implements Mapper<Text, LongWritable, Text, Text> {
-    private static final Log LOG = LogFactory.getLog(IOMapperBase.class);
+  private static final Log LOG = LogFactory.getLog(IOMapperBase.class);
 
-    protected ThreadLocal<byte[]> buffer;
-    protected int bufferSize;
-    protected FileSystem fs;
-    protected String hostName;
-    protected Closeable stream;
-    protected int threadPerMap;
-    protected ExecutorService pool;
+  protected ThreadLocal<byte[]> buffer;
+  protected int bufferSize;
+  protected FileSystem fs;
+  protected String hostName;
+  protected Closeable stream;
+  protected int threadPerMap;
+  protected ExecutorService pool;
 
-    public IOMapperBase() {
+  public IOMapperBase() {
+  }
+
+  @Override
+  public void configure(JobConf conf) {
+    setConf(conf);
+    try {
+      fs = FileSystem.get(conf);
+    } catch (Exception e) {
+      throw new RuntimeException("Cannot create file system.", e);
     }
+    bufferSize = conf.getInt("test.io.file.buffer.size", 4096);
+    buffer = ThreadLocal.withInitial(() -> new byte[bufferSize]);
 
-    @Override
-    public void configure(JobConf conf) {
-        setConf(conf);
-        try {
-            fs = FileSystem.get(conf);
-        } catch (Exception e) {
-            throw new RuntimeException("Cannot create file system.", e);
+    try {
+      hostName = InetAddress.getLocalHost().getHostName();
+    } catch (Exception e) {
+      hostName = "localhost";
+    }
+    threadPerMap = conf.getInt("test.threadsPerMap", 1);
+    pool = Executors.newFixedThreadPool(threadPerMap);
+  }
+
+  @Override
+  public void close() throws IOException {
+    pool.shutdown();
+  }
+
+  /**
+   * Perform io operation, usually read or write.
+   *
+   * @param reporter
+   * @param name     file name
+   * @param value    offset within the file
+   * @param id
+   * @param stream
+   * @return object that is passed as a parameter to
+   * {@link #collectStats(OutputCollector, String, long, Object)}
+   * @throws IOException
+   */
+  abstract T doIO(Reporter reporter,
+                  String name,
+                  long value, int id, Closeable stream) throws IOException;
+
+  /**
+   * Create an input or output stream based on the specified file.
+   * Subclasses should override this method to provide an actual stream.
+   *
+   * @param name file name
+   * @param id
+   * @return the stream
+   * @throws IOException
+   */
+  public Closeable getIOStream(String name, int id) throws IOException {
+    return null;
+  }
+
+  /**
+   * Collect stat data to be combined by a subsequent reducer.
+   *
+   * @param output
+   * @param name            file name
+   * @param execTime        IO execution time
+   * @param doIOReturnValue value returned by {@link #doIO(Reporter, String, long, int, Closeable)}
+   * @throws IOException
+   */
+  abstract void collectStats(OutputCollector<Text, Text> output,
+                             String name,
+                             long execTime,
+                             T doIOReturnValue) throws IOException;
+
+  /**
+   * Map file name and offset into statistical data.
+   * <p>
+   * The map task is to get the
+   * <tt>key</tt>, which contains the file name, and the
+   * <tt>value</tt>, which is the offset within the file.
+   * <p>
+   * The parameters are passed to the abstract method
+   * {@link #doIO(Reporter, String, long, int, Closeable)}, which performs the io operation,
+   * usually read or write data, and then
+   * {@link #collectStats(OutputCollector, String, long, Object)}
+   * is called to prepare stat data for a subsequent reducer.
+   */
+  @Override
+  public void map(Text key,
+                  LongWritable value,
+                  OutputCollector<Text, Text> output,
+                  Reporter reporter) throws IOException {
+    String name = key.toString();
+    long longValue = value.get();
+
+    reporter.setStatus("starting " + name + " ::host = " + hostName);
+    AtomicLong execTime = new AtomicLong(0L);
+    List<Future<Long>> futures = new ArrayList<>(threadPerMap);
+    for (int i = 0; i < threadPerMap; i++) {
+      int id = i;
+      Future<Long> future = pool.submit(() -> {
+        try (Closeable stream = getIOStream(name, id)) {
+          long tStart = System.currentTimeMillis();
+          T result = doIO(reporter, name, longValue, id, stream);
+          long tEnd = System.currentTimeMillis();
+          execTime.addAndGet(tEnd - tStart);
+          return (Long) result;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
         }
-        bufferSize = conf.getInt("test.io.file.buffer.size", 4096);
-        buffer = ThreadLocal.withInitial(() -> new byte[bufferSize]);
-
-        try {
-            hostName = InetAddress.getLocalHost().getHostName();
-        } catch (Exception e) {
-            hostName = "localhost";
-        }
-        threadPerMap = conf.getInt("test.threadsPerMap", 1);
-        pool = Executors.newFixedThreadPool(threadPerMap);
+      });
+      futures.add(future);
     }
 
-    @Override
-    public void close() throws IOException {
-        pool.shutdown();
+    Long result = 0L;
+    try {
+      for (Future<Long> future : futures) {
+        result += future.get();
+      }
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
     }
 
-    /**
-     * Perform io operation, usually read or write.
-     *
-     * @param reporter
-     * @param name     file name
-     * @param value    offset within the file
-     * @param id
-     * @param stream
-     * @return object that is passed as a parameter to
-     * {@link #collectStats(OutputCollector, String, long, Object)}
-     * @throws IOException
-     */
-    abstract T doIO(Reporter reporter,
-                    String name,
-                    long value, int id, Closeable stream) throws IOException;
+    collectStats(output, name, execTime.get(), (T) result);
 
-    /**
-     * Create an input or output stream based on the specified file.
-     * Subclasses should override this method to provide an actual stream.
-     *
-     * @param name file name
-     * @param id
-     * @return the stream
-     * @throws IOException
-     */
-    public Closeable getIOStream(String name, int id) throws IOException {
-        return null;
-    }
-
-    /**
-     * Collect stat data to be combined by a subsequent reducer.
-     *
-     * @param output
-     * @param name            file name
-     * @param execTime        IO execution time
-     * @param doIOReturnValue value returned by {@link #doIO(Reporter, String, long, int, Closeable)}
-     * @throws IOException
-     */
-    abstract void collectStats(OutputCollector<Text, Text> output,
-                               String name,
-                               long execTime,
-                               T doIOReturnValue) throws IOException;
-
-    /**
-     * Map file name and offset into statistical data.
-     * <p>
-     * The map task is to get the
-     * <tt>key</tt>, which contains the file name, and the
-     * <tt>value</tt>, which is the offset within the file.
-     * <p>
-     * The parameters are passed to the abstract method
-     * {@link #doIO(Reporter, String, long, int, Closeable)}, which performs the io operation,
-     * usually read or write data, and then
-     * {@link #collectStats(OutputCollector, String, long, Object)}
-     * is called to prepare stat data for a subsequent reducer.
-     */
-    @Override
-    public void map(Text key,
-                    LongWritable value,
-                    OutputCollector<Text, Text> output,
-                    Reporter reporter) throws IOException {
-        String name = key.toString();
-        long longValue = value.get();
-
-        reporter.setStatus("starting " + name + " ::host = " + hostName);
-        AtomicLong execTime = new AtomicLong(0L);
-        List<Future<Long>> futures = new ArrayList<>(threadPerMap);
-        for (int i = 0; i < threadPerMap; i++) {
-            int id = i;
-            Future<Long> future = pool.submit(() -> {
-                try (Closeable stream = getIOStream(name, id)) {
-                    long tStart = System.currentTimeMillis();
-                    T result = doIO(reporter, name, longValue, id, stream);
-                    long tEnd = System.currentTimeMillis();
-                    execTime.addAndGet(tEnd - tStart);
-                    return (Long) result;
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            futures.add(future);
-        }
-
-        Long result = 0L;
-        try {
-            for (Future<Long> future : futures) {
-                result += future.get();
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
-
-        collectStats(output, name, execTime.get(), (T) result);
-
-        reporter.setStatus("finished " + name + " ::host = " + hostName);
-    }
+    reporter.setStatus("finished " + name + " ::host = " + hostName);
+  }
 }

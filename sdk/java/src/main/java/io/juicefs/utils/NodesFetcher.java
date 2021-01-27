@@ -32,110 +32,110 @@ import java.util.stream.Collectors;
  * fetch calculate nodes of the cluster
  */
 public abstract class NodesFetcher {
-    private static final Log LOG = LogFactory.getLog(NodesFetcher.class);
+  private static final Log LOG = LogFactory.getLog(NodesFetcher.class);
 
-    protected File cacheFolder = new File("/tmp/.juicefs");
-    protected File cacheFile;
-    private String jfsName;
+  protected File cacheFolder = new File("/tmp/.juicefs");
+  protected File cacheFile;
+  private String jfsName;
 
-    public NodesFetcher(String jfsName) {
-        this.jfsName = jfsName;
-        if (!cacheFolder.exists()) {
-            cacheFolder.mkdirs();
-        }
-        cacheFile = new File(cacheFolder, jfsName + ".nodes");
-        cacheFolder.setWritable(true, false);
-        cacheFolder.setReadable(true, false);
-        cacheFolder.setExecutable(true, false);
-        cacheFile.setWritable(true, false);
-        cacheFile.setReadable(true, false);
-        cacheFile.setExecutable(true, false);
+  public NodesFetcher(String jfsName) {
+    this.jfsName = jfsName;
+    if (!cacheFolder.exists()) {
+      cacheFolder.mkdirs();
+    }
+    cacheFile = new File(cacheFolder, jfsName + ".nodes");
+    cacheFolder.setWritable(true, false);
+    cacheFolder.setReadable(true, false);
+    cacheFolder.setExecutable(true, false);
+    cacheFile.setWritable(true, false);
+    cacheFile.setReadable(true, false);
+    cacheFile.setExecutable(true, false);
+  }
+
+  public List<String> fetchNodes(String urls) {
+    List<String> result = readCache();
+
+    // refresh local disk cache every 10 mins
+    long duration = System.currentTimeMillis() - cacheFile.lastModified();
+    if (duration > 10 * 60 * 1000L || result == null) {
+      Set<String> nodes = getNodes(urls.split(","));
+      if (nodes == null) return result;
+      result = new ArrayList<>(nodes);
+      cache(result);
     }
 
-    public List<String> fetchNodes(String urls) {
-        List<String> result = readCache();
+    return result;
+  }
 
-        // refresh local disk cache every 10 mins
-        long duration = System.currentTimeMillis() - cacheFile.lastModified();
-        if (duration > 10 * 60 * 1000L || result == null) {
-            Set<String> nodes = getNodes(urls.split(","));
-            if (nodes == null) return result;
-            result = new ArrayList<>(nodes);
-            cache(result);
-        }
-
-        return result;
+  public List<String> readCache() {
+    try {
+      if (!cacheFile.exists()) return null;
+      return Files.readAllLines(cacheFile.toPath());
+    } catch (IOException e) {
+      LOG.warn("read cache failed due to: ", e);
+      return null;
     }
+  }
 
-    public List<String> readCache() {
-        try {
-            if (!cacheFile.exists()) return null;
-            return Files.readAllLines(cacheFile.toPath());
-        } catch (IOException e) {
-            LOG.warn("read cache failed due to: ", e);
-            return null;
-        }
+  public void cache(List<String> hostnames) {
+    File tmpFile = new File(cacheFolder, System.getProperty("user.name") + "-" + jfsName + ".nodes.tmp");
+    try (RandomAccessFile writer = new RandomAccessFile(tmpFile, "rws")) {
+      tmpFile.setWritable(true, false);
+      tmpFile.setReadable(true, false);
+      if (hostnames != null) {
+        String content = String.join("\n", hostnames);
+        writer.write(content.getBytes());
+      }
+      tmpFile.renameTo(cacheFile);
+    } catch (IOException e) {
+      LOG.warn("wirte cache failed due to: ", e);
     }
+  }
 
-    public void cache(List<String> hostnames) {
-        File tmpFile = new File(cacheFolder, System.getProperty("user.name") + "-" + jfsName + ".nodes.tmp");
-        try (RandomAccessFile writer = new RandomAccessFile(tmpFile, "rws")) {
-            tmpFile.setWritable(true, false);
-            tmpFile.setReadable(true, false);
-            if (hostnames != null) {
-                String content = String.join("\n", hostnames);
-                writer.write(content.getBytes());
-            }
-            tmpFile.renameTo(cacheFile);
-        } catch (IOException e) {
-            LOG.warn("wirte cache failed due to: ", e);
-        }
+  public Set<String> getNodes(String[] urls) {
+    if (urls == null) {
+      return null;
     }
-
-    public Set<String> getNodes(String[] urls) {
-        if (urls == null) {
-            return null;
+    for (String url : urls) {
+      try {
+        String response = doGet(url);
+        if (response == null) {
+          continue;
         }
-        for (String url : urls) {
-            try {
-                String response = doGet(url);
-                if (response == null) {
-                    continue;
-                }
-                return parseNodes(response);
-            } catch (Throwable e) {
-                LOG.warn("fetch from:" + url + " failed, switch to another url", e);
-            }
-        }
-        return null;
+        return parseNodes(response);
+      } catch (Throwable e) {
+        LOG.warn("fetch from:" + url + " failed, switch to another url", e);
+      }
     }
+    return null;
+  }
 
-    protected abstract Set<String> parseNodes(String response) throws Exception;
+  protected abstract Set<String> parseNodes(String response) throws Exception;
 
-    protected String doGet(String url) {
-        int timeout = 3; // seconds
+  protected String doGet(String url) {
+    int timeout = 3; // seconds
 
-        HttpURLConnection con = null;
-        try {
-            con = (HttpURLConnection) new URL(url).openConnection();
-            con.setConnectTimeout(timeout * 1000);
-            con.setReadTimeout(timeout * 1000);
+    HttpURLConnection con = null;
+    try {
+      con = (HttpURLConnection) new URL(url).openConnection();
+      con.setConnectTimeout(timeout * 1000);
+      con.setReadTimeout(timeout * 1000);
 
-            int status = con.getResponseCode();
-            if (status != 200) return null;
+      int status = con.getResponseCode();
+      if (status != 200) return null;
 
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8));
-            String content = in.lines().collect(Collectors.joining("\n"));
-            in.close();
-            return content;
-        } catch (IOException e) {
-            LOG.warn(e);
-            return null;
-        } finally {
-            if (con != null) {
-                con.disconnect();
-            }
-        }
+      BufferedReader in = new BufferedReader(
+              new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8));
+      String content = in.lines().collect(Collectors.joining("\n"));
+      in.close();
+      return content;
+    } catch (IOException e) {
+      LOG.warn(e);
+      return null;
+    } finally {
+      if (con != null) {
+        con.disconnect();
+      }
     }
+  }
 }

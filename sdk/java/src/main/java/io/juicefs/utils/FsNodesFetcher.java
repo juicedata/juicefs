@@ -29,31 +29,31 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class FsNodesFetcher extends NodesFetcher {
-    private static final Log LOG = LogFactory.getLog(FsNodesFetcher.class);
+  private static final Log LOG = LogFactory.getLog(FsNodesFetcher.class);
 
-    public FsNodesFetcher(String jfsName) {
-        super(jfsName);
-    }
+  public FsNodesFetcher(String jfsName) {
+    super(jfsName);
+  }
 
-    @Override
-    public List<String> fetchNodes(String uri) {
-        Path path = new Path(uri);
-        try {
-            FileSystem fs = path.getFileSystem(new Configuration());
-            if (!fs.exists(path)) return null;
-            FSDataInputStream inputStream = fs.open(path);
-            List<String> res = new BufferedReader(new InputStreamReader(inputStream))
-                    .lines().collect(Collectors.toList());
-            inputStream.close();
-            return res;
-        } catch (Throwable e) {
-            LOG.warn(e.getMessage());
-        }
-        return null;
+  @Override
+  public List<String> fetchNodes(String uri) {
+    Path path = new Path(uri);
+    try {
+      FileSystem fs = path.getFileSystem(new Configuration());
+      if (!fs.exists(path)) return null;
+      FSDataInputStream inputStream = fs.open(path);
+      List<String> res = new BufferedReader(new InputStreamReader(inputStream))
+              .lines().collect(Collectors.toList());
+      inputStream.close();
+      return res;
+    } catch (Throwable e) {
+      LOG.warn(e.getMessage());
     }
+    return null;
+  }
 
-    @Override
-    protected Set<String> parseNodes(String response) throws Exception {
-        return null;
-    }
+  @Override
+  protected Set<String> parseNodes(String response) throws Exception {
+    return null;
+  }
 }

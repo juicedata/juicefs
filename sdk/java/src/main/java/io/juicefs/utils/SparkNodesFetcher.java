@@ -21,21 +21,21 @@ import org.json.JSONObject;
 import java.util.HashSet;
 import java.util.Set;
 
-public class SparkNodesFetcher extends NodesFetcher{
-    public SparkNodesFetcher(String jfsName) {
-        super(jfsName);
-    }
+public class SparkNodesFetcher extends NodesFetcher {
+  public SparkNodesFetcher(String jfsName) {
+    super(jfsName);
+  }
 
-    // url like "http://host:8888/json/"
-    @Override
-    protected Set<String> parseNodes(String response) throws Exception {
-        Set<String> result = new HashSet<>();
-        JSONArray workers = new JSONObject(response).getJSONArray("workers");
-        for (Object worker : workers) {
-            if (((JSONObject) worker).getString("state").equals("ALIVE")) {
-                result.add(((JSONObject) worker).getString("host"));
-            }
-        }
-        return result;
+  // url like "http://host:8888/json/"
+  @Override
+  protected Set<String> parseNodes(String response) throws Exception {
+    Set<String> result = new HashSet<>();
+    JSONArray workers = new JSONObject(response).getJSONArray("workers");
+    for (Object worker : workers) {
+      if (((JSONObject) worker).getString("state").equals("ALIVE")) {
+        result.add(((JSONObject) worker).getString("host"));
+      }
     }
+    return result;
+  }
 }

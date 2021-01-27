@@ -14,6 +14,7 @@
  */
 package io.juicefs;
 
+import io.juicefs.utils.PatchUtil;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
@@ -27,109 +28,107 @@ import org.xeustechnologies.jcl.JclUtils;
 import java.io.IOException;
 import java.net.URI;
 
-import io.juicefs.utils.PatchUtil;
-
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
  *****************************************************************/
 @InterfaceAudience.Public
 @InterfaceStability.Stable
 public class JuiceFileSystem extends FilterFileSystem {
-    private static final Logger LOG = LoggerFactory.getLogger(JuiceFileSystem.class);
-    private static JarClassLoader jcl;
+  private static final Logger LOG = LoggerFactory.getLogger(JuiceFileSystem.class);
+  private static JarClassLoader jcl;
 
-    private static boolean fileChecksumEnabled = false;
-    private static boolean distcpPatched = false;
+  private static boolean fileChecksumEnabled = false;
+  private static boolean distcpPatched = false;
 
-    static {
-        jcl = new JarClassLoader();
-        String path = JuiceFileSystem.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-        jcl.add(path); // Load jar file
+  static {
+    jcl = new JarClassLoader();
+    String path = JuiceFileSystem.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+    jcl.add(path); // Load jar file
 
-        PatchUtil.patchBefore("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableFsDataOutputStream",
-                "waitUntilLeaseIsRevoked",
-                new String[]{"org.apache.hadoop.fs.FileSystem", "org.apache.hadoop.fs.Path"},
-                "if (fs instanceof io.juicefs.JuiceFileSystem) {\n" +
-                        "            return ((io.juicefs.JuiceFileSystem)fs).isFileClosed(path);\n" +
-                        "        }");
+    PatchUtil.patchBefore("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableFsDataOutputStream",
+            "waitUntilLeaseIsRevoked",
+            new String[]{"org.apache.hadoop.fs.FileSystem", "org.apache.hadoop.fs.Path"},
+            "if (fs instanceof io.juicefs.JuiceFileSystem) {\n" +
+                    "            return ((io.juicefs.JuiceFileSystem)fs).isFileClosed(path);\n" +
+                    "        }");
+  }
+
+  private synchronized static void patchDistCpChecksum() {
+    if (distcpPatched)
+      return;
+    PatchUtil.patchBefore("org.apache.hadoop.tools.mapred.RetriableFileCopyCommand",
+            "compareCheckSums",
+            null,
+            "if (sourceFS.getFileStatus(source).getBlockSize() != targetFS.getFileStatus(target).getBlockSize()) {return ;}");
+    distcpPatched = true;
+  }
+
+  private static FileSystem createInstance() {
+    // Create default factory
+    JclObjectFactory factory = JclObjectFactory.getInstance();
+    Object obj = factory.create(jcl, "io.juicefs.JuiceFileSystemImpl");
+    return (FileSystem) JclUtils.deepClone(obj);
+  }
+
+  @Override
+  public void initialize(URI uri, Configuration conf) throws IOException {
+    super.initialize(uri, conf);
+    fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
+  }
+
+  private String getConf(Configuration conf, String key, String value) {
+    String name = fs.getUri().getHost();
+    String v = conf.get("juicefs." + key, value);
+    if (name != null && !name.equals("")) {
+      v = conf.get("juicefs." + name + "." + key, v);
     }
+    if (v != null)
+      v = v.trim();
+    return v;
+  }
 
-    private synchronized static void patchDistCpChecksum() {
-        if (distcpPatched)
-            return;
-        PatchUtil.patchBefore("org.apache.hadoop.tools.mapred.RetriableFileCopyCommand",
-                "compareCheckSums",
-                null,
-                "if (sourceFS.getFileStatus(source).getBlockSize() != targetFS.getFileStatus(target).getBlockSize()) {return ;}");
-        distcpPatched = true;
-    }
+  public JuiceFileSystem() {
+    super(createInstance());
+  }
 
-    private static FileSystem createInstance() {
-        // Create default factory
-        JclObjectFactory factory = JclObjectFactory.getInstance();
-        Object obj = factory.create(jcl, "io.juicefs.JuiceFileSystemImpl");
-        return (FileSystem) JclUtils.deepClone(obj);
+  @Override
+  public String getScheme() {
+    StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+    if (elements[2].getClassName().equals("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableWriter") &&
+            elements[2].getMethodName().equals("<init>")) {
+      return "hdfs";
     }
+    return fs.getScheme();
+  }
 
-    @Override
-    public void initialize(URI uri, Configuration conf) throws IOException {
-        super.initialize(uri, conf);
-        fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
-    }
+  @Override
+  public ContentSummary getContentSummary(Path f) throws IOException {
+    return fs.getContentSummary(f);
+  }
 
-    private String getConf(Configuration conf, String key, String value) {
-        String name = fs.getUri().getHost();
-        String v = conf.get("juicefs." + key, value);
-        if (name != null && !name.equals("")) {
-            v = conf.get("juicefs." + name + "." + key, v);
-        }
-        if (v != null)
-            v = v.trim();
-        return v;
-    }
+  public boolean isFileClosed(final Path src) throws IOException {
+    FileStatus st = fs.getFileStatus(src);
+    return st.getLen() > 0;
+  }
 
-    public JuiceFileSystem() {
-        super(createInstance());
-    }
+  @Override
+  public FileChecksum getFileChecksum(Path f, long length) throws IOException {
+    if (!fileChecksumEnabled)
+      return null;
+    patchDistCpChecksum();
+    return super.getFileChecksum(f, length);
+  }
 
-    @Override
-    public String getScheme() {
-        StackTraceElement[] elements = Thread.currentThread().getStackTrace();
-        if (elements[2].getClassName().equals("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableWriter") &&
-                elements[2].getMethodName().equals("<init>")) {
-            return "hdfs";
-        }
-        return fs.getScheme();
-    }
+  @Override
+  public FileChecksum getFileChecksum(Path f) throws IOException {
+    if (!fileChecksumEnabled)
+      return null;
+    patchDistCpChecksum();
+    return super.getFileChecksum(f);
+  }
 
-    @Override
-    public ContentSummary getContentSummary(Path f) throws IOException {
-        return fs.getContentSummary(f);
-    }
-
-    public boolean isFileClosed(final Path src) throws IOException {
-        FileStatus st = fs.getFileStatus(src);
-        return st.getLen() > 0;
-    }
-
-    @Override
-    public FileChecksum getFileChecksum(Path f, long length) throws IOException {
-        if (!fileChecksumEnabled)
-            return null;
-        patchDistCpChecksum();
-        return super.getFileChecksum(f, length);
-    }
-
-    @Override
-    public FileChecksum getFileChecksum(Path f) throws IOException {
-        if (!fileChecksumEnabled)
-            return null;
-        patchDistCpChecksum();
-        return super.getFileChecksum(f);
-    }
-
-    @Override
-    public void close() throws IOException {
-        super.close();
-    }
+  @Override
+  public void close() throws IOException {
+    super.close();
+  }
 }

@@ -24,49 +24,49 @@ import org.json.JSONObject;
 import java.util.*;
 
 public class YarnNodesFetcher extends NodesFetcher {
-    private static final Log LOG = LogFactory.getLog(YarnNodesFetcher.class);
+  private static final Log LOG = LogFactory.getLog(YarnNodesFetcher.class);
 
-    public YarnNodesFetcher(String jfsName) {
-        super(jfsName);
-    }
+  public YarnNodesFetcher(String jfsName) {
+    super(jfsName);
+  }
 
-    @Override
-    public Set<String> getNodes(String[] urls) {
-        if (urls == null || urls.length == 0) {
-            return null;
-        }
-        List<String> yarnUrls = Arrays.asList(urls);
-        for (String url : urls) {
-            if ("yarn".equals(url.toLowerCase().trim())) {
-                Configuration conf = new Configuration();
-                Map<String, String> props = conf.getValByRegex("yarn\\.resourcemanager\\.webapp\\.address.*");
-                if (props.size() == 0) {
-                    return null;
-                }
-                yarnUrls = new ArrayList<>();
-                for (String v : props.values()) {
-                    yarnUrls.add("http://" + v + "/ws/v1/cluster/nodes/");
-                }
-                break;
-            }
-        }
-        return super.getNodes(yarnUrls.toArray(new String[0]));
+  @Override
+  public Set<String> getNodes(String[] urls) {
+    if (urls == null || urls.length == 0) {
+      return null;
     }
+    List<String> yarnUrls = Arrays.asList(urls);
+    for (String url : urls) {
+      if ("yarn".equals(url.toLowerCase().trim())) {
+        Configuration conf = new Configuration();
+        Map<String, String> props = conf.getValByRegex("yarn\\.resourcemanager\\.webapp\\.address.*");
+        if (props.size() == 0) {
+          return null;
+        }
+        yarnUrls = new ArrayList<>();
+        for (String v : props.values()) {
+          yarnUrls.add("http://" + v + "/ws/v1/cluster/nodes/");
+        }
+        break;
+      }
+    }
+    return super.getNodes(yarnUrls.toArray(new String[0]));
+  }
 
-    @Override
-    protected Set<String> parseNodes(String response) {
-        Set<String> result = new HashSet<>();
-        JSONArray allNodes = new JSONObject(response).getJSONObject("nodes").getJSONArray("node");
-        for (Object obj : allNodes) {
-            if (obj instanceof JSONObject) {
-                JSONObject node = (JSONObject) obj;
-                String state = node.getString("state");
-                String hostname = node.getString("nodeHostName");
-                if ("RUNNING".equals(state)) {
-                    result.add(hostname);
-                }
-            }
+  @Override
+  protected Set<String> parseNodes(String response) {
+    Set<String> result = new HashSet<>();
+    JSONArray allNodes = new JSONObject(response).getJSONObject("nodes").getJSONArray("node");
+    for (Object obj : allNodes) {
+      if (obj instanceof JSONObject) {
+        JSONObject node = (JSONObject) obj;
+        String state = node.getString("state");
+        String hostname = node.getString("nodeHostName");
+        if ("RUNNING".equals(state)) {
+          result.add(hostname);
         }
-        return result;
+      }
     }
+    return result;
+  }
 }

@@ -28,5 +28,4 @@ public class JuiceFSContract extends AbstractBondedFSContract {
   public String getScheme() {
     return "jfs";
   }
-
 }
