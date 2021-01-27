@@ -3,7 +3,7 @@ export GO111MODULE=on
 all: juicefs
 
 REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
-REVISIONDATE := $(shell git log -1 --pretty=format:'%as' 2>/dev/null)
+REVISIONDATE := $(shell git log -1 --pretty=format:'%ad' --date short 2>/dev/null)
 VERSION := $(shell git describe --tags --match 'v*' 2>/dev/null | sed -e 's/^v//' -e 's/-g[0-9a-f]\{7,\}$$//')
 
 LDFLAGS = -s -w
