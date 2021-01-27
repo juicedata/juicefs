@@ -18,9 +18,9 @@ package main
 import "fmt"
 
 var (
-	version      = "dev"
-	revision     = "HEAD"
-	revisionDate = "now"
+	version      = "0.9.3"
+	revision     = "$Format:%h$"
+	revisionDate = "$Format:%as$"
 )
 
 // Version prints version in format - `VERSION (REVISIONDATE REVISION)`
