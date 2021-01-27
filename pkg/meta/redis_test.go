@@ -437,10 +437,10 @@ func benchmarkReaddir(b *testing.B, n int) {
 	var es []*Entry
 	if m.Lookup(ctx, 1, dname, &inode, nil) == 0 && m.Readdir(ctx, inode, 0, &es) == 0 && len(es) == n+2 {
 	} else {
-		m.Rmr(ctx, 1, dname)
-		m.Mkdir(ctx, 1, dname, 0755, 0, 0, &inode, nil)
+		_ = m.Rmr(ctx, 1, dname)
+		_ = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &inode, nil)
 		for j := 0; j < n; j++ {
-			m.Create(ctx, inode, fmt.Sprintf("d%d", j), 0755, 0, nil, nil)
+			_ = m.Create(ctx, inode, fmt.Sprintf("d%d", j), 0755, 0, nil, nil)
 		}
 	}
 
