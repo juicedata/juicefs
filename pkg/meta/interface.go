@@ -106,6 +106,13 @@ type Slice struct {
 	Len     uint32
 }
 
+type Summary struct {
+	Length uint64
+	Size   uint64
+	Files  uint64
+	Dirs   uint64
+}
+
 type Meta interface {
 	Init(format Format, force bool) error
 	Load() (*Format, error)
@@ -140,6 +147,9 @@ type Meta interface {
 	Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno
 	Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
+
+	Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno
+	Rmr(ctx Context, inode Ino, name string) syscall.Errno
 
 	OnMsg(mtype uint32, cb MsgCallback)
 }

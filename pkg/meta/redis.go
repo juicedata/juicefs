@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -361,6 +362,40 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 	return 0
 }
 
+func (r *redisMeta) Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno {
+	var attr Attr
+	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ == TypeDirectory {
+		var entries []*Entry
+		if st := r.Readdir(ctx, inode, 1, &entries); st != 0 {
+			return st
+		}
+		for _, e := range entries {
+			if e.Inode == inode || len(e.Name) == 2 && bytes.Equal(e.Name, []byte("..")) {
+				continue
+			}
+			if e.Attr.Typ == TypeDirectory {
+				if st := r.Summary(ctx, e.Inode, summary); st != 0 {
+					return st
+				}
+			} else {
+				summary.Files++
+				summary.Length += e.Attr.Length
+				summary.Size += uint64(align4K(e.Attr.Length))
+			}
+		}
+		summary.Dirs++
+		summary.Size += 4096
+	} else {
+		summary.Files++
+		summary.Length += attr.Length
+		summary.Size += uint64(align4K(attr.Length))
+	}
+	return 0
+}
+
 func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	var foundIno Ino
 	var encodedAttr []byte
@@ -431,8 +466,10 @@ func (r *redisMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysc
 		return 0
 	}
 
-	if attr == nil {
-		attr = &Attr{}
+	if attr == nil || !attr.Full {
+		if attr == nil {
+			attr = &Attr{}
+		}
 		err := r.GetAttr(ctx, inode, attr)
 		if err != 0 {
 			return err
@@ -441,6 +478,7 @@ func (r *redisMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysc
 
 	mode := r.accessMode(attr, ctx.Uid(), ctx.Gid())
 	if mode&mmask != mmask {
+		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
 		return syscall.EACCES
 	}
 	return 0
@@ -761,6 +799,9 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 	if err != nil {
 		return errno(err)
 	}
+	if attr == nil {
+		attr = &Attr{}
+	}
 	attr.Typ = _type
 	attr.Mode = mode & ^cumask
 	attr.Uid = ctx.Uid()
@@ -778,16 +819,18 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 		}
 	}
 	attr.Parent = parent
+	if inode != nil {
+		*inode = ino
+	}
 
-	*inode = ino
 	return r.txn(ctx, func(tx *redis.Tx) error {
-		var patt Attr
+		var pattr Attr
 		a, err := tx.Get(ctx, r.inodeKey(parent)).Bytes()
 		if err != nil {
 			return err
 		}
-		r.parseAttr(a, &patt)
-		if patt.Typ != TypeDirectory {
+		r.parseAttr(a, &pattr)
+		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
 
@@ -800,22 +843,25 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 
 		now := time.Now()
 		if _type == TypeDirectory {
-			patt.Nlink++
+			pattr.Nlink++
 		}
-		patt.Mtime = now.Unix()
-		patt.Mtimensec = uint32(now.Nanosecond())
-		patt.Ctime = now.Unix()
-		patt.Ctimensec = uint32(now.Nanosecond())
+		pattr.Mtime = now.Unix()
+		pattr.Mtimensec = uint32(now.Nanosecond())
+		pattr.Ctime = now.Unix()
+		pattr.Ctimensec = uint32(now.Nanosecond())
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
 		attr.Mtime = now.Unix()
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
+		if ctx.Value(CtxKey("behavior")) == "Hadoop" {
+			attr.Gid = pattr.Gid
+		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, r.entryKey(parent), name, r.packEntry(_type, ino))
-			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&patt), 0)
+			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(attr), 0)
 			if _type == TypeSymlink {
 				pipe.Set(ctx, r.symKey(ino), path, 0)
@@ -989,6 +1035,38 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
 }
 
+func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
+	if st := r.Access(ctx, parent, 3, nil); st != 0 {
+		return st
+	}
+	var inode Ino
+	var attr Attr
+	if st := r.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ != TypeDirectory {
+		return r.Unlink(ctx, parent, name)
+	}
+	var entries []*Entry
+	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
+		return st
+	}
+	for _, e := range entries {
+		// TODO: in parallel
+		if e.Inode == inode || e.Inode == parent {
+			continue
+		}
+		if st := r.Rmr(ctx, inode, string(e.Name)); st != 0 {
+			return st
+		}
+	}
+	st := r.Rmdir(ctx, parent, name)
+	if st == syscall.ENOTEMPTY {
+		return r.Rmr(ctx, parent, name)
+	}
+	return st
+}
+
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 	if err != nil {
@@ -1025,6 +1103,9 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		var tattr Attr
 		var opened bool
 		if err == nil {
+			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
+				return syscall.EEXIST
+			}
 			typ1, dino1 := r.parseEntry(buf)
 			if dino1 != dino || typ1 != dtyp {
 				return syscall.EAGAIN
@@ -1198,10 +1279,6 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 	if err := r.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
 	}
-	vals, err := r.rdb.HGetAll(ctx, r.entryKey(inode)).Result()
-	if err != nil {
-		return errno(err)
-	}
 	*entries = []*Entry{
 		{
 			Inode: inode,
@@ -1216,27 +1293,64 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 			Attr:  &Attr{Typ: TypeDirectory},
 		})
 	}
+	vals, err := r.rdb.HGetAll(ctx, r.entryKey(inode)).Result()
+	if err != nil {
+		return errno(err)
+	}
+	newEntries := make([]Entry, len(vals))
+	newAttrs := make([]Attr, len(newEntries))
+	var i int
 	for name, val := range vals {
 		typ, inode := r.parseEntry([]byte(val))
-		*entries = append(*entries, &Entry{
-			Inode: inode,
-			Name:  []byte(name),
-			Attr:  &Attr{Typ: typ},
-		})
+		ent := newEntries[i]
+		ent.Inode = inode
+		ent.Name = []byte(name)
+		attr := newAttrs[i]
+		attr.Typ = typ
+		ent.Attr = &attr
+		*entries = append(*entries, &ent)
+		i++
 	}
 	if plus != 0 {
-		var keys []string
-		for _, e := range *entries {
-			keys = append(keys, r.inodeKey(e.Inode))
+		batchSize := 4096
+		if batchSize > len(*entries) {
+			batchSize = len(*entries)
 		}
-		rs, _ := r.rdb.MGet(ctx, keys...).Result()
-		for i, re := range rs {
-			if re != nil {
-				if a, ok := re.(string); ok {
-					r.parseAttr([]byte(a), (*entries)[i].Attr)
-				}
+		nEntries := len(*entries)
+		indexCh := make(chan int, 10)
+		go func() {
+			for i := 0; i < nEntries; i += batchSize {
+				indexCh <- i
 			}
+			close(indexCh)
+		}()
+		var wg sync.WaitGroup
+		for i := 0; i < 2; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				keysBatch := make([]string, 0, batchSize)
+				for idx := range indexCh {
+					end := idx + batchSize
+					if end > len(*entries) {
+						end = len(*entries)
+					}
+					for _, e := range (*entries)[idx:end] {
+						keysBatch = append(keysBatch, r.inodeKey(e.Inode))
+					}
+					rs, _ := r.rdb.MGet(ctx, keysBatch...).Result()
+					for j, re := range rs {
+						if re != nil {
+							if a, ok := re.(string); ok {
+								r.parseAttr([]byte(a), (*entries)[idx+j].Attr)
+							}
+						}
+					}
+					keysBatch = keysBatch[:0]
+				}
+			}()
 		}
+		wg.Wait()
 	}
 	return 0
 }

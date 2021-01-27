@@ -114,11 +114,6 @@ func AttrToFileInfo(inode Ino, attr *Attr) *FileStat {
 	return &FileStat{inode: inode, attr: attr}
 }
 
-type Config struct {
-	vfs.Config
-	AccessLog string
-}
-
 type FileSystem struct {
 	conf   *vfs.Config
 	reader vfs.DataReader
@@ -142,12 +137,12 @@ type File struct {
 	entries  []*meta.Entry
 }
 
-func NewFileSystem(conf *Config, m meta.Meta, d chunk.ChunkStore) *FileSystem {
+func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSystem, error) {
 	fs := &FileSystem{
 		m:      m,
-		conf:   &conf.Config,
-		reader: vfs.NewDataReader(&conf.Config, m, d),
-		writer: vfs.NewDataWriter(&conf.Config, m, d),
+		conf:   conf,
+		reader: vfs.NewDataReader(conf, m, d),
+		writer: vfs.NewDataWriter(conf, m, d),
 	}
 	if conf.AccessLog != "" {
 		f, err := os.OpenFile(conf.AccessLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -159,7 +154,7 @@ func NewFileSystem(conf *Config, m meta.Meta, d chunk.ChunkStore) *FileSystem {
 			go fs.flushLog(f, fs.logBuffer, conf.AccessLog)
 		}
 	}
-	return fs
+	return fs, nil
 }
 
 func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
@@ -259,6 +254,10 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 
 	if flags != 0 && !fi.IsDir() {
 		if ctx.Uid() != 0 {
+			err = fs.m.Access(ctx, fi.inode, uint8(flags), nil)
+			if err != 0 {
+				return nil, err
+			}
 			err = fs.m.Open(ctx, fi.inode, uint8(flags), nil)
 			if err != 0 {
 				return
@@ -328,7 +327,7 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, mMaskW, fi.attr)
+	err = fs.m.Access(ctx, parent.inode, mMaskW, parent.attr)
 	if err != 0 {
 		return err
 	}
@@ -337,6 +336,18 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	} else {
 		err = fs.m.Unlink(ctx, parent.inode, path.Base(p))
 	}
+	return
+}
+
+func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Rmr").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() { fs.log(l, "Rmr (%s): %s", p, errstr(err)) }()
+	parent, err := fs.lookup(ctx, path.Dir(p), true)
+	if err != 0 {
+		return
+	}
+	err = fs.m.Rmr(ctx, parent.inode, path.Base(p))
 	return
 }
 
@@ -613,9 +624,8 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Chmod").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chmod (%s,%o): %s", f.path, mode, errstr(err)) }()
-	err = f.fs.m.Access(ctx, f.inode, mMaskW, f.info.attr)
-	if err != 0 {
-		return err
+	if ctx.Uid() != f.info.attr.Uid {
+		return syscall.EACCES
 	}
 	var attr = Attr{Mode: mode}
 	err = f.fs.m.SetAttr(ctx, f.inode, meta.SetAttrMode, 0, &attr)
@@ -872,5 +882,16 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 		offset = len(f.entries)
 	}
 	entries = f.entries[offset:]
+	return
+}
+
+func (f *File) Summary(ctx meta.Context, depth uint8, maxentries uint32) (s *meta.Summary, err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.Summary").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		f.fs.log(l, "Summary (%s): %s (%d,%d,%d,%d)", f.path, errstr(err), s.Length, s.Size, s.Files, s.Dirs)
+	}()
+	s = &meta.Summary{}
+	err = f.fs.m.Summary(ctx, f.inode, s)
 	return
 }

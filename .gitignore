@@ -10,7 +10,9 @@ ltmain.sh
 fstests/secfs.test
 !fstests/Makefile
 jfs
-juicefs
+/juicefs
 dist/
 *.rdb
 .release-env
+*.so
+libjfs.h

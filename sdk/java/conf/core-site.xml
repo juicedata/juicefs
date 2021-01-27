@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+	<property>
+		<name>fs.defaultFS</name>
+		<value>jfs://dev/</value>
+	</property>
+	<property>
+		<name>fs.jfs.impl</name>
+		<value>io.juicefs.JuiceFileSystem</value>
+	</property>
+	<property>
+		<name>juicefs.file.checksum</name>
+		<value>true</value>
+	</property>
+	<property>
+		<name>juicefs.access-log</name>
+		<value>/tmp/juicefs-access.log</value>
+	</property>	
+	<property>
+		<name>juicefs.dev.meta</name>
+		<value>127.0.0.1</value>
+	</property>
+	<property>
+		<name>juicefs.names</name>
+		<value>a.local,b.local,c.local,d.local,e.local</value>
+	</property>
+	<property>
+		<name>juicefs.hosts</name>
+		<value>127.0.0.2,127.0.0.3,127.0.0.4,127.0.0.5,127.0.0.6</value>
+	</property>
+</configuration>

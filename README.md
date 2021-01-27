@@ -91,6 +91,10 @@ After that you can access the volume just like a local directory.
 
 To get all options, just run `./juicefs mount -h`.
 
+### Command Reference
+
+There is a [command reference](docs/command_reference.md) to see all options of the subcommand.
+
 ### Kubernetes
 
 There is a [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver) to use JuiceFS in Kubernetes easily.
@@ -174,7 +178,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 ## Roadmap
 
 - Stabilize storage format
-- Hadoop SDK
 - S3 gateway
 - Windows client
 - Encryption at rest

@@ -16,7 +16,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -172,7 +171,7 @@ func mount(c *cli.Context) error {
 	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
 		slices := args[0].([]meta.Slice)
 		chunkid := args[1].(uint64)
-		return compact(chunkConf, store, slices, chunkid)
+		return vfs.Compact(chunkConf, store, slices, chunkid)
 	}))
 
 	conf := &vfs.Config{
@@ -186,7 +185,7 @@ func mount(c *cli.Context) error {
 			Name:      format.Storage,
 			Endpoint:  format.Bucket,
 			AccessKey: format.AccessKey,
-			SecretKey: format.AccessKey,
+			SecretKey: format.SecretKey,
 		},
 		Chunk: &chunkConf,
 	}
@@ -204,65 +203,6 @@ func mount(c *cli.Context) error {
 }
 
 func clientFlags() []cli.Flag {
-	return []cli.Flag {
-	&cli.IntFlag{
-		Name:  "get-timeout",
-		Value: 60,
-		Usage: "the max number of seconds to download an object",
-	},
-	&cli.IntFlag{
-		Name:  "put-timeout",
-		Value: 60,
-		Usage: "the max number of seconds to upload an object",
-	},
-	&cli.IntFlag{
-		Name:  "io-retries",
-		Value: 30,
-		Usage: "number of retries after network failure",
-	},
-	&cli.IntFlag{
-		Name:  "max-uploads",
-		Value: 20,
-		Usage: "number of connections to upload",
-	},
-	&cli.IntFlag{
-		Name:  "buffer-size",
-		Value: 300,
-		Usage: "total read/write buffering in MB",
-	},
-	&cli.IntFlag{
-		Name:  "prefetch",
-		Value: 3,
-		Usage: "prefetch N blocks in parallel",
-	},
-
-	&cli.BoolFlag{
-		Name:  "writeback",
-		Usage: "Upload objects in background",
-	},
-	&cli.StringFlag{
-		Name:  "cache-dir",
-		Value: defaultCacheDir,
-		Usage: "directory to cache object",
-	},
-	&cli.IntFlag{
-		Name:  "cache-size",
-		Value: 1 << 10,
-		Usage: "size of cached objects in MiB",
-	},
-	&cli.Float64Flag{
-		Name:  "free-space-ratio",
-		Value: 0.1,
-		Usage: "min free space (ratio)",
-	},
-	&cli.BoolFlag{
-		Name:  "cache-partial-only",
-		Usage: "cache only random/small read",
-	},			
-}
-}
-
-func mountFlags() *cli.Command {
 	var defaultCacheDir = "/var/jfsCache"
 	if runtime.GOOS == "darwin" {
 		homeDir, err := os.UserHomeDir()
@@ -272,7 +212,66 @@ func mountFlags() *cli.Command {
 		}
 		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	}
-	return &cli.Command{
+	return []cli.Flag{
+		&cli.IntFlag{
+			Name:  "get-timeout",
+			Value: 60,
+			Usage: "the max number of seconds to download an object",
+		},
+		&cli.IntFlag{
+			Name:  "put-timeout",
+			Value: 60,
+			Usage: "the max number of seconds to upload an object",
+		},
+		&cli.IntFlag{
+			Name:  "io-retries",
+			Value: 30,
+			Usage: "number of retries after network failure",
+		},
+		&cli.IntFlag{
+			Name:  "max-uploads",
+			Value: 20,
+			Usage: "number of connections to upload",
+		},
+		&cli.IntFlag{
+			Name:  "buffer-size",
+			Value: 300,
+			Usage: "total read/write buffering in MB",
+		},
+		&cli.IntFlag{
+			Name:  "prefetch",
+			Value: 3,
+			Usage: "prefetch N blocks in parallel",
+		},
+
+		&cli.BoolFlag{
+			Name:  "writeback",
+			Usage: "Upload objects in background",
+		},
+		&cli.StringFlag{
+			Name:  "cache-dir",
+			Value: defaultCacheDir,
+			Usage: "directory to cache object",
+		},
+		&cli.IntFlag{
+			Name:  "cache-size",
+			Value: 1 << 10,
+			Usage: "size of cached objects in MiB",
+		},
+		&cli.Float64Flag{
+			Name:  "free-space-ratio",
+			Value: 0.1,
+			Usage: "min free space (ratio)",
+		},
+		&cli.BoolFlag{
+			Name:  "cache-partial-only",
+			Usage: "cache only random/small read",
+		},
+	}
+}
+
+func mountFlags() *cli.Command {
+	cmd := &cli.Command{
 		Name:      "mount",
 		Usage:     "mount a volume",
 		ArgsUsage: "REDIS-URL MOUNTPOINT",
@@ -290,7 +289,7 @@ func mountFlags() *cli.Command {
 
 			&cli.StringFlag{
 				Name:  "o",
-				Usage: "other fuse options",
+				Usage: "other FUSE options",
 			},
 			&cli.Float64Flag{
 				Name:  "attr-cache",
@@ -318,62 +317,6 @@ func mountFlags() *cli.Command {
 			},
 		},
 	}
-}
-
-func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int) error {
-	buf := page.Data
-	read := 0
-	reader := store.NewReader(s.Chunkid, int(s.Size))
-	for read < len(buf) {
-		p := page.Slice(read, len(buf)-read)
-		n, err := reader.ReadAt(context.Background(), p, off+int(s.Off))
-		p.Release()
-		if n == 0 && err != nil {
-			return err
-		}
-		read += n
-		off += n
-	}
-	return nil
-}
-
-func compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chunkid uint64) error {
-	writer := store.NewWriter(chunkid)
-	defer writer.Abort()
-
-	var pos int
-	for i, s := range slices {
-		if s.Chunkid == 0 {
-			_, err := writer.WriteAt(make([]byte, int(s.Len)), int64(pos))
-			if err != nil {
-				return err
-			}
-			pos += int(s.Len)
-			continue
-		}
-		var read int
-		for read < int(s.Len) {
-			l := utils.Min(conf.BlockSize, int(s.Len)-read)
-			p := chunk.NewOffPage(l)
-			if err := readSlice(store, &s, p, read); err != nil {
-				logger.Infof("can't compact chunk %d, retry later, read %d: %s", chunkid, i, err)
-				p.Release()
-				return err
-			}
-			_, err := writer.WriteAt(p.Data, int64(pos+read))
-			p.Release()
-			if err != nil {
-				logger.Errorf("can't compact chunk %d, retry later, write: %s", chunkid, err)
-				return err
-			}
-			read += l
-			if pos+read >= conf.BlockSize {
-				if err = writer.FlushTo(pos + read); err != nil {
-					panic(err)
-				}
-			}
-		}
-		pos += int(s.Len)
-	}
-	return writer.Finish(pos)
+	cmd.Flags = append(cmd.Flags, clientFlags()...)
+	return cmd
 }

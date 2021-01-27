@@ -67,6 +67,10 @@ func (c *fuseContext) Gid() uint32 {
 	return uint32(c.header.Gid)
 }
 
+func (c *fuseContext) Gids() []uint32 {
+	return []uint32{c.header.Gid}
+}
+
 func (c *fuseContext) Pid() uint32 {
 	return uint32(c.header.Pid)
 }
@@ -89,6 +93,10 @@ func (c *fuseContext) Canceled() bool {
 	default:
 		return false
 	}
+}
+
+func (c *fuseContext) WithValue(k, v interface{}) {
+	c.Context = context.WithValue(c.Context, k, v)
 }
 
 func (c *fuseContext) Err() error {
