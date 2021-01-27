@@ -405,7 +405,21 @@ func TestTruncateAndDelete(t *testing.T) {
 		t.Fatalf("truncate file %s", st)
 	}
 	r := m.(*redisMeta)
-	keys, _, _ := r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
+
+	listAll := func(pattern string) []string {
+		var keys, ks []string
+		var cursor uint64
+		for {
+			ks, cursor, err = r.rdb.Scan(ctx, cursor, pattern, 1000).Result()
+			keys = append(keys, ks...)
+			if err != nil || cursor == 0 {
+				break
+			}
+		}
+		return keys
+	}
+
+	keys := listAll(fmt.Sprintf("c%d_*", inode))
 	if len(keys) != 3 {
 		for _, k := range keys {
 			println("key", k)
@@ -416,8 +430,9 @@ func TestTruncateAndDelete(t *testing.T) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink file %s", st)
 	}
+
 	time.Sleep(time.Millisecond * 100)
-	keys, _, _ = r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
+	keys = listAll(fmt.Sprintf("c%d_*", inode))
 	// the last chunk will be found and deleted
 	if len(keys) != 1 {
 		t.Fatalf("number of chunks: %d != 1", len(keys))
