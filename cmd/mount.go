@@ -181,13 +181,7 @@ func mount(c *cli.Context) error {
 		Format:     format,
 		Version:    Version(),
 		Mountpoint: mp,
-		Primary: &vfs.StorageConfig{
-			Name:      format.Storage,
-			Endpoint:  format.Bucket,
-			AccessKey: format.AccessKey,
-			SecretKey: format.SecretKey,
-		},
-		Chunk: &chunkConf,
+		Chunk:      &chunkConf,
 	}
 	vfs.Init(conf, m, store)
 
