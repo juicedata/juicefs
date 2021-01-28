@@ -85,32 +85,28 @@ func newSwiftOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
-	//use 'http' or 'https"
 	if uri.Scheme != "http" && uri.Scheme != "https" {
 		return nil, fmt.Errorf("Invalid uri.Scheme: %s", uri.Scheme)
 	}
 
 	hostSlice := strings.SplitN(uri.Host, ".", 2)
 	if len(hostSlice) != 2 {
-		return nil, fmt.Errorf("Invalid uri.host: %s", uri.Host)
+		return nil, fmt.Errorf("Invalid host: %s", uri.Host)
 	}
 	container := hostSlice[0]
 	host := hostSlice[1]
 
 	// current only support V1 authentication
-	auth_url := uri.Scheme + "://" + host + "/auth/v1.0"
+	authURL := uri.Scheme + "://" + host + "/auth/v1.0"
 
-	//fmt.Printf("endpoint: %s\n", endpoint)
-	//fmt.Printf("connect to: %s, container: %s, auth_key: %s, ApiKey: *removed*\n", auth_url, container, accessKey)
 	conn := swift.Connection{
 		UserName: accessKey,
 		ApiKey:   secretKey,
-		AuthUrl:  auth_url,
+		AuthUrl:  authURL,
 	}
-	// Authenticate
 	err = conn.Authenticate()
 	if err != nil {
-		return nil, fmt.Errorf("Auth failed: %s", err)
+		return nil, fmt.Errorf("Auth: %s", err)
 	}
 	return &swiftOSS{DefaultObjectStorage{}, &conn, conn.Region, conn.StorageUrl, container}, nil
 }
