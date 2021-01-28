@@ -125,10 +125,10 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 	}
 	tmp := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
 	f, err := h.c.CreateFile(tmp, 3, 128<<20, 0755)
-	defer h.c.Remove(tmp)
+	defer func() { _ = h.c.Remove(tmp) }()
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
-			h.c.MkdirAll(filepath.Dir(path), 0755)
+			_ = h.c.MkdirAll(filepath.Dir(path), 0755)
 			f, err = h.c.CreateFile(tmp, 3, 128<<20, 0755)
 		}
 		if pe, ok := err.(*os.PathError); ok {
@@ -136,7 +136,7 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 				pe.Err = os.ErrExist
 			}
 			if pe.Err == os.ErrExist {
-				h.c.Remove(tmp)
+				_ = h.c.Remove(tmp)
 				f, err = h.c.CreateFile(tmp, 3, 128<<20, 0755)
 			}
 		}
@@ -230,7 +230,7 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 		return listed, nil // return empty list
 	}
 	go func() {
-		h.walk(root, func(path string, info os.FileInfo, err error) error {
+		_ = h.walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				if err == io.EOF {
 					err = nil // ignore

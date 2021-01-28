@@ -305,13 +305,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Meta: &meta.Config{
 				IORetries: 10,
 			},
-			Format: format,
-			Primary: &vfs.StorageConfig{
-				Name:      format.Storage,
-				Endpoint:  format.Bucket,
-				AccessKey: format.AccessKey,
-				SecretKey: format.AccessKey,
-			},
+			Format:    format,
 			Chunk:     &chunkConf,
 			AccessLog: jConf.AccessLog,
 		}

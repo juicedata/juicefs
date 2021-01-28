@@ -36,24 +36,12 @@ const (
 	maxFileSize = meta.ChunkSize << 31
 )
 
-type StorageConfig struct {
-	Name       string
-	Endpoint   string
-	AccessKey  string
-	SecretKey  string
-	Key        string
-	KeyPath    string
-	Passphrase string
-}
-
 type Config struct {
 	Meta       *meta.Config
 	Format     *meta.Format
-	Primary    *StorageConfig
 	Chunk      *chunk.Config
 	Version    string
 	Mountpoint string
-	Prefix     string
 	AccessLog  string
 }
 

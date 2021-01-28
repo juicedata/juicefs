@@ -27,8 +27,13 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
+// Ino is an alias to meta.Ino
 type Ino = meta.Ino
+
+// Attr is an alias to meta.Attr
 type Attr = meta.Attr
+
+// Context is an alias to vfs.LogContext
 type Context = vfs.LogContext
 
 type fuseContext struct {

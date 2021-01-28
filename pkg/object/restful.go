@@ -82,8 +82,8 @@ func init() {
 
 func cleanup(response *http.Response) {
 	if response != nil && response.Body != nil {
-		ioutil.ReadAll(response.Body)
-		response.Body.Close()
+		_, _ = ioutil.ReadAll(response.Body)
+		_ = response.Body.Close()
 	}
 }
 
@@ -114,7 +114,7 @@ func sign(req *http.Request, accessKey, secretKey, signName string) {
 	bucket := strings.Split(req.URL.Host, ".")[0]
 	toSign += "/" + bucket + req.URL.Path
 	h := hmac.New(sha1.New, []byte(secretKey))
-	h.Write([]byte(toSign))
+	_, _ = h.Write([]byte(toSign))
 	sig := base64.StdEncoding.EncodeToString(h.Sum(nil))
 	token := signName + " " + accessKey + ":" + sig
 	req.Header.Add("Authorization", token)

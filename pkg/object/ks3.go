@@ -189,7 +189,7 @@ func (s *ks3) AbortUpload(key string, uploadID string) {
 		Key:      &key,
 		UploadID: &uploadID,
 	}
-	s.s3.AbortMultipartUpload(params)
+	_, _ = s.s3.AbortMultipartUpload(params)
 }
 
 func (s *ks3) CompleteUpload(key string, uploadID string, parts []*Part) error {
@@ -241,13 +241,11 @@ func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
 	region := hostParts[1][3:]
-	if strings.HasPrefix(region, "-") {
-		region = region[1:]
-	}
+	region = strings.TrimLeft(region, "-")
 	if strings.HasSuffix(region, "-internal") {
 		region = region[:len(region)-len("-internal")]
 	}
-	region, _ = ks3Regions[region]
+	region = ks3Regions[region]
 
 	awsConfig := &aws.Config{
 		Region:      region,

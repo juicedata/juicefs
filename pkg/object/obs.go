@@ -176,7 +176,7 @@ func (s *obsClient) AbortUpload(key string, uploadID string) {
 	params.Bucket = s.bucket
 	params.Key = key
 	params.UploadId = uploadID
-	s.c.AbortMultipartUpload(params)
+	_, _ = s.c.AbortMultipartUpload(params)
 }
 
 func (s *obsClient) CompleteUpload(key string, uploadID string, parts []*Part) error {

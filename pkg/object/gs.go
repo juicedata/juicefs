@@ -27,6 +27,7 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/option"
 	"google.golang.org/api/storage/v1"
 )
 
@@ -173,7 +174,7 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-	service, err := storage.New(client)
+	service, err := storage.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
 		log.Fatalf("Failed to create service: %v", err)
 	}

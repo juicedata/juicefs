@@ -404,6 +404,9 @@ func TestTruncateAndDelete(t *testing.T) {
 	if st := m.Truncate(ctx, inode, 0, (10<<40)+10, attr); st != 0 {
 		t.Fatalf("truncate file %s", st)
 	}
+	if st := m.Truncate(ctx, inode, 0, (300<<20)+10, attr); st != 0 {
+		t.Fatalf("truncate file %s", st)
+	}
 	r := m.(*redisMeta)
 
 	listAll := func(pattern string) []string {
@@ -421,10 +424,7 @@ func TestTruncateAndDelete(t *testing.T) {
 
 	keys := listAll(fmt.Sprintf("c%d_*", inode))
 	if len(keys) != 3 {
-		for _, k := range keys {
-			println("key", k)
-		}
-		t.Fatalf("number of chunks: %d != 3", len(keys))
+		t.Fatalf("number of chunks: %d != 3, %+v", len(keys), keys)
 	}
 	m.Close(ctx, inode)
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
@@ -435,7 +435,7 @@ func TestTruncateAndDelete(t *testing.T) {
 	keys = listAll(fmt.Sprintf("c%d_*", inode))
 	// the last chunk will be found and deleted
 	if len(keys) != 1 {
-		t.Fatalf("number of chunks: %d != 1", len(keys))
+		t.Fatalf("number of chunks: %d != 1, %+v", len(keys), keys)
 	}
 }
 

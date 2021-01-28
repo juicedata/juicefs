@@ -74,7 +74,10 @@ func newOOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
 	}
 
-	ses := session.New(awsConfig)
+	ses, err := session.NewSession(awsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("aws session: %s", err)
+	}
 	return &oos{s3client{bucket, s3.New(ses), ses}}, nil
 }
 

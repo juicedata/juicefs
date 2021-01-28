@@ -40,7 +40,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
-func MakeDaemon(onExit func(int) error) error {
+func makeDaemon(onExit func(int) error) error {
 	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
 	return err
 }
@@ -141,7 +141,7 @@ func mount(c *cli.Context) error {
 	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
 
 	if c.Bool("background") {
-		err := MakeDaemon(func(stage int) error {
+		err := makeDaemon(func(stage int) error {
 			if stage != 0 {
 				return nil
 			}
@@ -181,13 +181,7 @@ func mount(c *cli.Context) error {
 		Format:     format,
 		Version:    Version(),
 		Mountpoint: mp,
-		Primary: &vfs.StorageConfig{
-			Name:      format.Storage,
-			Endpoint:  format.Bucket,
-			AccessKey: format.AccessKey,
-			SecretKey: format.SecretKey,
-		},
-		Chunk: &chunkConf,
+		Chunk:      &chunkConf,
 	}
 	vfs.Init(conf, m, store)
 
@@ -195,7 +189,7 @@ func mount(c *cli.Context) error {
 	if !c.Bool("no-usage-report") {
 		go reportUsage(m)
 	}
-	err = fuse.Main(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
+	err = fuse.Serve(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}

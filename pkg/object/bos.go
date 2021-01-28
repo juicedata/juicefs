@@ -137,7 +137,7 @@ func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte
 }
 
 func (q *bosclient) AbortUpload(key string, uploadID string) {
-	q.c.AbortMultipartUpload(q.bucket, key, uploadID)
+	_ = q.c.AbortMultipartUpload(q.bucket, key, uploadID)
 }
 
 func (q *bosclient) CompleteUpload(key string, uploadID string, parts []*Part) error {
@@ -214,6 +214,9 @@ func newBOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 
 	bosClient, err := bos.NewClient(accessKey, secretKey, endpoint)
+	if err != nil {
+		return nil, err
+	}
 	return &bosclient{bucket: bucketName, c: bosClient}, nil
 }
 

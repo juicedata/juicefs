@@ -132,7 +132,7 @@ func doSync(c *cli.Context) error {
 		return nil
 	}
 	config := sync.NewConfigFromCli(c)
-	go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", config.HTTPPort), nil)
+	go func() { _ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", config.HTTPPort), nil) }()
 
 	if config.Verbose {
 		utils.SetLogLevel(logrus.DebugLevel)

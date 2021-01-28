@@ -148,7 +148,7 @@ func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 }
 
 func (c *COS) AbortUpload(key string, uploadID string) {
-	c.c.Object.AbortMultipartUpload(ctx, key, uploadID)
+	_, _ = c.c.Object.AbortMultipartUpload(ctx, key, uploadID)
 }
 
 func (c *COS) CompleteUpload(key string, uploadID string, parts []*Part) error {
