@@ -187,7 +187,7 @@ func (s *ibmcos) AbortUpload(key string, uploadID string) {
 		Key:      &key,
 		UploadId: &uploadID,
 	}
-	s.s3.AbortMultipartUpload(params)
+	_, _ = s.s3.AbortMultipartUpload(params)
 }
 
 func (s *ibmcos) CompleteUpload(key string, uploadID string, parts []*Part) error {

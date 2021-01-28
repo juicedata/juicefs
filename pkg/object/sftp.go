@@ -237,7 +237,7 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer c.sftpClient.Remove(tmp)
+	defer func() { _ = c.sftpClient.Remove(tmp) }()
 	_, err = io.Copy(ff, in)
 	if err != nil {
 		ff.Close()

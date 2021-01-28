@@ -55,6 +55,7 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]*Object, er
 	return nil, err
 }
 
+// nolint:errcheck
 func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Create(); err != nil {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
@@ -154,12 +155,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			println(len(pending), marker)
 		}
 		part2Size := 1 << 20
-		part2, err := s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
+		_, err = s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
 		if err != nil {
 			t.Fatalf("UploadPart 2 failed: %s", err)
 		}
 		part2Size = 2 << 20
-		part2, err = s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
+		part2, err := s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
 		if err != nil {
 			t.Fatalf("UploadPart 2 failed: %s", err)
 		}

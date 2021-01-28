@@ -24,7 +24,6 @@ import (
 func getAtime(fi os.FileInfo) time.Time {
 	if sst, ok := fi.Sys().(*syscall.Stat_t); ok {
 		return time.Unix(sst.Atim.Unix())
-	} else {
-		return fi.ModTime()
 	}
+	return fi.ModTime()
 }

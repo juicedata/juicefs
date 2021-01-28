@@ -46,7 +46,7 @@ func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	awsConfig := &aws.Config{
-		Region:           aws.String("us-east-1"),
+		Region:           aws.String(awsDefaultRegion),
 		Endpoint:         &uri.Host,
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(true),
@@ -62,7 +62,10 @@ func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
 	}
 
-	ses := session.New(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
+	ses, err := session.NewSession(awsConfig)
+	if err != nil {
+		return nil, err
+	}
 	bucket := uri.Path[1:]
 	for strings.HasSuffix(bucket, "/") {
 		bucket = bucket[:len(bucket)-1]

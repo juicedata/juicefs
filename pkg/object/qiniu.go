@@ -184,8 +184,11 @@ func newQiniu(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		S3ForcePathStyle: aws.Bool(true),
 		HTTPClient:       httpClient,
 	}
-	sess := session.New(awsConfig)
-	s3client := s3client{bucket, s3.New(sess), sess}
+	ses, err := session.NewSession(awsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("aws session: %s", err)
+	}
+	s3client := s3client{bucket, s3.New(ses), ses}
 
 	cfg := storage.Config{
 		UseHTTPS: uri.Scheme == "https",

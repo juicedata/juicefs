@@ -146,7 +146,7 @@ func (o *ossClient) AbortUpload(key string, uploadID string) {
 		Key:      key,
 		UploadID: uploadID,
 	}
-	o.bucket.AbortMultipartUpload(initResult)
+	_ = o.bucket.AbortMultipartUpload(initResult)
 }
 
 func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*Part) error {
@@ -348,7 +348,7 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 					logger.Debugf("Refreshed STS, will be expired at %s", cred.Expiration)
 					expire, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
 					if err == nil {
-						time.Sleep(expire.Sub(time.Now()) / 2)
+						time.Sleep(time.Until(expire) / 2)
 					}
 				}
 			}

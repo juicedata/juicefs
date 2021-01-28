@@ -74,7 +74,7 @@ func mssSigner(req *http.Request, accessKey, secretKey, signName string) {
 	}
 	toSign += req.URL.Path
 	h := hmac.New(sha1.New, []byte(secretKey))
-	h.Write([]byte(toSign))
+	_, _ = h.Write([]byte(toSign))
 	sig := base64.StdEncoding.EncodeToString(h.Sum(nil))
 	token := signName + " " + accessKey + ":" + sig
 	req.Header.Add("Authorization", token)
