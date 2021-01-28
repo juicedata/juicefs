@@ -35,11 +35,12 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
+// Stat has the counters to represent the progress.
 type Stat struct {
-	Copied      int64
-	CopiedBytes int64
-	Failed      int64
-	Deleted     int64
+	Copied      int64 // the number of copied files
+	CopiedBytes int64 // total amount of copied data in bytes
+	Failed      int64 // the number of files that fail to copy
+	Deleted     int64 // the number of deleted files
 }
 
 func updateStats(r *Stat) {
@@ -179,7 +180,7 @@ func startManager(tasks chan *object.Object) (string, error) {
 		return "", fmt.Errorf("listen: %s", err)
 	}
 	logger.Infof("Listen at %s", l.Addr())
-	go http.Serve(l, nil)
+	go func() { _ = http.Serve(l, nil) }()
 	ip, err := findLocalIP()
 	if err != nil {
 		return "", fmt.Errorf("find local ip: %s", err)
