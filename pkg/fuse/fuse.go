@@ -32,7 +32,7 @@ import (
 
 var logger = utils.GetLogger("juicefs")
 
-type JFS struct {
+type fileSystem struct {
 	fuse.RawFileSystem
 	cacheMode       int
 	attrTimeout     time.Duration
@@ -40,13 +40,13 @@ type JFS struct {
 	entryTimeout    time.Duration
 }
 
-func NewJFS() *JFS {
-	return &JFS{
+func newFileSystem() *fileSystem {
+	return &fileSystem{
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
 	}
 }
 
-func (fs *JFS) replyEntry(out *fuse.EntryOut, e *meta.Entry) fuse.Status {
+func (fs *fileSystem) replyEntry(out *fuse.EntryOut, e *meta.Entry) fuse.Status {
 	out.NodeId = uint64(e.Inode)
 	out.Generation = 1
 	out.SetAttrTimeout(fs.attrTimeout)
@@ -62,7 +62,7 @@ func (fs *JFS) replyEntry(out *fuse.EntryOut, e *meta.Entry) fuse.Status {
 	return 0
 }
 
-func (fs *JFS) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name string, out *fuse.EntryOut) (status fuse.Status) {
+func (fs *fileSystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name string, out *fuse.EntryOut) (status fuse.Status) {
 	ctx := newContext(cancel, header)
 	defer releaseContext(ctx)
 	entry, err := vfs.Lookup(ctx, Ino(header.NodeId), name)
@@ -72,7 +72,7 @@ func (fs *JFS) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name string
 	return fs.replyEntry(out, entry)
 }
 
-func (fs *JFS) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
+func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	var opened uint8
@@ -91,7 +91,7 @@ func (fs *JFS) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fuse.Att
 	return 0
 }
 
-func (fs *JFS) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
+func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	var opened uint8
@@ -110,7 +110,7 @@ func (fs *JFS) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.Att
 	return 0
 }
 
-func (fs *JFS) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string, out *fuse.EntryOut) (code fuse.Status) {
+func (fs *fileSystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string, out *fuse.EntryOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, err := vfs.Mknod(ctx, Ino(in.NodeId), name, uint16(in.Mode), getUmask(in), in.Rdev)
@@ -120,7 +120,7 @@ func (fs *JFS) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string, out 
 	return fs.replyEntry(out, entry)
 }
 
-func (fs *JFS) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out *fuse.EntryOut) (code fuse.Status) {
+func (fs *fileSystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out *fuse.EntryOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, err := vfs.Mkdir(ctx, Ino(in.NodeId), name, uint16(in.Mode), uint16(in.Umask))
@@ -130,28 +130,28 @@ func (fs *JFS) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out 
 	return fs.replyEntry(out, entry)
 }
 
-func (fs *JFS) Unlink(cancel <-chan struct{}, header *fuse.InHeader, name string) (code fuse.Status) {
+func (fs *fileSystem) Unlink(cancel <-chan struct{}, header *fuse.InHeader, name string) (code fuse.Status) {
 	ctx := newContext(cancel, header)
 	defer releaseContext(ctx)
 	err := vfs.Unlink(ctx, Ino(header.NodeId), name)
 	return fuse.Status(err)
 }
 
-func (fs *JFS) Rmdir(cancel <-chan struct{}, header *fuse.InHeader, name string) (code fuse.Status) {
+func (fs *fileSystem) Rmdir(cancel <-chan struct{}, header *fuse.InHeader, name string) (code fuse.Status) {
 	ctx := newContext(cancel, header)
 	defer releaseContext(ctx)
 	err := vfs.Rmdir(ctx, Ino(header.NodeId), name)
 	return fuse.Status(err)
 }
 
-func (fs *JFS) Rename(cancel <-chan struct{}, in *fuse.RenameIn, oldName string, newName string) (code fuse.Status) {
+func (fs *fileSystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, oldName string, newName string) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := vfs.Rename(ctx, Ino(in.NodeId), oldName, Ino(in.Newdir), newName)
 	return fuse.Status(err)
 }
 
-func (fs *JFS) Link(cancel <-chan struct{}, in *fuse.LinkIn, name string, out *fuse.EntryOut) (code fuse.Status) {
+func (fs *fileSystem) Link(cancel <-chan struct{}, in *fuse.LinkIn, name string, out *fuse.EntryOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, err := vfs.Link(ctx, Ino(in.Oldnodeid), Ino(in.NodeId), name)
@@ -161,7 +161,7 @@ func (fs *JFS) Link(cancel <-chan struct{}, in *fuse.LinkIn, name string, out *f
 	return fs.replyEntry(out, entry)
 }
 
-func (fs *JFS) Symlink(cancel <-chan struct{}, header *fuse.InHeader, target string, name string, out *fuse.EntryOut) (code fuse.Status) {
+func (fs *fileSystem) Symlink(cancel <-chan struct{}, header *fuse.InHeader, target string, name string, out *fuse.EntryOut) (code fuse.Status) {
 	ctx := newContext(cancel, header)
 	defer releaseContext(ctx)
 	entry, err := vfs.Symlink(ctx, target, Ino(header.NodeId), name)
@@ -171,14 +171,14 @@ func (fs *JFS) Symlink(cancel <-chan struct{}, header *fuse.InHeader, target str
 	return fs.replyEntry(out, entry)
 }
 
-func (fs *JFS) Readlink(cancel <-chan struct{}, header *fuse.InHeader) (out []byte, code fuse.Status) {
+func (fs *fileSystem) Readlink(cancel <-chan struct{}, header *fuse.InHeader) (out []byte, code fuse.Status) {
 	ctx := newContext(cancel, header)
 	defer releaseContext(ctx)
 	path, err := vfs.Readlink(ctx, Ino(header.NodeId))
 	return path, fuse.Status(err)
 }
 
-func (fs *JFS) GetXAttr(cancel <-chan struct{}, header *fuse.InHeader, attr string, dest []byte) (sz uint32, code fuse.Status) {
+func (fs *fileSystem) GetXAttr(cancel <-chan struct{}, header *fuse.InHeader, attr string, dest []byte) (sz uint32, code fuse.Status) {
 	ctx := newContext(cancel, header)
 	defer releaseContext(ctx)
 	value, err := vfs.GetXattr(ctx, Ino(header.NodeId), attr, uint32(len(dest)))
@@ -189,7 +189,7 @@ func (fs *JFS) GetXAttr(cancel <-chan struct{}, header *fuse.InHeader, attr stri
 	return uint32(len(value)), 0
 }
 
-func (fs *JFS) ListXAttr(cancel <-chan struct{}, header *fuse.InHeader, dest []byte) (uint32, fuse.Status) {
+func (fs *fileSystem) ListXAttr(cancel <-chan struct{}, header *fuse.InHeader, dest []byte) (uint32, fuse.Status) {
 	ctx := newContext(cancel, header)
 	defer releaseContext(ctx)
 	data, err := vfs.ListXattr(ctx, Ino(header.NodeId), len(dest))
@@ -200,28 +200,28 @@ func (fs *JFS) ListXAttr(cancel <-chan struct{}, header *fuse.InHeader, dest []b
 	return uint32(len(data)), 0
 }
 
-func (fs *JFS) SetXAttr(cancel <-chan struct{}, in *fuse.SetXAttrIn, attr string, data []byte) fuse.Status {
+func (fs *fileSystem) SetXAttr(cancel <-chan struct{}, in *fuse.SetXAttrIn, attr string, data []byte) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := vfs.SetXattr(ctx, Ino(in.NodeId), attr, data, int(in.Flags))
 	return fuse.Status(err)
 }
 
-func (fs *JFS) RemoveXAttr(cancel <-chan struct{}, header *fuse.InHeader, attr string) (code fuse.Status) {
+func (fs *fileSystem) RemoveXAttr(cancel <-chan struct{}, header *fuse.InHeader, attr string) (code fuse.Status) {
 	ctx := newContext(cancel, header)
 	defer releaseContext(ctx)
 	err := vfs.RemoveXattr(ctx, Ino(header.NodeId), attr)
 	return fuse.Status(err)
 }
 
-func (fs *JFS) Access(cancel <-chan struct{}, in *fuse.AccessIn) (code fuse.Status) {
+func (fs *fileSystem) Access(cancel <-chan struct{}, in *fuse.AccessIn) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := vfs.Access(ctx, Ino(in.NodeId), int(in.Mask))
 	return fuse.Status(err)
 }
 
-func (fs *JFS) Create(cancel <-chan struct{}, in *fuse.CreateIn, name string, out *fuse.CreateOut) (code fuse.Status) {
+func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name string, out *fuse.CreateOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, fh, err := vfs.Create(ctx, Ino(in.NodeId), name, uint16(in.Mode), 0, in.Flags)
@@ -232,7 +232,7 @@ func (fs *JFS) Create(cancel <-chan struct{}, in *fuse.CreateIn, name string, ou
 	return fs.replyEntry(&out.EntryOut, entry)
 }
 
-func (fs *JFS) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
+func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	_, fh, err := vfs.Open(ctx, Ino(in.NodeId), in.Flags)
@@ -246,7 +246,7 @@ func (fs *JFS) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) 
 	return 0
 }
 
-func (fs *JFS) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (fuse.ReadResult, fuse.Status) {
+func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (fuse.ReadResult, fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	n, err := vfs.Read(ctx, Ino(in.NodeId), buf, in.Offset, in.Fh)
@@ -256,13 +256,13 @@ func (fs *JFS) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (fuse.R
 	return fuse.ReadResultData(buf[:n]), 0
 }
 
-func (fs *JFS) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
+func (fs *fileSystem) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	_ = vfs.Release(ctx, Ino(in.NodeId), in.Fh)
 }
 
-func (fs *JFS) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (written uint32, code fuse.Status) {
+func (fs *fileSystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (written uint32, code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := vfs.Write(ctx, Ino(in.NodeId), data, in.Offset, in.Fh)
@@ -272,28 +272,28 @@ func (fs *JFS) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (wri
 	return uint32(len(data)), 0
 }
 
-func (fs *JFS) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status {
+func (fs *fileSystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := vfs.Flush(ctx, Ino(in.NodeId), in.Fh, in.LockOwner)
 	return fuse.Status(err)
 }
 
-func (fs *JFS) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) (code fuse.Status) {
+func (fs *fileSystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := vfs.Fsync(ctx, Ino(in.NodeId), int(in.FsyncFlags), in.Fh)
 	return fuse.Status(err)
 }
 
-func (fs *JFS) Fallocate(cancel <-chan struct{}, in *fuse.FallocateIn) (code fuse.Status) {
+func (fs *fileSystem) Fallocate(cancel <-chan struct{}, in *fuse.FallocateIn) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := vfs.Fallocate(ctx, Ino(in.NodeId), uint8(in.Mode), int64(in.Offset), int64(in.Length), in.Fh)
 	return fuse.Status(err)
 }
 
-func (fs *JFS) GetLk(cancel <-chan struct{}, in *fuse.LkIn, out *fuse.LkOut) (code fuse.Status) {
+func (fs *fileSystem) GetLk(cancel <-chan struct{}, in *fuse.LkIn, out *fuse.LkOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	l := in.Lk
@@ -304,15 +304,15 @@ func (fs *JFS) GetLk(cancel <-chan struct{}, in *fuse.LkIn, out *fuse.LkOut) (co
 	return fuse.Status(err)
 }
 
-func (fs *JFS) SetLk(cancel <-chan struct{}, in *fuse.LkIn) (code fuse.Status) {
+func (fs *fileSystem) SetLk(cancel <-chan struct{}, in *fuse.LkIn) (code fuse.Status) {
 	return fs.setLk(cancel, in, false)
 }
 
-func (fs *JFS) SetLkw(cancel <-chan struct{}, in *fuse.LkIn) (code fuse.Status) {
+func (fs *fileSystem) SetLkw(cancel <-chan struct{}, in *fuse.LkIn) (code fuse.Status) {
 	return fs.setLk(cancel, in, true)
 }
 
-func (fs *JFS) setLk(cancel <-chan struct{}, in *fuse.LkIn, block bool) (code fuse.Status) {
+func (fs *fileSystem) setLk(cancel <-chan struct{}, in *fuse.LkIn, block bool) (code fuse.Status) {
 	if in.LkFlags&fuse.FUSE_LK_FLOCK != 0 {
 		return fs.Flock(cancel, in, block)
 	}
@@ -323,14 +323,14 @@ func (fs *JFS) setLk(cancel <-chan struct{}, in *fuse.LkIn, block bool) (code fu
 	return fuse.Status(err)
 }
 
-func (fs *JFS) Flock(cancel <-chan struct{}, in *fuse.LkIn, block bool) (code fuse.Status) {
+func (fs *fileSystem) Flock(cancel <-chan struct{}, in *fuse.LkIn, block bool) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := vfs.Flock(ctx, Ino(in.NodeId), in.Fh, in.Owner, in.Lk.Typ, block)
 	return fuse.Status(err)
 }
 
-func (fs *JFS) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
+func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	fh, err := vfs.Opendir(ctx, Ino(in.NodeId))
@@ -338,7 +338,7 @@ func (fs *JFS) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOu
 	return fuse.Status(err)
 }
 
-func (fs *JFS) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
+func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entries, err := vfs.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, false)
@@ -354,7 +354,7 @@ func (fs *JFS) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEnt
 	return fuse.Status(err)
 }
 
-func (fs *JFS) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
+func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entries, err := vfs.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
@@ -380,13 +380,13 @@ func (fs *JFS) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.Di
 
 var cancelReleaseDir = make(chan struct{})
 
-func (fs *JFS) ReleaseDir(in *fuse.ReleaseIn) {
+func (fs *fileSystem) ReleaseDir(in *fuse.ReleaseIn) {
 	ctx := newContext(cancelReleaseDir, &in.InHeader)
 	defer releaseContext(ctx)
 	vfs.Releasedir(ctx, Ino(in.NodeId), in.Fh)
 }
 
-func (fs *JFS) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.StatfsOut) (code fuse.Status) {
+func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.StatfsOut) (code fuse.Status) {
 	ctx := newContext(cancel, in)
 	defer releaseContext(ctx)
 	st, err := vfs.StatFS(ctx, Ino(in.NodeId))
@@ -404,15 +404,16 @@ func (fs *JFS) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.Statf
 	return 0
 }
 
-func Main(conf *vfs.Config, options string, attrcacheto_, entrycacheto_, direntrycacheto_ float64, xattrs bool) error {
+// Serve starts a server to serve requests from FUSE.
+func Serve(conf *vfs.Config, options string, attrCacheTo, entryCacheTo, dirEntryCacheTo float64, xattrs bool) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
 		logger.Warnf("setpriority: %s", err)
 	}
 
-	imp := NewJFS()
-	imp.attrTimeout = time.Millisecond * time.Duration(attrcacheto_*1000)
-	imp.entryTimeout = time.Millisecond * time.Duration(entrycacheto_*1000)
-	imp.direntryTimeout = time.Millisecond * time.Duration(direntrycacheto_*1000)
+	imp := newFileSystem()
+	imp.attrTimeout = time.Millisecond * time.Duration(attrCacheTo*1000)
+	imp.entryTimeout = time.Millisecond * time.Duration(entryCacheTo*1000)
+	imp.direntryTimeout = time.Millisecond * time.Duration(dirEntryCacheTo*1000)
 
 	var opt fuse.MountOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name
