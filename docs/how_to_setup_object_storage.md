@@ -13,11 +13,11 @@ S3 supports [two style URI](https://docs.aws.amazon.com/AmazonS3/latest/dev/Virt
 - Virtual hosted-style: `https://<bucket>.s3.<region>.amazonaws.com`
 - Path-style: `https://s3.<region>.amazonaws.com/<bucket>`
 
-The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia) is `us-east-1`. You could find all available regions in [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions).
+The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia) is `us-east-1`. You could find all available regions at [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions).
 
 ***Note: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.***
 
-Currently, JuiceFS only supports virtual hosted-style and maybe support path-style in the future ([#134](https://github.com/juicedata/juicefs/issues/134)). So when you format a volume, the `--bucket` option should be virtual hosted-style URI. For example:
+Currently, **JuiceFS only supports virtual hosted-style** and maybe support path-style in the future ([#134](https://github.com/juicedata/juicefs/issues/134)). So when you format a volume, the `--bucket` option should be virtual hosted-style URI. For example:
 
 ```bash
 $ ./juicefs format \
