@@ -19,7 +19,7 @@
 
 ---
 
-[架构](#架构) | [开始使用](#开始使用) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
+[架构](#架构) | [开始使用](#开始使用) | [hadoop](#Hadoop Java SDK) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
 
 ---
 
@@ -89,6 +89,10 @@ $ ./juicefs mount -d localhost ~/jfs
 ### Kubernetes
 
 JuiceFS 提供 [K8s CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)来简化部署。
+
+## Hadoop Java SDK
+
+JuiceFS 使用 [Hadoop Java SDK](docs/hadoop_java_sdk_cn.md) 与 Hadoop 生态结合
 
 ## POSIX 兼容性测试
 
