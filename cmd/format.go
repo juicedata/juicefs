@@ -30,7 +30,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	obj "github.com/juicedata/juicesync/object"
+	obj "github.com/juicedata/juicefs/pkg/object"
 	"github.com/urfave/cli/v2"
 )
 

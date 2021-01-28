@@ -12,6 +12,7 @@ import (
 )
 
 type swiftOSS struct {
+	DefaultObjectStorage
 	conn       *swift.Connection
 	region     string
 	storageUrl string
@@ -96,9 +97,9 @@ func newSwiftOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Auth failed: %s", err)
 	}
-	return &swiftOSS{&conn, conn.Region, conn.StorageUrl, container}, nil
+	return &swiftOSS{DefaultObjectStorage{}, &conn, conn.Region, conn.StorageUrl, container}, nil
 }
 
 func init() {
-	register("swift", newSwiftOSS)
+	Register("swift", newSwiftOSS)
 }

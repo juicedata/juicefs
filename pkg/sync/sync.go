@@ -15,9 +15,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/juicedata/juicesync/config"
-	"github.com/juicedata/juicesync/object"
-	"github.com/juicedata/juicesync/utils"
+	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
 	"github.com/mattn/go-isatty"
 )
@@ -42,7 +41,7 @@ var (
 	limiter     *ratelimit.Bucket
 )
 
-var logger = utils.GetLogger("juicesync")
+var logger = utils.GetLogger("juicefs")
 
 // human readable bytes size
 func formatSize(bytes uint64) string {
@@ -310,7 +309,7 @@ func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 	return nil
 }
 
-func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *config.Config) {
+func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *Config) {
 	for {
 		obj, ok := <-todo
 		if !ok {
@@ -402,7 +401,7 @@ func deleteFromDst(tasks chan *object.Object, dstobj *object.Object) {
 	atomic.AddInt64(&todo, 1)
 }
 
-func producer(tasks chan *object.Object, src, dst object.ObjectStorage, config *config.Config) {
+func producer(tasks chan *object.Object, src, dst object.ObjectStorage, config *Config) {
 	start, end := config.Start, config.End
 	logger.Infof("Syncing from %s to %s", src, dst)
 	if start != "" {
@@ -587,7 +586,7 @@ func filter(keys <-chan *object.Object, include, exclude []string) <-chan *objec
 }
 
 // Sync syncs all the keys between to object storage
-func Sync(src, dst object.ObjectStorage, config *config.Config) error {
+func Sync(src, dst object.ObjectStorage, config *Config) error {
 	var bufferSize = 10240
 	if config.Manager != "" {
 		bufferSize = 100

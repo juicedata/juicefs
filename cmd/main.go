@@ -59,6 +59,7 @@ func main() {
 		Commands: []*cli.Command{
 			formatFlags(),
 			mountFlags(),
+			syncFlags(),
 			benchmarkFlags(),
 		},
 	}

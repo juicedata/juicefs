@@ -6,8 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/juicedata/juicesync/config"
-	"github.com/juicedata/juicesync/object"
+	"github.com/juicedata/juicefs/pkg/object"
 )
 
 func collectAll(c <-chan *object.Object) []string {
@@ -72,7 +71,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 func TestSync(t *testing.T) {
 	// utils.SetLogLevel(logrus.DebugLevel)
 
-	config := &config.Config{
+	config := &Config{
 		Start:     "",
 		End:       "",
 		Threads:   50,

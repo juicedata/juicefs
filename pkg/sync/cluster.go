@@ -19,8 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/juicedata/juicesync/config"
-	"github.com/juicedata/juicesync/object"
+	"github.com/juicedata/juicefs/pkg/object"
 )
 
 type Stat struct {
@@ -197,7 +196,7 @@ func findSelfPath() (string, error) {
 	return "", fmt.Errorf("can't find path for %s", program)
 }
 
-func launchWorker(address string, config *config.Config, wg *sync.WaitGroup) {
+func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 	workers := strings.Split(strings.Join(config.Workers, ","), ",")
 	for _, host := range workers {
 		wg.Add(1)
@@ -209,7 +208,7 @@ func launchWorker(address string, config *config.Config, wg *sync.WaitGroup) {
 				logger.Errorf("find self path: %s", err)
 				return
 			}
-			rpath := "/tmp/juicesync"
+			rpath := filepath.Join("/tmp", filepath.Base(path))
 			cmd := exec.Command("rsync", "-au", path, host+":"+rpath)
 			err = cmd.Run()
 			if err != nil {
@@ -218,8 +217,11 @@ func launchWorker(address string, config *config.Config, wg *sync.WaitGroup) {
 				err = cmd.Run()
 			}
 			if err != nil {
-				logger.Errorf("copy juicesync to %s: %s", host, err)
+				logger.Errorf("copy itself to %s: %s", host, err)
 				return
+			}
+			if strings.HasSuffix(path, "juicefs") {
+				rpath += " sync"
 			}
 			// launch juicesync
 			var args = []string{host, rpath, "-manager", address}
@@ -231,7 +233,7 @@ func launchWorker(address string, config *config.Config, wg *sync.WaitGroup) {
 			}
 			err = cmd.Start()
 			if err != nil {
-				logger.Errorf("start juicesync at %s: %s", host, err)
+				logger.Errorf("start itself at %s: %s", host, err)
 				return
 			}
 			logger.Infof("launch a worker on %s", host)
@@ -253,7 +255,7 @@ func launchWorker(address string, config *config.Config, wg *sync.WaitGroup) {
 	}
 }
 
-func fetchJobs(todo chan *object.Object, config *config.Config) {
+func fetchJobs(todo chan *object.Object, config *Config) {
 	for {
 		// fetch jobs
 		url := fmt.Sprintf("http://%s/fetch", config.Manager)
