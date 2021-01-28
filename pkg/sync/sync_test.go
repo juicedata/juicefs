@@ -30,6 +30,7 @@ func collectAll(c <-chan *object.Object) []string {
 	return r
 }
 
+// nolint:errcheck
 func TestIterator(t *testing.T) {
 	m, _ := object.CreateStorage("mem", "", "", "")
 	m.Put("a", bytes.NewReader([]byte("a")))
@@ -59,7 +60,6 @@ func TestIterator(t *testing.T) {
 	}
 }
 
-// Single object
 func TestIeratorSingleEmptyKey(t *testing.T) {
 	// utils.SetLogLevel(logrus.DebugLevel)
 
@@ -81,6 +81,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 	}
 }
 
+// nolint:errcheck
 func TestSync(t *testing.T) {
 	// utils.SetLogLevel(logrus.DebugLevel)
 

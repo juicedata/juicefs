@@ -40,7 +40,7 @@ type Benchmark struct {
 
 func (bm *Benchmark) writeOneFile(filename string, buf []byte, blockCount int) ([]float64, error) {
 	timeTaken := make([]float64, 0, blockCount)
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0o777)
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0777)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (bm *Benchmark) writeOneFile(filename string, buf []byte, blockCount int) (
 
 func (bm *Benchmark) readOneFile(filename string, blockSize int, blockCount int) ([]float64, error) {
 	timeTaken := make([]float64, 0, blockCount)
-	file, err := os.OpenFile(filename, os.O_RDONLY, 0o777)
+	file, err := os.OpenFile(filename, os.O_RDONLY, 0777)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func benchmark(c *cli.Context) error {
 
 	dest = filepath.Join(dest, fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
 	if _, err := os.Stat(dest); os.IsNotExist(err) {
-		err = os.MkdirAll(dest, 0o755)
+		err = os.MkdirAll(dest, 0755)
 		if err != nil {
 			return err
 		}

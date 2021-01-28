@@ -82,7 +82,7 @@ func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Obje
 	// we try List the marker key separately.
 	if start != "" {
 		if obj, err := store.Head(start); err == nil {
-			logger.Debugf("Found start key: %s from %s in %s", start, store, time.Now().Sub(startTime))
+			logger.Debugf("Found start key: %s from %s in %s", start, store, time.Since(startTime))
 			out <- obj
 		}
 	}
@@ -117,7 +117,7 @@ func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Obje
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
 	}
-	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(startTime))
+	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 	go func() {
 		lastkey := ""
 		first := true
@@ -152,7 +152,7 @@ func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Obje
 				time.Sleep(time.Millisecond * 100)
 				objs, err = store.List("", marker, maxResults)
 			}
-			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Now().Sub(startTime))
+			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 			if err != nil {
 				// Telling that the listing has failed
 				out <- nil
@@ -377,7 +377,7 @@ func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *Con
 				logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
 			}
 			atomic.AddInt64(&copied, 1)
-			logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner, fi.Group, fi.Mode, obj.Key, time.Now().Sub(start))
+			logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner, fi.Group, fi.Mode, obj.Key, time.Since(start))
 			continue
 		}
 		err = copyInParallel(src, dst, obj)
@@ -402,7 +402,7 @@ func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *Con
 			}
 			atomic.AddInt64(&copied, 1)
 			atomic.AddInt64(&copiedBytes, int64(obj.Size))
-			logger.Debugf("Copied %s (%d bytes) in %s", obj.Key, obj.Size, time.Now().Sub(start))
+			logger.Debugf("Copied %s (%d bytes) in %s", obj.Key, obj.Size, time.Since(start))
 		}
 	}
 }
