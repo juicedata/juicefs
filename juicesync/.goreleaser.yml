@@ -1,0 +1,40 @@
+builds:
+  - env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/juicedata/juicesync/versioninfo.VERSION={{.Version}}
+      - -X github.com/juicedata/juicesync/versioninfo.REVISION={{.Commit}}
+      - -X github.com/juicedata/juicesync/versioninfo.REVISIONDATE={{.Date}}
+
+archives:
+  - replacements:
+      darwin: Darwin
+      linux: Linux
+      windows: Windows
+      386: i386
+      amd64: x86_64
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+brews:
+  -
+    # Github repository to push the tap to.
+    tap:
+      owner: juicedata
+      name: homebrew-tap
+
+    # Folder inside the repository to put the formula.
+    # Default is the root folder.
+    folder: Formula
+
+    homepage: "https://juicefs.com/"
+
+    description: "A tool to move your data between any clouds or regions."
