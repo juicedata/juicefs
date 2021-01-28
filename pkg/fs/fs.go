@@ -32,8 +32,8 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/juicedata/juicesync/utils"
 )
 
 var logger = utils.GetLogger("juicefs")

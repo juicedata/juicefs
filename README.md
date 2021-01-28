@@ -161,7 +161,7 @@ The last number on each line is the time (in seconds) current operation takes. W
 - Local disk
 - Redis
 
-For the detailed list, see [juicesync](https://github.com/juicedata/juicesync).
+For the detailed list, see [README](pkg/object/README.md).
 
 ## Status
 
@@ -209,7 +209,7 @@ The design of JuiceFS was inspired by [Google File System](https://research.goog
 
 ### Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue to [juicesync](https://github.com/juicedata/juicesync).
+JuiceFS already supported many object storage, please check [the list](#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ### Can I use Redis cluster?
 

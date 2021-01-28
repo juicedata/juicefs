@@ -23,11 +23,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/meta"
-	vfs "github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/juicedata/juicesync/utils"
-
 	"github.com/hanwen/go-fuse/v2/fuse"
+
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
 var logger = utils.GetLogger("juicefs")
