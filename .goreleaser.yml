@@ -1,19 +1,41 @@
+project_name: juicefs
+env:
+  - GO111MODULE=on
+  - GOPROXY=https://gocenter.io
+before:
+  hooks:
+    - go mod download
 builds:
-  - env:
-      - CGO_ENABLED=0
-    ldflags:
-      - -s -w
-      - -X github.com/juicedata/juicesync/versioninfo.VERSION={{.Version}}
-      - -X github.com/juicedata/juicesync/versioninfo.REVISION={{.Commit}}
-      - -X github.com/juicedata/juicesync/versioninfo.REVISIONDATE={{.Date}}
-
-archives:
-  - replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      386: i386
-      amd64: x86_64
+  - id: juicefs-darwin-amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=o64-clang
+      - CXX=o64-clang++
+    ldflags: -s -w -X main.version={{.Version}} -X main.revision={{.ShortCommit}} -X main.revisionDate={{.CommitDate}}
+    main: ./cmd
+    goos:
+      - darwin
+    goarch:
+      - amd64
+  - id: juicefs-linux-amd64
+    env:
+      - CGO_ENABLED=1
+    ldflags: -s -w -X main.version={{.Version}} -X main.revision={{.ShortCommit}} -X main.revisionDate={{.CommitDate}}
+    main: ./cmd
+    goos:
+      - linux
+    goarch:
+      - amd64
+  - id: juicefs-linux-arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+    ldflags: -s -w -X main.version={{.Version}} -X main.revision={{.ShortCommit}} -X main.revisionDate={{.CommitDate}}
+    main: ./cmd
+    goos:
+      - linux
+    goarch:
+      - arm64
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -25,16 +47,9 @@ changelog:
       - '^docs:'
       - '^test:'
 brews:
-  -
-    # Github repository to push the tap to.
-    tap:
+  - tap:
       owner: juicedata
       name: homebrew-tap
-
-    # Folder inside the repository to put the formula.
-    # Default is the root folder.
     folder: Formula
-
-    homepage: "https://juicefs.com/"
-
-    description: "A tool to move your data between any clouds or regions."
+    homepage: https://github.com/juicedata/juicefs
+    description: JuiceFS is a distributed POSIX file system built on top of Redis and S3
