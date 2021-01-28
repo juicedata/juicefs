@@ -43,6 +43,8 @@ You can download precompiled binaries from [releases page](https://github.com/ju
 
 You need install [Go](https://golang.org) first, then run following commands:
 
+Minimum go version: go1.13
+
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git
 $ cd juicefs
