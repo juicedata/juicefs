@@ -137,7 +137,7 @@ func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte
 }
 
 func (q *bosclient) AbortUpload(key string, uploadID string) {
-	q.c.AbortMultipartUpload(q.bucket, key, uploadID)
+	_ = q.c.AbortMultipartUpload(q.bucket, key, uploadID)
 }
 
 func (q *bosclient) CompleteUpload(key string, uploadID string, parts []*Part) error {

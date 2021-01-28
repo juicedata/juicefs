@@ -146,7 +146,7 @@ func (o *ossClient) AbortUpload(key string, uploadID string) {
 		Key:      key,
 		UploadID: uploadID,
 	}
-	o.bucket.AbortMultipartUpload(initResult)
+	_ = o.bucket.AbortMultipartUpload(initResult)
 }
 
 func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*Part) error {

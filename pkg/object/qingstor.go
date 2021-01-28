@@ -205,7 +205,7 @@ func (q *qingstor) AbortUpload(key string, uploadID string) {
 	input := &qs.AbortMultipartUploadInput{
 		UploadID: &uploadID,
 	}
-	q.bucket.AbortMultipartUpload(key, input)
+	_, _ = q.bucket.AbortMultipartUpload(key, input)
 }
 
 func (q *qingstor) CompleteUpload(key string, uploadID string, parts []*Part) error {
