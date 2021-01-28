@@ -46,7 +46,7 @@ func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	awsConfig := &aws.Config{
-		Region:           aws.String("us-east-1"),
+		Region:           aws.String(awsDefaultRegion),
 		Endpoint:         &uri.Host,
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(true),

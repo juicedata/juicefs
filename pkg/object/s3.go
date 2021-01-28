@@ -343,7 +343,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		awsConfig.S3ForcePathStyle = aws.Bool(true)
 	}
 
-	ses, err := session.NewSession(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
+	ses, err := session.NewSession(awsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
