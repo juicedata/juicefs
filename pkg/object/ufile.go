@@ -47,7 +47,7 @@ func ufileSigner(req *http.Request, accessKey, secretKey, signName string) {
 	}
 	toSign += "/" + bucket + key
 	h := hmac.New(sha1.New, []byte(secretKey))
-	h.Write([]byte(toSign))
+	_, _ = h.Write([]byte(toSign))
 	sig := base64.StdEncoding.EncodeToString(h.Sum(nil))
 	token := signName + " " + accessKey + ":" + sig
 	req.Header.Add("Authorization", token)
@@ -77,10 +77,9 @@ func (u *ufile) Create() error {
 	// generate signature
 	toSign := fmt.Sprintf("ActionCreateBucketBucketName%sPublicKey%sRegion%s",
 		name, u.accessKey, region)
-	h := sha1.New()
-	h.Write([]byte(toSign))
-	h.Write([]byte(u.secretKey))
-	sig := hex.EncodeToString(h.Sum(nil))
+
+	sum := sha1.Sum([]byte(toSign + u.secretKey))
+	sig := hex.EncodeToString(sum[:])
 	query.Add("Signature", sig)
 
 	req, err := http.NewRequest("GET", "https://api.ucloud.cn/?"+query.Encode(), nil)
@@ -195,7 +194,7 @@ func (u *ufile) UploadPart(key string, uploadID string, num int, data []byte) (*
 }
 
 func (u *ufile) AbortUpload(key string, uploadID string) {
-	u.request("DELETE", key+"?uploads="+uploadID, nil, nil)
+	_, _ = u.request("DELETE", key+"?uploads="+uploadID, nil, nil)
 }
 
 func (u *ufile) CompleteUpload(key string, uploadID string, parts []*Part) error {

@@ -127,7 +127,7 @@ func startManager(tasks chan *object.Object) (string, error) {
 		var objs []*object.Object
 		obj, ok := <-tasks
 		if !ok {
-			w.Write([]byte("[]"))
+			_, _ = w.Write([]byte("[]"))
 			return
 		}
 		objs = append(objs, obj)
@@ -152,7 +152,7 @@ func startManager(tasks chan *object.Object) (string, error) {
 			return
 		}
 		logger.Debugf("send %d objects to %s", len(objs), req.RemoteAddr)
-		w.Write(d)
+		_, _ = w.Write(d)
 	})
 	http.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != "POST" {
@@ -172,7 +172,7 @@ func startManager(tasks chan *object.Object) (string, error) {
 		}
 		updateStats(&r)
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 	l, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
