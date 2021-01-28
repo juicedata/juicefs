@@ -881,7 +881,7 @@ func (r *redisMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cum
 
 func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno {
 	err := r.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
-	if err == 0 {
+	if err == 0 && inode != nil {
 		r.Lock()
 		r.openFiles[*inode] = 1
 		r.Unlock()
@@ -1293,64 +1293,83 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 			Attr:  &Attr{Typ: TypeDirectory},
 		})
 	}
-	vals, err := r.rdb.HGetAll(ctx, r.entryKey(inode)).Result()
-	if err != nil {
-		return errno(err)
-	}
-	newEntries := make([]Entry, len(vals))
-	newAttrs := make([]Attr, len(newEntries))
-	var i int
-	for name, val := range vals {
-		typ, inode := r.parseEntry([]byte(val))
-		ent := newEntries[i]
-		ent.Inode = inode
-		ent.Name = []byte(name)
-		attr := newAttrs[i]
-		attr.Typ = typ
-		ent.Attr = &attr
-		*entries = append(*entries, &ent)
-		i++
-	}
-	if plus != 0 {
-		batchSize := 4096
-		if batchSize > len(*entries) {
-			batchSize = len(*entries)
+
+	var keys []string
+	var cursor uint64
+	var err error
+	for {
+		keys, cursor, err = r.rdb.HScan(ctx, r.entryKey(inode), cursor, "*", 10000).Result()
+		if err != nil {
+			return errno(err)
 		}
-		nEntries := len(*entries)
-		indexCh := make(chan int, 10)
-		go func() {
-			for i := 0; i < nEntries; i += batchSize {
-				indexCh <- i
+		newEntries := make([]Entry, len(keys)/2)
+		newAttrs := make([]Attr, len(keys)/2)
+		for i := 0; i < len(keys); i += 2 {
+			typ, inode := r.parseEntry([]byte(keys[i+1]))
+			ent := &newEntries[i/2]
+			ent.Inode = inode
+			ent.Name = []byte(keys[i])
+			ent.Attr = &newAttrs[i/2]
+			ent.Attr.Typ = typ
+			*entries = append(*entries, ent)
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+
+	if plus != 0 {
+		fillAttr := func(es []*Entry) error {
+			var keys = make([]string, len(es))
+			for i, e := range es {
+				keys[i] = r.inodeKey(e.Inode)
 			}
-			close(indexCh)
-		}()
-		var wg sync.WaitGroup
-		for i := 0; i < 2; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				keysBatch := make([]string, 0, batchSize)
-				for idx := range indexCh {
-					end := idx + batchSize
-					if end > len(*entries) {
-						end = len(*entries)
+			rs, err := r.rdb.MGet(ctx, keys...).Result()
+			if err != nil {
+				return err
+			}
+			for j, re := range rs {
+				if re != nil {
+					if a, ok := re.(string); ok {
+						r.parseAttr([]byte(a), es[j].Attr)
 					}
-					for _, e := range (*entries)[idx:end] {
-						keysBatch = append(keysBatch, r.inodeKey(e.Inode))
-					}
-					rs, _ := r.rdb.MGet(ctx, keysBatch...).Result()
-					for j, re := range rs {
-						if re != nil {
-							if a, ok := re.(string); ok {
-								r.parseAttr([]byte(a), (*entries)[idx+j].Attr)
-							}
+				}
+			}
+			return nil
+		}
+		batchSize := 4096
+		nEntries := len(*entries)
+		if nEntries <= batchSize {
+			err = fillAttr(*entries)
+		} else {
+			indexCh := make(chan []*Entry, 10)
+			var wg sync.WaitGroup
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for es := range indexCh {
+						e := fillAttr(es)
+						if e != nil {
+							err = e
+							break
 						}
 					}
-					keysBatch = keysBatch[:0]
+				}()
+			}
+			for i := 0; i < nEntries; i += batchSize {
+				if i+batchSize > nEntries {
+					indexCh <- (*entries)[i:]
+				} else {
+					indexCh <- (*entries)[i : i+batchSize]
 				}
-			}()
+			}
+			close(indexCh)
+			wg.Wait()
 		}
-		wg.Wait()
+		if err != nil {
+			return errno(err)
+		}
 	}
 	return 0
 }
