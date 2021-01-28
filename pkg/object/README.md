@@ -46,7 +46,7 @@ Some examples:
 
 Note:
 
-- It's recommended to run juicesync in the target region to have better performance.
+- It's recommended to run it in the target region to have better performance.
 - Auto discover endpoint for bucket of S3, OSS, COS, OBS, BOS, `SRC` and `DST` can use format `NAME://[ACCESS_KEY:SECRET_KEY@]BUCKET[/PREFIX]` . `ACCESS_KEY` and `SECRET_KEY` can be provided by corresponding environment variables (see below).
 - S3:
   * The access key and secret key for S3 could be provided by `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, or *IAM* role.
@@ -65,7 +65,7 @@ Note:
 - Qiniu:
   The S3 endpoint should be used for Qiniu, for example, abc.cn-north-1-s3.qiniu.com.
   If there are keys starting with "/", the domain should be provided as `QINIU_DOMAIN`.
-- sftp: if your target machine uses SSH certificates instead of password, you should pass the path to your private key file to the environment variable `SSH_PRIVATE_KEY_PATH`, like ` SSH_PRIVATE_KEY_PATH=/home/someuser/.ssh/id_rsa juicesync [src] [dst]`.
+- sftp: if your target machine uses SSH certificates instead of password, you should pass the path to your private key file to the environment variable `SSH_PRIVATE_KEY_PATH`, like ` SSH_PRIVATE_KEY_PATH=/home/someuser/.ssh/id_rsa juicefs sync [src] [dst]`.
 - Scaleway:
   * The credential can be provided by environment variable `SCW_ACCESS_KEY` and `SCW_SECRET_KEY` .
 - MinIO:

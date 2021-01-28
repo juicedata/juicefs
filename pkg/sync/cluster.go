@@ -237,7 +237,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			if strings.HasSuffix(path, "juicefs") {
 				rpath += " sync"
 			}
-			// launch juicesync
+			// launch itself
 			var args = []string{host, rpath, "-manager", address}
 			args = append(args, os.Args[1:]...)
 			cmd = exec.Command("ssh", args...)

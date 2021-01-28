@@ -21,13 +21,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/juicedata/juicesync/utils"
-	"github.com/juicedata/juicesync/versioninfo"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 var logger = utils.GetLogger("juicefs")
 
-var UserAgent = fmt.Sprintf("juicefs/%s", versioninfo.Version())
+var UserAgent = "JuiceFS"
 
 type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error
