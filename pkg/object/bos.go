@@ -214,6 +214,9 @@ func newBOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 
 	bosClient, err := bos.NewClient(accessKey, secretKey, endpoint)
+	if err != nil {
+		return nil, err
+	}
 	return &bosclient{bucket: bucketName, c: bosClient}, nil
 }
 

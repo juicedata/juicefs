@@ -244,7 +244,7 @@ func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
 	if r := os.Getenv("AWS_DEFAULT_REGION"); r != "" {
 		regions = []string{r}
 	} else {
-		regions = []string{"us-east-1", "cn-north-1"}
+		regions = []string{awsDefaultRegion, "cn-north-1"}
 	}
 
 	var (
@@ -313,11 +313,11 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 				endpoint = endpoint[len("dualstack."):]
 			}
 			if endpoint == "amazonaws.com" {
-				endpoint = "us-east-1." + endpoint
+				endpoint = awsDefaultRegion + "." + endpoint
 			}
 			region = strings.Split(endpoint, ".")[0]
 			if region == "external-1" {
-				region = "us-east-1"
+				region = awsDefaultRegion
 			}
 		} else {
 			// compatible s3
@@ -325,7 +325,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 			hostParts := strings.SplitN(uri.Host, ".", 2)
 			bucketName = hostParts[0]
 			ep = hostParts[1]
-			region = "us-east-1"
+			region = awsDefaultRegion
 		}
 	}
 

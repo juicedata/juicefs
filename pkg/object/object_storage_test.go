@@ -155,12 +155,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			println(len(pending), marker)
 		}
 		part2Size := 1 << 20
-		part2, err := s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
+		_, err = s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
 		if err != nil {
 			t.Fatalf("UploadPart 2 failed: %s", err)
 		}
 		part2Size = 2 << 20
-		part2, err = s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
+		part2, err := s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
 		if err != nil {
 			t.Fatalf("UploadPart 2 failed: %s", err)
 		}

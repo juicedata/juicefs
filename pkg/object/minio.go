@@ -62,7 +62,10 @@ func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
 	}
 
-	ses := session.New(awsConfig) //.WithLogLevel(aws.LogDebugWithHTTPBody))
+	ses, err := session.NewSession(awsConfig)
+	if err != nil {
+		return nil, err
+	}
 	bucket := uri.Path[1:]
 	for strings.HasSuffix(bucket, "/") {
 		bucket = bucket[:len(bucket)-1]
