@@ -56,6 +56,7 @@ func (c *conn) closed() error {
 type sftpStore struct {
 	DefaultObjectStorage
 	host   string
+	port   string
 	root   string
 	config *ssh.ClientConfig
 	poolMu sync.Mutex
@@ -67,11 +68,11 @@ func (f *sftpStore) sftpConnection() (c *conn, err error) {
 	c = &conn{
 		err: make(chan error, 1),
 	}
-	conn, err := net.Dial("tcp", f.host+":22")
+	conn, err := net.Dial("tcp", net.JoinHostPort(f.host, f.port))
 	if err != nil {
 		return nil, err
 	}
-	sshc, chans, reqs, err := ssh.NewClientConn(conn, f.host+":22", f.config)
+	sshc, chans, reqs, err := ssh.NewClientConn(conn, net.JoinHostPort(f.host, f.port), f.config)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +379,12 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan *Object, error) {
 
 func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	parts := strings.Split(endpoint, ":")
-	root := filepath.Clean(parts[1])
+	root := filepath.Clean(parts[len(parts)-1])
+	port := "22"
+	// two ":" means endpoint contains custom port
+	if len(parts) > 2 {
+		port = parts[len(parts)-2]
+	}
 	// append suffix `/` removed by filepath.Clean()
 	// `.` is a directory, add `/`
 	if strings.HasSuffix(parts[1], dirSuffix) || root == "." {
@@ -411,6 +417,7 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 
 	f := &sftpStore{
 		host:   parts[0],
+		port:   port,
 		root:   root,
 		config: config,
 	}
