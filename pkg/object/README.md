@@ -1,87 +1,5 @@
-# juicesync
 
-![build](https://github.com/juicedata/juicesync/workflows/build/badge.svg) ![release](https://github.com/juicedata/juicesync/workflows/release/badge.svg)
-
-Juicesync is a tool to move your data in object storage between any clouds or regions, also support local file, sftp and HDFS.
-
-# How it works?
-
-Juicesync will scan all the keys from two object stores, and comparing them in ascending order to find out missing or outdated keys, then download them from the source and upload them to the destination in parallel.
-
-# Install
-
-## With Homebrew
-
-```sh
-brew install juicedata/tap/juicesync
-```
-
-## Download binary release
-
-From [here](https://github.com/juicedata/juicesync/releases)
-
-# Develop
-
-We use go mod to manage modules, if not sure how to use this, refer to [The official document](https://github.com/golang/go/wiki/Modules).
-
-* If you're using Go 1.13
-
-	```
-	go build
-	```
-
-* If you're using Go >= 1.11, < 1.13
-
-	```
-	export GO111MODULE=on
-	go build
-	```
-
-# Upgrade
-
-* Use Homebrew to upgrade or
-* Download a new version from [release page](https://github.com/juicedata/juicesync/releases)
-
-# Usage
-
-```
-$ juicesync -h
-NAME:
-   juicesync - rsync for cloud storage
-
-USAGE:
-   juicesync [options] SRC DST
-    SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]
-
-VERSION:
-   v0.5.0-1-gce9968c
-
-COMMANDS:
-   help, h  Shows a list of commands or help for one command
-
-GLOBAL OPTIONS:
-   --start KEY, -s KEY        the first KEY to sync
-   --end KEY, -e KEY          the last KEY to sync
-   --threads value, -p value  number of concurrent threads (default: 10)
-   --http-port PORT           HTTP PORT to listen to (default: 6070)
-   --update, -u               update existing file if the source is newer (default: false)
-   --force-update, -f         always update existing file (default: false)
-   --perms                    preserve permissions (default: false)
-   --dirs                     Sync directories or holders (default: false)
-   --dry                      don't copy file (default: false)
-   --delete-src, --deleteSrc  delete objects from source after synced (default: false)
-   --delete-dst, --deleteDst  delete extraneous objects from destination (default: false)
-   --exclude PATTERN          exclude keys containing PATTERN (POSIX regular expressions)
-   --include PATTERN          only include keys containing PATTERN (POSIX regular expressions)
-   --manager value            manager address
-   --worker value             hosts (seperated by comma) to launch worker
-   --verbose, -v              turn on debug log (default: false)
-   --quiet, -q                change log level to ERROR (default: false)
-   --help, -h                 show help (default: false)
-   --version, -V              print only the version (default: false)
-```
-
-SRC and DST must be an URI of the following object storage:
+The following object store are supported:
 
 - file: local files
 - sftp: FTP via SSH
@@ -105,7 +23,7 @@ SRC and DST must be an URI of the following object storage:
 - minio: MinIO
 - scs: Sina Cloud Storage
 
-SRC and DST should be in the following format:
+they should be specified in the following format:
 
 [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]
 
