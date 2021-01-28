@@ -69,7 +69,7 @@ It will create a volume with default settings. If there Redis server is not runn
 
 As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--access-key` and `--secret-key`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
 
-For the details about how to setup different object storage, please see [the guide](docs/how_to_setup_object_storage.md).
+For the details about how to setup different object storage, please read [the guide](docs/how_to_setup_object_storage.md).
 
 ### Mount a volume
 

@@ -8,14 +8,16 @@ For authentication, the access key and secret key are needed. You could specify 
 
 ## S3
 
-S3 supports [two style URI](https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html): virtual hosted-style and path-style. The difference between virtual hosted-style and path-style is:
+S3 supports [two style URI](https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html): virtual hosted-style and path-style. The difference between them is:
 
 - Virtual hosted-style: `https://<bucket>.s3.<region>.amazonaws.com`
 - Path-style: `https://s3.<region>.amazonaws.com/<bucket>`
 
-***Note: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`.***
+The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia) is `us-east-1`. You could find all available regions in [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions).
 
-Currently, JuiceFS only supports virtual hosted-style and maybe support path-style in the future. So when you format a volume, the `--bucket` option should be virtual hosted-style URI. For example:
+***Note: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.***
+
+Currently, JuiceFS only supports virtual hosted-style and maybe support path-style in the future ([#134](https://github.com/juicedata/juicefs/issues/134)). So when you format a volume, the `--bucket` option should be virtual hosted-style URI. For example:
 
 ```bash
 $ ./juicefs format \
@@ -39,7 +41,7 @@ $ ./juicefs format \
 
 ## MinIO
 
-[MinIO](https://min.io) is an open source high performance object storage. It is API compatible with Amazon S3. You need set `--storage` option to `minio`. Currently, JuiceFS supports path-style URI when use MinIO storage. For example (`<endpoint>` may looks like `1.2.3.4:9000`):
+[MinIO](https://min.io) is an open source high performance object storage. It is API compatible with Amazon S3. You need set `--storage` option to `minio`. Currently, JuiceFS only supports path-style URI when use MinIO storage. For example (`<endpoint>` may looks like `1.2.3.4:9000`):
 
 ```bash
 $ ./juicefs format \
