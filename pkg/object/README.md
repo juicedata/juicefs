@@ -30,7 +30,7 @@ they should be specified in the following format:
 Some examples:
 
 - local/path
-- user@host:path
+- user@host:port:path
 - file:///Users/me/code/
 - hdfs://hdfs@namenode1:9000,namenode2:9000/user/
 - s3://my-bucket/
