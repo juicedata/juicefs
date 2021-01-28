@@ -1,6 +1,6 @@
 // Copyright (C) 2020-present Juicedata Inc.
 
-package config
+package sync
 
 import (
 	"github.com/urfave/cli/v2"
@@ -33,7 +33,6 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Start:       c.String("start"),
 		End:         c.String("end"),
 		Threads:     c.Int("threads"),
-		HTTPPort:    c.Int("http-port"),
 		Update:      c.Bool("update"),
 		ForceUpdate: c.Bool("force-update"),
 		Perms:       c.Bool("perms"),
