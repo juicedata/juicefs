@@ -247,7 +247,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 			walkRoot = path.Dir(d.root)
 		}
 
-		Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
+		_ = Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				// skip broken symbolic link
 				if fi, err1 := os.Lstat(path); err1 == nil && fi.Mode()&os.ModeSymlink != 0 {

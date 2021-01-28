@@ -55,6 +55,7 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]*Object, er
 	return nil, err
 }
 
+// nolint:errcheck
 func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Create(); err != nil {
 		t.Fatalf("Can't create bucket %s: %s", s, err)

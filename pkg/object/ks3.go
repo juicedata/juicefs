@@ -189,7 +189,7 @@ func (s *ks3) AbortUpload(key string, uploadID string) {
 		Key:      &key,
 		UploadID: &uploadID,
 	}
-	s.s3.AbortMultipartUpload(params)
+	_, _ = s.s3.AbortMultipartUpload(params)
 }
 
 func (s *ks3) CompleteUpload(key string, uploadID string, parts []*Part) error {
