@@ -5,7 +5,6 @@ package object
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -13,50 +12,9 @@ import (
 	"github.com/juicedata/juicesync/versioninfo"
 )
 
-var logger = utils.GetLogger("juicesync")
+var logger = utils.GetLogger("juicefs")
 
-var UserAgent = fmt.Sprintf("juicesync/%s", versioninfo.Version())
-
-type Object struct {
-	Key   string
-	Size  int64
-	Mtime time.Time // Unix seconds
-	IsDir bool
-}
-
-type MultipartUpload struct {
-	MinPartSize int
-	MaxCount    int
-	UploadID    string
-}
-
-type Part struct {
-	Num  int
-	Size int
-	ETag string
-}
-
-type PendingPart struct {
-	Key      string
-	UploadID string
-	Created  time.Time
-}
-
-type ObjectStorage interface {
-	String() string
-	Create() error
-	Head(key string) (*Object, error)
-	Get(key string, off, limit int64) (io.ReadCloser, error)
-	Put(key string, in io.Reader) error
-	Delete(key string) error
-	List(prefix, marker string, limit int64) ([]*Object, error)
-	ListAll(prefix, marker string) (<-chan *Object, error)
-	CreateMultipartUpload(key string) (*MultipartUpload, error)
-	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
-	AbortUpload(key string, uploadID string)
-	CompleteUpload(key string, uploadID string, parts []*Part) error
-	ListUploads(marker string) ([]*PendingPart, string, error)
-}
+var UserAgent = fmt.Sprintf("juicefs/%s", versioninfo.Version())
 
 type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error
@@ -80,6 +38,10 @@ type DefaultObjectStorage struct{}
 
 func (s DefaultObjectStorage) Create() error {
 	return nil
+}
+
+func (s DefaultObjectStorage) Head(key string) (*Object, error) {
+	return nil, notSupported
 }
 
 func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUpload, error) {

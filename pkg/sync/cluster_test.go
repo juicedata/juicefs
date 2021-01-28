@@ -5,8 +5,7 @@ package sync
 import (
 	"testing"
 
-	"github.com/juicedata/juicesync/config"
-	"github.com/juicedata/juicesync/object"
+	"github.com/juicedata/juicefs/pkg/object"
 )
 
 func TestCluster(t *testing.T) {
@@ -18,7 +17,7 @@ func TestCluster(t *testing.T) {
 	}
 	sendStats(addr)
 	// worker
-	var conf config.Config
+	var conf Config
 	conf.Manager = addr
 	mytodo := make(chan *object.Object, 100)
 	go fetchJobs(mytodo, &conf)
