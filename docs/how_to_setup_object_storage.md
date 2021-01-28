@@ -6,6 +6,8 @@ This is a guide about how to setup object storage when format a volume. Differen
 
 For authentication, the access key and secret key are needed. You could specify them through `--access-key` and `--secret-key` options. Or you can set `ACCESS_KEY` and `SECRET_KEY` environment variables.
 
+Public cloud provider usually allow user create IAM (Identity and Access Management) role (e.g. [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html)) or similar thing (e.g. [Alibaba Cloud RAM role](https://help.aliyun.com/document_detail/93689.html)), then grant the role to VM instance. If your VM instance already have permission to access object storage, then you could omit `--access-key` and `--secret-key` options.
+
 ## S3
 
 S3 supports [two style URI](https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html): virtual hosted-style and path-style. The difference between them is:
@@ -23,8 +25,7 @@ Currently, **JuiceFS only supports virtual hosted-style** and maybe support path
 $ ./juicefs format \
     --storage s3 \
     --bucket https://<bucket>.s3.<region>.amazonaws.com \
-    --access-key XXX \
-    --secret-key XXX \
+    ... \
     localhost test
 ```
 
@@ -34,8 +35,7 @@ You can also use S3 storage type to connect S3-compatible storage. But beware th
 $ ./juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
-    --access-key XXX \
-    --secret-key XXX \
+    ... \
     localhost test
 ```
 
@@ -47,7 +47,6 @@ $ ./juicefs format \
 $ ./juicefs format \
     --storage minio \
     --bucket http://<endpoint>/<bucket> \
-    --access-key XXX \
-    --secret-key XXX \
+    ... \
     localhost test
 ```
