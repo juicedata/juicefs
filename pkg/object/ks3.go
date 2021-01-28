@@ -241,7 +241,7 @@ func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
 	region := hostParts[1][3:]
-	region, _ = ks3Regions[strings.TrimRight(strings.TrimLeft(region, "-"), "-internal")]
+	region = ks3Regions[strings.TrimRight(strings.TrimLeft(region, "-"), "-internal")]
 
 	awsConfig := &aws.Config{
 		Region:      region,
