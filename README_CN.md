@@ -70,15 +70,7 @@ $ ./juicefs format localhost test
 
 JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket`、`--access-key` 和 `--secret-key` 来指定。它默认会使用本地目录来模拟一个对象存储用于测试，详细的参数请看 `./juicefs format -h`。
 
-如果使用 MinIO 来存数据，可以这么写：
-
-```bash
-$ ./juicefs format --storage minio \
-   --bucket http://1.2.3.4:9000/mybucket \
-   --access-key XXX \
-   --secret-key XXX \
-   localhost test
-```
+关于各种对象存储如何设置的详细介绍，请查看[这个文档](docs/how_to_setup_object_storage.md)。
 
 ### 挂载
 
