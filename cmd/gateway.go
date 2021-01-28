@@ -18,12 +18,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"path"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,12 +31,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/urfave/cli/v2"
 
-	"github.com/minio/cli"
+	mcli "github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
@@ -52,54 +54,54 @@ var mctx meta.Context
 var flags = []cli.Flag{}
 
 func gatewayFlags() *cli.Command {
-	var defaultCacheDir = "/var/jfsCache"
-	if runtime.GOOS == "darwin" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			logger.Fatalf("%v", err)
-			return nil
-		}
-		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
-	}
 	return &cli.Command{
 		Name:      "S3 gateway",
 		Usage:     "S3 Gateway for JuiceFS",
-		ArgsUsage: "REDIS-URL ADDR",
+		ArgsUsage: "REDIS-URL ADDRESS",
+		Flags:     clientFlags(),
 		Action:    gateway,
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:  "address",
-				Value: ":9000",
-				Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
-			},
-			cli.BoolFlag{
-				Name:  "anonymous",
-				Usage: "hide sensitive information from logging",
-			},
-			cli.BoolFlag{
-				Name:  "json",
-				Usage: "output server logs and startup information in json format",
-			},
-			// This flag is hidden and to be used only during certain performance testing.
-			cli.BoolFlag{
-				Name:   "no-compat",
-				Usage:  "disable strict S3 compatibility by turning on certain performance optimizations",
-				Hidden: true,
-			},
-		},
 	}
 }
 
-func gateway(ctx *cli.Context) error {
-	// mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	utils.InitLoggers(false)
+func gateway(c *cli.Context) error {
+	setLoggerLevel(c)
+	if !c.Bool("no-syslog") {
+		// The default log to syslog is only in daemon mode.
+		utils.InitLoggers(c.Bool("background"))
+	}
 	go func() {
 		for port := 6060; port < 6100; port++ {
 			http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
 		}
 	}()
 
-	minio.StartGateway(ctx, &GateWay{ctx})
+	if c.Args().Len() < 2 {
+		logger.Fatalf("Redis URL and listen address are required")
+	}
+	address := c.Args().Get(1)
+	gw = &GateWay{c}
+
+	args := []string{"juicefs", "gateway", "--addr", address}
+	app := &mcli.App{
+		Name:      "juicefs",
+		Usage:     "A POSIX file system built on Redis and object storage.",
+		Version:   Version(),
+		Copyright: "AGPLv3",
+		Action:    gateway2,
+		Commands: []mcli.Command{
+			{
+				Action: gateway2,
+				Flags:  []mcli.Flag{},
+			},
+		},
+	}
+	return app.Run(args)
+}
+
+var gw *GateWay
+
+func gateway2(ctx *mcli.Context) error {
+	minio.StartGateway(ctx, gw)
 	return nil
 }
 
@@ -116,9 +118,79 @@ func (g *GateWay) Production() bool {
 }
 
 func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	conf := g.conf
-	m := meta.Init(conf.Mountpoint, conf.Meta)
-	jfs, err := fs.Init(conf.Primary.Name, conf, m, true)
+	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+
+	c := g.ctx
+	redisAddr := c.Args().Get(0)
+	if !strings.Contains(redisAddr, "://") {
+		redisAddr = "redis://" + redisAddr
+	}
+	logger.Infof("Meta address: %s", redisAddr)
+	var rc = meta.RedisConfig{Retries: 10, Strict: true}
+	m, err := meta.NewRedisMeta(redisAddr, &rc)
+	if err != nil {
+		logger.Fatalf("Meta: %s", err)
+	}
+	format, err := m.Load()
+	if err != nil {
+		logger.Fatalf("load setting: %s", err)
+	}
+
+	chunkConf := chunk.Config{
+		BlockSize: format.BlockSize * 1024,
+		Compress:  format.Compression,
+
+		GetTimeout:  time.Second * time.Duration(c.Int("get-timeout")),
+		PutTimeout:  time.Second * time.Duration(c.Int("put-timeout")),
+		MaxUpload:   c.Int("max-uploads"),
+		AsyncUpload: c.Bool("writeback"),
+		Prefetch:    c.Int("prefetch"),
+		BufferSize:  c.Int("buffer-size") << 20,
+
+		CacheDir:       c.String("cache-dir"),
+		CacheSize:      int64(c.Int("cache-size")),
+		FreeSpace:      float32(c.Float64("free-space-ratio")),
+		CacheMode:      os.FileMode(0600),
+		CacheFullBlock: !c.Bool("cache-partial-only"),
+		AutoCreate:     true,
+	}
+	if chunkConf.CacheDir != "memory" {
+		chunkConf.CacheDir = filepath.Join(chunkConf.CacheDir, format.UUID)
+	}
+	blob, err := createStorage(format)
+	if err != nil {
+		logger.Fatalf("object storage: %s", err)
+	}
+	logger.Infof("Data use %s", blob)
+
+	store := chunk.NewCachedStore(blob, chunkConf)
+	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
+		chunkid := args[0].(uint64)
+		length := args[1].(uint32)
+		return store.Remove(chunkid, int(length))
+	}))
+	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
+		slices := args[0].([]meta.Slice)
+		chunkid := args[1].(uint64)
+		return vfs.Compact(chunkConf, store, slices, chunkid)
+	}))
+
+	conf := &vfs.Config{
+		Meta: &meta.Config{
+			IORetries: 10,
+		},
+		Format:  format,
+		Version: Version(),
+		Primary: &vfs.StorageConfig{
+			Name:      format.Storage,
+			Endpoint:  format.Bucket,
+			AccessKey: format.AccessKey,
+			SecretKey: format.SecretKey,
+		},
+		Chunk: &chunkConf,
+	}
+
+	jfs, err := fs.NewFileSystem(conf, m, store)
 	if err != nil {
 		logger.Fatalf("Initialize failed: %s", err)
 	}
@@ -323,6 +395,14 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 	return buckets, nil
 }
 
+func (n *jfsObjects) isLeafDir(bucket, leafPath string) bool {
+	return n.isObjectDir(context.Background(), bucket, leafPath)
+}
+
+func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
+	return !strings.HasSuffix(leafPath, "/")
+}
+
 func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
 	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
@@ -349,7 +429,8 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 				entries = append(entries, fi.Name())
 			}
 		}
-		return false, minio.FilterMatchingPrefix(entries, prefixEntry), false
+		entries, delayIsLeaf = minio.FilterListEntries(bucket, prefixDir, entries, prefixEntry, n.isLeaf)
+		return false, entries, delayIsLeaf
 	}
 
 	// Return list factory instance.
@@ -466,7 +547,7 @@ func (n *jfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, jfsToObjectErr(ctx, err, bucket, object)
 	}
 	f.Seek(mctx, startOffset, 0)
-	r := &io.LimitedReader{&fReader{f}, length}
+	r := &io.LimitedReader{R: &fReader{f}, N: length}
 	closer := func() { f.Close(mctx) }
 	return minio.NewGetObjectReaderFromReader(r, objInfo, opts, closer)
 }
@@ -483,15 +564,10 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	if minio.IsStringEqual(src, dst) {
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
-	dir := path.Dir(dst)
-	if dir != "" {
-		n.mkdirAll(ctx, dir, os.FileMode(0755))
-	}
-	// err = n.jfs.CreateSnapshot(mctx, src, dst, common.SNAPSHOT_MODE_CAN_OVERWRITE|common.SNAPSHOT_MODE_CPLIKE_ATTR)
-	if err != nil {
-		return info, jfsToObjectErr(ctx, err, dstBucket, dst)
-	}
-	return n.GetObjectInfo(ctx, dstBucket, dstObject, minio.ObjectOptions{})
+	return n.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, minio.ObjectOptions{
+		ServerSideEncryption: dstOpts.ServerSideEncryption,
+		UserDefined:          srcInfo.UserDefined,
+	})
 }
 
 var buffPool = sync.Pool{
@@ -532,6 +608,19 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 	return jfsToObjectErr(ctx, err, bucket, object)
 }
 
+func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
+	f, err := n.jfs.Open(mctx, minio.PathJoin(bucket, object), 000)
+	if err != 0 {
+		if os.IsNotExist(err) {
+			return false
+		}
+		return false
+	}
+	defer f.Close(mctx)
+	fi, _ := f.Stat()
+	return fi.IsDir()
+}
+
 func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
@@ -558,7 +647,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 func (n *jfsObjects) mkdirAll(ctx context.Context, p string, mode os.FileMode) error {
 	if fi, err := n.jfs.Stat(mctx, p); err == 0 {
 		if !fi.IsDir() {
-			return fmt.Errorf("% is not directory", p)
+			return fmt.Errorf("%s is not directory", p)
 		}
 		return nil
 	}
@@ -794,22 +883,15 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		return
 	}
 
-	var ps []string
+	var names []string
 	for _, part := range parts {
-		p := n.ppath(bucket, uploadID, strconv.Itoa(part.PartNumber))
-		ps = append(ps, p)
+		names = append(names, strconv.Itoa(part.PartNumber))
 	}
 	tmp := n.ppath(bucket, uploadID, "complete")
 	n.jfs.Delete(mctx, tmp)
 
-	if f, e := n.jfs.Create(mctx, tmp, 0755); e != 0 {
-		err = jfsToObjectErr(ctx, e, bucket, object)
-		return
-	} else {
-		f.Close(mctx)
-	}
 	// FIXME
-	// err = n.jfs.Concat(mctx, tmp, ps)
+	// err = n.jfs.Combine(mctx, n.path(bucket, uploadID), names, "complete")
 	if err != nil {
 		err = jfsToObjectErr(ctx, err, bucket, object)
 		logger.Errorf("merge parts %s: %s", uploadID, err)
@@ -839,7 +921,6 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		err = jfsToObjectErr(ctx, err, bucket, object)
 		return
 	}
-	go n.jfs.Rmr(mctx, n.upath(bucket, uploadID))
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
@@ -858,6 +939,6 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
 	}
-	// err = n.jfs.Rmr(mctx, n.upath(bucket, uploadID))
+	err = n.jfs.Rmr(mctx, n.upath(bucket, uploadID))
 	return jfsToObjectErr(ctx, err, bucket, object, uploadID)
 }
