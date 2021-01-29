@@ -140,7 +140,7 @@ func mount(c *cli.Context) error {
 	logger.Infof("Data use %s", blob)
 	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
 
-	if c.Bool("background") {
+	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		err := makeDaemon(func(stage int) error {
 			if stage != 0 {
 				return nil
