@@ -776,9 +776,6 @@ func (r *dataReader) Truncate(inode Ino, length uint64) {
 }
 
 func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
-	if length == 0 {
-		length = 1 << 60
-	}
 	b := frange{off, length}
 	r.visit(inode, func(f *fileReader) {
 		f.visit(func(s *sliceReader) {
