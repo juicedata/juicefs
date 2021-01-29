@@ -36,7 +36,9 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
@@ -179,7 +181,7 @@ func mount(c *cli.Context) error {
 			IORetries: 10,
 		},
 		Format:     format,
-		Version:    Version(),
+		Version:    version.Version(),
 		Mountpoint: mp,
 		Chunk:      &chunkConf,
 	}
@@ -187,7 +189,7 @@ func mount(c *cli.Context) error {
 
 	installHandler(mp)
 	if !c.Bool("no-usage-report") {
-		go reportUsage(m)
+		go usage.ReportUsage(m, version.Version())
 	}
 	err = fuse.Serve(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
 	if err != nil {

@@ -13,7 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package usage
 
 import (
 	"bytes"
@@ -25,9 +25,12 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
-var reportUrl = "https://juicefs.com/report-usage"
+const reportUrl = "https://juicefs.com/report-usage"
+
+var logger = utils.GetLogger("juicefs")
 
 type usage struct {
 	VolumeID   string `json:"volumeID"`
@@ -61,17 +64,17 @@ func sendUsage(u usage) error {
 	return nil
 }
 
-// reportUsage will send anonymous usage data to juicefs.io to help the team
+// ReportUsage will send anonymous usage data to juicefs.io to help the team
 // understand how the community is using it. You can use `--no-usage-report`
 // to disable this.
-func reportUsage(m meta.Meta) {
+func ReportUsage(m meta.Meta, version string) {
 	ctx := meta.Background
 	var u usage
 	if format, err := m.Load(); err == nil {
 		u.VolumeID = format.UUID
 	}
 	u.SessionID = int64(rand.Uint32())
-	u.Version = Version()
+	u.Version = version
 	var start = time.Now()
 	for {
 		var totalSpace, availSpace, iused, iavail uint64
