@@ -4,62 +4,29 @@ JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种�
 
 ## 部署 JuiceFS Java SDK
 
-当编译完成后，你可以在 sdk/java/target 目录下找到编译好的 jar 文件。将此文件放到 hadoop 生态各组件的 classpath 里。
-常见路径如下：
+当编译完成后，你可以在 `sdk/java/target` 目录下找到编译好的 JAR 文件。将此文件放到 Hadoop 生态各组件的 classpath 里。
 
-建议将 jar 文件放置在一个地方，然后其他地方均通过符号链接的方式放置。
+常见路径如下，建议将 JAR 文件放置在一个地方，然后其他地方均通过符号链接的方式放置。
 
-发行版：
+### 发行版
 
-- CDH:
-    - /opt/cloudera/parcels/CDH/lib/hadoop/lib
-    - /opt/cloudera/parcels/CDH/spark/jars
-    - /var/lib/impala
-    
-- HDP
-    - /usr/hdp/current/hadoop-client/lib
-    - /usr/hdp/current/hive-client/auxlib
-    - /usr/hdp/current/spark2-client/jars
-    
-- AmazonEMR
-    - /usr/lib/hadoop/lib
-    - /usr/lib/spark/jars
-    - /usr/lib/hive/auxlib
-    
-- AliyunEMR
-    - /opt/apps/ecm/service/hadoop/*/package/hadoop*/share/hadoop/common/lib
-    - /opt/apps/ecm/service/spark/*/package/spark*/jars
-    - /opt/apps/ecm/service/presto/*/package/presto*/plugin/hive-hadoop2
-    - /opt/apps/ecm/service/hive/*/package/apache-hive*/lib
-    - /opt/apps/ecm/service/impala/*/package/impala*/lib
-    
-- TencentEMR
-    - /usr/local/service/hadoop/share/hadoop/common/lib
-    - /usr/local/service/presto/plugin/hive-hadoop2
-    - /usr/local/service/spark/jars
-    - /usr/local/service/hive/auxlib
-    
-- UHadoop
-    - /home/hadoop/share/hadoop/common/lib
-    - /home/hadoop/hive/auxlib
-    - /home/hadoop/spark/jars
-    - /home/hadoop/presto/plugin/hive-hadoop2
+| 名称 | 安装路径 |
+| ---- | ---- |
+| CDH | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br>`/opt/cloudera/parcels/CDH/spark/jars`<br>`/var/lib/impala` |
+| HDP | `/usr/hdp/current/hadoop-client/lib`<br>`/usr/hdp/current/hive-client/auxlib`<br>`/usr/hdp/current/spark2-client/jars` |
+| Amazon EMR | `/usr/lib/hadoop/lib`<br>`/usr/lib/spark/jars`<br>`/usr/lib/hive/auxlib` |
+| 阿里云 EMR | `/opt/apps/ecm/service/hadoop/*/package/hadoop*/share/hadoop/common/lib`<br>`/opt/apps/ecm/service/spark/*/package/spark*/jars`<br>`/opt/apps/ecm/service/presto/*/package/presto*/plugin/hive-hadoop2`<br>`/opt/apps/ecm/service/hive/*/package/apache-hive*/lib`<br>`/opt/apps/ecm/service/impala/*/package/impala*/lib` |
+| 腾讯云 EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br>`/usr/local/service/presto/plugin/hive-hadoop2`<br>`/usr/local/service/spark/jars`<br>`/usr/local/service/hive/auxlib` |
+| UCloud UHadoop | `/home/hadoop/share/hadoop/common/lib`<br>`/home/hadoop/hive/auxlib`<br>`/home/hadoop/spark/jars`<br>`/home/hadoop/presto/plugin/hive-hadoop2` |
+| 百度云 EMR | `/opt/bmr/hadoop/share/hadoop/common/lib/`<br>`/opt/bmr/hive/auxlib`<br>`/opt/bmr/spark2/jars` |
 
-- BMR
-    - /opt/bmr/hadoop/share/hadoop/common/lib/
-    - /opt/bmr/hive/auxlib
-    - /opt/bmr/spark2/jars
-    
-社区开源组件：
+### 社区开源组件
 
-- Spark
-  
-    ${SPARK_HOME}/jars
-  
-- Presto
+| 名称 | 安装路径 |
+| ---- | ---- |
+| Spark | `${SPARK_HOME}/jars` |
+| Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
 
-    ${PRESTO_HOME}/plugin/hive-hadoop2
-  
 ## 配置参数
 
 ### 核心配置
