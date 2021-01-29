@@ -433,9 +433,9 @@ func TestTruncateAndDelete(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 	keys = listAll(fmt.Sprintf("c%d_*", inode))
-	// the last chunk will be found and deleted
-	if len(keys) != 1 {
-		t.Fatalf("number of chunks: %d != 1, %+v", len(keys), keys)
+	// the last chunk could be found and deleted
+	if len(keys) > 1 {
+		t.Fatalf("number of chunks: %d > 1, %+v", len(keys), keys)
 	}
 }
 
