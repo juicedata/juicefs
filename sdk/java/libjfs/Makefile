@@ -1,6 +1,17 @@
 export GO111MODULE=on
 LDFLAGS = -s -w
 
+REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
+REVISIONDATE := $(shell git log -1 --pretty=format:'%ad' --date short 2>/dev/null)
+VERSION := $(shell git describe --tags --match 'v*' 2>/dev/null | sed -e 's/^v//' -e 's/-g[0-9a-f]\{7,\}$$//')
+PKG := github.com/juicedata/juicefs/pkg/version
+LDFLAGS = -s -w
+ifneq ($(strip $(VERSION)),)
+	LDFLAGS += -X $(PKG).revision=$(REVISION) \
+		   -X $(PKG).revisionDate=$(REVISIONDATE) \
+		   -X $(PKG).version=$(VERSION)
+endif
+
 all: target/libjfs.so.gz
 
 target/libjfs.so.gz: libjfs.so
