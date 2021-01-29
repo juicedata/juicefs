@@ -50,6 +50,8 @@ $ cd juicefs
 $ make
 ```
 
+对于中国用户，建议设置 `GOPROXY` 到更快的镜像以加速编译，比如 [Goproxy 中国](https://github.com/goproxy/goproxy.cn)。
+
 ### 依赖
 
 需要 Redis（2.2 及以上）服务器来存储元数据，请参考 [Redis Quick Start](https://redis.io/topics/quickstart)。
