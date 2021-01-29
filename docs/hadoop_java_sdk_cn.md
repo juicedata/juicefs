@@ -13,7 +13,7 @@ JuiceFS Java SDK 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoo
 ```shell
 $ cd sdk/java
 $ make
-``
+```
 
 对于中国用户，建议设置更快的 Maven 镜像仓库以加速编译，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
 
