@@ -1,6 +1,7 @@
 project_name: juicefs
 env:
   - GO111MODULE=on
+  - CGO_ENABLED=1
   - GOPROXY=https://gocenter.io
   - PKG=github.com/juicedata/juicefs/pkg/version
 before:
@@ -9,7 +10,6 @@ before:
 builds:
   - id: juicefs-darwin-amd64
     env:
-      - CGO_ENABLED=1
       - CC=o64-clang
       - CXX=o64-clang++
     ldflags: -s -w -X ${PKG}.version={{.Version}} -X ${PKG}.revision={{.ShortCommit}} -X ${PKG}.revisionDate={{.CommitDate}}
@@ -20,7 +20,7 @@ builds:
       - amd64
   - id: juicefs-linux-amd64
     env:
-      - CGO_ENABLED=1
+      - STATIC=1
     ldflags: -s -w -X ${PKG}.version={{.Version}} -X ${PKG}.revision={{.ShortCommit}} -X ${PKG}.revisionDate={{.CommitDate}}
     main: ./cmd
     goos:
@@ -29,7 +29,6 @@ builds:
       - amd64
   - id: juicefs-linux-arm64
     env:
-      - CGO_ENABLED=1
       - CC=aarch64-linux-gnu-gcc
     ldflags: -s -w -X ${PKG}.version={{.Version}} -X ${PKG}.revision={{.ShortCommit}} -X ${PKG}.revisionDate={{.CommitDate}}
     main: ./cmd
