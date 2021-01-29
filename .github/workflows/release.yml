@@ -26,4 +26,4 @@ jobs:
           echo 'GITHUB_TOKEN=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}' > .release-env
 
       - name: release publish
-        run: make release
+        run: make snapshot
