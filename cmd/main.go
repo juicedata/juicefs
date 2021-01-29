@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -38,7 +39,7 @@ func main() {
 	app := &cli.App{
 		Name:      "juicefs",
 		Usage:     "A POSIX file system built on Redis and object storage.",
-		Version:   Version(),
+		Version:   version.Version(),
 		Copyright: "AGPLv3",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{

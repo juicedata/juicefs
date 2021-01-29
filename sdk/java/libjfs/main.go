@@ -44,7 +44,9 @@ import (
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 
 	"github.com/sirupsen/logrus"
@@ -309,6 +311,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Chunk:     &chunkConf,
 			AccessLog: jConf.AccessLog,
 		}
+		go usage.ReportUsage(m, "java-sdk "+version.Version())
 		jfs, err := fs.NewFileSystem(conf, m, store)
 		if err != nil {
 			logger.Errorf("Initialize failed: %s", err)

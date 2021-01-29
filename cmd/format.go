@@ -30,6 +30,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -50,6 +51,7 @@ func fixObjectSize(s int) int {
 }
 
 func createStorage(format *meta.Format) (object.ObjectStorage, error) {
+	object.UserAgent = "JuiceFS-" + version.Version()
 	blob, err := object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
 	if err != nil {
 		return nil, err
@@ -158,8 +160,6 @@ func format(c *cli.Context) error {
 	if format.Storage == "file" && !strings.HasSuffix(format.Bucket, "/") {
 		format.Bucket += "/"
 	}
-
-	object.UserAgent = "JuiceFS-" + Version()
 
 	blob, err := createStorage(&format)
 	if err != nil {

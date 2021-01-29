@@ -13,7 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package version
 
 import "fmt"
 
@@ -23,7 +23,7 @@ var (
 	revisionDate = "$Format:%as$"
 )
 
-// Version prints version in format - `VERSION (REVISIONDATE REVISION)`
+// Version returns version in format - `VERSION (REVISIONDATE REVISION)`
 // value is assigned in Makefile
 func Version() string {
 	return fmt.Sprintf("%v (%v %v)", version, revisionDate, revision)
