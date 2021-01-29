@@ -1680,7 +1680,7 @@ func (r *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 						})
 						return err
 					}
-					return fmt.Errorf("chunk %s changed", key)
+					return nil
 				}, key)
 			}
 			if err != nil && err != syscall.Errno(0) {
@@ -1688,9 +1688,10 @@ func (r *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 			}
 		}
 		if len(slices) < 100 {
-			return nil
+			break
 		}
 	}
+	return nil
 }
 
 func (r *redisMeta) deleteChunks(inode Ino, length uint64, tracking string) {
