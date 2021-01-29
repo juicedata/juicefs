@@ -110,8 +110,8 @@ JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种�
 ```xml
 
 <property>
-    <name>juicefs.{JFS_NAME}.meta</name>
-    <value>redis://host:port/1</value>
+  <name>juicefs.{JFS_NAME}.meta</name>
+  <value>redis://host:port/1</value>
 </property>
 ```
 
@@ -120,30 +120,29 @@ JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种�
 将以下配置参数加入到 Hadoop 配置文件 core-site.xml 中。
 
 ```xml
-
 <property>
-    <name>fs.jfs.impl</name>
-    <value>io.juicefs.JuiceFileSystem</value>
+  <name>fs.jfs.impl</name>
+  <value>io.juicefs.JuiceFileSystem</value>
 </property>
 <property>
-<name>fs.AbstractFileSystem.jfs.impl</name>
-<value>io.juicefs.JuiceFS</value>
+  <name>fs.AbstractFileSystem.jfs.impl</name>
+  <value>io.juicefs.JuiceFS</value>
 </property>
 <property>
-<name>juicefs.meta</name>
-<value>redis://host:6379/1</value>
+  <name>juicefs.meta</name>
+  <value>redis://host:6379/1</value>
 </property>
 <property>
-<name>juicefs.cache-dir</name>
-<value>/data*/jfs</value>
+  <name>juicefs.cache-dir</name>
+  <value>/data*/jfs</value>
 </property>
 <property>
-<name>juicefs.cache-size</name>
-<value>1024</value>
+  <name>juicefs.cache-size</name>
+  <value>1024</value>
 </property>
 <property>
-<name>juicefs.access-log</name>
-<value>/tmp/juicefs.access.log</value>
+  <name>juicefs.access-log</name>
+  <value>/tmp/juicefs.access.log</value>
 </property>
 ```
 
@@ -164,6 +163,5 @@ create table if not exists person
     string,
     age
     int
-)
-    location 'jfs://{JFS_NAME}/tmp/person';
+) location 'jfs://{JFS_NAME}/tmp/person';
 ```
