@@ -2,6 +2,13 @@
 
 JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
+## 编译
+
+```shell
+cd sdk/java
+make
+```
+
 ## 部署 JuiceFS Java SDK
 
 当编译完成后，你可以在 sdk/java/target 目录下找到编译好的 jar 文件。将此文件放到 hadoop 生态各组件的 classpath 里。 常见路径如下：
