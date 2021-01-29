@@ -1,6 +1,6 @@
 # 在 Hadoop 环境使用 JuiceFS Java SDK
 
-JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种应用
+JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
 ## Hadoop 兼容性
 
