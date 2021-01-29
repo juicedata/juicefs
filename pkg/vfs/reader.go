@@ -718,20 +718,6 @@ func (r *dataReader) checkReadBuffer() {
 	}
 }
 
-func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
-	r.Lock()
-	defer r.Unlock()
-	var nf *fileReader
-	for f := r.files[inode]; f != nil; f = nf {
-		nf = f.next
-		r.Unlock()
-		f.Lock()
-		fn(f)
-		f.Unlock()
-		r.Lock()
-	}
-}
-
 func (r *dataReader) Open(inode Ino, length uint64) FileReader {
 	f := &fileReader{
 		r:      r,
@@ -749,9 +735,20 @@ func (r *dataReader) Open(inode Ino, length uint64) FileReader {
 }
 
 func (r *dataReader) Truncate(inode Ino, length uint64) {
-	r.visit(inode, func(f *fileReader) {
+	// r could be hold inside f, so Unlock r first to avoid deadlock
+	r.Lock()
+	var fs []*fileReader
+	f := r.files[inode]
+	for f != nil {
+		fs = append(fs, f)
+		f = f.next
+	}
+	r.Unlock()
+	for _, f := range fs {
+		f.Lock()
 		f.length = length
-	})
+		f.Unlock()
+	}
 }
 
 func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {
