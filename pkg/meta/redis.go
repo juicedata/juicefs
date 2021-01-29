@@ -134,7 +134,7 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 
 	m.shaLookup, err = m.rdb.ScriptLoad(Background, scriptLookup).Result()
 	if err != nil {
-		logger.Infof("Failed to load scriptLookup: %v", err)
+		logger.Warnf("load scriptLookup: %v", err)
 		m.shaLookup = ""
 	}
 
@@ -188,21 +188,16 @@ func (r *redisMeta) Init(format Format, force bool) error {
 
 	// root inode
 	var attr Attr
-	attr.Flags = 0
 	attr.Typ = TypeDirectory
 	attr.Mode = 0777
-	attr.Uid = 0
-	attr.Uid = 0
 	ts := time.Now().Unix()
 	attr.Atime = ts
 	attr.Mtime = ts
 	attr.Ctime = ts
 	attr.Nlink = 2
 	attr.Length = 4 << 10
-	attr.Rdev = 0
 	attr.Parent = 1
-	r.rdb.Set(Background, r.inodeKey(1), r.marshal(&attr), 0)
-	return nil
+	return r.rdb.Set(Background, r.inodeKey(1), r.marshal(&attr), 0).Err()
 }
 
 func (r *redisMeta) Load() (*Format, error) {

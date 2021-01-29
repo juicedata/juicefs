@@ -23,6 +23,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -130,7 +131,7 @@ func format(c *cli.Context) error {
 		addr = "redis://" + addr
 	}
 	logger.Infof("Meta address: %s", addr)
-	var rc = meta.RedisConfig{Retries: 10}
+	var rc = meta.RedisConfig{Retries: 2}
 	m, err := meta.NewRedisMeta(addr, &rc)
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)
@@ -139,13 +140,18 @@ func format(c *cli.Context) error {
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Please give it a name")
 	}
+	name := c.Args().Get(1)
+	validName := regexp.MustCompile(`^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$`)
+	if !validName.MatchString(name) {
+		logger.Fatalf("invalid name: %s, only alphabet, number and - are allowed.", name)
+	}
 
 	compressor := compress.NewCompressor(c.String("compress"))
 	if compressor == nil {
 		logger.Fatalf("Unsupported compress algorithm: %s", c.String("compress"))
 	}
 	format := meta.Format{
-		Name:        c.Args().Get(1),
+		Name:        name,
 		UUID:        uuid.New().String(),
 		Storage:     c.String("storage"),
 		Bucket:      c.String("bucket"),
