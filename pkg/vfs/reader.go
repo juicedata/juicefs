@@ -453,6 +453,20 @@ func (f *fileReader) cleanupRequests(block *frange) {
 	})
 }
 
+func (f *fileReader) releaseIdleBuffer() {
+	now := time.Now()
+	var idle = time.Minute
+	used := atomic.LoadInt64(&readBufferUsed)
+	if used > int64(f.r.readAheadTotal) {
+		idle /= time.Duration(used / int64(f.r.readAheadTotal))
+	}
+	f.visit(func(s *sliceReader) {
+		if !s.state.valid() || s.modified.Add(idle).Before(now) || !f.need(s.block) {
+			s.drop()
+		}
+	})
+}
+
 type uint64Slice []uint64
 
 func (p uint64Slice) Len() int           { return len(p) }
@@ -670,7 +684,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 	if conf.Chunk.Readahead > 0 {
 		readAheadMax = conf.Chunk.Readahead
 	}
-	return &dataReader{
+	r := &dataReader{
 		m:              m,
 		store:          store,
 		files:          make(map[Ino]*fileReader),
@@ -679,6 +693,44 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		readAheadMax:   uint64(readAheadMax),
 		maxRequests:    readAheadMax/conf.Chunk.BlockSize*readSessions + 1,
 		maxRetries:     uint32(conf.Meta.IORetries),
+	}
+	go r.checkReadBuffer()
+	return r
+}
+
+func (r *dataReader) checkReadBuffer() {
+	var inodes []Ino
+	for {
+		r.Lock()
+		inodes = inodes[:0]
+		for inode := range r.files {
+			inodes = append(inodes, inode)
+		}
+		r.Unlock()
+		for _, inode := range inodes {
+			r.visit(inode, (*fileReader).releaseIdleBuffer)
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
+	r.Lock()
+	defer r.Unlock()
+	var nf *fileReader
+	for f := r.files[inode]; f != nil; f = nf {
+		// r could be hold inside f, so Unlock r first to avoid deadlock
+		f.refs++
+		r.Unlock()
+		f.Lock()
+		fn(f)
+		r.Lock()
+		nf = f.next
+		f.refs--
+		if f.refs == 0 && f.slices == nil {
+			f.delete()
+		}
+		f.Unlock()
 	}
 }
 
@@ -699,20 +751,9 @@ func (r *dataReader) Open(inode Ino, length uint64) FileReader {
 }
 
 func (r *dataReader) Truncate(inode Ino, length uint64) {
-	// r could be hold inside f, so Unlock r first to avoid deadlock
-	r.Lock()
-	var fs []*fileReader
-	f := r.files[inode]
-	for f != nil {
-		fs = append(fs, f)
-		f = f.next
-	}
-	r.Unlock()
-	for _, f := range fs {
-		f.Lock()
+	r.visit(inode, func(f *fileReader) {
 		f.length = length
-		f.Unlock()
-	}
+	})
 }
 
 func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {
