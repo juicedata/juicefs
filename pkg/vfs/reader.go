@@ -73,6 +73,7 @@ type FileReader interface {
 type DataReader interface {
 	Open(inode Ino, length uint64) FileReader
 	Truncate(inode Ino, length uint64)
+	Invalidate(inode Ino, off, length uint64)
 }
 
 type frange struct {
@@ -226,6 +227,23 @@ func (s *sliceReader) run() {
 			s.done(err, 0)
 		} else {
 			s.done(0, retry_time(f.tried))
+		}
+	}
+}
+
+func (s *sliceReader) invalidate() {
+	switch s.state {
+	case NEW:
+	case BUSY:
+		s.state = REFRESH
+		// TODO: interrupt reader
+	case READY:
+		if s.refs > 0 {
+			s.state = NEW
+			s.run()
+		} else {
+			s.state = INVALID
+			s.delete() // nobody wants it anymore, so delete it
 		}
 	}
 }
@@ -734,7 +752,7 @@ func (r *dataReader) Open(inode Ino, length uint64) FileReader {
 	return f
 }
 
-func (r *dataReader) Truncate(inode Ino, length uint64) {
+func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
 	// r could be hold inside f, so Unlock r first to avoid deadlock
 	r.Lock()
 	var fs []*fileReader
@@ -746,9 +764,29 @@ func (r *dataReader) Truncate(inode Ino, length uint64) {
 	r.Unlock()
 	for _, f := range fs {
 		f.Lock()
-		f.length = length
+		fn(f)
 		f.Unlock()
 	}
+}
+
+func (r *dataReader) Truncate(inode Ino, length uint64) {
+	r.visit(inode, func(f *fileReader) {
+		f.length = length
+	})
+}
+
+func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
+	if length == 0 {
+		length = 1 << 60
+	}
+	b := frange{off, length}
+	r.visit(inode, func(f *fileReader) {
+		f.visit(func(s *sliceReader) {
+			if b.overlap(s.block) {
+				s.invalidate()
+			}
+		})
+	})
 }
 
 func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {

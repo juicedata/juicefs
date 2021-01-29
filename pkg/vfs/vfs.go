@@ -562,6 +562,7 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 		return
 	}
 	reader.Truncate(ino, writer.GetLength(ino))
+	reader.Invalidate(ino, off, uint64(len(buf)))
 	return
 }
 
