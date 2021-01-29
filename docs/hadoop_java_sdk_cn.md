@@ -15,7 +15,7 @@ $ cd sdk/java
 $ make
 ```
 
-对于中国用户，建议设置更快的 Maven 镜像仓库，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
+对于中国用户，建议设置更快的 Maven 镜像仓库以加速编译，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
 
 ## 部署 JuiceFS Java SDK
 
