@@ -2,6 +2,13 @@
 
 JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
+## 编译
+
+```shell
+cd sdk/java
+make
+```
+
 ## 部署 JuiceFS Java SDK
 
 当编译完成后，你可以在 `sdk/java/target` 目录下找到编译好的 JAR 文件。将此文件放到 Hadoop 生态各组件的 classpath 里。
@@ -41,10 +48,12 @@ JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种�
 
 ### 缓存配置
 
-| 配置项             | 默认值 | 描述                                                         |
-| ------------------ | ------ | ------------------------------------------------------------ |
-| juicefs.cache-dir  |        | 本地缓存目录，可以指定多个文件夹，用冒号 `:` 分隔，也可以使用通配符（比如 `*` ）。**通常应用没有权限创建这些目录，需要手动创建并给予 0777 权限，便于多个应用共享缓存数据** 。 |
-| juicefs.cache-size | 0      | 磁盘缓存容量，单位 MB。如果配置多个目录，这是所有缓存目录的空间总和。 |
+| 配置项                     | 默认值 | 描述                                                         |
+| -------------------------- | ------ | ------------------------------------------------------------ |
+| juicefs.cache-dir          |        | 本地缓存目录，可以指定多个文件夹，用冒号 `:` 分隔，也可以使用通配符（比如 `*` ）。**通常应用没有权限创建这些目录，需要手动创建并给予 0777
+权限，便于多个应用共享缓存数据** 。 |
+| juicefs.cache-size         | 0      | 磁盘缓存容量，单位 MB。如果配置多个目录，这是所有缓存目录的空间总和。 |
+| juicefs.discover-nodes-url |        | 指定发现集群节点列表的方式，每 10 分钟刷新一次。  <br />Yarn: `yarn` <br />Spark Standalone：`http://spark-master:web-ui-port/json/`<br />Spark ThriftServer: `http://thrift-server:4040/api/v1/applications/`<br />Presto：`http://coordinator:discovery-uri-port/v1/service/presto/` |
 
 ### 其他配置
 
@@ -55,10 +64,11 @@ JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种�
 
 当使用多个 JuiceFS 文件系统时，上述所有配置项均可对单个文件系统指定，需要将文件系统名字 JFS_NAME 放在配置项的中间，比如：
 
-```arma.header
+```xml
+
 <property>
-    <name>juicefs.{JFS_NAME}.meta</name>
-    <value>redis://host:port/1</value>
+  <name>juicefs.{JFS_NAME}.meta</name>
+  <value>redis://host:port/1</value>
 </property>
 ```
 
@@ -66,7 +76,7 @@ JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种�
 
 将以下配置参数加入到 Hadoop 配置文件 core-site.xml 中。
 
-```arma.header
+```xml
 <property>
   <name>fs.jfs.impl</name>
   <value>io.juicefs.JuiceFileSystem</value>
@@ -97,16 +107,18 @@ JuiceFS 提供兼容 HDFS 的 Java 客户端来支持 Hadoop 生态中的各种�
 
 - hadoop
 
-```arma.header
+```bash
 hadoop fs -ls jfs://{JFS_NAME}/
 ```
 
 - hive
 
-```arma.header
-create table if not exists person(
-    name string,
-    age int
-)
-location 'jfs://{JFS_NAME}/tmp/person';
+```sql
+create table if not exists person
+(
+    name
+    string,
+    age
+    int
+) location 'jfs://{JFS_NAME}/tmp/person';
 ```
