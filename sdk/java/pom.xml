@@ -2,10 +2,10 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.juicefs</groupId>
-	<name>juicefs-hadoop-ce</name>
+	<name>juicefs-hadoop</name>
 	<description>Hadoop FileSystem implementation for JuiceFS</description>
-	<artifactId>juicefs-hadoop-ce</artifactId>
-	<version>0.9-beta</version>
+	<artifactId>juicefs-hadoop</artifactId>
+	<version>0.10.0</version>
 	<packaging>jar</packaging>
 	<properties>
 		<hadoop.version>3.0.0</hadoop.version>
