@@ -95,7 +95,7 @@ type sliceReader struct {
 	page       *chunk.Page
 	need       uint64
 	currentPos uint32
-	modified   time.Time
+	lastAccess time.Time
 	refs       uint16
 	cond       *utils.Cond
 	next       *sliceReader
@@ -215,7 +215,7 @@ func (s *sliceReader) run() {
 		s.state = READY
 		s.currentPos = uint32(n)
 		s.file.tried = 0
-		s.modified = time.Now()
+		s.lastAccess = time.Now()
 		s.done(0, 0)
 	} else {
 		s.currentPos = 0 // start again from beginning
@@ -286,7 +286,7 @@ type fileReader struct {
 func (f *fileReader) newSlice(block *frange) *sliceReader {
 	s := &sliceReader{}
 	s.file = f
-	s.modified = time.Now()
+	s.lastAccess = time.Now()
 	s.indx = uint32(block.off / meta.ChunkSize)
 	s.block = &frange{block.off, block.len} // random read
 	blockend := (block.off/f.r.blockSize + 1) * f.r.blockSize
@@ -439,7 +439,7 @@ func (f *fileReader) cleanupRequests(block *frange) {
 	var cnt int
 	f.visit(func(s *sliceReader) {
 		if !s.state.valid() ||
-			!block.overlap(s.block) && (s.modified.Add(time.Second*30).Before(now) || !f.need(s.block)) {
+			!block.overlap(s.block) && (s.lastAccess.Add(time.Second*30).Before(now) || !f.need(s.block)) {
 			s.drop()
 		} else if !block.overlap(s.block) {
 			cnt++
@@ -461,7 +461,7 @@ func (f *fileReader) releaseIdleBuffer() {
 		idle /= time.Duration(used / int64(f.r.readAheadTotal))
 	}
 	f.visit(func(s *sliceReader) {
-		if !s.state.valid() || s.modified.Add(idle).Before(now) || !f.need(s.block) {
+		if !s.state.valid() || s.lastAccess.Add(idle).Before(now) || !f.need(s.block) {
 			s.drop()
 		}
 	})
@@ -538,6 +538,7 @@ func (f *fileReader) prepareRequests(ranges []uint64) []*req {
 		f.visit(func(s *sliceReader) {
 			if !added && s.state.valid() && s.block.include(&b) {
 				s.refs++
+				s.lastAccess = time.Now()
 				reqs = append(reqs, &req{frange{ranges[i] - s.block.off, b.len}, s})
 				added = true
 			}
