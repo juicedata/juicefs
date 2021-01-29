@@ -12,7 +12,7 @@ builds:
     env:
       - CC=o64-clang
       - CXX=o64-clang++
-    ldflags: -s -w -X ${PKG}.version={{.Version}} -X ${PKG}.revision={{.ShortCommit}} -X ${PKG}.revisionDate={{.CommitDate}}
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}}
     main: ./cmd
     goos:
       - darwin
@@ -21,7 +21,7 @@ builds:
   - id: juicefs-linux-amd64
     env:
       - STATIC=1
-    ldflags: -s -w -X ${PKG}.version={{.Version}} -X ${PKG}.revision={{.ShortCommit}} -X ${PKG}.revisionDate={{.CommitDate}}
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}}
     main: ./cmd
     goos:
       - linux
@@ -30,7 +30,7 @@ builds:
   - id: juicefs-linux-arm64
     env:
       - CC=aarch64-linux-gnu-gcc
-    ldflags: -s -w -X ${PKG}.version={{.Version}} -X ${PKG}.revision={{.ShortCommit}} -X ${PKG}.revisionDate={{.CommitDate}}
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}}
     main: ./cmd
     goos:
       - linux
@@ -46,6 +46,9 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+archives:
+  - name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+
 brews:
   - tap:
       owner: juicedata
