@@ -11,6 +11,9 @@ ifneq ($(strip $(VERSION)),)
 	LDFLAGS += -X $(PKG).revision=$(REVISION) \
 		   -X $(PKG).revisionDate=$(REVISIONDATE) \
 		   -X $(PKG).version=$(VERSION)
+else ifneq ($(strip $(REVISION)),) # Use git clone with --depth or --no-tags
+	LDFLAGS += -X $(PKG).revision=$(REVISION) \
+		   -X $(PKG).revisionDate=$(REVISIONDATE)
 endif
 
 SHELL = /bin/sh
