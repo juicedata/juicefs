@@ -20,8 +20,8 @@ builds:
       - amd64
   - id: juicefs-linux-amd64
     env:
-      - STATIC=1
-    ldflags: -s -w -X ${PKG}.version={{.Version}} -X ${PKG}.revision={{.ShortCommit}} -X ${PKG}.revisionDate={{.CommitDate}}
+      - CC=musl-gcc
+    ldflags: -s -w -X ${PKG}.version={{.Version}} -X ${PKG}.revision={{.ShortCommit}} -X ${PKG}.revisionDate={{.CommitDate}} -linkmode external -extldflags '-static'
     main: ./cmd
     goos:
       - linux
