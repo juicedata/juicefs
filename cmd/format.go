@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/version"
@@ -137,6 +138,11 @@ func format(c *cli.Context) error {
 
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Please give it a name")
+	}
+
+	compressor := compress.NewCompressor(c.String("compress"))
+	if compressor == nil {
+		logger.Fatalf("Unsupported compress algorithm: %s", c.String("compress"))
 	}
 	format := meta.Format{
 		Name:        c.Args().Get(1),
