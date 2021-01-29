@@ -8,4 +8,4 @@ compile:
 test: libjfs
 	mvn test -B --quiet
 package: libjfs/target/libjfs.so.gz
-	mvn package -B -Dmaven.test.skip=true --quiet
+	mvn package -B -Dmaven.test.skip=true
