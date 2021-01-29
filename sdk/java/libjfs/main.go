@@ -173,6 +173,7 @@ type javaConf struct {
 	GetTimeout     int    `json:"getTimeout"`
 	PutTimeout     int    `json:"putTimeout"`
 	Debug          bool   `json:"debug"`
+	NoUsageReport  bool   `json:"noUsageReport"`
 	AccessLog      string `json:"accessLog"`
 }
 
@@ -217,7 +218,7 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintptr {
 	name := C.GoString(cname)
 	debug.SetGCPercent(50)
-	// object.UserAgent = "JuiceFS-SDK " + Build()
+	object.UserAgent = "JuiceFS-SDK " + version.Version()
 	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), func() *fs.FileSystem {
 		var jConf javaConf
 		err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
@@ -311,7 +312,9 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Chunk:     &chunkConf,
 			AccessLog: jConf.AccessLog,
 		}
-		go usage.ReportUsage(m, "java-sdk "+version.Version())
+		if !jConf.NoUsageReport {
+			go usage.ReportUsage(m, "java-sdk "+version.Version())
+		}
 		jfs, err := fs.NewFileSystem(conf, m, store)
 		if err != nil {
 			logger.Errorf("Initialize failed: %s", err)
