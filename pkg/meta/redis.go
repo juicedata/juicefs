@@ -407,6 +407,7 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		res, err = r.rdb.EvalSha(ctx, r.shaLookup, []string{entryKey, name}).Result()
 		if err != nil {
 			if strings.Contains(err.Error(), "NOSCRIPT") || strings.Contains(err.Error(), "Error running script") {
+				logger.Warnf("eval lookup: %s", err)
 				r.shaLookup = ""
 				return r.Lookup(ctx, parent, name, inode, attr)
 			}
