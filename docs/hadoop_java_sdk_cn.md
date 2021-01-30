@@ -43,6 +43,7 @@ $ make
 | ----   | ----                                 |
 | Spark  | `${SPARK_HOME}/jars`                 |
 | Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
+| Flink | `${FLINK_HOME}/lib` |
 
 ## 配置参数
 
@@ -83,8 +84,6 @@ $ make
 
 ### 常用配置
 
-将以下配置参数加入到 Hadoop 配置文件 `core-site.xml` 中：
-
 ```xml
 <property>
   <name>fs.jfs.impl</name>
@@ -111,6 +110,14 @@ $ make
   <value>/tmp/juicefs.access.log</value>
 </property>
 ```
+
+#### Hadoop 环境配置
+
+将配置参数加入到 Hadoop 配置文件 `core-site.xml` 中：
+
+#### Flink 配置
+
+将配置参数加入 `conf/flink.yaml`。如果只是使用 `Flink` 使用 `JuiceFS`, 可以不在 `Hadoop` 环境配置 `JuiceFS`。
 
 ### 验证
 
