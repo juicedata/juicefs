@@ -10,6 +10,10 @@
 		<value>io.juicefs.JuiceFileSystem</value>
 	</property>
 	<property>
+		<name>juicefs.no-usage-report</name>
+		<value>true</value>
+	</property>
+	<property>
 		<name>juicefs.file.checksum</name>
 		<value>true</value>
 	</property>
