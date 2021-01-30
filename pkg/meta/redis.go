@@ -1596,6 +1596,7 @@ func (r *redisMeta) cleanupChunks() {
 			} else if len(ps) > 2 {
 				length, _ = strconv.ParseInt(ps[2], 10, 0)
 			}
+			logger.Debugf("cleanup chunks of inode %d with %d bytes (%s)", inode, length, member)
 			r.deleteChunks(Ino(inode), uint64(length), member)
 		}
 		time.Sleep(time.Minute)
@@ -1697,23 +1698,22 @@ func (r *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 func (r *redisMeta) deleteChunks(inode Ino, length uint64, tracking string) {
 	var ctx = Background
 	var indx uint32
+	p := r.rdb.Pipeline()
 	for uint64(indx*ChunkSize) < length {
-		p := r.rdb.Pipeline()
-		var rs []*redis.IntCmd
 		var keys []string
 		for i := 0; uint64(indx)*ChunkSize < length && i < 1000; i++ {
 			key := r.chunkKey(inode, indx)
 			keys = append(keys, key)
-			rs = append(rs, p.LLen(ctx, key))
+			_ = p.LLen(ctx, key)
 			indx++
 		}
-		vals, err := p.Exec(ctx)
+		cmds, err := p.Exec(ctx)
 		if err != nil {
-			logger.Errorf("delete chunks of inode %d: %s", inode, err)
+			logger.Warnf("delete chunks of inode %d: %s", inode, err)
 			return
 		}
-		for i := range vals {
-			val, err := rs[i].Result()
+		for i, cmd := range cmds {
+			val, err := cmd.(*redis.IntCmd).Result()
 			if err == redis.Nil || val == 0 {
 				continue
 			}
@@ -1726,7 +1726,7 @@ func (r *redisMeta) deleteChunks(inode Ino, length uint64, tracking string) {
 		}
 	}
 	if tracking == "" {
-		tracking = inode.String() + ":" + strconv.Itoa(int(indx))
+		tracking = inode.String() + ":" + strconv.FormatInt(int64(length), 10)
 	}
 	_ = r.rdb.ZRem(ctx, delchunks, tracking)
 }
