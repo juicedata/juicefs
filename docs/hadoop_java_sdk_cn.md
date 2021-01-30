@@ -117,7 +117,7 @@ $ make
 
 #### Flink 配置
 
-将配置参数加入 `conf/flink-conf.yaml`。如果只是在 `Flink` 中使用 `JuiceFS`, 可以不在 `Hadoop` 环境配置 `JuiceFS`。
+将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
 
 ### 验证
 
