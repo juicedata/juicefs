@@ -161,7 +161,7 @@ The last number on each line is the time (in seconds) current operation takes. W
 - Local disk
 - Redis
 
-For the detailed list, see [README](pkg/object/README.md).
+For the detailed list, see [this document](docs/how_to_setup_object_storage.md#supported-object-storage).
 
 ## Status
 

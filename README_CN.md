@@ -166,7 +166,7 @@ $ cat /jfs/.accesslog
 - 本地目录
 - Redis
 
-完整的支持列表，请参照 [README.md](pkg/object/README.md)。
+完整的支持列表，请参照[这个文档](docs/how_to_setup_object_storage.md#supported-object-storage)。
 
 ## 状态
 
