@@ -162,7 +162,7 @@ juicefs umount [options] MOUNTPOINT
 ### Options
 
 `-f, --force`\
-Unmount a busy mount point by force (default: false).
+unmount a busy mount point by force (default: false).
 
 
 ## juicefs benchmark
