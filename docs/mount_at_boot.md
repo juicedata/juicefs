@@ -83,7 +83,7 @@ Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Re
 ```xml
         <key>KeepAlive</key>
         <dict>
-            <key>OtherJobEnabled</key>
-            <string>homebrew.mxcl.redis</string>
+                <key>OtherJobEnabled</key>
+                <string>homebrew.mxcl.redis</string>
         </dict>
 ```
