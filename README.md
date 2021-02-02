@@ -83,6 +83,8 @@ After that you can access the volume just like a local directory.
 
 To get all options, just run `./juicefs mount -h`.
 
+If you wanna mount JuiceFS automatically at boot, please read [the guide](docs/mount_at_boot.md).
+
 ### Command Reference
 
 There is a [command reference](docs/command_reference.md) to see all options of the subcommand.
