@@ -458,7 +458,7 @@ $ ./juicefs format \
 
 [OpenStack Swift](https://github.com/openstack/swift) is a distributed object storage system designed to scale from a single machine to thousands of servers. Swift is optimized for multi-tenancy and high concurrency. Swift is ideal for backups, web and mobile content, and any other unstructured data that can grow without bound.
 
-The `--bucket` option format is `http://<container>.<endpoint>`. A container defines a namespace for objects. ***Currently, JuiceFS only supports [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html).*** The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
+The `--bucket` option format is `http://<container>.<endpoint>`. A container defines a namespace for objects. **Currently, JuiceFS only supports [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html).** The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
 ```bash
 $ ./juicefs format \
