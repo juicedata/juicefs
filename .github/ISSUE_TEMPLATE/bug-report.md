@@ -15,7 +15,7 @@ labels: kind/bug
 
 **How to reproduce it (as minimally and precisely as possible)**:
 
-**Anything else we need to know?**:
+**Anything else we need to know?**
 
 **Environment**:
 - JuiceFS version (use `./juicefs --version`):
