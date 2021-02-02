@@ -12,14 +12,14 @@ import (
 func umountFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "umount",
-		Usage:     "umount a volume",
+		Usage:     "unmount a volume",
 		ArgsUsage: "MOUNTPOINT",
 		Action:    umount,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",
 				Aliases: []string{"f"},
-				Usage:   "umount a busy mountpoint by force",
+				Usage:   "unmount a busy mount point by force",
 			},
 		},
 	}

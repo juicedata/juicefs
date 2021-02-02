@@ -151,7 +151,7 @@ do not send usage report (default: false)
 
 ### Description
 
-Umount a volume.
+Unmount a volume.
 
 ### Synopsis
 
@@ -162,7 +162,7 @@ juicefs umount [options] MOUNTPOINT
 ### Options
 
 `-f, --force`\
-Umount a busy mountpoint by force (default: false).
+unmount a busy mount point by force (default: false)
 
 
 ## juicefs benchmark
