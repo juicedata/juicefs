@@ -84,6 +84,8 @@ $ ./juicefs mount -d localhost ~/jfs
 
 挂载之后你可以像使用本地盘一样使用它，详细的挂载参数，请运行 `./juicefs mount -h`。
 
+如果你希望开机自动挂载 JuiceFS，请查看[这个文档](docs/mount_at_boot.md)。
+
 ### 命令索引
 
 请点击[这里](docs/command_reference.md)查看所有子命令以及命令行参数。

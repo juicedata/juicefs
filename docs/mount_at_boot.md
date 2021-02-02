@@ -16,15 +16,15 @@ The format of `<REDIS-URL>` is `redis://<user>:<password>@<host>:<port>/<db>`, e
 redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=2048     0  0
 ```
 
-**Note：By default, CentOS 6 will NOT mount network file system after boot, run the following command to enable it:**
+**Note: By default, CentOS 6 will NOT mount network file system after boot, run following command to enable it:**
 
-```
+```bash
 $ sudo chkconfig --add netfs
 ```
 
 ## macOS
 
-Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `<NAME>`, `<PATH-TO-JUICEFS>`, `<REDIS-URL>` and `<MOUNTPOINT>` with appropriate value):
+Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `REDIS-URL` and `MOUNTPOINT` with appropriate value):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -32,13 +32,13 @@ Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Re
 <plist version="1.0">
 <dict>
         <key>Label</key>
-        <string>io.juicefs.<NAME></string>
+        <string>io.juicefs.NAME</string>
         <key>ProgramArguments</key>
         <array>
-                <string><PATH-TO-JUICEFS></string>
+                <string>PATH-TO-JUICEFS</string>
                 <string>mount</string>
-                <string><REDIS-URL></string>
-                <string><MOUNTPOINT></string>
+                <string>REDIS-URL</string>
+                <string>MOUNTPOINT</string>
         </array>
         <key>RunAtLoad</key>
         <true/>
