@@ -761,13 +761,12 @@ func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int 
 		if err != 0 {
 			return errno(err)
 		}
-		defer w.Delete(ctx, tmp)
+		defer func() { _ = w.Delete(ctx, tmp) }()
 		defer fi.Close(ctx)
 		var off uint64
 		for _, src := range srcs {
 			copied, err := w.CopyFileRange(ctx, src, 0, tmp, off, 1<<63)
 			if err != 0 {
-				w.Delete(ctx, tmp)
 				return errno(err)
 			}
 			off += copied
