@@ -69,7 +69,7 @@ It will create a volume with default settings. If there Redis server is not runn
 
 As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--access-key` and `--secret-key`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
 
-For the details about how to setup different object storage, please read [the guide](docs/how_to_setup_object_storage.md).
+For the details about how to setup different object storage, please read [the guide](docs/en/how_to_setup_object_storage.md).
 
 ### Mount a volume
 
@@ -83,11 +83,11 @@ After that you can access the volume just like a local directory.
 
 To get all options, just run `./juicefs mount -h`.
 
-If you wanna mount JuiceFS automatically at boot, please read [the guide](docs/mount_at_boot.md).
+If you wanna mount JuiceFS automatically at boot, please read [the guide](docs/en/mount_at_boot.md).
 
 ### Command Reference
 
-There is a [command reference](docs/command_reference.md) to see all options of the subcommand.
+There is a [command reference](docs/en/command_reference.md) to see all options of the subcommand.
 
 ### Kubernetes
 
@@ -127,7 +127,7 @@ Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon
 
 ![Sequential Read Write Benchmark](docs/images/sequential-read-write-benchmark.svg)
 
-It shows JuiceFS can provide 10X more throughput than the other two, read [more details](docs/fio.md).
+It shows JuiceFS can provide 10X more throughput than the other two, read [more details](docs/en/fio.md).
 
 ### Metadata IOPS
 
@@ -135,7 +135,7 @@ Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs
 
 ![Metadata Benchmark](docs/images/metadata-benchmark.svg)
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](docs/mdtest.md).
+It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](docs/en/mdtest.md).
 
 ### Analyze performance
 
@@ -163,7 +163,7 @@ The last number on each line is the time (in seconds) current operation takes. W
 - Local disk
 - Redis
 
-For the detailed list, see [this document](docs/how_to_setup_object_storage.md#supported-object-storage).
+For the detailed list, see [this document](docs/en/how_to_setup_object_storage.md#supported-object-storage).
 
 ## Status
 
