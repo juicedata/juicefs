@@ -19,7 +19,7 @@
 
 ---
 
-[架构](#架构) | [开始使用](#开始使用) | [Hadoop Java SDK](#hadoop-java-sdk) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
+[架构](#架构) | [开始使用](#开始使用) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
 
 ---
 
@@ -72,7 +72,7 @@ $ ./juicefs format localhost test
 
 JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket`、`--access-key` 和 `--secret-key` 来指定。它默认会使用本地目录来模拟一个对象存储用于测试，详细的参数请看 `./juicefs format -h`。
 
-关于各种对象存储如何设置的详细介绍，请查看[这个文档](docs/how_to_setup_object_storage.md)。
+关于各种对象存储如何设置的详细介绍，请查看[这个文档](docs/en/how_to_setup_object_storage.md)。
 
 ### 挂载
 
@@ -84,19 +84,19 @@ $ ./juicefs mount -d localhost ~/jfs
 
 挂载之后你可以像使用本地盘一样使用它，详细的挂载参数，请运行 `./juicefs mount -h`。
 
-如果你希望开机自动挂载 JuiceFS，请查看[这个文档](docs/mount_at_boot.md)。
+如果你希望开机自动挂载 JuiceFS，请查看[这个文档](docs/en/mount_at_boot.md)。
 
 ### 命令索引
 
-请点击[这里](docs/command_reference.md)查看所有子命令以及命令行参数。
+请点击[这里](docs/en/command_reference.md)查看所有子命令以及命令行参数。
 
 ### Kubernetes
 
 JuiceFS 提供 [K8s CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)来简化部署。
 
-## Hadoop Java SDK
+### Hadoop Java SDK
 
-JuiceFS 使用 [Hadoop Java SDK](docs/hadoop_java_sdk_cn.md) 与 Hadoop 生态结合
+JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生态结合。
 
 ## POSIX 兼容性测试
 
@@ -132,7 +132,7 @@ Result: PASS
 
 ![Sequential Read Write Benchmark](docs/images/sequential-read-write-benchmark.svg)
 
-上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](docs/fio.md)。
+上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](docs/en/fio.md)。
 
 ### 元数据性能
 
@@ -140,7 +140,7 @@ Result: PASS
 
 ![Metadata Benchmark](docs/images/metadata-benchmark.svg)
 
-上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](docs/mdtest.md)。
+上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](docs/en/mdtest.md)。
 
 ### 性能分析
 
@@ -168,7 +168,7 @@ $ cat /jfs/.accesslog
 - 本地目录
 - Redis
 
-完整的支持列表，请参照[这个文档](docs/how_to_setup_object_storage.md#supported-object-storage)。
+完整的支持列表，请参照[这个文档](docs/en/how_to_setup_object_storage.md#supported-object-storage)。
 
 ## 状态
 
