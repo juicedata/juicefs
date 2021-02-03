@@ -438,7 +438,8 @@ func (fs *FileSystem) CopyFileRange(ctx meta.Context, dst string, doff uint64, s
 	defer trace.StartRegion(context.TODO(), "fs.CopyFileRange").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "CopyFileRange (%s,%d,%s,%d,%d): %s", dst, doff, src, soff, size, errstr(err)) }()
-	dfi, err := fs.lookup(ctx, dst, true)
+	var dfi, sfi *FileStat
+	dfi, err = fs.lookup(ctx, dst, true)
 	if err != 0 {
 		return
 	}
@@ -446,7 +447,7 @@ func (fs *FileSystem) CopyFileRange(ctx meta.Context, dst string, doff uint64, s
 	if err != 0 {
 		return
 	}
-	sfi, err := fs.lookup(ctx, src, true)
+	sfi, err = fs.lookup(ctx, src, true)
 	if err != 0 {
 		return
 	}

@@ -44,14 +44,15 @@ import (
 	Flock: lockf$inode -> { $sid_$owner -> ltype }
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
 	Sessions: sessions -> [ $sid -> heartbeat ]
-	Removed chunks: delchunks -> [$inode -> seconds]
+	Removed files: delfiles -> [$inode:$length -> seconds]
+	Slices refs: k$chunkid_$size -> refcount
 */
 
 var logger = utils.GetLogger("juicefs")
 
 const usedSpace = "usedSpace"
 const totalInodes = "totalInodes"
-const delchunks = "delchunks"
+const delfiles = "delfiles"
 const allSessions = "sessions"
 
 const scriptLookup = `
@@ -145,7 +146,8 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 	}
 	logger.Debugf("session is is %d", m.sid)
 	go m.refreshSession()
-	go m.cleanupChunks()
+	go m.cleanupDeletedFiles()
+	go m.cleanupSlices()
 	go m.cleanupLeakedChunks()
 	return m, nil
 }
@@ -253,7 +255,7 @@ func (r *redisMeta) chunkKey(inode Ino, indx uint32) string {
 }
 
 func (r *redisMeta) sliceKey(chunkid uint64, size uint32) string {
-	return "l" + strconv.FormatUint(chunkid, 10) + "_" + strconv.FormatUint(uint64(size), 10)
+	return "k" + strconv.FormatUint(chunkid, 10) + "_" + strconv.FormatUint(uint64(size), 10)
 }
 
 func (r *redisMeta) xattrKey(inode Ino) string {
@@ -951,7 +953,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 						pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 						pipe.SAdd(ctx, r.sessionKey(r.sid), strconv.Itoa(int(inode)))
 					} else {
-						pipe.ZAdd(ctx, delchunks, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(inode, attr.Length)})
+						pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(inode, attr.Length)})
 						pipe.Del(ctx, r.inodeKey(inode))
 						pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
 					}
@@ -1200,7 +1202,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 							pipe.SAdd(ctx, r.sessionKey(r.sid), strconv.Itoa(int(dino)))
 						} else {
-							pipe.ZAdd(ctx, delchunks, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, dattr.Length)})
+							pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, dattr.Length)})
 							pipe.Del(ctx, r.inodeKey(dino))
 							pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
 						}
@@ -1458,7 +1460,7 @@ func (r *redisMeta) deleteInode(inode Ino) error {
 	}
 	r.parseAttr(a, &attr)
 	_, err = r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.ZAdd(ctx, delchunks, &redis.Z{Score: float64(time.Now().Unix()), Member: r.toDelete(inode, attr.Length)})
+		pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(time.Now().Unix()), Member: r.toDelete(inode, attr.Length)})
 		pipe.Del(ctx, r.inodeKey(inode))
 		pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
 		return nil
@@ -1720,10 +1722,10 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 	}, keys...)
 }
 
-func (r *redisMeta) cleanupChunks() {
+func (r *redisMeta) cleanupDeletedFiles() {
 	for {
 		now := time.Now()
-		members, _ := r.rdb.ZRangeByScore(Background, delchunks, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(time.Hour).Unix())), Count: 1000}).Result()
+		members, _ := r.rdb.ZRangeByScore(Background, delfiles, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(time.Hour).Unix())), Count: 1000}).Result()
 		for _, member := range members {
 			ps := strings.Split(member, ":")
 			inode, _ := strconv.ParseInt(ps[0], 10, 0)
@@ -1737,6 +1739,47 @@ func (r *redisMeta) cleanupChunks() {
 			r.deleteFile(Ino(inode), uint64(length), member)
 		}
 		time.Sleep(time.Minute)
+	}
+}
+
+func (r *redisMeta) cleanupSlices() {
+	for {
+		time.Sleep(time.Hour)
+		var ctx = Background
+		var ckeys []string
+		var cursor uint64
+		var err error
+		for {
+			ckeys, cursor, err = r.rdb.Scan(ctx, cursor, "k*", 1000).Result()
+			if err != nil {
+				logger.Errorf("scan slices: %s", err)
+				break
+			}
+			values, err := r.rdb.MGet(ctx, ckeys...).Result()
+			if err != nil {
+				logger.Warnf("mget slices: %s", err)
+				continue
+			}
+			for i, v := range values {
+				if v == nil {
+					continue
+				}
+				if strings.HasPrefix(v.(string), "-") { // < 0
+					ps := strings.Split(ckeys[i], "_")
+					if len(ps) == 2 {
+						chunkid, _ := strconv.Atoi(ps[0][1:])
+						size, _ := strconv.Atoi(ps[1])
+						if chunkid > 0 && size > 0 {
+							r.deleteSlice(ctx, uint64(chunkid), uint32(size))
+						}
+					}
+				}
+
+			}
+			if cursor == 0 {
+				break
+			}
+		}
 	}
 }
 
@@ -1871,7 +1914,7 @@ func (r *redisMeta) deleteFile(inode Ino, length uint64, tracking string) {
 	if tracking == "" {
 		tracking = inode.String() + ":" + strconv.FormatInt(int64(length), 10)
 	}
-	_ = r.rdb.ZRem(ctx, delchunks, tracking)
+	_ = r.rdb.ZRem(ctx, delfiles, tracking)
 }
 
 func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
