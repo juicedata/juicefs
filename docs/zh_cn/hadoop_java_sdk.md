@@ -84,6 +84,8 @@ $ make
 
 ### 常用配置
 
+**注意：替换 `juicefs.meta` 配置中的 `{HOST}`、`{PORT}` 和 `{DB}` 变量为实际的值。**
+
 ```xml
 <property>
   <name>fs.jfs.impl</name>
@@ -95,7 +97,7 @@ $ make
 </property>
 <property>
   <name>juicefs.meta</name>
-  <value>redis://host:6379/1</value>
+  <value>redis://{HOST}:{PORT}/{DB}</value>
 </property>
 <property>
   <name>juicefs.cache-dir</name>

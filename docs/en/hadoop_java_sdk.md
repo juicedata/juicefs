@@ -82,6 +82,8 @@ When you use multiple JuiceFS file systems, all these configurations could be se
 
 ### Configurations Example
 
+**Note: Replace `{HOST}`, `{PORT}` and `{DB}` in `juicefs.meta` with appropriate values.**
+
 ```xml
 <property>
   <name>fs.jfs.impl</name>
@@ -93,7 +95,7 @@ When you use multiple JuiceFS file systems, all these configurations could be se
 </property>
 <property>
   <name>juicefs.meta</name>
-  <value>redis://host:6379/1</value>
+  <value>redis://{HOST}:{PORT}/{DB}</value>
 </property>
 <property>
   <name>juicefs.cache-dir</name>
