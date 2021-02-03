@@ -19,7 +19,7 @@
 
 ---
 
-[架构](#架构) | [开始使用](#开始使用) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
+[架构](#架构) | [开始使用](#开始使用) | [运维管理](#运维管理) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
 
 ---
 
@@ -97,6 +97,13 @@ JuiceFS 提供 [K8s CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)
 ### Hadoop Java SDK
 
 JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生态结合。
+
+## 运维管理
+
+- [Redis 最佳实践](docs/en/redis_best_practices.md)
+- [开机自动挂载 JuiceFS](docs/en/mount_at_boot.md)
+- [如何设置对象存储](docs/en/how_to_setup_object_storage.md)
+- [Kubernetes CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)
 
 ## POSIX 兼容性测试
 
