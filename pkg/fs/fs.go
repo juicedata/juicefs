@@ -434,10 +434,12 @@ func (fs *FileSystem) Truncate(ctx meta.Context, path string, length uint64) (er
 	return
 }
 
-func (fs *FileSystem) CopyFileRange(ctx meta.Context, dst string, doff uint64, src string, soff, size uint64) (written uint64, err syscall.Errno) {
+func (fs *FileSystem) CopyFileRange(ctx meta.Context, src string, soff uint64, dst string, doff uint64, size uint64) (written uint64, err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.CopyFileRange").End()
 	l := vfs.NewLogContext(ctx)
-	defer func() { fs.log(l, "CopyFileRange (%s,%d,%s,%d,%d): %s", dst, doff, src, soff, size, errstr(err)) }()
+	defer func() {
+		fs.log(l, "CopyFileRange (%s,%d,%s,%d,%d): (%d,%s)", dst, doff, src, soff, size, written, errstr(err))
+	}()
 	var dfi, sfi *FileStat
 	dfi, err = fs.lookup(ctx, dst, true)
 	if err != 0 {

@@ -740,6 +740,47 @@ func toBuf(s uintptr, sz int) []byte {
 	return (*[1 << 30]byte)(unsafe.Pointer(s))[:sz:sz]
 }
 
+//export jfs_concat
+func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int {
+	w := F(h)
+	if w == nil {
+		return -int(syscall.EINVAL)
+	}
+	dst := C.GoString(_dst)
+	ctx := w.withPid(pid)
+	df, err := w.Open(ctx, dst, 2)
+	if err != 0 {
+		return errno(err)
+	}
+	defer df.Close(ctx)
+	srcs := strings.Split(string(toBuf(buf, bufsize-1)), "\000")
+	var tmp string
+	if len(srcs) > 1 {
+		tmp = filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+".merging")
+		fi, err := w.Create(ctx, tmp, 0644)
+		if err != 0 {
+			return errno(err)
+		}
+		defer w.Delete(ctx, tmp)
+		defer fi.Close(ctx)
+		var off uint64
+		for _, src := range srcs {
+			copied, err := w.CopyFileRange(ctx, src, 0, tmp, off, 1<<63)
+			if err != 0 {
+				w.Delete(ctx, tmp)
+				return errno(err)
+			}
+			off += copied
+		}
+	} else {
+		tmp = srcs[0]
+	}
+
+	dfi, _ := df.Stat()
+	_, err = w.CopyFileRange(ctx, tmp, 0, dst, uint64(dfi.Size()), 1<<63)
+	return errno(err)
+}
+
 //export jfs_lseek
 func jfs_lseek(pid, fd int, offset int64, whence int) int64 {
 	filesLock.Lock()
