@@ -21,7 +21,7 @@ After compiling you could find the JAR file in `sdk/java/target` directory, e.g.
 
 **Note: The SDK could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux.**
 
-Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the class path of each Hadoop ecosystem component. It's recommended create a symbolic link to the JAR file. The following tables describe where the SDK be placed.
+Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Hadoop ecosystem component. It's recommended create a symbolic link to the JAR file. The following tables describe where the SDK be placed.
 
 ### Hadoop Distribution
 
