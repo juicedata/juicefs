@@ -10,7 +10,7 @@ STOP -- PLEASE READ!
 
 GitHub issue is not the right place for support requests.
 
-If you're looking for help, check the [Discussion](https://github.com/juicedata/juicefs/discussions).
+If you're looking for help, check the Discussions (https://github.com/juicedata/juicefs/discussions).
 
-You can also post your question on the [Discussion](https://github.com/juicedata/juicefs/discussions) or the [JuiceFS Slack](https://juicefs.slack.com).
+You can also post your question on the Discussions or the JuiceFS Slack channel (https://juicefs.slack.com).
 -->
