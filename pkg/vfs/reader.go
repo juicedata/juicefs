@@ -778,6 +778,9 @@ func (r *dataReader) Truncate(inode Ino, length uint64) {
 func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
 	b := frange{off, length}
 	r.visit(inode, func(f *fileReader) {
+		if off+length > f.length {
+			f.length = off + length
+		}
 		f.visit(func(s *sliceReader) {
 			if b.overlap(s.block) {
 				s.invalidate()

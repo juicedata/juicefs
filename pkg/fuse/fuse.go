@@ -293,6 +293,16 @@ func (fs *fileSystem) Fallocate(cancel <-chan struct{}, in *fuse.FallocateIn) (c
 	return fuse.Status(err)
 }
 
+func (fs *fileSystem) CopyFileRange(cancel <-chan struct{}, in *fuse.CopyFileRangeIn) (written uint32, code fuse.Status) {
+	ctx := newContext(cancel, &in.InHeader)
+	defer releaseContext(ctx)
+	copied, err := vfs.CopyFileRange(ctx, Ino(in.NodeId), in.FhIn, in.OffIn, Ino(in.NodeIdOut), in.FhOut, in.OffOut, in.Len, uint32(in.Flags))
+	if err != 0 {
+		return 0, fuse.Status(err)
+	}
+	return uint32(copied), 0
+}
+
 func (fs *fileSystem) GetLk(cancel <-chan struct{}, in *fuse.LkIn, out *fuse.LkOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
