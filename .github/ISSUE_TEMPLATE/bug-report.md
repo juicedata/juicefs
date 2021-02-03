@@ -18,7 +18,7 @@ labels: kind/bug
 **Anything else we need to know?**
 
 **Environment**:
-- JuiceFS version (use `./juicefs --version`):
+- JuiceFS version (use `./juicefs --version`) or Hadoop Java SDK version:
 - Cloud provider or hardware configuration running JuiceFS:
 - OS (e.g: `cat /etc/os-release`):
 - Kernel (e.g. `uname -a`):
