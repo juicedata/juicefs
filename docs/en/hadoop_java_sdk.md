@@ -1,79 +1,77 @@
-# 在 Hadoop 环境使用 JuiceFS Java SDK
+# Use JuiceFS Hadoop Java SDK
 
-JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的各种应用。
+JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK to support variety of components in Hadoop ecosystem.
 
-## Hadoop 兼容性
+## Hadoop Compatibility
 
-JuiceFS Java SDK 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoop 生态中的各种主流组件。
+JuiceFS Hadoop Java SDK is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
 
-## 编译
+## Compiling
 
-你需要先安装 Go 1.13+、JDK 8+ 以及 Maven 工具，然后运行以下命令：
+You need first installing Go 1.13+, JDK 8+ and Maven, then run following commands:
 
 ```shell
 $ cd sdk/java
 $ make
 ```
 
-对于中国用户，建议设置更快的 Maven 镜像仓库以加速编译，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
+## Deploy JuiceFS Hadoop Java SDK
 
-## 部署 JuiceFS Java SDK
+After compiling you could find the JAR file in `sdk/java/target` directory, e.g. `juicefs-hadoop-0.10.0.jar`. Beware that file with `original-` prefix, it doesn't contain third-party dependencies. It's recommended to use the JAR file with third-party dependencies.
 
-当编译完成后，你可以在 `sdk/java/target` 目录下找到编译好的 JAR 文件，例如 `juicefs-hadoop-0.10.0.jar`。注意带有 `original-` 前缀的 JAR 文件是不包含第三方依赖的，推荐使用包含第三方依赖的 JAR 文件。
+**Note: The SDK could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux.**
 
-**注意：编译后的 JAR 文件只能部署在相同的系统环境中，例如在 Linux 中编译则只能用于 Linux 环境。**
+Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the class path of each Hadoop ecosystem component. It's recommended create a symbolic link to the JAR file. The following tables describe where the SDK be placed.
 
-然后将对应的 JAR 文件和 $JAVA_HOME/lib/tools.jar 放到 Hadoop 生态各组件的 classpath 里。常见路径如下，建议将 JAR 文件放置在一个地方，然后其他地方均通过符号链接的方式放置。
+### Hadoop Distribution
 
-### 发行版
+| Name              | Installing Paths                                                                                                                                                                                                                                                                                                           |
+| ----              | ----------------                                                                                                                                                                                                                                                                                                           |
+| CDH               | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br>`/opt/cloudera/parcels/CDH/spark/jars`<br>`/var/lib/impala`                                                                                                                                                                                                                  |
+| HDP               | `/usr/hdp/current/hadoop-client/lib`<br>`/usr/hdp/current/hive-client/auxlib`<br>`/usr/hdp/current/spark2-client/jars`                                                                                                                                                                                                     |
+| Amazon EMR        | `/usr/lib/hadoop/lib`<br>`/usr/lib/spark/jars`<br>`/usr/lib/hive/auxlib`                                                                                                                                                                                                                                                   |
+| Alibaba Cloud EMR | `/opt/apps/ecm/service/hadoop/*/package/hadoop*/share/hadoop/common/lib`<br>`/opt/apps/ecm/service/spark/*/package/spark*/jars`<br>`/opt/apps/ecm/service/presto/*/package/presto*/plugin/hive-hadoop2`<br>`/opt/apps/ecm/service/hive/*/package/apache-hive*/lib`<br>`/opt/apps/ecm/service/impala/*/package/impala*/lib` |
+| Tencent Cloud EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br>`/usr/local/service/presto/plugin/hive-hadoop2`<br>`/usr/local/service/spark/jars`<br>`/usr/local/service/hive/auxlib`                                                                                                                                              |
+| UCloud UHadoop    | `/home/hadoop/share/hadoop/common/lib`<br>`/home/hadoop/hive/auxlib`<br>`/home/hadoop/spark/jars`<br>`/home/hadoop/presto/plugin/hive-hadoop2`                                                                                                                                                                             |
+| Baidu Cloud EMR   | `/opt/bmr/hadoop/share/hadoop/common/lib`<br>`/opt/bmr/hive/auxlib`<br>`/opt/bmr/spark2/jars`                                                                                                                                                                                                                              |
 
-| 名称           | 安装路径                                                                                                                                                                                                                                                                                                                   |
-| ----           | ----                                                                                                                                                                                                                                                                                                                       |
-| CDH            | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br>`/opt/cloudera/parcels/CDH/spark/jars`<br>`/var/lib/impala`                                                                                                                                                                                                                  |
-| HDP            | `/usr/hdp/current/hadoop-client/lib`<br>`/usr/hdp/current/hive-client/auxlib`<br>`/usr/hdp/current/spark2-client/jars`                                                                                                                                                                                                     |
-| Amazon EMR     | `/usr/lib/hadoop/lib`<br>`/usr/lib/spark/jars`<br>`/usr/lib/hive/auxlib`                                                                                                                                                                                                                                                   |
-| 阿里云 EMR     | `/opt/apps/ecm/service/hadoop/*/package/hadoop*/share/hadoop/common/lib`<br>`/opt/apps/ecm/service/spark/*/package/spark*/jars`<br>`/opt/apps/ecm/service/presto/*/package/presto*/plugin/hive-hadoop2`<br>`/opt/apps/ecm/service/hive/*/package/apache-hive*/lib`<br>`/opt/apps/ecm/service/impala/*/package/impala*/lib` |
-| 腾讯云 EMR     | `/usr/local/service/hadoop/share/hadoop/common/lib`<br>`/usr/local/service/presto/plugin/hive-hadoop2`<br>`/usr/local/service/spark/jars`<br>`/usr/local/service/hive/auxlib`                                                                                                                                              |
-| UCloud UHadoop | `/home/hadoop/share/hadoop/common/lib`<br>`/home/hadoop/hive/auxlib`<br>`/home/hadoop/spark/jars`<br>`/home/hadoop/presto/plugin/hive-hadoop2`                                                                                                                                                                             |
-| 百度云 EMR     | `/opt/bmr/hadoop/share/hadoop/common/lib`<br>`/opt/bmr/hive/auxlib`<br>`/opt/bmr/spark2/jars`                                                                                                                                                                                                                              |
+### Community Components
 
-### 社区开源组件
-
-| 名称   | 安装路径                             |
-| ----   | ----                                 |
+| Name   | Installing Paths                     |
+| ----   | ----------------                     |
 | Spark  | `${SPARK_HOME}/jars`                 |
 | Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
-| Flink | `${FLINK_HOME}/lib` |
+| Flink  | `${FLINK_HOME}/lib`                  |
 
-## 配置参数
+## Configurations
 
-### 核心配置
+### Core Configurations
 
-| 配置项                           | 默认值                       | 描述                                                                                                                                                                                                         |
-| ------------------------------   | --------------------------   | ------------------------------------------------------------                                                                                                                                                 |
-| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | 指定 `jfs://` 这个存储类型所使用的实现。JuiceFS 支持修改 scheme，例如想要使用 `cfs://` 作为 scheme，则将 `fs.cfs.impl` 的实现修改为此配置即可，当使用 `cfs://` 访问数据的时候，仍然是访问的 JuiceFS 的数据。 |
-| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         |                                                                                                                                                                                                              |
-| `juicefs.meta`                   |                              | Redis 地址，格式为 `redis://<user>:<password>@<host>:6379/<db>`。                                                                                                                                            |
-| `juicefs.accesskey`              |                              | 对象存储的访问 ID（Access Key ID）。如果计算节点已经有访问对象存储的权限，则无需提供。                                                                                                                       |
-| `juicefs.secretkey`              |                              | 对象存储的私钥 (Secret Access Key)。如果计算节点已经有访问对象存储的权限，则无需提供。                                                                                                                       |
+| Configuration                    | Default Value                | Description                                                                                                                                               |
+| -------------                    | -------------                | -----------                                                                                                                                               |
+| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | The FileSystem implementation for `jfs://` URIs. If you wanna use different schema (e.g. `cfs://`), you could rename this configuration to `fs.cfs.impl`. |
+| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         |                                                                                                                                                           |
+| `juicefs.meta`                   |                              | Redis URL. Its format is `redis://<user>:<password>@<host>:<port>/<db>`.                                                                                  |
+| `juicefs.accesskey`              |                              | Access key of object storage. See [this document](how_to_setup_object_storage.md) to learn how to get access key for different object storage.            |
+| `juicefs.secretkey`              |                              | Secret key of object storage. See [this document](how_to_setup_object_storage.md) to learn how to get secret key for different object storage.            |
 
-### 缓存配置
+### Cache Configurations
 
-| 配置项                       | 默认值 | 描述                                                                                                                                                                                                                                                                                |
-| --------------------------   | ------ | ------------------------------------------------------------                                                                                                                                                                                                                        |
-| `juicefs.cache-dir`          |        | 本地缓存目录，可以指定多个文件夹，用冒号 `:` 分隔，也可以使用通配符（比如 `*` ）。**通常应用没有权限创建这些目录，需要手动创建并给予 `0777` 权限，便于多个应用共享缓存数据。**                                                                                                      |
-| `juicefs.cache-size`         | 0      | 磁盘缓存容量，单位 MiB。如果配置多个目录，这是所有缓存目录的空间总和。                                                                                                                                                                                                              |
-| `juicefs.discover-nodes-url` |        | 指定发现集群节点列表的方式，每 10 分钟刷新一次。<br />YARN：`yarn`<br />Spark Standalone：`http://spark-master:web-ui-port/json/`<br />Spark ThriftServer：`http://thrift-server:4040/api/v1/applications/`<br />Presto：`http://coordinator:discovery-uri-port/v1/service/presto/` |
+| Configuration                | Default Value | Description                                                                                                                                                                                                                                                                                           |
+| -------------                | ------------- | -----------                                                                                                                                                                                                                                                                                           |
+| `juicefs.cache-dir`          |               | Directory paths of local cache. Use colon to separate multiple paths. Also support wildcard in path. **It's recommended create these directories manually and set `0777` permission so that different applications could share the cache data.**                                                      |
+| `juicefs.cache-size`         | 0             | Maximum size of local cache in MiB. It's the total size when set multiple cache directories.                                                                                                                                                                                                          |
+| `juicefs.discover-nodes-url` |               | The URL to discover cluster nodes, refresh every 10 minutes.<br /><br />YARN: `yarn`<br />Spark Standalone: `http://spark-master:web-ui-port/json/`<br />Spark ThriftServer: `http://thrift-server:4040/api/v1/applications/`<br />Presto: `http://coordinator:discovery-uri-port/v1/service/presto/` |
 
-### 其他配置
+### Others
 
-| 配置项                    | 默认值  | 描述                                                                                                                |
-| ------------------        | ------  | ------------------------------------------------------------                                                        |
-| `juicefs.access-log`      |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。 |
-| `juicefs.superuser`       | `hdfs`  | 超级用户                                                                                                            |
-| `juicefs.no-usage-report` | `false` | 是否上报数据，它只上报诸如版本号等使用量数据，不包含任何用户信息。                                                  |
+| Configuration             | Default Value | Description                                                                                                                                                       |
+| -------------             | ------------- | -----------                                                                                                                                                       |
+| `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files. |
+| `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                    |
+| `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.               |
 
-当使用多个 JuiceFS 文件系统时，上述所有配置项均可对单个文件系统指定，需要将文件系统名字 `JFS_NAME` 放在配置项的中间，比如：
+When you use multiple JuiceFS file systems, all these configurations could be set to specific file system alone. You need put file system name in the middle of configuration, for example (replace `{JFS_NAME}` with appropriate value):
 
 ```xml
 <property>
@@ -82,7 +80,7 @@ $ make
 </property>
 ```
 
-### 常用配置
+### Configurations Example
 
 ```xml
 <property>
@@ -111,23 +109,23 @@ $ make
 </property>
 ```
 
-#### Hadoop 环境配置
+### Configuration in Hadoop
 
-将配置参数加入到 Hadoop 配置文件 `core-site.xml` 中：
+Add configurations to `core-site.xml`.
 
-#### Flink 配置
+### Configuration in Flink
 
-将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
+Add configurations to `conf/flink-conf.yaml`. You could only setup Flink client without modify configurations in Hadoop.
 
-### 验证
+## Verification
 
-#### Hadoop
+### Hadoop
 
 ```bash
 $ hadoop fs -ls jfs://{JFS_NAME}/
 ```
 
-#### Hive
+### Hive
 
 ```sql
 CREATE TABLE IF NOT EXISTS person

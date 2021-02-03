@@ -4,7 +4,7 @@ JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的�
 
 ## Hadoop 兼容性
 
-JuiceFS Java SDK 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoop 生态中的各种主流组件。
+JuiceFS Hadoop Java SDK 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoop 生态中的各种主流组件。
 
 ## 编译
 
@@ -17,13 +17,13 @@ $ make
 
 对于中国用户，建议设置更快的 Maven 镜像仓库以加速编译，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
 
-## 部署 JuiceFS Java SDK
+## 部署 JuiceFS Hadoop Java SDK
 
 当编译完成后，你可以在 `sdk/java/target` 目录下找到编译好的 JAR 文件，例如 `juicefs-hadoop-0.10.0.jar`。注意带有 `original-` 前缀的 JAR 文件是不包含第三方依赖的，推荐使用包含第三方依赖的 JAR 文件。
 
 **注意：编译后的 JAR 文件只能部署在相同的系统环境中，例如在 Linux 中编译则只能用于 Linux 环境。**
 
-然后将对应的 JAR 文件和 $JAVA_HOME/lib/tools.jar 放到 Hadoop 生态各组件的 classpath 里。常见路径如下，建议将 JAR 文件放置在一个地方，然后其他地方均通过符号链接的方式放置。
+然后将对应的 JAR 文件和 `$JAVA_HOME/lib/tools.jar` 放到 Hadoop 生态各组件的 class path 里。常见路径如下，建议将 JAR 文件放置在一个地方，然后其他地方均通过符号链接的方式放置。
 
 ### 发行版
 
@@ -53,9 +53,9 @@ $ make
 | ------------------------------   | --------------------------   | ------------------------------------------------------------                                                                                                                                                 |
 | `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | 指定 `jfs://` 这个存储类型所使用的实现。JuiceFS 支持修改 scheme，例如想要使用 `cfs://` 作为 scheme，则将 `fs.cfs.impl` 的实现修改为此配置即可，当使用 `cfs://` 访问数据的时候，仍然是访问的 JuiceFS 的数据。 |
 | `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         |                                                                                                                                                                                                              |
-| `juicefs.meta`                   |                              | Redis 地址，格式为 `redis://<user>:<password>@<host>:6379/<db>`。                                                                                                                                            |
-| `juicefs.accesskey`              |                              | 对象存储的访问 ID（Access Key ID）。如果计算节点已经有访问对象存储的权限，则无需提供。                                                                                                                       |
-| `juicefs.secretkey`              |                              | 对象存储的私钥 (Secret Access Key)。如果计算节点已经有访问对象存储的权限，则无需提供。                                                                                                                       |
+| `juicefs.meta`                   |                              | Redis 地址，格式为 `redis://<user>:<password>@<host>:<port>/<db>`。                                                                                                                                          |
+| `juicefs.accesskey`              |                              | 对象存储的访问 ID（Access Key ID）。如果计算节点已经有访问对象存储的权限，则无需提供。请查看[这个文档](../en/how_to_setup_object_storage.md)了解如何获取不同对象存储的 access key。                          |
+| `juicefs.secretkey`              |                              | 对象存储的私钥 (Secret Access Key)。如果计算节点已经有访问对象存储的权限，则无需提供。请查看[这个文档](../en/how_to_setup_object_storage.md)了解如何获取不同对象存储的 secret key。                          |
 
 ### 缓存配置
 
@@ -73,7 +73,7 @@ $ make
 | `juicefs.superuser`       | `hdfs`  | 超级用户                                                                                                            |
 | `juicefs.no-usage-report` | `false` | 是否上报数据，它只上报诸如版本号等使用量数据，不包含任何用户信息。                                                  |
 
-当使用多个 JuiceFS 文件系统时，上述所有配置项均可对单个文件系统指定，需要将文件系统名字 `JFS_NAME` 放在配置项的中间，比如：
+当使用多个 JuiceFS 文件系统时，上述所有配置项均可对单个文件系统指定，需要将文件系统名字 `{JFS_NAME}` 放在配置项的中间，比如：
 
 ```xml
 <property>
@@ -111,23 +111,23 @@ $ make
 </property>
 ```
 
-#### Hadoop 环境配置
+### Hadoop 环境配置
 
-将配置参数加入到 Hadoop 配置文件 `core-site.xml` 中：
+将配置参数加入到 Hadoop 配置文件 `core-site.xml` 中。
 
-#### Flink 配置
+### Flink 配置
 
 将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
 
-### 验证
+## 验证
 
-#### Hadoop
+### Hadoop
 
 ```bash
 $ hadoop fs -ls jfs://{JFS_NAME}/
 ```
 
-#### Hive
+### Hive
 
 ```sql
 CREATE TABLE IF NOT EXISTS person

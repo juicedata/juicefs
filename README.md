@@ -41,7 +41,7 @@ You can download precompiled binaries from [releases page](https://github.com/ju
 
 ### Building from source
 
-You need install [Go](https://golang.org) 1.13+ first, then run following commands:
+You need first installing [Go](https://golang.org) 1.13+, then run following commands:
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git
@@ -92,6 +92,10 @@ There is a [command reference](docs/en/command_reference.md) to see all options 
 ### Kubernetes
 
 There is a [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver) to use JuiceFS in Kubernetes easily.
+
+### Hadoop Java SDK
+
+If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_sdk.md).
 
 ## POSIX Compatibility
 
