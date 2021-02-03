@@ -1,6 +1,6 @@
 # Redis Best Practices
 
-This is a guide about Redis best practices. Redis is a critical component in JuiceFS architecture. It store all the file system metadata and serve metadata operation from client. If Redis has any problem (either service unavailable or lose data), it will affect the user experience.
+This is a guide about Redis best practices. Redis is a critical component in JuiceFS architecture. It stores all the file system metadata and serve metadata operation from client. If Redis has any problem (either service unavailable or lose data), it will affect the user experience.
 
 ## High Availability
 

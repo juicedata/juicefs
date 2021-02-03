@@ -19,7 +19,7 @@ The highlighted features are:
 
 ---
 
-[Architecture](#architecture) | [Getting Started](#getting-started) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
+[Architecture](#architecture) | [Getting Started](#getting-started) | [Administration](#administration) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
 
 ---
 
@@ -96,6 +96,10 @@ There is a [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driv
 ### Hadoop Java SDK
 
 If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_sdk.md).
+
+## Administration
+
+- [Redis Best Practices](docs/en/redis_best_practices.md)
 
 ## POSIX Compatibility
 
