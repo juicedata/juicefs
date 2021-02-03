@@ -1699,7 +1699,7 @@ func (r *redisMeta) deleteChunks(inode Ino, length uint64, tracking string) {
 	var ctx = Background
 	var indx uint32
 	p := r.rdb.Pipeline()
-	for uint64(indx*ChunkSize) < length {
+	for uint64(indx)*ChunkSize < length {
 		var keys []string
 		for i := 0; uint64(indx)*ChunkSize < length && i < 1000; i++ {
 			key := r.chunkKey(inode, indx)
