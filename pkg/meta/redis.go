@@ -1594,7 +1594,6 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 }
 
 func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	logger.Warnf("CopyFileRange %d %d %d %d %d", fin, offIn, fout, offOut, size)
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(fin), r.inodeKey(fout)).Result()
 		if err != nil {
