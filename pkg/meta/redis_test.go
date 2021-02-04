@@ -433,9 +433,68 @@ func TestTruncateAndDelete(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 	keys = listAll(fmt.Sprintf("c%d_*", inode))
-	// the last chunk will be found and deleted
-	if len(keys) != 1 {
-		t.Fatalf("number of chunks: %d != 1, %+v", len(keys), keys)
+	// the last chunk could be found and deleted
+	if len(keys) > 1 {
+		t.Fatalf("number of chunks: %d > 1, %+v", len(keys), keys)
+	}
+}
+
+// nolint:errcheck
+func TestCopyFileRange(t *testing.T) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	if err != nil {
+		t.Logf("redis is not available: %s", err)
+		t.Skip()
+	}
+	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+		return nil
+	})
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var iin, iout Ino
+	var attr = &Attr{}
+	_ = m.Unlink(ctx, 1, "fin")
+	_ = m.Unlink(ctx, 1, "fout")
+	if st := m.Create(ctx, 1, "fin", 0650, 022, &iin, attr); st != 0 {
+		t.Fatalf("create file %s", st)
+	}
+	defer m.Unlink(ctx, 1, "fin")
+	if st := m.Create(ctx, 1, "fout", 0650, 022, &iout, attr); st != 0 {
+		t.Fatalf("create file %s", st)
+	}
+	defer m.Unlink(ctx, 1, "fout")
+	m.Write(ctx, iin, 0, 100, Slice{10, 200, 0, 100})
+	m.Write(ctx, iin, 1, 100<<10, Slice{11, 100 << 10, 0, 10 << 10})
+	m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20})
+	m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20})
+	var copied uint64
+	if st := m.CopyFileRange(ctx, iin, 150, iout, 30<<20, 500<<20, 0, &copied); st != 0 {
+		t.Fatalf("copy file range: %s", st)
+	}
+	var expected uint64 = 3*ChunkSize + 30<<20 - 150
+	if copied != expected {
+		t.Fatalf("expect copy %d bytes, but got %d", expected, copied)
+	}
+	var expectedChunks = [][]Slice{
+		{{0, 30 << 20, 0, 30 << 20}, {10, 200, 50, 50}, {0, 0, 200, ChunkSize - 30<<20 - 50}},
+		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 100 << 10}, {11, 100 << 10, 0, 10 << 10}, {0, 0, 110 << 10, ChunkSize - (30<<20 - 150) - 110<<10}},
+		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 150 + (ChunkSize - 30<<20)}},
+		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {12, 63 << 20, 10 << 20, 30 << 20}},
+	}
+	for i := uint32(0); i < 4; i++ {
+		var chunks []Slice
+		if st := m.Read(ctx, iout, i, &chunks); st != 0 {
+			t.Fatalf("read chunk %d: %s", i, st)
+		}
+		if len(chunks) != len(expectedChunks[i]) {
+			t.Fatalf("expect chunk %d: %+v, but got %+v", i, expectedChunks[i], chunks)
+		}
+		for j, s := range chunks {
+			if s != expectedChunks[i][j] {
+				t.Fatalf("expect slice %d,%d: %+v, but got %+v", i, j, expectedChunks[i][j], s)
+			}
+		}
 	}
 }
 
