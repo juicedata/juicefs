@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -288,9 +289,10 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 
 	var (
-		bucketName string
-		region     string
-		ep         string
+		bucketName   string
+		region       string
+		ep           string
+		usePathStyle bool
 	)
 
 	if len(hostParts) == 1 { // take endpoint as bucketname
@@ -326,14 +328,18 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 			bucketName = hostParts[0]
 			ep = hostParts[1]
 			region = awsDefaultRegion
+			if net.ParseIP(ep) != nil {
+				usePathStyle = true
+			}
 		}
 	}
 
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	awsConfig := &aws.Config{
-		Region:     aws.String(region),
-		DisableSSL: aws.Bool(!ssl),
-		HTTPClient: httpClient,
+		Region:           aws.String(region),
+		DisableSSL:       aws.Bool(!ssl),
+		HTTPClient:       httpClient,
+		S3ForcePathStyle: aws.Bool(usePathStyle),
 	}
 	if accessKey != "" {
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
