@@ -2,6 +2,8 @@
 
 This is a guide about Redis best practices. Redis is a critical component in JuiceFS architecture. It stores all the file system metadata and serve metadata operation from client. If Redis has any problem (either service unavailable or lose data), it will affect the user experience.
 
+**Note: The following paragraphs are extracted from Redis official documentation. It may outdated, subject to latest version of the official documentation.**
+
 ## High Availability
 
 [Redis Sentinel](https://redis.io/topics/sentinel) is the official high availability solution for Redis. It provides following capabilities:
