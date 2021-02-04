@@ -1594,10 +1594,6 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 }
 
 func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	var keys []string = []string{r.inodeKey(fout), r.inodeKey(fin)}
-	for i := offIn / ChunkSize; i <= (offIn+size)/ChunkSize; i++ {
-		keys = append(keys, r.chunkKey(fin, uint32(i)))
-	}
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(fin), r.inodeKey(fout)).Result()
 		if err != nil {
@@ -1637,8 +1633,8 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		attr.Ctimensec = uint32(now.Nanosecond())
 
 		p := tx.Pipeline()
-		for _, key := range keys[2:] {
-			p.LRange(ctx, key, 0, 1000000)
+		for i := offIn / ChunkSize; i <= (offIn+size)/ChunkSize; i++ {
+			p.LRange(ctx, r.chunkKey(fin, uint32(i)), 0, 1000000)
 		}
 		vals, err := p.Exec(ctx)
 		if err != nil {
@@ -1719,7 +1715,7 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			*copied = size
 		}
 		return err
-	}, keys...)
+	}, r.inodeKey(fout), r.inodeKey(fin))
 }
 
 func (r *redisMeta) cleanupDeletedFiles() {
