@@ -38,7 +38,7 @@ snapshot:
 		-v `pwd`:/go/src/github.com/juicedata/juicefs \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-w /go/src/github.com/juicedata/juicefs \
-		goreng/golang-cross:latest release --snapshot --rm-dist --skip-publish
+		juicedata/golang-cross:latest release --snapshot --rm-dist --skip-publish
 
 release:
 	docker run --rm --privileged \
@@ -48,7 +48,7 @@ release:
 		-v `pwd`:/go/src/github.com/juicedata/juicefs \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-w /go/src/github.com/juicedata/juicefs \
-		goreng/golang-cross:latest release --rm-dist
+		juicedata/golang-cross:latest release --rm-dist
 
 test:
 	go test ./pkg/... ./cmd/...

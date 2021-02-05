@@ -2,8 +2,6 @@ name: release
 
 on:
   push:
-    branches:
-      - test_release
     tags:
       - v*
 
