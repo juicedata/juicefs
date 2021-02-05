@@ -2,7 +2,7 @@
 
 This is a guide about Redis best practices. Redis is a critical component in JuiceFS architecture. It stores all the file system metadata and serve metadata operation from client. If Redis has any problem (either service unavailable or lose data), it will affect the user experience.
 
-**It's highly recommended use Redis service provided by public cloud provider if possible.** See ["Recommended Managed Redis Service"](#recommended-managed-redis-service) for more information. If you still need operate Redis by yourself in production environment, continue read following contents.
+**It's highly recommended use Redis service managed by public cloud provider if possible.** See ["Recommended Managed Redis Service"](#recommended-managed-redis-service) for more information. If you still need operate Redis by yourself in production environment, continue read following contents.
 
 ---
 
