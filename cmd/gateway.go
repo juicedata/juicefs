@@ -35,6 +35,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 
@@ -85,7 +86,7 @@ func gateway(c *cli.Context) error {
 	app := &mcli.App{
 		Name:      "juicefs",
 		Usage:     "A POSIX file system built on Redis and object storage.",
-		Version:   Version(),
+		Version:   version.Version(),
 		Copyright: "AGPLv3",
 		Action:    gateway2,
 		Commands: []mcli.Command{
@@ -180,14 +181,8 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 			IORetries: 10,
 		},
 		Format:  format,
-		Version: Version(),
-		Primary: &vfs.StorageConfig{
-			Name:      format.Storage,
-			Endpoint:  format.Bucket,
-			AccessKey: format.AccessKey,
-			SecretKey: format.SecretKey,
-		},
-		Chunk: &chunkConf,
+		Version: version.Version(),
+		Chunk:   &chunkConf,
 	}
 
 	jfs, err := fs.NewFileSystem(conf, m, store)
@@ -564,10 +559,41 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	if minio.IsStringEqual(src, dst) {
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
-	return n.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, minio.ObjectOptions{
-		ServerSideEncryption: dstOpts.ServerSideEncryption,
-		UserDefined:          srcInfo.UserDefined,
-	})
+	tmp := n.tpath(dstBucket, "tmp", minio.MustGetUUID())
+	_ = n.mkdirAll(ctx, path.Dir(tmp), 0755)
+	_, err = n.jfs.Create(mctx, tmp, 0644)
+	if err != nil {
+		logger.Errorf("create %s: %s", tmp, err)
+		return
+	}
+	defer func() { _ = n.jfs.Delete(mctx, tmp) }()
+
+	_, eno := n.jfs.CopyFileRange(mctx, src, 0, tmp, 0, 1<<63)
+	if eno != 0 {
+		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
+		logger.Errorf("copy %s to %s: %s", src, tmp, err)
+		return
+	}
+	eno = n.jfs.Rename(mctx, tmp, dst)
+	if eno != 0 {
+		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
+		logger.Errorf("rename %s to %s: %s", tmp, dst, err)
+		return
+	}
+	fi, eno := n.jfs.Stat(mctx, dst)
+	if eno != 0 {
+		err = jfsToObjectErr(ctx, eno, dstBucket, dstObject)
+		return
+	}
+	return minio.ObjectInfo{
+		Bucket: dstBucket,
+		Name:   dstObject,
+		// ETag:    r.MD5CurrentHexString(),
+		ModTime: fi.ModTime(),
+		Size:    fi.Size(),
+		IsDir:   fi.IsDir(),
+		AccTime: fi.ModTime(),
+	}, nil
 }
 
 var buffPool = sync.Pool{
@@ -611,12 +637,9 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
 	f, err := n.jfs.Open(mctx, minio.PathJoin(bucket, object), 000)
 	if err != 0 {
-		if os.IsNotExist(err) {
-			return false
-		}
 		return false
 	}
-	defer f.Close(mctx)
+	defer func() { _ = f.Close(mctx) }()
 	fi, _ := f.Stat()
 	return fi.IsDir()
 }
@@ -666,7 +689,7 @@ func (n *jfsObjects) mkdirAll(ctx context.Context, p string, mode os.FileMode) e
 
 func (n *jfsObjects) putObject(ctx context.Context, bucket, p string, r *minio.PutObjReader, opts minio.ObjectOptions) (err error) {
 	tmpname := n.tpath(bucket, "tmp", minio.MustGetUUID())
-	n.mkdirAll(ctx, path.Dir(tmpname), 0755)
+	_ = n.mkdirAll(ctx, path.Dir(tmpname), 0755)
 	var f *fs.File
 	f, err = n.jfs.Create(mctx, tmpname, 0644)
 	if err != nil {
@@ -677,7 +700,8 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, p string, r *minio.P
 	var buf = buffPool.Get().([]byte)
 	defer buffPool.Put(buf)
 	for {
-		n, err := io.ReadFull(r, buf)
+		var n int
+		n, err = io.ReadFull(r, buf)
 		if n == 0 {
 			if err == io.EOF {
 				err = nil
@@ -692,14 +716,14 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, p string, r *minio.P
 	if err == nil {
 		err = f.Close(mctx)
 	} else {
-		f.Close(mctx)
+		_ = f.Close(mctx)
 	}
 	if err != nil {
 		return
 	}
 	dir := path.Dir(p)
 	if dir != "" {
-		n.mkdirAll(ctx, dir, os.FileMode(0755))
+		_ = n.mkdirAll(ctx, dir, os.FileMode(0755))
 	}
 	if err = n.jfs.Rename(mctx, tmpname, p); err != nil {
 		return
@@ -857,6 +881,7 @@ func (n *jfsObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 	if err = n.checkUploadIDExists(ctx, dstBucket, dstObject, uploadID); err != nil {
 		return
 	}
+	// TODO: use CopyFileRange
 	return n.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.PutObjReader, dstOpts)
 }
 
@@ -883,26 +908,31 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		return
 	}
 
-	var names []string
-	for _, part := range parts {
-		names = append(names, strconv.Itoa(part.PartNumber))
-	}
 	tmp := n.ppath(bucket, uploadID, "complete")
-	n.jfs.Delete(mctx, tmp)
-
-	// FIXME
-	// err = n.jfs.Combine(mctx, n.path(bucket, uploadID), names, "complete")
+	_ = n.jfs.Delete(mctx, tmp)
+	_, err = n.jfs.Create(mctx, tmp, 0755)
 	if err != nil {
 		err = jfsToObjectErr(ctx, err, bucket, object)
-		logger.Errorf("merge parts %s: %s", uploadID, err)
+		logger.Errorf("create complete for %s: %s", uploadID, err)
 		return
+	}
+	var total uint64
+	for _, part := range parts {
+		p := n.ppath(bucket, uploadID, strconv.Itoa(part.PartNumber))
+		copied, eno := n.jfs.CopyFileRange(mctx, p, 0, tmp, total, 1<<30)
+		if eno != 0 {
+			err = jfsToObjectErr(ctx, eno, bucket, object)
+			logger.Errorf("merge parts %s: %s", uploadID, err)
+			return
+		}
+		total += copied
 	}
 
 	name := n.path(bucket, object)
 	dir := path.Dir(name)
 	if dir != "" {
 		if err = n.mkdirAll(ctx, dir, os.FileMode(0755)); err != nil {
-			n.jfs.Delete(mctx, tmp)
+			_ = n.jfs.Delete(mctx, tmp)
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
 		}
@@ -910,7 +940,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	err = n.jfs.Rename(mctx, tmp, name)
 	if err != nil {
-		n.jfs.Delete(mctx, tmp)
+		_ = n.jfs.Delete(mctx, tmp)
 		err = jfsToObjectErr(ctx, err, bucket, object)
 		logger.Errorf("Rename %s -> %s: %s", tmp, name, err)
 		return
@@ -918,9 +948,13 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	fi, err := n.jfs.Stat(mctx, name)
 	if err != nil {
+		_ = n.jfs.Delete(mctx, name)
 		err = jfsToObjectErr(ctx, err, bucket, object)
 		return
 	}
+
+	// remove parts
+	_ = n.jfs.Rmr(mctx, n.upath(bucket, uploadID))
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
