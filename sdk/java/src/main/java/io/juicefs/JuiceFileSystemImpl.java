@@ -157,6 +157,8 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_listdir(long pid, long h, String path, int offset, Pointer buf, int size);
 
+    int jfs_concat(long pid, long h, String path, Pointer buf, int bufsize);
+
     int jfs_setXattr(long pid, long h, String path, String name, Pointer value, int vlen, int mode);
 
     int jfs_getXattr(long pid, long h, String path, String name, Pointer buf, int size);
@@ -325,6 +327,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("putTimeout", Integer.valueOf(getConf(conf, "put-timeout", getConf(conf, "object-timeout", "60"))));
     obj.put("memorySize", Integer.valueOf(getConf(conf, "memory-size", "300")));
     obj.put("readahead", Integer.valueOf(getConf(conf, "max-readahead", "0")));
+    obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", ""));
     obj.put("accessLog", getConf(conf, "access-log", ""));
     String jsonConf = obj.toString(2);
@@ -1140,6 +1143,31 @@ public class JuiceFileSystemImpl extends FileSystem {
       return new MD5MD5CRC32CastagnoliFileChecksum(bytesPerCrc, crcPerBlock, md5);
     } else {
       return new MD5MD5CRC32GzipFileChecksum(bytesPerCrc, crcPerBlock, md5);
+    }
+  }
+
+  @Override
+  public void concat(final Path dst, final Path[] srcs) throws IOException {
+    statistics.incrementWriteOps(1);
+    if (getFileStatus(dst).getLen() == 0) {
+      throw new IOException(dst + "is empty");
+    }
+    byte[][] srcbytes = new byte[srcs.length][];
+    int bufsize = 0;
+    for (int i = 0; i < srcs.length; i++) {
+      srcbytes[i] = normalizePath(srcs[i]).getBytes("UTF-8");
+      bufsize += srcbytes[i].length + 1;
+    }
+    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), bufsize);
+    long offset = 0;
+    for (int i = 0; i < srcs.length; i++) {
+      buf.put(offset, srcbytes[i], 0, srcbytes[i].length);
+      buf.putByte(offset + srcbytes[i].length, (byte) 0);
+      offset += srcbytes.length + 1;
+    }
+    int r = lib.jfs_concat(Thread.currentThread().getId(), handle, normalizePath(dst), buf, bufsize);
+    if (r < 0) {
+      throw error(r, dst);
     }
   }
 

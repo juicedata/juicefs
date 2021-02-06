@@ -17,12 +17,33 @@ package object
 
 import (
 	"io"
-
-	obj "github.com/juicedata/juicesync/object"
-	"github.com/juicedata/juicesync/utils"
+	"time"
 )
 
-var logger = utils.GetLogger("juicefs")
+type Object struct {
+	Key   string
+	Size  int64
+	Mtime time.Time // Unix seconds
+	IsDir bool
+}
+
+type MultipartUpload struct {
+	MinPartSize int
+	MaxCount    int
+	UploadID    string
+}
+
+type Part struct {
+	Num  int
+	Size int
+	ETag string
+}
+
+type PendingPart struct {
+	Key      string
+	UploadID string
+	Created  time.Time
+}
 
 // ObjectStorage is the interface for object storage.
 // all of these API should be idempotent.
@@ -37,22 +58,13 @@ type ObjectStorage interface {
 	Put(key string, in io.Reader) error
 	// Delete a object.
 	Delete(key string) error
-}
 
-var storages = make(map[string]Creator)
-
-type Creator func(bucket, accessKey, secretKey string) (ObjectStorage, error)
-
-func register(name string, creator Creator) {
-	storages[name] = creator
-}
-
-func CreateStorage(name, endpoint, accessKey, secretKey string) (ObjectStorage, error) {
-	f, ok := storages[name]
-	if ok {
-		logger.Debugf("Creating %s storage at endpoint %s", name, endpoint)
-		return f(endpoint, accessKey, secretKey)
-	}
-	// look for implementation in juicesync
-	return obj.CreateStorage(name, endpoint, accessKey, secretKey)
+	Head(key string) (*Object, error)
+	List(prefix, marker string, limit int64) ([]*Object, error)
+	ListAll(prefix, marker string) (<-chan *Object, error)
+	CreateMultipartUpload(key string) (*MultipartUpload, error)
+	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
+	AbortUpload(key string, uploadID string)
+	CompleteUpload(key string, uploadID string, parts []*Part) error
+	ListUploads(marker string) ([]*PendingPart, string, error)
 }

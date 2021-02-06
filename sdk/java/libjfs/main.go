@@ -43,9 +43,11 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/juicedata/juicesync/object"
 
 	"github.com/sirupsen/logrus"
 )
@@ -171,6 +173,7 @@ type javaConf struct {
 	GetTimeout     int    `json:"getTimeout"`
 	PutTimeout     int    `json:"putTimeout"`
 	Debug          bool   `json:"debug"`
+	NoUsageReport  bool   `json:"noUsageReport"`
 	AccessLog      string `json:"accessLog"`
 }
 
@@ -215,7 +218,7 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintptr {
 	name := C.GoString(cname)
 	debug.SetGCPercent(50)
-	// object.UserAgent = "JuiceFS-SDK " + Build()
+	object.UserAgent = "JuiceFS-SDK " + version.Version()
 	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), func() *fs.FileSystem {
 		var jConf javaConf
 		err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
@@ -305,15 +308,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Meta: &meta.Config{
 				IORetries: 10,
 			},
-			Format: format,
-			Primary: &vfs.StorageConfig{
-				Name:      format.Storage,
-				Endpoint:  format.Bucket,
-				AccessKey: format.AccessKey,
-				SecretKey: format.AccessKey,
-			},
+			Format:    format,
 			Chunk:     &chunkConf,
 			AccessLog: jConf.AccessLog,
+		}
+		if !jConf.NoUsageReport {
+			go usage.ReportUsage(m, "java-sdk "+version.Version())
 		}
 		jfs, err := fs.NewFileSystem(conf, m, store)
 		if err != nil {
@@ -738,6 +738,46 @@ func jfs_listdir(pid int, h uintptr, cpath *C.char, offset int, buf uintptr, buf
 
 func toBuf(s uintptr, sz int) []byte {
 	return (*[1 << 30]byte)(unsafe.Pointer(s))[:sz:sz]
+}
+
+//export jfs_concat
+func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int {
+	w := F(h)
+	if w == nil {
+		return -int(syscall.EINVAL)
+	}
+	dst := C.GoString(_dst)
+	ctx := w.withPid(pid)
+	df, err := w.Open(ctx, dst, 2)
+	if err != 0 {
+		return errno(err)
+	}
+	defer df.Close(ctx)
+	srcs := strings.Split(string(toBuf(buf, bufsize-1)), "\000")
+	var tmp string
+	if len(srcs) > 1 {
+		tmp = filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+".merging")
+		fi, err := w.Create(ctx, tmp, 0644)
+		if err != 0 {
+			return errno(err)
+		}
+		defer func() { _ = w.Delete(ctx, tmp) }()
+		defer fi.Close(ctx)
+		var off uint64
+		for _, src := range srcs {
+			copied, err := w.CopyFileRange(ctx, src, 0, tmp, off, 1<<63)
+			if err != 0 {
+				return errno(err)
+			}
+			off += copied
+		}
+	} else {
+		tmp = srcs[0]
+	}
+
+	dfi, _ := df.Stat()
+	_, err = w.CopyFileRange(ctx, tmp, 0, dst, uint64(dfi.Size()), 1<<63)
+	return errno(err)
 }
 
 //export jfs_lseek

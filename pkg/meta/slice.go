@@ -86,3 +86,14 @@ func (s *slice) visit(f func(*slice)) {
 	f(s) // s could be freed
 	right.visit(f)
 }
+
+func readSlices(vals []string) []*slice {
+	slices := make([]slice, len(vals))
+	ss := make([]*slice, len(vals))
+	for i, val := range vals {
+		s := &slices[i]
+		s.read([]byte(val))
+		ss[i] = s
+	}
+	return ss
+}

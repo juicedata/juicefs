@@ -13,7 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package utils
+package compress
 
 import (
 	"fmt"
@@ -66,8 +66,7 @@ func (n noOp) Decompress(dst, src []byte) (int, error) {
 	return len(src), nil
 }
 
-// ZStandard struct implements Compressor interface
-// implementaion is based on zstd library
+// ZStandard implements Compressor interface using zstd library
 type ZStandard struct {
 	level int
 }
@@ -102,8 +101,7 @@ func (n ZStandard) Decompress(dst, src []byte) (int, error) {
 	return len(d), err
 }
 
-// LZ4 struct implements Compressor interface
-// implementaion is based on LZ4 library
+// LZ4 implements Compressor using LZ4 library
 type LZ4 struct{}
 
 // Name returns name of the algorithm LZ4

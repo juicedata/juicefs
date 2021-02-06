@@ -73,6 +73,7 @@ type FileReader interface {
 type DataReader interface {
 	Open(inode Ino, length uint64) FileReader
 	Truncate(inode Ino, length uint64)
+	Invalidate(inode Ino, off, length uint64)
 }
 
 type frange struct {
@@ -95,7 +96,7 @@ type sliceReader struct {
 	page       *chunk.Page
 	need       uint64
 	currentPos uint32
-	modified   time.Time
+	lastAccess time.Time
 	refs       uint16
 	cond       *utils.Cond
 	next       *sliceReader
@@ -215,7 +216,7 @@ func (s *sliceReader) run() {
 		s.state = READY
 		s.currentPos = uint32(n)
 		s.file.tried = 0
-		s.modified = time.Now()
+		s.lastAccess = time.Now()
 		s.done(0, 0)
 	} else {
 		s.currentPos = 0 // start again from beginning
@@ -226,6 +227,23 @@ func (s *sliceReader) run() {
 			s.done(err, 0)
 		} else {
 			s.done(0, retry_time(f.tried))
+		}
+	}
+}
+
+func (s *sliceReader) invalidate() {
+	switch s.state {
+	case NEW:
+	case BUSY:
+		s.state = REFRESH
+		// TODO: interrupt reader
+	case READY:
+		if s.refs > 0 {
+			s.state = NEW
+			s.run()
+		} else {
+			s.state = INVALID
+			s.delete() // nobody wants it anymore, so delete it
 		}
 	}
 }
@@ -286,7 +304,7 @@ type fileReader struct {
 func (f *fileReader) newSlice(block *frange) *sliceReader {
 	s := &sliceReader{}
 	s.file = f
-	s.modified = time.Now()
+	s.lastAccess = time.Now()
 	s.indx = uint32(block.off / meta.ChunkSize)
 	s.block = &frange{block.off, block.len} // random read
 	blockend := (block.off/f.r.blockSize + 1) * f.r.blockSize
@@ -326,6 +344,7 @@ func (f *fileReader) delete() {
 			i = i.next
 		}
 	}
+	f.next = nil
 }
 
 func (f *fileReader) acquire() {
@@ -439,7 +458,7 @@ func (f *fileReader) cleanupRequests(block *frange) {
 	var cnt int
 	f.visit(func(s *sliceReader) {
 		if !s.state.valid() ||
-			!block.overlap(s.block) && (s.modified.Add(time.Second*30).Before(now) || !f.need(s.block)) {
+			!block.overlap(s.block) && (s.lastAccess.Add(time.Second*30).Before(now) || !f.need(s.block)) {
 			s.drop()
 		} else if !block.overlap(s.block) {
 			cnt++
@@ -449,6 +468,22 @@ func (f *fileReader) cleanupRequests(block *frange) {
 		if !block.overlap(s.block) && cnt > f.r.maxRequests {
 			s.drop()
 			cnt--
+		}
+	})
+}
+
+func (f *fileReader) releaseIdleBuffer() {
+	f.Lock()
+	defer f.Unlock()
+	now := time.Now()
+	var idle = time.Minute
+	used := atomic.LoadInt64(&readBufferUsed)
+	if used > int64(f.r.readAheadTotal) {
+		idle /= time.Duration(used / int64(f.r.readAheadTotal))
+	}
+	f.visit(func(s *sliceReader) {
+		if !s.state.valid() || s.lastAccess.Add(idle).Before(now) || !f.need(s.block) {
+			s.drop()
 		}
 	})
 }
@@ -524,6 +559,7 @@ func (f *fileReader) prepareRequests(ranges []uint64) []*req {
 		f.visit(func(s *sliceReader) {
 			if !added && s.state.valid() && s.block.include(&b) {
 				s.refs++
+				s.lastAccess = time.Now()
 				reqs = append(reqs, &req{frange{ranges[i] - s.block.off, b.len}, s})
 				added = true
 			}
@@ -670,7 +706,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 	if conf.Chunk.Readahead > 0 {
 		readAheadMax = conf.Chunk.Readahead
 	}
-	return &dataReader{
+	r := &dataReader{
 		m:              m,
 		store:          store,
 		files:          make(map[Ino]*fileReader),
@@ -679,6 +715,24 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		readAheadMax:   uint64(readAheadMax),
 		maxRequests:    readAheadMax/conf.Chunk.BlockSize*readSessions + 1,
 		maxRetries:     uint32(conf.Meta.IORetries),
+	}
+	go r.checkReadBuffer()
+	return r
+}
+
+func (r *dataReader) checkReadBuffer() {
+	for {
+		r.Lock()
+		for _, f := range r.files {
+			for f != nil {
+				r.Unlock()
+				f.releaseIdleBuffer()
+				r.Lock()
+				f = f.next
+			}
+		}
+		r.Unlock()
+		time.Sleep(time.Second)
 	}
 }
 
@@ -698,7 +752,7 @@ func (r *dataReader) Open(inode Ino, length uint64) FileReader {
 	return f
 }
 
-func (r *dataReader) Truncate(inode Ino, length uint64) {
+func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
 	// r could be hold inside f, so Unlock r first to avoid deadlock
 	r.Lock()
 	var fs []*fileReader
@@ -710,9 +764,29 @@ func (r *dataReader) Truncate(inode Ino, length uint64) {
 	r.Unlock()
 	for _, f := range fs {
 		f.Lock()
-		f.length = length
+		fn(f)
 		f.Unlock()
 	}
+}
+
+func (r *dataReader) Truncate(inode Ino, length uint64) {
+	r.visit(inode, func(f *fileReader) {
+		f.length = length
+	})
+}
+
+func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
+	b := frange{off, length}
+	r.visit(inode, func(f *fileReader) {
+		if off+length > f.length {
+			f.length = off + length
+		}
+		f.visit(func(s *sliceReader) {
+			if b.overlap(s.block) {
+				s.invalidate()
+			}
+		})
+	})
 }
 
 func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {

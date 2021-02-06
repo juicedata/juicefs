@@ -36,24 +36,12 @@ const (
 	maxFileSize = meta.ChunkSize << 31
 )
 
-type StorageConfig struct {
-	Name       string
-	Endpoint   string
-	AccessKey  string
-	SecretKey  string
-	Key        string
-	KeyPath    string
-	Passphrase string
-}
-
 type Config struct {
 	Meta       *meta.Config
 	Format     *meta.Format
-	Primary    *StorageConfig
 	Chunk      *chunk.Config
 	Version    string
 	Mountpoint string
-	Prefix     string
 	AccessLog  string
 }
 
@@ -574,6 +562,7 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 		return
 	}
 	reader.Truncate(ino, writer.GetLength(ino))
+	reader.Invalidate(ino, off, uint64(len(buf)))
 	return
 }
 
@@ -608,6 +597,73 @@ func Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh uint64) (
 	defer h.removeOp(ctx)
 
 	err = m.Fallocate(ctx, ino, mode, uint64(off), uint64(length))
+	return
+}
+
+func CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut Ino, fhOut, offOut, size uint64, flags uint32) (copied uint64, err syscall.Errno) {
+	defer func() {
+		logit(ctx, "copy_file_range (%d,%d,%d,%d,%d,%d): %s", nodeIn, offIn, nodeOut, offOut, size, flags, strerr(err))
+	}()
+	if IsSpecialNode(nodeIn) {
+		err = syscall.ENOTSUP
+		return
+	}
+	if IsSpecialNode(nodeOut) {
+		err = syscall.EACCES
+		return
+	}
+	hi := findHandle(nodeIn, fhIn)
+	if fhIn == 0 || hi == nil || hi.inode != nodeIn {
+		err = syscall.EBADF
+		return
+	}
+	ho := findHandle(nodeOut, fhOut)
+	if fhOut == 0 || ho == nil || ho.inode != nodeOut {
+		err = syscall.EBADF
+		return
+	}
+	if hi.reader == nil {
+		err = syscall.EBADF
+		return
+	}
+	if ho.writer == nil {
+		err = syscall.EBADF
+		return
+	}
+	if offIn >= maxFileSize || offIn+size >= maxFileSize || offOut >= maxFileSize || offOut+size >= maxFileSize {
+		err = syscall.EFBIG
+		return
+	}
+	if flags != 0 {
+		err = syscall.EINVAL
+		return
+	}
+	if nodeIn == nodeOut && (offIn+size > offOut || offOut+size > offIn) {
+		err = syscall.EINVAL // overlap
+		return
+	}
+
+	if !hi.Rlock(ctx) {
+		err = syscall.EINTR
+		return
+	}
+	defer hi.Runlock()
+	defer hi.removeOp(ctx)
+	if !ho.Wlock(ctx) {
+		err = syscall.EINTR
+		return
+	}
+	defer ho.Wunlock()
+	defer ho.removeOp(ctx)
+
+	err = writer.Flush(ctx, nodeOut)
+	if err != 0 {
+		return
+	}
+	err = m.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied)
+	if err == 0 {
+		reader.Invalidate(nodeOut, offOut, uint64(size))
+	}
 	return
 }
 

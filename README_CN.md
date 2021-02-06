@@ -1,8 +1,8 @@
-<p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="https://github.com/juicedata/juicefs/raw/main/docs/images/juicefs-logo.png" width="50%" /></a></p>
+<p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="docs/images/juicefs-logo.png" width="50%" /></a></p>
 <p align="center">
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
-    <a href="https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
-    <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs?dummy=unused" /></a>
+    <a href="https://join.slack.com/t/juicefs/shared_invite/zt-m34n1kf4-OJ~kvf8JNoO7ZIIq6MFzoA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
+    <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
     <a href="README.md"><img alt="English Docs" src="https://img.shields.io/badge/docs-English-informational" /></a>
 </p>
 
@@ -19,7 +19,7 @@
 
 ---
 
-[架构](#架构) | [开始使用](#开始使用) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
+[架构](#架构) | [开始使用](#开始使用) | [运维管理](#运维管理) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
 
 ---
 
@@ -42,13 +42,15 @@ JuiceFS 中的文件格式，如下图所示。一个文件首先被拆分成固
 
 ### 从源代码编译
 
-你需要先安装 [Go](https://golang.org)，然后通过下面的方式来编译：
+你需要先安装 [Go](https://golang.org) 1.13+，然后通过下面的方式来编译：
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git
 $ cd juicefs
 $ make
 ```
+
+对于中国用户，建议设置 `GOPROXY` 到更快的镜像以加速编译，比如 [Goproxy 中国](https://github.com/goproxy/goproxy.cn)。
 
 ### 依赖
 
@@ -70,15 +72,7 @@ $ ./juicefs format localhost test
 
 JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket`、`--access-key` 和 `--secret-key` 来指定。它默认会使用本地目录来模拟一个对象存储用于测试，详细的参数请看 `./juicefs format -h`。
 
-如果使用 MinIO 来存数据，可以这么写：
-
-```bash
-$ ./juicefs format --storage minio \
-   --bucket http://1.2.3.4:9000/mybucket \
-   --access-key XXX \
-   --secret-key XXX \
-   localhost test
-```
+关于各种对象存储如何设置的详细介绍，请查看[这个文档](docs/en/how_to_setup_object_storage.md)。
 
 ### 挂载
 
@@ -90,13 +84,26 @@ $ ./juicefs mount -d localhost ~/jfs
 
 挂载之后你可以像使用本地盘一样使用它，详细的挂载参数，请运行 `./juicefs mount -h`。
 
+如果你希望开机自动挂载 JuiceFS，请查看[这个文档](docs/en/mount_at_boot.md)。
+
 ### 命令索引
 
-请点击[这里](docs/command_reference.md)查看所有子命令以及命令行参数。
+请点击[这里](docs/en/command_reference.md)查看所有子命令以及命令行参数。
 
 ### Kubernetes
 
 JuiceFS 提供 [K8s CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)来简化部署。
+
+### Hadoop Java SDK
+
+JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生态结合。
+
+## 运维管理
+
+- [Redis 最佳实践](docs/en/redis_best_practices.md)
+- [开机自动挂载 JuiceFS](docs/en/mount_at_boot.md)
+- [如何设置对象存储](docs/en/how_to_setup_object_storage.md)
+- [Kubernetes CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)
 
 ## POSIX 兼容性测试
 
@@ -132,7 +139,7 @@ Result: PASS
 
 ![Sequential Read Write Benchmark](docs/images/sequential-read-write-benchmark.svg)
 
-上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](docs/fio.md)。
+上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](docs/en/fio.md)。
 
 ### 元数据性能
 
@@ -140,7 +147,7 @@ Result: PASS
 
 ![Metadata Benchmark](docs/images/metadata-benchmark.svg)
 
-上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](docs/mdtest.md)。
+上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](docs/en/mdtest.md)。
 
 ### 性能分析
 
@@ -168,7 +175,7 @@ $ cat /jfs/.accesslog
 - 本地目录
 - Redis
 
-完整的支持列表，请参照 [juicesync](https://github.com/juicedata/juicesync)。
+完整的支持列表，请参照[这个文档](docs/en/how_to_setup_object_storage.md#supported-object-storage)。
 
 ## 状态
 
@@ -192,11 +199,11 @@ JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还
 
 ## 社区
 
-欢迎加入 [Discussion](https://github.com/juicedata/juicefs/discussions) 和 [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ) 跟我们的团队和其他社区成员交流。
+欢迎加入 [Discussions](https://github.com/juicedata/juicefs/discussions) 和 [Slack 频道](https://join.slack.com/t/juicefs/shared_invite/zt-m34n1kf4-OJ~kvf8JNoO7ZIIq6MFzoA)跟我们的团队和其他社区成员交流。
 
 ## 使用量收集
 
-JuiceFS 的客户端会收集 **匿名** 使用数据来帮助我们更好地了解大家如何使用它，它只上报诸如版本号等使用量数据，不包含任何用户信息，完整的代码在[这里](cmd/usage.go)。
+JuiceFS 的客户端会收集 **匿名** 使用数据来帮助我们更好地了解大家如何使用它，它只上报诸如版本号等使用量数据，不包含任何用户信息，完整的代码在[这里](pkg/usage/usage.go)。
 
 你也可以通过下面的方式禁用它：
 
@@ -216,7 +223,7 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ### 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](#支持的对象存储)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请到 [juicesync](https://github.com/juicedata/juicesync) 创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](#支持的对象存储)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ### 是否可以使用 Redis 集群版？
 

@@ -67,6 +67,8 @@ func (mode smode) String() string {
 	return string(s)
 }
 
+// Entry is an alias of meta.Entry, which is used to generate the string
+// representation lazily.
 type Entry meta.Entry
 
 func (entry *Entry) String() string {
@@ -83,6 +85,7 @@ func (entry *Entry) String() string {
 		a.Atime, a.Mtime, a.Ctime, a.Length)
 }
 
+// LogContext is an interface to add duration on meta.Context.
 type LogContext interface {
 	meta.Context
 	Duration() time.Duration
@@ -97,6 +100,7 @@ func (ctx *logContext) Duration() time.Duration {
 	return time.Since(ctx.start)
 }
 
+// NewLogContext creates an LogContext starting from now.
 func NewLogContext(ctx meta.Context) LogContext {
 	return &logContext{ctx, time.Now()}
 }

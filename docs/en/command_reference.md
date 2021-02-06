@@ -147,6 +147,24 @@ cache only random/small read (default: false)
 `--no-usage-report`\
 do not send usage report (default: false)
 
+## juicefs umount
+
+### Description
+
+Unmount a volume.
+
+### Synopsis
+
+```
+juicefs umount [options] MOUNTPOINT
+```
+
+### Options
+
+`-f, --force`\
+unmount a busy mount point by force (default: false)
+
+
 ## juicefs benchmark
 
 ### Description
@@ -156,7 +174,7 @@ Run benchmark, include read/write/stat big and small files.
 ### Synopsis
 
 ```
-juicefs benchmark [command options] [arguments...]
+juicefs benchmark [options] DIR
 ```
 
 ### Options

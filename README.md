@@ -1,8 +1,8 @@
-<p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="https://github.com/juicedata/juicefs/raw/main/docs/images/juicefs-logo.png" width="50%" /></a></p>
+<p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="docs/images/juicefs-logo.png" width="50%" /></a></p>
 <p align="center">
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
-    <a href="https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
-    <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs?dummy=unused" /></a>
+    <a href="https://join.slack.com/t/juicefs/shared_invite/zt-m34n1kf4-OJ~kvf8JNoO7ZIIq6MFzoA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
+    <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
     <a href="README_CN.md"><img alt="Chinese Docs" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-informational" /></a>
 </p>
 
@@ -19,7 +19,7 @@ The highlighted features are:
 
 ---
 
-[Architecture](#architecture) | [Getting Started](#getting-started) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
+[Architecture](#architecture) | [Getting Started](#getting-started) | [Administration](#administration) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
 
 ---
 
@@ -41,7 +41,7 @@ You can download precompiled binaries from [releases page](https://github.com/ju
 
 ### Building from source
 
-You need install [Go](https://golang.org) first, then run following commands:
+You need first installing [Go](https://golang.org) 1.13+, then run following commands:
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git
@@ -69,15 +69,7 @@ It will create a volume with default settings. If there Redis server is not runn
 
 As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--access-key` and `--secret-key`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
 
-To use MinIO as object store, it could be specified as:
-
-```bash
-$ ./juicefs format --storage minio \
-   --bucket http://1.2.3.4:9000/mybucket \
-   --access-key XXX \
-   --secret-key XXX \
-   localhost test
-```
+For the details about how to setup different object storage, please read [the guide](docs/en/how_to_setup_object_storage.md).
 
 ### Mount a volume
 
@@ -91,13 +83,26 @@ After that you can access the volume just like a local directory.
 
 To get all options, just run `./juicefs mount -h`.
 
+If you wanna mount JuiceFS automatically at boot, please read [the guide](docs/en/mount_at_boot.md).
+
 ### Command Reference
 
-There is a [command reference](docs/command_reference.md) to see all options of the subcommand.
+There is a [command reference](docs/en/command_reference.md) to see all options of the subcommand.
 
 ### Kubernetes
 
 There is a [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver) to use JuiceFS in Kubernetes easily.
+
+### Hadoop Java SDK
+
+If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_sdk.md).
+
+## Administration
+
+- [Redis best practices](docs/en/redis_best_practices.md)
+- [Mount JuiceFS at boot](docs/en/mount_at_boot.md)
+- [How to setup object storage](docs/en/how_to_setup_object_storage.md)
+- [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver)
 
 ## POSIX Compatibility
 
@@ -133,7 +138,7 @@ Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon
 
 ![Sequential Read Write Benchmark](docs/images/sequential-read-write-benchmark.svg)
 
-It shows JuiceFS can provide 10X more throughput than the other two, read [more details](docs/fio.md).
+It shows JuiceFS can provide 10X more throughput than the other two, read [more details](docs/en/fio.md).
 
 ### Metadata IOPS
 
@@ -141,7 +146,7 @@ Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs
 
 ![Metadata Benchmark](docs/images/metadata-benchmark.svg)
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](docs/mdtest.md).
+It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](docs/en/mdtest.md).
 
 ### Analyze performance
 
@@ -169,7 +174,7 @@ The last number on each line is the time (in seconds) current operation takes. W
 - Local disk
 - Redis
 
-For the detailed list, see [juicesync](https://github.com/juicedata/juicesync).
+For the detailed list, see [this document](docs/en/how_to_setup_object_storage.md#supported-object-storage).
 
 ## Status
 
@@ -193,11 +198,11 @@ Thank you for your contribution! Please refer to the [CONTRIBUTING.md](CONTRIBUT
 
 ## Community
 
-Welcome to join the [Discussion](https://github.com/juicedata/juicefs/discussions) and the [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-kjbre7de-K8jeTMouDZE8nKEZVHLAMQ) to connect with JuiceFS team members and other users.
+Welcome to join the [Discussions](https://github.com/juicedata/juicefs/discussions) and the [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-m34n1kf4-OJ~kvf8JNoO7ZIIq6MFzoA) to connect with JuiceFS team members and other users.
 
 ## Usage Tracking
 
-JuiceFS by default collects **anonymous** usage data. It only collects core metrics (e.g. version number), no user or any sensitive data will be collected. You could review related code [here](cmd/usage.go).
+JuiceFS by default collects **anonymous** usage data. It only collects core metrics (e.g. version number), no user or any sensitive data will be collected. You could review related code [here](pkg/usage/usage.go).
 
 These data help us understand how the community is using this project. You could disable reporting easily by command line option `--no-usage-report`:
 
@@ -217,7 +222,7 @@ The design of JuiceFS was inspired by [Google File System](https://research.goog
 
 ### Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue to [juicesync](https://github.com/juicedata/juicesync).
+JuiceFS already supported many object storage, please check [the list](#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ### Can I use Redis cluster?
 

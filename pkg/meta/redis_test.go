@@ -404,22 +404,144 @@ func TestTruncateAndDelete(t *testing.T) {
 	if st := m.Truncate(ctx, inode, 0, (10<<40)+10, attr); st != 0 {
 		t.Fatalf("truncate file %s", st)
 	}
+	if st := m.Truncate(ctx, inode, 0, (300<<20)+10, attr); st != 0 {
+		t.Fatalf("truncate file %s", st)
+	}
 	r := m.(*redisMeta)
-	keys, _, _ := r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
-	if len(keys) != 3 {
-		for _, k := range keys {
-			println("key", k)
+
+	listAll := func(pattern string) []string {
+		var keys, ks []string
+		var cursor uint64
+		for {
+			ks, cursor, err = r.rdb.Scan(ctx, cursor, pattern, 1000).Result()
+			keys = append(keys, ks...)
+			if err != nil || cursor == 0 {
+				break
+			}
 		}
-		t.Fatalf("number of chunks: %d != 3", len(keys))
+		return keys
+	}
+
+	keys := listAll(fmt.Sprintf("c%d_*", inode))
+	if len(keys) != 3 {
+		t.Fatalf("number of chunks: %d != 3, %+v", len(keys), keys)
 	}
 	m.Close(ctx, inode)
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink file %s", st)
 	}
+
 	time.Sleep(time.Millisecond * 100)
-	keys, _, _ = r.rdb.Scan(ctx, 0, fmt.Sprintf("c%d_*", inode), 1000).Result()
-	// the last chunk will be found and deleted
-	if len(keys) != 1 {
-		t.Fatalf("number of chunks: %d != 1", len(keys))
+	keys = listAll(fmt.Sprintf("c%d_*", inode))
+	// the last chunk could be found and deleted
+	if len(keys) > 1 {
+		t.Fatalf("number of chunks: %d > 1, %+v", len(keys), keys)
 	}
+}
+
+// nolint:errcheck
+func TestCopyFileRange(t *testing.T) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	if err != nil {
+		t.Logf("redis is not available: %s", err)
+		t.Skip()
+	}
+	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+		return nil
+	})
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var iin, iout Ino
+	var attr = &Attr{}
+	_ = m.Unlink(ctx, 1, "fin")
+	_ = m.Unlink(ctx, 1, "fout")
+	if st := m.Create(ctx, 1, "fin", 0650, 022, &iin, attr); st != 0 {
+		t.Fatalf("create file %s", st)
+	}
+	defer m.Unlink(ctx, 1, "fin")
+	if st := m.Create(ctx, 1, "fout", 0650, 022, &iout, attr); st != 0 {
+		t.Fatalf("create file %s", st)
+	}
+	defer m.Unlink(ctx, 1, "fout")
+	m.Write(ctx, iin, 0, 100, Slice{10, 200, 0, 100})
+	m.Write(ctx, iin, 1, 100<<10, Slice{11, 100 << 10, 0, 10 << 10})
+	m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20})
+	m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20})
+	var copied uint64
+	if st := m.CopyFileRange(ctx, iin, 150, iout, 30<<20, 500<<20, 0, &copied); st != 0 {
+		t.Fatalf("copy file range: %s", st)
+	}
+	var expected uint64 = 3*ChunkSize + 30<<20 - 150
+	if copied != expected {
+		t.Fatalf("expect copy %d bytes, but got %d", expected, copied)
+	}
+	var expectedChunks = [][]Slice{
+		{{0, 30 << 20, 0, 30 << 20}, {10, 200, 50, 50}, {0, 0, 200, ChunkSize - 30<<20 - 50}},
+		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 100 << 10}, {11, 100 << 10, 0, 10 << 10}, {0, 0, 110 << 10, ChunkSize - (30<<20 - 150) - 110<<10}},
+		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 150 + (ChunkSize - 30<<20)}},
+		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {12, 63 << 20, 10 << 20, 30 << 20}},
+	}
+	for i := uint32(0); i < 4; i++ {
+		var chunks []Slice
+		if st := m.Read(ctx, iout, i, &chunks); st != 0 {
+			t.Fatalf("read chunk %d: %s", i, st)
+		}
+		if len(chunks) != len(expectedChunks[i]) {
+			t.Fatalf("expect chunk %d: %+v, but got %+v", i, expectedChunks[i], chunks)
+		}
+		for j, s := range chunks {
+			if s != expectedChunks[i][j] {
+				t.Fatalf("expect slice %d,%d: %+v, but got %+v", i, j, expectedChunks[i][j], s)
+			}
+		}
+	}
+}
+
+func benchmarkReaddir(b *testing.B, n int) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	if err != nil {
+		b.Logf("redis is not available: %s", err)
+		b.Skip()
+	}
+	ctx := Background
+	var inode Ino
+	dname := fmt.Sprintf("largedir%d", n)
+	var es []*Entry
+	if m.Lookup(ctx, 1, dname, &inode, nil) == 0 && m.Readdir(ctx, inode, 0, &es) == 0 && len(es) == n+2 {
+	} else {
+		_ = m.Rmr(ctx, 1, dname)
+		_ = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &inode, nil)
+		for j := 0; j < n; j++ {
+			_ = m.Create(ctx, inode, fmt.Sprintf("d%d", j), 0755, 0, nil, nil)
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var entries []*Entry
+		if e := m.Readdir(ctx, inode, 1, &entries); e != 0 {
+			b.Fatalf("readdir: %s", e)
+		}
+		if len(entries) != n+2 {
+			b.Fatalf("files: %d != %d", len(entries), n+2)
+		}
+	}
+}
+
+func BenchmarkReaddir10(b *testing.B) {
+	benchmarkReaddir(b, 10)
+}
+
+func BenchmarkReaddir1k(b *testing.B) {
+	benchmarkReaddir(b, 1000)
+}
+
+func BenchmarkReaddir100k(b *testing.B) {
+	benchmarkReaddir(b, 100000)
+}
+
+func BenchmarkReaddir10m(b *testing.B) {
+	benchmarkReaddir(b, 10000000)
 }

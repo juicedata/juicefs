@@ -1,3 +1,18 @@
+/*
+ * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
+ *
+ * This program is free software: you can use, redistribute, and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3
+ * or later ("AGPL"), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package object
 
 import (
@@ -12,6 +27,7 @@ import (
 )
 
 type swiftOSS struct {
+	DefaultObjectStorage
 	conn       *swift.Connection
 	region     string
 	storageUrl string
@@ -69,36 +85,32 @@ func newSwiftOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
-	//use 'http' or 'https"
 	if uri.Scheme != "http" && uri.Scheme != "https" {
 		return nil, fmt.Errorf("Invalid uri.Scheme: %s", uri.Scheme)
 	}
 
 	hostSlice := strings.SplitN(uri.Host, ".", 2)
 	if len(hostSlice) != 2 {
-		return nil, fmt.Errorf("Invalid uri.host: %s", uri.Host)
+		return nil, fmt.Errorf("Invalid host: %s", uri.Host)
 	}
 	container := hostSlice[0]
 	host := hostSlice[1]
 
 	// current only support V1 authentication
-	auth_url := uri.Scheme + "://" + host + "/auth/v1.0"
+	authURL := uri.Scheme + "://" + host + "/auth/v1.0"
 
-	//fmt.Printf("endpoint: %s\n", endpoint)
-	//fmt.Printf("connect to: %s, container: %s, auth_key: %s, ApiKey: *removed*\n", auth_url, container, accessKey)
 	conn := swift.Connection{
 		UserName: accessKey,
 		ApiKey:   secretKey,
-		AuthUrl:  auth_url,
+		AuthUrl:  authURL,
 	}
-	// Authenticate
 	err = conn.Authenticate()
 	if err != nil {
-		return nil, fmt.Errorf("Auth failed: %s", err)
+		return nil, fmt.Errorf("Auth: %s", err)
 	}
-	return &swiftOSS{&conn, conn.Region, conn.StorageUrl, container}, nil
+	return &swiftOSS{DefaultObjectStorage{}, &conn, conn.Region, conn.StorageUrl, container}, nil
 }
 
 func init() {
-	register("swift", newSwiftOSS)
+	Register("swift", newSwiftOSS)
 }

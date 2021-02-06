@@ -36,11 +36,13 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
-func MakeDaemon(onExit func(int) error) error {
+func makeDaemon(onExit func(int) error) error {
 	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
 	return err
 }
@@ -140,8 +142,8 @@ func mount(c *cli.Context) error {
 	logger.Infof("Data use %s", blob)
 	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
 
-	if c.Bool("background") {
-		err := MakeDaemon(func(stage int) error {
+	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
+		err := makeDaemon(func(stage int) error {
 			if stage != 0 {
 				return nil
 			}
@@ -179,23 +181,17 @@ func mount(c *cli.Context) error {
 			IORetries: 10,
 		},
 		Format:     format,
-		Version:    Version(),
+		Version:    version.Version(),
 		Mountpoint: mp,
-		Primary: &vfs.StorageConfig{
-			Name:      format.Storage,
-			Endpoint:  format.Bucket,
-			AccessKey: format.AccessKey,
-			SecretKey: format.SecretKey,
-		},
-		Chunk: &chunkConf,
+		Chunk:      &chunkConf,
 	}
 	vfs.Init(conf, m, store)
 
 	installHandler(mp)
 	if !c.Bool("no-usage-report") {
-		go reportUsage(m)
+		go usage.ReportUsage(m, version.Version())
 	}
-	err = fuse.Main(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
+	err = fuse.Serve(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}

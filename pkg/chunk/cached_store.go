@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -561,7 +562,7 @@ type cachedStore struct {
 	currentUpload chan bool
 	pendingKeys   map[string]bool
 	pendingMutex  sync.Mutex
-	compressor    utils.Compressor
+	compressor    compress.Compressor
 	seekable      bool
 }
 
@@ -619,7 +620,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool) (err error) {
 
 // NewCachedStore create a cached store.
 func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
-	compressor := utils.NewCompressor(config.Compress)
+	compressor := compress.NewCompressor(config.Compress)
 	if compressor == nil {
 		logger.Fatalf("unknown compress algorithm: %s", config.Compress)
 	}

@@ -1,6 +1,7 @@
 project_name: juicefs
 env:
   - GO111MODULE=on
+  - CGO_ENABLED=1
   - GOPROXY=https://gocenter.io
 before:
   hooks:
@@ -8,10 +9,9 @@ before:
 builds:
   - id: juicefs-darwin-amd64
     env:
-      - CGO_ENABLED=1
       - CC=o64-clang
       - CXX=o64-clang++
-    ldflags: -s -w -X main.version={{.Version}} -X main.revision={{.ShortCommit}} -X main.revisionDate={{.CommitDate}}
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}}
     main: ./cmd
     goos:
       - darwin
@@ -19,8 +19,8 @@ builds:
       - amd64
   - id: juicefs-linux-amd64
     env:
-      - CGO_ENABLED=1
-    ldflags: -s -w -X main.version={{.Version}} -X main.revision={{.ShortCommit}} -X main.revisionDate={{.CommitDate}}
+      - CC=/usr/bin/musl-gcc
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}} -linkmode external -extldflags '-static'
     main: ./cmd
     goos:
       - linux
@@ -28,9 +28,8 @@ builds:
       - amd64
   - id: juicefs-linux-arm64
     env:
-      - CGO_ENABLED=1
       - CC=aarch64-linux-gnu-gcc
-    ldflags: -s -w -X main.version={{.Version}} -X main.revision={{.ShortCommit}} -X main.revisionDate={{.CommitDate}}
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}}
     main: ./cmd
     goos:
       - linux
@@ -46,6 +45,9 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+archives:
+  - name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+
 brews:
   - tap:
       owner: juicedata

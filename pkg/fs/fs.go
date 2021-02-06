@@ -32,8 +32,8 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/juicedata/juicesync/utils"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -431,6 +431,33 @@ func (fs *FileSystem) Truncate(ctx meta.Context, path string, length uint64) (er
 		return
 	}
 	err = fs.m.Truncate(ctx, fi.inode, 0, length, nil)
+	return
+}
+
+func (fs *FileSystem) CopyFileRange(ctx meta.Context, src string, soff uint64, dst string, doff uint64, size uint64) (written uint64, err syscall.Errno) {
+	defer trace.StartRegion(context.TODO(), "fs.CopyFileRange").End()
+	l := vfs.NewLogContext(ctx)
+	defer func() {
+		fs.log(l, "CopyFileRange (%s,%d,%s,%d,%d): (%d,%s)", dst, doff, src, soff, size, written, errstr(err))
+	}()
+	var dfi, sfi *FileStat
+	dfi, err = fs.lookup(ctx, dst, true)
+	if err != 0 {
+		return
+	}
+	err = fs.m.Access(ctx, dfi.inode, mMaskW, dfi.attr)
+	if err != 0 {
+		return
+	}
+	sfi, err = fs.lookup(ctx, src, true)
+	if err != 0 {
+		return
+	}
+	err = fs.m.Access(ctx, sfi.inode, mMaskR, sfi.attr)
+	if err != 0 {
+		return
+	}
+	err = fs.m.CopyFileRange(ctx, sfi.inode, soff, dfi.inode, doff, size, 0, &written)
 	return
 }
 

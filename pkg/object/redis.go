@@ -27,6 +27,7 @@ import (
 
 // redisStore stores data chunks into Redis.
 type redisStore struct {
+	DefaultObjectStorage
 	rdb *redis.Client
 }
 
@@ -76,9 +77,9 @@ func newRedis(url, user, passwd string) (ObjectStorage, error) {
 		opt.Password = passwd
 	}
 	rdb := redis.NewClient(opt)
-	return &redisStore{rdb}, nil
+	return &redisStore{DefaultObjectStorage{}, rdb}, nil
 }
 
 func init() {
-	register("redis", newRedis)
+	Register("redis", newRedis)
 }
