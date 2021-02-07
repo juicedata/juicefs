@@ -2,7 +2,7 @@ os: linux
 dist: xenial
 language: go
 go:
-  - "1.13"
+  - "1.14"
 env:
   - DURATION=10 TEST_SUITE=all
 addons:
@@ -17,7 +17,6 @@ before_script:
   - export GO111MODULE=on
   - make
   - sudo make -C fstests setup
-script:
   - make test
   - sudo DURATION=${DURATION} make -C fstests ${TEST_SUITE}
   - make -C fstests flock
