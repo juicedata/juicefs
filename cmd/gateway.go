@@ -76,7 +76,7 @@ func gateway(c *cli.Context) error {
 	utils.InitLoggers(false)
 	go func() {
 		for port := 6060; port < 6100; port++ {
-			http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+			_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
 		}
 	}()
 
@@ -614,7 +614,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}, nil
 }
 
-var buffPool = sync.Pool{
+var buffPool = &sync.Pool{
 	New: func() interface{} {
 		return make([]byte, 1<<17)
 	},
