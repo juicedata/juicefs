@@ -53,21 +53,27 @@ const (
 var mctx meta.Context
 
 func gatewayFlags() *cli.Command {
+	flags := append(clientFlags(),
+		&cli.BoolFlag{
+			Name:  "access-log",
+			Usage: "path for access log",
+		},
+		&cli.BoolFlag{
+			Name:  "quiet",
+			Usage: "disable MinIO startup information",
+		})
 	return &cli.Command{
 		Name:      "gateway",
 		Usage:     "S3-compatible gateway",
 		ArgsUsage: "REDIS-URL ADDRESS",
-		Flags:     clientFlags(),
+		Flags:     flags,
 		Action:    gateway,
 	}
 }
 
 func gateway(c *cli.Context) error {
 	setLoggerLevel(c)
-	if !c.Bool("no-syslog") {
-		// The default log to syslog is only in daemon mode.
-		utils.InitLoggers(c.Bool("background"))
-	}
+	utils.InitLoggers(false)
 	go func() {
 		for port := 6060; port < 6100; port++ {
 			http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
@@ -80,7 +86,10 @@ func gateway(c *cli.Context) error {
 	address := c.Args().Get(1)
 	gw = &GateWay{c}
 
-	args := []string{"gateway", "-addr", address}
+	args := []string{"gateway", "--address", address, "--anonymous"}
+	if c.Bool("quiet") {
+		args = append(args, "--quiet")
+	}
 	app := &mcli.App{
 		Action: gateway2,
 		Flags: []mcli.Flag{
@@ -97,15 +106,12 @@ func gateway(c *cli.Context) error {
 				Name:  "json",
 				Usage: "output server logs and startup information in json format",
 			},
-			// This flag is hidden and to be used only during certain performance testing.
 			mcli.BoolFlag{
-				Name:   "no-compat",
-				Usage:  "disable strict S3 compatibility by turning on certain performance optimizations",
-				Hidden: true,
+				Name:  "quiet",
+				Usage: "disable MinIO startup information",
 			},
 		},
 	}
-	logger.Infof("args %+v", args)
 	return app.Run(args)
 }
 
@@ -190,16 +196,17 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Meta: &meta.Config{
 			IORetries: 10,
 		},
-		Format:  format,
-		Version: version.Version(),
-		Chunk:   &chunkConf,
+		Format:    format,
+		Version:   version.Version(),
+		AccessLog: c.String("access-log"),
+		Chunk:     &chunkConf,
 	}
 
 	jfs, err := fs.NewFileSystem(conf, m, store)
 	if err != nil {
 		logger.Fatalf("Initialize failed: %s", err)
 	}
-	return &jfsObjects{fs: jfs, listPool: minio.NewTreeWalkPool(time.Minute * 30)}, nil
+	return &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30)}, nil
 }
 
 type jfsObjects struct {
@@ -252,10 +259,13 @@ func jfsToObjectErr(ctx context.Context, err error, params ...string) error {
 		bucket = params[0]
 	}
 
-	if _, ok := err.(syscall.Errno); !ok {
+	if eno, ok := err.(syscall.Errno); !ok {
 		logger.Errorf("error: %s bucket: %s, object: %s, uploadID: %s", err, bucket, object, uploadID)
 		return err
+	} else if eno == 0 {
+		return nil
 	}
+
 	switch {
 	case fs.IsNotExist(err):
 		if uploadID != "" {
@@ -317,8 +327,8 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	if n.conf.Format.Name != "" {
 		return minio.BucketNotEmpty{Bucket: bucket}
 	}
-	err := n.fs.Delete(mctx, n.path(bucket))
-	return jfsToObjectErr(ctx, err, bucket)
+	eno := n.fs.Delete(mctx, n.path(bucket))
+	return jfsToObjectErr(ctx, eno, bucket)
 }
 
 func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, options minio.BucketOptions) error {
@@ -328,22 +338,22 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 	if n.conf.Format.Name != "" {
 		return nil
 	}
-	err := n.fs.Mkdir(mctx, n.path(bucket), 0755)
-	return jfsToObjectErr(ctx, err, bucket)
+	eno := n.fs.Mkdir(mctx, n.path(bucket), 0755)
+	return jfsToObjectErr(ctx, eno, bucket)
 }
 
 func (n *jfsObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, err error) {
 	if !n.isValidBucketName(bucket) {
 		return bi, minio.BucketNameInvalid{Bucket: bucket}
 	}
-	fi, err := n.fs.Stat(mctx, n.path(bucket))
-	if err == nil {
+	fi, eno := n.fs.Stat(mctx, n.path(bucket))
+	if eno == 0 {
 		bi = minio.BucketInfo{
 			Name:    bucket,
-			Created: time.Unix(fi.Atime(), 0),
+			Created: time.Unix(fi.Atime()/1000, 0),
 		}
 	}
-	return bi, jfsToObjectErr(ctx, err, bucket)
+	return bi, jfsToObjectErr(ctx, eno, bucket)
 }
 
 // byBucketName is a collection satisfying sort.Interface.
@@ -363,23 +373,23 @@ func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
 
 func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
 	if n.conf.Format.Name != "" {
-		fi, err := n.fs.Stat(mctx, "/")
-		if err != 0 {
-			return nil, jfsToObjectErr(ctx, err)
+		fi, eno := n.fs.Stat(mctx, "/")
+		if eno != 0 {
+			return nil, jfsToObjectErr(ctx, eno)
 		}
 		buckets = []minio.BucketInfo{{
 			Name:    n.conf.Format.Name,
-			Created: time.Unix(fi.Atime(), 0),
+			Created: time.Unix(fi.Atime()/1000, 0),
 		}}
 		return buckets, nil
 	}
-	f, err := n.fs.Open(mctx, sep, 0)
-	if err != nil {
-		return nil, jfsToObjectErr(ctx, err)
+	f, eno := n.fs.Open(mctx, sep, 0)
+	if eno != 0 {
+		return nil, jfsToObjectErr(ctx, eno)
 	}
-	entries, err := f.Readdir(mctx, 10000)
-	if err != nil {
-		return nil, jfsToObjectErr(ctx, err)
+	entries, eno := f.Readdir(mctx, 10000)
+	if eno != 0 {
+		return nil, jfsToObjectErr(ctx, eno)
 	}
 
 	for _, entry := range entries[2:] {
@@ -390,7 +400,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 		if entry.IsDir() {
 			buckets = append(buckets, minio.BucketInfo{
 				Name:    entry.Name(),
-				Created: time.Unix(entry.(*fs.FileStat).Atime(), 0),
+				Created: time.Unix(entry.(*fs.FileStat).Atime()/1000, 0),
 			})
 		}
 	}
@@ -409,15 +419,14 @@ func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
 }
 
 func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
-	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
-		f, err := n.fs.Open(mctx, n.path(bucket, prefixDir), 0)
-		if err != 0 {
-			return fs.IsNotExist(err), nil, false
+	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
+		f, eno := n.fs.Open(mctx, n.path(bucket, prefixDir), 0)
+		if eno != 0 {
+			return fs.IsNotExist(eno), nil, false
 		}
 		defer f.Close(mctx)
-		fis, err := f.Readdir(mctx, 0)
-		if err != 0 {
+		fis, eno := f.Readdir(mctx, 0)
+		if eno != 0 {
 			return
 		}
 		if len(fis) == 2 {
@@ -437,17 +446,14 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 		entries, delayIsLeaf = minio.FilterListEntries(bucket, prefixDir, entries, prefixEntry, n.isLeaf)
 		return false, entries, delayIsLeaf
 	}
-
-	// Return list factory instance.
-	return listDir
 }
 
 func (n *jfsObjects) checkBucket(ctx context.Context, bucket string) error {
 	if !n.isValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-	if _, err := n.fs.Stat(mctx, n.path(bucket)); err != 0 {
-		return jfsToObjectErr(ctx, err, bucket)
+	if _, eno := n.fs.Stat(mctx, n.path(bucket)); eno != 0 {
+		return jfsToObjectErr(ctx, eno, bucket)
 	}
 	return nil
 }
@@ -458,8 +464,8 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		return loi, err
 	}
 	getObjectInfo := func(ctx context.Context, bucket, object string) (obj minio.ObjectInfo, err error) {
-		fi, err := n.fs.Stat(mctx, n.path(bucket, object))
-		if err == nil {
+		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
+		if eno == 0 {
 			obj = minio.ObjectInfo{
 				Bucket:  bucket,
 				Name:    object,
@@ -469,10 +475,10 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				AccTime: fi.ModTime(),
 			}
 		}
-		return obj, jfsToObjectErr(ctx, err, bucket, object)
+		return obj, jfsToObjectErr(ctx, eno, bucket, object)
 	}
 
-	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), nil, nil, getObjectInfo, getObjectInfo)
+	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
 
 // ListObjectsV2 lists all blobs in JFS bucket filtered by prefix
@@ -506,9 +512,11 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	p := n.path(bucket, object)
 	root := n.path(bucket)
 	for p != root {
-		if err = n.fs.Delete(mctx, p); err != nil {
-			if fs.IsNotEmpty(err) {
+		if eno := n.fs.Delete(mctx, p); eno != 0 {
+			if fs.IsNotEmpty(eno) {
 				err = nil
+			} else {
+				err = eno
 			}
 			break
 		}
@@ -547,13 +555,13 @@ func (n *jfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if err != nil {
 		return
 	}
-	f, err := n.fs.Open(mctx, n.path(bucket, object), 0)
-	if err != nil {
-		return nil, jfsToObjectErr(ctx, err, bucket, object)
+	f, eno := n.fs.Open(mctx, n.path(bucket, object), 0)
+	if eno != 0 {
+		return nil, jfsToObjectErr(ctx, eno, bucket, object)
 	}
-	f.Seek(mctx, startOffset, 0)
+	_, _ = f.Seek(mctx, startOffset, 0)
 	r := &io.LimitedReader{R: &fReader{f}, N: length}
-	closer := func() { f.Close(mctx) }
+	closer := func() { _ = f.Close(mctx) }
 	return minio.NewGetObjectReaderFromReader(r, objInfo, opts, closer)
 }
 
@@ -571,14 +579,14 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 	tmp := n.tpath(dstBucket, "tmp", minio.MustGetUUID())
 	_ = n.mkdirAll(ctx, path.Dir(tmp), 0755)
-	_, err = n.fs.Create(mctx, tmp, 0644)
-	if err != nil {
-		logger.Errorf("create %s: %s", tmp, err)
+	_, eno := n.fs.Create(mctx, tmp, 0644)
+	if eno != 0 {
+		logger.Errorf("create %s: %s", tmp, eno)
 		return
 	}
 	defer func() { _ = n.fs.Delete(mctx, tmp) }()
 
-	_, eno := n.fs.CopyFileRange(mctx, src, 0, tmp, 0, 1<<63)
+	_, eno = n.fs.CopyFileRange(mctx, src, 0, tmp, 0, 1<<63)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
 		logger.Errorf("copy %s to %s: %s", src, tmp, err)
@@ -616,14 +624,14 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
-	f, err := n.fs.Open(mctx, n.path(bucket, object), 0)
-	if err != nil {
-		return jfsToObjectErr(ctx, err, bucket, object)
+	f, eno := n.fs.Open(mctx, n.path(bucket, object), 0)
+	if eno != 0 {
+		return jfsToObjectErr(ctx, eno, bucket, object)
 	}
-	defer f.Close(mctx)
+	defer func() { _ = f.Close(mctx) }()
 	var buf = buffPool.Get().([]byte)
 	defer buffPool.Put(buf)
-	f.Seek(mctx, startOffset, 0)
+	_, _ = f.Seek(mctx, startOffset, 0)
 	for length > 0 {
 		l := int64(len(buf))
 		if l > length {
@@ -645,8 +653,8 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 }
 
 func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
-	f, err := n.fs.Open(mctx, minio.PathJoin(bucket, object), 000)
-	if err != 0 {
+	f, eno := n.fs.Open(mctx, minio.PathJoin(bucket, object), 000)
+	if eno != 0 {
 		return false
 	}
 	defer func() { _ = f.Close(mctx) }()
@@ -658,9 +666,9 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
-	fi, err := n.fs.Stat(mctx, n.path(bucket, object))
-	if err != nil {
-		err = jfsToObjectErr(ctx, err, bucket, object)
+	fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
+	if eno != 0 {
+		err = jfsToObjectErr(ctx, eno, bucket, object)
 		return
 	}
 	if strings.HasSuffix(object, sep) && !fi.IsDir() {
@@ -678,35 +686,38 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 }
 
 func (n *jfsObjects) mkdirAll(ctx context.Context, p string, mode os.FileMode) error {
-	if fi, err := n.fs.Stat(mctx, p); err == 0 {
+	if fi, eno := n.fs.Stat(mctx, p); eno == 0 {
 		if !fi.IsDir() {
 			return fmt.Errorf("%s is not directory", p)
 		}
 		return nil
 	}
-	err := n.fs.Mkdir(mctx, p, uint16(mode))
-	if err != 0 && fs.IsNotExist(err) {
+	eno := n.fs.Mkdir(mctx, p, uint16(mode))
+	if eno != 0 && fs.IsNotExist(eno) {
 		if err := n.mkdirAll(ctx, path.Dir(p), 0755); err != nil {
 			return err
 		}
-		err = n.fs.Mkdir(mctx, p, uint16(mode))
+		eno = n.fs.Mkdir(mctx, p, uint16(mode))
 	}
-	if err != 0 && fs.IsExist(err) {
-		err = 0
+	if eno != 0 && fs.IsExist(eno) {
+		eno = 0
 	}
-	return err
+	if eno == 0 {
+		return nil
+	}
+	return eno
 }
 
-func (n *jfsObjects) putObject(ctx context.Context, bucket, p string, r *minio.PutObjReader, opts minio.ObjectOptions) (err error) {
+func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (err error) {
 	tmpname := n.tpath(bucket, "tmp", minio.MustGetUUID())
 	_ = n.mkdirAll(ctx, path.Dir(tmpname), 0755)
-	var f *fs.File
-	f, err = n.fs.Create(mctx, tmpname, 0644)
-	if err != nil {
-		logger.Errorf("create %s: %s", tmpname, err)
+	f, eno := n.fs.Create(mctx, tmpname, 0644)
+	if eno != 0 {
+		logger.Errorf("create %s: %s", tmpname, eno)
+		err = eno
 		return
 	}
-	defer n.fs.Delete(mctx, tmpname)
+	defer func() { _ = n.fs.Delete(mctx, tmpname) }()
 	var buf = buffPool.Get().([]byte)
 	defer buffPool.Put(buf)
 	for {
@@ -718,24 +729,29 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, p string, r *minio.P
 			}
 			break
 		}
-		_, err = f.Write(mctx, buf[:n])
-		if err != nil {
+		_, eno := f.Write(mctx, buf[:n])
+		if eno != 0 {
+			err = eno
 			break
 		}
 	}
 	if err == nil {
-		err = f.Close(mctx)
+		eno = f.Close(mctx)
+		if eno != 0 {
+			err = eno
+		}
 	} else {
 		_ = f.Close(mctx)
 	}
 	if err != nil {
 		return
 	}
-	dir := path.Dir(p)
+	dir := path.Dir(object)
 	if dir != "" {
 		_ = n.mkdirAll(ctx, dir, os.FileMode(0755))
 	}
-	if err = n.fs.Rename(mctx, tmpname, p); err != nil {
+	if eno := n.fs.Rename(mctx, tmpname, object); eno != 0 {
+		err = jfsToObjectErr(ctx, eno, bucket, object)
 		return
 	}
 	return
@@ -755,9 +771,9 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	} else if err = n.putObject(ctx, bucket, p, r, opts); err != nil {
 		return
 	}
-	fi, err := n.fs.Stat(mctx, p)
-	if err != nil {
-		return objInfo, jfsToObjectErr(ctx, err, bucket, object)
+	fi, eno := n.fs.Stat(mctx, p)
+	if eno != 0 {
+		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
 	}
 	return minio.ObjectInfo{
 		Bucket:  bucket,
@@ -778,7 +794,10 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 	p := n.upath(bucket, uploadID)
 	err = n.mkdirAll(ctx, p, os.FileMode(0755))
 	if err == nil {
-		n.fs.SetXattr(mctx, p, "s3-object", []byte(object), 0)
+		eno := n.fs.SetXattr(mctx, p, "s3-object", []byte(object), 0)
+		if eno != 0 {
+			logger.Warnf("set object %s on upload %s: %s", object, uploadID, eno)
+		}
 	}
 	return
 }
@@ -790,14 +809,14 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
-	f, e := n.fs.Open(mctx, n.tpath(bucket, "uploads"), 0)
-	if e != 0 {
+	f, eno := n.fs.Open(mctx, n.tpath(bucket, "uploads"), 0)
+	if eno != 0 {
 		return // no found
 	}
 	defer f.Close(mctx)
-	entries, e := f.ReaddirPlus(mctx, 0)
-	if e != 0 {
-		err = jfsToObjectErr(ctx, e, bucket)
+	entries, eno := f.ReaddirPlus(mctx, 0)
+	if eno != 0 {
+		err = jfsToObjectErr(ctx, eno, bucket)
 		return
 	}
 	lmi.Prefix = prefix
@@ -831,8 +850,8 @@ func (n *jfsObjects) checkUploadIDExists(ctx context.Context, bucket, object, up
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
-	_, err = n.fs.Stat(mctx, n.upath(bucket, uploadID))
-	return jfsToObjectErr(ctx, err, bucket, object, uploadID)
+	_, eno := n.fs.Stat(mctx, n.upath(bucket, uploadID))
+	return jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 }
 
 type sortPartInfo []minio.PartInfo
@@ -850,7 +869,7 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 		err = jfsToObjectErr(ctx, e, bucket, object, uploadID)
 		return
 	}
-	defer f.Close(mctx)
+	defer func() { _ = f.Close(mctx) }()
 	entries, e := f.ReaddirPlus(mctx, 0)
 	if e != 0 {
 		err = jfsToObjectErr(ctx, e, bucket, object, uploadID)
@@ -905,7 +924,7 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		return
 	}
 	etag := r.MD5CurrentHexString()
-	n.fs.SetXattr(mctx, p, partEtag, []byte(etag), 0)
+	_ = n.fs.SetXattr(mctx, p, partEtag, []byte(etag), 0)
 	info.PartNumber = partID
 	info.ETag = etag
 	info.LastModified = minio.UTCNow()
@@ -920,10 +939,10 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	tmp := n.ppath(bucket, uploadID, "complete")
 	_ = n.fs.Delete(mctx, tmp)
-	_, err = n.fs.Create(mctx, tmp, 0755)
-	if err != nil {
-		err = jfsToObjectErr(ctx, err, bucket, object)
-		logger.Errorf("create complete for %s: %s", uploadID, err)
+	_, eno := n.fs.Create(mctx, tmp, 0755)
+	if eno != 0 {
+		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
+		logger.Errorf("create complete: %s", err)
 		return
 	}
 	var total uint64
@@ -931,8 +950,8 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		p := n.ppath(bucket, uploadID, strconv.Itoa(part.PartNumber))
 		copied, eno := n.fs.CopyFileRange(mctx, p, 0, tmp, total, 1<<30)
 		if eno != 0 {
-			err = jfsToObjectErr(ctx, eno, bucket, object)
-			logger.Errorf("merge parts %s: %s", uploadID, err)
+			err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
+			logger.Errorf("merge parts: %s", err)
 			return
 		}
 		total += copied
@@ -943,23 +962,23 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if dir != "" {
 		if err = n.mkdirAll(ctx, dir, os.FileMode(0755)); err != nil {
 			_ = n.fs.Delete(mctx, tmp)
-			err = jfsToObjectErr(ctx, err, bucket, object)
+			err = jfsToObjectErr(ctx, err, bucket, object, uploadID)
 			return
 		}
 	}
 
-	err = n.fs.Rename(mctx, tmp, name)
-	if err != nil {
+	eno = n.fs.Rename(mctx, tmp, name)
+	if eno != 0 {
 		_ = n.fs.Delete(mctx, tmp)
-		err = jfsToObjectErr(ctx, err, bucket, object)
+		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 		logger.Errorf("Rename %s -> %s: %s", tmp, name, err)
 		return
 	}
 
-	fi, err := n.fs.Stat(mctx, name)
-	if err != nil {
+	fi, eno := n.fs.Stat(mctx, name)
+	if eno != 0 {
 		_ = n.fs.Delete(mctx, name)
-		err = jfsToObjectErr(ctx, err, bucket, object)
+		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 		return
 	}
 
@@ -983,6 +1002,6 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
 	}
-	err = n.fs.Rmr(mctx, n.upath(bucket, uploadID))
-	return jfsToObjectErr(ctx, err, bucket, object, uploadID)
+	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID))
+	return jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 }
