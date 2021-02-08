@@ -6,25 +6,25 @@
 
 The following table shows difference of main features between Alluxio and JuiceFS.
 
-| Features                         | Alluxio | JuiceFS |
-| --------                         | ------- | ------- |
-| Fully POSIX-compatible           | ✕       | ✓       |
-| Fully object storage integration | ✕       | ✓       |
-| Metadata consistency             | ✕       | ✓       |
-| Transparent compression          | ✕       | ✓       |
-| Zero-effort operation            | ✕       | ✓       |
-| Cache friendly                   | ✕       | ✓       |
-| Multi-tier cache                 | ✓       | ✓       |
-| Hadoop-compatible                | ✓       | ✓       |
-| S3-compatible                    | ✓       | ✓       |
-| Kubernetes CSI driver            | ✓       | ✓       |
-| Language                         | Java    | Go      |
+| Features                          | Alluxio | JuiceFS |
+| --------                          | ------- | ------- |
+| Fully POSIX-compatible            | ✕       | ✓       |
+| Fully object storage integrations | ✕       | ✓       |
+| Metadata consistency              | ✕       | ✓       |
+| Transparent compression           | ✕       | ✓       |
+| Zero-effort operation             | ✕       | ✓       |
+| Cache friendly                    | ✕       | ✓       |
+| Multi-tier cache                  | ✓       | ✓       |
+| Hadoop-compatible                 | ✓       | ✓       |
+| S3-compatible                     | ✓       | ✓       |
+| Kubernetes CSI driver             | ✓       | ✓       |
+| Language                          | Java    | Go      |
 
 ### Fully POSIX-compatible
 
 JuiceFS is [fully POSIX-compatible](../../README.md#posix-compatibility). One pjdfstest from [JD.com](https://www.slideshare.net/Alluxio/using-alluxio-posix-fuse-api-in-jdcom) shows that Alluxio didn't pass the POSIX compatibility test, e.g. Alluxio doesn't support symbolic link, truncate, fallocate, append, xattr, mkfifo, mknod and utimes. Besides the things covered by pjdfstest, JuiceFS also provides close-to-open consistency, atomic metadata operation, mmap, fallocate with punch hole, xattr, BSD locks (flock) and POSIX record locks (fcntl).
 
-### Fully object storage integration
+### Fully object storage integrations
 
 JuiceFS supports almost every object storage, see [the list](how_to_setup_object_storage.md#supported-object-storage) for more information.
 
@@ -54,4 +54,4 @@ JuiceFS is [Hadoop-compatible](hadoop_java_sdk.md). Not only compatible with Had
 
 ### Kubernetes CSI driver
 
-JuiceFS provides [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver) to help people who want to use JuiceFS in Kubernetes. Alluxio provides [K8s CSI driver](https://github.com/Alluxio/alluxio-csi) too, but this project seems like not active maintained and not official supported by Alluxio.
+JuiceFS provides [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver) to help people who want to use JuiceFS in Kubernetes. Alluxio provides [Kubernetes CSI driver](https://github.com/Alluxio/alluxio-csi) too, but this project seems like not active maintained and not official supported by Alluxio.
