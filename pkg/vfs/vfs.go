@@ -23,6 +23,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Ino = meta.Ino
@@ -49,6 +50,19 @@ var (
 	m      meta.Meta
 	reader DataReader
 	writer DataWriter
+)
+
+var (
+	readSizeHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "fuse_read_size_bytes",
+		Help:    "size of read distributions.",
+		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
+	})
+	writtenSizeHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "fuse_written_size_bytes",
+		Help:    "size of write distributions.",
+		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
+	})
 )
 
 func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
@@ -495,6 +509,7 @@ func Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err s
 	}
 
 	defer func() {
+		readSizeHistogram.Observe(float64(n))
 		logit(ctx, "read (%d,%d,%d): %s (%d)", ino, size, off, strerr(err), n)
 	}()
 	h := findHandle(ino, fh)
@@ -561,6 +576,7 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 	if err != 0 {
 		return
 	}
+	writtenSizeHistogram.Observe(float64(len(buf)))
 	reader.Truncate(ino, writer.GetLength(ino))
 	reader.Invalidate(ino, off, uint64(len(buf)))
 	return
@@ -848,4 +864,7 @@ func Init(conf *Config, m_ meta.Meta, store chunk.ChunkStore) {
 	reader = NewDataReader(conf, m, store)
 	writer = NewDataWriter(conf, m, store)
 	handles = make(map[Ino][]*handle)
+	prometheus.MustRegister(readSizeHistogram)
+	prometheus.MustRegister(writtenSizeHistogram)
+	prometheus.MustRegister(handlersGause)
 }

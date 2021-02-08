@@ -11,7 +11,7 @@ require (
 	github.com/IBM/ibm-cos-sdk-go v1.6.0
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
-	github.com/aws/aws-sdk-go v1.12.10
+	github.com/aws/aws-sdk-go v1.27.0
 	github.com/baidubce/bce-sdk-go v0.0.0-20180401121131-aa0c7bd66b01
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
@@ -33,6 +33,7 @@ require (
 	github.com/pengsrc/go-shared v0.2.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.10.0
+	github.com/prometheus/client_golang v1.9.0
 	github.com/qiniu/api.v7/v7 v7.8.0
 	github.com/satori/uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.7.0
@@ -42,6 +43,6 @@ require (
 	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible
 	golang.org/x/crypto v0.0.0-20201112155050-0c6587e931a9
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
-	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
+	golang.org/x/sys v0.0.0-20201214210602-f9fddec55a1e
 	google.golang.org/api v0.5.0
 )

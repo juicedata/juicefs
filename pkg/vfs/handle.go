@@ -22,6 +22,18 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+var (
+	handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "fuse_open_handlers",
+		Help: "number of open files and directories.",
+	}, func() float64 {
+		hanleLock.Lock()
+		defer hanleLock.Unlock()
+		return float64(len(handles))
+	})
 )
 
 type handle struct {

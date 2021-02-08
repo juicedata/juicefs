@@ -19,7 +19,21 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	opsDurationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "fuse_ops_durations_histogram_seconds",
+		Help:    "Operations latency distributions.",
+		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+	})
+)
+
+func init() {
+	prometheus.MustRegister(opsDurationsHistogram)
+}
 
 type logReader struct {
 	sync.Mutex
@@ -38,6 +52,7 @@ func init() {
 
 func logit(ctx Context, format string, args ...interface{}) {
 	used := ctx.Duration()
+	opsDurationsHistogram.Observe(used.Seconds())
 	readerLock.Lock()
 	defer readerLock.Unlock()
 	if len(readers) == 0 && used < time.Second*10 {
