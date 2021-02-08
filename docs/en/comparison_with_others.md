@@ -14,7 +14,6 @@ The following table shows difference of main features between Alluxio and JuiceF
 | Kubernetes CSI driver             | ✓       | ✓       |
 | Hadoop data locality              | ✓       | ✓       |
 | Fully POSIX-compatible            | ✕       | ✓       |
-| Fully object storage integrations | ✕       | ✓       |
 | Atomic metadata operation         | ✕       | ✓       |
 | Consistency                       | ✕       | ✓       |
 | Data compression                  | ✕       | ✓       |
@@ -26,10 +25,6 @@ The following table shows difference of main features between Alluxio and JuiceF
 ### Fully POSIX-compatible
 
 JuiceFS is [fully POSIX-compatible](../../README.md#posix-compatibility). One pjdfstest from [JD.com](https://www.slideshare.net/Alluxio/using-alluxio-posix-fuse-api-in-jdcom) shows that Alluxio didn't pass the POSIX compatibility test, e.g. Alluxio doesn't support symbolic link, truncate, fallocate, append, xattr, mkfifo, mknod and utimes. Besides the things covered by pjdfstest, JuiceFS also provides close-to-open consistency, atomic metadata operation, mmap, fallocate with punch hole, xattr, BSD locks (flock) and POSIX record locks (fcntl).
-
-### Fully object storage integrations
-
-JuiceFS supports almost every object storage, see [the list](how_to_setup_object_storage.md#supported-object-storage) for more information.
 
 ### Atomic metadata operation
 
