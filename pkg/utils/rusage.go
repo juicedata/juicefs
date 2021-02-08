@@ -31,6 +31,6 @@ func (ru *Rusage) GetStime() float64 {
 
 func GetRusage() *Rusage {
 	var ru syscall.Rusage
-	syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
+	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
 	return &Rusage{ru}
 }
