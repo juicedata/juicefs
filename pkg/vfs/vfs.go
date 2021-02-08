@@ -866,4 +866,5 @@ func Init(conf *Config, m_ meta.Meta, store chunk.ChunkStore) {
 	handles = make(map[Ino][]*handle)
 	prometheus.MustRegister(readSizeHistogram)
 	prometheus.MustRegister(writtenSizeHistogram)
+	prometheus.MustRegister(handlersGause)
 }
