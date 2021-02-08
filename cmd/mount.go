@@ -67,12 +67,13 @@ var (
 	})
 )
 
-func updateGauges(m meta.Meta) {
+func updateMetrics(m meta.Meta) {
 	prometheus.MustRegister(cpu)
 	prometheus.MustRegister(memory)
 	prometheus.MustRegister(uptime)
 	prometheus.MustRegister(usedSpace)
 	prometheus.MustRegister(usedInodes)
+
 	ctx := meta.Background
 	start := time.Now()
 	for {
@@ -237,6 +238,7 @@ func mount(c *cli.Context) error {
 	vfs.Init(conf, m, store)
 
 	installHandler(mp)
+	go updateMetrics(m)
 	http.Handle("/metrics", promhttp.HandlerFor(
 		prometheus.DefaultGatherer,
 		promhttp.HandlerOpts{
@@ -245,11 +247,13 @@ func mount(c *cli.Context) error {
 		},
 	))
 	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
-	go updateGauges(m)
-	err = http.ListenAndServe(c.String("metrics"), nil)
-	if err != nil {
-		logger.Errorf("listen and serve for metrics: %s", err)
-	}
+	go func() {
+		err = http.ListenAndServe(c.String("metrics"), nil)
+		if err != nil {
+			logger.Errorf("listen and serve for metrics: %s", err)
+		}
+	}()
+
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
