@@ -38,6 +38,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
@@ -190,8 +191,9 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
+	blob = object.WithMetrics(blob)
 
+	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		err := makeDaemon(func(stage int) error {
 			if stage != 0 {
