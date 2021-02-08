@@ -46,7 +46,7 @@ JuiceFS use Redis as the metadata service. You could use Redis service managed b
 
 ### Cache friendly
 
-The [default block size](../../README.md#architecture) of JuiceFS is 4MiB, compare to 64MiB of Alluxio, the granularity is smaller. The smaller block size is more cache friendly, i.e. cache management will be more efficiency.
+The [default block size](../../README.md#architecture) of JuiceFS is 4MiB, compare to 64MiB of Alluxio, the granularity is smaller. The smaller block size is more cache friendly and better for random read (e.g. Parquet and ORC) workload, i.e. cache management will be more efficiency.
 
 ### Hadoop-compatible
 
