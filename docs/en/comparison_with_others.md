@@ -8,17 +8,24 @@ The following table shows difference of main features between Alluxio and JuiceF
 
 | Features                          | Alluxio | JuiceFS |
 | --------                          | ------- | ------- |
-| Fully POSIX-compatible            | ✕       | ✓       |
-| Fully object storage integrations | ✕       | ✓       |
-| Metadata consistency              | ✕       | ✓       |
-| Transparent compression           | ✕       | ✓       |
-| Zero-effort operation             | ✕       | ✓       |
-| Cache friendly                    | ✕       | ✓       |
 | Multi-tier cache                  | ✓       | ✓       |
 | Hadoop-compatible                 | ✓       | ✓       |
 | S3-compatible                     | ✓       | ✓       |
 | Kubernetes CSI driver             | ✓       | ✓       |
+| Hadoop data locality              | ✓       | ✓       |
+| Custom storage format             | ✕       | ✓       |
+| Fully POSIX-compatible            | ✕       | ✓       |
+| Fully object storage integrations | ✕       | ✓       |
+| Consistency                       | ✕       | ✓       |
+| Metadata operation atomicity      | ✕       | ✓       |
+| Transparent compression           | ✕       | ✓       |
+| Zero-effort operation             | ✕       | ✓       |
+| Cache granularity                 | 64MiB   | 4MiB    |
 | Language                          | Java    | Go      |
+
+### Custom storage format
+
+The [storage format](../../README.md#architecture) of one file in JuiceFS consists of three levels: chunk, slice and block. A file will be split into multiple blocks, and be compressed and encrypted (optional) store into object storage.
 
 ### Fully POSIX-compatible
 
@@ -28,11 +35,15 @@ JuiceFS is [fully POSIX-compatible](../../README.md#posix-compatibility). One pj
 
 JuiceFS supports almost every object storage, see [the list](how_to_setup_object_storage.md#supported-object-storage) for more information.
 
-### Metadata consistency
+### Consistency
 
 Alluxio loads metadata from the UFS as needed and it doesn't have information about UFS at startup. By default, Alluxio expects that all modifications to UFS occur through Alluxio. If changes are made to UFS directly, you need sync metadata between Alluxio and UFS either manually or periodically.
 
-**The metadata service of JuiceFS is the single source of truth, not a mirror of UFS.** The metadata service doesn't rely on object storage to obtain metadata. Object storage just be treated as an unlimited block storage. There isn't any inconsistency between JuiceFS and object storage.
+JuiceFS provides strong consistency, both metadata and data. **The metadata service of JuiceFS is the single source of truth, not a mirror of UFS.** The metadata service doesn't rely on object storage to obtain metadata. Object storage just be treated as an unlimited block storage. There isn't any inconsistency between JuiceFS and object storage.
+
+### Metadata operation atomicity
+
+Thanks to [Redis transaction](https://redis.io/topics/transactions), **all metadata operations of JuiceFS are atomic**, e.g. rename file, delete file, rename directory, delete directory. But Alluxio relies on object storage to implement these metadata operations, for example rename file operation will become copy and delete operations.
 
 ### Transparent compression
 
@@ -42,11 +53,11 @@ By default JuiceFS uses [LZ4](https://lz4.github.io/lz4) to compress all your da
 
 Alluxio's architecture can be divided into 3 components: master, worker and client. A typical cluster consists of a single leading master, standby masters, a job master, standby job masters, workers, and job workers. You need operation these masters and workers by yourself.
 
-JuiceFS use Redis as the metadata service. You could use Redis service managed by public cloud provider easily. There isn't any operation needed. See ["Redis Best Practices"](redis_best_practices.md) for more information.
+JuiceFS uses Redis as the metadata service. You could use Redis service managed by public cloud provider easily. There isn't any operation needed. See ["Redis Best Practices"](redis_best_practices.md) for more information.
 
-### Cache friendly
+### Cache granularity
 
-The [default block size](../../README.md#architecture) of JuiceFS is 4MiB, compare to 64MiB of Alluxio, the granularity is smaller. The smaller block size is more cache friendly and better for random read (e.g. Parquet and ORC) workload, i.e. cache management will be more efficiency.
+The [default block size](../../README.md#architecture) of JuiceFS is 4MiB, compare to 64MiB of Alluxio, the granularity is smaller. The smaller block size is better for random read (e.g. Parquet and ORC) workload, i.e. cache management will be more efficiency.
 
 ### Hadoop-compatible
 
