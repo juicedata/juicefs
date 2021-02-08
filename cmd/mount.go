@@ -31,16 +31,67 @@ import (
 
 	"github.com/google/gops/agent"
 	"github.com/juicedata/godaemon"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
+
+var (
+	cpu = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "cpu_usage",
+		Help: "Accumulated CPU usage in seconds.",
+	})
+	memory = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "memory",
+		Help: "Used memory in bytes.",
+	})
+	uptime = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "uptime",
+		Help: "Total running time in seconds.",
+	})
+	usedSpace = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "used_space",
+		Help: "Total used space in bytes.",
+	})
+	usedInodes = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "used_inodes",
+		Help: "Total number of inodes.",
+	})
+)
+
+func updateMetrics(m meta.Meta) {
+	prometheus.MustRegister(cpu)
+	prometheus.MustRegister(memory)
+	prometheus.MustRegister(uptime)
+	prometheus.MustRegister(usedSpace)
+	prometheus.MustRegister(usedInodes)
+
+	ctx := meta.Background
+	start := time.Now()
+	for {
+		uptime.Set(time.Since(start).Seconds())
+		ru := utils.GetRusage()
+		cpu.Set(ru.GetStime() + ru.GetUtime())
+		_, rss := utils.MemoryUsage()
+		memory.Set(float64(rss))
+		var totalSpace, availSpace, iused, iavail uint64
+		err := m.StatFS(ctx, &totalSpace, &availSpace, &iused, &iavail)
+		if err == 0 {
+			usedSpace.Set(float64(totalSpace - availSpace))
+			usedInodes.Set(float64(iused))
+		}
+		time.Sleep(time.Second * 5)
+	}
+}
 
 func makeDaemon(onExit func(int) error) error {
 	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
@@ -140,8 +191,9 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
+	blob = object.WithMetrics(blob)
 
+	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		err := makeDaemon(func(stage int) error {
 			if stage != 0 {
@@ -188,6 +240,22 @@ func mount(c *cli.Context) error {
 	vfs.Init(conf, m, store)
 
 	installHandler(mp)
+	go updateMetrics(m)
+	http.Handle("/metrics", promhttp.HandlerFor(
+		prometheus.DefaultGatherer,
+		promhttp.HandlerOpts{
+			// Opt into OpenMetrics to support exemplars.
+			EnableOpenMetrics: true,
+		},
+	))
+	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
+	go func() {
+		err = http.ListenAndServe(c.String("metrics"), nil)
+		if err != nil {
+			logger.Errorf("listen and serve for metrics: %s", err)
+		}
+	}()
+
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
@@ -303,6 +371,11 @@ func mountFlags() *cli.Command {
 				Usage: "cache only random/small read",
 			},
 
+			&cli.StringFlag{
+				Name:  "metrics",
+				Value: ":9567",
+				Usage: "address to export metrics",
+			},
 			&cli.BoolFlag{
 				Name:  "no-usage-report",
 				Usage: "do not send usage report",
