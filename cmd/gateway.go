@@ -630,6 +630,7 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 	}
 	defer func() { _ = f.Close(mctx) }()
 	var buf = buffPool.Get().([]byte)
+	// nolint:staticcheck
 	defer buffPool.Put(buf)
 	_, _ = f.Seek(mctx, startOffset, 0)
 	for length > 0 {
@@ -719,6 +720,7 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 	}
 	defer func() { _ = n.fs.Delete(mctx, tmpname) }()
 	var buf = buffPool.Get().([]byte)
+	// nolint:staticcheck
 	defer buffPool.Put(buf)
 	for {
 		var n int
