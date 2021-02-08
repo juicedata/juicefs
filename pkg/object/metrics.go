@@ -55,7 +55,7 @@ func (p *withMetrics) track(method string, fn func() error) error {
 }
 
 func (p *withMetrics) Head(key string) (obj *Object, err error) {
-	p.track("HEAD", func() error {
+	err = p.track("HEAD", func() error {
 		obj, err = p.ObjectStorage.Head(key)
 		return err
 	})
@@ -63,7 +63,7 @@ func (p *withMetrics) Head(key string) (obj *Object, err error) {
 }
 
 func (p *withMetrics) Get(key string, off, limit int64) (r io.ReadCloser, err error) {
-	p.track("GET", func() error {
+	err = p.track("GET", func() error {
 		r, err = p.ObjectStorage.Get(key, off, limit)
 		return err
 	})
