@@ -560,11 +560,17 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	var khash = fnv.New32()
 	_, _ = khash.Write([]byte(keys[0]))
 	l := &r.txlocks[int(khash.Sum32())%len(r.txlocks)]
+	start := time.Now()
+	defer func() {
+		used := time.Since(start)
+		redisTxDist.Observe(used.Seconds())
+	}()
 	l.Lock()
 	defer l.Unlock()
 	for i := 0; i < 50; i++ {
 		err = r.rdb.Watch(ctx, txf, keys...)
 		if err == redis.TxFailedErr {
+			redisTxRestart.Add(1)
 			time.Sleep(time.Microsecond * 100 * time.Duration(rand.Int()%(i+1)))
 			continue
 		}

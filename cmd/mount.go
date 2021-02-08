@@ -31,6 +31,8 @@ import (
 
 	"github.com/google/gops/agent"
 	"github.com/juicedata/godaemon"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -41,6 +43,53 @@ import (
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
+
+var (
+	cpu = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "cpu_usage",
+		Help: "Accumulated CPU usage in seconds.",
+	})
+	memory = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "memory",
+		Help: "Used memory in bytes.",
+	})
+	uptime = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "uptime",
+		Help: "Total running time in seconds.",
+	})
+	usedSpace = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "used_space",
+		Help: "Total used space in bytes.",
+	})
+	usedInodes = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "used_inodes",
+		Help: "Total number of inodes.",
+	})
+)
+
+func updateGauges(m meta.Meta) {
+	prometheus.MustRegister(cpu)
+	prometheus.MustRegister(memory)
+	prometheus.MustRegister(uptime)
+	prometheus.MustRegister(usedSpace)
+	prometheus.MustRegister(usedInodes)
+	ctx := meta.Background
+	start := time.Now()
+	for {
+		uptime.Set(time.Since(start).Seconds())
+		ru := utils.GetRusage()
+		cpu.Set(ru.GetStime() + ru.GetUtime())
+		_, rss := utils.MemoryUsage()
+		memory.Set(float64(rss))
+		var totalSpace, availSpace, iused, iavail uint64
+		err := m.StatFS(ctx, &totalSpace, &availSpace, &iused, &iavail)
+		if err == 0 {
+			usedSpace.Set(float64(totalSpace - availSpace))
+			usedInodes.Set(float64(iused))
+		}
+		time.Sleep(time.Second * 5)
+	}
+}
 
 func makeDaemon(onExit func(int) error) error {
 	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
@@ -188,6 +237,19 @@ func mount(c *cli.Context) error {
 	vfs.Init(conf, m, store)
 
 	installHandler(mp)
+	http.Handle("/metrics", promhttp.HandlerFor(
+		prometheus.DefaultGatherer,
+		promhttp.HandlerOpts{
+			// Opt into OpenMetrics to support exemplars.
+			EnableOpenMetrics: true,
+		},
+	))
+	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
+	go updateGauges(m)
+	err = http.ListenAndServe(c.String("metrics"), nil)
+	if err != nil {
+		logger.Errorf("listen and serve for metrics: %s", err)
+	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
@@ -303,6 +365,11 @@ func mountFlags() *cli.Command {
 				Usage: "cache only random/small read",
 			},
 
+			&cli.StringFlag{
+				Name:  "metrics",
+				Value: ":9567",
+				Usage: "address to export metrics",
+			},
 			&cli.BoolFlag{
 				Name:  "no-usage-report",
 				Usage: "do not send usage report",
