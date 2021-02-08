@@ -228,3 +228,7 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 ### 是否可以使用 Redis 集群版？
 
 不可以。JuiceFS 使用了 Redis 的[事务功能](https://redis.io/topics/transactions)来保证元数据操作的原子性，而分布式版还不支持分布式事务。哨兵节点或者其他的 Redis 高可用方法是需要的。
+
+### JuiceFS 与 XXX 的区别是什么？
+
+请查看[「与其它项目比较」](docs/en/comparison_with_others.md)文档了解更多信息。

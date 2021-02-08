@@ -36,6 +36,7 @@ require (
 	github.com/pengsrc/go-shared v0.2.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.10.0
+	github.com/prometheus/client_golang v1.9.0
 	github.com/qiniu/api.v7/v7 v7.8.0
 	github.com/satori/uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.7.0
