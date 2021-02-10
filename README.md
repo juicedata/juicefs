@@ -91,7 +91,7 @@ There is a [command reference](docs/en/command_reference.md) to see all options 
 
 ### Kubernetes
 
-There is a [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver) to use JuiceFS in Kubernetes easily.
+[Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md) is so easy, have a try.
 
 ### Hadoop Java SDK
 
