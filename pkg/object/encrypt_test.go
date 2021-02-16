@@ -55,12 +55,12 @@ func TestRSA(t *testing.T) {
 		t.Fail()
 	}
 
-	exec.Command("openssl", "genrsa", "-out", "/tmp/private.pem", "2048").Run()
+	_ = exec.Command("openssl", "genrsa", "-out", "/tmp/private.pem", "2048").Run()
 	if _, err = ParseRsaPrivateKeyFromPath("/tmp/private.pem", ""); err != nil {
 		t.Error(err)
 		t.Fail()
 	}
-	exec.Command("openssl", "genrsa", "-out", "/tmp/private.pem", "-aes256", "-passout", "pass:abcd", "2048").Run()
+	_ = exec.Command("openssl", "genrsa", "-out", "/tmp/private.pem", "-aes256", "-passout", "pass:abcd", "2048").Run()
 	if _, err = ParseRsaPrivateKeyFromPath("/tmp/private.pem", "abcd"); err != nil {
 		t.Error(err)
 		t.Fail()
@@ -72,7 +72,7 @@ func BenchmarkRSA4096Encrypt(b *testing.B) {
 	kc := NewRSAEncryptor(testkey)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		kc.Encrypt(secret)
+		_, _ = kc.Encrypt(secret)
 	}
 }
 
@@ -82,7 +82,7 @@ func BenchmarkRSA4096Decrypt(b *testing.B) {
 	ciphertext, _ := kc.Encrypt(secret)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		kc.Decrypt(ciphertext)
+		_, _ = kc.Decrypt(ciphertext)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestEncryptedStore(t *testing.T) {
 	kc := NewRSAEncryptor(testkey)
 	dc := NewAESEncryptor(kc)
 	es := NewEncrypted(s, dc)
-	es.Put("a", bytes.NewReader([]byte("hello")))
+	_ = es.Put("a", bytes.NewReader([]byte("hello")))
 	r, err := es.Get("a", 1, 2)
 	if err != nil {
 		t.Errorf("Get a: %s", err)
