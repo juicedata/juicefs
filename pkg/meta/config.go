@@ -31,4 +31,5 @@ type Format struct {
 	BlockSize   int
 	Compression string
 	Partitions  int
+	EncryptKey  string
 }
