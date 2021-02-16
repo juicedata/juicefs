@@ -58,7 +58,18 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return object.WithPrefix(blob, format.Name+"/")
+	blob, _ = object.WithPrefix(blob, format.Name+"/")
+
+	if format.EncryptKey != "" {
+		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
+		privKey, err := object.ParseRsaPrivateKeyFromPem(format.EncryptKey, passphrase)
+		if err != nil {
+			return nil, fmt.Errorf("load private key: %s", err)
+		}
+		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
+		blob = object.NewEncrypted(blob, encryptor)
+	}
+	return blob, nil
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
@@ -173,6 +184,15 @@ func format(c *cli.Context) error {
 		format.Bucket += "/"
 	}
 
+	keyPath := c.String("encrypt-rsa-key")
+	if keyPath != "" {
+		pem, err := ioutil.ReadFile(keyPath)
+		if err != nil {
+			logger.Fatalf("load RSA key from %s: %s", keyPath, err)
+		}
+		format.EncryptKey = string(pem)
+	}
+
 	blob, err := createStorage(&format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -188,6 +208,9 @@ func format(c *cli.Context) error {
 	}
 	if format.SecretKey != "" {
 		format.SecretKey = "removed"
+	}
+	if format.EncryptKey != "" {
+		format.EncryptKey = "removed"
 	}
 	logger.Infof("Volume is formatted as %+v", format)
 	return nil
@@ -234,6 +257,10 @@ func formatFlags() *cli.Command {
 			&cli.StringFlag{
 				Name:  "secret-key",
 				Usage: "Secret key for object storage (env SECRET_KEY)",
+			},
+			&cli.StringFlag{
+				Name:  "encrypt-rsa-key",
+				Usage: "A path to RSA private key (PEM).",
 			},
 
 			&cli.BoolFlag{
