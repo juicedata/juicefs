@@ -17,6 +17,8 @@ package object
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -400,4 +402,13 @@ func TestMinIO(t *testing.T) {
 	}
 	b, _ := newMinio(fmt.Sprintf("http://%s", os.Getenv("MINIO_TEST_BUCKET")), "", "")
 	testStorage(t, b)
+}
+
+func TestEncrypted(t *testing.T) {
+	s, _ := CreateStorage("mem", "", "", "")
+	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	kc := NewRSAEncryptor(privkey)
+	dc := NewAESEncryptor(kc)
+	es := NewEncrypted(s, dc)
+	testStorage(t, es)
 }

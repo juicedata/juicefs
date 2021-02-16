@@ -185,7 +185,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 - Stabilize storage format
 - S3 gateway
 - Windows client
-- Encryption at rest
 - Other databases for metadata
 
 ## Reporting Issues
