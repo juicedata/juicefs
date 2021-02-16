@@ -11,6 +11,7 @@ use HTTPS except for the following scenarios:
 - Uploading to AliCloud OSS using internal endpoint
 - Uploading to UCloud UFile using internal endpoint
 
+
 ## Data Encryption At Rest
 
 JuiceFS supports data encryption at rest, i.e. data is encrypted before
@@ -24,9 +25,7 @@ JuiceFS client. The only thing users need to do is to provide a private key or
 passphrase during JuiceFS mount and use it like an ordinary file system. It is
 completedly transparent to the applications.
 
-.. note::
-
-   The data cached in the client side is **NOT** encrypted. Nevertheless, it is
+**Note**: The data cached in the client side is **NOT** encrypted Nevertheless, it is
    only accessible by root or the owner. If you want to encrypt the cached data
    as well, you can put the cache directory in an encrypted filesystem or block
    storage.
@@ -40,27 +39,23 @@ key S. The data is encrypted using AES-GCM with the symmetric key S, S is
 encrypted using the global RSA key M, and the RSA key is encrypted with the
 passphrase specified by the user.
 
-.. image:: images/encryption.png
-   :align: center
+![Encryption At-rest](../images/encryption.png)
 
 The detailed procedure for data encryption is as following:
 
-#. Data block are compressed using LZ4 or ZStandard before writing to
-   object storage.
-#. A random 256-bit symmetric key S and a random seed N are generated for each
-   block.
-#. Each block is encrypted with S and N using AES-GCM.
-#. The symmetric key S is encrypted with RSA key M as cipher K.
-#. The encrypted data is combined with cypher K and random seed N into object.
-   then written to object storage.
+- Data block are compressed using LZ4 or ZStandard before writing to object storage.
+- A random 256-bit symmetric key S and a random seed N are generated for each block.
+- Each block is encrypted with S and N using AES-GCM.
+- The symmetric key S is encrypted with RSA key M as cipher K.
+- The encrypted data is combined with cypher K and random seed N into object, then written to object storage.
 
 The steps for data decryption are as following:
 
-#. Read the whole encrypted object (it could be a bit larger than 4MB).
-#. Parse the cypher K of symmetric key K, random seed N and encrypted data.
-#. Decrypt K with RSA key to get symmetric key S.
-#. Decrypt data with S and N using AES-GCM into plain formats.
-#. Uncompress the data block.
+- Read the whole encrypted object (it could be a bit larger than 4MB).
+- Parse the cypher K of symmetric key K, random seed N and encrypted data.
+- Decrypt K with RSA key to get symmetric key S.
+- Decrypt data with S and N using AES-GCM into plain formats.
+- Uncompress the data block.
 
 
 ### Key Management
