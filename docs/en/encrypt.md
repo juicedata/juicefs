@@ -8,8 +8,8 @@ eavesdropping of network traffic by unauthorized users.
 For the data uploaded to object storage services, JuiceFS client will always
 use HTTPS except for the following scenarios:
 
-- Uploading to AliCloud OSS using internal endpoint
-- Uploading to UCloud UFile using internal endpoint
+- Uploading to Alibaba Cloud OSS using internal endpoint
+- Uploading to UCloud US3 using internal endpoint
 
 
 ## Data Encryption At Rest
@@ -25,10 +25,10 @@ JuiceFS client. The only thing users need to do is to provide a private key or
 passphrase during JuiceFS mount and use it like an ordinary file system. It is
 completedly transparent to the applications.
 
-**Note**: The data cached in the client side is **NOT** encrypted Nevertheless, it is
-   only accessible by root or the owner. If you want to encrypt the cached data
-   as well, you can put the cache directory in an encrypted filesystem or block
-   storage.
+**Note**: The data cached in the client side is **NOT** encrypted. Nevertheless, it is
+only accessible by root or the owner. If you want to encrypt the cached data
+as well, you can put the cache directory in an encrypted file system or block
+storage.
 
 
 ### Encryption and Decryption Method
@@ -80,7 +80,7 @@ $ openssl genrsa -out my-priv-key.pem -aes256 2048
 2. Provide the key during format:
 
 ```shell
-$ juicefs format --rsa-key my-priv-key.pem REDIS-URI NAME 
+$ juicefs format --encrypt-rsa-key my-priv-key.pem REDIS-URI NAME
 ```
 
 **Note**: If the private key is protected by a passphrase, it should be

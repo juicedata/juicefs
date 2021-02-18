@@ -73,6 +73,9 @@ Access key for object storage (env `ACCESS_KEY`)
 `--secret-key value`\
 Secret key for object storage (env `SECRET_KEY`)
 
+`--encrypt-rsa-key value`\
+A path to RSA private key (PEM)
+
 `--force`\
 overwrite existing format (default: false)
 
