@@ -15,7 +15,7 @@
 - **云原生**：完全弹性，很容易实现存储和计算分离架构；
 - **共享**：可以被多个客户端同时读写；
 - **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
-- **数据压缩**：默认使用 [LZ4](https://lz4.github.io/lz4) 压缩数据，节省存储空间。
+- **数据压缩**：默认使用 [LZ4](https://lz4.github.io/lz4) 压缩数据，节省存储空间；
 - **数据加密**: 支持传输中加密（encryption in transit）以及静态加密（encryption at rest），请查看[这个文档](docs/en/encrypt.md)了解更多信息。
 
 ---
