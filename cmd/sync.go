@@ -235,7 +235,7 @@ func syncFlags() *cli.Command {
 			},
 			&cli.IntFlag{
 				Name:  "bwlimit",
-				Usage: "limit bandwidth in Mbps (default: unlimited)",
+				Usage: "limit bandwidth in Mbps (0 means unlimited)",
 			},
 			&cli.BoolFlag{
 				Name:  "no-https",

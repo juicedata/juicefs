@@ -14,11 +14,13 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.9.3-27 (2021-01-26 c516f3c)
+   0.10.0-34 (2021-02-16 00de4c5)
 
 COMMANDS:
    format     format a volume
    mount      mount a volume
+   umount     unmount a volume
+   sync       sync between two storage
    benchmark  run benchmark, including read/write/stat big/small files
    help, h    Shows a list of commands or help for one command
 
@@ -72,6 +74,9 @@ Access key for object storage (env `ACCESS_KEY`)
 
 `--secret-key value`\
 Secret key for object storage (env `SECRET_KEY`)
+
+`--encrypt-rsa-key value`\
+A path to RSA private key (PEM)
 
 `--force`\
 overwrite existing format (default: false)
@@ -164,6 +169,70 @@ juicefs umount [options] MOUNTPOINT
 `-f, --force`\
 unmount a busy mount point by force (default: false)
 
+## juicefs sync
+
+### Description
+
+Sync between two storage.
+
+### Synopsis
+
+```
+juicefs sync [command options] SRC DST
+```
+
+### Options
+
+`--start KEY, -s KEY`\
+the first KEY to sync
+
+`--end KEY, -e KEY`\
+the last KEY to sync
+
+`--threads value, -p value`\
+number of concurrent threads (default: 10)
+
+`--http-port PORT`\
+HTTP PORT to listen to (default: 6070)
+
+`--update, -u`\
+update existing file if the source is newer (default: false)
+
+`--force-update, -f`\
+always update existing file (default: false)
+
+`--perms`\
+preserve permissions (default: false)
+
+`--dirs`\
+Sync directories or holders (default: false)
+
+`--dry`\
+don't copy file (default: false)
+
+`--delete-src, --deleteSrc`\
+delete objects from source after synced (default: false)
+
+`--delete-dst, --deleteDst`\
+delete extraneous objects from destination (default: false)
+
+`--exclude PATTERN`\
+exclude keys containing PATTERN (POSIX regular expressions)
+
+`--include PATTERN`\
+only include keys containing PATTERN (POSIX regular expressions)
+
+`--manager value`\
+manager address
+
+`--worker value`\
+hosts (seperated by comma) to launch worker
+
+`--bwlimit value`\
+limit bandwidth in Mbps (0 means unlimited) (default: 0)
+
+`--no-https`\
+do not use HTTPS (default: false)
 
 ## juicefs benchmark
 

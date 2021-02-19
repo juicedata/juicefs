@@ -16,6 +16,7 @@ The highlighted features are:
 - **Sharing**: JuiceFS is a shared file storage that can be read and written by many clients.
 - **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
 - **Data Compression**: By default JuiceFS uses [LZ4](https://lz4.github.io/lz4) to compress all your data, you could also use [Zstandard](https://facebook.github.io/zstd) instead.
+- **Data Encryption**: JuiceFS supports data encryption in transit and at rest, read [the guide](docs/en/encrypt.md) for more information.
 
 ---
 

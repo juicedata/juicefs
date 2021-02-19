@@ -260,7 +260,7 @@ func formatFlags() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "encrypt-rsa-key",
-				Usage: "A path to RSA private key (PEM).",
+				Usage: "A path to RSA private key (PEM)",
 			},
 
 			&cli.BoolFlag{
