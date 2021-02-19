@@ -6,21 +6,22 @@
 
 The following table shows difference of main features between Alluxio and JuiceFS.
 
-| Features                          | Alluxio | JuiceFS |
-| --------                          | ------- | ------- |
-| Storage format                    | Object  | Block   |
-| Language                          | Java    | Go      |
-| Cache granularity                 | 64MiB   | 4MiB    |
-| Multi-tier cache                  | ✓       | ✓       |
-| Hadoop-compatible                 | ✓       | ✓       |
-| S3-compatible                     | ✓       | ✓       |
-| Kubernetes CSI driver             | ✓       | ✓       |
-| Hadoop data locality              | ✓       | ✓       |
-| Fully POSIX-compatible            | ✕       | ✓       |
-| Atomic metadata operation         | ✕       | ✓       |
-| Consistency                       | ✕       | ✓       |
-| Data compression                  | ✕       | ✓       |
-| Zero-effort operation             | ✕       | ✓       |
+| Features                  | Alluxio | JuiceFS |
+| --------                  | ------- | ------- |
+| Storage format            | Object  | Block   |
+| Language                  | Java    | Go      |
+| Cache granularity         | 64MiB   | 4MiB    |
+| Multi-tier cache          | ✓       | ✓       |
+| Hadoop-compatible         | ✓       | ✓       |
+| S3-compatible             | ✓       | ✓       |
+| Kubernetes CSI driver     | ✓       | ✓       |
+| Hadoop data locality      | ✓       | ✓       |
+| Fully POSIX-compatible    | ✕       | ✓       |
+| Atomic metadata operation | ✕       | ✓       |
+| Consistency               | ✕       | ✓       |
+| Data compression          | ✕       | ✓       |
+| Data encryption           | ✕       | ✓       |
+| Zero-effort operation     | ✕       | ✓       |
 
 ### Storage format
 
@@ -58,7 +59,11 @@ JuiceFS provides strong consistency, both metadata and data. **The metadata serv
 
 ### Data compression
 
-By default JuiceFS uses [LZ4](https://lz4.github.io/lz4) to compress all your data. And will support encryption in the future. Alluxio doesn't have these features.
+By default JuiceFS uses [LZ4](https://lz4.github.io/lz4) to compress all your data, you could also use [Zstandard](https://facebook.github.io/zstd) instead. Alluxio doesn't have this feature.
+
+### Data encryption
+
+JuiceFS supports data encryption in transit and at rest. Alluxio community edition doesn't have this feature, but [enterprise edition](https://docs.alluxio.io/ee/user/stable/en/operation/Security.html#end-to-end-data-encryption) has.
 
 ### Zero-effort operation
 
