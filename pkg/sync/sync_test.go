@@ -72,7 +72,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 	}
 
 	// Simulate command line prefix in SRC or DST
-	s, _ = object.WithPrefix(s, "abc")
+	s = object.WithPrefix(s, "abc")
 	ch, _ := iterate(s, "", "")
 	keys := collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{""}) {

@@ -211,7 +211,7 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return object.WithPrefix(blob, format.Name+"/")
+	return object.WithPrefix(blob, format.Name+"/"), nil
 }
 
 //export jfs_init

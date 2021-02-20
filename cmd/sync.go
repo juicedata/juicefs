@@ -118,7 +118,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		}
 	}
 	if name != "file" && len(u.Path) > 1 {
-		store, _ = object.WithPrefix(store, u.Path[1:])
+		store = object.WithPrefix(store, u.Path[1:])
 	}
 	return store, nil
 }

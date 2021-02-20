@@ -58,7 +58,7 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 	if err != nil {
 		return nil, err
 	}
-	blob, _ = object.WithPrefix(blob, format.Name+"/")
+	blob = object.WithPrefix(blob, format.Name+"/")
 
 	if format.EncryptKey != "" {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
