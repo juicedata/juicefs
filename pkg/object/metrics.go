@@ -32,7 +32,53 @@ var (
 		Name: "object_request_errors",
 		Help: "failed requests to object store",
 	})
+	dataBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "object_request_data_bytes",
+		Help: "Object requests size in bytes.",
+	}, []string{"method"})
 )
+
+type readCounter struct {
+	io.Reader
+	method string
+}
+
+func newReadCounter(r io.Reader, method string) *readCounter {
+	return &readCounter{r, method}
+}
+
+// Read update metrics while reading data.
+func (counter *readCounter) Read(buf []byte) (int, error) {
+	n, err := counter.Reader.Read(buf)
+	dataBytes.WithLabelValues(counter.method).Add(float64(n))
+	return n, err
+}
+
+// WriteTo try to write data into `w` without copying.
+func (counter *readCounter) WriteTo(w io.Writer) (n int64, err error) {
+	if wt, ok := counter.Reader.(io.WriterTo); ok {
+		n, err = wt.WriteTo(w)
+	} else {
+		buf := bufPool.Get().([]byte)
+		defer bufPool.Put(buf)
+		n, err = io.CopyBuffer(w, counter.Reader, buf)
+	}
+	dataBytes.WithLabelValues(counter.method).Add(float64(n))
+	return
+}
+
+// Close closes the underlying reader
+func (counter *readCounter) Close() error {
+	if rc, ok := counter.Reader.(io.Closer); ok {
+		return rc.Close()
+	}
+	return nil
+}
+
+// Seek call the Seek in underlying reader.
+func (counter *readCounter) Seek(offset int64, whence int) (int64, error) {
+	return counter.Reader.(io.Seeker).Seek(offset, whence)
+}
 
 type withMetrics struct {
 	ObjectStorage
@@ -65,6 +111,9 @@ func (p *withMetrics) Head(key string) (obj *Object, err error) {
 func (p *withMetrics) Get(key string, off, limit int64) (r io.ReadCloser, err error) {
 	err = p.track("GET", func() error {
 		r, err = p.ObjectStorage.Get(key, off, limit)
+		if err == nil {
+			r = newReadCounter(r, "GET")
+		}
 		return err
 	})
 	return
@@ -72,7 +121,7 @@ func (p *withMetrics) Get(key string, off, limit int64) (r io.ReadCloser, err er
 
 func (p *withMetrics) Put(key string, in io.Reader) error {
 	return p.track("PUT", func() error {
-		return p.ObjectStorage.Put(key, in)
+		return p.ObjectStorage.Put(key, newReadCounter(in, "PUT"))
 	})
 }
 
