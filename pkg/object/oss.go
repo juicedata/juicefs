@@ -225,34 +225,35 @@ func fetchStsToken() (*stsCred, error) {
 
 func fetchStsCred() (*stsCred, error) {
 	url := "http://100.100.100.200/latest/meta-data/Ram/security-credentials/"
-	req, _ := http.NewRequest("GET", url, nil)
-	resp, err := httpClient.Do(req)
+	role, err := fetch(url)
 	if err != nil {
 		return nil, err
 	}
-	d, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	role := string(d)
-	req, err = http.NewRequest("GET", url+role, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err = httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	d, err = ioutil.ReadAll(resp.Body)
+	d, err := fetch(url + string(role))
 	if err != nil {
 		return nil, err
 	}
 	var cred stsCred
 	err = json.Unmarshal(d, &cred)
+	return &cred, err
+}
+
+func (o *ossClient) refreshToken() time.Time {
+	cred, err := fetchStsToken()
 	if err != nil {
-		return nil, err
+		logger.Errorf("refresh token: %s", err)
+		return time.Now().Add(time.Second)
 	}
-	return &cred, nil
+	o.client.Config.AccessKeyID = cred.AccessKeyId
+	o.client.Config.AccessKeySecret = cred.AccessKeySecret
+	o.client.Config.SecurityToken = cred.SecurityToken
+	logger.Debugf("Refreshed STS, will be expired at %s", cred.Expiration)
+	expire, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
+	if err != nil {
+		logger.Errorf("invalid expiration: %s, %s", cred.Expiration, err)
+		return time.Now().Add(time.Minute)
+	}
+	return expire
 }
 
 func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (string, error) {
@@ -338,21 +339,6 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		client, err = oss.New(domain, accessKey, secretKey)
 	} else {
 		client, err = oss.New(domain, accessKey, secretKey, oss.SecurityToken(securityToken))
-		go func() {
-			for {
-				cred, err := fetchStsToken()
-				if err == nil {
-					client.Config.AccessKeyID = cred.AccessKeyId
-					client.Config.AccessKeySecret = cred.AccessKeySecret
-					client.Config.SecurityToken = cred.SecurityToken
-					logger.Debugf("Refreshed STS, will be expired at %s", cred.Expiration)
-					expire, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
-					if err == nil {
-						time.Sleep(time.Until(expire) / 2)
-					}
-				}
-			}
-		}()
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create OSS client with endpoint %s: %s", endpoint, err)
@@ -370,7 +356,16 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("Cannot create bucket %s: %s", bucketName, err)
 	}
 
-	return &ossClient{client: client, bucket: bucket}, nil
+	o := &ossClient{client: client, bucket: bucket}
+	if securityToken != "" {
+		go func() {
+			for {
+				next := o.refreshToken()
+				time.Sleep(next.Sub(time.Now()) / 2)
+			}
+		}()
+	}
+	return o, nil
 }
 
 func init() {
