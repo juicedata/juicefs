@@ -376,7 +376,7 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		go func() {
 			for {
 				next := o.refreshToken()
-				time.Sleep(next.Sub(time.Now()) / 2)
+				time.Sleep(time.Until(next) / 2)
 			}
 		}()
 	}
