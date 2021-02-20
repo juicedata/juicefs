@@ -96,12 +96,20 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 		resp, err = o.bucket.GetObject(key, oss.NormalizedRange(r), oss.RangeBehavior("standard"))
 	} else {
 		resp, err = o.bucket.GetObject(key)
+		if err == nil {
+			resp = verifyChecksum(resp,
+				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+checksumAlgr))
+		}
 	}
 	err = o.checkError(err)
 	return
 }
 
 func (o *ossClient) Put(key string, in io.Reader) error {
+	if ins, ok := in.(io.ReadSeeker); ok {
+		option := oss.Meta(checksumAlgr, generateChecksum(ins))
+		return o.checkError(o.bucket.PutObject(key, in, option))
+	}
 	return o.checkError(o.bucket.PutObject(key, in))
 }
 
@@ -365,6 +373,7 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	client.Config.HTTPTimeout.ReadWriteTimeout = time.Second * 5 // 60s
 	client.Config.HTTPTimeout.HeaderTimeout = time.Second * 5    // 60s
 	client.Config.HTTPTimeout.LongTimeout = time.Second * 30     // 300s
+	client.Config.IsEnableCRC = false                            // CRC64ECMA is much slower than CRC32C
 
 	bucket, err := client.Bucket(bucketName)
 	if err != nil {
