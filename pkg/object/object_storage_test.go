@@ -410,7 +410,10 @@ func TestMinIO(t *testing.T) {
 // }
 
 func TestYovole(t *testing.T) {
-	s, _ := newYovole("https://jfstest.cn-east-1.cloud-oss.com", os.Getenv("OS2_ACCESS_KEY"), os.Getenv("OS2_SECRET_KEY"))
+	if os.Getenv("OS2_TEST_BUCKET") == "" {
+		t.SkipNow()
+	}
+	s, _ := newYovole(os.Getenv("OS2_TEST_BUCKET"), os.Getenv("OS2_ACCESS_KEY"), os.Getenv("OS2_SECRET_KEY"))
 	testStorage(t, s)
 }
 

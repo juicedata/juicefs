@@ -32,7 +32,7 @@ func yovoleSigner(req *http.Request, accessKey, secretKey, signName string) {
 	req.Header.Add("Version", "2018-10-30")
 	toSign := fmt.Sprintf("date:%s\nnonce:%s\nversion:2018-10-30\n", req.Header["Date"][0], nonce)
 	h := hmac.New(sha1.New, []byte(secretKey))
-	h.Write([]byte(toSign))
+	_, _ = h.Write([]byte(toSign))
 	sig := base64.StdEncoding.EncodeToString(h.Sum(nil))
 	auth := fmt.Sprintf("YCS1-HMAC-SHA1 Credential=%s, SignedHeaders=%s, Signature=%s",
 		accessKey, strings.Join(headers, ";"), sig)
