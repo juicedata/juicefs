@@ -614,9 +614,10 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}, nil
 }
 
-var buffPool = &sync.Pool{
+var buffPool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, 1<<17)
+		buf := make([]byte, 1<<17)
+		return &buf
 	},
 }
 
@@ -629,23 +630,22 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 		return jfsToObjectErr(ctx, eno, bucket, object)
 	}
 	defer func() { _ = f.Close(mctx) }()
-	var buf = buffPool.Get().([]byte)
-	// nolint:staticcheck
+	var buf = buffPool.Get().(*[]byte)
 	defer buffPool.Put(buf)
 	_, _ = f.Seek(mctx, startOffset, 0)
 	for length > 0 {
-		l := int64(len(buf))
+		l := int64(len(*buf))
 		if l > length {
 			l = length
 		}
-		n, e := f.Read(mctx, buf[:l])
+		n, e := f.Read(mctx, (*buf)[:l])
 		if n == 0 {
 			if e != io.EOF {
 				err = e
 			}
 			break
 		}
-		if _, err = writer.Write(buf[:n]); err != nil {
+		if _, err = writer.Write((*buf)[:n]); err != nil {
 			break
 		}
 		length -= int64(n)
@@ -719,19 +719,18 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 		return
 	}
 	defer func() { _ = n.fs.Delete(mctx, tmpname) }()
-	var buf = buffPool.Get().([]byte)
-	// nolint:staticcheck
+	var buf = buffPool.Get().(*[]byte)
 	defer buffPool.Put(buf)
 	for {
 		var n int
-		n, err = io.ReadFull(r, buf)
+		n, err = io.ReadFull(r, *buf)
 		if n == 0 {
 			if err == io.EOF {
 				err = nil
 			}
 			break
 		}
-		_, eno := f.Write(mctx, buf[:n])
+		_, eno := f.Write(mctx, (*buf)[:n])
 		if eno != 0 {
 			err = eno
 			break
