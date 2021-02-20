@@ -90,6 +90,12 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	if off == 0 && limit == -1 {
+		cs := resp.Metadata[checksumAlgr]
+		if cs != nil {
+			resp.Body = verifyChecksum(resp.Body, *cs)
+		}
+	}
 	return resp.Body, nil
 }
 
@@ -104,14 +110,17 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		}
 		body = bytes.NewReader(data)
 	}
+	checksum := generateChecksum(body)
 	params := &s3.PutObjectInput{
-		Bucket: &s.bucket,
-		Key:    &key,
-		Body:   body,
+		Bucket:   &s.bucket,
+		Key:      &key,
+		Body:     body,
+		Metadata: map[string]*string{checksumAlgr: &checksum},
 	}
 	_, err := s.s3.PutObject(params)
 	return err
 }
+
 func (s *s3client) Copy(dst, src string) error {
 	src = s.bucket + "/" + src
 	params := &s3.CopyObjectInput{

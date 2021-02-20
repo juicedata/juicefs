@@ -102,6 +102,7 @@ func CreateStorage(name, endpoint, accessKey, secretKey string) (ObjectStorage, 
 
 var bufPool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, 32<<10)
+		buf := make([]byte, 32<<10)
+		return &buf
 	},
 }

@@ -118,9 +118,9 @@ func (d *filestore) Put(key string, in io.Reader) error {
 		return err
 	}
 	defer os.Remove(tmp)
-	buf := bufPool.Get().([]byte)
+	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
-	_, err = io.CopyBuffer(f, in, buf)
+	_, err = io.CopyBuffer(f, in, *buf)
 	if err != nil {
 		f.Close()
 		return err
