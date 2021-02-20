@@ -238,9 +238,9 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 		return err
 	}
 	defer func() { _ = c.sftpClient.Remove(tmp) }()
-	buf := bufPool.Get().([]byte)
+	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
-	_, err = io.CopyBuffer(ff, in, buf)
+	_, err = io.CopyBuffer(ff, in, *buf)
 	if err != nil {
 		ff.Close()
 		return err

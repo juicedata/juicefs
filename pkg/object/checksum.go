@@ -35,12 +35,12 @@ func generateChecksum(in io.ReadSeeker) string {
 		return strconv.Itoa(int(crc32.Update(0, crc32c, data)))
 	}
 	var hash uint32
-	crcBuffer := bufPool.Get().([]byte)
+	crcBuffer := bufPool.Get().(*[]byte)
 	defer bufPool.Put(crcBuffer)
 	defer func() { _, _ = in.Seek(0, io.SeekStart) }()
 	for {
-		n, err := in.Read(crcBuffer)
-		hash = crc32.Update(hash, crc32c, crcBuffer[:n])
+		n, err := in.Read(*crcBuffer)
+		hash = crc32.Update(hash, crc32c, (*crcBuffer)[:n])
 		if err != nil {
 			if err != io.EOF {
 				return ""
