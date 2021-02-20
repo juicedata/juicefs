@@ -404,6 +404,16 @@ func TestMinIO(t *testing.T) {
 	testStorage(t, b)
 }
 
+// func TestUpYun(t *testing.T) {
+// 	s, _ := newUpyun("http://jfstest", "test", "")
+// 	testStorage(t, s)
+// }
+
+func TestYovole(t *testing.T) {
+	s, _ := newYovole("https://jfstest.cn-east-1.cloud-oss.com", os.Getenv("OS2_ACCESS_KEY"), os.Getenv("OS2_SECRET_KEY"))
+	testStorage(t, s)
+}
+
 func TestEncrypted(t *testing.T) {
 	s, _ := CreateStorage("mem", "", "", "")
 	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
