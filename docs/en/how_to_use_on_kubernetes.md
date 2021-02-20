@@ -71,7 +71,6 @@ storage:     2 bytes
 ```
 
 
-
 - Check storage class: `kubectl get sc` will show the storage class like this:
 
 ```
@@ -79,6 +78,52 @@ NAME                 PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMOD
 juicefs-sc           csi.juicefs.com            Delete          Immediate           false                  21m
 ```
 
+
+### Install with kubectl
+
+1. Deploy the driver:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+```
+
+Here we use the `juicedata/juicefs-csi-driver:latest` image, if we want to use the specified tag such as `v0.7.0` , we should download the deploy YAML file and modified it:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@juicedata/juicefs-csi-driver@juicedata/juicefs-csi-driver:v0.7.0@' | kubectl apply -f -
+```
+
+2. Create storage class
+
+- Add secret `juicefs-sc-secret` :
+
+```bash
+kubectl -n kube-system create secret generic juicefs-sc-secret \
+  --from-literal=name=test \
+  --from-literal=meta-url=redis://juicefs.afyq4z.0001.use1.cache.amazonaws.com/3 \
+  --from-literal=storage=s3 \
+  --from-literal=bucket=https://juicefs-test.s3.us-east-1.amazonaws.com \
+  --from-literal=access-key="" \
+  --from-literal=secret-key=""
+
+```
+
+- Create storage class use `kubectl apply`:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: juicefs-sc
+provisioner: csi.juicefs.com
+parameters:
+  csi.storage.k8s.io/node-publish-secret-name: juicefs-sc-secret
+  csi.storage.k8s.io/node-publish-secret-namespace: kube-system
+  csi.storage.k8s.io/provisioner-secret-name: juicefs-sc-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: kube-system
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+```
 
 
 # Use JuiceFS
