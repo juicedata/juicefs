@@ -37,7 +37,7 @@ func generateChecksum(in io.ReadSeeker) string {
 	var hash uint32
 	crcBuffer := bufPool.Get().([]byte)
 	defer bufPool.Put(crcBuffer)
-	defer in.Seek(0, io.SeekStart)
+	defer func() { _, _ = in.Seek(0, io.SeekStart) }()
 	for {
 		n, err := in.Read(crcBuffer)
 		hash = crc32.Update(hash, crc32c, crcBuffer[:n])
