@@ -165,6 +165,13 @@ func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Obje
 	return out, nil
 }
 
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 32<<10)
+		return &buf
+	},
+}
+
 func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
 	if limiter != nil {
 		limiter.Wait(obj.Size)
@@ -218,7 +225,9 @@ func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
 	if in, e = src.Get(key, int64(len(data)), -1); e != nil {
 		return e
 	}
-	_, e = io.Copy(f, in)
+	buf := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf)
+	_, e = io.CopyBuffer(f, in, *buf)
 	in.Close()
 	if e != nil {
 		return e

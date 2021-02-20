@@ -38,9 +38,11 @@ require (
 	github.com/pkg/sftp v1.10.0
 	github.com/prometheus/client_golang v1.9.0
 	github.com/qiniu/api.v7/v7 v7.8.0
+	github.com/satori/go.uuid v1.2.0
 	github.com/satori/uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
+	github.com/upyun/go-sdk v2.1.0+incompatible
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible

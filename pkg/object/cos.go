@@ -29,6 +29,8 @@ import (
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
+const cosChecksumKey = "x-cos-meta-" + checksumAlgr
+
 type COS struct {
 	c        *cos.Client
 	endpoint string
@@ -84,11 +86,21 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	if off == 0 && limit == -1 {
+		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey))
+	}
 	return resp.Body, nil
 }
 
 func (c *COS) Put(key string, in io.Reader) error {
-	_, err := c.c.Object.Put(ctx, key, in, nil)
+	var options *cos.ObjectPutOptions
+	if ins, ok := in.(io.ReadSeeker); ok {
+		header := http.Header(map[string][]string{
+			cosChecksumKey: {generateChecksum(ins)},
+		})
+		options = &cos.ObjectPutOptions{ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}}
+	}
+	_, err := c.c.Object.Put(ctx, key, in, options)
 	return err
 }
 

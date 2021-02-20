@@ -16,6 +16,7 @@ The highlighted features are:
 - **Sharing**: JuiceFS is a shared file storage that can be read and written by many clients.
 - **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
 - **Data Compression**: By default JuiceFS uses [LZ4](https://lz4.github.io/lz4) to compress all your data, you could also use [Zstandard](https://facebook.github.io/zstd) instead.
+- **Data Encryption**: JuiceFS supports data encryption in transit and at rest, read [the guide](docs/en/encrypt.md) for more information.
 
 ---
 
@@ -91,7 +92,7 @@ There is a [command reference](docs/en/command_reference.md) to see all options 
 
 ### Kubernetes
 
-There is a [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver) to use JuiceFS in Kubernetes easily.
+[Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md) is so easy, have a try.
 
 ### Hadoop Java SDK
 
@@ -185,7 +186,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 - Stabilize storage format
 - S3 gateway
 - Windows client
-- Encryption at rest
 - Other databases for metadata
 
 ## Reporting Issues

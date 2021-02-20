@@ -44,8 +44,8 @@ func init() {
 			Proxy:                 http.ProxyFromEnvironment,
 			TLSHandshakeTimeout:   time.Second * 20,
 			ResponseHeaderTimeout: time.Second * 30,
-			IdleConnTimeout:       time.Second * 60,
-			MaxIdleConnsPerHost:   100,
+			IdleConnTimeout:       time.Second * 300,
+			MaxIdleConnsPerHost:   500,
 			Dial: func(network string, address string) (net.Conn, error) {
 				separator := strings.LastIndex(address, ":")
 				host := address[:separator]

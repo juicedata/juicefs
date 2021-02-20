@@ -13,23 +13,27 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package meta
+package object
 
-type Config struct {
-	Addr      string
-	Password  string
-	IORetries int
-}
+import (
+	"bytes"
+	"hash/crc32"
+	"strconv"
+	"testing"
+)
 
-type Format struct {
-	Name        string
-	UUID        string
-	Storage     string
-	Bucket      string
-	AccessKey   string
-	SecretKey   string
-	BlockSize   int
-	Compression string
-	Partitions  int
-	EncryptKey  string
+func TestChecksum(t *testing.T) {
+	b := []byte("hello")
+	expected := crc32.Update(0, crc32c, b)
+	actual := generateChecksum(bytes.NewReader(b))
+	if actual != strconv.Itoa(int(expected)) {
+		t.Errorf("expect %d but got %s", expected, actual)
+		t.FailNow()
+	}
+
+	actual = generateChecksum(bytes.NewReader(b))
+	if actual != strconv.Itoa(int(expected)) {
+		t.Errorf("expect %d but got %s", expected, actual)
+		t.FailNow()
+	}
 }

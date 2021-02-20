@@ -52,9 +52,21 @@ func (o *ossClient) Create() error {
 	return err
 }
 
+func (o *ossClient) checkError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "InvalidAccessKeyId") || strings.Contains(msg, "SecurityTokenExpired") {
+		logger.Warnf("refresh security token: %s", err)
+		go o.refreshToken()
+	}
+	return err
+}
+
 func (o *ossClient) Head(key string) (*Object, error) {
 	r, err := o.bucket.GetObjectMeta(key)
-	if err != nil {
+	if o.checkError(err) != nil {
 		return nil, err
 	}
 
@@ -73,7 +85,7 @@ func (o *ossClient) Head(key string) (*Object, error) {
 	}, nil
 }
 
-func (o *ossClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err error) {
 	if off > 0 || limit > 0 {
 		var r string
 		if limit > 0 {
@@ -81,22 +93,33 @@ func (o *ossClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		} else {
 			r = fmt.Sprintf("%d-", off)
 		}
-		return o.bucket.GetObject(key, oss.NormalizedRange(r), oss.RangeBehavior("standard"))
+		resp, err = o.bucket.GetObject(key, oss.NormalizedRange(r), oss.RangeBehavior("standard"))
+	} else {
+		resp, err = o.bucket.GetObject(key)
+		if err == nil {
+			resp = verifyChecksum(resp,
+				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+checksumAlgr))
+		}
 	}
-	return o.bucket.GetObject(key)
+	err = o.checkError(err)
+	return
 }
 
 func (o *ossClient) Put(key string, in io.Reader) error {
-	return o.bucket.PutObject(key, in)
+	if ins, ok := in.(io.ReadSeeker); ok {
+		option := oss.Meta(checksumAlgr, generateChecksum(ins))
+		return o.checkError(o.bucket.PutObject(key, in, option))
+	}
+	return o.checkError(o.bucket.PutObject(key, in))
 }
 
 func (o *ossClient) Copy(dst, src string) error {
 	_, err := o.bucket.CopyObject(src, dst)
-	return err
+	return o.checkError(err)
 }
 
 func (o *ossClient) Delete(key string) error {
-	return o.bucket.DeleteObject(key)
+	return o.checkError(o.bucket.DeleteObject(key))
 }
 
 func (o *ossClient) List(prefix, marker string, limit int64) ([]*Object, error) {
@@ -105,7 +128,7 @@ func (o *ossClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 	}
 	result, err := o.bucket.ListObjects(oss.Prefix(prefix),
 		oss.Marker(marker), oss.MaxKeys(int(limit)))
-	if err != nil {
+	if o.checkError(err) != nil {
 		return nil, err
 	}
 	n := len(result.Objects)
@@ -123,7 +146,7 @@ func (o *ossClient) ListAll(prefix, marker string) (<-chan *Object, error) {
 
 func (o *ossClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	r, err := o.bucket.InitiateMultipartUpload(key)
-	if err != nil {
+	if o.checkError(err) != nil {
 		return nil, err
 	}
 	return &MultipartUpload{UploadID: r.UploadID, MinPartSize: 4 << 20, MaxCount: 10000}, nil
@@ -135,7 +158,7 @@ func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte
 		UploadID: uploadID,
 	}
 	r, err := o.bucket.UploadPart(initResult, bytes.NewReader(data), int64(len(data)), num)
-	if err != nil {
+	if o.checkError(err) != nil {
 		return nil, err
 	}
 	return &Part{Num: num, ETag: r.ETag}, nil
@@ -160,12 +183,12 @@ func (o *ossClient) CompleteUpload(key string, uploadID string, parts []*Part) e
 		oparts[i].ETag = p.ETag
 	}
 	_, err := o.bucket.CompleteMultipartUpload(initResult, oparts)
-	return err
+	return o.checkError(err)
 }
 
 func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	result, err := o.bucket.ListMultipartUploads(oss.KeyMarker(marker))
-	if err != nil {
+	if o.checkError(err) != nil {
 		return nil, "", err
 	}
 	parts := make([]*PendingPart, len(result.Uploads))
@@ -225,34 +248,35 @@ func fetchStsToken() (*stsCred, error) {
 
 func fetchStsCred() (*stsCred, error) {
 	url := "http://100.100.100.200/latest/meta-data/Ram/security-credentials/"
-	req, _ := http.NewRequest("GET", url, nil)
-	resp, err := httpClient.Do(req)
+	role, err := fetch(url)
 	if err != nil {
 		return nil, err
 	}
-	d, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	role := string(d)
-	req, err = http.NewRequest("GET", url+role, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err = httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	d, err = ioutil.ReadAll(resp.Body)
+	d, err := fetch(url + string(role))
 	if err != nil {
 		return nil, err
 	}
 	var cred stsCred
 	err = json.Unmarshal(d, &cred)
+	return &cred, err
+}
+
+func (o *ossClient) refreshToken() time.Time {
+	cred, err := fetchStsToken()
 	if err != nil {
-		return nil, err
+		logger.Errorf("refresh token: %s", err)
+		return time.Now().Add(time.Second)
 	}
-	return &cred, nil
+	o.client.Config.AccessKeyID = cred.AccessKeyId
+	o.client.Config.AccessKeySecret = cred.AccessKeySecret
+	o.client.Config.SecurityToken = cred.SecurityToken
+	logger.Debugf("Refreshed STS, will be expired at %s", cred.Expiration)
+	expire, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
+	if err != nil {
+		logger.Errorf("invalid expiration: %s, %s", cred.Expiration, err)
+		return time.Now().Add(time.Minute)
+	}
+	return expire
 }
 
 func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (string, error) {
@@ -338,21 +362,6 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		client, err = oss.New(domain, accessKey, secretKey)
 	} else {
 		client, err = oss.New(domain, accessKey, secretKey, oss.SecurityToken(securityToken))
-		go func() {
-			for {
-				cred, err := fetchStsToken()
-				if err == nil {
-					client.Config.AccessKeyID = cred.AccessKeyId
-					client.Config.AccessKeySecret = cred.AccessKeySecret
-					client.Config.SecurityToken = cred.SecurityToken
-					logger.Debugf("Refreshed STS, will be expired at %s", cred.Expiration)
-					expire, err := time.Parse("2006-01-02T15:04:05Z", cred.Expiration)
-					if err == nil {
-						time.Sleep(time.Until(expire) / 2)
-					}
-				}
-			}
-		}()
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create OSS client with endpoint %s: %s", endpoint, err)
@@ -364,13 +373,23 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	client.Config.HTTPTimeout.ReadWriteTimeout = time.Second * 5 // 60s
 	client.Config.HTTPTimeout.HeaderTimeout = time.Second * 5    // 60s
 	client.Config.HTTPTimeout.LongTimeout = time.Second * 30     // 300s
+	client.Config.IsEnableCRC = false                            // CRC64ECMA is much slower than CRC32C
 
 	bucket, err := client.Bucket(bucketName)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create bucket %s: %s", bucketName, err)
 	}
 
-	return &ossClient{client: client, bucket: bucket}, nil
+	o := &ossClient{client: client, bucket: bucket}
+	if securityToken != "" {
+		go func() {
+			for {
+				next := o.refreshToken()
+				time.Sleep(time.Until(next) / 2)
+			}
+		}()
+	}
+	return o, nil
 }
 
 func init() {

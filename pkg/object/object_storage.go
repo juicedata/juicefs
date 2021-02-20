@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -97,4 +98,11 @@ func CreateStorage(name, endpoint, accessKey, secretKey string) (ObjectStorage, 
 		return f(endpoint, accessKey, secretKey)
 	}
 	return nil, fmt.Errorf("invalid storage: %s", name)
+}
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 32<<10)
+		return &buf
+	},
 }
