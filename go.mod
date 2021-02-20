@@ -1,6 +1,6 @@
 module github.com/juicedata/juicefs
 
-go 1.13
+go 1.14
 
 require (
 	cloud.google.com/go v0.39.0
@@ -11,14 +11,14 @@ require (
 	github.com/IBM/ibm-cos-sdk-go v1.6.0
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
-	github.com/aws/aws-sdk-go v1.27.0
+	github.com/aws/aws-sdk-go v1.35.20
 	github.com/baidubce/bce-sdk-go v0.0.0-20180401121131-aa0c7bd66b01
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/google/gops v0.3.13
-	github.com/google/uuid v1.1.1
+	github.com/google/uuid v1.1.2
 	github.com/hanwen/go-fuse/v2 v2.0.4-0.20210104155004-09a3c381714c
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
@@ -28,7 +28,10 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
 	github.com/kurin/blazer v0.2.1
-	github.com/mattn/go-isatty v0.0.4
+	github.com/mattn/go-isatty v0.0.12
+	github.com/minio/cli v1.22.0
+	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
+	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/ncw/swift v1.0.53
 	github.com/pengsrc/go-shared v0.2.0 // indirect
 	github.com/pkg/errors v0.9.1
@@ -43,8 +46,9 @@ require (
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible
-	golang.org/x/crypto v0.0.0-20201112155050-0c6587e931a9
+	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
-	golang.org/x/sys v0.0.0-20201214210602-f9fddec55a1e
+	golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
+	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 	google.golang.org/api v0.5.0
 )

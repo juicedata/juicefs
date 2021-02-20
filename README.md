@@ -42,7 +42,7 @@ You can download precompiled binaries from [releases page](https://github.com/ju
 
 ### Building from source
 
-You need first installing [Go](https://golang.org) 1.13+, then run following commands:
+You need first installing [Go](https://golang.org) 1.14+, then run following commands:
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git

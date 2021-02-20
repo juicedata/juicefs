@@ -43,7 +43,7 @@ JuiceFS 中的文件格式，如下图所示。一个文件首先被拆分成固
 
 ### 从源代码编译
 
-你需要先安装 [Go](https://golang.org) 1.13+，然后通过下面的方式来编译：
+你需要先安装 [Go](https://golang.org) 1.14+，然后通过下面的方式来编译：
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git

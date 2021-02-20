@@ -31,7 +31,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 func supportHTTPS(name, endpoint string) bool {
@@ -69,7 +69,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				pass = parts[1]
 			} else if os.Getenv("SSH_PRIVATE_KEY_PATH") == "" {
 				fmt.Print("Enter Password: ")
-				bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
+				bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 				if err != nil {
 					logger.Fatalf("Read password: %s", err.Error())
 				}
