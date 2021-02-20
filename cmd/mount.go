@@ -266,7 +266,7 @@ func mount(c *cli.Context) error {
 	return nil
 }
 
-func mountFlags() *cli.Command {
+func clientFlags() []cli.Flag {
 	var defaultCacheDir = "/var/jfsCache"
 	if runtime.GOOS == "darwin" {
 		homeDir, err := os.UserHomeDir()
@@ -276,7 +276,66 @@ func mountFlags() *cli.Command {
 		}
 		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	}
-	return &cli.Command{
+	return []cli.Flag{
+		&cli.IntFlag{
+			Name:  "get-timeout",
+			Value: 60,
+			Usage: "the max number of seconds to download an object",
+		},
+		&cli.IntFlag{
+			Name:  "put-timeout",
+			Value: 60,
+			Usage: "the max number of seconds to upload an object",
+		},
+		&cli.IntFlag{
+			Name:  "io-retries",
+			Value: 30,
+			Usage: "number of retries after network failure",
+		},
+		&cli.IntFlag{
+			Name:  "max-uploads",
+			Value: 20,
+			Usage: "number of connections to upload",
+		},
+		&cli.IntFlag{
+			Name:  "buffer-size",
+			Value: 300,
+			Usage: "total read/write buffering in MB",
+		},
+		&cli.IntFlag{
+			Name:  "prefetch",
+			Value: 3,
+			Usage: "prefetch N blocks in parallel",
+		},
+
+		&cli.BoolFlag{
+			Name:  "writeback",
+			Usage: "Upload objects in background",
+		},
+		&cli.StringFlag{
+			Name:  "cache-dir",
+			Value: defaultCacheDir,
+			Usage: "directory to cache object",
+		},
+		&cli.IntFlag{
+			Name:  "cache-size",
+			Value: 1 << 10,
+			Usage: "size of cached objects in MiB",
+		},
+		&cli.Float64Flag{
+			Name:  "free-space-ratio",
+			Value: 0.1,
+			Usage: "min free space (ratio)",
+		},
+		&cli.BoolFlag{
+			Name:  "cache-partial-only",
+			Usage: "cache only random/small read",
+		},
+	}
+}
+
+func mountFlags() *cli.Command {
+	cmd := &cli.Command{
 		Name:      "mount",
 		Usage:     "mount a volume",
 		ArgsUsage: "REDIS-URL MOUNTPOINT",
@@ -316,61 +375,6 @@ func mountFlags() *cli.Command {
 				Usage: "enable extended attributes (xattr)",
 			},
 
-			&cli.IntFlag{
-				Name:  "get-timeout",
-				Value: 60,
-				Usage: "the max number of seconds to download an object",
-			},
-			&cli.IntFlag{
-				Name:  "put-timeout",
-				Value: 60,
-				Usage: "the max number of seconds to upload an object",
-			},
-			&cli.IntFlag{
-				Name:  "io-retries",
-				Value: 30,
-				Usage: "number of retries after network failure",
-			},
-			&cli.IntFlag{
-				Name:  "max-uploads",
-				Value: 20,
-				Usage: "number of connections to upload",
-			},
-			&cli.IntFlag{
-				Name:  "buffer-size",
-				Value: 300,
-				Usage: "total read/write buffering in MiB",
-			},
-			&cli.IntFlag{
-				Name:  "prefetch",
-				Value: 3,
-				Usage: "prefetch N blocks in parallel",
-			},
-
-			&cli.BoolFlag{
-				Name:  "writeback",
-				Usage: "Upload objects in background",
-			},
-			&cli.StringFlag{
-				Name:  "cache-dir",
-				Value: defaultCacheDir,
-				Usage: "directory to cache object",
-			},
-			&cli.IntFlag{
-				Name:  "cache-size",
-				Value: 1 << 10,
-				Usage: "size of cached objects in MiB",
-			},
-			&cli.Float64Flag{
-				Name:  "free-space-ratio",
-				Value: 0.1,
-				Usage: "min free space (ratio)",
-			},
-			&cli.BoolFlag{
-				Name:  "cache-partial-only",
-				Usage: "cache only random/small read",
-			},
-
 			&cli.StringFlag{
 				Name:  "metrics",
 				Value: ":9567",
@@ -382,4 +386,6 @@ func mountFlags() *cli.Command {
 			},
 		},
 	}
+	cmd.Flags = append(cmd.Flags, clientFlags()...)
+	return cmd
 }
