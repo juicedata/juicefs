@@ -144,7 +144,9 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 			return err
 		}
 	}
-	_, err = io.Copy(f, in)
+	buf := bufPool.Get().([]byte)
+	defer bufPool.Put(buf)
+	_, err = io.CopyBuffer(f, in, buf)
 	if err != nil {
 		f.Close()
 		return err
