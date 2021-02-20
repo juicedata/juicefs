@@ -59,9 +59,9 @@ func (counter *readCounter) WriteTo(w io.Writer) (n int64, err error) {
 	if wt, ok := counter.Reader.(io.WriterTo); ok {
 		n, err = wt.WriteTo(w)
 	} else {
-		buf := bufPool.Get().([]byte)
+		buf := bufPool.Get().(*[]byte)
 		defer bufPool.Put(buf)
-		n, err = io.CopyBuffer(w, counter.Reader, buf)
+		n, err = io.CopyBuffer(w, counter.Reader, *buf)
 	}
 	dataBytes.WithLabelValues(counter.method).Add(float64(n))
 	return
