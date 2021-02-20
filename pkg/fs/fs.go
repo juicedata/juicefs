@@ -228,6 +228,10 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 	}
 }
 
+func (fs *FileSystem) Meta() meta.Meta {
+	return fs.m
+}
+
 func (fs *FileSystem) StatFS(ctx meta.Context) (totalspace uint64, availspace uint64) {
 	defer trace.StartRegion(context.TODO(), "fs.StatFS").End()
 	l := vfs.NewLogContext(ctx)

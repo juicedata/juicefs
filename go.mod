@@ -13,6 +13,7 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
 	github.com/aws/aws-sdk-go v1.35.20
 	github.com/baidubce/bce-sdk-go v0.0.0-20180401121131-aa0c7bd66b01
+	github.com/billziss-gh/cgofuse v1.4.0
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/go-ini/ini v1.62.0 // indirect

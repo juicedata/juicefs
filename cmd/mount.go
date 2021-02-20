@@ -36,7 +36,6 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
-	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/usage"
@@ -259,10 +258,7 @@ func mount(c *cli.Context) error {
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
-	err = fuse.Serve(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
-	if err != nil {
-		logger.Fatalf("fuse: %s", err)
-	}
+	mount_main(conf, m, store, c)
 	return nil
 }
 
@@ -350,31 +346,6 @@ func mountFlags() *cli.Command {
 				Name:  "no-syslog",
 				Usage: "disable syslog",
 			},
-
-			&cli.StringFlag{
-				Name:  "o",
-				Usage: "other FUSE options",
-			},
-			&cli.Float64Flag{
-				Name:  "attr-cache",
-				Value: 1.0,
-				Usage: "attributes cache timeout in seconds",
-			},
-			&cli.Float64Flag{
-				Name:  "entry-cache",
-				Value: 1.0,
-				Usage: "file entry cache timeout in seconds",
-			},
-			&cli.Float64Flag{
-				Name:  "dir-entry-cache",
-				Value: 1.0,
-				Usage: "dir entry cache timeout in seconds",
-			},
-			&cli.BoolFlag{
-				Name:  "enable-xattr",
-				Usage: "enable extended attributes (xattr)",
-			},
-
 			&cli.StringFlag{
 				Name:  "metrics",
 				Value: ":9567",
@@ -386,6 +357,7 @@ func mountFlags() *cli.Command {
 			},
 		},
 	}
+	cmd.Flags = append(cmd.Flags, mount_flags()...)
 	cmd.Flags = append(cmd.Flags, clientFlags()...)
 	return cmd
 }
