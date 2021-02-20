@@ -63,7 +63,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
 	}
 
-	s, _ = WithPrefix(s, "unit-test")
+	s = WithPrefix(s, "unit-test")
 	defer s.Delete("/test")
 	k := "/large"
 	defer s.Delete(k)
