@@ -161,7 +161,7 @@ func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 	if fs.logBuffer == nil {
 		return
 	}
-	now := Now()
+	now := utils.Now()
 	cmd := fmt.Sprintf(format, args...)
 	ts := now.Format("2006.01.02 15:04:05.000000")
 	used := ctx.Duration()

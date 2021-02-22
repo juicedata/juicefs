@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/google/gops/agent"
-	"github.com/juicedata/godaemon"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -90,11 +89,6 @@ func updateMetrics(m meta.Meta) {
 		}
 		time.Sleep(time.Second * 5)
 	}
-}
-
-func makeDaemon(onExit func(int) error) error {
-	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
-	return err
 }
 
 func installHandler(mp string) {
@@ -194,22 +188,7 @@ func mount(c *cli.Context) error {
 
 	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
-		err := makeDaemon(func(stage int) error {
-			if stage != 0 {
-				return nil
-			}
-			for {
-				time.Sleep(time.Millisecond * 50)
-				st, err := os.Stat(mp)
-				if err == nil {
-					if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == 1 {
-						logger.Infof("\033[92mOK\033[0m, %s is ready at %s", format.Name, mp)
-						break
-					}
-				}
-			}
-			return nil
-		})
+		err := makeDaemon(format.Name, mp)
 		if err != nil {
 			logger.Fatalf("Failed to make daemon: %s", err)
 		}

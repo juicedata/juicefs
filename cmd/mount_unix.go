@@ -1,14 +1,55 @@
-// +build !windows,!darwin
+// +build !windows
+
+/*
+ * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
+ *
+ * This program is free software: you can use, redistribute, and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3
+ * or later ("AGPL"), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 package main
 
 import (
+	"os"
+	"syscall"
+	"time"
+
+	"github.com/juicedata/godaemon"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
+
+func makeDaemon(name, mp string) error {
+	onExit := func(stage int) error {
+		if stage != 0 {
+			return nil
+		}
+		for {
+			time.Sleep(time.Millisecond * 50)
+			st, err := os.Stat(mp)
+			if err == nil {
+				if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == 1 {
+					logger.Infof("\033[92mOK\033[0m, %s is ready at %s", name, mp)
+					break
+				}
+			}
+		}
+		return nil
+	}
+	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
+	return err
+}
 
 func mount_flags() []cli.Flag {
 	return []cli.Flag{

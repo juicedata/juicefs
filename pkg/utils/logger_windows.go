@@ -1,7 +1,5 @@
-// +build !windows
-
 /*
- * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
+ * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
  * This program is free software: you can use, redistribute, and/or modify
  * it under the terms of the GNU Affero General Public License, version 3
@@ -15,16 +13,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package fs
+package utils
 
-import "time"
-
-var started = time.Now()
-
-func Now() time.Time {
-	return time.Now()
-}
-
-func Clock() time.Duration {
-	return time.Since(started)
-}
+func InitLoggers(logToSyslog bool) {}

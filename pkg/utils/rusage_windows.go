@@ -1,5 +1,3 @@
-// +build !windows
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -17,22 +15,27 @@
 
 package utils
 
-import "syscall"
+import "golang.org/x/sys/windows"
 
 type Rusage struct {
-	syscall.Rusage
+	kernel windows.Filetime
+	user   windows.Filetime
 }
 
 func (ru *Rusage) GetUtime() float64 {
-	return float64(ru.Utime.Sec) + float64(ru.Utime.Usec)/1e6
+	return float64((int64(ru.user.HighDateTime)<<32)+int64(ru.user.LowDateTime)) / 10 / 1e6
 }
 
 func (ru *Rusage) GetStime() float64 {
-	return float64(ru.Stime.Sec) + float64(ru.Stime.Usec)/1e6
+	return float64((int64(ru.kernel.HighDateTime)<<32)+int64(ru.kernel.LowDateTime)) / 10 / 1e6
 }
 
 func GetRusage() *Rusage {
-	var ru syscall.Rusage
-	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
-	return &Rusage{ru}
+	h := windows.CurrentProcess()
+	var creation, exit, kernel, user windows.Filetime
+	err := windows.GetProcessTimes(h, &creation, &exit, &kernel, &user)
+	if err == nil {
+		return &Rusage{kernel, user}
+	}
+	return nil
 }

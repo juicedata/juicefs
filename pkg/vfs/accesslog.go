@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -60,7 +61,7 @@ func logit(ctx Context, format string, args ...interface{}) {
 	}
 
 	cmd := fmt.Sprintf(format, args...)
-	t := time.Now()
+	t := utils.Now()
 	ts := t.Format("2006.01.02 15:04:05.000000")
 	cmd += fmt.Sprintf(" <%.6f>", used.Seconds())
 	if ctx.Pid() != 0 && used >= time.Second*10 {
