@@ -12,7 +12,6 @@ addons:
       - libacl1-dev
       - redis-server
       - attr
-      - libfuse-dev # for cgofuse
       - gcc-mingw-w64 # for windows
 install: true
 before_script:
