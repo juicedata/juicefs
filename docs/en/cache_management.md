@@ -36,7 +36,7 @@ Kernel will cache content of recently visited files automatically. When the file
 
 Reading the same file in JuiceFS repeatedly will be extremely fast, with milliseconds latency and gigabytes throughput.
 
-Write cache in the kernel is not enabled in the current JuiceFS client, all write operations from the application will be passed from FUSE to client directly. It is suggested to make proper optimization in the application layer, such as cached writing to avoid performance penalty caused by frequent writing.
+Write cache in the kernel is not enabled by default. Start from [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means the `write()` syscall can often complete very fast. You could enable writeback-cache mode by `-o writeback_cache` option when run `juicefs mount` command. It's recommended enable it when write very small data (e.g. 100 bytes) frequently.
 
 ### Read Cache in Client
 
@@ -55,7 +55,7 @@ Local cache can be configured with the [following options](command_reference.md#
 --cache-partial-only      cache only random/small read (default: false)
 ```
 
-JuiceFS client will write the data downloaded from object storage (including also the data newly uploaded) into cache directory, uncompressed and no encryption. Since JuiceFS will generate a unique key for all data written to object storage, and all objects are immutable, the cache data will never expire. When cache grows over the size limit (or disk full), it will be automatically cleaned up. The current rule is create time and file size, older and larger file will be cleaned first.
+JuiceFS client will write the data downloaded from object storage (including also the data newly uploaded) into cache directory, uncompressed and no encryption. Since JuiceFS will generate a unique key for all data written to object storage, and all objects are immutable, the cache data will never expire. When cache grows over the size limit (or disk full), it will be automatically cleaned up. The current rule is compare access time, less frequent access file will be cleaned first.
 
 Local cache will effectively improve random read performance. It is recommended to use faster speed storage and larger cache size to accelerate the application that requires high performance in random read, e.g. MySQL, Elasticsearch, ClickHouse and etc.
 
