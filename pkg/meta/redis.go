@@ -1791,6 +1791,9 @@ func (r *redisMeta) cleanupSlices() {
 				logger.Errorf("scan slices: %s", err)
 				break
 			}
+			if len(ckeys) == 0 {
+				break
+			}
 			values, err := r.rdb.MGet(ctx, ckeys...).Result()
 			if err != nil {
 				logger.Warnf("mget slices: %s", err)
@@ -1841,6 +1844,9 @@ func (r *redisMeta) cleanupLeakedChunks() {
 			ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
 			ikeys = append(ikeys, k)
 			rs = append(rs, p.Exists(ctx, r.inodeKey(Ino(ino))))
+		}
+		if len(rs) == 0 {
+			break
 		}
 		_, err = p.Exec(ctx)
 		if err != nil {

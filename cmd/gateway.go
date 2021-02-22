@@ -172,7 +172,11 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		AutoCreate:     true,
 	}
 	if chunkConf.CacheDir != "memory" {
-		chunkConf.CacheDir = filepath.Join(chunkConf.CacheDir, format.UUID)
+		ds := utils.SplitDir(chunkConf.CacheDir)
+		for i := range ds {
+			ds[i] = filepath.Join(ds[i], format.UUID)
+		}
+		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
 	blob, err := createStorage(format)
 	if err != nil {

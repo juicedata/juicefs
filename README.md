@@ -103,7 +103,7 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_
 - [Redis best practices](docs/en/redis_best_practices.md)
 - [Mount JuiceFS at boot](docs/en/mount_at_boot.md)
 - [How to setup object storage](docs/en/how_to_setup_object_storage.md)
-- [Kubernetes CSI driver](https://github.com/juicedata/juicefs-csi-driver)
+- [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
 
 ## POSIX Compatibility
 
@@ -184,7 +184,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 ## Roadmap
 
 - Stabilize storage format
-- S3 gateway
 - Windows client
 - Other databases for metadata
 

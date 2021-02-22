@@ -18,6 +18,7 @@ package utils
 import (
 	"io"
 	"os"
+	"strings"
 )
 
 // Min returns min of 2 int
@@ -51,4 +52,13 @@ func CopyFile(dst, src string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// SplitDir splits a path with default path list separator or comma.
+func SplitDir(d string) []string {
+	dd := strings.Split(d, string(os.PathListSeparator))
+	if len(dd) == 1 {
+		dd = strings.Split(dd[0], ",")
+	}
+	return dd
 }
