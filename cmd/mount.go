@@ -310,12 +310,12 @@ func clientFlags() []cli.Flag {
 
 		&cli.BoolFlag{
 			Name:  "writeback",
-			Usage: "Upload objects in background",
+			Usage: "upload objects in background",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
 			Value: defaultCacheDir,
-			Usage: "directory to cache object",
+			Usage: "directory paths of local cache, use colon to separate multiple paths",
 		},
 		&cli.IntFlag{
 			Name:  "cache-size",

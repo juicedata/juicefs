@@ -49,7 +49,7 @@ A few data will be cached in memory (300MiB by default) and can be configured wi
 Local cache can be configured with the [following options](command_reference.md#juicefs-mount):
 
 ```
---cache-dir value         directory to cache object (default: "$HOME/.juicefs/cache" or "/var/jfsCache")
+--cache-dir value         directory paths of local cache, use colon to separate multiple paths (default: "$HOME/.juicefs/cache" or "/var/jfsCache")
 --cache-size value        size of cached objects in MiB (default: 1024)
 --free-space-ratio value  min free space (ratio) (default: 0.1)
 --cache-partial-only      cache only random/small read (default: false)
@@ -66,7 +66,7 @@ The Client will cache the data written by application in memory. It is flushed t
 Asynchronous upload can be enabled with the following parameter:
 
 ```
---writeback  Upload objects in background (default: false)
+--writeback  upload objects in background (default: false)
 ```
 
 When there is a demand to write lots of small files in a short period, `--writeback` is recommended to improve write performance. After the job is done, remove this option and remount to disable it. For the scenario with massive random write (for example, during MySQL incremental backup), `--writeback` is also recommended.

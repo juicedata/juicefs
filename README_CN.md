@@ -104,8 +104,8 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生�
 - [Redis 最佳实践](docs/en/redis_best_practices.md)
 - [开机自动挂载 JuiceFS](docs/en/mount_at_boot.md)
 - [如何设置对象存储](docs/en/how_to_setup_object_storage.md)
-- [Kubernetes CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)
 - [缓存管理](docs/en/cache_management.md)
+- [Kubernetes CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)
 
 ## POSIX 兼容性测试
 
