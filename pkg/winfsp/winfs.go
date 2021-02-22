@@ -553,10 +553,6 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 }
 
 func Serve(conf *vfs.Config, fs_ *fs.FileSystem, unc, fuseOpt string, fileCacheTo float64, asRoot, disk bool, delayClose int) error {
-	if unc != "" {
-		unc = strings.ReplaceAll(strings.ReplaceAll(unc, "\\", "/"), "//", "/")
-	}
-
 	var jfs juice
 	jfs.conf = conf
 	jfs.fs = fs_
@@ -564,19 +560,13 @@ func Serve(conf *vfs.Config, fs_ *fs.FileSystem, unc, fuseOpt string, fileCacheT
 	jfs.delayClose = delayClose
 	host := fuse.NewFileSystemHost(&jfs)
 	var options = "volname=" + conf.Format.Name
-	if runtime.GOOS == "windows" {
-		options += ",ExactFileSystemName=JuiceFS,create_umask=022"
-		options += ",DirInfoTimeout=1000,VolumeInfoTimeout=1000,KeepFileCache"
-		options += ",ThreadCount=16"
-		options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTo*1000))
-		if unc != "" {
-			options += ",VolumePrefix=" + unc
-		} else if !disk {
-			options += ",VolumePrefix=/juicefs/" + conf.Format.Name
-		}
-	} else if runtime.GOOS == "darwin" {
-		options += ",fstypename=JuiceFS,noappledouble,noapplexattr"
-		options += ",allow_other,allow_recursion,daemon_timeout=5,default_permissions"
+	options += ",ExactFileSystemName=JuiceFS,create_umask=022,ThreadCount=16"
+	options += ",DirInfoTimeout=1000,VolumeInfoTimeout=1000,KeepFileCache"
+	options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTo*1000))
+	if unc != "" {
+		options += ",VolumePrefix=" + strings.ReplaceAll(strings.ReplaceAll(unc, "\\", "/"), "//", "/")
+	} else if !disk {
+		options += ",VolumePrefix=/juicefs/" + conf.Format.Name
 	}
 	if asRoot {
 		options += ",uid=-1,gid=-1"
@@ -584,10 +574,9 @@ func Serve(conf *vfs.Config, fs_ *fs.FileSystem, unc, fuseOpt string, fileCacheT
 	if fuseOpt != "" {
 		options += "," + fuseOpt
 	}
-	host.SetCapCaseInsensitive(runtime.GOOS == "windows" && strings.Contains(conf.Mountpoint, ":"))
+	host.SetCapCaseInsensitive(strings.Contains(conf.Mountpoint, ":"))
 	host.SetCapReaddirPlus(true)
-	if host.Mount(conf.Mountpoint, []string{"-o", options}) {
-		return fmt.Errorf("bad")
-	}
+	logger.Debugf("mount point: %s, options: %s", conf.Mountpoint, options)
+	_ = host.Mount(conf.Mountpoint, []string{"-o", options})
 	return nil
 }

@@ -141,7 +141,7 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("MOUNTPOINT is required")
 	}
 	mp := c.Args().Get(1)
-	if !utils.Exists(mp) {
+	if !strings.Contains(mp, ":") && !utils.Exists(mp) {
 		if err := os.MkdirAll(mp, 0777); err != nil {
 			logger.Fatalf("create %s: %s", mp, err)
 		}
@@ -247,7 +247,10 @@ func mount(c *cli.Context) error {
 
 func clientFlags() []cli.Flag {
 	var defaultCacheDir = "/var/jfsCache"
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
+		fallthrough
+	case "windows":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			logger.Fatalf("%v", err)

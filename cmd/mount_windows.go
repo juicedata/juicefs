@@ -48,6 +48,7 @@ func mount_flags() []cli.Flag {
 		},
 		&cli.Float64Flag{
 			Name:  "file-cache-to",
+			Value: 0.1,
 			Usage: "Cache file attributes in seconds",
 		},
 		&cli.Float64Flag{

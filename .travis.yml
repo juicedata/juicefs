@@ -18,6 +18,8 @@ install: true
 before_script:
   - export GO111MODULE=on
   - make
+  - mkdir -p /usr/local/include/winfsp
+  - cp hack/winfsp_headers/* /usr/local/include/winfsp/
   - make juicefs.exe
   - sudo make -C fstests setup
 script:
