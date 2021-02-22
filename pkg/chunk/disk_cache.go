@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 var (
@@ -437,14 +439,6 @@ func keyHash(s string) uint32 {
 	return hash.Sum32()
 }
 
-func splitDir(d string) []string {
-	dd := strings.Split(d, string(os.PathListSeparator))
-	if len(dd) == 1 {
-		dd = strings.Split(dd[0], ",")
-	}
-	return dd
-}
-
 // hasMeta reports whether path contains any of the magic characters
 // recognized by Match.
 func hasMeta(path string) bool {
@@ -497,7 +491,7 @@ func newCacheManager(config *Config) CacheManager {
 		return newMemStore(config)
 	}
 	var dirs []string
-	for _, d := range splitDir(config.CacheDir) {
+	for _, d := range utils.SplitDir(config.CacheDir) {
 		dd := expandDir(d)
 		if config.AutoCreate {
 			dirs = append(dirs, dd...)
