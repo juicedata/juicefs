@@ -52,3 +52,5 @@ require (
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 	google.golang.org/api v0.5.0
 )
+
+replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20210222051636-e7cabdf948f4
