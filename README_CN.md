@@ -93,7 +93,7 @@ $ ./juicefs mount -d localhost ~/jfs
 
 ### Kubernetes
 
-JuiceFS 提供 [K8s CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)来简化部署。
+在 Kubernetes 中使用 JuiceFS 非常便捷，请查看[这个文档](docs/en/how_to_use_on_kubernetes.md)了解更多信息。
 
 ### Hadoop Java SDK
 
@@ -185,7 +185,6 @@ JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还
 ## 产品路线图
 
 - 稳定存储格式
-- S3 兼容网关
 - Windows 客户端
 - 支持其他数据库
 

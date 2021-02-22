@@ -12,11 +12,11 @@ JuiceFS provides the [CSI driver](https://github.com/juicedata/juicefs-csi-drive
 
 ## Installation
 
-### Install with helm 
+### Install with Helm
 
-To install helm, refer to the [Helm install guide](https://github.com/helm/helm#install) , helm 3 is required.
+To install Helm, refer to the [Helm install guide](https://github.com/helm/helm#install) , Helm 3 is required.
 
-1. Prepare a file `values.yaml` with access infomation about redis and object storage (take amazon s3 `us-east-1` as an example)
+1. Prepare a file `values.yaml` with access infomation about Redis and object storage (take Amazon S3 `us-east-1` as an example)
 
 ```yaml
 storageClasses:
@@ -32,7 +32,7 @@ storageClasses:
     bucket: "https://juicefs-test.s3.us-east-1.amazonaws.com"
 ```
 
-  Here we assign AWS [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) for the EC2 Kuberentes node, otherwise the `accessKey` and `secretKey` cannot be empty. We use ElasticCache redis as the meta store.
+Here we assign AWS [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) for the EC2 Kuberentes node, otherwise the `accessKey` and `secretKey` cannot be empty. We use ElastiCache for Redis as the meta store.
 
 2. Install
 
@@ -44,8 +44,8 @@ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install 
 
 3. Check the deployment
 
-- Check running pods: the deployment will launch a `StatefulSet` with replica `1` for the `juicefs-csi-controller` and a `DaemonSet` for `juicefs-csi-node` ，so run `kubectl -n kube-system get pods | grep juicefs-csi` should see `n+1` （where `n` is the number of worker node of the kubernetes cluster) pods is running
-- Check secret: `kubectl -n kube-system describe secret juicefs-sc-secret` will show the secret with above `backend` fields: 
+- Check running pods: the deployment will launch a `StatefulSet` with replica `1` for the `juicefs-csi-controller` and a `DaemonSet` for `juicefs-csi-node`, so run `kubectl -n kube-system get pods | grep juicefs-csi` should see `n+1` （where `n` is the number of worker node of the kubernetes cluster) pods is running.
+- Check secret: `kubectl -n kube-system describe secret juicefs-sc-secret` will show the secret with above `backend` fields:
 
 ```
 Name:         juicefs-sc-secret
@@ -126,7 +126,7 @@ volumeBindingMode: Immediate
 ```
 
 
-# Use JuiceFS
+## Use JuiceFS
 
 Now we can use JuiceFS in our pods.  Here we create a `PVC` and refer it in a pod as an example:
 

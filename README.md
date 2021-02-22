@@ -184,7 +184,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 ## Roadmap
 
 - Stabilize storage format
-- S3 gateway
 - Windows client
 - Other databases for metadata
 
