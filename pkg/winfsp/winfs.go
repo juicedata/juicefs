@@ -70,26 +70,8 @@ func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
 	var totalspace, availspace, iused, iavail uint64
 	j.fs.Meta().StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
 	var bsize uint64 = 0x10000
-	if runtime.GOOS == "darwin" {
-		if totalspace > 0x0001000000000000 {
-			bsize = 0x20000
-		}
-	}
 	blocks := totalspace / bsize
 	bavail := availspace / bsize
-	if runtime.GOOS == "darwin" {
-		if totalspace/bsize > 0xFFFFFFFF {
-			blocks = 0xFFFFFFFF
-		}
-		if availspace/bsize > 0xFFFFFFFF {
-			used := (totalspace - availspace) / bsize
-			if used >= blocks {
-				bavail = 0
-			} else {
-				bavail = blocks - used
-			}
-		}
-	}
 	stat.Namemax = 255
 	stat.Frsize = bsize
 	stat.Bsize = bsize
@@ -524,7 +506,7 @@ func (j *juice) Readdir(path string,
 	var ok bool
 	for _, e := range entries {
 		if e.Attr.Full {
-			// vfs.UpdateEntry(e)
+			vfs.UpdateLength(e.Inode, e.Attr)
 			attrToStat(e.Inode, e.Attr, &st)
 			ok = fill(string(e.Name), &st, 0)
 		} else {
