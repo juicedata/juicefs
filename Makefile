@@ -31,8 +31,8 @@ juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 	go build -tags ceph -ldflags="$(LDFLAGS)"  -o juicefs.ceph ./cmd
 
 /usr/local/include/winfsp:
-	mkdir -p /usr/local/include/winfsp
-	cp hack/winfsp_headers/* /usr/local/include/winfsp
+	sudo mkdir -p /usr/local/include/winfsp
+	sudo cp hack/winfsp_headers/* /usr/local/include/winfsp
 
 juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
 	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="$(LDFLAGS)" -o juicefs.exe ./cmd

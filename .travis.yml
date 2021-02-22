@@ -17,7 +17,7 @@ install: true
 before_script:
   - export GO111MODULE=on
   - make
-  - sudo make juicefs.exe
+  - make juicefs.exe
   - sudo make -C fstests setup
 script:
   - make test
