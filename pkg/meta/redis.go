@@ -145,6 +145,8 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		fopt.MaxRetries = conf.Retries
 		fopt.MinRetryBackoff = time.Millisecond * 100
 		fopt.MaxRetryBackoff = time.Minute * 1
+		fopt.ReadTimeout = time.Second * 30
+		fopt.WriteTimeout = time.Second * 5
 		rdb = redis.NewFailoverClient(&fopt)
 	} else {
 		if opt.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
@@ -153,6 +155,8 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		opt.MaxRetries = conf.Retries
 		opt.MinRetryBackoff = time.Millisecond * 100
 		opt.MaxRetryBackoff = time.Minute * 1
+		opt.ReadTimeout = time.Second * 30
+		opt.WriteTimeout = time.Second * 5
 		rdb = redis.NewClient(opt)
 	}
 	m := &redisMeta{
