@@ -2,7 +2,7 @@
 
 ## Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
+JuiceFS already supported many object storage, please check [the list](how_to_setup_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ## Can I use Redis cluster?
 
@@ -10,7 +10,7 @@ The simple answer is no. JuiceFS uses [transaction](https://redis.io/topics/tran
 
 ## What's the difference between JuiceFS and XXX?
 
-See ["Comparison with Others"](docs/en/comparison_with_others.md) for more information.
+See ["Comparison with Others"](comparison_with_others.md) for more information.
 
 ## How is the performance of JuiceFS?
 
