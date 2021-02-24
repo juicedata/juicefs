@@ -2,7 +2,7 @@
 
 ## Error Log
 
-If JuiceFS run in background (through `-d` option when mount volume), the log will output to syslog. Depending on your operating system, you can get the logs through different commands:
+When JuiceFS run in background (through `-d` option when mount volume), logs will output to syslog. Depending on your operating system, you can get the logs through different commands:
 
 ```bash
 # macOS
@@ -12,7 +12,7 @@ $ syslog | grep 'juicefs'
 $ cat /var/log/syslog | grep 'juicefs'
 ```
 
-There are 4 log levels. You can use the `grep` command to filter different level of logs for performance analysis or troubleshooting:
+There are 4 log levels. You can use the `grep` command to filter different levels of logs for performance analysis or troubleshooting:
 
 ```
 $ cat /var/log/syslog | grep 'juicefs' | grep '<INFO>'
