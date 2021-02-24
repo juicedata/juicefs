@@ -26,7 +26,7 @@ Yes, including those issued using mmap. Currently JuiceFS is optimized for seque
 
 All the metadata updates are immediately visible to all others. The new data written by `write()` will be buffered in kernel or client, visible to other processes on the same machine, not visible to other machines.
 
-After a certain time, call `fdatasync()` or `close()` to force upload the data to the object storage and update the metadata, other clients can visit the updates. It is also the strategy adopted by the vast majority of distributed file systems.
+After a certain time, call `fsync()`, `fdatasync()` or `close()` to force upload the data to the object storage and update the metadata, other clients can visit the updates. It is also the strategy adopted by the vast majority of distributed file systems.
 
 See ["Write Cache in Client"](cache_management.md#write-cache-in-client) for more information.
 
