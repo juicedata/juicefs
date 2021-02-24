@@ -231,3 +231,5 @@ The simple answer is no. JuiceFS uses [transaction](https://redis.io/topics/tran
 ### What's the difference between JuiceFS and XXX?
 
 See ["Comparison with Others"](docs/en/comparison_with_others.md) for more information.
+
+For more FAQs, please see the [full list](docs/en/faq.md).
