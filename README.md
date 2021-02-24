@@ -100,9 +100,9 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_
 
 ## Administration
 
-- [Redis best practices](docs/en/redis_best_practices.md)
-- [Mount JuiceFS at boot](docs/en/mount_at_boot.md)
-- [How to setup object storage](docs/en/how_to_setup_object_storage.md)
+- [Redis Best Practices](docs/en/redis_best_practices.md)
+- [Mount JuiceFS at Boot](docs/en/mount_at_boot.md)
+- [How to Setup Object Storage](docs/en/how_to_setup_object_storage.md)
 - [Cache Management](docs/en/cache_management.md)
 - [Fault Diagnosis and Analysis](docs/en/fault_diagnosis_and_analysis.md)
 - [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
