@@ -2,7 +2,7 @@
 
 ## Error Log
 
-When JuiceFS run in background (through `-d` option when mount volume), logs will output to syslog. Depending on your operating system, you can get the logs through different commands:
+When JuiceFS run in background (through [`-d` option](command_reference.md#juicefs-mount) when mount volume), logs will output to syslog. Depending on your operating system, you can get the logs through different commands:
 
 ```bash
 # macOS
