@@ -126,10 +126,6 @@ func mount(c *cli.Context) error {
 		}
 	}()
 	setLoggerLevel(c)
-	if !c.Bool("no-syslog") {
-		// The default log to syslog is only in daemon mode.
-		utils.InitLoggers(c.Bool("background"))
-	}
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and mountpoint are required")
 	}
@@ -189,15 +185,6 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	blob = object.WithMetrics(blob)
-
-	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
-	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
-		err := makeDaemon(format.Name, mp)
-		if err != nil {
-			logger.Fatalf("Failed to make daemon: %s", err)
-		}
-	}
-
 	store := chunk.NewCachedStore(blob, chunkConf)
 	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
@@ -323,15 +310,6 @@ func mountFlags() *cli.Command {
 		ArgsUsage: "REDIS-URL MOUNTPOINT",
 		Action:    mount,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:    "d",
-				Aliases: []string{"background"},
-				Usage:   "run in background",
-			},
-			&cli.BoolFlag{
-				Name:  "no-syslog",
-				Usage: "disable syslog",
-			},
 			&cli.StringFlag{
 				Name:  "metrics",
 				Value: ":9567",

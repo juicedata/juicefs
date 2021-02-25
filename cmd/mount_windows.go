@@ -24,10 +24,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func makeDaemon(name, mp string) error {
-	return nil
-}
-
 func mount_flags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{
