@@ -100,9 +100,11 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_
 
 ## Administration
 
-- [Redis best practices](docs/en/redis_best_practices.md)
-- [Mount JuiceFS at boot](docs/en/mount_at_boot.md)
-- [How to setup object storage](docs/en/how_to_setup_object_storage.md)
+- [Redis Best Practices](docs/en/redis_best_practices.md)
+- [Mount JuiceFS at Boot](docs/en/mount_at_boot.md)
+- [How to Setup Object Storage](docs/en/how_to_setup_object_storage.md)
+- [Cache Management](docs/en/cache_management.md)
+- [Fault Diagnosis and Analysis](docs/en/fault_diagnosis_and_analysis.md)
 - [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
 
 ## POSIX Compatibility
@@ -160,7 +162,7 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-The last number on each line is the time (in seconds) current operation takes. We can use this to debug and analyze performance issues. We will provide more tools to analyze it.
+The last number on each line is the time (in seconds) current operation takes. You can use this to debug and analyze performance issues. We will provide more tools to analyze it.
 
 ## Supported Object Storage
 

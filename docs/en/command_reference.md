@@ -135,10 +135,10 @@ total read/write buffering in MiB (default: 300)
 prefetch N blocks in parallel (default: 3)
 
 `--writeback`\
-Upload objects in background (default: false)
+upload objects in background (default: false)
 
 `--cache-dir value`\
-directory to cache object (default: `"$HOME/.juicefs/cache"`)
+directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
 
 `--cache-size value`\
 size of cached objects in MiB (default: 1024)

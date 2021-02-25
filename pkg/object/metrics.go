@@ -86,6 +86,9 @@ type withMetrics struct {
 
 // WithMetrics retuns a object storage that exposes metrics of requests.
 func WithMetrics(os ObjectStorage) ObjectStorage {
+	_ = prometheus.Register(reqsHistogram)
+	_ = prometheus.Register(reqErrors)
+	_ = prometheus.Register(dataBytes)
 	return &withMetrics{os}
 }
 
