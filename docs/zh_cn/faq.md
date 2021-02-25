@@ -8,10 +8,11 @@
 
 不可以。JuiceFS 使用了 Redis 的[事务功能](https://redis.io/topics/transactions)来保证元数据操作的原子性，而分布式版还不支持分布式事务。哨兵节点或者其它的 Redis 高可用方法是需要的。
 
+请查看[「Redis 最佳实践」](../en/redis_best_practices.md)了解更多信息。
+
 ## JuiceFS 与 XXX 的区别是什么？
 
 请查看[「与其它项目比较」](../en/comparison_with_others.md)文档了解更多信息。
-
 
 ## JuiceFS 的性能如何？
 
@@ -21,13 +22,13 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 
 ## JuiceFS 支持随机读写吗？
 
-支持，包括通过 mmap 等进行的随机读写。目前 JuiceFS 主要是对顺序读写进行了大量优化，对随机读写的优化也在进行中。
+支持，包括通过 mmap 等进行的随机读写。目前 JuiceFS 主要是对顺序读写进行了大量优化，对随机读写的优化也在进行中。如果想要更好的随机读性能，建议关闭压缩（[`--compress none`](../en/command_reference.md#juicefs-format)）。
 
 ## 数据更新什么时候会对其它客户端可见？
 
 所有的元数据更新都是立即对其它客户端可见。通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
 
-而一定时间之后，调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
+调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者 5 秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
 
 请查看[「客户端写缓存」](../en/cache_management.md#write-cache-in-client)了解更多信息。
 

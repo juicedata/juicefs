@@ -8,6 +8,8 @@ JuiceFS already supported many object storage, please check [the list](how_to_se
 
 The simple answer is no. JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, which is not well supported in cluster mode. Sentinal or other HA solution for Redis are needed.
 
+See ["Redis Best Practices"](redis_best_practices.md) for more information.
+
 ## What's the difference between JuiceFS and XXX?
 
 See ["Comparison with Others"](comparison_with_others.md) for more information.
@@ -20,13 +22,13 @@ JuiceFS is built with multiple layers of caching (invalidated automatically), on
 
 ## Does JuiceFS support random read/write?
 
-Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress.
+Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress. If you want better random reading performance, it's recommended to turn off compression ([`--compress none`](command_reference.md#juicefs-format)).
 
 ## When my update will be visible to other clients?
 
 All the metadata updates are immediately visible to all others. The new data written by `write()` will be buffered in kernel or client, visible to other processes on the same machine, not visible to other machines.
 
-After a certain time, call `fsync()`, `fdatasync()` or `close()` to force upload the data to the object storage and update the metadata, other clients can visit the updates. It is also the strategy adopted by the vast majority of distributed file systems.
+Either call `fsync()`, `fdatasync()` or `close()` to force upload the data to the object storage and update the metadata, or after 5 seconds of automatic refresh, other clients can visit the updates. It is also the strategy adopted by the vast majority of distributed file systems.
 
 See ["Write Cache in Client"](cache_management.md#write-cache-in-client) for more information.
 
