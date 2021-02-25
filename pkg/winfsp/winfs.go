@@ -313,6 +313,7 @@ func attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
 	var size, blocks uint64
 	switch attr.Typ {
 	case meta.TypeDirectory:
+		fallthrough
 	case meta.TypeSymlink:
 		fallthrough
 	case meta.TypeFile:
