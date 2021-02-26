@@ -22,6 +22,7 @@ The following object store are supported:
 - scw: Scaleway Object Storage
 - minio: MinIO
 - scs: Sina Cloud Storage
+- eos: ECloud (China Mobile Cloud) Object Storage
 
 they should be specified in the following format:
 
