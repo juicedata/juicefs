@@ -49,6 +49,7 @@ type juice struct {
 	sync.Mutex
 	conf     *vfs.Config
 	fs       *fs.FileSystem
+	host     *fuse.FileSystemHost
 	handlers map[uint64]meta.Ino
 	badfd    map[uint64]uint64
 
@@ -121,6 +122,11 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 
 // Mkdir creates a directory.
 func (j *juice) Mkdir(path string, mode uint32) (e int) {
+	if path == "/.UMOUNTIT" {
+		logger.Infof("Umount %s ...", j.conf.Mountpoint)
+		go j.host.Unmount()
+		return -fuse.ENOENT
+	}
 	ctx := j.newContext()
 	defer trace(path, mode)(&e)
 	e = errorconv(j.fs.Mkdir(ctx, path, uint16(mode)))
@@ -559,6 +565,7 @@ func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo flo
 	jfs.asRoot = asRoot
 	jfs.delayClose = delayClose
 	host := fuse.NewFileSystemHost(&jfs)
+	jfs.host = host
 	var options = "volname=" + conf.Format.Name
 	options += ",ExactFileSystemName=JuiceFS,create_umask=022,ThreadCount=16"
 	options += ",DirInfoTimeout=1000,VolumeInfoTimeout=1000,KeepFileCache"

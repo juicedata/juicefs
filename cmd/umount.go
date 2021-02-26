@@ -18,7 +18,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"github.com/urfave/cli/v2"
@@ -62,7 +64,12 @@ func umount(ctx *cli.Context) error {
 			cmd = exec.Command("umount", mp)
 		}
 	case "windows":
-		return killProcess("juicefs.exe", mp, force)
+		if !force {
+			_ = os.Mkdir(filepath.Join(mp, ".UMOUNTIT"), 0755)
+			return nil
+		} else {
+			cmd = exec.Command("taskkill", "/IM", "juicefs.exe", "/F")
+		}
 	default:
 		return fmt.Errorf("OS %s is not supported", runtime.GOOS)
 	}
