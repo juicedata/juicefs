@@ -170,4 +170,58 @@ Save above content to a file named like `juicefs-app.yaml` ，then use command `
 
 
 
-For more details about using JuiceFS on Kubernetes please refer [JuiceFS CSI driver](https://github.com/juicedata/juicefs-csi-driver).
+For more details about JuiceFS CSI driver please refer [JuiceFS CSI driver](https://github.com/juicedata/juicefs-csi-driver).
+
+
+
+## Monitoring
+
+JuiceFS CSI driver can export [prometheus](https://prometheus.io) metrics at port `:9560` .
+
+### Configurate Prometheus server
+
+Add a job to `prometheus.yml` :
+
+```yaml
+scrape_configs:
+  - job_name: 'juicefs'
+    kubernetes_sd_configs:
+    - role: pod
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_name]
+      action: keep
+      regex: kube-system;juicefs-csi-node-.+
+    - source_labels: [__address__]
+      action: replace
+      regex: ([^:]+)(:\d+)?
+      replacement: $1:9560
+      target_label: __address__
+    - source_labels: [__meta_kubernetes_pod_node_name]
+      target_label: node
+      action: replace
+```
+
+Here we assume the prometheus server is running inside Kubernetes cluster, if your prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable from prometheus server, refer [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
+
+```yaml
+scrape_configs:
+  - job_name: 'juicefs'
+    kubernetes_sd_configs:
+    - api_server: <Kubernetes API Server>
+      role: pod
+      tls_config:
+        ca_file: <...>
+        cert_file: <...>
+        key_file: <...>
+        insecure_skip_verify: false
+    relabel_configs:
+    ...
+    ...
+```
+
+
+
+### Configurate Grafana dashboard
+
+We provide a [dashboard template](./k8s_grafana_template.json) for [Grafana](https://grafana.com/) , which can be imported to show the collected metrics in Prometheus.
+
