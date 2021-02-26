@@ -10,7 +10,7 @@ JuiceFS S3 Gateway is a feature introduced in v0.11.0, please ensure you have la
 
 ## Quickstart
 
-Use `juicefs gateway` command to run the gateway, most options of this command are same as [`juicefs mount`](command_reference.md#juicefs-mount), except following options:
+Use `juicefs gateway` command to run the gateway, [most options](command_reference.md#juicefs-gateway) of this command are same as `juicefs mount`, except following options:
 
 ```
 --access-log value  path for JuiceFS access log
@@ -59,7 +59,7 @@ $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 
 ## Use MinIO Client
 
-Install MinIO client from [https://docs.min.io/docs/minio-client-complete-guide.html](https://docs.min.io/docs/minio-client-complete-guide.html). Then add an new host called `juicefs`:
+Install MinIO client from [https://docs.min.io/docs/minio-client-complete-guide.html](https://docs.min.io/docs/minio-client-complete-guide.html). Then add a new host called `juicefs`:
 
 ```bash
 $ mc alias set juicefs http://localhost:9000 admin 12345678 --api S3v4
