@@ -106,6 +106,7 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生�
 - [如何设置对象存储](docs/en/how_to_setup_object_storage.md)
 - [缓存管理](docs/en/cache_management.md)
 - [故障诊断和分析](docs/en/fault_diagnosis_and_analysis.md)
+- [S3 网关](docs/en/s3_gateway.md)
 - [在 Kubernetes 中使用 JuiceFS](docs/en/how_to_use_on_kubernetes.md)
 
 ## POSIX 兼容性测试
