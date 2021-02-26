@@ -29,7 +29,7 @@ $ export MINIO_ROOT_PASSWORD=12345678
 $ juicefs gateway redis://localhost:6379 localhost:9000
 ```
 
-If the gateway is running successfully, you could visit [http://localhost:9000](http://localhost:9000) this address in the browser:
+If the gateway is running successfully, you could visit [http://localhost:9000](http://localhost:9000) in the browser:
 
 ![MinIO browser](../images/minio-browser.png)
 
