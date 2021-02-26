@@ -56,9 +56,9 @@ var mctx meta.Context
 
 func gatewayFlags() *cli.Command {
 	flags := append(clientFlags(),
-		&cli.BoolFlag{
+		&cli.StringFlag{
 			Name:  "access-log",
-			Usage: "path for access log",
+			Usage: "path for JuiceFS access log",
 		},
 		&cli.BoolFlag{
 			Name:  "no-usage-report",
