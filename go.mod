@@ -18,6 +18,7 @@ require (
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/go-redis/redis/v8 v8.4.0
+	github.com/gonutz/w32/v2 v2.2.0
 	github.com/google/gops v0.3.13
 	github.com/google/uuid v1.1.2
 	github.com/hanwen/go-fuse/v2 v2.0.4-0.20210104155004-09a3c381714c

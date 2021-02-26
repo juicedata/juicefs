@@ -513,16 +513,16 @@ func (j *juice) Readdir(path string,
 		e = -fuse.EBADF
 		return
 	}
-	// TODO: read all
 	ctx := j.newContext()
-	entries, err := vfs.Readdir(ctx, ino, 10000, int(ofst), fh, true)
+	entries, err := vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
 	if err != 0 {
 		e = -int(err)
 		return
 	}
 	var st fuse.Stat_t
 	var ok bool
-	for _, e := range entries {
+	// remove the virtual accesslog
+	for _, e := range entries[:len(entries)-1] {
 		if e.Attr.Full {
 			vfs.UpdateLength(e.Inode, e.Attr)
 			attrToStat(e.Inode, e.Attr, &st)
@@ -552,7 +552,7 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	return
 }
 
-func Serve(conf *vfs.Config, fs_ *fs.FileSystem, unc, fuseOpt string, fileCacheTo float64, asRoot, disk bool, delayClose int) error {
+func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int) error {
 	var jfs juice
 	jfs.conf = conf
 	jfs.fs = fs_
@@ -563,11 +563,7 @@ func Serve(conf *vfs.Config, fs_ *fs.FileSystem, unc, fuseOpt string, fileCacheT
 	options += ",ExactFileSystemName=JuiceFS,create_umask=022,ThreadCount=16"
 	options += ",DirInfoTimeout=1000,VolumeInfoTimeout=1000,KeepFileCache"
 	options += fmt.Sprintf(",FileInfoTimeout=%d", int(fileCacheTo*1000))
-	if unc != "" {
-		options += ",VolumePrefix=" + strings.ReplaceAll(strings.ReplaceAll(unc, "\\", "/"), "//", "/")
-	} else if !disk {
-		options += ",VolumePrefix=/juicefs/" + conf.Format.Name
-	}
+	options += ",VolumePrefix=/juicefs/" + conf.Format.Name
 	if asRoot {
 		options += ",uid=-1,gid=-1"
 	}
