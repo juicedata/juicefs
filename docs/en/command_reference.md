@@ -14,12 +14,13 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.10.0-34 (2021-02-16 00de4c5)
+   0.10.0-56 (2021-02-25 04556e5)
 
 COMMANDS:
    format     format a volume
    mount      mount a volume
    umount     unmount a volume
+   gateway    S3-compatible gateway
    sync       sync between two storage
    benchmark  run benchmark, including read/write/stat big/small files
    help, h    Shows a list of commands or help for one command
@@ -168,6 +169,59 @@ juicefs umount [options] MOUNTPOINT
 
 `-f, --force`\
 unmount a busy mount point by force (default: false)
+
+## juicefs gateway
+
+### Description
+
+S3-compatible gateway.
+
+### Synopsis
+
+```
+juicefs gateway [command options] REDIS-URL ADDRESS
+```
+
+### Options
+
+`--get-timeout value`\
+the max number of seconds to download an object (default: 60)
+
+`--put-timeout value`\
+the max number of seconds to upload an object (default: 60)
+
+`--io-retries value`\
+number of retries after network failure (default: 30)
+
+`--max-uploads value`\
+number of connections to upload (default: 20)
+
+`--buffer-size value`\
+total read/write buffering in MiB (default: 300)
+
+`--prefetch value`\
+prefetch N blocks in parallel (default: 3)
+
+`--writeback`\
+upload objects in background (default: false)
+
+`--cache-dir value`\
+directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
+
+`--cache-size value`\
+size of cached objects in MiB (default: 1024)
+
+`--free-space-ratio value`\
+min free space (ratio) (default: 0.1)
+
+`--cache-partial-only`\
+cache only random/small read (default: false)
+
+`--access-log value`\
+path for JuiceFS access log
+
+`--quiet`\
+disable MinIO startup information (default: false)
 
 ## juicefs sync
 
