@@ -201,7 +201,7 @@ scrape_configs:
       action: replace
 ```
 
-Here we assume the prometheus server is running inside Kubernetes cluster, if your prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes is reachable from prometheus server, refer [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
+Here we assume the prometheus server is running inside Kubernetes cluster, if your prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable from prometheus server, refer [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
 
 ```yaml
 scrape_configs:
@@ -223,5 +223,5 @@ scrape_configs:
 
 ### Configurate Grafana dashboard
 
-Use the [Grafana Dashboard](./k8s_grafana_template.json) to show the collected metrics in Prometheus.
+We provide a [dashboard template](./k8s_grafana_template.json) for [Grafana](https://grafana.com/) , which can be imported to show the collected metrics in Prometheus.
 
