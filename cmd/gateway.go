@@ -35,6 +35,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
@@ -60,7 +61,11 @@ func gatewayFlags() *cli.Command {
 			Usage: "path for access log",
 		},
 		&cli.BoolFlag{
-			Name:  "quiet",
+			Name:  "no-usage-report",
+			Usage: "do not send usage report",
+		},
+		&cli.BoolFlag{
+			Name:  "no-banner",
 			Usage: "disable MinIO startup information",
 		})
 	return &cli.Command{
@@ -88,7 +93,7 @@ func gateway(c *cli.Context) error {
 	gw = &GateWay{c}
 
 	args := []string{"gateway", "--address", address, "--anonymous"}
-	if c.Bool("quiet") {
+	if c.Bool("no-banner") {
 		args = append(args, "--quiet")
 	}
 	app := &mcli.App{
@@ -206,6 +211,10 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Version:   version.Version(),
 		AccessLog: c.String("access-log"),
 		Chunk:     &chunkConf,
+	}
+
+	if !c.Bool("no-usage-report") {
+		go usage.ReportUsage(m, "gateway "+version.Version())
 	}
 
 	jfs, err := fs.NewFileSystem(conf, m, store)
