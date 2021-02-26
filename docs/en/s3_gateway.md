@@ -14,10 +14,10 @@ Use `juicefs gateway` command to run the gateway, [most options](command_referen
 
 ```
 --access-log value  path for JuiceFS access log
---quiet             disable MinIO startup information (default: false)
+--no-banner         disable MinIO startup information (default: false)
 ```
 
-The `--access-log` option controls where to store [access log](fault_diagnosis_and_analysis.md#access-log) of JuiceFS. By default access log will not be stored. The `--quiet` option controls if disable logs from MinIO.
+The `--access-log` option controls where to store [access log](fault_diagnosis_and_analysis.md#access-log) of JuiceFS. By default access log will not be stored. The `--no-banner` option controls if disable logs from MinIO.
 
 MinIO S3 Gateway requires two environment variables been configured before startup: `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`. You can set them with any value, but must meet the length requirements. `MINIO_ROOT_USER` length should be at least 3, and `MINIO_ROOT_PASSWORD` length at least 8 characters.
 

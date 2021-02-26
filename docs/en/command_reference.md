@@ -14,7 +14,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.10.0-56 (2021-02-25 04556e5)
+   0.10.0-62 (2021-02-26 a5dc9a8)
 
 COMMANDS:
    format     format a volume
@@ -36,7 +36,7 @@ COPYRIGHT:
    AGPLv3
 ```
 
-Usage: `juicefs [command] [command options] [arguments ...]`
+Usage: `juicefs [global options] command [command options] [arguments...]`
 
 Add `-h` or `--help` after all commands, getting arguments list and help information.
 
@@ -220,7 +220,10 @@ cache only random/small read (default: false)
 `--access-log value`\
 path for JuiceFS access log
 
-`--quiet`\
+`--no-usage-report`\
+do not send usage report (default: false)
+
+`--no-banner`\
 disable MinIO startup information (default: false)
 
 ## juicefs sync
