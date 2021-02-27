@@ -17,14 +17,17 @@ package vfs
 
 import (
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const (
 	minInternalNode = 0x7FFFFFFFFFFFF0
 	logInode        = minInternalNode + 1
+	controlInode    = minInternalNode + 2
 )
 
 type internalNode struct {
@@ -35,6 +38,7 @@ type internalNode struct {
 
 var internalNodes = []*internalNode{
 	{logInode, ".accesslog", &Attr{Mode: 0400}},
+	{controlInode, ".control", &Attr{Mode: 0666}},
 }
 
 func init() {
@@ -87,4 +91,24 @@ func getInternalNodeByName(name string) *internalNode {
 		}
 	}
 	return nil
+}
+
+func handleInternalMsg(ctx Context, msg []byte) []byte {
+	r := utils.ReadBuffer(msg)
+	cmd := r.Get32()
+	size := int(r.Get32())
+	if r.Left() != int(size) {
+		logger.Warnf("broken message: %d %d != %d", cmd, size, r.Left())
+		return []byte{uint8(syscall.EIO)}
+	}
+	switch cmd {
+	case meta.Rmr:
+		inode := Ino(r.Get64())
+		name := string(r.Get(int(r.Get8())))
+		r := m.Rmr(ctx, inode, name)
+		return []byte{uint8(r)}
+	default:
+		logger.Warnf("unknown message type: %d", cmd)
+		return []byte{uint8(syscall.EINVAL)}
+	}
 }
