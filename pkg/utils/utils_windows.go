@@ -1,5 +1,3 @@
-// +build !windows
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -17,18 +15,8 @@
 
 package utils
 
-import (
-	"os"
-	"syscall"
-)
+import "errors"
 
 func GetFileInode(path string) (uint64, error) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	if sst, ok := fi.Sys().(*syscall.Stat_t); ok {
-		return sst.Ino, nil
-	}
-	return 0, nil
+	return 0, errors.New("no supported in Windows")
 }

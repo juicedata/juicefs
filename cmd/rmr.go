@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -44,6 +45,10 @@ func openControler(path string) *os.File {
 }
 
 func rmr(ctx *cli.Context) error {
+	if runtime.GOOS == "windows" {
+		logger.Infof("Windows is not supported")
+		return nil
+	}
 	if ctx.Args().Len() < 1 {
 		logger.Infof("PATH is needed")
 		return nil
@@ -77,7 +82,11 @@ func rmr(ctx *cli.Context) error {
 			logger.Fatalf("read message: %d %s", n, err)
 		}
 		if errs[0] != 0 {
-			logger.Fatalf("RMR %s: %s", path, syscall.Errno(errs[0]))
+			errno := syscall.Errno(errs[0])
+			if runtime.GOOS == "windows" {
+				errno += 0x20000000
+			}
+			logger.Fatalf("RMR %s: %s", path, errno)
 		}
 		_ = f.Close()
 	}
