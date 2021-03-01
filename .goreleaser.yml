@@ -2,7 +2,6 @@ project_name: juicefs
 env:
   - GO111MODULE=on
   - CGO_ENABLED=1
-  - GOPROXY=https://gocenter.io
 before:
   hooks:
     - go mod download
