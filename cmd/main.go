@@ -63,6 +63,7 @@ func main() {
 			umountFlags(),
 			gatewayFlags(),
 			syncFlags(),
+			rmrFlags(),
 			benchmarkFlags(),
 		},
 	}
