@@ -26,6 +26,8 @@ const (
 	DeleteChunk = 1000
 	// CompactChunk is a message to compact a chunk in object store.
 	CompactChunk = 1001
+	// Rmr is a message to remove a directory recursively.
+	Rmr = 1002
 )
 
 const (
