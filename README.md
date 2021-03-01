@@ -12,6 +12,7 @@ The highlighted features are:
 
 - **Fully POSIX-compatible**: JuiceFS is a fully POSIX-compatible file system. Existing applications can work with it without any change. See [pjdfstest result](#posix-compatibility) below.
 - **Fully Hadoop-compatible**: JuiceFS [Hadoop Java SDK](docs/en/hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
+- **S3-compatible**: JuiceFS [S3 Gateway](docs/en/s3_gateway.md) provides S3-compatible interface.
 - **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. See [benchmark result](#performance-benchmark) below.
 - **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
 - **Sharing**: JuiceFS is a shared file storage that can be read and written by many clients.

@@ -12,6 +12,7 @@
 
 - **完整 POSIX 兼容**：已有应用可以无缝对接，参考 [pjdfstest 测试结果](#posix-兼容性测试)；
 - **完整 Hadoop 兼容**：JuiceFS [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoop 生态中的各种主流组件。
+- **S3 兼容**：JuiceFS [S3 网关](docs/en/s3_gateway.md)提供与 S3 协议兼容的访问接口；
 - **极致的性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](#性能测试)；
 - **云原生**：通过 [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
 - **共享**：可以被多个客户端同时读写。
