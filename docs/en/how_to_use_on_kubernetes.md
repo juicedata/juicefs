@@ -100,7 +100,7 @@ curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/
 ```bash
 kubectl -n kube-system create secret generic juicefs-sc-secret \
   --from-literal=name=test \
-  --from-literal=meta-url=redis://juicefs.afyq4z.0001.use1.cache.amazonaws.com/3 \
+  --from-literal=metaurl=redis://juicefs.afyq4z.0001.use1.cache.amazonaws.com/3 \
   --from-literal=storage=s3 \
   --from-literal=bucket=https://juicefs-test.s3.us-east-1.amazonaws.com \
   --from-literal=access-key="" \
