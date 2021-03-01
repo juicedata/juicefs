@@ -105,6 +105,7 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_
 - [How to Setup Object Storage](docs/en/how_to_setup_object_storage.md)
 - [Cache Management](docs/en/cache_management.md)
 - [Fault Diagnosis and Analysis](docs/en/fault_diagnosis_and_analysis.md)
+- [S3 Gateway](docs/en/s3_gateway.md)
 - [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
 
 ## POSIX Compatibility
@@ -223,12 +224,16 @@ The design of JuiceFS was inspired by [Google File System](https://research.goog
 
 ### Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
+JuiceFS already supported many object storage, please check [the list](how_to_setup_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ### Can I use Redis cluster?
 
 The simple answer is no. JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, which is not well supported in cluster mode. Sentinal or other HA solution for Redis are needed.
 
+See ["Redis Best Practices"](docs/en/redis_best_practices.md) for more information.
+
 ### What's the difference between JuiceFS and XXX?
 
 See ["Comparison with Others"](docs/en/comparison_with_others.md) for more information.
+
+For more FAQs, please see the [full list](docs/en/faq.md).

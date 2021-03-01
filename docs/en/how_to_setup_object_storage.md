@@ -6,36 +6,37 @@ This is a guide about how to setup object storage when format a volume. Differen
 
 This table lists all JuiceFS supported object storage, when you format a volume you need specify storage type through `--storage` option, e.g. for Amazon S3 the value of `--storage` is `s3`.
 
-| Name                                    | Value      |
-| ----                                    | -----      |
-| Amazon S3                               | `s3`       |
-| Google Cloud Storage                    | `gs`       |
-| Azure Blob Storage                      | `wasb`     |
-| Backblaze B2 Cloud Storage              | `b2`       |
-| IBM Cloud Object Storage                | `ibmcos`   |
-| Scaleway Object Storage                 | `scw`      |
-| DigitalOcean Spaces Object Storage      | `space`    |
-| Wasabi Cloud Object Storage             | `wasabi`   |
-| Alibaba Cloud Object Storage Service    | `oss`      |
-| Tencent Cloud Object Storage            | `cos`      |
-| Huawei Cloud Object Storage Service     | `obs`      |
-| Baidu Object Storage                    | `bos`      |
-| Kingsoft Cloud Standard Storage Service | `ks3`      |
-| Meituan Storage Service                 | `mss`      |
-| NetEase Object Storage                  | `nos`      |
-| QingStor Object Storage                 | `qingstor` |
-| Qiniu Cloud Object Storage              | `qiniu`    |
-| CTYun Object-Oriented Storage           | `oos`      |
-| Sina Cloud Storage                      | `scs`      |
-| SpeedyCloud Object Storage              | `speedy`   |
-| UCloud US3                              | `ufile`    |
-| Ceph RADOS                              | `ceph`     |
-| Ceph Object Gateway (RGW)               | `s3`       |
-| Swift                                   | `swift`    |
-| MinIO                                   | `minio`    |
-| HDFS                                    | `hdfs`     |
-| Redis                                   | `redis`    |
-| Local disk                              | `file`     |
+| Name                                       | Value      |
+| ----                                       | -----      |
+| Amazon S3                                  | `s3`       |
+| Google Cloud Storage                       | `gs`       |
+| Azure Blob Storage                         | `wasb`     |
+| Backblaze B2 Cloud Storage                 | `b2`       |
+| IBM Cloud Object Storage                   | `ibmcos`   |
+| Scaleway Object Storage                    | `scw`      |
+| DigitalOcean Spaces Object Storage         | `space`    |
+| Wasabi Cloud Object Storage                | `wasabi`   |
+| Alibaba Cloud Object Storage Service       | `oss`      |
+| Tencent Cloud Object Storage               | `cos`      |
+| Huawei Cloud Object Storage Service        | `obs`      |
+| Baidu Object Storage                       | `bos`      |
+| Kingsoft Cloud Standard Storage Service    | `ks3`      |
+| Meituan Storage Service                    | `mss`      |
+| NetEase Object Storage                     | `nos`      |
+| QingStor Object Storage                    | `qingstor` |
+| Qiniu Cloud Object Storage                 | `qiniu`    |
+| Sina Cloud Storage                         | `scs`      |
+| CTYun Object-Oriented Storage              | `oos`      |
+| ECloud (China Mobile Cloud) Object Storage | `eos`      |
+| SpeedyCloud Object Storage                 | `speedy`   |
+| UCloud US3                                 | `ufile`    |
+| Ceph RADOS                                 | `ceph`     |
+| Ceph Object Gateway (RGW)                  | `s3`       |
+| Swift                                      | `swift`    |
+| MinIO                                      | `minio`    |
+| HDFS                                       | `hdfs`     |
+| Redis                                      | `redis`    |
+| Local disk                                 | `file`     |
 
 ## Access key and secret key
 
@@ -352,6 +353,20 @@ $ ./juicefs format \
     localhost test
 ```
 
+## Sina Cloud Storage
+
+Please follow [this document](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) to learn how to get access key and secret key.
+
+The `--bucket` option format is `https://<bucket>.stor.sinaapp.com`. For example:
+
+```bash
+$ ./juicefs format \
+    --storage scs \
+    --bucket https://<bucket>.stor.sinaapp.com \
+    ... \
+    localhost test
+```
+
 ## CTYun Object-Oriented Storage
 
 Please follow [this document](https://www.ctyun.cn/help2/10000101/10473683) to learn how to get access key and secret key.
@@ -366,16 +381,16 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Sina Cloud Storage
+## ECloud (China Mobile Cloud) Object Storage
 
-Please follow [this document](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) to learn how to get access key and secret key.
+Please follow [this document](https://ecloud.10086.cn/op-help-center/doc/article/24501) to learn how to get access key and secret key.
 
-The `--bucket` option format is `https://<bucket>.stor.sinaapp.com`. For example:
+ECloud Object Storage provides [multiple endpoints](https://ecloud.10086.cn/op-help-center/doc/article/40956) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint. For example:
 
 ```bash
 $ ./juicefs format \
-    --storage scs \
-    --bucket https://<bucket>.stor.sinaapp.com \
+    --storage eos \
+    --bucket https://<bucket>.<endpoint> \
     ... \
     localhost test
 ```

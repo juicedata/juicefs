@@ -58,6 +58,7 @@ type handle struct {
 	cond    *utils.Cond
 
 	// internal files
+	off  uint64
 	data []byte
 }
 

@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
+ * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
  * This program is free software: you can use, redistribute, and/or modify
  * it under the terms of the GNU Affero General Public License, version 3
@@ -13,18 +13,20 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package version
+package utils
 
-import "fmt"
-
-var (
-	version      = "0.11.0"
-	revision     = "$Format:%h$"
-	revisionDate = "$Format:%as$"
+import (
+	"os"
+	"syscall"
 )
 
-// Version returns version in format - `VERSION (REVISIONDATE REVISION)`
-// value is assigned in Makefile
-func Version() string {
-	return fmt.Sprintf("%v (%v %v)", version, revisionDate, revision)
+func GetFileInode(path string) (uint64, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	if sst, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return sst.Ino, nil
+	}
+	return 0, nil
 }

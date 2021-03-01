@@ -1485,10 +1485,10 @@ func (r *redisMeta) cleanStaleSessions() {
 
 func (r *redisMeta) refreshSession() {
 	for {
+		time.Sleep(time.Minute)
 		now := time.Now()
 		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(now.Unix()), Member: strconv.Itoa(int(r.sid))})
 		go r.cleanStaleSessions()
-		time.Sleep(time.Minute)
 	}
 }
 
@@ -1764,6 +1764,7 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 
 func (r *redisMeta) cleanupDeletedFiles() {
 	for {
+		time.Sleep(time.Minute)
 		now := time.Now()
 		members, _ := r.rdb.ZRangeByScore(Background, delfiles, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(time.Hour).Unix())), Count: 1000}).Result()
 		for _, member := range members {
@@ -1778,7 +1779,6 @@ func (r *redisMeta) cleanupDeletedFiles() {
 			logger.Debugf("cleanup chunks of inode %d with %d bytes (%s)", inode, length, member)
 			r.deleteFile(Ino(inode), uint64(length), member)
 		}
-		time.Sleep(time.Minute)
 	}
 }
 
@@ -1827,6 +1827,7 @@ func (r *redisMeta) cleanupSlices() {
 }
 
 func (r *redisMeta) cleanupLeakedChunks() {
+	time.Sleep(time.Second * 10)
 	var ctx = Background
 	var ckeys []string
 	var cursor uint64

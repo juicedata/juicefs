@@ -393,7 +393,7 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 		}
 	}()
 	if IsSpecialNode(ino) {
-		if (flags & O_ACCMODE) != syscall.O_RDONLY {
+		if ino != controlInode && (flags&O_ACCMODE) != syscall.O_RDONLY {
 			err = syscall.EACCES
 			return
 		}
@@ -496,12 +496,22 @@ func Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err s
 				return
 			}
 			data := h.data
+			if off < uint64(h.off) {
+				data = nil
+			} else {
+				off -= h.off
+			}
 			if int(off) < len(data) {
 				data = data[off:]
 				if int(size) < len(data) {
 					data = data[:size]
 				}
 				n = copy(buf, data)
+			}
+			if off > 2<<20 {
+				// drop first part to avoid OOM
+				h.off += 1 << 20
+				h.data = h.data[1<<20:]
 			}
 			logit(ctx, "read (%d,%d,%d): OK (%d)", ino, size, off, n)
 		}
@@ -543,10 +553,6 @@ func Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err s
 func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno) {
 	size := uint64(len(buf))
 	defer func() { logit(ctx, "write (%d,%d,%d): %s", ino, size, off, strerr(err)) }()
-	if IsSpecialNode(ino) {
-		err = syscall.EACCES
-		return
-	}
 	h := findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
@@ -556,6 +562,13 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 		err = syscall.EFBIG
 		return
 	}
+
+	if ino == controlInode {
+		h.data = append(h.data, buf...)
+		h.data = append(h.data, handleInternalMsg(ctx, buf)...)
+		return
+	}
+
 	if h.writer == nil {
 		err = syscall.EACCES
 		return

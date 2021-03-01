@@ -106,6 +106,7 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生�
 - [如何设置对象存储](docs/en/how_to_setup_object_storage.md)
 - [缓存管理](docs/en/cache_management.md)
 - [故障诊断和分析](docs/en/fault_diagnosis_and_analysis.md)
+- [S3 网关](docs/en/s3_gateway.md)
 - [在 Kubernetes 中使用 JuiceFS](docs/en/how_to_use_on_kubernetes.md)
 
 ## POSIX 兼容性测试
@@ -224,12 +225,16 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ### 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](#支持的对象存储)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](docs/en/how_to_setup_object_storage.md#supported-object-storage)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ### 是否可以使用 Redis 集群版？
 
 不可以。JuiceFS 使用了 Redis 的[事务功能](https://redis.io/topics/transactions)来保证元数据操作的原子性，而分布式版还不支持分布式事务。哨兵节点或者其他的 Redis 高可用方法是需要的。
 
+请查看[「Redis 最佳实践」](docs/en/redis_best_practices.md)了解更多信息。
+
 ### JuiceFS 与 XXX 的区别是什么？
 
 请查看[「与其它项目比较」](docs/en/comparison_with_others.md)文档了解更多信息。
+
+更多 FAQ 请查看[完整列表](docs/zh_cn/faq.md)。
