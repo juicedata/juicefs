@@ -14,7 +14,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.10.0-62 (2021-02-26 a5dc9a8)
+   0.10.0-62 (2021-03-01 64b83a8)
 
 COMMANDS:
    format     format a volume
@@ -22,6 +22,7 @@ COMMANDS:
    umount     unmount a volume
    gateway    S3-compatible gateway
    sync       sync between two storage
+   rmr        remove all files in a directory
    benchmark  run benchmark, including read/write/stat big/small files
    help, h    Shows a list of commands or help for one command
 
@@ -290,6 +291,18 @@ limit bandwidth in Mbps (0 means unlimited) (default: 0)
 
 `--no-https`\
 do not use HTTPS (default: false)
+
+## juicefs rmr
+
+### Description
+
+Remove all files in directories recursively.
+
+### Synopsis
+
+```
+juicefs rmr PATH ...
+```
 
 ## juicefs benchmark
 
