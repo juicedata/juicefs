@@ -10,10 +10,14 @@
 
 主要特性有：
 
-- **完整 POSIX 兼容**：已有应用可以无缝对接；
-- **极致的性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模）；
-- **云原生**：完全弹性，很容易实现存储和计算分离架构；
-- **共享**：可以被多个客户端同时读写；
+- **完整 POSIX 兼容**：已有应用可以无缝对接，参考 [pjdfstest 测试结果](#posix-兼容性测试)；
+- **完整 Hadoop 兼容**：JuiceFS [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoop 生态中的各种主流组件。
+- **极致的性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](#性能测试)；
+- **云原生**：通过 [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
+- **共享**：可以被多个客户端同时读写。
+
+除此之外，JuiceFS 还具有其它一些特性：
+
 - **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
 - **数据压缩**：默认使用 [LZ4](https://lz4.github.io/lz4) 压缩数据，节省存储空间；
 - **数据加密**: 支持传输中加密（encryption in transit）以及静态加密（encryption at rest），请查看[这个文档](docs/en/encrypt.md)了解更多信息。
