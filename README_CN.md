@@ -15,7 +15,7 @@
 - **S3 兼容**：JuiceFS [S3 网关](docs/en/s3_gateway.md)提供与 S3 协议兼容的访问接口；
 - **极致的性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](#性能测试)；
 - **云原生**：通过 [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
-- **共享**：可以被多个客户端同时读写。
+- **共享**：可以被上千客户端同时读写，方便数据共享。
 
 除此之外，JuiceFS 还具有其它一些特性：
 
