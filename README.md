@@ -15,7 +15,7 @@ The highlighted features are:
 - **S3-compatible**: JuiceFS [S3 Gateway](docs/en/s3_gateway.md) provides S3-compatible interface.
 - **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. See [benchmark result](#performance-benchmark) below.
 - **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
-- **Sharing**: JuiceFS is a shared file storage that can be read and written by many clients.
+- **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
 
 In addition, there are some other features:
 
