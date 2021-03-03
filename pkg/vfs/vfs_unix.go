@@ -29,6 +29,7 @@ import (
 )
 
 const O_ACCMODE = syscall.O_ACCMODE
+const F_UNLCK = syscall.F_UNLCK
 
 const (
 	MODE_MASK_R = 4

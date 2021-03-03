@@ -30,13 +30,11 @@ import (
 	"time"
 
 	"github.com/google/gops/agent"
-	"github.com/juicedata/godaemon"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
-	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/usage"
@@ -93,11 +91,6 @@ func updateMetrics(m meta.Meta) {
 	}
 }
 
-func makeDaemon(onExit func(int) error) error {
-	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
-	return err
-}
-
 func installHandler(mp string) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
@@ -133,10 +126,6 @@ func mount(c *cli.Context) error {
 		}
 	}()
 	setLoggerLevel(c)
-	if !c.Bool("no-syslog") {
-		// The default log to syslog is only in daemon mode.
-		utils.InitLoggers(c.Bool("background"))
-	}
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and mountpoint are required")
 	}
@@ -148,7 +137,7 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("MOUNTPOINT is required")
 	}
 	mp := c.Args().Get(1)
-	if !utils.Exists(mp) {
+	if !strings.Contains(mp, ":") && !utils.Exists(mp) {
 		if err := os.MkdirAll(mp, 0777); err != nil {
 			logger.Fatalf("create %s: %s", mp, err)
 		}
@@ -196,30 +185,6 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	blob = object.WithMetrics(blob)
-
-	logger.Infof("Mounting volume %s at %s ...", format.Name, mp)
-	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
-		err := makeDaemon(func(stage int) error {
-			if stage != 0 {
-				return nil
-			}
-			for {
-				time.Sleep(time.Millisecond * 50)
-				st, err := os.Stat(mp)
-				if err == nil {
-					if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == 1 {
-						logger.Infof("\033[92mOK\033[0m, %s is ready at %s", format.Name, mp)
-						break
-					}
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			logger.Fatalf("Failed to make daemon: %s", err)
-		}
-	}
-
 	store := chunk.NewCachedStore(blob, chunkConf)
 	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
@@ -263,16 +228,16 @@ func mount(c *cli.Context) error {
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
-	err = fuse.Serve(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
-	if err != nil {
-		logger.Fatalf("fuse: %s", err)
-	}
+	mount_main(conf, m, store, c)
 	return nil
 }
 
 func clientFlags() []cli.Flag {
 	var defaultCacheDir = "/var/jfsCache"
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
+		fallthrough
+	case "windows":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			logger.Fatalf("%v", err)
@@ -345,40 +310,6 @@ func mountFlags() *cli.Command {
 		ArgsUsage: "REDIS-URL MOUNTPOINT",
 		Action:    mount,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:    "d",
-				Aliases: []string{"background"},
-				Usage:   "run in background",
-			},
-			&cli.BoolFlag{
-				Name:  "no-syslog",
-				Usage: "disable syslog",
-			},
-
-			&cli.StringFlag{
-				Name:  "o",
-				Usage: "other FUSE options",
-			},
-			&cli.Float64Flag{
-				Name:  "attr-cache",
-				Value: 1.0,
-				Usage: "attributes cache timeout in seconds",
-			},
-			&cli.Float64Flag{
-				Name:  "entry-cache",
-				Value: 1.0,
-				Usage: "file entry cache timeout in seconds",
-			},
-			&cli.Float64Flag{
-				Name:  "dir-entry-cache",
-				Value: 1.0,
-				Usage: "dir entry cache timeout in seconds",
-			},
-			&cli.BoolFlag{
-				Name:  "enable-xattr",
-				Usage: "enable extended attributes (xattr)",
-			},
-
 			&cli.StringFlag{
 				Name:  "metrics",
 				Value: ":9567",
@@ -390,6 +321,7 @@ func mountFlags() *cli.Command {
 			},
 		},
 	}
+	cmd.Flags = append(cmd.Flags, mount_flags()...)
 	cmd.Flags = append(cmd.Flags, clientFlags()...)
 	return cmd
 }
