@@ -113,6 +113,7 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生�
 - [故障诊断和分析](docs/en/fault_diagnosis_and_analysis.md)
 - [S3 网关](docs/en/s3_gateway.md)
 - [在 Kubernetes 中使用 JuiceFS](docs/en/how_to_use_on_kubernetes.md)
+- [FUSE 挂载选项](docs/en/fuse_mount_options.md)
 
 ## POSIX 兼容性测试
 
