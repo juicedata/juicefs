@@ -485,24 +485,6 @@ $ ./juicefs format \
     localhost test
 ```
 
-## HDFS
-
-[HDFS](https://hadoop.apache.org/) is the file system for Hadoop, which can be used as the object store for JuiceFS. When HDFS is used, `--access-key` can be used to specify the `username`, and `hdfs` is usually the default superuser. For example:
-
-```bash
-$ ./juicefs format \
-    --storage hdfs \
-    --bucket namenode1:8020 \
-    --access-key hdfs
-    localhost test
-```
-
-When the `--access-key` is not specified during formatting, `JuiceFS` will use the current user of `juicefs mount` or `Hadoop SDK` to access HDFS. It will hang and fail with IO error eventually, if the current user donot have enough permession to read/write the blocks in HDFS.
-
-JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_DIR` or `$HADOOP_HOME`. If an empty value is provide to `--bucket`, the default HDFS found in Hadoop configurations will be used.
-
-For HA cluster, the addresses of namenodes can be specified together like this: `--bucket=namenode1:port,namenode2:port`.
-
 ## MinIO
 
 [MinIO](https://min.io) is an open source high performance object storage. It is API compatible with Amazon S3. You need set `--storage` option to `minio`. Currently, JuiceFS only supports path-style URI when use MinIO storage. For example (`<endpoint>` may looks like `1.2.3.4:9000`):
@@ -514,3 +496,21 @@ $ ./juicefs format \
     ... \
     localhost test
 ```
+
+## HDFS
+
+[HDFS](https://hadoop.apache.org) is the file system for Hadoop, which can be used as the object store for JuiceFS. When HDFS is used, `--access-key` can be used to specify the `username`, and `hdfs` is usually the default superuser. For example:
+
+```bash
+$ ./juicefs format \
+    --storage hdfs \
+    --bucket namenode1:8020 \
+    --access-key hdfs
+    localhost test
+```
+
+When the `--access-key` is not specified during formatting, JuiceFS will use the current user of `juicefs mount` or Hadoop SDK to access HDFS. It will hang and fail with IO error eventually, if the current user don't have enough permission to read/write the blocks in HDFS.
+
+JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_DIR` or `$HADOOP_HOME`. If an empty value is provided to `--bucket`, the default HDFS found in Hadoop configurations will be used.
+
+For HA cluster, the addresses of NameNodes can be specified together like this: `--bucket=namenode1:port,namenode2:port`.

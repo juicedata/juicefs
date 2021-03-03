@@ -51,3 +51,12 @@ Use [`juicefs umount`](command_reference.md#juicefs-umount) command to unmount t
 ## How to upgrade JuiceFS client?
 
 First unmount JuiceFS volume, then re-mount the volume with newer version client.
+
+## docker: Error response from daemon: error while creating mount source path 'XXX': mkdir XXX: file exists.
+
+When you use [Docker bind mounts](https://docs.docker.com/storage/bind-mounts) to mount a directory on the host machine into a container, you may encounter this error. The reason is that `juicefs mount` command was executed with non-root user. In turn, Docker daemon doesn't have permission to access the directory.
+
+There are two solutions to this problem:
+
+1. Execute `juicefs mount` command with root user
+2. Modify FUSE configuration and mount option, see [this document](fuse_mount_options.md#allow_other) for more information.
