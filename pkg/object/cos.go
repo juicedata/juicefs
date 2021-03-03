@@ -238,6 +238,7 @@ func newCOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  accessKey,
 			SecretKey: secretKey,
+			Transport: httpClient.Transport,
 		},
 	})
 	client.UserAgent = UserAgent
