@@ -161,7 +161,7 @@ func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 	if fs.logBuffer == nil {
 		return
 	}
-	now := Now()
+	now := utils.Now()
 	cmd := fmt.Sprintf(format, args...)
 	ts := now.Format("2006.01.02 15:04:05.000000")
 	used := ctx.Duration()
@@ -226,6 +226,10 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 			_ = os.Chmod(path, 0666)
 		}
 	}
+}
+
+func (fs *FileSystem) Meta() meta.Meta {
+	return fs.m
 }
 
 func (fs *FileSystem) StatFS(ctx meta.Context) (totalspace uint64, availspace uint64) {

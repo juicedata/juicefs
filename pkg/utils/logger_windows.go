@@ -1,7 +1,5 @@
-// +build !windows
-
 /*
- * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
+ * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
  * This program is free software: you can use, redistribute, and/or modify
  * it under the terms of the GNU Affero General Public License, version 3
@@ -17,22 +15,4 @@
 
 package utils
 
-import "syscall"
-
-type Rusage struct {
-	syscall.Rusage
-}
-
-func (ru *Rusage) GetUtime() float64 {
-	return float64(ru.Utime.Sec) + float64(ru.Utime.Usec)/1e6
-}
-
-func (ru *Rusage) GetStime() float64 {
-	return float64(ru.Stime.Sec) + float64(ru.Stime.Usec)/1e6
-}
-
-func GetRusage() *Rusage {
-	var ru syscall.Rusage
-	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
-	return &Rusage{ru}
-}
+func InitLoggers(logToSyslog bool) {}

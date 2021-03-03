@@ -99,7 +99,7 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 	size := int(r.Get32())
 	if r.Left() != int(size) {
 		logger.Warnf("broken message: %d %d != %d", cmd, size, r.Left())
-		return []byte{uint8(syscall.EIO)}
+		return []byte{uint8(syscall.EIO & 0xff)}
 	}
 	switch cmd {
 	case meta.Rmr:
@@ -109,6 +109,6 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 		return []byte{uint8(r)}
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
-		return []byte{uint8(syscall.EINVAL)}
+		return []byte{uint8(syscall.EINVAL & 0xff)}
 	}
 }

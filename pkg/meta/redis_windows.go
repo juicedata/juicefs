@@ -1,5 +1,3 @@
-// +build !windows
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -15,24 +13,20 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package utils
+package meta
 
 import "syscall"
 
-type Rusage struct {
-	syscall.Rusage
+const ENOATTR = syscall.ENODATA
+
+func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
+	return syscall.ENOTSUP
 }
 
-func (ru *Rusage) GetUtime() float64 {
-	return float64(ru.Utime.Sec) + float64(ru.Utime.Usec)/1e6
+func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+	return syscall.ENOTSUP
 }
 
-func (ru *Rusage) GetStime() float64 {
-	return float64(ru.Stime.Sec) + float64(ru.Stime.Usec)/1e6
-}
-
-func GetRusage() *Rusage {
-	var ru syscall.Rusage
-	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
-	return &Rusage{ru}
+func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+	return syscall.ENOTSUP
 }
