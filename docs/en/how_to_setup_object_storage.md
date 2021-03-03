@@ -505,7 +505,7 @@ $ ./juicefs format \
 $ ./juicefs format \
     --storage hdfs \
     --bucket namenode1:8020 \
-    --access-key hdfs
+    --access-key hdfs \
     localhost test
 ```
 

@@ -59,4 +59,4 @@ When you use [Docker bind mounts](https://docs.docker.com/storage/bind-mounts) t
 There are two solutions to this problem:
 
 1. Execute `juicefs mount` command with root user
-2. Modify FUSE configuration and mount option, see [this document](fuse_mount_options.md#allow_other) for more information.
+2. Modify FUSE configuration and add `allow_other` mount option, see [this document](fuse_mount_options.md#allow_other) for more information.
