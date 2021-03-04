@@ -40,6 +40,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Chown go module cache
+        run: sudo chown -R $USER $HOME/go/pkg/mod
+
       - name: Build sdk
         run: make -C sdk/java
 
