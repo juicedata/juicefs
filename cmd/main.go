@@ -64,6 +64,7 @@ func main() {
 			gatewayFlags(),
 			syncFlags(),
 			rmrFlags(),
+			infoFlags(),
 			benchmarkFlags(),
 			gcFlags(),
 			checkFlags(),

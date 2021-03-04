@@ -1149,6 +1149,18 @@ func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
 	return r.emptyEntry(ctx, parent, name, inode, concurrent)
 }
 
+func (r *redisMeta) Info(ctx Context, parent Ino, summary* Summary) syscall.Errno {
+	if st := r.Access(ctx, parent, 3, nil); st != 0 {
+		return st
+	}
+
+	if st := r.Summary(ctx, parent, summary); st != 0 {
+		return st
+	}
+
+	return 0
+}
+
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 	if err != nil {

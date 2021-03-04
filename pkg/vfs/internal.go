@@ -19,9 +19,12 @@ import (
 	"os"
 	"syscall"
 	"time"
+	"encoding/gob"
+	"bytes"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"runtime"
 )
 
 const (
@@ -107,6 +110,26 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 		name := string(r.Get(int(r.Get8())))
 		r := m.Rmr(ctx, inode, name)
 		return []byte{uint8(r)}
+	case meta.Info:
+		var summary meta.Summary
+		var data bytes.Buffer
+
+		inode := Ino(r.Get64())
+		r := m.Info(ctx, inode, &summary)
+		if r != 0 {
+			errno := syscall.Errno(r)
+			if runtime.GOOS == "windows" {
+				errno += 0x20000000
+			}
+			logger.Fatalf("Info %s", errno)
+		}
+
+		enc := gob.NewEncoder(&data)
+		err := enc.Encode(&summary)
+		if err != nil {
+			logger.Fatalf("encode error: %s", err)
+		}
+		return data.Bytes()
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
 		return []byte{uint8(syscall.EINVAL & 0xff)}
