@@ -238,7 +238,11 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 	for i, u := range result.Uploads {
 		parts[i] = &PendingPart{*u.Key, *u.UploadId, *u.Initiated}
 	}
-	return parts, *result.NextKeyMarker, nil
+	var nextMarker string
+	if result.NextKeyMarker != nil {
+		nextMarker = *result.NextKeyMarker
+	}
+	return parts, nextMarker, nil
 }
 
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {

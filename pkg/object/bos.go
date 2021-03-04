@@ -149,7 +149,7 @@ func (q *bosclient) CompleteUpload(key string, uploadID string, parts []*Part) e
 		}
 	}
 	ps := api.CompleteMultipartUploadArgs{Parts: oparts}
-	_, err := q.c.CompleteMultipartUploadFromStruct(q.bucket, key, uploadID, &ps, nil)
+	_, err := q.c.CompleteMultipartUploadFromStruct(q.bucket, key, uploadID, &ps)
 	return err
 }
 

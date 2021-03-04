@@ -35,6 +35,10 @@ func (c *b2client) String() string {
 	return fmt.Sprintf("b2://%s", c.bucket.Name())
 }
 
+func (c *b2client) Create() error {
+	return nil
+}
+
 func (c *b2client) Head(key string) (*Object, error) {
 	attr, err := c.bucket.Object(key).Attrs(ctx)
 	if err != nil {
@@ -82,6 +86,9 @@ func (c *b2client) Delete(key string) error {
 }
 
 func (c *b2client) List(prefix, marker string, limit int64) ([]*Object, error) {
+	if limit > 1000 {
+		limit = 1000
+	}
 	var cursor *b2.Cursor
 	if marker != "" {
 		cursor = c.cursor

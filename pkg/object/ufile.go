@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -116,6 +117,51 @@ func (u *ufile) parseResp(resp *http.Response, out interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func copyObj(store ObjectStorage, dst, src string) error {
+	in, err := store.Get(src, 0, -1)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	d, err := ioutil.ReadAll(in)
+	if err != nil {
+		return err
+	}
+	return store.Put(dst, bytes.NewReader(d))
+}
+
+func (u *ufile) Copy(dst, src string) error {
+	resp, err := u.request("HEAD", src, nil, nil)
+	if err != nil {
+		return copyObj(u, dst, src)
+	}
+	if resp.StatusCode != 200 {
+		return copyObj(u, dst, src)
+	}
+
+	etag := resp.Header["Etag"]
+	if len(etag) < 1 {
+		return copyObj(u, dst, src)
+	}
+	hash := etag[0][1 : len(etag[0])-1]
+	lens := resp.Header["Content-Length"]
+	if len(lens) < 1 {
+		return copyObj(u, dst, src)
+	}
+	uri := fmt.Sprintf("uploadhit?Hash=%s&FileName=%s&FileSize=%s", hash, dst, lens[0])
+	resp, err = u.request("POST", uri, nil, nil)
+	if err != nil {
+		goto fallback
+	}
+	defer cleanup(resp)
+	if resp.StatusCode != 200 {
+		goto fallback
+	}
+	return nil
+fallback:
+	return copyObj(u, dst, src)
 }
 
 type DataItem struct {

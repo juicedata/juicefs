@@ -12,7 +12,7 @@ require (
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
 	github.com/aws/aws-sdk-go v1.35.20
-	github.com/baidubce/bce-sdk-go v0.0.0-20180401121131-aa0c7bd66b01
+	github.com/baidubce/bce-sdk-go v0.9.47
 	github.com/billziss-gh/cgofuse v1.4.0
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
@@ -44,7 +44,7 @@ require (
 	github.com/satori/uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
-	github.com/upyun/go-sdk v2.1.0+incompatible
+	github.com/upyun/go-sdk/v3 v3.0.2
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible

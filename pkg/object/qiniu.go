@@ -109,6 +109,10 @@ func (q *qiniu) Put(key string, in io.Reader) error {
 	return formUploader.Put(ctx, &ret, upToken, key, body, vlen, nil)
 }
 
+func (q *qiniu) Copy(dst, src string) error {
+	return q.bm.Copy(q.bucket, src, q.bucket, dst, true)
+}
+
 func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }
