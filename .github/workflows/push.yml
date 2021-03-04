@@ -1,0 +1,41 @@
+name: release
+
+on:
+  push:
+    branch:
+      - build-release
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.14.x'
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: setup release environment
+        run: |-
+          echo 'GITHUB_TOKEN=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}' > .release-env
+
+      - name: release publish
+        run: make snapshot
+
+      - name: Set up Java
+        uses: actions/setup-java@v1
+        with:
+          java-version: '8'
+        run: make -C sdk/java
+
+      - name: Upload SDK
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sdk/java/target/juicefs-hadoop-*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
