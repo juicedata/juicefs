@@ -43,7 +43,7 @@ jobs:
       - name: Chown go module cache
         run: sudo chown -R $USER $HOME/go/pkg/mod
 
-      - name: Build sdk
+      - name: Build SDK
         run: make -C sdk/java
 
       - name: Upload SDK
