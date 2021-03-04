@@ -236,7 +236,11 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 	for i, u := range result.Uploads {
 		parts[i] = &PendingPart{*u.Key, *u.UploadID, *u.Created}
 	}
-	return parts, *result.NextKeyMarker, nil
+	var nextMarker string
+	if result.NextKeyMarker != nil {
+		nextMarker = *result.NextKeyMarker
+	}
+	return parts, nextMarker, nil
 }
 
 func newQingStor(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
@@ -259,6 +263,8 @@ func newQingStor(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		conf.Port = 443
 	}
 	conf.Connection = httpClient
+	// workaround for https://github.com/yunify/qingstor-sdk-go/commit/9a04b54d6d574d368eac3aa627879b169a175f12
+	conf.ConnectionRetries = 0
 	qsService, _ := qs.Init(conf)
 	bucket, _ := qsService.Bucket(bucketName, zone)
 	return &qingstor{bucket: bucket}, nil

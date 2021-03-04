@@ -23,7 +23,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/upyun/go-sdk/upyun"
+	"github.com/upyun/go-sdk/v3/upyun"
 )
 
 type up struct {
@@ -39,6 +39,19 @@ func (u *up) String() string {
 
 func (u *up) Create() error {
 	return nil
+}
+
+func (u *up) Head(key string) (*Object, error) {
+	info, err := u.c.GetInfo("/" + key)
+	if err != nil {
+		return nil, err
+	}
+	return &Object{
+		key,
+		info.Size,
+		info.Time,
+		strings.HasSuffix(key, "/"),
+	}, nil
 }
 
 func (u *up) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -64,14 +77,16 @@ func (u *up) Put(key string, in io.Reader) error {
 	})
 }
 
-func (u *up) Exists(key string) error {
-	_, err := u.c.GetInfo("/" + key)
-	return err
-}
-
 func (u *up) Delete(key string) error {
 	return u.c.Delete(&upyun.DeleteObjectConfig{
 		Path: "/" + key,
+	})
+}
+
+func (u *up) Copy(dst, src string) error {
+	return u.c.Copy(&upyun.CopyObjectConfig{
+		SrcPath:  "/" + src,
+		DestPath: "/" + dst,
 	})
 }
 

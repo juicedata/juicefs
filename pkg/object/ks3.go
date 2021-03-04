@@ -223,16 +223,24 @@ func (s *ks3) ListUploads(marker string) ([]*PendingPart, string, error) {
 	for i, u := range result.Uploads {
 		parts[i] = &PendingPart{*u.Key, *u.UploadID, *u.Initiated}
 	}
-	return parts, *result.NextKeyMarker, nil
+	var nextMarker string
+	if result.NextKeyMarker != nil {
+		nextMarker = *result.NextKeyMarker
+	}
+	return parts, nextMarker, nil
 }
 
 var ks3Regions = map[string]string{
-	"cn-beijing":  "BEIJING",
-	"cn-shanghai": "SHANGHAI",
-	"":            "HANGZHOU",
-	"cn-hk-1":     "HONGKONG",
-	"rus":         "RUSSIA",
-	"sgp":         "SINGAPORE",
+	"cn-beijing":   "BEIJING",
+	"cn-shanghai":  "SHANGHAI",
+	"cn-guangzhou": "GUANGZHOU",
+	"cn-qingdao":   "QINGDAO",
+	"jr-beijing":   "JR_BEIJING",
+	"jr-shanghai":  "JR_SHANGHAI",
+	"":             "HANGZHOU",
+	"cn-hk-1":      "HONGKONG",
+	"rus":          "RUSSIA",
+	"sgp":          "SINGAPORE",
 }
 
 func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
@@ -242,17 +250,20 @@ func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	bucket := hostParts[0]
 	region := hostParts[1][3:]
 	region = strings.TrimLeft(region, "-")
-	if strings.HasSuffix(region, "-internal") {
-		region = region[:len(region)-len("-internal")]
+	if strings.HasSuffix(uri.Host, "ksyun.com") {
+		if strings.HasSuffix(region, "-internal") {
+			region = region[:len(region)-len("-internal")]
+		}
+		region = ks3Regions[region]
 	}
-	region = ks3Regions[region]
 
 	awsConfig := &aws.Config{
-		Region:      region,
-		Endpoint:    strings.SplitN(uri.Host, ".", 2)[1],
-		DisableSSL:  !ssl,
-		HTTPClient:  httpClient,
-		Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
+		Region:           region,
+		Endpoint:         strings.SplitN(uri.Host, ".", 2)[1],
+		DisableSSL:       !ssl,
+		HTTPClient:       httpClient,
+		S3ForcePathStyle: true,
+		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
 	}
 
 	return &ks3{bucket, s3.New(awsConfig), nil}, nil
