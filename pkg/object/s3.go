@@ -368,16 +368,16 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	awsConfig := &aws.Config{
-		Region:           aws.String(region),
-		DisableSSL:       aws.Bool(!ssl),
-		HTTPClient:       httpClient,
-		S3ForcePathStyle: aws.Bool(true),
+		Region:     aws.String(region),
+		DisableSSL: aws.Bool(!ssl),
+		HTTPClient: httpClient,
 	}
 	if accessKey != "" {
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
 	}
 	if ep != "" {
 		awsConfig.Endpoint = aws.String(ep)
+		awsConfig.S3ForcePathStyle = aws.Bool(true)
 	}
 
 	ses, err := session.NewSession(awsConfig)
