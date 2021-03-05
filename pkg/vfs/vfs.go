@@ -54,12 +54,12 @@ var (
 
 var (
 	readSizeHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "fuse_read_size_bytes",
+		Name:    "juicefs_fuse_read_size_bytes",
 		Help:    "size of read distributions.",
 		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
 	})
 	writtenSizeHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "fuse_written_size_bytes",
+		Name:    "juicefs_fuse_written_size_bytes",
 		Help:    "size of write distributions.",
 		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
 	})

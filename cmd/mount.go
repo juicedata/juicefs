@@ -45,23 +45,23 @@ import (
 
 var (
 	cpu = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "cpu_usage",
+		Name: "juicefs_cpu_usage",
 		Help: "Accumulated CPU usage in seconds.",
 	})
 	memory = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "memory",
+		Name: "juicefs_memory",
 		Help: "Used memory in bytes.",
 	})
 	uptime = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "uptime",
+		Name: "juicefs_uptime",
 		Help: "Total running time in seconds.",
 	})
 	usedSpace = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "used_space",
+		Name: "juicefs_used_space",
 		Help: "Total used space in bytes.",
 	})
 	usedInodes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "used_inodes",
+		Name: "juicefs_used_inodes",
 		Help: "Total number of inodes.",
 	})
 )
