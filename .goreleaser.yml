@@ -62,11 +62,3 @@ changelog:
       - '^test:'
 archives:
   - name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
-
-brews:
-  - tap:
-      owner: juicedata
-      name: homebrew-tap
-    folder: Formula
-    homepage: https://github.com/juicedata/juicefs
-    description: JuiceFS is a distributed POSIX file system built on top of Redis and S3

@@ -6,7 +6,7 @@ on:
       - v*
 
 jobs:
-  goreleaser:
+  releaser:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -21,9 +21,9 @@ jobs:
 
       - name: setup release environment
         run: |-
-          echo 'GITHUB_TOKEN=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}' > .release-env
+          echo 'GITHUB_TOKEN=${{secrets.GITHUB_TOKEN}}' > .release-env
 
-      - name: release publish
+      - name: goreleaser release
         run: make release
 
       - name: Set up Java
@@ -45,6 +45,13 @@ jobs:
 
       - name: Build SDK
         run: make -C sdk/java
+
+      - name: Canonicalize SDK name
+        run: |
+          sdk1=$(ls sdk/java/target/juicefs-hadoop-*.jar)
+          sdk2=$(echo $sdk1 | sed 's@^\(.*\)\.jar$@\1-linux-amd64.jar@')
+	  mv sdk1 sdk2
+        shell: bash
 
       - name: Upload SDK
         uses: softprops/action-gh-release@v1
