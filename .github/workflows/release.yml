@@ -6,7 +6,7 @@ on:
       - v*
 
 jobs:
-  goreleaser:
+  releaser:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -23,5 +23,40 @@ jobs:
         run: |-
           echo 'GITHUB_TOKEN=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}' > .release-env
 
-      - name: release publish
+      - name: goreleaser release
         run: make release
+
+      - name: Set up Java
+        uses: actions/setup-java@v1
+        with:
+          java-version: '8'
+
+      - name: Cache local Maven repository
+        id: cache-maven
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Chown go module cache
+        run: sudo chown -R $USER $HOME/go/pkg/mod
+
+      - name: Build SDK
+        run: make -C sdk/java
+
+      - name: Canonicalize SDK name
+        run: |
+          sdk1=$(ls sdk/java/target/juicefs-hadoop-*.jar)
+          sdk2=$(echo $sdk1 | sed 's@^\(.*\)\.jar$@\1-linux-amd64.jar@')
+          mv $sdk1 $sdk2
+        shell: bash
+
+      - name: Upload SDK
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sdk/java/target/juicefs-hadoop-*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
