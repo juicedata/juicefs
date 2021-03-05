@@ -19,12 +19,12 @@ import "github.com/prometheus/client_golang/prometheus"
 
 var (
 	redisTxDist = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "redis_tx_durations_histogram_seconds",
+		Name:    "juicefs_redis_tx_durations_histogram_seconds",
 		Help:    "Redis transactions latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 	})
 	redisTxRestart = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "redis_transaction_restart",
+		Name: "juicefs_redis_transaction_restart",
 		Help: "The number of times a Redis transaction is restarted.",
 	})
 )

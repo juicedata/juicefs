@@ -27,7 +27,7 @@ import (
 
 var (
 	handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Name: "fuse_open_handlers",
+		Name: "juicefs_fuse_open_handlers",
 		Help: "number of open files and directories.",
 	}, func() float64 {
 		hanleLock.Lock()
