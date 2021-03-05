@@ -50,7 +50,7 @@ jobs:
         run: |
           sdk1=$(ls sdk/java/target/juicefs-hadoop-*.jar)
           sdk2=$(echo $sdk1 | sed 's@^\(.*\)\.jar$@\1-linux-amd64.jar@')
-          mv sdk1 sdk2
+          mv $sdk1 $sdk2
         shell: bash
 
       - name: Upload SDK
