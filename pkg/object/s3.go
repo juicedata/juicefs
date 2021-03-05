@@ -293,12 +293,29 @@ func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
 	return "", err
 }
 
+func parseRegion(endpoint string) string {
+	if strings.HasPrefix(endpoint, "s3-") || strings.HasPrefix(endpoint, "s3.") {
+		endpoint = endpoint[3:]
+	}
+	if strings.HasPrefix(endpoint, "dualstack") {
+		endpoint = endpoint[len("dualstack."):]
+	}
+	if endpoint == "amazonaws.com" {
+		endpoint = awsDefaultRegion + "." + endpoint
+	}
+	region := strings.Split(endpoint, ".")[0]
+	if region == "external-1" {
+		region = awsDefaultRegion
+	}
+	return region
+}
+
 func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	endpoint = strings.Trim(endpoint, "/")
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err.Error())
 	}
-	hostParts := strings.SplitN(uri.Host, ".", 2)
 
 	var (
 		bucketName string
@@ -306,39 +323,46 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		ep         string
 	)
 
-	if len(hostParts) == 1 { // take endpoint as bucketname
-		bucketName = hostParts[0]
-		if region, err = autoS3Region(bucketName, accessKey, secretKey); err != nil {
-			return nil, fmt.Errorf("Can't guess your region for bucket %s: %s", bucketName, err)
-		}
-	} else { // get region in endpoint
+	if uri.Path != "" {
+		// [ENDPOINT]/[BUCKET]
+		pathParts := strings.Split(uri.Path, "/")
+		bucketName = pathParts[1]
 		if strings.Contains(uri.Host, ".amazonaws.com") {
 			// standard s3
-			// [BUCKET].s3-[REGION].[REST_OF_ENDPOINT]
-			// [BUCKET].s3.[REGION].amazonaws.com[.cn]
-			hostParts = strings.SplitN(uri.Host, ".s3", 2)
-			bucketName = hostParts[0]
-			endpoint = "s3" + hostParts[1]
-			if strings.HasPrefix(endpoint, "s3-") || strings.HasPrefix(endpoint, "s3.") {
-				endpoint = endpoint[3:]
-			}
-			if strings.HasPrefix(endpoint, "dualstack") {
-				endpoint = endpoint[len("dualstack."):]
-			}
-			if endpoint == "amazonaws.com" {
-				endpoint = awsDefaultRegion + "." + endpoint
-			}
-			region = strings.Split(endpoint, ".")[0]
-			if region == "external-1" {
-				region = awsDefaultRegion
-			}
+			// s3-[REGION].[REST_OF_ENDPOINT]/[BUCKET]
+			// s3.[REGION].amazonaws.com[.cn]/[BUCKET]
+			endpoint = uri.Host
+			region = parseRegion(endpoint)
 		} else {
 			// compatible s3
-			// [BUCKET].[ENDPOINT]
-			hostParts := strings.SplitN(uri.Host, ".", 2)
-			bucketName = hostParts[0]
-			ep = hostParts[1]
+			ep = uri.Host
 			region = awsDefaultRegion
+		}
+	} else {
+		// [BUCKET].[ENDPOINT]
+		hostParts := strings.SplitN(uri.Host, ".", 2)
+		if len(hostParts) == 1 {
+			// take endpoint as bucketname
+			bucketName = hostParts[0]
+			if region, err = autoS3Region(bucketName, accessKey, secretKey); err != nil {
+				return nil, fmt.Errorf("Can't guess your region for bucket %s: %s", bucketName, err)
+			}
+		} else {
+			// get region or endpoint
+			if strings.Contains(uri.Host, ".amazonaws.com") {
+				// standard s3
+				// [BUCKET].s3-[REGION].[REST_OF_ENDPOINT]
+				// [BUCKET].s3.[REGION].amazonaws.com[.cn]
+				hostParts = strings.SplitN(uri.Host, ".s3", 2)
+				bucketName = hostParts[0]
+				endpoint = "s3" + hostParts[1]
+				region = parseRegion(endpoint)
+			} else {
+				// compatible s3
+				bucketName = hostParts[0]
+				ep = hostParts[1]
+				region = awsDefaultRegion
+			}
 		}
 	}
 

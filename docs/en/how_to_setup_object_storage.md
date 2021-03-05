@@ -55,9 +55,10 @@ The `<region>` should be replaced with specific region code, e.g. the region cod
 
 ***Note: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.***
 
-Currently, **JuiceFS only supports virtual hosted-style** and maybe support path-style in the future ([#134](https://github.com/juicedata/juicefs/issues/134)). So when you format a volume, the `--bucket` option should be virtual hosted-style URI. For example:
+JuiceFS supports both types of endpoint since v0.12 (before v0.12, only virtual hosted-style were supported). So when you format a volume, the `--bucket` option can be either virtual hosted-style URI or path-style URI. For example:
 
 ```bash
+# virtual hosted-style
 $ ./juicefs format \
     --storage s3 \
     --bucket https://<bucket>.s3.<region>.amazonaws.com \
@@ -65,15 +66,36 @@ $ ./juicefs format \
     localhost test
 ```
 
-You can also use S3 storage type to connect with S3-compatible storage. But beware that you still need use virtual hosted-style URI. For example:
+```bash
+# path-style
+$ ./juicefs format \
+    --storage s3 \
+    --bucket https://s3.<region>.amazonaws.com/<bucket> \
+    ... \
+    localhost test
+```
+
+You can also use S3 storage type to connect with S3-compatible storage. For example:
 
 ```bash
+# virtual hosted-style
 $ ./juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
     ... \
     localhost test
 ```
+
+```bash
+# path-style
+$ ./juicefs format \
+    --storage s3 \
+    --bucket https://<endpoint>/<bucket> \
+    ... \
+    localhost test
+```
+
+
 
 ## Google Cloud Storage
 
