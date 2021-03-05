@@ -117,6 +117,22 @@ $ make
 
 将配置参数加入到 Hadoop 配置文件 `core-site.xml` 中。
 
+### CDH6 环境配置
+
+如果使用的是 CDH6 版本，除了修改 `core-site` 外，还需要通过 YARN 服务界面修改 `mapreduce.application.classpath`，增加:
+
+```shell
+$HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
+```
+
+### HDP 环境配置
+
+除了修改 `core-site` 外，还需要通过 MapReduce2 服务界面修改配置 `mapreduce.application.classpath`，在末尾增加（变量无需替换）:
+
+```shell
+/usr/hdp/${hdp.version}/hadoop/lib/juicefs-hadoop.jar
+```
+
 ### Flink 配置
 
 将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
@@ -138,3 +154,13 @@ CREATE TABLE IF NOT EXISTS person
   age INT
 ) LOCATION 'jfs://{JFS_NAME}/tmp/person';
 ```
+
+## FAQ
+
+### 出现 `java.lang.ClassNotFoundException: Class io.juicefs.JuiceFileSystem not found` 异常
+
+出现这个异常的原因是，juicefs-hadoop.jar 没有被加载，需要检查 jar 文件是否被正确的放置在各个组件的 classpath 里面，并且保证 jar 文件有可读权限。
+
+### 出现 `No FilesSystem for scheme: jfs` 异常
+
+出现这个异常的原因是 core-site.xml 里面的 JuiceFS 配置没有被读取到，需要检查组件配置的 core-site 里面是否有 JuiceFS 相关配置。
