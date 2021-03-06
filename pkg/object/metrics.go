@@ -28,6 +28,10 @@ var (
 		Help:    "Object requests latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.01, 1.5, 20),
 	}, []string{"method"})
+	reqCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "juicefs_object_request_count",
+		Help: "number of requests to object store",
+	}, []string{"method"})
 	reqErrors = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "juicefs_object_request_errors",
 		Help: "failed requests to object store",
@@ -87,6 +91,7 @@ type withMetrics struct {
 // WithMetrics retuns a object storage that exposes metrics of requests.
 func WithMetrics(os ObjectStorage) ObjectStorage {
 	_ = prometheus.Register(reqsHistogram)
+	_ = prometheus.Register(reqCount)
 	_ = prometheus.Register(reqErrors)
 	_ = prometheus.Register(dataBytes)
 	return &withMetrics{os}
@@ -97,6 +102,7 @@ func (p *withMetrics) track(method string, fn func() error) error {
 	err := fn()
 	used := time.Since(start)
 	reqsHistogram.WithLabelValues(method).Observe(used.Seconds())
+	reqCount.WithLabelValues(method).Add(1)
 	if err != nil {
 		reqErrors.Add(1)
 	}
