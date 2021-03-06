@@ -63,6 +63,14 @@ var (
 		Help:    "size of write distributions.",
 		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
 	})
+	readCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "juicefs_fuse_ops_read_count",
+		Help: "number of FUSE read ops",
+	})
+	writeCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "juicefs_fuse_ops_write_count",
+		Help: "number of FUSE write ops",
+	})
 )
 
 func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
@@ -519,6 +527,7 @@ func Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err s
 	}
 
 	defer func() {
+		readCount.Add(1)
 		readSizeHistogram.Observe(float64(n))
 		logit(ctx, "read (%d,%d,%d): %s (%d)", ino, size, off, strerr(err), n)
 	}()
@@ -589,6 +598,7 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 	if err != 0 {
 		return
 	}
+	writeCount.Add(1)
 	writtenSizeHistogram.Observe(float64(len(buf)))
 	reader.Truncate(ino, writer.GetLength(ino))
 	reader.Invalidate(ino, off, uint64(len(buf)))
@@ -879,5 +889,7 @@ func Init(conf *Config, m_ meta.Meta, store chunk.ChunkStore) {
 	handles = make(map[Ino][]*handle)
 	prometheus.MustRegister(readSizeHistogram)
 	prometheus.MustRegister(writtenSizeHistogram)
+	prometheus.MustRegister(writeCount)
+	prometheus.MustRegister(readCount)
 	prometheus.MustRegister(handlersGause)
 }
