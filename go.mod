@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	cloud.google.com/go v0.39.0
-	github.com/Arvintian/scs-go-sdk v1.0.0
+	github.com/Arvintian/scs-go-sdk v1.1.0
 	github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.17 // indirect
 	github.com/DataDog/zstd v1.4.5
