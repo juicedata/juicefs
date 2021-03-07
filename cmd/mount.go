@@ -115,16 +115,6 @@ func installHandler(mp string) {
 }
 
 func mount(c *cli.Context) error {
-	go func() {
-		for port := 6060; port < 6100; port++ {
-			_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
-		}
-	}()
-	go func() {
-		for port := 6070; port < 6100; port++ {
-			_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
-		}
-	}()
 	setLoggerLevel(c)
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and mountpoint are required")
@@ -208,6 +198,25 @@ func mount(c *cli.Context) error {
 	}
 	vfs.Init(conf, m, store)
 
+	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
+		// The default log to syslog is only in daemon mode.
+		utils.InitLoggers(!c.Bool("no-syslog"))
+		err := makeDaemon(conf.Format.Name, conf.Mountpoint)
+		if err != nil {
+			logger.Fatalf("Failed to make daemon: %s", err)
+		}
+	}
+
+	go func() {
+		for port := 6060; port < 6100; port++ {
+			_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+		}
+	}()
+	go func() {
+		for port := 6070; port < 6100; port++ {
+			_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+		}
+	}()
 	installHandler(mp)
 	go updateMetrics(m)
 	http.Handle("/metrics", promhttp.HandlerFor(
