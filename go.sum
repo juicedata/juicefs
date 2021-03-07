@@ -6,6 +6,8 @@ git.apache.org/thrift.git v0.13.0 h1:/3bz5WZ+sqYArk7MBBBbDufMxKKOA56/6JO6psDpUDY
 git.apache.org/thrift.git v0.13.0/go.mod h1:fPE2ZNJGynbRyZ4dJvy6G277gSllfV2HJqblrnkyeyg=
 github.com/Arvintian/scs-go-sdk v1.0.0 h1:2Hll7bcEc8co8v5/2Ibzo410fW4QnTnhkq1NOASd8vc=
 github.com/Arvintian/scs-go-sdk v1.0.0/go.mod h1:DMIkwn27iuTIo9o7INj3L/bcA7bW6QwljWC3ZpxjkXw=
+github.com/Arvintian/scs-go-sdk v1.1.0 h1:vqVOfoMD6XSr7eG1a2M9oSiQwhDZYKKdH2rrZRPx6So=
+github.com/Arvintian/scs-go-sdk v1.1.0/go.mod h1:DMIkwn27iuTIo9o7INj3L/bcA7bW6QwljWC3ZpxjkXw=
 github.com/Azure/azure-pipeline-go v0.2.2 h1:6oiIS9yaG6XCCzhgAgKFfIWyo4LLCiDhZot6ltoThhY=
 github.com/Azure/azure-pipeline-go v0.2.2/go.mod h1:4rQ/NZncSvGqNkkOsNpOU1tgoNuIlp9AfUH5G1tvCHc=
 github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible h1:UanIfAyKxwQgLNfs8LIVfWsSB6JaA0Bj5grnEldOFok=
