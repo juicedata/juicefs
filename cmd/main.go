@@ -43,8 +43,8 @@ func main() {
 		Copyright: "AGPLv3",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
-				Name:    "debug",
-				Aliases: []string{"v"},
+				Name:    "verbose",
+				Aliases: []string{"debug", "v"},
 				Usage:   "enable debug log",
 			},
 			&cli.BoolFlag{
@@ -161,7 +161,7 @@ func stringContains(s []string, e string) bool {
 func setLoggerLevel(c *cli.Context) {
 	if c.Bool("trace") {
 		utils.SetLogLevel(logrus.TraceLevel)
-	} else if c.Bool("debug") {
+	} else if c.Bool("verbose") {
 		utils.SetLogLevel(logrus.DebugLevel)
 	} else if c.Bool("quiet") {
 		utils.SetLogLevel(logrus.WarnLevel)
