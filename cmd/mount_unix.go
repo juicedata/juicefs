@@ -26,7 +26,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
@@ -91,14 +90,6 @@ func mount_flags() []cli.Flag {
 
 func mount_main(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, c *cli.Context) {
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Mountpoint)
-	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
-		// The default log to syslog is only in daemon mode.
-		utils.InitLoggers(!c.Bool("no-syslog"))
-		err := makeDaemon(conf.Format.Name, conf.Mountpoint)
-		if err != nil {
-			logger.Fatalf("Failed to make daemon: %s", err)
-		}
-	}
 	err := fuse.Serve(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)

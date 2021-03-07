@@ -46,6 +46,11 @@ func mount_flags() []cli.Flag {
 	}
 }
 
+func makeDaemon(name, mp string) error {
+	logger.Warnf("Cannot run in background in Windows.")
+	return nil
+}
+
 func mount_main(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, c *cli.Context) {
 	jfs, err := fs.NewFileSystem(conf, m, store)
 	if err != nil {
