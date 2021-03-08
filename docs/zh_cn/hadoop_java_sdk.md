@@ -148,7 +148,7 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 
 **注意：在重启之前需要保证 JuiceFS 配置已经写入配置文件，通常可以查看机器上各组件配置的 core-site.xml 里面是否有 JuiceFS 相关配置**
 
-| 服务名 | 服务名                     |
+| 组件名 | 服务名                     |
 | ------ | -------------------------- |
 | Hive   | HiveServer<br />Metastore  |
 | Spark  | ThriftServer               |
