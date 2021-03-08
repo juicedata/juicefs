@@ -193,6 +193,6 @@ You should check whether the JAR file was located properly, or it has the read p
 
 Some hadoop distribution also need to modify `mapred-site.xml` and put the JAR file location path to the end of the param `mapreduce.application.classpath`.
 
-### 出现 `No FilesSystem for scheme: jfs` 异常
+### `No FilesSystem for scheme: jfs` exception
 
 It means JuiceFS conf was not configured properly, you need check `core-site.xml` on the local machine.
