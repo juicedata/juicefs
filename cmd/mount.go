@@ -221,7 +221,7 @@ func mount(c *cli.Context) error {
 
 	mntLabels := prometheus.Labels{
 		"vol_name": format.Name,
-		"mp": mp,
+		"mp":       mp,
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(mntLabels, prometheus.DefaultRegisterer)
