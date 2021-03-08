@@ -877,7 +877,11 @@ func Init(conf *Config, m_ meta.Meta, store chunk.ChunkStore) {
 	reader = NewDataReader(conf, m, store)
 	writer = NewDataWriter(conf, m, store)
 	handles = make(map[Ino][]*handle)
+}
+
+func InitMetrics() {
 	prometheus.MustRegister(readSizeHistogram)
 	prometheus.MustRegister(writtenSizeHistogram)
 	prometheus.MustRegister(handlersGause)
+	prometheus.MustRegister(opsDurationsHistogram)
 }

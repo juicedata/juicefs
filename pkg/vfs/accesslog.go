@@ -32,10 +32,6 @@ var (
 	})
 )
 
-func init() {
-	prometheus.MustRegister(opsDurationsHistogram)
-}
-
 type logReader struct {
 	sync.Mutex
 	buffer chan []byte

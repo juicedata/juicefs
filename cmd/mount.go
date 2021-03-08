@@ -218,6 +218,15 @@ func mount(c *cli.Context) error {
 		}
 	}()
 	installHandler(mp)
+
+	mntLabels := prometheus.Labels{
+		"vol_name": format.Name,
+		"mp": mp,
+	}
+	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
+	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(mntLabels, prometheus.DefaultRegisterer)
+	meta.InitMetrics()
+	vfs.InitMetrics()
 	go updateMetrics(m)
 	http.Handle("/metrics", promhttp.HandlerFor(
 		prometheus.DefaultGatherer,
