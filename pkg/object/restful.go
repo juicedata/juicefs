@@ -222,7 +222,7 @@ func (s *RestfulStorage) Delete(key string) error {
 		return err
 	}
 	defer cleanup(resp)
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != 204 && resp.StatusCode != 404 {
 		return parseError(resp)
 	}
 	return nil
