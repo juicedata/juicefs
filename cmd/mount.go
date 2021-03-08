@@ -144,6 +144,13 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("load setting: %s", err)
 	}
 
+	mntLabels := prometheus.Labels{
+		"vol_name": format.Name,
+		"mp":       mp,
+	}
+	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
+	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(mntLabels, prometheus.DefaultRegisterer)
+
 	chunkConf := chunk.Config{
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
@@ -219,12 +226,6 @@ func mount(c *cli.Context) error {
 	}()
 	installHandler(mp)
 
-	mntLabels := prometheus.Labels{
-		"vol_name": format.Name,
-		"mp":       mp,
-	}
-	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
-	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(mntLabels, prometheus.DefaultRegisterer)
 	meta.InitMetrics()
 	vfs.InitMetrics()
 	go updateMetrics(m)
