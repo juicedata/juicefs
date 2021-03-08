@@ -2,6 +2,11 @@
 
 JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
+为了使各组件能够识别 JuiceFS ，通常需要两个步骤：
+
+1. 将 jar 文件放置到组件的 `classpath` 内
+2. 将 JuiceFS 相关配置写入配置文件（通常是 core-site.xml）
+
 ## Hadoop 兼容性
 
 JuiceFS Hadoop Java SDK 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoop 生态中的各种主流组件。
@@ -137,6 +142,28 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 
 将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
 
+## 重启相关服务
+
+当需要使用以下组件访问 JuiceFS 数据时，需要重启相关服务
+
+**注意：在重启之前需要保证 JuiceFS 配置已经写入配置文件，通常可以查看机器上各组件配置的 core-site.xml 里面是否有 JuiceFS 相关配置**
+
+| 服务名 | 服务名                     |
+| ------ | -------------------------- |
+| Hive   | HiveServer<br />Metastore  |
+| Spark  | ThriftServer               |
+| Presto | Coordinator<br />Worker    |
+| Impala | Catalog Server<br />Daemon |
+| HBase  | Master<br />RegionServer   |
+
+HDFS，HUE，ZooKeeper 等服务无需重启
+
+重启后，访问 JuiceFS 如果出现 `Class io.juicefs.JuiceFileSystem not found` 或者 `No FilesSystem for scheme: jfs`，可以参考 [FAQ](#faq)
+
+```bash
+lsof 
+```
+
 ## 验证
 
 ### Hadoop
@@ -157,9 +184,11 @@ CREATE TABLE IF NOT EXISTS person
 
 ## FAQ
 
-### 出现 `java.lang.ClassNotFoundException: Class io.juicefs.JuiceFileSystem not found` 异常
+### 出现 `Class io.juicefs.JuiceFileSystem not found` 异常
 
-出现这个异常的原因是，juicefs-hadoop.jar 没有被加载，需要检查 jar 文件是否被正确的放置在各个组件的 classpath 里面，并且保证 jar 文件有可读权限。
+出现这个异常的原因是，juicefs-hadoop.jar 没有被加载，可以用过 `lsof -p {pid} | grep juicefs` 查看 jar 文件是否被加载。需要检查 jar 文件是否被正确的放置在各个组件的 classpath 里面，并且保证 jar 文件有可读权限。
+
+另外在某些发行版 Hadoop 环境，需要修改 `mapred-site.xml` 里面的 `mapreduce.application.classpath` 参数，增加 juicefs-hadoop.jar 的路径。
 
 ### 出现 `No FilesSystem for scheme: jfs` 异常
 
