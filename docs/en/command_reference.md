@@ -104,7 +104,7 @@ run in background (default: false)
 disable syslog (default: false)
 
 `-o value`\
-other FUSE options
+other FUSE options (see [this document](fuse_mount_options.md) for more information)
 
 `--attr-cache value`\
 attributes cache timeout in seconds (default: 1)
