@@ -148,7 +148,7 @@ When the following components need to access JuiceFS, they should be restarted.
 usually you can find them in `core-site.xml` on the machine where the service of the component was deployed.**
 
 | Components | Services                   |
-| ------     | -------------------------- |
+| ---------- | --------                   |
 | Hive       | HiveServer<br />Metastore  |
 | Spark      | ThriftServer               |
 | Presto     | Coordinator<br />Worker    |
