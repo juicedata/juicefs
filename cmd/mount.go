@@ -101,7 +101,7 @@ func installHandler(mp string) {
 			<-signalChan
 			go func() {
 				if runtime.GOOS == "linux" {
-					_ = exec.Command("umount", mp, "-l").Run()
+					_ = exec.Command("fusermount", "-uz", mp).Run()
 				} else if runtime.GOOS == "darwin" {
 					_ = exec.Command("diskutil", "umount", "force", mp).Run()
 				}

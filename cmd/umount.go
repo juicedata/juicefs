@@ -59,9 +59,9 @@ func umount(ctx *cli.Context) error {
 		}
 	case "linux":
 		if force {
-			cmd = exec.Command("umount", "-l", mp)
+			cmd = exec.Command("fusermount", "-uz", mp)
 		} else {
-			cmd = exec.Command("umount", mp)
+			cmd = exec.Command("fusermount", "-u", mp)
 		}
 	case "windows":
 		if !force {
