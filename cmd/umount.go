@@ -58,10 +58,18 @@ func umount(ctx *cli.Context) error {
 			cmd = exec.Command("diskutil", "umount", mp)
 		}
 	case "linux":
-		if force {
-			cmd = exec.Command("fusermount", "-uz", mp)
+		if _, err := exec.LookPath("fusermount"); err == nil {
+			if force {
+				cmd = exec.Command("fusermount", "-uz", mp)
+			} else {
+				cmd = exec.Command("fusermount", "-u", mp)
+			}
 		} else {
-			cmd = exec.Command("fusermount", "-u", mp)
+			if force {
+				cmd = exec.Command("umount", "-l", mp)
+			} else {
+				cmd = exec.Command("umount", mp)
+			}
 		}
 	case "windows":
 		if !force {
