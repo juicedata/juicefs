@@ -29,7 +29,7 @@ var (
 	})
 )
 
-func init() {
+func InitMetrics() {
 	prometheus.MustRegister(redisTxDist)
 	prometheus.MustRegister(redisTxRestart)
 }
