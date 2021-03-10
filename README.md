@@ -193,7 +193,6 @@ It's considered as beta quality, the storage format is not stabilized yet. It's 
 ## Roadmap
 
 - Stabilize storage format
-- Windows client
 - Other databases for metadata
 
 ## Reporting Issues
