@@ -2,14 +2,14 @@
 
 JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
-为了使各组件能够识别 JuiceFS ，通常需要两个步骤：
-
-1. 将 jar 文件放置到组件的 `classpath` 内
-2. 将 JuiceFS 相关配置写入配置文件（通常是 core-site.xml）
-
 ## Hadoop 兼容性
 
 JuiceFS Hadoop Java SDK 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoop 生态中的各种主流组件。
+
+为了使各组件能够识别 JuiceFS，通常需要两个步骤：
+
+1. 将 JAR 文件放置到组件的 classpath 内；
+2. 将 JuiceFS 相关配置写入配置文件（通常是 `core-site.xml`）。
 
 ## 编译
 
@@ -48,7 +48,7 @@ $ make
 | ----   | ----                                 |
 | Spark  | `${SPARK_HOME}/jars`                 |
 | Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
-| Flink | `${FLINK_HOME}/lib` |
+| Flink  | `${FLINK_HOME}/lib`                  |
 
 ## 配置参数
 
@@ -122,17 +122,17 @@ $ make
 
 将配置参数加入到 Hadoop 配置文件 `core-site.xml` 中。
 
-### CDH6 环境配置
+#### CDH 6 环境配置
 
-如果使用的是 CDH6 版本，除了修改 `core-site` 外，还需要通过 YARN 服务界面修改 `mapreduce.application.classpath`，增加:
+如果使用的是 CDH 6 版本，除了修改 `core-site` 外，还需要通过 YARN 服务界面修改 `mapreduce.application.classpath`，增加：
 
 ```shell
 $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 ```
 
-### HDP 环境配置
+#### HDP 环境配置
 
-除了修改 `core-site` 外，还需要通过 MapReduce2 服务界面修改配置 `mapreduce.application.classpath`，在末尾增加（变量无需替换）:
+除了修改 `core-site` 外，还需要通过 MapReduce2 服务界面修改配置 `mapreduce.application.classpath`，在末尾增加（变量无需替换）：
 
 ```shell
 /usr/hdp/${hdp.version}/hadoop/lib/juicefs-hadoop.jar
@@ -144,9 +144,9 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 
 ## 重启相关服务
 
-当需要使用以下组件访问 JuiceFS 数据时，需要重启相关服务
+当需要使用以下组件访问 JuiceFS 数据时，需要重启相关服务。
 
-**注意：在重启之前需要保证 JuiceFS 配置已经写入配置文件，通常可以查看机器上各组件配置的 core-site.xml 里面是否有 JuiceFS 相关配置**
+**注意：在重启之前需要保证 JuiceFS 配置已经写入配置文件，通常可以查看机器上各组件配置的 `core-site.xml` 里面是否有 JuiceFS 相关配置。**
 
 | 组件名 | 服务名                     |
 | ------ | -------------------------- |
@@ -156,13 +156,9 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 | Impala | Catalog Server<br />Daemon |
 | HBase  | Master<br />RegionServer   |
 
-HDFS，HUE，ZooKeeper 等服务无需重启
+HDFS、Hue、ZooKeeper 等服务无需重启。
 
-重启后，访问 JuiceFS 如果出现 `Class io.juicefs.JuiceFileSystem not found` 或者 `No FilesSystem for scheme: jfs`，可以参考 [FAQ](#faq)
-
-```bash
-lsof 
-```
+重启后，访问 JuiceFS 如果出现 `Class io.juicefs.JuiceFileSystem not found` 或者 `No FilesSystem for scheme: jfs`，可以参考 [FAQ](#faq)。
 
 ## 验证
 
@@ -186,10 +182,10 @@ CREATE TABLE IF NOT EXISTS person
 
 ### 出现 `Class io.juicefs.JuiceFileSystem not found` 异常
 
-出现这个异常的原因是，juicefs-hadoop.jar 没有被加载，可以用过 `lsof -p {pid} | grep juicefs` 查看 jar 文件是否被加载。需要检查 jar 文件是否被正确的放置在各个组件的 classpath 里面，并且保证 jar 文件有可读权限。
+出现这个异常的原因是 juicefs-hadoop.jar 没有被加载，可以用 `lsof -p {pid} | grep juicefs` 查看 JAR 文件是否被加载。需要检查 JAR 文件是否被正确地放置在各个组件的 classpath 里面，并且保证 JAR 文件有可读权限。
 
 另外在某些发行版 Hadoop 环境，需要修改 `mapred-site.xml` 里面的 `mapreduce.application.classpath` 参数，增加 juicefs-hadoop.jar 的路径。
 
 ### 出现 `No FilesSystem for scheme: jfs` 异常
 
-出现这个异常的原因是 core-site.xml 里面的 JuiceFS 配置没有被读取到，需要检查组件配置的 core-site 里面是否有 JuiceFS 相关配置。
+出现这个异常的原因是 `core-site.xml` 里面的 JuiceFS 配置没有被读取到，需要检查组件配置的 `core-site.xml` 里面是否有 JuiceFS 相关配置。
