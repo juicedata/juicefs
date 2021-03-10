@@ -9,7 +9,7 @@ JuiceFS Hadoop Java SDK is compatible with Hadoop 2.x and Hadoop 3.x. As well as
 In order to make JuiceFS works with other components, it usually takes 2 steps:
 
 1. Put JAR file into the classpath of each Hadoop ecosystem component.
-2. Put JuiceFS conf into the conf file of each Hadoop ecosystem component(usually core-site.xml).
+2. Put JuiceFS configurations into the configuration file of each Hadoop ecosystem component (usually `core-site.xml`).
 
 ## Compiling
 
@@ -39,26 +39,6 @@ Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Ha
 | Tencent Cloud EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br>`/usr/local/service/presto/plugin/hive-hadoop2`<br>`/usr/local/service/spark/jars`<br>`/usr/local/service/hive/auxlib`                                                                                                                                              |
 | UCloud UHadoop    | `/home/hadoop/share/hadoop/common/lib`<br>`/home/hadoop/hive/auxlib`<br>`/home/hadoop/spark/jars`<br>`/home/hadoop/presto/plugin/hive-hadoop2`                                                                                                                                                                             |
 | Baidu Cloud EMR   | `/opt/bmr/hadoop/share/hadoop/common/lib`<br>`/opt/bmr/hive/auxlib`<br>`/opt/bmr/spark2/jars`                                                                                                                                                                                                                              |
-
-### CDH6
-
-Besides `core-site`，you also need to configure `mapreduce.application.classpath` of the YARN component, add:
-
-```shell
-$HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
-```
-
-### HDP
-
-Besides `core-site` 外，you also need to configure `mapreduce.application.classpath` of the MapReduce2 component, add:
-
-```shell
-/usr/hdp/${hdp.version}/hadoop/lib/juicefs-hadoop.jar
-```
-
-### Flink 配置
-
-Write JuiceFS conf to `conf/flink-conf.yaml` of Flink, you can just do it in Flink Client machine.
 
 ### Community Components
 
@@ -140,30 +120,44 @@ When you use multiple JuiceFS file systems, all these configurations could be se
 
 Add configurations to `core-site.xml`.
 
+#### CDH 6
+
+Besides `core-site`, you also need to configure `mapreduce.application.classpath` of the YARN component, add:
+
+```shell
+$HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
+```
+
+#### HDP
+
+Besides `core-site`, you also need to configure `mapreduce.application.classpath` of the MapReduce2 component, add (variables do not need to be replaced):
+
+```shell
+/usr/hdp/${hdp.version}/hadoop/lib/juicefs-hadoop.jar
+```
+
 ### Configuration in Flink
 
 Add configurations to `conf/flink-conf.yaml`. You could only setup Flink client without modify configurations in Hadoop.
 
 ## Restart Services
 
+When the following components need to access JuiceFS, they should be restarted.
 
-When those components below need to access JuiceFS, they should be restarted.
+**Note: Before restart, you need to confirm JuiceFS related configuration has been written to the configuration file of each component,
+usually you can find them in `core-site.xml` on the machine where the service of the component was deployed.**
 
-**Note: Before restart, you need to confirm JuiceFS related conf has been writen to the conf file of each component,
-usually you can find them in core-site.xml on the machine where the service of the component was deployed.**
+| Components | Services                   |
+| ---------- | --------                   |
+| Hive       | HiveServer<br />Metastore  |
+| Spark      | ThriftServer               |
+| Presto     | Coordinator<br />Worker    |
+| Impala     | Catalog Server<br />Daemon |
+| HBase      | Master<br />RegionServer   |
 
-| Components | Services                     |
-| ------ | -------------------------- |
-| Hive   | HiveServer<br />Metastore  |
-| Spark  | ThriftServer               |
-| Presto | Coordinator<br />Worker    |
-| Impala | Catalog Server<br />Daemon |
-| HBase  | Master<br />RegionServer   |
+HDFS, Hue, ZooKeeper and other services don't need to be restarted.
 
-HDFS，HUE，ZooKeeper etc don't need to restart.
-
-When `Class io.juicefs.JuiceFileSystem not found` or `No FilesSystem for scheme: jfs` exceptions was occurred after restart, 
-reference [FAQ](#faq)
+When `Class io.juicefs.JuiceFileSystem not found` or `No FilesSystem for scheme: jfs` exceptions was occurred after restart, reference [FAQ](#faq).
 
 ## Verification
 
@@ -187,12 +181,12 @@ CREATE TABLE IF NOT EXISTS person
 
 ### `Class io.juicefs.JuiceFileSystem not found` exception
 
-It means JAR file was not loaded, you can verify it by `lsof -p {pid} | grep juicefs`. 
+It means JAR file was not loaded, you can verify it by `lsof -p {pid} | grep juicefs`.
 
-You should check whether the JAR file was located properly, or it has the read permission by other users.
+You should check whether the JAR file was located properly, or other users have the read permission.
 
-Some hadoop distribution also need to modify `mapred-site.xml` and put the JAR file location path to the end of the param `mapreduce.application.classpath`.
+Some Hadoop distribution also need to modify `mapred-site.xml` and put the JAR file location path to the end of the parameter `mapreduce.application.classpath`.
 
 ### `No FilesSystem for scheme: jfs` exception
 
-It means JuiceFS conf was not configured properly, you need check `core-site.xml` on the local machine.
+It means JuiceFS Hadoop Java SDK was not configured properly, you need to check whether there is JuiceFS related configuration in the `core-site.xml` of the component configuration.
