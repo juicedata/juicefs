@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -89,6 +90,10 @@ func (s *scsClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 	}
 	s.marker = list.NextMarker
 	n := len(list.Contents)
+	// Message from scs technical support, the api not guarantee contents is ordered, but marker is work.
+	// So we sort contents at here, can work both contents is ordered or not ordered.
+	// https://scs.sinacloud.com/doc/scs/api#get_bucket
+	sort.Slice(list.Contents, func(i, j int) bool { return list.Contents[i].Name < list.Contents[j].Name })
 	objs := make([]*Object, n)
 	for i := 0; i < n; i++ {
 		ob := list.Contents[i]
