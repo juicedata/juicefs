@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
+	"golang.org/x/net/http/httpproxy"
 )
 
 const obsDefaultRegion = "cn-north-1"
@@ -241,7 +242,7 @@ func autoOBSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
+		return nil, fmt.Errorf("invalid endpoint %s: %q", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucketName := hostParts[0]
@@ -257,7 +258,7 @@ func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	var region string
 	if len(hostParts) == 1 {
 		if endpoint, err = autoOBSEndpoint(bucketName, accessKey, secretKey); err != nil {
-			return nil, fmt.Errorf("Cannot get location of bucket %q: %s", bucketName, err)
+			return nil, fmt.Errorf("cannot get location of bucket %s: %q", bucketName, err)
 		}
 		if !strings.HasPrefix(endpoint, "http") {
 			endpoint = fmt.Sprintf("%s://%s", uri.Scheme, endpoint)
@@ -266,9 +267,23 @@ func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		region = strings.Split(hostParts[1], ".")[1]
 	}
 
-	c, err := obs.New(accessKey, secretKey, endpoint)
+	// Use proxy setting from environment variables: HTTP_PROXY, HTTPS_PROXY, NO_PROXY
+	if uri, err = url.ParseRequestURI(endpoint); err != nil {
+		return nil, fmt.Errorf("invalid endpoint %s: %q", endpoint, err)
+	}
+	proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(uri)
 	if err != nil {
-		return nil, fmt.Errorf("Fail to initialize OBS: %s", err)
+		return nil, fmt.Errorf("get proxy url for endpoint: %s error: %q", endpoint, err)
+	}
+	var urlString string
+	if proxyURL != nil {
+		urlString = proxyURL.String()
+	}
+
+	// Empty proxy url string has no effect
+	c, err := obs.New(accessKey, secretKey, endpoint, obs.WithProxyUrl(urlString))
+	if err != nil {
+		return nil, fmt.Errorf("fail to initialize OBS: %q", err)
 	}
 	return &obsClient{bucketName, region, c}, nil
 }
