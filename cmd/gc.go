@@ -19,12 +19,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	"github.com/juicedata/juicefs/pkg/sync"
+	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
@@ -39,6 +40,11 @@ func gcFlags() *cli.Command {
 			&cli.BoolFlag{
 				Name:  "delete",
 				Usage: "deleted leaked objects",
+			},
+			&cli.IntFlag{
+				Name:  "threads",
+				Value: 50,
+				Usage: "number threads to delete leaked objects",
 			},
 		},
 	}
@@ -96,7 +102,7 @@ func gc(ctx *cli.Context) error {
 	}))
 
 	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := sync.ListAll(blob, "", "")
+	objs, err := osync.ListAll(blob, "", "")
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
@@ -108,21 +114,36 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("list all slices: %s", r)
 	}
 	keys := make(map[uint64]uint32)
+	var totalBytes uint64
 	for _, s := range slices {
 		keys[s.Chunkid] = s.Size
+		totalBytes += uint64(s.Size)
 	}
+	logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
 
 	var leaked, leakedBytes int64
 	var skipped, skippedBytes int64
 	maxMtime := time.Now().Add(time.Hour * -24)
 
-	founfLeaked := func(obj *object.Object) {
+	var leadObj = make(chan string, 10240)
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for key := range leadObj {
+				if err := blob.Delete(key); err != nil {
+					logger.Warnf("delete %s: %s", key, err)
+				}
+			}
+		}()
+	}
+
+	foundLeaked := func(obj *object.Object) {
 		leakedBytes += obj.Size
 		leaked++
 		if ctx.Bool("delete") {
-			if err := blob.Delete(obj.Key); err != nil {
-				logger.Warnf("delete %s: %s", obj.Key, err)
-			}
+			leadObj <- obj.Key
 		}
 	}
 	for obj := range objs {
@@ -144,24 +165,26 @@ func gc(ctx *cli.Context) error {
 		cid, _ := strconv.Atoi(parts[0])
 		size := keys[uint64(cid)]
 		if size == 0 {
-			logger.Infof("find leaked object: %s, size: %d", obj.Key, obj.Size)
-			founfLeaked(obj)
+			logger.Debugf("find leaked object: %s, size: %d", obj.Key, obj.Size)
+			foundLeaked(obj)
 			continue
 		}
 		indx, _ := strconv.Atoi(parts[1])
 		csize, _ := strconv.Atoi(parts[2])
-		if csize == format.BlockSize {
+		if csize == chunkConf.BlockSize {
 			if (indx+1)*csize > int(size) {
-				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*format.BlockSize+csize, size)
-				founfLeaked(obj)
+				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
+				foundLeaked(obj)
 			}
 		} else {
-			if indx*format.BlockSize+csize != int(size) {
-				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*format.BlockSize+csize, size)
-				founfLeaked(obj)
+			if indx*chunkConf.BlockSize+csize != int(size) {
+				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*chunkConf.BlockSize+csize, size)
+				foundLeaked(obj)
 			}
 		}
 	}
+	close(leadObj)
+	wg.Wait()
 	logger.Infof("found %d leaked objects (%d bytes), skipped %d (%d bytes)", leaked, leakedBytes, skipped, skippedBytes)
 	return nil
 }
