@@ -2067,6 +2067,41 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 	}
 }
 
+func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
+	*slices = nil
+	var cursor uint64
+	p := r.rdb.Pipeline()
+	for {
+		keys, c, err := r.rdb.Scan(ctx, cursor, "c*_*", 10000).Result()
+		if err != nil {
+			logger.Warnf("scan chunks: %s", err)
+			return errno(err)
+		}
+		for _, key := range keys {
+			_ = p.LRange(ctx, key, 0, 100000000)
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			logger.Warnf("list slices: %s", err)
+			return errno(err)
+		}
+		for _, cmd := range cmds {
+			vals := cmd.(*redis.StringSliceCmd).Val()
+			ss := readSlices(vals)
+			for _, s := range ss {
+				if s.chunkid > 0 {
+					*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+				}
+			}
+		}
+		if c == 0 {
+			break
+		}
+		cursor = c
+	}
+	return 0
+}
+
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
 	var err error
 	*vbuff, err = r.rdb.HGet(ctx, r.xattrKey(inode), name).Bytes()

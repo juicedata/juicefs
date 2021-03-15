@@ -59,12 +59,21 @@ type ObjectStorage interface {
 	// Delete a object.
 	Delete(key string) error
 
+	// Head returns some information about the object or an error if not found.
 	Head(key string) (*Object, error)
+	// List returns a list of objects.
 	List(prefix, marker string, limit int64) ([]*Object, error)
+	// ListAll returns all the objects as an channel.
 	ListAll(prefix, marker string) (<-chan *Object, error)
+
+	// CreateMultipartUpload starts to upload a large object part by part.
 	CreateMultipartUpload(key string) (*MultipartUpload, error)
+	// UploadPart upload a part of an object.
 	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
+	// AbortUpload abort a multipart upload.
 	AbortUpload(key string, uploadID string)
+	// CompleteUpload finish an multipart upload.
 	CompleteUpload(key string, uploadID string, parts []*Part) error
+	// ListUploads lists existing multipart uploads.
 	ListUploads(marker string) ([]*PendingPart, string, error)
 }

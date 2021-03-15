@@ -71,8 +71,8 @@ func formatSize(bytes uint64) string {
 	return fmt.Sprintf("%.3f %siB", v, units[z])
 }
 
-// iterate on all the keys that starts at marker from object storage.
-func iterate(store object.ObjectStorage, start, end string) (<-chan *object.Object, error) {
+// ListAll on all the keys that starts at marker from object storage.
+func ListAll(store object.ObjectStorage, start, end string) (<-chan *object.Object, error) {
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s start %q", store, start)
 
@@ -434,12 +434,12 @@ func producer(tasks chan *object.Object, src, dst object.ObjectStorage, config *
 	}
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
-	srckeys, err := iterate(src, start, end)
+	srckeys, err := ListAll(src, start, end)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	dstkeys, err := iterate(dst, start, end)
+	dstkeys, err := ListAll(dst, start, end)
 	if err != nil {
 		logger.Fatal(err)
 	}
