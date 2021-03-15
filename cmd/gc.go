@@ -65,7 +65,7 @@ func showProgress(p *gcProgress) {
 			time.Sleep(time.Millisecond * 10)
 			continue
 		}
-		var width int = 45
+		var width int = 55
 		a := width * p.found / (p.total + p.leaked)
 		b := width * p.leaked / (p.total + p.leaked)
 		var bar [80]byte
@@ -89,7 +89,7 @@ func showProgress(p *gcProgress) {
 			n := len(lastTime) - 1
 			d := lastTime[n].Sub(lastTime[0]).Seconds()
 			fps := float64(lastDone[n]-lastDone[0]) / d
-			fmt.Printf("[%s] % 8d % 2d%% % 4.1f/s \r", string(bar[:]), p.total+p.leaked, (p.found+p.leaked)*100/(p.total+p.leaked), fps)
+			fmt.Printf("[%s] % 8d % 2d%% % 4.0f/s \r", string(bar[:]), p.total+p.leaked, (p.found+p.leaked)*100/(p.total+p.leaked), fps)
 		}
 		time.Sleep(time.Millisecond * 300)
 	}
@@ -170,7 +170,7 @@ func gc(ctx *cli.Context) error {
 	go showProgress(&p)
 
 	var skipped, skippedBytes int64
-	maxMtime := time.Now().Add(time.Hour * -24)
+	maxMtime := time.Now().Add(time.Hour * -1)
 
 	var leakedObj = make(chan string, 10240)
 	var wg sync.WaitGroup
@@ -197,10 +197,10 @@ func gc(ctx *cli.Context) error {
 		if obj == nil {
 			break // failed listing
 		}
-		if strings.HasSuffix(obj.Key, "/") || obj.IsDir {
+		if obj.IsDir {
 			continue
 		}
-		if obj.Mtime.After(maxMtime) {
+		if obj.Mtime.After(maxMtime) || obj.Mtime.Unix() == 0 {
 			logger.Debugf("ignore new block: %s %s", obj.Key, obj.Mtime)
 			skippedBytes += obj.Size
 			skipped++
@@ -208,8 +208,15 @@ func gc(ctx *cli.Context) error {
 		}
 
 		logger.Debugf("found block %s", obj.Key)
-		name := strings.Split(obj.Key, "/")[2]
-		parts := strings.Split(name, "_")
+		parts := strings.Split(obj.Key, "/")
+		if len(parts) != 3 {
+			continue
+		}
+		name := parts[2]
+		parts = strings.Split(name, "_")
+		if len(parts) != 3 {
+			continue
+		}
 		cid, _ := strconv.Atoi(parts[0])
 		size := keys[uint64(cid)]
 		if size == 0 {
