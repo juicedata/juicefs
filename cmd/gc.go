@@ -50,6 +50,51 @@ func gcFlags() *cli.Command {
 	}
 }
 
+type gcProgress struct {
+	total       int
+	found       int // valid slices
+	leaked      int
+	leakedBytes int64
+}
+
+func showProgress(p *gcProgress) {
+	var lastDone []int
+	var lastTime []time.Time
+	for {
+		if p.total == 0 {
+			time.Sleep(time.Millisecond * 10)
+			continue
+		}
+		var width int = 45
+		a := width * p.found / (p.total + p.leaked)
+		b := width * p.leaked / (p.total + p.leaked)
+		var bar [80]byte
+		for i := 0; i < width; i++ {
+			if i < a {
+				bar[i] = '='
+			} else if i < a+b {
+				bar[i] = '-'
+			} else {
+				bar[i] = ' '
+			}
+		}
+		now := time.Now()
+		lastDone = append(lastDone, p.found+p.leaked)
+		lastTime = append(lastTime, now)
+		for len(lastTime) > 18 { // 5 seconds
+			lastDone = lastDone[1:]
+			lastTime = lastTime[1:]
+		}
+		if len(lastTime) > 1 {
+			n := len(lastTime) - 1
+			d := lastTime[n].Sub(lastTime[0]).Seconds()
+			fps := float64(lastDone[n]-lastDone[0]) / d
+			fmt.Printf("[%s] % 8d % 2d%% % 4.1f/s \r", string(bar[:]), p.total+p.leaked, (p.found+p.leaked)*100/(p.total+p.leaked), fps)
+		}
+		time.Sleep(time.Millisecond * 300)
+	}
+}
+
 func gc(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
@@ -121,17 +166,19 @@ func gc(ctx *cli.Context) error {
 	}
 	logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
 
-	var leaked, leakedBytes int64
+	var p = gcProgress{total: len(keys)}
+	go showProgress(&p)
+
 	var skipped, skippedBytes int64
 	maxMtime := time.Now().Add(time.Hour * -24)
 
-	var leadObj = make(chan string, 10240)
+	var leakedObj = make(chan string, 10240)
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for key := range leadObj {
+			for key := range leakedObj {
 				if err := blob.Delete(key); err != nil {
 					logger.Warnf("delete %s: %s", key, err)
 				}
@@ -140,10 +187,10 @@ func gc(ctx *cli.Context) error {
 	}
 
 	foundLeaked := func(obj *object.Object) {
-		leakedBytes += obj.Size
-		leaked++
+		p.leakedBytes += obj.Size
+		p.leaked++
 		if ctx.Bool("delete") {
-			leadObj <- obj.Key
+			leakedObj <- obj.Key
 		}
 	}
 	for obj := range objs {
@@ -159,6 +206,7 @@ func gc(ctx *cli.Context) error {
 			skipped++
 			continue
 		}
+
 		logger.Debugf("found block %s", obj.Key)
 		name := strings.Split(obj.Key, "/")[2]
 		parts := strings.Split(name, "_")
@@ -175,16 +223,20 @@ func gc(ctx *cli.Context) error {
 			if (indx+1)*csize > int(size) {
 				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
+			} else if (indx+1)*csize == int(size) {
+				p.found++
 			}
 		} else {
 			if indx*chunkConf.BlockSize+csize != int(size) {
 				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
+			} else {
+				p.found++
 			}
 		}
 	}
-	close(leadObj)
+	close(leakedObj)
 	wg.Wait()
-	logger.Infof("found %d leaked objects (%d bytes), skipped %d (%d bytes)", leaked, leakedBytes, skipped, skippedBytes)
+	logger.Infof("found %d leaked objects (%d bytes), skipped %d (%d bytes)", p.leaked, p.leakedBytes, skipped, skippedBytes)
 	return nil
 }
