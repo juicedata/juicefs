@@ -204,6 +204,9 @@ type Meta interface {
 	// Rmr remove all the files and directories recursively.
 	Rmr(ctx Context, inode Ino, name string) syscall.Errno
 
+	// ListSlices returns all slices used by all files.
+	ListSlices(ctx Context, slices *[]Slice) syscall.Errno
+
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 }
