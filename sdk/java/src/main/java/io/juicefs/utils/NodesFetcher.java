@@ -17,6 +17,7 @@ package io.juicefs.utils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import sun.net.www.protocol.http.Handler;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -117,7 +118,7 @@ public abstract class NodesFetcher {
 
     HttpURLConnection con = null;
     try {
-      con = (HttpURLConnection) new URL(url).openConnection();
+      con = (HttpURLConnection) new URL(null, url, new Handler()).openConnection();
       con.setConnectTimeout(timeout * 1000);
       con.setReadTimeout(timeout * 1000);
 
