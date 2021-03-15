@@ -136,7 +136,7 @@ func fsck(ctx *cli.Context) error {
 		for i := uint32(0); i <= n; i++ {
 			sz := chunkConf.BlockSize
 			if i == n {
-				sz = int(s.Size) % chunkConf.BlockSize
+				sz = int(s.Size) - int(i) * chunkConf.BlockSize
 			}
 			key := fmt.Sprintf("%d_%d_%d", s.Chunkid, i, sz)
 			if _, ok := blocks[key]; !ok {
