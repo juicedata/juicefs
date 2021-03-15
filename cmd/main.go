@@ -65,6 +65,7 @@ func main() {
 			syncFlags(),
 			rmrFlags(),
 			benchmarkFlags(),
+			gcFlags(),
 		},
 	}
 
