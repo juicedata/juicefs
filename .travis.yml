@@ -12,6 +12,7 @@ addons:
       - libacl1-dev
       - redis-server
       - attr
+      - lsof
       - gcc-mingw-w64 # for windows
 install: true
 before_script:
@@ -30,7 +31,7 @@ script:
   - sudo `which mvn` test -B
   - sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet  
   - cd ../../
-  - sudo ./juicefs umount /jfs
+  - sudo ./juicefs umount /jfs || sudo lsof && sudo ./juicefs umount --force /jfs
   - sudo ./juicefs gc localhost
   - sudo ./juicefs fsck localhost
 after_failure:
