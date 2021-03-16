@@ -90,9 +90,7 @@ func main() {
 func reorderArgs(app *cli.App, args []string) []string {
 	for _, c := range app.Commands{
 		for _, f := range c.Flags{
-			if f.IsSet() {
-				log.Printf("setting:%s",f.String())
-			}
+			log.Printf("setting:%b==%s", f.IsSet(),f.String())
 		}
 	}
 
