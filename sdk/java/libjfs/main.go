@@ -281,7 +281,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			CacheFullBlock: jConf.CacheFullBlock,
 			MaxUpload:      jConf.MaxUploads,
 			Prefetch:       3,
-			AsyncUpload:    jConf.Writeback,
+			Writeback:      jConf.Writeback,
 			Partitions:     format.Partitions,
 			UploadLimit:    jConf.UploadLimit,
 			GetTimeout:     time.Second * time.Duration(jConf.GetTimeout),
