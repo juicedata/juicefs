@@ -300,7 +300,7 @@ func clientFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:  "prefetch",
-			Value: 3,
+			Value: 1,
 			Usage: "prefetch N blocks in parallel",
 		},
 
