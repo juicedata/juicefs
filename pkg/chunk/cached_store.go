@@ -464,7 +464,7 @@ func (c *wChunk) upload(indx int) {
 				logger.Fatalf("block length does not match: %v != %v", off, blen)
 			}
 		}
-		if c.store.conf.AsyncUpload {
+		if c.store.conf.Writeback {
 			stagingPath, err := c.store.bcache.stage(key, block.Data, c.store.shouldCache(blen))
 			if err != nil {
 				logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
@@ -541,7 +541,7 @@ type Config struct {
 	AutoCreate     bool
 	Compress       string
 	MaxUpload      int
-	AsyncUpload    bool
+	Writeback      bool
 	Partitions     int
 	BlockSize      int
 	UploadLimit    int
