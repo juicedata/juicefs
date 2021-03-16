@@ -29,6 +29,10 @@ script:
   - sudo chmod 777 /jfs/tmp
   - sudo `which mvn` test -B
   - sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet  
+  - cd ../../
+  - sudo ./juicefs umount /jfs
+  - sudo ./juicefs gc localhost
+  - sudo ./juicefs fsck localhost
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 notifications:

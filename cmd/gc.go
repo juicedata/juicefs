@@ -17,6 +17,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,7 +27,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
-	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -134,17 +135,6 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	store := chunk.NewCachedStore(blob, chunkConf)
-	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
-		chunkid := args[0].(uint64)
-		length := args[1].(uint32)
-		return store.Remove(chunkid, int(length))
-	}))
-	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
-		slices := args[0].([]meta.Slice)
-		chunkid := args[1].(uint64)
-		return vfs.Compact(chunkConf, store, slices, chunkid)
-	}))
 
 	blob = object.WithPrefix(blob, "chunks/")
 	objs, err := osync.ListAll(blob, "", "")
@@ -167,7 +157,9 @@ func gc(ctx *cli.Context) error {
 	logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
 
 	var p = gcProgress{total: len(keys)}
-	go showProgress(&p)
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		go showProgress(&p)
+	}
 
 	var skipped, skippedBytes int64
 	maxMtime := time.Now().Add(time.Hour * -1)
@@ -244,6 +236,15 @@ func gc(ctx *cli.Context) error {
 	}
 	close(leakedObj)
 	wg.Wait()
-	logger.Infof("found %d leaked objects (%d bytes), skipped %d (%d bytes)", p.leaked, p.leakedBytes, skipped, skippedBytes)
+
+	if p.leaked > 0 {
+		logger.Infof("found %d leaked objects (%d bytes), skipped %d (%d bytes)", p.leaked, p.leakedBytes, skipped, skippedBytes)
+		if !ctx.Bool("delete") {
+			logger.Infof("Please add `--delete` to clean them")
+		}
+	} else {
+		logger.Infof("scan %d objects, no leaked found", p.found)
+	}
+
 	return nil
 }

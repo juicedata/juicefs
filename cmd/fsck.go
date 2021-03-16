@@ -24,7 +24,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
-	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -34,13 +33,6 @@ func checkFlags() *cli.Command {
 		Usage:     "Check consistency of file system",
 		ArgsUsage: "REDIS-URL",
 		Action:    fsck,
-		Flags: []cli.Flag{
-			&cli.IntFlag{
-				Name:  "threads",
-				Value: 50,
-				Usage: "number threads to delete leaked objects",
-			},
-		},
 	}
 }
 
@@ -83,18 +75,8 @@ func fsck(ctx *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	store := chunk.NewCachedStore(blob, chunkConf)
-	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
-		chunkid := args[0].(uint64)
-		length := args[1].(uint32)
-		return store.Remove(chunkid, int(length))
-	}))
-	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
-		slices := args[0].([]meta.Slice)
-		chunkid := args[1].(uint64)
-		return vfs.Compact(chunkConf, store, slices, chunkid)
-	}))
 
+	logger.Infof("Listing all blocks ...")
 	blob = object.WithPrefix(blob, "chunks/")
 	objs, err := osync.ListAll(blob, "", "")
 	if err != nil {
@@ -121,6 +103,7 @@ func fsck(ctx *cli.Context) error {
 	}
 	logger.Infof("Found %d blocks (%d bytes)", len(blocks), totalBlockBytes)
 
+	logger.Infof("Listing all slices ...")
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
 	r := m.ListSlices(c, &slices)
@@ -129,6 +112,7 @@ func fsck(ctx *cli.Context) error {
 	}
 	keys := make(map[uint64]uint32)
 	var totalBytes uint64
+	var lost, lostBytes int
 	for _, s := range slices {
 		keys[s.Chunkid] = s.Size
 		totalBytes += uint64(s.Size)
@@ -136,17 +120,22 @@ func fsck(ctx *cli.Context) error {
 		for i := uint32(0); i <= n; i++ {
 			sz := chunkConf.BlockSize
 			if i == n {
-				sz = int(s.Size) - int(i) * chunkConf.BlockSize
+				sz = int(s.Size) - int(i)*chunkConf.BlockSize
 			}
 			key := fmt.Sprintf("%d_%d_%d", s.Chunkid, i, sz)
 			if _, ok := blocks[key]; !ok {
 				if _, err := blob.Head(key); err != nil {
 					logger.Errorf("can't find block %s: %s", key, err)
+					lost++
+					lostBytes += sz
 				}
 			}
 		}
 	}
 	logger.Infof("Used by %d slices (%d bytes)", len(keys), totalBytes)
+	if lost > 0 {
+		logger.Fatalf("%d object is lost (%d bytes)", lost, lostBytes)
+	}
 
 	return nil
 }

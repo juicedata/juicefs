@@ -171,22 +171,7 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		},
 	}
 
-	m.shaLookup, err = m.rdb.ScriptLoad(Background, scriptLookup).Result()
-	if err != nil {
-		logger.Warnf("load scriptLookup: %v", err)
-		m.shaLookup = ""
-	}
-
 	m.checkServerConfig()
-	m.sid, err = m.rdb.Incr(Background, "nextsession").Result()
-	if err != nil {
-		return nil, fmt.Errorf("create session: %s", err)
-	}
-	logger.Debugf("session is is %d", m.sid)
-	go m.refreshSession()
-	go m.cleanupDeletedFiles()
-	go m.cleanupSlices()
-	go m.cleanupLeakedChunks()
 	return m, nil
 }
 
@@ -254,6 +239,27 @@ func (r *redisMeta) Load() (*Format, error) {
 		return nil, fmt.Errorf("json: %s", err)
 	}
 	return &format, nil
+}
+
+func (r *redisMeta) NewSession() error {
+	var err error
+	r.sid, err = r.rdb.Incr(Background, "nextsession").Result()
+	if err != nil {
+		return fmt.Errorf("create session: %s", err)
+	}
+	logger.Debugf("session is is %d", r.sid)
+
+	r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result()
+	if err != nil {
+		logger.Warnf("load scriptLookup: %v", err)
+		r.shaLookup = ""
+	}
+
+	go r.refreshSession()
+	go r.cleanupDeletedFiles()
+	go r.cleanupSlices()
+	go r.cleanupLeakedChunks()
+	return nil
 }
 
 func (r *redisMeta) OnMsg(mtype uint32, cb MsgCallback) {
