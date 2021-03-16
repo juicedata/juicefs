@@ -79,14 +79,23 @@ func main() {
 		}
 	}
 
-	err := app.Run(reorderArgs(os.Args))
+	app.Commands[0].Flags[0].IsSet()
+	err := app.Run(reorderArgs(app, os.Args))
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 
-func reorderArgs(args []string) []string {
+func reorderArgs(app *cli.App, args []string) []string {
+	for _, c := range app.Commands{
+		for _, f := range c.Flags{
+			if f.IsSet() {
+				log.Printf("setting:%s",f.String())
+			}
+		}
+	}
+
 	globalOptionMap := map[string]string{
 		"--verbose": "-v",
 		"--debug":   "-v",
