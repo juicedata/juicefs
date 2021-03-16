@@ -31,7 +31,7 @@ script:
   - sudo `which mvn` test -B
   - sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet  
   - cd ../../
-  - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs
+  - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
   - sudo ./juicefs gc localhost
   - sudo ./juicefs fsck localhost
 after_failure:
