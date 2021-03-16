@@ -31,6 +31,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const chunkSize = 1 << 26 // 64M
@@ -39,6 +40,23 @@ const SlowRequest = time.Second * time.Duration(10)
 
 var (
 	logger = utils.GetLogger("juicefs")
+
+	cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "juicefs_blockcache_hits",
+		Help: "read from cached block",
+	})
+	cacheMiss = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "juicefs_blockcache_miss",
+		Help: "missed read from cached block",
+	})
+	cacheHitBytes = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "juicefs_blockcache_hit_bytes",
+		Help: "read bytes from cached block",
+	})
+	cacheMissBytes = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "juicefs_blockcache_miss_bytes",
+		Help: "missed bytes from cached block",
+	})
 )
 
 // chunk for read only
@@ -111,6 +129,8 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			n, err = r.ReadAt(p, int64(boff))
 			r.Close()
 			if err == nil {
+				cacheHits.Add(1)
+				cacheHitBytes.Add(float64(n))
 				return n, nil
 			}
 			if f, ok := r.(*os.File); ok {
@@ -132,6 +152,8 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		c.store.fetcher.fetch(key)
 		if err == nil {
 			defer in.Close()
+			cacheMiss.Add(1)
+			cacheMissBytes.Add(float64(len(p)))
 			return io.ReadFull(in, p)
 		}
 	}
@@ -612,6 +634,8 @@ func (store *cachedStore) load(key string, page *Page, cache bool) (err error) {
 		return fmt.Errorf("read %s fully: %s (%d < %d) after %s (tried %d)", key, err, n, len(page.Data),
 			time.Since(start), tried)
 	}
+	cacheMiss.Add(1)
+	cacheMissBytes.Add(float64(len(page.Data)))
 	if cache {
 		store.bcache.cache(key, page)
 	}
@@ -652,6 +676,28 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		defer p.Release()
 		_ = store.load(key, p, true)
 	})
+	_ = prometheus.Register(cacheHits)
+	_ = prometheus.Register(cacheHitBytes)
+	_ = prometheus.Register(cacheMiss)
+	_ = prometheus.Register(cacheMissBytes)
+	_ = prometheus.Register(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "juicefs_blockcache_blocks",
+			Help: "number of cached blocks",
+		},
+		func() float64 {
+			cnt, _ := store.bcache.stats()
+			return float64(cnt)
+		}))
+	_ = prometheus.Register(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "juicefs_blockcache_bytes",
+			Help: "number of cached bytes",
+		},
+		func() float64 {
+			_, used := store.bcache.stats()
+			return float64(used)
+		}))
 	go store.uploadStaging()
 	return store
 }
