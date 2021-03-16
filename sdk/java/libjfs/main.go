@@ -303,6 +303,10 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			chunkid := args[1].(uint64)
 			return vfs.Compact(chunkConf, store, slices, chunkid)
 		}))
+		err = m.NewSession()
+		if err != nil {
+			logger.Fatalf("new session: %s", err)
+		}
 
 		conf := &vfs.Config{
 			Meta: &meta.Config{

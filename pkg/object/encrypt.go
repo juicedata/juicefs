@@ -49,6 +49,7 @@ func ExportRsaPrivateKeyToPem(key *rsa.PrivateKey, passphrase string) string {
 	}
 	if passphrase != "" {
 		var err error
+		// nolint:staticcheck
 		block, _ = x509.EncryptPEMBlock(rand.Reader, block.Type, buf, []byte(passphrase), x509.PEMCipherAES256)
 		if err != nil {
 			panic(err)
@@ -65,12 +66,14 @@ func ParseRsaPrivateKeyFromPem(privPEM string, passphrase string) (*rsa.PrivateK
 	}
 
 	buf := block.Bytes
+	// nolint:staticcheck
 	if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") &&
 		x509.IsEncryptedPEMBlock(block) {
 		if passphrase == "" {
 			return nil, fmt.Errorf("passphrase is required to private key")
 		}
 		var err error
+		// nolint:staticcheck
 		buf, err = x509.DecryptPEMBlock(block, []byte(passphrase))
 		if err != nil {
 			if err == x509.IncorrectPasswordError {

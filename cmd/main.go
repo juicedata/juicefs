@@ -66,6 +66,7 @@ func main() {
 			rmrFlags(),
 			benchmarkFlags(),
 			gcFlags(),
+			checkFlags(),
 		},
 	}
 

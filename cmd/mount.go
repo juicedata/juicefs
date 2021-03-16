@@ -197,6 +197,10 @@ func mount(c *cli.Context) error {
 		chunkid := args[1].(uint64)
 		return vfs.Compact(chunkConf, store, slices, chunkid)
 	}))
+	err = m.NewSession()
+	if err != nil {
+		logger.Fatalf("new session: %s", err)
+	}
 
 	conf := &vfs.Config{
 		Meta: &meta.Config{

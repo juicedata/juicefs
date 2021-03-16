@@ -74,6 +74,7 @@ func TestRedisClient(t *testing.T) {
 	}
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
 	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.NewSession()
 	ctx := Background
 	var parent, inode Ino
 	var attr = &Attr{}
@@ -286,6 +287,7 @@ func TestCompaction(t *testing.T) {
 		}
 		return nil
 	})
+	_ = m.NewSession()
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -343,6 +345,8 @@ func TestConcurrentWrite(t *testing.T) {
 		return nil
 	})
 	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.NewSession()
+
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -387,6 +391,8 @@ func TestTruncateAndDelete(t *testing.T) {
 		return nil
 	})
 	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.NewSession()
+
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -451,6 +457,8 @@ func TestCopyFileRange(t *testing.T) {
 		return nil
 	})
 	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.NewSession()
+
 	ctx := Background
 	var iin, iout Ino
 	var attr = &Attr{}
@@ -505,6 +513,7 @@ func benchmarkReaddir(b *testing.B, n int) {
 		b.Logf("redis is not available: %s", err)
 		b.Skip()
 	}
+	_ = m.NewSession()
 	ctx := Background
 	var inode Ino
 	dname := fmt.Sprintf("largedir%d", n)
