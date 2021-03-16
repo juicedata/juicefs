@@ -18,7 +18,7 @@ fsx: healthcheck secfs.test/tools/bin/fsx
 setup:
 	redis-server &
 	mkdir -p /jfs
-	../juicefs format -storage mem localhost unittest
+	../juicefs format localhost unittest
 	../juicefs mount -d --no-usage-report --enable-xattr localhost /jfs
 
 healthcheck:

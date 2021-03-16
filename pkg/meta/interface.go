@@ -133,6 +133,8 @@ type Meta interface {
 	Init(format Format, force bool) error
 	// Load loads the existing setting of a formatted volume from meta service.
 	Load() (*Format, error)
+	// NewSession create a new client session.
+	NewSession() error
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno
