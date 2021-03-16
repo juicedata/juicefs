@@ -143,7 +143,7 @@ func (cache *cacheStore) curFreeRatio() (float32, float32) {
 	return float32(free) / float32(total), float32(ffree) / float32(files)
 }
 
-func (cache *cacheStore) flushPage(path string, data []byte) error {
+func (cache *cacheStore) flushPage(path string, data []byte, sync bool) error {
 	cache.createDir(filepath.Dir(path))
 	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE, cache.mode)
@@ -157,6 +157,15 @@ func (cache *cacheStore) flushPage(path string, data []byte) error {
 		_ = f.Close()
 		_ = os.Remove(tmp)
 		return err
+	}
+	if sync {
+		err = f.Sync()
+		if err != nil {
+			logger.Warnf("sync stagging file %s: %s", tmp, err)
+			_ = f.Close()
+			_ = os.Remove(tmp)
+			return err
+		}
 	}
 	err = f.Close()
 	if err != nil {
@@ -238,7 +247,7 @@ func (cache *cacheStore) flush() {
 	for {
 		w := <-cache.pending
 		path := cache.cachePath(w.key)
-		if cache.capacity > 0 && cache.flushPage(path, w.page.Data) == nil {
+		if cache.capacity > 0 && cache.flushPage(path, w.page.Data, false) == nil {
 			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
 		}
 		cache.Lock()
@@ -270,7 +279,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 
 func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
 	stagingPath := cache.stagePath(key)
-	err := cache.flushPage(stagingPath, data)
+	err := cache.flushPage(stagingPath, data, true)
 	if err == nil && cache.capacity > 0 && keepCache {
 		path := cache.cachePath(key)
 		cache.createDir(filepath.Dir(path))

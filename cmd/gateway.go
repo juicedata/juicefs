@@ -163,12 +163,12 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
 
-		GetTimeout:  time.Second * time.Duration(c.Int("get-timeout")),
-		PutTimeout:  time.Second * time.Duration(c.Int("put-timeout")),
-		MaxUpload:   c.Int("max-uploads"),
-		AsyncUpload: c.Bool("writeback"),
-		Prefetch:    c.Int("prefetch"),
-		BufferSize:  c.Int("buffer-size") << 20,
+		GetTimeout: time.Second * time.Duration(c.Int("get-timeout")),
+		PutTimeout: time.Second * time.Duration(c.Int("put-timeout")),
+		MaxUpload:  c.Int("max-uploads"),
+		Writeback:  c.Bool("writeback"),
+		Prefetch:   c.Int("prefetch"),
+		BufferSize: c.Int("buffer-size") << 20,
 
 		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
