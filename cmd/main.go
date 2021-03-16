@@ -79,11 +79,58 @@ func main() {
 		}
 	}
 
-	err := app.Run(os.Args)
+	err := app.Run(reorderArgs(os.Args))
 	if err != nil {
 		log.Fatal(err)
 	}
 }
+
+
+func reorderArgs(args []string) []string {
+	globalOptionMap := map[string]string{
+		"--verbose": "-v",
+		"--debug":   "-v",
+		"-v":        "-v",
+		"--quiet":   "-q",
+		"-q":        "-q",
+		"--trace":   "--trace",
+		"--help":    "-h",
+		"-h":        "-h",
+		"--version": "-V",
+		"-V":        "-V",
+	}
+
+	commandMap := map[string]string{
+		"format":    "format",
+		"mount":     "mount",
+		"umount":    "umount",
+		"gateway":   "gateway",
+		"sync":      "sync",
+		"rmr":       "rmr",
+		"benchmark": "benchmark",
+		"gc":        "gc",
+		"fsck":      "fsck",
+		"help":      "h",
+		"h":         "h",
+	}
+	newArgs := []string{args[0]}
+	cmdArgs := []string{}
+	tailArgs := []string{}
+	for _, term := range args[1:] {
+		if g, ok := globalOptionMap[term]; ok {
+			newArgs = append(newArgs, g)
+			continue
+		}
+		if g, ok := commandMap[term]; ok {
+			cmdArgs = append(cmdArgs, g)
+			continue
+		}
+		tailArgs = append(tailArgs, term)
+	}
+	newArgs = append(newArgs, append(cmdArgs, tailArgs...)...)
+	return newArgs
+}
+
 
 func handleSysMountArgs() ([]string, error) {
 	optionToCmdFlag := map[string]string{
