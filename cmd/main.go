@@ -207,7 +207,7 @@ func reorderArgs(app *cli.App, args []string) []string {
 	if len(args) <= 1 {
 		return args
 	}
-	allOrdered :=[]string{}
+	allOrdered :=[]string{args[0]}
 	// init dictionary
 	globalFlagMap := make(map[string]bool,0)
 	commandMap := map[string]string{}
