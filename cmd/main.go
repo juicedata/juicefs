@@ -129,7 +129,8 @@ func processCommand(cm map[string]string, args []string) []string {
 			}
 		}
 	}
-	return newArgs
+	headArgs = append(append(headArgs, newArgs...), tailArgs...)
+	return headArgs
 }
 func processCommandOptions(cfm map[string]bool, args []string) []string {
 	mergedArgs  := []string{}
