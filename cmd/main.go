@@ -181,7 +181,7 @@ func processCommandOptions(cfm map[string]bool, args []string) []string {
 	}
 
 	changeToTail := false
-	for _, t := range mergedArgs[1:] {
+	for _, t := range mergedArgs {
 		if _, ok := cfm[t] ; ok {
 			cmfArgs = append(cmfArgs, t)
 			changeToTail = true
@@ -199,7 +199,9 @@ func processCommandOptions(cfm map[string]bool, args []string) []string {
 
 // juicefs [global options] command [command options] [arguments...]
 func reorderArgs(app *cli.App, args []string) []string {
-
+	if len(args) <= 1 {
+		return args
+	}
 	// init dictionary
 	globalFlagMap := make(map[string]bool,0)
 	commandMap := map[string]string{}
