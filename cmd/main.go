@@ -86,11 +86,11 @@ func main() {
 	}
 }
 
-
+// juicefs [global options] command [command options] [arguments...]
 func reorderArgs(app *cli.App, args []string) []string {
 	for _, c := range app.Commands{
 		for _, f := range c.Flags{
-			log.Printf("setting:%b==%s", f.IsSet(),f.String())
+			log.Printf("==%s",f.Names())
 		}
 	}
 
