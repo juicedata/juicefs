@@ -185,11 +185,12 @@ func processCommandOptions(cfm map[string]bool, args []string) []string {
 		if _, ok := cfm[t] ; ok {
 			cmfArgs = append(cmfArgs, t)
 			changeToTail = true
-		}
-		if changeToTail {
-			tailArgs = append(tailArgs, t)
-		} else {
-			headArgs = append(headArgs, t)
+		}else {
+			if changeToTail {
+				tailArgs = append(tailArgs, t)
+			} else {
+				headArgs = append(headArgs, t)
+			}
 		}
 	}
 	headArgs =  append(append(headArgs, cmfArgs...), tailArgs...)
