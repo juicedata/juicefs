@@ -85,79 +85,138 @@ func main() {
 	}
 }
 
+
+func flagComplete(flags []string) []string {
+	newFlags := []string {}
+	for _, flag := range flags {
+		if len(flag) > 1 {
+			newFlags = append(newFlags, fmt.Sprintf("--%s", flag))
+		}
+		if len(flag) == 1 {
+			newFlags = append(newFlags, fmt.Sprintf("-%s", flag))
+		}
+	}
+	return newFlags
+}
+
+func processGlobalOptions(gm map[string]bool, args []string) []string {
+	newArgs  := []string{args[0]}
+	tailArgs := []string{}
+	for _, t := range args[1:] {
+		if _, ok := gm[t]; ok {
+			newArgs = append(newArgs, t)
+		}else {
+			tailArgs =append(tailArgs,t)
+		}
+	}
+	newArgs = append(newArgs, tailArgs...)
+	return newArgs
+}
+func processCommand(cm map[string]string, args []string) []string {
+	newArgs  := []string{}
+	headArgs := []string{args[0]}
+	tailArgs := []string{}
+	changeToTail := false
+	for _, t := range args[1:] {
+		if _, ok := cm[t]; ok {
+			newArgs = append(newArgs, t)
+			changeToTail = true
+		}else {
+			if changeToTail {
+				tailArgs =append(tailArgs,t )
+			} else {
+				headArgs = append(headArgs, t)
+			}
+		}
+	}
+	return newArgs
+}
+func processCommandOptions(cfm map[string]bool, args []string) []string {
+	mergedArgs  := []string{}
+	headArgs := []string{args[0]}
+	tailArgs := []string{}
+	cmfArgs := []string{}
+
+
+	// merge command options
+	j := len(args)
+	for i:=1 ; i < j; i++ {
+		p := args[i]
+		if b, ok := cfm[p]; ok {
+			if b { // 是bool型的
+				if i+1 < j && (args[i+1] == "false" || args[i+1] == "true" ) {
+					mergedArgs = append(mergedArgs, fmt.Sprintf("%s=%s", p, args[i+1]))
+					cfm[fmt.Sprintf("%s=%s", p, args[i+1])] = false
+					i++
+					continue
+				}
+			} else { // 值型
+				if i+1 < j {
+					mergedArgs = append(mergedArgs, fmt.Sprintf("%s=%s", p, args[i+1]))
+					cfm[fmt.Sprintf("%s=%s", p, args[i+1])] = false
+					i++
+					continue
+				}
+			}
+		}
+		mergedArgs = append(mergedArgs, p)
+	}
+
+	changeToTail := false
+	for _, t := range mergedArgs[1:] {
+		if _, ok := cfm[t] ; ok {
+			cmfArgs = append(cmfArgs, t)
+			changeToTail = true
+		}
+		if changeToTail {
+			tailArgs = append(tailArgs, t)
+		} else {
+			headArgs = append(headArgs, t)
+		}
+	}
+	headArgs =  append(append(headArgs, cmfArgs...), tailArgs...)
+	return headArgs
+}
+
 // juicefs [global options] command [command options] [arguments...]
 func reorderArgs(app *cli.App, args []string) []string {
 
-	flagMap := map[string]string{}
-	// flags part
+	// init dictionary
+	globalFlagMap := make(map[string]bool,0)
+	commandMap := map[string]string{}
+	commandFlagMap := make(map[string]bool,0)
+	for _, f := range app.Flags {
+		switch f.(type) {
+		case *cli.BoolFlag:
+			for _,fc := range flagComplete(f.Names()) {
+				globalFlagMap[fc] = true
+			}
+		default:
+			for _,fc := range flagComplete(f.Names()) {
+				globalFlagMap[fc] = false
+			}
+		}
+	}
 	for _, c := range app.Commands{
-		for _, f := range c.Flags{
-			for _, flagName := range f.Names(){
-				k :=  fmt.Sprintf("--%s",flagName)
-				flagMap[k] = k
+		commandMap[c.Name] = c.Name
+		for _, f := range c.Flags {
+			switch f.(type) {
+			case *cli.BoolFlag:
+				for _,fc := range flagComplete(f.Names()) {
+					commandFlagMap[fc] = true
+				}
+			default:
+				for _,fc := range flagComplete(f.Names()) {
+					commandFlagMap[fc] = false
+				}
 			}
 		}
 	}
 
-	globalOptionMap := map[string]string{
-		"--verbose": "-v",
-		"--debug":   "-v",
-		"-v":        "-v",
-		"--quiet":   "-q",
-		"-q":        "-q",
-		"--trace":   "--trace",
-		"--help":    "-h",
-		"-h":        "-h",
-		"--version": "-V",
-		"-V":        "-V",
-	}
-
-	commandMap := map[string]string{
-		"format":    "format",
-		"mount":     "mount",
-		"umount":    "umount",
-		"gateway":   "gateway",
-		"sync":      "sync",
-		"rmr":       "rmr",
-		"benchmark": "benchmark",
-		"gc":        "gc",
-		"fsck":      "fsck",
-		"help":      "h",
-		"h":         "h",
-	}
-	newArgs := []string{args[0]}
-	cmdArgs := []string{}
-	cmdOptionsArgs := []string{}
-	tailArgs := []string{}
-	var needSkip bool = false
-	for _, term := range args[1:] {
-		if needSkip {
-			var l = len(cmdOptionsArgs)
-			if l > 0 {
-				cmdOptionsArgs[l-1] = fmt.Sprintf("%s=%s", cmdOptionsArgs[l-1], term)
-			}
-			needSkip = false
-			continue
-		}
-		if g, ok := globalOptionMap[term]; ok {
-			newArgs = append(newArgs, g)
-			continue
-		}
-		if g, ok := commandMap[term]; ok {
-			cmdArgs = append(cmdArgs, g)
-			continue
-		}
-		if g, ok := flagMap[term]; ok {
-			cmdOptionsArgs = append(cmdOptionsArgs, g)
-			needSkip = true
-			continue
-		}
-
-		tailArgs = append(tailArgs, term)
-	}
-	newArgs = append(newArgs, append(cmdArgs, cmdOptionsArgs...)...)
-	newArgs = append(newArgs, tailArgs...)
-	return newArgs
+	globalOptionOrdered := processGlobalOptions(globalFlagMap, args)
+	globalOptionAndcommandOrdered := processCommand(commandMap, globalOptionOrdered)
+	allOrdered := processCommandOptions(commandFlagMap, globalOptionAndcommandOrdered)
+	return allOrdered
 }
 
 
