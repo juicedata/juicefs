@@ -380,16 +380,26 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan *Object, error) {
 }
 
 func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
-	parts := strings.Split(endpoint, ":")
+	var hostEnd int
+	// IPv6 address like [fe80::148a:d031:823a:fff]
+	if strings.HasPrefix(endpoint, "[") {
+		hostEnd = strings.Index(endpoint, "]") + 1
+	} else { // IPv4 address or host name
+		hostEnd = strings.Index(endpoint, ":")
+	}
+	if hostEnd <= 0 {
+		return nil, fmt.Errorf("unable to parse host from endpoint: %s", endpoint)
+	}
+	parts := strings.Split(endpoint[hostEnd:], ":")
 	root := filepath.Clean(parts[len(parts)-1])
 	port := "22"
 	// two ":" means endpoint contains custom port
-	if len(parts) > 2 {
+	if len(parts) > 1 {
 		port = parts[len(parts)-2]
 	}
 	// append suffix `/` removed by filepath.Clean()
 	// `.` is a directory, add `/`
-	if strings.HasSuffix(parts[1], dirSuffix) || root == "." {
+	if strings.HasSuffix(parts[len(parts)-1], dirSuffix) || root == "." {
 		root = root + dirSuffix
 	}
 
@@ -418,7 +428,7 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	}
 
 	f := &sftpStore{
-		host:   parts[0],
+		host:   strings.Trim(endpoint[:hostEnd], "[]"), // Trim bracket if it's IPv6 address
 		port:   port,
 		root:   root,
 		config: config,
