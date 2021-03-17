@@ -81,6 +81,7 @@ func main() {
 
 	os.Args = reorderArgs(app, os.Args)
 
+	log.Printf("reorder:%v", os.Args)
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
