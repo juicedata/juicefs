@@ -88,9 +88,15 @@ func main() {
 
 // juicefs [global options] command [command options] [arguments...]
 func reorderArgs(app *cli.App, args []string) []string {
+
+	flagMap := map[string]string{}
+	// flags part
 	for _, c := range app.Commands{
 		for _, f := range c.Flags{
-			log.Printf("==%s",f.Names())
+			for _, flagName := range f.Names(){
+				k :=  fmt.Sprintf("--%s",flagName)
+				flagMap[k] = k
+			}
 		}
 	}
 
@@ -122,8 +128,18 @@ func reorderArgs(app *cli.App, args []string) []string {
 	}
 	newArgs := []string{args[0]}
 	cmdArgs := []string{}
+	cmdOptionsArgs := []string{}
 	tailArgs := []string{}
+	var needSkip bool = false
 	for _, term := range args[1:] {
+		if needSkip {
+			var l = len(cmdOptionsArgs)
+			if l > 0 {
+				cmdOptionsArgs[l-1] = fmt.Sprintf("%s=%s", cmdOptionsArgs[l-1], term)
+			}
+			needSkip = false
+			continue
+		}
 		if g, ok := globalOptionMap[term]; ok {
 			newArgs = append(newArgs, g)
 			continue
@@ -132,9 +148,16 @@ func reorderArgs(app *cli.App, args []string) []string {
 			cmdArgs = append(cmdArgs, g)
 			continue
 		}
+		if g, ok := flagMap[term]; ok {
+			cmdOptionsArgs = append(cmdOptionsArgs, g)
+			needSkip = true
+			continue
+		}
+
 		tailArgs = append(tailArgs, term)
 	}
-	newArgs = append(newArgs, append(cmdArgs, tailArgs...)...)
+	newArgs = append(newArgs, append(cmdArgs, cmdOptionsArgs...)...)
+	newArgs = append(newArgs, tailArgs...)
 	return newArgs
 }
 
