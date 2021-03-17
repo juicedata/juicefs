@@ -24,11 +24,14 @@ import (
 	"net/url"
 	"reflect"
 	"sync"
+	"sort"
+	"strings"
 
 	"github.com/ceph/go-ceph/rados"
 )
 
 type ceph struct {
+	DefaultObjectStorage
 	name string
 	conn *rados.Conn
 	free chan *rados.IOContext
@@ -160,6 +163,40 @@ func (c *ceph) Delete(key string) error {
 	})
 }
 
+func (c *ceph) ListAll(prefix, marker string) (<-chan *Object, error) {
+	var objs = make(chan *Object, 1000)
+	err := c.do(func(ctx *rados.IOContext) error {
+		defer close(objs)
+		iter, err := ctx.Iter()
+		if err != nil {
+			return err
+		}
+		defer iter.Close()
+
+		// FIXME: this will be really slow for many objects
+		keys := make([]string, 0, 1000)
+		for iter.Next() {
+			key := iter.Value()
+			if key <= marker || !strings.HasPrefix(key, prefix) {
+				continue
+			}
+			keys = append(keys, key)
+		}
+		// the keys are not ordered, sort them first
+		sort.Strings(keys)
+		// TODO: parallel
+		for _, key := range keys {
+			st, err := ctx.Stat(key)
+			if err != nil {
+				continue // FIXME
+			}
+			objs <- &Object{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/")}
+		}
+		return nil
+	})
+	return objs, err
+}
+
 func newCeph(endpoint, cluster, user string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
@@ -184,5 +221,5 @@ func newCeph(endpoint, cluster, user string) (ObjectStorage, error) {
 }
 
 func init() {
-	register("ceph", newCeph)
+	Register("ceph", newCeph)
 }
