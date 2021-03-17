@@ -108,7 +108,7 @@ func processGlobalOptions(gm map[string]bool, args []string) []string {
 	newArgs  := []string{args[0]}
 	tailArgs := []string{}
 	log.Printf("processGlobalOptions begin %v", args)
-	defer log.Printf("processGlobalOptions end %v", newArgs )
+
 	for _, t := range args[1:] {
 		if _, ok := gm[t]; ok {
 			newArgs = append(newArgs, t)
@@ -117,6 +117,7 @@ func processGlobalOptions(gm map[string]bool, args []string) []string {
 		}
 	}
 	newArgs = append(newArgs, tailArgs...)
+	log.Printf("processGlobalOptions end %v", newArgs )
 	return newArgs
 }
 func processCommand(cm map[string]string, args []string) []string {
@@ -125,7 +126,7 @@ func processCommand(cm map[string]string, args []string) []string {
 	tailArgs := []string{}
 
 	log.Printf("processCommand begin %v", args)
-	defer log.Printf("processCommand end %v", headArgs )
+
 
 	changeToTail := false
 	for _, t := range args[1:] {
@@ -141,6 +142,7 @@ func processCommand(cm map[string]string, args []string) []string {
 		}
 	}
 	headArgs = append(append(headArgs, newArgs...), tailArgs...)
+	log.Printf("processCommand end %v", headArgs )
 	return headArgs
 }
 func processCommandOptions(cfm map[string]bool, args []string) []string {
@@ -151,7 +153,7 @@ func processCommandOptions(cfm map[string]bool, args []string) []string {
 	cmfArgs := []string{}
 
 	log.Printf("processCommandOptions begin %v", args)
-	defer log.Printf("processCommandOptions end %v", headArgs )
+
 
 	// merge command options
 	j := len(args)
@@ -190,6 +192,7 @@ func processCommandOptions(cfm map[string]bool, args []string) []string {
 		}
 	}
 	headArgs =  append(append(headArgs, cmfArgs...), tailArgs...)
+	log.Printf("processCommandOptions end %v", headArgs )
 	return headArgs
 }
 
