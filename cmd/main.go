@@ -163,6 +163,9 @@ func processCommandOptions(cfm map[string]bool, args []string) ([]string, []stri
 				}
 			}
 		}
+		if strings.Contains(p, "=") {
+			cfm[p] = false
+		}
 		mergedArgs = append(mergedArgs, p)
 	}
 
