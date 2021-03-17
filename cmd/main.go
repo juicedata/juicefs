@@ -146,7 +146,7 @@ func processCommand(cm map[string]string, args []string) []string {
 	log.Printf("processCommand end %v", headArgs )
 	return headArgs
 }
-func processCommandOptions(cfm map[string]bool, args []string) []string {
+func processCommandOptions(cfm map[string]bool, args []string) ([]string,[]string,[]string) {
 
 	mergedArgs  := []string{}
 	headArgs := []string{args[0]}
@@ -197,10 +197,9 @@ func processCommandOptions(cfm map[string]bool, args []string) []string {
 		}
 	}
 	log.Printf("processCommandOptions 3 head:%v cmf:%v tail:%v", headArgs, cmfArgs,tailArgs )
-	headArgs = append(headArgs, cmfArgs...)
-	headArgs =  append(headArgs, tailArgs...)
+	//headArgs = append(append(headArgs, cmfArgs...), tailArgs...)
 	log.Printf("processCommandOptions end %v", headArgs )
-	return headArgs
+	return headArgs, cmfArgs, tailArgs
 }
 
 // juicefs [global options] command [command options] [arguments...]
@@ -208,6 +207,7 @@ func reorderArgs(app *cli.App, args []string) []string {
 	if len(args) <= 1 {
 		return args
 	}
+	allOrdered :=[]string{}
 	// init dictionary
 	globalFlagMap := make(map[string]bool,0)
 	commandMap := map[string]string{}
@@ -252,8 +252,21 @@ func reorderArgs(app *cli.App, args []string) []string {
 
 	globalOptionOrdered := processGlobalOptions(globalFlagMap, args)
 	globalOptionAndcommandOrdered := processCommand(commandMap, globalOptionOrdered)
-	allOrdered := processCommandOptions(commandFlagMap, globalOptionAndcommandOrdered)
-	return allOrdered
+	h, c, t := processCommandOptions(commandFlagMap, globalOptionAndcommandOrdered)
+	for _, item := range h[1:] {
+		if _, ok :=globalFlagMap[item]; ok {
+			allOrdered = append(allOrdered, item)
+			continue
+		}
+		if _, ok :=commandMap[item]; ok {
+			allOrdered = append(allOrdered, item)
+			continue
+		}
+		th := []string{item}
+		th = append(th, t...)
+		t  = th
+	}
+	return append(append(allOrdered, c...), t...)
 }
 
 
