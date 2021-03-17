@@ -27,7 +27,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
-	"reflect"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -80,7 +79,7 @@ func main() {
 		}
 	}
 
-	log.Printf("origin: %v", os.Args)
+	log.Printf(" origin:%v", os.Args)
 
 	os.Args = reorderArgs(app, os.Args)
 
@@ -91,9 +90,8 @@ func main() {
 	}
 }
 
-
 func flagComplete(flags []string) []string {
-	newFlags := []string {}
+	newFlags := []string{}
 	for _, flag := range flags {
 		if len(flag) > 1 {
 			newFlags = append(newFlags, fmt.Sprintf("--%s", flag))
@@ -106,63 +104,51 @@ func flagComplete(flags []string) []string {
 }
 
 func processGlobalOptions(gm map[string]bool, args []string) []string {
-	newArgs  := []string{args[0]}
+	newArgs := []string{args[0]}
 	tailArgs := []string{}
-	log.Printf("processGlobalOptions begin %v", args)
-
 	for _, t := range args[1:] {
 		if _, ok := gm[t]; ok {
 			newArgs = append(newArgs, t)
-		}else {
-			tailArgs =append(tailArgs,t)
+		} else {
+			tailArgs = append(tailArgs, t)
 		}
 	}
 	newArgs = append(newArgs, tailArgs...)
-	log.Printf("processGlobalOptions end %v", newArgs )
 	return newArgs
 }
 func processCommand(cm map[string]string, args []string) []string {
-	newArgs  := []string{}
+	newArgs := []string{}
 	headArgs := []string{args[0]}
 	tailArgs := []string{}
-
-	log.Printf("processCommand begin %v", args)
-
-
 	changeToTail := false
 	for _, t := range args[1:] {
 		if _, ok := cm[t]; ok {
 			newArgs = append(newArgs, t)
 			changeToTail = true
-		}else {
+		} else {
 			if changeToTail {
-				tailArgs =append(tailArgs,t )
+				tailArgs = append(tailArgs, t)
 			} else {
 				headArgs = append(headArgs, t)
 			}
 		}
 	}
 	headArgs = append(append(headArgs, newArgs...), tailArgs...)
-	log.Printf("processCommand end %v", headArgs )
 	return headArgs
 }
-func processCommandOptions(cfm map[string]bool, args []string) ([]string,[]string,[]string) {
+func processCommandOptions(cfm map[string]bool, args []string) ([]string, []string, []string) {
 
-	mergedArgs  := []string{}
+	mergedArgs := []string{}
 	headArgs := []string{args[0]}
 	tailArgs := []string{}
 	cmfArgs := []string{}
-
-	log.Printf("processCommandOptions begin %v", args)
-
-
 	// merge command options
 	j := len(args)
-	for i:=1 ; i < j; i++ {
+	for i := 1; i < j; i++ {
 		p := args[i]
 		if b, ok := cfm[p]; ok {
 			if b { // 是bool型的
-				if i+1 < j && (args[i+1] == "false" || args[i+1] == "true" ) {
+				if i+1 < j && (args[i+1] == "false" || args[i+1] == "true") {
 					mergedArgs = append(mergedArgs, fmt.Sprintf("%s=%s", p, args[i+1]))
 					cfm[fmt.Sprintf("%s=%s", p, args[i+1])] = false
 					i++
@@ -181,14 +167,11 @@ func processCommandOptions(cfm map[string]bool, args []string) ([]string,[]strin
 	}
 
 	changeToTail := false
-	log.Printf("mergeArgs:%v", mergedArgs)
-	keys := reflect.ValueOf(cfm).MapKeys()
-	log.Printf("commandFlagMap:%v",keys)
 	for _, t := range mergedArgs {
-		if _, ok := cfm[t] ; ok {
+		if _, ok := cfm[t]; ok {
 			cmfArgs = append(cmfArgs, t)
 			changeToTail = true
-		}else {
+		} else {
 			if changeToTail {
 				tailArgs = append(tailArgs, t)
 			} else {
@@ -196,9 +179,6 @@ func processCommandOptions(cfm map[string]bool, args []string) ([]string,[]strin
 			}
 		}
 	}
-	log.Printf("processCommandOptions 3 head:%v cmf:%v tail:%v", headArgs, cmfArgs,tailArgs )
-	//headArgs = append(append(headArgs, cmfArgs...), tailArgs...)
-	log.Printf("processCommandOptions end %v", headArgs )
 	return headArgs, cmfArgs, tailArgs
 }
 
@@ -207,59 +187,49 @@ func reorderArgs(app *cli.App, args []string) []string {
 	if len(args) <= 1 {
 		return args
 	}
-	allOrdered :=[]string{args[0]}
+	allOrdered := []string{args[0]}
 	// init dictionary
-	globalFlagMap := make(map[string]bool,0)
+	globalFlagMap := make(map[string]bool, 0)
 	commandMap := map[string]string{}
-	commandFlagMap := make(map[string]bool,0)
+	commandFlagMap := make(map[string]bool, 0)
 	for _, f := range app.Flags {
 		switch f.(type) {
 		case *cli.BoolFlag:
-			for _,fc := range flagComplete(f.Names()) {
+			for _, fc := range flagComplete(f.Names()) {
 				globalFlagMap[fc] = true
 			}
 		default:
-			for _,fc := range flagComplete(f.Names()) {
+			for _, fc := range flagComplete(f.Names()) {
 				globalFlagMap[fc] = false
 			}
 		}
 	}
-	for _, c := range app.Commands{
+	for _, c := range app.Commands {
 		commandMap[c.Name] = c.Name
 		for _, f := range c.Flags {
 			switch f.(type) {
 			case *cli.BoolFlag:
-				for _,fc := range flagComplete(f.Names()) {
+				for _, fc := range flagComplete(f.Names()) {
 					commandFlagMap[fc] = true
 				}
 			default:
-				for _,fc := range flagComplete(f.Names()) {
+				for _, fc := range flagComplete(f.Names()) {
 					commandFlagMap[fc] = false
 				}
 			}
 		}
 	}
 
-	keys := reflect.ValueOf(globalFlagMap).MapKeys()
-	log.Printf("globalFlagMap:%v",keys)
-
-
-	keys = reflect.ValueOf(commandMap).MapKeys()
-	log.Printf("commandMap:%v",keys)
-
-	keys = reflect.ValueOf(commandFlagMap).MapKeys()
-	log.Printf("commandFlagMap:%v",keys)
-
 	globalOptionOrdered := processGlobalOptions(globalFlagMap, args)
 	globalOptionAndcommandOrdered := processCommand(commandMap, globalOptionOrdered)
 	h, c, t := processCommandOptions(commandFlagMap, globalOptionAndcommandOrdered)
 	newTail := []string{}
 	for _, item := range h[1:] {
-		if _, ok :=globalFlagMap[item]; ok {
+		if _, ok := globalFlagMap[item]; ok {
 			allOrdered = append(allOrdered, item)
 			continue
 		}
-		if _, ok :=commandMap[item]; ok {
+		if _, ok := commandMap[item]; ok {
 			allOrdered = append(allOrdered, item)
 			continue
 		}
@@ -268,7 +238,6 @@ func reorderArgs(app *cli.App, args []string) []string {
 	newTail = append(newTail, t...)
 	return append(append(allOrdered, c...), newTail...)
 }
-
 
 func handleSysMountArgs() ([]string, error) {
 	optionToCmdFlag := map[string]string{
