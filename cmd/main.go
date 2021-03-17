@@ -27,6 +27,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
+	"reflect"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -230,6 +231,16 @@ func reorderArgs(app *cli.App, args []string) []string {
 			}
 		}
 	}
+
+	keys := reflect.ValueOf(globalFlagMap).MapKeys()
+	log.Printf("globalFlagMap:%v",keys)
+
+
+	keys = reflect.ValueOf(commandMap).MapKeys()
+	log.Printf("commandMap:%v",keys)
+
+	keys = reflect.ValueOf(commandFlagMap).MapKeys()
+	log.Printf("commandFlagMap:%v",keys)
 
 	globalOptionOrdered := processGlobalOptions(globalFlagMap, args)
 	globalOptionAndcommandOrdered := processCommand(commandMap, globalOptionOrdered)
