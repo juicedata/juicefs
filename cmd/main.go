@@ -253,6 +253,7 @@ func reorderArgs(app *cli.App, args []string) []string {
 	globalOptionOrdered := processGlobalOptions(globalFlagMap, args)
 	globalOptionAndcommandOrdered := processCommand(commandMap, globalOptionOrdered)
 	h, c, t := processCommandOptions(commandFlagMap, globalOptionAndcommandOrdered)
+	newTail := []string{}
 	for _, item := range h[1:] {
 		if _, ok :=globalFlagMap[item]; ok {
 			allOrdered = append(allOrdered, item)
@@ -262,11 +263,10 @@ func reorderArgs(app *cli.App, args []string) []string {
 			allOrdered = append(allOrdered, item)
 			continue
 		}
-		th := []string{item}
-		th = append(th, t...)
-		t  = th
+		newTail = append(newTail, item)
 	}
-	return append(append(allOrdered, c...), t...)
+	newTail = append(newTail, t...)
+	return append(append(allOrdered, c...), newTail...)
 }
 
 
