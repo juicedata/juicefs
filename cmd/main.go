@@ -79,7 +79,7 @@ func main() {
 		}
 	}
 
-	log.Printf("origin cmdline:%v", os.Args)
+	log.Printf("origin  cmdline:%v", os.Args)
 	os.Args = reorderArgs(app, os.Args)
 	log.Printf("reorder cmdline:%v", os.Args)
 	err := app.Run(os.Args)
