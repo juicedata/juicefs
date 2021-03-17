@@ -79,7 +79,6 @@ func main() {
 		}
 	}
 
-	app.Commands[0].Flags[0].IsSet()
 	err := app.Run(reorderArgs(app, os.Args))
 	if err != nil {
 		log.Fatal(err)
