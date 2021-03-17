@@ -196,7 +196,8 @@ func processCommandOptions(cfm map[string]bool, args []string) []string {
 			}
 		}
 	}
-	headArgs =  append(append(headArgs, cmfArgs...), tailArgs...)
+	headArgs = append(headArgs, cmfArgs...)
+	headArgs =  append(headArgs, tailArgs...)
 	log.Printf("processCommandOptions end %v", headArgs )
 	return headArgs
 }
