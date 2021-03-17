@@ -79,6 +79,8 @@ func main() {
 		}
 	}
 
+	log.Printf("origin:%v", os.Args)
+
 	os.Args = reorderArgs(app, os.Args)
 
 	log.Printf("reorder:%v", os.Args)
