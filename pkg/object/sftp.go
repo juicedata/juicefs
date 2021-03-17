@@ -383,7 +383,7 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	var hostEnd int
 	// IPv6 address like [fe80::148a:d031:823a:fff]
 	if strings.HasPrefix(endpoint, "[") {
-		hostEnd = strings.Index(endpoint, "]") + 1
+		hostEnd = strings.Index(endpoint, "]:") + 1
 	} else { // IPv4 address or host name
 		hostEnd = strings.Index(endpoint, ":")
 	}
