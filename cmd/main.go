@@ -181,6 +181,9 @@ func processCommandOptions(cfm map[string]bool, args []string) []string {
 	}
 
 	changeToTail := false
+	log.Printf("mergeArgs:%v", mergedArgs)
+	keys := reflect.ValueOf(cfm).MapKeys()
+	log.Printf("commandFlagMap:%v",keys)
 	for _, t := range mergedArgs {
 		if _, ok := cfm[t] ; ok {
 			cmfArgs = append(cmfArgs, t)
