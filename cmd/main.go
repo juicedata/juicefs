@@ -107,6 +107,8 @@ func flagComplete(flags []string) []string {
 func processGlobalOptions(gm map[string]bool, args []string) []string {
 	newArgs  := []string{args[0]}
 	tailArgs := []string{}
+	log.Printf("processGlobalOptions begin %v", args)
+	defer log.Printf("processGlobalOptions end %v", newArgs )
 	for _, t := range args[1:] {
 		if _, ok := gm[t]; ok {
 			newArgs = append(newArgs, t)
@@ -121,6 +123,10 @@ func processCommand(cm map[string]string, args []string) []string {
 	newArgs  := []string{}
 	headArgs := []string{args[0]}
 	tailArgs := []string{}
+
+	log.Printf("processCommand begin %v", args)
+	defer log.Printf("processCommand end %v", headArgs )
+
 	changeToTail := false
 	for _, t := range args[1:] {
 		if _, ok := cm[t]; ok {
@@ -138,11 +144,14 @@ func processCommand(cm map[string]string, args []string) []string {
 	return headArgs
 }
 func processCommandOptions(cfm map[string]bool, args []string) []string {
+
 	mergedArgs  := []string{}
 	headArgs := []string{args[0]}
 	tailArgs := []string{}
 	cmfArgs := []string{}
 
+	log.Printf("processCommandOptions begin %v", args)
+	defer log.Printf("processCommandOptions end %v", headArgs )
 
 	// merge command options
 	j := len(args)
