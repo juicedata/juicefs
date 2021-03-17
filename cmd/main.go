@@ -79,7 +79,9 @@ func main() {
 		}
 	}
 
-	err := app.Run(reorderArgs(app, os.Args))
+	os.Args = reorderArgs(app, os.Args)
+
+	err := app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
 	}
