@@ -394,7 +394,7 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	root := filepath.Clean(parts[len(parts)-1])
 	port := "22"
 	// two ":" means endpoint contains custom port
-	if len(parts) > 1 {
+	if len(parts) > 2 {
 		port = parts[len(parts)-2]
 	}
 	// append suffix `/` removed by filepath.Clean()
