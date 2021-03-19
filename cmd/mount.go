@@ -45,23 +45,23 @@ import (
 
 var (
 	cpu = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "juicefs_cpu_usage",
+		Name: "cpu_usage",
 		Help: "Accumulated CPU usage in seconds.",
 	})
 	memory = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "juicefs_memory",
+		Name: "memory",
 		Help: "Used memory in bytes.",
 	})
 	uptime = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "juicefs_uptime",
+		Name: "uptime",
 		Help: "Total running time in seconds.",
 	})
 	usedSpace = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "juicefs_used_space",
+		Name: "used_space",
 		Help: "Total used space in bytes.",
 	})
 	usedInodes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "juicefs_used_inodes",
+		Name: "used_inodes",
 		Help: "Total number of inodes.",
 	})
 )
@@ -153,7 +153,8 @@ func mount(c *cli.Context) error {
 		"mp":       mp,
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
-	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(mntLabels, prometheus.DefaultRegisterer)
+	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(mntLabels,
+		prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.DefaultRegisterer))
 
 	chunkConf := chunk.Config{
 		BlockSize: format.BlockSize * 1024,

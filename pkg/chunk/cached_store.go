@@ -42,19 +42,19 @@ var (
 	logger = utils.GetLogger("juicefs")
 
 	cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "juicefs_blockcache_hits",
+		Name: "blockcache_hits",
 		Help: "read from cached block",
 	})
 	cacheMiss = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "juicefs_blockcache_miss",
+		Name: "blockcache_miss",
 		Help: "missed read from cached block",
 	})
 	cacheHitBytes = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "juicefs_blockcache_hit_bytes",
+		Name: "blockcache_hit_bytes",
 		Help: "read bytes from cached block",
 	})
 	cacheMissBytes = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "juicefs_blockcache_miss_bytes",
+		Name: "blockcache_miss_bytes",
 		Help: "missed bytes from cached block",
 	})
 )
@@ -682,7 +682,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 	_ = prometheus.Register(cacheMissBytes)
 	_ = prometheus.Register(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
-			Name: "juicefs_blockcache_blocks",
+			Name: "blockcache_blocks",
 			Help: "number of cached blocks",
 		},
 		func() float64 {
@@ -691,7 +691,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		}))
 	_ = prometheus.Register(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
-			Name: "juicefs_blockcache_bytes",
+			Name: "blockcache_bytes",
 			Help: "number of cached bytes",
 		},
 		func() float64 {

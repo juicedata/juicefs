@@ -26,7 +26,7 @@ import (
 
 var (
 	opsDurationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "juicefs_fuse_ops_durations_histogram_seconds",
+		Name:    "fuse_ops_durations_histogram_seconds",
 		Help:    "Operations latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 	})
