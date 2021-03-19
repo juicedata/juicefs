@@ -19,6 +19,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -50,6 +51,21 @@ func makeDaemon(name, mp string) error {
 		os.Stdout.WriteString("\n")
 		logger.Fatalf("fail to mount after 10 seconds, please mount in foreground")
 		return nil
+	}
+
+	// the current dir will be changed to root in daemon,
+	// so the mount point has to be an absolute path.
+	if godaemon.Stage() == 0 {
+		for i, a := range os.Args {
+			if a == mp {
+				amp, err := filepath.Abs(mp)
+				if err == nil {
+					os.Args[i] = amp
+				} else {
+					logger.Warnf("abs of %s: %s", mp, err)
+				}
+			}
+		}
 	}
 	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
 	return err

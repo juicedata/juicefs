@@ -214,6 +214,21 @@ func mount(c *cli.Context) error {
 	vfs.Init(conf, m, store)
 
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
+		if runtime.GOOS != "windows" {
+			d := c.String("cache-dir")
+			if d != "memory" && !strings.HasPrefix(d, "/") {
+				ad, err := filepath.Abs(d)
+				if err != nil {
+					logger.Fatalf("cache-dir should be absolute path in daemon mode")
+				} else {
+					for i, a := range os.Args {
+						if a == d || a == "--cache-dir="+d {
+							os.Args[i] = a[:len(a)-len(d)] + ad
+						}
+					}
+				}
+			}
+		}
 		// The default log to syslog is only in daemon mode.
 		utils.InitLoggers(!c.Bool("no-syslog"))
 		err := makeDaemon(conf.Format.Name, conf.Mountpoint)
