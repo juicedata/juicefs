@@ -24,16 +24,16 @@ import (
 
 var (
 	reqsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "juicefs_object_request_durations_histogram_seconds",
+		Name:    "object_request_durations_histogram_seconds",
 		Help:    "Object requests latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.01, 1.5, 20),
 	}, []string{"method"})
 	reqErrors = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "juicefs_object_request_errors",
+		Name: "object_request_errors",
 		Help: "failed requests to object store",
 	})
 	dataBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "juicefs_object_request_data_bytes",
+		Name: "object_request_data_bytes",
 		Help: "Object requests size in bytes.",
 	}, []string{"method"})
 )
