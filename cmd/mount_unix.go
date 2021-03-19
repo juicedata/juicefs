@@ -35,16 +35,20 @@ func makeDaemon(name, mp string) error {
 		if stage != 0 {
 			return nil
 		}
-		for {
-			time.Sleep(time.Millisecond * 50)
+		for i := 0; i < 20; i++ {
+			time.Sleep(time.Millisecond * 500)
 			st, err := os.Stat(mp)
 			if err == nil {
 				if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == 1 {
 					logger.Infof("\033[92mOK\033[0m, %s is ready at %s", name, mp)
-					break
+					return nil
 				}
 			}
+			os.Stdout.WriteString(".")
+			os.Stdout.Sync()
 		}
+		os.Stdout.WriteString("\n")
+		logger.Fatalf("fail to mount after 10 seconds, please mount in foreground")
 		return nil
 	}
 	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
