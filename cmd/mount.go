@@ -119,18 +119,20 @@ func installHandler(mp string) {
 }
 
 func mount(c *cli.Context) error {
+	args := extractArgs(c)
+
 	setLoggerLevel(c)
-	if c.Args().Len() < 1 {
+	if len(args) < 1 {
 		logger.Fatalf("Redis URL and mountpoint are required")
 	}
-	addr := c.Args().Get(0)
+	addr := args[0]
 	if !strings.Contains(addr, "://") {
 		addr = "redis://" + addr
 	}
-	if c.Args().Len() < 2 {
+	if len(args) < 2 {
 		logger.Fatalf("MOUNTPOINT is required")
 	}
-	mp := c.Args().Get(1)
+	mp := args[1]
 	if !strings.Contains(mp, ":") && !utils.Exists(mp) {
 		if err := os.MkdirAll(mp, 0777); err != nil {
 			logger.Fatalf("create %s: %s", mp, err)

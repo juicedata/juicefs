@@ -97,11 +97,13 @@ func showProgress(p *gcProgress) {
 }
 
 func gc(ctx *cli.Context) error {
+	args := extractArgs(ctx)
+
 	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
+	if len(args) < 1 {
 		return fmt.Errorf("REDIS-URL is needed")
 	}
-	addr := ctx.Args().Get(0)
+	addr := args[0]
 	if !strings.Contains(addr, "://") {
 		addr = "redis://" + addr
 	}

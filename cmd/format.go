@@ -133,11 +133,13 @@ func test(store object.ObjectStorage) error {
 }
 
 func format(c *cli.Context) error {
+	args := extractArgs(c)
+
 	setLoggerLevel(c)
-	if c.Args().Len() < 1 {
+	if len(args) < 1 {
 		logger.Fatalf("Redis URL and name are required")
 	}
-	addr := c.Args().Get(0)
+	addr := args[0]
 	if !strings.Contains(addr, "://") {
 		addr = "redis://" + addr
 	}
@@ -148,10 +150,10 @@ func format(c *cli.Context) error {
 		logger.Fatalf("Meta is not available: %s", err)
 	}
 
-	if c.Args().Len() < 2 {
+	if len(args) < 2 {
 		logger.Fatalf("Please give it a name")
 	}
-	name := c.Args().Get(1)
+	name := args[1]
 	validName := regexp.MustCompile(`^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$`)
 	if !validName.MatchString(name) {
 		logger.Fatalf("invalid name: %s, only alphabet, number and - are allowed.", name)

@@ -169,3 +169,23 @@ func setLoggerLevel(c *cli.Context) {
 		utils.SetLogLevel(logrus.WarnLevel)
 	}
 }
+
+// Extract command line arguments from the input string
+// (e.g juicefs mount --writeback=true localhost /home/test -d --cache-size 4096).
+func extractArgs(c *cli.Context) []string {
+	raw := c.Args().Slice()
+	if len(raw) == 0 {
+		return []string{}
+	}
+	args := make([]string, 0, len(raw))
+	for i := range raw {
+		if strings.HasPrefix(raw[i], "-") {
+			continue
+		}
+		if i == 0 || !strings.HasPrefix(raw[i-1], "-") {
+			args = append(args, raw[i])
+			continue
+		}
+	}
+	return args
+}

@@ -49,12 +49,13 @@ func rmr(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
-	if ctx.Args().Len() < 1 {
+	args := extractArgs(ctx)
+	if len(args) < 1 {
 		logger.Infof("PATH is needed")
 		return nil
 	}
-	for i := 0; i < ctx.Args().Len(); i++ {
-		path := ctx.Args().Get(i)
+	for i := 0; i < len(args); i++ {
+		path := args[i]
 		d := filepath.Dir(path)
 		name := filepath.Base(path)
 		inode, err := utils.GetFileInode(d)

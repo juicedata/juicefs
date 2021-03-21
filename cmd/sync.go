@@ -127,7 +127,8 @@ const USAGE = `juicefs [options] sync [options] SRC DST
 SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`
 
 func doSync(c *cli.Context) error {
-	if c.Args().Len() != 2 {
+	args := extractArgs(c)
+	if len(args) != 2 {
 		logger.Errorf(USAGE)
 		return nil
 	}
@@ -141,14 +142,14 @@ func doSync(c *cli.Context) error {
 	}
 	utils.InitLoggers(false)
 
-	if strings.HasSuffix(c.Args().Get(0), "/") != strings.HasSuffix(c.Args().Get(1), "/") {
+	if strings.HasSuffix(args[0], "/") != strings.HasSuffix(args[1], "/") {
 		logger.Fatalf("SRC and DST should both end with '/' or not!")
 	}
-	src, err := createSyncStorage(c.Args().Get(0), config)
+	src, err := createSyncStorage(args[0], config)
 	if err != nil {
 		return err
 	}
-	dst, err := createSyncStorage(c.Args().Get(1), config)
+	dst, err := createSyncStorage(args[1], config)
 	if err != nil {
 		return err
 	}

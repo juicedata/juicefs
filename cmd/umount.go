@@ -43,10 +43,11 @@ func umountFlags() *cli.Command {
 }
 
 func umount(ctx *cli.Context) error {
-	if ctx.Args().Len() < 1 {
+	args := extractArgs(ctx)
+	if len(args) < 1 {
 		return fmt.Errorf("MOUNTPOINT is needed")
 	}
-	mp := ctx.Args().Get(0)
+	mp := args[0]
 	force := ctx.Bool("force")
 
 	var cmd *exec.Cmd

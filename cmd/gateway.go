@@ -78,6 +78,7 @@ func gatewayFlags() *cli.Command {
 }
 
 func gateway(c *cli.Context) error {
+	arguments := extractArgs(c)
 	setLoggerLevel(c)
 	utils.InitLoggers(false)
 	go func() {
@@ -86,10 +87,10 @@ func gateway(c *cli.Context) error {
 		}
 	}()
 
-	if c.Args().Len() < 2 {
+	if len(arguments) < 2 {
 		logger.Fatalf("Redis URL and listen address are required")
 	}
-	address := c.Args().Get(1)
+	address := arguments[1]
 	gw = &GateWay{c}
 
 	args := []string{"gateway", "--address", address, "--anonymous"}
@@ -144,7 +145,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
 
 	c := g.ctx
-	redisAddr := c.Args().Get(0)
+	redisAddr := extractArgs(c)[0]
 	if !strings.Contains(redisAddr, "://") {
 		redisAddr = "redis://" + redisAddr
 	}

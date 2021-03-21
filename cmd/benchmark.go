@@ -158,6 +158,7 @@ func newBenchmark(filenamePrefix string, fileSizeMiB float64, blockSize float64,
 }
 
 func benchmark(c *cli.Context) error {
+	args := extractArgs(c)
 	setLoggerLevel(c)
 
 	var purgeCmdArgs []string
@@ -174,8 +175,8 @@ func benchmark(c *cli.Context) error {
 	smallFileSize := c.Float64("smallfile-file-size")
 	smallFileCount := c.Int("smallfile-count")
 
-	if c.NArg() > 0 {
-		dest = c.Args().Get(0)
+	if len(args) > 0 {
+		dest = args[0]
 	}
 
 	dest = filepath.Join(dest, fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
