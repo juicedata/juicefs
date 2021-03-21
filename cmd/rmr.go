@@ -55,8 +55,13 @@ func rmr(ctx *cli.Context) error {
 	}
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
-		d := filepath.Dir(path)
-		name := filepath.Base(path)
+		p, err := filepath.Abs(path)
+		if err != nil {
+			logger.Errorf("abs of %s: %s", path, err)
+			continue
+		}
+		d := filepath.Dir(p)
+		name := filepath.Base(p)
 		inode, err := utils.GetFileInode(d)
 		if err != nil {
 			return fmt.Errorf("lookup inode for %s: %s", d, err)
