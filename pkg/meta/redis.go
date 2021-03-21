@@ -1087,6 +1087,58 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
 }
 
+func (r *redisMeta) emptyDir(ctx Context, inode Ino, concurrent chan int) syscall.Errno {
+	if st := r.Access(ctx, inode, 3, nil); st != 0 {
+		return st
+	}
+	var entries []*Entry
+	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
+		return st
+	}
+	var wg sync.WaitGroup
+	var status syscall.Errno
+	for _, e := range entries {
+		if e.Inode == inode || len(e.Name) == 2 && string(e.Name) == ".." {
+			continue
+		}
+		if e.Attr.Typ == TypeDirectory {
+			select {
+			case concurrent <- 1:
+				wg.Add(1)
+				go func(child Ino, name string) {
+					defer wg.Done()
+					e := r.emptyEntry(ctx, inode, name, child, concurrent)
+					if e != 0 {
+						status = e
+					}
+					<-concurrent
+				}(e.Inode, string(e.Name))
+			default:
+				if st := r.emptyEntry(ctx, inode, string(e.Name), e.Inode, concurrent); st != 0 {
+					return st
+				}
+			}
+		} else {
+			if st := r.Unlink(ctx, inode, string(e.Name)); st != 0 {
+				return st
+			}
+		}
+	}
+	wg.Wait()
+	return status
+}
+
+func (r *redisMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, concurrent chan int) syscall.Errno {
+	st := r.emptyDir(ctx, inode, concurrent)
+	if st == 0 {
+		st = r.Rmdir(ctx, parent, name)
+		if st == syscall.ENOTEMPTY {
+			st = r.emptyEntry(ctx, parent, name, inode, concurrent)
+		}
+	}
+	return st
+}
+
 func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
 	if st := r.Access(ctx, parent, 3, nil); st != 0 {
 		return st
@@ -1099,24 +1151,8 @@ func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
 	if attr.Typ != TypeDirectory {
 		return r.Unlink(ctx, parent, name)
 	}
-	var entries []*Entry
-	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
-		return st
-	}
-	for _, e := range entries {
-		// TODO: in parallel
-		if e.Inode == inode || e.Inode == parent {
-			continue
-		}
-		if st := r.Rmr(ctx, inode, string(e.Name)); st != 0 {
-			return st
-		}
-	}
-	st := r.Rmdir(ctx, parent, name)
-	if st == syscall.ENOTEMPTY {
-		return r.Rmr(ctx, parent, name)
-	}
-	return st
+	concurrent := make(chan int, 50)
+	return r.emptyEntry(ctx, parent, name, inode, concurrent)
 }
 
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
