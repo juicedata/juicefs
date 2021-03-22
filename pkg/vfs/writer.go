@@ -273,6 +273,9 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 	if utils.UsedMemory() > f.w.bufferSize {
 		// slow down
 		time.Sleep(time.Millisecond * 10)
+		for utils.UsedMemory() > f.w.bufferSize*2 {
+			time.Sleep(time.Millisecond * 100)
+		}
 	}
 	f.Lock()
 	defer f.Unlock()
