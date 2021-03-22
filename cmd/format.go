@@ -217,13 +217,18 @@ func format(c *cli.Context) error {
 }
 
 func formatFlags() *cli.Command {
-	var defaultBucket = "/var/jfs"
-	if runtime.GOOS == "darwin" {
+	var defaultBucket string
+	switch runtime.GOOS {
+	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			logger.Fatalf("%v", err)
 		}
 		defaultBucket = path.Join(homeDir, ".juicefs", "local")
+	case "windows":
+		defaultBucket = path.Join("C:/jfs/local")
+	default:
+		defaultBucket = "/var/jfs"
 	}
 	return &cli.Command{
 		Name:      "format",
