@@ -21,6 +21,15 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+var (
+	compactSizeHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "compact_size_histogram_bytes",
+		Help:    "Distribution of size of compacted data in bytes.",
+		Buckets: prometheus.ExponentialBuckets(1024, 2, 16),
+	})
 )
 
 func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int) error {
@@ -41,6 +50,13 @@ func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int)
 }
 
 func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chunkid uint64) error {
+	var size uint32
+	for _, s := range slices {
+		size += s.Len
+	}
+	compactSizeHistogram.Observe(float64(size))
+	logger.Debugf("compact %d slices (%d bytes) to chunk %d", len(slices), size, chunkid)
+
 	writer := store.NewWriter(chunkid)
 	defer writer.Abort()
 
