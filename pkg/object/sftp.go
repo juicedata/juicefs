@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -150,10 +151,16 @@ func (f *sftpStore) path(key string) string {
 	if key == "" {
 		return f.root
 	}
+	var absPath string
 	if strings.HasSuffix(key, dirSuffix) {
-		return filepath.Join(f.root, key) + dirSuffix
+		absPath = filepath.Join(f.root, key) + dirSuffix
+	} else {
+		absPath = filepath.Join(f.root, key)
 	}
-	return filepath.Join(f.root, key)
+	if runtime.GOOS == "windows" {
+		absPath = strings.Replace(absPath, "\\", "/", -1)
+	}
+	return absPath
 }
 
 func (f *sftpStore) Head(key string) (*Object, error) {
@@ -232,6 +239,9 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 		return err
 	}
 	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
+	if runtime.GOOS == "windows" {
+		tmp = strings.Replace(tmp, "\\", "/", -1)
+	}
 
 	ff, err := c.sftpClient.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
@@ -389,6 +399,9 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("unable to parse host from endpoint (%s): %q", endpoint, err)
 	}
 	root := filepath.Clean(endpoint[idx+1:])
+	if runtime.GOOS == "windows" {
+		root = strings.Replace(root, "\\", "/", -1)
+	}
 	// append suffix `/` removed by filepath.Clean()
 	// `.` is a directory, add `/`
 	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) || root == "." {
