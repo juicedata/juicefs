@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -53,9 +54,34 @@ func supportHTTPS(name, endpoint string) bool {
 	return true
 }
 
+// Check if uri is local file path
+func isFilePath(uri string) bool {
+	// check drive pattern when running on Windows
+	if runtime.GOOS == "windows" &&
+		len(uri) > 1 && (('a' <= uri[0] && uri[0] <= 'z') ||
+		('A' <= uri[0] && uri[0] <= 'Z')) && uri[1] == ':' {
+		return true
+	}
+	return !strings.Contains(uri, ":")
+}
+
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
 	if !strings.Contains(uri, "://") {
-		if strings.Contains(uri, ":") {
+		if isFilePath(uri) {
+			absPath, err := filepath.Abs(uri)
+			if err != nil {
+				logger.Fatalf("invalid path: %s", err.Error())
+			}
+			if !strings.HasPrefix(absPath, "/") { // Windows path
+				absPath = "/" + strings.Replace(absPath, "\\", "/", -1)
+			}
+			if strings.HasSuffix(uri, "/") {
+				absPath += "/"
+			}
+
+			// Windows: file:///C:/a/b/c, Unix: file:///a/b/c
+			uri = "file://" + absPath
+		} else { // sftp
 			var user string
 			if strings.Contains(uri, "@") {
 				parts := strings.Split(uri, "@")
@@ -77,14 +103,6 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			}
 			return object.CreateStorage("sftp", uri, user, pass)
 		}
-		fullpath, err := filepath.Abs(uri)
-		if err != nil {
-			logger.Fatalf("invalid path: %s", err.Error())
-		}
-		if strings.HasSuffix(uri, "/") {
-			fullpath += "/"
-		}
-		uri = "file://" + fullpath
 	}
 	u, err := url.Parse(uri)
 	if err != nil {
@@ -141,14 +159,17 @@ func doSync(c *cli.Context) error {
 	}
 	utils.InitLoggers(false)
 
-	if strings.HasSuffix(c.Args().Get(0), "/") != strings.HasSuffix(c.Args().Get(1), "/") {
-		logger.Fatalf("SRC and DST should both end with '/' or not!")
+	// Windows support `\` and `/` as its separator, Unix only use `/`
+	srcURL := strings.Replace(c.Args().Get(0), "\\", "/", -1)
+	dstURL := strings.Replace(c.Args().Get(1), "\\", "/", -1)
+	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {
+		logger.Fatalf("SRC and DST should both end with path separator or not!")
 	}
-	src, err := createSyncStorage(c.Args().Get(0), config)
+	src, err := createSyncStorage(srcURL, config)
 	if err != nil {
 		return err
 	}
-	dst, err := createSyncStorage(c.Args().Get(1), config)
+	dst, err := createSyncStorage(dstURL, config)
 	if err != nil {
 		return err
 	}

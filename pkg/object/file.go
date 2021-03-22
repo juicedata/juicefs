@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -39,6 +40,9 @@ type filestore struct {
 }
 
 func (d *filestore) String() string {
+	if runtime.GOOS == "windows" {
+		return "file:///" + d.root
+	}
 	return "file://" + d.root
 }
 
@@ -250,6 +254,10 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 		}
 
 		_ = Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
+			if runtime.GOOS == "windows" {
+				path = strings.Replace(path, "\\", "/", -1)
+			}
+
 			if err != nil {
 				// skip broken symbolic link
 				if fi, err1 := os.Lstat(path); err1 == nil && fi.Mode()&os.ModeSymlink != 0 {
@@ -319,6 +327,10 @@ func (d *filestore) Chown(path string, owner, group string) error {
 }
 
 func newDisk(root, accesskey, secretkey string) (ObjectStorage, error) {
+	// For Windows, the path looks like /C:/a/b/c/
+	if runtime.GOOS == "windows" {
+		root = root[1:]
+	}
 	if strings.HasSuffix(root, dirSuffix) {
 		logger.Debugf("Ensure dicectory %s", root)
 		if err := os.MkdirAll(root, 0755); err != nil {

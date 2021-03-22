@@ -35,7 +35,8 @@ juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 	sudo cp hack/winfsp_headers/* /usr/local/include/winfsp
 
 juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
-	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="$(LDFLAGS)" -o juicefs.exe ./cmd
+	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
+	     go build -ldflags="$(LDFLAGS)" -buildmode exe -o juicefs.exe ./cmd
 
 .PHONY: snapshot release test
 snapshot:
