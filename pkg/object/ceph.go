@@ -23,9 +23,9 @@ import (
 	"io"
 	"net/url"
 	"reflect"
-	"sync"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/ceph/go-ceph/rados"
 )
