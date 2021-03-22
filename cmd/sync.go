@@ -54,14 +54,15 @@ func supportHTTPS(name, endpoint string) bool {
 	return true
 }
 
-// Check if path is file path
-func isFilePath(path string) bool {
+// Check if uri is local file path
+func isFilePath(uri string) bool {
+	// check drive pattern when running on Windows
 	if runtime.GOOS == "windows" &&
-		len(path) > 1 && (('a' <= path[0] && path[0] <= 'z') ||
-		('A' <= path[0] && path[0] <= 'Z')) && path[1] == ':' {
+		len(uri) > 1 && (('a' <= uri[0] && uri[0] <= 'z') ||
+		('A' <= uri[0] && uri[0] <= 'Z')) && uri[1] == ':' {
 		return true
 	}
-	return !strings.Contains(path, ":")
+	return !strings.Contains(uri, ":")
 }
 
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
