@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -53,12 +54,19 @@ func supportHTTPS(name, endpoint string) bool {
 	return true
 }
 
+// Check if path is file path
+func isFilePath(path string) bool {
+	if runtime.GOOS == "windows" &&
+		len(path) > 1 && (('a' <= path[0] && path[0] <= 'z') ||
+		('A' <= path[0] && path[0] <= 'Z')) && path[1] == ':' {
+		return true
+	}
+	return !strings.Contains(path, ":")
+}
+
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
 	if !strings.Contains(uri, "://") {
-		// Check if the uri is the file path
-		if (len(uri) > 1 && (('a' <= uri[0] && uri[0] <= 'z') ||
-			('A' <= uri[0] && uri[0] <= 'Z')) && uri[1] == ':') ||
-			!strings.Contains(uri, ":") {
+		if isFilePath(uri) {
 			absPath, err := filepath.Abs(uri)
 			if err != nil {
 				logger.Fatalf("invalid path: %s", err.Error())
