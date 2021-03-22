@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 16,
-  "iteration": 1616143256230,
+  "iteration": 1616378184198,
   "links": [],
   "panels": [
     {
@@ -35,7 +35,7 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 0,
         "y": 0
@@ -134,7 +134,7 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 8,
         "y": 0
@@ -232,7 +232,7 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 16,
         "y": 0
@@ -335,21 +335,21 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 0,
-        "y": 8
+        "y": 6
       },
       "hiddenSeries": false,
       "id": 8,
       "legend": {
         "avg": false,
-        "current": false,
+        "current": true,
         "max": false,
         "min": false,
         "show": true,
         "total": false,
-        "values": false
+        "values": true
       },
       "lines": true,
       "linewidth": 1,
@@ -439,21 +439,21 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 8,
-        "y": 8
+        "y": 6
       },
       "hiddenSeries": false,
       "id": 7,
       "legend": {
         "avg": false,
-        "current": false,
+        "current": true,
         "max": false,
         "min": false,
         "show": true,
         "total": false,
-        "values": false
+        "values": true
       },
       "lines": true,
       "linewidth": 1,
@@ -474,6 +474,7 @@
         {
           "expr": "sum(rate(juicefs_fuse_written_size_bytes_sum{vol_name=\"$name\"}[1m]) < 5000000000) by (node)",
           "format": "time_series",
+          "instant": false,
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "Write {{node}}",
@@ -517,8 +518,9 @@
           "show": true
         },
         {
-          "format": "short",
-          "label": null,
+          "decimals": null,
+          "format": "Bps",
+          "label": "",
           "logBase": 1,
           "max": null,
           "min": null,
@@ -551,21 +553,21 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 16,
-        "y": 8
+        "y": 6
       },
       "hiddenSeries": false,
       "id": 18,
       "legend": {
         "avg": false,
-        "current": false,
+        "current": true,
         "max": false,
         "min": false,
         "show": true,
         "total": false,
-        "values": false
+        "values": true
       },
       "lines": true,
       "linewidth": 1,
@@ -650,10 +652,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 0,
-        "y": 16
+        "y": 12
       },
       "hiddenSeries": false,
       "id": 13,
@@ -748,10 +750,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 8,
-        "y": 16
+        "y": 12
       },
       "hiddenSeries": false,
       "id": 14,
@@ -838,10 +840,10 @@
       "datasource": "$Source",
       "fill": 1,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 16,
-        "y": 16
+        "y": 12
       },
       "id": 20,
       "legend": {
@@ -929,10 +931,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 0,
-        "y": 24
+        "y": 18
       },
       "hiddenSeries": false,
       "id": 15,
@@ -1033,10 +1035,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 8,
-        "y": 24
+        "y": 18
       },
       "hiddenSeries": false,
       "id": 17,
@@ -1138,10 +1140,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 16,
-        "y": 24
+        "y": 18
       },
       "hiddenSeries": false,
       "id": 16,
@@ -1236,21 +1238,21 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 0,
-        "y": 32
+        "y": 24
       },
       "hiddenSeries": false,
       "id": 10,
       "legend": {
         "avg": false,
-        "current": false,
+        "current": true,
         "max": false,
         "min": false,
         "show": true,
         "total": false,
-        "values": false
+        "values": true
       },
       "lines": true,
       "linewidth": 1,
@@ -1335,21 +1337,21 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 8,
-        "y": 32
+        "y": 24
       },
       "hiddenSeries": false,
       "id": 11,
       "legend": {
         "avg": false,
-        "current": false,
+        "current": true,
         "max": false,
         "min": false,
         "show": true,
         "total": false,
-        "values": false
+        "values": true
       },
       "lines": true,
       "linewidth": 1,
@@ -1434,21 +1436,21 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 16,
-        "y": 32
+        "y": 24
       },
       "hiddenSeries": false,
       "id": 21,
       "legend": {
         "avg": false,
-        "current": false,
+        "current": true,
         "max": false,
         "min": false,
         "show": true,
         "total": false,
-        "values": false
+        "values": true
       },
       "lines": true,
       "linewidth": 1,
@@ -1533,10 +1535,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 0,
-        "y": 40
+        "y": 30
       },
       "hiddenSeries": false,
       "id": 22,
@@ -1632,10 +1634,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 8,
-        "y": 40
+        "y": 30
       },
       "hiddenSeries": false,
       "id": 23,
@@ -1731,10 +1733,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 8,
         "x": 16,
-        "y": 40
+        "y": 30
       },
       "hiddenSeries": false,
       "id": 24,
@@ -1765,7 +1767,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(juicefs_blockcache_hits{vol_name=\"$name\"}) by (node,mp) / (sum(juicefs_blockcache_hits{vol_name=\"$name\"}) by (node,mp) + sum(juicefs_blockcache_miss{vol_name=\"$name\"}) by (node,mp))",
+          "expr": "sum(rate(juicefs_blockcache_hits{vol_name=\"$name\"}[1m])) by (node,mp) / (sum(rate(juicefs_blockcache_hits{vol_name=\"$name\"}[1m])) by (node,mp) + sum(rate(juicefs_blockcache_miss{vol_name=\"$name\"}[1m])) by (node,mp))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1773,7 +1775,7 @@
           "refId": "A"
         },
         {
-          "expr": "sum(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}) by (node,mp) / (sum(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}) by (node,mp) + sum(juicefs_blockcache_miss_bytes{vol_name=\"$name\"}) by (node,mp))",
+          "expr": "sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}[1m])) by (node,mp) / (sum(rate(juicefs_blockcache_hit_bytes{vol_name=\"$name\"}[1m])) by (node,mp) + sum(rate(juicefs_blockcache_miss_bytes{vol_name=\"$name\"}[1m])) by (node,mp))",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "HitBytes {{node}}:{{mp}}",
@@ -1820,6 +1822,303 @@
         "align": false,
         "alignLevel": null
       }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$Source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 36
+      },
+      "hiddenSeries": false,
+      "id": 25,
+      "legend": {
+        "avg": false,
+        "current": true,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.4.2",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_count{vol_name=\"$name\"}[1m])) by (node,mp)",
+          "format": "time_series",
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "{{node}}:{{mp}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Compaction",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$Source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 36
+      },
+      "hiddenSeries": false,
+      "id": 26,
+      "legend": {
+        "avg": false,
+        "current": true,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.4.2",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(rate(juicefs_compact_size_histogram_bytes_sum{vol_name=\"$name\"}[1m])) by (node,mp)",
+          "format": "time_series",
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "{{node}}:{{mp}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Compacted Data",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "Bps",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$Source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 36
+      },
+      "hiddenSeries": false,
+      "id": 27,
+      "legend": {
+        "avg": false,
+        "current": true,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.4.2",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(juicefs_fuse_open_handlers{vol_name=\"$name\"}) by (node,mp)",
+          "format": "time_series",
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "{{node}}:{{mp}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Open File Handlers",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
     }
   ],
   "refresh": "10s",
@@ -1830,7 +2129,7 @@
     "list": [
       {
         "current": {
-          "tags": [],
+          "selected": true,
           "text": "juicefs",
           "value": "juicefs"
         },
@@ -1859,7 +2158,7 @@
         "name": "name",
         "options": [
           {
-            "selected": true,
+            "selected": false,
             "text": "test",
             "value": "test"
           }
@@ -1901,7 +2200,7 @@
     ]
   },
   "timezone": "",
-  "title": "JuiceFS",
+  "title": "JuiceFS Dashboard",
   "uid": "-hm07csGk",
-  "version": 2
+  "version": 3
 }
