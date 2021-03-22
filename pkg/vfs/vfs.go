@@ -884,4 +884,5 @@ func InitMetrics() {
 	prometheus.MustRegister(writtenSizeHistogram)
 	prometheus.MustRegister(handlersGause)
 	prometheus.MustRegister(opsDurationsHistogram)
+	prometheus.MustRegister(compactSizeHistogram)
 }
