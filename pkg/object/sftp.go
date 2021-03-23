@@ -271,6 +271,26 @@ func (f *sftpStore) Chtimes(key string, mtime time.Time) error {
 	return c.sftpClient.Chtimes(f.path(key), mtime, mtime)
 }
 
+func (f *sftpStore) Chmod(path string, mode os.FileMode) error {
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return err
+	}
+	defer f.putSftpConnection(&c, err)
+	return c.sftpClient.Chmod(path, mode)
+}
+
+func (f *sftpStore) Chown(path string, owner, group string) error {
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return err
+	}
+	defer f.putSftpConnection(&c, err)
+	uid := lookupUser(owner)
+	gid := lookupGroup(group)
+	return c.sftpClient.Chown(path, uid, gid)
+}
+
 func (f *sftpStore) Delete(key string) error {
 	c, err := f.getSftpConnection()
 	if err != nil {
