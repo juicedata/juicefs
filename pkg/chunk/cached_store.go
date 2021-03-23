@@ -552,6 +552,9 @@ func (c *wChunk) Abort() {
 		}
 		c.pages[i] = nil
 	}
+	// delete uploaded blocks
+	c.length = c.uploaded
+	_ = c.Remove()
 }
 
 // Config contains options for cachedStore

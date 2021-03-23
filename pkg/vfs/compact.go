@@ -58,13 +58,13 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chu
 	logger.Debugf("compact %d slices (%d bytes) to chunk %d", len(slices), size, chunkid)
 
 	writer := store.NewWriter(chunkid)
-	defer writer.Abort()
 
 	var pos int
 	for i, s := range slices {
 		if s.Chunkid == 0 {
 			_, err := writer.WriteAt(make([]byte, int(s.Len)), int64(pos))
 			if err != nil {
+				writer.Abort()
 				return err
 			}
 			pos += int(s.Len)
@@ -77,12 +77,14 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chu
 			if err := readSlice(store, &s, p, read); err != nil {
 				logger.Infof("can't compact chunk %d, retry later, read %d: %s", chunkid, i, err)
 				p.Release()
+				writer.Abort()
 				return err
 			}
 			_, err := writer.WriteAt(p.Data, int64(pos+read))
 			p.Release()
 			if err != nil {
 				logger.Errorf("can't compact chunk %d, retry later, write: %s", chunkid, err)
+				writer.Abort()
 				return err
 			}
 			read += l
@@ -94,5 +96,9 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chu
 		}
 		pos += int(s.Len)
 	}
-	return writer.Finish(pos)
+	err := writer.Finish(pos)
+	if err != nil {
+		writer.Abort()
+	}
+	return err
 }

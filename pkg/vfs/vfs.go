@@ -472,7 +472,7 @@ func Release(ctx Context, ino Ino, fh uint64) (err syscall.Errno) {
 			owner := f.flockOwner
 			f.Unlock()
 			if f.writer != nil {
-				f.writer.Close(ctx)
+				f.writer.Flush(ctx)
 			}
 			if locks&1 != 0 {
 				_ = m.Flock(ctx, ino, owner, F_UNLCK, false)
