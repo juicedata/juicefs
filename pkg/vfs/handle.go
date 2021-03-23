@@ -143,9 +143,11 @@ func (h *handle) Wunlock() {
 func (h *handle) Close() {
 	if h.reader != nil {
 		h.reader.Close(meta.Background)
+		h.reader = nil
 	}
 	if h.writer != nil {
 		h.writer.Close(meta.Background)
+		h.writer = nil
 	}
 }
 

@@ -107,6 +107,7 @@ func (s *sliceWriter) flushData() {
 	s.prepareID(meta.Background, true)
 	if s.err != 0 {
 		logger.Infof("flush inode:%d chunk: %s", s.chunk.file.inode, s.err)
+		s.writer.Abort()
 		return
 	}
 	s.length = s.slen
