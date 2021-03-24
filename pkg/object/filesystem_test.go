@@ -23,10 +23,10 @@ import (
 	"testing"
 )
 
-func testKeysEqual(objs []*Object, expectedKeys []string) error {
+func testKeysEqual(objs []Object, expectedKeys []string) error {
 	gottenKeys := make([]string, len(objs))
 	for idx, obj := range objs {
-		gottenKeys[idx] = obj.Key
+		gottenKeys[idx] = obj.Key()
 	}
 	if len(gottenKeys) != len(expectedKeys) {
 		return fmt.Errorf("Expected {%s}, got {%s}", strings.Join(expectedKeys, ", "),

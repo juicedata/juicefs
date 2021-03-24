@@ -70,14 +70,14 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func (q *qiniu) Head(key string) (*Object, error) {
+func (q *qiniu) Head(key string) (Object, error) {
 	r, err := q.bm.Stat(q.bucket, key)
 	if err != nil {
 		return nil, err
 	}
 
 	mtime := time.Unix(0, r.PutTime*100)
-	return &Object{
+	return &obj{
 		key,
 		r.Fsize,
 		mtime,
@@ -121,7 +121,7 @@ func (q *qiniu) Delete(key string) error {
 	return q.bm.Delete(q.bucket, key)
 }
 
-func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (q *qiniu) List(prefix, marker string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -144,11 +144,11 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]*Object, error) {
 		return nil, err
 	}
 	n := len(entries)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		entry := entries[i]
 		mtime := entry.PutTime / 10000000
-		objs[i] = &Object{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/")}
+		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/")}
 	}
 	return objs, nil
 }

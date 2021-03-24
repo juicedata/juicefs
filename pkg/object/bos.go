@@ -48,13 +48,13 @@ func (q *bosclient) Create() error {
 	return err
 }
 
-func (q *bosclient) Head(key string) (*Object, error) {
+func (q *bosclient) Head(key string) (Object, error) {
 	r, err := q.c.GetObjectMeta(q.bucket, key)
 	if err != nil {
 		return nil, err
 	}
 	mtime, _ := time.Parse(time.RFC1123, r.LastModified)
-	return &Object{
+	return &obj{
 		key,
 		r.ContentLength,
 		mtime,
@@ -100,7 +100,7 @@ func (q *bosclient) Delete(key string) error {
 	return q.c.DeleteObject(q.bucket, key)
 }
 
-func (q *bosclient) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (q *bosclient) List(prefix, marker string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -110,11 +110,11 @@ func (q *bosclient) List(prefix, marker string, limit int64) ([]*Object, error) 
 		return nil, err
 	}
 	n := len(out.Contents)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		k := out.Contents[i]
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
-		objs[i] = &Object{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/")}
+		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/")}
 	}
 	return objs, nil
 }

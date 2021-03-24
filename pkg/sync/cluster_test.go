@@ -16,13 +16,26 @@ package sync
 
 import (
 	"testing"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
+type obj struct {
+	key   string
+	size  int64
+	mtime time.Time
+	isDir bool
+}
+
+func (o *obj) Key() string      { return o.key }
+func (o *obj) Size() int64      { return o.size }
+func (o *obj) Mtime() time.Time { return o.mtime }
+func (o *obj) IsDir() bool      { return o.isDir }
+
 func TestCluster(t *testing.T) {
 	// manager
-	todo := make(chan *object.Object, 100)
+	todo := make(chan object.Object, 100)
 	addr, err := startManager(todo)
 	if err != nil {
 		t.Fatal(err)
@@ -31,15 +44,15 @@ func TestCluster(t *testing.T) {
 	// worker
 	var conf Config
 	conf.Manager = addr
-	mytodo := make(chan *object.Object, 100)
+	mytodo := make(chan object.Object, 100)
 	go fetchJobs(mytodo, &conf)
 
-	todo <- &object.Object{Key: "test"}
+	todo <- &obj{key: "test"}
 	close(todo)
 
 	obj := <-mytodo
-	if obj.Key != "test" {
-		t.Fatalf("expect test but got %s", obj.Key)
+	if obj.Key() != "test" {
+		t.Fatalf("expect test but got %s", obj.Key())
 	}
 	if _, ok := <-mytodo; ok {
 		t.Fatalf("should end")

@@ -27,7 +27,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -53,7 +52,7 @@ func (d *filestore) path(key string) string {
 	return d.root + key
 }
 
-func (d *filestore) Head(key string) (*Object, error) {
+func (d *filestore) Head(key string) (Object, error) {
 	p := d.path(key)
 
 	fi, err := os.Stat(p)
@@ -64,7 +63,7 @@ func (d *filestore) Head(key string) (*Object, error) {
 	if fi.IsDir() {
 		size = 0
 	}
-	return &Object{
+	return &obj{
 		key,
 		size,
 		fi.ModTime(),
@@ -238,12 +237,12 @@ func readDirNames(dirname string) ([]string, error) {
 	return names, nil
 }
 
-func (d *filestore) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (d *filestore) List(prefix, marker string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
 
-func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
-	listed := make(chan *Object, 10240)
+func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
+	listed := make(chan Object, 10240)
 	go func() {
 		var walkRoot string
 		if strings.HasSuffix(d.root, dirSuffix) {
@@ -284,8 +283,8 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 				return nil
 			}
 			owner, group := getOwnerGroup(info)
-			f := &File{
-				Object{
+			f := &file{
+				obj{
 					key,
 					info.Size(),
 					info.ModTime(),
@@ -296,12 +295,12 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan *Object, error) {
 				info.Mode(),
 			}
 			if info.IsDir() {
-				f.Size = 0
-				if f.Key != "" || !strings.HasSuffix(d.root, dirSuffix) {
-					f.Key += dirSuffix
+				f.size = 0
+				if f.key != "" || !strings.HasSuffix(d.root, dirSuffix) {
+					f.key += dirSuffix
 				}
 			}
-			listed <- (*Object)(unsafe.Pointer(f))
+			listed <- f
 			return nil
 		})
 		close(listed)

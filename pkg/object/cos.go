@@ -50,7 +50,7 @@ func (c *COS) Create() error {
 	return err
 }
 
-func (c *COS) Head(key string) (*Object, error) {
+func (c *COS) Head(key string) (Object, error) {
 	resp, err := c.c.Object.Head(ctx, key, nil)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func (c *COS) Head(key string) (*Object, error) {
 		mtime, _ = time.Parse(time.RFC1123, val[0])
 	}
 
-	return &Object{key, size, mtime, strings.HasSuffix(key, "/")}, nil
+	return &obj{key, size, mtime, strings.HasSuffix(key, "/")}, nil
 }
 
 func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -115,7 +115,7 @@ func (c *COS) Delete(key string) error {
 	return err
 }
 
-func (c *COS) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (c *COS) List(prefix, marker string, limit int64) ([]Object, error) {
 	param := cos.BucketGetOptions{
 		Prefix:  prefix,
 		Marker:  marker,
@@ -130,16 +130,16 @@ func (c *COS) List(prefix, marker string, limit int64) ([]*Object, error) {
 		return nil, err
 	}
 	n := len(resp.Contents)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		t, _ := time.Parse(time.RFC3339, o.LastModified)
-		objs[i] = &Object{o.Key, int64(o.Size), t, strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{o.Key, int64(o.Size), t, strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }
 
-func (c *COS) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (c *COS) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
 

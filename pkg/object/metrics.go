@@ -103,7 +103,7 @@ func (p *withMetrics) track(method string, fn func() error) error {
 	return err
 }
 
-func (p *withMetrics) Head(key string) (obj *Object, err error) {
+func (p *withMetrics) Head(key string) (obj Object, err error) {
 	err = p.track("HEAD", func() error {
 		obj, err = p.ObjectStorage.Head(key)
 		return err

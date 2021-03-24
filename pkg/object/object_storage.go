@@ -32,12 +32,23 @@ var UserAgent = "JuiceFS"
 type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error
 }
-type File struct {
+type File interface {
 	Object
-	Owner string
-	Group string
-	Mode  os.FileMode
+	Owner() string
+	Group() string
+	Mode() os.FileMode
 }
+
+type file struct {
+	obj
+	owner string
+	group string
+	mode  os.FileMode
+}
+
+func (f *file) Owner() string     { return f.owner }
+func (f *file) Group() string     { return f.group }
+func (f *file) Mode() os.FileMode { return f.mode }
 
 type FileSystem interface {
 	MtimeChanger
@@ -53,7 +64,7 @@ func (s DefaultObjectStorage) Create() error {
 	return nil
 }
 
-func (s DefaultObjectStorage) Head(key string) (*Object, error) {
+func (s DefaultObjectStorage) Head(key string) (Object, error) {
 	return nil, notSupported
 }
 
@@ -75,11 +86,11 @@ func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 	return nil, "", nil
 }
 
-func (s DefaultObjectStorage) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s DefaultObjectStorage) List(prefix, marker string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (s DefaultObjectStorage) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
 

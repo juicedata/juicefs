@@ -17,14 +17,51 @@ package object
 
 import (
 	"io"
+	"os"
 	"time"
 )
 
-type Object struct {
-	Key   string
-	Size  int64
-	Mtime time.Time // Unix seconds
-	IsDir bool
+type Object interface {
+	Key() string
+	Size() int64
+	Mtime() time.Time
+	IsDir() bool
+}
+
+type obj struct {
+	key   string
+	size  int64
+	mtime time.Time
+	isDir bool
+}
+
+func (o *obj) Key() string      { return o.key }
+func (o *obj) Size() int64      { return o.size }
+func (o *obj) Mtime() time.Time { return o.mtime }
+func (o *obj) IsDir() bool      { return o.isDir }
+
+func MarshalObject(o Object) map[string]interface{} {
+	m := make(map[string]interface{})
+	m["key"] = o.Key()
+	m["size"] = o.Size()
+	m["mtime"] = o.Mtime().Unix()
+	m["isdir"] = o.IsDir()
+	if f, ok := o.(File); ok {
+		m["mode"] = f.Mode()
+		m["owner"] = f.Owner()
+		m["group"] = f.Group()
+	}
+	return m
+}
+
+func UnmarshalObject(m map[string]interface{}) Object {
+	mtime := time.Unix(int64(m["mtime"].(float64)), 0)
+	o := obj{m["key"].(string), int64(m["size"].(float64)), mtime, m["isdir"].(bool)}
+	if _, ok := m["mode"]; ok {
+		f := file{o, m["owner"].(string), m["group"].(string), m["mode"].(os.FileMode)}
+		return &f
+	}
+	return &o
 }
 
 type MultipartUpload struct {
@@ -60,11 +97,11 @@ type ObjectStorage interface {
 	Delete(key string) error
 
 	// Head returns some information about the object or an error if not found.
-	Head(key string) (*Object, error)
+	Head(key string) (Object, error)
 	// List returns a list of objects.
-	List(prefix, marker string, limit int64) ([]*Object, error)
+	List(prefix, marker string, limit int64) ([]Object, error)
 	// ListAll returns all the objects as an channel.
-	ListAll(prefix, marker string) (<-chan *Object, error)
+	ListAll(prefix, marker string) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.
 	CreateMultipartUpload(key string) (*MultipartUpload, error)

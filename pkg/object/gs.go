@@ -86,17 +86,17 @@ func (g *gs) Create() error {
 	return err
 }
 
-func (g *gs) Head(key string) (*Object, error) {
+func (g *gs) Head(key string) (Object, error) {
 	req := g.service.Objects.Get(g.bucket, key)
-	obj, err := req.Do()
+	o, err := req.Do()
 	if err != nil {
 		return nil, err
 	}
 
-	mtime, _ := time.Parse(time.RFC3339, obj.Updated)
-	return &Object{
+	mtime, _ := time.Parse(time.RFC3339, o.Updated)
+	return &obj{
 		key,
-		int64(obj.Size),
+		int64(o.Size),
 		mtime,
 		strings.HasSuffix(key, "/"),
 	}, nil
@@ -134,7 +134,7 @@ func (g *gs) Delete(key string) error {
 	return g.service.Objects.Delete(g.bucket, key).Do()
 }
 
-func (g *gs) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
 	call := g.service.Objects.List(g.bucket).Prefix(prefix).MaxResults(limit)
 	if marker != "" {
 		if g.pageToken == "" {
@@ -150,11 +150,11 @@ func (g *gs) List(prefix, marker string, limit int64) ([]*Object, error) {
 	}
 	g.pageToken = objects.NextPageToken
 	n := len(objects.Items)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		item := objects.Items[i]
 		mtime, _ := time.Parse(time.RFC3339, item.Updated)
-		objs[i] = &Object{item.Name, int64(item.Size), mtime, strings.HasSuffix(item.Name, "/")}
+		objs[i] = &obj{item.Name, int64(item.Size), mtime, strings.HasSuffix(item.Name, "/")}
 	}
 	return objs, nil
 }

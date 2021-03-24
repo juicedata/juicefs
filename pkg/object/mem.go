@@ -26,10 +26,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 )
 
-type obj struct {
+type mobj struct {
 	data  []byte
 	mtime time.Time
 	mode  os.FileMode
@@ -41,36 +40,36 @@ type memStore struct {
 	sync.Mutex
 	DefaultObjectStorage
 	name    string
-	objects map[string]*obj
+	objects map[string]*mobj
 }
 
 func (m *memStore) String() string {
 	return fmt.Sprintf("mem://%s", m.name)
 }
 
-func (m *memStore) Head(key string) (*Object, error) {
+func (m *memStore) Head(key string) (Object, error) {
 	m.Lock()
 	defer m.Unlock()
 	// Minimum length is 1.
 	if key == "" {
 		return nil, errors.New("object key cannot be empty")
 	}
-	obj, ok := m.objects[key]
+	o, ok := m.objects[key]
 	if !ok {
 		return nil, errors.New("not exists")
 	}
-	f := &File{
-		Object{
+	f := &file{
+		obj{
 			key,
-			int64(len(obj.data)),
-			obj.mtime,
+			int64(len(o.data)),
+			o.mtime,
 			strings.HasSuffix(key, "/"),
 		},
-		obj.owner,
-		obj.group,
-		obj.mode,
+		o.owner,
+		o.group,
+		o.mode,
 	}
-	return (*Object)(unsafe.Pointer(f)), nil
+	return f, nil
 }
 
 func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -106,7 +105,7 @@ func (m *memStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	m.objects[key] = &obj{data: data, mtime: time.Now()}
+	m.objects[key] = &mobj{data: data, mtime: time.Now()}
 	return nil
 }
 
@@ -159,32 +158,32 @@ func (m *memStore) Delete(key string) error {
 	return nil
 }
 
-type sortObject []*Object
+type sortObject []Object
 
 func (s sortObject) Len() int           { return len(s) }
-func (s sortObject) Less(i, j int) bool { return s[i].Key < s[j].Key }
+func (s sortObject) Less(i, j int) bool { return s[i].Key() < s[j].Key() }
 func (s sortObject) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (m *memStore) List(prefix, marker string, limit int64) ([]Object, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	objs := make([]*Object, 0)
+	objs := make([]Object, 0)
 	for k := range m.objects {
 		if strings.HasPrefix(k, prefix) && k > marker {
-			obj := m.objects[k]
-			f := &File{
-				Object{
+			o := m.objects[k]
+			f := &file{
+				obj{
 					k,
-					int64(len(obj.data)),
-					obj.mtime,
+					int64(len(o.data)),
+					o.mtime,
 					strings.HasSuffix(k, "/"),
 				},
-				obj.owner,
-				obj.group,
-				obj.mode,
+				o.owner,
+				o.group,
+				o.mode,
 			}
-			objs = append(objs, (*Object)(unsafe.Pointer(f)))
+			objs = append(objs, f)
 		}
 	}
 	sort.Sort(sortObject(objs))
@@ -196,7 +195,7 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]*Object, error) {
 
 func newMem(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
 	store := &memStore{name: endpoint}
-	store.objects = make(map[string]*obj)
+	store.objects = make(map[string]*mobj)
 	return store, nil
 }
 
