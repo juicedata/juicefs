@@ -48,7 +48,7 @@ JuiceFS 中的文件格式，如下图所示。一个文件首先被拆分成固
 
 ### 从源代码编译
 
-你需要先安装 [Go](https://golang.org) 1.14+，然后通过下面的方式来编译：
+你需要先安装 [Go](https://golang.org) 1.14+ 以及 GCC 5.4+，然后通过下面的方式来编译：
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git
@@ -112,8 +112,9 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生�
 - [缓存管理](docs/en/cache_management.md)
 - [故障诊断和分析](docs/en/fault_diagnosis_and_analysis.md)
 - [S3 网关](docs/en/s3_gateway.md)
-- [在 Kubernetes 中使用 JuiceFS](docs/en/how_to_use_on_kubernetes.md)
 - [FUSE 挂载选项](docs/en/fuse_mount_options.md)
+- [在 Kubernetes 中使用 JuiceFS](docs/en/how_to_use_on_kubernetes.md)
+- [在 Windows 中使用 JuiceFS](docs/en/windows.md)
 
 ## POSIX 兼容性测试
 
