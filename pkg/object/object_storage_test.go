@@ -19,9 +19,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -424,4 +427,28 @@ func TestEncrypted(t *testing.T) {
 	dc := NewAESEncryptor(kc)
 	es := NewEncrypted(s, dc)
 	testStorage(t, es)
+}
+
+func TestMarsharl(t *testing.T) {
+	s, _ := CreateStorage("mem", "", "", "")
+	_ = s.Put("hello", bytes.NewReader([]byte("world")))
+	fs := s.(FileSystem)
+	_ = fs.Chown("hello", "user", "group")
+	_ = fs.Chmod("hello", 0764)
+	o, _ := s.Head("hello")
+
+	m := MarshalObject(o)
+	d, _ := json.Marshal(m)
+	var m2 map[string]interface{}
+	if err := json.Unmarshal(d, &m2); err != nil {
+		t.Fatalf("unmarshal: %s", err)
+	}
+	o2 := UnmarshalObject(m2)
+	if math.Abs(float64(o2.Mtime().UnixNano()-o.Mtime().UnixNano())) > 1000 {
+		t.Fatalf("mtime %s != %s", o2.Mtime(), o.Mtime())
+	}
+	o2.(*file).mtime = o.Mtime()
+	if !reflect.DeepEqual(o, o2) {
+		t.Fatalf("%+v != %+v", o2, o)
+	}
 }

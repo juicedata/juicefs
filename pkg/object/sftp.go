@@ -174,19 +174,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	objKey, size := key, info.Size()
-	if info.IsDir() {
-		objKey, size = key+"/", 0
-	}
-	owner, group := getOwnerGroup(info)
-	o := &file{
-		obj{objKey, size, info.ModTime(), info.IsDir()},
-		owner,
-		group,
-		info.Mode(),
-	}
-	return o, nil
+	return fileInfo(key, info), nil
 }
 
 func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {

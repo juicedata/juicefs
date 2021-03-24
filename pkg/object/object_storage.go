@@ -50,6 +50,30 @@ func (f *file) Owner() string     { return f.owner }
 func (f *file) Group() string     { return f.group }
 func (f *file) Mode() os.FileMode { return f.mode }
 
+func MarshalObject(o Object) map[string]interface{} {
+	m := make(map[string]interface{})
+	m["key"] = o.Key()
+	m["size"] = o.Size()
+	m["mtime"] = o.Mtime().UnixNano()
+	m["isdir"] = o.IsDir()
+	if f, ok := o.(File); ok {
+		m["mode"] = f.Mode()
+		m["owner"] = f.Owner()
+		m["group"] = f.Group()
+	}
+	return m
+}
+
+func UnmarshalObject(m map[string]interface{}) Object {
+	mtime := time.Unix(0, int64(m["mtime"].(float64)))
+	o := obj{m["key"].(string), int64(m["size"].(float64)), mtime, m["isdir"].(bool)}
+	if _, ok := m["mode"]; ok {
+		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64))}
+		return &f
+	}
+	return &o
+}
+
 type FileSystem interface {
 	MtimeChanger
 	Chmod(path string, mode os.FileMode) error
