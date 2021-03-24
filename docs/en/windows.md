@@ -16,7 +16,7 @@ We can cross compile JuiceFS for Windows platform on Linux or macOS.
 
    On macOS, use [Homebrew](https://brew.sh) to install: `brew install mingw-w64`
 
-2. Build JuiceFS for Windows
+2. Build JuiceFS for Windows:
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git

@@ -52,7 +52,7 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 
 首先请卸载 JuiceFS 文件系统，然后使用新版本的客户端重新挂载。
 
-## docker: Error response from daemon: error while creating mount source path 'XXX': mkdir XXX: file exists.
+## `docker: Error response from daemon: error while creating mount source path 'XXX': mkdir XXX: file exists.`
 
 当你使用 [Docker bind mounts](https://docs.docker.com/storage/bind-mounts) 把宿主机上的一个目录挂载到容器中时，你可能会遇到这个错误。这是因为使用了非 root 用户执行了 `juicefs mount` 命令，进而导致 Docker 没有权限访问这个目录。
 
