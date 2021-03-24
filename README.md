@@ -47,7 +47,7 @@ You can download precompiled binaries from [releases page](https://github.com/ju
 
 ### Building from source
 
-You need first installing [Go](https://golang.org) 1.14+, then run following commands:
+You need first installing [Go](https://golang.org) 1.14+ and GCC 5.4+, then run following commands:
 
 ```bash
 $ git clone https://github.com/juicedata/juicefs.git
@@ -111,8 +111,9 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_
 - [Cache Management](docs/en/cache_management.md)
 - [Fault Diagnosis and Analysis](docs/en/fault_diagnosis_and_analysis.md)
 - [S3 Gateway](docs/en/s3_gateway.md)
-- [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
 - [FUSE Mount Options](docs/en/fuse_mount_options.md)
+- [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
+- [Using JuiceFS on Windows](docs/en/windows.md)
 
 ## POSIX Compatibility
 
