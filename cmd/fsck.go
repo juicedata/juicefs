@@ -92,7 +92,7 @@ func fsck(ctx *cli.Context) error {
 			continue
 		}
 
-		logger.Debugf("found block %s", obj.Key)
+		logger.Debugf("found block %s", obj.Key())
 		parts := strings.Split(obj.Key(), "/")
 		if len(parts) != 3 {
 			continue
