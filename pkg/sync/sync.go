@@ -424,9 +424,17 @@ func (o *withSize) Size() int64 {
 	return o.nsize
 }
 
+type withFSize struct {
+	object.File
+	nsize int64
+}
+
+func (o *withFSize) Size() int64 {
+	return o.nsize
+}
+
 func deleteFromDst(tasks chan object.Object, dstobj object.Object) {
-	dstobj = &withSize{dstobj, markDelete}
-	tasks <- dstobj
+	tasks <- &withSize{dstobj, markDelete}
 	atomic.AddInt64(&found, 1)
 	atomic.AddInt64(&todo, 1)
 }
@@ -495,9 +503,6 @@ OUT:
 		if !hasMore || obj.Key() < dstobj.Key() ||
 			obj.Key() == dstobj.Key() && (config.ForceUpdate || obj.Size() != dstobj.Size() ||
 				config.Update && obj.Mtime().After(dstobj.Mtime())) {
-			if dstobj != nil {
-				// logger.Infof("%s size %+v %+v", obj.Key(), *obj, *dstobj)
-			}
 			tasks <- obj
 			atomic.AddInt64(&todo, 1)
 		} else if config.DeleteSrc && dstobj != nil && obj.Key() == dstobj.Key() && obj.Size() == dstobj.Size() {
@@ -507,8 +512,7 @@ OUT:
 			f1 := obj.(object.File)
 			f2 := dstobj.(object.File)
 			if f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group() {
-				logger.Infof("target %p %p %s %s %s %s", dstobj, f2, f2.Key(), f2.Mode(), f2.Owner(), f2.Group())
-				tasks <- &withSize{obj, markCopyPerms}
+				tasks <- &withFSize{f1, markCopyPerms}
 				atomic.AddInt64(&todo, 1)
 			}
 		}
