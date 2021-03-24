@@ -163,7 +163,7 @@ func (f *sftpStore) path(key string) string {
 	return absPath
 }
 
-func (f *sftpStore) Head(key string) (*Object, error) {
+func (f *sftpStore) Head(key string) (Object, error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err
@@ -174,17 +174,7 @@ func (f *sftpStore) Head(key string) (*Object, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	objKey, size := key, info.Size()
-	if info.IsDir() {
-		objKey, size = key+"/", 0
-	}
-	return &Object{
-		objKey,
-		size,
-		info.ModTime(),
-		info.IsDir(),
-	}, nil
+	return fileInfo(key, info), nil
 }
 
 func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -321,7 +311,24 @@ func (s sortFI) Less(i, j int) bool {
 	return name1 < name2
 }
 
-func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan *Object) {
+func fileInfo(key string, fi os.FileInfo) Object {
+	owner, group := getOwnerGroup(fi)
+	f := &file{
+		obj{key, fi.Size(), fi.ModTime(), fi.IsDir()},
+		owner,
+		group,
+		fi.Mode(),
+	}
+	if fi.IsDir() {
+		if key != "" {
+			f.key += "/"
+		}
+		f.size = 0
+	}
+	return f
+}
+
+func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan Object) {
 	infos, err := c.ReadDir(path)
 	if err != nil {
 		logger.Errorf("readdir %s: %s", path, err)
@@ -333,11 +340,7 @@ func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan *Object
 		p := path + fi.Name()
 		key := p[len(f.root):]
 		if key > marker {
-			if fi.IsDir() {
-				out <- &Object{key + "/", 0, fi.ModTime(), true}
-			} else {
-				out <- &Object{key, fi.Size(), fi.ModTime(), false}
-			}
+			out <- fileInfo(key, fi)
 		}
 		if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
 			f.doFind(c, p+dirSuffix, marker, out)
@@ -345,7 +348,7 @@ func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan *Object
 	}
 }
 
-func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) {
+func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 	if strings.HasSuffix(path, dirSuffix) {
 		fi, err := c.Stat(path)
 		if err != nil {
@@ -353,7 +356,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 			return
 		}
 		if marker == "" {
-			out <- &Object{"", 0, fi.ModTime(), true}
+			out <- fileInfo("", fi)
 		}
 		f.doFind(c, path, marker, out)
 	} else {
@@ -378,11 +381,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 
 			key := p[len(f.root):]
 			if key > marker || marker == "" {
-				if fi.IsDir() {
-					out <- &Object{key + "/", 0, fi.ModTime(), true}
-				} else {
-					out <- &Object{key, fi.Size(), fi.ModTime(), false}
-				}
+				out <- fileInfo(key, fi)
 			}
 			if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
 				f.doFind(c, p+dirSuffix, marker, out)
@@ -391,16 +390,16 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan *Object) 
 	}
 }
 
-func (f *sftpStore) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (f *sftpStore) List(prefix, marker string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
 
-func (f *sftpStore) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (f *sftpStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return nil, err
 	}
-	listed := make(chan *Object, 10240)
+	listed := make(chan Object, 10240)
 	go func() {
 		defer f.putSftpConnection(&c, nil)
 

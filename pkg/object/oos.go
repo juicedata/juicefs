@@ -42,12 +42,12 @@ func (s *oos) Create() error {
 	return err
 }
 
-func (s *oos) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s *oos) List(prefix, marker string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	objs, err := s.s3client.List(prefix, marker, limit)
-	if marker != "" && len(objs) > 0 && objs[0].Key == marker {
+	if marker != "" && len(objs) > 0 && objs[0].Key() == marker {
 		objs = objs[1:]
 	}
 	return objs, err

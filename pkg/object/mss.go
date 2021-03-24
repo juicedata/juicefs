@@ -97,7 +97,7 @@ func (c *mss) Copy(dst, src string) error {
 	return nil
 }
 
-func (c *mss) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (c *mss) List(prefix, marker string, limit int64) ([]Object, error) {
 	uri, _ := url.ParseRequestURI(c.endpoint)
 
 	query := url.Values{}
@@ -136,9 +136,9 @@ func (c *mss) List(prefix, marker string, limit int64) ([]*Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	objs := make([]*Object, len(out.Contents))
+	objs := make([]Object, len(out.Contents))
 	for i, item := range out.Contents {
-		objs[i] = &Object{
+		objs[i] = &obj{
 			item.Key,
 			item.Size,
 			item.LastModified,

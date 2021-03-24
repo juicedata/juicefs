@@ -22,10 +22,10 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
-func collectAll(c <-chan *object.Object) []string {
+func collectAll(c <-chan object.Object) []string {
 	r := make([]string, 0)
 	for s := range c {
-		r = append(r, s.Key)
+		r = append(r, s.Key())
 	}
 	return r
 }

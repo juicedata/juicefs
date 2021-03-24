@@ -123,9 +123,9 @@ func findLocalIP() (string, error) {
 	return "", errors.New("are you connected to the network?")
 }
 
-func startManager(tasks chan *object.Object) (string, error) {
+func startManager(tasks chan object.Object) (string, error) {
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
-		var objs []*object.Object
+		var objs []object.Object
 		obj, ok := <-tasks
 		if !ok {
 			_, _ = w.Write([]byte("[]"))
@@ -147,7 +147,7 @@ func startManager(tasks chan *object.Object) (string, error) {
 				break LOOP
 			}
 		}
-		d, err := json.MarshalIndent(objs, "", "  ")
+		d, err := marshalObjects(objs)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -269,7 +269,28 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 	}
 }
 
-func fetchJobs(todo chan *object.Object, config *Config) {
+func marshalObjects(objs []object.Object) ([]byte, error) {
+	var arr []map[string]interface{}
+	for _, o := range objs {
+		arr = append(arr, object.MarshalObject(o))
+	}
+	return json.MarshalIndent(arr, "", " ")
+}
+
+func unmarshalObjects(d []byte) ([]object.Object, error) {
+	var arr []map[string]interface{}
+	err := json.Unmarshal(d, &arr)
+	if err != nil {
+		return nil, err
+	}
+	var objs []object.Object
+	for _, m := range arr {
+		objs = append(objs, object.UnmarshalObject(m))
+	}
+	return objs, nil
+}
+
+func fetchJobs(todo chan object.Object, config *Config) {
 	for {
 		// fetch jobs
 		url := fmt.Sprintf("http://%s/fetch", config.Manager)
@@ -279,8 +300,8 @@ func fetchJobs(todo chan *object.Object, config *Config) {
 			time.Sleep(time.Second)
 			continue
 		}
-		var jobs []*object.Object
-		err = json.Unmarshal(ans, &jobs)
+		var jobs []object.Object
+		jobs, err = unmarshalObjects(ans)
 		if err != nil {
 			logger.Errorf("Unmarshal %s: %s", string(ans), err)
 			time.Sleep(time.Second)

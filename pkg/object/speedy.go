@@ -35,7 +35,7 @@ func (s *speedy) String() string {
 	return fmt.Sprintf("speedy://%s", uri.Host)
 }
 
-func (s *speedy) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s *speedy) List(prefix, marker string, limit int64) ([]Object, error) {
 	uri, _ := url.ParseRequestURI(s.endpoint)
 
 	query := url.Values{}
@@ -74,12 +74,12 @@ func (s *speedy) List(prefix, marker string, limit int64) ([]*Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	objs := make([]*Object, 0)
+	objs := make([]Object, 0)
 	for _, item := range out.Contents {
 		if strings.HasSuffix(item.Key, "/.speedycloud_dir_flag") {
 			continue
 		}
-		objs = append(objs, &Object{item.Key, item.Size, item.LastModified, strings.HasSuffix(item.Key, "/")})
+		objs = append(objs, &obj{item.Key, item.Size, item.LastModified, strings.HasSuffix(item.Key, "/")})
 	}
 	return objs, nil
 }

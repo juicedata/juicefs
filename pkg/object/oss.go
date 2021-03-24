@@ -64,7 +64,7 @@ func (o *ossClient) checkError(err error) error {
 	return err
 }
 
-func (o *ossClient) Head(key string) (*Object, error) {
+func (o *ossClient) Head(key string) (Object, error) {
 	r, err := o.bucket.GetObjectMeta(key)
 	if o.checkError(err) != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (o *ossClient) Head(key string) (*Object, error) {
 	contentLength := r.Get("Content-Length")
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
 	size, _ := strconv.ParseInt(contentLength, 10, 64)
-	return &Object{
+	return &obj{
 		key,
 		size,
 		mtime,
@@ -122,7 +122,7 @@ func (o *ossClient) Delete(key string) error {
 	return o.checkError(o.bucket.DeleteObject(key))
 }
 
-func (o *ossClient) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (o *ossClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -132,15 +132,15 @@ func (o *ossClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 		return nil, err
 	}
 	n := len(result.Objects)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := result.Objects[i]
-		objs[i] = &Object{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }
 
-func (o *ossClient) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (o *ossClient) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
 

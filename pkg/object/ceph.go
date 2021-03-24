@@ -163,8 +163,8 @@ func (c *ceph) Delete(key string) error {
 	})
 }
 
-func (c *ceph) ListAll(prefix, marker string) (<-chan *Object, error) {
-	var objs = make(chan *Object, 1000)
+func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
+	var objs = make(chan Object, 1000)
 	err := c.do(func(ctx *rados.IOContext) error {
 		defer close(objs)
 		iter, err := ctx.Iter()
@@ -190,7 +190,7 @@ func (c *ceph) ListAll(prefix, marker string) (<-chan *Object, error) {
 			if err != nil {
 				continue // FIXME
 			}
-			objs <- &Object{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/")}
+			objs <- &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/")}
 		}
 		return nil
 	})

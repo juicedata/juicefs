@@ -183,7 +183,7 @@ type uFileListObjectsOutput struct {
 	DataSet []*DataItem `json:"DataSet,omitempty"`
 }
 
-func (u *ufile) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (u *ufile) List(prefix, marker string, limit int64) ([]Object, error) {
 	query := url.Values{}
 	query.Add("list", "")
 	query.Add("prefix", prefix)
@@ -201,9 +201,9 @@ func (u *ufile) List(prefix, marker string, limit int64) ([]*Object, error) {
 	if err := u.parseResp(resp, &out); err != nil {
 		return nil, err
 	}
-	objs := make([]*Object, len(out.DataSet))
+	objs := make([]Object, len(out.DataSet))
 	for i, item := range out.DataSet {
-		objs[i] = &Object{item.FileName, item.Size, time.Unix(int64(item.ModifyTime), 0), strings.HasSuffix(item.FileName, "/")}
+		objs[i] = &obj{item.FileName, item.Size, time.Unix(int64(item.ModifyTime), 0), strings.HasSuffix(item.FileName, "/")}
 	}
 	return objs, nil
 }

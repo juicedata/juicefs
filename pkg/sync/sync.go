@@ -26,7 +26,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -72,11 +71,11 @@ func formatSize(bytes uint64) string {
 }
 
 // ListAll on all the keys that starts at marker from object storage.
-func ListAll(store object.ObjectStorage, start, end string) (<-chan *object.Object, error) {
+func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Object, error) {
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s start %q", store, start)
 
-	out := make(chan *object.Object, maxResults)
+	out := make(chan object.Object, maxResults)
 
 	// As the result of object storage's List method doesn't include the marker key,
 	// we try List the marker key separately.
@@ -100,7 +99,7 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan *object.Obje
 
 		go func() {
 			for obj := range ch {
-				if obj != nil && obj.Key > end {
+				if obj != nil && obj.Key() > end {
 					break
 				}
 				out <- obj
@@ -124,7 +123,7 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan *object.Obje
 	END:
 		for len(objs) > 0 {
 			for _, obj := range objs {
-				key := obj.Key
+				key := obj.Key()
 				if !first && key <= lastkey {
 					logger.Fatalf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
 				}
@@ -172,15 +171,15 @@ var bufPool = sync.Pool{
 	},
 }
 
-func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
+func copyObject(src, dst object.ObjectStorage, obj object.Object) error {
 	if limiter != nil {
-		limiter.Wait(obj.Size)
+		limiter.Wait(obj.Size())
 	}
 	concurrent <- 1
 	defer func() {
 		<-concurrent
 	}()
-	key := obj.Key
+	key := obj.Key()
 	if strings.HasPrefix(src.String(), "file://") || strings.HasPrefix(dst.String(), "file://") {
 		in, e := src.Get(key, 0, -1)
 		if e != nil {
@@ -193,7 +192,7 @@ func copyObject(src, dst object.ObjectStorage, obj *object.Object) error {
 		return dst.Put(key, in)
 	}
 	firstBlock := -1
-	if obj.Size > maxBlock {
+	if obj.Size() > maxBlock {
 		firstBlock = maxBlock
 	}
 	in, e := src.Get(key, 0, int64(firstBlock))
@@ -250,13 +249,13 @@ func try(n int, f func() error) (err error) {
 	return
 }
 
-func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
-	if obj.Size < maxBlock {
+func copyInParallel(src, dst object.ObjectStorage, obj object.Object) error {
+	if obj.Size() < maxBlock {
 		return try(3, func() error {
 			return copyObject(src, dst, obj)
 		})
 	}
-	upload, err := dst.CreateMultipartUpload(obj.Key)
+	upload, err := dst.CreateMultipartUpload(obj.Key())
 	if err != nil {
 		return try(3, func() error {
 			return copyObject(src, dst, obj)
@@ -266,12 +265,12 @@ func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 	if partSize == 0 {
 		partSize = defaultPartSize
 	}
-	if obj.Size > partSize*int64(upload.MaxCount) {
-		partSize = obj.Size / int64(upload.MaxCount)
+	if obj.Size() > partSize*int64(upload.MaxCount) {
+		partSize = obj.Size() / int64(upload.MaxCount)
 		partSize = ((partSize-1)>>20 + 1) << 20 // align to MB
 	}
-	n := int((obj.Size-1)/partSize) + 1
-	key := obj.Key
+	n := int((obj.Size()-1)/partSize) + 1
+	key := obj.Key()
 	logger.Debugf("Copying object %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
 	parts := make([]*object.Part, n)
 	errs := make(chan error, n)
@@ -279,7 +278,7 @@ func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 		go func(num int) {
 			sz := partSize
 			if num == n-1 {
-				sz = obj.Size - int64(num)*partSize
+				sz = obj.Size() - int64(num)*partSize
 			}
 			var err error
 			if limiter != nil {
@@ -331,7 +330,7 @@ func copyInParallel(src, dst object.ObjectStorage, obj *object.Object) error {
 	return nil
 }
 
-func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *Config) {
+func worker(todo chan object.Object, src, dst object.ObjectStorage, config *Config) {
 	for {
 		obj, ok := <-todo
 		if !ok {
@@ -339,34 +338,34 @@ func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *Con
 		}
 		start := time.Now()
 		var err error
-		if obj.Size == markDelete {
+		if obj.Size() == markDelete {
 			if config.DeleteSrc {
 				if config.Dry {
-					logger.Debugf("Will delete %s from %s", obj.Key, src)
+					logger.Debugf("Will delete %s from %s", obj.Key(), src)
 					continue
 				}
 				if err = try(3, func() error {
-					return src.Delete(obj.Key)
+					return src.Delete(obj.Key())
 				}); err == nil {
-					logger.Debugf("Deleted %s from %s", obj.Key, src)
+					logger.Debugf("Deleted %s from %s", obj.Key(), src)
 					atomic.AddInt64(&deleted, 1)
 				} else {
-					logger.Errorf("Failed to delete %s from %s: %s", obj.Key, src, err.Error())
+					logger.Errorf("Failed to delete %s from %s: %s", obj.Key(), src, err.Error())
 					atomic.AddInt64(&failed, 1)
 				}
 			}
 			if config.DeleteDst {
 				if config.Dry {
-					logger.Debugf("Will delete %s from %s", obj.Key, dst)
+					logger.Debugf("Will delete %s from %s", obj.Key(), dst)
 					continue
 				}
 				if err = try(3, func() error {
-					return dst.Delete(obj.Key)
+					return dst.Delete(obj.Key())
 				}); err == nil {
-					logger.Debugf("Deleted %s from %s", obj.Key, dst)
+					logger.Debugf("Deleted %s from %s", obj.Key(), dst)
 					atomic.AddInt64(&deleted, 1)
 				} else {
-					logger.Errorf("Failed to delete %s from %s: %s", obj.Key, dst, err.Error())
+					logger.Errorf("Failed to delete %s from %s: %s", obj.Key(), dst, err.Error())
 					atomic.AddInt64(&failed, 1)
 				}
 			}
@@ -374,56 +373,73 @@ func worker(todo chan *object.Object, src, dst object.ObjectStorage, config *Con
 		}
 
 		if config.Dry {
-			logger.Debugf("Will copy %s (%d bytes)", obj.Key, obj.Size)
+			logger.Debugf("Will copy %s (%d bytes)", obj.Key(), obj.Size())
 			continue
 		}
-		if config.Perms && obj.Size == markCopyPerms {
-			fi := (*object.File)(unsafe.Pointer(obj))
-			if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
-				logger.Warnf("Chmod %s to %d: %s", obj.Key, fi.Mode, err)
+		if config.Perms && obj.Size() == markCopyPerms {
+			fi := obj.(object.File)
+			if err := dst.(object.FileSystem).Chmod(obj.Key(), fi.Mode()); err != nil {
+				logger.Warnf("Chmod %s to %d: %s", obj.Key(), fi.Mode(), err)
 			}
-			if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
-				logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
+			if err := dst.(object.FileSystem).Chown(obj.Key(), fi.Owner(), fi.Group()); err != nil {
+				logger.Warnf("Chown %s to (%s,%s): %s", obj.Key(), fi.Owner(), fi.Group(), err)
 			}
 			atomic.AddInt64(&copied, 1)
-			logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner, fi.Group, fi.Mode, obj.Key, time.Since(start))
+			logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), obj.Key(), time.Since(start))
 			continue
 		}
 		err = copyInParallel(src, dst, obj)
 		if err != nil {
 			atomic.AddInt64(&failed, 1)
-			logger.Errorf("Failed to copy %s: %s", obj.Key, err.Error())
+			logger.Errorf("Failed to copy %s: %s", obj.Key(), err.Error())
 		} else {
 			if mc, ok := dst.(object.MtimeChanger); ok {
-				err := mc.Chtimes(obj.Key, obj.Mtime)
+				err := mc.Chtimes(obj.Key(), obj.Mtime())
 				if err != nil {
-					logger.Warnf("Update mtime of %s: %s", obj.Key, err)
+					logger.Warnf("Update mtime of %s: %s", obj.Key(), err)
 				}
 			}
 			if config.Perms {
-				fi := (*object.File)(unsafe.Pointer(obj))
-				if err := dst.(object.FileSystem).Chmod(obj.Key, fi.Mode); err != nil {
-					logger.Warnf("Chmod %s to %o: %s", obj.Key, fi.Mode, err)
+				fi := obj.(object.File)
+				if err := dst.(object.FileSystem).Chmod(obj.Key(), fi.Mode()); err != nil {
+					logger.Warnf("Chmod %s to %o: %s", obj.Key(), fi.Mode(), err)
 				}
-				if err := dst.(object.FileSystem).Chown(obj.Key, fi.Owner, fi.Group); err != nil {
-					logger.Warnf("Chown %s to (%s,%s): %s", obj.Key, fi.Owner, fi.Group, err)
+				if err := dst.(object.FileSystem).Chown(obj.Key(), fi.Owner(), fi.Group()); err != nil {
+					logger.Warnf("Chown %s to (%s,%s): %s", obj.Key(), fi.Owner(), fi.Group(), err)
 				}
 			}
 			atomic.AddInt64(&copied, 1)
-			atomic.AddInt64(&copiedBytes, int64(obj.Size))
-			logger.Debugf("Copied %s (%d bytes) in %s", obj.Key, obj.Size, time.Since(start))
+			atomic.AddInt64(&copiedBytes, int64(obj.Size()))
+			logger.Debugf("Copied %s (%d bytes) in %s", obj.Key(), obj.Size(), time.Since(start))
 		}
 	}
 }
 
-func deleteFromDst(tasks chan *object.Object, dstobj *object.Object) {
-	dstobj.Size = markDelete
-	tasks <- dstobj
+type withSize struct {
+	object.Object
+	nsize int64
+}
+
+func (o *withSize) Size() int64 {
+	return o.nsize
+}
+
+type withFSize struct {
+	object.File
+	nsize int64
+}
+
+func (o *withFSize) Size() int64 {
+	return o.nsize
+}
+
+func deleteFromDst(tasks chan object.Object, dstobj object.Object) {
+	tasks <- &withSize{dstobj, markDelete}
 	atomic.AddInt64(&found, 1)
 	atomic.AddInt64(&todo, 1)
 }
 
-func producer(tasks chan *object.Object, src, dst object.ObjectStorage, config *Config) {
+func producer(tasks chan object.Object, src, dst object.ObjectStorage, config *Config) {
 	start, end := config.Start, config.End
 	logger.Infof("Syncing from %s to %s", src, dst)
 	if start != "" {
@@ -448,7 +464,7 @@ func producer(tasks chan *object.Object, src, dst object.ObjectStorage, config *
 		dstkeys = filter(dstkeys, config.Include, config.Exclude)
 	}
 
-	var dstobj *object.Object
+	var dstobj object.Object
 	hasMore := true
 OUT:
 	for obj := range srckeys {
@@ -457,18 +473,18 @@ OUT:
 			hasMore = false
 			break
 		}
-		if !config.Dirs && obj.IsDir {
+		if !config.Dirs && obj.IsDir() {
 			// ignore directories
-			logger.Debug("Ignore directory ", obj.Key)
+			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
 		atomic.AddInt64(&found, 1)
-		for hasMore && (dstobj == nil || obj.Key > dstobj.Key) {
+		for hasMore && (dstobj == nil || obj.Key() > dstobj.Key()) {
 			var ok bool
-			if config.DeleteDst && dstobj != nil && dstobj.Key < obj.Key {
-				if !config.Dirs && dstobj.IsDir {
+			if config.DeleteDst && dstobj != nil && dstobj.Key() < obj.Key() {
+				if !config.Dirs && dstobj.IsDir() {
 					// ignore
-					logger.Debug("Ignore deleting dst directory ", dstobj.Key)
+					logger.Debug("Ignore deleting dst directory ", dstobj.Key())
 				} else {
 					deleteFromDst(tasks, dstobj)
 				}
@@ -484,25 +500,23 @@ OUT:
 			}
 		}
 		// FIXME: there is a race when source is modified during coping
-		if !hasMore || obj.Key < dstobj.Key ||
-			obj.Key == dstobj.Key && (config.ForceUpdate || obj.Size != dstobj.Size ||
-				config.Update && obj.Mtime.Unix() > dstobj.Mtime.Unix()) {
+		if !hasMore || obj.Key() < dstobj.Key() ||
+			obj.Key() == dstobj.Key() && (config.ForceUpdate || obj.Size() != dstobj.Size() ||
+				config.Update && obj.Mtime().After(dstobj.Mtime())) {
 			tasks <- obj
 			atomic.AddInt64(&todo, 1)
-		} else if config.DeleteSrc && dstobj != nil && obj.Key == dstobj.Key && obj.Size == dstobj.Size {
-			obj.Size = markDelete
-			tasks <- obj
+		} else if config.DeleteSrc && dstobj != nil && obj.Key() == dstobj.Key() && obj.Size() == dstobj.Size() {
+			tasks <- &withSize{obj, markDelete}
 			atomic.AddInt64(&todo, 1)
 		} else if config.Perms {
-			f1 := (*object.File)(unsafe.Pointer(obj))
-			f2 := (*object.File)(unsafe.Pointer(dstobj))
-			if f2.Mode != f1.Mode || f2.Owner != f1.Owner || f2.Group != f1.Group {
-				obj.Size = markCopyPerms
-				tasks <- obj
+			f1 := obj.(object.File)
+			f2 := dstobj.(object.File)
+			if f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group() {
+				tasks <- &withFSize{f1, markCopyPerms}
 				atomic.AddInt64(&todo, 1)
 			}
 		}
-		if dstobj != nil && dstobj.Key == obj.Key {
+		if dstobj != nil && dstobj.Key() == obj.Key() {
 			dstobj = nil
 		}
 	}
@@ -583,21 +597,21 @@ func findAny(s string, ps []*regexp.Regexp) bool {
 	return false
 }
 
-func filter(keys <-chan *object.Object, include, exclude []string) <-chan *object.Object {
+func filter(keys <-chan object.Object, include, exclude []string) <-chan object.Object {
 	inc := compileExp(include)
 	exc := compileExp(exclude)
-	r := make(chan *object.Object)
+	r := make(chan object.Object)
 	go func() {
 		for o := range keys {
 			if o == nil {
 				break
 			}
-			if findAny(o.Key, exc) {
-				logger.Debugf("exclude %s", o.Key)
+			if findAny(o.Key(), exc) {
+				logger.Debugf("exclude %s", o.Key())
 				continue
 			}
-			if len(inc) > 0 && !findAny(o.Key, inc) {
-				logger.Debugf("%s is not included", o.Key)
+			if len(inc) > 0 && !findAny(o.Key(), inc) {
+				logger.Debugf("%s is not included", o.Key())
 				continue
 			}
 			r <- o
@@ -613,7 +627,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.Manager != "" {
 		bufferSize = 100
 	}
-	todo := make(chan *object.Object, bufferSize)
+	todo := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
 	if config.BWLimit > 0 {

@@ -42,7 +42,7 @@ func (s *scsClient) Create() error {
 	return s.c.PutBucket(s.bucket, scs.ACLPrivate)
 }
 
-func (s *scsClient) Head(key string) (*Object, error) {
+func (s *scsClient) Head(key string) (Object, error) {
 	om, err := s.b.Head(key)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (s *scsClient) Head(key string) (*Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Object{Key: key, Size: om.ContentLength, Mtime: mtime, IsDir: strings.HasSuffix(key, "/")}, nil
+	return &obj{key: key, size: om.ContentLength, mtime: mtime, isDir: strings.HasSuffix(key, "/")}, nil
 }
 
 func (s *scsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -75,7 +75,7 @@ func (s *scsClient) Delete(key string) error {
 	return s.b.Delete(key)
 }
 
-func (s *scsClient) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s *scsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	if marker != "" {
 		if s.marker == "" {
 			// last page
@@ -94,21 +94,21 @@ func (s *scsClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 	// So we sort contents at here, can work both contents is ordered or not ordered.
 	// https://scs.sinacloud.com/doc/scs/api#get_bucket
 	sort.Slice(list.Contents, func(i, j int) bool { return list.Contents[i].Name < list.Contents[j].Name })
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		ob := list.Contents[i]
 		mtime, _ := time.Parse(time.RFC1123, ob.LastModified)
-		objs[i] = &Object{
-			Key:   ob.Name,
-			Size:  ob.Size,
-			Mtime: mtime,
-			IsDir: strings.HasSuffix(ob.Name, "/"),
+		objs[i] = &obj{
+			key:   ob.Name,
+			size:  ob.Size,
+			mtime: mtime,
+			isDir: strings.HasSuffix(ob.Name, "/"),
 		}
 	}
 	return objs, nil
 }
 
-func (s *scsClient) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (s *scsClient) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
 

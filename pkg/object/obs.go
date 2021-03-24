@@ -53,7 +53,7 @@ func (s *obsClient) Create() error {
 	return err
 }
 
-func (s *obsClient) Head(key string) (*Object, error) {
+func (s *obsClient) Head(key string) (Object, error) {
 	params := &obs.GetObjectMetadataInput{
 		Bucket: s.bucket,
 		Key:    key,
@@ -62,7 +62,7 @@ func (s *obsClient) Head(key string) (*Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Object{
+	return &obj{
 		key,
 		r.ContentLength,
 		r.LastModified,
@@ -123,7 +123,7 @@ func (s *obsClient) Delete(key string) error {
 	return err
 }
 
-func (s *obsClient) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s *obsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	input := &obs.ListObjectsInput{
 		Bucket: s.bucket,
 		Marker: marker,
@@ -135,15 +135,15 @@ func (s *obsClient) List(prefix, marker string, limit int64) ([]*Object, error) 
 		return nil, err
 	}
 	n := len(resp.Contents)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &Object{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }
 
-func (s *obsClient) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (s *obsClient) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
 

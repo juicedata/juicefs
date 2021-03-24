@@ -55,7 +55,7 @@ func (s *ks3) Create() error {
 	return err
 }
 
-func (s *ks3) Head(key string) (*Object, error) {
+func (s *ks3) Head(key string) (Object, error) {
 	param := s3.HeadObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
@@ -66,7 +66,7 @@ func (s *ks3) Head(key string) (*Object, error) {
 		return nil, err
 	}
 
-	return &Object{
+	return &obj{
 		key,
 		*r.ContentLength,
 		*r.LastModified,
@@ -131,7 +131,7 @@ func (s *ks3) Delete(key string) error {
 	return err
 }
 
-func (s *ks3) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s *ks3) List(prefix, marker string, limit int64) ([]Object, error) {
 	param := s3.ListObjectsInput{
 		Bucket:  &s.bucket,
 		Prefix:  &prefix,
@@ -143,15 +143,15 @@ func (s *ks3) List(prefix, marker string, limit int64) ([]*Object, error) {
 		return nil, err
 	}
 	n := len(resp.Contents)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &Object{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
+		objs[i] = &obj{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
 	}
 	return objs, nil
 }
 
-func (s *ks3) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (s *ks3) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
 

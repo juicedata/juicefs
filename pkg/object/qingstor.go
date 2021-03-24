@@ -45,13 +45,13 @@ func (q *qingstor) Create() error {
 	return err
 }
 
-func (q *qingstor) Head(key string) (*Object, error) {
+func (q *qingstor) Head(key string) (Object, error) {
 	r, err := q.bucket.HeadObject(key, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Object{
+	return &obj{
 		key,
 		*r.ContentLength,
 		*r.LastModified,
@@ -148,7 +148,7 @@ func (q *qingstor) Delete(key string) error {
 	return err
 }
 
-func (q *qingstor) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (q *qingstor) List(prefix, marker string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -163,10 +163,10 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]*Object, error) {
 		return nil, err
 	}
 	n := len(out.Keys)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		k := out.Keys[i]
-		objs[i] = &Object{
+		objs[i] = &obj{
 			*k.Key,
 			*k.Size,
 			time.Unix(int64(*k.Modified), 0),
@@ -176,7 +176,7 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]*Object, error) {
 	return objs, nil
 }
 
-func (q *qingstor) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (q *qingstor) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
 

@@ -40,7 +40,7 @@ func (s *nos) String() string {
 	return fmt.Sprintf("nos://%s", s.bucket)
 }
 
-func (s *nos) Head(key string) (*Object, error) {
+func (s *nos) Head(key string) (Object, error) {
 	objectRequest := &model.ObjectRequest{
 		Bucket: s.bucket,
 		Object: key,
@@ -54,7 +54,7 @@ func (s *nos) Head(key string) (*Object, error) {
 		return nil, fmt.Errorf("cannot get last modified time")
 	}
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
-	return &Object{
+	return &obj{
 		key,
 		r.ContentLength,
 		mtime,
@@ -120,7 +120,7 @@ func (s *nos) Delete(key string) error {
 	return s.client.DeleteObject(&param)
 }
 
-func (s *nos) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s *nos) List(prefix, marker string, limit int64) ([]Object, error) {
 	param := model.ListObjectsRequest{
 		Bucket:  s.bucket,
 		Prefix:  prefix,
@@ -132,14 +132,14 @@ func (s *nos) List(prefix, marker string, limit int64) ([]*Object, error) {
 		return nil, err
 	}
 	n := len(resp.Contents)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		mtime, err := time.Parse("2006-01-02T15:04:05 +0800", o.LastModified)
 		if err == nil {
 			mtime = mtime.Add(-8 * time.Hour)
 		}
-		objs[i] = &Object{o.Key, o.Size, mtime, strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{o.Key, o.Size, mtime, strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }

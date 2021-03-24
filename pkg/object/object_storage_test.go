@@ -19,9 +19,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -39,14 +42,14 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 	return string(data), nil
 }
 
-func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]*Object, error) {
+func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
 	r, err := s.List(prefix, marker, limit)
 	if err == nil {
 		return r, nil
 	}
 	ch, err := s.ListAll(prefix, marker)
 	if err == nil {
-		objs := make([]*Object, 0)
+		objs := make([]Object, 0)
 		for obj := range ch {
 			if len(objs) < int(limit) {
 				objs = append(objs, obj)
@@ -96,14 +99,14 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if len(objs) != 1 {
 			t.Fatalf("List should return 1 keys, but got %d", len(objs))
 		}
-		if objs[0].Key != "/test" {
-			t.Fatalf("First key should be /test, but got %s", objs[0].Key)
+		if objs[0].Key() != "/test" {
+			t.Fatalf("First key should be /test, but got %s", objs[0].Key())
 		}
-		if !strings.Contains(s.String(), "encrypted") && objs[0].Size != 5 {
-			t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size)
+		if !strings.Contains(s.String(), "encrypted") && objs[0].Size() != 5 {
+			t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size())
 		}
 		now := time.Now()
-		if objs[0].Mtime.Before(now.Add(-10*time.Second)) || objs[0].Mtime.After(now.Add(time.Second*10)) {
+		if objs[0].Mtime().Before(now.Add(-10*time.Second)) || objs[0].Mtime().After(now.Add(time.Second*10)) {
 			t.Fatalf("Mtime of key should be within 10 seconds")
 		}
 	} else {
@@ -424,4 +427,28 @@ func TestEncrypted(t *testing.T) {
 	dc := NewAESEncryptor(kc)
 	es := NewEncrypted(s, dc)
 	testStorage(t, es)
+}
+
+func TestMarsharl(t *testing.T) {
+	s, _ := CreateStorage("mem", "", "", "")
+	_ = s.Put("hello", bytes.NewReader([]byte("world")))
+	fs := s.(FileSystem)
+	_ = fs.Chown("hello", "user", "group")
+	_ = fs.Chmod("hello", 0764)
+	o, _ := s.Head("hello")
+
+	m := MarshalObject(o)
+	d, _ := json.Marshal(m)
+	var m2 map[string]interface{}
+	if err := json.Unmarshal(d, &m2); err != nil {
+		t.Fatalf("unmarshal: %s", err)
+	}
+	o2 := UnmarshalObject(m2)
+	if math.Abs(float64(o2.Mtime().UnixNano()-o.Mtime().UnixNano())) > 1000 {
+		t.Fatalf("mtime %s != %s", o2.Mtime(), o.Mtime())
+	}
+	o2.(*file).mtime = o.Mtime()
+	if !reflect.DeepEqual(o, o2) {
+		t.Fatalf("%+v != %+v", o2, o)
+	}
 }

@@ -41,12 +41,12 @@ func (u *up) Create() error {
 	return nil
 }
 
-func (u *up) Head(key string) (*Object, error) {
+func (u *up) Head(key string) (Object, error) {
 	info, err := u.c.GetInfo("/" + key)
 	if err != nil {
 		return nil, err
 	}
-	return &Object{
+	return &obj{
 		key,
 		info.Size,
 		info.Time,
@@ -90,7 +90,7 @@ func (u *up) Copy(dst, src string) error {
 	})
 }
 
-func (u *up) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (u *up) List(prefix, marker string, limit int64) ([]Object, error) {
 	if u.listing == nil {
 		listing := make(chan *upyun.FileInfo, limit)
 		go func() {
@@ -103,7 +103,7 @@ func (u *up) List(prefix, marker string, limit int64) ([]*Object, error) {
 		}()
 		u.listing = listing
 	}
-	objs := make([]*Object, 0, limit)
+	objs := make([]Object, 0, limit)
 	for len(objs) < int(limit) {
 		fi, ok := <-u.listing
 		if !ok {
@@ -111,7 +111,7 @@ func (u *up) List(prefix, marker string, limit int64) ([]*Object, error) {
 		}
 		key := prefix + "/" + fi.Name
 		if !fi.IsDir && key > marker {
-			objs = append(objs, &Object{key, fi.Size, fi.Time, strings.HasSuffix(key, "/")})
+			objs = append(objs, &obj{key, fi.Size, fi.Time, strings.HasSuffix(key, "/")})
 		}
 	}
 	if len(objs) > 0 {
