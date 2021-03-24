@@ -20,12 +20,24 @@ import (
 	"time"
 )
 
-type Object struct {
-	Key   string
-	Size  int64
-	Mtime time.Time // Unix seconds
-	IsDir bool
+type Object interface {
+	Key() string
+	Size() int64
+	Mtime() time.Time
+	IsDir() bool
 }
+
+type obj struct {
+	key   string
+	size  int64
+	mtime time.Time
+	isDir bool
+}
+
+func (o *obj) Key() string      { return o.key }
+func (o *obj) Size() int64      { return o.size }
+func (o *obj) Mtime() time.Time { return o.mtime }
+func (o *obj) IsDir() bool      { return o.isDir }
 
 type MultipartUpload struct {
 	MinPartSize int
@@ -60,11 +72,11 @@ type ObjectStorage interface {
 	Delete(key string) error
 
 	// Head returns some information about the object or an error if not found.
-	Head(key string) (*Object, error)
+	Head(key string) (Object, error)
 	// List returns a list of objects.
-	List(prefix, marker string, limit int64) ([]*Object, error)
+	List(prefix, marker string, limit int64) ([]Object, error)
 	// ListAll returns all the objects as an channel.
-	ListAll(prefix, marker string) (<-chan *Object, error)
+	ListAll(prefix, marker string) (<-chan Object, error)
 
 	// CreateMultipartUpload starts to upload a large object part by part.
 	CreateMultipartUpload(key string) (*MultipartUpload, error)

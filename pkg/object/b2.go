@@ -39,13 +39,13 @@ func (c *b2client) Create() error {
 	return nil
 }
 
-func (c *b2client) Head(key string) (*Object, error) {
+func (c *b2client) Head(key string) (Object, error) {
 	attr, err := c.bucket.Object(key).Attrs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Object{
+	return &obj{
 		attr.Name,
 		attr.Size,
 		attr.UploadTimestamp,
@@ -85,7 +85,7 @@ func (c *b2client) Delete(key string) error {
 	return c.bucket.Object(key).Delete(ctx)
 }
 
-func (c *b2client) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (c *b2client) List(prefix, marker string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -103,12 +103,12 @@ func (c *b2client) List(prefix, marker string, limit int64) ([]*Object, error) {
 	c.cursor = nc
 
 	n := len(objects)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		attr, err := objects[i].Attrs(ctx)
 		if err == nil {
 			// attr.LastModified is not correct
-			objs[i] = &Object{
+			objs[i] = &obj{
 				attr.Name,
 				attr.Size,
 				attr.UploadTimestamp,

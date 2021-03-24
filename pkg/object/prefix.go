@@ -39,13 +39,18 @@ func (p *withPrefix) Create() error {
 	return p.os.Create()
 }
 
-func (p *withPrefix) Head(key string) (*Object, error) {
-	obj, err := p.os.Head(p.prefix + key)
+func (p *withPrefix) Head(key string) (Object, error) {
+	o, err := p.os.Head(p.prefix + key)
 	if err != nil {
 		return nil, err
 	}
-	obj.Key = obj.Key[len(p.prefix):]
-	return obj, nil
+	switch po := o.(type) {
+	case *obj:
+		po.key = po.key[len(p.prefix):]
+	case *file:
+		po.key = po.key[len(p.prefix):]
+	}
+	return o, nil
 }
 
 func (p *withPrefix) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -60,19 +65,24 @@ func (p *withPrefix) Delete(key string) error {
 	return p.os.Delete(p.prefix + key)
 }
 
-func (p *withPrefix) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (p *withPrefix) List(prefix, marker string, limit int64) ([]Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
 	objs, err := p.os.List(p.prefix+prefix, marker, limit)
 	ln := len(p.prefix)
-	for _, obj := range objs {
-		obj.Key = obj.Key[ln:]
+	for _, o := range objs {
+		switch p := o.(type) {
+		case *obj:
+			p.key = p.key[ln:]
+		case *file:
+			p.key = p.key[ln:]
+		}
 	}
 	return objs, err
 }
 
-func (p *withPrefix) ListAll(prefix, marker string) (<-chan *Object, error) {
+func (p *withPrefix) ListAll(prefix, marker string) (<-chan Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
@@ -80,12 +90,17 @@ func (p *withPrefix) ListAll(prefix, marker string) (<-chan *Object, error) {
 	if err != nil {
 		return r, err
 	}
-	r2 := make(chan *Object, 10240)
+	r2 := make(chan Object, 10240)
 	ln := len(p.prefix)
 	go func() {
 		for o := range r {
 			if o != nil {
-				o.Key = o.Key[ln:]
+				switch p := o.(type) {
+				case *obj:
+					p.key = p.key[ln:]
+				case *file:
+					p.key = p.key[ln:]
+				}
 			}
 			r2 <- o
 		}

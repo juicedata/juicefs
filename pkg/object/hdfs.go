@@ -27,7 +27,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/colinmarc/hdfs/v2"
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
@@ -50,15 +49,15 @@ func (h *hdfsclient) path(key string) string {
 	return "/" + key
 }
 
-func (h *hdfsclient) Head(key string) (*Object, error) {
+func (h *hdfsclient) Head(key string) (Object, error) {
 	info, err := h.c.Stat(h.path(key))
 	if err != nil {
 		return nil, err
 	}
 
 	hinfo := info.(*hdfs.FileInfo)
-	f := &File{
-		Object{
+	f := &file{
+		obj{
 			key,
 			info.Size(),
 			info.ModTime(),
@@ -68,24 +67,24 @@ func (h *hdfsclient) Head(key string) (*Object, error) {
 		hinfo.OwnerGroup(),
 		info.Mode(),
 	}
-	if f.Owner == superuser {
-		f.Owner = "root"
+	if f.owner == superuser {
+		f.owner = "root"
 	}
-	if f.Group == supergroup {
-		f.Group = "root"
+	if f.group == supergroup {
+		f.group = "root"
 	}
 	// stickybit from HDFS is different than golang
-	if f.Mode&01000 != 0 {
-		f.Mode &= ^os.FileMode(01000)
-		f.Mode |= os.ModeSticky
+	if f.mode&01000 != 0 {
+		f.mode &= ^os.FileMode(01000)
+		f.mode |= os.ModeSticky
 	}
 	if info.IsDir() {
-		f.Size = 0
-		if !strings.HasSuffix(f.Key, "/") {
-			f.Key += "/"
+		f.size = 0
+		if !strings.HasSuffix(f.key, "/") {
+			f.key += "/"
 		}
 	}
-	return (*Object)(unsafe.Pointer(f)), nil
+	return f, nil
 }
 
 type withCloser struct {
@@ -166,7 +165,7 @@ func (h *hdfsclient) Delete(key string) error {
 	return err
 }
 
-func (h *hdfsclient) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (h *hdfsclient) List(prefix, marker string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
 
@@ -219,8 +218,8 @@ func (h *hdfsclient) walk(path string, walkFn filepath.WalkFunc) error {
 	return nil
 }
 
-func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
-	listed := make(chan *Object, 10240)
+func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
+	listed := make(chan Object, 10240)
 	root := h.path(prefix)
 	_, err := h.c.Stat(root)
 	if err != nil && err.(*os.PathError).Err == os.ErrNotExist && !strings.HasSuffix(prefix, "/") {
@@ -250,8 +249,8 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 				return nil
 			}
 			hinfo := info.(*hdfs.FileInfo)
-			f := &File{
-				Object{
+			f := &file{
+				obj{
 					key,
 					info.Size(),
 					info.ModTime(),
@@ -261,24 +260,24 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan *Object, error) {
 				hinfo.OwnerGroup(),
 				info.Mode(),
 			}
-			if f.Owner == superuser {
-				f.Owner = "root"
+			if f.owner == superuser {
+				f.owner = "root"
 			}
-			if f.Group == supergroup {
-				f.Group = "root"
+			if f.group == supergroup {
+				f.group = "root"
 			}
 			// stickybit from HDFS is different than golang
-			if f.Mode&01000 != 0 {
-				f.Mode &= ^os.FileMode(01000)
-				f.Mode |= os.ModeSticky
+			if f.mode&01000 != 0 {
+				f.mode &= ^os.FileMode(01000)
+				f.mode |= os.ModeSticky
 			}
 			if info.IsDir() {
-				f.Size = 0
+				f.size = 0
 				if path != root || !strings.HasSuffix(root, "/") {
-					f.Key += "/"
+					f.key += "/"
 				}
 			}
-			listed <- (*Object)(unsafe.Pointer(f))
+			listed <- f
 			return nil
 		})
 		close(listed)

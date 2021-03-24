@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+
+	"github.com/pkg/sftp"
 )
 
 var uids = make(map[int]string)
@@ -31,23 +33,39 @@ var users = make(map[string]int)
 var groups = make(map[string]int)
 var mutex sync.Mutex
 
+func userName(uid int) string {
+	name, ok := uids[uid]
+	if !ok {
+		if u, err := user.LookupId(strconv.Itoa(uid)); err == nil {
+			name = u.Username
+			uids[uid] = name
+		}
+	}
+	return name
+}
+
+func groupName(gid int) string {
+	name, ok := gids[gid]
+	if !ok {
+		if g, err := user.LookupGroupId(strconv.Itoa(gid)); err == nil {
+			name = g.Name
+			gids[gid] = name
+		}
+	}
+	return name
+}
+
 func getOwnerGroup(info os.FileInfo) (string, string) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	var owner, group string
-	if st, ok := info.Sys().(*syscall.Stat_t); ok {
-		if u, ok := uids[int(st.Uid)]; ok {
-			owner = u
-		} else if u, err := user.LookupId(strconv.Itoa(int(st.Uid))); err == nil {
-			owner = u.Username
-			uids[int(st.Uid)] = owner
-		}
-		if g, ok := gids[int(st.Gid)]; ok {
-			group = g
-		} else if g, err := user.LookupGroupId(strconv.Itoa(int(st.Gid))); err == nil {
-			group = g.Name
-			gids[int(st.Gid)] = group
-		}
+	switch st := info.Sys().(type) {
+	case *syscall.Stat_t:
+		owner = userName(int(st.Uid))
+		group = groupName(int(st.Gid))
+	case *sftp.FileStat:
+		owner = userName(int(st.UID))
+		group = groupName(int(st.GID))
 	}
 	return owner, group
 }

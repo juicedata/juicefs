@@ -149,7 +149,7 @@ func parseError(resp *http.Response) error {
 	return fmt.Errorf("status: %v, message: %s", resp.StatusCode, string(data))
 }
 
-func (s *RestfulStorage) Head(key string) (*Object, error) {
+func (s *RestfulStorage) Head(key string) (Object, error) {
 	resp, err := s.request("HEAD", key, nil, nil)
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func (s *RestfulStorage) Head(key string) (*Object, error) {
 		return nil, fmt.Errorf("cannot get last modified time")
 	}
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
-	return &Object{
+	return &obj{
 		key,
 		resp.ContentLength,
 		mtime,
@@ -228,7 +228,7 @@ func (s *RestfulStorage) Delete(key string) error {
 	return nil
 }
 
-func (s *RestfulStorage) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (s *RestfulStorage) List(prefix, marker string, limit int64) ([]Object, error) {
 	return nil, errors.New("Not implemented")
 }
 

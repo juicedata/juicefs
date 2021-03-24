@@ -42,14 +42,14 @@ func (b *wasb) Create() error {
 	return err
 }
 
-func (b *wasb) Head(key string) (*Object, error) {
+func (b *wasb) Head(key string) (Object, error) {
 	blob := b.container.GetBlobReference(key)
 	err := blob.GetProperties(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Object{
+	return &obj{
 		blob.Name,
 		blob.Properties.ContentLength,
 		time.Time(blob.Properties.LastModified),
@@ -84,7 +84,7 @@ func (b *wasb) Delete(key string) error {
 	return b.container.GetBlobReference(key).Delete(nil)
 }
 
-func (b *wasb) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (b *wasb) List(prefix, marker string, limit int64) ([]Object, error) {
 	if marker != "" {
 		if b.marker == "" {
 			// last page
@@ -103,11 +103,11 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]*Object, error) {
 	}
 	b.marker = resp.NextMarker
 	n := len(resp.Blobs)
-	objs := make([]*Object, n)
+	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		blob := resp.Blobs[i]
 		mtime := time.Time(blob.Properties.LastModified)
-		objs[i] = &Object{
+		objs[i] = &obj{
 			blob.Name,
 			int64(blob.Properties.ContentLength),
 			mtime,

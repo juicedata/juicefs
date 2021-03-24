@@ -88,18 +88,18 @@ func fsck(ctx *cli.Context) error {
 		if obj == nil {
 			break // failed listing
 		}
-		if obj.IsDir {
+		if obj.IsDir() {
 			continue
 		}
 
-		logger.Debugf("found block %s", obj.Key)
-		parts := strings.Split(obj.Key, "/")
+		logger.Debugf("found block %s", obj.Key())
+		parts := strings.Split(obj.Key(), "/")
 		if len(parts) != 3 {
 			continue
 		}
 		name := parts[2]
-		blocks[name] = obj.Size
-		totalBlockBytes += obj.Size
+		blocks[name] = obj.Size()
+		totalBlockBytes += obj.Size()
 	}
 	logger.Infof("Found %d blocks (%d bytes)", len(blocks), totalBlockBytes)
 

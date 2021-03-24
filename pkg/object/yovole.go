@@ -64,7 +64,7 @@ func (u *yovole) Create() error {
 
 // ListOutput presents output for ListObjects.
 type ListResult struct {
-	ObjectSummaries []*ObjectSummaries
+	ObjectSummaries []ObjectSummaries
 	BucketName      string
 	Prefix          string
 	MaxKeys         int
@@ -76,7 +76,7 @@ type ObjectSummaries struct {
 	LastModified int64
 }
 
-func (u *yovole) List(prefix, marker string, limit int64) ([]*Object, error) {
+func (u *yovole) List(prefix, marker string, limit int64) ([]Object, error) {
 	uri, _ := url.ParseRequestURI(u.endpoint)
 
 	query := url.Values{}
@@ -116,9 +116,9 @@ func (u *yovole) List(prefix, marker string, limit int64) ([]*Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	objs := make([]*Object, 0)
+	objs := make([]Object, 0)
 	for _, item := range out.ObjectSummaries {
-		objs = append(objs, &Object{item.Key, item.Size, time.Unix(item.LastModified, 0), strings.HasSuffix(item.Key, "/")})
+		objs = append(objs, &obj{item.Key, item.Size, time.Unix(item.LastModified, 0), strings.HasSuffix(item.Key, "/")})
 	}
 	return objs, nil
 }

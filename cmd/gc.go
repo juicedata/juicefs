@@ -178,29 +178,29 @@ func gc(ctx *cli.Context) error {
 		}()
 	}
 
-	foundLeaked := func(obj *object.Object) {
-		p.leakedBytes += obj.Size
+	foundLeaked := func(obj object.Object) {
+		p.leakedBytes += obj.Size()
 		p.leaked++
 		if ctx.Bool("delete") {
-			leakedObj <- obj.Key
+			leakedObj <- obj.Key()
 		}
 	}
 	for obj := range objs {
 		if obj == nil {
 			break // failed listing
 		}
-		if obj.IsDir {
+		if obj.IsDir() {
 			continue
 		}
-		if obj.Mtime.After(maxMtime) || obj.Mtime.Unix() == 0 {
-			logger.Debugf("ignore new block: %s %s", obj.Key, obj.Mtime)
-			skippedBytes += obj.Size
+		if obj.Mtime().After(maxMtime) || obj.Mtime().Unix() == 0 {
+			logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
+			skippedBytes += obj.Size()
 			skipped++
 			continue
 		}
 
-		logger.Debugf("found block %s", obj.Key)
-		parts := strings.Split(obj.Key, "/")
+		logger.Debugf("found block %s", obj.Key())
+		parts := strings.Split(obj.Key(), "/")
 		if len(parts) != 3 {
 			continue
 		}
@@ -212,7 +212,7 @@ func gc(ctx *cli.Context) error {
 		cid, _ := strconv.Atoi(parts[0])
 		size := keys[uint64(cid)]
 		if size == 0 {
-			logger.Debugf("find leaked object: %s, size: %d", obj.Key, obj.Size)
+			logger.Debugf("find leaked object: %s, size: %d", obj.Key(), obj.Size())
 			foundLeaked(obj)
 			continue
 		}
