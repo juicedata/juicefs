@@ -60,3 +60,7 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 
 1. 用 root 用户执行 `juicefs mount` 命令
 2. 修改 FUSE 的配置文件以及增加 `allow_other` 挂载选项，请查看[这个文档](../en/fuse_mount_options.md#allow_other)了解更多信息。
+
+## `/go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1` 或者 `/go/pkg/tool/linux_amd64/compile: signal: killed`
+
+这个错误有可能是因为 GCC 版本过低导致，请尝试升级 GCC 到 5.4 及以上版本。

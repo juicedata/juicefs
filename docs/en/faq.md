@@ -60,3 +60,7 @@ There are two solutions to this problem:
 
 1. Execute `juicefs mount` command with root user
 2. Modify FUSE configuration and add `allow_other` mount option, see [this document](fuse_mount_options.md#allow_other) for more information.
+
+## `/go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1` or `/go/pkg/tool/linux_amd64/compile: signal: killed`
+
+This error may caused by GCC version is too low, please try to upgrade your GCC to 5.4+.
