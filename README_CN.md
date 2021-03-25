@@ -60,9 +60,9 @@ $ make
 
 ### 依赖
 
-需要 Redis（2.2 及以上）服务器来存储元数据，请参考 [Redis Quick Start](https://redis.io/topics/quickstart)。
+需要 Redis（2.8 及以上）服务器来存储元数据，请参考 [Redis Quick Start](https://redis.io/topics/quickstart)。
 
-如果是 macOS 系统，还需要 [macFUSE](https://osxfuse.github.io/)。
+如果是 macOS 系统，还需要 [macFUSE](https://osxfuse.github.io)。
 
 还需要一个对象存储，测试时可以用本地目录代替。
 
