@@ -57,9 +57,9 @@ $ make
 
 ### Dependency
 
-A Redis server (>= 2.2) is needed for metadata, please follow [Redis Quick Start](https://redis.io/topics/quickstart).
+A Redis server (>= 2.8) is needed for metadata, please follow [Redis Quick Start](https://redis.io/topics/quickstart).
 
-[macFUSE](https://osxfuse.github.io/) is also needed for macOS.
+[macFUSE](https://osxfuse.github.io) is also needed for macOS.
 
 The last one you need is object storage. There are many options for object storage, local disk is the easiest one to get started.
 
