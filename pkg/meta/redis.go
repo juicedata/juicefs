@@ -47,6 +47,13 @@ import (
 	Sessions: sessions -> [ $sid -> heartbeat ]
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$chunkid_$size -> refcount
+
+	Redis features:
+	  Sorted Set: 1.2+
+	  Hash Set: 2.0+
+	  Transaction: 2.2+
+	  Scripting: 2.6+
+	  Scan: 2.8+
 */
 
 var logger = utils.GetLogger("juicefs")
@@ -451,7 +458,17 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		var res interface{}
 		res, err = r.rdb.EvalSha(ctx, r.shaLookup, []string{entryKey, name}).Result()
 		if err != nil {
-			if strings.Contains(err.Error(), "NOSCRIPT") || strings.Contains(err.Error(), "Error running script") {
+			if strings.Contains(err.Error(), "NOSCRIPT") {
+				var err2 error
+				r.shaLookup, err2 = r.rdb.ScriptLoad(Background, scriptLookup).Result()
+				if err2 != nil {
+					logger.Warnf("load scriptLookup: %s", err2)
+				} else {
+					logger.Info("loaded script for lookup")
+				}
+				return r.Lookup(ctx, parent, name, inode, attr)
+			}
+			if strings.Contains(err.Error(), "Error running script") {
 				logger.Warnf("eval lookup: %s", err)
 				r.shaLookup = ""
 				return r.Lookup(ctx, parent, name, inode, attr)
