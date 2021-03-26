@@ -140,6 +140,9 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}
 	}
 
+	cacheMiss.Add(1)
+	cacheMissBytes.Add(float64(len(p)))
+
 	if c.store.seekable && boff > 0 && len(p) <= blockSize/4 {
 		// partial read
 		st := time.Now()
@@ -152,8 +155,6 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		c.store.fetcher.fetch(key)
 		if err == nil {
 			defer in.Close()
-			cacheMiss.Add(1)
-			cacheMissBytes.Add(float64(len(p)))
 			return io.ReadFull(in, p)
 		}
 	}
@@ -637,8 +638,6 @@ func (store *cachedStore) load(key string, page *Page, cache bool) (err error) {
 		return fmt.Errorf("read %s fully: %s (%d < %d) after %s (tried %d)", key, err, n, len(page.Data),
 			time.Since(start), tried)
 	}
-	cacheMiss.Add(1)
-	cacheMissBytes.Add(float64(len(page.Data)))
 	if cache {
 		store.bcache.cache(key, page)
 	}
