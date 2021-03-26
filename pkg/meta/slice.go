@@ -87,6 +87,16 @@ func (s *slice) visit(f func(*slice)) {
 	right.visit(f)
 }
 
+func marshalSlice(pos uint32, chunkid uint64, size, off, len uint32) []byte {
+	w := utils.NewBuffer(24)
+	w.Put32(pos)
+	w.Put64(chunkid)
+	w.Put32(size)
+	w.Put32(off)
+	w.Put32(len)
+	return w.Bytes()
+}
+
 func readSlices(vals []string) []*slice {
 	slices := make([]slice, len(vals))
 	ss := make([]*slice, len(vals))
