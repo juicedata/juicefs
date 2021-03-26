@@ -291,14 +291,16 @@ func TestCompaction(t *testing.T) {
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
+	_ = m.Unlink(ctx, 1, "f")
 	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
 	defer func() {
 		_ = m.Unlink(ctx, 1, "f")
 	}()
+	var size uint32 = 1000000
 	for i := 0; i < 50; i++ {
-		if st := m.Write(ctx, inode, 0, uint32(i*100), Slice{Chunkid: uint64(i) + 1, Size: 100, Len: 100}); st != 0 {
+		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: uint64(i) + 1, Size: size, Len: size}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
 		time.Sleep(time.Millisecond)
@@ -317,11 +319,15 @@ func TestCompaction(t *testing.T) {
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
-	if len(chunks) > 1 {
+	if len(chunks) > 3 {
 		t.Fatalf("inode %d should be compacted after read, but have %d slices", inode, len(chunks))
 	}
-	if chunks[0].Size != 5000 {
-		t.Fatalf("size of slice should be 5000, but got %d", chunks[0].Size)
+	var total uint32
+	for _, s := range chunks {
+		total += s.Len
+	}
+	if total != size*50 {
+		t.Fatalf("size of slice should be %d, but got %d", size*50, total)
 	}
 	l.Lock()
 	deletes := len(deleted)

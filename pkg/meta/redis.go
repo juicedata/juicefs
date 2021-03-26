@@ -659,34 +659,17 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&t), 0)
 			if length > old {
 				// zero out from old to length
-				w := utils.NewBuffer(24)
-				w.Put32(uint32(old % ChunkSize))
-				w.Put64(0)
-				w.Put32(0)
-				w.Put32(0)
+				var l = uint32(length - old)
 				if length > (old/ChunkSize+1)*ChunkSize {
-					w.Put32(ChunkSize - uint32(old%ChunkSize))
-				} else {
-					w.Put32(uint32(length - old))
+					l = ChunkSize - uint32(old%ChunkSize)
 				}
-				pipe.RPush(ctx, r.chunkKey(inode, uint32(old/ChunkSize)), w.Bytes())
-				w = utils.NewBuffer(24)
-				w.Put32(0)
-				w.Put64(0)
-				w.Put32(0)
-				w.Put32(0)
-				w.Put32(ChunkSize)
+				pipe.RPush(ctx, r.chunkKey(inode, uint32(old/ChunkSize)), marshalSlice(uint32(old%ChunkSize), 0, 0, 0, l))
+				buf := marshalSlice(0, 0, 0, 0, ChunkSize)
 				for _, indx := range zeroChunks {
-					pipe.RPushX(ctx, r.chunkKey(inode, indx), w.Bytes())
+					pipe.RPushX(ctx, r.chunkKey(inode, indx), buf)
 				}
 				if length > (old/ChunkSize+1)*ChunkSize && length%ChunkSize > 0 {
-					w := utils.NewBuffer(24)
-					w.Put32(0)
-					w.Put64(0)
-					w.Put32(0)
-					w.Put32(0)
-					w.Put32(uint32(length % ChunkSize))
-					pipe.RPush(ctx, r.chunkKey(inode, uint32(length/ChunkSize)), w.Bytes())
+					pipe.RPush(ctx, r.chunkKey(inode, uint32(length/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(length%ChunkSize)))
 				}
 			}
 			pipe.IncrBy(ctx, usedSpace, align4K(length)-align4K(old))
@@ -765,13 +748,7 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 					if coff+size > ChunkSize {
 						l = ChunkSize - coff
 					}
-					w := utils.NewBuffer(24)
-					w.Put32(uint32(coff))
-					w.Put64(0)
-					w.Put32(0)
-					w.Put32(0)
-					w.Put32(uint32(l))
-					pipe.RPush(ctx, r.chunkKey(inode, indx), w.Bytes())
+					pipe.RPush(ctx, r.chunkKey(inode, indx), marshalSlice(uint32(coff), 0, 0, 0, uint32(l)))
 					off += l
 					size -= l
 				}
@@ -1671,16 +1648,9 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 
-		w := utils.NewBuffer(24)
-		w.Put32(off)
-		w.Put64(slice.Chunkid)
-		w.Put32(slice.Size)
-		w.Put32(slice.Off)
-		w.Put32(slice.Len)
-
 		var rpush *redis.IntCmd
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			rpush = pipe.RPush(ctx, r.chunkKey(inode, indx), w.Bytes())
+			rpush = pipe.RPush(ctx, r.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 			// most of chunk are used by single inode, so use that as the default (1 == not exists)
 			// pipe.Incr(ctx, r.sliceKey(slice.Chunkid, slice.Size))
 			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
@@ -1770,36 +1740,18 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 						indx := uint32(doff / ChunkSize)
 						dpos := uint32(doff % ChunkSize)
 						if dpos+s.Len > ChunkSize {
-							w := utils.NewBuffer(24)
-							w.Put32(dpos)
-							w.Put64(s.Chunkid)
-							w.Put32(s.Size)
-							w.Put32(s.Off)
-							w.Put32(ChunkSize - dpos)
-							pipe.RPush(ctx, r.chunkKey(fout, indx), w.Bytes())
+							pipe.RPush(ctx, r.chunkKey(fout, indx), marshalSlice(dpos, s.Chunkid, s.Size, s.Off, ChunkSize-dpos))
 							if s.Chunkid > 0 {
 								pipe.Incr(ctx, r.sliceKey(s.Chunkid, s.Size))
 							}
 
 							skip := ChunkSize - dpos
-							w = utils.NewBuffer(24)
-							w.Put32(0)
-							w.Put64(s.Chunkid)
-							w.Put32(s.Size)
-							w.Put32(s.Off + skip)
-							w.Put32(s.Len - skip)
-							pipe.RPush(ctx, r.chunkKey(fout, indx+1), w.Bytes())
+							pipe.RPush(ctx, r.chunkKey(fout, indx+1), marshalSlice(0, s.Chunkid, s.Size, s.Off+skip, s.Len-skip))
 							if s.Chunkid > 0 {
 								pipe.Incr(ctx, r.sliceKey(s.Chunkid, s.Size))
 							}
 						} else {
-							w := utils.NewBuffer(24)
-							w.Put32(dpos)
-							w.Put64(s.Chunkid)
-							w.Put32(s.Size)
-							w.Put32(s.Off)
-							w.Put32(s.Len)
-							pipe.RPush(ctx, r.chunkKey(fout, indx), w.Bytes())
+							pipe.RPush(ctx, r.chunkKey(fout, indx), marshalSlice(dpos, s.Chunkid, s.Size, s.Off, s.Len))
 							if s.Chunkid > 0 {
 								pipe.Incr(ctx, r.sliceKey(s.Chunkid, s.Size))
 							}
@@ -2049,17 +2001,45 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 		return
 	}
 
-	ss := readSlices(vals)
-	chunks := buildSlice(ss)
-	var size uint32
-	for _, s := range chunks {
-		size += s.Len
+	var ss []*slice
+	var chunks []Slice
+	var skipped int
+	var pos, size uint32
+	for skipped < len(vals) {
+		// the slices will be formed as a tree after buildSlice(),
+		// we should create new one (or remove the link in tree)
+		ss = readSlices(vals[skipped:])
+		chunks = buildSlice(ss)
+		pos, size = 0, 0
+		if chunks[0].Chunkid == 0 {
+			pos = chunks[0].Len
+			chunks = chunks[1:]
+		}
+		for _, s := range chunks {
+			size += s.Len
+		}
+		first := ss[0]
+		if first.len < (1<<20) || first.len*5 < size {
+			// it's too small
+			break
+		}
+		isFirst := func(pos uint32, s Slice) bool {
+			return pos == first.pos && s.Chunkid == first.chunkid && s.Off == first.off && s.Len == first.len
+		}
+		if !isFirst(pos, chunks[0]) {
+			// it's not the first slice, compact it
+			break
+		}
+		skipped++
 	}
-	// TODO: skip first few large slices
-	logger.Debugf("compact %d %d %d %d", inode, indx, len(vals), len(chunks))
+	if len(ss) == 0 {
+		return
+	}
+
+	logger.Debugf("compact %d %d %d %d %d", inode, indx, pos, len(ss), len(chunks))
 	err = r.newMsg(CompactChunk, chunks, chunkid)
 	if err != nil {
-		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(vals), err)
+		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
 		return
 	}
 	var rs []*redis.IntCmd
@@ -2079,15 +2059,12 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 			}
 		}
 
-		w := utils.NewBuffer(24)
-		w.Put32(0)
-		w.Put64(chunkid)
-		w.Put32(size)
-		w.Put32(0)
-		w.Put32(size)
 		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, key, int64(len(vals)), -1)
-			pipe.LPush(ctx, key, w.Bytes())
+			pipe.LPush(ctx, key, marshalSlice(pos, chunkid, size, 0, size))
+			for i := skipped; i > 0; i-- {
+				pipe.LPush(ctx, key, vals[i-1])
+			}
 			pipe.IncrBy(ctx, r.sliceKey(chunkid, size), 0) // create the key to tracking it
 			for _, s := range ss {
 				rs = append(rs, pipe.Decr(ctx, r.sliceKey(s.chunkid, s.size)))
