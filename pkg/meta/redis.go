@@ -2032,11 +2032,11 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 		}
 		skipped++
 	}
-	if len(ss) == 0 {
+	if len(ss) < 2 {
 		return
 	}
 
-	logger.Debugf("compact %d %d %d %d %d", inode, indx, pos, len(ss), len(chunks))
+	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
 	err = r.newMsg(CompactChunk, chunks, chunkid)
 	if err != nil {
 		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
@@ -2084,6 +2084,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 
 	if errno == syscall.EINVAL {
 		r.rdb.Decr(ctx, r.sliceKey(chunkid, size))
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
 		r.deleteSlice(ctx, chunkid, size)
 	} else if errno == 0 {
 		for i, s := range ss {
