@@ -14,7 +14,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.10.0-62 (2021-03-01 64b83a8)
+   0.11.0-56 (2021-03-26 35779ef)
 
 COMMANDS:
    format     format a volume
@@ -22,16 +22,18 @@ COMMANDS:
    umount     unmount a volume
    gateway    S3-compatible gateway
    sync       sync between two storage
-   rmr        remove all files in a directory
+   rmr        remove directories recursively
    benchmark  run benchmark, including read/write/stat big/small files
+   gc         collect any leaked objects
+   fsck       Check consistency of file system
    help, h    Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --debug, -v    enable debug log (default: false)
-   --quiet, -q    only warning and errors (default: false)
-   --trace        enable trace log (default: false)
-   --help, -h     show help (default: false)
-   --version, -V  print only the version (default: false)
+   --verbose, --debug, -v  enable debug log (default: false)
+   --quiet, -q             only warning and errors (default: false)
+   --trace                 enable trace log (default: false)
+   --help, -h              show help (default: false)
+   --version, -V           print only the version (default: false)
 
 COPYRIGHT:
    AGPLv3
@@ -332,3 +334,35 @@ size of small file in MiB (default: 0.1)
 
 `--smallfile-count value`\
 number of small files (default: 100)
+
+## juicefs gc
+
+### Description
+
+Collect any leaked objects.
+
+### Synopsis
+
+```
+juicefs gc [command options] REDIS-URL
+```
+
+### Options
+
+`--delete`\
+deleted leaked objects (default: false)
+
+`--threads value`\
+number threads to delete leaked objects (default: 50)
+
+## juicefs fsck
+
+### Description
+
+Check consistency of file system.
+
+### Synopsis
+
+```
+juicefs fsck [command options] REDIS-URL
+```
