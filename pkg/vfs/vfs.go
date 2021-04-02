@@ -462,8 +462,9 @@ func Release(ctx Context, ino Ino, fh uint64) (err syscall.Errno) {
 			f.Lock()
 			// rwlock_wait_for_unlock:
 			for (f.writing | f.writers | f.readers) != 0 {
-				if f.cond.WaitWithTimeout(time.Millisecond*100) && ctx.Canceled() {
+				if f.cond.WaitWithTimeout(time.Second) && ctx.Canceled() {
 					f.Unlock()
+					logger.Warnf("write lock %d interrupted", f.inode)
 					err = syscall.EINTR
 					return
 				}
