@@ -580,11 +580,13 @@ func (f *fileReader) shouldStop() bool {
 }
 
 func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, syscall.Errno) {
+	start := time.Now()
 	for _, req := range reqs {
 		s := req.s
 		for s.state != READY && uint64(s.currentPos) < req.end() {
-			if s.cond.WaitWithTimeout(time.Millisecond * 10) {
+			if s.cond.WaitWithTimeout(time.Second) {
 				if ctx.Canceled() {
+					logger.Warnf("read %d interrupted after %d", f.inode, time.Since(start))
 					return 0, syscall.EINTR
 				}
 			}

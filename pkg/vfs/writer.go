@@ -278,13 +278,16 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 			time.Sleep(time.Millisecond * 100)
 		}
 	}
+
+	s := time.Now()
 	f.Lock()
 	defer f.Unlock()
 	size := uint64(len(data))
 	f.writewaiting++
 	for f.flushwaiting > 0 {
-		if f.writecond.WaitWithTimeout(time.Millisecond*100) && ctx.Canceled() {
+		if f.writecond.WaitWithTimeout(time.Second) && ctx.Canceled() {
 			f.writewaiting--
+			logger.Warnf("write %d interrupted after %d", f.inode, time.Since(s))
 			return syscall.EINTR
 		}
 	}
@@ -311,6 +314,7 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 }
 
 func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
+	s := time.Now()
 	f.Lock()
 	defer f.Unlock()
 	f.flushwaiting++
@@ -330,7 +334,8 @@ func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 				}
 			}
 		}
-		if f.flushcond.WaitWithTimeout(time.Second) && ctx.Canceled() {
+		if f.flushcond.WaitWithTimeout(time.Second*3) && ctx.Canceled() {
+			logger.Warnf("flush %d interrupted after %d", f.inode, time.Since(s))
 			err = syscall.EINTR
 			break
 		}

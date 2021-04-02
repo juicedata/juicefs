@@ -96,8 +96,9 @@ func (h *handle) cancelOp(pid uint32) {
 func (h *handle) Rlock(ctx Context) bool {
 	h.Lock()
 	for (h.writing | h.writers) != 0 {
-		if h.cond.WaitWithTimeout(time.Millisecond*100) && ctx.Canceled() {
+		if h.cond.WaitWithTimeout(time.Second) && ctx.Canceled() {
 			h.Unlock()
+			logger.Warnf("read lock %d interrupted", h.inode)
 			return false
 		}
 	}
@@ -120,9 +121,10 @@ func (h *handle) Wlock(ctx Context) bool {
 	h.Lock()
 	h.writers++
 	for (h.readers | h.writing) != 0 {
-		if h.cond.WaitWithTimeout(time.Millisecond*100) && ctx.Canceled() {
+		if h.cond.WaitWithTimeout(time.Second) && ctx.Canceled() {
 			h.writers--
 			h.Unlock()
+			logger.Warnf("write lock %d interrupted", h.inode)
 			return false
 		}
 	}
