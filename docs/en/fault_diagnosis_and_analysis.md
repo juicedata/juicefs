@@ -8,8 +8,11 @@ When JuiceFS run in background (through [`-d` option](command_reference.md#juice
 # macOS
 $ syslog | grep 'juicefs'
 
-# Linux
+# Debian based system
 $ cat /var/log/syslog | grep 'juicefs'
+
+# CentOS based system
+$ cat /var/log/messages | grep 'juicefs'
 ```
 
 There are 4 log levels. You can use the `grep` command to filter different levels of logs for performance analysis or troubleshooting:
