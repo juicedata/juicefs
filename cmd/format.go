@@ -242,7 +242,7 @@ func formatFlags() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "compress",
-				Value: "lz4",
+				Value: "none",
 				Usage: "compression algorithm (lz4, zstd, none)",
 			},
 			&cli.StringFlag{
