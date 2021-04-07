@@ -161,6 +161,12 @@ func format(c *cli.Context) error {
 	if compressor == nil {
 		logger.Fatalf("Unsupported compress algorithm: %s", c.String("compress"))
 	}
+	if c.Bool("no-update") {
+		if _, err := m.Load(); err == nil {
+			return nil
+		}
+	}
+
 	format := meta.Format{
 		Name:        name,
 		UUID:        uuid.New().String(),
@@ -271,6 +277,10 @@ func formatFlags() *cli.Command {
 			&cli.BoolFlag{
 				Name:  "force",
 				Usage: "overwrite existing format",
+			},
+			&cli.BoolFlag{
+				Name:  "no-update",
+				Usage: "don't update existing volume",
 			},
 		},
 		Action: format,
