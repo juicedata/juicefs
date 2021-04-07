@@ -20,7 +20,7 @@ The highlighted features are:
 In addition, there are some other features:
 
 - **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
-- **Data Compression**: By default JuiceFS uses [LZ4](https://lz4.github.io/lz4) to compress all your data, you could also use [Zstandard](https://facebook.github.io/zstd) instead.
+- **Data Compression**: JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data.
 - **Data Encryption**: JuiceFS supports data encryption in transit and at rest, read [the guide](docs/en/encrypt.md) for more information.
 
 ---
