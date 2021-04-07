@@ -65,7 +65,7 @@ juicefs format [command options] REDIS-URL NAME
 size of block in KiB (default: 4096)
 
 `--compress value`\
-compression algorithm (lz4, zstd, none) (default: "lz4")
+compression algorithm (lz4, zstd, none) (default: "none")
 
 `--storage value`\
 Object storage type (e.g. s3, gcs, oss, cos) (default: "file")

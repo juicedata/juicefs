@@ -59,7 +59,7 @@ JuiceFS provides strong consistency, both metadata and data. **The metadata serv
 
 ### Data compression
 
-By default JuiceFS uses [LZ4](https://lz4.github.io/lz4) to compress all your data, you could also use [Zstandard](https://facebook.github.io/zstd) instead. Alluxio doesn't have this feature.
+JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data. Alluxio doesn't have this feature.
 
 ### Data encryption
 
