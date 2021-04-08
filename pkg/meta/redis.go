@@ -103,6 +103,7 @@ type redisMeta struct {
 	openFiles    map[Ino]int
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
+	deleting     chan int
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 
@@ -172,6 +173,7 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		openFiles:    make(map[Ino]int),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
+		deleting:     make(chan int, 2),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -1890,6 +1892,8 @@ func (r *redisMeta) toDelete(inode Ino, length uint64) string {
 }
 
 func (r *redisMeta) deleteSlice(ctx Context, chunkid uint64, size uint32) {
+	r.deleting <- 1
+	defer func() { <-r.deleting }()
 	err := r.newMsg(DeleteChunk, chunkid, size)
 	if err != nil {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
