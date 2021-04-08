@@ -23,6 +23,7 @@ COMMANDS:
    gateway    S3-compatible gateway
    sync       sync between two storage
    rmr        remove directories recursively
+   info       show internal information for paths or inodes
    benchmark  run benchmark, including read/write/stat big/small files
    gc         collect any leaked objects
    fsck       Check consistency of file system
@@ -305,6 +306,24 @@ Remove all files in directories recursively.
 ```
 juicefs rmr PATH ...
 ```
+
+## juicefs info
+
+### Description
+
+Show internal information for given paths or inodes.
+
+### Synopsis
+
+```
+juicefs info [command options] PATH or INODE
+```
+
+### Options
+
+`--inode, -i`\
+use inode instead of path (current dir should be inside JuiceFS) (default: `false`)
+
 
 ## juicefs benchmark
 

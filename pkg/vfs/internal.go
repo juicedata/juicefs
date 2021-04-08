@@ -16,15 +16,14 @@
 package vfs
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"syscall"
 	"time"
-	"encoding/gob"
-	"bytes"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"runtime"
 )
 
 const (
@@ -112,24 +111,34 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 		return []byte{uint8(r)}
 	case meta.Info:
 		var summary meta.Summary
-		var data bytes.Buffer
-
 		inode := Ino(r.Get64())
-		r := m.Info(ctx, inode, &summary)
-		if r != 0 {
-			errno := syscall.Errno(r)
-			if runtime.GOOS == "windows" {
-				errno += 0x20000000
-			}
-			logger.Fatalf("Info %s", errno)
-		}
 
-		enc := gob.NewEncoder(&data)
-		err := enc.Encode(&summary)
-		if err != nil {
-			logger.Fatalf("encode error: %s", err)
+		wb := utils.NewBuffer(4)
+		r := m.Summary(ctx, inode, &summary)
+		if r != 0 {
+			msg := r.Error()
+			wb.Put32(uint32(len(msg)))
+			return append(wb.Bytes(), []byte(msg)...)
 		}
-		return data.Bytes()
+		var w = bytes.NewBuffer(nil)
+		fmt.Fprintf(w, " inode: %d\n", inode)
+		fmt.Fprintf(w, " files:\t%d\n", summary.Files)
+		fmt.Fprintf(w, " dirs:\t%d\n", summary.Dirs)
+		fmt.Fprintf(w, " length:\t%d\n", summary.Length)
+		fmt.Fprintf(w, " size:\t%d\n", summary.Size)
+
+		if summary.Files == 1 && summary.Dirs == 0 {
+			fmt.Fprintf(w, " chunks:\n")
+			for indx := uint64(0); indx*meta.ChunkSize < summary.Length; indx++ {
+				var cs []meta.Slice
+				_ = m.Read(ctx, inode, uint32(indx), &cs)
+				for _, c := range cs {
+					fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Chunkid, c.Size, c.Off, c.Size)
+				}
+			}
+		}
+		wb.Put32(uint32(w.Len()))
+		return append(wb.Bytes(), w.Bytes()...)
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
 		return []byte{uint8(syscall.EINVAL & 0xff)}

@@ -207,8 +207,6 @@ type Meta interface {
 	Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno
 	// Rmr remove all the files and directories recursively.
 	Rmr(ctx Context, inode Ino, name string) syscall.Errno
-	// get internal info for  the file and directory.
-	Info(ctx Context, parent Ino, summary* Summary) syscall.Errno
 
 	// ListSlices returns all slices used by all files.
 	ListSlices(ctx Context, slices *[]Slice) syscall.Errno

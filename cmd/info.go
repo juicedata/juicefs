@@ -17,10 +17,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
-	"bytes"
-	"encoding/gob"
+	"strconv"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -30,9 +30,16 @@ import (
 func infoFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "info",
-		Usage:     "info DIR or FILE",
-		ArgsUsage: "DIR or FILE",
+		Usage:     "show internal information for paths or inodes",
+		ArgsUsage: "PATH or INODE",
 		Action:    info,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "inode",
+				Aliases: []string{"i"},
+				Usage:   "use inode instead of path (current dir should be inside JuiceFS)",
+			},
+		},
 	}
 }
 
@@ -45,51 +52,57 @@ func info(ctx *cli.Context) error {
 		logger.Infof("DIR or FILE is needed")
 		return nil
 	}
+	for i := 0; i < ctx.Args().Len(); i++ {
+		path := ctx.Args().Get(i)
+		var d string
+		var inode uint64
+		var err error
+		if ctx.Bool("inode") {
+			inode, err = strconv.ParseUint(path, 10, 64)
+			d, _ = os.Getwd()
+		} else {
+			d, err = filepath.Abs(path)
+			if err != nil {
+				logger.Fatalf("abs of %s: %s", path, err)
+			}
+			inode, err = utils.GetFileInode(d)
+		}
+		if err != nil {
+			logger.Errorf("lookup inode for %s: %s", path, err)
+			continue
+		}
 
-	path := ctx.Args().Get(0)
-	p, err := filepath.Abs(path)
-	if err != nil {
-		logger.Errorf("abs of %s: %s", path, err)
-	}
-	d := filepath.Dir(p)
-	name := filepath.Base(p)
-	inode, err := utils.GetFileInode(d)
-	if err != nil {
-		return fmt.Errorf("lookup inode for %s: %s", d, err)
-	}
+		f := openControler(d)
+		if f == nil {
+			logger.Errorf("%s is not inside JuiceFS", path)
+			continue
+		}
 
-	f := openControler(d)
-	if f == nil {
-		logger.Errorf("%s is not inside JuiceFS", path)
-	}
+		wb := utils.NewBuffer(8 + 8)
+		wb.Put32(meta.Info)
+		wb.Put32(8)
+		wb.Put64(inode)
+		_, err = f.Write(wb.Bytes())
+		if err != nil {
+			logger.Fatalf("write message: %s", err)
+		}
 
-	wb := utils.NewBuffer(8 + 8)
-	wb.Put32(meta.Info)
-	wb.Put32(8)
-	wb.Put64(inode)
-	_, err = f.Write(wb.Bytes())
-	if err != nil {
-		logger.Fatalf("write message: %s", err)
+		data := make([]byte, 4)
+		n, err := f.Read(data)
+		if err != nil {
+			logger.Fatalf("read size: %d %s", n, err)
+		}
+		r := utils.ReadBuffer(data)
+		size := r.Get32()
+		data = make([]byte, size)
+		n, err = f.Read(data)
+		if err != nil {
+			logger.Fatalf("read info: %s", err)
+		}
+		fmt.Println(path, ":")
+		fmt.Println(string(data[:n]))
+		_ = f.Close()
 	}
-
-	data := make([]byte, 100)
-	n, err := f.Read(data)
-	if err != nil {
-		logger.Fatalf("read message: %d %s", n, err)
-	}
-	_ = f.Close()
-	var summary meta.Summary
-	dec := gob.NewDecoder(bytes.NewReader(data))
-	err = dec.Decode(&summary)
-	if err != nil {
-		logger.Fatalf("decode error: %s", err)
-	}
-
-	fmt.Printf("name:\t%s\n", name)
-	fmt.Printf("files:\t%d\n", summary.Files)
-	fmt.Printf("dirs:\t%d\n", summary.Dirs)
-	fmt.Printf("size:\t%d\n", summary.Size)
-	fmt.Printf("length:\t%d\n", summary.Length)
 
 	return nil
 }
