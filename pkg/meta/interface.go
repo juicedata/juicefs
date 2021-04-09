@@ -28,6 +28,8 @@ const (
 	CompactChunk = 1001
 	// Rmr is a message to remove a directory recursively.
 	Rmr = 1002
+	// Info is a message to get the internal info for file or directory.
+	Info = 1003
 )
 
 const (
