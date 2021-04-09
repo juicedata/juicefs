@@ -2015,6 +2015,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 		// we should create new one (or remove the link in tree)
 		ss = readSlices(vals[skipped:])
 		first := *ss[0]
+		// copy the first slice so it will not be updated by buildSlice
 		chunks = buildSlice(ss)
 		pos, size = 0, 0
 		if chunks[0].Chunkid == 0 {

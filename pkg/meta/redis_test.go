@@ -298,6 +298,24 @@ func TestCompaction(t *testing.T) {
 	defer func() {
 		_ = m.Unlink(ctx, 1, "f")
 	}()
+
+	// random write
+	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Chunkid: uint64(1000), Size: 64 << 20, Len: 64 << 20})
+	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Chunkid: uint64(1001), Size: 8, Len: 8})
+	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Chunkid: uint64(1002), Size: 8, Len: 8})
+	var cs1 []Slice
+	_ = m.Read(ctx, inode, 1, &cs1)
+	if len(cs1) != 5 {
+		t.Fatalf("expect 5 slices, but got %+v", cs1)
+	}
+	m.(*redisMeta).compactChunk(inode, 1)
+	var cs []Slice
+	_ = m.Read(ctx, inode, 1, &cs)
+	if len(cs) != 1 {
+		t.Fatalf("expect 1 slice, but got %+v", cs)
+	}
+
+	// append
 	var size uint32 = 1000000
 	for i := 0; i < 50; i++ {
 		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: uint64(i) + 1, Size: size, Len: size}); st != 0 {
