@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -91,6 +92,9 @@ func info(ctx *cli.Context) error {
 		n, err := f.Read(data)
 		if err != nil {
 			logger.Fatalf("read size: %d %s", n, err)
+		}
+		if n == 1 && data[0] == byte(syscall.EINVAL) {
+			logger.Fatalf("info is not supported, please upgrade and mount again")
 		}
 		r := utils.ReadBuffer(data)
 		size := r.Get32()
