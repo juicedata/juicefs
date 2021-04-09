@@ -133,7 +133,7 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 				var cs []meta.Slice
 				_ = m.Read(ctx, inode, uint32(indx), &cs)
 				for _, c := range cs {
-					fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Chunkid, c.Size, c.Off, c.Size)
+					fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Chunkid, c.Size, c.Off, c.Len)
 				}
 			}
 		}
