@@ -167,6 +167,7 @@ func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
 		opt.WriteTimeout = time.Second * 5
 		rdb = redis.NewClient(opt)
 	}
+
 	m := &redisMeta{
 		conf:         conf,
 		rdb:          rdb,
@@ -2188,4 +2189,8 @@ func (r *redisMeta) checkServerConfig() {
 	if err != nil {
 		logger.Warnf("parse info: %s", err)
 	}
+
+	start := time.Now()
+	_ = r.rdb.Ping(Background)
+	logger.Infof("Ping redis: %s", time.Since(start))
 }
