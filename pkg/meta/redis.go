@@ -1617,7 +1617,7 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	}
 	ss := readSlices(vals)
 	*chunks = buildSlice(ss)
-	if len(vals) >= 5 {
+	if len(vals) >= 5 || len(*chunks) >= 5 {
 		go r.compactChunk(inode, indx)
 	}
 	return 0
@@ -2133,7 +2133,7 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 				var indx uint32
 				n, err := fmt.Sscanf(keys[i], "c%d_%d", &inode, &indx)
 				if err == nil && n == 2 {
-					logger.Infof("compact inode %d chunk %d", inode, indx)
+					logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, cnt)
 					r.compactChunk(Ino(inode), indx)
 				}
 			}
