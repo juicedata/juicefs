@@ -930,7 +930,7 @@ public class NNBench {
           try {
             // Set up timer for measuring AL
             long startTimeAL = System.currentTimeMillis();
-            filesystem.delete(filePath, true);
+            filesystem.delete(filePath, false);
             totalTimeAL1.addAndGet(System.currentTimeMillis() - startTimeAL);
 
             successfulOp = true;

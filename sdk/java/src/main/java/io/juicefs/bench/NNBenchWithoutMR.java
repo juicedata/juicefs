@@ -222,7 +222,7 @@ public class NNBenchWithoutMR {
           // can return false only if namesystem
           // delete could remove the path from the name
           // space (e.g. no Exception has been thrown)
-          fileSys.delete(new Path(taskDir, "A" + index), true);
+          fileSys.delete(new Path(taskDir, "A" + index), false);
           success = true;
         } catch (IOException ioe) {
           success = false;
