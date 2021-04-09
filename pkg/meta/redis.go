@@ -2109,6 +2109,43 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 	}
 }
 
+func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
+	var cursor uint64
+	p := r.rdb.Pipeline()
+	for {
+		keys, c, err := r.rdb.Scan(ctx, cursor, "c*_*", 10000).Result()
+		if err != nil {
+			logger.Warnf("scan chunks: %s", err)
+			return errno(err)
+		}
+		for _, key := range keys {
+			_ = p.LLen(ctx, key)
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			logger.Warnf("list slices: %s", err)
+			return errno(err)
+		}
+		for i, cmd := range cmds {
+			cnt := cmd.(*redis.IntCmd).Val()
+			if cnt > 1 {
+				var inode uint64
+				var indx uint32
+				n, err := fmt.Sscanf(keys[i], "c%d_%d", &inode, &indx)
+				if err == nil && n == 2 {
+					logger.Infof("compact inode %d chunk %d", inode, indx)
+					r.compactChunk(Ino(inode), indx)
+				}
+			}
+		}
+		if c == 0 {
+			break
+		}
+		cursor = c
+	}
+	return 0
+}
+
 func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
 	*slices = nil
 	var cursor uint64

@@ -208,6 +208,8 @@ type Meta interface {
 	// Rmr remove all the files and directories recursively.
 	Rmr(ctx Context, inode Ino, name string) syscall.Errno
 
+	// Compact all the chunks by merge small slices together
+	CompactAll(ctx Context) syscall.Errno
 	// ListSlices returns all slices used by all files.
 	ListSlices(ctx Context, slices *[]Slice) syscall.Errno
 
