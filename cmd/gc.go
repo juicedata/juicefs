@@ -132,7 +132,7 @@ func gc(ctx *cli.Context) error {
 		Prefetch:   0,
 		BufferSize: 300,
 		CacheDir:   "memory",
-		CacheSize:  0,
+		CacheSize:  300,
 	}
 
 	blob, err := createStorage(format)
