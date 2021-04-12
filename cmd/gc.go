@@ -159,8 +159,8 @@ func gc(ctx *cli.Context) error {
 				ns++
 				nb += int(s.Len)
 			}
-			if time.Since(lastLog) > time.Second && isatty.IsTerminal(os.Stderr.Fd()) {
-				logger.Infof("Compacted %d chunks (%d slices, %d bytes).\r", nc, ns, nb)
+			if time.Since(lastLog) > time.Second && isatty.IsTerminal(os.Stdout.Fd()) {
+				fmt.Printf("Compacted %d chunks (%d slices, %d bytes).\r", nc, ns, nb)
 				lastLog = time.Now()
 			}
 			return err
