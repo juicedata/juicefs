@@ -371,8 +371,11 @@ juicefs gc [command options] REDIS-URL
 `--delete`\
 deleted leaked objects (default: false)
 
+`--compact`\
+compact all chunks with more than 1 slices (default: false).
+
 `--threads value`\
-number threads to delete leaked objects (default: 50)
+number threads to delete leaked objects (default: 10)
 
 ## juicefs fsck
 
