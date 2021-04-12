@@ -3,11 +3,9 @@
 JuiceFS provides the [CSI driver](https://github.com/juicedata/juicefs-csi-driver) for Kubernetes.
 
 
-
 ## Prerequisites
 
 - Kubernetes 1.14+
-
 
 
 ## Installation
@@ -16,7 +14,7 @@ JuiceFS provides the [CSI driver](https://github.com/juicedata/juicefs-csi-drive
 
 To install Helm, refer to the [Helm install guide](https://github.com/helm/helm#install), Helm 3 is required.
 
-1. Prepare a file `values.yaml` with access infomation about Redis and object storage (take Amazon S3 `us-east-1` as an example)
+1. Prepare a file `values.yaml` with access information about Redis and object storage (take Amazon S3 `us-east-1` as an example)
 
 ```yaml
 storageClasses:
@@ -224,4 +222,3 @@ scrape_configs:
 ### Configurate Grafana dashboard
 
 We provide a [dashboard template](./k8s_grafana_template.json) for [Grafana](https://grafana.com/) , which can be imported to show the collected metrics in Prometheus.
-
