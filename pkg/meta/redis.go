@@ -1617,7 +1617,7 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	}
 	ss := readSlices(vals)
 	*chunks = buildSlice(ss)
-	if len(vals) >= 5 {
+	if len(vals) >= 5 || len(*chunks) >= 5 {
 		go r.compactChunk(inode, indx)
 	}
 	return 0
@@ -2108,6 +2108,43 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 	} else {
 		logger.Warnf("compact %s: %s", key, errno)
 	}
+}
+
+func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
+	var cursor uint64
+	p := r.rdb.Pipeline()
+	for {
+		keys, c, err := r.rdb.Scan(ctx, cursor, "c*_*", 10000).Result()
+		if err != nil {
+			logger.Warnf("scan chunks: %s", err)
+			return errno(err)
+		}
+		for _, key := range keys {
+			_ = p.LLen(ctx, key)
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			logger.Warnf("list slices: %s", err)
+			return errno(err)
+		}
+		for i, cmd := range cmds {
+			cnt := cmd.(*redis.IntCmd).Val()
+			if cnt > 1 {
+				var inode uint64
+				var indx uint32
+				n, err := fmt.Sscanf(keys[i], "c%d_%d", &inode, &indx)
+				if err == nil && n == 2 {
+					logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, cnt)
+					r.compactChunk(Ino(inode), indx)
+				}
+			}
+		}
+		if c == 0 {
+			break
+		}
+		cursor = c
+	}
+	return 0
 }
 
 func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {

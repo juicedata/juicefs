@@ -27,6 +27,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
@@ -42,9 +43,13 @@ func gcFlags() *cli.Command {
 				Name:  "delete",
 				Usage: "deleted leaked objects",
 			},
+			&cli.BoolFlag{
+				Name:  "compact",
+				Usage: "compact small slices into bigger ones",
+			},
 			&cli.IntFlag{
 				Name:  "threads",
-				Value: 50,
+				Value: 10,
 				Usage: "number threads to delete leaked objects",
 			},
 		},
@@ -127,7 +132,7 @@ func gc(ctx *cli.Context) error {
 		Prefetch:   0,
 		BufferSize: 300,
 		CacheDir:   "memory",
-		CacheSize:  0,
+		CacheSize:  300,
 	}
 
 	blob, err := createStorage(format)
@@ -135,6 +140,24 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
+
+	if ctx.Bool("compact") {
+		store := chunk.NewCachedStore(blob, chunkConf)
+		m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
+			chunkid := args[0].(uint64)
+			length := args[1].(uint32)
+			return store.Remove(chunkid, int(length))
+		}))
+		m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
+			slices := args[0].([]meta.Slice)
+			chunkid := args[1].(uint64)
+			return vfs.Compact(chunkConf, store, slices, chunkid)
+		}))
+		err := m.CompactAll(meta.Background)
+		if err != 0 {
+			logger.Errorf("compact all chunks: %s", err)
+		}
+	}
 
 	blob = object.WithPrefix(blob, "chunks/")
 	objs, err := osync.ListAll(blob, "", "")
@@ -166,7 +189,7 @@ func gc(ctx *cli.Context) error {
 
 	var leakedObj = make(chan string, 10240)
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for i := 0; i < ctx.Int("threads"); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
