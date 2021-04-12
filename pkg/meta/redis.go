@@ -1844,9 +1844,8 @@ func (r *redisMeta) cleanupSlices() {
 								r.deleteSlice(ctx, uint64(chunkid), uint32(size))
 							}
 						}
-					} else if v == "0" {
-						// TODO: delete it
 					}
+					// TODO: delete the values "0"
 				}
 			}
 			if cursor == 0 {
