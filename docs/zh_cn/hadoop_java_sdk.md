@@ -178,6 +178,76 @@ CREATE TABLE IF NOT EXISTS person
 ) LOCATION 'jfs://{JFS_NAME}/tmp/person';
 ```
 
+## Benchmark
+
+当部署完成后，可以运行 JuiceFS 自带的压测工具进行性能测试。
+
+
+### 本地测试
+#### 元数据
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation createWrite -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local  
+  ```
+
+  此命令会 create 10000 个空文件
+
+- open
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation openRead -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  ```
+  
+  此命令会 open 10000 个文件，并不读取数据
+
+- rename
+  
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  ```
+   
+- delete
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation delete -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  ```
+
+- 参考值
+
+| 操作   | tps  | 时延(ms) |
+| ------ | ---- | ---- |
+| create | 961  | 1.04 |
+| open   | 1135 | 0.88 |
+| rename | 364  | 2.75 |
+| delete | 289  | 3.46 |
+
+#### IO 性能
+
+- 连续写
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -write -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+- 连续读
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -read -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+  
+  如果多次运行此命令，可能会出现数据被缓存到了系统缓存而导致读取速度非常快，只需清除 JuiceFS 的本地磁盘缓存即可
+
+- 参考值
+
+| 操作   | 吞吐(MB/s)  |
+| ------ | ---- | 
+| write | 453  |
+| read   | 141 | 
+
+如果机器的网络带宽比较低，则一般能达到网络带宽瓶颈  
+
 ## FAQ
 
 ### 出现 `Class io.juicefs.JuiceFileSystem not found` 异常
