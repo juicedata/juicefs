@@ -45,6 +45,7 @@ import (
 	Flock: lockf$inode -> { $sid_$owner -> ltype }
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
 	Sessions: sessions -> [ $sid -> heartbeat ]
+
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$chunkid_$size -> refcount
 
@@ -287,7 +288,7 @@ func (r *redisMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (r *redisMeta) sessionKey(sid int64) string {
+func (r *redisMeta) sustained(sid int64) string {
 	return "session" + strconv.FormatInt(sid, 10)
 }
 
@@ -997,7 +998,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				case TypeFile:
 					if opened {
 						pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
-						pipe.SAdd(ctx, r.sessionKey(r.sid), strconv.Itoa(int(inode)))
+						pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(inode)))
 					} else {
 						pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(inode, attr.Length)})
 						pipe.Del(ctx, r.inodeKey(inode))
@@ -1282,7 +1283,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					} else if dtyp == TypeFile {
 						if opened {
 							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
-							pipe.SAdd(ctx, r.sessionKey(r.sid), strconv.Itoa(int(dino)))
+							pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(dino)))
 						} else {
 							pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, dattr.Length)})
 							pipe.Del(ctx, r.inodeKey(dino))
@@ -1463,19 +1464,25 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 
 func (r *redisMeta) cleanStaleSession(sid int64) {
 	var ctx = Background
-	inodes, err := r.rdb.LRange(ctx, r.sessionKey(sid), 0, 1000).Result()
-	if err != nil {
-		return
-	}
-	for _, sinode := range inodes {
-		inode, _ := strconv.ParseInt(sinode, 10, 0)
-		if err := r.deleteInode(Ino(inode)); err != nil {
-			logger.Errorf("Failed to delete inode %d: %s", inode, err)
+	for {
+		inodes, err := r.rdb.LRange(ctx, r.sustained(sid), 0, 1000).Result()
+		if err != nil {
+			logger.Warnf("LRange %s: %s", r.sustained(sid), err)
+			return
 		}
-	}
-	if len(inodes) == 0 {
-		r.rdb.Del(ctx, r.sessionKey(sid))
-		r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
+		if len(inodes) == 0 {
+			r.rdb.Del(ctx, r.sustained(sid))
+			r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
+			return
+		}
+		for _, sinode := range inodes {
+			inode, _ := strconv.ParseInt(sinode, 10, 0)
+			if err := r.deleteInode(Ino(inode)); err != nil {
+				logger.Errorf("Failed to delete inode %d: %s", inode, err)
+			} else {
+				r.rdb.SRem(ctx, r.sustained(sid), sinode)
+			}
+		}
 	}
 }
 
@@ -1576,7 +1583,7 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 			delete(r.removedFiles, inode)
 			go func() {
 				if err := r.deleteInode(inode); err == nil {
-					r.rdb.SRem(ctx, r.sessionKey(r.sid), strconv.Itoa(int(inode)))
+					r.rdb.SRem(ctx, r.sustained(r.sid), strconv.Itoa(int(inode)))
 				}
 			}()
 		}
