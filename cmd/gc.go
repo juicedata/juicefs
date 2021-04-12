@@ -148,14 +148,29 @@ func gc(ctx *cli.Context) error {
 			length := args[1].(uint32)
 			return store.Remove(chunkid, int(length))
 		}))
+		var nc, ns, nb int
+		var lastLog time.Time
 		m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
 			chunkid := args[1].(uint64)
-			return vfs.Compact(chunkConf, store, slices, chunkid)
+			err = vfs.Compact(chunkConf, store, slices, chunkid)
+			nc++
+			for _, s := range slices {
+				ns++
+				nb += int(s.Len)
+			}
+			if time.Since(lastLog) > time.Second && isatty.IsTerminal(os.Stderr.Fd()) {
+				logger.Infof("Compacted %d chunks (%d slices, %d bytes).\r", nc, ns, nb)
+				lastLog = time.Now()
+			}
+			return err
 		}))
+		logger.Infof("start to compact chunks ...")
 		err := m.CompactAll(meta.Background)
 		if err != 0 {
 			logger.Errorf("compact all chunks: %s", err)
+		} else {
+			logger.Infof("Compacted %d chunks (%d slices, %d bytes).", nc, ns, nb)
 		}
 	}
 
