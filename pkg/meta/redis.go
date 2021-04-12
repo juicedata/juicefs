@@ -268,7 +268,6 @@ func (r *redisMeta) NewSession() error {
 	go r.refreshSession()
 	go r.cleanupDeletedFiles()
 	go r.cleanupSlices()
-	go r.cleanupLeakedChunks()
 	return nil
 }
 
@@ -1841,7 +1840,6 @@ func (r *redisMeta) cleanupSlices() {
 }
 
 func (r *redisMeta) cleanupLeakedChunks() {
-	time.Sleep(time.Second * 10)
 	var ctx = Background
 	var ckeys []string
 	var cursor uint64
@@ -1864,22 +1862,21 @@ func (r *redisMeta) cleanupLeakedChunks() {
 			ikeys = append(ikeys, k)
 			rs = append(rs, p.Exists(ctx, r.inodeKey(Ino(ino))))
 		}
-		if len(rs) == 0 {
-			break
-		}
-		_, err = p.Exec(ctx)
-		if err != nil {
-			logger.Errorf("check inodes: %s", err)
-			return
-		}
-		for i, rr := range rs {
-			if rr.Val() == 0 {
-				key := ikeys[i]
-				logger.Debugf("found leaked chunk %s", key)
-				ps := strings.Split(key, "_")
-				ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
-				indx, _ := strconv.Atoi(ps[1])
-				_ = r.deleteChunk(Ino(ino), uint32(indx))
+		if len(rs) > 0 {
+			_, err = p.Exec(ctx)
+			if err != nil {
+				logger.Errorf("check inodes: %s", err)
+				return
+			}
+			for i, rr := range rs {
+				if rr.Val() == 0 {
+					key := ikeys[i]
+					logger.Infof("found leaked chunk %s", key)
+					ps := strings.Split(key, "_")
+					ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
+					indx, _ := strconv.Atoi(ps[1])
+					_ = r.deleteChunk(Ino(ino), uint32(indx))
+				}
 			}
 		}
 		if cursor == 0 {
@@ -2148,6 +2145,8 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 }
 
 func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
+	// try to find leaked chunks cause by 0.10-, remove it in 0.13
+	r.cleanupLeakedChunks()
 	*slices = nil
 	var cursor uint64
 	p := r.rdb.Pipeline()
