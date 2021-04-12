@@ -16,10 +16,8 @@
 package object
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"strings"
 
@@ -39,35 +37,21 @@ func (s *swiftOSS) String() string {
 }
 
 func (s *swiftOSS) Create() error {
-	/* Connection.ContainerCreate():
-	 *     No error is returned if it already exists but the metadata if any will be updated.
-	 */
-	err := s.conn.ContainerCreate(s.container, nil)
-	return err
+	// No error is returned if it already exists but the metadata if any will be updated.
+	return s.conn.ContainerCreate(s.container, nil)
 }
 
 func (s *swiftOSS) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	objOpenFile, _, err := s.conn.ObjectOpen(s.container, key, false, nil)
-	if err != nil {
-		return nil, err
-	}
-	if off > 0 {
-		_, err := objOpenFile.Seek(off, 0)
-		if err != nil {
-			objOpenFile.Close()
-			return nil, err
-		}
-	}
-	if limit > 0 {
-		defer objOpenFile.Close()
-		buf := make([]byte, limit)
-		if n, err := objOpenFile.Read(buf); err != nil {
-			return nil, err
+	headers := make(map[string]string)
+	if off > 0 || limit > 0 {
+		if limit > 0 {
+			headers["Range"] = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
 		} else {
-			return ioutil.NopCloser(bytes.NewBuffer(buf[:n])), nil
+			headers["Range"] = fmt.Sprintf("bytes=%d-", off)
 		}
 	}
-	return objOpenFile, err
+	f, _, err := s.conn.ObjectOpen(s.container, key, false, headers)
+	return f, err
 }
 
 func (s *swiftOSS) Put(key string, in io.Reader) error {
@@ -76,8 +60,7 @@ func (s *swiftOSS) Put(key string, in io.Reader) error {
 }
 
 func (s *swiftOSS) Delete(key string) error {
-	err := s.conn.ObjectDelete(s.container, key)
-	return err
+	return s.conn.ObjectDelete(s.container, key)
 }
 
 func newSwiftOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
