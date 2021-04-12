@@ -45,6 +45,8 @@ import (
 	Flock: lockf$inode -> { $sid_$owner -> ltype }
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
 	Sessions: sessions -> [ $sid -> heartbeat ]
+	sustained: session$sid -> [$inode]
+	locked: locked$sid -> { lockf$inode or lockpinode }
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$chunkid_$size -> refcount
@@ -258,7 +260,7 @@ func (r *redisMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	logger.Debugf("session is is %d", r.sid)
+	logger.Debugf("session is %d", r.sid)
 
 	r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result()
 	if err != nil {
@@ -290,6 +292,10 @@ func (r *redisMeta) newMsg(mid uint32, args ...interface{}) error {
 
 func (r *redisMeta) sustained(sid int64) string {
 	return "session" + strconv.FormatInt(sid, 10)
+}
+
+func (r *redisMeta) lockedKey(sid int64) string {
+	return "locked" + strconv.FormatInt(sid, 10)
 }
 
 func (r *redisMeta) symKey(inode Ino) string {
@@ -1464,32 +1470,51 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 
 func (r *redisMeta) cleanStaleSession(sid int64) {
 	var ctx = Background
-	for {
-		inodes, err := r.rdb.LRange(ctx, r.sustained(sid), 0, 1000).Result()
-		if err != nil {
-			logger.Warnf("LRange %s: %s", r.sustained(sid), err)
-			return
+	key := r.sustained(sid)
+	inodes, err := r.rdb.SMembers(ctx, key).Result()
+	if err != nil {
+		logger.Warnf("SMembers %s: %s", key, err)
+		return
+	}
+	for _, sinode := range inodes {
+		inode, _ := strconv.ParseInt(sinode, 10, 0)
+		if err := r.deleteInode(Ino(inode)); err != nil {
+			logger.Errorf("Failed to delete inode %d: %s", inode, err)
+		} else {
+			r.rdb.SRem(ctx, key, sinode)
 		}
-		if len(inodes) == 0 {
-			r.rdb.Del(ctx, r.sustained(sid))
-			r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
-			return
-		}
-		for _, sinode := range inodes {
-			inode, _ := strconv.ParseInt(sinode, 10, 0)
-			if err := r.deleteInode(Ino(inode)); err != nil {
-				logger.Errorf("Failed to delete inode %d: %s", inode, err)
-			} else {
-				r.rdb.SRem(ctx, r.sustained(sid), sinode)
+	}
+	if len(inodes) == 0 {
+		r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
+		logger.Infof("cleanup session %d", sid)
+	}
+}
+
+func (r *redisMeta) cleanStaleLocks(ssid string) {
+	var ctx = Background
+	key := "locked" + ssid
+	inodes, err := r.rdb.SMembers(ctx, key).Result()
+	if err != nil {
+		logger.Warnf("SMembers %s: %s", key, err)
+		return
+	}
+	for _, k := range inodes {
+		owners, _ := r.rdb.HKeys(ctx, k).Result()
+		for _, o := range owners {
+			if strings.Split(o, "_")[0] == ssid {
+				err = r.rdb.HDel(ctx, k, o).Err()
+				logger.Infof("cleanup lock on %s from session %s: %s", k, ssid, err)
 			}
 		}
+		r.rdb.SRem(ctx, key, k)
 	}
 }
 
 func (r *redisMeta) cleanStaleSessions() {
+	// TODO: once per minute
 	now := time.Now()
 	var ctx = Background
-	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -10).Unix())), Count: 100}
+	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -5).Unix())), Count: 100}
 	staleSessions, _ := r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
 	for _, ssid := range staleSessions {
 		sid, _ := strconv.Atoi(ssid)
@@ -1497,42 +1522,17 @@ func (r *redisMeta) cleanStaleSessions() {
 	}
 
 	rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
-	staleSessions, err := r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
-	if err != nil || len(staleSessions) == 0 {
-		return
-	}
-	sids := make(map[string]bool)
+	staleSessions, _ = r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
 	for _, sid := range staleSessions {
-		sids[sid] = true
-	}
-	var cursor uint64
-	var keys []string
-	for {
-		keys, cursor, err = r.rdb.Scan(ctx, cursor, "lock*", 1000).Result()
-		if err != nil {
-			break
-		}
-		for _, k := range keys {
-			owners, _ := r.rdb.HKeys(ctx, k).Result()
-			for _, o := range owners {
-				p := strings.Split(o, "_")[0]
-				if _, ok := sids[p]; ok {
-					err = r.rdb.HDel(ctx, k, o).Err()
-					logger.Infof("cleanup lock on %s from session %s: %s", k, p, err)
-				}
-			}
-		}
-		if cursor == 0 {
-			break
-		}
+		r.cleanStaleLocks(sid)
 	}
 }
 
 func (r *redisMeta) refreshSession() {
 	for {
-		time.Sleep(time.Minute)
 		now := time.Now()
 		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(now.Unix()), Member: strconv.Itoa(int(r.sid))})
+		time.Sleep(time.Minute)
 		go r.cleanStaleSessions()
 	}
 }
@@ -1568,6 +1568,7 @@ func (r *redisMeta) Open(ctx Context, inode Ino, flags uint8, attr *Attr) syscal
 	if err == 0 {
 		r.Lock()
 		r.openFiles[inode] = r.openFiles[inode] + 1
+		logger.Infof("open %d", inode)
 		r.Unlock()
 	}
 	return 0
