@@ -39,6 +39,8 @@ public abstract class NodesFetcher {
   protected File cacheFile;
   private String jfsName;
 
+  private static Handler handler = new Handler();
+
   public NodesFetcher(String jfsName) {
     this.jfsName = jfsName;
     if (!cacheFolder.exists()) {
@@ -118,7 +120,7 @@ public abstract class NodesFetcher {
 
     HttpURLConnection con = null;
     try {
-      con = (HttpURLConnection) new URL(null, url, new Handler()).openConnection();
+      con = (HttpURLConnection) new URL(null, url, handler).openConnection();
       con.setConnectTimeout(timeout * 1000);
       con.setReadTimeout(timeout * 1000);
 
