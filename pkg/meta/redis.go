@@ -1950,6 +1950,7 @@ func (r *redisMeta) cleanupOldSliceRefs() {
 							r.deleteSlice(ctx, uint64(chunkid), uint32(size))
 						}
 					}
+					r.rdb.Del(ctx, ckeys[i])
 				} else if v == "0" {
 					r.rdb.Del(ctx, ckeys[i])
 				} else {
