@@ -55,6 +55,8 @@ $ cd juicefs
 $ make
 ```
 
+For China user, it's recommended to set `GOPROXY` to speed up compilation, e.g. [Goproxy China](https://github.com/goproxy/goproxy.cn).
+
 ### Dependency
 
 A Redis server (>= 2.8) is needed for metadata, please follow [Redis Quick Start](https://redis.io/topics/quickstart).
@@ -71,7 +73,9 @@ Assume you have a Redis server running locally, we can create a volume called `t
 $ ./juicefs format localhost test
 ```
 
-It will create a volume with default settings. If there Redis server is not running locally, the address could be specified using URL, for example, `redis://user:password@host:6379/1`, the password can also be specified by environment variable `REDIS_PASSWORD` to hide it from command line options.
+It will create a volume with default settings. If there Redis server is not running locally, the address could be specified using URL, for example, `redis://username:password@host:6379/1`, the password can also be specified by environment variable `REDIS_PASSWORD` to hide it from command line options.
+
+**Note: After Redis 6.0.0, [`AUTH`](https://redis.io/commands/auth) command was extended with two arguments, i.e. username and password. If you use Redis < 6.0.0, just omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.**
 
 As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--access-key` and `--secret-key`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
 

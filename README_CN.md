@@ -74,7 +74,9 @@ $ make
 $ ./juicefs format localhost test
 ```
 
-它会使用默认参数来格式化。如果 Redis 服务不在本地，你可以像这样完整填写它的地址：`redis://user:password@host:6379/1`。Redis 密码可以通过环境变量 `REDIS_PASSWORD` 来指定，避免暴露在命令行选项中。
+它会使用默认参数来格式化。如果 Redis 服务不在本地，你可以像这样完整填写它的地址：`redis://username:password@host:6379/1`。Redis 密码可以通过环境变量 `REDIS_PASSWORD` 来指定，避免暴露在命令行选项中。
+
+**注意：Redis 6.0.0 版本以后 [`AUTH`](https://redis.io/commands/auth) 命令支持两个参数，也就是 username 和 password。如果你使用的 Redis 版本小于 6.0.0，省略 URL 中的 username 参数即可，例如 `redis://:password@host:6379/1`。**
 
 JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket`、`--access-key` 和 `--secret-key` 来指定。它默认会使用本地目录来模拟一个对象存储用于测试，详细的参数请看 `./juicefs format -h`。
 
