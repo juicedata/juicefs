@@ -141,13 +141,13 @@ func gc(ctx *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
+	store := chunk.NewCachedStore(blob, chunkConf)
+	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
+		chunkid := args[0].(uint64)
+		length := args[1].(uint32)
+		return store.Remove(chunkid, int(length))
+	}))
 	if ctx.Bool("compact") {
-		store := chunk.NewCachedStore(blob, chunkConf)
-		m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
-			chunkid := args[0].(uint64)
-			length := args[1].(uint32)
-			return store.Remove(chunkid, int(length))
-		}))
 		var nc, ns, nb int
 		var lastLog time.Time
 		m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
