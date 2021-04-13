@@ -1568,7 +1568,6 @@ func (r *redisMeta) Open(ctx Context, inode Ino, flags uint8, attr *Attr) syscal
 	if err == 0 {
 		r.Lock()
 		r.openFiles[inode] = r.openFiles[inode] + 1
-		logger.Infof("open %d", inode)
 		r.Unlock()
 	}
 	return 0

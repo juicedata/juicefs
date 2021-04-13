@@ -169,9 +169,8 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 		*pid = 0
 		return 0
 	}
-	ikey := r.plockKey(inode)
 	lkey := r.ownerKey(owner)
-	owners, err := r.rdb.HGetAll(ctx, ikey).Result()
+	owners, err := r.rdb.HGetAll(ctx, r.plockKey(inode)).Result()
 	if err != nil {
 		return errno(err)
 	}
