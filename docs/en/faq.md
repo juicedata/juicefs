@@ -64,3 +64,7 @@ There are two solutions to this problem:
 ## `/go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1` or `/go/pkg/tool/linux_amd64/compile: signal: killed`
 
 This error may caused by GCC version is too low, please try to upgrade your GCC to 5.4+.
+
+## `format: ERR wrong number of arguments for 'auth' command`
+
+This error means you use Redis < 6.0.0 and specify username in Redis URL when execute `juicefs format` command. Only Redis >= 6.0.0 supports specify username, so you need omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.
