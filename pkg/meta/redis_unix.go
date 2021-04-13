@@ -28,15 +28,16 @@ import (
 )
 
 func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
+	ikey := r.flockKey(inode)
 	lkey := r.ownerKey(owner)
 	if ltype == syscall.F_UNLCK {
-		_, err := r.rdb.HDel(ctx, r.flockKey(inode), lkey).Result()
+		_, err := r.rdb.HDel(ctx, ikey, lkey).Result()
 		return errno(err)
 	}
 	var err syscall.Errno
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
-			owners, err := tx.HGetAll(ctx, r.flockKey(inode)).Result()
+			owners, err := tx.HGetAll(ctx, ikey).Result()
 			if err != nil {
 				return err
 			}
@@ -47,7 +48,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 					}
 				}
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					pipe.HSet(ctx, r.flockKey(inode), lkey, "R")
+					pipe.HSet(ctx, ikey, lkey, "R")
 					return nil
 				})
 				return err
@@ -57,11 +58,12 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				return syscall.EAGAIN
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.HSet(ctx, r.flockKey(inode), lkey, "W")
+				pipe.HSet(ctx, ikey, lkey, "W")
+				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 				return nil
 			})
 			return err
-		}, r.flockKey(inode))
+		}, ikey)
 
 		if !block || err != syscall.EAGAIN {
 			break
@@ -199,13 +201,14 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 }
 
 func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+	ikey := r.plockKey(inode)
 	lkey := r.ownerKey(owner)
 	var err syscall.Errno
 	lock := plock{ltype, pid, start, end}
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
 			if ltype == syscall.F_UNLCK {
-				d, err := tx.HGet(ctx, r.plockKey(inode), lkey).Result()
+				d, err := tx.HGet(ctx, ikey, lkey).Result()
 				if err != nil {
 					return err
 				}
@@ -216,15 +219,15 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				ls = r.updateLocks(ls, lock)
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					if len(ls) == 0 {
-						pipe.HDel(ctx, r.plockKey(inode), lkey)
+						pipe.HDel(ctx, ikey, lkey)
 					} else {
-						pipe.HSet(ctx, r.plockKey(inode), lkey, r.dumpLocks(ls))
+						pipe.HSet(ctx, ikey, lkey, r.dumpLocks(ls))
 					}
 					return nil
 				})
 				return err
 			}
-			owners, err := tx.HGetAll(ctx, r.plockKey(inode)).Result()
+			owners, err := tx.HGetAll(ctx, ikey).Result()
 			if err != nil {
 				return err
 			}
@@ -241,11 +244,12 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 			}
 			ls = r.updateLocks(ls, lock)
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.HSet(ctx, r.plockKey(inode), lkey, r.dumpLocks(ls))
+				pipe.HSet(ctx, ikey, lkey, r.dumpLocks(ls))
+				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 				return nil
 			})
 			return err
-		}, r.plockKey(inode))
+		}, ikey)
 
 		if !block || err != syscall.EAGAIN {
 			break
