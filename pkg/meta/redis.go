@@ -2233,6 +2233,7 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
 	// try to find leaked chunks cause by 0.10-, remove it in 0.13
 	r.cleanupLeakedChunks()
+	r.cleanupOldSliceRefs()
 	*slices = nil
 	var cursor uint64
 	p := r.rdb.Pipeline()
