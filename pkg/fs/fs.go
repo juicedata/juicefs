@@ -573,9 +573,6 @@ func (fs *FileSystem) lookup(ctx meta.Context, p string, followLastSymlink bool)
 			inode = fi.Inode()
 		}
 		parent = inode
-		if resolved {
-			break
-		}
 	}
 	if parent == 1 {
 		err = fs.m.GetAttr(ctx, parent, attr)
