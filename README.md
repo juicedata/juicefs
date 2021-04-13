@@ -55,7 +55,7 @@ $ cd juicefs
 $ make
 ```
 
-For China user, it's recommended to set `GOPROXY` to speed up compilation, e.g. [Goproxy China](https://github.com/goproxy/goproxy.cn).
+For users in China, it's recommended to set `GOPROXY` to speed up compilation, e.g. [Goproxy China](https://github.com/goproxy/goproxy.cn).
 
 ### Dependency
 
