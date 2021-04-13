@@ -65,6 +65,7 @@ const usedSpace = "usedSpace"
 const totalInodes = "totalInodes"
 const delfiles = "delfiles"
 const allSessions = "sessions"
+const sliceRefs = "sliceRef"
 
 const scriptLookup = `
 local parse = function(buf, idx, pos)
@@ -1751,18 +1752,18 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 						if dpos+s.Len > ChunkSize {
 							pipe.RPush(ctx, r.chunkKey(fout, indx), marshalSlice(dpos, s.Chunkid, s.Size, s.Off, ChunkSize-dpos))
 							if s.Chunkid > 0 {
-								pipe.Incr(ctx, r.sliceKey(s.Chunkid, s.Size))
+								pipe.HIncrBy(ctx, sliceRefs, r.sliceKey(s.Chunkid, s.Size), 1)
 							}
 
 							skip := ChunkSize - dpos
 							pipe.RPush(ctx, r.chunkKey(fout, indx+1), marshalSlice(0, s.Chunkid, s.Size, s.Off+skip, s.Len-skip))
 							if s.Chunkid > 0 {
-								pipe.Incr(ctx, r.sliceKey(s.Chunkid, s.Size))
+								pipe.HIncrBy(ctx, sliceRefs, r.sliceKey(s.Chunkid, s.Size), 1)
 							}
 						} else {
 							pipe.RPush(ctx, r.chunkKey(fout, indx), marshalSlice(dpos, s.Chunkid, s.Size, s.Off, s.Len))
 							if s.Chunkid > 0 {
-								pipe.Incr(ctx, r.sliceKey(s.Chunkid, s.Size))
+								pipe.HIncrBy(ctx, sliceRefs, r.sliceKey(s.Chunkid, s.Size), 1)
 							}
 						}
 					}
@@ -1805,39 +1806,47 @@ func (r *redisMeta) cleanupDeletedFiles() {
 func (r *redisMeta) cleanupSlices() {
 	for {
 		time.Sleep(time.Hour)
+
+		// once per hour
 		var ctx = Background
+		last, _ := r.rdb.Get(ctx, "nextCleanupSlices").Uint64()
+		now := time.Now().Unix()
+		if last+3600 > uint64(now) {
+			continue
+		}
+		r.rdb.Set(ctx, "nextCleanupSlices", now, 0)
+
 		var ckeys []string
 		var cursor uint64
 		var err error
 		for {
-			ckeys, cursor, err = r.rdb.Scan(ctx, cursor, "k*", 1000).Result()
+			ckeys, cursor, err = r.rdb.HScan(ctx, sliceRefs, cursor, "*", 1000).Result()
 			if err != nil {
 				logger.Errorf("scan slices: %s", err)
 				break
 			}
-			if len(ckeys) == 0 {
-				break
-			}
-			values, err := r.rdb.MGet(ctx, ckeys...).Result()
-			if err != nil {
-				logger.Warnf("mget slices: %s", err)
-				continue
-			}
-			for i, v := range values {
-				if v == nil {
-					continue
+			if len(ckeys) > 0 {
+				values, err := r.rdb.HMGet(ctx, sliceRefs, ckeys...).Result()
+				if err != nil {
+					logger.Warnf("mget slices: %s", err)
+					break
 				}
-				if strings.HasPrefix(v.(string), "-") { // < 0
-					ps := strings.Split(ckeys[i], "_")
-					if len(ps) == 2 {
-						chunkid, _ := strconv.Atoi(ps[0][1:])
-						size, _ := strconv.Atoi(ps[1])
-						if chunkid > 0 && size > 0 {
-							r.deleteSlice(ctx, uint64(chunkid), uint32(size))
+				for i, v := range values {
+					if v == nil {
+						continue
+					}
+					if strings.HasPrefix(v.(string), "-") { // < 0
+						ps := strings.Split(ckeys[i], "_")
+						if len(ps) == 2 {
+							chunkid, _ := strconv.Atoi(ps[0][1:])
+							size, _ := strconv.Atoi(ps[1])
+							if chunkid > 0 && size > 0 {
+								r.deleteSlice(ctx, uint64(chunkid), uint32(size))
+							}
 						}
 					}
+					// TODO: delete the values "0"
 				}
-
 			}
 			if cursor == 0 {
 				break
@@ -1903,7 +1912,7 @@ func (r *redisMeta) deleteSlice(ctx Context, chunkid uint64, size uint32) {
 	if err != nil {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	} else {
-		_ = r.rdb.Del(ctx, r.sliceKey(chunkid, size))
+		_ = r.rdb.HDel(ctx, sliceRefs, r.sliceKey(chunkid, size))
 	}
 }
 
@@ -1927,7 +1936,7 @@ func (r *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 					size := rb.Get32()
 					slices = append(slices, &slice{chunkid: chunkid, size: size})
 					pipe.LPop(ctx, key)
-					rs = append(rs, pipe.Decr(ctx, r.sliceKey(chunkid, size)))
+					rs = append(rs, pipe.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), -1))
 				}
 				return nil
 			})
@@ -2075,7 +2084,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 			for i := skipped; i > 0; i-- {
 				pipe.LPush(ctx, key, vals[i-1])
 			}
-			pipe.IncrBy(ctx, r.sliceKey(chunkid, size), 0) // create the key to tracking it
+			pipe.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), 1) // create the key to tracking it
 			for _, s := range ss {
 				rs = append(rs, pipe.Decr(ctx, r.sliceKey(s.chunkid, s.size)))
 			}
@@ -2085,7 +2094,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 	}, key)
 	// there could be false-negative that the compaction is successful, double-check
 	if errno != 0 && errno != syscall.EINVAL {
-		if e := r.rdb.Get(ctx, r.sliceKey(chunkid, size)).Err(); e == redis.Nil {
+		if e := r.rdb.HGet(ctx, sliceRefs, r.sliceKey(chunkid, size)).Err(); e == redis.Nil {
 			errno = syscall.EINVAL // failed
 		} else if e == nil {
 			errno = 0 // successful
@@ -2093,10 +2102,12 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 	}
 
 	if errno == syscall.EINVAL {
-		r.rdb.Decr(ctx, r.sliceKey(chunkid, size))
+		r.rdb.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), -2)
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
 		r.deleteSlice(ctx, chunkid, size)
 	} else if errno == 0 {
+		// reset it to zero
+		r.rdb.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), -1)
 		for i, s := range ss {
 			if rs[i].Err() == nil && rs[i].Val() < 0 {
 				r.deleteSlice(ctx, s.chunkid, s.size)
