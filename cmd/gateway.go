@@ -528,6 +528,8 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
+	info.Bucket = bucket
+	info.Name = object
 	p := n.path(bucket, object)
 	root := n.path(bucket)
 	for p != root {
@@ -541,18 +543,19 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 		}
 		p = path.Dir(p)
 	}
-	return minio.ObjectInfo{}, nil
+	return info, jfsToObjectErr(ctx, err, bucket, object)
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
-	if err := n.checkBucket(ctx, bucket); err != nil {
-		return
+	for _, object := range objects {
+		_, err := n.DeleteObject(ctx, bucket, object.ObjectName, options)
+		if err == nil {
+			objs = append(objs, minio.DeletedObject{ObjectName: object.ObjectName})
+		} else {
+			errs = append(errs, err)
+		}
 	}
-	errs = make([]error, len(objects))
-	for idx, object := range objects {
-		_, errs[idx] = n.DeleteObject(ctx, bucket, object.ObjectName, minio.ObjectOptions{})
-	}
-	return nil, nil
+	return
 }
 
 type fReader struct {
@@ -673,12 +676,10 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 }
 
 func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
-	f, eno := n.fs.Open(mctx, minio.PathJoin(bucket, object), 000)
+	fi, eno := n.fs.Stat(mctx, minio.PathJoin(bucket, object))
 	if eno != 0 {
 		return false
 	}
-	defer func() { _ = f.Close(mctx) }()
-	fi, _ := f.Stat()
 	return fi.IsDir()
 }
 
