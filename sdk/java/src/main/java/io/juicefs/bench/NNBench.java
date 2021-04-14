@@ -74,7 +74,7 @@ public class NNBench {
   public static long numberOfMaps = 1l; // default is 1
   public static long numberOfReduces = 1l; // default is 1
   public static long startTime =
-          System.currentTimeMillis() + (60 * 1000); // default is 'now' + 1min
+          System.currentTimeMillis() + (20 * 1000); // default is 'now' + 1min
   public static long numberOfFiles = 1l; // default is 1
   public static String baseDir = "/benchmarks/NNBench";  // default
   public static int threadsPerMap = 1;
@@ -727,7 +727,7 @@ public class NNBench {
                             AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
       for (long l = 0L; l < numberOfFiles; l++) {
         Path filePath;
-        if (deleteBeforeRename) {
+        if (beforeRename) {
           filePath = new Path(new Path(baseDir, dataDirName),
                   new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), "file_" + l)));
         } else {

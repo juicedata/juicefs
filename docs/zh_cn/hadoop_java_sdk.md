@@ -254,66 +254,76 @@ CREATE TABLE IF NOT EXISTS person
 
 以下测试需要保证集群有足够的资源能够同时启动所需的 map 数量
 
+此测试使用了 3 台 4c32g 内存的计算节点，阿里云 Redis 5.0 社区 4G 主从版 
+
 #### 元数据
 
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation create -threadsPerMap 20 -maps 12 -numberOfFiles 200 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation create -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
   ```
 
-  此命令会启动 10 个 map task，每个 task 有 20 个线程，每个线程会创建 200 个空文件，总共 40000 个空文件
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会创建 100 个空文件，总共 100000 个空文件
 
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation open -threadsPerMap 20 -maps 12 -numberOfFiles 200 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation open -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
   ```
 
-  此命令会启动 10 个 map task，每个 task 有 20 个线程，每个线程会 open 200 个文件，总共 open 40000 个文件
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 open 1000 个文件，总共 open 100000 个文件
 
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation rename -threadsPerMap 20 -maps 12 -numberOfFiles 200 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation rename -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
   ```
 
-  此命令会启动 10 个 map task，每个 task 有 20 个线程，每个线程会 rename 200 个文件，总共 rename 40000 个文件
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 rename 1000 个文件，总共 rename 100000 个文件
 
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation delete -threadsPerMap 20 -maps 12 -numberOfFiles 200 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation delete -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
   ```
 
-  此命令会启动 10 个 map task，每个 task 有 20 个线程，每个线程会 delete 200 个文件，总共 delete 40000 个文件
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 delete 1000 个文件，总共 delete 100000 个文件
   
 - 参考值
 
-| 操作   | tps  | 时延(ms) |
-| ------ | ---- | ---- |
-| create | 5652  | 33.1 |
-| open   | 8785 | 20.4 |
-| rename | 2957  | 64.4 |
-| delete | 1114  | 173.8 |
+| 操作   | tps(10并发) | 时延(ms) | tps(100并发) | 时延(ms) |
+| ------ | ---- | ---- | ---- | ---- |
+| create | 2307 | 3.6 | 8375 | 11.5 |
+| open   | 3215 | 2.3 | 12691 | 7.5 |
+| rename | 1700 | 5.22 | 5343 | 18.4 |
+| delete | 1378 | 6.7      | 3576 | 27.6 |
 
 #### IO 性能
 
 - 连续写
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -write -nrFiles 10 -fileSize 1000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -write -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
   ```
 
-  此命令会启动 10 个 map task，每个 task 写入 1000MB 的数据
+  此命令会启动 10 个 map task，每个 task 写入 10000MB 的数据
 
 - 连续读
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -read -nrFiles 10 -fileSize 1000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -read -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
   ```
 
-  此命令会启动 10 个 map task，每个 task 读取 1000MB 的数据
+  此命令会启动 10 个 map task，每个 task 读取 10000MB 的数据
+
+
+- 参考值
+
+| 操作   | 吞吐(MB/s)  |
+| ------ | ---- | 
+| write | 1792  |
+| read   | 1409 | 
 
 
 ## FAQ
