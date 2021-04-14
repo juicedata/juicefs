@@ -16,6 +16,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -56,5 +58,6 @@ func mount_main(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, c *cli.Co
 	if err != nil {
 		logger.Fatalf("Initialize failed: %s", err)
 	}
-	winfsp.Serve(conf, jfs, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
+	winfsp.Serve(conf, jfs, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"),
+		strings.HasSuffix(conf.Mountpoint, ":"))
 }
