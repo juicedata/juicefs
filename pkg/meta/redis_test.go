@@ -262,6 +262,38 @@ func TestRedisClient(t *testing.T) {
 	}
 }
 
+func TestCaseIncensi(t *testing.T) {
+	var conf = RedisConfig{CaseInsensi: true}
+	m, err := NewRedisMeta("redis://127.0.0.1:6379/6", &conf)
+	if err != nil {
+		t.Logf("redis is not available: %s", err)
+		t.Skip()
+	}
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var inode Ino
+	var attr = &Attr{}
+	_ = m.Create(ctx, 1, "foo", 0755, 0, &inode, attr)
+	if st := m.Create(ctx, 1, "Foo", 0755, 0, &inode, attr); st != syscall.EEXIST {
+		t.Fatalf("create should fail with EEXIST")
+	}
+	if st := m.Lookup(ctx, 1, "Foo", &inode, attr); st != 0 {
+		t.Fatalf("lookup Foo should be OK")
+	}
+	if st := m.Rename(ctx, 1, "Foo", 1, "bar", &inode, attr); st != 0 {
+		t.Fatalf("rename Foo to bar should be OK")
+	}
+	if st := m.Unlink(ctx, 1, "Bar"); st != 0 {
+		t.Fatalf("unlink Bar should be OK")
+	}
+	if st := m.Mkdir(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("mkdir Foo should be OK")
+	}
+	if st := m.Rmdir(ctx, 1, "foo"); st != 0 {
+		t.Fatalf("rmdir foo should be OK")
+	}
+}
+
 func TestCompaction(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1:6379/8", &conf)

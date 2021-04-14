@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -558,7 +557,7 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	return
 }
 
-func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int) error {
+func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int, caseInsensi bool) error {
 	var jfs juice
 	jfs.conf = conf
 	jfs.fs = fs_
@@ -577,7 +576,7 @@ func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo flo
 	if fuseOpt != "" {
 		options += "," + fuseOpt
 	}
-	host.SetCapCaseInsensitive(strings.Contains(conf.Mountpoint, ":"))
+	host.SetCapCaseInsensitive(caseInsensi)
 	host.SetCapReaddirPlus(true)
 	logger.Debugf("mount point: %s, options: %s", conf.Mountpoint, options)
 	_ = host.Mount(conf.Mountpoint, []string{"-o", options})
