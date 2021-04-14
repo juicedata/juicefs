@@ -33,7 +33,6 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.*;
 
 import java.io.*;
-import java.net.InetAddress;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -63,31 +62,27 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class NNBench {
   private static final Log LOG = LogFactory.getLog(
-          "org.apache.hadoop.hdfs.NNBench");
+          NNBench.class);
 
   protected static String CONTROL_DIR_NAME = "control";
   protected static String OUTPUT_DIR_NAME = "output";
   protected static String DATA_DIR_NAME = "data";
   protected static final String DEFAULT_RES_FILE_NAME = "NNBench_results.log";
-  protected static final String NNBENCH_VERSION = "NameNode Benchmark 0.4";
+  protected static final String NNBENCH_VERSION = "Meta Benchmark 1.0";
 
   public static String operation = "none";
   public static long numberOfMaps = 1l; // default is 1
   public static long numberOfReduces = 1l; // default is 1
   public static long startTime =
-          System.currentTimeMillis() + (60 * 1000); // default is 'now' + 2min
-  public static long blockSize = 1l; // default is 1
-  public static int bytesToWrite = 0; // default is 0
-  public static long bytesPerChecksum = 1l; // default is 1
+          System.currentTimeMillis() + (20 * 1000); // default is 'now' + 1min
   public static long numberOfFiles = 1l; // default is 1
-  public static short replicationFactorPerFile = 1; // default is 1
   public static String baseDir = "/benchmarks/NNBench";  // default
-  public static boolean readFileAfterOpen = false; // default is to not read
   public static int threadsPerMap = 1;
+  public static boolean deleteBeforeRename = false;
 
   // Supported operations
-  private static final String OP_CREATE_WRITE = "create_write";
-  private static final String OP_OPEN_READ = "open_read";
+  private static final String OP_CREATE = "create";
+  private static final String OP_OPEN = "open";
   private static final String OP_RENAME = "rename";
   private static final String OP_DELETE = "delete";
 
@@ -107,7 +102,7 @@ public class NNBench {
     FileSystem tempFS = new Path(baseDir).getFileSystem(config);
 
     // Delete the data directory only if it is the create/write operation
-    if (operation.equals(OP_CREATE_WRITE)) {
+    if (operation.equals(OP_CREATE)) {
       LOG.info("Deleting data directory");
       tempFS.delete(new Path(baseDir, DATA_DIR_NAME), true);
     }
@@ -157,12 +152,12 @@ public class NNBench {
     String usage =
             "Usage: nnbench <options>\n" +
                     "Options:\n" +
-                    "\t-operation <Available operations are " + OP_CREATE_WRITE + " " +
-                    OP_OPEN_READ + " " + OP_RENAME + " " + OP_DELETE + ". " +
+                    "\t-operation <Available operations are " + OP_CREATE + " " +
+                    OP_OPEN + " " + OP_RENAME + " " + OP_DELETE + ". " +
                     "This option is mandatory>\n" +
-                    "\t * NOTE: The open_read, rename and delete operations assume " +
+                    "\t * NOTE: The open, rename and delete operations assume " +
                     "that the files they operate on, are already available. " +
-                    "The create_write operation must be run before running the " +
+                    "The create operation must be run before running the " +
                     "other operations.\n" +
                     "\t-maps <number of maps. default is 1. This is not mandatory>\n" +
                     "\t-reduces <number of reduces. default is 1. This is not mandatory>\n" +
@@ -170,21 +165,11 @@ public class NNBench {
                     "Make sure this is far enough into the future, so all maps " +
                     "(operations) will start at the same time>. " +
                     "default is launch time + 2 mins. This is not mandatory \n" +
-                    "\t-blockSize <Block size in bytes. default is 1. " +
-                    "This is not mandatory>\n" +
-                    "\t-bytesToWrite <Bytes to write. default is 0. " +
-                    "This is not mandatory>\n" +
-                    "\t-bytesPerChecksum <Bytes per checksum for the files. default is 1. " +
-                    "This is not mandatory>\n" +
                     "\t-numberOfFiles <number of files to create. default is 1. " +
                     "This is not mandatory>\n" +
-                    "\t-replicationFactorPerFile <Replication factor for the files." +
-                    " default is 1. This is not mandatory>\n" +
-                    "\t-baseDir <base DFS path. default is /becnhmarks/NNBench. " +
+                    "\t-baseDir <base FS path. default is /becnhmarks/NNBench. " +
                     "This is not mandatory>\n" +
-                    "\t-readFileAfterOpen <true or false. if true, it reads the file and " +
-                    "reports the average time to read. This is valid with the open_read " +
-                    "operation. default is false. This is not mandatory>\n" +
+                    "\t-deleteBeforeRename\n" +
                     "\t-help: Display the help statement\n";
 
 
@@ -230,30 +215,18 @@ public class NNBench {
       } else if (args[i].equals("-startTime")) {
         checkArgs(i + 1, args.length);
         startTime = Long.parseLong(args[++i]) * 1000;
-      } else if (args[i].equals("-blockSize")) {
-        checkArgs(i + 1, args.length);
-        blockSize = Long.parseLong(args[++i]);
-      } else if (args[i].equals("-bytesToWrite")) {
-        checkArgs(i + 1, args.length);
-        bytesToWrite = Integer.parseInt(args[++i]);
-      } else if (args[i].equals("-bytesPerChecksum")) {
-        checkArgs(i + 1, args.length);
-        bytesPerChecksum = Long.parseLong(args[++i]);
       } else if (args[i].equals("-numberOfFiles")) {
         checkArgs(i + 1, args.length);
         numberOfFiles = Long.parseLong(args[++i]);
-      } else if (args[i].equals("-replicationFactorPerFile")) {
-        checkArgs(i + 1, args.length);
-        replicationFactorPerFile = Short.parseShort(args[++i]);
       } else if (args[i].equals("-baseDir")) {
         checkArgs(i + 1, args.length);
         baseDir = args[++i];
-      } else if (args[i].equals("-readFileAfterOpen")) {
-        checkArgs(i + 1, args.length);
-        readFileAfterOpen = Boolean.parseBoolean(args[++i]);
       } else if (args[i].equals("-threadsPerMap")) {
         checkArgs(i + 1, args.length);
         threadsPerMap = Integer.parseInt(args[++i]);
+      } else if (args[i].equals("-deleteBeforeRename")) {
+        deleteBeforeRename = true;
+        ++i;
       } else if (args[i].equals("-help")) {
         displayUsage();
         System.exit(-1);
@@ -265,13 +238,8 @@ public class NNBench {
     LOG.info("               Start time: " + sdf.format(new Date(startTime)));
     LOG.info("           Number of maps: " + numberOfMaps);
     LOG.info("        Number of reduces: " + numberOfReduces);
-    LOG.info("               Block Size: " + blockSize);
-    LOG.info("           Bytes to write: " + bytesToWrite);
-    LOG.info("       Bytes per checksum: " + bytesPerChecksum);
     LOG.info("          Number of files: " + numberOfFiles);
-    LOG.info("       Replication factor: " + replicationFactorPerFile);
     LOG.info("                 Base dir: " + baseDir);
-    LOG.info("     Read file after open: " + readFileAfterOpen);
     LOG.info("          Threads per map: " + threadsPerMap);
 
     // Set user-defined parameters, so the map method can access the values
@@ -279,15 +247,10 @@ public class NNBench {
     config.setLong("test.nnbench.maps", numberOfMaps);
     config.setLong("test.nnbench.reduces", numberOfReduces);
     config.setLong("test.nnbench.starttime", startTime);
-    config.setLong("test.nnbench.blocksize", blockSize);
-    config.setInt("test.nnbench.bytestowrite", bytesToWrite);
-    config.setLong("test.nnbench.bytesperchecksum", bytesPerChecksum);
     config.setLong("test.nnbench.numberoffiles", numberOfFiles);
-    config.setInt("test.nnbench.replicationfactor",
-            (int) replicationFactorPerFile);
     config.set("test.nnbench.basedir", baseDir);
-    config.setBoolean("test.nnbench.readFileAfterOpen", readFileAfterOpen);
     config.setInt("test.nnbench.threadsPerMap", threadsPerMap);
+    config.setBoolean("test.nnbench.deleteBeforeRename", deleteBeforeRename);
 
     config.set("test.nnbench.datadir.name", DATA_DIR_NAME);
     config.set("test.nnbench.outputdir.name", OUTPUT_DIR_NAME);
@@ -310,9 +273,7 @@ public class NNBench {
     BufferedReader lines;
     lines = new BufferedReader(new InputStreamReader(in));
 
-    long totalTimeAL1 = 0l;
-    long totalTimeAL2 = 0l;
-    long totalTimeTPmS = 0l;
+    long totalTime = 0l;
     long lateMaps = 0l;
     long numOfExceptions = 0l;
     long successfulFileOps = 0l;
@@ -321,20 +282,14 @@ public class NNBench {
     long mapEndTimeTPmS = 0l;
 
     String resultTPSLine1 = null;
-    String resultTPSLine2 = null;
     String resultALLine1 = null;
-    String resultALLine2 = null;
 
     String line;
     while ((line = lines.readLine()) != null) {
       StringTokenizer tokens = new StringTokenizer(line, " \t\n\r\f%;");
       String attr = tokens.nextToken();
-      if (attr.endsWith(":totalTimeAL1")) {
-        totalTimeAL1 = Long.parseLong(tokens.nextToken());
-      } else if (attr.endsWith(":totalTimeAL2")) {
-        totalTimeAL2 = Long.parseLong(tokens.nextToken());
-      } else if (attr.endsWith(":totalTimeTPmS")) {
-        totalTimeTPmS = Long.parseLong(tokens.nextToken());
+      if (attr.endsWith(":totalTime")) {
+        totalTime = Long.parseLong(tokens.nextToken());
       } else if (attr.endsWith(":latemaps")) {
         lateMaps = Long.parseLong(tokens.nextToken());
       } else if (attr.endsWith(":numOfExceptions")) {
@@ -350,55 +305,27 @@ public class NNBench {
 
     // Average latency is the average time to perform 'n' number of
     // operations, n being the number of files
-    double avgLatency1 = (double) totalTimeAL1 / successfulFileOps;
-    double avgLatency2 = (double) totalTimeAL2 / successfulFileOps;
+    double avgLatency = (double) totalTime / successfulFileOps;
 
-    // The time it takes for the longest running map is measured. Using that,
-    // cluster transactions per second is calculated. It includes time to
-    // retry any of the failed operations
-    double longestMapTimeTPmS = (double) (mapEndTimeTPmS - mapStartTimeTPmS);
-    double totalTimeTPS = (longestMapTimeTPmS == 0) ?
-            (1000 * successfulFileOps) :
-            (double) (1000 * successfulFileOps) / longestMapTimeTPmS;
+    double totalTimeTPS =
+            (double) (1000 * successfulFileOps) / (mapEndTimeTPmS - mapStartTimeTPmS);
 
-    // The time it takes to perform 'n' operations is calculated (in ms),
-    // n being the number of files. Using that time, the average execution
-    // time is calculated. It includes time to retry any of the
-    // failed operations
-    double AverageExecutionTime = (totalTimeTPmS == 0) ?
-            (double) successfulFileOps :
-            (double) totalTimeTPmS / successfulFileOps;
-
-    if (operation.equals(OP_CREATE_WRITE)) {
-      // For create/write/close, it is treated as two transactions,
-      // since a file create from a client perspective involves create and close
-      resultTPSLine1 = "               TPS: Create/Write/Close: " +
-              (int) (totalTimeTPS * 2);
-      resultTPSLine2 = "Avg exec time (ms): Create/Write/Close: " +
-              AverageExecutionTime;
-      resultALLine1 = "            Avg Lat (ms): Create/Write: " + avgLatency1;
-      resultALLine2 = "                   Avg Lat (ms): Close: " + avgLatency2;
-    } else if (operation.equals(OP_OPEN_READ)) {
-      resultTPSLine1 = "                        TPS: Open/Read: " +
+    if (operation.equals(OP_CREATE)) {
+      resultTPSLine1 = "                           TPS: Create: " +
+              (int) (totalTimeTPS);
+      resultALLine1 = "                   Avg Lat (ms): Create: " + avgLatency;
+    } else if (operation.equals(OP_OPEN)) {
+      resultTPSLine1 = "                             TPS: Open: " +
               (int) totalTimeTPS;
-      resultTPSLine2 = "         Avg Exec time (ms): Open/Read: " +
-              AverageExecutionTime;
-      resultALLine1 = "                    Avg Lat (ms): Open: " + avgLatency1;
-      if (readFileAfterOpen) {
-        resultALLine2 = "                  Avg Lat (ms): Read: " + avgLatency2;
-      }
+      resultALLine1 = "                     Avg Lat (ms): Open: " + avgLatency;
     } else if (operation.equals(OP_RENAME)) {
       resultTPSLine1 = "                           TPS: Rename: " +
               (int) totalTimeTPS;
-      resultTPSLine2 = "            Avg Exec time (ms): Rename: " +
-              AverageExecutionTime;
-      resultALLine1 = "                  Avg Lat (ms): Rename: " + avgLatency1;
+      resultALLine1 = "                   Avg Lat (ms): Rename: " + avgLatency;
     } else if (operation.equals(OP_DELETE)) {
       resultTPSLine1 = "                           TPS: Delete: " +
               (int) totalTimeTPS;
-      resultTPSLine2 = "            Avg Exec time (ms): Delete: " +
-              AverageExecutionTime;
-      resultALLine1 = "                  Avg Lat (ms): Delete: " + avgLatency1;
+      resultALLine1 = "                   Avg Lat (ms): Delete: " + avgLatency;
     }
 
     String resultLines[] = {
@@ -411,32 +338,25 @@ public class NNBench {
             "                            Start time: " +
                     sdf.format(new Date(startTime)),
             "                           Maps to run: " + numberOfMaps,
+            "                       Threads per map: " + threadsPerMap,
             "                        Reduces to run: " + numberOfReduces,
-            "                    Block Size (bytes): " + blockSize,
-            "                        Bytes to write: " + bytesToWrite,
-            "                    Bytes per checksum: " + bytesPerChecksum,
             "                       Number of files: " + numberOfFiles,
-            "                    Replication factor: " + replicationFactorPerFile,
             "            Successful file operations: " + successfulFileOps,
             "",
             "        # maps that missed the barrier: " + lateMaps,
             "                          # exceptions: " + numOfExceptions,
             "",
             resultTPSLine1,
-            resultTPSLine2,
             resultALLine1,
-            resultALLine2,
             "",
-            "                 RAW DATA: AL Total #1: " + totalTimeAL1,
-            "                 RAW DATA: AL Total #2: " + totalTimeAL2,
-            "              RAW DATA: TPS Total (ms): " + totalTimeTPmS,
-            "       RAW DATA: Longest Map Time (ms): " + longestMapTimeTPmS,
+            "              RAW DATA: TPS Total (ms): " + totalTime,
+            "           RAW DATA: Job Duration (ms): " + (mapEndTimeTPmS - mapStartTimeTPmS),
             "                   RAW DATA: Late maps: " + lateMaps,
             "             RAW DATA: # of exceptions: " + numOfExceptions,
             ""};
 
     PrintStream res = new PrintStream(new FileOutputStream(
-            new File(DEFAULT_RES_FILE_NAME), true));
+            DEFAULT_RES_FILE_NAME, true));
 
     // Write to a file and also dump to log
     for (int i = 0; i < resultLines.length; i++) {
@@ -451,7 +371,6 @@ public class NNBench {
    * @throws IOException on error
    */
   public static void runTests() throws IOException {
-    config.setLong("io.bytes.per.checksum", bytesPerChecksum);
 
     JobConf job = new JobConf(config, NNBench.class);
 
@@ -480,8 +399,8 @@ public class NNBench {
    */
   public static void validateInputs() {
     // If it is not one of the four operations, then fail
-    if (!operation.equals(OP_CREATE_WRITE) &&
-            !operation.equals(OP_OPEN_READ) &&
+    if (!operation.equals(OP_CREATE) &&
+            !operation.equals(OP_OPEN) &&
             !operation.equals(OP_RENAME) &&
             !operation.equals(OP_DELETE)) {
       System.err.println("Error: Unknown operation: " + operation);
@@ -504,27 +423,6 @@ public class NNBench {
       System.exit(-1);
     }
 
-    // If blocksize is a negative number or 0, then fail
-    if (blockSize <= 0) {
-      System.err.println("Error: Block size must be a positive number");
-      displayUsage();
-      System.exit(-1);
-    }
-
-    // If bytes to write is a negative number, then fail
-    if (bytesToWrite < 0) {
-      System.err.println("Error: Bytes to write must be a positive number");
-      displayUsage();
-      System.exit(-1);
-    }
-
-    // If bytes per checksum is a negative number, then fail
-    if (bytesPerChecksum < 0) {
-      System.err.println("Error: Bytes per checksum must be a positive number");
-      displayUsage();
-      System.exit(-1);
-    }
-
     // If number of files is a negative number, then fail
     if (numberOfFiles < 0) {
       System.err.println("Error: Number of files must be a positive number");
@@ -532,20 +430,6 @@ public class NNBench {
       System.exit(-1);
     }
 
-    // If replication factor is a negative number, then fail
-    if (replicationFactorPerFile < 0) {
-      System.err.println("Error: Replication factor must be a positive number");
-      displayUsage();
-      System.exit(-1);
-    }
-
-    // If block size is not a multiple of bytesperchecksum, fail
-    if (blockSize % bytesPerChecksum != 0) {
-      System.err.println("Error: Block Size in bytes must be a multiple of " +
-              "bytes per checksum: ");
-      displayUsage();
-      System.exit(-1);
-    }
   }
 
   /**
@@ -584,18 +468,16 @@ public class NNBench {
   static class NNBenchMapper extends Configured
           implements Mapper<Text, LongWritable, Text, Text> {
     FileSystem filesystem = null;
-    private String hostName = null;
 
     long numberOfFiles = 1l;
-    long blkSize = 1l;
-    short replFactor = 1;
-    int bytesToWrite = 0;
+    boolean beforeRename = false;
     String baseDir = null;
     String dataDirName = null;
     String op = null;
-    boolean readFile = false;
     final int MAX_OPERATION_EXCEPTIONS = 1000;
     int threadsPerMap = 1;
+
+    ExecutorService executorService;
 
     // Data to collect from the operation
 
@@ -619,12 +501,13 @@ public class NNBench {
         throw new RuntimeException("Cannot get file system.", e);
       }
 
-      try {
-        hostName = InetAddress.getLocalHost().getHostName();
-      } catch (Exception e) {
-        throw new RuntimeException("Error getting hostname", e);
-      }
+      numberOfFiles = conf.getLong("test.nnbench.numberoffiles", 1l);
+      dataDirName = conf.get("test.nnbench.datadir.name");
+      op = conf.get("test.nnbench.operation");
+      beforeRename = conf.getBoolean("test.nnbench.deleteBeforeRename", false);
 
+      threadsPerMap = conf.getInt("test.nnbench.threadsPerMap", 1);
+      executorService = Executors.newFixedThreadPool(threadsPerMap);
     }
 
     /**
@@ -670,17 +553,7 @@ public class NNBench {
                     LongWritable value,
                     OutputCollector<Text, Text> output,
                     Reporter reporter) throws IOException {
-      Configuration conf = filesystem.getConf();
 
-      numberOfFiles = conf.getLong("test.nnbench.numberoffiles", 1l);
-      blkSize = conf.getLong("test.nnbench.blocksize", 1l);
-      replFactor = (short) (conf.getInt("test.nnbench.replicationfactor", 1));
-      bytesToWrite = conf.getInt("test.nnbench.bytestowrite", 0);
-      dataDirName = conf.get("test.nnbench.datadir.name");
-      op = conf.get("test.nnbench.operation");
-      readFile = conf.getBoolean("test.nnbench.readFileAfterOpen", false);
-      threadsPerMap = conf.getInt("test.nnbench.threadsPerMap", 1);
-      ExecutorService executorService = Executors.newFixedThreadPool(threadsPerMap);
 
       List<Entry> res = Collections.synchronizedList(new ArrayList<>());
 
@@ -688,33 +561,31 @@ public class NNBench {
         int threadNum = i;
         executorService.submit(() -> {
           try {
-            doMap(reporter, res, value.get(), threadNum);
+            doMap(res, value.get(), threadNum);
           } catch (IOException e) {
-            LOG.error(e);
-            throw new RuntimeException();
+            throw new RuntimeException(e);
           }
         });
       }
 
       executorService.shutdown();
       try {
-        executorService.awaitTermination(100, TimeUnit.HOURS);
+        executorService.awaitTermination(1000, TimeUnit.HOURS);
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
 
+      long successOps = 0L;
       for (Entry entry : res) {
+        if (entry.key.toString().contains("successfulFileOps")) {
+          successOps += Long.parseLong(entry.value.toString());
+        }
         output.collect(entry.key, entry.value);
       }
-
-//      try {
-//        executorService.awaitTermination(10, TimeUnit.MINUTES);
-//      } catch (InterruptedException e) {
-//        throw new RuntimeException();
-//      }
+      reporter.setStatus("Finish " + successOps + " files");
     }
 
-    class Entry {
+    static class Entry {
       Text key;
       Text value;
 
@@ -724,49 +595,38 @@ public class NNBench {
       }
     }
 
-    private void doMap(Reporter reporter, List<Entry> res, long mapId, int threadNum) throws IOException {
-      long totalTimeTPmS = 0l;
+    private void doMap(List<Entry> res, long mapId, int threadNum) throws IOException {
       long startTimeTPmS = 0l;
       long endTimeTPms = 0l;
 
       AtomicLong successfulFileOps = new AtomicLong(0L);
       AtomicInteger numOfExceptions = new AtomicInteger(0);
-      AtomicLong totalTimeAL1 = new AtomicLong(0L);
-      AtomicLong totalTimeAL2 = new AtomicLong(0L);
-
+      AtomicLong totalTime = new AtomicLong(0L);
 
       if (barrier()) {
-        if (op.equals(OP_CREATE_WRITE)) {
-          startTimeTPmS = System.currentTimeMillis();
-          doCreateWriteOp(mapId, "file_", reporter, threadNum, successfulFileOps, numOfExceptions, totalTimeAL1, totalTimeAL2);
-        } else if (op.equals(OP_OPEN_READ)) {
-          startTimeTPmS = System.currentTimeMillis();
-          doOpenReadOp(mapId, "file_", reporter, successfulFileOps, numOfExceptions, totalTimeAL1, totalTimeAL2, threadNum);
+        startTimeTPmS = System.currentTimeMillis();
+        if (op.equals(OP_CREATE)) {
+          doCreate(mapId, successfulFileOps, numOfExceptions, totalTime, threadNum);
+        } else if (op.equals(OP_OPEN)) {
+          doOpen(mapId, successfulFileOps, numOfExceptions, totalTime, threadNum);
         } else if (op.equals(OP_RENAME)) {
-          startTimeTPmS = System.currentTimeMillis();
-          doRenameOp(mapId, "file_", reporter, successfulFileOps, numOfExceptions, totalTimeAL1, threadNum);
+          doRenameOp(mapId, successfulFileOps, numOfExceptions, totalTime, threadNum);
         } else if (op.equals(OP_DELETE)) {
-          startTimeTPmS = System.currentTimeMillis();
-          doDeleteOp(mapId, "file_", reporter, successfulFileOps, numOfExceptions, totalTimeAL1, threadNum);
+          doDeleteOp(mapId, successfulFileOps, numOfExceptions, totalTime, threadNum);
         }
 
         endTimeTPms = System.currentTimeMillis();
-        totalTimeTPmS = endTimeTPms - startTimeTPmS;
       } else {
         res.add(new Entry(new Text("l:latemaps"), new Text("1")));
       }
 
       // collect after the map end time is measured
-      res.add(new Entry(new Text("l:totalTimeAL1"),
-              new Text(String.valueOf(totalTimeAL1.get()))));
-      res.add(new Entry(new Text("l:totalTimeAL2"),
-              new Text(String.valueOf(totalTimeAL2.get()))));
+      res.add(new Entry(new Text("l:totalTime"),
+              new Text(String.valueOf(totalTime.get()))));
       res.add(new Entry(new Text("l:numOfExceptions"),
               new Text(String.valueOf(numOfExceptions.get()))));
       res.add(new Entry(new Text("l:successfulFileOps"),
               new Text(String.valueOf(successfulFileOps.get()))));
-      res.add(new Entry(new Text("l:totalTimeTPmS"),
-              new Text(String.valueOf(totalTimeTPmS))));
       res.add(new Entry(new Text("min:mapStartTimeTPmS"),
               new Text(String.valueOf(startTimeTPmS))));
       res.add(new Entry(new Text("max:mapEndTimeTPmS"),
@@ -774,53 +634,29 @@ public class NNBench {
     }
 
     /**
-     * Create and Write operation.
-     *
-     * @param name              of the prefix of the putput file to be created
-     * @param reporter          an instanse of (@link Reporter) to be used for
-     * @param successfulFileOps
-     * @param numOfExceptions
-     * @param totalTimeAL1
-     * @param totalTimeAL2
+     * Create operation.
      */
-    private void doCreateWriteOp(long mapId, String name,
-                                 Reporter reporter, int threadNum, AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTimeAL1, AtomicLong totalTimeAL2) {
+    private void doCreate(long mapId,
+                          AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
       FSDataOutputStream out;
-      byte[] buffer = new byte[bytesToWrite];
 
-      for (long l = 0l; l < numberOfFiles; l++) {
+      for (long l = 0L; l < numberOfFiles; l++) {
         Path filePath = new Path(new Path(baseDir, dataDirName),
-                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), name + "_" + l)));
-
+                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), "file_" + l)));
         boolean successfulOp = false;
         while (!successfulOp && numOfExceptions.get() < MAX_OPERATION_EXCEPTIONS) {
           try {
             // Set up timer for measuring AL (transaction #1)
-            long startTimeAL = System.currentTimeMillis();
+            long startTime = System.currentTimeMillis();
             // Create the file
-            // Use a buffer size of 512
-            out = filesystem.create(filePath,
-                    true,
-                    512,
-                    replFactor,
-                    blkSize);
-            out.write(buffer);
-            totalTimeAL1.addAndGet(System.currentTimeMillis() - startTimeAL);
-
-            // Close the file / file output stream
-            // Set up timers for measuring AL (transaction #2)
-            startTimeAL = System.currentTimeMillis();
+            out = filesystem.create(filePath, false);
             out.close();
-
-            totalTimeAL2.addAndGet(System.currentTimeMillis() - startTimeAL);
-            successfulOp = true;
+            totalTime.addAndGet(System.currentTimeMillis() - startTime);
             successfulFileOps.getAndIncrement();
-
-            reporter.setStatus("Finish " + l + " files");
+            successfulOp = true;
           } catch (IOException e) {
             LOG.info("Exception recorded in op: " +
-                    "Create/Write/Close", e);
-
+                    "Create", e);
             numOfExceptions.getAndIncrement();
           }
         }
@@ -829,43 +665,25 @@ public class NNBench {
 
     /**
      * Open operation
-     *
-     * @param name              of the prefix of the putput file to be read
-     * @param reporter          an instanse of (@link Reporter) to be used for
-     * @param successfulFileOps
-     * @param numOfExceptions
-     * @param totalTimeAL1
-     * @param totalTimeAL2
      */
-    private void doOpenReadOp(long mapId, String name,
-                              Reporter reporter, AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTimeAL1, AtomicLong totalTimeAL2, int threadNum) {
+    private void doOpen(long mapId,
+                        AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
       FSDataInputStream input;
-      byte[] buffer = new byte[bytesToWrite];
 
-      for (long l = 0l; l < numberOfFiles; l++) {
+      for (long l = 0L; l < numberOfFiles; l++) {
         Path filePath = new Path(new Path(baseDir, dataDirName),
-                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), name + "_" + l)));
+                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), "file_" + l)));
 
         boolean successfulOp = false;
         while (!successfulOp && numOfExceptions.get() < MAX_OPERATION_EXCEPTIONS) {
           try {
             // Set up timer for measuring AL
-            long startTimeAL = System.currentTimeMillis();
+            long startTime = System.currentTimeMillis();
             input = filesystem.open(filePath);
-            totalTimeAL1.addAndGet(System.currentTimeMillis() - startTimeAL);
-
-            // If the file needs to be read (specified at command line)
-            if (readFile) {
-              startTimeAL = System.currentTimeMillis();
-              input.readFully(buffer);
-
-              totalTimeAL2.addAndGet(System.currentTimeMillis() - startTimeAL);
-            }
             input.close();
-            successfulOp = true;
+            totalTime.addAndGet(System.currentTimeMillis() - startTime);
             successfulFileOps.getAndIncrement();
-
-            reporter.setStatus("Finish " + l + " files");
+            successfulOp = true;
           } catch (IOException e) {
             LOG.info("Exception recorded in op: OpenRead " + e);
             numOfExceptions.getAndIncrement();
@@ -876,35 +694,26 @@ public class NNBench {
 
     /**
      * Rename operation
-     *
-     * @param name            of prefix of the file to be renamed
-     * @param reporter        an instanse of (@link Reporter) to be used for
-     * @param numOfExceptions
-     * @param totalTimeAL1
      */
-    private void doRenameOp(long mapId, String name,
-                            Reporter reporter, AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTimeAL1, int threadNum) {
-      for (long l = 0l; l < numberOfFiles; l++) {
+    private void doRenameOp(long mapId,
+                            AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
+      for (long l = 0L; l < numberOfFiles; l++) {
         Path filePath = new Path(new Path(baseDir, dataDirName),
-                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), name + "_" + l)));
+                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), "file_" + l)));
         Path filePathR = new Path(new Path(baseDir, dataDirName),
-                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), name + "_r_" + l)));
+                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), "file_r_" + l)));
 
         boolean successfulOp = false;
         while (!successfulOp && numOfExceptions.get() < MAX_OPERATION_EXCEPTIONS) {
           try {
             // Set up timer for measuring AL
-            long startTimeAL = System.currentTimeMillis();
+            long startTime = System.currentTimeMillis();
             filesystem.rename(filePath, filePathR);
-            totalTimeAL1.addAndGet(System.currentTimeMillis() - startTimeAL);
-
-            successfulOp = true;
+            totalTime.addAndGet(System.currentTimeMillis() - startTime);
             successfulFileOps.getAndIncrement();
-
-            reporter.setStatus("Finish " + l + " files");
+            successfulOp = true;
           } catch (IOException e) {
             LOG.info("Exception recorded in op: Rename");
-
             numOfExceptions.getAndIncrement();
           }
         }
@@ -913,33 +722,30 @@ public class NNBench {
 
     /**
      * Delete operation
-     *
-     * @param name            of prefix of the file to be deleted
-     * @param reporter        an instanse of (@link Reporter) to be used for
-     * @param numOfExceptions
-     * @param totalTimeAL1
      */
-    private void doDeleteOp(long mapId, String name,
-                            Reporter reporter, AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTimeAL1, int threadNum) {
-      for (long l = 0l; l < numberOfFiles; l++) {
-        Path filePath = new Path(new Path(baseDir, dataDirName),
-                new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), name + "_" + l)));
+    private void doDeleteOp(long mapId,
+                            AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
+      for (long l = 0L; l < numberOfFiles; l++) {
+        Path filePath;
+        if (beforeRename) {
+          filePath = new Path(new Path(baseDir, dataDirName),
+                  new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), "file_" + l)));
+        } else {
+          filePath = new Path(new Path(baseDir, dataDirName),
+                  new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), "file_r_" + l)));
+        }
 
         boolean successfulOp = false;
         while (!successfulOp && numOfExceptions.get() < MAX_OPERATION_EXCEPTIONS) {
           try {
             // Set up timer for measuring AL
-            long startTimeAL = System.currentTimeMillis();
+            long startTime = System.currentTimeMillis();
             filesystem.delete(filePath, false);
-            totalTimeAL1.addAndGet(System.currentTimeMillis() - startTimeAL);
-
-            successfulOp = true;
+            totalTime.addAndGet(System.currentTimeMillis() - startTime);
             successfulFileOps.getAndIncrement();
-
-            reporter.setStatus("Finish " + l + " files");
+            successfulOp = true;
           } catch (IOException e) {
             LOG.info("Exception in recorded op: Delete");
-
             numOfExceptions.getAndIncrement();
           }
         }

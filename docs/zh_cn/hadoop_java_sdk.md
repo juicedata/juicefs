@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS person
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation createWrite -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local  
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation create -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local  
   ```
 
   此命令会 create 10000 个空文件
@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS person
 - open
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation openRead -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation open -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
   
   此命令会 open 10000 个文件，并不读取数据
@@ -205,20 +205,20 @@ CREATE TABLE IF NOT EXISTS person
 - rename
   
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
    
 - delete
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation delete -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation delete -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
 
 - 参考值
 
 | 操作   | tps  | 时延(ms) |
 | ------ | ---- | ---- |
-| create | 961  | 1.04 |
+| create | 546  | 1.83 |
 | open   | 1135 | 0.88 |
 | rename | 364  | 2.75 |
 | delete | 289  | 3.46 |
@@ -247,6 +247,95 @@ CREATE TABLE IF NOT EXISTS person
 | read   | 141 | 
 
 如果机器的网络带宽比较低，则一般能达到网络带宽瓶颈  
+
+### 分布式测试
+
+以下命令会启动 MapReduce 分布式任务程序元数据和 IO 性能
+
+以下测试需要保证集群有足够的资源能够同时启动所需的 map 数量
+
+此测试使用了 3 台 4c32g 内存的计算节点，突发带宽 5Gbit/s，阿里云 Redis 5.0 社区 4G 主从版 
+
+#### 元数据
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation create -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会创建 100 个空文件，总共 100000 个空文件
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation open -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 open 1000 个文件，总共 open 100000 个文件
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation rename -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 rename 1000 个文件，总共 rename 100000 个文件
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation delete -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 delete 1000 个文件，总共 delete 100000 个文件
+  
+- 参考值
+
+  - 10 并发
+  
+  | 操作   | IOPS | 时延(ms) |
+  | ------ | ---- | ---- |
+  | create | 2307 | 3.6 |
+  | open   | 3215 | 2.3 |
+  | rename | 1700 | 5.22 |
+  | delete | 1378 | 6.7      |
+
+  - 100 并发
+
+  | 操作   | IOPS | 时延(ms) |
+  | ------ | ---- | ---- |
+  | create | 8375 | 11.5 |
+  | open   | 12691 | 7.5 |
+  | rename | 5343 | 18.4 |
+  | delete | 3576 | 27.6 |
+
+#### IO 性能
+
+- 连续写
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -write -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+  此命令会启动 10 个 map task，每个 task 写入 10000MB 的数据
+
+- 连续读
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -read -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+  此命令会启动 10 个 map task，每个 task 读取 10000MB 的数据
+
+
+- 参考值
+
+| 操作   | 平均吞吐(MB/s)  | 总吞吐(MB/s)  |
+| ------ | ---- | ---- | 
+| write | 180  | 1792  |
+| read   | 141 | 1409 | 
+
 
 ## FAQ
 
