@@ -68,6 +68,7 @@ Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Ha
 | `juicefs.cache-size`         | 0             | Maximum size of local cache in MiB. It's the total size when set multiple cache directories.                                                                                                                                                                                                          |
 | `juicefs.discover-nodes-url` |               | The URL to discover cluster nodes, refresh every 10 minutes.<br /><br />YARN: `yarn`<br />Spark Standalone: `http://spark-master:web-ui-port/json/`<br />Spark ThriftServer: `http://thrift-server:4040/api/v1/applications/`<br />Presto: `http://coordinator:discovery-uri-port/v1/service/presto/` |
 
+
 ### Others
 
 | Configuration             | Default Value | Description                                                                                                                                                       |
@@ -176,6 +177,165 @@ CREATE TABLE IF NOT EXISTS person
   age INT
 ) LOCATION 'jfs://{JFS_NAME}/tmp/person';
 ```
+
+## Benchmark
+
+JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
+
+### Local environment
+#### Meta
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation create -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local  
+  ```
+
+  It creates 10000 empty files without write data
+
+- open
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation open -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  ```
+
+  It opens 10000 files without read data
+
+- rename
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  ```
+
+- delete
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation delete -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  ```
+
+- for reference
+
+| operation   | tps  | delay(ms) |
+| ------ | ---- | ---- |
+| create | 546  | 1.83 |
+| open   | 1135 | 0.88 |
+| rename | 364  | 2.75 |
+| delete | 289  | 3.46 |
+
+#### IO Performance
+
+- sequential write
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -write -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+- sequential read
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -read -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+  When run the cmd for the second time, the result may be much better than the first run. It's because the data was cached in memory, just clean the local disk cache.
+
+- for reference
+
+| operation   | throughput(MB/s)  |
+| ------ | ---- | 
+| write | 453  |
+| read   | 141 | 
+
+### Distribute Benchmark
+
+Distribute benchmark use MapReduce program to test meta and IO throughput performance
+
+Enough resources should be provided to make sure all Map task can be started at the same time
+
+We use 3 4c32g ecs(5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
+
+#### Meta
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation create -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  10 map task, each has 10 threads, each thread create 1000 empty file. 100000 files in total
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation open -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  10 map task, each has 10 threads, each thread open 1000 file. 100000 files in total
+  
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation rename -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  10 map task, each has 10 threads, each thread rename 1000 file. 100000 files in total
+
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation delete -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  10 map task, each has 10 threads, each thread delete 1000 file. 100000 files in total
+  
+
+- for reference
+
+    - 10 threads
+
+  | operation   | tps | delay(ms) |
+    | ------ | ---- | ---- |
+  | create | 2307 | 3.6 |
+  | open   | 3215 | 2.3 |
+  | rename | 1700 | 5.22 |
+  | delete | 1378 | 6.7      |
+
+    - 100 threads
+
+  | operation   | tps | delay(ms) |
+    | ------ | ---- | ---- |
+  | create | 8375 | 11.5 |
+  | open   | 12691 | 7.5 |
+  | rename | 5343 | 18.4 |
+  | delete | 3576 | 27.6 |
+
+#### IO Performance
+
+- sequential write
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -write -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+  10 map task, each task write 10000MB random data sequentially
+
+- sequential read
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -read -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+  10 map task, each task read 10000MB random data sequentially
+
+
+- for reference
+
+| operation   | total throughput(MB/s)  |
+| ------ | ---- | 
+| write | 1792  |
+| read   | 1409 | 
+
 
 ## FAQ
 

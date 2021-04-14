@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS person
   hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation create -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
   ```
 
-  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会创建 100 个空文件，总共 100000 个空文件
+  此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会创建 1000 个空文件，总共 100000 个空文件
 
 - create
 
