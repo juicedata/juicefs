@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS person
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation createWrite -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local  
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation create -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local  
   ```
 
   此命令会 create 10000 个空文件
@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS person
 - open
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation openRead -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation open -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
   
   此命令会 open 10000 个文件，并不读取数据
@@ -205,20 +205,20 @@ CREATE TABLE IF NOT EXISTS person
 - rename
   
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
    
 - delete
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation delete -numFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation delete -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
 
 - 参考值
 
 | 操作   | tps  | 时延(ms) |
 | ------ | ---- | ---- |
-| create | 961  | 1.04 |
+| create | 546  | 1.83 |
 | open   | 1135 | 0.88 |
 | rename | 364  | 2.75 |
 | delete | 289  | 3.46 |
@@ -247,6 +247,74 @@ CREATE TABLE IF NOT EXISTS person
 | read   | 141 | 
 
 如果机器的网络带宽比较低，则一般能达到网络带宽瓶颈  
+
+### 分布式测试
+
+以下命令会启动 MapReduce 分布式任务程序元数据和 IO 性能
+
+以下测试需要保证集群有足够的资源能够同时启动所需的 map 数量
+
+#### 元数据
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation create -threadsPerMap 20 -maps 12 -numberOfFiles 200 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  此命令会启动 10 个 map task，每个 task 有 20 个线程，每个线程会创建 200 个空文件，总共 40000 个空文件
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation open -threadsPerMap 20 -maps 12 -numberOfFiles 200 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  此命令会启动 10 个 map task，每个 task 有 20 个线程，每个线程会 open 200 个文件，总共 open 40000 个文件
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation rename -threadsPerMap 20 -maps 12 -numberOfFiles 200 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  此命令会启动 10 个 map task，每个 task 有 20 个线程，每个线程会 rename 200 个文件，总共 rename 40000 个文件
+
+- create
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation delete -threadsPerMap 20 -maps 12 -numberOfFiles 200 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  ```
+
+  此命令会启动 10 个 map task，每个 task 有 20 个线程，每个线程会 delete 200 个文件，总共 delete 40000 个文件
+  
+- 参考值
+
+| 操作   | tps  | 时延(ms) |
+| ------ | ---- | ---- |
+| create | 5652  | 33.1 |
+| open   | 8785 | 20.4 |
+| rename | 2957  | 64.4 |
+| delete | 1114  | 173.8 |
+
+#### IO 性能
+
+- 连续写
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -write -nrFiles 10 -fileSize 1000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+  此命令会启动 10 个 map task，每个 task 写入 1000MB 的数据
+
+- 连续读
+
+  ```shell
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -read -nrFiles 10 -fileSize 1000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  ```
+
+  此命令会启动 10 个 map task，每个 task 读取 1000MB 的数据
+
 
 ## FAQ
 
