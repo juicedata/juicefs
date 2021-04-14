@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS person
 
   - 10 并发
   
-  | 操作   | tps(10并发) | 时延(ms) |
+  | 操作   | IOPS | 时延(ms) |
   | ------ | ---- | ---- |
   | create | 2307 | 3.6 |
   | open   | 3215 | 2.3 |
@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS person
 
   - 100 并发
 
-  | 操作   | tps(100并发) | 时延(ms) |
+  | 操作   | IOPS | 时延(ms) |
   | ------ | ---- | ---- |
   | create | 8375 | 11.5 |
   | open   | 12691 | 7.5 |
@@ -331,10 +331,10 @@ CREATE TABLE IF NOT EXISTS person
 
 - 参考值
 
-| 操作   | 总吞吐(MB/s)  |
-| ------ | ---- | 
-| write | 1792  |
-| read   | 1409 | 
+| 操作   | 平均吞吐(MB/s)  | 总吞吐(MB/s)  |
+| ------ | ---- | ---- | 
+| write | 180  | 1792  |
+| read   | 141 | 1409 | 
 
 
 ## FAQ
