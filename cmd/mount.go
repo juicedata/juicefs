@@ -138,7 +138,11 @@ func mount(c *cli.Context) error {
 	}
 
 	logger.Infof("Meta address: %s", addr)
-	var rc = meta.RedisConfig{Retries: 10, Strict: true}
+	var rc = meta.RedisConfig{
+		Retries:     10,
+		Strict:      true,
+		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
+	}
 	m, err := meta.NewRedisMeta(addr, &rc)
 	if err != nil {
 		logger.Fatalf("Meta: %s", err)

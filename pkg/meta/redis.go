@@ -93,8 +93,9 @@ return {ino, redis.call('GET', "i" .. tostring(ino))}
 
 // RedisConfig is config for Redis client.
 type RedisConfig struct {
-	Strict  bool // update ctime
-	Retries int
+	Strict      bool // update ctime
+	Retries     int
+	CaseInsensi bool
 }
 
 type redisMeta struct {
@@ -458,13 +459,25 @@ func (r *redisMeta) Summary(ctx Context, inode Ino, summary *Summary) syscall.Er
 	return 0
 }
 
+func (r *redisMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
+	var entries []*Entry
+	_ = r.Readdir(ctx, parent, 0, &entries)
+	for _, e := range entries {
+		n := string(e.Name)
+		if strings.EqualFold(name, n) {
+			return e
+		}
+	}
+	return nil
+}
+
 func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	var foundIno Ino
 	var encodedAttr []byte
 	var err error
 
 	entryKey := r.entryKey(parent)
-	if len(r.shaLookup) > 0 && attr != nil {
+	if len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
 		var res interface{}
 		res, err = r.rdb.EvalSha(ctx, r.shaLookup, []string{entryKey, name}).Result()
 		if err != nil {
@@ -502,10 +515,19 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	} else {
 		var buf []byte
 		buf, err = r.rdb.HGet(ctx, entryKey, name).Bytes()
+		if err == nil {
+			_, foundIno = r.parseEntry(buf)
+		}
+		if err == redis.Nil && r.conf.CaseInsensi {
+			e := r.resolveCase(ctx, parent, name)
+			if e != nil {
+				foundIno = e.Inode
+				err = nil
+			}
+		}
 		if err != nil {
 			return errno(err)
 		}
-		_, foundIno = r.parseEntry(buf)
 		if attr != nil {
 			encodedAttr, err = r.rdb.Get(ctx, r.inodeKey(foundIno)).Bytes()
 		}
@@ -895,6 +917,8 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 			return err
 		} else if err == nil {
 			return syscall.EEXIST
+		} else if err == redis.Nil && r.conf.CaseInsensi && r.resolveCase(ctx, parent, name) != nil {
+			return syscall.EEXIST
 		}
 
 		now := time.Now()
@@ -947,6 +971,13 @@ func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cu
 
 func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
+	if err == redis.Nil && r.conf.CaseInsensi {
+		if e := r.resolveCase(ctx, parent, name); e != nil {
+			name = string(e.Name)
+			buf = r.packEntry(e.Attr.Typ, e.Inode)
+			err = nil
+		}
+	}
 	if err != nil {
 		return errno(err)
 	}
@@ -1037,6 +1068,13 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.ENOTEMPTY
 	}
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
+	if err == redis.Nil && r.conf.CaseInsensi {
+		if e := r.resolveCase(ctx, parent, name); e != nil {
+			name = string(e.Name)
+			buf = r.packEntry(e.Attr.Typ, e.Inode)
+			err = nil
+		}
+	}
 	if err != nil {
 		return errno(err)
 	}
@@ -1161,6 +1199,13 @@ func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
 
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
+	if err == redis.Nil && r.conf.CaseInsensi {
+		if e := r.resolveCase(ctx, parentSrc, nameSrc); e != nil {
+			nameSrc = string(e.Name)
+			buf = r.packEntry(e.Attr.Typ, e.Inode)
+			err = nil
+		}
+	}
 	if err != nil {
 		return errno(err)
 	}
@@ -1172,6 +1217,13 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		return 0
 	}
 	buf, err = r.rdb.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
+	if err == redis.Nil && r.conf.CaseInsensi {
+		if e := r.resolveCase(ctx, parentDst, nameDst); e != nil {
+			nameDst = string(e.Name)
+			buf = r.packEntry(e.Attr.Typ, e.Inode)
+			err = nil
+		}
+	}
 	if err != nil && err != redis.Nil {
 		return errno(err)
 	}
