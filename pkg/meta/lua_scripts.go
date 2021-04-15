@@ -29,29 +29,60 @@ return {ino, redis.call('GET', "i" .. tostring(ino))}
 
 //nolint
 const scriptResolve = `
-local function parse_attr(buf)
+local function unpack_attr(buf)
     local buf_len = string.len(buf)
     local x = {}
-    if buf_len ~= 72 and buf_len ~= 64 then
-        error("Invalid attr")
+    if buf_len ~= 71 and buf_len ~= 63 then
+        if buf_len == 72 or buf_len == 64 then
+            -- Strip trailing \x00
+            buf = string.sub(buf, 1, -2)
+        else
+            error(string.format("Invalid attr length: %d", buf_len))
+        end
     end
     local format = ">BHI4I4I8I4I8I4I8I4I4I8I4"
-    if buf_len == 72 then
+    if buf_len == 71 then
         format = format .. "I8"
     end
+
     x.flags, x.mode, x.uid, x.gid,
     x.atime, x.atime_nsec,
     x.mtime, x.mtime_nsec,
     x.ctime, x.ctime_nsec,
     x.nlink, x.length, x.rdev, x.parent = string.unpack(format, buf)
+
+    x.type = (x.mode >> 12) & 7
     x.mode = x.mode & 0xfff
+    if x.parent == nil then
+    end
+
     return x
+end
+
+local function pack_attr(attr)
+    return string.pack(
+            ">BHI4I4I8I4I8I4I8I4I4I8I4I8",
+            attr.flags,
+            (attr.type << 12) | (attr.mode & 0xfff),
+            attr.uid,
+            attr.gid,
+            attr.atime,
+            attr.atime_nsec,
+            attr.mtime,
+            attr.mtime_nsec,
+            attr.ctime,
+            attr.ctime_nsec,
+            attr.nlink,
+            attr.length,
+            attr.rdev,
+            attr.parent
+    )
 end
 
 local function get_attr(ino)
     -- TODO: Handle errors
     local encoded_attr = redis.call('GET', "i" .. tostring(ino))
-    return parse_attr(encoded_attr)
+    return unpack_attr(encoded_attr)
 end
 
 local function lookup(parent_ino, name)
@@ -66,13 +97,12 @@ local function lookup(parent_ino, name)
     return {ino, get_attr(ino)}
 end
 
-local function can_access(ino, uid, gid)
+local function can_access(ino, uid, gid, mask)
     if uid == 0 then
         return 0
     end
 
     attr = get_attr(ino)
-    local mask_x = 1
     if attr.uid == uid then
         mode = (attr.mode >> 6) & 7
     elseif attr.gid == gid then
@@ -80,6 +110,29 @@ local function can_access(ino, uid, gid)
     else
         mode = attr.mode & 7
     end
-    return mode&mask_x == mask_x
+    return mode&mask == mask
+end
+
+local function resolve(path, uid, gid)
+    local first = true
+    local parent_ino = 1
+    local mask_x = 1
+    local attr
+    for name in string.gmatch(path, "[^/]+") do
+        if not first then
+            if not can_access(parent_ino, uid, gid, mask_x) then
+                error("EACCESS")
+            end
+        else
+            first = false
+        end
+
+        ino, attr = lookup(parent_ino, name)
+        parent_ino = ino
+    end
+    if parent_ino == 1 then
+        attr = get_attr(parent_ino)
+    end
+    return {ino, attr}
 end
 `
