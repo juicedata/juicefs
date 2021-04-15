@@ -44,6 +44,7 @@ local function parse_attr(buf)
     x.mtime, x.mtime_nsec,
     x.ctime, x.ctime_nsec,
     x.nlink, x.length, x.rdev, x.parent = string.unpack(format, buf)
+    x.mode = x.mode & 0xfff
     return x
 end
 
@@ -63,5 +64,22 @@ local function lookup(parent_ino, name)
     end
     local ino = string.unpack(">I8", string.sub(buf, 2))
     return {ino, get_attr(ino)}
+end
+
+local function can_access(ino, uid, gid)
+    if uid == 0 then
+        return 0
+    end
+
+    attr = get_attr(ino)
+    local mask_x = 1
+    if attr.uid == uid then
+        mode = (attr.mode >> 6) & 7
+    elseif attr.gid == gid then
+        mode = (attr.mode >> 3) & 7
+    else
+        mode = attr.mode & 7
+    end
+    return mode&mask_x == mask_x
 end
 `
