@@ -552,7 +552,7 @@ public class TestDFSIO implements Tool {
      */
     private long nextOffset(long current) {
       if (skipSize == 0)
-        return rnd.nextLong((fileSize));
+        return rnd.nextLong(fileSize);
       if (skipSize > 0)
         return (current < 0) ? 0 : (current + bufferSize + skipSize);
       // skipSize < 0
