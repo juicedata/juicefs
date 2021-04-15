@@ -530,7 +530,7 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	return errno(err)
 }
 
-func (r *redisMeta) Resolve(ctx Context, path string, followLastSymlink bool, inode *Ino, attr *Attr) syscall.Errno {
+func (r *redisMeta) Resolve(ctx Context, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return syscall.ENOTSUP
 }
 

@@ -533,7 +533,15 @@ func (fs *FileSystem) lookup(ctx meta.Context, p string, followLastSymlink bool)
 	var inode Ino
 	var attr = &Attr{}
 
-	if err = fs.m.Resolve(ctx, p, followLastSymlink, &inode, attr); err != syscall.ENOTSUP {
+	err = fs.m.Resolve(ctx, p, &inode, attr)
+	if err == 0 {
+		fi = AttrToFileInfo(inode, attr)
+		p = strings.TrimRight(p, "/")
+		ss := strings.Split(p, "/")
+		fi.name = ss[len(ss)-1]
+		return
+	}
+	if err != syscall.ENOTSUP {
 		return
 	}
 
