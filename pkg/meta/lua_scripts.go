@@ -32,19 +32,36 @@ const scriptResolve = `
 local function parse_attr(buf)
     local buf_len = string.len(buf)
     local x = {}
-    if buf_len == 72 then
-        x.flags, x.mode, x.uid, x.gid,
-        x.atime, x.atime_nsec,
-        x.mtime, x.mtime_nsec,
-        x.ctime, x.ctime_nsec,
-        x.nlink, x.length, x.rdev, x.parent = string.unpack(">BHI4I4I8I4I8I4I8I4I4I8I4I8", buf)
-    elseif buf_len == 64 then
-        x.flags, x.mode, x.uid, x.gid,
-        x.atime, x.atime_nsec,
-        x.mtime, x.mtime_nsec,
-        x.ctime, x.ctime_nsec,
-        x.nlink, x.length, x.rdev = string.unpack(">BHI4I4I8I4I8I4I8I4I4I8I4", buf)
+    if buf_len ~= 72 and buf_len ~= 64 then
+        error("Invalid attr")
     end
+    local format = ">BHI4I4I8I4I8I4I8I4I4I8I4"
+    if buf_len == 72 then
+        format = format .. "I8"
+    end
+    x.flags, x.mode, x.uid, x.gid,
+    x.atime, x.atime_nsec,
+    x.mtime, x.mtime_nsec,
+    x.ctime, x.ctime_nsec,
+    x.nlink, x.length, x.rdev, x.parent = string.unpack(format, buf)
     return x
+end
+
+local function get_attr(ino)
+    -- TODO: Handle errors
+    local encoded_attr = redis.call('GET', "i" .. tostring(ino))
+    return parse_attr(encoded_attr)
+end
+
+local function lookup(parent_ino, name)
+    local buf = redis.call('HGET', parent_ino, name)
+    if not buf then
+        return false
+    end
+    if string.len(buf) ~= 9 then
+        return {err=string.format("Invalid entry data: %s", buf)}
+    end
+    local ino = string.unpack(">I8", string.sub(buf, 2))
+    return {ino, get_attr(ino)}
 end
 `
