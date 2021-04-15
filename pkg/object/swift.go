@@ -50,12 +50,12 @@ func (s *swiftOSS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 			headers["Range"] = fmt.Sprintf("bytes=%d-", off)
 		}
 	}
-	f, _, err := s.conn.ObjectOpen(s.container, key, false, headers)
+	f, _, err := s.conn.ObjectOpen(s.container, key, true, headers)
 	return f, err
 }
 
 func (s *swiftOSS) Put(key string, in io.Reader) error {
-	_, err := s.conn.ObjectPut(s.container, key, in, false, "", "", nil)
+	_, err := s.conn.ObjectPut(s.container, key, in, true, "", "", nil)
 	return err
 }
 
