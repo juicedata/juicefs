@@ -327,17 +327,17 @@ func (d *filestore) Chown(path string, owner, group string) error {
 
 func newDisk(root, accesskey, secretkey string) (ObjectStorage, error) {
 	// For Windows, the path looks like /C:/a/b/c/
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == "windows" && strings.HasPrefix(root, "/") {
 		root = root[1:]
 	}
 	if strings.HasSuffix(root, dirSuffix) {
-		logger.Debugf("Ensure dicectory %s", root)
+		logger.Debugf("Ensure directory %s", root)
 		if err := os.MkdirAll(root, 0755); err != nil {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
 		}
 	} else {
 		dir := path.Dir(root)
-		logger.Debugf("Ensure dicectory %s", dir)
+		logger.Debugf("Ensure directory %s", dir)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
 		}

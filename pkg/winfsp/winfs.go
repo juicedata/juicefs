@@ -527,14 +527,22 @@ func (j *juice) Readdir(path string,
 	}
 	var st fuse.Stat_t
 	var ok bool
-	// remove the virtual accesslog
-	for _, e := range entries[:len(entries)-1] {
-		if e.Attr.Full {
+	var full = true
+	// all the entries should have same format
+	for _, e := range entries {
+		if !e.Attr.Full {
+			full = false
+			break
+		}
+	}
+	for _, e := range entries {
+		name := string(e.Name)
+		if full {
 			vfs.UpdateLength(e.Inode, e.Attr)
 			attrToStat(e.Inode, e.Attr, &st)
-			ok = fill(string(e.Name), &st, 0)
+			ok = fill(name, &st, 0)
 		} else {
-			ok = fill(string(e.Name), nil, 0)
+			ok = fill(name, nil, 0)
 		}
 		if !ok {
 			break

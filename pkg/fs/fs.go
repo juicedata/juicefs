@@ -537,6 +537,12 @@ func (fs *FileSystem) lookup(ctx meta.Context, p string, followLastSymlink bool)
 		if len(name) == 0 {
 			continue
 		}
+		if parent == 1 && i == len(ss)-1 && vfs.IsSpecialName(name) {
+			inode, attr := vfs.GetInternalNodeByName(name)
+			fi = AttrToFileInfo(inode, attr)
+			parent = inode
+			break
+		}
 		if i > 0 {
 			if err := fs.m.Access(ctx, parent, mMaskX, attr); err != 0 {
 				return nil, err
