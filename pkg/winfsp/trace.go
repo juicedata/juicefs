@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 )
 
 var (
@@ -100,6 +101,7 @@ func Trace(skip int, prfx string, vals ...interface{}) func(vals ...interface{})
 		rslt := ""
 		rcvr := recover()
 		if nil != rcvr {
+			debug.PrintStack()
 			rslt = fmt.Sprintf("!PANIC:%v", rcvr)
 		} else {
 			if len(vals) != 1 {

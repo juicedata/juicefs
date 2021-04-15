@@ -15,8 +15,23 @@
 
 package utils
 
-import "errors"
+import (
+	"os"
+
+	"golang.org/x/sys/windows"
+)
 
 func GetFileInode(path string) (uint64, error) {
-	return 0, errors.New("no supported in Windows")
+	// FIXME support directory
+	fd, err := windows.Open(path, os.O_RDONLY, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer windows.Close(fd)
+	var data windows.ByHandleFileInformation
+	err = windows.GetFileInformationByHandle(fd, &data)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(data.FileIndexHigh)<<32 + uint64(data.FileIndexLow), nil
 }

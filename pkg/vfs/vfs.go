@@ -138,7 +138,7 @@ func Mknod(ctx Context, parent Ino, name string, mode uint16, cumask uint16, rde
 	defer func() {
 		logit(ctx, "mknod (%d,%s,%s:0%04o,0x%08X): %s%s", parent, name, smode(mode), mode, rdev, strerr(err), (*Entry)(entry))
 	}()
-	if parent == rootID && isSpecialName(name) {
+	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EACCES
 		return
 	}
@@ -164,7 +164,7 @@ func Mknod(ctx Context, parent Ino, name string, mode uint16, cumask uint16, rde
 func Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "unlink (%d,%s): %s", parent, name, strerr(err)) }()
 	nleng := uint8(len(name))
-	if parent == rootID && isSpecialName(name) {
+	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EACCES
 		return
 	}
@@ -181,7 +181,7 @@ func Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16) (en
 		logit(ctx, "mkdir (%d,%s,%s:0%04o): %s%s", parent, name, smode(mode), mode, strerr(err), (*Entry)(entry))
 	}()
 	nleng := uint8(len(name))
-	if parent == rootID && isSpecialName(name) {
+	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
 	}
@@ -202,7 +202,7 @@ func Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16) (en
 func Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	nleng := uint8(len(name))
 	defer func() { logit(ctx, "rmdir (%d,%s): %s", parent, name, strerr(err)) }()
-	if parent == rootID && isSpecialName(name) {
+	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EACCES
 		return
 	}
@@ -219,7 +219,7 @@ func Symlink(ctx Context, path string, parent Ino, name string) (entry *meta.Ent
 	defer func() {
 		logit(ctx, "symlink (%d,%s,%s): %s%s", parent, name, path, strerr(err), (*Entry)(entry))
 	}()
-	if parent == rootID && isSpecialName(name) {
+	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
 	}
@@ -245,11 +245,11 @@ func Readlink(ctx Context, ino Ino) (path []byte, err syscall.Errno) {
 
 func Rename(ctx Context, parent Ino, name string, newparent Ino, newname string) (err syscall.Errno) {
 	defer func() { logit(ctx, "rename (%d,%s,%d,%s): %s", parent, name, newparent, newname, strerr(err)) }()
-	if parent == rootID && isSpecialName(name) {
+	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EACCES
 		return
 	}
-	if newparent == rootID && isSpecialName(newname) {
+	if newparent == rootID && IsSpecialName(newname) {
 		err = syscall.EACCES
 		return
 	}
@@ -270,7 +270,7 @@ func Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *meta.Entr
 		err = syscall.EACCES
 		return
 	}
-	if newparent == rootID && isSpecialName(newname) {
+	if newparent == rootID && IsSpecialName(newname) {
 		err = syscall.EACCES
 		return
 	}
@@ -359,7 +359,7 @@ func Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, fl
 	defer func() {
 		logit(ctx, "create (%d,%s,%s:0%04o): %s%s [fh:%d]", parent, name, smode(mode), mode, strerr(err), (*Entry)(entry), fh)
 	}()
-	if parent == rootID && isSpecialName(name) {
+	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
 	}

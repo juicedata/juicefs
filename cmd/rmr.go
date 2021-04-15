@@ -38,7 +38,11 @@ func rmrFlags() *cli.Command {
 
 func openControler(path string) *os.File {
 	f, err := os.OpenFile(filepath.Join(path, ".control"), os.O_RDWR, 0)
-	if err != nil && path != "/" {
+	if err != nil && !os.IsNotExist(err) {
+		logger.Errorf("%s", err)
+		return nil
+	}
+	if err != nil && os.IsNotExist(err) && path != "/" {
 		return openControler(filepath.Dir(path))
 	}
 	return f

@@ -55,6 +55,7 @@ func init() {
 		v.attr.Mtime = now
 		v.attr.Ctime = now
 		v.attr.Nlink = 1
+		v.attr.Full = true
 	}
 }
 
@@ -62,7 +63,7 @@ func IsSpecialNode(ino Ino) bool {
 	return ino >= minInternalNode
 }
 
-func isSpecialName(name string) bool {
+func IsSpecialName(name string) bool {
 	if name[0] != '.' {
 		return false
 	}
@@ -81,6 +82,14 @@ func getInternalNode(ino Ino) *internalNode {
 		}
 	}
 	return nil
+}
+
+func GetInternalNodeByName(name string) (Ino, *Attr) {
+	n := getInternalNodeByName(name)
+	if n != nil {
+		return n.inode, n.attr
+	}
+	return 0, nil
 }
 
 func getInternalNodeByName(name string) *internalNode {
