@@ -467,13 +467,13 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	defer f.putSftpConnection(&c, err)
 
 	if strings.HasSuffix(root, dirSuffix) {
-		logger.Debugf("Ensure dicectory %s", root)
+		logger.Debugf("Ensure directory %s", root)
 		if err := c.sftpClient.MkdirAll(root); err != nil {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
 		}
 	} else {
 		dir := filepath.Dir(root)
-		logger.Debugf("Ensure dicectory %s", dir)
+		logger.Debugf("Ensure directory %s", dir)
 		if err := c.sftpClient.MkdirAll(dir); err != nil {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
 		}
