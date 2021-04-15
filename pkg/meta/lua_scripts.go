@@ -53,30 +53,8 @@ local function unpack_attr(buf)
 
     x.type = (x.mode >> 12) & 7
     x.mode = x.mode & 0xfff
-    if x.parent == nil then
-    end
 
     return x
-end
-
-local function pack_attr(attr)
-    return string.pack(
-            ">BHI4I4I8I4I8I4I8I4I4I8I4I8",
-            attr.flags,
-            (attr.type << 12) | (attr.mode & 0xfff),
-            attr.uid,
-            attr.gid,
-            attr.atime,
-            attr.atime_nsec,
-            attr.mtime,
-            attr.mtime_nsec,
-            attr.ctime,
-            attr.ctime_nsec,
-            attr.nlink,
-            attr.length,
-            attr.rdev,
-            attr.parent
-    )
 end
 
 local function get_attr(ino)
@@ -88,13 +66,12 @@ end
 local function lookup(parent_ino, name)
     local buf = redis.call('HGET', parent_ino, name)
     if not buf then
-        return false
+        error(string.format("No entry found for %s", name))
     end
     if string.len(buf) ~= 9 then
         return {err=string.format("Invalid entry data: %s", buf)}
     end
-    local ino = string.unpack(">I8", string.sub(buf, 2))
-    return {ino, get_attr(ino)}
+    return string.unpack(">I8", string.sub(buf, 2))
 end
 
 local function can_access(ino, uid, gid, mask)
@@ -127,12 +104,12 @@ local function resolve(path, uid, gid)
             first = false
         end
 
-        ino, attr = lookup(parent_ino, name)
+        ino = lookup(parent_ino, name)
         parent_ino = ino
     end
     if parent_ino == 1 then
         attr = get_attr(parent_ino)
     end
-    return {ino, attr}
+    return {parent_ino, redis.call('GET', "i" .. tostring(parent_ino))}
 end
 `
