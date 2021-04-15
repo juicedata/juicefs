@@ -498,7 +498,7 @@ public class TestDFSIO implements Tool {
    * 3) Skip-read skips skipSize bytes after every read          : skipSize > 0
    */
   public static class RandomReadMapper extends IOStatMapper {
-    private Random rnd;
+    private ThreadLocalRandom rnd;
     private long fileSize;
     private long skipSize;
 
@@ -509,7 +509,7 @@ public class TestDFSIO implements Tool {
     }
 
     public RandomReadMapper() {
-      rnd = new Random();
+      rnd = ThreadLocalRandom.current();
     }
 
     @Override // IOMapperBase
@@ -552,7 +552,7 @@ public class TestDFSIO implements Tool {
      */
     private long nextOffset(long current) {
       if (skipSize == 0)
-        return rnd.nextInt((int) (fileSize));
+        return rnd.nextLong((fileSize));
       if (skipSize > 0)
         return (current < 0) ? 0 : (current + bufferSize + skipSize);
       // skipSize < 0
