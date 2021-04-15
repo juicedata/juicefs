@@ -274,13 +274,13 @@ public class TestFSIO {
   }
 
   static class RandomReadTask extends TaskBase {
-    private Random rnd;
+    private ThreadLocalRandom rnd;
     private long fileSize;
     private long skipSize;
 
     public RandomReadTask(Integer id, Configuration config) {
       super(id, config);
-      rnd = new Random();
+      rnd = ThreadLocalRandom.current();
       skipSize = config.getLong("test.io.skip.size", 0);
     }
 
@@ -311,7 +311,7 @@ public class TestFSIO {
 
     private long nextOffset(long current) {
       if (skipSize == 0)
-        return rnd.nextInt((int) (fileSize));
+        return rnd.nextLong(fileSize);
       if (skipSize > 0)
         return (current < 0) ? 0 : (current + bufferSize + skipSize);
       // skipSize < 0
