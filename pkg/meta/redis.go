@@ -67,18 +67,6 @@ const delfiles = "delfiles"
 const allSessions = "sessions"
 const sliceRefs = "sliceRef"
 
-const scriptLookup = `
-local buf = redis.call('HGET', KEYS[1], KEYS[2])
-if not buf then
-       return false
-end
-if string.len(buf) ~= 9 then
-       return {err=string.format("Invalid entry data: %s", buf)}
-end
-local ino = string.unpack(">I8", string.sub(buf, 2))
-return {ino, redis.call('GET', "i" .. tostring(ino))}
-`
-
 // RedisConfig is config for Redis client.
 type RedisConfig struct {
 	Strict      bool // update ctime
