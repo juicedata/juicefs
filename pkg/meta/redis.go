@@ -75,7 +75,7 @@ end
 if string.len(buf) ~= 9 then
        return {err=string.format("Invalid entry data: %s", buf)}
 end
-local ino = string.unpack(">I8", string.sub(buf, 2))
+local ino = struct.unpack(">I8", string.sub(buf, 2))
 return {ino, redis.call('GET', "i" .. tostring(ino))}
 `
 
