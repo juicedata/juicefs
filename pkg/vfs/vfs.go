@@ -402,6 +402,8 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 		switch ino {
 		case logInode:
 			openAccessLog(fh)
+		case statsInode:
+			h.data = collectMetrics()
 		}
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: ino, Attr: n.attr}
