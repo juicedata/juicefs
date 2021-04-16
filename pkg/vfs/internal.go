@@ -19,17 +19,21 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 )
 
 const (
 	minInternalNode = 0x7FFFFFFFFFFFF0
 	logInode        = minInternalNode + 1
 	controlInode    = minInternalNode + 2
+	statsInode      = minInternalNode + 3
 )
 
 type internalNode struct {
@@ -41,6 +45,7 @@ type internalNode struct {
 var internalNodes = []*internalNode{
 	{logInode, ".accesslog", &Attr{Mode: 0400}},
 	{controlInode, ".control", &Attr{Mode: 0666}},
+	{statsInode, ".stats", &Attr{Mode: 0444}},
 }
 
 func init() {
@@ -102,6 +107,33 @@ func getInternalNodeByName(name string) *internalNode {
 		}
 	}
 	return nil
+}
+
+func collectMetrics() []byte {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		logger.Errorf("collect metrics: %s", err)
+		return nil
+	}
+	w := bytes.NewBuffer(nil)
+	format := func(v float64) string {
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	}
+	for _, mf := range mfs {
+		for _, m := range mf.Metric {
+			switch *mf.Type {
+			case io_prometheus_client.MetricType_GAUGE:
+				_, _ = fmt.Fprintf(w, "%s %s\n", *mf.Name, format(*m.Gauge.Value))
+			case io_prometheus_client.MetricType_COUNTER:
+				_, _ = fmt.Fprintf(w, "%s %s\n", *mf.Name, format(*m.Counter.Value))
+			case io_prometheus_client.MetricType_HISTOGRAM:
+				_, _ = fmt.Fprintf(w, "%s_total %d\n", *mf.Name, *m.Histogram.SampleCount)
+				_, _ = fmt.Fprintf(w, "%s_sum %s\n", *mf.Name, format(*m.Histogram.SampleSum))
+			case io_prometheus_client.MetricType_SUMMARY:
+			}
+		}
+	}
+	return w.Bytes()
 }
 
 func handleInternalMsg(ctx Context, msg []byte) []byte {
