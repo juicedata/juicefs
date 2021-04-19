@@ -26,7 +26,7 @@ var (
 	reqsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "object_request_durations_histogram_seconds",
 		Help:    "Object requests latency distributions.",
-		Buckets: prometheus.ExponentialBuckets(0.01, 1.5, 20),
+		Buckets: prometheus.ExponentialBuckets(0.01, 1.5, 25),
 	}, []string{"method"})
 	reqErrors = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "object_request_errors",
