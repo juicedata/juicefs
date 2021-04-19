@@ -1,3 +1,5 @@
+// +build !nogs
+
 /*
  * JuiceFS, Copyright (C) 2018 Juicedata, Inc.
  *
@@ -30,8 +32,6 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/api/storage/v1"
 )
-
-var ctx = context.Background()
 
 type gs struct {
 	DefaultObjectStorage

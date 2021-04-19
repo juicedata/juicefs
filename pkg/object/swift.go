@@ -1,3 +1,5 @@
+// +build !noswift
+
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *

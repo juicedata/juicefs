@@ -1,3 +1,5 @@
+//+build !nogateway
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *

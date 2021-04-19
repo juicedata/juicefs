@@ -1,3 +1,5 @@
+// +build !noibmcos
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *

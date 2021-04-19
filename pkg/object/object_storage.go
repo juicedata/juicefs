@@ -16,6 +16,7 @@
 package object
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+var ctx = context.Background()
 var logger = utils.GetLogger("juicefs")
 
 var UserAgent = "JuiceFS"

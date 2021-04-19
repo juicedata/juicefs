@@ -1,3 +1,5 @@
+// +build !noupyun
+
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
