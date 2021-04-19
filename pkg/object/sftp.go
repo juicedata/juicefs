@@ -1,3 +1,5 @@
+// +build !nosftp
+
 // Part of this file is borrowed from Rclone under MIT license:
 // https://github.com/ncw/rclone/blob/master/backend/sftp/sftp.go
 

@@ -1,3 +1,5 @@
+// +build !noqiniu,!nos3
+
 /*
  * JuiceFS, Copyright (C) 2018 Juicedata, Inc.
  *
