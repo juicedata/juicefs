@@ -1,3 +1,5 @@
+// +build !nos3
+
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
