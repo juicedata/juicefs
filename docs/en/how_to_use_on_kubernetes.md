@@ -20,7 +20,7 @@ To install Helm, refer to the [Helm install guide](https://github.com/helm/helm#
 storageClasses:
 - name: juicefs-sc
   enabled: true
-  reclaimPolicy: Delete
+  reclaimPolicy: Retain
   backend:
     name: "test"
     metaurl: "redis://juicefs.afyq4z.0001.use1.cache.amazonaws.com/3"
@@ -42,8 +42,15 @@ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install 
 
 3. Check the deployment
 
-- Check running pods: the deployment will launch a `StatefulSet` with replica `1` for the `juicefs-csi-controller` and a `DaemonSet` for `juicefs-csi-node`, so run `kubectl -n kube-system get pods | grep juicefs-csi` should see `n+1` （where `n` is the number of worker node of the kubernetes cluster) pods is running.
-- Check secret: `kubectl -n kube-system describe secret juicefs-sc-secret` will show the secret with above `backend` fields:
+- Check pods are running: the deployment will launch a `StatefulSet` named `juicefs-csi-controller` with replica `1` and a `DaemonSet` named `juicefs-csi-node`, so run `kubectl -n kube-system get pods | grep juicefs-csi` should see `n+1` (where `n` is the number of worker nodes of the Kubernetes cluster) pods is running. For example:
+
+```sh
+$ kubectl -n kube-system get pods | grep juicefs-csi
+juicefs-csi-controller-0               3/3     Running   0          25m
+juicefs-csi-node-hzczw                 3/3     Running   0          25m
+```
+
+- Check secret: `kubectl -n kube-system describe secret juicefs-sc-secret` will show the secret with above `backend` fields in `values.yaml`:
 
 ```
 Name:         juicefs-sc-secret
@@ -68,14 +75,12 @@ secret-key:  0 bytes
 storage:     2 bytes
 ```
 
-
-- Check storage class: `kubectl get sc` will show the storage class like this:
+- Check storage class: `kubectl get sc juicefs-sc` will show the storage class like this:
 
 ```
-NAME                 PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
-juicefs-sc           csi.juicefs.com            Delete          Immediate           false                  21m
+NAME         PROVISIONER       RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+juicefs-sc   csi.juicefs.com   Retain          Immediate           false                  69m
 ```
-
 
 ### Install with kubectl
 
@@ -93,7 +98,7 @@ curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/
 
 2. Create storage class
 
-- Add secret `juicefs-sc-secret` :
+- Create secret `juicefs-sc-secret`:
 
 ```bash
 kubectl -n kube-system create secret generic juicefs-sc-secret \
@@ -119,26 +124,26 @@ parameters:
   csi.storage.k8s.io/node-publish-secret-namespace: kube-system
   csi.storage.k8s.io/provisioner-secret-name: juicefs-sc-secret
   csi.storage.k8s.io/provisioner-secret-namespace: kube-system
-reclaimPolicy: Delete
+reclaimPolicy: Retain
 volumeBindingMode: Immediate
 ```
 
 
 ## Use JuiceFS
 
-Now we can use JuiceFS in our pods.  Here we create a `PVC` and refer it in a pod as an example:
+Now we can use JuiceFS in our pods.  Here we create a `PVC` and refer to it in a pod as an example:
 
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: jtext-pvc
+  name: juicefs-pvc
 spec:
   accessModes:
   - ReadWriteMany
   resources:
     requests:
-      storage: 10Gi
+      storage: 10Pi
   storageClassName: juicefs-sc
 ---
 apiVersion: v1
@@ -160,25 +165,29 @@ spec:
   volumes:
   - name: juicefs-pv
     persistentVolumeClaim:
-      claimName: jtext-pvc
-
+      claimName: juicefs-pvc
 ```
 
-Save above content to a file named like `juicefs-app.yaml` ，then use command `kubectl apply -f juicefs-app.yaml` to bootstrap the pod.
+Save above content to a file named like `juicefs-app.yaml`, then use command `kubectl apply -f juicefs-app.yaml` to bootstrap the pod. After that, you can check the status of pod:
 
+```sh
+$ kubectl get pod juicefs-app
+NAME          READY     STATUS    RESTARTS   AGE
+juicefs-app   1/1       Running   0          10m
+```
 
+If the status of pod is not `Running` (e.g. `ContainerCreating`), there may have some issues. Please refer to the [troubleshooting](https://github.com/juicedata/juicefs-csi-driver/blob/master/docs/troubleshooting.md) document.
 
-For more details about JuiceFS CSI driver please refer [JuiceFS CSI driver](https://github.com/juicedata/juicefs-csi-driver).
-
+For more details about JuiceFS CSI driver please refer to [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver).
 
 
 ## Monitoring
 
-JuiceFS CSI driver can export [prometheus](https://prometheus.io) metrics at port `:9560` .
+JuiceFS CSI driver can export [Prometheus](https://prometheus.io) metrics at port `9567`.
 
-### Configurate Prometheus server
+### Configure Prometheus server
 
-Add a job to `prometheus.yml` :
+Add a job to `prometheus.yml`:
 
 ```yaml
 scrape_configs:
@@ -192,14 +201,14 @@ scrape_configs:
     - source_labels: [__address__]
       action: replace
       regex: ([^:]+)(:\d+)?
-      replacement: $1:9560
+      replacement: $1:9567
       target_label: __address__
     - source_labels: [__meta_kubernetes_pod_node_name]
       target_label: node
       action: replace
 ```
 
-Here we assume the prometheus server is running inside Kubernetes cluster, if your prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable from prometheus server, refer [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
+Here we assume the Prometheus server is running inside Kubernetes cluster, if your prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable from Prometheus server, refer to [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
 
 ```yaml
 scrape_configs:
@@ -217,8 +226,6 @@ scrape_configs:
     ...
 ```
 
+### Configure Grafana dashboard
 
-
-### Configurate Grafana dashboard
-
-We provide a [dashboard template](./k8s_grafana_template.json) for [Grafana](https://grafana.com/) , which can be imported to show the collected metrics in Prometheus.
+We provide a [dashboard template](./k8s_grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
