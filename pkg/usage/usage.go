@@ -74,6 +74,7 @@ func ReportUsage(m meta.Meta, version string) {
 		u.VolumeID = format.UUID
 	}
 	u.SessionID = int64(rand.Uint32())
+	println("sessionid", u.SessionID)
 	u.Version = version
 	var start = time.Now()
 	for {

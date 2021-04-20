@@ -43,11 +43,14 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
 
 	"github.com/sirupsen/logrus"
 )
@@ -61,6 +64,7 @@ var (
 	handlers = make(map[uintptr]*wrapper)
 	activefs = make(map[string][]*wrapper)
 	logger   = utils.GetLogger("juicefs")
+	pusher   *push.Pusher
 )
 
 func errno(err error) int {
@@ -175,6 +179,9 @@ type javaConf struct {
 	Debug          bool   `json:"debug"`
 	NoUsageReport  bool   `json:"noUsageReport"`
 	AccessLog      string `json:"accessLog"`
+	PushGateway    string `json:"pushGateway"`
+	PushInterval   int    `json:"pushInterval"`
+	PushAuth       string `json:"pushAuth"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) uintptr {
@@ -260,11 +267,42 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
 		}
+
+		if jConf.PushGateway != "" && pusher == nil {
+			prometheus.DefaultRegisterer = prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.DefaultRegisterer)
+			// TODO: support multiple volumes
+			pusher = push.New(jConf.PushGateway, "juicefs").Gatherer(prometheus.DefaultGatherer)
+			pusher = pusher.Grouping("vol_name", format.Name).Grouping("mp", "sdk-"+strconv.Itoa(os.Getpid()))
+			if h, err := os.Hostname(); err == nil {
+				pusher = pusher.Grouping("instance", h)
+			} else {
+				logger.Warnf("cannot get hostname: %s", err)
+			}
+			if strings.Contains(jConf.PushAuth, ":") {
+				parts := strings.Split(jConf.PushAuth, ":")
+				pusher = pusher.BasicAuth(parts[0], parts[1])
+			}
+			interval := time.Second * 10
+			if jConf.PushInterval > 0 {
+				interval = time.Second * time.Duration(jConf.PushInterval)
+			}
+			go func() {
+				for {
+					time.Sleep(interval)
+					pusher.Push()
+				}
+			}()
+			meta.InitMetrics()
+			vfs.InitMetrics()
+			go metric.UpdateMetrics(m)
+		}
+
 		blob, err := createStorage(format)
 		if err != nil {
 			logger.Fatalf("object storage: %s", err)
 		}
 		logger.Infof("Data use %s", blob)
+		blob = object.WithMetrics(blob)
 
 		var freeSpaceRatio = 0.2
 		if jConf.FreeSpace != "" {
@@ -378,6 +416,9 @@ func jfs_term(pid int, h uintptr) int {
 				}
 			}
 		}
+	}
+	if pusher != nil {
+		pusher.Push()
 	}
 	return 0
 }

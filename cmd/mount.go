@@ -36,60 +36,13 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
-
-var (
-	cpu = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "cpu_usage",
-		Help: "Accumulated CPU usage in seconds.",
-	})
-	memory = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "memory",
-		Help: "Used memory in bytes.",
-	})
-	uptime = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "uptime",
-		Help: "Total running time in seconds.",
-	})
-	usedSpace = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "used_space",
-		Help: "Total used space in bytes.",
-	})
-	usedInodes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "used_inodes",
-		Help: "Total number of inodes.",
-	})
-)
-
-func updateMetrics(m meta.Meta) {
-	prometheus.MustRegister(cpu)
-	prometheus.MustRegister(memory)
-	prometheus.MustRegister(uptime)
-	prometheus.MustRegister(usedSpace)
-	prometheus.MustRegister(usedInodes)
-
-	ctx := meta.Background
-	start := time.Now()
-	for {
-		uptime.Set(time.Since(start).Seconds())
-		ru := utils.GetRusage()
-		cpu.Set(ru.GetStime() + ru.GetUtime())
-		_, rss := utils.MemoryUsage()
-		memory.Set(float64(rss))
-		var totalSpace, availSpace, iused, iavail uint64
-		err := m.StatFS(ctx, &totalSpace, &availSpace, &iused, &iavail)
-		if err == 0 {
-			usedSpace.Set(float64(totalSpace - availSpace))
-			usedInodes.Set(float64(iused))
-		}
-		time.Sleep(time.Second * 5)
-	}
-}
 
 func installHandler(mp string) {
 	// Go will catch all the signals
@@ -152,12 +105,12 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("load setting: %s", err)
 	}
 
-	mntLabels := prometheus.Labels{
+	metricLabels := prometheus.Labels{
 		"vol_name": format.Name,
 		"mp":       mp,
 	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
-	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(mntLabels,
+	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(metricLabels,
 		prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.DefaultRegisterer))
 
 	chunkConf := chunk.Config{
@@ -256,7 +209,7 @@ func mount(c *cli.Context) error {
 
 	meta.InitMetrics()
 	vfs.InitMetrics()
-	go updateMetrics(m)
+	go metric.UpdateMetrics(m)
 	http.Handle("/metrics", promhttp.HandlerFor(
 		prometheus.DefaultGatherer,
 		promhttp.HandlerOpts{
