@@ -184,7 +184,7 @@ For more details about JuiceFS CSI driver please refer to [JuiceFS CSI Driver](h
 
 ## Monitoring
 
-JuiceFS CSI driver can export [Prometheus](https://prometheus.io) metrics at port `9567`.
+JuiceFS CSI driver can export [Prometheus](https://prometheus.io) metrics at port `9560`.
 
 ### Configure Prometheus server
 
@@ -202,7 +202,7 @@ scrape_configs:
     - source_labels: [__address__]
       action: replace
       regex: ([^:]+)(:\d+)?
-      replacement: $1:9567
+      replacement: $1:9560
       target_label: __address__
     - source_labels: [__meta_kubernetes_pod_node_name]
       target_label: node
