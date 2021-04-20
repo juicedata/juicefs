@@ -82,11 +82,6 @@ func gatewayFlags() *cli.Command {
 func gateway(c *cli.Context) error {
 	setLoggerLevel(c)
 	utils.InitLoggers(false)
-	go func() {
-		for port := 6060; port < 6100; port++ {
-			_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
-		}
-	}()
 
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Redis URL and listen address are required")
