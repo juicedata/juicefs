@@ -42,10 +42,10 @@ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install 
 
 3. Check the deployment
 
-- Check pods are running: the deployment will launch a `StatefulSet` named `juicefs-csi-controller` with replica `1` and a `DaemonSet` named `juicefs-csi-node`, so run `kubectl -n kube-system get pods | grep juicefs-csi` should see `n+1` (where `n` is the number of worker nodes of the Kubernetes cluster) pods is running. For example:
+- Check pods are running: the deployment will launch a `StatefulSet` named `juicefs-csi-controller` with replica `1` and a `DaemonSet` named `juicefs-csi-node`, so run `kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver` should see `n+1` (where `n` is the number of worker nodes of the Kubernetes cluster) pods is running. For example:
 
 ```sh
-$ kubectl -n kube-system get pods | grep juicefs-csi
+$ kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
 juicefs-csi-controller-0               3/3     Running   0          25m
 juicefs-csi-node-hzczw                 3/3     Running   0          25m
 ```
