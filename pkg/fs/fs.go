@@ -158,13 +158,14 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 }
 
 func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
+	used := ctx.Duration()
+	opsDurationsHistogram.Observe(used.Seconds())
 	if fs.logBuffer == nil {
 		return
 	}
 	now := utils.Now()
 	cmd := fmt.Sprintf(format, args...)
 	ts := now.Format("2006.01.02 15:04:05.000000")
-	used := ctx.Duration()
 	cmd += fmt.Sprintf(" <%.6f>", used.Seconds())
 	line := fmt.Sprintf("%s [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd)
 	select {
@@ -771,6 +772,7 @@ func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 	if got == 0 {
 		return 0, io.EOF
 	}
+	readSizeHistogram.Observe(float64(got))
 	return got, nil
 }
 
@@ -805,6 +807,7 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 		f.wdata = nil
 		return
 	}
+	writtenSizeHistogram.Observe(float64(len(b)))
 	return len(b), 0
 }
 
