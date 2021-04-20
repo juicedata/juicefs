@@ -103,7 +103,6 @@ func showProgress(p *gcProgress) {
 
 func gc(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
-	setupAgent(ctx)
 	if ctx.Args().Len() < 1 {
 		return fmt.Errorf("REDIS-URL is needed")
 	}
