@@ -772,7 +772,7 @@ func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 	if got == 0 {
 		return 0, io.EOF
 	}
-	writtenSizeHistogram.Observe(float64(got))
+	readSizeHistogram.Observe(float64(got))
 	return got, nil
 }
 
