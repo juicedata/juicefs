@@ -19,6 +19,7 @@ before_script:
   - export GO111MODULE=on
   - make
   - make juicefs.exe
+  - make juicefs.lite
   - sudo make -C fstests setup
 script:
   - make test
