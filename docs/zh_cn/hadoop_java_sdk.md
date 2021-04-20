@@ -76,6 +76,7 @@ $ make
 | ------------------        | ------  | ------------------------------------------------------------                                                        |
 | `juicefs.access-log`      |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。 |
 | `juicefs.superuser`       | `hdfs`  | 超级用户                                                                                                            |
+| `juicefs.push-gateway`    |         | Promethous Push Gateway 的地址，`host:port` 形式。                                                |
 | `juicefs.no-usage-report` | `false` | 是否上报数据，它只上报诸如版本号等使用量数据，不包含任何用户信息。                                                  |
 
 当使用多个 JuiceFS 文件系统时，上述所有配置项均可对单个文件系统指定，需要将文件系统名字 `{JFS_NAME}` 放在配置项的中间，比如：
@@ -176,6 +177,25 @@ CREATE TABLE IF NOT EXISTS person
   name STRING,
   age INT
 ) LOCATION 'jfs://{JFS_NAME}/tmp/person';
+```
+
+## 指标收集
+
+JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式上报到 [Push Gateway](https://github.com/prometheus/pushgateway), 然后可以通过 [Grafana](https://grafana.com/) 以及我们[预定义的模板](../en/k8s_grafana_template.json)来展示收集的运行指标。
+
+请用如下参数启用 指标收集：
+
+```xml
+<property>
+  <name>juicefs.push-gateway</name>
+  <value>host:port</value>
+</property>
+```
+
+**注意: 每一个使用 JuiceFS Java SDK 的进程会有唯一的指标，而 Push Gateway 会一直记住所有收集到的指标，导致指标数持续积累占用过多内存，也会使得 Promethous 抓取指标时变慢，建议定期清理 Push Gateway 上 `job` 为 `juicefs` 的指标。建议每个小时使用下面的命令清理一次，运行中的 Java SDK 会指标清空后继续更新，基本不影响使用。
+
+```bash
+  curl -X DELETE http://host:9091/metrics/job/juicefs
 ```
 
 ## Benchmark
