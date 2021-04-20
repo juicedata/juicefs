@@ -18,10 +18,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"strings"
 
+	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -55,6 +57,10 @@ func main() {
 			&cli.BoolFlag{
 				Name:  "trace",
 				Usage: "enable trace log",
+			},
+			&cli.BoolFlag{
+				Name:  "no-agent",
+				Usage: "Disable pprof (:6060) and gops (:6070) agent",
 			},
 		},
 		Commands: []*cli.Command{
@@ -229,6 +235,21 @@ func reorderOptions(app *cli.App, args []string) []string {
 	return append(newArgs, others...)
 }
 
+func setupAgent(c *cli.Context) {
+	if !c.Bool("no-agent") {
+		go func() {
+			for port := 6060; port < 6100; port++ {
+				_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+			}
+		}()
+		go func() {
+			for port := 6070; port < 6100; port++ {
+				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+			}
+		}()
+	}
+}
+
 func setLoggerLevel(c *cli.Context) {
 	if c.Bool("trace") {
 		utils.SetLogLevel(logrus.TraceLevel)
@@ -237,4 +258,5 @@ func setLoggerLevel(c *cli.Context) {
 	} else if c.Bool("quiet") {
 		utils.SetLogLevel(logrus.WarnLevel)
 	}
+	setupAgent(c)
 }

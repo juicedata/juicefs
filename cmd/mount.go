@@ -16,7 +16,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -29,7 +28,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/gops/agent"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -242,16 +240,6 @@ func mount(c *cli.Context) error {
 		}
 	}
 
-	go func() {
-		for port := 6060; port < 6100; port++ {
-			_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
-		}
-	}()
-	go func() {
-		for port := 6070; port < 6100; port++ {
-			_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
-		}
-	}()
 	installHandler(mp)
 
 	meta.InitMetrics()
@@ -359,7 +347,7 @@ func mountFlags() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "metrics",
-				Value: ":9567",
+				Value: "127.0.0.1:9567",
 				Usage: "address to export metrics",
 			},
 			&cli.BoolFlag{
