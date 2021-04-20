@@ -46,8 +46,9 @@ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install 
 
 ```sh
 $ kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
-juicefs-csi-controller-0               3/3     Running   0          25m
-juicefs-csi-node-hzczw                 3/3     Running   0          25m
+NAME                       READY   STATUS    RESTARTS   AGE
+juicefs-csi-controller-0   3/3     Running   0          22m
+juicefs-csi-node-v9tzb     3/3     Running   0          14m
 ```
 
 - Check secret: `kubectl -n kube-system describe secret juicefs-sc-secret` will show the secret with above `backend` fields in `values.yaml`:
