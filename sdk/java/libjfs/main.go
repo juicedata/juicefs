@@ -289,7 +289,9 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			go func() {
 				for {
 					time.Sleep(interval)
-					pusher.Push()
+					if err := pusher.Push(); err != nil {
+						logger.Warnf("push metrics to %s: %s", jConf.PushGateway, err)
+					}
 				}
 			}()
 			meta.InitMetrics()
@@ -418,7 +420,9 @@ func jfs_term(pid int, h uintptr) int {
 		}
 	}
 	if pusher != nil {
-		pusher.Push()
+		if err := pusher.Push(); err != nil {
+			logger.Warnf("push metrics: %s", err)
+		}
 	}
 	return 0
 }
