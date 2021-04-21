@@ -33,6 +33,29 @@ import (
 
 var logger = utils.GetLogger("juicefs")
 
+func globalFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "verbose",
+			Aliases: []string{"debug", "v"},
+			Usage:   "enable debug log",
+		},
+		&cli.BoolFlag{
+			Name:    "quiet",
+			Aliases: []string{"q"},
+			Usage:   "only warning and errors",
+		},
+		&cli.BoolFlag{
+			Name:  "trace",
+			Usage: "enable trace log",
+		},
+		&cli.BoolFlag{
+			Name:  "no-agent",
+			Usage: "Disable pprof (:6060) and gops (:6070) agent",
+		},
+	}
+}
+
 func main() {
 	cli.VersionFlag = &cli.BoolFlag{
 		Name: "version", Aliases: []string{"V"},
@@ -43,26 +66,7 @@ func main() {
 		Usage:     "A POSIX file system built on Redis and object storage.",
 		Version:   version.Version(),
 		Copyright: "AGPLv3",
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:    "verbose",
-				Aliases: []string{"debug", "v"},
-				Usage:   "enable debug log",
-			},
-			&cli.BoolFlag{
-				Name:    "quiet",
-				Aliases: []string{"q"},
-				Usage:   "only warning and errors",
-			},
-			&cli.BoolFlag{
-				Name:  "trace",
-				Usage: "enable trace log",
-			},
-			&cli.BoolFlag{
-				Name:  "no-agent",
-				Usage: "Disable pprof (:6060) and gops (:6070) agent",
-			},
-		},
+		Flags:     globalFlags(),
 		Commands: []*cli.Command{
 			formatFlags(),
 			mountFlags(),
@@ -103,7 +107,7 @@ func handleSysMountArgs() ([]string, error) {
 	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
-	for _, f := range mountFlags().Flags {
+	for _, f := range append(mountFlags().Flags, globalFlags()...) {
 		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
 			_, cmdFlagsLookup[names[0]] = f.(*cli.BoolFlag)
 		}
@@ -139,12 +143,11 @@ func handleSysMountArgs() ([]string, error) {
 				newArgs = append(newArgs, fmt.Sprintf("--%s", flagName))
 			} else if isBool, ok := cmdFlagsLookup[opt]; ok && isBool {
 				newArgs = append(newArgs, fmt.Sprintf("--%s", opt))
+				if opt == "debug" {
+					fuseOptions = append(fuseOptions, opt)
+				}
 			} else {
 				fuseOptions = append(fuseOptions, opt)
-				if opt == "debug" {
-					tmpArgs := []string{"juicefs", "--debug", "mount", "-d"}
-					newArgs = append(tmpArgs, newArgs[3:]...)
-				}
 			}
 		}
 
