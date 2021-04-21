@@ -791,15 +791,21 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 			attr.Mode |= (cur.Mode & 06000)
 		}
+		var changed bool
 		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			cur.Mode &= 01777
+			if cur.Mode&01777 != cur.Mode {
+				cur.Mode &= 01777
+				changed = true
+			}
 			attr.Mode &= 01777
 		}
-		if set&SetAttrUID != 0 {
+		if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
 			cur.Uid = attr.Uid
+			changed = true
 		}
-		if set&SetAttrGID != 0 {
+		if set&SetAttrGID != 0 && cur.Uid != attr.Uid {
 			cur.Gid = attr.Gid
+			changed = true
 		}
 		if set&SetAttrMode != 0 {
 			if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
@@ -807,24 +813,34 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 					attr.Mode &= 05777
 				}
 			}
-			cur.Mode = attr.Mode
+			if attr.Mode != cur.Mode {
+				cur.Mode = attr.Mode
+				changed = true
+			}
 		}
 		now := time.Now()
-		if set&SetAttrAtime != 0 {
+		if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
 			cur.Atime = attr.Atime
 			cur.Atimensec = attr.Atimensec
+			changed = true
 		}
 		if set&SetAttrAtimeNow != 0 {
 			cur.Atime = now.Unix()
 			cur.Atimensec = uint32(now.Nanosecond())
+			changed = true
 		}
-		if set&SetAttrMtime != 0 {
+		if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
 			cur.Mtime = attr.Mtime
 			cur.Mtimensec = attr.Mtimensec
+			changed = true
 		}
 		if set&SetAttrMtimeNow != 0 {
 			cur.Mtime = now.Unix()
 			cur.Mtimensec = uint32(now.Nanosecond())
+			changed = true
+		}
+		if !changed {
+			return nil
 		}
 		cur.Ctime = now.Unix()
 		cur.Ctimensec = uint32(now.Nanosecond())
