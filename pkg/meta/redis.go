@@ -840,6 +840,7 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			changed = true
 		}
 		if !changed {
+			*attr = cur
 			return nil
 		}
 		cur.Ctime = now.Unix()
