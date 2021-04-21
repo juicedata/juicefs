@@ -14,7 +14,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.11.0-56 (2021-03-26 35779ef)
+   0.12.1-11 (2021-04-21 d749382)
 
 COMMANDS:
    format     format a volume
@@ -33,6 +33,7 @@ GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
    --quiet, -q             only warning and errors (default: false)
    --trace                 enable trace log (default: false)
+   --no-agent              Disable pprof (:6060) and gops (:6070) agent (default: false)
    --help, -h              show help (default: false)
    --version, -V           print only the version (default: false)
 
