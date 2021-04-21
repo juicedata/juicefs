@@ -87,7 +87,7 @@ A path to RSA private key (PEM)
 `--force`\
 overwrite existing format (default: false)
 
-`--no-update`
+`--no-update`\
 don't update existing volume (default: false)
 
 ## juicefs mount
