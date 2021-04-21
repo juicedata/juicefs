@@ -73,7 +73,7 @@ compression algorithm (lz4, zstd, none) (default: "none")
 Object storage type (e.g. s3, gcs, oss, cos) (default: "file")
 
 `--bucket value`\
-A bucket URL to store data (default: `"$HOME/.juicefs/local"`)
+A bucket URL to store data (default: `"$HOME/.juicefs/local"` or `"/var/jfs"`)
 
 `--access-key value`\
 Access key for object storage (env `ACCESS_KEY`)
@@ -86,6 +86,9 @@ A path to RSA private key (PEM)
 
 `--force`\
 overwrite existing format (default: false)
+
+`--no-update`\
+don't update existing volume (default: false)
 
 ## juicefs mount
 
@@ -100,6 +103,12 @@ juicefs mount [command options] REDIS-URL MOUNTPOINT
 ```
 
 ### Options
+
+`--metrics value`\
+address to export metrics (default: "127.0.0.1:9567")
+
+`--no-usage-report`\
+do not send usage report (default: false)
 
 `-d, --background`\
 run in background (default: false)
@@ -144,7 +153,7 @@ prefetch N blocks in parallel (default: 3)
 upload objects in background (default: false)
 
 `--cache-dir value`\
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
+directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`)
 
 `--cache-size value`\
 size of cached objects in MiB (default: 1024)
@@ -154,9 +163,6 @@ min free space (ratio) (default: 0.1)
 
 `--cache-partial-only`\
 cache only random/small read (default: false)
-
-`--no-usage-report`\
-do not send usage report (default: false)
 
 ## juicefs umount
 
@@ -323,7 +329,7 @@ juicefs info [command options] PATH or INODE
 ### Options
 
 `--inode, -i`\
-use inode instead of path (current dir should be inside JuiceFS) (default: `false`)
+use inode instead of path (current dir should be inside JuiceFS) (default: false)
 
 
 ## juicefs benchmark
