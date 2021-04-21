@@ -803,7 +803,7 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			cur.Uid = attr.Uid
 			changed = true
 		}
-		if set&SetAttrGID != 0 && cur.Uid != attr.Uid {
+		if set&SetAttrGID != 0 && cur.Gid != attr.Gid {
 			cur.Gid = attr.Gid
 			changed = true
 		}
