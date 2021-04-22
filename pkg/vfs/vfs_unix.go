@@ -188,6 +188,7 @@ func SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32,
 	if set&meta.SetAttrSize != 0 {
 		err = Truncate(ctx, ino, int64(size), opened, attr)
 	}
+	UpdateLength(ino, attr)
 	entry = &meta.Entry{Inode: ino, Attr: attr}
 	return
 }
