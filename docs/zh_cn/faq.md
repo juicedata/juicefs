@@ -68,3 +68,30 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 ## `format: ERR wrong number of arguments for 'auth' command`
 
 这个错误意味着你使用的 Redis 版本小于 6.0.0 同时在执行 `juicefs format` 命令时指定了 username 参数。只有 Redis 6.0.0 版本以后才支持指定 username，因此你需要省略 URL 中的 username 参数，例如 `redis://:password@host:6379/1`。
+
+## `fuse: fuse: exec: "/bin/fusermount": stat /bin/fusermount: no such file or directory`
+
+这个错误意味着使用了非 root 用户执行 `juicefs mount` 命令，并且 `fusermount` 这个命令也找不到。
+
+这个问题有两种解决方法：
+
+1. 用 root 用户执行 `juicefs mount` 命令
+2. 安装 `fuse` 包（例如 `apt-get install fuse`、`yum install fuse`）
+
+## `fuse: fuse: fork/exec /usr/bin/fusermount: permission denied`
+
+这个错误意味着当前用户没有执行 `fusermount` 命令的权限。例如，你可以通过下面的命令检查 `fusermount` 命令的权限：
+
+```sh
+$ ls -l /usr/bin/fusermount
+-rwsr-x---. 1 root fuse 27968 Dec  7  2011 /usr/bin/fusermount
+```
+
+上面的例子表示只有 root 用户和 `fuse` 用户组的用户有权限执行。另一个例子：
+
+```sh
+$ ls -l /usr/bin/fusermount
+-rwsr-xr-x 1 root root 32096 Oct 30  2018 /usr/bin/fusermount
+```
+
+上面的例子表示所有用户都有权限执行。
