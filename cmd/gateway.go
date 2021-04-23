@@ -372,13 +372,6 @@ func (n *jfsObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio
 	return bi, jfsToObjectErr(ctx, eno, bucket)
 }
 
-// byBucketName is a collection satisfying sort.Interface.
-type byBucketName []minio.BucketInfo
-
-func (d byBucketName) Len() int           { return len(d) }
-func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
-
 // Ignores all reserved bucket names or invalid bucket names.
 func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
 	if err := s3utils.CheckValidBucketName(bucketEntry); err != nil {
@@ -422,7 +415,9 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 	}
 
 	// Sort bucket infos by bucket name.
-	sort.Sort(byBucketName(buckets))
+	sort.Slice(buckets, func(i, j int) bool {
+		return buckets[i].Name < buckets[j].Name
+	})
 	return buckets, nil
 }
 
@@ -872,12 +867,6 @@ func (n *jfsObjects) checkUploadIDExists(ctx context.Context, bucket, object, up
 	return jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 }
 
-type sortPartInfo []minio.PartInfo
-
-func (s sortPartInfo) Len() int           { return len(s) }
-func (s sortPartInfo) Less(i, j int) bool { return s[i].PartNumber < s[j].PartNumber }
-func (s sortPartInfo) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
 func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (result minio.ListPartsInfo, err error) {
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return result, err
@@ -910,7 +899,9 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 			})
 		}
 	}
-	sort.Sort(sortPartInfo(result.Parts))
+	sort.Slice(result.Parts, func(i, j int) bool {
+		return result.Parts[i].PartNumber < result.Parts[j].PartNumber
+	})
 	if len(result.Parts) > maxParts {
 		result.IsTruncated = true
 		result.Parts = result.Parts[:maxParts]
