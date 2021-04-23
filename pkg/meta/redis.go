@@ -406,6 +406,9 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 	defer cancel()
 	used, _ := r.rdb.IncrBy(c, usedSpace, 0).Result()
 	used = ((used >> 16) + 1) << 16 // aligned to 64K
+	for used*10 > int64(*totalspace)*8 {
+		*totalspace *= 2
+	}
 	*availspace = *totalspace - uint64(used)
 	inodes, _ := r.rdb.IncrBy(c, totalInodes, 0).Result()
 	*iused = uint64(inodes)
