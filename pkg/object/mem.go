@@ -158,12 +158,6 @@ func (m *memStore) Delete(key string) error {
 	return nil
 }
 
-type sortObject []Object
-
-func (s sortObject) Len() int           { return len(s) }
-func (s sortObject) Less(i, j int) bool { return s[i].Key() < s[j].Key() }
-func (s sortObject) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
 func (m *memStore) List(prefix, marker string, limit int64) ([]Object, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -186,7 +180,9 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]Object, error) {
 			objs = append(objs, f)
 		}
 	}
-	sort.Sort(sortObject(objs))
+	sort.Slice(objs, func(i, j int) bool {
+		return objs[i].Key() < objs[j].Key()
+	})
 	if int64(len(objs)) > limit {
 		objs = objs[:limit]
 	}
