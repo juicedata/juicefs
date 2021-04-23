@@ -76,7 +76,7 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 这个问题有两种解决方法：
 
 1. 用 root 用户执行 `juicefs mount` 命令
-2. 安装 `fuse` 包（例如 `apt-get install fuse`, `yum install fuse`）
+2. 安装 `fuse` 包（例如 `apt-get install fuse`、`yum install fuse`）
 
 ## `fuse: fuse: fork/exec /usr/bin/fusermount: permission denied`
 
