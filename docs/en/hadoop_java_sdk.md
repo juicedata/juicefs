@@ -2,6 +2,8 @@
 
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK to support variety of components in Hadoop ecosystem.
 
+**NOTICE：JuiceFS use local user uid mapping. So，you should sync all the needed users and their uids across the whole hadoop cluster to avoid permission error.**
+
 ## Hadoop Compatibility
 
 JuiceFS Hadoop Java SDK is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
