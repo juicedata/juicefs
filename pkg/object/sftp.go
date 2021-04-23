@@ -297,20 +297,18 @@ func (f *sftpStore) Delete(key string) error {
 	return err
 }
 
-type sortFI []os.FileInfo
-
-func (s sortFI) Len() int      { return len(s) }
-func (s sortFI) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s sortFI) Less(i, j int) bool {
-	name1 := s[i].Name()
-	if s[i].IsDir() {
-		name1 += "/"
-	}
-	name2 := s[j].Name()
-	if s[j].IsDir() {
-		name2 += "/"
-	}
-	return name1 < name2
+func sortFIsByName(fis []os.FileInfo) {
+	sort.Slice(fis, func(i, j int) bool {
+		name1 := fis[i].Name()
+		if fis[i].IsDir() {
+			name1 += "/"
+		}
+		name2 := fis[j].Name()
+		if fis[j].IsDir() {
+			name2 += "/"
+		}
+		return name1 < name2
+	})
 }
 
 func fileInfo(key string, fi os.FileInfo) Object {
@@ -337,7 +335,7 @@ func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan Object)
 		return
 	}
 
-	sort.Sort(sortFI(infos))
+	sortFIsByName(infos)
 	for _, fi := range infos {
 		p := path + fi.Name()
 		key := p[len(f.root):]
@@ -371,7 +369,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 			return
 		}
 
-		sort.Sort(sortFI(infos))
+		sortFIsByName(infos)
 		for _, fi := range infos {
 			p := dir + fi.Name()
 			if !strings.HasPrefix(p, f.root) {
