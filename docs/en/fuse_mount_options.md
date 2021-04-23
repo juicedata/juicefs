@@ -6,6 +6,10 @@ This is a guide that lists important FUSE mount options. These mount options are
 $ juicefs mount -d -o allow_other,writeback_cache localhost ~/jfs
 ```
 
+## debug
+
+Enable debug log
+
 ## allow_other
 
 This option overrides the security measure restricting file access to the user mounting the file system. So all users (including root) can access the files. This option is by default only allowed to root, but this restriction can be removed with `user_allow_other` configuration option in `/etc/fuse.conf`.
