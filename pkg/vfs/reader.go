@@ -488,12 +488,6 @@ func (f *fileReader) releaseIdleBuffer() {
 	})
 }
 
-type uint64Slice []uint64
-
-func (p uint64Slice) Len() int           { return len(p) }
-func (p uint64Slice) Less(i, j int) bool { return p[i] < p[j] }
-func (p uint64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-
 func (f *fileReader) splitRange(block *frange) []uint64 {
 	ranges := []uint64{block.off, block.end()}
 	contain := func(p uint64) bool {
@@ -514,7 +508,9 @@ func (f *fileReader) splitRange(block *frange) []uint64 {
 			}
 		}
 	})
-	sort.Sort(uint64Slice(ranges))
+	sort.Slice(ranges, func(i, j int) bool {
+		return ranges[i] < ranges[j]
+	})
 	return ranges
 }
 
@@ -630,11 +626,11 @@ func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, sys
 		return 0, f.err
 	}
 
-	size := uint32(len(buf))
+	size := uint64(len(buf))
 	if offset >= f.length || size == 0 {
 		return 0, 0
 	}
-	block := &frange{offset, uint64(size)}
+	block := &frange{offset, size}
 	if block.end() > f.length {
 		block.len = f.length - block.off
 	}
