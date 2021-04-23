@@ -68,3 +68,30 @@ This error may caused by GCC version is too low, please try to upgrade your GCC 
 ## `format: ERR wrong number of arguments for 'auth' command`
 
 This error means you use Redis < 6.0.0 and specify username in Redis URL when execute `juicefs format` command. Only Redis >= 6.0.0 supports specify username, so you need omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.
+
+## `fuse: fuse: exec: "/bin/fusermount": stat /bin/fusermount: no such file or directory`
+
+This error means `juicefs mount` command was executed with non-root user, and `fusermount` command cannot found.
+
+There are two solutions to this problem:
+
+1. Execute `juicefs mount` command with root user
+2. Install `fuse` package (e.g. `apt-get install fuse`, `yum install fuse`)
+
+## `fuse: fuse: fork/exec /usr/bin/fusermount: permission denied`
+
+This error means current user doesn't have permission to execute `fusermount` command. For example, check `fusermount` permission with following command:
+
+```sh
+$ ls -l /usr/bin/fusermount
+-rwsr-x---. 1 root fuse 27968 Dec  7  2011 /usr/bin/fusermount
+```
+
+Above example means only root user and `fuse` group user have executable permission. Another example:
+
+```sh
+$ ls -l /usr/bin/fusermount
+-rwsr-xr-x 1 root root 32096 Oct 30  2018 /usr/bin/fusermount
+```
+
+Above example means all users have executable permission.
