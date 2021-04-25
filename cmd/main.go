@@ -78,6 +78,7 @@ func main() {
 			benchmarkFlags(),
 			gcFlags(),
 			checkFlags(),
+			profileFlags(),
 		},
 	}
 
