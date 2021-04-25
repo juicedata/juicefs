@@ -68,6 +68,10 @@ func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if len(uri.Path) < 2 {
+		return nil, fmt.Errorf("no bucket name provided in %s: %s", endpoint, err)
+	}
 	bucket := uri.Path[1:]
 	for strings.HasSuffix(bucket, "/") {
 		bucket = bucket[:len(bucket)-1]
