@@ -42,7 +42,7 @@ Create a file named `hosts` in this directory, place IP addresses of all hosts n
 
 Here we ensure an account `alice` with UID 1200 and  group `staff` with GID 500 on 2 hosts:
 
-```shell
+```
 ~/account-sync$ cat hosts
 172.16.255.163
 172.16.255.180
@@ -72,7 +72,7 @@ Now the new account `alice:staff` has been created on these 2 hosts.
 
 If the UID or GID specified has been allocated to another user or group on some hosts, the creation would failed.
 
-```bash
+```
 ~/account-sync$ ansible-playbook -i hosts -u root --ssh-extra-args "-o StrictHostKeyChecking=no" \
 --extra-vars "group=ubuntu gid=1000 user=ubuntu uid=1000" play.yaml
 
