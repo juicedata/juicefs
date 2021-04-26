@@ -274,7 +274,7 @@ func profile(ctx *cli.Context) error {
 		file:      file,
 		replay:    replay,
 		tty:       isatty.IsTerminal(os.Stdout.Fd()),
-		interval:  time.Second * ctx.Duration("interval"),
+		interval:  time.Second * time.Duration(ctx.Int64("interval")),
 		uids:      strings.Split(ctx.String("uid"), ","),
 		gids:      strings.Split(ctx.String("gid"), ","),
 		pids:      strings.Split(ctx.String("pid"), ","),
@@ -323,10 +323,10 @@ func profileFlags() *cli.Command {
 				Aliases: []string{"p"},
 				Usage:   "track only specified PIDs(separated by comma ,)",
 			},
-			&cli.DurationFlag{
+			&cli.Int64Flag{
 				Name:  "interval",
 				Value: 2,
-				Usage: "flush interval",
+				Usage: "flush interval in seconds",
 			},
 		},
 	}
