@@ -452,3 +452,8 @@ func TestMarsharl(t *testing.T) {
 		t.Fatalf("%+v != %+v", o2, o)
 	}
 }
+
+func TestSharding(t *testing.T) {
+	s, _ := NewSharded("mem", "", "", "", 10)
+	testStorage(t, s)
+}

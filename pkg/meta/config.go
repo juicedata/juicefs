@@ -30,6 +30,7 @@ type Format struct {
 	SecretKey   string
 	BlockSize   int
 	Compression string
+	Shards      int
 	Partitions  int
 	EncryptKey  string
 }

@@ -214,7 +214,13 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 }
 
 func createStorage(format *meta.Format) (object.ObjectStorage, error) {
-	blob, err := object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
+	var blob object.ObjectStorage
+	var err error
+	if format.Shards > 1 {
+		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.Shards)
+	} else {
+		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
+	}
 	if err != nil {
 		return nil, err
 	}
