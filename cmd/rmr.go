@@ -24,6 +24,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -38,11 +39,11 @@ func rmrFlags() *cli.Command {
 
 func openControler(path string) *os.File {
 	f, err := os.OpenFile(filepath.Join(path, ".control"), os.O_RDWR, 0)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
 		logger.Errorf("%s", err)
 		return nil
 	}
-	if err != nil && os.IsNotExist(err) && path != "/" {
+	if err != nil && path != "/" {
 		return openControler(filepath.Dir(path))
 	}
 	return f
