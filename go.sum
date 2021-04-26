@@ -355,7 +355,6 @@ github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/juicedata/godaemon v0.0.0-20210118074000-659b6681b236 h1:py4S1ZTRfz5hIvrhu83YSw7t0Z621+VrmmZBqSkQn5c=
 github.com/juicedata/godaemon v0.0.0-20210118074000-659b6681b236/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
-github.com/juicedata/juicesync v0.7.0 h1:6Twooa5VNi39gfGfmuZwZCztkReLlSSZIET57bpJSh8=
 github.com/juicedata/minio v0.0.0-20210222051636-e7cabdf948f4 h1:/Klbj2LgJnqWrVfK2RtsqNQm649uXi2diLc/2X3eis4=
 github.com/juicedata/minio v0.0.0-20210222051636-e7cabdf948f4/go.mod h1:pQt7BggRNk3m4ZLGmtZ8ShrWe70RvyeXsHljoapikM0=
 github.com/juju/ratelimit v1.0.1 h1:+7AIFJVQ0EQgq/K9+0Krm7m530Du7tIz0METWzN0RgY=

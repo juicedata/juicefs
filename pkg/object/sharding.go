@@ -43,7 +43,7 @@ func (s *sharded) Create() error {
 
 func (s *sharded) pick(key string) ObjectStorage {
 	h := fnv.New32a()
-	h.Write([]byte(key))
+	_, _ = h.Write([]byte(key))
 	i := h.Sum32() % uint32(len(s.stores))
 	return s.stores[i]
 }
