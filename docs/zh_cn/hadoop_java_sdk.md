@@ -2,7 +2,9 @@
 
 JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
-**注意：由于 JuiceFS 使用本地的 user 和 uid 映射。因此，在分布式环境下使用，需要同步所有需要使用的 user 和 uid 到所有的 Hadoop 节点上，以避免权限问题。**
+> **注意**：
+>
+> 由于 JuiceFS 使用本地的 user 和 UID 映射。因此，在分布式环境下使用，需要[同步所有需要使用的 user 和 UID](../en/how_to_sync_the_same_account.md) 到所有的 Hadoop 节点上，以避免权限问题。
 
 ## Hadoop 兼容性
 
@@ -229,7 +231,7 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
   ```shell
   hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
-   
+  
 - delete
 
   ```shell
@@ -264,9 +266,9 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
 - 参考值
 
 | 操作   | 吞吐(MB/s)  |
-| ------ | ---- | 
+| ------ | ---- |
 | write | 453  |
-| read   | 141 | 
+| read   | 141 |
 
 如果机器的网络带宽比较低，则一般能达到网络带宽瓶颈  
 
@@ -354,9 +356,9 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
 - 参考值
 
 | 操作   | 平均吞吐(MB/s)  | 总吞吐(MB/s)  |
-| ------ | ---- | ---- | 
+| ------ | ---- | ---- |
 | write | 180  | 1792  |
-| read   | 141 | 1409 | 
+| read   | 141 | 1409 |
 
 
 ## FAQ

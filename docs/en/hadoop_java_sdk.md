@@ -2,7 +2,9 @@
 
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK to support variety of components in Hadoop ecosystem.
 
-**NOTICE: JuiceFS use local user uid mapping. So, you should sync all the needed users and their uids across the whole Hadoop Cluster to avoid permission error.**
+> **NOTICE**:
+>
+>  JuiceFS use local user uid mapping. So, you should [sync all the needed users and their uids](./how_to_sync_the_same_account.md) across the whole Hadoop Cluster to avoid permission error.
 
 ## Hadoop Compatibility
 
@@ -243,9 +245,9 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 - for reference
 
 | operation   | throughput(MB/s)  |
-| ------ | ---- | 
+| ------ | ---- |
 | write | 453  |
-| read   | 141 | 
+| read   | 141 |
 
 ### Distribute Benchmark
 
@@ -273,7 +275,6 @@ We use 3 4c32g ecs(5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
 
   10 map task, each has 10 threads, each thread open 1000 file. 100000 files in total
   
-
 - create
 
   ```shell
@@ -291,13 +292,12 @@ We use 3 4c32g ecs(5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
 
   10 map task, each has 10 threads, each thread delete 1000 file. 100000 files in total
   
-
 - for reference
 
     - 10 threads
 
   | operation   | tps | delay(ms) |
-    | ------ | ---- | ---- |
+  | ------ | ---- | ---- |
   | create | 2307 | 3.6 |
   | open   | 3215 | 2.3 |
   | rename | 1700 | 5.22 |
@@ -306,7 +306,7 @@ We use 3 4c32g ecs(5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
     - 100 threads
 
   | operation   | tps | delay(ms) |
-    | ------ | ---- | ---- |
+  | ------ | ---- | ---- |
   | create | 8375 | 11.5 |
   | open   | 12691 | 7.5 |
   | rename | 5343 | 18.4 |
@@ -334,9 +334,9 @@ We use 3 4c32g ecs(5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
 - for reference
 
 | operation   | total throughput(MB/s)  |
-| ------ | ---- | 
+| ------ | ---- |
 | write | 1792  |
-| read   | 1409 | 
+| read   | 1409 |
 
 
 ## FAQ

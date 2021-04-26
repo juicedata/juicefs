@@ -95,3 +95,14 @@ $ ls -l /usr/bin/fusermount
 ```
 
 Above example means all users have executable permission.
+
+## Why the same user on host X has permission to access a file in JuiceFS while has no permission to it on host Y?
+
+The same user has different UID or GID on host X and host Y. Use `id` command to show the UID and GID:
+
+```bash
+$ id alice
+uid=1201(alice) gid=500(staff) groups=500(staff)
+```
+
+Read [sync account on multiple hosts](./how_to_sync_the_same_account.md) to resolve this problem.
