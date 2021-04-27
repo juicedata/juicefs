@@ -146,11 +146,9 @@ func (s *sharded) ListAll(prefix, marker string) (<-chan Object, error) {
 		if err != nil {
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
 		}
-		if err == nil {
-			first := <-ch
-			if first != nil {
-				heads.Push(nextKey{first, ch})
-			}
+		first := <-ch
+		if first != nil {
+			heads.Push(nextKey{first, ch})
 		}
 	}
 	heap.Init(heads)
