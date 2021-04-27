@@ -454,6 +454,6 @@ func TestMarsharl(t *testing.T) {
 }
 
 func TestSharding(t *testing.T) {
-	s, _ := NewSharded("mem", "", "", "", 10)
+	s, _ := NewSharded("mem", "%d", "", "", 10)
 	testStorage(t, s)
 }
