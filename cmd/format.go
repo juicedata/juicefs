@@ -54,7 +54,13 @@ func fixObjectSize(s int) int {
 
 func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 	object.UserAgent = "JuiceFS-" + version.Version()
-	blob, err := object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
+	var blob object.ObjectStorage
+	var err error
+	if format.Shards > 1 {
+		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.Shards)
+	} else {
+		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -174,6 +180,7 @@ func format(c *cli.Context) error {
 		Bucket:      c.String("bucket"),
 		AccessKey:   c.String("access-key"),
 		SecretKey:   c.String("secret-key"),
+		Shards:      c.Int("shards"),
 		BlockSize:   fixObjectSize(c.Int("block-size")),
 		Compression: c.String("compress"),
 	}
@@ -250,6 +257,11 @@ func formatFlags() *cli.Command {
 				Name:  "compress",
 				Value: "none",
 				Usage: "compression algorithm (lz4, zstd, none)",
+			},
+			&cli.IntFlag{
+				Name:  "shards",
+				Value: 0,
+				Usage: "store the blocks into N buckets by hash of key",
 			},
 			&cli.StringFlag{
 				Name:  "storage",
