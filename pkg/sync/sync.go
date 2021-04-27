@@ -184,7 +184,7 @@ func copyObject(src, dst object.ObjectStorage, obj object.Object) error {
 		in, e := src.Get(key, 0, -1)
 		if e != nil {
 			if _, err := src.Head(key); err != nil {
-				return nil
+				return err
 			}
 			return e
 		}
@@ -198,7 +198,7 @@ func copyObject(src, dst object.ObjectStorage, obj object.Object) error {
 	in, e := src.Get(key, 0, int64(firstBlock))
 	if e != nil {
 		if _, err := src.Head(key); err != nil {
-			return nil
+			return err
 		}
 		return e
 	}
