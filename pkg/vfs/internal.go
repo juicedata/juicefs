@@ -121,14 +121,20 @@ func collectMetrics() []byte {
 	}
 	for _, mf := range mfs {
 		for _, m := range mf.Metric {
+			var name string = *mf.Name
+			for _, l := range m.Label {
+				if *l.Name != "mp" && *l.Name != "vol_name" {
+					name += "_" + *l.Value
+				}
+			}
 			switch *mf.Type {
 			case io_prometheus_client.MetricType_GAUGE:
-				_, _ = fmt.Fprintf(w, "%s %s\n", *mf.Name, format(*m.Gauge.Value))
+				_, _ = fmt.Fprintf(w, "%s %s\n", name, format(*m.Gauge.Value))
 			case io_prometheus_client.MetricType_COUNTER:
-				_, _ = fmt.Fprintf(w, "%s %s\n", *mf.Name, format(*m.Counter.Value))
+				_, _ = fmt.Fprintf(w, "%s %s\n", name, format(*m.Counter.Value))
 			case io_prometheus_client.MetricType_HISTOGRAM:
-				_, _ = fmt.Fprintf(w, "%s_total %d\n", *mf.Name, *m.Histogram.SampleCount)
-				_, _ = fmt.Fprintf(w, "%s_sum %s\n", *mf.Name, format(*m.Histogram.SampleSum))
+				_, _ = fmt.Fprintf(w, "%s_total %d\n", name, *m.Histogram.SampleCount)
+				_, _ = fmt.Fprintf(w, "%s_sum %s\n", name, format(*m.Histogram.SampleSum))
 			case io_prometheus_client.MetricType_SUMMARY:
 			}
 		}

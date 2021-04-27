@@ -18,11 +18,14 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-isatty"
@@ -157,6 +160,31 @@ func newBenchmark(filenamePrefix string, fileSizeMiB float64, blockSize float64,
 	}
 }
 
+func readStats(path string) map[string]float64 {
+	f, err := os.Open(path)
+	if err != nil {
+		logger.Warnf("open %s: %s", path, err)
+		return nil
+	}
+	d, err := ioutil.ReadAll(f)
+	if err != nil {
+		logger.Warnf("read %s: %s", path, err)
+		return nil
+	}
+	stats := make(map[string]float64)
+	lines := strings.Split(string(d), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) == 2 {
+			stats[fields[0]], err = strconv.ParseFloat(fields[1], 64)
+			if err != nil {
+				logger.Warnf("parse %s: %s", fields[1], err)
+			}
+		}
+	}
+	return stats
+}
+
 func benchmark(c *cli.Context) error {
 	setLoggerLevel(c)
 
@@ -168,14 +196,24 @@ func benchmark(c *cli.Context) error {
 	} else {
 		logger.Fatal("Currently only support Linux/macOS")
 	}
-	dest := c.String("dest")
+	dest := "/jfs"
 	blockSize := c.Float64("block-size")
-	bigFileSize := c.Float64("bigfile-file-size")
-	smallFileSize := c.Float64("smallfile-file-size")
-	smallFileCount := c.Int("smallfile-count")
+	bigFileSize := c.Float64("big-file-size")
+	smallFileSize := c.Float64("small-file-size")
+	smallFileCount := c.Int("small-file-count")
 
 	if c.NArg() > 0 {
 		dest = c.Args().Get(0)
+	}
+
+	var statPath string
+	var stats map[string]float64
+	for mp := dest; mp != "/"; mp = filepath.Dir(mp) {
+		if _, err := os.Stat(filepath.Join(mp, ".stats")); err == nil {
+			statPath = filepath.Join(mp, ".stats")
+			stats = readStats(statPath)
+			break
+		}
 	}
 
 	dest = filepath.Join(dest, fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
@@ -242,37 +280,51 @@ func benchmark(c *cli.Context) error {
 	if err := rmrCmd.Run(); err != nil {
 		return err
 	}
+
+	if stats != nil {
+		stats2 := readStats(statPath)
+		st := func(n string) float64 {
+			return stats2["juicefs_"+n] - stats["juicefs_"+n]
+		}
+		show := func(title, name string) {
+			fmt.Printf("%s: %.0f, avg: %.1f ms\n", title, st(name+"_total"),
+				st(name+"_sum")/st(name+"_total")*1000)
+		}
+		show("FUSE operation", "fuse_ops_durations_histogram_seconds")
+		show("Update meta", "redis_tx_durations_histogram_seconds")
+		show("Put object", "object_request_durations_histogram_seconds_PUT")
+		show("Get object first byte", "object_request_durations_histogram_seconds_GET")
+		show("Delete object", "object_request_durations_histogram_seconds_DELETE")
+		fmt.Printf("Used: %.1fs, CPU: %.1f%%, MEM: %.1f MiB\n", st("uptime"),
+			st("cpu_usage")*100/st("uptime"), stats2["juicefs_memory"]/1024/1024)
+	}
 	return nil
 }
 
 func benchmarkFlags() *cli.Command {
 	return &cli.Command{
-		Name:   "benchmark",
-		Usage:  "run benchmark, including read/write/stat big/small files",
-		Action: benchmark,
+		Name:      "bench",
+		Usage:     "run benchmark to read/write/stat big/small files",
+		Action:    benchmark,
+		ArgsUsage: "PATH",
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "dest",
-				Value: "/jfs/benchmark",
-				Usage: "path to run benchmark",
-			},
 			&cli.Float64Flag{
 				Name:  "block-size",
 				Value: 1,
 				Usage: "block size in MiB",
 			},
 			&cli.Float64Flag{
-				Name:  "bigfile-file-size",
+				Name:  "big-file-size",
 				Value: 1024,
 				Usage: "size of big file in MiB",
 			},
 			&cli.Float64Flag{
-				Name:  "smallfile-file-size",
+				Name:  "small-file-size",
 				Value: 0.1,
 				Usage: "size of small file in MiB",
 			},
 			&cli.IntFlag{
-				Name:  "smallfile-count",
+				Name:  "small-file-count",
 				Value: 100,
 				Usage: "number of small files",
 			},
