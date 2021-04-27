@@ -114,10 +114,11 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_
 - [How to Setup Object Storage](docs/en/how_to_setup_object_storage.md)
 - [Cache Management](docs/en/cache_management.md)
 - [Fault Diagnosis and Analysis](docs/en/fault_diagnosis_and_analysis.md)
-- [S3 Gateway](docs/en/s3_gateway.md)
 - [FUSE Mount Options](docs/en/fuse_mount_options.md)
+- [Sync Account on Multiple Hosts](docs/en/how_to_sync_the_same_account.md)
 - [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
 - [Using JuiceFS on Windows](docs/en/windows.md)
+- [S3 Gateway](docs/en/s3_gateway.md)
 
 ## POSIX Compatibility
 
