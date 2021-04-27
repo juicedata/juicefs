@@ -96,13 +96,13 @@ $ ls -l /usr/bin/fusermount
 
 上面的例子表示所有用户都有权限执行。
 
-## 为什么同一个用户在主机 X 上有权限访问 JuiceFS 的文件，在主机 Y 上访问该文件却没有权限?
+## 为什么同一个用户在主机 X 上有权限访问 JuiceFS 的文件，在主机 Y 上访问该文件却没有权限？
 
-该用户在主机 X 和主机 Y 上的 UID 或者 GID 不一样。使用 `id` 命令可以显示用户的 UID 和 GID ：
+该用户在主机 X 和主机 Y 上的 UID 或者 GID 不一样。使用 `id` 命令可以显示用户的 UID 和 GID：
 
 ```bash
 $ id alice
 uid=1201(alice) gid=500(staff) groups=500(staff)
 ```
 
-阅读文档 [同步账号到多个主机](../en/how_to_sync_the_same_account.md) 解决这个问题。
+阅读文档[「同步账号到多个主机」](../en/how_to_sync_the_same_account.md)解决这个问题。
