@@ -1803,7 +1803,7 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 							s.Len -= dec
 						}
 						if coff+uint64(pos)+uint64(s.Len) > offIn+size {
-							dec := uint32(offIn + size - (coff + uint64(pos) + uint64(s.Len)))
+							dec := uint32(coff + uint64(pos) + uint64(s.Len) - (offIn + size))
 							s.Len -= dec
 						}
 						doff := coff + uint64(pos) - offIn + offOut
