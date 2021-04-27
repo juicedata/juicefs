@@ -1791,22 +1791,22 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 				// Add a zero chunk for hole
 				ss := append([]*slice{{len: ChunkSize}}, readSlices(sv)...)
 				cs := buildSlice(ss)
-				var tpos uint32
+				tpos := coff
 				for _, s := range cs {
 					pos := tpos
-					tpos += s.Len
-					if coff+uint64(pos) < offIn+size && coff+uint64(pos)+uint64(s.Len) > offIn {
-						if coff+uint64(pos) < offIn {
-							dec := uint32(offIn - coff - uint64(pos))
-							s.Off += dec
+					tpos += uint64(s.Len)
+					if pos < offIn+size && pos+uint64(s.Len) > offIn {
+						if pos < offIn {
+							dec := offIn - pos
+							s.Off += uint32(dec)
 							pos += dec
-							s.Len -= dec
+							s.Len -= uint32(dec)
 						}
-						if coff+uint64(pos)+uint64(s.Len) > offIn+size {
-							dec := uint32(offIn + size - (coff + uint64(pos) + uint64(s.Len)))
-							s.Len -= dec
+						if pos+uint64(s.Len) > offIn+size {
+							dec := pos + uint64(s.Len) - (offIn + size)
+							s.Len -= uint32(dec)
 						}
-						doff := coff + uint64(pos) - offIn + offOut
+						doff := pos - offIn + offOut
 						indx := uint32(doff / ChunkSize)
 						dpos := uint32(doff % ChunkSize)
 						if dpos+s.Len > ChunkSize {
