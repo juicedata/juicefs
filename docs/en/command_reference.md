@@ -69,6 +69,9 @@ size of block in KiB (default: 4096)
 `--compress value`\
 compression algorithm (lz4, zstd, none) (default: "none")
 
+`--shards value`\
+store the blocks into N buckets by hash of key (default: 0)
+
 `--storage value`\
 Object storage type (e.g. s3, gcs, oss, cos) (default: "file")
 

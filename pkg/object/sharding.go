@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -189,7 +190,11 @@ func NewSharded(name, endpoint, ak, sk string, shards int) (ObjectStorage, error
 	stores := make([]ObjectStorage, shards)
 	var err error
 	for i := range stores {
-		stores[i], err = CreateStorage(name, fmt.Sprintf(endpoint, i), ak, sk)
+		ep := fmt.Sprintf(endpoint, i)
+		if strings.HasSuffix(ep, "%!(EXTRA int=0)") {
+			return nil, fmt.Errorf("can not generate different endpoint using %s", endpoint)
+		}
+		stores[i], err = CreateStorage(name, ep, ak, sk)
 		if err != nil {
 			return nil, err
 		}
