@@ -333,7 +333,7 @@ juicefs info [command options] PATH or INODE
 use inode instead of path (current dir should be inside JuiceFS) (default: false)
 
 
-## juicefs benchmark
+## juicefs bench
 
 ### Description
 
@@ -342,24 +342,21 @@ Run benchmark, include read/write/stat big and small files.
 ### Synopsis
 
 ```
-juicefs benchmark [options] DIR
+juicefs bench [options] [PATH]
 ```
 
 ### Options
 
-`--dest value`\
-path to run benchmark (default: `"/jfs/benchmark"`)
-
 `--block-size value`\
 block size in MiB (default: 1)
 
-`--bigfile-file-size value`\
+`--big-file-size value`\
 size of big file in MiB (default: 1024)
 
-`--smallfile-file-size value`\
+`--small-file-size value`\
 size of small file in MiB (default: 0.1)
 
-`--smallfile-count value`\
+`--small-file-count value`\
 number of small files (default: 100)
 
 ## juicefs gc
