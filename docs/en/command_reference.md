@@ -14,7 +14,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.12.1-11 (2021-04-21 d749382)
+   0.12.1-23 (2021-04-26 56efd35)
 
 COMMANDS:
    format     format a volume
@@ -27,6 +27,7 @@ COMMANDS:
    benchmark  run benchmark, including read/write/stat big/small files
    gc         collect any leaked objects
    fsck       Check consistency of file system
+   profile    analyze access log (Experimental)
    help, h    Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -395,3 +396,29 @@ Check consistency of file system.
 ```
 juicefs fsck [command options] REDIS-URL
 ```
+
+## juicefs profile
+
+### Description
+
+Analyze access log (Experimental).
+
+### Synopsis
+
+```
+juicefs profile [command options] MOUNTPOINT/LOGFILE
+```
+
+### Options
+
+`--uid value, -u value`\
+track only specified UIDs(separated by comma ,)
+
+`--gid value, -g value`\
+track only specified GIDs(separated by comma ,)
+
+`--pid value, -p value`\
+track only specified PIDs(separated by comma ,)
+
+`--interval value`\
+flush interval in seconds (default: 2)
