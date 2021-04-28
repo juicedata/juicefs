@@ -34,3 +34,7 @@ target/libjfs.so.gz: libjfs.so
 
 libjfs.so: *.go ../../../pkg/*/*.go
 	go build -buildmode=c-shared -ldflags="$(LDFLAGS)" -o libjfs.so .
+
+libjfs.dll: *.go ../../../pkg/*/*.go
+	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o libjfs.dll \
+	-buildmode=c-shared -ldflags="$(LDFLAGS)"

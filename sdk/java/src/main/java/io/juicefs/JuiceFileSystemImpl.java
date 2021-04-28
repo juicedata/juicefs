@@ -168,10 +168,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     int jfs_removeXattr(long pid, long h, String path, String name);
   }
 
-  static int EPERM = -1;
-  static int ENOENT = -2;
-  static int EINTR = -0x4;
-  static int EIO = -5;
+  static int EPERM = -0x01;
+  static int ENOENT = -0x02;
+  static int EINTR = -0x04;
+  static int EIO = -0x05;
   static int EACCESS = -0xd;
   static int EEXIST = -0x11;
   static int ENOTDIR = -0x14;
@@ -179,11 +179,9 @@ public class JuiceFileSystemImpl extends FileSystem {
   static int ENOSPACE = -0x1c;
   static int EROFS = -0x1e;
   static int ENOTEMPTY = -0x27;
-  static int ENOTEMPTY1 = -0x42; // darwin
   static int ENODATA = -0x3d;
   static int ENOATTR = -0x5d;
   static int ENOTSUP = -0x5f;
-  static int ENOTSUP1 = -0x2d; // darwin
 
   static int MODE_MASK_R = 4;
   static int MODE_MASK_W = 2;
@@ -214,11 +212,11 @@ public class JuiceFileSystemImpl extends FileSystem {
       return new FileAlreadyExistsException();
     } else if (errno == EINVAL) {
       return new InvalidRequestException("Invalid parameter");
-    } else if (errno == ENOTEMPTY || errno == ENOTEMPTY1) {
+    } else if (errno == ENOTEMPTY) {
       return new PathIsNotEmptyDirectoryException(p.toString());
     } else if (errno == EINTR) {
       return new InterruptedIOException();
-    } else if (errno == ENOTSUP || errno == ENOTSUP1) {
+    } else if (errno == ENOTSUP) {
       return new PathOperationException(p.toString());
     } else if (errno == ENOSPACE) {
       return new IOException("No space");
@@ -310,13 +308,18 @@ public class JuiceFileSystemImpl extends FileSystem {
     for (String key : bkeys) {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
-    String[] cacheDirs = getConf(conf, "cache-dir", "memory").split(":");
+    String pathListSeparator = ":";
+    String os = System.getProperty("os.name");
+    if (os.toLowerCase().contains("windows")) {
+      pathListSeparator = ";";
+    }
+    String[] cacheDirs = getConf(conf, "cache-dir", "memory").split(pathListSeparator);
     for (int i = 0; i < cacheDirs.length; i++) {
       if (!"memory".equals(cacheDirs[i])) {
         cacheDirs[i] = new File(cacheDirs[i], name).toString();
       }
     }
-    obj.put("cacheDir", String.join(":", cacheDirs));
+    obj.put("cacheDir", String.join(pathListSeparator, cacheDirs));
     obj.put("cacheSize", Integer.valueOf(getConf(conf, "cache-size", "100")));
     obj.put("cacheFullBlock", Boolean.valueOf(getConf(conf, "cache-full-block", "true")));
     obj.put("metacache", Boolean.valueOf(getConf(conf, "metacache", "true")));
@@ -433,6 +436,11 @@ public class JuiceFileSystemImpl extends FileSystem {
     libjfsLibraryLoader.failImmediately();
     String name = "libjfs.1.so";
     File dir = new File("/tmp");
+    String os = System.getProperty("os.name");
+    if (os.toLowerCase().contains("windows")) {
+      name = "libjfs1.dll";
+      dir = new File(System.getProperty("java.io.tmpdir"));
+    }
     File libFile = new File(dir, name);
     URL res = JuiceFileSystemImpl.class.getResource("/libjfs.so.gz");
     if (res == null) {
@@ -475,11 +483,15 @@ public class JuiceFileSystemImpl extends FileSystem {
           reader.close();
           tmp.setLastModified(soTime);
           tmp.setReadable(true, false);
+          new File(dir, name).delete();
           if (tmp.renameTo(new File(dir, name))) {
             // updated libjfs.so
             libFile = new File(dir, name);
-          } else if (!tmp.renameTo(libFile)) {
-            throw new IOException("Can't update " + libFile);
+          } else {
+            libFile.delete();
+            if (!tmp.renameTo(libFile)) {
+              throw new IOException("Can't update " + libFile);
+            }
           }
         }
       }
