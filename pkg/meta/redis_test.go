@@ -527,6 +527,16 @@ func TestCompaction(t *testing.T) {
 	if total != size*50 {
 		t.Fatalf("size of slice should be %d, but got %d", size*50, total)
 	}
+
+	// TODO: check result if that's predictable
+	if st := m.CompactAll(ctx); st != 0 {
+		logger.Fatalf("compactall: %s", st)
+	}
+	var slices []Slice
+	if st := m.ListSlices(ctx, &slices); st != 0 {
+		logger.Fatalf("list all slices: %s", st)
+	}
+
 	l.Lock()
 	deletes := len(deleted)
 	l.Unlock()
