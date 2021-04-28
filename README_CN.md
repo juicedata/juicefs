@@ -193,7 +193,7 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试`./juicefs profile /jfs`命令实时监控统计信息。欲进一步了解此子命令请运行`./juicefs profile -h`或参阅[这里](docs/en/operations_profiling.md)。
+每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试 `./juicefs profile /jfs` 命令实时监控统计信息。欲进一步了解此子命令请运行 `./juicefs profile -h` 或参阅[这里](docs/en/operations_profiling.md)。
 
 ## 支持的对象存储
 
