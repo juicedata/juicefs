@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"syscall"
@@ -67,44 +68,95 @@ func BenchmarkReadSlices(b *testing.B) {
 // nolint:errcheck
 func TestRedisClient(t *testing.T) {
 	var conf RedisConfig
+	_, err := NewRedisMeta("http://127.0.0.1:6379/7", &conf)
+	if err == nil {
+		t.Fatal("meta created with invalid url")
+	}
 	m, err := NewRedisMeta("redis://127.0.0.1:6379/7", &conf)
 	if err != nil {
-		t.Logf("redis is not available: %s", err)
-		t.Skip()
+		t.Skipf("redis is not available: %s", err)
 	}
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
 	_ = m.Init(Format{Name: "test"}, true)
+	err = m.Init(Format{Name: "test"}, false) // changes nothing
+	if err != nil {
+		t.Fatalf("initialize failed: %s", err)
+	}
+	format, err := m.Load()
+	if err != nil {
+		t.Fatalf("load failed after initialization: %s", err)
+	}
+	if format.Name != "test" {
+		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
+	}
 	_ = m.NewSession()
 	ctx := Background
-	var parent, inode Ino
+	var parent, inode, dummyInode Ino
 	var attr = &Attr{}
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
-		t.Fatalf("mkdir %s", st)
+		t.Fatalf("mkdir d: %s", st)
 	}
 	defer m.Rmdir(ctx, 1, "d")
+	if st := m.Unlink(ctx, 1, "d"); st != syscall.EPERM {
+		t.Fatalf("unlink d: %s", st)
+	}
+	if st := m.Rmdir(ctx, parent, "."); st != syscall.EINVAL {
+		t.Fatalf("unlink d.: %s", st)
+	}
+	if st := m.Rmdir(ctx, parent, ".."); st != syscall.ENOTEMPTY {
+		t.Fatalf("unlink d..: %s", st)
+	}
 	if st := m.Lookup(ctx, 1, "d", &parent, attr); st != 0 {
-		t.Fatalf("lookup dir: %s", st)
+		t.Fatalf("lookup d: %s", st)
 	}
 	if st := m.Access(ctx, parent, 4, attr); st != 0 {
-		t.Fatalf("access dir: %s", st)
+		t.Fatalf("access d: %s", st)
 	}
 	if st := m.Create(ctx, parent, "f", 0650, 022, &inode, attr); st != 0 {
-		t.Fatalf("create file %s", st)
+		t.Fatalf("create f: %s", st)
 	}
 	defer m.Unlink(ctx, parent, "f")
-	if st := m.Lookup(ctx, parent, "f", &inode, attr); st != 0 {
-		t.Fatalf("lookup file: %s", st)
+	if st := m.Rmdir(ctx, parent, "f"); st != syscall.ENOTDIR {
+		t.Fatalf("rmdir f: %s", st)
 	}
+	if st := m.Rmdir(ctx, 1, "d"); st != syscall.ENOTEMPTY {
+		t.Fatalf("rmdir d: %s", st)
+	}
+	if st := m.Mknod(ctx, inode, "df", TypeFile, 0650, 022, 0, &dummyInode, nil); st != syscall.ENOTDIR {
+		t.Fatalf("create fd: %s", st)
+	}
+	if st := m.Mknod(ctx, parent, "f", TypeFile, 0650, 022, 0, &inode, attr); st != syscall.EEXIST {
+		t.Fatalf("create f: %s", st)
+	}
+	if st := m.Lookup(ctx, parent, "f", &inode, attr); st != 0 {
+		t.Fatalf("lookup f: %s", st)
+	}
+	attr.Atime = 2
 	attr.Mtime = 2
 	attr.Uid = 1
-	if st := m.SetAttr(ctx, inode, SetAttrMtime|SetAttrUID, 0, attr); st != 0 {
-		t.Fatalf("setattr file %s", st)
+	attr.Gid = 1
+	attr.Mode = 0644
+	if st := m.SetAttr(ctx, inode, SetAttrAtime|SetAttrMtime|SetAttrUID|SetAttrGID|SetAttrMode, 0, attr); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	if st := m.SetAttr(ctx, inode, 0, 0, attr); st != 0 { // changes nothing
+		t.Fatalf("setattr f: %s", st)
 	}
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
-		t.Fatalf("getattr file %s", st)
+		t.Fatalf("getattr f: %s", st)
 	}
-	if attr.Mtime != 2 || attr.Uid != 1 {
-		t.Fatalf("mtime:%d uid:%d", attr.Mtime, attr.Uid)
+	if attr.Atime != 2 || attr.Mtime != 2 || attr.Uid != 1 || attr.Gid != 1 || attr.Mode != 0644 {
+		t.Fatalf("atime:%d mtime:%d uid:%d gid:%d mode:%o", attr.Atime, attr.Mtime, attr.Uid, attr.Gid, attr.Mode)
+	}
+	if st := m.SetAttr(ctx, inode, SetAttrAtimeNow|SetAttrMtimeNow, 0, attr); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	fakeCtx := NewContext(100, 1, []uint32{1})
+	if st := m.Access(fakeCtx, parent, 4, nil); st != syscall.EACCES {
+		t.Fatalf("access d: %s", st)
+	}
+	if st := m.Access(fakeCtx, inode, 4, nil); st != 0 {
+		t.Fatalf("access f: %s", st)
 	}
 	var entries []*Entry
 	if st := m.Readdir(ctx, parent, 0, &entries); st != 0 {
@@ -115,19 +167,50 @@ func TestRedisClient(t *testing.T) {
 		t.Fatalf("entries: %+v", entries)
 	}
 	if st := m.Rename(ctx, parent, "f", 1, "f2", &inode, attr); st != 0 {
-		t.Fatalf("rename f %s", st)
+		t.Fatalf("rename d/f -> f2: %s", st)
 	}
 	defer func() {
 		_ = m.Unlink(ctx, 1, "f2")
 	}()
-	if st := m.Lookup(ctx, 1, "f2", &inode, attr); st != 0 {
-		t.Fatalf("lookup f2: %s", st)
+	if st := m.Rename(ctx, 1, "f2", 1, "f2", &inode, attr); st != 0 {
+		t.Fatalf("rename f2 -> f2: %s", st)
+	}
+	if st := m.Create(ctx, 1, "f", 0644, 022, &inode, attr); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	defer m.Unlink(ctx, 1, "f")
+	if st := m.Rename(ctx, 1, "f2", 1, "f", &inode, attr); st != 0 {
+		t.Fatalf("rename f2 -> f: %s", st)
+	}
+	if st := m.Link(ctx, inode, 1, "f3", attr); st != 0 {
+		t.Fatalf("link f3 -> f: %s", st)
+	}
+	defer m.Unlink(ctx, 1, "f3")
+	if st := m.Link(ctx, parent, 1, "d2", attr); st != syscall.EPERM {
+		t.Fatalf("link d2 -> d: %s", st)
+	}
+	if st := m.Symlink(ctx, 1, "s", "/f", &inode, attr); st != 0 {
+		t.Fatalf("symlink s -> /f: %s", st)
+	}
+	defer m.Unlink(ctx, 1, "s")
+	var target []byte
+	if st := m.ReadLink(ctx, inode, &target); st != 0 {
+		t.Fatalf("readlink s: %s", st)
+	}
+	if !bytes.Equal(target, []byte("/f")) {
+		t.Fatalf("readlink got %s, expected %s", target, "/f")
+	}
+	if st := m.ReadLink(ctx, parent, &target); st != syscall.ENOENT {
+		t.Fatalf("readlink d: %s", st)
+	}
+	if st := m.Lookup(ctx, 1, "f", &inode, attr); st != 0 {
+		t.Fatalf("lookup f: %s", st)
 	}
 
 	// data
 	var chunkid uint64
 	if st := m.Open(ctx, inode, 2, attr); st != 0 {
-		t.Fatalf("open f2: %s", st)
+		t.Fatalf("open f: %s", st)
 	}
 	if st := m.NewChunk(ctx, inode, 0, 0, &chunkid); st != 0 {
 		t.Fatalf("write chunk: %s", st)
@@ -145,6 +228,24 @@ func TestRedisClient(t *testing.T) {
 	}
 	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 100, 50); st != 0 {
 		t.Fatalf("fallocate: %s", st)
+	}
+	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocCollapesRange, 100, 50); st != syscall.EINVAL {
+		t.Fatalf("fallocate: %s", st)
+	}
+	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocInsertRange, 100, 50); st != syscall.EINVAL {
+		t.Fatalf("fallocate: %s", st)
+	}
+	if st := m.Fallocate(ctx, inode, fallocCollapesRange, 100, 50); st != syscall.ENOTSUP {
+		t.Fatalf("fallocate: %s", st)
+	}
+	if st := m.Fallocate(ctx, inode, fallocPunchHole, 100, 50); st != syscall.EINVAL {
+		t.Fatalf("fallocate: %s", st)
+	}
+	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 0, 0); st != syscall.EINVAL {
+		t.Fatalf("fallocate: %s", st)
+	}
+	if st := m.Fallocate(ctx, parent, fallocPunchHole|fallocKeepSize, 100, 50); st != syscall.EPERM {
+		t.Fatalf("fallocate dir: %s", st)
 	}
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read chunk: %s", st)
@@ -254,11 +355,60 @@ func TestRedisClient(t *testing.T) {
 	}
 	g.Wait()
 
-	if st := m.Unlink(ctx, 1, "f2"); st != 0 {
-		t.Fatalf("unlink: %s", st)
+	var totalspace, availspace, iused, iavail uint64
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	var summary Summary
+	if st := m.Summary(ctx, 1, &summary); st != 0 {
+		t.Fatalf("summary: %s", st)
+	}
+	expected := Summary{Length: 202, Size: 16384, Files: 3, Dirs: 2}
+	if summary != expected {
+		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
+	}
+	if st := m.Summary(ctx, inode, &summary); st != 0 {
+		t.Fatalf("summary: %s", st)
+	}
+	expected = Summary{Length: 402, Size: 20480, Files: 4, Dirs: 2}
+	if summary != expected {
+		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
+	}
+	if st := m.Unlink(ctx, 1, "f"); st != 0 {
+		t.Fatalf("unlink f: %s", st)
 	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
-		t.Fatalf("rmdir: %s", st)
+		t.Fatalf("rmdir d: %s", st)
+	}
+}
+
+func TestRmr(t *testing.T) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1:6379/5", &conf)
+	if err != nil {
+		t.Skipf("redis is not available: %s", err)
+	}
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var inode, parent Ino
+	var attr = &Attr{}
+	if st := m.Create(ctx, 1, "f", 0644, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	if st := m.Rmr(ctx, 1, "f"); st != 0 {
+		t.Fatalf("rmr f: %s", st)
+	}
+	if st := m.Mkdir(ctx, 1, "d", 0755, 0, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d2", 0755, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d/d2: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f", 0644, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d/f: %s", st)
+	}
+	if st := m.Rmr(ctx, 1, "d"); st != 0 {
+		t.Fatalf("rmr d: %s", st)
 	}
 }
 
@@ -266,8 +416,7 @@ func TestCaseIncensi(t *testing.T) {
 	var conf = RedisConfig{CaseInsensi: true}
 	m, err := NewRedisMeta("redis://127.0.0.1:6379/6", &conf)
 	if err != nil {
-		t.Logf("redis is not available: %s", err)
-		t.Skip()
+		t.Skipf("redis is not available: %s", err)
 	}
 	_ = m.Init(Format{Name: "test"}, true)
 	ctx := Background
@@ -298,8 +447,7 @@ func TestCompaction(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1:6379/8", &conf)
 	if err != nil {
-		t.Logf("redis is not available: %s", err)
-		t.Skip()
+		t.Skipf("redis is not available: %s", err)
 	}
 	_ = m.Init(Format{Name: "test"}, true)
 	done := make(chan bool, 1)
@@ -391,8 +539,7 @@ func TestConcurrentWrite(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1/9", &conf)
 	if err != nil {
-		t.Logf("redis is not available: %s", err)
-		t.Skip()
+		t.Skipf("redis is not available: %s", err)
 	}
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
@@ -440,8 +587,7 @@ func TestTruncateAndDelete(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
 	if err != nil {
-		t.Logf("redis is not available: %s", err)
-		t.Skip()
+		t.Skipf("redis is not available: %s", err)
 	}
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
@@ -453,6 +599,9 @@ func TestTruncateAndDelete(t *testing.T) {
 	var inode Ino
 	var attr = &Attr{}
 	m.Unlink(ctx, 1, "f")
+	if st := m.Truncate(ctx, 1, 0, 4<<10, attr); st != syscall.EPERM {
+		t.Fatalf("truncate dir %s", st)
+	}
 	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
@@ -506,8 +655,7 @@ func TestCopyFileRange(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
 	if err != nil {
-		t.Logf("redis is not available: %s", err)
-		t.Skip()
+		t.Skipf("redis is not available: %s", err)
 	}
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
@@ -566,8 +714,7 @@ func benchmarkReaddir(b *testing.B, n int) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
 	if err != nil {
-		b.Logf("redis is not available: %s", err)
-		b.Skip()
+		b.Skipf("redis is not available: %s", err)
 	}
 	_ = m.NewSession()
 	ctx := Background
