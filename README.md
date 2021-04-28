@@ -150,7 +150,7 @@ Besides the things covered by pjdfstest, JuiceFS provides:
 
 ### Basic benchmark
 
-JuiceFS provides a subcommand to run a few basic benchmarks to understand how it works in your enviroment:
+JuiceFS provides a subcommand to run a few basic benchmarks to understand how it works in your environment:
 
 ```bash
 $ ./juicefs bench /jfs
