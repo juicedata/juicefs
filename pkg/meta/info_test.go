@@ -22,8 +22,14 @@ func TestOlderThan(t *testing.T) {
 	if !v.olderThan(version{6, 2, 0}) {
 		t.Fatal("Expect true, got false.")
 	}
+	if !v.olderThan(version{2, 3, 0}) {
+		t.Fatal("Expect true, got false.")
+	}
 	if !v.olderThan(version{2, 2, 12}) {
 		t.Fatal("Expect true, got false.")
+	}
+	if v.olderThan(version{2, 1, 0}) {
+		t.Fatal("Expect false, got true.")
 	}
 	if v.olderThan(v) {
 		t.Fatal("Expect false, got true.")
@@ -35,7 +41,7 @@ func TestOlderThan(t *testing.T) {
 
 func TestParseVersion(t *testing.T) {
 	t.Run("Should return error for invalid version", func(t *testing.T) {
-		invalidVers := []string{"", "2.sadf.1", "3"}
+		invalidVers := []string{"", "2.sadf.1", "3", "t.3.4"}
 		for _, v := range invalidVers {
 			_, err := parseVersion(v)
 			if err == nil {
@@ -49,6 +55,9 @@ func TestParseVersion(t *testing.T) {
 			t.Fatalf("Failed to parse a valid version: %s", err)
 		}
 		if !(ver.major == 6 && ver.minor == 2 && ver.patch == 19) {
+			t.Fatalf("Expect %s, got %s", "6.2.19", ver)
+		}
+		if ver.String() != "6.2.19" {
 			t.Fatalf("Expect %s, got %s", "6.2.19", ver)
 		}
 	})
@@ -235,6 +244,20 @@ func TestParseRedisInfo(t *testing.T) {
 		}
 		if info.maxMemoryPolicy != "allkeys-lru" {
 			t.Fatalf("Expect %s, got %s", "allkeys-lru", info.maxMemoryPolicy)
+		}
+	})
+	t.Run("Test fields that may emit warnings", func(t *testing.T) {
+		input := `# Server
+	redis_version:2.1.0
+
+		# Cluster
+	cluster_enabled:1`
+		info, err := checkRedisInfo(input)
+		if err != nil {
+			t.Fatalf("Failed to parse redis info: %s", err)
+		}
+		if !info.clusterEnabled {
+			t.Fatalf("Expect %t, got %t", true, false)
 		}
 	})
 }
