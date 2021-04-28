@@ -90,6 +90,7 @@ func TestRedisClient(t *testing.T) {
 		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
 	}
 	_ = m.NewSession()
+	go m.(*redisMeta).cleanStaleSessions()
 	ctx := Background
 	var parent, inode, dummyInode Ino
 	var attr = &Attr{}
@@ -193,14 +194,17 @@ func TestRedisClient(t *testing.T) {
 		t.Fatalf("symlink s -> /f: %s", st)
 	}
 	defer m.Unlink(ctx, 1, "s")
-	var target []byte
-	if st := m.ReadLink(ctx, inode, &target); st != 0 {
+	var target1, target2 []byte
+	if st := m.ReadLink(ctx, inode, &target1); st != 0 {
 		t.Fatalf("readlink s: %s", st)
 	}
-	if !bytes.Equal(target, []byte("/f")) {
-		t.Fatalf("readlink got %s, expected %s", target, "/f")
+	if st := m.ReadLink(ctx, inode, &target2); st != 0 { // cached
+		t.Fatalf("readlink s: %s", st)
 	}
-	if st := m.ReadLink(ctx, parent, &target); st != syscall.ENOENT {
+	if !bytes.Equal(target1, target2) || !bytes.Equal(target1, []byte("/f")) {
+		t.Fatalf("readlink got %s %s, expected %s", target1, target2, "/f")
+	}
+	if st := m.ReadLink(ctx, parent, &target1); st != syscall.ENOENT {
 		t.Fatalf("readlink d: %s", st)
 	}
 	if st := m.Lookup(ctx, 1, "f", &inode, attr); st != 0 {
