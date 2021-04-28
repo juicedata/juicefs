@@ -15,9 +15,6 @@
 
 package main
 
-// #include <pwd.h>
-// #include <grp.h>
-import "C"
 import (
 	"crypto/md5"
 	"encoding/binary"
@@ -26,50 +23,9 @@ import (
 	"sync"
 )
 
-// protect getpwent and getgrent
-var cgoMutex sync.Mutex
-
 type pwent struct {
 	id   int
 	name string
-}
-
-func genAllUids() []pwent {
-	cgoMutex.Lock()
-	defer cgoMutex.Unlock()
-	C.setpwent()
-	defer C.endpwent()
-	var uids []pwent
-	for {
-		p := C.getpwent()
-		if p == nil {
-			break
-		}
-		name := C.GoString(p.pw_name)
-		if name != "root" {
-			uids = append(uids, pwent{int(p.pw_uid), name})
-		}
-	}
-	return uids
-}
-
-func genAllGids() []pwent {
-	cgoMutex.Lock()
-	defer cgoMutex.Unlock()
-	C.setgrent()
-	defer C.endgrent()
-	var gids []pwent
-	for {
-		p := C.getgrent()
-		if p == nil {
-			break
-		}
-		name := C.GoString(p.gr_name)
-		if name != "root" {
-			gids = append(gids, pwent{int(p.gr_gid), name})
-		}
-	}
-	return gids
 }
 
 type mapping struct {

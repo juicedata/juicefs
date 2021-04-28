@@ -67,15 +67,65 @@ var (
 	pusher   *push.Pusher
 )
 
+const (
+	EPERM     = -0x01
+	ENOENT    = -0x02
+	EINTR     = -0x04
+	EIO       = -0x05
+	EACCES    = -0x0d
+	EEXIST    = -0x11
+	ENOTDIR   = -0x14
+	EINVAL    = -0x16
+	ENOSPC    = -0x1c
+	EROFS     = -0x1e
+	ENOTEMPTY = -0x27
+	ENODATA   = -0x3d
+	ENOTSUP   = -0x5f
+)
+
 func errno(err error) int {
 	if err == nil {
 		return 0
 	}
 	eno, ok := err.(syscall.Errno)
 	if !ok {
-		return -int(syscall.EIO)
+		return EIO
 	}
-	return -int(eno)
+	if eno == 0 {
+		return 0
+	}
+	// Use the errno in Linux for all the OS
+	switch eno {
+	case syscall.EPERM:
+		return EPERM
+	case syscall.ENOENT:
+		return ENOENT
+	case syscall.EINTR:
+		return EINTR
+	case syscall.EIO:
+		return EIO
+	case syscall.EACCES:
+		return EACCES
+	case syscall.EEXIST:
+		return EEXIST
+	case syscall.ENOTDIR:
+		return ENOTDIR
+	case syscall.EINVAL:
+		return EINVAL
+	case syscall.ENOSPC:
+		return ENOSPC
+	case syscall.EROFS:
+		return EROFS
+	case syscall.ENOTEMPTY:
+		return ENOTEMPTY
+	case syscall.ENODATA:
+		return ENODATA
+	case syscall.ENOTSUP:
+		return ENOTSUP
+	default:
+		logger.Warnf("unknown errno %d: %s", eno, err)
+		return -int(eno)
+	}
 }
 
 type wrapper struct {
@@ -208,7 +258,7 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 	w.lookupUid("root")
 	w.lookupGid("root")
 	activefs[name] = append(ws, w)
-	h := uintptr(unsafe.Pointer(w))
+	h := uintptr(unsafe.Pointer(w)) & 0x7fffffff // low 32bits
 	handlers[h] = w
 	return h
 }
@@ -437,7 +487,7 @@ func jfs_term(pid int, h uintptr) int {
 func jfs_open(pid int, h uintptr, cpath *C.char, flags int) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	path := C.GoString(cpath)
 	f, err := w.Open(w.withPid(pid), path, uint32(flags))
@@ -446,7 +496,7 @@ func jfs_open(pid int, h uintptr, cpath *C.char, flags int) int {
 	}
 	st, _ := f.Stat()
 	if st.IsDir() {
-		return -int(syscall.ENOENT)
+		return ENOENT
 	}
 	return nextFileHandle(f, w)
 }
@@ -455,7 +505,7 @@ func jfs_open(pid int, h uintptr, cpath *C.char, flags int) int {
 func jfs_access(pid int, h uintptr, cpath *C.char, flags int) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.Access(w.withPid(pid), C.GoString(cpath), flags))
 }
@@ -464,7 +514,7 @@ func jfs_access(pid int, h uintptr, cpath *C.char, flags int) int {
 func jfs_create(pid int, h uintptr, cpath *C.char, mode uint16) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	path := C.GoString(cpath)
 	f, err := w.Create(w.withPid(pid), path, mode)
@@ -478,7 +528,7 @@ func jfs_create(pid int, h uintptr, cpath *C.char, mode uint16) int {
 func jfs_mkdir(pid int, h uintptr, cpath *C.char, mode C.mode_t) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.Mkdir(w.withPid(pid), C.GoString(cpath), uint16(mode)))
 }
@@ -487,7 +537,7 @@ func jfs_mkdir(pid int, h uintptr, cpath *C.char, mode C.mode_t) int {
 func jfs_delete(pid int, h uintptr, cpath *C.char) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.Delete(w.withPid(pid), C.GoString(cpath)))
 }
@@ -496,7 +546,7 @@ func jfs_delete(pid int, h uintptr, cpath *C.char) int {
 func jfs_rmr(pid int, h uintptr, cpath *C.char) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.Rmr(w.withPid(pid), C.GoString(cpath)))
 }
@@ -505,7 +555,7 @@ func jfs_rmr(pid int, h uintptr, cpath *C.char) int {
 func jfs_rename(pid int, h uintptr, oldpath *C.char, newpath *C.char) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.Rename(w.withPid(pid), C.GoString(oldpath), C.GoString(newpath)))
 }
@@ -514,7 +564,7 @@ func jfs_rename(pid int, h uintptr, oldpath *C.char, newpath *C.char) int {
 func jfs_truncate(pid int, h uintptr, path *C.char, length uint64) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.Truncate(w.withPid(pid), C.GoString(path), length))
 }
@@ -523,7 +573,7 @@ func jfs_truncate(pid int, h uintptr, path *C.char, length uint64) int {
 func jfs_setXattr(pid int, h uintptr, path *C.char, name *C.char, value uintptr, vlen int, mode int) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.SetXattr(w.withPid(pid), C.GoString(path), C.GoString(name), toBuf(value, vlen), mode))
 }
@@ -532,7 +582,7 @@ func jfs_setXattr(pid int, h uintptr, path *C.char, name *C.char, value uintptr,
 func jfs_getXattr(pid int, h uintptr, path *C.char, name *C.char, buf uintptr, bufsize int) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	buff, err := w.GetXattr(w.withPid(pid), C.GoString(path), C.GoString(name))
 	if err != 0 {
@@ -549,7 +599,7 @@ func jfs_getXattr(pid int, h uintptr, path *C.char, name *C.char, buf uintptr, b
 func jfs_listXattr(pid int, h uintptr, path *C.char, buf uintptr, bufsize int) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	buff, err := w.ListXattr(w.withPid(pid), C.GoString(path))
 	if err != 0 {
@@ -566,7 +616,7 @@ func jfs_listXattr(pid int, h uintptr, path *C.char, buf uintptr, bufsize int) i
 func jfs_removeXattr(pid int, h uintptr, path *C.char, name *C.char) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.RemoveXattr(w.withPid(pid), C.GoString(path), C.GoString(name)))
 }
@@ -575,7 +625,7 @@ func jfs_removeXattr(pid int, h uintptr, path *C.char, name *C.char) int {
 func jfs_symlink(pid int, h uintptr, target *C.char, link *C.char) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	return errno(w.Symlink(w.withPid(pid), C.GoString(target), C.GoString(link)))
 }
@@ -584,7 +634,7 @@ func jfs_symlink(pid int, h uintptr, target *C.char, link *C.char) int {
 func jfs_readlink(pid int, h uintptr, link *C.char, buf uintptr, bufsize int) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	target, err := w.Readlink(w.withPid(pid), C.GoString(link))
 	if err != 0 {
@@ -618,7 +668,7 @@ func fill_stat(w *wrapper, wb *utils.Buffer, st *fs.FileStat) int {
 func jfs_stat1(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
 	if err != 0 {
@@ -632,7 +682,7 @@ func jfs_stat1(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 func jfs_lstat1(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	fi, err := w.Stat(w.withPid(pid), C.GoString(cpath))
 	if err != 0 {
@@ -645,7 +695,7 @@ func jfs_lstat1(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 func jfs_summary(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	ctx := w.withPid(pid)
 	f, err := w.Open(ctx, C.GoString(cpath), 0)
@@ -667,7 +717,7 @@ func jfs_summary(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 func jfs_statvfs(pid int, h uintptr, buf uintptr) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	total, avail := w.StatFS(w.withPid(pid))
 	wb := utils.NewNativeBuffer(toBuf(buf, 16))
@@ -680,7 +730,7 @@ func jfs_statvfs(pid int, h uintptr, buf uintptr) int {
 func jfs_chmod(pid int, h uintptr, cpath *C.char, mode C.mode_t) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
 	if err != 0 {
@@ -690,23 +740,23 @@ func jfs_chmod(pid int, h uintptr, cpath *C.char, mode C.mode_t) int {
 }
 
 //export jfs_chown
-func jfs_chown(pid int, h uintptr, cpath *C.char, uid C.uid_t, gid C.gid_t) int {
+func jfs_chown(pid int, h uintptr, cpath *C.char, uid uint32, gid uint32) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
 	if err != 0 {
 		return errno(err)
 	}
-	return errno(f.Chown(w.withPid(pid), uint32(uid), uint32(gid)))
+	return errno(f.Chown(w.withPid(pid), uid, gid))
 }
 
 //export jfs_utime
 func jfs_utime(pid int, h uintptr, cpath *C.char, mtime, atime int64) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
 	if err != 0 {
@@ -719,7 +769,7 @@ func jfs_utime(pid int, h uintptr, cpath *C.char, mtime, atime int64) int {
 func jfs_setOwner(pid int, h uintptr, cpath *C.char, owner *C.char, group *C.char) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
 	if err != 0 {
@@ -747,7 +797,7 @@ func jfs_listdir(pid int, h uintptr, cpath *C.char, offset int, buf uintptr, buf
 		fw := openFiles[int(h)]
 		filesLock.Unlock()
 		if fw == nil {
-			return -int(syscall.EINVAL)
+			return EINVAL
 		}
 		freeHandle(int(h))
 		w = fw.w
@@ -756,7 +806,7 @@ func jfs_listdir(pid int, h uintptr, cpath *C.char, offset int, buf uintptr, buf
 	} else {
 		w = F(h)
 		if w == nil {
-			return -int(syscall.EINVAL)
+			return EINVAL
 		}
 		var err syscall.Errno
 		ctx = w.withPid(pid)
@@ -766,7 +816,7 @@ func jfs_listdir(pid int, h uintptr, cpath *C.char, offset int, buf uintptr, buf
 		}
 		st, _ := f.Stat()
 		if !st.IsDir() {
-			return -int(syscall.ENOTDIR)
+			return ENOTDIR
 		}
 	}
 
@@ -799,7 +849,7 @@ func toBuf(s uintptr, sz int) []byte {
 func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int {
 	w := F(h)
 	if w == nil {
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	dst := C.GoString(_dst)
 	ctx := w.withPid(pid)
@@ -845,7 +895,7 @@ func jfs_lseek(pid, fd int, offset int64, whence int) int64 {
 		return int64(off)
 	}
 	filesLock.Unlock()
-	return -int64(syscall.EINVAL)
+	return int64(EINVAL)
 }
 
 //export jfs_read
@@ -854,7 +904,7 @@ func jfs_read(pid, fd int, cbuf uintptr, count int) int {
 	f, ok := openFiles[int(fd)]
 	if !ok {
 		filesLock.Unlock()
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	filesLock.Unlock()
 
@@ -872,7 +922,7 @@ func jfs_pread(pid, fd int, cbuf uintptr, count C.size_t, offset C.off_t) int {
 	f, ok := openFiles[int(fd)]
 	if !ok {
 		filesLock.Unlock()
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	filesLock.Unlock()
 
@@ -893,7 +943,7 @@ func jfs_write(pid, fd int, cbuf uintptr, count C.size_t) int {
 	f, ok := openFiles[int(fd)]
 	if !ok {
 		filesLock.Unlock()
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	filesLock.Unlock()
 
@@ -912,7 +962,7 @@ func jfs_flush(pid, fd int) int {
 	f, ok := openFiles[int(fd)]
 	if !ok {
 		filesLock.Unlock()
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	filesLock.Unlock()
 
@@ -925,7 +975,7 @@ func jfs_fsync(pid, fd int) int {
 	f, ok := openFiles[int(fd)]
 	if !ok {
 		filesLock.Unlock()
-		return -int(syscall.EINVAL)
+		return EINVAL
 	}
 	filesLock.Unlock()
 
