@@ -1048,7 +1048,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 						pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 						pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(inode)))
 					} else {
-						// pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(inode, attr.Length)})
+						pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(inode, attr.Length)})
 						pipe.Del(ctx, r.inodeKey(inode))
 						pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
 					}
@@ -1354,7 +1354,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 							pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(dino)))
 						} else {
-							// pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, dattr.Length)})
+							pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, dattr.Length)})
 							pipe.Del(ctx, r.inodeKey(dino))
 							pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
 						}
@@ -1548,7 +1548,7 @@ func (r *redisMeta) cleanStaleSession(sid int64) {
 		}
 	}
 	if len(inodes) == 0 {
-		// r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
+		r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
 		logger.Infof("cleanup session %d", sid)
 	}
 }
@@ -1574,7 +1574,6 @@ func (r *redisMeta) cleanStaleLocks(ssid string) {
 }
 
 func (r *redisMeta) cleanStaleSessions() {
-	return
 	// TODO: once per minute
 	now := time.Now()
 	var ctx = Background
@@ -1594,8 +1593,8 @@ func (r *redisMeta) cleanStaleSessions() {
 
 func (r *redisMeta) refreshSession() {
 	for {
-		// now := time.Now()
-		// r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(now.Unix()), Member: strconv.Itoa(int(r.sid))})
+		now := time.Now()
+		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(now.Unix()), Member: strconv.Itoa(int(r.sid))})
 		time.Sleep(time.Minute)
 		go r.cleanStaleSessions()
 	}
@@ -1613,7 +1612,7 @@ func (r *redisMeta) deleteInode(inode Ino) error {
 	}
 	r.parseAttr(a, &attr)
 	_, err = r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		// pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(time.Now().Unix()), Member: r.toDelete(inode, attr.Length)})
+		pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(time.Now().Unix()), Member: r.toDelete(inode, attr.Length)})
 		pipe.Del(ctx, r.inodeKey(inode))
 		pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
 		return nil
@@ -1847,7 +1846,6 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 }
 
 func (r *redisMeta) cleanupDeletedFiles() {
-	return
 	for {
 		time.Sleep(time.Minute)
 		now := time.Now()
@@ -2120,7 +2118,7 @@ func (r *redisMeta) deleteFile(inode Ino, length uint64, tracking string) {
 	if tracking == "" {
 		tracking = inode.String() + ":" + strconv.FormatInt(int64(length), 10)
 	}
-	// _ = r.rdb.ZRem(ctx, delfiles, tracking)
+	_ = r.rdb.ZRem(ctx, delfiles, tracking)
 }
 
 func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
@@ -2209,10 +2207,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 		}
 
 		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-			// pipe.LTrim(ctx, key, int64(len(vals)), -1)
-			for range(vals) {
-				pipe.LPop(ctx, key)
-			}
+			pipe.LTrim(ctx, key, int64(len(vals)), -1)
 			pipe.LPush(ctx, key, marshalSlice(pos, chunkid, size, 0, size))
 			for i := skipped; i > 0; i-- {
 				pipe.LPush(ctx, key, vals[i-1])
