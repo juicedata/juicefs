@@ -27,10 +27,10 @@ type Format struct {
 	Storage     string
 	Bucket      string
 	AccessKey   string
-	SecretKey   string
+	SecretKey   string `json:",omitempty"`
 	BlockSize   int
 	Compression string
 	Shards      int
 	Partitions  int
-	EncryptKey  string
+	EncryptKey  string `json:",omitempty"`
 }

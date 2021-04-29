@@ -79,6 +79,7 @@ func main() {
 			gcFlags(),
 			checkFlags(),
 			profileFlags(),
+			statusFlags(),
 		},
 	}
 
