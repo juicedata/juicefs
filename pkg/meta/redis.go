@@ -533,7 +533,7 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	return errno(err)
 }
 
-func (r *redisMeta) accessMode(attr *Attr, uid uint32, gid uint32) uint8 {
+func accessMode(attr *Attr, uid uint32, gid uint32) uint8 {
 	if uid == 0 {
 		return 0x7
 	}
@@ -562,7 +562,7 @@ func (r *redisMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysc
 		}
 	}
 
-	mode := r.accessMode(attr, ctx.Uid(), ctx.Gid())
+	mode := accessMode(attr, ctx.Uid(), ctx.Gid())
 	if mode&mmask != mmask {
 		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
 		return syscall.EACCES

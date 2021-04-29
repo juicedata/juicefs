@@ -31,6 +31,7 @@ require (
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
 	github.com/kurin/blazer v0.2.1
 	github.com/mattn/go-isatty v0.0.12
+	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/minio/cli v1.22.0
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go v6.0.14+incompatible
