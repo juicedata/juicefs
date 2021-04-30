@@ -80,8 +80,9 @@ func newCacheStore(dir string, cacheSize int64, limit, pendingPages int, config 
 	c.createDir(c.dir)
 	br, fr := c.curFreeRatio()
 	if br < c.freeRatio || fr < c.freeRatio {
-		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching: free ratio should be >= %d%%", int(br*100), int(fr*100), int(c.freeRatio*100))
+		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching in %s: free ratio should be >= %d%%", int(br*100), int(fr*100), c.dir, int(c.freeRatio*100))
 	}
+	logger.Infof("Created new cache store (%s): capacity (%d MB), free ratio (%d%%), max blocks (%d), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), c.limit, pendingPages)
 	go c.flush()
 	go c.checkFreeSpace()
 	go c.refreshCacheKeys()
@@ -102,6 +103,7 @@ func (cache *cacheStore) checkFreeSpace() {
 	for {
 		br, fr := cache.curFreeRatio()
 		if br < cache.freeRatio || fr < cache.freeRatio {
+			logger.Infof("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
 			cache.cleanup()
 			cache.Unlock()
@@ -132,7 +134,7 @@ func (cache *cacheStore) cache(key string, p *Page) {
 	case cache.pending <- pendingFile{key, p}:
 	default:
 		// does not have enough bandwidth to write it into disk, discard it
-		logger.Debugf("Caching queue is full, drop %s (%d bytes)", key, len(p.Data))
+		logger.Infof("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 		delete(cache.pages, key)
 		p.Release()
 	}
@@ -148,12 +150,12 @@ func (cache *cacheStore) flushPage(path string, data []byte, sync bool) error {
 	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE, cache.mode)
 	if err != nil {
-		logger.Infof("Can't create cache file %s: %s", tmp, err)
+		logger.Warnf("Can't create cache file %s: %s", tmp, err)
 		return err
 	}
 	_, err = f.Write(data)
 	if err != nil {
-		logger.Infof("Write to cache file %s: %s", tmp, err)
+		logger.Warnf("Write to cache file %s failed: %s", tmp, err)
 		_ = f.Close()
 		_ = os.Remove(tmp)
 		return err
@@ -161,7 +163,7 @@ func (cache *cacheStore) flushPage(path string, data []byte, sync bool) error {
 	if sync {
 		err = f.Sync()
 		if err != nil {
-			logger.Warnf("sync stagging file %s: %s", tmp, err)
+			logger.Warnf("sync stagging file %s failed: %s", tmp, err)
 			_ = f.Close()
 			_ = os.Remove(tmp)
 			return err
@@ -169,13 +171,13 @@ func (cache *cacheStore) flushPage(path string, data []byte, sync bool) error {
 	}
 	err = f.Close()
 	if err != nil {
-		logger.Infof("Close cache file %s: %s", tmp, err)
+		logger.Warnf("Close cache file %s failed: %s", tmp, err)
 		_ = os.Remove(tmp)
 		return err
 	}
 	err = os.Rename(tmp, path)
 	if err != nil {
-		logger.Infof("Rename cache file %s -> %s: %s", tmp, path, err)
+		logger.Warnf("Rename cache file %s -> %s failed: %s", tmp, path, err)
 		_ = os.Remove(tmp)
 	}
 	return err
@@ -273,6 +275,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	cache.used += int64(size + 4096)
 
 	if cache.used > cache.capacity || len(cache.keys) > cache.limit {
+		logger.Infof("Cleanup cache when add new data (%s): %d blocks (%d MB), maximum %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, cache.limit, cache.capacity>>20)
 		cache.cleanup()
 	}
 }
@@ -286,7 +289,7 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 		if err := os.Link(stagingPath, path); err == nil {
 			cache.add(key, 0, uint32(time.Now().Unix()))
 		} else {
-			logger.Warnf("link %s to %s: %s", stagingPath, path, err)
+			logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
 		}
 	}
 	return stagingPath, err
@@ -353,7 +356,7 @@ func (cache *cacheStore) cleanup() {
 		}
 	}
 	if len(todel) > 0 {
-		logger.Debugf("cleanup cache: %d blocks (%d MB), freed %d blocks (%d MB)", len(cache.keys), cache.used>>20, len(todel), freed>>20)
+		logger.Infof("cleanup cache (%s): %d blocks (%d MB), freed %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
 	}
 	cache.Unlock()
 	for _, key := range todel {
@@ -373,7 +376,7 @@ func (cache *cacheStore) scanCached() {
 	var oneMinAgo = start.Add(-time.Minute)
 
 	cachePrefix := filepath.Join(cache.dir, cacheDir)
-	logger.Debugf("Scan %s to find cached blocks", cachePrefix)
+	logger.Infof("Scan %s to find cached blocks", cachePrefix)
 	_ = filepath.Walk(cachePrefix, func(path string, fi os.FileInfo, err error) error {
 		if fi != nil {
 			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
@@ -401,7 +404,7 @@ func (cache *cacheStore) scanCached() {
 
 	cache.Lock()
 	cache.scanned = true
-	logger.Debugf("Found %d cached blocks (%d bytes) in %s", len(cache.keys), cache.used, time.Since(start))
+	logger.Infof("Found %d cached blocks (%d bytes) in %s with %s", len(cache.keys), cache.used, cache.dir, time.Since(start))
 	cache.Unlock()
 }
 
@@ -411,7 +414,7 @@ func (cache *cacheStore) scanStaging() map[string]string {
 
 	stagingBlocks := make(map[string]string)
 	stagingPrefix := filepath.Join(cache.dir, stagingDir)
-	logger.Debugf("Scan %s to find staging blocks", stagingPrefix)
+	logger.Infof("Scan %s to find staging blocks", stagingPrefix)
 	_ = filepath.Walk(stagingPrefix, func(path string, fi os.FileInfo, err error) error {
 		if fi != nil {
 			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
@@ -433,7 +436,7 @@ func (cache *cacheStore) scanStaging() map[string]string {
 		return nil
 	})
 	if len(stagingBlocks) > 0 {
-		logger.Infof("Found %d staging blocks (%d bytes) in %s", len(stagingBlocks), cache.used, time.Since(start))
+		logger.Infof("Found %d staging blocks (%d bytes) in %s with %s", len(stagingBlocks), cache.used, cache.dir, time.Since(start))
 	}
 	return stagingBlocks
 }
@@ -495,7 +498,7 @@ type CacheManager interface {
 }
 
 func newCacheManager(config *Config) CacheManager {
-	logger.Infof("Cache: %s capacity: %d MB", config.CacheDir, config.CacheSize)
+	logger.Infof("Cache dirs: %s, capacity: %d MB", config.CacheDir, config.CacheSize)
 	if config.CacheDir == "memory" || config.CacheSize == 0 {
 		return newMemStore(config)
 	}
