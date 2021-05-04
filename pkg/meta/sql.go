@@ -28,7 +28,7 @@ import (
 	"xorm.io/xorm"
 )
 
-// DBConfig is config for Redis client.
+// DBConfig is config for SQL client.
 type DBConfig struct {
 	Strict      bool // update ctime
 	Retries     int
@@ -36,24 +36,24 @@ type DBConfig struct {
 }
 
 type setting struct {
-	Name  string
+	Name  string `xorm:"pk"`
 	Value string `xorm:"varchar(4096)"`
 }
 
 type counter struct {
-	Name  string
+	Name  string `xorm:"pk"`
 	Value uint64
 }
 
 type edge struct {
-	Parent uint64
-	Name   string
+	Parent uint64 `xorm:"unique(edge)"`
+	Name   string `xorm:"unique(edge)"`
 	Inode  uint64
 	Type   uint8
 }
 
 type node struct {
-	Inode  uint64
+	Inode  uint64 `xorm:"pk"`
 	Type   uint8
 	Flags  uint8
 	Mode   uint16
@@ -61,7 +61,7 @@ type node struct {
 	Gid    uint32
 	Atime  time.Time
 	Mtime  time.Time
-	Ctime  time.Time
+	Ctime  time.Time `xorm:"updated"`
 	Nlink  uint32
 	Length uint64
 	Rdev   uint32
@@ -69,31 +69,27 @@ type node struct {
 }
 
 type chunk struct {
-	Inode   uint64
-	Indx    uint32
-	Pos     uint32
-	Chunkid uint64
-	Size    uint32
-	Off     uint32
-	Len     uint32
+	Inode  uint64 `xorm:"unique(chunk)"`
+	Indx   uint32 `xorm:"unique(chunk)"`
+	Slices []byte `xorm:"VARBINARY"`
 }
 
 type symlink struct {
-	Inode  uint64
+	Inode  uint64 `xorm:"pk"`
 	Target string `xorm:"varchar(4096)"`
 }
 
 type session struct {
-	sid       uint64
-	heartbeta time.Time
+	Sid       uint64 `xorm:"pk"`
+	Heartbeat time.Time
 }
 
 type delchunk struct {
-	inode  uint64
-	start  uint64
-	end    uint64
-	maxid  uint64
-	expire time.Time
+	Inode  uint64
+	Start  uint64
+	End    uint64
+	Maxid  uint64
+	Expire time.Time
 }
 
 type dbMeta struct {
@@ -193,7 +189,7 @@ func (m *dbMeta) Load() (*Format, error) {
 }
 
 func (m *dbMeta) NewSession() error {
-	v, err := m.incr("nextsession")
+	v, err := m.incrCounter("nextsession")
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
@@ -222,7 +218,7 @@ func (m *dbMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (m *dbMeta) incr(name string) (uint64, error) {
+func (m *dbMeta) incrCounter(name string) (uint64, error) {
 	r, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
 		var c counter
 		_, err := s.Where("name = ?", name).Get(&c)
@@ -240,7 +236,7 @@ func (m *dbMeta) incr(name string) (uint64, error) {
 }
 
 func (m *dbMeta) nextInode() (Ino, error) {
-	v, err := m.incr("nextinode")
+	v, err := m.incrCounter("nextinode")
 	return Ino(v), err
 }
 
@@ -410,7 +406,6 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !changed {
 			return nil, nil
 		}
-		cur.Ctime = now
 		_, err = s.Where("inode = ?", inode).Update(&cur)
 		return &cur, err
 	})
@@ -537,10 +532,8 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			pn.Nlink++
 		}
 		pn.Mtime = now
-		pn.Ctime = now
 		n.Atime = now
 		n.Mtime = now
-		n.Ctime = now
 		if ctx.Value(CtxKey("behavior")) == "Hadoop" {
 			n.Gid = pn.Gid
 		}
@@ -626,7 +619,6 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		now := time.Now()
 		pn.Mtime = now
 		pn.Ctime = time.Now()
-		n.Ctime = now
 		n.Nlink--
 		var opened bool
 		if e.Type == TypeFile && n.Nlink == 0 {
@@ -728,7 +720,6 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		now := time.Now()
 		pn.Nlink--
 		pn.Mtime = now
-		pn.Ctime = now
 		if _, err := s.Delete(&edge{Parent: uint64(parent), Name: name}); err != nil {
 			return nil, err
 		}
@@ -836,11 +827,8 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 
 		now := time.Now()
 		spn.Mtime = now
-		spn.Ctime = now
 		dpn.Mtime = now
-		dpn.Ctime = now
 		sn.Parent = uint64(parentDst)
-		sn.Ctime = now
 		if sn.Type == TypeDirectory && parentSrc != parentDst {
 			spn.Nlink--
 			dpn.Nlink++
@@ -931,9 +919,7 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 
 		now := time.Now()
 		pn.Mtime = now
-		pn.Ctime = now
 		n.Nlink++
-		n.Ctime = now
 
 		if ok, err := s.Insert(&edge{Parent: uint64(parent), Name: name, Inode: uint64(inode), Type: n.Type}); err != nil || ok == 0 {
 			return nil, err
@@ -1052,28 +1038,25 @@ func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {
 
 func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
 	var c chunk
-	rows, err := m.engine.Where("inode=? and indx=?", inode, indx).Rows(&c)
+	_, err := m.engine.Where("inode=? and indx=?", inode, indx).Get(&c)
 	if err != nil {
 		return errno(err)
 	}
-	defer rows.Close()
-	var vals []*slice
-	for rows.Next() {
-		err := rows.Scan(&c)
-		if err != nil {
-			return errno(err)
-		}
-		vals = append(vals, &slice{c.Chunkid, c.Size, c.Off, c.Size, c.Pos, nil, nil})
+	var ss []*slice
+	for i := 0; i < len(c.Slices); i += sliceBytes {
+		s := new(slice)
+		s.read(c.Slices[i:])
+		ss = append(ss, s)
 	}
-	*chunks = buildSlice(vals)
-	if len(vals) >= 5 || len(*chunks) >= 5 {
-		// go r.compactChunk(inode, indx)
+	*chunks = buildSlice(ss)
+	if len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5 {
+		// go m.compactChunk(inode, indx)
 	}
 	return 0
 }
 
 func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
-	v, err := m.incr("nextchunk")
+	v, err := m.incrCounter("nextchunk")
 	if err == nil {
 		*chunkid = v
 	}
@@ -1101,10 +1084,24 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		now := time.Now()
 		n.Mtime = now
-		n.Ctime = now
 
-		if _, err := s.Insert(&chunk{uint64(inode), indx, off, slice.Chunkid, slice.Size, slice.Off, slice.Len}); err != nil {
+		var ck chunk
+		ok, err = s.Where("Inode = ? and Indx = ?", inode, indx).Get(&ck)
+		if err != nil {
 			return nil, err
+		}
+		// TODO: use concat
+		ck.Slices = append(ck.Slices, marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len)...)
+		if ok {
+			if _, err := s.Update(&ck, &chunk{Inode: uint64(inode), Indx: indx}); err != nil {
+				return nil, err
+			}
+		} else {
+			ck.Inode = uint64(inode)
+			ck.Indx = indx
+			if _, err := s.Insert(&ck); err != nil {
+				return nil, err
+			}
 		}
 		if _, err := s.Update(&n, &node{Inode: uint64(inode)}); err != nil {
 			return nil, err
@@ -1113,7 +1110,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if added > 0 {
 			s.Exec("update counter set value=value+1 where key='usedSpace'")
 		}
-		if n, _ := s.Count(&chunk{Inode: uint64(inode), Indx: indx}); n%20 == 19 {
+		if (len(ck.Slices)/sliceBytes)%20 == 19 {
 			// 	go r.compactChunk(inode, indx)
 		}
 		return nil, nil
