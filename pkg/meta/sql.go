@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -46,14 +47,14 @@ type counter struct {
 }
 
 type edge struct {
-	Parent uint64 `xorm:"unique(edge)"`
+	Parent Ino    `xorm:"unique(edge)"`
 	Name   string `xorm:"unique(edge)"`
-	Inode  uint64
+	Inode  Ino
 	Type   uint8
 }
 
 type node struct {
-	Inode  uint64 `xorm:"pk"`
+	Inode  Ino `xorm:"pk"`
 	Type   uint8
 	Flags  uint8
 	Mode   uint16
@@ -65,17 +66,17 @@ type node struct {
 	Nlink  uint32
 	Length uint64
 	Rdev   uint32
-	Parent uint64
+	Parent Ino
 }
 
 type chunk struct {
-	Inode  uint64 `xorm:"unique(chunk)"`
+	Inode  Ino    `xorm:"unique(chunk)"`
 	Indx   uint32 `xorm:"unique(chunk)"`
 	Slices []byte `xorm:"VARBINARY"`
 }
 
 type symlink struct {
-	Inode  uint64 `xorm:"pk"`
+	Inode  Ino    `xorm:"pk"`
 	Target string `xorm:"varchar(4096)"`
 }
 
@@ -85,7 +86,7 @@ type session struct {
 }
 
 type delchunk struct {
-	Inode  uint64
+	Inode  Ino
 	Start  uint64
 	End    uint64
 	Maxid  uint64
@@ -499,7 +500,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		return errno(err)
 	}
 	var n node
-	n.Inode = uint64(ino)
+	n.Inode = ino
 	n.Type = _type
 	n.Mode = mode & ^cumask
 	n.Uid = ctx.Uid()
@@ -516,7 +517,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			n.Rdev = rdev
 		}
 	}
-	n.Parent = uint64(parent)
+	n.Parent = parent
 	if inode != nil {
 		*inode = ino
 	}
@@ -553,8 +554,8 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			n.Gid = pn.Gid
 		}
 
-		e.Inode = uint64(ino)
-		e.Parent = uint64(parent)
+		e.Inode = ino
+		e.Parent = parent
 		e.Name = name
 		e.Type = _type
 		_, err = s.Insert(&e)
@@ -568,7 +569,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			return err
 		}
 		if _type == TypeSymlink {
-			if _, err := s.Insert(&symlink{Inode: uint64(ino), Target: path}); err != nil {
+			if _, err := s.Insert(&symlink{Inode: ino, Target: path}); err != nil {
 				return err
 			}
 		} else if _type == TypeFile {
@@ -641,10 +642,12 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			m.Unlock()
 		}
 
-		if _, err := s.Delete(&edge{Parent: uint64(parent), Name: name}); err != nil {
+		if _, err := s.Delete(&edge{Parent: parent, Name: name}); err != nil {
 			return err
 		}
-		// s.Delete(&xattr{Inode: e.Inode})
+		if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
+			return err
+		}
 		if _, err := s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
@@ -733,13 +736,15 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		now := time.Now()
 		pn.Nlink--
 		pn.Mtime = now
-		if _, err := s.Delete(&edge{Parent: uint64(parent), Name: name}); err != nil {
+		if _, err := s.Delete(&edge{Parent: parent, Name: name}); err != nil {
 			return err
 		}
 		if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
 			return err
 		}
-		// s.Delete(&xattr{Inode: e.Inode})
+		if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
+			return err
+		}
 		if _, err := s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
@@ -840,7 +845,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		now := time.Now()
 		spn.Mtime = now
 		dpn.Mtime = now
-		sn.Parent = uint64(parentDst)
+		sn.Parent = parentDst
 		if sn.Type == TypeDirectory && parentSrc != parentDst {
 			spn.Nlink--
 			dpn.Nlink++
@@ -849,8 +854,8 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			m.parseAttr(&sn, attr)
 		}
 
-		s.Delete(&edge{Parent: uint64(parentSrc), Name: nameSrc})
-		s.Update(&spn, &node{Inode: uint64(parentSrc)})
+		s.Delete(&edge{Parent: parentSrc, Name: nameSrc})
+		s.Update(&spn, &node{Inode: parentSrc})
 		if dino > 0 {
 			if dn.Type != TypeDirectory && dn.Nlink > 0 {
 				s.Update(dn, &node{Inode: dn.Inode})
@@ -874,11 +879,11 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				s.Exec("update counter set value=value-1 where key='totalInodes'")
 				// pipe.Del(ctx, r.xattrKey(dino))
 			}
-			s.Delete(&edge{Parent: uint64(parentDst), Name: nameDst})
+			s.Delete(&edge{Parent: parentDst, Name: nameDst})
 		}
-		s.Insert(&edge{uint64(parentDst), nameDst, sn.Inode, sn.Type})
+		s.Insert(&edge{parentDst, nameDst, sn.Inode, sn.Type})
 		if parentDst != parentSrc {
-			s.Update(&dpn, &node{Inode: uint64(parentDst)})
+			s.Update(&dpn, &node{Inode: parentDst})
 		}
 		s.Update(&sn, &node{Inode: sn.Inode})
 		if err == nil && dino > 0 && dn.Type == TypeFile {
@@ -932,13 +937,13 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 		pn.Mtime = now
 		n.Nlink++
 
-		if ok, err := s.Insert(&edge{Parent: uint64(parent), Name: name, Inode: uint64(inode), Type: n.Type}); err != nil || ok == 0 {
+		if ok, err := s.Insert(&edge{Parent: parent, Name: name, Inode: inode, Type: n.Type}); err != nil || ok == 0 {
 			return err
 		}
-		if _, err := s.Update(&pn, &node{Inode: uint64(parent)}); err != nil {
+		if _, err := s.Update(&pn, &node{Inode: parent}); err != nil {
 			return err
 		}
-		if _, err := s.Cols("ctime", "nlink").Update(&n, node{Inode: uint64(inode)}); err != nil {
+		if _, err := s.Cols("ctime", "nlink").Update(&n, node{Inode: inode}); err != nil {
 			return err
 		}
 		if err == nil && attr != nil {
@@ -976,7 +981,7 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	if err != nil {
 		return errno(err)
 	}
-	names := make(map[uint64][]byte)
+	names := make(map[Ino][]byte)
 	var inodes []string
 	for rows.Next() {
 		err = rows.Scan(e)
@@ -984,7 +989,7 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 			return errno(err)
 		}
 		names[e.Inode] = []byte(e.Name)
-		inodes = append(inodes, strconv.FormatUint(e.Inode, 10))
+		inodes = append(inodes, strconv.FormatUint(uint64(e.Inode), 10))
 	}
 	rows.Close()
 	if len(inodes) == 0 {
@@ -1053,15 +1058,10 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	if err != nil {
 		return errno(err)
 	}
-	var ss []*slice
-	for i := 0; i < len(c.Slices); i += sliceBytes {
-		s := new(slice)
-		s.read(c.Slices[i:])
-		ss = append(ss, s)
-	}
+	ss := readSliceBuf(c.Slices)
 	*chunks = buildSlice(ss)
 	if len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5 {
-		// go m.compactChunk(inode, indx)
+		go m.compactChunk(inode, indx)
 	}
 	return 0
 }
@@ -1108,13 +1108,13 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 				return err
 			}
 		} else {
-			ck.Inode = uint64(inode)
+			ck.Inode = inode
 			ck.Indx = indx
 			if _, err := s.Insert(&ck); err != nil {
 				return err
 			}
 		}
-		if _, err := s.Update(&n, &node{Inode: uint64(inode)}); err != nil {
+		if _, err := s.Update(&n, &node{Inode: inode}); err != nil {
 			return err
 		}
 		// most of chunk are used by single inode, so use that as the default (1 == not exists)
@@ -1122,10 +1122,188 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			s.Exec("update counter set value=value+1 where key='usedSpace'")
 		}
 		if (len(ck.Slices)/sliceBytes)%20 == 19 {
-			// 	go r.compactChunk(inode, indx)
+			go m.compactChunk(inode, indx)
 		}
 		return nil
 	})
+}
+
+func readSliceBuf(buf []byte) []*slice {
+	var ss []*slice
+	for i := 0; i < len(buf); i += sliceBytes {
+		s := new(slice)
+		s.read(buf[i:])
+		ss = append(ss, s)
+	}
+	return ss
+}
+
+func (m *dbMeta) compactChunk(inode Ino, indx uint32) {
+	// avoid too many or duplicated compaction
+	m.Lock()
+	k := uint64(inode) + (uint64(indx) << 32)
+	if len(m.compacting) > 10 || m.compacting[k] {
+		m.Unlock()
+		return
+	}
+	m.compacting[k] = true
+	m.Unlock()
+	defer func() {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+	}()
+
+	var c chunk
+	_, err := m.engine.Where("inode=? and indx=?", inode, indx).Get(&c)
+	if err != nil {
+		return
+	}
+	chunkid, err := m.incrCounter("nextchunk")
+	if err != nil {
+		return
+	}
+
+	var ss []*slice
+	var chunks []Slice
+	var skipped int
+	var pos, size uint32
+	for skipped < len(c.Slices) {
+		// the slices will be formed as a tree after buildSlice(),
+		// we should create new one (or remove the link in tree)
+		ss = readSliceBuf(c.Slices[skipped:])
+		// copy the first slice so it will not be updated by buildSlice
+		first := *ss[0]
+		chunks = buildSlice(ss)
+		pos, size = 0, 0
+		if chunks[0].Chunkid == 0 {
+			pos = chunks[0].Len
+			chunks = chunks[1:]
+		}
+		for _, s := range chunks {
+			size += s.Len
+		}
+		if first.len < (1<<20) || first.len*5 < size {
+			// it's too small
+			break
+		}
+		isFirst := func(pos uint32, s Slice) bool {
+			return pos == first.pos && s.Chunkid == first.chunkid && s.Off == first.off && s.Len == first.len
+		}
+		if !isFirst(pos, chunks[0]) {
+			// it's not the first slice, compact it
+			break
+		}
+		skipped += sliceBytes
+	}
+	if len(ss) < 2 {
+		return
+	}
+
+	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped/sliceBytes, pos, len(ss), size)
+	err = m.newMsg(CompactChunk, chunks, chunkid)
+	if err != nil {
+		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
+		return
+	}
+	errno := m.txn(func(s *xorm.Session) error {
+		var c2 chunk
+		_, err := s.Where("inode=? and indx=?", inode, indx).Get(&c2)
+		if err != nil {
+			return err
+		}
+		if bytes.Equal(c.Slices, c2.Slices[:len(c.Slices)]) {
+			return syscall.EINVAL
+		}
+
+		c2.Slices = append(append(c2.Slices[:skipped], marshalSlice(pos, chunkid, size, 0, size)...), c2.Slices[len(c.Slices):]...)
+		if _, err := s.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
+			return err
+		}
+		// pipe.HIncrBy(ctx, sliceRefs, m.sliceKey(chunkid, size), 1) // create the key to tracking it
+		// for _, s := range ss {
+		// 	rs = append(rs, pipe.Decr(ctx, m.sliceKey(s.chunkid, s.size)))
+		// }
+		return nil
+	})
+	// there could be false-negative that the compaction is successful, double-check
+	if errno != 0 && errno != syscall.EINVAL {
+		// if e := m.rdb.HGet(ctx, sliceRefs, m.sliceKey(chunkid, size)).Err(); e == redis.Nil {
+		// 	errno = syscall.EINVAL // failed
+		// } else if e == nil {
+		// 	errno = 0 // successful
+		// }
+	}
+
+	if errno == syscall.EINVAL {
+		// m.rdb.HIncrBy(ctx, sliceRefs, m.sliceKey(chunkid, size), -2)
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
+		// m.deleteSlice(ctx, chunkid, size)
+	} else if errno == 0 {
+		// reset it to zero
+		// m.rdb.HIncrBy(ctx, sliceRefs, m.sliceKey(chunkid, size), -1)
+		// m.cleanupZeroRef(m.sliceKey(chunkid, size))
+		// for i, s := range ss {
+		// 	if rs[i].Err() == nil && rs[i].Val() < 0 {
+		// 		// m.deleteSlice(ctx, s.chunkid, s.size)
+		// 	}
+		// }
+		// if m.rdb.LLen(ctx, m.chunkKey(inode, indx)).Val() > 5 {
+		// 	go func() {
+		// 		// wait for the current compaction to finish
+		// 		time.Sleep(time.Millisecond * 10)
+		// 		m.compactChunk(inode, indx)
+		// 	}()
+		// }
+	} else {
+		logger.Warnf("compact %d %d: %s", inode, indx, errno)
+	}
+}
+
+func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
+	var c chunk
+	rows, err := m.engine.Rows(&c)
+	if err != nil {
+		return errno(err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		err = rows.Scan(&c)
+		if err != nil {
+			return errno(err)
+		}
+		if len(c.Slices)/sliceBytes >= 2 {
+			logger.Debugf("compact chunk %d:%d (%d slices)", c.Inode, c.Indx, len(c.Slices)/sliceBytes)
+			m.compactChunk(c.Inode, c.Indx)
+		}
+	}
+	return 0
+}
+
+func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
+	// r.cleanupOldSliceRefs()
+	var c chunk
+	rows, err := m.engine.Rows(&c)
+	if err != nil {
+		return errno(err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	*slices = nil
+	for rows.Next() {
+		err = rows.Scan(&c)
+		if err != nil {
+			return errno(err)
+		}
+		ss := readSliceBuf(c.Slices)
+		for _, s := range ss {
+			if s.chunkid > 0 {
+				*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+			}
+		}
+	}
+	return 0
 }
 
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
@@ -1178,7 +1356,10 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		return syscall.EINVAL
 	}
 	return m.txn(func(s *xorm.Session) error {
-		_, err := m.engine.Delete(&xattr{Inode: inode, Name: name})
+		n, err := m.engine.Delete(&xattr{Inode: inode, Name: name})
+		if n == 0 {
+			err = ENOATTR
+		}
 		return err
 	})
 }
