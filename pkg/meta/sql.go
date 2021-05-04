@@ -92,6 +92,12 @@ type delchunk struct {
 	Expire time.Time
 }
 
+type xattr struct {
+	Inode Ino    `xorm:"unique(name)"`
+	Name  string `xorm:"unique(name)"`
+	Value []byte `xorm:"VARBINARY"`
+}
+
 type dbMeta struct {
 	sync.Mutex
 	conf   *DBConfig
@@ -134,6 +140,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	_ = m.engine.Sync2(new(edge))
 	_ = m.engine.Sync2(new(symlink))
 	_ = m.engine.Sync2(new(chunk))
+	_ = m.engine.Sync2(new(xattr))
 
 	f, err := m.Load()
 	if err != nil {
@@ -226,7 +233,7 @@ func (m *dbMeta) incrCounter(name string) (uint64, error) {
 			return nil, err
 		}
 		c.Value++
-		_, err = s.Cols("value").Update(&c)
+		_, err = s.Cols("value").Update(&c, &counter{Name: name})
 		if err != nil {
 			return nil, err
 		}
@@ -238,6 +245,13 @@ func (m *dbMeta) incrCounter(name string) (uint64, error) {
 func (m *dbMeta) nextInode() (Ino, error) {
 	v, err := m.incrCounter("nextinode")
 	return Ino(v), err
+}
+
+func (m *dbMeta) txn(f func(s *xorm.Session) error) syscall.Errno {
+	_, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+		return nil, f(s)
+	})
+	return errno(err)
 }
 
 func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
@@ -346,14 +360,14 @@ func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	_, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	return m.txn(func(s *xorm.Session) error {
 		var cur node
 		ok, err := s.Where("Inode = ?", inode).Get(&cur)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 			attr.Mode |= (cur.Mode & 06000)
@@ -404,35 +418,36 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		}
 		m.parseAttr(&cur, attr)
 		if !changed {
-			return nil, nil
+			return nil
 		}
 		_, err = s.Where("inode = ?", inode).Update(&cur)
-		return &cur, err
+		if err == nil && attr != nil {
+			m.parseAttr(&cur, attr)
+		}
+		return err
 	})
-	return errno(err)
 }
 
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	n, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	return m.txn(func(s *xorm.Session) error {
 		var n node
 		ok, err := s.Where("Inode = ?", inode).Get(&n)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		n.Length = length
-		_, err = s.Cols("length").Update(&n)
+		_, err = s.Cols("length").Update(&n, &node{Inode: n.Inode})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return &n, nil
+		if err == nil && attr != nil {
+			m.parseAttr(&n, attr)
+		}
+		return nil
 	})
-	if err == nil && attr != nil {
-		m.parseAttr(n.(*node), attr)
-	}
-	return errno(err)
 }
 
 func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
@@ -506,25 +521,25 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		*inode = ino
 	}
 
-	_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	return m.txn(func(s *xorm.Session) error {
 		var pn node
 		ok, err := s.Where("Inode = ?", parent).Get(&pn)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if pn.Type != TypeDirectory {
-			return nil, syscall.ENOTDIR
+			return syscall.ENOTDIR
 		}
 		var e edge
 		ok, err = s.Where("parent=? and name=?", parent, name).Get(&e)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if ok || !ok && m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
-			return nil, syscall.EEXIST
+			return syscall.EEXIST
 		}
 
 		now := time.Now()
@@ -544,28 +559,27 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		e.Type = _type
 		_, err = s.Insert(&e)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if _, err := s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return nil, err
+			return err
 		}
 		if _, err := s.Insert(&n); err != nil {
-			return nil, err
+			return err
 		}
 		if _type == TypeSymlink {
 			if _, err := s.Insert(&symlink{Inode: uint64(ino), Target: path}); err != nil {
-				return nil, err
+				return err
 			}
 		} else if _type == TypeFile {
 			s.Exec("update counter set value=value+? where key='usedSpace'", align4K(0))
 		}
 		s.Exec("update counter set value=value+1 where key='totalInodes'")
-		return nil, err
+		if err != nil {
+			m.parseAttr(&n, attr)
+		}
+		return err
 	})
-	if err != nil {
-		m.parseAttr(&n, attr)
-	}
-	return errno(err)
 }
 
 func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
@@ -583,37 +597,37 @@ func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumas
 }
 
 func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	_, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	return m.txn(func(s *xorm.Session) error {
 		var pn node
 		ok, err := s.Where("Inode = ?", parent).Get(&pn)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if pn.Type != TypeDirectory {
-			return nil, syscall.ENOTDIR
+			return syscall.ENOTDIR
 		}
 		var e edge
 		ok, err = s.Where("parent=? and name=?", parent, name).Get(&e)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok && (!m.conf.CaseInsensi || m.resolveCase(ctx, parent, name) == nil) {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if e.Type == TypeDirectory {
-			return nil, syscall.EPERM
+			return syscall.EPERM
 		}
 
 		var n node
 		ok, err = s.Where("Inode = ?", e.Inode).Get(&n)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 
 		now := time.Now()
@@ -628,37 +642,37 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 
 		if _, err := s.Delete(&edge{Parent: uint64(parent), Name: name}); err != nil {
-			return nil, err
+			return err
 		}
 		// s.Delete(&xattr{Inode: e.Inode})
 		if _, err := s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return nil, err
+			return err
 		}
 		s.Exec("update counter set value=value-1 where key='totalInodes'")
 
 		if n.Nlink > 0 {
 			if _, err := s.Update(&n, &node{Inode: e.Inode}); err != nil {
-				return nil, err
+				return err
 			}
 		} else {
 			switch e.Type {
 			case TypeSymlink:
 				if _, err := s.Delete(&symlink{Inode: e.Inode}); err != nil {
-					return nil, err
+					return err
 				}
 				if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
-					return nil, err
+					return err
 				}
 			case TypeFile:
 				if opened {
 					if _, err := s.Update(&n, &node{Inode: e.Inode}); err != nil {
-						return nil, err
+						return err
 					}
 					// pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(inode)))
 				} else {
 					// pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(inode, attr.Length)})
 					if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
-						return nil, err
+						return err
 					}
 					s.Exec("update counter set value=value-? where key='usedSpace'", align4K(n.Length))
 				}
@@ -673,9 +687,8 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				// go m.deleteFile(inode, attr.Length, "")
 			}
 		}
-		return nil, err
+		return err
 	})
-	return errno(err)
 }
 
 func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -686,109 +699,108 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.ENOTEMPTY
 	}
 
-	_, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	return m.txn(func(s *xorm.Session) error {
 		var pn node
 		ok, err := s.Where("Inode = ?", parent).Get(&pn)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if pn.Type != TypeDirectory {
-			return nil, syscall.ENOTDIR
+			return syscall.ENOTDIR
 		}
 		var e edge
 		ok, err = s.Where("parent=? and name=?", parent, name).Get(&e)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok && (!m.conf.CaseInsensi || m.resolveCase(ctx, parent, name) == nil) {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if e.Type != TypeDirectory {
-			return nil, syscall.ENOTDIR
+			return syscall.ENOTDIR
 		}
 		cnt, err := s.Where("parent = ?", e.Inode).Count(&edge{})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if cnt != 0 {
-			return nil, syscall.ENOTEMPTY
+			return syscall.ENOTEMPTY
 		}
 
 		now := time.Now()
 		pn.Nlink--
 		pn.Mtime = now
 		if _, err := s.Delete(&edge{Parent: uint64(parent), Name: name}); err != nil {
-			return nil, err
+			return err
 		}
 		if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
-			return nil, err
+			return err
 		}
 		// s.Delete(&xattr{Inode: e.Inode})
 		if _, err := s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return nil, err
+			return err
 		}
 		s.Exec("update counter set value=value-1 where key='totalInodes'")
-		return nil, err
+		return err
 	})
-	return errno(err)
 }
 
 func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
-	_, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	return m.txn(func(s *xorm.Session) error {
 		var spn node
 		ok, err := s.Where("Inode = ?", parentSrc).Get(&spn)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if spn.Type != TypeDirectory {
-			return nil, syscall.ENOTDIR
+			return syscall.ENOTDIR
 		}
 		var se edge
 		ok, err = s.Where("parent=? and name=?", parentSrc, nameSrc).Get(&se)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok && (!m.conf.CaseInsensi || m.resolveCase(ctx, parentSrc, nameSrc) == nil) {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 
 		if parentSrc == parentDst && nameSrc == nameDst {
 			if inode != nil {
 				*inode = Ino(se.Inode)
 			}
-			return nil, nil
+			return nil
 		}
 
 		var sn node
 		ok, err = s.Where("Inode = ?", se.Inode).Get(&sn)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 
 		var dpn node
 		ok, err = s.Where("Inode = ?", parentDst).Get(&dpn)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if dpn.Type != TypeDirectory {
-			return nil, syscall.ENOTDIR
+			return syscall.ENOTDIR
 		}
 		var de edge
 		ok, err = s.Where("parent=? and name=?", parentDst, nameDst).Get(&de)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		var opened bool
 		var dino Ino
@@ -796,20 +808,20 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		if ok {
 			dino = Ino(de.Inode)
 			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
-				return nil, syscall.EEXIST
+				return syscall.EEXIST
 			}
 			if de.Type == TypeDirectory {
 				cnt, err := s.Where("parent = ?", de.Inode).Count(&edge{})
 				if err != nil {
-					return nil, err
+					return err
 				}
 				if cnt != 0 {
-					return nil, syscall.ENOTEMPTY
+					return syscall.ENOTEMPTY
 				}
 			} else {
 				ok, err := s.Where("Inode = ?", de.Inode).Get(&dn)
 				if err != nil {
-					return nil, errno(err)
+					return errno(err)
 				}
 				if !ok {
 
@@ -878,43 +890,42 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				// go r.deleteFile(dino, dattr.Length, "")
 			}
 		}
-		return nil, err
+		return err
 	})
-	return errno(err)
 }
 
 func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	_, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	return m.txn(func(s *xorm.Session) error {
 		var pn node
 		ok, err := s.Where("Inode = ?", parent).Get(&pn)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if pn.Type != TypeDirectory {
-			return nil, syscall.ENOTDIR
+			return syscall.ENOTDIR
 		}
 		var e edge
 		ok, err = s.Where("parent=? and name=?", parent, name).Get(&e)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if ok || !ok && m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
-			return nil, syscall.EEXIST
+			return syscall.EEXIST
 		}
 
 		var n node
 		ok, err = s.Where("Inode = ?", inode).Get(&n)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if n.Type == TypeDirectory {
-			return nil, syscall.EPERM
+			return syscall.EPERM
 		}
 
 		now := time.Now()
@@ -922,20 +933,19 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 		n.Nlink++
 
 		if ok, err := s.Insert(&edge{Parent: uint64(parent), Name: name, Inode: uint64(inode), Type: n.Type}); err != nil || ok == 0 {
-			return nil, err
+			return err
 		}
 		if _, err := s.Update(&pn, &node{Inode: uint64(parent)}); err != nil {
-			return nil, err
+			return err
 		}
 		if _, err := s.Cols("ctime", "nlink").Update(&n, node{Inode: uint64(inode)}); err != nil {
-			return nil, err
+			return err
 		}
 		if err == nil && attr != nil {
 			m.parseAttr(&n, attr)
 		}
-		return nil, err
+		return err
 	})
-	return errno(err)
 }
 
 func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
@@ -982,6 +992,7 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	}
 
 	var n node
+	// FIXME
 	nodes, err := m.engine.Where("inode IN (?)", strings.Join(inodes, ",")).Rows(&n)
 	if err != nil {
 		return errno(err)
@@ -1064,17 +1075,17 @@ func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, ch
 }
 
 func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	_, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	return m.txn(func(s *xorm.Session) error {
 		var n node
 		ok, err := s.Where("Inode = ?", inode).Get(&n)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, syscall.ENOENT
+			return syscall.ENOENT
 		}
 		if n.Type != TypeFile {
-			return nil, syscall.EPERM
+			return syscall.EPERM
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		var added int64
@@ -1088,23 +1099,23 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		var ck chunk
 		ok, err = s.Where("Inode = ? and Indx = ?", inode, indx).Get(&ck)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		// TODO: use concat
 		ck.Slices = append(ck.Slices, marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len)...)
 		if ok {
-			if _, err := s.Update(&ck, &chunk{Inode: uint64(inode), Indx: indx}); err != nil {
-				return nil, err
+			if _, err := s.Where("Inode = ? and indx = ?", inode, indx).Update(&ck); err != nil {
+				return err
 			}
 		} else {
 			ck.Inode = uint64(inode)
 			ck.Indx = indx
 			if _, err := s.Insert(&ck); err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if _, err := s.Update(&n, &node{Inode: uint64(inode)}); err != nil {
-			return nil, err
+			return err
 		}
 		// most of chunk are used by single inode, so use that as the default (1 == not exists)
 		if added > 0 {
@@ -1113,25 +1124,63 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if (len(ck.Slices)/sliceBytes)%20 == 19 {
 			// 	go r.compactChunk(inode, indx)
 		}
-		return nil, nil
+		return nil
 	})
-	return errno(err)
 }
 
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
-	return syscall.ENOSYS
+	var x xattr
+	ok, err := m.engine.Where("Inode = ? AND name = ?", inode, name).Get(&x)
+	if err != nil {
+		return errno(err)
+	}
+	if !ok {
+		return ENOATTR
+	}
+	*vbuff = x.Value
+	return 0
 }
 
 func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
-	return syscall.ENOSYS
+	var x xattr
+	rows, err := m.engine.Where("inode = ?", inode).Rows(&x)
+	if err != nil {
+		return errno(err)
+	}
+	*names = nil
+	for rows.Next() {
+		err = rows.Scan(&x)
+		if err != nil {
+			return errno(err)
+		}
+		*names = append(*names, []byte(x.Name)...)
+		*names = append(*names, 0)
+	}
+	return 0
 }
 
 func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) syscall.Errno {
-	return syscall.ENOSYS
+	if name == "" {
+		return syscall.EINVAL
+	}
+	return m.txn(func(s *xorm.Session) error {
+		var x = xattr{inode, name, value}
+		n, err := m.engine.InsertOne(&x)
+		if err != nil || n == 0 {
+			_, err = m.engine.Update(&x, &xattr{inode, name, nil})
+		}
+		return err
+	})
 }
 
 func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
-	return syscall.ENOSYS
+	if name == "" {
+		return syscall.EINVAL
+	}
+	return m.txn(func(s *xorm.Session) error {
+		_, err := m.engine.Delete(&xattr{Inode: inode, Name: name})
+		return err
+	})
 }
 
 func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
