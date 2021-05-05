@@ -17,6 +17,7 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync"
 	"syscall"
@@ -65,7 +66,6 @@ func BenchmarkReadSlices(b *testing.B) {
 	}
 }
 
-// nolint:errcheck
 func TestRedisClient(t *testing.T) {
 	var conf RedisConfig
 	_, err := NewRedisMeta("http://127.0.0.1:6379/7", &conf)
@@ -76,9 +76,14 @@ func TestRedisClient(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	testMetaClient(t, m)
+}
+
+// nolint:errcheck
+func testMetaClient(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
 	_ = m.Init(Format{Name: "test"}, true)
-	err = m.Init(Format{Name: "test"}, false) // changes nothing
+	err := m.Init(Format{Name: "test"}, false) // changes nothing
 	if err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
@@ -90,7 +95,10 @@ func TestRedisClient(t *testing.T) {
 		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
 	}
 	_ = m.NewSession()
-	go m.(*redisMeta).cleanStaleSessions()
+	switch m.(type) {
+	case *redisMeta:
+		go m.(*redisMeta).cleanStaleSessions()
+	}
 	ctx := Background
 	var parent, inode, dummyInode Ino
 	var attr = &Attr{}
@@ -273,6 +281,47 @@ func TestRedisClient(t *testing.T) {
 		t.Fatalf("setxattr: %s", st)
 	}
 
+	var totalspace, availspace, iused, iavail uint64
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	var summary Summary
+	if st := m.Summary(ctx, 1, &summary); st != 0 {
+		t.Fatalf("summary: %s", st)
+	}
+	expected := Summary{Length: 202, Size: 16384, Files: 3, Dirs: 2}
+	if summary != expected {
+		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
+	}
+	if st := m.Summary(ctx, inode, &summary); st != 0 {
+		t.Fatalf("summary: %s", st)
+	}
+	expected = Summary{Length: 402, Size: 20480, Files: 4, Dirs: 2}
+	if summary != expected {
+		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
+	}
+	if st := m.Unlink(ctx, 1, "f"); st != 0 {
+		t.Fatalf("unlink f: %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
+		t.Fatalf("rmdir d: %s", st)
+	}
+}
+
+func TestLocksRedis(t *testing.T) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1:6379/5", &conf)
+	if err != nil {
+		t.Skipf("redis is not available: %s", err)
+	}
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var inode Ino
+	var attr = &Attr{}
+	defer m.Unlink(ctx, 1, "f")
+	if st := m.Create(ctx, 1, "f", 0644, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
 	// flock
 	if st := m.Flock(ctx, inode, 1, syscall.F_RDLCK, false); st != 0 {
 		t.Fatalf("flock rlock: %s", st)
@@ -358,32 +407,6 @@ func TestRedisClient(t *testing.T) {
 		}(i)
 	}
 	g.Wait()
-
-	var totalspace, availspace, iused, iavail uint64
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
-		t.Fatalf("statfs: %s", st)
-	}
-	var summary Summary
-	if st := m.Summary(ctx, 1, &summary); st != 0 {
-		t.Fatalf("summary: %s", st)
-	}
-	expected := Summary{Length: 202, Size: 16384, Files: 3, Dirs: 2}
-	if summary != expected {
-		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
-	}
-	if st := m.Summary(ctx, inode, &summary); st != 0 {
-		t.Fatalf("summary: %s", st)
-	}
-	expected = Summary{Length: 402, Size: 20480, Files: 4, Dirs: 2}
-	if summary != expected {
-		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
-	}
-	if st := m.Unlink(ctx, 1, "f"); st != 0 {
-		t.Fatalf("unlink f: %s", st)
-	}
-	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
-		t.Fatalf("rmdir d: %s", st)
-	}
 }
 
 func TestRmr(t *testing.T) {
@@ -392,6 +415,10 @@ func TestRmr(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	testRmr(t, m)
+}
+
+func testRmr(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
 	ctx := Background
 	var inode, parent Ino
@@ -422,6 +449,10 @@ func TestCaseIncensi(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	testCaseIncensi(t, m)
+}
+
+func testCaseIncensi(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
 	ctx := Background
 	var inode Ino
@@ -434,7 +465,10 @@ func TestCaseIncensi(t *testing.T) {
 		t.Fatalf("lookup Foo should be OK")
 	}
 	if st := m.Rename(ctx, 1, "Foo", 1, "bar", &inode, attr); st != 0 {
-		t.Fatalf("rename Foo to bar should be OK")
+		t.Fatalf("rename Foo to bar should be OK, but got %s", st)
+	}
+	if st := m.Lookup(ctx, 1, "Bar", &inode, attr); st != 0 {
+		t.Fatalf("lookup Bar should be OK")
 	}
 	if st := m.Unlink(ctx, 1, "Bar"); st != 0 {
 		t.Fatalf("unlink Bar should be OK")
@@ -453,6 +487,10 @@ func TestCompaction(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	testCompaction(t, m)
+}
+
+func testCompaction(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
 	done := make(chan bool, 1)
 	var l sync.Mutex
@@ -492,7 +530,12 @@ func TestCompaction(t *testing.T) {
 	if len(cs1) != 5 {
 		t.Fatalf("expect 5 slices, but got %+v", cs1)
 	}
-	m.(*redisMeta).compactChunk(inode, 1)
+	switch m.(type) {
+	case *redisMeta:
+		m.(*redisMeta).compactChunk(inode, 1)
+	case *dbMeta:
+		m.(*dbMeta).compactChunk(inode, 1)
+	}
 	var cs []Slice
 	_ = m.Read(ctx, inode, 1, &cs)
 	if len(cs) != 1 {
@@ -521,7 +564,7 @@ func TestCompaction(t *testing.T) {
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
-	if len(chunks) > 3 {
+	if len(chunks) > 5 {
 		t.Fatalf("inode %d should be compacted after read, but have %d slices", inode, len(chunks))
 	}
 	var total uint32
@@ -555,6 +598,10 @@ func TestConcurrentWrite(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	testConcurrentWrite(t, m)
+}
+
+func testConcurrentWrite(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
 	})
@@ -576,7 +623,7 @@ func TestConcurrentWrite(t *testing.T) {
 
 	var errno syscall.Errno
 	var g sync.WaitGroup
-	for i := 0; i <= 20; i++ {
+	for i := 0; i <= 1; i++ {
 		g.Add(1)
 		go func(indx uint32) {
 			defer g.Done()
@@ -603,6 +650,11 @@ func TestTruncateAndDelete(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	m.(*redisMeta).rdb.FlushAll(context.Background())
+	testTruncateAndDelete(t, m)
+}
+
+func testTruncateAndDelete(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
 	})
@@ -632,24 +684,11 @@ func TestTruncateAndDelete(t *testing.T) {
 	if st := m.Truncate(ctx, inode, 0, (300<<20)+10, attr); st != 0 {
 		t.Fatalf("truncate file %s", st)
 	}
-	r := m.(*redisMeta)
 
-	listAll := func(pattern string) []string {
-		var keys, ks []string
-		var cursor uint64
-		for {
-			ks, cursor, err = r.rdb.Scan(ctx, cursor, pattern, 1000).Result()
-			keys = append(keys, ks...)
-			if err != nil || cursor == 0 {
-				break
-			}
-		}
-		return keys
-	}
-
-	keys := listAll(fmt.Sprintf("c%d_*", inode))
-	if len(keys) != 3 {
-		t.Fatalf("number of chunks: %d != 3, %+v", len(keys), keys)
+	var ss []Slice
+	m.ListSlices(ctx, &ss)
+	if len(ss) != 1 {
+		t.Fatalf("number of chunks: %d != 3, %+v", len(ss), ss)
 	}
 	m.Close(ctx, inode)
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
@@ -657,10 +696,10 @@ func TestTruncateAndDelete(t *testing.T) {
 	}
 
 	time.Sleep(time.Millisecond * 100)
-	keys = listAll(fmt.Sprintf("c%d_*", inode))
+	m.ListSlices(ctx, &ss)
 	// the last chunk could be found and deleted
-	if len(keys) > 1 {
-		t.Fatalf("number of chunks: %d > 1, %+v", len(keys), keys)
+	if len(ss) > 1 {
+		t.Fatalf("number of chunks: %d > 1, %+v", len(ss), ss)
 	}
 }
 
@@ -671,6 +710,11 @@ func TestCopyFileRange(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	m.(*redisMeta).rdb.FlushAll(context.Background())
+	testCopyFileRange(t, m)
+}
+
+func testCopyFileRange(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
 	})
