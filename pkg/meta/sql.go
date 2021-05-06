@@ -103,6 +103,10 @@ type sliceRef struct {
 	Refs    int
 }
 
+type freeID struct {
+	next  uint64
+	maxid uint64
+}
 type dbMeta struct {
 	sync.Mutex
 	conf   *Config
@@ -115,6 +119,10 @@ type dbMeta struct {
 	deleting     chan int
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
+
+	freeMu     sync.Mutex
+	freeInodes freeID
+	freeChunks freeID
 }
 
 func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
@@ -236,7 +244,7 @@ func (m *dbMeta) Load() (*Format, error) {
 }
 
 func (m *dbMeta) NewSession() error {
-	v, err := m.incrCounter("nextSession")
+	v, err := m.incrCounter("nextSession", 1)
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
@@ -271,7 +279,7 @@ func (m *dbMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (m *dbMeta) incrCounter(name string) (uint64, error) {
+func (m *dbMeta) incrCounter(name string, batch uint64) (uint64, error) {
 	var v uint64
 	errno := m.txn(func(s *xorm.Session) error {
 		var c counter
@@ -279,13 +287,9 @@ func (m *dbMeta) incrCounter(name string) (uint64, error) {
 		if err != nil {
 			return err
 		}
-		c.Value++
-		_, err = s.Cols("value").Update(&c, &counter{Name: name})
-		if err != nil {
-			return err
-		}
-		v = c.Value - 1
-		return nil
+		v = c.Value
+		_, err = s.Cols("value").Update(&counter{Value: c.Value + batch}, &counter{Name: name})
+		return err
 	})
 	if errno == 0 {
 		return v, nil
@@ -294,8 +298,18 @@ func (m *dbMeta) incrCounter(name string) (uint64, error) {
 }
 
 func (m *dbMeta) nextInode() (Ino, error) {
-	// TODO: cache
-	v, err := m.incrCounter("nextInode")
+	m.freeMu.Lock()
+	defer m.freeMu.Unlock()
+	if m.freeInodes.next < m.freeInodes.maxid {
+		v := m.freeInodes.next
+		m.freeInodes.next++
+		return Ino(v), nil
+	}
+	v, err := m.incrCounter("nextInode", 100)
+	if err == nil {
+		m.freeInodes.next = v + 1
+		m.freeInodes.maxid = v + 1000
+	}
 	return Ino(v), err
 }
 
@@ -310,8 +324,8 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) syscall.Errno {
 		// TODO: add other retryable errors here
 		if errors.Is(err, sqlite3.ErrBusy) || err != nil && strings.Contains(err.Error(), "database is locked") {
 			txRestart.Add(1)
+			logger.Debug("conflicted transaction, restart it")
 			time.Sleep(time.Millisecond * time.Duration(i) * time.Duration(i))
-			logger.Warnf("conflicted transaction, restart it")
 			continue
 		}
 		break
@@ -1431,10 +1445,18 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 }
 
 func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
-	// TODO: batch
-	v, err := m.incrCounter("nextChunk")
+	m.freeMu.Lock()
+	defer m.freeMu.Unlock()
+	if m.freeChunks.next < m.freeChunks.maxid {
+		*chunkid = m.freeChunks.next
+		m.freeChunks.next++
+		return 0
+	}
+	v, err := m.incrCounter("nextChunk", 1000)
 	if err == nil {
 		*chunkid = v
+		m.freeChunks.next = v + 1
+		m.freeChunks.maxid = v + 1000
 	}
 	return errno(err)
 }
