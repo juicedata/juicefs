@@ -203,11 +203,6 @@ type Meta interface {
 	// Setlk sets a file range lock on given file.
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
 
-	// Summary returns the summary for given file or directory.
-	Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno
-	// Rmr remove all the files and directories recursively.
-	Rmr(ctx Context, inode Ino, name string) syscall.Errno
-
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context) syscall.Errno
 	// ListSlices returns all slices used by all files.

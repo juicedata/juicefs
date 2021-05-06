@@ -416,7 +416,7 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 	return 0
 }
 
-func (r *redisMeta) Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno {
+func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary) syscall.Errno {
 	var attr Attr
 	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
 		return st
@@ -431,7 +431,7 @@ func (r *redisMeta) Summary(ctx Context, inode Ino, summary *Summary) syscall.Er
 				continue
 			}
 			if e.Attr.Typ == TypeDirectory {
-				if st := r.Summary(ctx, e.Inode, summary); st != 0 {
+				if st := GetSummary(r, ctx, e.Inode, summary); st != 0 {
 					return st
 				}
 			} else {
@@ -1137,7 +1137,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
 }
 
-func (r *redisMeta) emptyDir(ctx Context, inode Ino, concurrent chan int) syscall.Errno {
+func emptyDir(r Meta, ctx Context, inode Ino, concurrent chan int) syscall.Errno {
 	if st := r.Access(ctx, inode, 3, nil); st != 0 {
 		return st
 	}
@@ -1157,14 +1157,14 @@ func (r *redisMeta) emptyDir(ctx Context, inode Ino, concurrent chan int) syscal
 				wg.Add(1)
 				go func(child Ino, name string) {
 					defer wg.Done()
-					e := r.emptyEntry(ctx, inode, name, child, concurrent)
+					e := emptyEntry(r, ctx, inode, name, child, concurrent)
 					if e != 0 {
 						status = e
 					}
 					<-concurrent
 				}(e.Inode, string(e.Name))
 			default:
-				if st := r.emptyEntry(ctx, inode, string(e.Name), e.Inode, concurrent); st != 0 {
+				if st := emptyEntry(r, ctx, inode, string(e.Name), e.Inode, concurrent); st != 0 {
 					return st
 				}
 			}
@@ -1178,18 +1178,18 @@ func (r *redisMeta) emptyDir(ctx Context, inode Ino, concurrent chan int) syscal
 	return status
 }
 
-func (r *redisMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, concurrent chan int) syscall.Errno {
-	st := r.emptyDir(ctx, inode, concurrent)
+func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, concurrent chan int) syscall.Errno {
+	st := emptyDir(r, ctx, inode, concurrent)
 	if st == 0 {
 		st = r.Rmdir(ctx, parent, name)
 		if st == syscall.ENOTEMPTY {
-			st = r.emptyEntry(ctx, parent, name, inode, concurrent)
+			st = emptyEntry(r, ctx, parent, name, inode, concurrent)
 		}
 	}
 	return st
 }
 
-func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
+func Remove(r Meta, ctx Context, parent Ino, name string) syscall.Errno {
 	if st := r.Access(ctx, parent, 3, nil); st != 0 {
 		return st
 	}
@@ -1202,7 +1202,7 @@ func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
 		return r.Unlink(ctx, parent, name)
 	}
 	concurrent := make(chan int, 50)
-	return r.emptyEntry(ctx, parent, name, inode, concurrent)
+	return emptyEntry(r, ctx, parent, name, inode, concurrent)
 }
 
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {

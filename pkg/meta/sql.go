@@ -284,49 +284,21 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) syscall.Errno {
 
 func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	var c counter
-	m.engine.Where("name='usedSpace'").Get(&c)
+	_, err := m.engine.Where("name='usedSpace'").Get(&c)
+	if err != nil {
+		logger.Errorf("get used space: %s", err)
+	}
 	*totalspace = 1 << 50
 	for *totalspace < c.Value {
 		*totalspace *= 2
 	}
 	*availspace = *totalspace - c.Value
-	m.engine.Where("name='totalInodes'").Get(&c)
+	_, err = m.engine.Where("name='totalInodes'").Get(&c)
+	if err != nil {
+		logger.Errorf("get total inodes: %s", err)
+	}
 	*iused = c.Value
 	*iavail = 10 << 20
-	return 0
-}
-
-func (r *dbMeta) Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno {
-	var attr Attr
-	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
-		return st
-	}
-	if attr.Typ == TypeDirectory {
-		var entries []*Entry
-		if st := r.Readdir(ctx, inode, 1, &entries); st != 0 {
-			return st
-		}
-		for _, e := range entries {
-			if e.Inode == inode || len(e.Name) == 2 && bytes.Equal(e.Name, []byte("..")) {
-				continue
-			}
-			if e.Attr.Typ == TypeDirectory {
-				if st := r.Summary(ctx, e.Inode, summary); st != 0 {
-					return st
-				}
-			} else {
-				summary.Files++
-				summary.Length += e.Attr.Length
-				summary.Size += uint64(align4K(e.Attr.Length))
-			}
-		}
-		summary.Dirs++
-		summary.Size += 4096
-	} else {
-		summary.Files++
-		summary.Length += attr.Length
-		summary.Size += uint64(align4K(attr.Length))
-	}
 	return 0
 }
 
@@ -901,74 +873,6 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		s.Exec("update counter set value=value-1 where name='totalInodes'")
 		return err
 	})
-}
-
-func (r *dbMeta) emptyDir(ctx Context, inode Ino, concurrent chan int) syscall.Errno {
-	if st := r.Access(ctx, inode, 3, nil); st != 0 {
-		return st
-	}
-	var entries []*Entry
-	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
-		return st
-	}
-	var wg sync.WaitGroup
-	var status syscall.Errno
-	for _, e := range entries {
-		if e.Inode == inode || len(e.Name) == 2 && string(e.Name) == ".." {
-			continue
-		}
-		if e.Attr.Typ == TypeDirectory {
-			select {
-			case concurrent <- 1:
-				wg.Add(1)
-				go func(child Ino, name string) {
-					defer wg.Done()
-					e := r.emptyEntry(ctx, inode, name, child, concurrent)
-					if e != 0 {
-						status = e
-					}
-					<-concurrent
-				}(e.Inode, string(e.Name))
-			default:
-				if st := r.emptyEntry(ctx, inode, string(e.Name), e.Inode, concurrent); st != 0 {
-					return st
-				}
-			}
-		} else {
-			if st := r.Unlink(ctx, inode, string(e.Name)); st != 0 {
-				return st
-			}
-		}
-	}
-	wg.Wait()
-	return status
-}
-
-func (r *dbMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, concurrent chan int) syscall.Errno {
-	st := r.emptyDir(ctx, inode, concurrent)
-	if st == 0 {
-		st = r.Rmdir(ctx, parent, name)
-		if st == syscall.ENOTEMPTY {
-			st = r.emptyEntry(ctx, parent, name, inode, concurrent)
-		}
-	}
-	return st
-}
-
-func (r *dbMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
-	if st := r.Access(ctx, parent, 3, nil); st != 0 {
-		return st
-	}
-	var inode Ino
-	var attr Attr
-	if st := r.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
-		return st
-	}
-	if attr.Typ != TypeDirectory {
-		return r.Unlink(ctx, parent, name)
-	}
-	concurrent := make(chan int, 50)
-	return r.emptyEntry(ctx, parent, name, inode, concurrent)
 }
 
 func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {

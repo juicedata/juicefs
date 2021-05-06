@@ -13,6 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//nolint:errcheck
 package meta
 
 import (
@@ -79,7 +80,6 @@ func TestRedisClient(t *testing.T) {
 	testMetaClient(t, m)
 }
 
-// nolint:errcheck
 func testMetaClient(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
 	_ = m.Init(Format{Name: "test"}, true)
@@ -286,14 +286,14 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("statfs: %s", st)
 	}
 	var summary Summary
-	if st := m.Summary(ctx, 1, &summary); st != 0 {
+	if st := GetSummary(m, ctx, 1, &summary); st != 0 {
 		t.Fatalf("summary: %s", st)
 	}
 	expected := Summary{Length: 202, Size: 16384, Files: 3, Dirs: 2}
 	if summary != expected {
 		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
 	}
-	if st := m.Summary(ctx, inode, &summary); st != 0 {
+	if st := GetSummary(m, ctx, inode, &summary); st != 0 {
 		t.Fatalf("summary: %s", st)
 	}
 	expected = Summary{Length: 402, Size: 20480, Files: 4, Dirs: 2}
@@ -409,16 +409,16 @@ func TestLocksRedis(t *testing.T) {
 	g.Wait()
 }
 
-func TestRmr(t *testing.T) {
+func TestRemove(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1:6379/5", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
-	testRmr(t, m)
+	testRemove(t, m)
 }
 
-func testRmr(t *testing.T, m Meta) {
+func testRemove(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
 	ctx := Background
 	var inode, parent Ino
@@ -426,7 +426,7 @@ func testRmr(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
-	if st := m.Rmr(ctx, 1, "f"); st != 0 {
+	if st := Remove(m, ctx, 1, "f"); st != 0 {
 		t.Fatalf("rmr f: %s", st)
 	}
 	if st := m.Mkdir(ctx, 1, "d", 0755, 0, 0, &parent, attr); st != 0 {
@@ -438,7 +438,7 @@ func testRmr(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f", 0644, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/f: %s", st)
 	}
-	if st := m.Rmr(ctx, 1, "d"); st != 0 {
+	if st := Remove(m, ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
 }
@@ -643,7 +643,6 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	}
 }
 
-// nolint:errcheck
 func TestTruncateAndDelete(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
@@ -703,7 +702,6 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 }
 
-// nolint:errcheck
 func TestCopyFileRange(t *testing.T) {
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
@@ -781,8 +779,8 @@ func benchmarkReaddir(b *testing.B, n int) {
 	var es []*Entry
 	if m.Lookup(ctx, 1, dname, &inode, nil) == 0 && m.Readdir(ctx, inode, 0, &es) == 0 && len(es) == n+2 {
 	} else {
-		_ = m.Rmr(ctx, 1, dname)
-		_ = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &inode, nil)
+		Remove(m, ctx, 1, dname)
+		m.Mkdir(ctx, 1, dname, 0755, 0, 0, &inode, nil)
 		for j := 0; j < n; j++ {
 			_ = m.Create(ctx, inode, fmt.Sprintf("d%d", j), 0755, 0, nil, nil)
 		}
