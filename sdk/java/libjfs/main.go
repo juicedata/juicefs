@@ -310,10 +310,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		utils.InitLoggers(false)
 
 		addr := jConf.MetaURL
-		m := meta.NewClient(addr, &meta.Config{
-			Retries: 10,
-			Strict:  true,
-		})
+		m := meta.NewClient(addr, &meta.Config{Retries: 10, Strict: true})
 		format, err := m.Load()
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
@@ -401,7 +398,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 
 		conf := &vfs.Config{
 			Meta: &meta.Config{
-				IORetries: 10,
+				Retries: 10,
 			},
 			Format:    format,
 			Chunk:     &chunkConf,

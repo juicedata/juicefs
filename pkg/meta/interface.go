@@ -213,12 +213,7 @@ type Meta interface {
 	OnMsg(mtype uint32, cb MsgCallback)
 }
 
-type Config struct {
-	Strict      bool // update ctime
-	Retries     int
-	CaseInsensi bool
-}
-
+// NewClient creates a Meta client for given uri.
 func NewClient(uri string, conf *Config) Meta {
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
