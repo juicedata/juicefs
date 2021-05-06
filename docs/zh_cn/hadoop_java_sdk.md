@@ -1,4 +1,4 @@
-# 在 Hadoop 环境使用 JuiceFS Java SDK
+# Hadoop 使用 JuiceFS
 
 JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
