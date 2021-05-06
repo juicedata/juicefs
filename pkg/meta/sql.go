@@ -31,13 +31,6 @@ import (
 	"xorm.io/xorm"
 )
 
-// DBConfig is config for SQL client.
-type DBConfig struct {
-	Strict      bool // update ctime
-	Retries     int
-	CaseInsensi bool
-}
-
 type setting struct {
 	Name  string `xorm:"pk"`
 	Value string `xorm:"varchar(4096)"`
@@ -112,7 +105,7 @@ type sliceRef struct {
 
 type dbMeta struct {
 	sync.Mutex
-	conf   *DBConfig
+	conf   *Config
 	engine *xorm.Engine
 
 	sid          uint64
@@ -124,7 +117,7 @@ type dbMeta struct {
 	msgCallbacks *msgCallbacks
 }
 
-func NewSQLMeta(driver, dsn string, conf *DBConfig) (*dbMeta, error) {
+func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 	engine, err := xorm.NewEngine(driver, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
@@ -299,7 +292,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) syscall.Errno {
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	var err error
-	for i := 0; i < m.conf.Retries; i++ {
+	for i := 0; i < 50; i++ {
 		_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
 			return nil, f(s)
 		})

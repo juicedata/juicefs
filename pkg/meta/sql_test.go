@@ -22,7 +22,7 @@ import (
 
 func TestSQLClient(t *testing.T) {
 	os.Remove("test.db")
-	m, err := NewSQLMeta("sqlite3", "test.db", &DBConfig{})
+	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -30,8 +30,8 @@ func TestSQLClient(t *testing.T) {
 }
 
 func TestConcurrentWriteSQL(t *testing.T) {
-	os.Remove("test2.db")
-	m, err := NewSQLMeta("sqlite3", "test2.db", &DBConfig{})
+	os.Remove("test.db")
+	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -40,7 +40,7 @@ func TestConcurrentWriteSQL(t *testing.T) {
 
 func TestCompactionSQL(t *testing.T) {
 	os.Remove("test.db")
-	m, err := NewSQLMeta("sqlite3", "test.db", &DBConfig{})
+	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -49,7 +49,7 @@ func TestCompactionSQL(t *testing.T) {
 
 func TestTruncateAndDeleteSQL(t *testing.T) {
 	os.Remove("test.db")
-	m, err := NewSQLMeta("sqlite3", "test.db", &DBConfig{})
+	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -58,7 +58,7 @@ func TestTruncateAndDeleteSQL(t *testing.T) {
 
 func TestCopyFileRangeSQL(t *testing.T) {
 	os.Remove("test.db")
-	m, err := NewSQLMeta("sqlite3", "test.db", &DBConfig{})
+	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -67,7 +67,7 @@ func TestCopyFileRangeSQL(t *testing.T) {
 
 func TestCaseIncensiSQL(t *testing.T) {
 	os.Remove("test.db")
-	m, err := NewSQLMeta("sqlite3", "test.db", &DBConfig{CaseInsensi: true})
+	m, err := newSQLMeta("sqlite3", "test.db", &Config{CaseInsensi: true})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}

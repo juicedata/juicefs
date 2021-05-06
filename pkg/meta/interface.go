@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"strings"
 	"syscall"
 )
 
@@ -210,4 +211,32 @@ type Meta interface {
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
+}
+
+type Config struct {
+	Strict      bool // update ctime
+	Retries     int
+	CaseInsensi bool
+}
+
+func NewClient(uri string, conf *Config) Meta {
+	if !strings.Contains(uri, "://") {
+		uri = "redis://" + uri
+	}
+	logger.Infof("Meta address: %s", uri)
+	var m Meta
+	var err error
+	if strings.HasPrefix(uri, "redis") {
+		m, err = newRedisMeta(uri, conf)
+	} else {
+		p := strings.Index(uri, "://")
+		if p < 0 {
+			logger.Fatalf("invalid uri: %s", uri)
+		}
+		m, err = newSQLMeta(uri[:p], uri[p+3:], conf)
+	}
+	if err != nil {
+		logger.Fatalf("Meta is not available: %s", err)
+	}
+	return m
 }

@@ -68,12 +68,12 @@ func BenchmarkReadSlices(b *testing.B) {
 }
 
 func TestRedisClient(t *testing.T) {
-	var conf RedisConfig
-	_, err := NewRedisMeta("http://127.0.0.1:6379/7", &conf)
+	var conf Config
+	_, err := newRedisMeta("http://127.0.0.1:6379/7", &conf)
 	if err == nil {
 		t.Fatal("meta created with invalid url")
 	}
-	m, err := NewRedisMeta("redis://127.0.0.1:6379/7", &conf)
+	m, err := newRedisMeta("redis://127.0.0.1:6379/7", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
@@ -309,8 +309,8 @@ func testMetaClient(t *testing.T, m Meta) {
 }
 
 func TestLocksRedis(t *testing.T) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1:6379/5", &conf)
+	var conf Config
+	m, err := newRedisMeta("redis://127.0.0.1:6379/5", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
@@ -410,8 +410,8 @@ func TestLocksRedis(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1:6379/5", &conf)
+	var conf Config
+	m, err := newRedisMeta("redis://127.0.0.1:6379/5", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
@@ -444,8 +444,8 @@ func testRemove(t *testing.T, m Meta) {
 }
 
 func TestCaseIncensi(t *testing.T) {
-	var conf = RedisConfig{CaseInsensi: true}
-	m, err := NewRedisMeta("redis://127.0.0.1:6379/6", &conf)
+	var conf = Config{CaseInsensi: true}
+	m, err := newRedisMeta("redis://127.0.0.1:6379/6", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
@@ -482,8 +482,8 @@ func testCaseIncensi(t *testing.T, m Meta) {
 }
 
 func TestCompaction(t *testing.T) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1:6379/8", &conf)
+	var conf Config
+	m, err := newRedisMeta("redis://127.0.0.1:6379/8", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
@@ -593,8 +593,8 @@ func testCompaction(t *testing.T, m Meta) {
 }
 
 func TestConcurrentWrite(t *testing.T) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1/9", &conf)
+	var conf Config
+	m, err := newRedisMeta("redis://127.0.0.1/9", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
@@ -618,7 +618,6 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
-	// nolint:errcheck
 	defer m.Unlink(ctx, 1, "f")
 
 	var errno syscall.Errno
@@ -644,8 +643,8 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 }
 
 func TestTruncateAndDelete(t *testing.T) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	var conf Config
+	m, err := newRedisMeta("redis://127.0.0.1/10", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
@@ -703,8 +702,8 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 }
 
 func TestCopyFileRange(t *testing.T) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	var conf Config
+	m, err := newRedisMeta("redis://127.0.0.1/10", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
@@ -767,8 +766,8 @@ func testCopyFileRange(t *testing.T, m Meta) {
 }
 
 func benchmarkReaddir(b *testing.B, n int) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	var conf Config
+	m, err := newRedisMeta("redis://127.0.0.1/10", &conf)
 	if err != nil {
 		b.Skipf("redis is not available: %s", err)
 	}

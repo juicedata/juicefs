@@ -79,16 +79,9 @@ local ino = struct.unpack(">I8", string.sub(buf, 2))
 return {ino, redis.call('GET', "i" .. tostring(ino))}
 `
 
-// RedisConfig is config for Redis client.
-type RedisConfig struct {
-	Strict      bool // update ctime
-	Retries     int
-	CaseInsensi bool
-}
-
 type redisMeta struct {
 	sync.Mutex
-	conf    *RedisConfig
+	conf    *Config
 	rdb     *redis.Client
 	txlocks [1024]sync.Mutex // Pessimistic locks to reduce conflict on Redis
 
@@ -110,8 +103,8 @@ type msgCallbacks struct {
 	callbacks map[uint32]MsgCallback
 }
 
-// NewRedisMeta return a meta store using Redis.
-func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
+// newRedisMeta return a meta store using Redis.
+func newRedisMeta(url string, conf *Config) (Meta, error) {
 	opt, err := redis.ParseURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", url, err)

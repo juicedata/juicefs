@@ -75,9 +75,6 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("Redis URL and mountpoint are required")
 	}
 	addr := c.Args().Get(0)
-	if !strings.Contains(addr, "://") {
-		addr = "redis://" + addr
-	}
 	if c.Args().Len() < 2 {
 		logger.Fatalf("MOUNTPOINT is required")
 	}
@@ -87,17 +84,11 @@ func mount(c *cli.Context) error {
 			logger.Fatalf("create %s: %s", mp, err)
 		}
 	}
-
-	logger.Infof("Meta address: %s", addr)
-	var rc = meta.RedisConfig{
+	m := meta.NewClient(addr, &meta.Config{
 		Retries:     10,
 		Strict:      true,
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
-	}
-	m, err := meta.NewRedisMeta(addr, &rc)
-	if err != nil {
-		logger.Fatalf("Meta: %s", err)
-	}
+	})
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
@@ -160,7 +151,7 @@ func mount(c *cli.Context) error {
 
 	conf := &vfs.Config{
 		Meta: &meta.Config{
-			IORetries: 10,
+			Retries: 10,
 		},
 		Format:     format,
 		Version:    version.Version(),

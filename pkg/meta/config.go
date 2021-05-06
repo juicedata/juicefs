@@ -15,11 +15,11 @@
 
 package meta
 
-type Config struct {
-	Addr      string
-	Password  string
-	IORetries int
-}
+// type Config struct {
+// 	Addr      string
+// 	Password  string
+// 	IORetries int
+// }
 
 type Format struct {
 	Name        string
