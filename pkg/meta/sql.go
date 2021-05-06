@@ -122,6 +122,9 @@ func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
+	if err = engine.Ping(); err != nil {
+		return nil, fmt.Errorf("ping database: %s", err)
+	}
 	engine.SetLogLevel(0)
 
 	if conf.Retries == 0 {
@@ -269,23 +272,25 @@ func (m *dbMeta) newMsg(mid uint32, args ...interface{}) error {
 }
 
 func (m *dbMeta) incrCounter(name string) (uint64, error) {
-	r, err := m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+	var v uint64
+	errno := m.txn(func(s *xorm.Session) error {
 		var c counter
 		_, err := s.Where("name = ?", name).Get(&c)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		c.Value++
 		_, err = s.Cols("value").Update(&c, &counter{Name: name})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return c.Value - 1, nil
+		v = c.Value - 1
+		return nil
 	})
-	if err != nil {
-		return 0, err
+	if errno == 0 {
+		return v, nil
 	}
-	return r.(uint64), nil
+	return 0, errno
 }
 
 func (m *dbMeta) nextInode() (Ino, error) {
