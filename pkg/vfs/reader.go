@@ -240,7 +240,7 @@ func (s *sliceReader) invalidate() {
 	case READY:
 		if s.refs > 0 {
 			s.state = NEW
-			s.run()
+			go s.run()
 		} else {
 			s.state = INVALID
 			s.delete() // nobody wants it anymore, so delete it
@@ -659,12 +659,6 @@ func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, sys
 	return f.waitForIO(ctx, reqs, buf)
 }
 
-func (f *fileReader) Truncate(length uint64) {
-	f.Lock()
-	f.length = length
-	f.Unlock()
-}
-
 func (f *fileReader) visit(fn func(s *sliceReader)) {
 	var next *sliceReader
 	for s := f.slices; s != nil; s = next {
@@ -769,11 +763,13 @@ func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
 
 func (r *dataReader) Truncate(inode Ino, length uint64) {
 	r.visit(inode, func(f *fileReader) {
-		f.visit(func(s *sliceReader) {
-			if s.block.off+s.block.len > length {
-				s.invalidate()
-			}
-		})
+		if length < f.length {
+			f.visit(func(s *sliceReader) {
+				if s.block.off+s.block.len > length {
+					s.invalidate()
+				}
+			})
+		}
 		f.length = length
 	})
 }
