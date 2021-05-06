@@ -21,6 +21,13 @@ import (
 	"time"
 )
 
+func TestNewCacheStore(t *testing.T) {
+	s := newCacheStore("/tmp/diskCache", 1<<30, 1<<10, 1, &defaultConf)
+	if s == nil {
+		t.Fatalf("Create new cache store failed")
+	}
+}
+
 func TestExpand(t *testing.T) {
 	rs := expandDir("/not/exists/jfsCache")
 	if len(rs) != 1 || rs[0] != "/not/exists/jfsCache" {
