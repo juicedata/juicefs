@@ -122,6 +122,7 @@ func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
+	engine.SetLogLevel(0)
 
 	if conf.Retries == 0 {
 		conf.Retries = 30
@@ -185,32 +186,35 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err != nil {
 		logger.Fatalf("json: %s", err)
 	}
-	_, err = m.engine.Insert(&setting{"format", string(data)})
-	if err != nil {
-		return err
-	}
 
-	now := time.Now()
-	_, err = m.engine.Insert(&node{
-		Inode:  1,
-		Type:   TypeDirectory,
-		Mode:   0777,
-		Atime:  now,
-		Mtime:  now,
-		Ctime:  now,
-		Nlink:  2,
-		Length: 4 << 10,
-		Parent: 1,
+	return m.txn(func(s *xorm.Session) error {
+		_, err = s.Insert(&setting{"format", string(data)})
+		if err != nil {
+			return err
+		}
+
+		now := time.Now()
+		_, err = s.Insert(&node{
+			Inode:  1,
+			Type:   TypeDirectory,
+			Mode:   0777,
+			Atime:  now,
+			Mtime:  now,
+			Ctime:  now,
+			Nlink:  2,
+			Length: 4 << 10,
+			Parent: 1,
+		})
+		_, err = s.Insert(
+			counter{"nextInode", 2}, // 1 is root
+			counter{"nextChunk", 1},
+			counter{"nextSession", 1},
+			counter{"usedSpace", 0},
+			counter{"totalInodes", 0},
+			counter{"nextCleanupSlices", 0},
+		)
+		return err
 	})
-	_, _ = m.engine.Insert(
-		counter{"nextInode", 2}, // 1 is root
-		counter{"nextChunk", 1},
-		counter{"nextSession", 1},
-		counter{"usedSpace", 0},
-		counter{"totalInodes", 0},
-		counter{"nextCleanupSlices", 0},
-	)
-	return err
 }
 
 func (m *dbMeta) Load() (*Format, error) {
@@ -233,7 +237,9 @@ func (m *dbMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	_, err = m.engine.Insert(&session{v, time.Now()})
+	_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+		return s.Insert(&session{v, time.Now()})
+	})
 	if err != nil {
 		return fmt.Errorf("insert new session: %s", err)
 	}
@@ -489,7 +495,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			return nil
 		}
 		_, err = s.Update(&cur, &node{Inode: inode})
-		if err == nil && attr != nil {
+		if err == nil {
 			m.parseAttr(&cur, attr)
 		}
 		return err
@@ -509,6 +515,36 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if n.Type != TypeFile {
 			return syscall.EPERM
 		}
+
+		var c chunk
+		indx := uint32(length / ChunkSize)
+		_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
+			marshalSlice(uint32(length%ChunkSize), 0, 0, 0, ChunkSize-uint32(length%ChunkSize)), inode, indx)
+		if err != nil {
+			return err
+		}
+		var indexes []uint32
+		rows, err := s.Where("inode = ? AND indx > ?", inode, indx).Cols("indx").Rows(&c)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			err = rows.Scan(&c)
+			if err != nil {
+				rows.Close()
+				return err
+			}
+			indexes = append(indexes, c.Indx)
+		}
+		rows.Close()
+		for _, indx := range indexes {
+			_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
+				marshalSlice(0, 0, 0, 0, ChunkSize), inode, indx)
+			if err != nil {
+				return err
+			}
+		}
+
 		added := align4K(length) - align4K(n.Length)
 		n.Length = length
 		_, err = s.Cols("length").Update(&n, &node{Inode: n.Inode})
@@ -516,7 +552,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return err
 		}
 		_, err = s.Exec("update counter set value=value+? where name='usedSpace'", added)
-		if err == nil && attr != nil {
+		if err == nil {
 			m.parseAttr(&n, attr)
 		}
 		return nil
@@ -708,7 +744,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			}
 		}
 		_, err = s.Exec("update counter set value=value+1 where name='totalInodes'")
-		if err != nil {
+		if err == nil {
 			m.parseAttr(&n, attr)
 		}
 		return err
@@ -1021,9 +1057,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			spn.Nlink--
 			dpn.Nlink++
 		}
-		if attr != nil {
-			m.parseAttr(&sn, attr)
-		}
+		m.parseAttr(&sn, attr)
 
 		if n, err := s.Delete(&edge{Parent: parentSrc, Name: se.Name}); err != nil {
 			return err
@@ -1155,7 +1189,7 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 		if _, err := s.Cols("nlink").Update(&n, node{Inode: inode}); err != nil {
 			return err
 		}
-		if err == nil && attr != nil {
+		if err == nil {
 			m.parseAttr(&n, attr)
 		}
 		return err
@@ -1228,30 +1262,41 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	return 0
 }
 
-func (r *dbMeta) cleanStaleSession(sid uint64) {
+func (m *dbMeta) cleanStaleSession(sid uint64) {
 	var s sustained
-	rows, err := r.engine.Where("Sid = ?", sid).Rows(&s)
+	rows, err := m.engine.Where("Sid = ?", sid).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale session %d: %s", sid, err)
 		return
 	}
-	defer rows.Close()
-	var done bool = true
+
+	var inodes []Ino
 	for rows.Next() {
-		err = rows.Scan(&s)
-		if err != nil {
-			return
-		}
-		if err := r.deleteInode(Ino(s.Inode)); err != nil {
-			logger.Errorf("Failed to delete inode %d: %s", s.Inode, err)
-			done = false
-		} else {
-			_, _ = r.engine.Delete(&s)
+		if rows.Scan(&s) == nil {
+			inodes = append(inodes, s.Inode)
 		}
 	}
+	rows.Close()
+
+	var done bool = true
+	for _, inode := range inodes {
+		if err := m.deleteInode(inode); err != nil {
+			logger.Errorf("Failed to delete inode %d: %s", inode, err)
+			done = false
+		} else {
+			_ = m.txn(func(ses *xorm.Session) error {
+				_, err = ses.Delete(&s)
+				return err
+			})
+		}
+	}
+
 	if done {
-		_, err = r.engine.Delete(&session{Sid: sid})
-		logger.Infof("cleanup session %d: %s", sid, err)
+		_ = m.txn(func(ses *xorm.Session) error {
+			_, err = ses.Delete(&session{Sid: sid})
+			logger.Infof("cleanup session %d: %s", sid, err)
+			return err
+		})
 	}
 }
 
@@ -1263,14 +1308,15 @@ func (r *dbMeta) cleanStaleSessions() {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
 	}
-	defer rows.Close()
+	var ids []uint64
 	for rows.Next() {
-		err = rows.Scan(&s)
-		if err != nil {
-			logger.Warnf("scan session: %s", err)
-			break
+		if rows.Scan(&s) == nil {
+			ids = append(ids, s.Sid)
 		}
-		r.cleanStaleSession(s.Sid)
+	}
+	rows.Close()
+	for _, sid := range ids {
+		r.cleanStaleSession(sid)
 	}
 
 	// rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
@@ -1280,13 +1326,17 @@ func (r *dbMeta) cleanStaleSessions() {
 	// }
 }
 
-func (r *dbMeta) refreshSession() {
+func (m *dbMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
-		if _, err := r.engine.Cols("Heartbeat").Update(&session{Heartbeat: time.Now()}, &session{Sid: r.sid}); err != nil {
-			logger.Errorf("update session: %s", err)
-		}
-		go r.cleanStaleSessions()
+		_ = m.txn(func(ses *xorm.Session) error {
+			_, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now()}, &session{Sid: m.sid})
+			if err != nil {
+				logger.Errorf("update session: %s", err)
+			}
+			return err
+		})
+		go m.cleanStaleSessions()
 	}
 }
 
@@ -1338,7 +1388,10 @@ func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {
 			delete(m.removedFiles, inode)
 			go func() {
 				if err := m.deleteInode(inode); err == nil {
-					_, _ = m.engine.Delete(&sustained{m.sid, inode})
+					_ = m.txn(func(ses *xorm.Session) error {
+						_, err := ses.Delete(&sustained{m.sid, inode})
+						return err
+					})
 				}
 			}()
 		}
@@ -1466,15 +1519,16 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
 		chunks := make(map[uint32][]*slice)
 		for rows.Next() {
 			err = rows.Scan(&c)
 			if err != nil {
+				rows.Close()
 				return err
 			}
 			chunks[c.Indx] = readSliceBuf(c.Slices)
 		}
+		rows.Close()
 
 		ses := s
 		updateSlices := func(indx uint32, buf []byte, s *Slice) error {
@@ -1557,14 +1611,15 @@ func (m *dbMeta) cleanupDeletedFiles() {
 		if err != nil {
 			continue
 		}
-		defer rows.Close()
+		var fs []delfile
 		for rows.Next() {
-			err = rows.Scan(&d)
-			if err != nil {
-				logger.Warnf("scan deleted file: %s", err)
-				break
+			if rows.Scan(&d) == nil {
+				fs = append(fs, d)
 			}
-			logger.Debugf("cleanup chunks of inode %d with %d bytes", d.Inode, d.Length)
+		}
+		rows.Close()
+		for _, f := range fs {
+			logger.Debugf("cleanup chunks of inode %d with %d bytes", f.Inode, f.Length)
 			m.deleteFile(d.Inode, d.Length)
 		}
 	}
@@ -1584,20 +1639,24 @@ func (m *dbMeta) cleanupSlices() {
 		if c.Value+3600 > uint64(now) {
 			continue
 		}
-		_, _ = m.engine.Update(&counter{Value: uint64(now)}, counter{Name: "nextCleanupSlices"})
+		_ = m.txn(func(ses *xorm.Session) error {
+			_, err := ses.Update(&counter{Value: uint64(now)}, counter{Name: "nextCleanupSlices"})
+			return err
+		})
 
 		var ck sliceRef
 		rows, err := m.engine.Where("refs <= 0").Rows(&ck)
 		if err != nil {
 			continue
 		}
-		defer rows.Close()
+		var cks []sliceRef
 		for rows.Next() {
-			err = rows.Scan(&ck)
-			if err != nil {
-				logger.Warnf("scan slice: %s", err)
-				break
+			if rows.Scan(&ck) == nil {
+				cks = append(cks, ck)
 			}
+		}
+		rows.Close()
+		for _, ck := range cks {
 			if ck.Refs <= 0 {
 				m.deleteSlice(ck.Chunkid, ck.Size)
 			}
@@ -1612,9 +1671,13 @@ func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
 	if err != nil {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	} else {
-		if _, err := m.engine.Delete(sliceRef{Chunkid: chunkid}); err != nil {
-			logger.Errorf("delete slice %d: %s", chunkid, err)
-		}
+		_ = m.txn(func(ses *xorm.Session) error {
+			_, err := ses.Delete(&sliceRef{Chunkid: chunkid})
+			if err != nil {
+				logger.Errorf("delete slice %d: %s", chunkid, err)
+			}
+			return err
+		})
 	}
 }
 
@@ -1631,7 +1694,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		ss = readSliceBuf(c.Slices)
 		for _, s := range ss {
-			_, err = ses.Exec("update slice_ref update refs=refs-1 where chunkid=? AND size=?", s.chunkid, s.size)
+			_, err = ses.Exec("update slice_ref set refs=refs-1 where chunkid=? AND size=?", s.chunkid, s.size)
 			if err != nil {
 				return err
 			}
@@ -1654,13 +1717,17 @@ func (m *dbMeta) deleteFile(inode Ino, length uint64) {
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	var indexes []uint32
 	for rows.Next() {
 		if rows.Scan(&c) == nil {
-			err = m.deleteChunk(inode, c.Indx)
-			if err != nil {
-				return
-			}
+			indexes = append(indexes, c.Indx)
+		}
+	}
+	rows.Close()
+	for _, indx := range indexes {
+		err = m.deleteChunk(inode, indx)
+		if err != nil {
+			return
 		}
 	}
 }
@@ -1796,17 +1863,19 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32) {
 
 func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	var c chunk
-	rows, err := m.engine.Where("length(slices) >= ?", sliceBytes*2).Rows(&c)
+	rows, err := m.engine.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Rows(&c)
 	if err != nil {
 		return errno(err)
 	}
-	defer rows.Close()
-
+	var cs []chunk
 	for rows.Next() {
-		err = rows.Scan(&c)
-		if err != nil {
-			return errno(err)
+		if rows.Scan(&c) == nil {
+			cs = append(cs, c)
 		}
+	}
+	rows.Close()
+
+	for _, c := range cs {
 		logger.Debugf("compact chunk %d:%d (%d slices)", c.Inode, c.Indx, len(c.Slices)/sliceBytes)
 		m.compactChunk(c.Inode, c.Indx)
 	}
@@ -1876,9 +1945,9 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 	}
 	return m.txn(func(s *xorm.Session) error {
 		var x = xattr{inode, name, value}
-		n, err := m.engine.InsertOne(&x)
+		n, err := s.InsertOne(&x)
 		if err != nil || n == 0 {
-			_, err = m.engine.Update(&x, &xattr{inode, name, nil})
+			_, err = s.Update(&x, &xattr{inode, name, nil})
 		}
 		return err
 	})
@@ -1889,7 +1958,7 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		return syscall.EINVAL
 	}
 	return m.txn(func(s *xorm.Session) error {
-		n, err := m.engine.Delete(&xattr{Inode: inode, Name: name})
+		n, err := s.Delete(&xattr{Inode: inode, Name: name})
 		if n == 0 {
 			err = ENOATTR
 		}
