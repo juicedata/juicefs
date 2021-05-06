@@ -1007,7 +1007,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					return errno(err)
 				}
 				if !ok {
-
+					return syscall.ENOENT
 				}
 				dn.Nlink--
 				if dn.Nlink > 0 {
@@ -1253,7 +1253,7 @@ func (r *dbMeta) cleanStaleSession(sid uint64) {
 			logger.Errorf("Failed to delete inode %d: %s", s.Inode, err)
 			done = false
 		} else {
-			r.engine.Delete(&s)
+			_, _ = r.engine.Delete(&s)
 		}
 	}
 	if done {

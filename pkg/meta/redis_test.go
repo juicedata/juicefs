@@ -95,9 +95,9 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
 	}
 	_ = m.NewSession()
-	switch m.(type) {
+	switch r := m.(type) {
 	case *redisMeta:
-		go m.(*redisMeta).cleanStaleSessions()
+		go r.cleanStaleSessions()
 	}
 	ctx := Background
 	var parent, inode, dummyInode Ino
@@ -530,11 +530,11 @@ func testCompaction(t *testing.T, m Meta) {
 	if len(cs1) != 5 {
 		t.Fatalf("expect 5 slices, but got %+v", cs1)
 	}
-	switch m.(type) {
+	switch r := m.(type) {
 	case *redisMeta:
-		m.(*redisMeta).compactChunk(inode, 1)
+		r.compactChunk(inode, 1)
 	case *dbMeta:
-		m.(*dbMeta).compactChunk(inode, 1)
+		r.compactChunk(inode, 1)
 	}
 	var cs []Slice
 	_ = m.Read(ctx, inode, 1, &cs)
@@ -623,7 +623,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 
 	var errno syscall.Errno
 	var g sync.WaitGroup
-	for i := 0; i <= 20; i++ {
+	for i := 0; i <= 10; i++ {
 		g.Add(1)
 		go func(indx uint32) {
 			defer g.Done()
@@ -649,7 +649,7 @@ func TestTruncateAndDelete(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
-	m.(*redisMeta).rdb.FlushAll(context.Background())
+	m.(*redisMeta).rdb.FlushDB(context.Background())
 	testTruncateAndDelete(t, m)
 }
 
@@ -708,7 +708,7 @@ func TestCopyFileRange(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
-	m.(*redisMeta).rdb.FlushAll(context.Background())
+	m.(*redisMeta).rdb.FlushDB(context.Background())
 	testCopyFileRange(t, m)
 }
 
