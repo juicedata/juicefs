@@ -769,6 +769,11 @@ func (r *dataReader) visit(inode Ino, fn func(*fileReader)) {
 
 func (r *dataReader) Truncate(inode Ino, length uint64) {
 	r.visit(inode, func(f *fileReader) {
+		f.visit(func(s *sliceReader) {
+			if s.block.off+s.block.len > length {
+				s.invalidate()
+			}
+		})
 		f.length = length
 	})
 }
