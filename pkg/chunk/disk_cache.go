@@ -436,7 +436,7 @@ func (cache *cacheStore) scanStaging() map[string]string {
 		return nil
 	})
 	if len(stagingBlocks) > 0 {
-		logger.Debugf("Found %d staging blocks (%d bytes) in %s with %s", len(stagingBlocks), cache.used, cache.dir, time.Since(start))
+		logger.Infof("Found %d staging blocks (%d bytes) in %s with %s", len(stagingBlocks), cache.used, cache.dir, time.Since(start))
 	}
 	return stagingBlocks
 }
