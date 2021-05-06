@@ -515,36 +515,46 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if n.Type != TypeFile {
 			return syscall.EPERM
 		}
+		if length == n.Length {
+			m.parseAttr(&n, attr)
+			return nil
+		}
 
-		var c chunk
-		indx := uint32(length / ChunkSize)
-		_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
-			marshalSlice(uint32(length%ChunkSize), 0, 0, 0, ChunkSize-uint32(length%ChunkSize)), inode, indx)
-		if err != nil {
-			return err
-		}
-		var indexes []uint32
-		rows, err := s.Where("inode = ? AND indx > ?", inode, indx).Cols("indx").Rows(&c)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			err = rows.Scan(&c)
-			if err != nil {
-				rows.Close()
-				return err
+		if length < n.Length {
+			var c chunk
+			indx := uint32(length / ChunkSize)
+			if uint32(n.Length/ChunkSize) == indx {
+				_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
+					marshalSlice(uint32(length%ChunkSize), 0, 0, 0, uint32(n.Length-length)), inode, indx)
+			} else {
+				_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
+					marshalSlice(uint32(length%ChunkSize), 0, 0, 0, ChunkSize-uint32(length%ChunkSize)), inode, indx)
 			}
-			indexes = append(indexes, c.Indx)
-		}
-		rows.Close()
-		for _, indx := range indexes {
-			_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
-				marshalSlice(0, 0, 0, 0, ChunkSize), inode, indx)
 			if err != nil {
 				return err
 			}
+			var indexes []uint32
+			rows, err := s.Where("inode = ? AND indx > ?", inode, indx).Cols("indx").Rows(&c)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				err = rows.Scan(&c)
+				if err != nil {
+					rows.Close()
+					return err
+				}
+				indexes = append(indexes, c.Indx)
+			}
+			rows.Close()
+			for _, indx := range indexes {
+				_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
+					marshalSlice(0, 0, 0, 0, ChunkSize), inode, indx)
+				if err != nil {
+					return err
+				}
+			}
 		}
-
 		added := align4K(length) - align4K(n.Length)
 		n.Length = length
 		_, err = s.Cols("length").Update(&n, &node{Inode: n.Inode})
@@ -1672,7 +1682,7 @@ func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	} else {
 		_ = m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Delete(&sliceRef{Chunkid: chunkid})
+			_, err = ses.Exec("delete from slice_ref where chunkid=?", chunkid)
 			if err != nil {
 				logger.Errorf("delete slice %d: %s", chunkid, err)
 			}
@@ -1807,7 +1817,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32) {
 		if err != nil {
 			return err
 		}
-		if !bytes.Equal(c.Slices, c2.Slices[:len(c.Slices)]) {
+		if len(c2.Slices) < len(c.Slices) || !bytes.Equal(c.Slices, c2.Slices[:len(c.Slices)]) {
 			return syscall.EINVAL
 		}
 
