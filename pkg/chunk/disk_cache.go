@@ -414,7 +414,7 @@ func (cache *cacheStore) scanStaging() map[string]string {
 
 	stagingBlocks := make(map[string]string)
 	stagingPrefix := filepath.Join(cache.dir, stagingDir)
-	logger.Infof("Scan %s to find staging blocks", stagingPrefix)
+	logger.Debugf("Scan %s to find staging blocks", stagingPrefix)
 	_ = filepath.Walk(stagingPrefix, func(path string, fi os.FileInfo, err error) error {
 		if fi != nil {
 			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
@@ -436,7 +436,7 @@ func (cache *cacheStore) scanStaging() map[string]string {
 		return nil
 	})
 	if len(stagingBlocks) > 0 {
-		logger.Infof("Found %d staging blocks (%d bytes) in %s with %s", len(stagingBlocks), cache.used, cache.dir, time.Since(start))
+		logger.Debugf("Found %d staging blocks (%d bytes) in %s with %s", len(stagingBlocks), cache.used, cache.dir, time.Since(start))
 	}
 	return stagingBlocks
 }
