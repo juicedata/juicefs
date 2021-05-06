@@ -213,6 +213,9 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	if err != nil {
 		return err
 	}
+	if body != nil {
+		return nil
+	}
 
 	// root inode
 	var attr Attr
@@ -611,16 +614,13 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	_, _ = khash.Write([]byte(keys[0]))
 	l := &r.txlocks[int(khash.Sum32())%len(r.txlocks)]
 	start := time.Now()
-	defer func() {
-		used := time.Since(start)
-		redisTxDist.Observe(used.Seconds())
-	}()
+	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	l.Lock()
 	defer l.Unlock()
 	for i := 0; i < 50; i++ {
 		err = r.rdb.Watch(ctx, txf, keys...)
 		if err == redis.TxFailedErr {
-			redisTxRestart.Add(1)
+			txRestart.Add(1)
 			time.Sleep(time.Microsecond * 100 * time.Duration(rand.Int()%(i+1)))
 			continue
 		}
@@ -1847,7 +1847,7 @@ func (r *redisMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
 		now := time.Now()
-		members, _ := r.rdb.ZRangeByScore(Background, delfiles, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(time.Hour).Unix())), Count: 1000}).Result()
+		members, _ := r.rdb.ZRangeByScore(Background, delfiles, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(-time.Hour).Unix())), Count: 1000}).Result()
 		for _, member := range members {
 			ps := strings.Split(member, ":")
 			inode, _ := strconv.ParseInt(ps[0], 10, 0)

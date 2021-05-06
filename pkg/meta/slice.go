@@ -109,3 +109,13 @@ func readSlices(vals []string) []*slice {
 	}
 	return ss
 }
+
+func readSliceBuf(buf []byte) []*slice {
+	var ss []*slice
+	for i := 0; i < len(buf); i += sliceBytes {
+		s := new(slice)
+		s.read(buf[i:])
+		ss = append(ss, s)
+	}
+	return ss
+}

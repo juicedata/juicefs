@@ -623,7 +623,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 
 	var errno syscall.Errno
 	var g sync.WaitGroup
-	for i := 0; i <= 1; i++ {
+	for i := 0; i <= 20; i++ {
 		g.Add(1)
 		go func(indx uint32) {
 			defer g.Done()
