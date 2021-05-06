@@ -103,7 +103,7 @@ func (cache *cacheStore) checkFreeSpace() {
 	for {
 		br, fr := cache.curFreeRatio()
 		if br < cache.freeRatio || fr < cache.freeRatio {
-			logger.Infof("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
+			logger.Debugf("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
 			cache.cleanup()
 			cache.Unlock()
@@ -134,7 +134,7 @@ func (cache *cacheStore) cache(key string, p *Page) {
 	case cache.pending <- pendingFile{key, p}:
 	default:
 		// does not have enough bandwidth to write it into disk, discard it
-		logger.Infof("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
+		logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 		delete(cache.pages, key)
 		p.Release()
 	}
@@ -150,7 +150,7 @@ func (cache *cacheStore) flushPage(path string, data []byte, sync bool) error {
 	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE, cache.mode)
 	if err != nil {
-		logger.Warnf("Can't create cache file %s: %s", tmp, err)
+		logger.Infof("Can't create cache file %s: %s", tmp, err)
 		return err
 	}
 	_, err = f.Write(data)
@@ -177,7 +177,7 @@ func (cache *cacheStore) flushPage(path string, data []byte, sync bool) error {
 	}
 	err = os.Rename(tmp, path)
 	if err != nil {
-		logger.Warnf("Rename cache file %s -> %s failed: %s", tmp, path, err)
+		logger.Infof("Rename cache file %s -> %s failed: %s", tmp, path, err)
 		_ = os.Remove(tmp)
 	}
 	return err
@@ -275,7 +275,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	cache.used += int64(size + 4096)
 
 	if cache.used > cache.capacity || len(cache.keys) > cache.limit {
-		logger.Infof("Cleanup cache when add new data (%s): %d blocks (%d MB), maximum %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, cache.limit, cache.capacity>>20)
+		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB), maximum %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, cache.limit, cache.capacity>>20)
 		cache.cleanup()
 	}
 }
@@ -356,7 +356,7 @@ func (cache *cacheStore) cleanup() {
 		}
 	}
 	if len(todel) > 0 {
-		logger.Infof("cleanup cache (%s): %d blocks (%d MB), freed %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
+		logger.Debugf("cleanup cache (%s): %d blocks (%d MB), freed %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
 	}
 	cache.Unlock()
 	for _, key := range todel {
@@ -376,7 +376,7 @@ func (cache *cacheStore) scanCached() {
 	var oneMinAgo = start.Add(-time.Minute)
 
 	cachePrefix := filepath.Join(cache.dir, cacheDir)
-	logger.Infof("Scan %s to find cached blocks", cachePrefix)
+	logger.Debugf("Scan %s to find cached blocks", cachePrefix)
 	_ = filepath.Walk(cachePrefix, func(path string, fi os.FileInfo, err error) error {
 		if fi != nil {
 			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
@@ -404,7 +404,7 @@ func (cache *cacheStore) scanCached() {
 
 	cache.Lock()
 	cache.scanned = true
-	logger.Infof("Found %d cached blocks (%d bytes) in %s with %s", len(cache.keys), cache.used, cache.dir, time.Since(start))
+	logger.Debugf("Found %d cached blocks (%d bytes) in %s with %s", len(cache.keys), cache.used, cache.dir, time.Since(start))
 	cache.Unlock()
 }
 
