@@ -51,7 +51,7 @@ func TestMySQLClient(t *testing.T) {
 
 func TestConcurrentWriteSQL(t *testing.T) {
 	os.Remove("test1.db")
-	m, err := newSQLMeta("mysql", "root:mysql123@/dev", &Config{})
+	m, err := newSQLMeta("sqlite3", "test1.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -60,9 +60,7 @@ func TestConcurrentWriteSQL(t *testing.T) {
 
 func TestCompactionSQL(t *testing.T) {
 	os.Remove("test2.db")
-	// m, err := newSQLMeta("sqlite3", "test2.db", &Config{})
-	m, err := newSQLMeta("mysql", "root:mysql123@/dev", &Config{})
-
+	m, err := newSQLMeta("sqlite3", "test2.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
