@@ -26,7 +26,7 @@
   - [JuiceFS 多主机间同步账户](sync_accounts_between_multiple_hosts.md)
   - [同类技术对比](comparison_with_others.md)
 - [应用场景&案例](case/README.md)
-  - 数据备份
+  - 数据备份、迁移与恢复
   - 大数据
   - 数据共享
   - 异地灾备
