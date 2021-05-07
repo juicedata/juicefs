@@ -532,9 +532,9 @@ func testCompaction(t *testing.T, m Meta) {
 	}
 	switch r := m.(type) {
 	case *redisMeta:
-		r.compactChunk(inode, 1)
+		r.compactChunk(inode, 1, true)
 	case *dbMeta:
-		r.compactChunk(inode, 1)
+		r.compactChunk(inode, 1, true)
 	}
 	var cs []Slice
 	_ = m.Read(ctx, inode, 1, &cs)

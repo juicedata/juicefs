@@ -1439,7 +1439,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	ss := readSliceBuf(c.Slices)
 	*chunks = buildSlice(ss)
 	if len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5 {
-		go m.compactChunk(inode, indx)
+		go m.compactChunk(inode, indx, false)
 	}
 	return 0
 }
@@ -1508,7 +1508,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			_, err = s.Exec("update counter set value=value+? where name='usedSpace'", added)
 		}
 		if (len(ck.Slices)/sliceBytes)%20 == 19 {
-			go m.compactChunk(inode, indx)
+			go m.compactChunk(inode, indx, false)
 		}
 		return err
 	})
@@ -1769,21 +1769,23 @@ func (m *dbMeta) deleteFile(inode Ino, length uint64) {
 	}
 }
 
-func (m *dbMeta) compactChunk(inode Ino, indx uint32) {
-	// avoid too many or duplicated compaction
-	m.Lock()
-	k := uint64(inode) + (uint64(indx) << 32)
-	if len(m.compacting) > 10 || m.compacting[k] {
-		m.Unlock()
-		return
-	}
-	m.compacting[k] = true
-	m.Unlock()
-	defer func() {
+func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
+	if !force {
+		// avoid too many or duplicated compaction
 		m.Lock()
-		delete(m.compacting, k)
+		k := uint64(inode) + (uint64(indx) << 32)
+		if len(m.compacting) > 10 || m.compacting[k] {
+			m.Unlock()
+			return
+		}
+		m.compacting[k] = true
 		m.Unlock()
-	}()
+		defer func() {
+			m.Lock()
+			delete(m.compacting, k)
+			m.Unlock()
+		}()
+	}
 
 	var c chunk
 	_, err := m.engine.Where("inode=? and indx=?", inode, indx).Get(&c)
@@ -1891,7 +1893,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32) {
 		go func() {
 			// wait for the current compaction to finish
 			time.Sleep(time.Millisecond * 10)
-			m.compactChunk(inode, indx)
+			m.compactChunk(inode, indx, force)
 		}()
 	} else {
 		logger.Warnf("compact %d %d: %s", inode, indx, errno)
@@ -1914,7 +1916,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 
 	for _, c := range cs {
 		logger.Debugf("compact chunk %d:%d (%d slices)", c.Inode, c.Indx, len(c.Slices)/sliceBytes)
-		m.compactChunk(c.Inode, c.Indx)
+		m.compactChunk(c.Inode, c.Indx, true)
 	}
 	return 0
 }

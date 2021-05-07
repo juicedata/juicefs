@@ -1680,7 +1680,7 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	ss := readSlices(vals)
 	*chunks = buildSlice(ss)
 	if len(vals) >= 5 || len(*chunks) >= 5 {
-		go r.compactChunk(inode, indx)
+		go r.compactChunk(inode, indx, false)
 	}
 	return 0
 }
@@ -1725,7 +1725,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return nil
 		})
 		if err == nil && rpush.Val()%20 == 0 {
-			go r.compactChunk(inode, indx)
+			go r.compactChunk(inode, indx, false)
 		}
 		return err
 	}, r.inodeKey(inode))
@@ -2114,21 +2114,23 @@ func (r *redisMeta) deleteFile(inode Ino, length uint64, tracking string) {
 	_ = r.rdb.ZRem(ctx, delfiles, tracking)
 }
 
-func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
+func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// avoid too many or duplicated compaction
-	r.Lock()
-	k := uint64(inode) + (uint64(indx) << 32)
-	if len(r.compacting) > 10 || r.compacting[k] {
-		r.Unlock()
-		return
-	}
-	r.compacting[k] = true
-	r.Unlock()
-	defer func() {
+	if !force {
 		r.Lock()
-		delete(r.compacting, k)
+		k := uint64(inode) + (uint64(indx) << 32)
+		if len(r.compacting) > 10 || r.compacting[k] {
+			r.Unlock()
+			return
+		}
+		r.compacting[k] = true
 		r.Unlock()
-	}()
+		defer func() {
+			r.Lock()
+			delete(r.compacting, k)
+			r.Unlock()
+		}()
+	}
 
 	var ctx = Background
 	vals, err := r.rdb.LRange(ctx, r.chunkKey(inode, indx), 0, 200).Result()
@@ -2239,7 +2241,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 			go func() {
 				// wait for the current compaction to finish
 				time.Sleep(time.Millisecond * 10)
-				r.compactChunk(inode, indx)
+				r.compactChunk(inode, indx, force)
 			}()
 		}
 	} else {
@@ -2272,7 +2274,7 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 				n, err := fmt.Sscanf(keys[i], "c%d_%d", &inode, &indx)
 				if err == nil && n == 2 {
 					logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, cnt)
-					r.compactChunk(Ino(inode), indx)
+					r.compactChunk(Ino(inode), indx, true)
 				}
 			}
 		}
