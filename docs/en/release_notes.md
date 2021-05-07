@@ -1,4 +1,4 @@
 # Release notes
 
-See [JuiceFS changelog]([Releases · juicedata/juicefs (github.com)](https://github.com/juicedata/juicefs/releases)) for release notes.
+See [JuiceFS changelog](https://github.com/juicedata/juicefs/releases) for release notes.
 
