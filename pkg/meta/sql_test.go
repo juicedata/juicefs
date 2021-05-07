@@ -29,9 +29,28 @@ func TestSQLClient(t *testing.T) {
 	testMetaClient(t, m)
 }
 
+func TestMySQLClient(t *testing.T) {
+	m, err := newSQLMeta("mysql", "root:@/dev", &Config{})
+	if err != nil {
+		t.Skipf("create meta: %s", err)
+	}
+	m.engine.DropTables(&setting{})
+	m.engine.DropTables(&counter{})
+	m.engine.DropTables(&node{})
+	m.engine.DropTables(&edge{})
+	m.engine.DropTables(&symlink{})
+	m.engine.DropTables(&chunk{})
+	m.engine.DropTables(&sliceRef{})
+	m.engine.DropTables(&session{})
+	m.engine.DropTables(&sustained{})
+	m.engine.DropTables(&xattr{})
+	m.engine.DropTables(&delfile{})
+	testMetaClient(t, m)
+}
+
 func TestConcurrentWriteSQL(t *testing.T) {
-	os.Remove("test.db")
-	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
+	os.Remove("test1.db")
+	m, err := newSQLMeta("sqlite3", "test1.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -39,8 +58,8 @@ func TestConcurrentWriteSQL(t *testing.T) {
 }
 
 func TestCompactionSQL(t *testing.T) {
-	os.Remove("test.db")
-	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
+	os.Remove("test2.db")
+	m, err := newSQLMeta("sqlite3", "test2.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}

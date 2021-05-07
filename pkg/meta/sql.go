@@ -17,6 +17,7 @@ package meta
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,9 +27,11 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 	"xorm.io/xorm"
+	"xorm.io/xorm/names"
 )
 
 type setting struct {
@@ -67,7 +70,7 @@ type node struct {
 type chunk struct {
 	Inode  Ino    `xorm:"unique(chunk)"`
 	Indx   uint32 `xorm:"unique(chunk)"`
-	Slices []byte `xorm:"VARBINARY"`
+	Slices []byte `xorm:"blob"`
 }
 
 type symlink struct {
@@ -78,7 +81,7 @@ type symlink struct {
 type xattr struct {
 	Inode Ino    `xorm:"unique(name)"`
 	Name  string `xorm:"unique(name)"`
-	Value []byte `xorm:"VARBINARY"`
+	Value []byte `xorm:"blob"`
 }
 
 type session struct {
@@ -127,13 +130,13 @@ type dbMeta struct {
 
 func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 	engine, err := xorm.NewEngine(driver, dsn)
+	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
 	if err = engine.Ping(); err != nil {
 		return nil, fmt.Errorf("ping database: %s", err)
 	}
-	engine.SetLogLevel(0)
 
 	if conf.Retries == 0 {
 		conf.Retries = 30
@@ -154,17 +157,39 @@ func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 }
 
 func (m *dbMeta) Init(format Format, force bool) error {
-	_ = m.engine.Sync2(new(setting))
-	_ = m.engine.Sync2(new(counter))
-	_ = m.engine.Sync2(new(node))
-	_ = m.engine.Sync2(new(edge))
-	_ = m.engine.Sync2(new(symlink))
-	_ = m.engine.Sync2(new(chunk))
-	_ = m.engine.Sync2(new(sliceRef))
-	_ = m.engine.Sync2(new(xattr))
-	_ = m.engine.Sync2(new(session))
-	_ = m.engine.Sync2(new(sustained))
-	_ = m.engine.Sync2(new(delfile))
+	if err := m.engine.Sync2(new(setting)); err != nil {
+		logger.Fatalf("create table jfs_setting: %s", err)
+	}
+	if err := m.engine.Sync2(new(counter)); err != nil {
+		logger.Fatalf("create table jfs_counter: %s", err)
+	}
+	if err := m.engine.Sync2(new(node)); err != nil {
+		logger.Fatalf("create table jfs_node: %s", err)
+	}
+	if err := m.engine.Sync2(new(edge)); err != nil {
+		logger.Fatalf("create table jfs_edge: %s", err)
+	}
+	if err := m.engine.Sync2(new(symlink)); err != nil {
+		logger.Fatalf("create table jfs_symlink: %s", err)
+	}
+	if err := m.engine.Sync2(new(chunk)); err != nil {
+		logger.Fatalf("create table jfs_chunk: %s", err)
+	}
+	if err := m.engine.Sync2(new(sliceRef)); err != nil {
+		logger.Fatalf("create table jfs_slice_ref: %s", err)
+	}
+	if err := m.engine.Sync2(new(xattr)); err != nil {
+		logger.Fatalf("create table jfs_xattr: %s", err)
+	}
+	if err := m.engine.Sync2(new(session)); err != nil {
+		logger.Fatalf("create table jfs_session: %s", err)
+	}
+	if err := m.engine.Sync2(new(sustained)); err != nil {
+		logger.Fatalf("create table jfs_sustained: %s", err)
+	}
+	if err := m.engine.Sync2(new(delfile)); err != nil {
+		logger.Fatalf("create table jfs_delfile: %s", err)
+	}
 
 	old, err := m.Load()
 	if err != nil {
@@ -216,6 +241,9 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			Length: 4 << 10,
 			Parent: 1,
 		})
+		if err != nil {
+			return err
+		}
 		_, err = s.Insert(
 			counter{"nextInode", 2}, // 1 is root
 			counter{"nextChunk", 1},
@@ -521,6 +549,25 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 	})
 }
 
+func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {
+	var r sql.Result
+	var err error
+	if m.engine.DriverName() == "sqlite3" {
+		r, err = s.Exec("update jfs_chunk set slices=slices || ? where inode=? AND indx=?", buf, inode, indx)
+	} else {
+		r, err = s.Exec("update jfs_chunk set slices=concat(slices, ?) where inode=? AND indx=?", buf, inode, indx)
+	}
+	if err == nil {
+		if n, _ := r.RowsAffected(); n == 0 {
+			n, err = s.Insert(&chunk{inode, indx, buf})
+			if err == nil && n == 0 {
+				return fmt.Errorf("insert slice failed")
+			}
+		}
+	}
+	return err
+}
+
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
 	return m.txn(func(s *xorm.Session) error {
 		var n node
@@ -542,13 +589,13 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if length < n.Length {
 			var c chunk
 			indx := uint32(length / ChunkSize)
+			var buf []byte
 			if uint32(n.Length/ChunkSize) == indx {
-				_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
-					marshalSlice(uint32(length%ChunkSize), 0, 0, 0, uint32(n.Length-length)), inode, indx)
+				buf = marshalSlice(uint32(length%ChunkSize), 0, 0, 0, uint32(n.Length-length))
 			} else {
-				_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
-					marshalSlice(uint32(length%ChunkSize), 0, 0, 0, ChunkSize-uint32(length%ChunkSize)), inode, indx)
+				buf = marshalSlice(uint32(length%ChunkSize), 0, 0, 0, ChunkSize-uint32(length%ChunkSize))
 			}
+			err = m.appendSlice(s, inode, indx, buf)
 			if err != nil {
 				return err
 			}
@@ -567,8 +614,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			}
 			rows.Close()
 			for _, indx := range indexes {
-				_, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?",
-					marshalSlice(0, 0, 0, 0, ChunkSize), inode, indx)
+				err = m.appendSlice(s, inode, indx, marshalSlice(0, 0, 0, 0, ChunkSize))
 				if err != nil {
 					return err
 				}
@@ -580,7 +626,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if err != nil {
 			return err
 		}
-		_, err = s.Exec("update counter set value=value+? where name='usedSpace'", added)
+		_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
 		if err == nil {
 			m.parseAttr(&n, attr)
 		}
@@ -588,7 +634,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	})
 }
 
-func (r *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
+func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
 	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
 		return syscall.EINVAL
 	}
@@ -604,7 +650,7 @@ func (r *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	return r.txn(func(s *xorm.Session) error {
+	return m.txn(func(s *xorm.Session) error {
 		var n node
 		ok, err := s.Where("Inode = ?", inode).Get(&n)
 		if err != nil {
@@ -643,14 +689,15 @@ func (r *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 				if coff+size > ChunkSize {
 					l = ChunkSize - coff
 				}
-				if _, err = s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?", marshalSlice(uint32(coff), 0, 0, 0, uint32(l)), inode, indx); err != nil {
+				err = m.appendSlice(s, inode, indx, marshalSlice(uint32(coff), 0, 0, 0, uint32(l)))
+				if err != nil {
 					return err
 				}
 				off += l
 				size -= l
 			}
 		}
-		_, err = s.Exec("update counter set value=value+? where name='usedSpace'", added)
+		_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
 		return err
 	})
 }
@@ -768,11 +815,11 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 				return err
 			}
 		} else if _type == TypeFile {
-			if _, err := s.Exec("update counter set value=value+? where name='usedSpace'", align4K(0)); err != nil {
+			if _, err := s.Exec("update jfs_counter set value=value+? where name='usedSpace'", align4K(0)); err != nil {
 				return err
 			}
 		}
-		_, err = s.Exec("update counter set value=value+1 where name='totalInodes'")
+		_, err = s.Exec("update jfs_counter set value=value+1 where name='totalInodes'")
 		if err == nil {
 			m.parseAttr(&n, attr)
 		}
@@ -855,7 +902,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err = s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
-		if _, err = s.Exec("update counter set value=value-1 where name='totalInodes'"); err != nil {
+		if _, err = s.Exec("update jfs_counter set value=value-1 where name='totalInodes'"); err != nil {
 			return err
 		}
 
@@ -887,7 +934,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 					if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
 						return err
 					}
-					if _, err := s.Exec("update counter set value=value-? where name='usedSpace'", align4K(n.Length)); err != nil {
+					if _, err := s.Exec("update jfs_counter set value=value-? where name='usedSpace'", align4K(n.Length)); err != nil {
 						return err
 					}
 				}
@@ -967,7 +1014,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
-		if _, err := s.Exec("update counter set value=value-1 where name='totalInodes'"); err != nil {
+		if _, err := s.Exec("update jfs_counter set value=value-1 where name='totalInodes'"); err != nil {
 			return err
 		}
 		return err
@@ -1129,12 +1176,12 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 						if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
 							return err
 						}
-						if _, err := s.Exec("update counter set value=value-? where name='usedSpace'", align4K(dn.Length)); err != nil {
+						if _, err := s.Exec("update jfs_counter set value=value-? where name='usedSpace'", align4K(dn.Length)); err != nil {
 							return err
 						}
 					}
 				}
-				if _, err := s.Exec("update counter set value=value-1 where name='totalInodes'"); err != nil {
+				if _, err := s.Exec("update jfs_counter set value=value-1 where name='totalInodes'"); err != nil {
 					return err
 				}
 				if _, err := s.Delete(xattr{Inode: dino}); err != nil {
@@ -1329,10 +1376,10 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 	}
 }
 
-func (r *dbMeta) cleanStaleSessions() {
+func (m *dbMeta) cleanStaleSessions() {
 	// TODO: once per minute
 	var s session
-	rows, err := r.engine.Where("Heartbeat > ?", time.Now().Add(time.Minute*-5)).Rows(&s)
+	rows, err := m.engine.Where("Heartbeat > ?", time.Now().Add(time.Minute*-5)).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -1345,7 +1392,7 @@ func (r *dbMeta) cleanStaleSessions() {
 	}
 	rows.Close()
 	for _, sid := range ids {
-		r.cleanStaleSession(sid)
+		m.cleanStaleSession(sid)
 	}
 
 	// rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
@@ -1369,9 +1416,9 @@ func (m *dbMeta) refreshSession() {
 	}
 }
 
-func (r *dbMeta) deleteInode(inode Ino) error {
+func (m *dbMeta) deleteInode(inode Ino) error {
 	var n node
-	err := r.txn(func(s *xorm.Session) error {
+	err := m.txn(func(s *xorm.Session) error {
 		ok, err := s.Where("inode = ?", inode).Get(&n)
 		if err != nil {
 			return err
@@ -1385,11 +1432,11 @@ func (r *dbMeta) deleteInode(inode Ino) error {
 		if _, err := s.Delete(&node{Inode: inode}); err != nil {
 			return err
 		}
-		_, err = s.Exec("update counter set value=value-? where name='usedSpace'", align4K(n.Length))
+		_, err = s.Exec("update jfs_counter set value=value-? where name='usedSpace'", align4K(n.Length))
 		return err
 	})
 	if err == 0 {
-		go r.deleteFile(inode, n.Length)
+		go m.deleteFile(inode, n.Length)
 	}
 	return err
 }
@@ -1490,7 +1537,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		buf := marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len)
 		if ok {
-			if _, err := s.Exec("update chunk set slices=slices || ? where inode=? AND indx=?", buf, inode, indx); err != nil {
+			if err := m.appendSlice(s, inode, indx, buf); err != nil {
 				return err
 			}
 		} else {
@@ -1505,7 +1552,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			return err
 		}
 		if added > 0 {
-			_, err = s.Exec("update counter set value=value+? where name='usedSpace'", added)
+			_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
 		}
 		if (len(ck.Slices)/sliceBytes)%20 == 19 {
 			go m.compactChunk(inode, indx, false)
@@ -1569,18 +1616,11 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 
 		ses := s
 		updateSlices := func(indx uint32, buf []byte, s *Slice) error {
-			if r, err := ses.Exec("update chunk set slices=slices || ? where inode=? AND indx=?", buf, fout, indx); err != nil {
+			if err := m.appendSlice(ses, fout, indx, buf); err != nil {
 				return err
-			} else if n, _ := r.RowsAffected(); n == 0 {
-				n, err := ses.Insert(&chunk{fout, indx, buf})
-				if err != nil {
-					return err
-				} else if n == 0 {
-					return fmt.Errorf("insert slice failed")
-				}
 			}
 			if s.Chunkid > 0 {
-				if _, err := ses.Exec("update slice_ref set refs=refs+1 where chunkid = ? AND size = ?", s.Chunkid, s.Size); err != nil {
+				if _, err := ses.Exec("update jfs_slice_ref set refs=refs+1 where chunkid = ? AND size = ?", s.Chunkid, s.Size); err != nil {
 					return err
 				}
 			}
@@ -1631,7 +1671,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			return err
 		}
 		if added > 0 {
-			_, err = s.Exec("update counter set value=value+? where name='usedSpace'", added)
+			_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
 		}
 		if err == nil {
 			*copied = size
@@ -1709,7 +1749,7 @@ func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	} else {
 		_ = m.txn(func(ses *xorm.Session) error {
-			_, err = ses.Exec("delete from slice_ref where chunkid=?", chunkid)
+			_, err = ses.Exec("delete from jfs_slice_ref where chunkid=?", chunkid)
 			if err != nil {
 				logger.Errorf("delete slice %d: %s", chunkid, err)
 			}
@@ -1731,7 +1771,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		ss = readSliceBuf(c.Slices)
 		for _, s := range ss {
-			_, err = ses.Exec("update slice_ref set refs=refs-1 where chunkid=? AND size=?", s.chunkid, s.size)
+			_, err = ses.Exec("update jfs_slice_ref set refs=refs-1 where chunkid=? AND size=?", s.chunkid, s.size)
 			if err != nil {
 				return err
 			}
@@ -1860,7 +1900,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		}
 		ses := s
 		for _, s := range ss {
-			if _, err := ses.Exec("update slice_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
+			if _, err := ses.Exec("update jfs_slice_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
 				return err
 			}
 		}
