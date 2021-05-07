@@ -71,6 +71,10 @@ func parseLine(line string) *logEntry {
 		return nil
 	}
 	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		logger.Warnf("Log line is invalid: %s", line)
+		return nil
+	}
 	ts, err := time.Parse("2006.01.02 15:04:05.000000", strings.Join([]string{fields[0], fields[1]}, " "))
 	if err != nil {
 		logger.Warnf("Failed to parse log line: %s: %s", line, err)
