@@ -71,7 +71,7 @@ func parseLine(line string) *logEntry {
 		return nil
 	}
 	fields := strings.Fields(line)
-	if len(fields) < 2 {
+	if len(fields) < 5 {
 		logger.Warnf("Log line is invalid: %s", line)
 		return nil
 	}
@@ -81,7 +81,11 @@ func parseLine(line string) *logEntry {
 		return nil
 	}
 	ids := findDigits.FindAllString(fields[2], 3) // e.g: [uid:0,gid:0,pid:36674]
-	latStr := fields[len(fields)-1]               // e.g: <0.000003>
+	if len(ids) != 3 {
+		logger.Warnf("Log line is invalid: %s", line)
+		return nil
+	}
+	latStr := fields[len(fields)-1] // e.g: <0.000003>
 	latFloat, err := strconv.ParseFloat(latStr[1:len(latStr)-1], 64)
 	if err != nil {
 		logger.Warnf("Failed to parse log line: %s: %s", line, err)
