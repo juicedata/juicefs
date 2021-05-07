@@ -484,6 +484,9 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		return obj, jfsToObjectErr(ctx, eno, bucket, object)
 	}
 
+	if maxKeys == 0 {
+		maxKeys = -1 // list as many objects as possible
+	}
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
 
