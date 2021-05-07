@@ -192,10 +192,10 @@ func (p *profiler) flush(timeStamp time.Time, keyStats []keyStat, done bool) {
 	output := make([]string, 3)
 	output[0] = fmt.Sprintf("> %s JuiceFS Profiling%s", timeStamp.Format(time.RFC1123), head)
 	output[1] = fmt.Sprintln("[enter]Pause/Continue")
-	output[2] = fmt.Sprintf("%-16s %10s %15s %18s", "OP", "Number", "Average(us)", "Total(us)")
+	output[2] = fmt.Sprintf("%-16s %10s %15s %18s %18s", "OP", "Number", "Average(us)", "Total(us)", "Percentage(%)")
 	for _, s := range keyStats {
-		output = append(output, fmt.Sprintf("%-16s %10d %15.0f %18d",
-			s.key, s.sPtr.count, float64(s.sPtr.total)/float64(s.sPtr.count), s.sPtr.total))
+		output = append(output, fmt.Sprintf("%-16s %10d %15.0f %18d %18.1f",
+			s.key, s.sPtr.count, float64(s.sPtr.total)/float64(s.sPtr.count), s.sPtr.total, float64(s.sPtr.total)/float64(p.interval.Microseconds())*100.0))
 	}
 	printLines(output, p.tty)
 }
