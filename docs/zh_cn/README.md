@@ -2,7 +2,7 @@
 
 [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/juicedata/juicefs/blob/main/LICENSE) [![Go Report](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=flat)](https://goreportcard.com/badge/github.com/juicedata/juicefs) [![Join Slack](https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack)](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA)
 
-![JuiceFS LOGO](images/juicefs-logo.png)
+![JuiceFS LOGO](../images/juicefs-logo.png)
 
 JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 GNU Affero General Public License v3.0 开源协议下发布。使用 JuiceFS 文件系统存储数据，数据本身会被持久化在对象存储（例如，AWS S3），而数据所对应的元数据会被持久化在 Redis 等高性能的数据库中。 JuiceFS 可以简单便捷的将海量云端存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
 
@@ -27,7 +27,7 @@ JuiceFS 文件系统由三个部分组成：
 2. **数据存储**：存储数据本身，支持本地磁盘、对象存储；
 3. **元数据存储**：存储数据对应的元数据，支持 Redis 等多种引擎；
 
-![](images/juicefs-arch-new.png)
+![](../images/juicefs-arch-new.png)
 
 作为文件系统，JuiceFS 会分别处理数据及其对应的元数据，数据会被存储在对象存储中，元数据会被存储在元数据服务引擎中。
 
@@ -46,7 +46,7 @@ JuiceFS 文件系统由三个部分组成：
 
 在 JuiceFS 文件系统中，一个文件首先被拆分成固定大小的 **"Chunk"**，默认 64 MiB。每个 Chunk 可以由一个或者多个 **"Slice"** 组成，它们是变长的。对于每一个 Slice，又会被拆分成固定大小的 **"Block"**，默认为 4 MiB（格式化后不可修改）。最后，这些 Block 会被压缩和加密保存到对象存储中（压缩和加密都是可选的）。
 
-![](images/juicefs-storage-format.png)
+![](../images/juicefs-storage-format.png)
 
 ## 快速上手
 
@@ -179,7 +179,7 @@ JuiceFS 支持在 Windows 环境中创建和挂载文件系统。但你需要先
 
 为了便于使用，可以在 `C：\` 盘根目录创建一个名为 `juicefs` 的文件夹，把 `juicefs.exe` 解压到该文件夹中。然后将 `C:\juicefs` 文件夹路径添加到系统的环境变量，重启系统让设置生效以后，可直接使用使用系统自带的 `命令提示符` 或 `PowerShell` 等程序执行 `juicefs` 命令。
 
-![Windows ENV path](images\windows-path.png)
+![Windows ENV path](../images/windows-path.png)
 
 ### 三、挂载 JuiceFS 文件系统
 
@@ -199,7 +199,7 @@ $ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access
 > juicefs.exe mount redis://192.168.1.6:6379/1 Z:
 ```
 
-![](images\juicefs-on-windows.png)
+![](../images/juicefs-on-windows.png)
 
 如上图，JuiceFS 客户端会把文件系统以网络驱动器的形式挂载为指定的系统盘符，你可以根据实际需要改用其他的盘符，但注意不要使用已经被占用的盘符。
 
@@ -295,7 +295,7 @@ Used: 23.4s, CPU: 69.1%, MEM: 147.0 MiB
 
 Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio), here is the result:
 
-[![Sequential Read Write Benchmark](images/sequential-read-write-benchmark.svg)](https://github.com/juicedata/juicefs/blob/main/docs/images/sequential-read-write-benchmark.svg)
+[![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](https://github.com/juicedata/juicefs/blob/main/docs/images/sequential-read-write-benchmark.svg)
 
 It shows JuiceFS can provide 10X more throughput than the other two, read [more details](https://github.com/juicedata/juicefs/blob/main/docs/en/fio.md).
 
@@ -303,9 +303,9 @@ It shows JuiceFS can provide 10X more throughput than the other two, read [more 
 
 Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior), here is the result:
 
-[![Metadata Benchmark](images/metadata-benchmark.svg)](https://github.com/juicedata/juicefs/blob/main/docs/images/metadata-benchmark.svg)
+[![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](https://github.com/juicedata/juicefs/blob/main/docs/en/mdtest.md).
+It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](../en/mdtest.md).
 
 ### Analyze performance
 

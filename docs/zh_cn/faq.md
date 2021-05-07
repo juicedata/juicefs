@@ -106,4 +106,3 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 ```
 
 阅读文档[「同步账号到多个主机」](../en/how_to_sync_the_same_account.md)解决这个问题。
-
