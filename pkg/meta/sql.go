@@ -223,7 +223,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		logger.Fatalf("json: %s", err)
 	}
 
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		_, err = s.Insert(&setting{"format", string(data)})
 		if err != nil {
 			return err
@@ -253,7 +253,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			counter{"nextCleanupSlices", 0},
 		)
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) Load() (*Format, error) {
@@ -309,7 +309,7 @@ func (m *dbMeta) newMsg(mid uint32, args ...interface{}) error {
 
 func (m *dbMeta) incrCounter(name string, batch uint64) (uint64, error) {
 	var v uint64
-	errno := m.txn(func(s *xorm.Session) error {
+	err := m.txn(func(s *xorm.Session) error {
 		var c counter
 		_, err := s.Where("name = ?", name).Get(&c)
 		if err != nil {
@@ -319,10 +319,7 @@ func (m *dbMeta) incrCounter(name string, batch uint64) (uint64, error) {
 		_, err = s.Cols("value").Update(&counter{Value: c.Value + batch}, &counter{Name: name})
 		return err
 	})
-	if errno == 0 {
-		return v, nil
-	}
-	return 0, errno
+	return v, err
 }
 
 func (m *dbMeta) nextInode() (Ino, error) {
@@ -341,7 +338,7 @@ func (m *dbMeta) nextInode() (Ino, error) {
 	return Ino(v), err
 }
 
-func (m *dbMeta) txn(f func(s *xorm.Session) error) syscall.Errno {
+func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	var err error
@@ -350,15 +347,15 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) syscall.Errno {
 			return nil, f(s)
 		})
 		// TODO: add other retryable errors here
-		if errors.Is(err, sqlite3.ErrBusy) || err != nil && strings.Contains(err.Error(), "database is locked") {
+		if errors.Is(err, sqlite3.ErrBusy) || err != nil && (strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "try restarting transaction")) {
 			txRestart.Add(1)
-			logger.Debug("conflicted transaction, restart it")
+			logger.Debugf("conflicted transaction, restart it (tried %d)", i+1)
 			time.Sleep(time.Millisecond * time.Duration(i) * time.Duration(i))
 			continue
 		}
 		break
 	}
-	return errno(err)
+	return err
 }
 
 func (m *dbMeta) parseAttr(n *node, attr *Attr) {
@@ -481,7 +478,7 @@ func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var cur node
 		ok, err := s.Where("Inode = ?", inode).Get(&cur)
 		if err != nil {
@@ -546,7 +543,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			m.parseAttr(&cur, attr)
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {
@@ -569,7 +566,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 }
 
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var n node
 		ok, err := s.Where("Inode = ?", inode).Get(&n)
 		if err != nil {
@@ -631,7 +628,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			m.parseAttr(&n, attr)
 		}
 		return nil
-	})
+	}))
 }
 
 func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
@@ -650,7 +647,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var n node
 		ok, err := s.Where("Inode = ?", inode).Get(&n)
 		if err != nil {
@@ -699,7 +696,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		}
 		_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
@@ -769,7 +766,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		*inode = ino
 	}
 
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var pn node
 		ok, err := s.Where("Inode = ?", parent).Get(&pn)
 		if err != nil {
@@ -824,7 +821,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			m.parseAttr(&n, attr)
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
@@ -842,7 +839,7 @@ func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumas
 }
 
 func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var pn node
 		ok, err := s.Where("Inode = ?", parent).Get(&pn)
 		if err != nil {
@@ -950,7 +947,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -961,7 +958,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.ENOTEMPTY
 	}
 
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var pn node
 		ok, err := s.Where("Inode = ?", parent).Get(&pn)
 		if err != nil {
@@ -1018,11 +1015,11 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return err
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var spn node
 		ok, err := s.Where("Inode = ?", parentSrc).Get(&spn)
 		if err != nil {
@@ -1215,11 +1212,11 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			}
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var pn node
 		ok, err := s.Where("Inode = ?", parent).Get(&pn)
 		if err != nil {
@@ -1269,7 +1266,7 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 			m.parseAttr(&n, attr)
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
@@ -1435,7 +1432,7 @@ func (m *dbMeta) deleteInode(inode Ino) error {
 		_, err = s.Exec("update jfs_counter set value=value-? where name='usedSpace'", align4K(n.Length))
 		return err
 	})
-	if err == 0 {
+	if err == nil {
 		go m.deleteFile(inode, n.Length)
 	}
 	return err
@@ -1509,7 +1506,7 @@ func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, ch
 }
 
 func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var n node
 		ok, err := s.Where("Inode = ?", inode).Get(&n)
 		if err != nil {
@@ -1558,11 +1555,11 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			go m.compactChunk(inode, indx, false)
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var nin, nout node
 		ok, err := s.Where("inode = ?", fin).Get(&nin)
 		if err != nil {
@@ -1677,7 +1674,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			*copied = size
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) cleanupDeletedFiles() {
@@ -1748,13 +1745,13 @@ func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
 	if err != nil {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	} else {
-		_ = m.txn(func(ses *xorm.Session) error {
+		err = m.txn(func(ses *xorm.Session) error {
 			_, err = ses.Exec("delete from jfs_slice_ref where chunkid=?", chunkid)
-			if err != nil {
-				logger.Errorf("delete slice %d: %s", chunkid, err)
-			}
 			return err
 		})
+		if err != nil {
+			logger.Errorf("delete slice %d: %s", chunkid, err)
+		}
 	}
 }
 
@@ -1779,7 +1776,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		_, err = ses.Delete(&chunk{inode, indx, nil})
 		return err
 	})
-	if err != 0 {
+	if err != nil {
 		return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", inode, err)
 	}
 	for _, s := range ss {
@@ -1880,13 +1877,14 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
 		return
 	}
-	errno := m.txn(func(s *xorm.Session) error {
+	err = m.txn(func(s *xorm.Session) error {
 		var c2 chunk
 		_, err := s.Where("inode=? and indx=?", inode, indx).Get(&c2)
 		if err != nil {
 			return err
 		}
 		if len(c2.Slices) < len(c.Slices) || !bytes.Equal(c.Slices, c2.Slices[:len(c.Slices)]) {
+			logger.Infof("chunk %d:%d was changed %d -> %d", inode, indx, len(c.Slices), len(c2.Slices))
 			return syscall.EINVAL
 		}
 
@@ -1907,22 +1905,23 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return nil
 	})
 	// there could be false-negative that the compaction is successful, double-check
-	if errno != 0 {
+	if err != nil {
 		var c chunk
-		ok, err := m.engine.Where("chunkid=? and size=?", chunkid, size).Get(&c)
-		if err == nil {
+		ok, e := m.engine.Where("chunkid=? and size=?", chunkid, size).Get(&c)
+		if e == nil {
 			if ok {
-				errno = 0
+				err = nil
 			} else {
-				errno = syscall.EINVAL
+				logger.Infof("compacted chunk %d was not used", chunkid)
+				err = syscall.EINVAL
 			}
 		}
 	}
 
-	if errno == syscall.EINVAL {
+	if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINVAL {
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
 		m.deleteSlice(chunkid, size)
-	} else if errno == 0 {
+	} else if err == nil {
 		for _, s := range ss {
 			var ref sliceRef
 			ok, err := m.engine.Where("chunkid = ?", s.chunkid).Get(&ref)
@@ -1930,14 +1929,14 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				m.deleteSlice(s.chunkid, s.size)
 			}
 		}
-		go func() {
-			// wait for the current compaction to finish
-			time.Sleep(time.Millisecond * 10)
-			m.compactChunk(inode, indx, force)
-		}()
 	} else {
 		logger.Warnf("compact %d %d: %s", inode, indx, errno)
 	}
+	go func() {
+		// wait for the current compaction to finish
+		time.Sleep(time.Millisecond * 10)
+		m.compactChunk(inode, indx, force)
+	}()
 }
 
 func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
@@ -2022,27 +2021,27 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 	if name == "" {
 		return syscall.EINVAL
 	}
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var x = xattr{inode, name, value}
 		n, err := s.InsertOne(&x)
 		if err != nil || n == 0 {
 			_, err = s.Update(&x, &xattr{inode, name, nil})
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	if name == "" {
 		return syscall.EINVAL
 	}
-	return m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		n, err := s.Delete(&xattr{Inode: inode, Name: name})
 		if n == 0 {
 			err = ENOATTR
 		}
 		return err
-	})
+	}))
 }
 
 func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {

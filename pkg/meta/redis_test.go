@@ -94,7 +94,6 @@ func testMetaClient(t *testing.T, m Meta) {
 	if format.Name != "test" {
 		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
 	}
-	_ = m.NewSession()
 	switch r := m.(type) {
 	case *redisMeta:
 		go r.cleanStaleSessions()
@@ -492,7 +491,6 @@ func TestCompaction(t *testing.T) {
 
 func testCompaction(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
-	done := make(chan bool, 1)
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
@@ -503,13 +501,8 @@ func testCompaction(t *testing.T, m Meta) {
 		return nil
 	})
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
-		select {
-		case done <- true:
-		default:
-		}
 		return nil
 	})
-	_ = m.NewSession()
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -550,22 +543,18 @@ func testCompaction(t *testing.T, m Meta) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	<-done
+	switch r := m.(type) {
+	case *redisMeta:
+		r.compactChunk(inode, 0, true)
+	case *dbMeta:
+		r.compactChunk(inode, 0, true)
+	}
 	var chunks []Slice
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
-	if len(chunks) > 20 {
+	if len(chunks) >= 10 {
 		t.Fatalf("inode %d should be compacted, but have %d slices", inode, len(chunks))
-	}
-	<-done
-	// wait for it to update chunks
-	time.Sleep(time.Millisecond * 5)
-	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
-		t.Fatalf("read 0: %s", st)
-	}
-	if len(chunks) > 5 {
-		t.Fatalf("inode %d should be compacted after read, but have %d slices", inode, len(chunks))
 	}
 	var total uint32
 	for _, s := range chunks {
@@ -609,7 +598,6 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 		return nil
 	})
 	_ = m.Init(Format{Name: "test"}, true)
-	_ = m.NewSession()
 
 	ctx := Background
 	var inode Ino
@@ -657,7 +645,6 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		return nil
 	})
 	_ = m.Init(Format{Name: "test"}, true)
-	_ = m.NewSession()
 
 	ctx := Background
 	var inode Ino
@@ -716,7 +703,6 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		return nil
 	})
 	_ = m.Init(Format{Name: "test"}, true)
-	_ = m.NewSession()
 
 	ctx := Background
 	var iin, iout Ino
@@ -771,7 +757,6 @@ func benchmarkReaddir(b *testing.B, n int) {
 	if err != nil {
 		b.Skipf("redis is not available: %s", err)
 	}
-	_ = m.NewSession()
 	ctx := Background
 	var inode Ino
 	dname := fmt.Sprintf("largedir%d", n)
