@@ -2,63 +2,77 @@
 
 [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/juicedata/juicefs/blob/main/LICENSE) [![Go Report](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=flat)](https://goreportcard.com/badge/github.com/juicedata/juicefs) [![Join Slack](https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack)](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA)
 
-![JuiceFS LOGO](images/juicefs-logo.png)
+![JuiceFS LOGO](../images/juicefs-logo.png)
 
-JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 GNU Affero General Public License v3.0 开源协议下发布。使用 JuiceFS 文件系统存储数据，数据本身会被持久化在对象存储（例如，AWS S3），而数据所对应的元数据会被持久化在 Redis 等高性能的数据库中。 JuiceFS 可以简单便捷的将海量云端存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
+JuiceFS is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS file system to store data, the data itself will be persisted in object storage (e.g. AWS S3), and the metadata corresponding to the data will be persisted in high-performance databases such as Redis. 
 
-## JuiceFS 的核心特性
+JuiceFS can simply and conveniently connect massive cloud storage directly to big data, machine learning, artificial intelligence, and various application platforms that have been put into production environment, without modifying the code, you can use massive cloud storage as efficiently as using local storage. 
 
-1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
-2. **HDFS 兼容**：完整兼容 HDFS API，提供更强的元数据性能；
-3. **S3 兼容**：提供与 S3 协议兼容的访问接口；
-4. **云原生**：通过 [Kubernetes CSI driver](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
-5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
-6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
-7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](https://github.com/juicedata/juicefs/blob/main/README_CN.md#性能测试)；
-8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest）；
-9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
-10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
 
-## JuiceFS 的技术架构
 
-JuiceFS 文件系统由三个部分组成：
+## Highlighted Features
 
-1. **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes、S3 等文件系统接口的实现；
-2. **数据存储**：存储数据本身，支持本地磁盘、对象存储；
-3. **元数据存储**：存储数据对应的元数据，支持 Redis 等多种引擎；
+1. **Fully POSIX-compatible**: Use like a local file system, seamlessly docking with existing applications, no business intrusion.
+2. **Fully Hadoop-compatible**: JuiceFS [Hadoop Java SDK](hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
+3. **S3-compatible**:  JuiceFS [S3 Gateway](s3_gateway.md) provides S3-compatible interface.
+4. **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
+5. **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
+6. **Strong Consistency**: The confirmed modification will be immediately visible on all servers mounted with the same file system .
+7. **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. 
+8. **Data Encryption**: Supports data encryption in transit and at rest, read [the guide](encrypt.md) for more information.
+9. **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
+10. **Data Compression**: JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data.
 
-![](images/juicefs-arch-new.png)
+## Architecture
 
-作为文件系统，JuiceFS 会分别处理数据及其对应的元数据，数据会被存储在对象存储中，元数据会被存储在元数据服务引擎中。
+JuiceFS file system consists of three parts: 
 
-在**数据存储**方面，JuiceFS 支持几乎所有的公有云对象存储，同时也支持 OpenStack Swift、Ceph、MinIO 等私有化的对象存储。
+1. **JuiceFS Client**: Coordinate the implementation of object storage and metadata storage engines, as well as file system interfaces such as POSIX, Hadoop, Kubernetes, and S3 gateway.
+2. **Data Storage**: Store the data itself, support local disk and object storage.
+3. **Metadata Engine**: Store the metadata corresponding to the data, support multiple engines such as Redis.
 
-在**元数据存储**方面，JuiceFS 采用多引擎设计，目前已支持 [Redis](https://redis.io/) 作为元数据服务引擎，也将陆续实现对 TiKV、PostgreSQL、MariaDB、MySQL、Oracle 等更多数据引擎的支持。
+![](../images/juicefs-arch-new.png)
 
-在**文件系统接口**实现方面：
+As a file system, JuiceFS will process data and its corresponding metadata separately, the data will be stored in the object storage, and the metadata will be stored in the metadata engine.
 
-- 通过 **FUSE** ，JuiceFS 文件系统能够以 POSIX 兼容的方式挂载到服务器，将海量云端存储直接当做本地存储来使用。
-- 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。
-- 通过 **Kubernetes CSI driver**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。
-- 通过 **S3 Gateway**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。
+In terms of **data storage**, JuiceFS supports almost all public cloud object storage services, as well as privatized object storage such as OpenStack Swift, Ceph, and MinIO.
 
-## JuiceFS 中的文件格式
+In terms of **metadata storage**, JuiceFS adopts a multi-engine design, and currently supports [Redis](https://redis.io/) as a metadata engine, and it will also implement TiKV, PostgreSQL, MariaDB, MySQL , Oracle and more engines.
 
-在 JuiceFS 文件系统中，一个文件首先被拆分成固定大小的 **"Chunk"**，默认 64 MiB。每个 Chunk 可以由一个或者多个 **"Slice"** 组成，它们是变长的。对于每一个 Slice，又会被拆分成固定大小的 **"Block"**，默认为 4 MiB（格式化后不可修改）。最后，这些 Block 会被压缩和加密保存到对象存储中（压缩和加密都是可选的）。
+In terms of the implementation of **file system interface**:
 
-![](images/juicefs-storage-format.png)
+- With **FUSE**, the JuiceFS file system can be mounted to the server in a POSIX compatible manner, and the massive cloud storage can be used directly as local storage.
+- With **Hadoop Java SDK**, the JuiceFS file system can directly replace HDFS, providing Hadoop with low-cost mass storage.
+- With **Kubernetes CSI driver**, the JuiceFS file system can directly provide mass storage for Kubernetes.
+- Through **S3 Gateway**, applications that use S3 as the storage layer can be directly accessed, and tools such as AWS CLI, s3cmd, and MinIO client can be used to access the JuiceFS file system.
 
-## 快速上手
+## How JuiceFS stores files
 
-使用 JuiceFS 创建文件系统，需要以下 3 个方面准备：
+The `file system` acts as a medium for interaction between the user and the hard drive, which allows files to be stored on the hard drive properly. As you know, Windows commonly used file systems are FAT32, NTFS, Linux commonly used file systems are Ext4, XFS, BTRFS, etc., each file system has its own unique way of organizing and managing files, which determines the file system Features such as storage capacity and performance.
 
-1. 准备 Redis 数据库
-2. 准备对象存储
-3. 下载安装 JuiceFS 客户端
+As a file system, JuiceFS is no exception. Its strong consistency and high performance are inseparable from its unique file management mode.
 
-### 一、准备 Redis 数据库
+Unlike the traditional file system that can only use local disks to store data and corresponding metadata, JuiceFS will format the data and store it in object storage (cloud storage), and store the metadata corresponding to the data in databases such as Redis. .
 
-你可以很容易的在云计算平台购买到各种配置的云 Redis 数据库，但如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 Redis 数据库实例：
+Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the default upper limit is 64 MiB. Each Chunk is composed of one or more **"Slice"**. The length of the slice is not fixed, depending on the way the file is written. Each slice will be further split into fixed-size **"Block"**, which is 4 MiB by default. Finally, these blocks will be stored in the object storage. At the same time, JuiceFS will store the metadata information of Chunk, Slice, and Block of each file in metadata engines such as Redis.
+
+![JuiceFS storage format](../images/juicefs-storage-format-new.png)
+
+Files in JuiceFS are eventually split into Chunks, Slices and Blocks and stored in object storage. Therefore, you will find that the source file stored in JuiceFS cannot be found in the object storage browser. There is only one chunks directory and a bunch of digitally numbered directories and files in the bucket. Don't panic, this is the secret of the high-performance operation of the JuiceFS file system!
+
+![How JuiceFS stores your files](../images/how-juicefs-stores-files-new.png)
+
+## Quick Start
+
+To create a JuiceFS file system, you need the following 3 preparations:
+
+1. Redis database for metadata storage
+2. Object storage is used to store data blocks
+3.  JuiceFS Client
+
+### 1. Redis Database
+
+You can easily buy cloud Redis databases in various configurations on the cloud computing platform, but if you just want to quickly evaluate JuiceFS, you can use Docker to quickly run a Redis database instance on your local computer:
 
 ```shell
 $ sudo docker run -d --name redis \
@@ -68,17 +82,17 @@ $ sudo docker run -d --name redis \
 	redis redis-server --appendonly yes
 ```
 
-容器创建成功以后，可使用 `redis://127.0.0.1:6379` 访问 redis 数据库。
+After the container is successfully created, you can use `redis://127.0.0.1:6379` to access the redis database.
 
-> **注意**：以上命令将 redis 的数据持久化在 docker 的 redis-data 数据卷当中，你可以按需修改数据持久化的存储位置。
+> **Note**: The above command persists redis data in the `redis-data` data volume of docker, and you can modify the storage location of data persistence as needed.
 
-> **安全提示**：以上命令创建的 redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，强烈建议参照 [Redis 官方文档](https://redis.io/topics/security) 启用保护模式。
+> **Security Tips**: The redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database via the Internet, it is strongly recommended to refer to [Redis official documentation](https: //redis.io/topics/security) Enable protected mode.
 
-### 二、准备对象存储
+### 2. Object Storage
 
-和 Redis 数据库一样，几乎所有的公有云计算平台都提供对象存储服务。因为 JuiceFS 支持几乎所有主流平台的对象存储服务，因此你可以根据个人偏好自由选择。你可以查看我们的 [对象存储支持列表和设置指南]()，其中列出了 JuiceFS 目前支持的所有对象存储服务，以及具体的使用方法。
+Like Redis databases, almost all public cloud computing platforms provide object storage services. Because JuiceFS supports object storage services on almost all platforms, you can choose freely according to your personal preferences. You can check our [Object Storage Support List and Setting Guide](), which lists all the object storage services currently supported by JuiceFS and how to use them.
 
-当然，如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 MinIO 对象存储实例：
+Of course, if you just want to quickly evaluate JuiceFS, you can use Docker to quickly run a MinIO object storage instance on your local computer:
 
 ```shell
 $ sudo docker run -d --name minio \
@@ -88,32 +102,32 @@ $ sudo docker run -d --name minio \
 	minio/minio server /data
 ```
 
-容器创建成功以后，使用 `http://127.0.0.1:9000` 访问 minio 管理界面，root 用户初始的 Access Key 和 Secret Key 均为 `minioadmin`。
+After the container is successfully created, use `http://127.0.0.1:9000` to access the MinIO management interface. The initial Access Key and Secret Key of the root user are both `minioadmin`.
 
-> **注意**：以上命令将 minio 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改数据持久化存储的位置。
+> **Note**: The above command maps the data path of MinIO object storage to the `minio-data` folder in the current directory, and you can modify the location of the data persistent storage as needed.
 
-### 三、安装 JuiceFS 客户端
+### 3. JuiceFS Client
 
-JuiceFS 同时支持 Linux、Windows、MacOS 三大操作系统平台，你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，请根据实际使用的系统和架构选择对应的版本。
+JuiceFS supports Linux, Windows, and MacOS. You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest). Please refer to the actual system and Select the corresponding version of the architecture.
 
-以 x86 架构的 Linux 系统为例，下载文件名包含 `linux-amd64` 的压缩包：
+Take the x86-based Linux system as an example, download the compressed package containing `linux-amd64` in the file name:
 
 ```shell
 $ wget https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.12.1-linux-amd64.tar.gz
 ```
 
-解压并安装：
+Unzip and install:
 
 ```shell
 $ tar -zxf juicefs-0.12.1-linux-amd64.tar.gz
 $ sudo install juicefs /usr/local/bin
 ```
 
-### 四、创建  JuiceFS 文件系统
+### 4. Create JuiceFS file system 
 
-创建 JuiceFS 文件系统时，需要同时指定用来存储元数据的 Redis 数据库和用来存储实际数据的对象存储。
+When creating a JuiceFS file system, you need to specify both the Redis database used to store metadata and the object storage used to store actual data.
 
-以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 redis 中的 `1` 号数据库存储元数据，使用 minio 中创建的 `pics` 存储桶存储实际数据。
+The following command will create a JuiceFS file system named `pics`, use the database `1` in Redis to store metadata, and use the `pics` bucket created in MinIO to store actual data:
 
 ```shell
 $ juicefs format \
@@ -125,7 +139,7 @@ $ juicefs format \
 	pics
 ```
 
-执行命令后，会看到类似下面的内容输出，说明 JuiceFS 文件系统创建成功了。
+After executing the command, you will see output similar to the following, indicating that the JuiceFS file system was created successfully.
 
 ```shell
 2021/04/29 23:01:18.352256 juicefs[34223] <INFO>: Meta address: redis://127.0.0.1:6379/1
@@ -134,18 +148,18 @@ $ juicefs format \
 2021/04/29 23:01:18.361674 juicefs[34223] <INFO>: Volume is formatted as {Name:pics UUID:9c0fab76-efd0-43fd-a81e-ae0916e2fc90 Storage:minio Bucket:http://127.0.0.1:9000/pics AccessKey:minioadmin SecretKey:removed BlockSize:4096 Compression:none Partitions:0 EncryptKey:}
 ```
 
-> **注意**：你可以根据需要，创建无限多个 JuiceFS 文件系统。但需要注意的是，每个 Redis 数据库中只能创建一个文件系统。比如要再创建一个名为 `memory` 的文件系统时，可以使用 Redis 中的 2 号数据库，即 `redis://127.0.0.1:6379/2` 。
+> **Note**: You can create as many JuiceFS file systems as you need. But it should be noted that only one file system can be created in each Redis database. For example, when you want to create another file system named `memory`, you have to use another database in Redis, such as No.2, which is `redis://127.0.0.1:6379/2`.
 
-### 五、挂载 JuiceFS 文件系统
+### 5. Mount JuiceFS file system
 
-JuiceFS 文件系统创建完成以后，接下来就可以把它挂载到操作系统上使用了。以下命令将 `pics` 文件系统挂载到 `/mnt/jfs` 目录中。
+After the JuiceFS file system is created, you can mount it on the operating system and use it. The following command mounts the `pics` file system to the `/mnt/jfs` directory.
 
 ```shell
 $ sudo juicefs mount -d redis://127.0.0.1:6379/1 /mnt/jfs
 ```
-> **注意**：挂载 JuiceFS 文件系统时，不需要显式指定文件系统的名称，只要填写正确的 Redis 服务器地址和数据库编号即可。
+> **Note**: When mounting the JuiceFS file system, there is no need to explicitly specify the name of the file system, just fill in the correct Redis server address and database number.
 
-执行命令后，会看到类似下面的内容输出，说明 JuiceFS 文件系统已经成功挂载到系统上了。
+After executing the command, you will see output similar to the following, indicating that the JuiceFS file system has been successfully mounted on the system.
 
 ```shell
 2021/04/29 23:22:25.838419 juicefs[37999] <INFO>: Meta address: redis://127.0.0.1:6379/1
@@ -155,96 +169,96 @@ $ sudo juicefs mount -d redis://127.0.0.1:6379/1 /mnt/jfs
 2021/04/29 23:22:26.340509 juicefs[37999] <INFO>: OK, pics is ready at /mnt/jfs
 ```
 
-挂载完成以后就可以在 `/mnt/jfs` 目录中存取文件了，你可以执行 `df` 命令查看 JuiceFS 文件系统的挂载情况：
+After the mounting is complete, you can access files in the `/mnt/jfs` directory. You can execute the `df` command to view the JuiceFS file system's mounting status:
 
 ```shell
 $ df -Th
-文件系统       类型          容量  已用  可用 已用% 挂载点
-JuiceFS:pics   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
+Filesystem     Type          Size    Used   Avail    Use%    Mounted on
+JuiceFS:pics   fuse.juicefs  1.0P     64K    1.0P     1%     /mnt/jfs
 ```
 
-> **注意**：默认情况下， juicefs 的缓存位于 `/var/jfsCache` 目录，为了获得该目录的读写权限，这里使用了 sudo 命令，以管理员权限挂载的 JuiceFS 文件系统。普通用户在读写 `/mnt/jfs` 时，需要为用户赋予该目录的操作权限。
+> **Note**: By default, the cache of JuiceFS is located in the `/var/jfsCache` directory. In order to obtain the read and write permissions of this directory, the `sudo` command is used here to mount the JuiceFS file system with administrator privileges. When ordinary users read and write `/mnt/jfs`, please assign them the appropriate permissions.
 
-## Windows 系统
+## Windows
 
-### 一、安装依赖工具
+### 1. Requirement
 
-JuiceFS 支持在 Windows 环境中创建和挂载文件系统。但你需要先安装  [WinFsp](http://www.secfs.net/winfsp/) 才能在 Windows 系统中挂载 JuiceFS 文件系统。
+JuiceFS supports creating and mounting file systems in Windows. But you need to install [WinFsp] (http://www.secfs.net/winfsp/) to be able to mount the JuiceFS file system.
 
-> **[WinFsp](https://github.com/billziss-gh/winfsp)** 是一个开源的 Windows 文件系统代理，它提供了一个 FUSE 仿真层，使得 JuiceFS 客户端可以将文件系统挂载到 Windows 系统中使用。
+> **[WinFsp](https://github.com/billziss-gh/winfsp)** is an open source Windows file system agent, it provides a FUSE emulation layer, so that the JuiceFS client can mount the file system to Windows.
 
-### 二、Windows 上安装 JuiceFS
+### 2. Install JuiceFS on Windows 
 
-你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，以 Windows 10 系统为例，下载文件名包含 `windows-amd64` 的压缩包，解压后得到 `juicefs.exe` 即是 JuiceFS 的客户端程序。
+You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest), take Windows 10 system as an example, the download file name contains `windows-amd64`, decompress and `juicefs.exe` is JuiceFS client.
 
-为了便于使用，可以在 `C：\` 盘根目录创建一个名为 `juicefs` 的文件夹，把 `juicefs.exe` 解压到该文件夹中。然后将 `C:\juicefs` 文件夹路径添加到系统的环境变量，重启系统让设置生效以后，可直接使用使用系统自带的 `命令提示符` 或 `PowerShell` 等程序执行 `juicefs` 命令。
+For ease of use, you can create a folder named `juicefs` in the root directory of `C:\`, and extract the `juicefs.exe` into this folder. Then add the path `C:\juicefs` to the environment variables of the system. After restarting the system to make the settings take effect, you can directly use the system's built-in `Command Prompt` or `PowerShell` to execute the `juicefs` command.
 
-![Windows ENV path](images\windows-path.png)
+![Windows ENV path](../images/windows-path.png)
 
-### 三、挂载 JuiceFS 文件系统
+### 3. Mount JuiceFS file system
 
-这里假设你已经准备好了对象存储、Redis 数据库，并且已经创建好了 JuiceFS 文件系统。如果你还没有准备好这些必须的资源，请参考前面的 [快速上手](#快速上手) 部分内容。
+It is assumed that you have prepared object storage, Redis database, and created JuiceFS file system. If you have not prepared these necessary resources, please refer to the previous section of [Quick Start](#Quick Start).
 
-这里，我们假设在当前局域网中 IP 地址为 `192.168.1.8` 的 Linux 主机上部署了 MinIO 对象存储和 Redis 数据库，然后执行了以下命令，创建了名为 `music` 的 JuiceFS 文件系统。
+Suppose that the MinIO object storage and Redis database are deployed on the Linux host with the IP address of `192.168.1.8` in LAN, and then the following commands are executed to create a JuiceFS file system named `music`.
 
 ```shell
 $ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access-key minioadmin --secret-key minioadmin redis://192.168.1.8:6379/1 music
 ```
 
-> **注意**：Windows 系统上的 JuiceFS 客户端是命令行程序，你需要在 `命令提示符`、`PowerShell` 或 `Windows 终端` 中使用。
+> **Note**: JuiceFS client on Windows is a command line program, you need to use it in `Command Prompt`, `PowerShell` or `Windows Terminal`.
 
-执行以下命令，将 `music` 文件系统挂载到 Z 盘。
+Execute the following command to mount the `music` file system to `Z` drive:
 
 ```power
 > juicefs.exe mount redis://192.168.1.6:6379/1 Z:
 ```
 
-![](images\juicefs-on-windows.png)
+![](../images/juicefs-on-windows.png)
 
-如上图，JuiceFS 客户端会把文件系统以网络驱动器的形式挂载为指定的系统盘符，你可以根据实际需要改用其他的盘符，但注意不要使用已经被占用的盘符。
+As shown in the figure above, JuiceFS client will mount the file system as a network drive as the specified system drive letter. You can change to another drive letter according to actual needs, but be careful not to use the drive letter that is already occupied.
 
-## macOS 系统
+## macOS
 
-### 一、安装依赖工具
+### 1. Requirement
 
-JuiceFS 支持在 macOS 系统中创建和挂载文件系统。但你需要先安装 [macFUSE](https://osxfuse.github.io/) 才能在 macOS 系统中挂载 JuiceFS 文件系统。
+JuiceFS supports creating and mounting file systems in macOS. But you need to install [macFUSE](https://osxfuse.github.io/) before you can mount the JuiceFS file system.
 
-> [macFUSE](https://github.com/osxfuse/osxfuse) 是一个开源的文件系统增强工具，它让 macOS 可以挂载第三方的文件系统，使得 JuiceFS 客户端可以将文件系统挂载到 macOS 系统中使用。
+> [macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems, allowing JuiceFS client to mount the file system to macOS.
 
-### 二、macOS 上安装 JuiceFS
+### 2. Install JuiceFS on macOS 
 
-你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，下载文件名包含 `darwin-amd64` 的压缩包，例如：
+You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest), download the compressed package containing `darwin-amd64` in the file name, for example:
 
 ```shell
 $ curl -fsSL https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.12.1-darwin-amd64.tar.gz -o juicefs-0.12.1-darwin-amd64.tar.gz
 ```
 
-解压并安装：
+Unzip and install:
 
 ```shell
 $ tar -zxf juicefs-0.12.1-darwin-amd64.tar.gz
 $ sudo install juicefs /usr/local/bin
 ```
 
-### 三、挂载 JuiceFS 文件系统
+### 3. Mount JuiceFS file system
 
-这里假设你已经准备好了对象存储、Redis 数据库，并且已经创建好了 JuiceFS 文件系统。如果你还没有准备好这些必须的资源，请参考前面的 [快速上手](#快速上手) 部分内容。
+It is assumed that you have prepared object storage, Redis database, and created JuiceFS file system. If you have not prepared these necessary resources, please refer to the previous section of [Quick Start](#Quick Start).
 
-这里，我们假设在当前局域网中 IP 地址为 `192.168.1.8` 的 Linux 主机上部署了 MinIO 对象存储和 Redis 数据库，然后执行了以下命令，创建了名为 `music` 的 JuiceFS 文件系统。
+Suppose that the MinIO object storage and Redis database are deployed on the Linux host with the IP address of `192.168.1.8` in LAN, and then the following commands are executed to create a JuiceFS file system named `music`.
 
 ```shell
 $ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access-key minioadmin --secret-key minioadmin redis://192.168.1.8:6379/1 music
 ```
 
-执行以下命令，将 `music` 文件系统挂载到当前用户家目录下的 `~/music` 文件夹。
+Execute the following command to mount the `music` file system to the `~/music` folder in the current user's home directory.
 
 ```shell
 $ juicefs mount redis://192.168.1.8:6379/1 ~/music
 ```
 
-> **提示**：在本指南中，Windows 和 macOS 挂载的是同一个文件系统，JuiceFS 支持上千台客户端同时挂载同一个文件系统，提供便捷的海量数据共享能力。
+> **Tip**: In this guide, Windows and macOS mount the same file system. JuiceFS supports thousands of clients to mount the same file system at the same time, providing convenient mass data sharing capabilities.
 
-## POSIX 兼容性
+## POSIX Compatibility 
 
 JuiceFS passed all of the 8813 tests in latest [pjdfstest](https://github.com/pjd/pjdfstest).
 
@@ -269,3 +283,71 @@ Besides the things covered by pjdfstest, JuiceFS provides:
 - Extended attributes (xattr).
 - BSD locks (flock).
 - POSIX record locks (fcntl).
+
+## Performance Benchmark
+
+### Basic benchmark
+
+JuiceFS provides a subcommand to run a few basic benchmarks to understand how it works in your environment:
+
+```
+$ ./juicefs bench /jfs
+Written a big file (1024.00 MiB): (113.67 MiB/s)
+Read a big file (1024.00 MiB): (127.12 MiB/s)
+Written 100 small files (102.40 KiB): 151.7 files/s, 6.6 ms for each file
+Read 100 small files (102.40 KiB): 692.1 files/s, 1.4 ms for each file
+Stated 100 files: 584.2 files/s, 1.7 ms for each file
+FUSE operation: 19333, avg: 0.3 ms
+Update meta: 436, avg: 1.4 ms
+Put object: 356, avg: 4.8 ms
+Get object first byte: 308, avg: 0.2 ms
+Delete object: 356, avg: 0.2 ms
+Used: 23.4s, CPU: 69.1%, MEM: 147.0 MiB
+```
+
+### Throughput
+
+Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio), here is the result:
+
+[![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
+
+It shows JuiceFS can provide 10X more throughput than the other two, read [more details](fio.md).
+
+### Metadata IOPS
+
+Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior), here is the result:
+
+[![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
+
+It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](../en/mdtest.md).
+
+### Analyze performance
+
+There is a virtual file called `.accesslog` in the root of JuiceFS to show all the operations and the time they takes, for example:
+
+```
+$ cat /jfs/.accesslog
+2021.01.15 08:26:11.003330 [uid:0,gid:0,pid:4403] write (17669,8666,4993160): OK <0.000010>
+2021.01.15 08:26:11.003473 [uid:0,gid:0,pid:4403] write (17675,198,997439): OK <0.000014>
+2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
+```
+
+The last number on each line is the time (in seconds) current operation takes. You can use this directly to debug and analyze performance issues, or try `./juicefs profile /jfs` to monitor real time statistics. Please run `./juicefs profile -h` or refer to [here](operations_profiling.md) to learn more about this subcommand.
+
+## Usage Tracking
+
+JuiceFS by default collects **anonymous** usage data. It only collects core metrics (e.g. version number), no user or any sensitive data will be collected. You could review related code [here](https://github.com/juicedata/juicefs/blob/main/pkg/usage/usage.go).
+
+These data help us understand how the community is using this project. You could disable reporting easily by command line option `--no-usage-report`:
+
+```
+$ ./juicefs mount --no-usage-report
+```
+
+## License
+
+JuiceFS is open-sourced under GNU AGPL v3.0, see [LICENSE](https://github.com/juicedata/juicefs/blob/main/LICENSE).
+
+## Credits
+
+The design of JuiceFS was inspired by [Google File System](https://research.google/pubs/pub51), [HDFS](https://hadoop.apache.org/) and [MooseFS](https://moosefs.com/), thanks to their great work.
