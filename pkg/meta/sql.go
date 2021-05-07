@@ -36,74 +36,72 @@ import (
 
 type setting struct {
 	Name  string `xorm:"pk"`
-	Value string `xorm:"varchar(4096)"`
+	Value string `xorm:"varchar(4096) notnull"`
 }
 
 type counter struct {
 	Name  string `xorm:"pk"`
-	Value uint64
+	Value uint64 `xorm:"notnull"`
 }
 
 type edge struct {
-	Parent Ino    `xorm:"unique(edge)"`
-	Name   string `xorm:"unique(edge)"`
-	Inode  Ino
-	Type   uint8
+	Parent Ino    `xorm:"unique(edge) notnull"`
+	Name   string `xorm:"unique(edge) notnull"`
+	Inode  Ino    `xorm:"notnull"`
+	Type   uint8  `xorm:"notnull"`
 }
 
 type node struct {
-	Inode  Ino `xorm:"pk"`
-	Type   uint8
-	Flags  uint8
-	Mode   uint16
-	Uid    uint32
-	Gid    uint32
-	Atime  time.Time
-	Mtime  time.Time
+	Inode  Ino       `xorm:"pk"`
+	Type   uint8     `xorm:"notnull"`
+	Flags  uint8     `xorm:"notnull"`
+	Mode   uint16    `xorm:"notnull"`
+	Uid    uint32    `xorm:"notnull"`
+	Gid    uint32    `xorm:"notnull"`
+	Atime  time.Time `xorm:"notnull"`
+	Mtime  time.Time `xorm:"notnull"`
 	Ctime  time.Time `xorm:"updated"`
-	Nlink  uint32
-	Length uint64
+	Nlink  uint32    `xorm:"notnull"`
+	Length uint64    `xorm:"notnull"`
 	Rdev   uint32
 	Parent Ino
 }
 
 type chunk struct {
-	Inode  Ino    `xorm:"unique(chunk)"`
-	Indx   uint32 `xorm:"unique(chunk)"`
-	Slices []byte `xorm:"blob"`
+	Inode  Ino    `xorm:"unique(chunk) notnull"`
+	Indx   uint32 `xorm:"unique(chunk) notnull"`
+	Slices []byte `xorm:"blob notnull"`
 }
-
+type sliceRef struct {
+	Chunkid uint64 `xorm:"pk"`
+	Size    uint32 `xorm:"notnull"`
+	Refs    int    `xorm:"notnull"`
+}
 type symlink struct {
 	Inode  Ino    `xorm:"pk"`
-	Target string `xorm:"varchar(4096)"`
+	Target string `xorm:"varchar(4096) notnull"`
 }
 
 type xattr struct {
-	Inode Ino    `xorm:"unique(name)"`
-	Name  string `xorm:"unique(name)"`
-	Value []byte `xorm:"blob"`
+	Inode Ino    `xorm:"unique(name) notnull"`
+	Name  string `xorm:"unique(name) notnull"`
+	Value []byte `xorm:"blob notnull"`
 }
 
 type session struct {
-	Sid       uint64 `xorm:"pk"`
-	Heartbeat time.Time
+	Sid       uint64    `xorm:"pk"`
+	Heartbeat time.Time `xorm:"notnull"`
 }
 
 type sustained struct {
-	Sid   uint64 `xorm:"unique(sustained)"`
-	Inode Ino    `xorm:"unique(sustained)"`
+	Sid   uint64 `xorm:"unique(sustained) notnull"`
+	Inode Ino    `xorm:"unique(sustained) notnull"`
 }
 
 type delfile struct {
-	Inode  Ino    `xorm:"unique(delfile)"`
-	Length uint64 `xorm:"unique(delfile)"`
-	Expire time.Time
-}
-
-type sliceRef struct {
-	Chunkid uint64
-	Size    uint32
-	Refs    int
+	Inode  Ino       `xorm:"unique(delfile) notnull"`
+	Length uint64    `xorm:"unique(delfile) notnull"`
+	Expire time.Time `xorm:"notnull"`
 }
 
 type freeID struct {
