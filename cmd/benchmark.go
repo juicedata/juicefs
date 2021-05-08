@@ -291,7 +291,7 @@ func benchmark(c *cli.Context) error {
 				st(name+"_sum")/st(name+"_total")*1000)
 		}
 		show("FUSE operation", "fuse_ops_durations_histogram_seconds")
-		show("Update meta", "redis_tx_durations_histogram_seconds")
+		show("Update meta", "transaction_durations_histogram_seconds")
 		show("Put object", "object_request_durations_histogram_seconds_PUT")
 		show("Get object first byte", "object_request_durations_histogram_seconds_GET")
 		show("Delete object", "object_request_durations_histogram_seconds_DELETE")

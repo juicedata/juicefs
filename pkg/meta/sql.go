@@ -36,74 +36,72 @@ import (
 
 type setting struct {
 	Name  string `xorm:"pk"`
-	Value string `xorm:"varchar(4096)"`
+	Value string `xorm:"varchar(4096) notnull"`
 }
 
 type counter struct {
 	Name  string `xorm:"pk"`
-	Value uint64
+	Value uint64 `xorm:"notnull"`
 }
 
 type edge struct {
-	Parent Ino    `xorm:"unique(edge)"`
-	Name   string `xorm:"unique(edge)"`
-	Inode  Ino
-	Type   uint8
+	Parent Ino    `xorm:"unique(edge) notnull"`
+	Name   string `xorm:"unique(edge) notnull"`
+	Inode  Ino    `xorm:"notnull"`
+	Type   uint8  `xorm:"notnull"`
 }
 
 type node struct {
-	Inode  Ino `xorm:"pk"`
-	Type   uint8
-	Flags  uint8
-	Mode   uint16
-	Uid    uint32
-	Gid    uint32
-	Atime  time.Time
-	Mtime  time.Time
+	Inode  Ino       `xorm:"pk"`
+	Type   uint8     `xorm:"notnull"`
+	Flags  uint8     `xorm:"notnull"`
+	Mode   uint16    `xorm:"notnull"`
+	Uid    uint32    `xorm:"notnull"`
+	Gid    uint32    `xorm:"notnull"`
+	Atime  time.Time `xorm:"notnull"`
+	Mtime  time.Time `xorm:"notnull"`
 	Ctime  time.Time `xorm:"updated"`
-	Nlink  uint32
-	Length uint64
+	Nlink  uint32    `xorm:"notnull"`
+	Length uint64    `xorm:"notnull"`
 	Rdev   uint32
 	Parent Ino
 }
 
 type chunk struct {
-	Inode  Ino    `xorm:"unique(chunk)"`
-	Indx   uint32 `xorm:"unique(chunk)"`
-	Slices []byte `xorm:"blob"`
+	Inode  Ino    `xorm:"unique(chunk) notnull"`
+	Indx   uint32 `xorm:"unique(chunk) notnull"`
+	Slices []byte `xorm:"blob notnull"`
 }
-
+type sliceRef struct {
+	Chunkid uint64 `xorm:"pk"`
+	Size    uint32 `xorm:"notnull"`
+	Refs    int    `xorm:"notnull"`
+}
 type symlink struct {
 	Inode  Ino    `xorm:"pk"`
-	Target string `xorm:"varchar(4096)"`
+	Target string `xorm:"varchar(4096) notnull"`
 }
 
 type xattr struct {
-	Inode Ino    `xorm:"unique(name)"`
-	Name  string `xorm:"unique(name)"`
-	Value []byte `xorm:"blob"`
+	Inode Ino    `xorm:"unique(name) notnull"`
+	Name  string `xorm:"unique(name) notnull"`
+	Value []byte `xorm:"blob notnull"`
 }
 
 type session struct {
-	Sid       uint64 `xorm:"pk"`
-	Heartbeat time.Time
+	Sid       uint64    `xorm:"pk"`
+	Heartbeat time.Time `xorm:"notnull"`
 }
 
 type sustained struct {
-	Sid   uint64 `xorm:"unique(sustained)"`
-	Inode Ino    `xorm:"unique(sustained)"`
+	Sid   uint64 `xorm:"unique(sustained) notnull"`
+	Inode Ino    `xorm:"unique(sustained) notnull"`
 }
 
 type delfile struct {
-	Inode  Ino    `xorm:"unique(delfile)"`
-	Length uint64 `xorm:"unique(delfile)"`
-	Expire time.Time
-}
-
-type sliceRef struct {
-	Chunkid uint64
-	Size    uint32
-	Refs    int
+	Inode  Ino       `xorm:"pk notnull"`
+	Length uint64    `xorm:"notnull"`
+	Expire time.Time `xorm:"notnull"`
 }
 
 type freeID struct {
@@ -223,7 +221,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		logger.Fatalf("json: %s", err)
 	}
 
-	return errno(m.txn(func(s *xorm.Session) error {
+	return m.txn(func(s *xorm.Session) error {
 		_, err = s.Insert(&setting{"format", string(data)})
 		if err != nil {
 			return err
@@ -253,7 +251,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			counter{"nextCleanupSlices", 0},
 		)
 		return err
-	}))
+	})
 }
 
 func (m *dbMeta) Load() (*Format, error) {
@@ -333,7 +331,7 @@ func (m *dbMeta) nextInode() (Ino, error) {
 	v, err := m.incrCounter("nextInode", 100)
 	if err == nil {
 		m.freeInodes.next = v + 1
-		m.freeInodes.maxid = v + 1000
+		m.freeInodes.maxid = v + 100
 	}
 	return Ino(v), err
 }
@@ -1106,7 +1104,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			} else {
 				ok, err := s.Where("Inode = ?", de.Inode).Get(&dn)
 				if err != nil {
-					return errno(err)
+					return err
 				}
 				if !ok {
 					return syscall.ENOENT
@@ -1376,7 +1374,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 func (m *dbMeta) cleanStaleSessions() {
 	// TODO: once per minute
 	var s session
-	rows, err := m.engine.Where("Heartbeat > ?", time.Now().Add(time.Minute*-5)).Rows(&s)
+	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5)).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -1403,8 +1401,8 @@ func (m *dbMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
 		_ = m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now()}, &session{Sid: m.sid})
-			if err != nil {
+			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now()}, &session{Sid: m.sid})
+			if err != nil || n == 0 {
 				logger.Errorf("update session: %s", err)
 			}
 			return err
@@ -1804,6 +1802,7 @@ func (m *dbMeta) deleteFile(inode Ino, length uint64) {
 			return
 		}
 	}
+	_, _ = m.engine.Delete(delfile{Inode: inode})
 }
 
 func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
@@ -1930,7 +1929,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		}
 	} else {
-		logger.Warnf("compact %d %d: %s", inode, indx, errno)
+		logger.Warnf("compact %d %d: %s", inode, indx, err)
 	}
 	go func() {
 		// wait for the current compaction to finish

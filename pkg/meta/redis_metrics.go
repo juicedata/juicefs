@@ -19,7 +19,7 @@ import "github.com/prometheus/client_golang/prometheus"
 
 var (
 	txDist = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "tx_durations_histogram_seconds",
+		Name:    "transaction_durations_histogram_seconds",
 		Help:    "Transactions latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 	})

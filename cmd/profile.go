@@ -198,14 +198,16 @@ func (p *profiler) flush(timeStamp time.Time, keyStats []keyStat, done bool) {
 		}
 	}
 	output := make([]string, 3)
-	output[0] = fmt.Sprintf("> %s JuiceFS Profiling%s", timeStamp.Format(time.RFC1123), head)
-	output[1] = fmt.Sprintln("[enter]Pause/Continue")
-	output[2] = fmt.Sprintf("%-16s %10s %15s %18s %18s", "OP", "Number", "Average(us)", "Total(us)", "Percentage(%)")
+	output[0] = fmt.Sprintf("> JuiceFS Profiling %13s %45s", head, timeStamp.Format("2006-01-02T15:04:05"))
+	output[2] = fmt.Sprintf("%-14s %10s %15s %18s %14s", "Operation", "Count", "Average(us)", "Total(us)", "Percent(%)")
 	for _, s := range keyStats {
-		output = append(output, fmt.Sprintf("%-16s %10d %15.0f %18d %18.1f",
+		output = append(output, fmt.Sprintf("%-14s %10d %15.0f %18d %14.1f",
 			s.key, s.sPtr.count, float64(s.sPtr.total)/float64(s.sPtr.count), s.sPtr.total, float64(s.sPtr.total)/float64(p.interval.Microseconds())*100.0))
 	}
 	printLines(output, p.tty)
+	if p.replay {
+		output[1] = fmt.Sprintln("\n[enter]Pause/Continue")
+	}
 }
 
 func (p *profiler) flusher() {
@@ -236,7 +238,7 @@ func (p *profiler) flusher() {
 				keyStats = append(keyStats, keyStat{k, s})
 			}
 			sort.Slice(keyStats, func(i, j int) bool { // reversed
-				return keyStats[i].sPtr.count > keyStats[j].sPtr.count
+				return keyStats[i].sPtr.total > keyStats[j].sPtr.total
 			})
 			p.flush(ts, keyStats, done)
 			if done {
@@ -305,7 +307,9 @@ func profile(ctx *cli.Context) error {
 		if prof.tty {
 			fmt.Print("\033[1A\033[K") // move cursor back
 		}
-		prof.pause <- true // pause/continue
+		if prof.replay {
+			prof.pause <- true // pause/continue
+		}
 	}
 }
 

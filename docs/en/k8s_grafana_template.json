@@ -685,7 +685,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(juicefs_redis_tx_durations_histogram_seconds_count{vol_name=\"$name\"}[1m])) by  (node)",
+          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\"}[1m])) by  (node)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -697,7 +697,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Redis Transcations",
+      "title": "Transcations",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -783,7 +783,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(juicefs_redis_tx_durations_histogram_seconds_sum{vol_name=\"$name\"}[1m])) by  (node,mp) * 1000000 / sum(rate(juicefs_redis_tx_durations_histogram_seconds_count{vol_name=\"$name\"}[1m])) by  (node,mp)",
+          "expr": "sum(rate(juicefs_transaction_durations_histogram_seconds_sum{vol_name=\"$name\"}[1m])) by  (node,mp) * 1000000 / sum(rate(juicefs_transaction_durations_histogram_seconds_count{vol_name=\"$name\"}[1m])) by  (node,mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -795,7 +795,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Redis Transcation Latency",
+      "title": "Transcation Latency",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -869,7 +869,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(juicefs_redis_transaction_restart{vol_name=~\"$name\"}[1m])) by (node)",
+          "expr": "sum(rate(juicefs_transaction_restart{vol_name=~\"$name\"}[1m])) by (node)",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Restarts {{node}}",
@@ -879,7 +879,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Redis Transaction Restarts",
+      "title": "Transaction Restarts",
       "tooltip": {
         "shared": true,
         "sort": 0,

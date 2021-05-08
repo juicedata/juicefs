@@ -515,9 +515,13 @@ func testCompaction(t *testing.T, m Meta) {
 	}()
 
 	// random write
-	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Chunkid: uint64(1000), Size: 64 << 20, Len: 64 << 20})
-	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Chunkid: uint64(1001), Size: 8, Len: 8})
-	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Chunkid: uint64(1002), Size: 8, Len: 8})
+	var chunkid uint64
+	m.NewChunk(ctx, inode, 0, 0, &chunkid)
+	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Chunkid: chunkid, Size: 64 << 20, Len: 64 << 20})
+	m.NewChunk(ctx, inode, 0, 0, &chunkid)
+	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Chunkid: chunkid, Size: 8, Len: 8})
+	m.NewChunk(ctx, inode, 0, 0, &chunkid)
+	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Chunkid: chunkid, Size: 8, Len: 8})
 	var cs1 []Slice
 	_ = m.Read(ctx, inode, 1, &cs1)
 	if len(cs1) != 5 {
@@ -538,7 +542,9 @@ func testCompaction(t *testing.T, m Meta) {
 	// append
 	var size uint32 = 1000000
 	for i := 0; i < 50; i++ {
-		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: uint64(i) + 1, Size: size, Len: size}); st != 0 {
+		var chunkid uint64
+		m.NewChunk(ctx, inode, 0, 0, &chunkid)
+		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: chunkid, Size: size, Len: size}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
 		time.Sleep(time.Millisecond)
@@ -615,7 +621,9 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 		go func(indx uint32) {
 			defer g.Done()
 			for j := 0; j < 100; j++ {
-				var slice = Slice{Chunkid: 1, Size: 100, Len: 100}
+				var chunkid uint64
+				m.NewChunk(ctx, inode, indx, 0, &chunkid)
+				var slice = Slice{Chunkid: chunkid, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
 					errno = st
