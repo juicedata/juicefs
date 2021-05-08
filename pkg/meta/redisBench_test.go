@@ -22,6 +22,10 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+func init() {
+	utils.SetOutFile("bench-test.log")
+}
+
 func encodeSlices(size int) []string {
 	w := utils.NewBuffer(24)
 	w.Put32(0)
