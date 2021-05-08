@@ -2,8 +2,8 @@
 
 ## Table of content
 
-- [JuiceFS Quick Start Guide](README.md)
-- [Release Notes](release_notes.md)
+- [What is JuiceFS](introduction.md)
+- [Quick Start Guide](quick_start_guide.md)
 - [Installation & Upgrade](installation.md)
 - Basic Usage
   - Use JuiceFS on Linux
@@ -16,8 +16,7 @@
 - [Command Reference](command_reference.md)
 - Advanced Topic
   - [Redis best practices](redis_best_practices.md)
-  - [JuiceFS single node benchmark](single_node_benchmark.md)
-  - [Mount JuiceFS at boot](mount_at_boot.md)
+  - [JuiceFS benchmark](single_node_benchmark.md)
   - [JuiceFS supported object storage and setup guide ](object_storage_support_and_setup.md)
   - [JuiceFS cache management](cache_management.md)
   - [JuiceFS operations profiling](operations_profiling.md)
@@ -25,12 +24,9 @@
   - [FUSE mount options](fuse_mount_options.md)
   - [JuiceFS sync accounts between multiple hosts](sync_accounts_between_multiple_hosts.md)
   - [Comparison with others](comparison_with_others.md)
+  - [Uasge tracking](usage_tracking.md)
 - [Scenarios & Cases](case/README.md)
-  - Data backup
-  - Big data
-  - Data sharing
-  - Disaster backup 
-  - AI
 - [FAQ](FAQ.md)
+- [Release Notes](release_notes.md)
 - [Glossary](glossary.md)
 

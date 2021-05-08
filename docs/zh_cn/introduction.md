@@ -4,7 +4,7 @@
 
 JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 GNU Affero General Public License v3.0 开源协议下发布。使用 JuiceFS 文件系统存储数据，数据本身会被持久化在对象存储（例如，AWS S3），而数据所对应的元数据会被持久化在 Redis 等高性能的数据库中。 JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
 
-## JuiceFS 的核心特性
+## 核心特性
 
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
 2. **HDFS 兼容**：完整兼容 HDFS API，提供更强的元数据性能；
@@ -16,29 +16,6 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest）；
 9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
 10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
-
-## JuiceFS 的技术架构
-
-JuiceFS 文件系统由三个部分组成：
-
-1. **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes、S3 等文件系统接口的实现；
-2. **数据存储**：存储数据本身，支持本地磁盘、对象存储；
-3. **元数据存储**：存储数据对应的元数据，支持 Redis 等多种引擎；
-
-![](../images/juicefs-arch-new.png)
-
-作为文件系统，JuiceFS 会分别处理数据及其对应的元数据，数据会被存储在对象存储中，元数据会被存储在元数据服务引擎中。
-
-在**数据存储**方面，JuiceFS 支持几乎所有的公有云对象存储，同时也支持 OpenStack Swift、Ceph、MinIO 等私有化的对象存储。
-
-在**元数据存储**方面，JuiceFS 采用多引擎设计，目前已支持 [Redis](https://redis.io/) 作为元数据服务引擎，也将陆续实现对 TiKV、PostgreSQL、MariaDB、MySQL、Oracle 等更多数据引擎的支持。
-
-在**文件系统接口**实现方面：
-
-- 通过 **FUSE** ，JuiceFS 文件系统能够以 POSIX 兼容的方式挂载到服务器，将海量云端存储直接当做本地存储来使用。
-- 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。
-- 通过 **Kubernetes CSI driver**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。
-- 通过 **S3 Gateway**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。
 
 ## JuiceFS 如何存储文件
 
@@ -84,7 +61,7 @@ Result: PASS
 
 ## 性能对比
 
-### 吞吐量测试
+### 吞吐量
 
 使用 [fio](https://github.com/axboe/fio) 在 JuiceFS、[EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 上执行连续读写测试，结果如下：
 
@@ -92,7 +69,7 @@ Result: PASS
 
 结果表明，JuiceFS 可以提供比另外两个工具大10倍的吞吐量，[了解更多](../en/fio.md)。
 
-### 元数据 IOPS 测试
+### 元数据 IOPS
 
 使用 [mdtest](https://github.com/hpc/ior) 在 JuiceFS、[EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 上执行简易的 mdtest  基准测试，结果如下：
 
