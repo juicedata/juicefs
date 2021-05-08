@@ -19,13 +19,11 @@ package meta
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 )
-
 
 func TestRedisClient(t *testing.T) {
 	var conf Config
@@ -718,4 +716,3 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		}
 	}
 }
-

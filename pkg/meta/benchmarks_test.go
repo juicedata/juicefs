@@ -68,8 +68,8 @@ func BenchmarkReadSlices(b *testing.B) {
 
 func prepareParent(m Meta, name string, inode *Ino) error {
 	ctx := Background
-	if err := m.Rmr(ctx, 1, name); err != 0 && err != syscall.ENOENT {
-		return fmt.Errorf("rmr: %s", err)
+	if err := Remove(m, ctx, 1, name); err != 0 && err != syscall.ENOENT {
+		return fmt.Errorf("remove: %s", err)
 	}
 	if err := m.Mkdir(ctx, 1, name, 0755, 0, 0, inode, nil); err != 0 {
 		return fmt.Errorf("mkdir: %s", err)
@@ -139,30 +139,6 @@ func rmdir(b *testing.B, m Meta, n int) {
 	}
 }
 
-func BenchmarkDir(b *testing.B) { // mkdir, rename dir, rmdir
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
-	if err != nil {
-		b.Skipf("redis is not available: %s", err)
-	}
-	_ = m.Init(Format{Name: "bench"}, true)
-	_ = m.NewSession()
-
-	cases := []struct {
-		desc string
-		size int
-	}{
-		{"1", 1},
-		{"100", 100},
-		{"10k", 10000},
-	}
-	for _, c := range cases {
-		b.Run(fmt.Sprintf("mkdir_%s", c.desc), func(b *testing.B) { mkdir(b, m, c.size) })
-		b.Run(fmt.Sprintf("mvdir_%s", c.desc), func(b *testing.B) { mvdir(b, m, c.size) })
-		b.Run(fmt.Sprintf("rmdir_%s", c.desc), func(b *testing.B) { rmdir(b, m, c.size) })
-	}
-}
-
 func readdir(b *testing.B, m Meta, n int) {
 	ctx := Background
 	dname := fmt.Sprintf("largedir%d", n)
@@ -170,7 +146,7 @@ func readdir(b *testing.B, m Meta, n int) {
 	var es []*Entry
 	if m.Lookup(ctx, 1, dname, &inode, nil) == 0 && m.Readdir(ctx, inode, 0, &es) == 0 && len(es) == n+2 {
 	} else {
-		_ = m.Rmr(ctx, 1, dname)
+		_ = Remove(m, ctx, 1, dname)
 		_ = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &inode, nil)
 		for j := 0; j < n; j++ {
 			_ = m.Create(ctx, inode, fmt.Sprintf("d%d", j), 0755, 0, nil, nil)
@@ -186,29 +162,6 @@ func readdir(b *testing.B, m Meta, n int) {
 		if len(entries) != n+2 {
 			b.Fatalf("files: %d != %d", len(entries), n+2)
 		}
-	}
-}
-
-func BenchmarkReaddir(b *testing.B) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
-	if err != nil {
-		b.Skipf("redis is not available: %s", err)
-	}
-	_ = m.Init(Format{Name: "bench"}, true)
-	_ = m.NewSession()
-
-	cases := []struct {
-		desc string
-		size int
-	}{
-		{"10", 10},
-		{"1k", 1000},
-		// {"100k", 100000},
-		// {"10m", 10000000},
-	}
-	for _, c := range cases {
-		b.Run(c.desc, func(b *testing.B) { readdir(b, m, c.size) })
 	}
 }
 
@@ -396,15 +349,63 @@ func access(b *testing.B, m Meta, n int) { // contains a Getattr
 	}
 }
 
-func BenchmarkFile(b *testing.B) {
-	var conf RedisConfig
-	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
-	if err != nil {
-		b.Skipf("redis is not available: %s", err)
-	}
+func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir
 	_ = m.Init(Format{Name: "bench"}, true)
 	_ = m.NewSession()
+	cases := []struct {
+		desc string
+		size int
+	}{
+		{"1", 1},
+		{"100", 100},
+		{"10k", 10000},
+	}
+	for _, c := range cases {
+		b.Run(fmt.Sprintf("mkdir_%s", c.desc), func(b *testing.B) { mkdir(b, m, c.size) })
+		b.Run(fmt.Sprintf("mvdir_%s", c.desc), func(b *testing.B) { mvdir(b, m, c.size) })
+		b.Run(fmt.Sprintf("rmdir_%s", c.desc), func(b *testing.B) { rmdir(b, m, c.size) })
+	}
+}
 
+func BenchmarkRedisDir(b *testing.B) {
+	m := NewClient("redis://127.0.0.1/10", &Config{})
+	benchmarkDir(b, m)
+}
+func BenchmarkSQLDir(b *testing.B) {
+	m := NewClient("sqlite3://test.db", &Config{})
+	benchmarkDir(b, m)
+}
+
+func benchmarkReaddir(b *testing.B, m Meta) {
+	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.NewSession()
+	cases := []struct {
+		desc string
+		size int
+	}{
+		{"10", 10},
+		{"1k", 1000},
+		// {"100k", 100000},
+		// {"10m", 10000000},
+	}
+	for _, c := range cases {
+		b.Run(c.desc, func(b *testing.B) { readdir(b, m, c.size) })
+	}
+}
+
+func BenchmarkRedisReaddir(b *testing.B) {
+	m := NewClient("redis://127.0.0.1/10", &Config{})
+	benchmarkReaddir(b, m)
+}
+
+func BenchmarkSQLReaddir(b *testing.B) {
+	m := NewClient("sqlite3://test.db", &Config{})
+	benchmarkReaddir(b, m)
+}
+
+func benchmarkFile(b *testing.B, m Meta) {
+	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.NewSession()
 	cases := []struct {
 		desc string
 		size int
@@ -423,4 +424,14 @@ func BenchmarkFile(b *testing.B) {
 		b.Run(fmt.Sprintf("setattr_%s", c.desc), func(b *testing.B) { setattr(b, m, c.size) })
 		b.Run(fmt.Sprintf("access_%s", c.desc), func(b *testing.B) { access(b, m, c.size) })
 	}
+}
+
+func BenchmarkRedisFile(b *testing.B) {
+	m := NewClient("redis://127.0.0.1/10", &Config{})
+	benchmarkFile(b, m)
+}
+
+func BenchmarkSQLFile(b *testing.B) {
+	m := NewClient("sqlite3://test.db", &Config{})
+	benchmarkFile(b, m)
 }
