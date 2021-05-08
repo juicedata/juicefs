@@ -54,11 +54,11 @@ As a file system, JuiceFS is no exception. Its strong consistency and high perfo
 
 Unlike the traditional file system that can only use local disks to store data and corresponding metadata, JuiceFS will format the data and store it in object storage (cloud storage), and store the metadata corresponding to the data in databases such as Redis. .
 
-Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the default upper limit is 64 MiB. Each Chunk is composed of one or more **"Slice"**. The length of the slice is not fixed, depending on the way the file is written. Each slice will be further split into fixed-size **"Block"**, which is 4 MiB by default. Finally, these blocks will be stored in the object storage. At the same time, JuiceFS will store the metadata information of Chunk, Slice, and Block of each file in metadata engines such as Redis.
+Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the default upper limit is 64 MiB. Each Chunk is composed of one or more **"Slice"**. The length of the slice is not fixed, depending on the way the file is written. Each slice will be further split into fixed-size **"Block"**, which is 4 MiB by default. Finally, these blocks will be stored in the object storage. At the same time, JuiceFS will store each file and its Chunks, Slices, Blocks and other metadata information in metadata engines.
 
 ![JuiceFS storage format](../images/juicefs-storage-format-new.png)
 
-Files in JuiceFS are eventually split into Chunks, Slices and Blocks and stored in object storage. Therefore, you will find that the source file stored in JuiceFS cannot be found in the object storage browser. There is only one chunks directory and a bunch of digitally numbered directories and files in the bucket. Don't panic, this is the secret of the high-performance operation of the JuiceFS file system!
+Using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you will find that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform. There is a chunks directory and a bunch of digitally numbered directories and files in the bucket. Don't panic, this is the secret of the high-performance operation of the JuiceFS file system!
 
 ![How JuiceFS stores your files](../images/how-juicefs-stores-files-new.png)
 
@@ -193,7 +193,7 @@ You can download the latest pre-compiled binary program from [here](https://gith
 
 For ease of use, you can create a folder named `juicefs` in the root directory of `C:\`, and extract the `juicefs.exe` into this folder. Then add the path `C:\juicefs` to the environment variables of the system. After restarting the system to make the settings take effect, you can directly use the system's built-in `Command Prompt` or `PowerShell` to execute the `juicefs` command.
 
-![Windows ENV path](../images/windows-path.png)
+![Windows ENV path](../images/windows-path-en.png)
 
 ### 3. Mount JuiceFS file system
 
@@ -210,10 +210,10 @@ $ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access
 Execute the following command to mount the `music` file system to `Z` drive:
 
 ```power
-> juicefs.exe mount redis://192.168.1.6:6379/1 Z:
+> juicefs.exe mount redis://192.168.1.8:6379/1 Z:
 ```
 
-![](../images/juicefs-on-windows.png)
+![](../images/juicefs-on-windows-new.png)
 
 As shown in the figure above, JuiceFS client will mount the file system as a network drive as the specified system drive letter. You can change to another drive letter according to actual needs, but be careful not to use the drive letter that is already occupied.
 

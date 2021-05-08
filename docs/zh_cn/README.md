@@ -4,7 +4,7 @@
 
 ![JuiceFS LOGO](../images/juicefs-logo.png)
 
-JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 GNU Affero General Public License v3.0 开源协议下发布。使用 JuiceFS 文件系统存储数据，数据本身会被持久化在对象存储（例如，AWS S3），而数据所对应的元数据会被持久化在 Redis 等高性能的数据库中。 JuiceFS 可以简单便捷的将海量云端存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
+JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 GNU Affero General Public License v3.0 开源协议下发布。使用 JuiceFS 文件系统存储数据，数据本身会被持久化在对象存储（例如，AWS S3），而数据所对应的元数据会被持久化在 Redis 等高性能的数据库中。 JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
 
 ## JuiceFS 的核心特性
 
@@ -50,11 +50,11 @@ JuiceFS 作为一个文件系统也不例外，它的强一致性、高性能等
 
 与传统文件系统只能使用本地磁盘存储数据和对应的元数据的模式不同，JuiceFS 会将数据格式化以后存储在对象存储（云存储），同时会将数据对应的元数据存储在 Redis 等数据库中。
 
-任何存入 JuiceFS 的文件都会被拆分成固定大小的 **"Chunk"**，默认的容量上限是 64 MiB。每个 Chunk 由一个或多个 **“Slice”** 组成，Slice 的长度不固定，取决于文件写入的方式。每个 Slice 又会被进一步拆分成固定大小的 **"Block"**，默认为 4 MiB。最后，这些 Block 会被存储到对象存储。与此同时，JuiceFS 会将每个文件的 Chunk、Slice、Block 的元数据信息存储在 Redis 等元数据引擎中。
+任何存入 JuiceFS 的文件都会被拆分成固定大小的 **"Chunk"**，默认的容量上限是 64 MiB。每个 Chunk 由一个或多个 **“Slice”** 组成，Slice 的长度不固定，取决于文件写入的方式。每个 Slice 又会被进一步拆分成固定大小的 **"Block"**，默认为 4 MiB。最后，这些 Block 会被存储到对象存储。与此同时，JuiceFS 会将每个文件以及它的 Chunks、Slices、Blocks 等元数据信息存储在元数据引擎中。
 
 ![JuiceFS storage format](../images/juicefs-storage-format-new.png)
 
-在 JuiceFS 中的文件最终被拆分成 Chunks、Slices 和 Blocks 存储在对象存储中。因此，你会发现在对象存储浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 文件系统高性能运作的秘诀！
+使用 JuiceFS，文件最终会被拆分成 Chunks、Slices 和 Blocks 存储在对象存储。因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 文件系统高性能运作的秘诀！
 
 ![How JuiceFS stores your files](C:\Users\Herald\repo\juicefs\docs\images\how-juicefs-stores-files-new.png)
 
@@ -206,10 +206,10 @@ $ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access
 执行以下命令，将 `music` 文件系统挂载到 Z 盘。
 
 ```power
-> juicefs.exe mount redis://192.168.1.6:6379/1 Z:
+> juicefs.exe mount redis://192.168.1.8:6379/1 Z:
 ```
 
-![](../images/juicefs-on-windows.png)
+![](../images/juicefs-on-windows-new.png)
 
 如上图，JuiceFS 客户端会把文件系统以网络驱动器的形式挂载为指定的系统盘符，你可以根据实际需要改用其他的盘符，但注意不要使用已经被占用的盘符。
 
@@ -256,7 +256,7 @@ $ juicefs mount redis://192.168.1.8:6379/1 ~/music
 
 ## POSIX 兼容性
 
-JuiceFS passed all of the 8813 tests in latest [pjdfstest](https://github.com/pjd/pjdfstest).
+JuiceFS 通过了 [pjdfstest](https://github.com/pjd/pjdfstest) 最新的 8813 项 POSIX 文件系统兼容性测试。
 
 ```
 All tests successful.
@@ -269,7 +269,7 @@ Files=235, Tests=8813, 233 wallclock secs ( 2.77 usr  0.38 sys +  2.57 cusr  3.9
 Result: PASS
 ```
 
-Besides the things covered by pjdfstest, JuiceFS provides:
+此外，JuiceFS 还提供：
 
 - Close-to-open consistency. Once a file is closed, the following open and read can see the data written before close. Within same mount point, read can see all data written before it.
 - Rename and all other metadata operations are atomic guaranteed by Redis transaction.
@@ -280,11 +280,11 @@ Besides the things covered by pjdfstest, JuiceFS provides:
 - BSD locks (flock).
 - POSIX record locks (fcntl).
 
-## Performance Benchmark
+## 性能测试
 
-### Basic benchmark
+### 基础测试
 
-JuiceFS provides a subcommand to run a few basic benchmarks to understand how it works in your environment:
+JuiceFS 提供了一个子命令来运行一些基本的基准测试，用以评估 JuiceFS 在当前环境的运行情况：
 
 ```
 $ ./juicefs bench /jfs
@@ -301,25 +301,25 @@ Delete object: 356, avg: 0.2 ms
 Used: 23.4s, CPU: 69.1%, MEM: 147.0 MiB
 ```
 
-### Throughput
+### 吞吐量
 
-Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio), here is the result:
+使用 [fio](https://github.com/axboe/fio) 在 JuiceFS、[EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 上执行连续读写测试，结果如下：
 
 [![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](https://github.com/juicedata/juicefs/blob/main/docs/images/sequential-read-write-benchmark.svg)
 
-It shows JuiceFS can provide 10X more throughput than the other two, read [more details](https://github.com/juicedata/juicefs/blob/main/docs/en/fio.md).
+结果表明，JuiceFS 可以提供比另外两个工具大10倍的吞吐量，[了解更多](../en/fio.md)。
 
-### Metadata IOPS
+### 元数据 IOPS
 
-Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior), here is the result:
+使用 [mdtest](https://github.com/hpc/ior) 在 JuiceFS、[EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 上执行简易的 mdtest  基准测试，结果如下：
 
 [![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](../en/mdtest.md).
+结果表明，JuiceFS 可以提供比另外两个工具更高的元数据 IOPS，[了解更多](../en/mdtest.md)。
 
-### Analyze performance
+### 性能分析
 
-There is a virtual file called `.accesslog` in the root of JuiceFS to show all the operations and the time they takes, for example:
+JuiceFS 的根目录中有一个名为`.accesslog` 的虚拟文件，它记录了文件系统上的所有操作及其花费的时间，例如：
 
 ```
 $ cat /jfs/.accesslog
@@ -328,13 +328,15 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-The last number on each line is the time (in seconds) current operation takes. You can use this directly to debug and analyze performance issues, or try `./juicefs profile /jfs` to monitor real time statistics. Please run `./juicefs profile -h` or refer to [here](https://github.com/juicedata/juicefs/blob/main/docs/en/operations_profiling.md) to learn more about this subcommand.
+每行的最后一个数字是当前操作花费的时间（以秒为单位）。 您可以用它调试和分析性能问题，或者尝试使用`./juicefs profile / jfs` 查看实时统计信息。运行 `./juicefs profile -h` 或 [点此](../en/operations_profiling.md)了解该命令的更多信息。
 
 ## 用量统计
 
-JuiceFS by default collects **anonymous** usage data. It only collects core metrics (e.g. version number), no user or any sensitive data will be collected. You could review related code [here](https://github.com/juicedata/juicefs/blob/main/pkg/usage/usage.go).
+JuiceFS 默认会收集 **匿名** 用量数据。它仅收集核心指标（例如版本号），不会收集任何用户信息或任何敏感数据。您可以在[此处](https://github.com/juicedata/juicefs/blob/main/pkg/usage/usage.go)查看相关代码。
 
 These data help us understand how the community is using this project. You could disable reporting easily by command line option `--no-usage-report`:
+
+这些数据有助于我们了解社区如何使用此项目。您可以通过命令行选项 `--no-usage-report` 禁用该功能：
 
 ```
 $ ./juicefs mount --no-usage-report
