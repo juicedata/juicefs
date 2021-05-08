@@ -49,6 +49,18 @@ var (
 		Name: "blockcache_miss",
 		Help: "missed read from cached block",
 	})
+	cacheWrites = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "blockcache_writes",
+		Help: "written cached block",
+	})
+	cacheDrops = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "blockcache_drops",
+		Help: "dropped block",
+	})
+	cacheEvicts = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "blockcache_evicts",
+		Help: "evicted cache blocks",
+	})
 	cacheHitBytes = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "blockcache_hit_bytes",
 		Help: "read bytes from cached block",
@@ -56,6 +68,20 @@ var (
 	cacheMissBytes = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "blockcache_miss_bytes",
 		Help: "missed bytes from cached block",
+	})
+	cacheWriteBytes = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "blockcache_write_bytes",
+		Help: "write bytes of cached block",
+	})
+	cacheReadHist = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "blockcache_read_hist_seconds",
+		Help:    "read cached block latency distribution",
+		Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
+	})
+	cacheWriteHist = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "blockcache_write_hist_seconds",
+		Help:    "write cached block latency distribution",
+		Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
 	})
 )
 
@@ -124,6 +150,7 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 
 	key := c.key(indx)
 	if c.store.conf.CacheSize > 0 {
+		start := time.Now()
 		r, err := c.store.bcache.load(key)
 		if err == nil {
 			n, err = r.ReadAt(p, int64(boff))
@@ -131,6 +158,7 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			if err == nil {
 				cacheHits.Add(1)
 				cacheHitBytes.Add(float64(n))
+				cacheReadHist.Observe(time.Since(start).Seconds())
 				return n, nil
 			}
 			if f, ok := r.(*os.File); ok {
@@ -682,6 +710,12 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 	_ = prometheus.Register(cacheHitBytes)
 	_ = prometheus.Register(cacheMiss)
 	_ = prometheus.Register(cacheMissBytes)
+	_ = prometheus.Register(cacheWrites)
+	_ = prometheus.Register(cacheWriteBytes)
+	_ = prometheus.Register(cacheDrops)
+	_ = prometheus.Register(cacheEvicts)
+	_ = prometheus.Register(cacheReadHist)
+	_ = prometheus.Register(cacheWriteHist)
 	_ = prometheus.Register(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_blocks",

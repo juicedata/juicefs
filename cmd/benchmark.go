@@ -295,6 +295,8 @@ func benchmark(c *cli.Context) error {
 		show("Put object", "object_request_durations_histogram_seconds_PUT")
 		show("Get object first byte", "object_request_durations_histogram_seconds_GET")
 		show("Delete object", "object_request_durations_histogram_seconds_DELETE")
+		show("Write into cache", "blockcache_write_hist_seconds")
+		show("Read from cache", "blockcache_read_hist_seconds")
 		fmt.Printf("Used: %.1fs, CPU: %.1f%%, MEM: %.1f MiB\n", st("uptime"),
 			st("cpu_usage")*100/st("uptime"), stats2["juicefs_memory"]/1024/1024)
 	}
