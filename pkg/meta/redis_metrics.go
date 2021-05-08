@@ -18,18 +18,18 @@ package meta
 import "github.com/prometheus/client_golang/prometheus"
 
 var (
-	redisTxDist = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "redis_tx_durations_histogram_seconds",
-		Help:    "Redis transactions latency distributions.",
+	txDist = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "transaction_durations_histogram_seconds",
+		Help:    "Transactions latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 	})
-	redisTxRestart = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "redis_transaction_restart",
-		Help: "The number of times a Redis transaction is restarted.",
+	txRestart = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "transaction_restart",
+		Help: "The number of times a transaction is restarted.",
 	})
 )
 
 func InitMetrics() {
-	prometheus.MustRegister(redisTxDist)
-	prometheus.MustRegister(redisTxRestart)
+	prometheus.MustRegister(txDist)
+	prometheus.MustRegister(txRestart)
 }

@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"strings"
 	"syscall"
 )
 
@@ -203,11 +204,6 @@ type Meta interface {
 	// Setlk sets a file range lock on given file.
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
 
-	// Summary returns the summary for given file or directory.
-	Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno
-	// Rmr remove all the files and directories recursively.
-	Rmr(ctx Context, inode Ino, name string) syscall.Errno
-
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context) syscall.Errno
 	// ListSlices returns all slices used by all files.
@@ -215,4 +211,27 @@ type Meta interface {
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
+}
+
+// NewClient creates a Meta client for given uri.
+func NewClient(uri string, conf *Config) Meta {
+	if !strings.Contains(uri, "://") {
+		uri = "redis://" + uri
+	}
+	logger.Infof("Meta address: %s", uri)
+	var m Meta
+	var err error
+	if strings.HasPrefix(uri, "redis") {
+		m, err = newRedisMeta(uri, conf)
+	} else {
+		p := strings.Index(uri, "://")
+		if p < 0 {
+			logger.Fatalf("invalid uri: %s", uri)
+		}
+		m, err = newSQLMeta(uri[:p], uri[p+3:], conf)
+	}
+	if err != nil {
+		logger.Fatalf("Meta is not available: %s", err)
+	}
+	return m
 }

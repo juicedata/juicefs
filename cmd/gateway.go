@@ -141,16 +141,11 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
 
 	c := g.ctx
-	redisAddr := c.Args().Get(0)
-	if !strings.Contains(redisAddr, "://") {
-		redisAddr = "redis://" + redisAddr
-	}
-	logger.Infof("Meta address: %s", redisAddr)
-	var rc = meta.RedisConfig{Retries: 10, Strict: true}
-	m, err := meta.NewRedisMeta(redisAddr, &rc)
-	if err != nil {
-		logger.Fatalf("Meta: %s", err)
-	}
+	addr := c.Args().Get(0)
+	m := meta.NewClient(addr, &meta.Config{
+		Retries: 10,
+		Strict:  true,
+	})
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
@@ -206,7 +201,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 
 	conf := &vfs.Config{
 		Meta: &meta.Config{
-			IORetries: 10,
+			Retries: 10,
 		},
 		Format:    format,
 		Version:   version.Version(),
