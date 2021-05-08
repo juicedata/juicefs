@@ -438,6 +438,64 @@ func listxattr(b *testing.B, m Meta, n int) {
 	}
 }
 
+func benchLink(b *testing.B, m Meta) {
+	var parent Ino
+	if err := prepareParent(m, "benchLink", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "source", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := m.Link(ctx, inode, parent, fmt.Sprintf("l%d", i), nil); err != 0 {
+			b.Fatalf("link: %s", err)
+		}
+	}
+}
+
+func benchSymlink(b *testing.B, m Meta) {
+	var parent Ino
+	if err := prepareParent(m, "benchSymlink", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "source", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := m.Symlink(ctx, parent, fmt.Sprintf("s%d", i), "/benchSymlink/source", nil, nil); err != 0 {
+			b.Fatalf("symlink: %s", err)
+		}
+	}
+}
+
+func benchReadlink(b *testing.B, m Meta) {
+	var parent Ino
+	if err := prepareParent(m, "benchReadlink", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "source", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	if err := m.Symlink(ctx, parent, "slink", "/benchReadlink/source", &inode, nil); err != 0 {
+		b.Fatalf("symlink: %s", err)
+	}
+	var buf []byte
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := m.ReadLink(ctx, inode, &buf); err != 0 {
+			b.Fatalf("readlink: %s", err)
+		}
+	}
+}
+
 func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir
 	_ = m.Init(Format{Name: "bench"}, true)
 	_ = m.NewSession()
@@ -543,4 +601,23 @@ func BenchmarkRedisXattr(b *testing.B) {
 func BenchmarkSQLXattr(b *testing.B) {
 	m := NewClient("sqlite3://test.db", &Config{})
 	benchmarkXattr(b, m)
+}
+
+func benchmarkLink(b *testing.B, m Meta) {
+	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.NewSession()
+	b.Run("link", func(b *testing.B) { benchLink(b, m) })
+	b.Run("symlink", func(b *testing.B) { benchSymlink(b, m) })
+	// maybe meaningless since symlink would be cached
+	// b.Run("readlink", func(b *testing.B) { benchReadlink(b, m) })
+}
+
+func BenchmarkRedisLink(b *testing.B) {
+	m := NewClient("redis://127.0.0.1/10", &Config{})
+	benchmarkLink(b, m)
+}
+
+func BenchmarkSQLLink(b *testing.B) {
+	m := NewClient("sqlite3://test.db", &Config{})
+	benchmarkLink(b, m)
 }
