@@ -23,6 +23,11 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+const (
+	redisAddr  = "redis://127.0.0.1/10"
+	sqliteAddr = "sqlite3://test.db"
+)
+
 func init() {
 	utils.SetOutFile("bench-test.log")
 }
@@ -77,7 +82,7 @@ func prepareParent(m Meta, name string, inode *Ino) error {
 	return nil
 }
 
-func mkdir(b *testing.B, m Meta, n int) {
+func benchMkdir(b *testing.B, m Meta) {
 	var parent Ino
 	if err := prepareParent(m, "benchMkdir", &parent); err != nil {
 		b.Fatal(err)
@@ -85,38 +90,30 @@ func mkdir(b *testing.B, m Meta, n int) {
 	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < n; j++ {
-			if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
-				b.Fatalf("mkdir: %s", err)
-			}
+		if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0755, 0, 0, nil, nil); err != 0 {
+			b.Fatalf("mkdir: %s", err)
 		}
 	}
 }
 
-func mvdir(b *testing.B, m Meta, n int) { // rename dir
+func benchMvdir(b *testing.B, m Meta) { // rename dir
 	var parent Ino
 	if err := prepareParent(m, "benchMvdir", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
+	if err := m.Mkdir(ctx, parent, "d0", 0755, 0, 0, nil, nil); err != 0 {
+		b.Fatalf("mkdir: %s", err)
+	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
-				b.Fatalf("mkdir: %s", err)
-			}
-		}
-		b.StartTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Rename(ctx, parent, fmt.Sprintf("d%d_%d", i, j), parent, fmt.Sprintf("rd%d_%d", i, j), nil, nil); err != 0 {
-				b.Fatalf("rename dir: %s", err)
-			}
+		if err := m.Rename(ctx, parent, fmt.Sprintf("d%d", i), parent, fmt.Sprintf("d%d", i+1), nil, nil); err != 0 {
+			b.Fatalf("rename dir: %s", err)
 		}
 	}
 }
 
-func rmdir(b *testing.B, m Meta, n int) {
+func benchRmdir(b *testing.B, m Meta) {
 	var parent Ino
 	if err := prepareParent(m, "benchRmdir", &parent); err != nil {
 		b.Fatal(err)
@@ -125,39 +122,32 @@ func rmdir(b *testing.B, m Meta, n int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
-				b.Fatalf("mkdir: %s", err)
-			}
+		if err := m.Mkdir(ctx, parent, "dir", 0755, 0, 0, nil, nil); err != 0 {
+			b.Fatalf("mkdir: %s", err)
 		}
 		b.StartTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Rmdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j)); err != 0 {
-				b.Fatalf("rmdir: %s", err)
-			}
+		if err := m.Rmdir(ctx, parent, "dir"); err != 0 {
+			b.Fatalf("rmdir: %s", err)
 		}
 	}
 }
 
-func readdir(b *testing.B, m Meta, n int) {
+func benchReaddir(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchReaddir", &parent); err != nil {
+		b.Fatal(err)
+	}
 	ctx := Background
-	dname := fmt.Sprintf("largedir%d", n)
-	var inode Ino
-	var es []*Entry
-	if m.Lookup(ctx, 1, dname, &inode, nil) == 0 && m.Readdir(ctx, inode, 0, &es) == 0 && len(es) == n+2 {
-	} else {
-		_ = Remove(m, ctx, 1, dname)
-		_ = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &inode, nil)
-		for j := 0; j < n; j++ {
-			_ = m.Create(ctx, inode, fmt.Sprintf("d%d", j), 0755, 0, nil, nil)
+	for j := 0; j < n; j++ {
+		if err := m.Create(ctx, parent, fmt.Sprintf("f%d", j), 0644, 022, nil, nil); err != 0 {
+			b.Fatalf("create: %s", err)
 		}
 	}
-
+	var entries []*Entry
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		var entries []*Entry
-		if e := m.Readdir(ctx, inode, 1, &entries); e != 0 {
-			b.Fatalf("readdir: %s", e)
+		if err := m.Readdir(ctx, parent, 1, &entries); err != 0 {
+			b.Fatalf("readdir: %s", err)
 		}
 		if len(entries) != n+2 {
 			b.Fatalf("files: %d != %d", len(entries), n+2)
@@ -165,7 +155,7 @@ func readdir(b *testing.B, m Meta, n int) {
 	}
 }
 
-func mknod(b *testing.B, m Meta, n int) {
+func benchMknod(b *testing.B, m Meta) {
 	var parent Ino
 	if err := prepareParent(m, "benchMknod", &parent); err != nil {
 		b.Fatal(err)
@@ -173,15 +163,13 @@ func mknod(b *testing.B, m Meta, n int) {
 	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < n; j++ {
-			if err := m.Mknod(ctx, parent, fmt.Sprintf("f%d_%d", i, j), TypeFile, 0644, 022, 0, nil, nil); err != 0 {
-				b.Fatalf("mknod: %s", err)
-			}
+		if err := m.Mknod(ctx, parent, fmt.Sprintf("f%d", i), TypeFile, 0644, 022, 0, nil, nil); err != 0 {
+			b.Fatalf("mknod: %s", err)
 		}
 	}
 }
 
-func create(b *testing.B, m Meta, n int) {
+func benchCreate(b *testing.B, m Meta) {
 	var parent Ino
 	if err := prepareParent(m, "benchCreate", &parent); err != nil {
 		b.Fatal(err)
@@ -189,38 +177,30 @@ func create(b *testing.B, m Meta, n int) {
 	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < n; j++ {
-			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, nil, nil); err != 0 {
-				b.Fatalf("create: %s", err)
-			}
+		if err := m.Create(ctx, parent, fmt.Sprintf("f%d", i), 0644, 022, nil, nil); err != 0 {
+			b.Fatalf("create: %s", err)
 		}
 	}
 }
 
-func rename(b *testing.B, m Meta, n int) {
+func benchRename(b *testing.B, m Meta) {
 	var parent Ino
 	if err := prepareParent(m, "benchRename", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
+	if err := m.Create(ctx, parent, "f0", 0644, 022, nil, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, nil, nil); err != 0 {
-				b.Fatalf("create: %s", err)
-			}
-		}
-		b.StartTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Rename(ctx, parent, fmt.Sprintf("f%d_%d", i, j), parent, fmt.Sprintf("rf%d_%d", i, j), nil, nil); err != 0 {
-				b.Fatalf("rename file: %s", err)
-			}
+		if err := m.Rename(ctx, parent, fmt.Sprintf("f%d", i), parent, fmt.Sprintf("f%d", i+1), nil, nil); err != 0 {
+			b.Fatalf("rename file: %s", err)
 		}
 	}
 }
 
-func unlink(b *testing.B, m Meta, n int) {
+func benchUnlink(b *testing.B, m Meta) {
 	var parent Ino
 	if err := prepareParent(m, "benchUnlink", &parent); err != nil {
 		b.Fatal(err)
@@ -229,133 +209,96 @@ func unlink(b *testing.B, m Meta, n int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, nil, nil); err != 0 {
-				b.Fatalf("create: %s", err)
-			}
+		if err := m.Create(ctx, parent, "file", 0644, 022, nil, nil); err != 0 {
+			b.Fatalf("create: %s", err)
 		}
 		b.StartTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Unlink(ctx, parent, fmt.Sprintf("f%d_%d", i, j)); err != 0 {
-				b.Fatalf("unlink: %s", err)
-			}
+		if err := m.Unlink(ctx, parent, "file"); err != 0 {
+			b.Fatalf("unlink: %s", err)
 		}
 	}
 }
 
-func lookup(b *testing.B, m Meta, n int) {
+func benchLookup(b *testing.B, m Meta) {
 	var parent Ino
 	if err := prepareParent(m, "benchLookup", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
+	if err := m.Create(ctx, parent, "file", 0644, 022, nil, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
 	var inode Ino
 	var attr Attr
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, nil, nil); err != 0 {
-				b.Fatalf("create: %s", err)
-			}
-		}
-		b.StartTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Lookup(ctx, parent, fmt.Sprintf("f%d_%d", i, j), &inode, &attr); err != 0 {
-				b.Fatalf("lookup: %s", err)
-			}
+		if err := m.Lookup(ctx, parent, "file", &inode, &attr); err != 0 {
+			b.Fatalf("lookup: %s", err)
 		}
 	}
 }
 
-func getattr(b *testing.B, m Meta, n int) {
-	var parent Ino
+func benchGetAttr(b *testing.B, m Meta) {
+	var parent, inode Ino
 	if err := prepareParent(m, "benchGetAttr", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
-	var inode Ino
+	if err := m.Create(ctx, parent, "file", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
 	var attr Attr
-	inodes := make([]Ino, n)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, &inode, nil); err != 0 {
-				b.Fatalf("create: %s", err)
-			}
-			inodes[j] = inode
-		}
-		b.StartTimer()
-		for j := 0; j < n; j++ {
-			if err := m.GetAttr(ctx, inodes[j], &attr); err != 0 {
-				b.Fatalf("getattr: %s", err)
-			}
+		if err := m.GetAttr(ctx, inode, &attr); err != 0 {
+			b.Fatalf("getattr: %s", err)
 		}
 	}
 }
 
-func setattr(b *testing.B, m Meta, n int) {
-	var parent Ino
+func benchSetAttr(b *testing.B, m Meta) {
+	var parent, inode Ino
 	if err := prepareParent(m, "benchSetAttr", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
-	var inode Ino
-	var attr = Attr{Mode: 0755}
-	inodes := make([]Ino, n)
+	if err := m.Create(ctx, parent, "file", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	var attr = Attr{Mode: 0644}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, &inode, nil); err != 0 {
-				b.Fatalf("create: %s", err)
-			}
-			inodes[j] = inode
-		}
-		b.StartTimer()
-		for j := 0; j < n; j++ {
-			if err := m.SetAttr(ctx, inodes[j], SetAttrMode, 0, &attr); err != 0 {
-				b.Fatalf("setattr: %s", err)
-			}
+		attr.Mode ^= 1
+		if err := m.SetAttr(ctx, inode, SetAttrMode, 0, &attr); err != 0 {
+			b.Fatalf("setattr: %s", err)
 		}
 	}
 }
 
-func access(b *testing.B, m Meta, n int) { // contains a Getattr
-	var parent Ino
+func benchAccess(b *testing.B, m Meta) { // contains a Getattr
+	var parent, inode Ino
 	if err := prepareParent(m, "benchAccess", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
+	if err := m.Create(ctx, parent, "file", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
 	myCtx := NewContext(100, 1, []uint32{1})
-	var inode Ino
-	inodes := make([]Ino, n)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, &inode, nil); err != 0 {
-				b.Fatalf("create: %s", err)
-			}
-			inodes[j] = inode
-		}
-		b.StartTimer()
-		for j := 0; j < n; j++ {
-			if err := m.Access(myCtx, inodes[j], 4, nil); err != 0 && err != syscall.EACCES {
-				b.Fatalf("access: %s", err)
-			}
+		if err := m.Access(myCtx, inode, 4, nil); err != 0 && err != syscall.EACCES {
+			b.Fatalf("access: %s", err)
 		}
 	}
 }
 
-func setxattr(b *testing.B, m Meta) {
-	var parent Ino
+func benchSetXattr(b *testing.B, m Meta) {
+	var parent, inode Ino
 	if err := prepareParent(m, "benchSetXattr", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
-	var inode Ino
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -369,13 +312,12 @@ func setxattr(b *testing.B, m Meta) {
 	}
 }
 
-func getxattr(b *testing.B, m Meta) {
-	var parent Ino
+func benchGetXattr(b *testing.B, m Meta) {
+	var parent, inode Ino
 	if err := prepareParent(m, "benchGetXattr", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
-	var inode Ino
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -391,13 +333,12 @@ func getxattr(b *testing.B, m Meta) {
 	}
 }
 
-func removexattr(b *testing.B, m Meta) {
-	var parent Ino
+func benchRemoveXattr(b *testing.B, m Meta) {
+	var parent, inode Ino
 	if err := prepareParent(m, "benchRemoveXattr", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
-	var inode Ino
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -414,13 +355,12 @@ func removexattr(b *testing.B, m Meta) {
 	}
 }
 
-func listxattr(b *testing.B, m Meta, n int) {
-	var parent Ino
+func benchListXattr(b *testing.B, m Meta, n int) {
+	var parent, inode Ino
 	if err := prepareParent(m, "benchListXattr", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
-	var inode Ino
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
@@ -474,6 +414,7 @@ func benchSymlink(b *testing.B, m Meta) {
 	}
 }
 
+/*
 func benchReadlink(b *testing.B, m Meta) {
 	var parent Ino
 	if err := prepareParent(m, "benchReadlink", &parent); err != nil {
@@ -495,111 +436,68 @@ func benchReadlink(b *testing.B, m Meta) {
 		}
 	}
 }
+*/
 
-func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir
-	_ = m.Init(Format{Name: "bench"}, true)
+func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir, readdir
+	_ = m.Init(Format{Name: "benchmarkDir"}, true)
 	_ = m.NewSession()
-	cases := []struct {
-		desc string
-		size int
-	}{
-		{"1", 1},
-		// {"100", 100},
-		// {"10k", 10000},
-	}
-	for _, c := range cases {
-		b.Run(fmt.Sprintf("mkdir_%s", c.desc), func(b *testing.B) { mkdir(b, m, c.size) })
-		b.Run(fmt.Sprintf("mvdir_%s", c.desc), func(b *testing.B) { mvdir(b, m, c.size) })
-		b.Run(fmt.Sprintf("rmdir_%s", c.desc), func(b *testing.B) { rmdir(b, m, c.size) })
-	}
+	b.Run("mkdir", func(b *testing.B) { benchMkdir(b, m) })
+	b.Run("mvdir", func(b *testing.B) { benchMvdir(b, m) })
+	b.Run("rmdir", func(b *testing.B) { benchRmdir(b, m) })
+	b.Run("readdir_10", func(b *testing.B) { benchReaddir(b, m, 10) })
+	b.Run("readdir_1k", func(b *testing.B) { benchReaddir(b, m, 1000) })
+	// b.Run("readdir_100k", func(b *testing.B) { benchReaddir(b, m, 100000) })
 }
 
 func BenchmarkRedisDir(b *testing.B) {
-	m := NewClient("redis://127.0.0.1/10", &Config{})
+	m := NewClient(redisAddr, &Config{})
 	benchmarkDir(b, m)
 }
 func BenchmarkSQLDir(b *testing.B) {
-	m := NewClient("sqlite3://test.db", &Config{})
+	m := NewClient(sqliteAddr, &Config{})
 	benchmarkDir(b, m)
 }
 
-func benchmarkReaddir(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "bench"}, true)
-	_ = m.NewSession()
-	cases := []struct {
-		desc string
-		size int
-	}{
-		{"10", 10},
-		{"1k", 1000},
-		// {"100k", 100000},
-		// {"10m", 10000000},
-	}
-	for _, c := range cases {
-		b.Run(c.desc, func(b *testing.B) { readdir(b, m, c.size) })
-	}
-}
-
-func BenchmarkRedisReaddir(b *testing.B) {
-	m := NewClient("redis://127.0.0.1/10", &Config{})
-	benchmarkReaddir(b, m)
-}
-
-func BenchmarkSQLReaddir(b *testing.B) {
-	m := NewClient("sqlite3://test.db", &Config{})
-	benchmarkReaddir(b, m)
-}
-
 func benchmarkFile(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.Init(Format{Name: "benchmarkFile"}, true)
 	_ = m.NewSession()
-	cases := []struct {
-		desc string
-		size int
-	}{
-		{"1", 1},
-		// {"100", 100},
-		// {"10k", 10000},
-	}
-	for _, c := range cases {
-		b.Run(fmt.Sprintf("mknod_%s", c.desc), func(b *testing.B) { mknod(b, m, c.size) })
-		b.Run(fmt.Sprintf("create_%s", c.desc), func(b *testing.B) { create(b, m, c.size) })
-		b.Run(fmt.Sprintf("rename_%s", c.desc), func(b *testing.B) { rename(b, m, c.size) })
-		b.Run(fmt.Sprintf("unlink_%s", c.desc), func(b *testing.B) { unlink(b, m, c.size) })
-		b.Run(fmt.Sprintf("lookup_%s", c.desc), func(b *testing.B) { lookup(b, m, c.size) })
-		b.Run(fmt.Sprintf("getattr_%s", c.desc), func(b *testing.B) { getattr(b, m, c.size) })
-		b.Run(fmt.Sprintf("setattr_%s", c.desc), func(b *testing.B) { setattr(b, m, c.size) })
-		b.Run(fmt.Sprintf("access_%s", c.desc), func(b *testing.B) { access(b, m, c.size) })
-	}
+	b.Run("mknod", func(b *testing.B) { benchMknod(b, m) })
+	b.Run("create", func(b *testing.B) { benchCreate(b, m) })
+	b.Run("rename", func(b *testing.B) { benchRename(b, m) })
+	b.Run("unlink", func(b *testing.B) { benchUnlink(b, m) })
+	b.Run("lookup", func(b *testing.B) { benchLookup(b, m) })
+	b.Run("getattr", func(b *testing.B) { benchGetAttr(b, m) })
+	b.Run("setattr", func(b *testing.B) { benchSetAttr(b, m) })
+	b.Run("access", func(b *testing.B) { benchAccess(b, m) })
 }
 
 func BenchmarkRedisFile(b *testing.B) {
-	m := NewClient("redis://127.0.0.1/10", &Config{})
+	m := NewClient(redisAddr, &Config{})
 	benchmarkFile(b, m)
 }
 
 func BenchmarkSQLFile(b *testing.B) {
-	m := NewClient("sqlite3://test.db", &Config{})
+	m := NewClient(sqliteAddr, &Config{})
 	benchmarkFile(b, m)
 }
 
 func benchmarkXattr(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.Init(Format{Name: "benchmarkXattr"}, true)
 	_ = m.NewSession()
-	b.Run("setxattr", func(b *testing.B) { setxattr(b, m) })
-	b.Run("getxattr", func(b *testing.B) { getxattr(b, m) })
-	b.Run("removexattr", func(b *testing.B) { removexattr(b, m) })
-	b.Run("listxattr_1", func(b *testing.B) { listxattr(b, m, 1) })
-	b.Run("listxattr_10", func(b *testing.B) { listxattr(b, m, 10) })
+	b.Run("setxattr", func(b *testing.B) { benchSetXattr(b, m) })
+	b.Run("getxattr", func(b *testing.B) { benchGetXattr(b, m) })
+	b.Run("removexattr", func(b *testing.B) { benchRemoveXattr(b, m) })
+	b.Run("listxattr_1", func(b *testing.B) { benchListXattr(b, m, 1) })
+	b.Run("listxattr_10", func(b *testing.B) { benchListXattr(b, m, 10) })
 }
 
 func BenchmarkRedisXattr(b *testing.B) {
-	m := NewClient("redis://127.0.0.1/10", &Config{})
+	m := NewClient(redisAddr, &Config{})
 	benchmarkXattr(b, m)
 }
 
 func BenchmarkSQLXattr(b *testing.B) {
-	m := NewClient("sqlite3://test.db", &Config{})
+	m := NewClient(sqliteAddr, &Config{})
 	benchmarkXattr(b, m)
 }
 
@@ -613,11 +511,11 @@ func benchmarkLink(b *testing.B, m Meta) {
 }
 
 func BenchmarkRedisLink(b *testing.B) {
-	m := NewClient("redis://127.0.0.1/10", &Config{})
+	m := NewClient(redisAddr, &Config{})
 	benchmarkLink(b, m)
 }
 
 func BenchmarkSQLLink(b *testing.B) {
-	m := NewClient("sqlite3://test.db", &Config{})
+	m := NewClient(sqliteAddr, &Config{})
 	benchmarkLink(b, m)
 }
