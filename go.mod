@@ -18,6 +18,7 @@ require (
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/go-redis/redis/v8 v8.4.0
+	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gonutz/w32/v2 v2.2.0
 	github.com/google/gops v0.3.13
 	github.com/google/uuid v1.1.2
@@ -31,6 +32,7 @@ require (
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
 	github.com/kurin/blazer v0.2.1
 	github.com/mattn/go-isatty v0.0.12
+	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/minio/cli v1.22.0
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go v6.0.14+incompatible
@@ -55,6 +57,7 @@ require (
 	golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 	google.golang.org/api v0.5.0
+	xorm.io/xorm v1.0.7
 )
 
 replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20210222051636-e7cabdf948f4

@@ -15,10 +15,11 @@
 
 package meta
 
+// Config for clients.
 type Config struct {
-	Addr      string
-	Password  string
-	IORetries int
+	Strict      bool // update ctime
+	Retries     int
+	CaseInsensi bool
 }
 
 type Format struct {
