@@ -17,6 +17,7 @@ package meta
 
 import (
 	"fmt"
+	"syscall"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -65,16 +66,114 @@ func BenchmarkReadSlices(b *testing.B) {
 	}
 }
 
-func benchmarkReaddir(b *testing.B, n int) {
+func mkdir(b *testing.B, m Meta, n int) {
+	var err syscall.Errno
+	ctx := Background
+	dname := "benchMkdir"
+	if err = m.Rmr(ctx, 1, dname); err != 0 && err != syscall.ENOENT {
+		b.Fatalf("rmr: %s", err)
+	}
+	var parent Ino
+	if err = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &parent, nil); err != 0 {
+		b.Fatalf("mkdir: %s", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < n; j++ {
+			if err = m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
+				b.Fatalf("mkdir: %s", err)
+			}
+		}
+	}
+}
+
+func mvdir(b *testing.B, m Meta, n int) { // rename dir
+	var err syscall.Errno
+	ctx := Background
+	dname := "benchMvdir"
+	if err = m.Rmr(ctx, 1, dname); err != 0 && err != syscall.ENOENT {
+		b.Fatalf("rmr: %s", err)
+	}
+	var parent Ino
+	if err = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &parent, nil); err != 0 {
+		b.Fatalf("mkdir: %s", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for j := 0; j < n; j++ {
+			if err = m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
+				b.Fatalf("mkdir: %s", err)
+			}
+		}
+		b.StartTimer()
+		for j := 0; j < n; j++ {
+			if err = m.Rename(ctx, parent, fmt.Sprintf("d%d_%d", i, j), parent, fmt.Sprintf("rd%d_%d", i, j), nil, nil); err != 0 {
+				b.Fatalf("rename dir: %s", err)
+			}
+		}
+	}
+}
+
+func rmdir(b *testing.B, m Meta, n int) {
+	var err syscall.Errno
+	ctx := Background
+	dname := "benchRmdir"
+	if err = m.Rmr(ctx, 1, dname); err != 0 && err != syscall.ENOENT {
+		b.Fatalf("rmr: %s", err)
+	}
+	var parent Ino
+	if err = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &parent, nil); err != 0 {
+		b.Fatalf("mkdir: %s", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for j := 0; j < n; j++ {
+			if err = m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
+				b.Fatalf("mkdir: %s", err)
+			}
+		}
+		b.StartTimer()
+		for j := 0; j < n; j++ {
+			if err = m.Rmdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j)); err != 0 {
+				b.Fatalf("rmdir: %s", err)
+			}
+		}
+	}
+}
+
+func BenchmarkDir(b *testing.B) { // mkdir, rename dir, rmdir
 	var conf RedisConfig
 	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
 	if err != nil {
 		b.Skipf("redis is not available: %s", err)
 	}
+	_ = m.Init(Format{Name: "bench"}, true)
 	_ = m.NewSession()
+
+	cases := []struct {
+		desc string
+		size int
+	}{
+		{"1", 1},
+		{"100", 100},
+		{"10k", 10000},
+	}
+	for _, c := range cases {
+		b.Run(fmt.Sprintf("mkdir_%s", c.desc), func(b *testing.B) { mkdir(b, m, c.size) })
+		b.Run(fmt.Sprintf("mvdir_%s", c.desc), func(b *testing.B) { mvdir(b, m, c.size) })
+		b.Run(fmt.Sprintf("rmdir_%s", c.desc), func(b *testing.B) { rmdir(b, m, c.size) })
+	}
+}
+
+func readdir(b *testing.B, m Meta, n int) {
 	ctx := Background
-	var inode Ino
 	dname := fmt.Sprintf("largedir%d", n)
+	var inode Ino
 	var es []*Entry
 	if m.Lookup(ctx, 1, dname, &inode, nil) == 0 && m.Readdir(ctx, inode, 0, &es) == 0 && len(es) == n+2 {
 	} else {
@@ -97,18 +196,25 @@ func benchmarkReaddir(b *testing.B, n int) {
 	}
 }
 
-func BenchmarkReaddir10(b *testing.B) {
-	benchmarkReaddir(b, 10)
-}
+func BenchmarkReaddir(b *testing.B) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	if err != nil {
+		b.Skipf("redis is not available: %s", err)
+	}
+	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.NewSession()
 
-func BenchmarkReaddir1k(b *testing.B) {
-	benchmarkReaddir(b, 1000)
-}
-
-func BenchmarkReaddir100k(b *testing.B) {
-	benchmarkReaddir(b, 100000)
-}
-
-func BenchmarkReaddir10m(b *testing.B) {
-	benchmarkReaddir(b, 10000000)
+	cases := []struct {
+		desc string
+		size int
+	}{
+		{"10", 10},
+		{"1k", 1000},
+		// {"100k", 100000},
+		// {"10m", 10000000},
+	}
+	for _, c := range cases {
+		b.Run(c.desc, func(b *testing.B) { readdir(b, m, c.size) })
+	}
 }
