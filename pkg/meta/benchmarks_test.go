@@ -349,6 +349,95 @@ func access(b *testing.B, m Meta, n int) { // contains a Getattr
 	}
 }
 
+func setxattr(b *testing.B, m Meta) {
+	var parent Ino
+	if err := prepareParent(m, "benchSetXattr", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "fxattr", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	b.ResetTimer()
+	value := []byte("value0")
+	for i := 0; i < b.N; i++ {
+		value[5] = byte(i%10 + 48)
+		if err := m.SetXattr(ctx, inode, "key", value); err != 0 {
+			b.Fatalf("setxattr: %s", err)
+		}
+	}
+}
+
+func getxattr(b *testing.B, m Meta) {
+	var parent Ino
+	if err := prepareParent(m, "benchGetXattr", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "fxattr", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	if err := m.SetXattr(ctx, inode, "key", []byte("value")); err != 0 {
+		b.Fatalf("setxattr: %s", err)
+	}
+	var buf []byte
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := m.GetXattr(ctx, inode, "key", &buf); err != 0 {
+			b.Fatalf("getxattr: %s", err)
+		}
+	}
+}
+
+func removexattr(b *testing.B, m Meta) {
+	var parent Ino
+	if err := prepareParent(m, "benchRemoveXattr", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "fxattr", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		if err := m.SetXattr(ctx, inode, "key", []byte("value")); err != 0 {
+			b.Fatalf("setxattr: %s", err)
+		}
+		b.StartTimer()
+		if err := m.RemoveXattr(ctx, inode, "key"); err != 0 {
+			b.Fatalf("removexattr: %s", err)
+		}
+	}
+}
+
+func listxattr(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchListXattr", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "fxattr", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	for j := 0; j < n; j++ {
+		if err := m.SetXattr(ctx, inode, fmt.Sprintf("key%d", j), []byte("value")); err != 0 {
+			b.Fatalf("setxattr: %s", err)
+		}
+	}
+	var buf []byte
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := m.ListXattr(ctx, inode, &buf); err != 0 {
+			b.Fatalf("removexattr: %s", err)
+		}
+	}
+}
+
 func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir
 	_ = m.Init(Format{Name: "bench"}, true)
 	_ = m.NewSession()
@@ -434,4 +523,24 @@ func BenchmarkRedisFile(b *testing.B) {
 func BenchmarkSQLFile(b *testing.B) {
 	m := NewClient("sqlite3://test.db", &Config{})
 	benchmarkFile(b, m)
+}
+
+func benchmarkXattr(b *testing.B, m Meta) {
+	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.NewSession()
+	b.Run("setxattr", func(b *testing.B) { setxattr(b, m) })
+	b.Run("getxattr", func(b *testing.B) { getxattr(b, m) })
+	b.Run("removexattr", func(b *testing.B) { removexattr(b, m) })
+	b.Run("listxattr_1", func(b *testing.B) { listxattr(b, m, 1) })
+	b.Run("listxattr_10", func(b *testing.B) { listxattr(b, m, 10) })
+}
+
+func BenchmarkRedisXattr(b *testing.B) {
+	m := NewClient("redis://127.0.0.1/10", &Config{})
+	benchmarkXattr(b, m)
+}
+
+func BenchmarkSQLXattr(b *testing.B) {
+	m := NewClient("sqlite3://test.db", &Config{})
+	benchmarkXattr(b, m)
 }
