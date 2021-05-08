@@ -357,8 +357,8 @@ func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir
 		size int
 	}{
 		{"1", 1},
-		{"100", 100},
-		{"10k", 10000},
+		// {"100", 100},
+		// {"10k", 10000},
 	}
 	for _, c := range cases {
 		b.Run(fmt.Sprintf("mkdir_%s", c.desc), func(b *testing.B) { mkdir(b, m, c.size) })
@@ -411,8 +411,8 @@ func benchmarkFile(b *testing.B, m Meta) {
 		size int
 	}{
 		{"1", 1},
-		{"100", 100},
-		{"10k", 10000},
+		// {"100", 100},
+		// {"10k", 10000},
 	}
 	for _, c := range cases {
 		b.Run(fmt.Sprintf("mknod_%s", c.desc), func(b *testing.B) { mknod(b, m, c.size) })
