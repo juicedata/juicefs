@@ -109,3 +109,13 @@ func SetLogLevel(lvl logrus.Level) {
 		logger.Level = lvl
 	}
 }
+
+func SetOutFile(name string) {
+	file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return
+	}
+	for _, logger := range loggers {
+		logger.SetOutput(file)
+	}
+}
