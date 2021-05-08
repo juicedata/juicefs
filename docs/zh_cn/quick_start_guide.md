@@ -1,0 +1,119 @@
+# JuiceFS 快速上手
+
+使用 JuiceFS 创建文件系统，需要以下 3 个方面的准备：
+
+1. 准备 Redis 数据库
+2. 准备对象存储
+3. 下载安装 JuiceFS 客户端
+
+> 还不了解 JuiceFS？可以先查阅 [JuiceFS 是什么？](introduction.md)
+
+### 一、准备 Redis 数据库
+
+你可以很容易的在云计算平台购买到各种配置的云 Redis 数据库，但如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 Redis 数据库实例：
+
+```shell
+$ sudo docker run -d --name redis \
+	-v redis-data:/data \
+	-p 6379:6379 \
+	--restart unless-stopped \
+	redis redis-server --appendonly yes
+```
+
+容器创建成功以后，可使用 `redis://127.0.0.1:6379` 访问 redis 数据库。
+
+> **注意**：以上命令将 redis 的数据持久化在 docker 的 redis-data 数据卷当中，你可以按需修改数据持久化的存储位置。
+
+> **安全提示**：以上命令创建的 redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，强烈建议参照 [Redis 官方文档](https://redis.io/topics/security) 启用保护模式。
+
+### 二、准备对象存储
+
+和 Redis 数据库一样，几乎所有的公有云计算平台都提供对象存储服务。因为 JuiceFS 支持几乎所有主流平台的对象存储服务，因此你可以根据个人偏好自由选择。你可以查看我们的 [对象存储支持列表和设置指南]()，其中列出了 JuiceFS 目前支持的所有对象存储服务，以及具体的使用方法。
+
+当然，如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 MinIO 对象存储实例：
+
+```shell
+$ sudo docker run -d --name minio \
+	-v $PWD/minio-data:/data \
+	-p 9000:9000 \
+	--restart unless-stopped \
+	minio/minio server /data
+```
+
+容器创建成功以后，使用 `http://127.0.0.1:9000` 访问 minio 管理界面，root 用户初始的 Access Key 和 Secret Key 均为 `minioadmin`。
+
+> **注意**：以上命令将 minio 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改数据持久化存储的位置。
+
+### 三、安装 JuiceFS 客户端
+
+JuiceFS 同时支持 Linux、Windows、MacOS 三大操作系统平台，你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，请根据实际使用的系统和架构选择对应的版本。
+
+以 x86 架构的 Linux 系统为例，下载文件名包含 `linux-amd64` 的压缩包：
+
+```shell
+$ wget https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.12.1-linux-amd64.tar.gz
+```
+
+解压并安装：
+
+```shell
+$ tar -zxf juicefs-0.12.1-linux-amd64.tar.gz
+$ sudo install juicefs /usr/local/bin
+```
+
+### 四、创建  JuiceFS 文件系统
+
+创建 JuiceFS 文件系统时，需要同时指定用来存储元数据的 Redis 数据库和用来存储实际数据的对象存储。
+
+以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 redis 中的 `1` 号数据库存储元数据，使用 minio 中创建的 `pics` 存储桶存储实际数据。
+
+```shell
+$ juicefs format \
+	--storage minio \
+	--bucket http://127.0.0.1:9000/pics \
+	--access-key minioadmin \
+	--secret-key minioadmin \
+	redis://127.0.0.1:6379/1 \
+	pics
+```
+
+执行命令后，会看到类似下面的内容输出，说明 JuiceFS 文件系统创建成功了。
+
+```shell
+2021/04/29 23:01:18.352256 juicefs[34223] <INFO>: Meta address: redis://127.0.0.1:6379/1
+2021/04/29 23:01:18.354252 juicefs[34223] <INFO>: Ping redis: 132.185µs
+2021/04/29 23:01:18.354758 juicefs[34223] <INFO>: Data uses 127.0.0.1:9000/pics/
+2021/04/29 23:01:18.361674 juicefs[34223] <INFO>: Volume is formatted as {Name:pics UUID:9c0fab76-efd0-43fd-a81e-ae0916e2fc90 Storage:minio Bucket:http://127.0.0.1:9000/pics AccessKey:minioadmin SecretKey:removed BlockSize:4096 Compression:none Partitions:0 EncryptKey:}
+```
+
+> **注意**：你可以根据需要，创建无限多个 JuiceFS 文件系统。但需要注意的是，每个 Redis 数据库中只能创建一个文件系统。比如要再创建一个名为 `memory` 的文件系统时，可以使用 Redis 中的 2 号数据库，即 `redis://127.0.0.1:6379/2` 。
+
+### 五、挂载 JuiceFS 文件系统
+
+JuiceFS 文件系统创建完成以后，接下来就可以把它挂载到操作系统上使用了。以下命令将 `pics` 文件系统挂载到 `/mnt/jfs` 目录中。
+
+```shell
+$ sudo juicefs mount -d redis://127.0.0.1:6379/1 /mnt/jfs
+```
+
+> **注意**：挂载 JuiceFS 文件系统时，不需要显式指定文件系统的名称，只要填写正确的 Redis 服务器地址和数据库编号即可。
+
+执行命令后，会看到类似下面的内容输出，说明 JuiceFS 文件系统已经成功挂载到系统上了。
+
+```shell
+2021/04/29 23:22:25.838419 juicefs[37999] <INFO>: Meta address: redis://127.0.0.1:6379/1
+2021/04/29 23:22:25.839184 juicefs[37999] <INFO>: Ping redis: 67.625µs
+2021/04/29 23:22:25.839399 juicefs[37999] <INFO>: Data use 127.0.0.1:9000/pics/
+2021/04/29 23:22:25.839554 juicefs[37999] <INFO>: Cache: /var/jfsCache/9c0fab76-efd0-43fd-a81e-ae0916e2fc90 capacity: 1024 MB
+2021/04/29 23:22:26.340509 juicefs[37999] <INFO>: OK, pics is ready at /mnt/jfs
+```
+
+挂载完成以后就可以在 `/mnt/jfs` 目录中存取文件了，你可以执行 `df` 命令查看 JuiceFS 文件系统的挂载情况：
+
+```shell
+$ df -Th
+文件系统       类型          容量  已用  可用 已用% 挂载点
+JuiceFS:pics   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
+```
+
+> **注意**：默认情况下， juicefs 的缓存位于 `/var/jfsCache` 目录，为了获得该目录的读写权限，这里使用了 sudo 命令，以管理员权限挂载的 JuiceFS 文件系统。普通用户在读写 `/mnt/jfs` 时，需要为用户赋予该目录的操作权限。
