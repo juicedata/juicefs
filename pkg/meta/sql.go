@@ -99,8 +99,8 @@ type sustained struct {
 }
 
 type delfile struct {
-	Inode  Ino       `xorm:"unique(delfile) notnull"`
-	Length uint64    `xorm:"unique(delfile) notnull"`
+	Inode  Ino       `xorm:"pk notnull"`
+	Length uint64    `xorm:"notnull"`
 	Expire time.Time `xorm:"notnull"`
 }
 
@@ -221,7 +221,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		logger.Fatalf("json: %s", err)
 	}
 
-	return errno(m.txn(func(s *xorm.Session) error {
+	return m.txn(func(s *xorm.Session) error {
 		_, err = s.Insert(&setting{"format", string(data)})
 		if err != nil {
 			return err
@@ -251,7 +251,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			counter{"nextCleanupSlices", 0},
 		)
 		return err
-	}))
+	})
 }
 
 func (m *dbMeta) Load() (*Format, error) {
@@ -331,7 +331,7 @@ func (m *dbMeta) nextInode() (Ino, error) {
 	v, err := m.incrCounter("nextInode", 100)
 	if err == nil {
 		m.freeInodes.next = v + 1
-		m.freeInodes.maxid = v + 1000
+		m.freeInodes.maxid = v + 100
 	}
 	return Ino(v), err
 }
@@ -1104,7 +1104,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			} else {
 				ok, err := s.Where("Inode = ?", de.Inode).Get(&dn)
 				if err != nil {
-					return errno(err)
+					return err
 				}
 				if !ok {
 					return syscall.ENOENT
@@ -1374,7 +1374,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 func (m *dbMeta) cleanStaleSessions() {
 	// TODO: once per minute
 	var s session
-	rows, err := m.engine.Where("Heartbeat > ?", time.Now().Add(time.Minute*-5)).Rows(&s)
+	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5)).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -1401,8 +1401,8 @@ func (m *dbMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
 		_ = m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now()}, &session{Sid: m.sid})
-			if err != nil {
+			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now()}, &session{Sid: m.sid})
+			if err != nil || n == 0 {
 				logger.Errorf("update session: %s", err)
 			}
 			return err
@@ -1802,6 +1802,7 @@ func (m *dbMeta) deleteFile(inode Ino, length uint64) {
 			return
 		}
 	}
+	_, _ = m.engine.Delete(delfile{Inode: inode})
 }
 
 func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
@@ -1928,7 +1929,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		}
 	} else {
-		logger.Warnf("compact %d %d: %s", inode, indx, errno)
+		logger.Warnf("compact %d %d: %s", inode, indx, err)
 	}
 	go func() {
 		// wait for the current compaction to finish
