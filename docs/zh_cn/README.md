@@ -14,7 +14,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 4. **云原生**：通过 [Kubernetes CSI driver](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
 5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
-7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](https://github.com/juicedata/juicefs/blob/main/README_CN.md#性能测试)；
+7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](#性能测试)；
 8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest）；
 9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
 10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
@@ -56,7 +56,7 @@ JuiceFS 作为一个文件系统也不例外，它的强一致性、高性能等
 
 使用 JuiceFS，文件最终会被拆分成 Chunks、Slices 和 Blocks 存储在对象存储。因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 文件系统高性能运作的秘诀！
 
-![How JuiceFS stores your files](C:\Users\Herald\repo\juicefs\docs\images\how-juicefs-stores-files-new.png)
+![How JuiceFS stores your files](../images/how-juicefs-stores-files-new.png)
 
 ## 快速上手
 
@@ -334,8 +334,6 @@ $ cat /jfs/.accesslog
 
 JuiceFS 默认会收集 **匿名** 用量数据。它仅收集核心指标（例如版本号），不会收集任何用户信息或任何敏感数据。您可以在[此处](https://github.com/juicedata/juicefs/blob/main/pkg/usage/usage.go)查看相关代码。
 
-These data help us understand how the community is using this project. You could disable reporting easily by command line option `--no-usage-report`:
-
 这些数据有助于我们了解社区如何使用此项目。您可以通过命令行选项 `--no-usage-report` 禁用该功能：
 
 ```
@@ -349,3 +347,4 @@ JuiceFS is open-sourced under GNU AGPL v3.0, see [LICENSE](https://github.com/ju
 ## Credits
 
 The design of JuiceFS was inspired by [Google File System](https://research.google/pubs/pub51), [HDFS](https://hadoop.apache.org/) and [MooseFS](https://moosefs.com/), thanks to their great work.
+
