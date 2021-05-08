@@ -79,16 +79,9 @@ local ino = struct.unpack(">I8", string.sub(buf, 2))
 return {ino, redis.call('GET', "i" .. tostring(ino))}
 `
 
-// RedisConfig is config for Redis client.
-type RedisConfig struct {
-	Strict      bool // update ctime
-	Retries     int
-	CaseInsensi bool
-}
-
 type redisMeta struct {
 	sync.Mutex
-	conf    *RedisConfig
+	conf    *Config
 	rdb     *redis.Client
 	txlocks [1024]sync.Mutex // Pessimistic locks to reduce conflict on Redis
 
@@ -110,8 +103,8 @@ type msgCallbacks struct {
 	callbacks map[uint32]MsgCallback
 }
 
-// NewRedisMeta return a meta store using Redis.
-func NewRedisMeta(url string, conf *RedisConfig) (Meta, error) {
+// newRedisMeta return a meta store using Redis.
+func newRedisMeta(url string, conf *Config) (Meta, error) {
 	opt, err := redis.ParseURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", url, err)
@@ -212,6 +205,9 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	err = r.rdb.Set(Background, "setting", data, 0).Err()
 	if err != nil {
 		return err
+	}
+	if body != nil {
+		return nil
 	}
 
 	// root inode
@@ -416,7 +412,7 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 	return 0
 }
 
-func (r *redisMeta) Summary(ctx Context, inode Ino, summary *Summary) syscall.Errno {
+func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary) syscall.Errno {
 	var attr Attr
 	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
 		return st
@@ -431,7 +427,7 @@ func (r *redisMeta) Summary(ctx Context, inode Ino, summary *Summary) syscall.Er
 				continue
 			}
 			if e.Attr.Typ == TypeDirectory {
-				if st := r.Summary(ctx, e.Inode, summary); st != 0 {
+				if st := GetSummary(r, ctx, e.Inode, summary); st != 0 {
 					return st
 				}
 			} else {
@@ -533,7 +529,7 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	return errno(err)
 }
 
-func (r *redisMeta) accessMode(attr *Attr, uid uint32, gid uint32) uint8 {
+func accessMode(attr *Attr, uid uint32, gid uint32) uint8 {
 	if uid == 0 {
 		return 0x7
 	}
@@ -562,7 +558,7 @@ func (r *redisMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysc
 		}
 	}
 
-	mode := r.accessMode(attr, ctx.Uid(), ctx.Gid())
+	mode := accessMode(attr, ctx.Uid(), ctx.Gid())
 	if mode&mmask != mmask {
 		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
 		return syscall.EACCES
@@ -611,16 +607,13 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	_, _ = khash.Write([]byte(keys[0]))
 	l := &r.txlocks[int(khash.Sum32())%len(r.txlocks)]
 	start := time.Now()
-	defer func() {
-		used := time.Since(start)
-		redisTxDist.Observe(used.Seconds())
-	}()
+	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	l.Lock()
 	defer l.Unlock()
 	for i := 0; i < 50; i++ {
 		err = r.rdb.Watch(ctx, txf, keys...)
 		if err == redis.TxFailedErr {
-			redisTxRestart.Add(1)
+			txRestart.Add(1)
 			time.Sleep(time.Microsecond * 100 * time.Duration(rand.Int()%(i+1)))
 			continue
 		}
@@ -1137,7 +1130,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
 }
 
-func (r *redisMeta) emptyDir(ctx Context, inode Ino, concurrent chan int) syscall.Errno {
+func emptyDir(r Meta, ctx Context, inode Ino, concurrent chan int) syscall.Errno {
 	if st := r.Access(ctx, inode, 3, nil); st != 0 {
 		return st
 	}
@@ -1157,14 +1150,14 @@ func (r *redisMeta) emptyDir(ctx Context, inode Ino, concurrent chan int) syscal
 				wg.Add(1)
 				go func(child Ino, name string) {
 					defer wg.Done()
-					e := r.emptyEntry(ctx, inode, name, child, concurrent)
+					e := emptyEntry(r, ctx, inode, name, child, concurrent)
 					if e != 0 {
 						status = e
 					}
 					<-concurrent
 				}(e.Inode, string(e.Name))
 			default:
-				if st := r.emptyEntry(ctx, inode, string(e.Name), e.Inode, concurrent); st != 0 {
+				if st := emptyEntry(r, ctx, inode, string(e.Name), e.Inode, concurrent); st != 0 {
 					return st
 				}
 			}
@@ -1178,18 +1171,18 @@ func (r *redisMeta) emptyDir(ctx Context, inode Ino, concurrent chan int) syscal
 	return status
 }
 
-func (r *redisMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, concurrent chan int) syscall.Errno {
-	st := r.emptyDir(ctx, inode, concurrent)
+func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, concurrent chan int) syscall.Errno {
+	st := emptyDir(r, ctx, inode, concurrent)
 	if st == 0 {
 		st = r.Rmdir(ctx, parent, name)
 		if st == syscall.ENOTEMPTY {
-			st = r.emptyEntry(ctx, parent, name, inode, concurrent)
+			st = emptyEntry(r, ctx, parent, name, inode, concurrent)
 		}
 	}
 	return st
 }
 
-func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
+func Remove(r Meta, ctx Context, parent Ino, name string) syscall.Errno {
 	if st := r.Access(ctx, parent, 3, nil); st != 0 {
 		return st
 	}
@@ -1202,7 +1195,7 @@ func (r *redisMeta) Rmr(ctx Context, parent Ino, name string) syscall.Errno {
 		return r.Unlink(ctx, parent, name)
 	}
 	concurrent := make(chan int, 50)
-	return r.emptyEntry(ctx, parent, name, inode, concurrent)
+	return emptyEntry(r, ctx, parent, name, inode, concurrent)
 }
 
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
@@ -1685,7 +1678,7 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	ss := readSlices(vals)
 	*chunks = buildSlice(ss)
 	if len(vals) >= 5 || len(*chunks) >= 5 {
-		go r.compactChunk(inode, indx)
+		go r.compactChunk(inode, indx, false)
 	}
 	return 0
 }
@@ -1730,7 +1723,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return nil
 		})
 		if err == nil && rpush.Val()%20 == 0 {
-			go r.compactChunk(inode, indx)
+			go r.compactChunk(inode, indx, false)
 		}
 		return err
 	}, r.inodeKey(inode))
@@ -1847,7 +1840,7 @@ func (r *redisMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
 		now := time.Now()
-		members, _ := r.rdb.ZRangeByScore(Background, delfiles, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(time.Hour).Unix())), Count: 1000}).Result()
+		members, _ := r.rdb.ZRangeByScore(Background, delfiles, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(-time.Hour).Unix())), Count: 1000}).Result()
 		for _, member := range members {
 			ps := strings.Split(member, ":")
 			inode, _ := strconv.ParseInt(ps[0], 10, 0)
@@ -2119,21 +2112,23 @@ func (r *redisMeta) deleteFile(inode Ino, length uint64, tracking string) {
 	_ = r.rdb.ZRem(ctx, delfiles, tracking)
 }
 
-func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
+func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// avoid too many or duplicated compaction
-	r.Lock()
-	k := uint64(inode) + (uint64(indx) << 32)
-	if len(r.compacting) > 10 || r.compacting[k] {
-		r.Unlock()
-		return
-	}
-	r.compacting[k] = true
-	r.Unlock()
-	defer func() {
+	if !force {
 		r.Lock()
-		delete(r.compacting, k)
+		k := uint64(inode) + (uint64(indx) << 32)
+		if len(r.compacting) > 10 || r.compacting[k] {
+			r.Unlock()
+			return
+		}
+		r.compacting[k] = true
 		r.Unlock()
-	}()
+		defer func() {
+			r.Lock()
+			delete(r.compacting, k)
+			r.Unlock()
+		}()
+	}
 
 	var ctx = Background
 	vals, err := r.rdb.LRange(ctx, r.chunkKey(inode, indx), 0, 200).Result()
@@ -2244,7 +2239,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32) {
 			go func() {
 				// wait for the current compaction to finish
 				time.Sleep(time.Millisecond * 10)
-				r.compactChunk(inode, indx)
+				r.compactChunk(inode, indx, force)
 			}()
 		}
 	} else {
@@ -2277,7 +2272,7 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 				n, err := fmt.Sscanf(keys[i], "c%d_%d", &inode, &indx)
 				if err == nil && n == 2 {
 					logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, cnt)
-					r.compactChunk(Ino(inode), indx)
+					r.compactChunk(Ino(inode), indx, true)
 				}
 			}
 		}

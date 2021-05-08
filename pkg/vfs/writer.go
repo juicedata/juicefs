@@ -402,7 +402,7 @@ func NewDataWriter(conf *Config, m meta.Meta, store chunk.ChunkStore) DataWriter
 		blockSize:  conf.Chunk.BlockSize,
 		bufferSize: int64(conf.Chunk.BufferSize),
 		files:      make(map[Ino]*fileWriter),
-		maxRetries: uint32(conf.Meta.IORetries),
+		maxRetries: uint32(conf.Meta.Retries),
 	}
 	go w.flushAll()
 	return w

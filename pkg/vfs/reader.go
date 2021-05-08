@@ -706,7 +706,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 		readAheadTotal: uint64(readAheadTotal),
 		readAheadMax:   uint64(readAheadMax),
 		maxRequests:    readAheadMax/conf.Chunk.BlockSize*readSessions + 1,
-		maxRetries:     uint32(conf.Meta.IORetries),
+		maxRetries:     uint32(conf.Meta.Retries),
 	}
 	go r.checkReadBuffer()
 	return r

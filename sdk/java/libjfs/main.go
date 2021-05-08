@@ -310,15 +310,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		utils.InitLoggers(false)
 
 		addr := jConf.MetaURL
-		if !strings.Contains(addr, "://") {
-			addr = "redis://" + addr
-		}
-		logger.Infof("Meta address: %s", addr)
-		var rc = meta.RedisConfig{Retries: 10, Strict: true}
-		m, err := meta.NewRedisMeta(addr, &rc)
-		if err != nil {
-			logger.Fatalf("Meta: %s", err)
-		}
+		m := meta.NewClient(addr, &meta.Config{Retries: 10, Strict: true})
 		format, err := m.Load()
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
@@ -406,7 +398,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 
 		conf := &vfs.Config{
 			Meta: &meta.Config{
-				IORetries: 10,
+				Retries: 10,
 			},
 			Format:    format,
 			Chunk:     &chunkConf,

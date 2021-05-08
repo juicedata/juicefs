@@ -25,11 +25,7 @@ import (
 
 // nolint:errcheck
 func TestFileSystem(t *testing.T) {
-	m, err := meta.NewRedisMeta("redis://127.0.0.1:6379/10", &meta.RedisConfig{})
-	if err != nil {
-		t.Logf("redis is not available: %s", err)
-		t.Skip()
-	}
+	m := meta.NewClient("redis://127.0.0.1:6379/10", &meta.Config{})
 	format := meta.Format{
 		Name:      "test",
 		BlockSize: 4096,

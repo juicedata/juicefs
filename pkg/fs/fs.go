@@ -352,7 +352,7 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
 	if err != 0 {
 		return
 	}
-	err = fs.m.Rmr(ctx, parent.inode, path.Base(p))
+	err = meta.Remove(fs.m, ctx, parent.inode, path.Base(p))
 	return
 }
 
@@ -929,6 +929,6 @@ func (f *File) Summary(ctx meta.Context, depth uint8, maxentries uint32) (s *met
 		f.fs.log(l, "Summary (%s): %s (%d,%d,%d,%d)", f.path, errstr(err), s.Length, s.Size, s.Files, s.Dirs)
 	}()
 	s = &meta.Summary{}
-	err = f.fs.m.Summary(ctx, f.inode, s)
+	err = meta.GetSummary(f.fs.m, ctx, f.inode, s)
 	return
 }

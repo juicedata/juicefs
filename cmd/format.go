@@ -143,16 +143,7 @@ func format(c *cli.Context) error {
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Redis URL and name are required")
 	}
-	addr := c.Args().Get(0)
-	if !strings.Contains(addr, "://") {
-		addr = "redis://" + addr
-	}
-	logger.Infof("Meta address: %s", addr)
-	var rc = meta.RedisConfig{Retries: 2}
-	m, err := meta.NewRedisMeta(addr, &rc)
-	if err != nil {
-		logger.Fatalf("Meta is not available: %s", err)
-	}
+	m := meta.NewClient(c.Args().Get(0), &meta.Config{Retries: 2})
 
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Please give it a name")
