@@ -540,8 +540,8 @@ func testCompaction(t *testing.T, m Meta) {
 	l.Lock()
 	deletes := len(deleted)
 	l.Unlock()
-	if deletes < 40 {
-		t.Fatalf("deleted chunks %d is less then 40", deletes)
+	if deletes < 30 {
+		t.Fatalf("deleted chunks %d is less then 30", deletes)
 	}
 }
 
