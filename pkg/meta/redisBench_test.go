@@ -66,22 +66,27 @@ func BenchmarkReadSlices(b *testing.B) {
 	}
 }
 
-func mkdir(b *testing.B, m Meta, n int) {
-	var err syscall.Errno
+func prepareParent(m Meta, name string, inode *Ino) error {
 	ctx := Background
-	dname := "benchMkdir"
-	if err = m.Rmr(ctx, 1, dname); err != 0 && err != syscall.ENOENT {
-		b.Fatalf("rmr: %s", err)
+	if err := m.Rmr(ctx, 1, name); err != 0 && err != syscall.ENOENT {
+		return fmt.Errorf("rmr: %s", err)
 	}
-	var parent Ino
-	if err = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &parent, nil); err != 0 {
-		b.Fatalf("mkdir: %s", err)
+	if err := m.Mkdir(ctx, 1, name, 0755, 0, 0, inode, nil); err != 0 {
+		return fmt.Errorf("mkdir: %s", err)
 	}
+	return nil
+}
 
+func mkdir(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchMkdir", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < n; j++ {
-			if err = m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
+			if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
 				b.Fatalf("mkdir: %s", err)
 			}
 		}
@@ -89,28 +94,22 @@ func mkdir(b *testing.B, m Meta, n int) {
 }
 
 func mvdir(b *testing.B, m Meta, n int) { // rename dir
-	var err syscall.Errno
-	ctx := Background
-	dname := "benchMvdir"
-	if err = m.Rmr(ctx, 1, dname); err != 0 && err != syscall.ENOENT {
-		b.Fatalf("rmr: %s", err)
-	}
 	var parent Ino
-	if err = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &parent, nil); err != 0 {
-		b.Fatalf("mkdir: %s", err)
+	if err := prepareParent(m, "benchMvdir", &parent); err != nil {
+		b.Fatal(err)
 	}
-
+	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		for j := 0; j < n; j++ {
-			if err = m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
+			if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
 				b.Fatalf("mkdir: %s", err)
 			}
 		}
 		b.StartTimer()
 		for j := 0; j < n; j++ {
-			if err = m.Rename(ctx, parent, fmt.Sprintf("d%d_%d", i, j), parent, fmt.Sprintf("rd%d_%d", i, j), nil, nil); err != 0 {
+			if err := m.Rename(ctx, parent, fmt.Sprintf("d%d_%d", i, j), parent, fmt.Sprintf("rd%d_%d", i, j), nil, nil); err != 0 {
 				b.Fatalf("rename dir: %s", err)
 			}
 		}
@@ -118,28 +117,22 @@ func mvdir(b *testing.B, m Meta, n int) { // rename dir
 }
 
 func rmdir(b *testing.B, m Meta, n int) {
-	var err syscall.Errno
-	ctx := Background
-	dname := "benchRmdir"
-	if err = m.Rmr(ctx, 1, dname); err != 0 && err != syscall.ENOENT {
-		b.Fatalf("rmr: %s", err)
-	}
 	var parent Ino
-	if err = m.Mkdir(ctx, 1, dname, 0755, 0, 0, &parent, nil); err != 0 {
-		b.Fatalf("mkdir: %s", err)
+	if err := prepareParent(m, "benchRmdir", &parent); err != nil {
+		b.Fatal(err)
 	}
-
+	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		for j := 0; j < n; j++ {
-			if err = m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
+			if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j), 0755, 0, 0, nil, nil); err != 0 {
 				b.Fatalf("mkdir: %s", err)
 			}
 		}
 		b.StartTimer()
 		for j := 0; j < n; j++ {
-			if err = m.Rmdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j)); err != 0 {
+			if err := m.Rmdir(ctx, parent, fmt.Sprintf("d%d_%d", i, j)); err != 0 {
 				b.Fatalf("rmdir: %s", err)
 			}
 		}
@@ -216,5 +209,218 @@ func BenchmarkReaddir(b *testing.B) {
 	}
 	for _, c := range cases {
 		b.Run(c.desc, func(b *testing.B) { readdir(b, m, c.size) })
+	}
+}
+
+func mknod(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchMknod", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < n; j++ {
+			if err := m.Mknod(ctx, parent, fmt.Sprintf("f%d_%d", i, j), TypeFile, 0644, 022, 0, nil, nil); err != 0 {
+				b.Fatalf("mknod: %s", err)
+			}
+		}
+	}
+}
+
+func create(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchCreate", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < n; j++ {
+			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, nil, nil); err != 0 {
+				b.Fatalf("create: %s", err)
+			}
+		}
+	}
+}
+
+func rename(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchRename", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, nil, nil); err != 0 {
+				b.Fatalf("create: %s", err)
+			}
+		}
+		b.StartTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Rename(ctx, parent, fmt.Sprintf("f%d_%d", i, j), parent, fmt.Sprintf("rf%d_%d", i, j), nil, nil); err != 0 {
+				b.Fatalf("rename file: %s", err)
+			}
+		}
+	}
+}
+
+func unlink(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchUnlink", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, nil, nil); err != 0 {
+				b.Fatalf("create: %s", err)
+			}
+		}
+		b.StartTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Unlink(ctx, parent, fmt.Sprintf("f%d_%d", i, j)); err != 0 {
+				b.Fatalf("unlink: %s", err)
+			}
+		}
+	}
+}
+
+func lookup(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchLookup", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	var attr Attr
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, nil, nil); err != 0 {
+				b.Fatalf("create: %s", err)
+			}
+		}
+		b.StartTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Lookup(ctx, parent, fmt.Sprintf("f%d_%d", i, j), &inode, &attr); err != 0 {
+				b.Fatalf("lookup: %s", err)
+			}
+		}
+	}
+}
+
+func getattr(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchGetAttr", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	var attr Attr
+	inodes := make([]Ino, n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, &inode, nil); err != 0 {
+				b.Fatalf("create: %s", err)
+			}
+			inodes[j] = inode
+		}
+		b.StartTimer()
+		for j := 0; j < n; j++ {
+			if err := m.GetAttr(ctx, inodes[j], &attr); err != 0 {
+				b.Fatalf("getattr: %s", err)
+			}
+		}
+	}
+}
+
+func setattr(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchSetAttr", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	var attr = Attr{Mode: 0755}
+	inodes := make([]Ino, n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, &inode, nil); err != 0 {
+				b.Fatalf("create: %s", err)
+			}
+			inodes[j] = inode
+		}
+		b.StartTimer()
+		for j := 0; j < n; j++ {
+			if err := m.SetAttr(ctx, inodes[j], SetAttrMode, 0, &attr); err != 0 {
+				b.Fatalf("setattr: %s", err)
+			}
+		}
+	}
+}
+
+func access(b *testing.B, m Meta, n int) { // contains a Getattr
+	var parent Ino
+	if err := prepareParent(m, "benchAccess", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	myCtx := NewContext(100, 1, []uint32{1})
+	var inode Ino
+	inodes := make([]Ino, n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Create(ctx, parent, fmt.Sprintf("f%d_%d", i, j), 0644, 022, &inode, nil); err != 0 {
+				b.Fatalf("create: %s", err)
+			}
+			inodes[j] = inode
+		}
+		b.StartTimer()
+		for j := 0; j < n; j++ {
+			if err := m.Access(myCtx, inodes[j], 4, nil); err != 0 && err != syscall.EACCES {
+				b.Fatalf("access: %s", err)
+			}
+		}
+	}
+}
+
+func BenchmarkFile(b *testing.B) {
+	var conf RedisConfig
+	m, err := NewRedisMeta("redis://127.0.0.1/10", &conf)
+	if err != nil {
+		b.Skipf("redis is not available: %s", err)
+	}
+	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.NewSession()
+
+	cases := []struct {
+		desc string
+		size int
+	}{
+		{"1", 1},
+		{"100", 100},
+		{"10k", 10000},
+	}
+	for _, c := range cases {
+		b.Run(fmt.Sprintf("mknod_%s", c.desc), func(b *testing.B) { mknod(b, m, c.size) })
+		b.Run(fmt.Sprintf("create_%s", c.desc), func(b *testing.B) { create(b, m, c.size) })
+		b.Run(fmt.Sprintf("rename_%s", c.desc), func(b *testing.B) { rename(b, m, c.size) })
+		b.Run(fmt.Sprintf("unlink_%s", c.desc), func(b *testing.B) { unlink(b, m, c.size) })
+		b.Run(fmt.Sprintf("lookup_%s", c.desc), func(b *testing.B) { lookup(b, m, c.size) })
+		b.Run(fmt.Sprintf("getattr_%s", c.desc), func(b *testing.B) { getattr(b, m, c.size) })
+		b.Run(fmt.Sprintf("setattr_%s", c.desc), func(b *testing.B) { setattr(b, m, c.size) })
+		b.Run(fmt.Sprintf("access_%s", c.desc), func(b *testing.B) { access(b, m, c.size) })
 	}
 }
