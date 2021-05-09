@@ -2,6 +2,6 @@
 
 Please select the user documentation in your preferred language:
 
-- [English](en/TOC.md)
-- [简体中文](zh_cn/TOC.md)
+- [English](en/README.md)
+- [简体中文](zh_cn/README.md)
 
