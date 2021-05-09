@@ -24,8 +24,10 @@ import (
 )
 
 const (
-	redisAddr  = "redis://127.0.0.1/10"
-	sqliteAddr = "sqlite3://test.db"
+	redisAddr = "redis://127.0.0.1/10"
+	// redisAddr  = "redis://127.0.0.1:7369" // Titan
+	sqlAddr = "sqlite3://test.db"
+	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/test" // TiDB
 )
 
 func init() {
@@ -454,7 +456,7 @@ func BenchmarkRedisDir(b *testing.B) {
 	benchmarkDir(b, m)
 }
 func BenchmarkSQLDir(b *testing.B) {
-	m := NewClient(sqliteAddr, &Config{})
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkDir(b, m)
 }
 
@@ -477,7 +479,7 @@ func BenchmarkRedisFile(b *testing.B) {
 }
 
 func BenchmarkSQLFile(b *testing.B) {
-	m := NewClient(sqliteAddr, &Config{})
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkFile(b, m)
 }
 
@@ -497,7 +499,7 @@ func BenchmarkRedisXattr(b *testing.B) {
 }
 
 func BenchmarkSQLXattr(b *testing.B) {
-	m := NewClient(sqliteAddr, &Config{})
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkXattr(b, m)
 }
 
@@ -516,6 +518,6 @@ func BenchmarkRedisLink(b *testing.B) {
 }
 
 func BenchmarkSQLLink(b *testing.B) {
-	m := NewClient(sqliteAddr, &Config{})
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkLink(b, m)
 }
