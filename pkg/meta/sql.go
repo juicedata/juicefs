@@ -128,10 +128,10 @@ type dbMeta struct {
 
 func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 	engine, err := xorm.NewEngine(driver, dsn)
-	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
+	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	if err = engine.Ping(); err != nil {
 		return nil, fmt.Errorf("ping database: %s", err)
 	}
