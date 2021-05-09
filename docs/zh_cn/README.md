@@ -21,8 +21,9 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 
 ## 目录
 
-- [JuiceFS 是什么？](introduction.md)
-  - [技术架构](architecture.md)
+- 介绍
+  - [JuiceFS 是什么？](introduction.md)
+  - [JuiceFS 的技术架构](architecture.md)
   - [JuiceFS 如何存储文件？](how_juicefs_store_files.md)
 - [快速上手](quick_start_guide.md)
 - 基本用法
@@ -36,10 +37,10 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
   - JuiceFS 客户端升级
 - [命令参考](command_reference.md)
 - 进阶主题
+  - [JuiceFS 支持的对象存储和设置指南](object_storage_support_and_setup.md)
   - [Redis 最佳实践](redis_best_practices.md)
   - [JuiceFS 性能测试](benchmark.md)
-  - [支持的对象存储和设置指南](object_storage_support_and_setup.md)
-  - POSIX 兼容性
+  - [POSIX 兼容性](posix_compatibility.md)
   - [JuiceFS 缓存管理](cache_management.md)
   - [JuiceFS 性能诊断](operations_profiling.md)
   - [JuiceFS 故障诊断和分析](fault_diagnosis_and_analysis.md)

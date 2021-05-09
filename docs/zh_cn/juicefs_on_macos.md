@@ -1,12 +1,12 @@
 # macOS 系统使用 JuiceFS
 
-### 一、安装依赖工具
+## 1. 安装依赖工具
 
 JuiceFS 支持在 macOS 系统中创建和挂载文件系统。但你需要先安装 [macFUSE](https://osxfuse.github.io/) 才能在 macOS 系统中挂载 JuiceFS 文件系统。
 
 > [macFUSE](https://github.com/osxfuse/osxfuse) 是一个开源的文件系统增强工具，它让 macOS 可以挂载第三方的文件系统，使得 JuiceFS 客户端可以将文件系统挂载到 macOS 系统中使用。
 
-### 二、macOS 上安装 JuiceFS
+## 2. macOS 上安装 JuiceFS
 
 你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，下载文件名包含 `darwin-amd64` 的压缩包，例如：
 
@@ -21,7 +21,7 @@ $ tar -zxf juicefs-0.12.1-darwin-amd64.tar.gz
 $ sudo install juicefs /usr/local/bin
 ```
 
-### 三、挂载 JuiceFS 文件系统
+## 3. 挂载 JuiceFS 文件系统
 
 这里假设你已经准备好了对象存储、Redis 数据库，并且已经创建好了 JuiceFS 文件系统。如果你还没有准备好这些必须的资源，请参考 [快速上手指南](quick_start_guide.md)。
 
@@ -39,7 +39,7 @@ $ juicefs mount redis://192.168.1.8:6379/1 ~/music
 
 > **提示**：在本指南中，Windows 和 macOS 挂载的是同一个文件系统，JuiceFS 支持上千台客户端同时挂载同一个文件系统，提供便捷的海量数据共享能力。
 
-## 开机自动挂载 JuiceFS
+## 4. 开机自动挂载 JuiceFS
 
 Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `REDIS-URL` and `MOUNTPOINT` with appropriate value):
 
@@ -105,3 +105,4 @@ Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Re
         </dict>
 ```
 
+## 5. 卸载文件系统
