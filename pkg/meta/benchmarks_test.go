@@ -25,9 +25,10 @@ import (
 
 const (
 	redisAddr = "redis://127.0.0.1/10"
-	// redisAddr  = "redis://127.0.0.1:7369" // Titan
-	sqlAddr = "sqlite3://test.db"
-	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/test" // TiDB
+	// redisAddr = "redis://127.0.0.1:7369" // Titan
+	sqlAddr = "sqlite3://juicefs.db"
+	// sqlAddr = "mysql://root:@/juicefs" // MySQL
+	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/juicefs" // TiDB
 )
 
 func init() {
@@ -440,6 +441,75 @@ func benchReadlink(b *testing.B, m Meta) {
 }
 */
 
+func benchNewChunk(b *testing.B, m Meta) {
+	ctx := Background
+	var chunkid uint64
+	for i := 0; i < b.N; i++ {
+		if err := m.NewChunk(ctx, 1, 0, 0, &chunkid); err != 0 {
+			b.Fatalf("newchunk: %s", err)
+		}
+	}
+}
+
+func benchWrite(b *testing.B, m Meta) {
+	var parent Ino
+	if err := prepareParent(m, "benchWrite", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "file", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	var (
+		chunkid uint64
+		offset  uint32
+		step    uint32 = 1024
+	)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := m.NewChunk(ctx, inode, 0, 0, &chunkid); err != 0 {
+			b.Fatalf("newchunk: %s", err)
+		}
+		if err := m.Write(ctx, inode, 0, offset, Slice{Chunkid: chunkid, Size: step, Len: step}); err != 0 {
+			b.Fatalf("write: %s", err)
+		}
+		offset += step
+		if offset+step > ChunkSize {
+			offset = 0
+		}
+	}
+}
+
+func benchRead(b *testing.B, m Meta, n int) {
+	var parent Ino
+	if err := prepareParent(m, "benchRead", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var inode Ino
+	if err := m.Create(ctx, parent, "file", 0644, 022, &inode, nil); err != 0 {
+		b.Fatalf("create: %s", err)
+	}
+	var chunkid uint64
+	var step uint32 = 1024
+	for j := 0; j < n; j++ {
+		if err := m.NewChunk(ctx, inode, 0, 0, &chunkid); err != 0 {
+			b.Fatalf("newchunk: %s", err)
+		}
+		if err := m.Write(ctx, inode, 0, uint32(j)*step, Slice{Chunkid: chunkid, Size: step, Len: step}); err != 0 {
+			b.Fatalf("write: %s", err)
+		}
+	}
+	var slices []Slice
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := m.Read(ctx, inode, 0, &slices); err != 0 {
+			b.Fatalf("read: %s", err)
+		}
+	}
+}
+
 func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir, readdir
 	_ = m.Init(Format{Name: "benchmarkDir"}, true)
 	_ = m.NewSession()
@@ -504,7 +574,7 @@ func BenchmarkSQLXattr(b *testing.B) {
 }
 
 func benchmarkLink(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "bench"}, true)
+	_ = m.Init(Format{Name: "benchmarkLink"}, true)
 	_ = m.NewSession()
 	b.Run("link", func(b *testing.B) { benchLink(b, m) })
 	b.Run("symlink", func(b *testing.B) { benchSymlink(b, m) })
@@ -520,4 +590,23 @@ func BenchmarkRedisLink(b *testing.B) {
 func BenchmarkSQLLink(b *testing.B) {
 	m := NewClient(sqlAddr, &Config{})
 	benchmarkLink(b, m)
+}
+
+func benchmarkData(b *testing.B, m Meta) {
+	_ = m.Init(Format{Name: "benchmarkData"}, true)
+	_ = m.NewSession()
+	b.Run("newchunk", func(b *testing.B) { benchNewChunk(b, m) })
+	b.Run("write", func(b *testing.B) { benchWrite(b, m) })
+	b.Run("read_1", func(b *testing.B) { benchRead(b, m, 1) })
+	b.Run("read_10", func(b *testing.B) { benchRead(b, m, 10) })
+}
+
+func BenchmarkRedisData(b *testing.B) {
+	m := NewClient(redisAddr, &Config{})
+	benchmarkData(b, m)
+}
+
+func BenchmarkSQLData(b *testing.B) {
+	m := NewClient(sqlAddr, &Config{})
+	benchmarkData(b, m)
 }
