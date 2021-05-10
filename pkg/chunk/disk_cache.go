@@ -135,6 +135,7 @@ func (cache *cacheStore) cache(key string, p *Page) {
 	default:
 		// does not have enough bandwidth to write it into disk, discard it
 		logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
+		cacheDrops.Add(1)
 		delete(cache.pages, key)
 		p.Release()
 	}
@@ -146,6 +147,12 @@ func (cache *cacheStore) curFreeRatio() (float32, float32) {
 }
 
 func (cache *cacheStore) flushPage(path string, data []byte, sync bool) error {
+	start := time.Now()
+	cacheWrites.Add(1)
+	cacheWriteBytes.Add(float64(len(data)))
+	defer func() {
+		cacheWriteHist.Observe(time.Since(start).Seconds())
+	}()
 	cache.createDir(filepath.Dir(path))
 	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE, cache.mode)
@@ -349,6 +356,7 @@ func (cache *cacheStore) cleanup() {
 			cache.used -= int64(lastValue.size + 4096)
 			todel = append(todel, lastKey)
 			logger.Debugf("remove %s from cache, age: %d", lastKey, now-lastValue.atime)
+			cacheEvicts.Add(1)
 			cnt = 0
 			if len(cache.keys) < num && cache.used < goal {
 				break
