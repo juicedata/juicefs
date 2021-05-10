@@ -155,38 +155,17 @@ func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 }
 
 func (m *dbMeta) Init(format Format, force bool) error {
-	if err := m.engine.Sync2(new(setting)); err != nil {
-		logger.Fatalf("create table jfs_setting: %s", err)
+	if err := m.engine.Sync2(new(setting), new(counter)); err != nil {
+		logger.Fatalf("create table setting, counter: %s", err)
 	}
-	if err := m.engine.Sync2(new(counter)); err != nil {
-		logger.Fatalf("create table jfs_counter: %s", err)
+	if err := m.engine.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
+		logger.Fatalf("create table node, edge, symlink, xattr: %s", err)
 	}
-	if err := m.engine.Sync2(new(node)); err != nil {
-		logger.Fatalf("create table jfs_node: %s", err)
+	if err := m.engine.Sync2(new(chunk), new(sliceRef)); err != nil {
+		logger.Fatalf("create table chunk, slice_ref: %s", err)
 	}
-	if err := m.engine.Sync2(new(edge)); err != nil {
-		logger.Fatalf("create table jfs_edge: %s", err)
-	}
-	if err := m.engine.Sync2(new(symlink)); err != nil {
-		logger.Fatalf("create table jfs_symlink: %s", err)
-	}
-	if err := m.engine.Sync2(new(chunk)); err != nil {
-		logger.Fatalf("create table jfs_chunk: %s", err)
-	}
-	if err := m.engine.Sync2(new(sliceRef)); err != nil {
-		logger.Fatalf("create table jfs_slice_ref: %s", err)
-	}
-	if err := m.engine.Sync2(new(xattr)); err != nil {
-		logger.Fatalf("create table jfs_xattr: %s", err)
-	}
-	if err := m.engine.Sync2(new(session)); err != nil {
-		logger.Fatalf("create table jfs_session: %s", err)
-	}
-	if err := m.engine.Sync2(new(sustained)); err != nil {
-		logger.Fatalf("create table jfs_sustained: %s", err)
-	}
-	if err := m.engine.Sync2(new(delfile)); err != nil {
-		logger.Fatalf("create table jfs_delfile: %s", err)
+	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
+		logger.Fatalf("create table session, sustaind, delfile: %s", err)
 	}
 
 	old, err := m.Load()
