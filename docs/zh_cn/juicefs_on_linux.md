@@ -32,3 +32,11 @@ $ make
 ```
 
 > **提示**：中国地区用户，可以设置  `GOPROXY` 加快 Go 模块的下载速度，例如： [Goproxy China](https://github.com/goproxy/goproxy.cn)。
+
+## 常见错误
+
+```
+./juicefs: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.32' not found (required by ./juicefs)
+./juicefs: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.33' not found (required by ./juicefs)
+```
+

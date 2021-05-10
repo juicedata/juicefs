@@ -4,7 +4,7 @@ JuiceFS 文件系统由三个部分组成：
 
 1. **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes、S3 Gateway 等文件系统接口的实现；
 2. **数据存储**：存储数据本身，支持本地磁盘、对象存储；
-3. **元数据引擎**：存储数据对应的元数据，支持 Redis 等多种引擎；
+3. **元数据引擎**：存储数据对应的元数据，支持 Redis、MySQL、Sqlite 等多种引擎；
 
 ![JuiceFS Architecture](../images/juicefs-arch-new.png)
 
@@ -16,7 +16,7 @@ JuiceFS 文件系统由三个部分组成：
 
 在**文件系统接口**实现方面：
 
-- 通过 **FUSE** ，JuiceFS 文件系统能够以 POSIX 兼容的方式挂载到服务器，将海量云端存储直接当做本地存储来使用。
+- 通过 **FUSE**，JuiceFS 文件系统能够以 POSIX 兼容的方式挂载到服务器，将海量云端存储直接当做本地存储来使用。
 - 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。
 - 通过 **Kubernetes CSI driver**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。
 - 通过 **S3 Gateway**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。
