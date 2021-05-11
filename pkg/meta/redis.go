@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -601,6 +602,45 @@ func errno(err error) syscall.Errno {
 	return syscall.EIO
 }
 
+type timeoutError interface {
+	Timeout() bool
+}
+
+func shouldRetry(err error, retryOnFailure bool) bool {
+	switch err {
+	case redis.TxFailedErr:
+		return true
+	case io.EOF, io.ErrUnexpectedEOF:
+		return retryOnFailure
+	case nil, context.Canceled, context.DeadlineExceeded:
+		return false
+	}
+
+	if v, ok := err.(timeoutError); ok && v.Timeout() {
+		return retryOnFailure
+	}
+
+	s := err.Error()
+	if s == "ERR max number of clients reached" {
+		return true
+	}
+	etype := strings.SplitN(s, " ", 2)[0]
+	switch etype {
+	case "LOADING":
+	case "READONLY":
+	case "CLUSTERDOWN":
+	case "TRYAGAIN":
+	case "MOVED":
+	case "ASK":
+	case "DISABLE":
+	case "NOWRITE":
+	case "NOREAD":
+	default:
+		return false
+	}
+	return true
+}
+
 func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) syscall.Errno {
 	var err error
 	var khash = fnv.New32()
@@ -610,9 +650,11 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	l.Lock()
 	defer l.Unlock()
+	// TODO: enable retry for some of idempodent transactions
+	var retryOnFailture = false
 	for i := 0; i < 50; i++ {
 		err = r.rdb.Watch(ctx, txf, keys...)
-		if err == redis.TxFailedErr {
+		if shouldRetry(err, retryOnFailture) {
 			txRestart.Add(1)
 			time.Sleep(time.Microsecond * 100 * time.Duration(rand.Int()%(i+1)))
 			continue
