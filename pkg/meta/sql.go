@@ -412,6 +412,10 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 	return 0
 }
 
+func (r *dbMeta) Resolve(ctx Context, path string, inode *Ino, attr *Attr) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
 func (m *dbMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
 	if ctx.Uid() == 0 {
 		return 0

@@ -67,18 +67,6 @@ const delfiles = "delfiles"
 const allSessions = "sessions"
 const sliceRefs = "sliceRef"
 
-const scriptLookup = `
-local buf = redis.call('HGET', KEYS[1], KEYS[2])
-if not buf then
-       return false
-end
-if string.len(buf) ~= 9 then
-       return {err=string.format("Invalid entry data: %s", buf)}
-end
-local ino = struct.unpack(">I8", string.sub(buf, 2))
-return {ino, redis.call('GET', "i" .. tostring(ino))}
-`
-
 type redisMeta struct {
 	sync.Mutex
 	conf    *Config
@@ -527,6 +515,10 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		*inode = foundIno
 	}
 	return errno(err)
+}
+
+func (r *redisMeta) Resolve(ctx Context, path string, inode *Ino, attr *Attr) syscall.Errno {
+	return syscall.ENOTSUP
 }
 
 func accessMode(attr *Attr, uid uint32, gid uint32) uint8 {

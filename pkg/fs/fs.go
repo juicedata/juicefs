@@ -531,9 +531,25 @@ func (fs *FileSystem) RemoveXattr(ctx meta.Context, p string, name string) (err 
 }
 
 func (fs *FileSystem) lookup(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
+	var inode Ino
+	var attr = &Attr{}
+
+	err = fs.m.Resolve(ctx, p, &inode, attr)
+	if err == 0 {
+		fi = AttrToFileInfo(inode, attr)
+		p = strings.TrimRight(p, "/")
+		ss := strings.Split(p, "/")
+		fi.name = ss[len(ss)-1]
+		return
+	}
+	if err != syscall.ENOTSUP {
+		return
+	}
+
+	// Fallback to the default implementation that calls `fs.m.Lookup` for each directory along the path.
+	// It might be slower for deep directories, but it works for every meta that implements `Lookup`.
 	parent := Ino(1)
 	ss := strings.Split(p, "/")
-	var attr = &Attr{}
 	for i, name := range ss {
 		if len(name) == 0 {
 			continue
@@ -552,7 +568,6 @@ func (fs *FileSystem) lookup(ctx meta.Context, p string, followLastSymlink bool)
 
 		var inode Ino
 		var resolved bool
-		// TODO: speed up by resolve the path in Redis
 		err = fs.m.Lookup(ctx, parent, name, &inode, attr)
 		if i == len(ss)-1 {
 			resolved = true
