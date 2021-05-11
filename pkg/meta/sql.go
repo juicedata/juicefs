@@ -1354,7 +1354,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 func (m *dbMeta) cleanStaleSessions() {
 	// TODO: once per minute
 	var s session
-	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5)).Rows(&s)
+	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).UTC()).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
