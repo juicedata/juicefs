@@ -1,18 +1,16 @@
 # JuiceFS 支持的元数据存储引擎
 
-通过阅读 [JuiceFS 的技术架构](architecture.md) 和 [JuiceFS 如何存储文件](how_juicefs_store_files.md) 两篇文档，我们已经知道 JuiceFS 被设计成为一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中。
+通过阅读 [JuiceFS 的技术架构](architecture.md) 和 [JuiceFS 如何存储文件](how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中。
 
 ## 元数据存储引擎
 
-对于 JuiceFS 文件系统来说，元数据至关重要。它记录着每一个文件的详细信息，名称、大小、权限、位置等等。特别是这种数据与元数据分离存储的文件系统，元数据的读写性能直接决定了文件系统实际的性能表现。
+数据和元数据同样至关重要，元数据中记录着每一个文件的详细信息，名称、大小、权限、位置等等。特别是这种数据与元数据分离存储的文件系统，元数据的读写性能直接决定了文件系统实际的性能表现。
 
-JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性能的云原生文件系统，JuiceFS 最先支持的是运行在内存上的键值数据库—— Redis，这使得 JuiceFS 拥有十倍于 Amazon EFS 和 S3FS 的性能表现。
+JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性能的云原生文件系统，JuiceFS 最先支持的是运行在内存上的键值数据库—— [Redis](https://redis.io)，这使得 JuiceFS 拥有十倍于 Amazon [EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的性能表现，[查看测试结果](benchmark.md)。
 
-伴随着社区用户积极参与和沟通反馈，我们了解到有很多应用场景并不绝对依赖超高的性能，有时候用户只是想临时找到一个趁手的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储存储挂载到本地小规模的使用。
+通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储存储挂载到本地小规模的使用。因此，JuiceFS 陆续开放了对 MySQL/MariaDB、Sqlite 等更多数据库的支持。
 
-在社区用户需求的驱动下，JuiceFS 陆续开放了对 MySQL/MariaDB、PostgreSQL、Sqlite 等更多数据库的支持，并且会在将来开放对更多数据库的支持。
-
-**需要特别注意的是**，在使用 JuiceFS 文件系统的过程中不论你选择哪种数据库存储元数据，最最最重要的是，请 **务必确保元数据的安全！**元数据一旦损坏或丢失，会直接导致对应数据彻底损坏或丢失，严重的可能直接导致整个文件系统发生损毁。
+**但需要特别注意的是**，在使用 JuiceFS 文件系统的过程中，不论你选择哪种数据库存储元数据，请 **务必确保元数据的安全！**元数据一旦损坏或丢失，将直接导致对应数据彻底损坏或丢失，严重的可能直接导致整个文件系统发生损毁。
 
 ## Redis
 
@@ -34,7 +32,9 @@ $ sudo docker run -d --name redis \
 
 > **安全提示**：以上命令创建的 redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，强烈建议参照 [Redis 官方文档](https://redis.io/topics/security) 启用保护模式。
 
-你还可以查看 [Redis 最佳实践](redis_best_practices.md)，进一步了解相关内容。
+如果你计划在多台服务器上共享使用同一个 JuiceFS 文件系统，你必须确保 Redis 数据库可以被每一台要挂载文件系统的服务器访问到。
+
+如果你有兴趣，可以查看 [Redis 最佳实践](redis_best_practices.md)。
 
 ## MySQL
 
@@ -46,6 +46,7 @@ $ sudo docker run -d --name redis \
 $ sudo docker run -d --name mysql \
 	-p 3306:3306 \
 	-v mysql-data:/var/lib/mysql \
+	-e MYSQL_ROOT_PASSWORD=password \
 	-e MYSQL_DATABASE=juicefs \
 	-e MYSQL_USER=user \
 	-e MYSQL_PASSWORD=password \
@@ -53,9 +54,102 @@ $ sudo docker run -d --name mysql \
 	mysql
 ```
 
+**注意**：以上命令将 mysql 的数据持久化在了 docker 的 mysql-data 数据卷当中，你可以按需修改数据持久化的存储位置。出于测试方便同时开放了 3306 端口，请勿将该实例用于关键数据的存储。
+
+### 创建文件系统
+
+使用 MySQL 作为元数据存储引擎时，通常使用以下格式访问数据库：
+
+```shell
+mysql://<username>:<password>@(<IP or Domain name>:3306)/<database-name>
+```
+
+例如：
+
+```shell
+$ juicefs format --storage minio \
+	--bucket http://192.168.1.6:9000/jfs \
+	--access-key minioadmin \
+	--secret-key minioadmin \
+	mysql://user:password@(192.168.1.6:3306)/juicefs \
+	pics
+```
+
+更多 mysql 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
+
+### 挂载文件系统
+
+```shell
+$ sudo juicefs mount -d mysql://user:password@(192.168.1.6:3306)/juicefs /mnt/jfs
+```
+
 ## MariaDB
 
-## Sqlite
+> MariaDB 也是最流行的关系型数据库之一，它是 MySQL 的一个开源分支，由 MySQL 原始开发者维护并保持开源。
+
+因为 MariaDB 与 MySQL 高度兼容，因此在使用上也没有任何差别，比如在本地的 Docker 上创建一个实例，只是改换个名称和镜像而已，各项参数和设置完全一致：
+
+```shell
+$ sudo docker run -d --name mariadb \
+	-p 3306:3306 \
+	-v mysql-data:/var/lib/mysql \
+	-e MYSQL_ROOT_PASSWORD=password \
+	-e MYSQL_DATABASE=juicefs \
+	-e MYSQL_USER=user \
+	-e MYSQL_PASSWORD=password \
+	--restart unless-stopped \
+	mariadb
+```
+
+在创建和挂载文件系统时，则保持 MySQL 的语法，例如：
+
+```shell
+$ juicefs format --storage minio \
+	--bucket http://192.168.1.6:9000/jfs \
+	--access-key minioadmin \
+	--secret-key minioadmin \
+	mysql://user:password@(192.168.1.6:3306)/juicefs \
+	pics
+```
+
+## SQLite
+
+> [SQLite](https://sqlite.org) 是一款被广泛使用的小巧、快速、单文件、可靠、全功能的 SQL 数据库引擎。
+
+SQLite 数据库只有一个文件，创建和使用都非常灵活，用它作为 JuiceFS 元数据存储引擎时无需提前创建数据库文件，可以直接创建文件系统：
+
+```shell
+$ juicefs format --storage minio \
+	--bucket https://192.168.1.6:9000/jfs \
+	--access-key minioadmin \
+	--secret-key minioadmin \
+	sqlite3://my-jfs.db \
+	pics
+```
+
+执行以上命令会自动在当前目录中创建名为 `my-jfs.db` 的数据库文件，请 **务必妥善保管** 这个数据库文件！
+
+挂载文件系统：
+
+```shell
+$ sudo juicefs mount -d sqlite3://my-jfs.db
+```
+
+如果数据库不在当前目录，则需要指定数据库文件的绝对路径，比如：
+
+```shell
+$ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
+```
+
+### 注意
+
+由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，通常只有数据库所在的主机可以访问它。因此，SQLite 数据库更适合单机使用，对于多台服务器共享同一文件系统的情况，建议使用 Redis 或 MySQL 等数据库。
 
 ## PostgreSQL
+
+即将推出......
+
+## TiKV
+
+即将推出......
 
