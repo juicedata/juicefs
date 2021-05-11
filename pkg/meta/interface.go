@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"os"
 	"strings"
 	"syscall"
 )
@@ -213,12 +214,31 @@ type Meta interface {
 	OnMsg(mtype uint32, cb MsgCallback)
 }
 
+func removePassword(uri string) string {
+	p := strings.Index(uri, "@")
+	if p < 0 {
+		return uri
+	}
+	sp := strings.Index(uri, "://")
+	cp := strings.Index(uri[sp+3:], ":")
+	if cp < 0 || sp+3+cp > p {
+		return uri
+	}
+	return uri[:sp+3+cp] + uri[p:]
+}
+
 // NewClient creates a Meta client for given uri.
 func NewClient(uri string, conf *Config) Meta {
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
 	}
-	logger.Infof("Meta address: %s", uri)
+	logger.Infof("Meta address: %s", removePassword(uri))
+	if os.Getenv("META_PASSWORD") != "" {
+		p := strings.Index(uri, ":@")
+		if p > 0 {
+			uri = uri[:p+1] + os.Getenv("META_PASSWORD") + uri[p+1:]
+		}
+	}
 	var m Meta
 	var err error
 	if strings.HasPrefix(uri, "redis") {
