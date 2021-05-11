@@ -81,7 +81,8 @@ type redisMeta struct {
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 
-	shaLookup string // The SHA returned by Redis for the loaded `scriptLookup`
+	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
+	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
 }
 
 var _ Meta = &redisMeta{}
@@ -240,6 +241,11 @@ func (r *redisMeta) NewSession() error {
 	if err != nil {
 		logger.Warnf("load scriptLookup: %v", err)
 		r.shaLookup = ""
+	}
+	r.shaResolve, err = r.rdb.ScriptLoad(Background, scriptResolve).Result()
+	if err != nil {
+		logger.Warnf("load scriptResolve: %v", err)
+		r.shaResolve = ""
 	}
 
 	go r.refreshSession()
@@ -485,6 +491,9 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		if !ok {
 			return errno(fmt.Errorf("invalid script result: %v", res))
 		}
+		if returnedAttr == "" {
+			return syscall.ENOENT
+		}
 		foundIno = Ino(returnedIno)
 		encodedAttr = []byte(returnedAttr)
 	} else {
@@ -517,8 +526,52 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	return errno(err)
 }
 
-func (r *redisMeta) Resolve(ctx Context, path string, inode *Ino, attr *Attr) syscall.Errno {
-	return syscall.ENOTSUP
+func (r *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if len(r.shaResolve) == 0 || r.conf.CaseInsensi {
+		return syscall.ENOTSUP
+	}
+	args := []string{parent.String(), path,
+		strconv.FormatUint(uint64(ctx.Uid()), 10),
+		strconv.FormatUint(uint64(ctx.Gid()), 10)}
+	res, err := r.rdb.EvalSha(ctx, r.shaResolve, args).Result()
+	if err != nil {
+		fields := strings.Fields(err.Error())
+		lastError := fields[len(fields)-1]
+		switch lastError {
+		case "ENOENT":
+			return syscall.ENOENT
+		case "EACCESS":
+			return syscall.EACCES
+		case "ENOTDIR":
+			return syscall.ENOTDIR
+		case "ENOTSUP":
+			return syscall.ENOTSUP
+		default:
+			logger.Warnf("resolve %d %s: %s", parent, path, err)
+			return syscall.ENOTSUP
+		}
+	}
+	vals, ok := res.([]interface{})
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	returnedIno, ok := vals[0].(int64)
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	returnedAttr, ok := vals[1].(string)
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	if returnedAttr == "" {
+		return syscall.ENOENT
+	}
+	*inode = Ino(returnedIno)
+	r.parseAttr([]byte(returnedAttr), attr)
+	return 0
 }
 
 func accessMode(attr *Attr, uid uint32, gid uint32) uint8 {

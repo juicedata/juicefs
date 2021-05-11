@@ -13,6 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//nolint
 package meta
 
 const scriptLookup = `
@@ -20,96 +21,66 @@ local buf = redis.call('HGET', KEYS[1], KEYS[2])
 if not buf then
        return false
 end
-if string.len(buf) ~= 9 then
-       return {err=string.format("Invalid entry data: %s", buf)}
-end
-local ino = string.unpack(">I8", string.sub(buf, 2))
+local ino = struct.unpack(">I8", string.sub(buf, 2))
 return {ino, redis.call('GET', "i" .. tostring(ino))}
 `
 
-//nolint
 const scriptResolve = `
 local function unpack_attr(buf)
-    local buf_len = string.len(buf)
     local x = {}
-    if buf_len ~= 71 and buf_len ~= 63 then
-        if buf_len == 72 or buf_len == 64 then
-            -- Strip trailing \x00
-            buf = string.sub(buf, 1, -2)
-        else
-            error(string.format("Invalid attr length: %d", buf_len))
-        end
-    end
-    local format = ">BHI4I4I8I4I8I4I8I4I4I8I4"
-    if buf_len == 71 then
-        format = format .. "I8"
-    end
-
-    x.flags, x.mode, x.uid, x.gid,
-    x.atime, x.atime_nsec,
-    x.mtime, x.mtime_nsec,
-    x.ctime, x.ctime_nsec,
-    x.nlink, x.length, x.rdev, x.parent = string.unpack(format, buf)
-
-    x.type = (x.mode >> 12) & 7
-    x.mode = x.mode & 0xfff
-
+    x.flags, x.mode, x.uid, x.gid = struct.unpack(">BHI4I4", string.sub(buf, 0, 11))
+    x.type = (x.mode / 4096) % 8
+    x.mode = x.mode % 4096
     return x
 end
 
 local function get_attr(ino)
-    -- TODO: Handle errors
     local encoded_attr = redis.call('GET', "i" .. tostring(ino))
+    if not encoded_attr then
+        error("ENOENT")
+    end
     return unpack_attr(encoded_attr)
 end
 
-local function lookup(parent_ino, name)
-    local buf = redis.call('HGET', parent_ino, name)
+local function lookup(parent, name)
+    local buf = redis.call('HGET', "d" .. tostring(parent), name)
     if not buf then
-        error(string.format("No entry found for %s", name))
+        error("ENOENT")
     end
-    if string.len(buf) ~= 9 then
-        return {err=string.format("Invalid entry data: %s", buf)}
-    end
-    return string.unpack(">I8", string.sub(buf, 2))
+    return struct.unpack(">BI8", buf)
 end
 
-local function can_access(ino, uid, gid, mask)
+local function can_access(ino, uid, gid)
     if uid == 0 then
-        return 0
+        return true
     end
 
-    attr = get_attr(ino)
+    local attr = get_attr(ino)
+    local mode = 0
     if attr.uid == uid then
-        mode = (attr.mode >> 6) & 7
+        mode = (attr.mode / 64) % 8
     elseif attr.gid == gid then
-        mode = (attr.mode >> 3) & 7
+        mode = (attr.mode / 8) % 8
     else
-        mode = attr.mode & 7
+        mode = attr.mode % 8
     end
-    return mode&mask == mask
+    return mode % 2 == 1
 end
 
-local function resolve(path, uid, gid)
-    local first = true
-    local parent_ino = 1
-    local mask_x = 1
-    local attr
+local function resolve(parent, path, uid, gid)
+    local _type = 2
     for name in string.gmatch(path, "[^/]+") do
-        if not first then
-            if not can_access(parent_ino, uid, gid, mask_x) then
-                error("EACCESS")
-            end
-        else
-            first = false
+        if _type == 3 then
+            error("ENOTSUP")
+        elseif _type ~= 2 then
+            error("ENOTDIR")
+        elseif parent > 1 and not can_access(parent, uid, gid) then 
+            error("EACCESS")
         end
-
-        ino = lookup(parent_ino, name)
-        parent_ino = ino
+        _type, parent = lookup(parent, name)
     end
-    if parent_ino == 1 then
-        attr = get_attr(parent_ino)
-    end
-    return {parent_ino, redis.call('GET', "i" .. tostring(parent_ino))}
+    return {parent, redis.call('GET', "i" .. tostring(parent))}
 end
+
+return resolve(tonumber(KEYS[1]), KEYS[2], tonumber(KEYS[3]), tonumber(KEYS[4]))
 `

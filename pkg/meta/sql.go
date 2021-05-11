@@ -412,7 +412,7 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 	return 0
 }
 
-func (r *dbMeta) Resolve(ctx Context, path string, inode *Ino, attr *Attr) syscall.Errno {
+func (r *dbMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return syscall.ENOTSUP
 }
 
