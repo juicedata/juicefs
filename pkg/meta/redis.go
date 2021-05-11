@@ -569,7 +569,9 @@ func (r *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 	if returnedAttr == "" {
 		return syscall.ENOENT
 	}
-	*inode = Ino(returnedIno)
+	if inode != nil {
+		*inode = Ino(returnedIno)
+	}
 	r.parseAttr([]byte(returnedAttr), attr)
 	return 0
 }
