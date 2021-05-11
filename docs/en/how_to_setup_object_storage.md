@@ -6,37 +6,37 @@ This is a guide about how to setup object storage when format a volume. Differen
 
 This table lists all JuiceFS supported object storage, when you format a volume you need specify storage type through `--storage` option, e.g. for Amazon S3 the value of `--storage` is `s3`.
 
-| Name                                       | Value      |
-| ----                                       | -----      |
-| Amazon S3                                  | `s3`       |
-| Google Cloud Storage                       | `gs`       |
-| Azure Blob Storage                         | `wasb`     |
-| Backblaze B2 Cloud Storage                 | `b2`       |
-| IBM Cloud Object Storage                   | `ibmcos`   |
-| Scaleway Object Storage                    | `scw`      |
-| DigitalOcean Spaces Object Storage         | `space`    |
-| Wasabi Cloud Object Storage                | `wasabi`   |
-| Alibaba Cloud Object Storage Service       | `oss`      |
-| Tencent Cloud Object Storage               | `cos`      |
-| Huawei Cloud Object Storage Service        | `obs`      |
-| Baidu Object Storage                       | `bos`      |
-| Kingsoft Cloud Standard Storage Service    | `ks3`      |
-| Meituan Storage Service                    | `mss`      |
-| NetEase Object Storage                     | `nos`      |
-| QingStor Object Storage                    | `qingstor` |
-| Qiniu Cloud Object Storage                 | `qiniu`    |
-| Sina Cloud Storage                         | `scs`      |
-| CTYun Object-Oriented Storage              | `oos`      |
-| ECloud (China Mobile Cloud) Object Storage | `eos`      |
-| SpeedyCloud Object Storage                 | `speedy`   |
-| UCloud US3                                 | `ufile`    |
-| Ceph RADOS                                 | `ceph`     |
-| Ceph Object Gateway (RGW)                  | `s3`       |
-| Swift                                      | `swift`    |
-| MinIO                                      | `minio`    |
-| HDFS                                       | `hdfs`     |
-| Redis                                      | `redis`    |
-| Local disk                                 | `file`     |
+| Name                                                         | Value      |
+| ------------------------------------------------------------ | ---------- |
+| [Amazon S3](#S3)                                             | `s3`       |
+| [Google Cloud Storage](#Google Cloud Storage)                | `gs`       |
+| [Azure Blob Storage](#Azure Blob Storage)                    | `wasb`     |
+| [Backblaze B2 Cloud Storage](#Backblaze B2 Cloud Storage)    | `b2`       |
+| [IBM Cloud Object Storage](#IBM Cloud Object Storage)        | `ibmcos`   |
+| [Scaleway Object Storage](#Scaleway Object Storage)          | `scw`      |
+| [DigitalOcean Spaces Object Storage](#DigitalOcean Spaces Object Storage) | `space`    |
+| [Wasabi Cloud Object Storage](#Wasabi Cloud Object Storage)  | `wasabi`   |
+| [Alibaba Cloud Object Storage Service](#Alibaba Cloud Object Storage Service) | `oss`      |
+| [Tencent Cloud Object Storage](#Tencent Cloud Object Storage) | `cos`      |
+| [Huawei Cloud Object Storage Service](#Tencent Cloud Object Storage) | `obs`      |
+| [Baidu Object Storage](#Baidu Object Storage)                | `bos`      |
+| [Kingsoft Cloud Standard Storage Service](#Kingsoft Cloud Standard Storage Service) | `ks3`      |
+| [Meituan Storage Service](#Meituan Storage Service)          | `mss`      |
+| [NetEase Object Storage](#NetEase Object Storage)            | `nos`      |
+| [QingStor Object Storage](#QingStor Object Storage)          | `qingstor` |
+| [Qiniu Cloud Object Storage](#Qiniu Cloud Object Storage)    | `qiniu`    |
+| [Sina Cloud Storage](#Sina Cloud Storage)                    | `scs`      |
+| [CTYun Object-Oriented Storage](#CTYun Object-Oriented Storage) | `oos`      |
+| [ECloud (China Mobile Cloud) Object Storage](#ECloud (China Mobile Cloud) Object Storage) | `eos`      |
+| [SpeedyCloud Object Storage](#SpeedyCloud Object Storage)    | `speedy`   |
+| [UCloud US3](#SpeedyCloud Object Storage)                    | `ufile`    |
+| [Ceph RADOS](#Ceph RADOS)                                    | `ceph`     |
+| [Ceph Object Gateway (RGW)](#Ceph Object Gateway (RGW))      | `s3`       |
+| [Swift](#Swift)                                              | `swift`    |
+| [MinIO](#MinIO)                                              | `minio`    |
+| [HDFS](#HDFS)                                                | `hdfs`     |
+| [Redis](#Redis)                                              | `redis`    |
+| [Local disk](#Local disk)                                    | `file`     |
 
 ## Access key and secret key
 
