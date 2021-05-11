@@ -624,17 +624,26 @@ func shouldRetry(err error, retryOnFailure bool) bool {
 	if s == "ERR max number of clients reached" {
 		return true
 	}
-	etype := strings.SplitN(s, " ", 2)[0]
-	switch etype {
+	ps := strings.SplitN(s, " ", 3)
+	switch ps[0] {
 	case "LOADING":
 	case "READONLY":
 	case "CLUSTERDOWN":
 	case "TRYAGAIN":
 	case "MOVED":
 	case "ASK":
-	case "DISABLE":
-	case "NOWRITE":
-	case "NOREAD":
+	case "ERR":
+		if len(ps) > 1 {
+			switch ps[1] {
+			case "DISABLE":
+				fallthrough
+			case "NOWRITE":
+				fallthrough
+			case "NOREAD":
+				return true
+			}
+		}
+		return false
 	default:
 		return false
 	}
