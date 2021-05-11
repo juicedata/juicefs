@@ -176,6 +176,18 @@ func mount(c *cli.Context) error {
 				}
 			}
 		}
+		sqliteScheme := "sqlite3://"
+		if strings.HasPrefix(addr, sqliteScheme) {
+			path := addr[len(sqliteScheme):]
+			path2, err := filepath.Abs(path)
+			if err == nil && path2 != path {
+				for i, a := range os.Args {
+					if a == addr {
+						os.Args[i] = sqliteScheme + path2
+					}
+				}
+			}
+		}
 		// The default log to syslog is only in daemon mode.
 		utils.InitLoggers(!c.Bool("no-syslog"))
 		err := makeDaemon(conf.Format.Name, conf.Mountpoint)
