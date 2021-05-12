@@ -26,7 +26,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -646,7 +645,6 @@ func errno(err error) syscall.Errno {
 	if err == redis.Nil {
 		return syscall.ENOENT
 	}
-	debug.PrintStack()
 	logger.Errorf("error: %s", err)
 	return syscall.EIO
 }
