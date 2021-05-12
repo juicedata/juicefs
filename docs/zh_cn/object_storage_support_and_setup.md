@@ -23,9 +23,17 @@ $ juicefs format --storage s3 \
 
 类似的，你可以调整参数，使用几乎所有的公有云/私有云对象存储服务来创建文件系统。
 
+## Access key 和 secret key
+
+一般而言，对象存储服务通过 `access key` 和 `secret key` 验证用户身份，创建文件系统时，除了使用 `--access-key` 和 `--secret-key` 两个选项显式设置以外，还可以通过 `ACCESS_KEY` 和 `SECRET_KEY` 这两个环境变量进行设置。
+
+公有云通常允许用户创建 IAM (Identity and Access Management) 角色，例如： [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) 或  [Alibaba Cloud RAM role](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果 VM 实例已经拥有访问对象存储的权限，则可以无需设置 `--access-key` 和 `--secret-key` 这两个选项。
+
 ## 支持的存储服务
 
-下表列出了 JuiceFS 支持的对象存储服务，点选查看设置方法：
+下表列出了 JuiceFS 支持的对象存储服务，点击名称查看设置方法：
+
+> 你想要的对象存储不在列表中，欢迎提交需求 [isusse](https://github.com/juicedata/juicefs/issues)。
 
 | Name                                                         | Value      |
 | ------------------------------------------------------------ | ---------- |
@@ -37,6 +45,7 @@ $ juicefs format --storage s3 \
 | [Scaleway Object Storage](#Scaleway Object Storage)          | `scw`      |
 | [DigitalOcean Spaces Object Storage](#DigitalOcean Spaces Object Storage) | `space`    |
 | [Wasabi Cloud Object Storage](#Wasabi Cloud Object Storage)  | `wasabi`   |
+| [Storj DCS]()                                                | `s3`       |
 | [阿里云 OSS](#aliyun_oss)                                    | `oss`      |
 | [腾讯云 COS](#qcloud_cos)                                    | `cos`      |
 | [华为云 OBS](#huawei_obs)                                    | `obs`      |
@@ -58,12 +67,6 @@ $ juicefs format --storage s3 \
 | [HDFS](#HDFS)                                                | `hdfs`     |
 | [Redis](#Redis)                                              | `redis`    |
 | [本地磁盘](#Local disk)                                      | `file`     |
-
-## Access key 和 secret key
-
-For authorization, the access key and secret key are needed. You could specify them through `--access-key` and `--secret-key` options. Or you can set `ACCESS_KEY` and `SECRET_KEY` environment variables.
-
-Public cloud provider usually allow user create IAM (Identity and Access Management) role (e.g. [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html)) or similar thing (e.g. [Alibaba Cloud RAM role](https://help.aliyun.com/document_detail/93689.html)), then assign the role to VM instance. If your VM instance already have permission to access object storage, then you could omit `--access-key` and `--secret-key` options.
 
 ## S3
 
@@ -115,8 +118,6 @@ $ ./juicefs format \
     ... \
     localhost test
 ```
-
-
 
 ## Google Cloud Storage
 
@@ -223,6 +224,10 @@ $ ./juicefs format \
 ```
 
 ***Note: For Tokyo (ap-northeast-1) region user, see [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) to learn how to get appropriate endpoint URI.***
+
+## Storj DCS
+
+待添加
 
 ## 阿里云 OSS <span id='aliyun_oss'></span>
 
