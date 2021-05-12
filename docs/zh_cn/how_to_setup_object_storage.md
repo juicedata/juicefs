@@ -79,7 +79,7 @@ S3 支持  [两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/Amaz
 
 **注意**：AWS 中国的用户，应使用 `amazonaws.com.cn` 域名。相应的区域代码信息[点此查看](https://docs.amazonaws.cn/aws/latest/userguide/endpoints-arns.html)。
 
-JuiceFS v0.12 之前的版本仅支持虚拟托管类型。v0.12 以及之后的版本两种风格都支持。因此，在创建文件系统时，`--bucket` 选项即可以使用虚拟托管类型的链接，也可以使用路径类型的链接，例如：
+JuiceFS v0.12 之前的版本仅支持虚拟托管类型。v0.12 以及之后的版本两种风格都支持。因此，在创建文件系统时，`--bucket` 选项既可以使用虚拟托管类型的链接，也可以使用路径类型的链接，例如：
 
 ```bash
 # 虚拟托管类型
@@ -121,7 +121,7 @@ $ ./juicefs format \
 
 ## Google 云存储 <span id='google-gs'></span>
 
-使用 Google 云存储创建 JuiceFS 文件系统时，由于 Google 云存储没有 `Access key` 和 `Secret key`，因此在创建文件系统时可以忽略 `--access-key` 和 `--secret-key`选项。请查阅 Google Cloud 的文档了解 [身份验证](https://cloud.google.com/docs/authentication) 和 [身份及访问管理(IAM)](https://cloud.google.com/iam/docs/overview) 相关内容。一般来说，无需额外配置，在使用 Google 云服务器时默认已经拥有云存储的访问权限。
+使用 Google 云存储创建 JuiceFS 文件系统时，由于 Google 云存储没有 `Access key` 和 `Secret key`，因此在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。请查阅 Google Cloud 的文档了解 [身份验证](https://cloud.google.com/docs/authentication) 和 [身份及访问管理 (IAM)](https://cloud.google.com/iam/docs/overview) 相关内容。一般来说，无需额外配置，在使用 Google 云服务器时默认已经拥有云存储的访问权限。
 
 另外，由于 bucket 名称是 [全局唯一](https://cloud.google.com/storage/docs/naming-buckets#considerations) 的，创建文件系统时，`--bucket` 选项中只需指定 bucket 名称即可。例如：
 
