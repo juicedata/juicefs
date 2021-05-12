@@ -1,10 +1,10 @@
 # JuiceFS 编译安装和升级
 
-对于一般用户，建议直接访问 [releases page](https://github.com/juicedata/juicefs/releases) 页面下载预编译的版本安装使用。
+对于一般用户，建议直接访问 [releases](https://github.com/juicedata/juicefs/releases) 页面下载预编译的版本安装使用。
 
 ## 从源代码手动编译
 
-如果你想优先体验 JuiceFS 的新功能，可以从我们仓库的 master 克隆代码，手动编译最新的客户端。
+如果你想优先体验 JuiceFS 的新功能，可以从我们仓库的 main 分支克隆代码，手动编译最新的客户端。
 
 ### 克隆源码
 
@@ -37,4 +37,5 @@ $ make
 
 ## JuiceFS 客户端升级
 
-JuiceFS 客户端是一个名为` juicefs` 二进制文件，升级时只需使用新版二进制文件替换旧版即可。
+JuiceFS 客户端是一个名为 `juicefs` 二进制文件，升级时只需使用新版二进制文件替换旧版即可。
+

@@ -17,3 +17,4 @@ dist/
 .release-env
 *.so
 libjfs.h
+.DS_Store

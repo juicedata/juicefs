@@ -1,22 +1,22 @@
 # Metadata Engines for JuiceFS
 
-通过阅读 [JuiceFS 的技术架构](architecture.md) 和 [JuiceFS 如何存储文件](how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中。
+By reading [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS Store Files](how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database.
 
-## 元数据存储引擎
+## Metadata Storage Engine
 
-元数据和数据同样至关重要，元数据中记录着每一个文件的详细信息，名称、大小、权限、位置等等。特别是这种数据与元数据分离存储的文件系统，元数据的读写性能直接决定了文件系统实际的性能表现。
+Metadata and data are equally important. The metadata records the detailed information of each file, such as the name, size, permissions, location, and so on. Especially for this kind of file system where data and metadata are stored separately, the read and write performance of metadata directly determines the actual performance of the file system.
 
-JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性能的云原生文件系统，JuiceFS 最先支持的是运行在内存上的键值数据库—— [Redis](https://redis.io)，这使得 JuiceFS 拥有十倍于 Amazon [EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的性能表现，[查看测试结果](benchmark.md)。
+The metadata storage of JuiceFS uses a multi-engine design. In order to create an ultra-high-performance cloud-native file system, JuiceFS first supports [Redis](https://redis.io) a key-value database running in memory, which makes JuiceFS ten times more powerful than Amazon [ EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) performance, [View test results](benchmark.md) .
 
-通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模的使用。因此，JuiceFS 陆续开放了对 MySQL/MariaDB、SQLite 等更多数据库的支持。
+Through active interaction with community users, we found that many application scenarios do not absolutely rely on high performance. Sometimes users just want to temporarily find a convenient tool to reliably migrate data on the cloud, or simply want to mount the object storage locally for a Small-scale use. Therefore, JuiceFS has successively opened up support for more databases such as MySQL/MariaDB and SQLite.
 
-**但需要特别注意的是**，在使用 JuiceFS 文件系统的过程中，不论你选择哪种数据库存储元数据，请 **务必确保元数据的安全**！元数据一旦损坏或丢失，将直接导致对应数据彻底损坏或丢失，严重的可能直接导致整个文件系统发生损毁。
+**But you need to pay special attention**, in the process of using the JuiceFS file system, no matter which database you choose to store metadata, please **make sure to ensure the security of the metadata**! Once the metadata is damaged or lost, it will directly cause the corresponding data to be completely damaged or lost, and in serious cases may directly cause the entire file system to be damaged.
 
 ## Redis
 
-> [Redis](https://redis.io/) 是一款开源的（BSD许可）基于内存的键值存储系统，常被用作数据库、缓存和消息代理。
+> [Redis](https://redis.io/) is an open source (BSD license) memory-based key-value storage system, often used as a database, cache, and message broker.
 
-你可以很容易的在云计算平台购买到各种配置的云 Redis 数据库，但如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 Redis 数据库实例：
+You can easily buy a cloud Redis database service on the cloud computing platform, but if you just want to quickly evaluate JuiceFS, you can use Docker to quickly run a Redis database instance on your local computer:
 
 ```shell
 $ sudo docker run -d --name redis \
@@ -26,19 +26,19 @@ $ sudo docker run -d --name redis \
 	redis redis-server --appendonly yes
 ```
 
-> **注意**：以上命令将 Redis 的数据持久化在 Docker 的 redis-data 数据卷当中，你可以按需修改数据持久化的存储位置。
+> **Note**: The above command persists Redis data in Docker's `redis-data` data volume. You can modify the storage location of data persistence as needed.
 
-> **安全提示**：以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
+> **Security Tips**: The Redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database instance through the Internet, please refer to [Redis Security](https:// recommendations in redis.io/topics/security).
 
-### 创建文件系统
+### Create a file system
 
-使用 Redis 作为元数据存储引擎时，通常使用以下格式访问数据库：
+When using Redis as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
 redis://<IP or Domain name>:6379
 ```
 
-例如，以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 Redis 中的 `1` 号数据库存储元数据：
+For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 
 ```shell
 $ juicefs format \
@@ -50,21 +50,21 @@ $ juicefs format \
 	pics
 ```
 
-### 挂载文件系统
+### Mount a file system
 
 ```shell
 $ sudo juicefs mount -d redis://192.168.1.6:6379/1 /mnt/jfs
 ```
 
-> **提示**：如果你计划在多台服务器上共享使用同一个 JuiceFS 文件系统，你必须确保 Redis 数据库可以被每一台要挂载文件系统的服务器访问到。
+> **Tip**: If you plan to share and use the same JuiceFS file system on multiple servers, you must ensure that the Redis database can be accessed by each server where the file system is to be mounted.
 
-如果你有兴趣，可以查看 [Redis 最佳实践](redis_best_practices.md)。
+If you are interested, you can check [Redis Best Practices](redis_best_practices.md).
 
 ## MySQL
 
-> MySQL 是世界上最受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库。
+> MySQL is one of the most popular open source relational databases in the world, and is often used as the preferred database for Web applications.
 
-你可以很容易的在云计算平台购买到各种配置的云 MySQL 数据库，但如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 MySQL 数据库实例：
+You can easily buy a cloud MySQL database service on the cloud computing platform, but if you just want to quickly evaluate JuiceFS, you can use Docker to quickly run a MySQL database instance on your local computer:
 
 ```shell
 $ sudo docker run -d --name mysql \
@@ -78,19 +78,19 @@ $ sudo docker run -d --name mysql \
 	mysql
 ```
 
-为了方便你快速开始测试，以上代码直接通过 `MYSQL_ROOT_PASSWORD`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD` 环境变量分别设置了 root 用户的密码、名为 juicefs 的数据库以及用于管理该数据库的用户和密码，你可以根据实际需要调整上述环境变量对应的值，也可以 [点此查看](https://hub.docker.com/_/mysql)  Docker 中创建 MySQL 容器的更多内容。
+In order to make it easier for you to start the test quickly, the above code directly sets the password of the root user, the database named juicefs, and the user and user used to manage the database through the `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD` environment variables. Password, you can adjust the corresponding values of the above environment variables according to actual needs, or you can [click here to view](https://hub.docker.com/_/mysql) Docker to create more content of MySQL image.
 
-> **注意**：以上命令将 MySQL 的数据持久化在了 Docker 的 mysql-data 数据卷当中，你可以按需修改数据持久化的存储位置。出于测试方便同时开放了 3306 端口，请勿将该实例用于关键数据的存储。
+> **Note**: The above command persists MySQL data in Docker's `mysql-data` data volume. You can modify the storage location of data persistence as needed. For the convenience of testing, port `3306` is also opened. Please do not use this instance for storage of critical data.
 
-### 创建文件系统
+### Create a file system
 
-使用 MySQL 作为元数据存储引擎时，通常使用以下格式访问数据库：
+When using MySQL as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
 mysql://<username>:<password>@(<IP or Domain name>:3306)/<database-name>
 ```
 
-例如：
+For example:
 
 ```shell
 $ juicefs format --storage minio \
@@ -101,9 +101,9 @@ $ juicefs format --storage minio \
 	pics
 ```
 
-更多 MySQL 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
+For more examples of MySQL database address format, [click here to view](https://github.com/Go-SQL-Driver/MySQL/#examples).
 
-### 挂载文件系统
+### Mount a file system
 
 ```shell
 $ sudo juicefs mount -d mysql://user:password@(192.168.1.6:3306)/juicefs /mnt/jfs
@@ -111,9 +111,9 @@ $ sudo juicefs mount -d mysql://user:password@(192.168.1.6:3306)/juicefs /mnt/jf
 
 ## MariaDB
 
-> MariaDB 也是最流行的关系型数据库之一，它是 MySQL 的一个开源分支，由 MySQL 原始开发者维护并保持开源。
+> MariaDB is also one of the most popular relational databases. It is an open source branch of MySQL, maintained by the original developers of MySQL and kept open source.
 
-因为 MariaDB 与 MySQL 高度兼容，因此在使用上也没有任何差别，比如在本地的 Docker 上创建一个实例，只是改换个名称和镜像而已，各项参数和设置完全一致：
+Because MariaDB is highly compatible with MySQL, there is no difference in usage. For example, to create an instance on a local Docker, just change the name and mirror, and the parameters and settings are exactly the same:
 
 ```shell
 $ sudo docker run -d --name mariadb \
@@ -127,7 +127,7 @@ $ sudo docker run -d --name mariadb \
 	mariadb
 ```
 
-在创建和挂载文件系统时，则保持 MySQL 的语法，例如：
+When creating and mounting a file system, keep the MySQL syntax, for example:
 
 ```shell
 $ juicefs format --storage minio \
@@ -140,9 +140,9 @@ $ juicefs format --storage minio \
 
 ## SQLite
 
-> [SQLite](https://sqlite.org) 是一款被广泛使用的小巧、快速、单文件、可靠、全功能的 SQL 数据库引擎。
+> [SQLite](https://sqlite.org) is a widely used small, fast, single-file, reliable, and full-featured SQL database engine.
 
-SQLite 数据库只有一个文件，创建和使用都非常灵活，用它作为 JuiceFS 元数据存储引擎时无需提前创建数据库文件，可以直接创建文件系统：
+The SQLite database has only one file, which is very flexible to create and use. When using it as the JuiceFS metadata storage engine, there is no need to create a database file in advance, and you can directly create a file system:
 
 ```shell
 $ juicefs format --storage minio \
@@ -153,32 +153,32 @@ $ juicefs format --storage minio \
 	pics
 ```
 
-执行以上命令会自动在当前目录中创建名为 `my-jfs.db` 的数据库文件，请 **务必妥善保管** 这个数据库文件！
+Executing the above command will automatically create a database file named `my-jfs.db` in the current directory, **please take good care of this file**！
 
-挂载文件系统：
+Mount the file system:
 
 ```shell
 $ sudo juicefs mount -d sqlite3://my-jfs.db
 ```
 
-如果数据库不在当前目录，则需要指定数据库文件的绝对路径，比如：
+If the database is not in the current directory, you need to specify the absolute path of the database file, for example:
 
 ```shell
 $ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 ```
 
-### 注意
+### Notice
 
-由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，通常只有数据库所在的主机可以访问它。因此，SQLite 数据库更适合单机使用，对于多台服务器共享同一文件系统的情况，建议使用 Redis 或 MySQL 等数据库。
+Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for stand-alone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 
 ## TiDB
 
-即将推出......
+Coming soon...
 
 ## TiKV
 
-即将推出......
+Coming soon...
 
 ## PostgreSQL
 
-即将推出......
+Coming soon...

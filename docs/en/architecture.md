@@ -6,13 +6,13 @@ JuiceFS file system consists of three parts:
 2. **Data Storage**: Store the data itself, support local disk and object storage.
 3. **Metadata Engine**: Store the metadata corresponding to the data, support multiple engines such as Redis.
 
-![img](file:///Users/herald/repo/juicefs/docs/images/juicefs-arch-new.png?lastModify=1620808685)
+![](../images/juicefs-arch-new.png?lastModify=1620808685)
 
 As a file system, JuiceFS will process data and its corresponding metadata separately, the data will be stored in the object storage, and the metadata will be stored in the metadata engine.
 
 In terms of **data storage**, JuiceFS supports almost all public cloud object storage services, as well as privatized object storage such as OpenStack Swift, Ceph, and MinIO.
 
-In terms of **metadata storage**, JuiceFS adopts a multi-engine design, and currently supports [Redis](https://redis.io/) as a metadata engine, and it will also implement TiKV, PostgreSQL, MariaDB, MySQL , Oracle and more engines.
+In terms of **metadata storage**, JuiceFS adopts a multi-engine design, and currently supports [Redis](https://redis.io/), MySQL/MariaDB, Sqlite as metadata service engines, and will continue to implement more metadata engine. Welcome to [Submit Issue](https://github.com/juicedata/juicefs/issues) to feedback your needs!
 
 In terms of the implementation of **file system interface**:
 
