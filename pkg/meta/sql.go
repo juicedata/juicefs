@@ -1358,7 +1358,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 func (m *dbMeta) cleanStaleSessions() {
 	// TODO: once per minute
 	var s session
-	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5)).Rows(&s)
+	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).UTC()).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -1385,8 +1385,11 @@ func (m *dbMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
 		_ = m.txn(func(ses *xorm.Session) error {
-			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now()}, &session{Sid: m.sid})
-			if err != nil || n == 0 {
+			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().UTC()}, &session{Sid: m.sid})
+			if err == nil && n == 0 {
+				err = fmt.Errorf("no session found matching sid: %d", m.sid)
+			}
+			if err != nil {
 				logger.Errorf("update session: %s", err)
 			}
 			return err
