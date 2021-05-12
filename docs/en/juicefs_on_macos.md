@@ -1,28 +1,45 @@
-# Mount JuiceFS at Boot
+# macOS
 
-This is a guide about how to mount JuiceFS automatically at boot.
+## 1. Requirement
 
-## Linux
+JuiceFS supports creating and mounting file systems in macOS. But you need to install [macFUSE](https://osxfuse.github.io/) before you can mount the JuiceFS file system.
 
-Copy `juicefs` as `/sbin/mount.juicefs`, then edit `/etc/fstab` with following line:
+> [macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems, allowing JuiceFS client to mount the file system to macOS.
 
-```
-<REDIS-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
-```
+## 2. Install JuiceFS on macOS 
 
-The format of `<REDIS-URL>` is `redis://<user>:<password>@<host>:<port>/<db>`, e.g. `redis://localhost:6379/1`. And replace `<MOUNTPOINT>` with specific path you wanna mount JuiceFS to, e.g. `/jfs`. If you need set [mount options](command_reference.md#juicefs-mount), replace `[,<MOUNT-OPTIONS>]` with comma separated options list. The following line is an example:
+You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest), download the compressed package containing `darwin-amd64` in the file name, for example:
 
-```
-redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=2048     0  0
+```shell
+$ curl -fsSL https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.12.1-darwin-amd64.tar.gz -o juicefs-0.12.1-darwin-amd64.tar.gz
 ```
 
-**Note: By default, CentOS 6 will NOT mount network file system after boot, run following command to enable it:**
+Unzip and install:
 
-```bash
-$ sudo chkconfig --add netfs
+```shell
+$ tar -zxf juicefs-0.12.1-darwin-amd64.tar.gz
+$ sudo install juicefs /usr/local/bin
 ```
 
-## macOS
+## 3. Mount JuiceFS file system
+
+It is assumed that you have prepared object storage, Redis database, and created JuiceFS file system. If you have not prepared these necessary resources, please refer to the previous section of [Quick Start](#Quick Start).
+
+Suppose that the MinIO object storage and Redis database are deployed on the Linux host with the IP address of `192.168.1.8` in LAN, and then the following commands are executed to create a JuiceFS file system named `music`.
+
+```shell
+$ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access-key minioadmin --secret-key minioadmin redis://192.168.1.8:6379/1 music
+```
+
+Execute the following command to mount the `music` file system to the `~/music` folder in the current user's home directory.
+
+```shell
+$ juicefs mount redis://192.168.1.8:6379/1 ~/music
+```
+
+> **Tip**: In this guide, Windows and macOS mount the same file system. JuiceFS supports thousands of clients to mount the same file system at the same time, providing convenient mass data sharing capabilities.
+
+## 4. Automatically mount JuiceFS on boot
 
 Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `REDIS-URL` and `MOUNTPOINT` with appropriate value):
 
@@ -88,3 +105,4 @@ Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Re
         </dict>
 ```
 
+## 5. Unmount a JuiceFS
