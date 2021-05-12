@@ -65,7 +65,7 @@ $ sudo install juicefs /usr/local/bin
 
 ## 四、创建  JuiceFS 文件系统
 
-创建 JuiceFS 文件系统时，需要同时指定用来存储元数据的 Redis 数据库和用来存储实际数据的对象存储。
+创建 JuiceFS 文件系统要使用 `format` 子命令，需要同时指定用来存储元数据的 Redis 数据库和用来存储实际数据的对象存储。
 
 以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 redis 中的 `1` 号数据库存储元数据，使用 minio 中创建的 `pics` 存储桶存储实际数据。
 
@@ -87,6 +87,8 @@ $ juicefs format \
 2021/04/29 23:01:18.354758 juicefs[34223] <INFO>: Data uses 127.0.0.1:9000/pics/
 2021/04/29 23:01:18.361674 juicefs[34223] <INFO>: Volume is formatted as {Name:pics UUID:9c0fab76-efd0-43fd-a81e-ae0916e2fc90 Storage:minio Bucket:http://127.0.0.1:9000/pics AccessKey:minioadmin SecretKey:removed BlockSize:4096 Compression:none Partitions:0 EncryptKey:}
 ```
+
+可以通过 `juicefs format -h` 命令，获得创建文件系统的完整帮助信息。
 
 > **注意**：你可以根据需要，创建无限多个 JuiceFS 文件系统。但需要注意的是，每个 Redis 数据库中只能创建一个文件系统。比如要再创建一个名为 `memory` 的文件系统时，可以使用 Redis 中的 2 号数据库，即 `redis://127.0.0.1:6379/2` 。
 
