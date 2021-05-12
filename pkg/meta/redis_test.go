@@ -35,6 +35,7 @@ func TestRedisClient(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	m.(*redisMeta).rdb.FlushDB(context.TODO())
 	testMetaClient(t, m)
 }
 
@@ -52,6 +53,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if format.Name != "test" {
 		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
 	}
+	m.NewSession()
 	switch r := m.(type) {
 	case *redisMeta:
 		go r.cleanStaleSessions()
@@ -96,6 +98,22 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	if st := m.Lookup(ctx, parent, "f", &inode, attr); st != 0 {
 		t.Fatalf("lookup f: %s", st)
+	}
+	if st := m.Resolve(ctx, 1, "d/f", &inode, attr); st != 0 && st != syscall.ENOTSUP {
+		t.Fatalf("resolve d/f: %s", st)
+	}
+	if st := m.Resolve(ctx, parent, "/f", &inode, attr); st != 0 && st != syscall.ENOTSUP {
+		t.Fatalf("resolve f: %s", st)
+	}
+	var ctx2 = NewContext(0, 1, []uint32{1})
+	if st := m.Resolve(ctx2, parent, "/f", &inode, attr); st != syscall.EACCES && st != syscall.ENOTSUP {
+		t.Fatalf("resolve f: %s", st)
+	}
+	if st := m.Resolve(ctx, parent, "/f/c", &inode, attr); st != syscall.ENOTDIR && st != syscall.ENOTSUP {
+		t.Fatalf("resolve f: %s", st)
+	}
+	if st := m.Resolve(ctx, parent, "/f2", &inode, attr); st != syscall.ENOENT && st != syscall.ENOTSUP {
+		t.Fatalf("resolve f2: %s", st)
 	}
 	attr.Atime = 2
 	attr.Mtime = 2
