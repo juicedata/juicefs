@@ -37,14 +37,14 @@ func rmrFlags() *cli.Command {
 	}
 }
 
-func openControler(path string) *os.File {
+func openController(path string) *os.File {
 	f, err := os.OpenFile(filepath.Join(path, ".control"), os.O_RDWR, 0)
 	if err != nil && !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
 		logger.Errorf("%s", err)
 		return nil
 	}
 	if err != nil && path != "/" {
-		return openControler(filepath.Dir(path))
+		return openController(filepath.Dir(path))
 	}
 	return f
 }
@@ -71,7 +71,7 @@ func rmr(ctx *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("lookup inode for %s: %s", d, err)
 		}
-		f := openControler(d)
+		f := openController(d)
 		if f == nil {
 			logger.Errorf("%s is not inside JuiceFS", path)
 			continue

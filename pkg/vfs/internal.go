@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -186,6 +187,17 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 		}
 		wb.Put32(uint32(w.Len()))
 		return append(wb.Bytes(), w.Bytes()...)
+	case meta.FillCache:
+		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
+		concurrent := r.Get16()
+		background := r.Get8()
+		if background == 0 {
+			// logger.Infof("filling caches: %v", paths)
+			logger.Infof("TODO: fill cache of %d paths with %d %d", len(paths), concurrent, background)
+		} else {
+			logger.Infof("TODO: fill cache in background")
+		}
+		return []byte{uint8(len(paths))} // TODO: real response
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
 		return []byte{uint8(syscall.EINVAL & 0xff)}
