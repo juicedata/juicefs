@@ -4,7 +4,6 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 数据备份、迁移与恢复
 
-- [用 JuiceFS 备份 NGINX 日志](archive-nginx-log-in-juicefs.md)
 - [基于 JuiceFS 的 MySQL 备份、验证和恢复方案](https://juicefs.com/docs/zh/backup_mysql_in_juicefs.html)
 - [利用 JuiceFS 把 MySQL 备份验证性能提升 10 倍](https://juicefs.com/blog/cn/posts/optimize-xtrabackup-prepare-by-oplog/)
 - [跨云数据搬迁利器：Juicesync](https://juicefs.com/blog/cn/posts/juicesync/)
