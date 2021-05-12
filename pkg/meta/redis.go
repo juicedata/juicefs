@@ -386,7 +386,7 @@ func (r *redisMeta) marshal(attr *Attr) []byte {
 
 func align4K(length uint64) int64 {
 	if length == 0 {
-		return 0
+		return 1 << 12
 	}
 	return int64((((length - 1) >> 12) + 1) << 12)
 }
@@ -396,12 +396,18 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 	c, cancel := context.WithTimeout(ctx, time.Millisecond*300)
 	defer cancel()
 	used, _ := r.rdb.IncrBy(c, usedSpace, 0).Result()
+	if used < 0 {
+		used = 0
+	}
 	used = ((used >> 16) + 1) << 16 // aligned to 64K
 	for used*10 > int64(*totalspace)*8 {
 		*totalspace *= 2
 	}
 	*availspace = *totalspace - uint64(used)
 	inodes, _ := r.rdb.IncrBy(c, totalInodes, 0).Result()
+	if inodes < 0 {
+		inodes = 0
+	}
 	*iused = uint64(inodes)
 	*iavail = 10 << 20
 	return 0
@@ -1044,9 +1050,8 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(attr), 0)
 			if _type == TypeSymlink {
 				pipe.Set(ctx, r.symKey(ino), path, 0)
-			} else if _type == TypeFile {
-				pipe.IncrBy(ctx, usedSpace, align4K(0))
 			}
+			pipe.IncrBy(ctx, usedSpace, align4K(0))
 			pipe.Incr(ctx, totalInodes)
 			return nil
 		})
@@ -1129,9 +1134,6 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 			} else {
 				switch _type {
-				case TypeSymlink:
-					pipe.Del(ctx, r.symKey(inode))
-					pipe.Del(ctx, r.inodeKey(inode))
 				case TypeFile:
 					if opened {
 						pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
@@ -1140,9 +1142,16 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 						pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(inode, attr.Length)})
 						pipe.Del(ctx, r.inodeKey(inode))
 						pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
+						pipe.Decr(ctx, totalInodes)
 					}
+				case TypeSymlink:
+					pipe.Del(ctx, r.symKey(inode))
+					fallthrough
+				default:
+					pipe.Del(ctx, r.inodeKey(inode))
+					pipe.IncrBy(ctx, usedSpace, -align4K(0))
+					pipe.Decr(ctx, totalInodes)
 				}
-				pipe.IncrBy(ctx, totalInodes, -1)
 			}
 			return nil
 		})
@@ -1221,7 +1230,8 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			pipe.Del(ctx, r.inodeKey(inode))
 			pipe.Del(ctx, r.xattrKey(inode))
 			// pipe.Del(ctx, r.entryKey(inode))
-			pipe.IncrBy(ctx, totalInodes, -1)
+			pipe.IncrBy(ctx, usedSpace, -align4K(0))
+			pipe.Decr(ctx, totalInodes)
 			return nil
 		})
 		return err
@@ -1435,9 +1445,8 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					if dtyp == TypeDirectory {
 						pipe.Del(ctx, r.inodeKey(dino))
 						dattr.Nlink--
-					} else if dtyp == TypeSymlink {
-						pipe.Del(ctx, r.symKey(dino))
-						pipe.Del(ctx, r.inodeKey(dino))
+						pipe.IncrBy(ctx, usedSpace, -align4K(0))
+						pipe.Decr(ctx, totalInodes)
 					} else if dtyp == TypeFile {
 						if opened {
 							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
@@ -1446,9 +1455,16 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 							pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, dattr.Length)})
 							pipe.Del(ctx, r.inodeKey(dino))
 							pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
+							pipe.Decr(ctx, totalInodes)
 						}
+					} else {
+						if dtyp == TypeSymlink {
+							pipe.Del(ctx, r.symKey(dino))
+						}
+						pipe.Del(ctx, r.inodeKey(dino))
+						pipe.IncrBy(ctx, usedSpace, -align4K(0))
+						pipe.Decr(ctx, totalInodes)
 					}
-					pipe.IncrBy(ctx, totalInodes, -1)
 					pipe.Del(ctx, r.xattrKey(dino))
 				}
 				pipe.HDel(ctx, r.entryKey(parentDst), nameDst)
@@ -1704,6 +1720,7 @@ func (r *redisMeta) deleteInode(inode Ino) error {
 		pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(time.Now().Unix()), Member: r.toDelete(inode, attr.Length)})
 		pipe.Del(ctx, r.inodeKey(inode))
 		pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
+		pipe.Decr(ctx, totalInodes)
 		return nil
 	})
 	if err == nil {
