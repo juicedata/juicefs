@@ -907,7 +907,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 						return err
 					}
 				} else {
-					if _, err := s.Insert(delfile{e.Inode, n.Length, time.Now()}); err != nil {
+					if _, err := s.Insert(delfile{e.Inode, n.Length, time.Now().UTC()}); err != nil {
 						return err
 					}
 					if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
@@ -1149,7 +1149,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 							return err
 						}
 					} else {
-						if _, err := s.Insert(delfile{dn.Inode, dn.Length, time.Now()}); err != nil {
+						if _, err := s.Insert(delfile{dn.Inode, dn.Length, time.Now().UTC()}); err != nil {
 							return err
 						}
 						if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
@@ -1408,7 +1408,7 @@ func (m *dbMeta) deleteInode(inode Ino) error {
 		if !ok {
 			return nil
 		}
-		if _, err := s.Insert(&delfile{inode, n.Length, time.Now()}); err != nil {
+		if _, err := s.Insert(&delfile{inode, n.Length, time.Now().UTC()}); err != nil {
 			return err
 		}
 		if _, err := s.Delete(&node{Inode: inode}); err != nil {
@@ -1666,7 +1666,7 @@ func (m *dbMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
 		var d delfile
-		rows, err := m.engine.Where("expire < ?", time.Now().Add(-time.Hour)).Rows(&d)
+		rows, err := m.engine.Where("expire < ?", time.Now().Add(-time.Hour).UTC()).Rows(&d)
 		if err != nil {
 			continue
 		}
