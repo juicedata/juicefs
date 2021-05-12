@@ -135,6 +135,30 @@ func benchRmdir(b *testing.B, m Meta) {
 	}
 }
 
+func benchResolve(b *testing.B, m Meta) {
+	var parent Ino
+	if err := prepareParent(m, "benchResolve", &parent); err != nil {
+		b.Fatal(err)
+	}
+	ctx := Background
+	var child Ino = parent
+	for i := 0; i < 5; i++ {
+		if err := m.Mkdir(ctx, child, "d", 0755, 0, 0, &child, nil); err != 0 {
+			b.Fatalf("mkdir: %s", err)
+		}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := m.Resolve(ctx, parent, "d/d/d/d/d", nil, nil); err != 0 {
+			if err == syscall.ENOTSUP {
+				b.SkipNow()
+				return
+			}
+			b.Fatalf("resolve: %s", err)
+		}
+	}
+}
+
 func benchReaddir(b *testing.B, m Meta, n int) {
 	var parent Ino
 	if err := prepareParent(m, "benchReaddir", &parent); err != nil {
@@ -516,6 +540,7 @@ func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir, readdir
 	b.Run("mkdir", func(b *testing.B) { benchMkdir(b, m) })
 	b.Run("mvdir", func(b *testing.B) { benchMvdir(b, m) })
 	b.Run("rmdir", func(b *testing.B) { benchRmdir(b, m) })
+	b.Run("resolve", func(b *testing.B) { benchResolve(b, m) })
 	b.Run("readdir_10", func(b *testing.B) { benchReaddir(b, m, 10) })
 	b.Run("readdir_1k", func(b *testing.B) { benchReaddir(b, m, 1000) })
 	// b.Run("readdir_100k", func(b *testing.B) { benchReaddir(b, m, 100000) })
