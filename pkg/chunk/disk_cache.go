@@ -51,7 +51,6 @@ type cacheStore struct {
 	mode      os.FileMode
 	capacity  int64
 	freeRatio float32
-	limit     int
 	pending   chan pendingFile
 	pages     map[string]*Page
 
@@ -60,7 +59,7 @@ type cacheStore struct {
 	scanned bool
 }
 
-func newCacheStore(dir string, cacheSize int64, limit, pendingPages int, config *Config) *cacheStore {
+func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config) *cacheStore {
 	if config.CacheMode == 0 {
 		config.CacheMode = 0600 // only owner can read/write cache
 	}
@@ -72,7 +71,6 @@ func newCacheStore(dir string, cacheSize int64, limit, pendingPages int, config 
 		mode:      config.CacheMode,
 		capacity:  cacheSize,
 		freeRatio: config.FreeSpace,
-		limit:     limit,
 		keys:      make(map[string]cacheItem),
 		pending:   make(chan pendingFile, pendingPages),
 		pages:     make(map[string]*Page),
@@ -82,7 +80,7 @@ func newCacheStore(dir string, cacheSize int64, limit, pendingPages int, config 
 	if br < c.freeRatio || fr < c.freeRatio {
 		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching in %s: free ratio should be >= %d%%", int(br*100), int(fr*100), c.dir, int(c.freeRatio*100))
 	}
-	logger.Infof("Created new cache store (%s): capacity (%d MB), free ratio (%d%%), max blocks (%d), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), c.limit, pendingPages)
+	logger.Infof("Created new cache store (%s): capacity (%d MB), free ratio (%d%%), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), pendingPages)
 	go c.flush()
 	go c.checkFreeSpace()
 	go c.refreshCacheKeys()
@@ -281,8 +279,8 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	}
 	cache.used += int64(size + 4096)
 
-	if cache.used > cache.capacity || len(cache.keys) > cache.limit {
-		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB), maximum %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, cache.limit, cache.capacity>>20)
+	if cache.used > cache.capacity {
+		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
 		cache.cleanup()
 	}
 }
@@ -312,7 +310,7 @@ func (cache *cacheStore) cleanup() {
 		return
 	}
 	goal := cache.capacity * 95 / 100
-	num := int(cache.limit * 95 / 100)
+	num := len(cache.keys) * 99 / 100
 	// make sure we have enough free space after cleanup
 	br, fr := cache.curFreeRatio()
 	if br < cache.freeRatio {
@@ -530,17 +528,13 @@ func newCacheManager(config *Config) CacheManager {
 	sort.Strings(dirs)
 	dirCacheSize := config.CacheSize << 20
 	dirCacheSize /= int64(len(dirs))
-	limit := dirCacheSize / int64(config.BlockSize) * 2
-	if limit < 1000000 {
-		limit = 1000000
-	}
 	m := &cacheManager{
 		stores: make([]*cacheStore, len(dirs)),
 	}
 	// 20% of buffer could be used for pending pages
 	pendingPages := config.BufferSize * 2 / 10 / config.BlockSize / len(dirs)
 	for i, d := range dirs {
-		m.stores[i] = newCacheStore(strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, int(limit), pendingPages, config)
+		m.stores[i] = newCacheStore(strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config)
 	}
 	return m
 }
