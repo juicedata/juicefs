@@ -1,7 +1,5 @@
 # JuiceFS 编译安装和升级
 
-对于一般用户，建议直接访问 [releases](https://github.com/juicedata/juicefs/releases) 页面下载预编译的版本安装使用。
-
 ## 从源代码手动编译
 
 如果你想优先体验 JuiceFS 的新功能，可以从我们仓库的 main 分支克隆代码，手动编译最新的客户端。

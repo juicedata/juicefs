@@ -8,11 +8,11 @@ Unlike the traditional file system that can only use local disks to store data a
 
 Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the default upper limit is 64 MiB. Each Chunk is composed of one or more **"Slice"**. The length of the slice is not fixed, depending on the way the file is written. Each slice will be further split into fixed-size **"Block"**, which is 4 MiB by default. Finally, these blocks will be stored in the object storage. At the same time, JuiceFS will store each file and its Chunks, Slices, Blocks and other metadata information in metadata engines.
 
-![JuiceFS storage format](/Users/herald/repo/juicefs/docs/images/juicefs-storage-format-new.png)
+![JuiceFS storage format](../images/juicefs-storage-format-new.png)
 
 Using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you will find that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform. There is a chunks directory and a bunch of digitally numbered directories and files in the bucket. Don't panic, this is the secret of the high-performance operation of the JuiceFS file system!
 
-![How JuiceFS stores your files](/Users/herald/repo/juicefs/docs/images/how-juicefs-stores-files-new.png)
+![How JuiceFS stores your files](../images/how-juicefs-stores-files-new.png)
 
 ## Go further
 

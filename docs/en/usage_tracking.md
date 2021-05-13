@@ -7,5 +7,3 @@ These data help us understand how the community is using this project. You could
 ```
 $ ./juicefs mount --no-usage-report
 ```
-
-## 

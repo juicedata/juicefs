@@ -1,6 +1,4 @@
-# Kubernets 使用 JuiceFS
-
-# Use JuiceFS on Kubernetes
+# Kubernetes 使用 JuiceFS
 
 JuiceFS provides the [CSI driver](https://github.com/juicedata/juicefs-csi-driver) for Kubernetes.
 

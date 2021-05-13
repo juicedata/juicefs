@@ -1,7 +1,5 @@
 # JuiceFS 快速上手
 
-[TOC]
-
 创建 JuiceFS 文件系统，需要以下 3 个方面的准备：
 
 1. 准备 Redis 数据库
@@ -24,9 +22,9 @@ $ sudo docker run -d --name redis \
 
 容器创建成功以后，可使用 `redis://127.0.0.1:6379` 访问 redis 数据库。
 
-> **注意**：以上命令将 redis 的数据持久化在 docker 的 redis-data 数据卷当中，你可以按需修改数据持久化的存储位置。
+> **注意**：以上命令将 Redis 的数据持久化在 Docker 的 `redis-data` 数据卷当中，你可以按需修改数据持久化的存储位置。
 
-> **安全提示**：以上命令创建的 redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
+> **安全提示**：以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
 
 ## 二、准备对象存储
 
@@ -42,13 +40,13 @@ $ sudo docker run -d --name minio \
 	minio/minio server /data
 ```
 
-容器创建成功以后，使用 `http://127.0.0.1:9000` 访问 minio 管理界面，root 用户初始的 Access Key 和 Secret Key 均为 `minioadmin`。
+容器创建成功以后，使用 `http://127.0.0.1:9000` 访问 MinIO 管理界面，root 用户初始的 Access Key 和 Secret Key 均为 `minioadmin`。
 
-> **注意**：以上命令将 minio 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改数据持久化存储的位置。
+> **注意**：以上命令将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改数据持久化存储的位置。
 
 ## 三、安装 JuiceFS 客户端
 
-JuiceFS 同时支持 Linux、Windows、MacOS 三大操作系统平台，你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，请根据实际使用的系统和架构选择对应的版本。
+JuiceFS 同时支持 Linux、Windows、macOS 三大操作系统平台，你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，请根据实际使用的系统和架构选择对应的版本。
 
 以 x86 架构的 Linux 系统为例，下载文件名包含 `linux-amd64` 的压缩包：
 
@@ -67,7 +65,7 @@ $ sudo install juicefs /usr/local/bin
 
 创建 JuiceFS 文件系统要使用 `format` 子命令，需要同时指定用来存储元数据的 Redis 数据库和用来存储实际数据的对象存储。
 
-以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 redis 中的 `1` 号数据库存储元数据，使用 minio 中创建的 `pics` 存储桶存储实际数据。
+以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 redis 中的 `1` 号数据库存储元数据，使用 MinIO 中创建的 `pics` 存储桶存储实际数据。
 
 ```shell
 $ juicefs format \
@@ -120,7 +118,7 @@ $ df -Th
 JuiceFS:pics   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
 ```
 
-> **注意**：默认情况下， juicefs 的缓存位于 `/var/jfsCache` 目录，为了获得该目录的读写权限，这里使用了 sudo 命令，以管理员权限挂载的 JuiceFS 文件系统。普通用户在读写 `/mnt/jfs` 时，需要为用户赋予该目录的操作权限。
+> **注意**：默认情况下， JuiceFS 的缓存位于 `/var/jfsCache` 目录，为了获得该目录的读写权限，这里使用了 sudo 命令，以管理员权限挂载的 JuiceFS 文件系统。普通用户在读写 `/mnt/jfs` 时，需要为用户赋予该目录的操作权限。
 
 ## 六、开机自动挂载 JuiceFS
 

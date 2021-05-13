@@ -229,7 +229,7 @@ $ ./juicefs format \
 
 ## Storj DCS <span id='storj-dcs'></span>
 
-使用 Wasabi 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://docs.storj.io/api-reference/s3-compatible-gateway) 了解如何创建 `Access key` 和 `Secret key`。
+使用 Storj DCS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://docs.storj.io/api-reference/s3-compatible-gateway) 了解如何创建 `Access key` 和 `Secret key`。
 
 Storj DCS 兼容 AWS S3，`--storage` 使用 `s3` 即可。`--bucket` 选项的设置格式为 `https://gateway.<region>.storjshare.io/<bucket>`，请将 `<region>` 替换成你实际使用的存储区域，目前 DCS 有三个可用存储区域：us1、ap1 和 eu1。
 
@@ -241,8 +241,6 @@ $ juicefs format \
 	--secret-key <your-sceret-key> \
 	redis://localhost/1 my-jfs
 ```
-
-
 
 ## 阿里云 OSS <span id='aliyun-oss'></span>
 
