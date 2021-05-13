@@ -1,10 +1,39 @@
 # How to Setup Object Storage
 
-This is a guide about how to setup object storage when format a volume. Different object storage may has different option value. Check the specific object storage for your need.
+By reading [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS Store Files](how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database.
+
+## Storage setting options 
+
+When creating a JuiceFS file system, setting up data storage generally involves the following options:
+
+- `--storage` Specify the storage service to be used by the file system, e.g. `--storage s3`
+- `--bucket` Specify the bucket endpoint of the object storage in a specific format, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`
+- `--access-key` and `--secret-key` is the authentication key used when accessing the object storage service. You need to create it on the corresponding cloud platform.
+
+For example, the following command uses Amazon S3 object storage to create a file system:
+
+```shell
+$ juicefs format --storage s3 \
+	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
+	--access-key abcdefghijklmn \
+	--secret-key nmlkjihgfedAcBdEfg \
+	redis://192.168.1.6/1 \
+	my-juice
+```
+
+Similarly, you can adjust the parameters and use almost all public/private cloud object storage services to create a file system.
+
+## Access Key and Secret Key
+
+Generally, the object storage service uses `access key` and `secret key` to verify user identity. When creating a file system, in addition to using the two options `--access-key` and `--secret-key` to explicitly set.  You can also set it through two environment variables `ACCESS_KEY` and `SECRET_KEY`.
+
+Public cloud provider usually allow user create IAM (Identity and Access Management) role (e.g. [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html)) or similar thing (e.g. [Alibaba Cloud RAM role](https://help.aliyun.com/document_detail/93689.html)), then assign the role to VM instance. If your VM instance already have permission to access object storage, then you could omit `--access-key` and `--secret-key` options.
 
 ## Supported Object Storage
 
-This table lists all JuiceFS supported object storage, when you format a volume you need specify storage type through `--storage` option, e.g. for Amazon S3 the value of `--storage` is `s3`.
+The following table lists the object storage services supported by JuiceFS. Click the name to view the setting details:
+
+> If the object storage service you want is not in the list, please submit a request [issue](https://github.com/juicedata/juicefs/issues).
 
 | Name                                                      | Value      |
 | --------------------------------------------------------- | ---------- |
@@ -16,6 +45,7 @@ This table lists all JuiceFS supported object storage, when you format a volume 
 | [Scaleway Object Storage](#scaleway)                      | `scw`      |
 | [DigitalOcean Spaces Object Storage](#do-spaces)          | `space`    |
 | [Wasabi Cloud Object Storage](#wasabi)                    | `wasabi`   |
+| [Storj DCS](#storj-dcs)                                   | `s3`       |
 | [Alibaba Cloud Object Storage Service](#aliyun-oss)       | `oss`      |
 | [Tencent Cloud Object Storage](#qcloud-cos)               | `cos`      |
 | [Huawei Cloud Object Storage Service](#huawei-obs)        | `obs`      |
@@ -37,12 +67,6 @@ This table lists all JuiceFS supported object storage, when you format a volume 
 | [HDFS](#hdfs)                                             | `hdfs`     |
 | [Redis](#redis)                                           | `redis`    |
 | [Local disk](#local)                                      | `file`     |
-
-## Access key and secret key
-
-For authorization, the access key and secret key are needed. You could specify them through `--access-key` and `--secret-key` options. Or you can set `ACCESS_KEY` and `SECRET_KEY` environment variables.
-
-Public cloud provider usually allow user create IAM (Identity and Access Management) role (e.g. [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html)) or similar thing (e.g. [Alibaba Cloud RAM role](https://help.aliyun.com/document_detail/93689.html)), then assign the role to VM instance. If your VM instance already have permission to access object storage, then you could omit `--access-key` and `--secret-key` options.
 
 ## S3 <span id='aws-s3'></span>
 
@@ -202,6 +226,21 @@ $ ./juicefs format \
 ```
 
 ***Note: For Tokyo (ap-northeast-1) region user, see [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) to learn how to get appropriate endpoint URI.***
+
+## Storj DCS <span id='storj-dcs'></span>
+
+When using Storj DCS to create a JuiceFS file system, please refer to [this document](https://docs.storj.io/api-reference/s3-compatible-gateway) to learn how to create access key and secret key.
+
+Storj DCS is an S3-compatible storage, just use `s3` for `--storage` option. The setting format of the `--bucket` option is `https://gateway.<region>.storjshare.io/<bucket>`, please replace `<region>` with the storage region you actually use. There are currently three avaliable regions: `us1`, `ap1` and `eu1`. For example:
+
+```shell
+$ juicefs format \
+	--storage s3 \
+	--bucket https://gateway.<region>.storjshare.io/<bucket> \
+	--access-key <your-access-key> \
+	--secret-key <your-sceret-key> \
+	redis://localhost/1 my-jfs
+```
 
 ## Alibaba Cloud Object Storage Service <span id='aliyun-oss'></span>
 
