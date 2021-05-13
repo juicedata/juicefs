@@ -52,17 +52,17 @@ type edge struct {
 }
 
 type node struct {
-	Inode  Ino       `xorm:"pk"`
-	Type   uint8     `xorm:"notnull"`
-	Flags  uint8     `xorm:"notnull"`
-	Mode   uint16    `xorm:"notnull"`
-	Uid    uint32    `xorm:"notnull"`
-	Gid    uint32    `xorm:"notnull"`
-	Atime  time.Time `xorm:"notnull"`
-	Mtime  time.Time `xorm:"notnull"`
-	Ctime  time.Time `xorm:"updated"`
-	Nlink  uint32    `xorm:"notnull"`
-	Length uint64    `xorm:"notnull"`
+	Inode  Ino    `xorm:"pk"`
+	Type   uint8  `xorm:"notnull"`
+	Flags  uint8  `xorm:"notnull"`
+	Mode   uint16 `xorm:"notnull"`
+	Uid    uint32 `xorm:"notnull"`
+	Gid    uint32 `xorm:"notnull"`
+	Atime  int64  `xorm:"notnull"`
+	Mtime  int64  `xorm:"notnull"`
+	Ctime  int64  `xorm:"notnull"`
+	Nlink  uint32 `xorm:"notnull"`
+	Length uint64 `xorm:"notnull"`
 	Rdev   uint32
 	Parent Ino
 }
@@ -72,7 +72,7 @@ type chunk struct {
 	Indx   uint32 `xorm:"unique(chunk) notnull"`
 	Slices []byte `xorm:"blob notnull"`
 }
-type sliceRef struct {
+type chunkRef struct {
 	Chunkid uint64 `xorm:"pk"`
 	Size    uint32 `xorm:"notnull"`
 	Refs    int    `xorm:"notnull"`
@@ -89,8 +89,8 @@ type xattr struct {
 }
 
 type session struct {
-	Sid       uint64    `xorm:"pk"`
-	Heartbeat time.Time `xorm:"notnull"`
+	Sid       uint64 `xorm:"pk"`
+	Heartbeat int64  `xorm:"notnull"`
 }
 
 type sustained struct {
@@ -99,9 +99,9 @@ type sustained struct {
 }
 
 type delfile struct {
-	Inode  Ino       `xorm:"pk notnull"`
-	Length uint64    `xorm:"notnull"`
-	Expire time.Time `xorm:"notnull"`
+	Inode  Ino    `xorm:"pk notnull"`
+	Length uint64 `xorm:"notnull"`
+	Expire int64  `xorm:"notnull"`
 }
 
 type freeID struct {
@@ -163,8 +163,8 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
 		logger.Fatalf("create table node, edge, symlink, xattr: %s", err)
 	}
-	if err := m.engine.Sync2(new(chunk), new(sliceRef)); err != nil {
-		logger.Fatalf("create table chunk, slice_ref: %s", err)
+	if err := m.engine.Sync2(new(chunk), new(chunkRef)); err != nil {
+		logger.Fatalf("create table chunk, chunk_ref: %s", err)
 	}
 	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
 		logger.Fatalf("create table session, sustaind, delfile: %s", err)
@@ -213,9 +213,9 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			Inode:  1,
 			Type:   TypeDirectory,
 			Mode:   0777,
-			Atime:  now,
-			Mtime:  now,
-			Ctime:  now,
+			Atime:  now.UnixNano() / 1000,
+			Mtime:  now.UnixNano() / 1000,
+			Ctime:  now.UnixNano() / 1000,
 			Nlink:  2,
 			Length: 4 << 10,
 			Parent: 1,
@@ -256,7 +256,7 @@ func (m *dbMeta) NewSession() error {
 		return fmt.Errorf("create session: %s", err)
 	}
 	_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
-		return s.Insert(&session{v, time.Now()})
+		return s.Insert(&session{v, time.Now().Unix()})
 	})
 	if err != nil {
 		return fmt.Errorf("insert new session: %s", err)
@@ -347,12 +347,12 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Flags = n.Flags
 	attr.Uid = n.Uid
 	attr.Gid = n.Gid
-	attr.Atime = n.Atime.Unix()
-	attr.Atimensec = uint32(n.Atime.Nanosecond())
-	attr.Mtime = n.Mtime.Unix()
-	attr.Mtimensec = uint32(n.Mtime.Nanosecond())
-	attr.Ctime = n.Ctime.Unix()
-	attr.Ctimensec = uint32(n.Ctime.Nanosecond())
+	attr.Atime = n.Atime / 1e6
+	attr.Atimensec = uint32(n.Atime % 1e6 * 1000)
+	attr.Mtime = n.Mtime / 1e6
+	attr.Mtimensec = uint32(n.Mtime % 1e6 * 1000)
+	attr.Ctime = n.Ctime / 1e6
+	attr.Ctimensec = uint32(n.Ctime % 1e6 * 1000)
 	attr.Nlink = n.Nlink
 	attr.Length = n.Length
 	attr.Rdev = uint32(n.Rdev)
@@ -544,17 +544,17 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				changed = true
 			}
 		}
-		now := time.Now()
-		if set&SetAttrAtime != 0 && (cur.Atime.Unix() != attr.Atime || uint32(cur.Atime.Nanosecond()) != attr.Atimensec) {
-			cur.Atime = time.Unix(attr.Atime, int64(attr.Atimensec))
+		now := time.Now().UnixNano() / 1e3
+		if set&SetAttrAtime != 0 {
+			cur.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
 			changed = true
 		}
 		if set&SetAttrAtimeNow != 0 {
 			cur.Atime = now
 			changed = true
 		}
-		if set&SetAttrMtime != 0 && (cur.Mtime.Unix() != attr.Mtime || uint32(cur.Mtime.Nanosecond()) != attr.Mtimensec) {
-			cur.Mtime = time.Unix(attr.Mtime, int64(attr.Mtimensec))
+		if set&SetAttrMtime != 0 {
+			cur.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
 			changed = true
 		}
 		if set&SetAttrMtimeNow != 0 {
@@ -565,6 +565,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !changed {
 			return nil
 		}
+		cur.Ctime = now
 		_, err = s.Update(&cur, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&cur, attr)
@@ -647,7 +648,8 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		newSpace = align4K(length) - align4K(n.Length)
 		n.Length = length
-		_, err = s.Cols("length").Update(&n, &node{Inode: n.Inode})
+		n.Ctime = time.Now().UnixNano() / 1e3
+		_, err = s.Cols("length", "Ctime").Update(&n, &node{Inode: n.Inode})
 		if err != nil {
 			return err
 		}
@@ -702,6 +704,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		old := n.Length
 		newSpace = align4K(length) - align4K(n.Length)
 		n.Length = length
+		n.Ctime = time.Now().UnixNano() / 1e3
 		if _, err := s.Update(&n, &node{Inode: inode}); err != nil {
 			return err
 		}
@@ -820,13 +823,15 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			return syscall.EEXIST
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		if _type == TypeDirectory {
 			pn.Nlink++
 		}
 		pn.Mtime = now
+		pn.Ctime = now
 		n.Atime = now
 		n.Mtime = now
+		n.Ctime = now
 		if ctx.Value(CtxKey("behavior")) == "Hadoop" {
 			n.Gid = pn.Gid
 		}
@@ -910,10 +915,11 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		pn.Mtime = now
-		pn.Ctime = time.Now()
+		pn.Ctime = now
 		n.Nlink--
+		n.Ctime = now
 		var opened bool
 		if e.Type == TypeFile && n.Nlink == 0 {
 			m.Lock()
@@ -942,11 +948,11 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 					if _, err := s.Insert(sustained{m.sid, e.Inode}); err != nil {
 						return err
 					}
-					if _, err := s.Update(&n, &node{Inode: e.Inode}); err != nil {
+					if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
 						return err
 					}
 				} else {
-					if _, err := s.Insert(delfile{e.Inode, n.Length, time.Now().UTC()}); err != nil {
+					if _, err := s.Insert(delfile{e.Inode, n.Length, time.Now().Unix()}); err != nil {
 						return err
 					}
 					if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
@@ -1029,9 +1035,10 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOTEMPTY
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		pn.Nlink--
 		pn.Mtime = now
+		pn.Ctime = now
 		if _, err := s.Delete(&edge{Parent: parent, Name: name}); err != nil {
 			return err
 		}
@@ -1146,7 +1153,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				}
 				dn.Nlink--
 				if dn.Nlink > 0 {
-					dn.Ctime = time.Now()
+					dn.Ctime = time.Now().UnixNano() / 1e3
 				} else if dn.Type == TypeFile {
 					m.Lock()
 					opened = m.openFiles[Ino(dn.Inode)] > 0
@@ -1155,10 +1162,13 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			}
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		spn.Mtime = now
+		spn.Ctime = now
 		dpn.Mtime = now
+		dpn.Ctime = now
 		sn.Parent = parentDst
+		sn.Ctime = now
 		if sn.Type == TypeDirectory && parentSrc != parentDst {
 			spn.Nlink--
 			dpn.Nlink++
@@ -1188,7 +1198,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 							return err
 						}
 					} else {
-						if _, err := s.Insert(delfile{dn.Inode, dn.Length, time.Now().UTC()}); err != nil {
+						if _, err := s.Insert(delfile{dn.Inode, dn.Length, time.Now().Unix()}); err != nil {
 							return err
 						}
 						if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
@@ -1281,9 +1291,11 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 			return syscall.EPERM
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		pn.Mtime = now
+		pn.Ctime = now
 		n.Nlink++
+		n.Ctime = now
 
 		if ok, err := s.Insert(&edge{Parent: parent, Name: name, Inode: inode, Type: n.Type}); err != nil || ok == 0 {
 			return err
@@ -1408,7 +1420,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 func (m *dbMeta) cleanStaleSessions() {
 	// TODO: once per minute
 	var s session
-	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).UTC()).Rows(&s)
+	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -1435,7 +1447,7 @@ func (m *dbMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
 		_ = m.txn(func(ses *xorm.Session) error {
-			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().UTC()}, &session{Sid: m.sid})
+			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
 			if err == nil && n == 0 {
 				err = fmt.Errorf("no session found matching sid: %d", m.sid)
 			}
@@ -1459,7 +1471,7 @@ func (m *dbMeta) deleteInode(inode Ino) error {
 		if !ok {
 			return nil
 		}
-		if _, err := s.Insert(&delfile{inode, n.Length, time.Now().UTC()}); err != nil {
+		if _, err := s.Insert(&delfile{inode, n.Length, time.Now().Unix()}); err != nil {
 			return err
 		}
 		newSpace = -align4K(n.Length)
@@ -1559,8 +1571,9 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			newSpace = align4K(newleng) - align4K(n.Length)
 			n.Length = newleng
 		}
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		n.Mtime = now
+		n.Ctime = now
 
 		var ck chunk
 		ok, err = s.Where("Inode = ? and Indx = ?", inode, indx).Get(&ck)
@@ -1577,7 +1590,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 				return err
 			}
 		}
-		if _, err := s.Insert(sliceRef{slice.Chunkid, slice.Size, 1}); err != nil {
+		if _, err := s.Insert(chunkRef{slice.Chunkid, slice.Size, 1}); err != nil {
 			return err
 		}
 		_, err = s.Update(&n, &node{Inode: inode})
@@ -1626,8 +1639,9 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		nout.Mtime = now
+		nout.Ctime = now
 
 		var c chunk
 		rows, err := s.Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).Rows(&c)
@@ -1651,7 +1665,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 				return err
 			}
 			if s.Chunkid > 0 {
-				if _, err := ses.Exec("update jfs_slice_ref set refs=refs+1 where chunkid = ? AND size = ?", s.Chunkid, s.Size); err != nil {
+				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", s.Chunkid, s.Size); err != nil {
 					return err
 				}
 			}
@@ -1714,7 +1728,7 @@ func (m *dbMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
 		var d delfile
-		rows, err := m.engine.Where("expire < ?", time.Now().Add(-time.Hour).UTC()).Rows(&d)
+		rows, err := m.engine.Where("expire < ?", time.Now().Add(-time.Hour).Unix()).Rows(&d)
 		if err != nil {
 			continue
 		}
@@ -1751,12 +1765,12 @@ func (m *dbMeta) cleanupSlices() {
 			return err
 		})
 
-		var ck sliceRef
+		var ck chunkRef
 		rows, err := m.engine.Where("refs <= 0").Rows(&ck)
 		if err != nil {
 			continue
 		}
-		var cks []sliceRef
+		var cks []chunkRef
 		for rows.Next() {
 			if rows.Scan(&ck) == nil {
 				cks = append(cks, ck)
@@ -1779,7 +1793,7 @@ func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	} else {
 		err = m.txn(func(ses *xorm.Session) error {
-			_, err = ses.Exec("delete from jfs_slice_ref where chunkid=?", chunkid)
+			_, err = ses.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
 			return err
 		})
 		if err != nil {
@@ -1801,7 +1815,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		ss = readSliceBuf(c.Slices)
 		for _, s := range ss {
-			_, err = ses.Exec("update jfs_slice_ref set refs=refs-1 where chunkid=? AND size=?", s.chunkid, s.size)
+			_, err = ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? AND size=?", s.chunkid, s.size)
 			if err != nil {
 				return err
 			}
@@ -1927,12 +1941,12 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return err
 		}
 		// create the key to tracking it
-		if n, err := s.Insert(sliceRef{chunkid, size, 1}); err != nil || n == 0 {
+		if n, err := s.Insert(chunkRef{chunkid, size, 1}); err != nil || n == 0 {
 			return err
 		}
 		ses := s
 		for _, s := range ss {
-			if _, err := ses.Exec("update jfs_slice_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
+			if _, err := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
 				return err
 			}
 		}
@@ -1940,7 +1954,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	})
 	// there could be false-negative that the compaction is successful, double-check
 	if err != nil {
-		var c = sliceRef{Chunkid: chunkid}
+		var c = chunkRef{Chunkid: chunkid}
 		ok, e := m.engine.Get(&c)
 		if e == nil {
 			if ok {
@@ -1957,7 +1971,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.deleteSlice(chunkid, size)
 	} else if err == nil {
 		for _, s := range ss {
-			var ref = sliceRef{Chunkid: s.chunkid}
+			var ref = chunkRef{Chunkid: s.chunkid}
 			ok, err := m.engine.Get(&ref)
 			if err == nil && ok && ref.Refs <= 0 {
 				m.deleteSlice(s.chunkid, s.size)
