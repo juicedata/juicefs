@@ -438,7 +438,9 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 			// TODO: in SQL
 			if e := m.resolveCase(ctx, parent, name); e != nil {
 				*inode = e.Inode
-				*attr = *e.Attr
+				if attr != nil {
+					return m.GetAttr(ctx, *inode, attr)
+				}
 				return 0
 			}
 		}
