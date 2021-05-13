@@ -1341,7 +1341,7 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	})
 
 	dbSession := m.engine.Table(&edge{})
-	if plus == 1 {
+	if plus != 0 {
 		dbSession = dbSession.Table(&node{}).Join("INNER", "jfs_edge", "jfs_edge.inode=jfs_node.inode")
 	}
 	var nodesWithParent []nodeParent
@@ -1349,13 +1349,17 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 		return errno(err)
 	}
 	for _, n := range nodesWithParent {
-		var attr Attr
-		m.parseAttr(&n.node, &attr) // .Type is fetched into node, so attr will always have .Typ filled regardless of plus value
-		*entries = append(*entries, &Entry{
+		entry := &Entry{
 			Inode: n.node.Inode,
 			Name:  []byte(n.edge.Name),
-			Attr:  &attr,
-		})
+			Attr:  &Attr{},
+		}
+		if plus != 0 {
+			m.parseAttr(&n.node, entry.Attr)
+		} else {
+			entry.Attr.Typ = n.node.Type // xorm fetches .Type is into node, actually it's from the edge table
+		}
+		*entries = append(*entries, entry)
 	}
 	return 0
 }
