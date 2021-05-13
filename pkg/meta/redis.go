@@ -1442,12 +1442,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 				if dtyp != TypeDirectory && tattr.Nlink > 0 {
 					pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 				} else {
-					if dtyp == TypeDirectory {
-						pipe.Del(ctx, r.inodeKey(dino))
-						dattr.Nlink--
-						pipe.IncrBy(ctx, usedSpace, -align4K(0))
-						pipe.Decr(ctx, totalInodes)
-					} else if dtyp == TypeFile {
+					if dtyp == TypeFile {
 						if opened {
 							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 							pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(dino)))
@@ -1458,7 +1453,9 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 							pipe.Decr(ctx, totalInodes)
 						}
 					} else {
-						if dtyp == TypeSymlink {
+						if dtyp == TypeDirectory {
+							dattr.Nlink--
+						} else if dtyp == TypeSymlink {
 							pipe.Del(ctx, r.symKey(dino))
 						}
 						pipe.Del(ctx, r.inodeKey(dino))
