@@ -41,7 +41,7 @@ type setting struct {
 
 type counter struct {
 	Name  string `xorm:"pk"`
-	Value uint64 `xorm:"notnull"`
+	Value int64  `xorm:"notnull"`
 }
 
 type edge struct {
@@ -52,17 +52,17 @@ type edge struct {
 }
 
 type node struct {
-	Inode  Ino       `xorm:"pk"`
-	Type   uint8     `xorm:"notnull"`
-	Flags  uint8     `xorm:"notnull"`
-	Mode   uint16    `xorm:"notnull"`
-	Uid    uint32    `xorm:"notnull"`
-	Gid    uint32    `xorm:"notnull"`
-	Atime  time.Time `xorm:"notnull"`
-	Mtime  time.Time `xorm:"notnull"`
-	Ctime  time.Time `xorm:"updated"`
-	Nlink  uint32    `xorm:"notnull"`
-	Length uint64    `xorm:"notnull"`
+	Inode  Ino    `xorm:"pk"`
+	Type   uint8  `xorm:"notnull"`
+	Flags  uint8  `xorm:"notnull"`
+	Mode   uint16 `xorm:"notnull"`
+	Uid    uint32 `xorm:"notnull"`
+	Gid    uint32 `xorm:"notnull"`
+	Atime  int64  `xorm:"notnull"`
+	Mtime  int64  `xorm:"notnull"`
+	Ctime  int64  `xorm:"notnull"`
+	Nlink  uint32 `xorm:"notnull"`
+	Length uint64 `xorm:"notnull"`
 	Rdev   uint32
 	Parent Ino
 }
@@ -89,8 +89,8 @@ type xattr struct {
 }
 
 type session struct {
-	Sid       uint64    `xorm:"pk"`
-	Heartbeat time.Time `xorm:"notnull"`
+	Sid       uint64 `xorm:"pk"`
+	Heartbeat int64  `xorm:"notnull"`
 }
 
 type sustained struct {
@@ -99,9 +99,9 @@ type sustained struct {
 }
 
 type delfile struct {
-	Inode  Ino       `xorm:"pk notnull"`
-	Length uint64    `xorm:"notnull"`
-	Expire time.Time `xorm:"notnull"`
+	Inode  Ino    `xorm:"pk notnull"`
+	Length uint64 `xorm:"notnull"`
+	Expire int64  `xorm:"notnull"`
 }
 
 type freeID struct {
@@ -120,6 +120,8 @@ type dbMeta struct {
 	deleting     chan int
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
+	newSpace     int64
+	newInodes    int64
 
 	freeMu     sync.Mutex
 	freeInodes freeID
@@ -162,7 +164,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		logger.Fatalf("create table node, edge, symlink, xattr: %s", err)
 	}
 	if err := m.engine.Sync2(new(chunk), new(sliceRef)); err != nil {
-		logger.Fatalf("create table chunk, slice_ref: %s", err)
+		logger.Fatalf("create table chunk, chunk_ref: %s", err)
 	}
 	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
 		logger.Fatalf("create table session, sustaind, delfile: %s", err)
@@ -211,9 +213,9 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			Inode:  1,
 			Type:   TypeDirectory,
 			Mode:   0777,
-			Atime:  now,
-			Mtime:  now,
-			Ctime:  now,
+			Atime:  now.UnixNano() / 1000,
+			Mtime:  now.UnixNano() / 1000,
+			Ctime:  now.UnixNano() / 1000,
 			Nlink:  2,
 			Length: 4 << 10,
 			Parent: 1,
@@ -254,7 +256,7 @@ func (m *dbMeta) NewSession() error {
 		return fmt.Errorf("create session: %s", err)
 	}
 	_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
-		return s.Insert(&session{v, time.Now()})
+		return s.Insert(&session{v, time.Now().Unix()})
 	})
 	if err != nil {
 		return fmt.Errorf("insert new session: %s", err)
@@ -265,6 +267,7 @@ func (m *dbMeta) NewSession() error {
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
+	go m.flushStats()
 	return nil
 }
 
@@ -284,8 +287,8 @@ func (m *dbMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (m *dbMeta) incrCounter(name string, batch uint64) (uint64, error) {
-	var v uint64
+func (m *dbMeta) incrCounter(name string, batch int64) (uint64, error) {
+	var v int64
 	err := m.txn(func(s *xorm.Session) error {
 		var c = counter{Name: name}
 		_, err := s.Get(&c)
@@ -296,7 +299,7 @@ func (m *dbMeta) incrCounter(name string, batch uint64) (uint64, error) {
 		_, err = s.Cols("value").Update(&counter{Value: c.Value + batch}, &counter{Name: name})
 		return err
 	})
-	return v, err
+	return uint64(v), err
 }
 
 func (m *dbMeta) nextInode() (Ino, error) {
@@ -344,12 +347,12 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Flags = n.Flags
 	attr.Uid = n.Uid
 	attr.Gid = n.Gid
-	attr.Atime = n.Atime.Unix()
-	attr.Atimensec = uint32(n.Atime.Nanosecond())
-	attr.Mtime = n.Mtime.Unix()
-	attr.Mtimensec = uint32(n.Mtime.Nanosecond())
-	attr.Ctime = n.Ctime.Unix()
-	attr.Ctimensec = uint32(n.Ctime.Nanosecond())
+	attr.Atime = n.Atime / 1e6
+	attr.Atimensec = uint32(n.Atime % 1e6 * 1000)
+	attr.Mtime = n.Mtime / 1e6
+	attr.Mtimensec = uint32(n.Mtime % 1e6 * 1000)
+	attr.Ctime = n.Ctime / 1e6
+	attr.Ctimensec = uint32(n.Ctime % 1e6 * 1000)
 	attr.Nlink = n.Nlink
 	attr.Length = n.Length
 	attr.Rdev = uint32(n.Rdev)
@@ -357,23 +360,65 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Full = true
 }
 
+func (m *dbMeta) updateStats(space int64, inodes int64) {
+	m.Lock()
+	m.newSpace += space
+	m.newInodes += inodes
+	m.Unlock()
+}
+
+func (m *dbMeta) flushStats() {
+	for {
+		m.Lock()
+		newSpace, newInodes := m.newSpace, m.newInodes
+		m.newSpace, m.newInodes = 0, 0
+		m.Unlock()
+		if newSpace != 0 || newInodes != 0 {
+			err := m.txn(func(s *xorm.Session) error {
+				_, err := s.Exec("UPDATE jfs_counter SET value=value+ (CASE name WHEN 'usedSpace' THEN ? ELSE ? END) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes)
+				return err
+			})
+			if err != nil {
+				logger.Warnf("update stats: %s", err)
+				m.updateStats(newSpace, newInodes)
+			}
+		}
+		time.Sleep(time.Second)
+	}
+}
+
 func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+	m.Lock()
+	usedSpace := m.newSpace
+	inodes := m.newInodes
+	m.Unlock()
 	var c = counter{Name: "usedSpace"}
 	_, err := m.engine.Get(&c)
 	if err != nil {
 		logger.Warnf("get used space: %s", err)
+	} else {
+		usedSpace += c.Value
 	}
+	if usedSpace < 0 {
+		usedSpace = 0
+	}
+	usedSpace = ((usedSpace >> 16) + 1) << 16 // aligned to 64K
 	*totalspace = 1 << 50
-	for *totalspace < c.Value {
+	for *totalspace < uint64(usedSpace) {
 		*totalspace *= 2
 	}
-	*availspace = *totalspace - c.Value
+	*availspace = *totalspace - uint64(usedSpace)
 	c = counter{Name: "totalInodes"}
 	_, err = m.engine.Get(&c)
 	if err != nil {
 		logger.Warnf("get total inodes: %s", err)
+	} else {
+		inodes += c.Value
 	}
-	*iused = c.Value
+	if inodes < 0 {
+		inodes = 0
+	}
+	*iused = uint64(inodes)
 	*iavail = 10 << 20
 	return 0
 }
@@ -499,17 +544,17 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				changed = true
 			}
 		}
-		now := time.Now()
-		if set&SetAttrAtime != 0 && (cur.Atime.Unix() != attr.Atime || uint32(cur.Atime.Nanosecond()) != attr.Atimensec) {
-			cur.Atime = time.Unix(attr.Atime, int64(attr.Atimensec))
+		now := time.Now().UnixNano() / 1e3
+		if set&SetAttrAtime != 0 {
+			cur.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
 			changed = true
 		}
 		if set&SetAttrAtimeNow != 0 {
 			cur.Atime = now
 			changed = true
 		}
-		if set&SetAttrMtime != 0 && (cur.Mtime.Unix() != attr.Mtime || uint32(cur.Mtime.Nanosecond()) != attr.Mtimensec) {
-			cur.Mtime = time.Unix(attr.Mtime, int64(attr.Mtimensec))
+		if set&SetAttrMtime != 0 {
+			cur.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
 			changed = true
 		}
 		if set&SetAttrMtimeNow != 0 {
@@ -520,6 +565,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !changed {
 			return nil
 		}
+		cur.Ctime = now
 		_, err = s.Update(&cur, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&cur, attr)
@@ -548,7 +594,8 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 }
 
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	return errno(m.txn(func(s *xorm.Session) error {
+	var newSpace int64
+	err := m.txn(func(s *xorm.Session) error {
 		var n = node{Inode: inode}
 		ok, err := s.Get(&n)
 		if err != nil {
@@ -599,18 +646,20 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 				}
 			}
 		}
-		added := align4K(length) - align4K(n.Length)
+		newSpace = align4K(length) - align4K(n.Length)
 		n.Length = length
-		_, err = s.Cols("length").Update(&n, &node{Inode: n.Inode})
+		n.Ctime = time.Now().UnixNano() / 1e3
+		_, err = s.Cols("length", "Ctime").Update(&n, &node{Inode: n.Inode})
 		if err != nil {
 			return err
 		}
-		_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
-		if err == nil {
-			m.parseAttr(&n, attr)
-		}
+		m.parseAttr(&n, attr)
 		return nil
-	}))
+	})
+	if err == nil {
+		m.updateStats(newSpace, 0)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
@@ -629,7 +678,8 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	return errno(m.txn(func(s *xorm.Session) error {
+	var newSpace int64
+	err := m.txn(func(s *xorm.Session) error {
 		var n = node{Inode: inode}
 		ok, err := s.Get(&n)
 		if err != nil {
@@ -652,8 +702,9 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		}
 
 		old := n.Length
-		added := align4K(length) - align4K(n.Length)
+		newSpace = align4K(length) - align4K(n.Length)
 		n.Length = length
+		n.Ctime = time.Now().UnixNano() / 1e3
 		if _, err := s.Update(&n, &node{Inode: inode}); err != nil {
 			return err
 		}
@@ -676,9 +727,12 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 				size -= l
 			}
 		}
-		_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
-		return err
-	}))
+		return nil
+	})
+	if err == nil {
+		m.updateStats(newSpace, 0)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
@@ -748,7 +802,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		*inode = ino
 	}
 
-	return errno(m.txn(func(s *xorm.Session) error {
+	err = m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -769,13 +823,15 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			return syscall.EEXIST
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		if _type == TypeDirectory {
 			pn.Nlink++
 		}
 		pn.Mtime = now
+		pn.Ctime = now
 		n.Atime = now
 		n.Mtime = now
+		n.Ctime = now
 		if ctx.Value(CtxKey("behavior")) == "Hadoop" {
 			n.Gid = pn.Gid
 		}
@@ -793,17 +849,14 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			if _, err := s.Insert(&symlink{Inode: ino, Target: path}); err != nil {
 				return err
 			}
-		} else if _type == TypeFile {
-			if _, err := s.Exec("update jfs_counter set value=value+? where name='usedSpace'", align4K(0)); err != nil {
-				return err
-			}
 		}
-		_, err = s.Exec("update jfs_counter set value=value+1 where name='totalInodes'")
-		if err == nil {
-			m.parseAttr(&n, attr)
-		}
+		m.parseAttr(&n, attr)
 		return err
-	}))
+	})
+	if err == nil {
+		m.updateStats(align4K(0), 1)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
@@ -821,7 +874,8 @@ func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumas
 }
 
 func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	return errno(m.txn(func(s *xorm.Session) error {
+	var newSpace, newInode int64
+	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -861,10 +915,11 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOENT
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		pn.Mtime = now
-		pn.Ctime = time.Now()
+		pn.Ctime = now
 		n.Nlink--
+		n.Ctime = now
 		var opened bool
 		if e.Type == TypeFile && n.Nlink == 0 {
 			m.Lock()
@@ -881,9 +936,6 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err = s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
-		if _, err = s.Exec("update jfs_counter set value=value-1 where name='totalInodes'"); err != nil {
-			return err
-		}
 
 		if n.Nlink > 0 {
 			if _, err := s.Update(&n, &node{Inode: e.Inode}); err != nil {
@@ -891,32 +943,33 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 		} else {
 			switch e.Type {
-			case TypeSymlink:
-				if _, err := s.Delete(&symlink{Inode: e.Inode}); err != nil {
-					return err
-				}
-				if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
-					return err
-				}
 			case TypeFile:
 				if opened {
 					if _, err := s.Insert(sustained{m.sid, e.Inode}); err != nil {
 						return err
 					}
-					if _, err := s.Update(&n, &node{Inode: e.Inode}); err != nil {
+					if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
 						return err
 					}
 				} else {
-					if _, err := s.Insert(delfile{e.Inode, n.Length, time.Now().UTC()}); err != nil {
+					if _, err := s.Insert(delfile{e.Inode, n.Length, time.Now().Unix()}); err != nil {
 						return err
 					}
 					if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
 						return err
 					}
-					if _, err := s.Exec("update jfs_counter set value=value-? where name='usedSpace'", align4K(n.Length)); err != nil {
-						return err
-					}
+					newSpace, newInode = -align4K(n.Length), -1
 				}
+			case TypeSymlink:
+				if _, err := s.Delete(&symlink{Inode: e.Inode}); err != nil {
+					return err
+				}
+				fallthrough
+			default:
+				if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
+					return err
+				}
+				newSpace, newInode = -align4K(0), -1
 			}
 		}
 		if err == nil && e.Type == TypeFile && n.Nlink == 0 {
@@ -929,7 +982,11 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 		}
 		return err
-	}))
+	})
+	if err == nil {
+		m.updateStats(newSpace, newInode)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -940,7 +997,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.ENOTEMPTY
 	}
 
-	return errno(m.txn(func(s *xorm.Session) error {
+	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
 		if err != nil {
@@ -978,9 +1035,10 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOTEMPTY
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		pn.Nlink--
 		pn.Mtime = now
+		pn.Ctime = now
 		if _, err := s.Delete(&edge{Parent: parent, Name: name}); err != nil {
 			return err
 		}
@@ -990,18 +1048,18 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
 			return err
 		}
-		if _, err := s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return err
-		}
-		if _, err := s.Exec("update jfs_counter set value=value-1 where name='totalInodes'"); err != nil {
-			return err
-		}
+		_, err = s.Update(&pn, &node{Inode: pn.Inode})
 		return err
-	}))
+	})
+	if err == nil {
+		m.updateStats(-align4K(0), -1)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
-	return errno(m.txn(func(s *xorm.Session) error {
+	var newSpace, newInode int64
+	err := m.txn(func(s *xorm.Session) error {
 		var spn = node{Inode: parentSrc}
 		ok, err := s.Get(&spn)
 		if err != nil {
@@ -1095,7 +1153,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				}
 				dn.Nlink--
 				if dn.Nlink > 0 {
-					dn.Ctime = time.Now()
+					dn.Ctime = time.Now().UnixNano() / 1e3
 				} else if dn.Type == TypeFile {
 					m.Lock()
 					opened = m.openFiles[Ino(dn.Inode)] > 0
@@ -1104,10 +1162,13 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			}
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		spn.Mtime = now
+		spn.Ctime = now
 		dpn.Mtime = now
+		dpn.Ctime = now
 		sn.Parent = parentDst
+		sn.Ctime = now
 		if sn.Type == TypeDirectory && parentSrc != parentDst {
 			spn.Nlink--
 			dpn.Nlink++
@@ -1128,19 +1189,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					return err
 				}
 			} else {
-				if dn.Type == TypeDirectory {
-					if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
-						return err
-					}
-					dn.Nlink--
-				} else if dn.Type == TypeSymlink {
-					if _, err := s.Delete(&symlink{Inode: dn.Inode}); err != nil {
-						return err
-					}
-					if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
-						return err
-					}
-				} else if dn.Type == TypeFile {
+				if dn.Type == TypeFile {
 					if opened {
 						if _, err := s.Update(&dn, &node{Inode: dn.Inode}); err != nil {
 							return err
@@ -1149,19 +1198,26 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 							return err
 						}
 					} else {
-						if _, err := s.Insert(delfile{dn.Inode, dn.Length, time.Now().UTC()}); err != nil {
+						if _, err := s.Insert(delfile{dn.Inode, dn.Length, time.Now().Unix()}); err != nil {
 							return err
 						}
 						if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
 							return err
 						}
-						if _, err := s.Exec("update jfs_counter set value=value-? where name='usedSpace'", align4K(dn.Length)); err != nil {
+						newSpace, newInode = -align4K(dn.Length), -1
+					}
+				} else {
+					if dn.Type == TypeDirectory {
+						dn.Nlink--
+					} else if dn.Type == TypeSymlink {
+						if _, err := s.Delete(&symlink{Inode: dn.Inode}); err != nil {
 							return err
 						}
 					}
-				}
-				if _, err := s.Exec("update jfs_counter set value=value-1 where name='totalInodes'"); err != nil {
-					return err
+					if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
+						return err
+					}
+					newSpace, newInode = -align4K(0), -1
 				}
 				if _, err := s.Delete(xattr{Inode: dino}); err != nil {
 					return err
@@ -1194,7 +1250,11 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			}
 		}
 		return err
-	}))
+	})
+	if err == nil {
+		m.updateStats(newSpace, newInode)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
@@ -1231,9 +1291,11 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 			return syscall.EPERM
 		}
 
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		pn.Mtime = now
+		pn.Ctime = now
 		n.Nlink++
+		n.Ctime = now
 
 		if ok, err := s.Insert(&edge{Parent: parent, Name: name, Inode: inode, Type: n.Type}); err != nil || ok == 0 {
 			return err
@@ -1358,7 +1420,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 func (m *dbMeta) cleanStaleSessions() {
 	// TODO: once per minute
 	var s session
-	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).UTC()).Rows(&s)
+	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -1385,7 +1447,7 @@ func (m *dbMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
 		_ = m.txn(func(ses *xorm.Session) error {
-			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().UTC()}, &session{Sid: m.sid})
+			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
 			if err == nil && n == 0 {
 				err = fmt.Errorf("no session found matching sid: %d", m.sid)
 			}
@@ -1400,6 +1462,7 @@ func (m *dbMeta) refreshSession() {
 
 func (m *dbMeta) deleteInode(inode Ino) error {
 	var n = node{Inode: inode}
+	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
 		ok, err := s.Get(&n)
 		if err != nil {
@@ -1408,16 +1471,15 @@ func (m *dbMeta) deleteInode(inode Ino) error {
 		if !ok {
 			return nil
 		}
-		if _, err := s.Insert(&delfile{inode, n.Length, time.Now().UTC()}); err != nil {
+		if _, err := s.Insert(&delfile{inode, n.Length, time.Now().Unix()}); err != nil {
 			return err
 		}
-		if _, err := s.Delete(&node{Inode: inode}); err != nil {
-			return err
-		}
-		_, err = s.Exec("update jfs_counter set value=value-? where name='usedSpace'", align4K(n.Length))
+		newSpace = -align4K(n.Length)
+		_, err = s.Delete(&node{Inode: inode})
 		return err
 	})
 	if err == nil {
+		m.updateStats(newSpace, -1)
 		go m.deleteFile(inode, n.Length)
 	}
 	return err
@@ -1491,7 +1553,8 @@ func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, ch
 }
 
 func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	return errno(m.txn(func(s *xorm.Session) error {
+	var newSpace int64
+	err := m.txn(func(s *xorm.Session) error {
 		var n = node{Inode: inode}
 		ok, err := s.Get(&n)
 		if err != nil {
@@ -1504,13 +1567,13 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			return syscall.EPERM
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
-		var added int64
 		if newleng > n.Length {
-			added = align4K(newleng) - align4K(n.Length)
+			newSpace = align4K(newleng) - align4K(n.Length)
 			n.Length = newleng
 		}
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		n.Mtime = now
+		n.Ctime = now
 
 		var ck chunk
 		ok, err = s.Where("Inode = ? and Indx = ?", inode, indx).Get(&ck)
@@ -1530,21 +1593,21 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if _, err := s.Insert(sliceRef{slice.Chunkid, slice.Size, 1}); err != nil {
 			return err
 		}
-		if _, err := s.Update(&n, &node{Inode: inode}); err != nil {
-			return err
-		}
-		if added > 0 {
-			_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
-		}
+		_, err = s.Update(&n, &node{Inode: inode})
 		if (len(ck.Slices)/sliceBytes)%20 == 19 {
 			go m.compactChunk(inode, indx, false)
 		}
 		return err
-	}))
+	})
+	if err == nil {
+		m.updateStats(newSpace, 0)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	return errno(m.txn(func(s *xorm.Session) error {
+	var newSpace int64
+	err := m.txn(func(s *xorm.Session) error {
 		var nin, nout = node{Inode: fin}, node{Inode: fout}
 		ok, err := s.Get(&nin)
 		if err != nil {
@@ -1572,13 +1635,13 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 
 		newleng := offOut + size
-		var added int64
 		if newleng > nout.Length {
-			added = align4K(newleng) - align4K(nout.Length)
+			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		now := time.Now()
+		now := time.Now().UnixNano() / 1e3
 		nout.Mtime = now
+		nout.Ctime = now
 
 		var c chunk
 		rows, err := s.Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).Rows(&c)
@@ -1652,21 +1715,20 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		if _, err := s.Update(&nout, &node{Inode: fout}); err != nil {
 			return err
 		}
-		if added > 0 {
-			_, err = s.Exec("update jfs_counter set value=value+? where name='usedSpace'", added)
-		}
-		if err == nil {
-			*copied = size
-		}
-		return err
-	}))
+		*copied = size
+		return nil
+	})
+	if err == nil {
+		m.updateStats(newSpace, 0)
+	}
+	return errno(err)
 }
 
 func (m *dbMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
 		var d delfile
-		rows, err := m.engine.Where("expire < ?", time.Now().Add(-time.Hour).UTC()).Rows(&d)
+		rows, err := m.engine.Where("expire < ?", time.Now().Add(-time.Hour).Unix()).Rows(&d)
 		if err != nil {
 			continue
 		}
@@ -1695,11 +1757,11 @@ func (m *dbMeta) cleanupSlices() {
 			continue
 		}
 		now := time.Now().Unix()
-		if c.Value+3600 > uint64(now) {
+		if c.Value+3600 > now {
 			continue
 		}
 		_ = m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Update(&counter{Value: uint64(now)}, counter{Name: "nextCleanupSlices"})
+			_, err := ses.Update(&counter{Value: now}, counter{Name: "nextCleanupSlices"})
 			return err
 		})
 
