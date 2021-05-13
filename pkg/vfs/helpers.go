@@ -17,6 +17,8 @@ package vfs
 
 import (
 	"fmt"
+	"path"
+	"strings"
 	"syscall"
 	"time"
 
@@ -103,4 +105,71 @@ func (ctx *logContext) Duration() time.Duration {
 // NewLogContext creates an LogContext starting from now.
 func NewLogContext(ctx meta.Context) LogContext {
 	return &logContext{ctx, time.Now()}
+}
+
+func Resolve(ctx meta.Context, p string, followLastSymlink bool) (entry *meta.Entry, err syscall.Errno) {
+	var inode Ino
+	var attr = &Attr{}
+	err = m.Resolve(ctx, 1, p, &inode, attr)
+	if err == 0 {
+		p = strings.TrimRight(p, "/")
+		ss := strings.Split(p, "/")
+		entry = &meta.Entry{Inode: inode, Name: []byte(ss[len(ss)-1]), Attr: attr}
+	}
+	if err != syscall.ENOTSUP {
+		return
+	}
+
+	// Fallback to the default implementation that calls `m.Lookup` for each directory along the path.
+	// It might be slower for deep directories, but it works for every meta that implements `Lookup`.
+	parent := Ino(1)
+	ss := strings.Split(p, "/")
+	for i, name := range ss {
+		if len(name) == 0 {
+			continue
+		}
+		if parent == 1 && i == len(ss)-1 && IsSpecialName(name) {
+			inode, attr = GetInternalNodeByName(name)
+			entry = &meta.Entry{Inode: inode, Attr: attr}
+			parent = inode
+			break
+		}
+		if i > 0 {
+			if err = m.Access(ctx, parent, 1, attr); err != 0 {
+				return
+			}
+		}
+		if err = m.Lookup(ctx, parent, name, &inode, attr); err != 0 {
+			return
+		}
+
+		var resolved bool
+		if i == len(ss)-1 {
+			resolved = true
+			entry = &meta.Entry{Inode: inode, Name: []byte(name), Attr: attr}
+		}
+		if attr.Typ == meta.TypeSymlink && (!resolved || followLastSymlink) {
+			var buf []byte
+			if err = m.ReadLink(ctx, inode, &buf); err != 0 {
+				return
+			}
+			target := string(buf)
+			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+				return &meta.Entry{Name: []byte(target)}, syscall.ENOTSUP
+			}
+			target = path.Join(strings.Join(ss[:i], "/"), target)
+			if entry, err = Resolve(ctx, target, followLastSymlink); err != 0 {
+				return
+			}
+			inode = entry.Inode
+		}
+		parent = inode
+	}
+	if parent == 1 {
+		if err = m.GetAttr(ctx, parent, attr); err != 0 {
+			return
+		}
+		entry = &meta.Entry{Inode: 1, Attr: attr}
+	}
+	return
 }
