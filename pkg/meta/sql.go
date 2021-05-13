@@ -438,7 +438,9 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 			// TODO: in SQL
 			if e := m.resolveCase(ctx, parent, name); e != nil {
 				*inode = e.Inode
-				*attr = *e.Attr
+				if attr != nil && e.Attr != nil {
+					*attr = *e.Attr
+				}
 				return 0
 			}
 		}
@@ -1340,14 +1342,17 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 		Attr:  &pattr,
 	})
 
+	dbSession := m.engine.Table(&edge{})
+	if plus == 1 {
+		dbSession = dbSession.Table(&node{}).Join("INNER", "jfs_edge", "jfs_edge.inode=jfs_node.inode")
+	}
 	var nodesWithParent []nodeParent
-	if err := m.engine.Table("jfs_node").Join("INNER", "jfs_edge",
-		"jfs_edge.inode=jfs_node.inode").Find(&nodesWithParent, &edge{Parent: inode}); err != nil {
+	if err := dbSession.Find(&nodesWithParent, &edge{Parent: inode}); err != nil {
 		return errno(err)
 	}
 	for _, n := range nodesWithParent {
 		var attr Attr
-		m.parseAttr(&n.node, &attr)
+		m.parseAttr(&n.node, &attr) // .Type is fetched into node, so attr will always have .Typ filled regardless of plus value
 		*entries = append(*entries, &Entry{
 			Inode: n.node.Inode,
 			Name:  []byte(n.edge.Name),
