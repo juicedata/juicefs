@@ -60,7 +60,7 @@ type node struct {
 	Gid    uint32 `xorm:"notnull"`
 	Atime  int64  `xorm:"notnull"`
 	Mtime  int64  `xorm:"notnull"`
-	Ctime  int64  `xorm:"updated"`
+	Ctime  int64  `xorm:"notnull"`
 	Nlink  uint32 `xorm:"notnull"`
 	Length uint64 `xorm:"notnull"`
 	Rdev   uint32
@@ -948,7 +948,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 					if _, err := s.Insert(sustained{m.sid, e.Inode}); err != nil {
 						return err
 					}
-					if _, err := s.Update(&n, &node{Inode: e.Inode}); err != nil {
+					if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
 						return err
 					}
 				} else {
