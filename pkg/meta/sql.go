@@ -72,7 +72,7 @@ type chunk struct {
 	Indx   uint32 `xorm:"unique(chunk) notnull"`
 	Slices []byte `xorm:"blob notnull"`
 }
-type sliceRef struct {
+type chunkRef struct {
 	Chunkid uint64 `xorm:"pk"`
 	Size    uint32 `xorm:"notnull"`
 	Refs    int    `xorm:"notnull"`
@@ -163,7 +163,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
 		logger.Fatalf("create table node, edge, symlink, xattr: %s", err)
 	}
-	if err := m.engine.Sync2(new(chunk), new(sliceRef)); err != nil {
+	if err := m.engine.Sync2(new(chunk), new(chunkRef)); err != nil {
 		logger.Fatalf("create table chunk, chunk_ref: %s", err)
 	}
 	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
@@ -1590,7 +1590,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 				return err
 			}
 		}
-		if _, err := s.Insert(sliceRef{slice.Chunkid, slice.Size, 1}); err != nil {
+		if _, err := s.Insert(chunkRef{slice.Chunkid, slice.Size, 1}); err != nil {
 			return err
 		}
 		_, err = s.Update(&n, &node{Inode: inode})
@@ -1665,7 +1665,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 				return err
 			}
 			if s.Chunkid > 0 {
-				if _, err := ses.Exec("update jfs_slice_ref set refs=refs+1 where chunkid = ? AND size = ?", s.Chunkid, s.Size); err != nil {
+				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", s.Chunkid, s.Size); err != nil {
 					return err
 				}
 			}
@@ -1765,12 +1765,12 @@ func (m *dbMeta) cleanupSlices() {
 			return err
 		})
 
-		var ck sliceRef
+		var ck chunkRef
 		rows, err := m.engine.Where("refs <= 0").Rows(&ck)
 		if err != nil {
 			continue
 		}
-		var cks []sliceRef
+		var cks []chunkRef
 		for rows.Next() {
 			if rows.Scan(&ck) == nil {
 				cks = append(cks, ck)
@@ -1793,7 +1793,7 @@ func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	} else {
 		err = m.txn(func(ses *xorm.Session) error {
-			_, err = ses.Exec("delete from jfs_slice_ref where chunkid=?", chunkid)
+			_, err = ses.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
 			return err
 		})
 		if err != nil {
@@ -1815,7 +1815,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		ss = readSliceBuf(c.Slices)
 		for _, s := range ss {
-			_, err = ses.Exec("update jfs_slice_ref set refs=refs-1 where chunkid=? AND size=?", s.chunkid, s.size)
+			_, err = ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? AND size=?", s.chunkid, s.size)
 			if err != nil {
 				return err
 			}
@@ -1941,12 +1941,12 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return err
 		}
 		// create the key to tracking it
-		if n, err := s.Insert(sliceRef{chunkid, size, 1}); err != nil || n == 0 {
+		if n, err := s.Insert(chunkRef{chunkid, size, 1}); err != nil || n == 0 {
 			return err
 		}
 		ses := s
 		for _, s := range ss {
-			if _, err := ses.Exec("update jfs_slice_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
+			if _, err := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
 				return err
 			}
 		}
@@ -1954,7 +1954,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	})
 	// there could be false-negative that the compaction is successful, double-check
 	if err != nil {
-		var c = sliceRef{Chunkid: chunkid}
+		var c = chunkRef{Chunkid: chunkid}
 		ok, e := m.engine.Get(&c)
 		if e == nil {
 			if ok {
@@ -1971,7 +1971,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.deleteSlice(chunkid, size)
 	} else if err == nil {
 		for _, s := range ss {
-			var ref = sliceRef{Chunkid: s.chunkid}
+			var ref = chunkRef{Chunkid: s.chunkid}
 			ok, err := m.engine.Get(&ref)
 			if err == nil && ok && ref.Refs <= 0 {
 				m.deleteSlice(s.chunkid, s.size)

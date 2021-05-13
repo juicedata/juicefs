@@ -41,7 +41,7 @@ func TestMySQLClient(t *testing.T) {
 	m.engine.DropTables(&edge{})
 	m.engine.DropTables(&symlink{})
 	m.engine.DropTables(&chunk{})
-	m.engine.DropTables(&sliceRef{})
+	m.engine.DropTables(&chunkRef{})
 	m.engine.DropTables(&session{})
 	m.engine.DropTables(&sustained{})
 	m.engine.DropTables(&xattr{})
