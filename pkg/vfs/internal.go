@@ -192,13 +192,11 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 		concurrent := r.Get16()
 		background := r.Get8()
 		if background == 0 {
-			logger.Infof("filling caches: %v", paths)
 			fillCache(paths, int(concurrent))
-			logger.Infof("TODO: fill cache of %d paths with %d %d", len(paths), concurrent, background)
 		} else {
 			go fillCache(paths, int(concurrent))
 		}
-		return []byte{uint8(len(paths))} // TODO: real response
+		return []byte{uint8(0)}
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
 		return []byte{uint8(syscall.EINVAL & 0xff)}

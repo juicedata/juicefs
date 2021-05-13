@@ -211,6 +211,8 @@ type Meta interface {
 	// Setlk sets a file range lock on given file.
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
 
+	// ListFileSlices returns all slices used by the given file.
+	ListFileSlices(ctx Context, inode Ino, size uint64, slices *[]Slice) syscall.Errno
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context) syscall.Errno
 	// ListSlices returns all slices used by all files.

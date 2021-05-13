@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime/trace"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -530,13 +531,78 @@ func (fs *FileSystem) RemoveXattr(ctx meta.Context, p string, name string) (err 
 }
 
 func (fs *FileSystem) lookup(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
-	var entry *meta.Entry
-	if entry, err = vfs.Resolve(ctx, p, followLastSymlink); err != 0 {
+	var inode Ino
+	var attr = &Attr{}
+
+	err = fs.m.Resolve(ctx, 1, p, &inode, attr)
+	if err == 0 {
+		fi = AttrToFileInfo(inode, attr)
+		p = strings.TrimRight(p, "/")
+		ss := strings.Split(p, "/")
+		fi.name = ss[len(ss)-1]
+	}
+	if err != syscall.ENOTSUP {
 		return
 	}
-	fi = AttrToFileInfo(entry.Inode, entry.Attr)
-	fi.name = string(entry.Name)
-	return
+
+	// Fallback to the default implementation that calls `fs.m.Lookup` for each directory along the path.
+	// It might be slower for deep directories, but it works for every meta that implements `Lookup`.
+	parent := Ino(1)
+	ss := strings.Split(p, "/")
+	for i, name := range ss {
+		if len(name) == 0 {
+			continue
+		}
+		if parent == 1 && i == len(ss)-1 && vfs.IsSpecialName(name) {
+			inode, attr := vfs.GetInternalNodeByName(name)
+			fi = AttrToFileInfo(inode, attr)
+			parent = inode
+			break
+		}
+		if i > 0 {
+			if err := fs.m.Access(ctx, parent, mMaskX, attr); err != 0 {
+				return nil, err
+			}
+		}
+
+		var inode Ino
+		var resolved bool
+		err = fs.m.Lookup(ctx, parent, name, &inode, attr)
+		if i == len(ss)-1 {
+			resolved = true
+		}
+		if err != 0 {
+			return
+		}
+		fi = AttrToFileInfo(inode, attr)
+		fi.name = name
+		if (!resolved || followLastSymlink) && fi.IsSymlink() {
+			var buf []byte
+			err = fs.m.ReadLink(ctx, inode, &buf)
+			if err != 0 {
+				return
+			}
+			target := string(buf)
+			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+				return &FileStat{name: target}, syscall.ENOTSUP
+			}
+			target = path.Join(strings.Join(ss[:i], "/"), target)
+			fi, err = fs.lookup(ctx, target, followLastSymlink)
+			if err != 0 {
+				return
+			}
+			inode = fi.Inode()
+		}
+		parent = inode
+	}
+	if parent == 1 {
+		err = fs.m.GetAttr(ctx, parent, attr)
+		if err != 0 {
+			return
+		}
+		fi = AttrToFileInfo(1, attr)
+	}
+	return fi, 0
 }
 
 func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16) (f *File, err syscall.Errno) {

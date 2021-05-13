@@ -49,21 +49,10 @@ func sendCommand(cf *os.File, batch []string, count int, concurrent uint, backgr
 		logger.Infof("Warm-up cache for %d paths in backgroud", count)
 		return
 	}
-	// TODO: handle real response
 	var errs = make([]byte, 1)
 	if n, err := cf.Read(errs); err != nil || n != 1 {
 		logger.Fatalf("Read message: %d %s", n, err)
 	}
-	logger.Infof("result %d", errs[0])
-	/*
-		if errs[0] != 0 {
-			errno := syscall.Errno(errs[0])
-			if runtime.GOOS == "windows" {
-				errno += 0x20000000
-			}
-			logger.Fatalf("FillCache %s", errno)
-		}
-	*/
 	logger.Infof("%d paths are warmed up", count)
 }
 
@@ -118,7 +107,6 @@ func warmup(ctx *cli.Context) error {
 	if mp == "/" {
 		logger.Fatalf("Path %s is not inside JuiceFS", first)
 	}
-	logger.Infof("mount point is %s", mp)
 
 	controller := openController(mp)
 	if controller == nil {

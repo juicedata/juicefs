@@ -2294,6 +2294,37 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 }
 
+func (r *redisMeta) ListFileSlices(ctx Context, inode Ino, size uint64, slices *[]Slice) syscall.Errno {
+	var indx uint32
+	p := r.rdb.Pipeline()
+	*slices = nil
+	for uint64(indx)*ChunkSize < size {
+		for i := 0; uint64(indx)*ChunkSize < size && i < 1000; i++ {
+			key := r.chunkKey(inode, indx)
+			_ = p.LRange(ctx, key, 0, 100000000) // FIXME: max
+			indx++
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			logger.Warnf("Failed to get chunks of inode %d: %s", inode, err)
+			return errno(err)
+		}
+		for _, cmd := range cmds {
+			val := cmd.(*redis.StringSliceCmd).Val()
+			if len(val) == 0 {
+				continue
+			}
+			ss := readSlices(val)
+			for _, s := range ss {
+				if s.chunkid > 0 {
+					*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+				}
+			}
+		}
+	}
+	return 0
+}
+
 func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 	var cursor uint64
 	p := r.rdb.Pipeline()

@@ -802,4 +802,16 @@ func (store *cachedStore) Remove(chunkid uint64, length int) error {
 	return r.Remove()
 }
 
+func (store *cachedStore) FillCache(chunkid uint64, length uint32) error {
+	if length == 0 {
+		return nil
+	}
+	r := chunkForRead(chunkid, int(length), store)
+	lastIndx := int(length-1) / store.conf.BlockSize
+	for i := 0; i <= lastIndx; i++ {
+		store.fetcher.fetch(r.key(i))
+	}
+	return nil
+}
+
 var _ ChunkStore = &cachedStore{}

@@ -16,7 +16,11 @@
 package vfs
 
 import (
+	"fmt"
+	"path"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -49,22 +53,77 @@ func fillCache(paths []string, concurrent int) {
 		}()
 	}
 
+	var inode Ino
+	var attr *Attr
 	for _, p := range paths {
-		entry, st := Resolve(meta.Background, p, true)
-		if st != 0 {
+		if st := resolve(p, &inode, attr); st != 0 {
 			logger.Warnf("Failed to resolve path %s: %s", p, st)
 			continue
 		}
 		logger.Debugf("Warming up path %s", p)
-		if entry.Attr.Typ == meta.TypeDirectory {
-			walkDir(entry.Inode, todo)
-		} else if entry.Attr.Typ != meta.TypeSymlink {
-			todo <- _file{entry.Inode, entry.Attr.Length}
+		if attr.Typ == meta.TypeDirectory {
+			walkDir(inode, todo)
+		} else if attr.Typ != meta.TypeSymlink {
+			todo <- _file{inode, attr.Length}
 		}
 	}
 	close(todo)
 	wg.Wait()
 	logger.Infof("Warmup %d paths in %s", len(paths), time.Since(start))
+}
+
+func resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
+	p = strings.Trim(p, "/")
+	ctx := meta.Background
+	err := m.Resolve(ctx, 1, p, inode, attr)
+	if err != syscall.ENOTSUP {
+		return err
+	}
+
+	// Fallback to the default implementation that calls `m.Lookup` for each directory along the path.
+	// It might be slower for deep directories, but it works for every meta that implements `Lookup`.
+	parent := Ino(1)
+	ss := strings.Split(p, "/")
+	for i, name := range ss {
+		if len(name) == 0 {
+			continue
+		}
+		if parent == 1 && i == len(ss)-1 && IsSpecialName(name) {
+			*inode, attr = GetInternalNodeByName(name)
+			parent = *inode
+			break
+		}
+		if i > 0 {
+			if err = m.Access(ctx, parent, 1, attr); err != 0 {
+				return err
+			}
+		}
+		if err = m.Lookup(ctx, parent, name, inode, attr); err != 0 {
+			return err
+		}
+		if attr.Typ == meta.TypeSymlink {
+			var buf []byte
+			if err = m.ReadLink(ctx, *inode, &buf); err != 0 {
+				return err
+			}
+			target := string(buf)
+			if strings.HasPrefix(target, "/") || strings.Contains(target, "://") {
+				return syscall.ENOTSUP
+			}
+			target = path.Join(strings.Join(ss[:i], "/"), target)
+			if err = resolve(target, inode, attr); err != 0 {
+				return err
+			}
+		}
+		parent = *inode
+	}
+	if parent == 1 {
+		*inode = parent
+		if err = m.GetAttr(ctx, *inode, attr); err != 0 {
+			return err
+		}
+	}
+	return 0
 }
 
 func walkDir(inode Ino, todo chan _file) {
@@ -102,7 +161,14 @@ func walkDir(inode Ino, todo chan _file) {
 }
 
 func fillInode(inode Ino, size uint64) error {
-	// TODO
-	logger.Infof("filling inode %d, size %d", inode, size)
+	var slices []meta.Slice
+	if err := m.ListFileSlices(meta.Background, inode, size, &slices); err != 0 {
+		return fmt.Errorf("Failed to get slices of inode %d: %d", inode, err)
+	}
+	for _, s := range slices {
+		if err := store.FillCache(s.Chunkid, s.Size); err != nil {
+			return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Chunkid, err)
+		}
+	}
 	return nil
 }
