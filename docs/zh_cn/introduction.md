@@ -9,7 +9,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
 2. **HDFS 兼容**：完整兼容 HDFS API，提供更强的元数据性能；
 3. **S3 兼容**：提供与 S3 协议兼容的访问接口；
-4. **云原生**：通过 [Kubernetes CSI driver](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
+4. **云原生**：通过 [Kubernetes CSI driver](how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
 5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
 7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](benchmark.md)；
