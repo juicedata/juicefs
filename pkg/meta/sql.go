@@ -566,7 +566,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			return nil
 		}
 		cur.Ctime = now
-		_, err = s.Update(&cur, &node{Inode: inode})
+		_, err = s.Cols("mode", "uid", "gid", "atime", "mtime", "ctime").Update(&cur, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&cur, attr)
 		}
@@ -647,9 +647,11 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			}
 		}
 		newSpace = align4K(length) - align4K(n.Length)
+		now := time.Now().UnixNano() / 1e3
 		n.Length = length
-		n.Ctime = time.Now().UnixNano() / 1e3
-		_, err = s.Cols("length", "Ctime").Update(&n, &node{Inode: n.Inode})
+		n.Mtime = now
+		n.Ctime = now
+		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: n.Inode})
 		if err != nil {
 			return err
 		}
@@ -703,9 +705,11 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := n.Length
 		newSpace = align4K(length) - align4K(n.Length)
+		now := time.Now().UnixNano() / 1e3
 		n.Length = length
-		n.Ctime = time.Now().UnixNano() / 1e3
-		if _, err := s.Update(&n, &node{Inode: inode}); err != nil {
+		n.Mtime = now
+		n.Ctime = now
+		if _, err := s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode}); err != nil {
 			return err
 		}
 		if mode&(fallocZeroRange|fallocPunchHole) != 0 {
@@ -839,7 +843,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		if _, err = s.Insert(&edge{parent, name, ino, _type}); err != nil {
 			return err
 		}
-		if _, err := s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
+		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
 		if _, err := s.Insert(&n); err != nil {
@@ -933,12 +937,12 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
 			return err
 		}
-		if _, err = s.Update(&pn, &node{Inode: pn.Inode}); err != nil {
+		if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
 
 		if n.Nlink > 0 {
-			if _, err := s.Update(&n, &node{Inode: e.Inode}); err != nil {
+			if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
 				return err
 			}
 		} else {
@@ -1048,7 +1052,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
 			return err
 		}
-		_, err = s.Update(&pn, &node{Inode: pn.Inode})
+		_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
 		return err
 	})
 	if err == nil {
@@ -1180,7 +1184,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		} else if n != 1 {
 			return fmt.Errorf("delete src failed")
 		}
-		if _, err := s.Update(&spn, &node{Inode: parentSrc}); err != nil {
+		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&spn, &node{Inode: parentSrc}); err != nil {
 			return err
 		}
 		if dino > 0 {
@@ -1191,7 +1195,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			} else {
 				if dn.Type == TypeFile {
 					if opened {
-						if _, err := s.Update(&dn, &node{Inode: dn.Inode}); err != nil {
+						if _, err := s.Cols("nlink", "ctime").Update(&dn, &node{Inode: dn.Inode}); err != nil {
 							return err
 						}
 						if _, err := s.Insert(sustained{m.sid, dn.Inode}); err != nil {
@@ -1233,11 +1237,11 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			return fmt.Errorf("insert edge(%d,%s) failed", parentDst, nameDst)
 		}
 		if parentDst != parentSrc {
-			if _, err := s.Update(&dpn, &node{Inode: parentDst}); err != nil {
+			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&dpn, &node{Inode: parentDst}); err != nil {
 				return err
 			}
 		}
-		if _, err := s.Update(&sn, &node{Inode: sn.Inode}); err != nil {
+		if _, err := s.Cols("ctime").Update(&sn, &node{Inode: sn.Inode}); err != nil {
 			return err
 		}
 		if err == nil && dino > 0 && dn.Type == TypeFile {
@@ -1300,10 +1304,10 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 		if ok, err := s.Insert(&edge{Parent: parent, Name: name, Inode: inode, Type: n.Type}); err != nil || ok == 0 {
 			return err
 		}
-		if _, err := s.Update(&pn, &node{Inode: parent}); err != nil {
+		if _, err := s.Cols("mtime", "ctime").Update(&pn, &node{Inode: parent}); err != nil {
 			return err
 		}
-		if _, err := s.Cols("nlink").Update(&n, node{Inode: inode}); err != nil {
+		if _, err := s.Cols("nlink", "ctime").Update(&n, node{Inode: inode}); err != nil {
 			return err
 		}
 		if err == nil {
@@ -1593,7 +1597,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if _, err := s.Insert(sliceRef{slice.Chunkid, slice.Size, 1}); err != nil {
 			return err
 		}
-		_, err = s.Update(&n, &node{Inode: inode})
+		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
 		if (len(ck.Slices)/sliceBytes)%20 == 19 {
 			go m.compactChunk(inode, indx, false)
 		}
@@ -1712,7 +1716,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 				}
 			}
 		}
-		if _, err := s.Update(&nout, &node{Inode: fout}); err != nil {
+		if _, err := s.Cols("length", "mtime", "ctime").Update(&nout, &node{Inode: fout}); err != nil {
 			return err
 		}
 		*copied = size
