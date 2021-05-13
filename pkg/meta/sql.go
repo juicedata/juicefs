@@ -133,11 +133,15 @@ func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
-	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
+	start := time.Now()
 	if err = engine.Ping(); err != nil {
 		return nil, fmt.Errorf("ping database: %s", err)
 	}
+	if time.Since(start) > time.Millisecond {
+		logger.Warnf("The latency to database is too high: %s", time.Since(start))
+	}
 
+	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	if conf.Retries == 0 {
 		conf.Retries = 30
 	}
