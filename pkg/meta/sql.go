@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -65,6 +64,11 @@ type node struct {
 	Length uint64 `xorm:"notnull"`
 	Rdev   uint32
 	Parent Ino
+}
+
+type nodeParent struct {
+	node `xorm:"extends"`
+	edge `xorm:"extends"`
 }
 
 type chunk struct {
@@ -1336,44 +1340,18 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 		Attr:  &pattr,
 	})
 
-	rows, err := m.engine.Rows(&edge{Parent: inode})
-	if err != nil {
+	var nodesWithParent []nodeParent
+	if err := m.engine.Table("jfs_node").Join("INNER", "jfs_edge",
+		"jfs_edge.inode=jfs_node.inode").Find(&nodesWithParent, &edge{Parent: inode}); err != nil {
 		return errno(err)
 	}
-	names := make(map[Ino][]byte)
-	var inodes []string
-	for rows.Next() {
-		var e edge
-		err = rows.Scan(&e)
-		if err != nil {
-			_ = rows.Close()
-			return errno(err)
-		}
-		names[e.Inode] = []byte(e.Name)
-		inodes = append(inodes, strconv.FormatUint(uint64(e.Inode), 10))
-	}
-	_ = rows.Close()
-	if len(inodes) == 0 {
-		return 0
-	}
-
-	var n node
-	nodes, err := m.engine.Where(fmt.Sprintf("inode IN (%s)", strings.Join(inodes, ","))).Rows(&n)
-	if err != nil {
-		return errno(err)
-	}
-	defer nodes.Close()
-	for nodes.Next() {
-		err = nodes.Scan(&n)
-		if err != nil {
-			return errno(err)
-		}
-		attr := new(Attr)
-		m.parseAttr(&n, attr)
+	for _, n := range nodesWithParent {
+		var attr Attr
+		m.parseAttr(&n.node, &attr)
 		*entries = append(*entries, &Entry{
-			Inode: Ino(n.Inode),
-			Name:  names[n.Inode],
-			Attr:  attr,
+			Inode: n.node.Inode,
+			Name:  []byte(n.edge.Name),
+			Attr:  &attr,
 		})
 	}
 	return 0
