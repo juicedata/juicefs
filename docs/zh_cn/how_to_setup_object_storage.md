@@ -260,7 +260,9 @@ $ ./juicefs format \
     localhost test
 ```
 
-阿里云 OSS 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://help.aliyun.com/document_detail/31834.html)，你可以根据实际的场景选用。如果你在阿里云的服务器上创建文件系统，则无需在 `--bucket` 选项中设置 endpoint 链接，JuiceFS 会自动帮你设置。例如：
+阿里云 OSS 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://help.aliyun.com/document_detail/31834.html)，你可以根据实际的场景选用。
+
+如果你是在阿里云的服务器上创建文件系统，则无需在 `--bucket` 选项中设置 endpoint 链接，JuiceFS 会自动帮你设置。例如：
 
 ```bash
 # Running within Alibaba Cloud
@@ -273,9 +275,9 @@ $ ./juicefs format \
 
 ## 腾讯云 COS <span id='qcloud-cos'></span>
 
-The naming rule of bucket in Tencent Cloud is `<bucket>-<APPID>`, so you must append `APPID` to the bucket name. Please follow [this document](https://cloud.tencent.com/document/product/436/13312) to learn how to get `APPID`.
+使用腾讯云 COS 创建 JuiceFS 文件系统时，Bucket 名称格式为 `<bucket>-<APPID>`，即需要在 bucket 名称后面指定 `APPID`，[点此查看](https://cloud.tencent.com/document/product/436/13312) 如何获取  `APPID` 。
 
-The full format of `--bucket` option is `https://<bucket>-<APPID>.cos.<region>.myqcloud.com`, replace `<region>` with specific region code, e.g. the region code of Shanghai is `ap-shanghai`. You could find all available regions at [here](https://cloud.tencent.com/document/product/436/6224). For example:
+`--bucket` 选项的完整格式为 `https://<bucket>-<APPID>.cos.<region>.myqcloud.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：上海的区域代码为 `ap-shanghai`。[点此查看](https://cloud.tencent.com/document/product/436/6224) 所有可用的区域代码。例如：
 
 ```bash
 $ ./juicefs format \
@@ -285,7 +287,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-When you running within Tencent Cloud, you could omit `.cos.<region>.myqcloud.com` part in `--bucket` option. JuiceFS will choose appropriate endpoint automatically. For example:
+如果你是在腾讯云的服务器上创建文件系统，可以在 `--bucket` 选项中省略 `.cos.<region>.myqcloud.com` 部分。 JuiceFS 会自动设置 endpoint 链接。 例如：
 
 ```bash
 # Running within Tencent Cloud
@@ -298,9 +300,9 @@ $ ./juicefs format \
 
 ## 华为云 OBS <span id='huawei-obs'></span>
 
-Please follow [this document](https://support.huaweicloud.com/usermanual-ca/zh-cn_topic_0046606340.html) to learn how to get access key and secret key.
+使用华为云 OBS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://support.huaweicloud.com/usermanual-ca/zh-cn_topic_0046606340.html) 了解如何创建 `Access key` 和 `Secret key`。
 
-The `--bucket` option format is `https://<bucket>.obs.<region>.myhuaweicloud.com`, replace `<region>` with specific region code, e.g. the region code of Beijing 1 is `cn-north-1`. You could find all available regions at [here](https://developer.huaweicloud.com/endpoint?OBS). For example:
+`--bucket` 选项的格式为 `https://<bucket>.obs.<region>.myhuaweicloud.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：北京一的区域代码为 `cn-north-1`。[点此查看](https://developer.huaweicloud.com/endpoint?OBS) 所有可用的区域代码。例如：
 
 ```bash
 $ ./juicefs format \
@@ -310,7 +312,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-When you running within Huawei Cloud, you could omit `.obs.<region>.myhuaweicloud.com` part in `--bucket` option. JuiceFS will choose appropriate endpoint automatically. For example:
+如果是你在华为云的服务器上创建文件系统，可以在 `--bucket` 选项中省略 `.obs.<region>.myhuaweicloud.com` 部分。 JuiceFS 会自动设置 endpoint 链接。 例如：
 
 ```bash
 # Running within Huawei Cloud
@@ -323,9 +325,9 @@ $ ./juicefs format \
 
 ## 百度 BOS <span id='baidu-bos'></span>
 
-Please follow [this document](https://cloud.baidu.com/doc/Reference/s/9jwvz2egb) to learn how to get access key and secret key.
+使用百度云 BOS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://cloud.baidu.com/doc/Reference/s/9jwvz2egb) 了解如何创建 `Access key` 和 `Secret key`。
 
-The `--bucket` option format is `https://<bucket>.<region>.bcebos.com`, replace `<region>` with specific region code, e.g. the region code of Beijing is `bj`. You could find all available regions at [here](https://cloud.baidu.com/doc/BOS/s/Ck1rk80hn#%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D%EF%BC%88endpoint%EF%BC%89). For example:
+`--bucket` 选项的格式为 `https://<bucket>.<region>.bcebos.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：北京的区域代码为 `bj`。[点此查看](https://cloud.baidu.com/doc/BOS/s/Ck1rk80hn#%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D%EF%BC%88endpoint%EF%BC%89) 所有可用的区域代码。例如：
 
 ```bash
 $ ./juicefs format \
@@ -335,7 +337,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-When you running within Baidu Cloud, you could omit `.<region>.bcebos.com` part in `--bucket` option. JuiceFS will choose appropriate endpoint automatically. For example:
+如果你是在百度云的服务器上创建文件系统，可以在 `--bucket` 选项中省略 `.<region>.bcebos.com` 部分。 JuiceFS 会自动设置 endpoint 链接。 例如：
 
 ```bash
 # Running within Baidu Cloud
@@ -348,9 +350,9 @@ $ ./juicefs format \
 
 ## 金山云 KS3 <span id='kingsoft-ks3'></span>
 
-Please follow [this document](https://docs.ksyun.com/documents/1386) to learn how to get access key and secret key.
+使用金山云 KS3 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://docs.ksyun.com/documents/1386) 了解如何创建 `Access key` 和 `Secret key`。
 
-KS3 provides [multiple endpoints](https://docs.ksyun.com/documents/6761) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint. For example:
+金山云 KS3 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://docs.ksyun.com/documents/6761)，你可以根据实际的场景选用。
 
 ```bash
 $ ./juicefs format \
@@ -362,9 +364,9 @@ $ ./juicefs format \
 
 ## 美团云 MMS <span id='meituan-mms'></span>
 
-Please follow [this document](https://www.mtyun.com/doc/api/mss/mss/fang-wen-kong-zhi) to learn how to get access key and secret key.
+使用美团云 MMS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://www.mtyun.com/doc/api/mss/mss/fang-wen-kong-zhi) 了解如何创建 `Access key` 和 `Secret key`。
 
-The `--bucket` option format is `https://<bucket>.<endpoint>`, replace `<endpoint>` with specific value, e.g. `mtmss.com`. You could find all available endpoints at [here](https://www.mtyun.com/doc/products/storage/mss/index#%E5%8F%AF%E7%94%A8%E5%8C%BA%E5%9F%9F). For example:
+`--bucket` 选项的格式为 `https://<bucket>.<endpoint>`，请将 `<endpoint>` 替换成你实际地址，例如：`mtmss.com`。[点此查看](https://www.mtyun.com/doc/products/storage/mss/index#%E5%8F%AF%E7%94%A8%E5%8C%BA%E5%9F%9F) 所有可用的 endpoint 地址。例如：
 
 ```bash
 $ ./juicefs format \
@@ -376,9 +378,9 @@ $ ./juicefs format \
 
 ## 网易云 NOS <span id='163-nos'></span>
 
-Please follow [this document](https://www.163yun.com/help/documents/55485278220111872) to learn how to get access key and secret key.
+使用网易云 NOS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://www.163yun.com/help/documents/55485278220111872) 了解如何创建 `Access key` 和 `Secret key`。
 
-NOS provides [multiple endpoints](https://www.163yun.com/help/documents/67078583131230208) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint. For example:
+网易云 NOS 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://www.163yun.com/help/documents/67078583131230208)，你可以根据实际的场景选用。例如：
 
 ```bash
 $ ./juicefs format \
@@ -390,9 +392,9 @@ $ ./juicefs format \
 
 ## 青云 QingStor <span id='QingStor'></span>
 
-Please follow [this document](https://docs.qingcloud.com/qingstor/api/common/signature.html#%E8%8E%B7%E5%8F%96-access-key) to learn how to get access key and secret key.
+使用青云 QingStor 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://docs.qingcloud.com/qingstor/api/common/signature.html#%E8%8E%B7%E5%8F%96-access-key) 了解如何创建 `Access key` 和 `Secret key`。
 
-The `--bucket` option format is `https://<bucket>.<region>.qingstor.com`, replace `<region>` with specific region code, e.g. the region code of Beijing 3-A is `pek3a`. You could find all available regions at [here](https://docs.qingcloud.com/qingstor/#%E5%8C%BA%E5%9F%9F%E5%8F%8A%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D). For example:
+`--bucket` 选项的格式为 `https://<bucket>.<region>.qingstor.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：北京 3-A 的区域代码为 `pek3a`。[点此查看](https://docs.qingcloud.com/qingstor/#%E5%8C%BA%E5%9F%9F%E5%8F%8A%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D) 所有可用的区域代码。例如：
 
 ```bash
 $ ./juicefs format \
@@ -404,9 +406,9 @@ $ ./juicefs format \
 
 ## 七牛云 Kodo <span id='kodo'></span>
 
-Please follow [this document](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) to learn how to get access key and secret key.
+使用七牛云 Kodo 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) 了解如何创建 `Access key` 和 `Secret key`。
 
-The `--bucket` option format is `https://<bucket>.s3-<region>.qiniucs.com`, replace `<region>` with specific region code, e.g. the region code of China East is `cn-east-1`. You could find all available regions at [here](https://developer.qiniu.com/kodo/4088/s3-access-domainname). For example:
+`--bucket` 选项的格式为 `https://<bucket>.s3-<region>.qiniucs.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：中国东部的区域代码为 `cn-east-1`。[点此查看](https://developer.qiniu.com/kodo/4088/s3-access-domainname) 所有可用的区域代码。例如：
 
 ```bash
 $ ./juicefs format \
@@ -418,9 +420,9 @@ $ ./juicefs format \
 
 ## 新浪云 SCS <span id='sina-scs'></span>
 
-Please follow [this document](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) to learn how to get access key and secret key.
+使用新浪云 SCS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) 了解如何创建 `Access key` 和 `Secret key`。
 
-The `--bucket` option format is `https://<bucket>.stor.sinaapp.com`. For example:
+`--bucket` 选项格式为 `https://<bucket>.stor.sinaapp.com`。例如：
 
 ```bash
 $ ./juicefs format \
@@ -432,9 +434,9 @@ $ ./juicefs format \
 
 ## 天翼云 OOS <span id='ct-oos'></span>
 
-Please follow [this document](https://www.ctyun.cn/help2/10000101/10473683) to learn how to get access key and secret key.
+使用天翼云 OOS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://www.ctyun.cn/help2/10000101/10473683) 了解如何创建 `Access key` 和 `Secret key`。
 
-The `--bucket` option format is `https://<bucket>.oss-<region>.ctyunapi.cn`, replace `<region>` with specific region code, e.g. the region code of Chengdu is `sccd`. You could find all available regions at [here](https://www.ctyun.cn/help2/10000101/10474062). For example:
+`--bucket` 选项的格式为 `https://<bucket>.oss-<region>.ctyunapi.cn`，请将 `<region>` 替换成你实际使用的存储区域，例如：成都的区域代码为 `sccd`。[点此查看](https://www.ctyun.cn/help2/10000101/10474062) 所有可用的区域代码。例如：
 
 ```bash
 $ ./juicefs format \
@@ -446,9 +448,9 @@ $ ./juicefs format \
 
 ## 移动云 EOS <span id='ecloud-eos'></span>
 
-Please follow [this document](https://ecloud.10086.cn/op-help-center/doc/article/24501) to learn how to get access key and secret key.
+使用移动云 EOS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://ecloud.10086.cn/op-help-center/doc/article/24501) 了解如何创建 `Access key` 和 `Secret key`。
 
-ECloud Object Storage provides [multiple endpoints](https://ecloud.10086.cn/op-help-center/doc/article/40956) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint. For example:
+移动云 EOS 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://ecloud.10086.cn/op-help-center/doc/article/40956)，你可以根据实际的场景选用。例如：
 
 ```bash
 $ ./juicefs format \
@@ -464,9 +466,9 @@ $ ./juicefs format \
 
 ## 优刻得 US3 <span id='ucloud-us3'></span>
 
-Please follow [this document](https://docs.ucloud.cn/uai-censor/access/key) to learn how to get access key and secret key.
+使用优刻得 US3 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://docs.ucloud.cn/uai-censor/access/key) 了解如何创建 `Access key` 和 `Secret key`。
 
-US3 (formerly UFile) provides [multiple endpoints](https://docs.ucloud.cn/ufile/introduction/region) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint. For example:
+优刻得 US3（原名 UFile） 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://docs.ucloud.cn/ufile/introduction/region)，你可以根据实际的场景选用。例如：
 
 ```bash
 $ ./juicefs format \
@@ -478,14 +480,16 @@ $ ./juicefs format \
 
 ## Ceph RADOS <span id='ceph-rados'></span>
 
-The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messaging layer protocol that enables clients to interact with a Ceph Monitor and a Ceph OSD Daemon. The `librados` API enables you to interact with the two types of daemons:
+[Ceph存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。  `librados` API 使您可以与这两种类型的守护程序进行交互：
 
-- The [Ceph Monitor](https://docs.ceph.com/en/latest/rados/configuration/common/#monitors), which maintains a master copy of the cluster map.
-- The [Ceph OSD Daemon (OSD)](https://docs.ceph.com/en/latest/rados/configuration/common/#osds), which stores data as objects on a storage node.
+- [Ceph Monitor](https://docs.ceph.com/en/latest/rados/configuration/common/#monitors) 维护群集映射的主副本
+- [Ceph OSD Daemon (OSD)](https://docs.ceph.com/en/latest/rados/configuration/common/#osds) 将数据作为对象存储在存储节点上
 
 JuiceFS supports the use of native Ceph APIs based on `librados`. You need install `librados` library and build `juicefs` binary separately.
 
-First installing `librados`:
+JuiceFS 支持使用基于 `librados` 的本地 Ceph API。您需要分别安装 `librados` 库并重新编译 `juicefs` 二进制文件。
+
+首先安装  `librados`：
 
 ```bash
 # Debian based system
@@ -495,22 +499,24 @@ $ sudo apt-get install librados-dev
 $ sudo yum install librados-devel
 ```
 
-Then compile JuiceFS for Ceph (ensure you have Go 1.14+ and GCC 5.4+):
+然后为 Ceph 编译 JuiceFS（要求 Go 1.14+ 和 GCC 5.4+）：
 
 ```bash
 $ make juicefs.ceph
 ```
 
-The `--bucket` option format is `ceph://<pool-name>`. A [pool](https://docs.ceph.com/en/latest/rados/operations/pools) is logical partition for storing objects. You may need first creating a pool. The value of `--access-key` option is Ceph cluster name, the default cluster name is `ceph`. The value of `--secret-key` option is [Ceph client user name](https://docs.ceph.com/en/latest/rados/operations/user-management), the default user name is `client.admin`.
+[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。` --secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
 
 For connect to Ceph Monitor, `librados` will read Ceph configuration file by search default locations and the first found is used. The locations are:
 
-- `CEPH_CONF` environment variable
+为了连接到 Ceph Monitor，`librados` 将通过搜索默认位置读取 Ceph 的配置文件，并使用找到的第一个。 这些位置是：
+
+- `CEPH_CONF` 环境变量
 - `/etc/ceph/ceph.conf`
 - `~/.ceph/config`
-- `ceph.conf` in the current working directory
+- 在当前工作目录中的 `ceph.conf`
 
-The example command is:
+例如：
 
 ```bash
 $ ./juicefs.ceph format \
@@ -524,9 +530,9 @@ $ ./juicefs.ceph format \
 
 ## Ceph Object Gateway (RGW) <span id='ceph-rgw'></span>
 
-[Ceph Object Gateway](https://ceph.io/ceph-storage/object-storage) is an object storage interface built on top of `librados` to provide applications with a RESTful gateway to Ceph Storage Clusters. Ceph Object Gateway supports S3-compatible interface, so we could set `--storage` to `s3` directly.
+[Ceph Object Gateway](https://ceph.io/ceph-storage/object-storage) 是在 `librados` 之上构建的对象存储接口，旨在为应用程序提供访问 Ceph 存储集群的 RESTful 网关。Ceph 对象网关支持 S3 兼容的接口，因此我们可以将 `--storage` 设置为 `s3`。
 
-The `--bucket` option format is `http://<bucket>.<endpoint>` (virtual hosted-style). For example:
+`--bucket` 选项的格式为 `http://<bucket>.<endpoint>`（虚拟托管类型），例如：
 
 ```bash
 $ ./juicefs format \
@@ -538,9 +544,13 @@ $ ./juicefs format \
 
 ## Swift <span id='swift'></span>
 
-[OpenStack Swift](https://github.com/openstack/swift) is a distributed object storage system designed to scale from a single machine to thousands of servers. Swift is optimized for multi-tenancy and high concurrency. Swift is ideal for backups, web and mobile content, and any other unstructured data that can grow without bound.
+[OpenStack Swift](https://github.com/openstack/swift) 是一种分布式对象存储系统，旨在从一台计算机扩展到数千台服务器。Swift 已针对多租户和高并发进行了优化。Swift 广泛适用于备份、Web 和移动内容的理想选择，可以无限量存储任何非结构化数据。
 
-The `--bucket` option format is `http://<container>.<endpoint>`. A container defines a namespace for objects. **Currently, JuiceFS only supports [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html).** The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
+`--bucket` 选项格式为 `http://<container>.<endpoint>`，`container` 用来设定对象的命名空间。
+
+**当前，JuiceFS 仅支持  [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html)。**
+
+`--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 
 ```bash
 $ ./juicefs format \
@@ -554,7 +564,11 @@ $ ./juicefs format \
 
 ## MinIO <span id='minio'></span>
 
-[MinIO](https://min.io) is an open source high performance object storage. It is API compatible with Amazon S3. You need set `--storage` option to `minio`. Currently, JuiceFS only supports path-style URI when use MinIO storage. For example (`<endpoint>` may looks like `1.2.3.4:9000`):
+[MinIO](https://min.io) 是一款开源的高性能对象存储。它提供了于 Amazon S3 兼容的 API。
+
+使用 MinIO 创建 JuiceFS 文件系统，`--storage` 选项设置为 `minio`。
+
+当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`<endpoint>` 为 `1.2.3.4:9000`：
 
 ```bash
 $ ./juicefs format \
@@ -566,7 +580,9 @@ $ ./juicefs format \
 
 ## HDFS <span id='hdfs'></span>
 
-[HDFS](https://hadoop.apache.org) is the file system for Hadoop, which can be used as the object store for JuiceFS. When HDFS is used, `--access-key` can be used to specify the `username`, and `hdfs` is usually the default superuser. For example:
+Hadoop 的文件系统 [HDFS](https://hadoop.apache.org) 也可以作为对象存储供 JuiceFS 使用。
+
+当使用 HDFS 创建 JuiceFS 文件系统时，`--access-key` 的值设置为用户名，默认的超级用户通常是 `hdfs`。例如：
 
 ```bash
 $ ./juicefs format \
@@ -576,11 +592,15 @@ $ ./juicefs format \
     localhost test
 ```
 
-When the `--access-key` is not specified during formatting, JuiceFS will use the current user of `juicefs mount` or Hadoop SDK to access HDFS. It will hang and fail with IO error eventually, if the current user don't have enough permission to read/write the blocks in HDFS.
+如果在创建文件系统时不指定 `--access-key`，JuiceFS 会使用执行 `juicefs mount` 命令的用户身份或通过 Hadoop SDK 访问 HDFS 的用户身份。如果该用户没有 HDFS 的读写权限，则程序会失败挂起，发生 IO 错误。
 
-JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_DIR` or `$HADOOP_HOME`. If an empty value is provided to `--bucket`, the default HDFS found in Hadoop configurations will be used.
+JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端加载配置。如果 `--bucket` 选项留空，将使用在 Hadoop 配置中找到的默认 HDFS。
 
-For HA cluster, the addresses of NameNodes can be specified together like this: `--bucket=namenode1:port,namenode2:port`.
+对于 HA 群集，可以像下面这样一起指定 NameNodes 的地址：`--bucket=namenode1:port,namenode2:port`。
+
+## Redis <span id='redis'></span>
+
+待编写......
 
 ## 本地磁盘 <span id='local'></span>
 

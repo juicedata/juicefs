@@ -1,34 +1,34 @@
-# Operations Profiling
+# JuiceFS 性能诊断
 
-## Introduction
+## 介绍
 
-JuiceFS has a special virtual file named `.accesslog` to track every operation occurred within its client. This file may generate thousands of log entries per second when under pressure, making it hard to find out what is actually going on at a certain time. Thus, we made a simple tool called `juicefs profile` to show an overview of recently completed operations. The basic idea is to aggregate all logs in the past interval and display statistics periodically, like:
+JuiceFS 文件系统挂载以后，在文件系统的根目录中有一个名为`.accesslog` 的特殊虚拟文件，用于跟踪其客户端端中发生的每个操作。在负载压力较大的情况下，此文件每秒可能会生成数千个日志记录，很难确定特定时间的实际情况。因此，我们制作了一个名为 `juicefs profile` 的简单工具，可以显示最近完成操作的概述。目的是汇总过去某个时间的所有日志并定期显示统计信息，例如：
 
 ![juicefs-profiling](images/juicefs-profiling.gif)
 
-## Profiling Modes
+## 诊断模式
 
-For now there are 2 modes of profiling: real time and replay.
+目前有两种诊断模式：`实时模式` 和 `回放模式`。
 
-### Real Time Mode
+### 实时模式
 
-By executing the following command you can watch real time operations under the mount point:
+通过执行以下命令，您可以观察挂载点上的实时操作：
 
 ```bash
 $ juicefs profile MOUNTPOINT
 ```
 
-The result is sorted in a descending order by number.
+> 结果按数字降序排列
 
-### Replay Mode
+### 回放模式
 
-Running the profile command on an existing log file enables the **replay mode**:
+在现有的日志文件上运行 profile 命令将启用“回放模式”：
 
 ```
 $ juicefs profile LOGFILE
 ```
 
-When debugging or analyzing perfomance issues, it is usually more practical to record access log first and then replay it(multiple times). For example:
+在调试或分析性能问题时，更实用的做法通常是先记录访问日志，然后重放（多次）。 例如：
 
 ```bash
 $ cat /jfs/.accesslog > /tmp/jfs-oplog
@@ -36,14 +36,14 @@ $ cat /jfs/.accesslog > /tmp/jfs-oplog
 $ juicefs profile /tmp/jfs-oplog
 ```
 
-The replay could be paused anytime by <kbd>enter/return</kbd>, and continues by pressing it again.
+> 可以随时按键盘上的 <kbd>enter/return</kbd> 暂停/继续回放。
 
-## Filter
+## 过滤
 
-Sometimes we are only interested in a certain user or process, then we can filter others out by specifying its IDs; e.g:
+有时我们只对某个用户或进程感兴趣，可以通过指定其 ID 来过滤掉其他用户或进程。 例如：
 
 ```bash
 $ juicefs profile /tmp/jfs-oplog --uid 12345
 ```
 
-For more information, please run `juicefs profile -h`.
+更多信息，请运行 `juicefs profile -h` 命令查看。

@@ -38,6 +38,8 @@ $ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access
 
 ## 4. 开机自动挂载 JuiceFS
 
+> **提示**：此处提供的方法仅在 Windows 10 上得到验证，欢迎验证并反馈其他 Windows 版本。
+
 ### 1. 创建脚本
 
 创建一个 VBS 脚本，例如：`juicefs-music.vbs`。根据实际情况修改以下内容：
@@ -51,7 +53,7 @@ ws.Run "C:\juicefs\juicefs.exe mount redis://192.168.1.8:6379/1 Z:",0
 
 ### 2. 设置开机启动
 
-使用键盘组合键 `win + R` 唤出运行窗口
+使用键盘组合键 <kbd>Windows + R</kbd> 唤出运行窗口
 
 ![Windows run](../images/windows-run-startup.png)
 

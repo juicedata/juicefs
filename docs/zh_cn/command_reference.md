@@ -1,10 +1,10 @@
 # JuiceFS 命令参考
 
-There are many commands to help you manage your file system. This page provides a detailed reference for these commands.
+有许多命令可帮助您管理文件系统，该页面提供了有关这些命令的详细参考。
 
-## Overview
+## 概览
 
-If you run `juicefs` by itself, it will print all available subcommands. In addition, you can add `-h/--help` flag after each subcommand to get more information of that subcommand.
+在终端输入 `juicefs` 并执行，你就会看到所有可用的子命令。另外，你可以在每个子命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
 
 ```
 NAME:
@@ -42,13 +42,15 @@ COPYRIGHT:
    AGPLv3
 ```
 
-Usage: `juicefs [global options] command [command options] [arguments...]`
+用法：`juicefs [global options] command [command options] [arguments...]`
 
-Add `-h` or `--help` after all commands, getting arguments list and help information.
+在所有命令后面添加 `-h` 或 `--help`，即可获得该命令的参数列表和帮助信息。
 
 ***Note:*** If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for the convenience.
 
-The documentation below gives you detailed information about each subcommand.
+**注意**：如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](quick_start_guide.md) 了解安装相关内容。
+
+以下文档为您提供有关每个子命令的详细信息。
 
 ## juicefs format
 

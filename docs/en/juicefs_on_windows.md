@@ -38,6 +38,8 @@ As shown in the figure above, JuiceFS client will mount the file system as a net
 
 ## 4. Automatically mount JuiceFS on boot
 
+> **Tip**: The method provided here is only verified on Windows 10. Welcome to verify other Windows versions and provide feedback.
+
 ### 1. Create a VBS Script
 
 Create a VBS script, for example: `juicefs-music.vbs`. Modify the following content according to the actual situation:
@@ -51,7 +53,7 @@ ws.Run "C:\juicefs\juicefs.exe mount redis://192.168.1.8:6379/1 Z:",0
 
 ### 2. Set boot up
 
-Use the keyboard combination `win + R` to call up the running window
+Use the keyboard combination <kbd>Windows + R</kbd> to call up the running window
 
 ![Windows run](../images/windows-run-startup.png)
 

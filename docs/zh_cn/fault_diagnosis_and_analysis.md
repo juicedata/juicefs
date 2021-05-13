@@ -1,8 +1,8 @@
 # JuiceFS 故障诊断和分析
 
-## Error Log
+## 错误日志
 
-When JuiceFS run in background (through [`-d` option](command_reference.md#juicefs-mount) when mount volume), logs will output to syslog. Depending on your operating system, you can get the logs through different commands:
+当 JuiceFS 通过 `-d` 选项在后台运行时，日志会输出到 syslog。取决于你使用的操作系统，你可以通过不同的命令获取日志：
 
 ```bash
 # macOS
@@ -15,7 +15,7 @@ $ cat /var/log/syslog | grep 'juicefs'
 $ cat /var/log/messages | grep 'juicefs'
 ```
 
-There are 4 log levels. You can use the `grep` command to filter different levels of logs for performance analysis or troubleshooting:
+日志等级有 4 种。你可以使用 `grep` 命令过滤显示不同等级的日志信息，从而进行性能统计和故障追踪。
 
 ```
 $ cat /var/log/syslog | grep 'juicefs' | grep '<INFO>'
@@ -24,7 +24,7 @@ $ cat /var/log/syslog | grep 'juicefs' | grep '<ERROR>'
 $ cat /var/log/syslog | grep 'juicefs' | grep '<FATAL>'
 ```
 
-## Access Log
+## 访问日志
 
 JuiceFS 的根目录中有一个名为`.accesslog` 的虚拟文件，它记录了文件系统上的所有操作及其花费的时间，例如：
 
