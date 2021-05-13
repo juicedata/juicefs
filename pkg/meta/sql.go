@@ -1179,14 +1179,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					return err
 				}
 			} else {
-				if dn.Type == TypeDirectory {
-					if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
-						return err
-					}
-					dn.Nlink--
-					newSpace = -align4K(0)
-					newInode = -1
-				} else if dn.Type == TypeFile {
+				if dn.Type == TypeFile {
 					if opened {
 						if _, err := s.Update(&dn, &node{Inode: dn.Inode}); err != nil {
 							return err
@@ -1201,11 +1194,12 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 						if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
 							return err
 						}
-						newSpace = -align4K(dn.Length)
-						newInode = -1
+						newSpace, newInode = -align4K(dn.Length), -1
 					}
 				} else {
-					if dn.Type == TypeSymlink {
+					if dn.Type == TypeDirectory {
+						dn.Nlink--
+					} else if dn.Type == TypeSymlink {
 						if _, err := s.Delete(&symlink{Inode: dn.Inode}); err != nil {
 							return err
 						}
@@ -1213,8 +1207,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
 						return err
 					}
-					newSpace = -align4K(0)
-					newInode = -1
+					newSpace, newInode = -align4K(0), -1
 				}
 				if _, err := s.Delete(xattr{Inode: dino}); err != nil {
 					return err
