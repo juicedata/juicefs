@@ -54,7 +54,7 @@ func fillCache(paths []string, concurrent int) {
 	}
 
 	var inode Ino
-	var attr *Attr
+	var attr = &Attr{}
 	for _, p := range paths {
 		if st := resolve(p, &inode, attr); st != 0 {
 			logger.Warnf("Failed to resolve path %s: %s", p, st)
@@ -162,12 +162,14 @@ func walkDir(inode Ino, todo chan _file) {
 
 func fillInode(inode Ino, size uint64) error {
 	var slices []meta.Slice
-	if err := m.ListFileSlices(meta.Background, inode, size, &slices); err != 0 {
-		return fmt.Errorf("Failed to get slices of inode %d: %d", inode, err)
-	}
-	for _, s := range slices {
-		if err := store.FillCache(s.Chunkid, s.Size); err != nil {
-			return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Chunkid, err)
+	for indx := uint64(0); indx*meta.ChunkSize < size; indx++ {
+		if st := m.Read(meta.Background, inode, uint32(indx), &slices); st != 0 {
+			return fmt.Errorf("Failed to get slices of inode %d index %d: %d", inode, indx, st)
+		}
+		for _, s := range slices {
+			if err := store.FillCache(s.Chunkid, s.Size); err != nil {
+				return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Chunkid, err)
+			}
 		}
 	}
 	return nil

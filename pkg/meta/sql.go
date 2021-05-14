@@ -1922,10 +1922,6 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}()
 }
 
-func (m *dbMeta) ListFileSlices(ctx Context, inode Ino, size uint64, slices *[]Slice) syscall.Errno {
-	return syscall.ENOTSUP // TODO
-}
-
 func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	var c chunk
 	rows, err := m.engine.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Rows(&c)
