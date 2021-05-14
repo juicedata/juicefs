@@ -3,7 +3,7 @@
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
     <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
-    <a href="docs/zh_cn/README.md"><img alt="中文手册" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87%E6%89%8B%E5%86%8C-brightgreen" /></a>
+    <a href="README_CN.md"><img alt="中文手册" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87%E6%89%8B%E5%86%8C-brightgreen" /></a>
 </p>
 
 **JuiceFS** is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS file system to store data, the data itself will be persisted in object storage (e.g. Amazon S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene. 
@@ -18,7 +18,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
 4. **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
 5. **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
 6. **Strong Consistency**: The confirmed modification will be immediately visible on all servers mounted with the same file system .
-7. **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. 
+7. **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. [Test results](docs/en/benchmark.md)
 8. **Data Encryption**: Supports data encryption in transit and at rest, read [the guide](docs/en/encrypt.md) for more information.
 9. **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
 10. **Data Compression**: JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data.

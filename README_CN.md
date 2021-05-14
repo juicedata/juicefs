@@ -3,7 +3,7 @@
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
     <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
-    <a href="docs/en/README.md"><img alt="English Docs" src="https://img.shields.io/badge/docs-English-informational" /></a>
+    <a href="README.md"><img alt="English Docs" src="https://img.shields.io/badge/docs-English-informational" /></a>
 </p>
 
 
@@ -12,13 +12,13 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 ## 核心特性
 
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
-2. **HDFS 兼容**：完整兼容 HDFS API，提供更强的元数据性能；
-3. **S3 兼容**：提供与 S3 协议兼容的访问接口；
+2. **HDFS 兼容**：完整兼容 [HDFS API](docs/zh_cn/hadoop_java_sdk.md)，提供更强的元数据性能；
+3. **S3 兼容**：提供 [S3 Gateway](docs/zh_cn/s3_gateway.md) 实现 S3 协议兼容的访问接口；
 4. **云原生**：通过 [Kubernetes CSI driver](docs/zh_cn/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
 5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
 7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](docs/zh_cn/benchmark.md)；
-8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest）；
+8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](docs/en/encrypt.md)；
 9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
 10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
 
