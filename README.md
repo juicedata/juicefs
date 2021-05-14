@@ -6,7 +6,7 @@
     <a href="docs/zh_cn/README.md"><img alt="中文手册" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87%E6%89%8B%E5%86%8C-brightgreen" /></a>
 </p>
 
-**JuiceFS** is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS file system to store data, the data itself will be persisted in object storage (e.g. AWS S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene. 
+**JuiceFS** is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS file system to store data, the data itself will be persisted in object storage (e.g. Amazon S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene. 
 
 JuiceFS can simply and conveniently connect massive cloud storage directly to big data, machine learning, artificial intelligence, and various application platforms that have been put into production environment, without modifying the code, you can use massive cloud storage as efficiently as using local storage. 
 
@@ -177,7 +177,7 @@ JuiceFS supports almost all object storage services. [Learn more](docs/en/how_to
 
 ## Status
 
-It's considered as beta quality, the storage format is not stabilized yet. It's not recommended to deploy it into production environment. Please test it with your use cases and give us [feedback](https://github.com/juicedata/juicefs/issues).
+It's considered as beta quality, the storage format is not stabilized yet. It's not recommended to deploy it into production environment. Please test it with your use cases and give us [feedback](https://github.com/juicedata/juicefs/discussions).
 
 ## Roadmap
 

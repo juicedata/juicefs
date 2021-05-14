@@ -3,25 +3,24 @@
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
     <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
-    <a href="README.md"><img alt="English Docs" src="https://img.shields.io/badge/docs-English-informational" /></a>
+    <a href="docs/en/README.md"><img alt="English Docs" src="https://img.shields.io/badge/docs-English-informational" /></a>
 </p>
 
-**JuiceFS** 是一个建立在 [Redis](https://redis.io) 和 S3 等对象存储之上的开源 POSIX 文件系统。它是为云原生环境设计，通过把元数据和数据分别持久化到 Redis 和对象存储中，它相当于一个无状态的中间件，帮助各种应用通过标准的文件系统接口来共享数据。
 
-主要特性有：
+JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 GNU Affero General Public License v3.0 开源协议下发布。使用 JuiceFS 文件系统存储数据，数据本身会被持久化在对象存储（例如，Amazon S3），而数据所对应的元数据可以根据场景需求被持久化在 Redis、MySQL、SQLite 等多种数据库引擎中。JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
 
-- **完整 POSIX 兼容**：已有应用可以无缝对接，参考 [pjdfstest 测试结果](#posix-兼容性测试)；
-- **完整 Hadoop 兼容**：JuiceFS [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以及 Hadoop 生态中的各种主流组件。
-- **S3 兼容**：JuiceFS [S3 网关](docs/en/s3_gateway.md)提供与 S3 协议兼容的访问接口；
-- **极致的性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](#性能测试)；
-- **云原生**：通过 [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
-- **共享**：可以被上千客户端同时读写，方便数据共享。
+## 核心特性
 
-除此之外，JuiceFS 还具有其它一些特性：
-
-- **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
-- **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或者 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
-- **数据加密**: 支持传输中加密（encryption in transit）以及静态加密（encryption at rest），请查看[这个文档](docs/en/encrypt.md)了解更多信息。
+1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
+2. **HDFS 兼容**：完整兼容 HDFS API，提供更强的元数据性能；
+3. **S3 兼容**：提供与 S3 协议兼容的访问接口；
+4. **云原生**：通过 [Kubernetes CSI driver](docs/zh_cn/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
+5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
+6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
+7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](docs/zh_cn/benchmark.md)；
+8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest）；
+9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
+10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
 
 ---
 
@@ -31,76 +30,41 @@
 
 ## 架构
 
-JuiceFS 使用 Redis 来存储文件系统的元数据。Redis 是一个开源的内存数据库，可以保障元数据的高性能访问。所有文件的数据会通过客户端存储到对象存储中，以下是它的架构图：
+JuiceFS 文件系统由三个部分组成：
 
-![JuiceFS Architecture](docs/images/juicefs-arch.png)
+1. **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes、S3 Gateway 等文件系统接口的实现；
+2. **数据存储**：存储数据本身，支持本地磁盘、对象存储；
+3. **元数据引擎**：存储数据对应的元数据，支持 Redis、MySQL、SQLite 等多种引擎；
 
-JuiceFS 中的文件格式，如下图所示。一个文件首先被拆分成固定大小的 **"Chunk"**，默认 64 MiB。每个 Chunk 可以由一个或者多个 **"Slice"** 组成，它们是变长的。对于每一个 Slice，又会被拆分成固定大小的 **"Block"**，默认为 4 MiB（格式化后就不可以修改）。最后，这些 Block 会被压缩和加密保存到对象存储中。压缩和加密都是可选的。
+![JuiceFS Architecture](docs/images/juicefs-arch-new.png)
 
-![JuiceFS Storage Format](docs/images/juicefs-storage-format.png)
+JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高性能的键值数据存储，非常适合存储元数据。与此同时，所有数据将通过 JuiceFS 客户端存储到对象存储中。[了解详情](docs/zh_cn/architecture.md)
 
+![JuiceFS Storage Format](docs/images/juicefs-storage-format-new.png)
+
+任何存入 JuiceFS 的文件都会被拆分成固定大小的 **"Chunk"**，默认的容量上限是 64 MiB。每个 Chunk 由一个或多个 **"Slice"** 组成，Slice 的长度不固定，取决于文件写入的方式。每个 Slice 又会被进一步拆分成固定大小的 **"Block"**，默认为 4 MiB。最后，这些 Block 会被存储到对象存储。与此同时，JuiceFS 会将每个文件以及它的 Chunks、Slices、Blocks 等元数据信息存储在元数据引擎中。[了解详情](docs/zh_cn/how_juicefs_store_files.md)
+
+![How JuiceFS stores your files](docs/images/how-juicefs-stores-files-new.png)
+
+使用 JuiceFS，文件最终会被拆分成 Chunks、Slices 和 Blocks 存储在对象存储。因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 文件系统高性能运作的秘诀！
 
 ## 开始使用
 
-### 预编译版本
+创建 JuiceFS 文件系统，需要以下 3 个方面的准备：
 
-你可以直接下载预编译的版本：[二进制版本](https://github.com/juicedata/juicefs/releases)。
+1. 准备 Redis 数据库
+2. 准备对象存储
+3. 下载安装 JuiceFS 客户端
 
-### 从源代码编译
-
-你需要先安装 [Go](https://golang.org) 1.14+ 以及 GCC 5.4+，然后通过下面的方式来编译：
-
-```bash
-$ git clone https://github.com/juicedata/juicefs.git
-$ cd juicefs
-$ make
-```
-
-对于中国用户，建议设置 `GOPROXY` 到更快的镜像以加速编译，比如 [Goproxy 中国](https://github.com/goproxy/goproxy.cn)。
-
-### 依赖
-
-需要 Redis（2.8 及以上）服务器来存储元数据，请参考 [Redis Quick Start](https://redis.io/topics/quickstart)。
-
-如果是 macOS 系统，还需要 [macFUSE](https://osxfuse.github.io)。
-
-还需要一个对象存储，测试时可以用本地目录代替。
-
-### 格式化
-
-假定你已经有一个本地运行的 Redis 服务，下面用它来格式化一个叫做 `test` 的文件系统：
-
-```bash
-$ ./juicefs format localhost test
-```
-
-它会使用默认参数来格式化。如果 Redis 服务不在本地，你可以像这样完整填写它的地址：`redis://username:password@host:6379/1`。Redis 密码可以通过环境变量 `REDIS_PASSWORD` 来指定，避免暴露在命令行选项中。
-
-**注意：Redis 6.0.0 版本以后 [`AUTH`](https://redis.io/commands/auth) 命令支持两个参数，也就是 username 和 password。如果你使用的 Redis 版本小于 6.0.0，省略 URL 中的 username 参数即可，例如 `redis://:password@host:6379/1`。**
-
-JuiceFS 还需要一个对象存储，可以通过参数 `--storage`、`--bucket`、`--access-key` 和 `--secret-key` 来指定。它默认会使用本地目录来模拟一个对象存储用于测试，详细的参数请看 `./juicefs format -h`。
-
-关于各种对象存储如何设置的详细介绍，请查看[这个文档](docs/en/how_to_setup_object_storage.md)。
-
-### 挂载
-
-一旦文件系统格式化好了，你可以把它挂载成一个目录，这个目录叫做 *挂载点*。
-
-```bash
-$ ./juicefs mount -d localhost ~/jfs
-```
-
-挂载之后你可以像使用本地盘一样使用它，详细的挂载参数，请运行 `./juicefs mount -h`。
-
-如果你希望开机自动挂载 JuiceFS，请查看[这个文档](docs/en/mount_at_boot.md)。
+请参照 [快速上手指南](docs/zh_cn/quick_start_guide.md) 立即开始使用 JuiceFS！
 
 ### 命令索引
 
-请点击[这里](docs/en/command_reference.md)查看所有子命令以及命令行参数。
+请点击 [这里](docs/zh_cn/command_reference.md) 查看所有子命令以及命令行参数。
 
 ### Kubernetes
 
-在 Kubernetes 中使用 JuiceFS 非常便捷，请查看[这个文档](docs/en/how_to_use_on_kubernetes.md)了解更多信息。
+在 Kubernetes 中使用 JuiceFS 非常便捷，请查看 [这个文档](docs/zh_cn/how_to_use_on_kubernetes.md) 了解更多信息。
 
 ### Hadoop Java SDK
 
@@ -108,16 +72,16 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生�
 
 ## 运维管理
 
-- [Redis 最佳实践](docs/en/redis_best_practices.md)
-- [开机自动挂载 JuiceFS](docs/en/mount_at_boot.md)
-- [如何设置对象存储](docs/en/how_to_setup_object_storage.md)
-- [缓存管理](docs/en/cache_management.md)
-- [故障诊断和分析](docs/en/fault_diagnosis_and_analysis.md)
-- [FUSE 挂载选项](docs/en/fuse_mount_options.md)
-- [同步账号到多个主机](docs/en/how_to_sync_the_same_account.md)
-- [在 Kubernetes 中使用 JuiceFS](docs/en/how_to_use_on_kubernetes.md)
-- [在 Windows 中使用 JuiceFS](docs/en/windows.md)
-- [S3 网关](docs/en/s3_gateway.md)
+- [Redis 最佳实践](docs/zh_cn/redis_best_practices.md)
+- [开机自动挂载 JuiceFS](docs/zh_cn/mount_at_boot.md)
+- [如何设置对象存储](docs/zh_cn/how_to_setup_object_storage.md)
+- [缓存管理](docs/zh_cn/cache_management.md)
+- [故障诊断和分析](docs/zh_cn/fault_diagnosis_and_analysis.md)
+- [FUSE 挂载选项](docs/zh_cn/fuse_mount_options.md)
+- [同步账号到多个主机](docs/zh_cn/how_to_sync_the_same_account.md)
+- [在 Kubernetes 中使用 JuiceFS](docs/zh_cn/how_to_use_on_kubernetes.md)
+- [在 Windows 中使用 JuiceFS](docs/zh_cn/windows.md)
+- [S3 网关](docs/zh_cn/s3_gateway.md)
 
 ## POSIX 兼容性测试
 
@@ -193,7 +157,7 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试 `./juicefs profile /jfs` 命令实时监控统计信息。欲进一步了解此子命令请运行 `./juicefs profile -h` 或参阅[这里](docs/en/operations_profiling.md)。
+每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试 `./juicefs profile /jfs` 命令实时监控统计信息。欲进一步了解此子命令请运行 `./juicefs profile -h` 或参阅[这里](docs/zh_cn/operations_profiling.md)。
 
 ## 支持的对象存储
 
@@ -208,11 +172,11 @@ $ cat /jfs/.accesslog
 - 本地目录
 - Redis
 
-完整的支持列表，请参照[这个文档](docs/en/how_to_setup_object_storage.md#supported-object-storage)。
+JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_cn/how_to_setup_object_storage.md)。
 
 ## 状态
 
-JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还不建议使用到生产环境中。如果你对它有兴趣，请尽早测试，并给我们反馈。
+JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还不建议使用到生产环境中。如果你对它有兴趣，请尽早测试，并给我们[反馈](https://github.com/juicedata/juicefs/discussions)。
 
 ## 产品路线图
 
@@ -229,11 +193,11 @@ JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还
 
 ## 社区
 
-欢迎加入 [Discussions](https://github.com/juicedata/juicefs/discussions) 和 [Slack 频道](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA)跟我们的团队和其他社区成员交流。
+欢迎加入 [Discussions](https://github.com/juicedata/juicefs/discussions) 和 [Slack 频道](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA) 跟我们的团队和其他社区成员交流。
 
 ## 使用量收集
 
-JuiceFS 的客户端会收集 **匿名** 使用数据来帮助我们更好地了解大家如何使用它，它只上报诸如版本号等使用量数据，不包含任何用户信息，完整的代码在[这里](pkg/usage/usage.go)。
+JuiceFS 的客户端会收集 **匿名** 使用数据来帮助我们更好地了解大家如何使用它，它只上报诸如版本号等使用量数据，不包含任何用户信息，完整的代码在 [这里](pkg/usage/usage.go)。
 
 你也可以通过下面的方式禁用它：
 
