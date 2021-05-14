@@ -28,7 +28,7 @@ $ sudo docker run -d --name redis \
 
 > **Note**: The above command persists Redis data in Docker's `redis-data` data volume. You can modify the storage location of data persistence as needed.
 
-> **Note: After Redis 6.0.0, [AUTH](https://redis.io/commands/auth) command was extended with two arguments, i.e. username and password. If you use Redis < 6.0.0, just omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.**
+> **Note**: After Redis 6.0.0, [AUTH](https://redis.io/commands/auth) command was extended with two arguments, i.e. username and password. If you use Redis < 6.0.0, just omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.
 
 > **Security Tips**: The Redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database instance through the Internet, please refer to [Redis Security](https:// recommendations in redis.io/topics/security).
 

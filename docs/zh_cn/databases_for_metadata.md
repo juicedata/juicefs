@@ -28,7 +28,7 @@ $ sudo docker run -d --name redis \
 
 > **注意**：以上命令将 Redis 的数据持久化在 Docker 的 redis-data 数据卷当中，你可以按需修改数据持久化的存储位置。
 
-> **注意：在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了两个参数，即用户名和密码。 如果您使用 Redis < 6.0.0，则只需在 URL 中省略 username 参数，例如 `redis://:password@host:6379/1`。**
+> **注意**：在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了两个参数，即用户名和密码。 如果您使用 Redis < 6.0.0，则只需在 URL 中省略 username 参数，例如 `redis://:password@host:6379/1`。
 
 > **安全提示**：以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
 
