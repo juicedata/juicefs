@@ -26,6 +26,8 @@ $ sudo docker run -d --name redis \
 
 > **安全提示**：以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
 
+有关 Redis 数据库相关的更多内容，[点此查看](databases_for_metadata.md#Redis)。
+
 ## 二、准备对象存储
 
 和 Redis 数据库一样，几乎所有的公有云计算平台都提供对象存储服务。因为 JuiceFS 支持几乎所有主流平台的对象存储服务，因此你可以根据个人偏好自由选择。你可以查看我们的 [对象存储支持列表和设置指南](how_to_setup_object_storage.md)，其中列出了 JuiceFS 目前支持的所有对象存储服务，以及具体的使用方法。
@@ -60,6 +62,8 @@ $ wget https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.
 $ tar -zxf juicefs-0.12.1-linux-amd64.tar.gz
 $ sudo install juicefs /usr/local/bin
 ```
+
+> **提示**: 你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
 
 ## 四、创建  JuiceFS 文件系统
 
