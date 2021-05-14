@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -65,6 +64,11 @@ type node struct {
 	Length uint64 `xorm:"notnull"`
 	Rdev   uint32
 	Parent Ino
+}
+
+type namedNode struct {
+	node `xorm:"extends"`
+	Name string
 }
 
 type chunk struct {
@@ -428,12 +432,16 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 }
 
 func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	var e = edge{Parent: parent, Name: name}
-	ok, err := m.engine.Get(&e)
+	dbSession := m.engine.Table(&edge{})
+	if attr != nil {
+		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+	}
+	nn := namedNode{node: node{Parent: parent}, Name: name}
+	exist, err := dbSession.Select("*").Get(&nn)
 	if err != nil {
 		return errno(err)
 	}
-	if !ok {
+	if !exist {
 		if m.conf.CaseInsensi {
 			// TODO: in SQL
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -446,20 +454,10 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		}
 		return syscall.ENOENT
 	}
-	if attr == nil {
-		*inode = Ino(e.Inode)
-		return 0
+	*inode = nn.Inode
+	if attr != nil {
+		m.parseAttr(&nn.node, attr)
 	}
-	var n = node{Inode: e.Inode}
-	ok, err = m.engine.Get(&n)
-	if err != nil {
-		return errno(err)
-	}
-	if !ok {
-		return syscall.ENOENT
-	}
-	*inode = Ino(e.Inode)
-	m.parseAttr(&n, attr)
 	return 0
 }
 
@@ -1346,45 +1344,26 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 		Attr:  &pattr,
 	})
 
-	rows, err := m.engine.Rows(&edge{Parent: inode})
-	if err != nil {
+	dbSession := m.engine.Table(&edge{})
+	if plus != 0 {
+		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+	}
+	var nodes []namedNode
+	if err := dbSession.Find(&nodes, &edge{Parent: inode}); err != nil {
 		return errno(err)
 	}
-	names := make(map[Ino][]byte)
-	var inodes []string
-	for rows.Next() {
-		var e edge
-		err = rows.Scan(&e)
-		if err != nil {
-			_ = rows.Close()
-			return errno(err)
+	for _, n := range nodes {
+		entry := &Entry{
+			Inode: n.Inode,
+			Name:  []byte(n.Name),
+			Attr:  &Attr{},
 		}
-		names[e.Inode] = []byte(e.Name)
-		inodes = append(inodes, strconv.FormatUint(uint64(e.Inode), 10))
-	}
-	_ = rows.Close()
-	if len(inodes) == 0 {
-		return 0
-	}
-
-	var n node
-	nodes, err := m.engine.Where(fmt.Sprintf("inode IN (%s)", strings.Join(inodes, ","))).Rows(&n)
-	if err != nil {
-		return errno(err)
-	}
-	defer nodes.Close()
-	for nodes.Next() {
-		err = nodes.Scan(&n)
-		if err != nil {
-			return errno(err)
+		if plus != 0 {
+			m.parseAttr(&n.node, entry.Attr)
+		} else {
+			entry.Attr.Typ = n.Type
 		}
-		attr := new(Attr)
-		m.parseAttr(&n, attr)
-		*entries = append(*entries, &Entry{
-			Inode: Ino(n.Inode),
-			Name:  names[n.Inode],
-			Attr:  attr,
-		})
+		*entries = append(*entries, entry)
 	}
 	return 0
 }
