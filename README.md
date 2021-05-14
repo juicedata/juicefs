@@ -3,25 +3,25 @@
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
     <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
-    <a href="README_CN.md"><img alt="Chinese Docs" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-informational" /></a>
+    <a href="docs/zh_cn/README.md"><img alt="中文手册" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87%E6%89%8B%E5%86%8C-brightgreen" /></a>
 </p>
 
-**JuiceFS** is an open-source POSIX file system built on top of [Redis](https://redis.io) and object storage (e.g. Amazon S3), designed and optimized for cloud native environment. By using the widely adopted Redis and S3 as the persistent storage, JuiceFS serves as a stateless middleware to enable many applications to share data easily.
+**JuiceFS** is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS file system to store data, the data itself will be persisted in object storage (e.g. AWS S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene. 
 
-The highlighted features are:
+JuiceFS can simply and conveniently connect massive cloud storage directly to big data, machine learning, artificial intelligence, and various application platforms that have been put into production environment, without modifying the code, you can use massive cloud storage as efficiently as using local storage. 
 
-- **Fully POSIX-compatible**: JuiceFS is a fully POSIX-compatible file system. Existing applications can work with it without any change. See [pjdfstest result](#posix-compatibility) below.
-- **Fully Hadoop-compatible**: JuiceFS [Hadoop Java SDK](docs/en/hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
-- **S3-compatible**: JuiceFS [S3 Gateway](docs/en/s3_gateway.md) provides S3-compatible interface.
-- **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. See [benchmark result](#performance-benchmark) below.
-- **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
-- **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
+## Highlighted Features
 
-In addition, there are some other features:
-
-- **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
-- **Data Compression**: JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data.
-- **Data Encryption**: JuiceFS supports data encryption in transit and at rest, read [the guide](docs/en/encrypt.md) for more information.
+1. **Fully POSIX-compatible**: Use like a local file system, seamlessly docking with existing applications, no business intrusion.
+2. **Fully Hadoop-compatible**: JuiceFS [Hadoop Java SDK](docs/en/hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
+3. **S3-compatible**:  JuiceFS [S3 Gateway](docs/en/s3_gateway.md) provides S3-compatible interface.
+4. **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](docs/en/how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
+5. **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
+6. **Strong Consistency**: The confirmed modification will be immediately visible on all servers mounted with the same file system .
+7. **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. 
+8. **Data Encryption**: Supports data encryption in transit and at rest, read [the guide](docs/en/encrypt.md) for more information.
+9. **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
+10. **Data Compression**: JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data.
 
 ---
 
@@ -31,69 +31,33 @@ In addition, there are some other features:
 
 ## Architecture
 
-![JuiceFS Architecture](docs/images/juicefs-arch.png)
+JuiceFS file system consists of three parts: 
 
-JuiceFS relies on Redis to store file system metadata. Redis is a fast, open-source, in-memory key-value data store and very suitable for storing the metadata. All the data will store into object storage through JuiceFS client.
+1. **JuiceFS Client**: Coordinate the implementation of object storage and metadata storage engines, as well as file system interfaces such as POSIX, Hadoop, Kubernetes, and S3 gateway.
+2. **Data Storage**: Store the data itself, support local disk and object storage.
+3. **Metadata Engine**: Metadata corresponding to the stored data, supporting multiple engines such as Redis, MySQL, and SQLite;
 
-![JuiceFS Storage Format](docs/images/juicefs-storage-format.png)
+![JuiceFS Architecture](docs/images/juicefs-arch-new.png)
 
-The storage format of one file in JuiceFS consists of three levels. The first level called **"Chunk"**. Each chunk has fixed size, currently it is 64MiB and cannot be changed. The second level called **"Slice"**. The slice size is variable. A chunk may have multiple slices. The third level called **"Block"**. Like chunk, its size is fixed. By default one block is 4MiB and you could modify it when formatting a volume (see following section). At last, the block will be compressed and encrypted (optional) store into object storage.
+JuiceFS relies on Redis to store file system metadata. Redis is a fast, open-source, in-memory key-value data store and very suitable for storing the metadata. All the data will store into object storage through JuiceFS client. [Learn more](docs/en/architecture.md)
+
+![JuiceFS Storage Format](docs/images/juicefs-storage-format-new.png)
+
+Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the default upper limit is 64 MiB. Each Chunk is composed of one or more **"Slice"**. The length of the slice is not fixed, depending on the way the file is written. Each slice will be further split into fixed-size **"Block"**, which is 4 MiB by default. Finally, these blocks will be stored in the object storage. At the same time, JuiceFS will store each file and its Chunks, Slices, Blocks and other metadata information in metadata engines.
+
+![How JuiceFS stores your files](docs/images/how-juicefs-stores-files-new.png)
+
+Using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you will find that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform. There is a chunks directory and a bunch of digitally numbered directories and files in the bucket. Don't panic, this is the secret of the high-performance operation of the JuiceFS file system!
 
 ## Getting Started
 
-### Precompiled binaries
+To create a JuiceFS file system, you need the following 3 preparations:
 
-You can download precompiled binaries from [releases page](https://github.com/juicedata/juicefs/releases).
+1. Redis database for metadata storage
+2. Object storage is used to store data blocks
+3. JuiceFS Client
 
-### Building from source
-
-You need first installing [Go](https://golang.org) 1.14+ and GCC 5.4+, then run following commands:
-
-```bash
-$ git clone https://github.com/juicedata/juicefs.git
-$ cd juicefs
-$ make
-```
-
-For users in China, it's recommended to set `GOPROXY` to speed up compilation, e.g. [Goproxy China](https://github.com/goproxy/goproxy.cn).
-
-### Dependency
-
-A Redis server (>= 2.8) is needed for metadata, please follow [Redis Quick Start](https://redis.io/topics/quickstart).
-
-[macFUSE](https://osxfuse.github.io) is also needed for macOS.
-
-The last one you need is object storage. There are many options for object storage, local disk is the easiest one to get started.
-
-### Format a volume
-
-Assume you have a Redis server running locally, we can create a volume called `test` using it to store metadata:
-
-```bash
-$ ./juicefs format localhost test
-```
-
-It will create a volume with default settings. If there Redis server is not running locally, the address could be specified using URL, for example, `redis://username:password@host:6379/1`, the password can also be specified by environment variable `REDIS_PASSWORD` to hide it from command line options.
-
-**Note: After Redis 6.0.0, [`AUTH`](https://redis.io/commands/auth) command was extended with two arguments, i.e. username and password. If you use Redis < 6.0.0, just omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.**
-
-As JuiceFS relies on object storage to store data, you can specify a object storage using `--storage`, `--bucket`, `--access-key` and `--secret-key`. By default, it uses a local directory to serve as an object store, for all the options, please see `./juicefs format -h`.
-
-For the details about how to setup different object storage, please read [the guide](docs/en/how_to_setup_object_storage.md).
-
-### Mount a volume
-
-Once a volume is formatted, you can mount it to a directory, which is called *mount point*.
-
-```bash
-$ ./juicefs mount -d localhost ~/jfs
-```
-
-After that you can access the volume just like a local directory.
-
-To get all options, just run `./juicefs mount -h`.
-
-If you wanna mount JuiceFS automatically at boot, please read [the guide](docs/en/mount_at_boot.md).
+Please refer to [Quick Start Guide](docs/en/quick_start_guide.md) to start using JuiceFS immediately! 
 
 ### Command Reference
 
@@ -117,7 +81,7 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_
 - [FUSE Mount Options](docs/en/fuse_mount_options.md)
 - [Sync Account on Multiple Hosts](docs/en/how_to_sync_the_same_account.md)
 - [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
-- [Using JuiceFS on Windows](docs/en/windows.md)
+- [Using JuiceFS on Windows](docs/en/juicefs_on_windows.md)
 - [S3 Gateway](docs/en/s3_gateway.md)
 
 ## POSIX Compatibility
@@ -209,11 +173,11 @@ The last number on each line is the time (in seconds) current operation takes. Y
 - Local disk
 - Redis
 
-For the detailed list, see [this document](docs/en/how_to_setup_object_storage.md#supported-object-storage).
+JuiceFS supports almost all object storage services. [Learn more](docs/en/how_to_setup_object_storage.md#supported-object-storage).
 
 ## Status
 
-It's considered as beta quality, the storage format is not stabilized yet. It's not recommended to deploy it into production environment. Please test it with your use cases and give us feedback.
+It's considered as beta quality, the storage format is not stabilized yet. It's not recommended to deploy it into production environment. Please test it with your use cases and give us [feedback](https://github.com/juicedata/juicefs/issues).
 
 ## Roadmap
 
