@@ -33,7 +33,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
   - [Windows 系统使用 JuiceFS](juicefs_on_windows.md)
   - [macOS 系统使用 JuiceFS](juicefs_on_macos.md)
   - [Docker 使用 JuiceFS](juicefs_on_docker.md)
-  - [Kubernets 使用 JuiceFS](juicefs_on_kubernets.md) 
+  - [Kubernets 使用 JuiceFS](juicefs_on_kubernetes.md) 
   - [Hadoop 使用 JuiceFS](hadoop_java_sdk.md)
   - [JuiceFS 启用 S3 Gateway](s3_gateway.md)
   - [JuiceFS 客户端编译和升级](client_compile_and_upgrade.md)
