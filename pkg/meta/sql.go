@@ -66,9 +66,9 @@ type node struct {
 	Parent Ino
 }
 
-type nodeParent struct {
-	node `xorm:"extends"`
+type namedNode struct {
 	edge `xorm:"extends"`
+	node `xorm:"extends"`
 }
 
 type chunk struct {
@@ -1342,22 +1342,22 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 
 	dbSession := m.engine.Table(&edge{})
 	if plus != 0 {
-		dbSession = dbSession.Table(&node{}).Join("INNER", "jfs_edge", "jfs_edge.inode=jfs_node.inode")
+		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
 	}
-	var nodesWithParent []nodeParent
-	if err := dbSession.Find(&nodesWithParent, &edge{Parent: inode}); err != nil {
+	var nodes []namedNode
+	if err := dbSession.Find(&nodes, &edge{Parent: inode}); err != nil {
 		return errno(err)
 	}
-	for _, n := range nodesWithParent {
+	for _, n := range nodes {
 		entry := &Entry{
 			Inode: n.node.Inode,
-			Name:  []byte(n.edge.Name),
+			Name:  []byte(n.Name),
 			Attr:  &Attr{},
 		}
 		if plus != 0 {
 			m.parseAttr(&n.node, entry.Attr)
 		} else {
-			entry.Attr.Typ = n.node.Type // xorm fetches .Type is into node, actually it's from the edge table
+			entry.Attr.Typ = n.edge.Type // If plus==0, we only have .edge filled
 		}
 		*entries = append(*entries, entry)
 	}
