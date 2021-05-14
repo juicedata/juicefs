@@ -432,12 +432,16 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 }
 
 func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	var e = edge{Parent: parent, Name: name}
-	ok, err := m.engine.Get(&e)
+	dbSession := m.engine.Table(&edge{})
+	if attr != nil {
+		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+	}
+	nn := namedNode{node: node{Parent: parent}, Name: name}
+	exist, err := dbSession.Select("*").Get(&nn)
 	if err != nil {
 		return errno(err)
 	}
-	if !ok {
+	if !exist {
 		if m.conf.CaseInsensi {
 			// TODO: in SQL
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -450,20 +454,10 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		}
 		return syscall.ENOENT
 	}
-	if attr == nil {
-		*inode = Ino(e.Inode)
-		return 0
+	*inode = nn.Inode
+	if attr != nil {
+		m.parseAttr(&nn.node, attr)
 	}
-	var n = node{Inode: e.Inode}
-	ok, err = m.engine.Get(&n)
-	if err != nil {
-		return errno(err)
-	}
-	if !ok {
-		return syscall.ENOENT
-	}
-	*inode = Ino(e.Inode)
-	m.parseAttr(&n, attr)
 	return 0
 }
 
