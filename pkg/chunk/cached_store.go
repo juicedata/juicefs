@@ -716,7 +716,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		}
 		p := NewOffPage(size)
 		defer p.Release()
-		_ = store.load(key, p, true, false)
+		_ = store.load(key, p, true, true)
 	})
 	_ = prometheus.Register(cacheHits)
 	_ = prometheus.Register(cacheHitBytes)

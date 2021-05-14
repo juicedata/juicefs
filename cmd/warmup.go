@@ -29,7 +29,7 @@ import (
 const batchMax = 10240
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, batch []string, count int, concurrent uint, background bool) {
+func sendCommand(cf *os.File, batch []string, count int, threads uint, background bool) {
 	paths := strings.Join(batch[:count], "\n")
 	var back uint8
 	if background {
@@ -40,7 +40,7 @@ func sendCommand(cf *os.File, batch []string, count int, concurrent uint, backgr
 	wb.Put32(4 + 3 + uint32(len(paths)))
 	wb.Put32(uint32(len(paths)))
 	wb.Put([]byte(paths))
-	wb.Put16(uint16(concurrent))
+	wb.Put16(uint16(threads))
 	wb.Put8(back)
 	if _, err := cf.Write(wb.Bytes()); err != nil {
 		logger.Fatalf("Write message: %s", err)
@@ -57,7 +57,7 @@ func sendCommand(cf *os.File, batch []string, count int, concurrent uint, backgr
 }
 
 func warmup(ctx *cli.Context) error {
-	fname := ctx.String("listfile")
+	fname := ctx.String("file")
 	paths := ctx.Args().Slice()
 	if fname != "" {
 		fd, err := os.Open(fname)
@@ -114,7 +114,7 @@ func warmup(ctx *cli.Context) error {
 	}
 	defer controller.Close()
 
-	concurrent := ctx.Uint("concurrent")
+	threads := ctx.Uint("threads")
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, batchMax)
@@ -128,12 +128,12 @@ func warmup(ctx *cli.Context) error {
 			continue
 		}
 		if index >= batchMax {
-			sendCommand(controller, batch, index, concurrent, background)
+			sendCommand(controller, batch, index, threads, background)
 			index = 0
 		}
 	}
 	if index > 0 {
-		sendCommand(controller, batch, index, concurrent, background)
+		sendCommand(controller, batch, index, threads, background)
 	}
 
 	return nil
@@ -147,15 +147,15 @@ func warmupFlags() *cli.Command {
 		Action:    warmup,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:    "listfile",
+				Name:    "file",
 				Aliases: []string{"f"},
 				Usage:   "file containing a list of paths",
 			},
 			&cli.UintFlag{
-				Name:    "concurrent",
-				Aliases: []string{"c"},
+				Name:    "threads",
+				Aliases: []string{"p"},
 				Value:   50,
-				Usage:   "number of concurrent worker",
+				Usage:   "number of concurrent workers",
 			},
 			&cli.BoolFlag{
 				Name:    "background",

@@ -63,7 +63,7 @@ func fillCache(paths []string, concurrent int) {
 		logger.Debugf("Warming up path %s", p)
 		if attr.Typ == meta.TypeDirectory {
 			walkDir(inode, todo)
-		} else if attr.Typ != meta.TypeSymlink {
+		} else if attr.Typ == meta.TypeFile {
 			todo <- _file{inode, attr.Length}
 		}
 	}
