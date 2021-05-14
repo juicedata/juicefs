@@ -59,6 +59,8 @@ $ tar -zxf juicefs-0.12.1-linux-amd64.tar.gz
 $ sudo install juicefs /usr/local/bin
 ```
 
+> **Note**: You can also build the JuiceFS client manually from the source code. [Learn more](client_compile_and_upgrade.md)
+
 ## 4. Create JuiceFS file system 
 
 When creating a JuiceFS file system, you need to specify both the Redis database used to store metadata and the object storage used to store actual data.
@@ -181,7 +183,7 @@ This can happen because some programs are reading and writing files in the file 
 
 > **Risk Tips**: The commands contained in the following content may cause files damage or loss, please be cautious!
 
-Of course, you can also add the `--force` or `-f` parameter to the unmount command to force the file system to be uninstalled, but you have to bear the possible catastrophic consequences:
+Of course, you can also add the `--force` or `-f` parameter to the unmount command to force the file system to be unmounted, but you have to bear the possible catastrophic consequences:
 
 ```shell
 $ sudo juicefs umount --force /mnt/jfs
