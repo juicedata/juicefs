@@ -67,8 +67,8 @@ type node struct {
 }
 
 type namedNode struct {
-	edge `xorm:"extends"`
 	node `xorm:"extends"`
+	Name string
 }
 
 type chunk struct {
@@ -1350,14 +1350,14 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	}
 	for _, n := range nodes {
 		entry := &Entry{
-			Inode: n.node.Inode,
+			Inode: n.Inode,
 			Name:  []byte(n.Name),
 			Attr:  &Attr{},
 		}
 		if plus != 0 {
 			m.parseAttr(&n.node, entry.Attr)
 		} else {
-			entry.Attr.Typ = n.edge.Type // If plus==0, we only have .edge filled
+			entry.Attr.Typ = n.Type
 		}
 		*entries = append(*entries, entry)
 	}
