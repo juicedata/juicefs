@@ -32,6 +32,8 @@ const (
 	Rmr = 1002
 	// Info is a message to get the internal info for file or directory.
 	Info = 1003
+	// FillCache is a message to build cache for target directories/files
+	FillCache = 1004
 )
 
 const (

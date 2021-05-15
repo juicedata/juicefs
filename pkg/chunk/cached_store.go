@@ -115,6 +115,18 @@ func (c *rChunk) index(off int) int {
 	return off / c.store.conf.BlockSize
 }
 
+func (c *rChunk) keys() []string {
+	if c.length <= 0 {
+		return nil
+	}
+	lastIndx := (c.length - 1) / c.store.conf.BlockSize
+	keys := make([]string, lastIndx+1)
+	for i := 0; i <= lastIndx; i++ {
+		keys[i] = c.key(i)
+	}
+	return keys
+}
+
 func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err error) {
 	p := page.Data
 	if len(p) == 0 {
@@ -197,7 +209,7 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		tmp.Acquire()
 		err := withTimeout(func() error {
 			defer tmp.Release()
-			return c.store.load(key, tmp, c.store.shouldCache(blockSize))
+			return c.store.load(key, tmp, c.store.shouldCache(blockSize), false)
 		}, c.store.conf.GetTimeout)
 		return tmp, err
 	})
@@ -393,7 +405,7 @@ func (c *wChunk) syncUpload(key string, block *Page) {
 	buf.Data = buf.Data[:n]
 	if blen < c.store.conf.BlockSize {
 		// block will be freed after written into disk
-		c.store.bcache.cache(key, block)
+		c.store.bcache.cache(key, block, false)
 	}
 	block.Release()
 
@@ -620,7 +632,7 @@ type cachedStore struct {
 	seekable      bool
 }
 
-func (store *cachedStore) load(key string, page *Page, cache bool) (err error) {
+func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -667,7 +679,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool) (err error) {
 			time.Since(start), tried)
 	}
 	if cache {
-		store.bcache.cache(key, page)
+		store.bcache.cache(key, page, forceCache)
 	}
 	return nil
 }
@@ -704,7 +716,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		}
 		p := NewOffPage(size)
 		defer p.Release()
-		_ = store.load(key, p, true)
+		_ = store.load(key, p, true, true)
 	})
 	_ = prometheus.Register(cacheHits)
 	_ = prometheus.Register(cacheHitBytes)
@@ -800,6 +812,29 @@ func (store *cachedStore) NewWriter(chunkid uint64) Writer {
 func (store *cachedStore) Remove(chunkid uint64, length int) error {
 	r := chunkForRead(chunkid, length, store)
 	return r.Remove()
+}
+
+func (store *cachedStore) FillCache(chunkid uint64, length uint32) error {
+	r := chunkForRead(chunkid, int(length), store)
+	keys := r.keys()
+	for _, k := range keys {
+		f, err := store.bcache.load(k)
+		if err == nil { // already cached
+			f.Close()
+			continue
+		}
+		size := parseObjOrigSize(k)
+		if size == 0 || size > store.conf.BlockSize {
+			logger.Warnf("Invalid size: %s %d", k, size)
+			continue
+		}
+		p := NewOffPage(size)
+		defer p.Release()
+		if err = store.load(k, p, true, true); err != nil {
+			logger.Warnf("Failed to load key: %s %s", k, err)
+		}
+	}
+	return nil // currently errors are skipped
 }
 
 var _ ChunkStore = &cachedStore{}

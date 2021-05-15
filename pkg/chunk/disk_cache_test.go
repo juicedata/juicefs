@@ -52,7 +52,7 @@ func BenchmarkLoadCached(b *testing.B) {
 	s := newCacheStore("/tmp/diskCache", 1<<30, 1, &defaultConf)
 	p := NewPage(make([]byte, 1024))
 	key := "/chunks/1_1024"
-	s.cache(key, p)
+	s.cache(key, p, false)
 	time.Sleep(time.Millisecond * 100)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

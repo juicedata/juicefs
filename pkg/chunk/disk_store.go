@@ -108,4 +108,8 @@ func (s *diskStore) Remove(chunkid uint64, length int) error {
 	return os.Remove(s.chunkPath(chunkid))
 }
 
+func (s *diskStore) FillCache(chunkid uint64, length uint32) error {
+	return fmt.Errorf("Not Supported")
+}
+
 var _ ChunkStore = &diskStore{}
