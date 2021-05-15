@@ -73,7 +73,7 @@ func info(ctx *cli.Context) error {
 			continue
 		}
 
-		f := openControler(d)
+		f := openController(d)
 		if f == nil {
 			logger.Errorf("%s is not inside JuiceFS", path)
 			continue

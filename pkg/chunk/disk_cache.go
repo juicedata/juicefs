@@ -117,7 +117,7 @@ func (cache *cacheStore) refreshCacheKeys() {
 	}
 }
 
-func (cache *cacheStore) cache(key string, p *Page) {
+func (cache *cacheStore) cache(key string, p *Page, force bool) {
 	if cache.capacity == 0 {
 		return
 	}
@@ -131,11 +131,17 @@ func (cache *cacheStore) cache(key string, p *Page) {
 	select {
 	case cache.pending <- pendingFile{key, p}:
 	default:
-		// does not have enough bandwidth to write it into disk, discard it
-		logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
-		cacheDrops.Add(1)
-		delete(cache.pages, key)
-		p.Release()
+		if force {
+			cache.Unlock()
+			cache.pending <- pendingFile{key, p}
+			cache.Lock()
+		} else {
+			// does not have enough bandwidth to write it into disk, discard it
+			logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
+			cacheDrops.Add(1)
+			delete(cache.pages, key)
+			p.Release()
+		}
 	}
 }
 
@@ -494,7 +500,7 @@ func expandDir(pattern string) []string {
 }
 
 type CacheManager interface {
-	cache(key string, p *Page)
+	cache(key string, p *Page, force bool)
 	remove(key string)
 	load(key string) (ReadCloser, error)
 	uploaded(key string, size int)
@@ -553,11 +559,11 @@ func (m *cacheManager) stats() (int64, int64) {
 	return cnt, used
 }
 
-func (m *cacheManager) cache(key string, p *Page) {
+func (m *cacheManager) cache(key string, p *Page, force bool) {
 	if len(m.stores) == 0 {
 		return
 	}
-	m.getStore(key).cache(key, p)
+	m.getStore(key).cache(key, p, force)
 }
 
 type ReadCloser interface {

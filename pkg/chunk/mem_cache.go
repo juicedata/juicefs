@@ -47,7 +47,7 @@ func (c *memcache) stats() (int64, int64) {
 	return int64(len(c.pages)), c.used
 }
 
-func (c *memcache) cache(key string, p *Page) {
+func (c *memcache) cache(key string, p *Page, force bool) {
 	if c.capacity == 0 {
 		return
 	}

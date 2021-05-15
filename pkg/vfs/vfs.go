@@ -48,6 +48,7 @@ type Config struct {
 
 var (
 	m      meta.Meta
+	store  chunk.ChunkStore
 	reader DataReader
 	writer DataWriter
 )
@@ -875,8 +876,9 @@ func RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno) {
 
 var logger = utils.GetLogger("juicefs")
 
-func Init(conf *Config, m_ meta.Meta, store chunk.ChunkStore) {
+func Init(conf *Config, m_ meta.Meta, store_ chunk.ChunkStore) {
 	m = m_
+	store = store_
 	reader = NewDataReader(conf, m, store)
 	writer = NewDataWriter(conf, m, store)
 	handles = make(map[Ino][]*handle)
