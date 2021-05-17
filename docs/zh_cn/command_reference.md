@@ -14,21 +14,23 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.12.1-23 (2021-04-26 56efd35)
+   0.12.1-70 (2021-05-15 36937f5)
 
 COMMANDS:
-   format     format a volume
-   mount      mount a volume
-   umount     unmount a volume
-   gateway    S3-compatible gateway
-   sync       sync between two storage
-   rmr        remove directories recursively
-   info       show internal information for paths or inodes
-   benchmark  run benchmark, including read/write/stat big/small files
-   gc         collect any leaked objects
-   fsck       Check consistency of file system
-   profile    analyze access log (Experimental)
-   help, h    Shows a list of commands or help for one command
+   format   format a volume
+   mount    mount a volume
+   umount   unmount a volume
+   gateway  S3-compatible gateway
+   sync     sync between two storage
+   rmr      remove directories recursively
+   info     show internal information for paths or inodes
+   bench    run benchmark to read/write/stat big/small files
+   gc       collect any leaked objects
+   fsck     Check consistency of file system
+   profile  analyze access log (Experimental)
+   status   show status of JuiceFS
+   warmup   build cache for target directories/files
+   help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
@@ -347,7 +349,7 @@ Run benchmark, include read/write/stat big and small files.
 ### Synopsis
 
 ```
-juicefs bench [options] [PATH]
+juicefs bench [command options] PATH
 ```
 
 ### Options
@@ -424,3 +426,38 @@ track only specified PIDs(separated by comma ,)
 
 `--interval value`\
 flush interval in seconds (default: 2)
+
+## juicefs status
+
+### Description
+
+show status of JuiceFS
+
+### Synopsis
+
+```
+juicefs status [command options] REDIS-URL
+```
+
+## juicefs warmup
+
+### Description
+
+build cache for target directories/files
+
+### Synopsis
+
+```
+juicefs warmup [command options] [PATH ...]
+```
+
+### Options
+
+`--file value, -f value`\
+file containing a list of paths
+
+`--threads value, -p value`\
+number of concurrent workers (default: 50)
+
+`--background, -b`\
+run in background (default: false)
