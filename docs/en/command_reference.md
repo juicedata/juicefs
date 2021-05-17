@@ -347,7 +347,7 @@ Run benchmark, include read/write/stat big and small files.
 ### Synopsis
 
 ```
-juicefs bench [options] [PATH]
+juicefs bench [command options] PATH
 ```
 
 ### Options
