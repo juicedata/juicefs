@@ -1809,14 +1809,21 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 				return err
 			}
 		}
-		_, err = ses.Delete(&chunk{inode, indx, nil})
+		n, err := ses.Delete(&c)
+		if err == nil && n == 0 {
+			err = fmt.Errorf("chunk %d:%d changed, try restarting transaction", inode, indx)
+		}
 		return err
 	})
 	if err != nil {
 		return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", inode, err)
 	}
 	for _, s := range ss {
-		m.deleteSlice(s.chunkid, s.size)
+		var ref = chunkRef{Chunkid: s.chunkid}
+		ok, err := m.engine.Get(&ref)
+		if err == nil && ok && ref.Refs <= 0 {
+			m.deleteSlice(s.chunkid, s.size)
+		}
 	}
 	return nil
 }
