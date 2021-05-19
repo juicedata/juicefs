@@ -12,7 +12,7 @@ Edit the configuration file of FUSE, usually `/etc/fuse.conf`:
 $ sudo nano /etc/fuse.conf
 ```
 
-Delete the `# ` symbol in front of ``user_allow_other` in the configuration file, and modify it as follows:
+Delete the `# ` symbol in front of `user_allow_other` in the configuration file, and modify it as follows:
 
 ```
 # /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
