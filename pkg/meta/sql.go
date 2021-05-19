@@ -338,7 +338,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 		if errors.Is(err, sqlite3.ErrBusy) || err != nil && (strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "try restarting transaction")) {
 			txRestart.Add(1)
 			logger.Debugf("conflicted transaction, restart it (tried %d)", i+1)
-			time.Sleep(time.Millisecond * time.Duration(i) * time.Duration(i))
+			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		}
 		break
@@ -363,8 +363,8 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Ctimensec = uint32(n.Ctime % 1e6 * 1000)
 	attr.Nlink = n.Nlink
 	attr.Length = n.Length
-	attr.Rdev = uint32(n.Rdev)
-	attr.Parent = Ino(n.Parent)
+	attr.Rdev = n.Rdev
+	attr.Parent = n.Parent
 	attr.Full = true
 }
 
@@ -1384,7 +1384,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 	}
 	rows.Close()
 
-	var done bool = true
+	done := true
 	for _, inode := range inodes {
 		if err := m.deleteInode(inode); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
