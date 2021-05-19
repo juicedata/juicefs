@@ -1,6 +1,6 @@
 # JuiceFS Metrics
 
-JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system. The default API address is `http://localhost:9567/metrics`, you could custom the address through `--metrics` option when execute `juicefs mount` command.
+JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system. The default API address is `http://localhost:9567/metrics`, you could custom the address through `--metrics` option when execute [`juicefs mount`](command_reference.md#juicefs-mount) command.
 
 JuiceFS also provides a [dashboard template](./k8s_grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
 
@@ -22,7 +22,7 @@ Below are descriptions of each metrics.
 | `juicefs_used_space`  | Total used space       | byte |
 | `juicefs_used_inodes` | Total number of inodes |      |
 
-## System
+## Operating system
 
 ### Metrics
 
