@@ -50,6 +50,18 @@ func encodeSlices(size int) []string {
 	return vals
 }
 
+func encodeSlicesAsBuf(nSlices uint32) []byte {
+	w := utils.NewBuffer(nSlices * sliceBytes)
+	for i := uint32(0); i < nSlices; i++ {
+		w.Put32(0)
+		w.Put64(1014)
+		w.Put32(122)
+		w.Put32(0)
+		w.Put32(122)
+	}
+	return w.Bytes()
+}
+
 func BenchmarkReadSlices(b *testing.B) {
 	cases := []struct {
 		desc string
@@ -68,6 +80,30 @@ func BenchmarkReadSlices(b *testing.B) {
 				slices = readSlices(vals)
 			}
 			if len(slices) != len(vals) {
+				b.Fail()
+			}
+		})
+	}
+}
+
+func BenchmarkReadSliceBuf(b *testing.B) {
+	cases := []struct {
+		desc string
+		size uint32
+	}{
+		{"small", 4},
+		{"mid", 64},
+		{"large", 1024},
+	}
+	for _, c := range cases {
+		b.Run(c.desc, func(b *testing.B) {
+			buf := encodeSlicesAsBuf(c.size)
+			b.ResetTimer()
+			var slices []*slice
+			for i := 0; i < b.N; i++ {
+				slices = readSliceBuf(buf)
+			}
+			if len(slices) != int(c.size) {
 				b.Fail()
 			}
 		})
