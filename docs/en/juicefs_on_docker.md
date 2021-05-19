@@ -12,7 +12,7 @@ Edit the configuration file of FUSE, usually `/etc/fuse.conf`:
 $ sudo nano /etc/fuse.conf
 ```
 
-Delete the `# ` symbol in front of ``user_allow_ other` in the configuration file, and modify it as follows:
+Delete the `# ` symbol in front of ``user_allow_other` in the configuration file, and modify it as follows:
 
 ```
 # /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
@@ -30,7 +30,7 @@ user_allow_other
 After the `allow_other` of FUSE is enabled, you need to re-mount the JuiceFS file systemd with the `allow_other` option, for example:
 
 ```
-$ sudo juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
+$ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
 ### Mapping storage to a Docker container

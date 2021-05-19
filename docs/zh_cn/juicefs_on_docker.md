@@ -30,7 +30,7 @@ user_allow_other
 FUSE 的 `user_allow_other` 启用后，你需要重新挂载 JuiceFS 文件系统，使用 `-o` 选项设置 `allow_other`，例如：
 
 ```
-$ sudo juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
+$ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
 ## Docker 映射 JuiceFS 存储
