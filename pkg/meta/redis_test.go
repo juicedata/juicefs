@@ -289,6 +289,10 @@ func TestLocksRedis(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	testLocks(t, m)
+}
+
+func testLocks(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
 	ctx := Background
 	var inode Ino
@@ -325,6 +329,9 @@ func TestLocksRedis(t *testing.T) {
 
 	// POSIX locks
 	if st := m.Setlk(ctx, inode, 1, false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
+		if st == syscall.ENOSYS {
+			t.Skip()
+		}
 		t.Fatalf("plock rlock: %s", st)
 	}
 	if st := m.Setlk(ctx, inode, 2, false, syscall.F_RDLCK, 0, 0x2FFFF, 1); st != 0 {
@@ -362,6 +369,7 @@ func TestLocksRedis(t *testing.T) {
 	// concurrent locks
 	var g sync.WaitGroup
 	var count int
+	var err syscall.Errno
 	for i := 0; i < 100; i++ {
 		g.Add(1)
 		go func(i int) {
@@ -382,6 +390,9 @@ func TestLocksRedis(t *testing.T) {
 		}(i)
 	}
 	g.Wait()
+	if err != 0 {
+		t.Fatalf("lock fail: %s", err)
+	}
 }
 
 func TestRemove(t *testing.T) {
