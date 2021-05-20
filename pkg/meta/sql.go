@@ -1426,13 +1426,8 @@ func (m *dbMeta) cleanStaleSessions() {
 	rows.Close()
 	for _, sid := range ids {
 		m.cleanStaleSession(sid)
+		m.cleanStaleLocks(sid)
 	}
-
-	// rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
-	// staleSessions, _ = r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
-	// for _, sid := range staleSessions {
-	// 	r.cleanStaleLocks(sid)
-	// }
 }
 
 func (m *dbMeta) refreshSession() {

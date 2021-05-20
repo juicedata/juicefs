@@ -97,3 +97,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	}
 	return err
 }
+
+func (m *dbMeta) cleanStaleLocks(sid uint64) {
+	_, _ = m.engine.Delete(flock{Sid: sid})
+}

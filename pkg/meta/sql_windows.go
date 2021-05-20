@@ -20,3 +20,6 @@ import "syscall"
 func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	return syscall.ENOSYS
 }
+
+func (m *dbMeta) cleanStaleLocks(sid uint64) {
+}
