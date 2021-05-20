@@ -1998,6 +1998,12 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}()
 }
 
+func dup(b []byte) []byte {
+	r := make([]byte, len(b))
+	copy(r, b)
+	return r
+}
+
 func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	var c chunk
 	rows, err := m.engine.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Rows(&c)

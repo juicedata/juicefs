@@ -94,12 +94,6 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	return err
 }
 
-func dup(b []byte) []byte {
-	r := make([]byte, len(b))
-	copy(r, b)
-	return r
-}
-
 func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
 	if *ltype == syscall.F_UNLCK {
 		*start = 0
