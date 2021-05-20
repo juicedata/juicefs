@@ -92,6 +92,13 @@ type xattr struct {
 	Value []byte `xorm:"blob notnull"`
 }
 
+type flock struct {
+	Inode Ino    `xorm:"notnull unique(flock)"`
+	Sid   uint64 `xorm:"notnull unique(flock)"`
+	Owner uint64 `xorm:"notnull unique(flock)"`
+	Ltype byte   `xorm:"notnull"`
+}
+
 type session struct {
 	Sid       uint64 `xorm:"pk"`
 	Heartbeat int64  `xorm:"notnull"`
@@ -1372,6 +1379,9 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 }
 
 func (m *dbMeta) cleanStaleSession(sid uint64) {
+	// release locks
+	_, _ = m.engine.Delete(flock{Sid: sid})
+
 	var s = sustained{Sid: sid}
 	rows, err := m.engine.Rows(&s)
 	if err != nil {
@@ -1426,7 +1436,6 @@ func (m *dbMeta) cleanStaleSessions() {
 	rows.Close()
 	for _, sid := range ids {
 		m.cleanStaleSession(sid)
-		m.cleanStaleLocks(sid)
 	}
 }
 

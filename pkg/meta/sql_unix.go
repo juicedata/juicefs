@@ -24,13 +24,6 @@ import (
 	"xorm.io/xorm"
 )
 
-type flock struct {
-	Inode Ino    `xorm:"notnull unique(flock)"`
-	Sid   uint64 `xorm:"notnull unique(flock)"`
-	Owner uint64 `xorm:"notnull unique(flock)"`
-	Ltype byte   `xorm:"notnull"`
-}
-
 func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	if ltype == syscall.F_UNLCK {
 		return errno(m.txn(func(s *xorm.Session) error {
@@ -98,8 +91,4 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 		}
 	}
 	return err
-}
-
-func (m *dbMeta) cleanStaleLocks(sid uint64) {
-	_, _ = m.engine.Delete(flock{Sid: sid})
 }
