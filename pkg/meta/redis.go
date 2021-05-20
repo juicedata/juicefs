@@ -555,6 +555,7 @@ func (r *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 			return syscall.ENOTSUP
 		default:
 			logger.Warnf("resolve %d %s: %s", parent, path, err)
+			r.shaResolve = ""
 			return syscall.ENOTSUP
 		}
 	}

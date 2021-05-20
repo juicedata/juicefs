@@ -534,15 +534,17 @@ func (fs *FileSystem) lookup(ctx meta.Context, p string, followLastSymlink bool)
 	var inode Ino
 	var attr = &Attr{}
 
-	err = fs.m.Resolve(ctx, 1, p, &inode, attr)
-	if err == 0 {
-		fi = AttrToFileInfo(inode, attr)
-		p = strings.TrimRight(p, "/")
-		ss := strings.Split(p, "/")
-		fi.name = ss[len(ss)-1]
-	}
-	if err != syscall.ENOTSUP {
-		return
+	if fs.conf.FastResolve {
+		err = fs.m.Resolve(ctx, 1, p, &inode, attr)
+		if err == 0 {
+			fi = AttrToFileInfo(inode, attr)
+			p = strings.TrimRight(p, "/")
+			ss := strings.Split(p, "/")
+			fi.name = ss[len(ss)-1]
+		}
+		if err != syscall.ENOTSUP {
+			return
+		}
 	}
 
 	// Fallback to the default implementation that calls `fs.m.Lookup` for each directory along the path.
