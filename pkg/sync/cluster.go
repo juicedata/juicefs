@@ -234,12 +234,21 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				logger.Errorf("copy itself to %s: %s", host, err)
 				return
 			}
-			if strings.HasSuffix(path, "juicefs") {
-				rpath += " sync"
-			}
-			// launch itself
-			var args = []string{host, rpath, "-manager", address}
+			// launch itself with --worker argument replaced with --manager
+			var args = []string{host, rpath}
 			args = append(args, os.Args[1:]...)
+			for i := range args {
+				if strings.HasPrefix(args[i], "--worker") {
+					if len(args[i]) > len("--worker") {
+						args[i] = fmt.Sprintf("--manager=%s", address)
+					} else {
+						args[i] = "--manager"
+						args[i+1] = address
+					}
+					break
+				}
+			}
+			logger.Debugf("launch worker command args: [ssh, %s]\n", strings.Join(args, ", "))
 			cmd = exec.Command("ssh", args...)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
