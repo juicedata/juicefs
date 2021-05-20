@@ -92,6 +92,13 @@ type xattr struct {
 	Value []byte `xorm:"blob notnull"`
 }
 
+type flock struct {
+	Inode Ino    `xorm:"notnull unique(flock)"`
+	Sid   uint64 `xorm:"notnull unique(flock)"`
+	Owner uint64 `xorm:"notnull unique(flock)"`
+	Ltype byte   `xorm:"notnull"`
+}
+
 type session struct {
 	Sid       uint64 `xorm:"pk"`
 	Heartbeat int64  `xorm:"notnull"`
@@ -176,6 +183,9 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	}
 	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
 		logger.Fatalf("create table session, sustaind, delfile: %s", err)
+	}
+	if err := m.engine.Sync2(new(flock)); err != nil {
+		logger.Fatalf("create table flock: %s", err)
 	}
 
 	old, err := m.Load()
@@ -1369,6 +1379,9 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 }
 
 func (m *dbMeta) cleanStaleSession(sid uint64) {
+	// release locks
+	_, _ = m.engine.Delete(flock{Sid: sid})
+
 	var s = sustained{Sid: sid}
 	rows, err := m.engine.Rows(&s)
 	if err != nil {
@@ -1424,12 +1437,6 @@ func (m *dbMeta) cleanStaleSessions() {
 	for _, sid := range ids {
 		m.cleanStaleSession(sid)
 	}
-
-	// rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
-	// staleSessions, _ = r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
-	// for _, sid := range staleSessions {
-	// 	r.cleanStaleLocks(sid)
-	// }
 }
 
 func (m *dbMeta) refreshSession() {
@@ -2085,10 +2092,6 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		}
 		return err
 	}))
-}
-
-func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
-	return syscall.ENOSYS
 }
 
 func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
