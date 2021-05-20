@@ -80,23 +80,23 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 	return err
 }
 
-type plock struct {
+type plockRecord struct {
 	ltype uint32
 	pid   uint32
 	start uint64
 	end   uint64
 }
 
-func (r *redisMeta) loadLocks(d []byte) []plock {
-	var ls []plock
+func loadLocks(d []byte) []plockRecord {
+	var ls []plockRecord
 	rb := utils.FromBuffer(d)
 	for rb.HasMore() {
-		ls = append(ls, plock{rb.Get32(), rb.Get32(), rb.Get64(), rb.Get64()})
+		ls = append(ls, plockRecord{rb.Get32(), rb.Get32(), rb.Get64(), rb.Get64()})
 	}
 	return ls
 }
 
-func (r *redisMeta) dumpLocks(ls []plock) []byte {
+func dumpLocks(ls []plockRecord) []byte {
 	wb := utils.NewBuffer(uint32(len(ls)) * 24)
 	for _, l := range ls {
 		wb.Put32(l.ltype)
@@ -107,8 +107,8 @@ func (r *redisMeta) dumpLocks(ls []plock) []byte {
 	return wb.Bytes()
 }
 
-func (r *redisMeta) insertLocks(ls []plock, i int, nl plock) []plock {
-	nls := make([]plock, len(ls)+1)
+func insertLocks(ls []plockRecord, i int, nl plockRecord) []plockRecord {
+	nls := make([]plockRecord, len(ls)+1)
 	copy(nls[:i], ls[:i])
 	nls[i] = nl
 	copy(nls[i+1:], ls[i:])
@@ -116,14 +116,14 @@ func (r *redisMeta) insertLocks(ls []plock, i int, nl plock) []plock {
 	return ls
 }
 
-func (r *redisMeta) updateLocks(ls []plock, nl plock) []plock {
+func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	// ls is ordered by l.start without overlap
 	var i int
 	for i < len(ls) && nl.end > nl.start {
 		l := ls[i]
 		if l.end < nl.start {
 		} else if l.start < nl.start {
-			ls = r.insertLocks(ls, i+1, plock{nl.ltype, nl.pid, nl.start, l.end})
+			ls = insertLocks(ls, i+1, plockRecord{nl.ltype, nl.pid, nl.start, l.end})
 			ls[i].end = nl.start
 			i++
 			nl.start = l.end
@@ -132,11 +132,11 @@ func (r *redisMeta) updateLocks(ls []plock, nl plock) []plock {
 			ls[i].start = nl.start
 			nl.start = l.end
 		} else if l.start < nl.end {
-			ls = r.insertLocks(ls, i, nl)
+			ls = insertLocks(ls, i, nl)
 			ls[i+1].start = nl.end
 			nl.start = nl.end
 		} else {
-			ls = r.insertLocks(ls, i, nl)
+			ls = insertLocks(ls, i, nl)
 			nl.start = nl.end
 		}
 		i++
@@ -176,7 +176,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 	}
 	delete(owners, lkey) // exclude itself
 	for k, d := range owners {
-		ls := r.loadLocks([]byte(d))
+		ls := loadLocks([]byte(d))
 		for _, l := range ls {
 			// find conflicted locks
 			if (*ltype == syscall.F_WRLCK || l.ltype == syscall.F_WRLCK) && *end > l.start && *start < l.end {
@@ -204,7 +204,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	ikey := r.plockKey(inode)
 	lkey := r.ownerKey(owner)
 	var err syscall.Errno
-	lock := plock{ltype, pid, start, end}
+	lock := plockRecord{ltype, pid, start, end}
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
 			if ltype == syscall.F_UNLCK {
@@ -212,16 +212,16 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				if err != nil {
 					return err
 				}
-				ls := r.loadLocks([]byte(d))
+				ls := loadLocks([]byte(d))
 				if len(ls) == 0 {
 					return nil
 				}
-				ls = r.updateLocks(ls, lock)
+				ls = updateLocks(ls, lock)
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					if len(ls) == 0 {
 						pipe.HDel(ctx, ikey, lkey)
 					} else {
-						pipe.HSet(ctx, ikey, lkey, r.dumpLocks(ls))
+						pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
 					}
 					return nil
 				})
@@ -231,10 +231,10 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 			if err != nil {
 				return err
 			}
-			ls := r.loadLocks([]byte(owners[lkey]))
+			ls := loadLocks([]byte(owners[lkey]))
 			delete(owners, lkey)
 			for _, d := range owners {
-				ls := r.loadLocks([]byte(d))
+				ls := loadLocks([]byte(d))
 				for _, l := range ls {
 					// find conflicted locks
 					if (ltype == syscall.F_WRLCK || l.ltype == syscall.F_WRLCK) && end > l.start && start < l.end {
@@ -242,9 +242,9 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 					}
 				}
 			}
-			ls = r.updateLocks(ls, lock)
+			ls = updateLocks(ls, lock)
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.HSet(ctx, ikey, lkey, r.dumpLocks(ls))
+				pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
 				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
 				return nil
 			})

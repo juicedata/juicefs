@@ -99,6 +99,13 @@ type flock struct {
 	Ltype byte   `xorm:"notnull"`
 }
 
+type plock struct {
+	Inode   Ino    `xorm:"notnull unique(plock)"`
+	Sid     uint64 `xorm:"notnull unique(plock)"`
+	Owner   uint64 `xorm:"notnull unique(plock)"`
+	Records []byte `xorm:"blob notnull"`
+}
+
 type session struct {
 	Sid       uint64 `xorm:"pk"`
 	Heartbeat int64  `xorm:"notnull"`
@@ -184,8 +191,8 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
 		logger.Fatalf("create table session, sustaind, delfile: %s", err)
 	}
-	if err := m.engine.Sync2(new(flock)); err != nil {
-		logger.Fatalf("create table flock: %s", err)
+	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
+		logger.Fatalf("create table flock, plock: %s", err)
 	}
 
 	old, err := m.Load()
@@ -1381,6 +1388,7 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 func (m *dbMeta) cleanStaleSession(sid uint64) {
 	// release locks
 	_, _ = m.engine.Delete(flock{Sid: sid})
+	_, _ = m.engine.Delete(plock{Sid: sid})
 
 	var s = sustained{Sid: sid}
 	rows, err := m.engine.Rows(&s)
@@ -1999,6 +2007,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	var cs []chunk
 	for rows.Next() {
 		if rows.Scan(&c) == nil {
+			c.Slices = dup(c.Slices)
 			cs = append(cs, c)
 		}
 	}
@@ -2092,12 +2101,4 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		}
 		return err
 	}))
-}
-
-func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
-	return syscall.ENOSYS
-}
-
-func (m *dbMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
-	return syscall.ENOSYS
 }

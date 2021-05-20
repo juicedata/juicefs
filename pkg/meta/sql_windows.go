@@ -20,3 +20,11 @@ import "syscall"
 func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	return syscall.ENOSYS
 }
+
+func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+	return syscall.ENOSYS
+}
+
+func (m *dbMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+	return syscall.ENOSYS
+}
