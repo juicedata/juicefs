@@ -177,6 +177,9 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
 		logger.Fatalf("create table session, sustaind, delfile: %s", err)
 	}
+	if err := m.engine.Sync2(new(flock)); err != nil {
+		logger.Fatalf("create table flock: %s", err)
+	}
 
 	old, err := m.Load()
 	if err != nil {
@@ -2085,10 +2088,6 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		}
 		return err
 	}))
-}
-
-func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
-	return syscall.ENOSYS
 }
 
 func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
