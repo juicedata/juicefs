@@ -422,6 +422,28 @@ func F(p uintptr) *wrapper {
 	return handlers[p]
 }
 
+//export jfs_update_uid
+func jfs_update_uid(h uintptr, uidstr *C.char) {
+	w := F(h)
+	if w == nil {
+		return
+	}
+	for _, line := range strings.Split(C.GoString(uidstr), "\n") {
+		line = strings.TrimSpace(line)
+		fields := strings.Split(line, ":")
+		if len(fields) < 3 {
+			continue
+		}
+		username := strings.TrimSpace(fields[0])
+		if username == w.user {
+			uid, _ := strconv.Atoi(strings.TrimSpace(fields[2]))
+			logger.Debugf("update uid for %s to %d", username, uid)
+			w.ctx = meta.NewContext(uint32(os.Getpid()), uint32(uid), w.ctx.Gids())
+			return
+		}
+	}
+}
+
 //export jfs_term
 func jfs_term(pid int, h uintptr) int {
 	w := F(h)

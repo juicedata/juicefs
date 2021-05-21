@@ -56,6 +56,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
+import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 
 /****************************************************************
@@ -84,8 +85,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   private FsPermission uMask;
   private String hflushMethod;
   private ScheduledExecutorService nodesFetcherThread;
-  private ScheduledExecutorService refreshGroupsThread;
-  private FileStatus lastFileStatus;
+  private ScheduledExecutorService refreshUidThread;
+  private FileStatus lastUidFile;
   private static final DirectBufferPool bufferPool = new DirectBufferPool();
   private boolean metricsEnable = false;
 
@@ -103,7 +104,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public static interface Libjfs {
     long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
 
-    void jfs_update_grouping(long h, String grouping);
+    void jfs_update_uid(long h, String uidstr);
 
     int jfs_term(long pid, long h);
 
@@ -370,6 +371,51 @@ public class JuiceFileSystemImpl extends FileSystem {
       metricsEnable = true;
       JuiceFSInstrumentation.init(this, statistics);
     }
+    updateUid(conf);
+    refreshUid();
+  }
+
+  private void updateUid(Configuration conf) {
+    String uidFile = getConf(conf, "uid-file", null);
+    if (null == uidFile) {
+      return;
+    }
+
+    Path path = new Path(uidFile);
+    URI uri = path.toUri();
+    FileSystem uidFs;
+    try {
+      if (getScheme().equals(uri.getScheme()) &&
+              (name != null && name.equals(uri.getAuthority()))) {
+        uidFs = this;
+      } else {
+        uidFs = path.getFileSystem(conf);
+      }
+
+      FileStatus status = uidFs.getFileStatus(path);
+      if (lastUidFile != null && status.getModificationTime() == lastUidFile.getModificationTime()
+              && status.getLen() == lastUidFile.getLen()) {
+        return;
+      }
+      FSDataInputStream in = uidFs.open(path);
+      String s = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
+      lib.jfs_update_uid(handle, s);
+      in.close();
+      lastUidFile = status;
+    } catch (IOException e) {
+      LOG.warn("update uid: " + e);
+    }
+  }
+
+  private void refreshUid() {
+    refreshUidThread = Executors.newScheduledThreadPool(1, r -> {
+      Thread thread = new Thread(r, "Uid refresher");
+      thread.setDaemon(true);
+      return thread;
+    });
+    refreshUidThread.scheduleAtFixedRate(() -> {
+      updateUid(getConf());
+    }, 0, 2, TimeUnit.MINUTES);
   }
 
   private void initializeStorageIds(Configuration conf) throws IOException {
@@ -1545,8 +1591,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void close() throws IOException {
     super.close();
-    if (refreshGroupsThread != null) {
-      refreshGroupsThread.shutdownNow();
+    if (refreshUidThread != null) {
+      refreshUidThread.shutdownNow();
     }
     lib.jfs_term(Thread.currentThread().getId(), handle);
     if (nodesFetcherThread != null) {
