@@ -24,6 +24,8 @@ $ cd sdk/java
 $ make
 ```
 
+> **Tip**: For users in China, it's recommended to set a local Maven mirror to speedup compilation, e.g. [Aliyun Maven Mirror](https://maven.aliyun.com).
+
 ## Deploy JuiceFS Hadoop Java SDK
 
 After compiling you could find the JAR file in `sdk/java/target` directory, e.g. `juicefs-hadoop-0.10.0.jar`. Beware that file with `original-` prefix, it doesn't contain third-party dependencies. It's recommended to use the JAR file with third-party dependencies.
@@ -70,15 +72,31 @@ Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Ha
 | -------------                | ------------- | -----------                                                                                                                                                                                                                                                                                           |
 | `juicefs.cache-dir`          |               | Directory paths of local cache. Use colon to separate multiple paths. Also support wildcard in path. **It's recommended create these directories manually and set `0777` permission so that different applications could share the cache data.**                                                      |
 | `juicefs.cache-size`         | 0             | Maximum size of local cache in MiB. It's the total size when set multiple cache directories.                                                                                                                                                                                                          |
+| `juicefs.cache-full-block`   | `true`        | Whether cache every read blocks, `false` means only cache random/small read blocks.                                                                                                                                                                                                                   |
+| `juicefs.free-space`         | 0.2           | Min free space ratio of cache directory                                                                                                                                                                                                                                                               |
 | `juicefs.discover-nodes-url` |               | The URL to discover cluster nodes, refresh every 10 minutes.<br /><br />YARN: `yarn`<br />Spark Standalone: `http://spark-master:web-ui-port/json/`<br />Spark ThriftServer: `http://thrift-server:4040/api/v1/applications/`<br />Presto: `http://coordinator:discovery-uri-port/v1/service/presto/` |
 
+### I/O Configurations
+
+| Configuration         | Default Value | Description                                     |
+| -------------         | ------------- | -----------                                     |
+| `juicefs.max-uploads` | 50            | The max number of connections to upload         |
+| `juicefs.get-timeout` | 5             | The max number of seconds to download an object |
+| `juicefs.put-timeout` | 60            | The max number of seconds to upload an object   |
+| `juicefs.memory-size` | 300           | Total read/write buffering in MiB               |
+| `juicefs.prefetch`    | 3             | Prefetch N blocks in parallel                   |
 
 ### Others
 
 | Configuration             | Default Value | Description                                                                                                                                                       |
 | -------------             | ------------- | -----------                                                                                                                                                       |
+| `juicefs.debug`           | `false`       | Whether enable debug log                                                                                                                                          |
 | `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files. |
 | `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                    |
+| `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                           |
+| `juicefs.push-interval`   | 10            | Prometheus push interval in seconds                                                                                                                               |
+| `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                             |
+| `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                      |
 | `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.               |
 
 When you use multiple JuiceFS file systems, all these configurations could be set to specific file system alone. You need put file system name in the middle of configuration, for example (replace `{JFS_NAME}` with appropriate value):
@@ -182,6 +200,27 @@ CREATE TABLE IF NOT EXISTS person
 ) LOCATION 'jfs://{JFS_NAME}/tmp/person';
 ```
 
+## Metrics
+
+JuiceFS Hadoop Java SDK supports reporting metrics to [Prometheus Pushgateway](https://github.com/prometheus/pushgateway), then you can use [Grafana](https://grafana.com) and [dashboard template](k8s_grafana_template.json) to visualize these metrics.
+
+Enable metrics reporting through following configurations:
+
+```xml
+<property>
+  <name>juicefs.push-gateway</name>
+  <value>host:port</value>
+</property>
+```
+
+> **Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly. It is recommended to use the following command to clean up once every hour. The running Hadoop Java SDK will continue to update after the metrics are cleared, which basically does not affect the use.
+
+```bash
+$ curl -X DELETE http://host:9091/metrics/job/juicefs
+```
+
+For a description of all monitoring metrics, please see [JuiceFS Metrics](p8s_metrics.md).
+
 ## Benchmark
 
 JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
@@ -219,12 +258,12 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 
 - for reference
 
-| operation   | tps  | delay(ms) |
-| ------ | ---- | ---- |
-| create | 546  | 1.83 |
-| open   | 1135 | 0.88 |
-| rename | 364  | 2.75 |
-| delete | 289  | 3.46 |
+| Operation | TPS  | Delay (ms) |
+| --------- | ---  | ---------- |
+| create    | 546  | 1.83       |
+| open      | 1135 | 0.88       |
+| rename    | 364  | 2.75       |
+| delete    | 289  | 3.46       |
 
 #### IO Performance
 
@@ -244,10 +283,10 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 
 - for reference
 
-| operation   | throughput(MB/s)  |
-| ------ | ---- |
-| write | 453  |
-| read   | 141 |
+| Operation | Throughput (MB/s) |
+| --------- | ----------------- |
+| write     | 453               |
+| read      | 141               |
 
 ### Distribute Benchmark
 
@@ -255,7 +294,7 @@ Distribute benchmark use MapReduce program to test meta and IO throughput perfor
 
 Enough resources should be provided to make sure all Map task can be started at the same time
 
-We use 3 4c32g ecs(5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
+We use 3 4c32g ECS (5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
 
 #### Meta
 
@@ -296,21 +335,21 @@ We use 3 4c32g ecs(5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
 
     - 10 threads
 
-  | operation   | tps | delay(ms) |
-  | ------ | ---- | ---- |
-  | create | 2307 | 3.6 |
-  | open   | 3215 | 2.3 |
-  | rename | 1700 | 5.22 |
-  | delete | 1378 | 6.7      |
+  | Operation | TPS  | Delay (ms) |
+  | --------- | ---  | ---------- |
+  | create    | 2307 | 3.6        |
+  | open      | 3215 | 2.3        |
+  | rename    | 1700 | 5.22       |
+  | delete    | 1378 | 6.7        |
 
     - 100 threads
 
-  | operation   | tps | delay(ms) |
-  | ------ | ---- | ---- |
-  | create | 8375 | 11.5 |
-  | open   | 12691 | 7.5 |
-  | rename | 5343 | 18.4 |
-  | delete | 3576 | 27.6 |
+  | Operation | TPS   | Delay (ms) |
+  | --------- | ---   | ---------- |
+  | create    | 8375  | 11.5       |
+  | open      | 12691 | 7.5        |
+  | rename    | 5343  | 18.4       |
+  | delete    | 3576  | 27.6       |
 
 #### IO Performance
 
@@ -333,10 +372,10 @@ We use 3 4c32g ecs(5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
 
 - for reference
 
-| operation   | total throughput(MB/s)  |
-| ------ | ---- |
-| write | 1792  |
-| read   | 1409 |
+| Operation | Total Throughput (MB/s) |
+| --------- | ----------------------- |
+| write     | 1792                    |
+| read      | 1409                    |
 
 
 ## FAQ
