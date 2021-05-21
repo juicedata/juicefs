@@ -4,7 +4,7 @@ JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/c
 
 > **NOTICE**:
 >
-> JuiceFS use local mapping of user and UID. So, you should [sync all the needed users and their UIDs](how_to_sync_the_same_account.md) across the whole Hadoop cluster to avoid permission error.
+> JuiceFS use local mapping of user and UID. So, you should [sync all the needed users and their UIDs](sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error.
 
 ## Hadoop Compatibility
 

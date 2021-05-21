@@ -4,7 +4,7 @@ JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的�
 
 > **注意**：
 >
-> 由于 JuiceFS 使用本地的 user 和 UID 映射。因此，在分布式环境下使用，需要[同步所有需要使用的 user 和 UID](how_to_sync_the_same_account.md) 到所有的 Hadoop 节点上，以避免权限问题。
+> 由于 JuiceFS 使用本地的 user 和 UID 映射。因此，在分布式环境下使用，需要[同步所有需要使用的 user 和 UID](sync_accounts_between_multiple_hosts.md) 到所有的 Hadoop 节点上，以避免权限问题。
 
 ## Hadoop 兼容性
 
