@@ -4,9 +4,9 @@
 
 ![JuiceFS LOGO](../images/juicefs-logo.png)
 
-JuiceFS is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS  to store data, the data itself will be persisted in object storage (e.g. Amazon S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene. 
+JuiceFS is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS  to store data, the data itself will be persisted in object storage (e.g. Amazon S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene.
 
-JuiceFS can simply and conveniently connect massive cloud storage directly to big data, machine learning, artificial intelligence, and various application platforms that have been put into production environment, without modifying the code, you can use massive cloud storage as efficiently as using local storage. 
+JuiceFS can simply and conveniently connect massive cloud storage directly to big data, machine learning, artificial intelligence, and various application platforms that have been put into production environment, without modifying the code, you can use massive cloud storage as efficiently as using local storage.
 
 ## Highlighted Features
 
@@ -35,7 +35,11 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [Use JuiceFS on macOS](juicefs_on_macos.md)
   - [Use JuiceFS on Windows](juicefs_on_windows.md)
   - [Use JuiceFS on Docker](juicefs_on_docker.md)
+<<<<<<< HEAD
   - [Use JuiceFS on Kubernetes](how_to_use_on_kubernetes.md) 
+=======
+  - [Use JuiceFS on Kubernetes](juicefs_on_kubernetes.md)
+>>>>>>> origin/main
   - [Use JuiceFS on Hadoop](hadoop_java_sdk.md)
   - [JuiceFS enable S3 Gateway](s3_gateway.md)
   - [JuiceFS client compilation and upgrade](client_compile_and_upgrade.md)
@@ -47,6 +51,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [JuiceFS cache management](cache_management.md)
   - [JuiceFS operations profiling](operations_profiling.md)
   - [JuiceFS fault diagnosis and analysis](fault_diagnosis_and_analysis.md)
+  - [JuiceFS metrics](p8s_metrics.md)
   - [FUSE mount options](fuse_mount_options.md)
   - [JuiceFS sync accounts between multiple hosts](sync_accounts_between_multiple_hosts.md)
   - [Comparison with others](comparison_with_others.md)

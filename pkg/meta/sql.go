@@ -92,6 +92,20 @@ type xattr struct {
 	Value []byte `xorm:"blob notnull"`
 }
 
+type flock struct {
+	Inode Ino    `xorm:"notnull unique(flock)"`
+	Sid   uint64 `xorm:"notnull unique(flock)"`
+	Owner uint64 `xorm:"notnull unique(flock)"`
+	Ltype byte   `xorm:"notnull"`
+}
+
+type plock struct {
+	Inode   Ino    `xorm:"notnull unique(plock)"`
+	Sid     uint64 `xorm:"notnull unique(plock)"`
+	Owner   uint64 `xorm:"notnull unique(plock)"`
+	Records []byte `xorm:"blob notnull"`
+}
+
 type session struct {
 	Sid       uint64 `xorm:"pk"`
 	Heartbeat int64  `xorm:"notnull"`
@@ -176,6 +190,9 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	}
 	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
 		logger.Fatalf("create table session, sustaind, delfile: %s", err)
+	}
+	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
+		logger.Fatalf("create table flock, plock: %s", err)
 	}
 
 	old, err := m.Load()
@@ -338,7 +355,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 		if errors.Is(err, sqlite3.ErrBusy) || err != nil && (strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "try restarting transaction")) {
 			txRestart.Add(1)
 			logger.Debugf("conflicted transaction, restart it (tried %d)", i+1)
-			time.Sleep(time.Millisecond * time.Duration(i) * time.Duration(i))
+			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		}
 		break
@@ -363,8 +380,8 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Ctimensec = uint32(n.Ctime % 1e6 * 1000)
 	attr.Nlink = n.Nlink
 	attr.Length = n.Length
-	attr.Rdev = uint32(n.Rdev)
-	attr.Parent = Ino(n.Parent)
+	attr.Rdev = n.Rdev
+	attr.Parent = n.Parent
 	attr.Full = true
 }
 
@@ -1369,6 +1386,10 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 }
 
 func (m *dbMeta) cleanStaleSession(sid uint64) {
+	// release locks
+	_, _ = m.engine.Delete(flock{Sid: sid})
+	_, _ = m.engine.Delete(plock{Sid: sid})
+
 	var s = sustained{Sid: sid}
 	rows, err := m.engine.Rows(&s)
 	if err != nil {
@@ -1384,7 +1405,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 	}
 	rows.Close()
 
-	var done bool = true
+	done := true
 	for _, inode := range inodes {
 		if err := m.deleteInode(inode); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
@@ -1424,12 +1445,6 @@ func (m *dbMeta) cleanStaleSessions() {
 	for _, sid := range ids {
 		m.cleanStaleSession(sid)
 	}
-
-	// rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
-	// staleSessions, _ = r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
-	// for _, sid := range staleSessions {
-	// 	r.cleanStaleLocks(sid)
-	// }
 }
 
 func (m *dbMeta) refreshSession() {
@@ -1983,6 +1998,12 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}()
 }
 
+func dup(b []byte) []byte {
+	r := make([]byte, len(b))
+	copy(r, b)
+	return r
+}
+
 func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	var c chunk
 	rows, err := m.engine.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Rows(&c)
@@ -1992,6 +2013,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	var cs []chunk
 	for rows.Next() {
 		if rows.Scan(&c) == nil {
+			c.Slices = dup(c.Slices)
 			cs = append(cs, c)
 		}
 	}
@@ -2085,16 +2107,4 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		}
 		return err
 	}))
-}
-
-func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
-	return syscall.ENOSYS
-}
-
-func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
-	return syscall.ENOSYS
-}
-
-func (m *dbMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
-	return syscall.ENOSYS
 }

@@ -111,11 +111,13 @@ func readSlices(vals []string) []*slice {
 }
 
 func readSliceBuf(buf []byte) []*slice {
-	var ss []*slice
+	nSlices := len(buf) / sliceBytes
+	slices := make([]slice, nSlices)
+	ss := make([]*slice, nSlices)
 	for i := 0; i < len(buf); i += sliceBytes {
-		s := new(slice)
+		s := &slices[i/sliceBytes]
 		s.read(buf[i:])
-		ss = append(ss, s)
+		ss[i/sliceBytes] = s
 	}
 	return ss
 }

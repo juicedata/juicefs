@@ -115,6 +115,20 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Resolve(ctx, parent, "/f2", &inode, attr); st != syscall.ENOENT && st != syscall.ENOTSUP {
 		t.Fatalf("resolve f2: %s", st)
 	}
+	// check owner permission
+	var p1, c1 Ino
+	if st := m.Mkdir(ctx2, 1, "d1", 0777, 022, 0, &p1, attr); st != 0 {
+		t.Fatalf("mkdir d1: %s", st)
+	}
+	if st := m.Mkdir(ctx2, p1, "d2", 0777, 022, 0, &c1, attr); st != 0 {
+		t.Fatalf("mkdir d2: %s", st)
+	}
+	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
+		t.Fatalf("resolve /d1/d2: %s", st)
+	}
+	m.Rmdir(ctx2, p1, "d2")
+	m.Rmdir(ctx2, 1, "d1")
+
 	attr.Atime = 2
 	attr.Mtime = 2
 	attr.Uid = 1
@@ -289,6 +303,10 @@ func TestLocksRedis(t *testing.T) {
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
 	}
+	testLocks(t, m)
+}
+
+func testLocks(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
 	ctx := Background
 	var inode Ino
@@ -362,6 +380,7 @@ func TestLocksRedis(t *testing.T) {
 	// concurrent locks
 	var g sync.WaitGroup
 	var count int
+	var err syscall.Errno
 	for i := 0; i < 100; i++ {
 		g.Add(1)
 		go func(i int) {
@@ -382,6 +401,9 @@ func TestLocksRedis(t *testing.T) {
 		}(i)
 	}
 	g.Wait()
+	if err != 0 {
+		t.Fatalf("lock fail: %s", err)
+	}
 }
 
 func TestRemove(t *testing.T) {
