@@ -29,7 +29,7 @@ const scriptResolve = `
 local function unpack_attr(buf)
     local x = {}
     x.flags, x.mode, x.uid, x.gid = struct.unpack(">BHI4I4", string.sub(buf, 0, 11))
-    x.type = (x.mode / 4096) % 8
+    x.type = math.floor(x.mode / 4096) % 8
     x.mode = x.mode % 4096
     return x
 end
@@ -58,9 +58,9 @@ local function can_access(ino, uid, gid)
     local attr = get_attr(ino)
     local mode = 0
     if attr.uid == uid then
-        mode = (attr.mode / 64) % 8
+        mode = math.floor(attr.mode / 64) % 8
     elseif attr.gid == gid then
-        mode = (attr.mode / 8) % 8
+        mode = math.floor(attr.mode / 8) % 8
     else
         mode = attr.mode % 8
     end

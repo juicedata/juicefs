@@ -227,6 +227,7 @@ type javaConf struct {
 	MaxUploads     int    `json:"maxUploads"`
 	GetTimeout     int    `json:"getTimeout"`
 	PutTimeout     int    `json:"putTimeout"`
+	FastResolve    bool   `json:"fastResolve"`
 	Debug          bool   `json:"debug"`
 	NoUsageReport  bool   `json:"noUsageReport"`
 	AccessLog      string `json:"accessLog"`
@@ -401,9 +402,10 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Meta: &meta.Config{
 				Retries: 10,
 			},
-			Format:    format,
-			Chunk:     &chunkConf,
-			AccessLog: jConf.AccessLog,
+			Format:      format,
+			Chunk:       &chunkConf,
+			AccessLog:   jConf.AccessLog,
+			FastResolve: jConf.FastResolve,
 		}
 		if !jConf.NoUsageReport {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())

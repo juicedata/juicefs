@@ -38,12 +38,13 @@ const (
 )
 
 type Config struct {
-	Meta       *meta.Config
-	Format     *meta.Format
-	Chunk      *chunk.Config
-	Version    string
-	Mountpoint string
-	AccessLog  string
+	Meta        *meta.Config
+	Format      *meta.Format
+	Chunk       *chunk.Config
+	Version     string
+	Mountpoint  string
+	FastResolve bool
+	AccessLog   string
 }
 
 var (
