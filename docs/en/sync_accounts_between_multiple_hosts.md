@@ -1,4 +1,4 @@
-# Sync Account on Multiple Hosts
+# Sync Accounts between Multiple Hosts
 
 JuiceFS supports POSIX compatible ACL to manage permissions in the granularity of directory or file. The behavior is the same as a local file system.
 
