@@ -1,4 +1,4 @@
-# macOS
+# JuiceFS on macOS
 
 ## 1. Requirement
 
