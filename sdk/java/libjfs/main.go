@@ -25,6 +25,7 @@ package main
 // #include <utime.h>
 import "C"
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -422,26 +423,67 @@ func F(p uintptr) *wrapper {
 	return handlers[p]
 }
 
-//export jfs_update_uid
-func jfs_update_uid(h uintptr, uidstr *C.char) {
+//export jfs_update_uid_grouping
+func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 	w := F(h)
 	if w == nil {
 		return
 	}
-	for _, line := range strings.Split(C.GoString(uidstr), "\n") {
-		line = strings.TrimSpace(line)
-		fields := strings.Split(line, ":")
-		if len(fields) < 3 {
-			continue
+	if uidstr != nil {
+		usernames := make(map[string]int)
+		userIDs := make(map[int]string)
+		for _, line := range strings.Split(C.GoString(uidstr), "\n") {
+			line = strings.TrimSpace(line)
+			fields := strings.Split(line, ":")
+			if len(fields) < 2 {
+				continue
+			}
+			username := strings.TrimSpace(fields[0])
+			uid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
+			usernames[username] = uid
+			userIDs[uid] = username
 		}
-		username := strings.TrimSpace(fields[0])
-		if username == w.user {
-			uid, _ := strconv.Atoi(strings.TrimSpace(fields[2]))
-			logger.Debugf("update uid for %s to %d", username, uid)
-			w.ctx = meta.NewContext(uint32(os.Getpid()), uint32(uid), w.ctx.Gids())
-			return
+		w.m.userIDs = userIDs
+		w.m.usernames = usernames
+
+		var buffer bytes.Buffer
+		for key, value := range usernames {
+			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", key, value))
 		}
+		logger.Debugf("Update uids mapping\n %s", buffer.String())
 	}
+
+	var groups []string
+	if grouping != nil {
+		groupIDs := make(map[int]string)
+		groupsMap := make(map[string]int)
+		for _, line := range strings.Split(C.GoString(grouping), "\n") {
+			line = strings.TrimSpace(line)
+			fields := strings.Split(line, ":")
+			if len(fields) < 2 {
+				continue
+			}
+			gname := strings.TrimSpace(fields[0])
+			gid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
+			groupIDs[gid] = gname
+			groupsMap[gname] = gid
+			for _, user := range strings.Split(fields[len(fields)-1], ",") {
+				if strings.TrimSpace(user) == w.user {
+					groups = append(groups, gname)
+				}
+			}
+		}
+		w.m.groupIDs = groupIDs
+		w.m.groups = groupsMap
+
+		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
+	}
+
+	gids := w.ctx.Gids()
+	if len(groups) > 0 {
+		gids = w.lookupGids(strings.Join(groups, ","))
+	}
+	w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), gids)
 }
 
 //export jfs_term

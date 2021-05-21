@@ -86,7 +86,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   private String hflushMethod;
   private ScheduledExecutorService nodesFetcherThread;
   private ScheduledExecutorService refreshUidThread;
-  private FileStatus lastUidFile;
+  private Map<String, FileStatus> lastFileStatus = new HashMap<>();
   private static final DirectBufferPool bufferPool = new DirectBufferPool();
   private boolean metricsEnable = false;
 
@@ -104,7 +104,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public static interface Libjfs {
     long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
 
-    void jfs_update_uid(long h, String uidstr);
+    void jfs_update_uid_grouping(long h, String uidstr, String grouping);
 
     int jfs_term(long pid, long h);
 
@@ -371,52 +371,69 @@ public class JuiceFileSystemImpl extends FileSystem {
       metricsEnable = true;
       JuiceFSInstrumentation.init(this, statistics);
     }
+
     String uidFile = getConf(conf, "uid-file", null);
-    if (null != uidFile && !"".equals(uidFile.trim())) {
-      updateUid(uidFile);
-      refreshUid(uidFile);
+    String groupingFile = getConf(conf, "grouping", null);
+    if (!isEmpty(uidFile) || !isEmpty(groupingFile)) {
+      updateUidAndGrouping(uidFile, groupingFile);
+      refreshUidAndGrouping(uidFile, groupingFile);
     }
   }
 
-  private void updateUid(String uidFile) {
-    if (null == uidFile) {
-      return;
-    }
+  private boolean isEmpty(String str) {
+    return str == null || str.trim().isEmpty();
+  }
 
-    Path path = new Path(uidFile);
+  private String readFile(String file) {
+    Path path = new Path(file);
     URI uri = path.toUri();
-    FileSystem uidFs;
+    FileSystem fs;
     try {
       if (getScheme().equals(uri.getScheme()) &&
               (name != null && name.equals(uri.getAuthority()))) {
-        uidFs = this;
+        fs = this;
       } else {
-        uidFs = path.getFileSystem(getConf());
+        fs = path.getFileSystem(getConf());
       }
 
-      FileStatus status = uidFs.getFileStatus(path);
-      if (lastUidFile != null && status.getModificationTime() == lastUidFile.getModificationTime()
-              && status.getLen() == lastUidFile.getLen()) {
-        return;
+      FileStatus lastStatus = lastFileStatus.get(file);
+      FileStatus status = fs.getFileStatus(path);
+      if (lastStatus != null && status.getModificationTime() == lastStatus.getModificationTime()
+              && status.getLen() == lastStatus.getLen()) {
+        return null;
       }
-      FSDataInputStream in = uidFs.open(path);
-      String s = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
-      lib.jfs_update_uid(handle, s);
+      FSDataInputStream in = fs.open(path);
+      String res = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
       in.close();
-      lastUidFile = status;
+      lastFileStatus.put(file, status);
+      return res;
     } catch (IOException e) {
-      LOG.warn("update uid: " + e);
+      LOG.warn(String.format("read %s failed", file), e);
+      return null;
     }
   }
 
-  private void refreshUid(String uidFile) {
+  private void updateUidAndGrouping(String uidFile, String groupFile) {
+    String uidstr = null;
+    if (uidFile != null && !"".equals(uidFile.trim())) {
+      uidstr = readFile(uidFile);
+    }
+    String grouping = null;
+    if (groupFile != null && !"".equals(groupFile.trim())) {
+      grouping = readFile(groupFile);
+    }
+
+    lib.jfs_update_uid_grouping(handle, uidstr, grouping);
+  }
+
+  private void refreshUidAndGrouping(String uidFile, String groupFile) {
     refreshUidThread = Executors.newScheduledThreadPool(1, r -> {
-      Thread thread = new Thread(r, "Uid refresher");
+      Thread thread = new Thread(r, "Uid and group refresher");
       thread.setDaemon(true);
       return thread;
     });
     refreshUidThread.scheduleAtFixedRate(() -> {
-      updateUid(uidFile);
+      updateUidAndGrouping(uidFile, groupFile);
     }, 0, 2, TimeUnit.MINUTES);
   }
 
