@@ -24,6 +24,8 @@ After the container is successfully created, you can use `redis://127.0.0.1:6379
 
 > **Security Tips**: The redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database via the Internet, it is strongly recommended to refer to [Redis official documentation](https: //redis.io/topics/security) Enable protected mode.
 
+For more information about Redis database, [click here to view](databases_for_metadata.md#Redis).
+
 ## 2. Object Storage
 
 Like Redis databases, almost all public cloud computing platforms provide object storage services. Because JuiceFS supports object storage services on almost all platforms, you can choose freely according to your personal preferences. You can check our [Object Storage Support List and Setting Guide](how_to_setup_object_storage.md), which lists all the object storage services currently supported by JuiceFS and how to use them.
