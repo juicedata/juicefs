@@ -4,7 +4,7 @@ JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的�
 
 > **注意**：
 >
-> 由于 JuiceFS 使用本地的 user 和 UID 映射。因此，在分布式环境下使用，需要[同步所有需要使用的 user 和 UID](../en/how_to_sync_the_same_account.md) 到所有的 Hadoop 节点上，以避免权限问题。
+> 由于 JuiceFS 使用本地的 user 和 UID 映射。因此，在分布式环境下使用，需要[同步所有需要使用的 user 和 UID](sync_accounts_between_multiple_hosts.md) 到所有的 Hadoop 节点上，以避免权限问题。
 
 ## Hadoop 兼容性
 
@@ -24,7 +24,7 @@ $ cd sdk/java
 $ make
 ```
 
-对于中国用户，建议设置更快的 Maven 镜像仓库以加速编译，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
+> **提示**：对于中国用户，建议设置更快的 Maven 镜像仓库以加速编译，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
 
 ## 部署 JuiceFS Hadoop Java SDK
 
@@ -68,19 +68,35 @@ $ make
 
 ### 缓存配置
 
-| 配置项                       | 默认值 | 描述                                                                                                                                                                                                                                                                                |
-| --------------------------   | ------ | ------------------------------------------------------------                                                                                                                                                                                                                        |
-| `juicefs.cache-dir`          |        | 本地缓存目录，可以指定多个文件夹，用冒号 `:` 分隔，也可以使用通配符（比如 `*` ）。**通常应用没有权限创建这些目录，需要手动创建并给予 `0777` 权限，便于多个应用共享缓存数据。**                                                                                                      |
-| `juicefs.cache-size`         | 0      | 磁盘缓存容量，单位 MiB。如果配置多个目录，这是所有缓存目录的空间总和。                                                                                                                                                                                                              |
-| `juicefs.discover-nodes-url` |        | 指定发现集群节点列表的方式，每 10 分钟刷新一次。<br />YARN：`yarn`<br />Spark Standalone：`http://spark-master:web-ui-port/json/`<br />Spark ThriftServer：`http://thrift-server:4040/api/v1/applications/`<br />Presto：`http://coordinator:discovery-uri-port/v1/service/presto/` |
+| 配置项                       | 默认值 | 描述                                                                                                                                                                                                                                                                                      |
+| --------------------------   | ------ | ------------------------------------------------------------                                                                                                                                                                                                                              |
+| `juicefs.cache-dir`          |        | 本地缓存目录，可以指定多个文件夹，用冒号 `:` 分隔，也可以使用通配符（比如 `*` ）。**通常应用没有权限创建这些目录，需要手动创建并给予 `0777` 权限，便于多个应用共享缓存数据。**                                                                                                            |
+| `juicefs.cache-size`         | 0      | 磁盘缓存容量，单位 MiB。如果配置多个目录，这是所有缓存目录的空间总和。                                                                                                                                                                                                                    |
+| `juicefs.cache-full-block`   | `true` | 是否缓存所有读取的数据块，`false` 表示只缓存随机读的数据块。                                                                                                                                                                                                                              |
+| `juicefs.free-space`         | 0.2    | 本地缓存目录的最小可用空间比例                                                                                                                                                                                                                                                            |
+| `juicefs.discover-nodes-url` |        | 指定发现集群节点列表的方式，每 10 分钟刷新一次。<br /><br />YARN：`yarn`<br />Spark Standalone：`http://spark-master:web-ui-port/json/`<br />Spark ThriftServer：`http://thrift-server:4040/api/v1/applications/`<br />Presto：`http://coordinator:discovery-uri-port/v1/service/presto/` |
+
+### I/O 配置
+
+| 配置项                | 默认值 | 描述                                                         |
+| ------------------    | ------ | ------------------------------------------------------------ |
+| `juicefs.max-uploads` | 50     | 上传数据的最大连接数                                         |
+| `juicefs.get-timeout` | 5      | 下载一个对象的超时时间，单位为秒。                           |
+| `juicefs.put-timeout` | 60     | 上传一个对象的超时时间，单位为秒。                           |
+| `juicefs.memory-size` | 300    | 读写数据的缓冲区最大空间，单位为 MiB。                       |
+| `juicefs.prefetch`    | 3      | 预读数据块的最大并发数                                       |
 
 ### 其他配置
 
 | 配置项                    | 默认值  | 描述                                                                                                                |
 | ------------------        | ------  | ------------------------------------------------------------                                                        |
+| `juicefs.debug`           | `false` | 是否开启 debug 日志                                                                                                 |
 | `juicefs.access-log`      |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。 |
 | `juicefs.superuser`       | `hdfs`  | 超级用户                                                                                                            |
-| `juicefs.push-gateway`    |         | Promethous Push Gateway 的地址，`host:port` 形式。                                                |
+| `juicefs.push-gateway`    |         | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。                  |
+| `juicefs.push-interval`   | 10      | 推送数据到 Prometheus 的时间间隔，单位为秒。                                                                        |
+| `juicefs.push-auth`       |         | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。           |
+| `juicefs.fast-resolve`    | `true`  | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）                                                                   |
 | `juicefs.no-usage-report` | `false` | 是否上报数据，它只上报诸如版本号等使用量数据，不包含任何用户信息。                                                  |
 
 当使用多个 JuiceFS 文件系统时，上述所有配置项均可对单个文件系统指定，需要将文件系统名字 `{JFS_NAME}` 放在配置项的中间，比如：
@@ -185,9 +201,9 @@ CREATE TABLE IF NOT EXISTS person
 
 ## 指标收集
 
-JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式上报到 [Push Gateway](https://github.com/prometheus/pushgateway), 然后可以通过 [Grafana](https://grafana.com/) 以及我们[预定义的模板](../en/k8s_grafana_template.json)来展示收集的运行指标。
+JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus.io) 格式上报到 [Pushgateway](https://github.com/prometheus/pushgateway)，然后可以通过 [Grafana](https://grafana.com) 以及我们[预定义的模板](../en/k8s_grafana_template.json)来展示收集的运行指标。
 
-请用如下参数启用 指标收集：
+请用如下参数启用指标收集：
 
 ```xml
 <property>
@@ -196,11 +212,13 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
 </property>
 ```
 
-**注意: 每一个使用 JuiceFS Java SDK 的进程会有唯一的指标，而 Push Gateway 会一直记住所有收集到的指标，导致指标数持续积累占用过多内存，也会使得 Promethous 抓取指标时变慢，建议定期清理 Push Gateway 上 `job` 为 `juicefs` 的指标。建议每个小时使用下面的命令清理一次，运行中的 Java SDK 会指标清空后继续更新，基本不影响使用。
+> **注意**：每一个使用 JuiceFS Hadoop Java SDK 的进程会有唯一的指标，而 Pushgateway 会一直记住所有收集到的指标，导致指标数持续积累占用过多内存，也会使得 Prometheus 抓取指标时变慢，建议定期清理 Pushgateway 上 `job` 为 `juicefs` 的指标。建议每个小时使用下面的命令清理一次，运行中的 Hadoop Java SDK 会在指标清空后继续更新，基本不影响使用。
 
 ```bash
-  curl -X DELETE http://host:9091/metrics/job/juicefs
+$ curl -X DELETE http://host:9091/metrics/job/juicefs
 ```
+
+关于所有监控指标的描述，请查看 [JuiceFS 监控指标](p8s_metrics.md)。
 
 ## Benchmark
 
@@ -213,7 +231,7 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation create -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local  
+  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation create -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
 
   此命令会 create 10000 个空文件
@@ -223,15 +241,15 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
   ```shell
   hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation open -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
-  
+
   此命令会 open 10000 个文件，并不读取数据
 
 - rename
-  
+
   ```shell
   hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
   ```
-  
+
 - delete
 
   ```shell
@@ -240,12 +258,12 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
 
 - 参考值
 
-| 操作   | tps  | 时延(ms) |
-| ------ | ---- | ---- |
-| create | 546  | 1.83 |
-| open   | 1135 | 0.88 |
-| rename | 364  | 2.75 |
-| delete | 289  | 3.46 |
+| 操作   | TPS  | 时延（ms） |
+| ------ | ---- | ----       |
+| create | 546  | 1.83       |
+| open   | 1135 | 0.88       |
+| rename | 364  | 2.75       |
+| delete | 289  | 3.46       |
 
 #### IO 性能
 
@@ -260,17 +278,17 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
   ```shell
   hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -read -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
   ```
-  
+
   如果多次运行此命令，可能会出现数据被缓存到了系统缓存而导致读取速度非常快，只需清除 JuiceFS 的本地磁盘缓存即可
 
 - 参考值
 
-| 操作   | 吞吐(MB/s)  |
-| ------ | ---- |
-| write | 453  |
-| read   | 141 |
+| 操作   | 吞吐（MB/s） |
+| ------ | ----         |
+| write  | 453          |
+| read   | 141          |
 
-如果机器的网络带宽比较低，则一般能达到网络带宽瓶颈  
+如果机器的网络带宽比较低，则一般能达到网络带宽瓶颈
 
 ### 分布式测试
 
@@ -278,7 +296,7 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
 
 以下测试需要保证集群有足够的资源能够同时启动所需的 map 数量
 
-此测试使用了 3 台 4c32g 内存的计算节点，突发带宽 5Gbit/s，阿里云 Redis 5.0 社区 4G 主从版 
+此测试使用了 3 台 4c32g 内存的计算节点，突发带宽 5Gbit/s，阿里云 Redis 5.0 社区 4G 主从版
 
 #### 元数据
 
@@ -313,26 +331,26 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
   ```
 
   此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 delete 1000 个文件，总共 delete 100000 个文件
-  
+
 - 参考值
 
   - 10 并发
-  
-  | 操作   | IOPS | 时延(ms) |
-  | ------ | ---- | ---- |
-  | create | 2307 | 3.6 |
-  | open   | 3215 | 2.3 |
-  | rename | 1700 | 5.22 |
-  | delete | 1378 | 6.7      |
+
+  | 操作   | IOPS | 时延（ms） |
+  | ------ | ---- | ----       |
+  | create | 2307 | 3.6        |
+  | open   | 3215 | 2.3        |
+  | rename | 1700 | 5.22       |
+  | delete | 1378 | 6.7        |
 
   - 100 并发
 
-  | 操作   | IOPS | 时延(ms) |
-  | ------ | ---- | ---- |
-  | create | 8375 | 11.5 |
-  | open   | 12691 | 7.5 |
-  | rename | 5343 | 18.4 |
-  | delete | 3576 | 27.6 |
+  | 操作   | IOPS  | 时延（ms） |
+  | ------ | ----  | ----       |
+  | create | 8375  | 11.5       |
+  | open   | 12691 | 7.5        |
+  | rename | 5343  | 18.4       |
+  | delete | 3576  | 27.6       |
 
 #### IO 性能
 
@@ -355,10 +373,10 @@ JuiceFS SDK 支持把运行指标以 [Promethous](https://prometheus.io/) 格式
 
 - 参考值
 
-| 操作   | 平均吞吐(MB/s)  | 总吞吐(MB/s)  |
-| ------ | ---- | ---- |
-| write | 180  | 1792  |
-| read   | 141 | 1409 |
+| 操作   | 平均吞吐（MB/s） | 总吞吐（MB/s） |
+| ------ | ----             | ----           |
+| write  | 180              | 1792           |
+| read   | 141              | 1409           |
 
 
 ## FAQ

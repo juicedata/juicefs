@@ -222,6 +222,7 @@ type javaConf struct {
 	Writeback      bool   `json:"writeback"`
 	OpenCache      bool   `json:"opencache"`
 	MemorySize     int    `json:"memorySize"`
+	Prefetch       int    `json:"prefetch"`
 	Readahead      int    `json:"readahead"`
 	UploadLimit    int    `json:"uploadLimit"`
 	MaxUploads     int    `json:"maxUploads"`
@@ -370,7 +371,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			AutoCreate:     jConf.AutoCreate,
 			CacheFullBlock: jConf.CacheFullBlock,
 			MaxUpload:      jConf.MaxUploads,
-			Prefetch:       3,
+			Prefetch:       jConf.Prefetch,
 			Writeback:      jConf.Writeback,
 			Partitions:     format.Partitions,
 			UploadLimit:    jConf.UploadLimit,
