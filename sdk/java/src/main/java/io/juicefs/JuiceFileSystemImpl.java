@@ -371,12 +371,14 @@ public class JuiceFileSystemImpl extends FileSystem {
       metricsEnable = true;
       JuiceFSInstrumentation.init(this, statistics);
     }
-    updateUid(conf);
-    refreshUid();
+    String uidFile = getConf(conf, "uid-file", null);
+    if (null != uidFile && !"".equals(uidFile.trim())) {
+      updateUid(uidFile);
+      refreshUid(uidFile);
+    }
   }
 
-  private void updateUid(Configuration conf) {
-    String uidFile = getConf(conf, "uid-file", null);
+  private void updateUid(String uidFile) {
     if (null == uidFile) {
       return;
     }
@@ -389,7 +391,7 @@ public class JuiceFileSystemImpl extends FileSystem {
               (name != null && name.equals(uri.getAuthority()))) {
         uidFs = this;
       } else {
-        uidFs = path.getFileSystem(conf);
+        uidFs = path.getFileSystem(getConf());
       }
 
       FileStatus status = uidFs.getFileStatus(path);
@@ -407,14 +409,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
-  private void refreshUid() {
+  private void refreshUid(String uidFile) {
     refreshUidThread = Executors.newScheduledThreadPool(1, r -> {
       Thread thread = new Thread(r, "Uid refresher");
       thread.setDaemon(true);
       return thread;
     });
     refreshUidThread.scheduleAtFixedRate(() -> {
-      updateUid(getConf());
+      updateUid(uidFile);
     }, 0, 2, TimeUnit.MINUTES);
   }
 
