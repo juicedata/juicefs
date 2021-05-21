@@ -4,7 +4,7 @@ JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/c
 
 > **NOTICE**:
 >
->  JuiceFS use local mapping of user and UID. So, you should [sync all the needed users and their UIDs](./how_to_sync_the_same_account.md) across the whole Hadoop cluster to avoid permission error.
+> JuiceFS use local mapping of user and UID. So, you should [sync all the needed users and their UIDs](how_to_sync_the_same_account.md) across the whole Hadoop cluster to avoid permission error.
 
 ## Hadoop Compatibility
 
@@ -24,7 +24,7 @@ $ cd sdk/java
 $ make
 ```
 
-> **Tip**: For users in China, it's recommended to set a local Maven mirror to speedup compilation, e.g. [Aliyun Maven Mirror](https://maven.aliyun.com).
+> **Tip**: For users in China, it's recommended to set a local Maven mirror to speed-up compilation, e.g. [Aliyun Maven Mirror](https://maven.aliyun.com).
 
 ## Deploy JuiceFS Hadoop Java SDK
 
@@ -294,7 +294,7 @@ Distribute benchmark use MapReduce program to test meta and IO throughput perfor
 
 Enough resources should be provided to make sure all Map task can be started at the same time
 
-We use 3 4c32g ECS (5Gbit/s) and AliYun Redis 5.0 4G redis for the benchmark
+We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
 #### Meta
 
