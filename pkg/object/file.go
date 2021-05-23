@@ -263,6 +263,10 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 					logger.Warnf("skip unreachable symlink: %s (%s)", path, err)
 					return nil
 				}
+				if os.IsNotExist(err) {
+					logger.Warnf("skip not exist file or directory: %s", path)
+					return nil
+				}
 				listed <- nil
 				logger.Errorf("list %s: %s", path, err)
 				return err
