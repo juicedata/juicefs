@@ -259,8 +259,11 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.SetXattr(ctx, inode, "a", []byte("v")); st != 0 {
 		t.Fatalf("setxattr: %s", st)
 	}
+	if st := m.SetXattr(ctx, inode, "a", []byte("v2")); st != 0 {
+		t.Fatalf("setxattr: %s", st)
+	}
 	var value []byte
-	if st := m.GetXattr(ctx, inode, "a", &value); st != 0 || string(value) != "v" {
+	if st := m.GetXattr(ctx, inode, "a", &value); st != 0 || string(value) != "v2" {
 		t.Fatalf("getxattr: %s %v", st, value)
 	}
 	if st := m.ListXattr(ctx, inode, &value); st != 0 || string(value) != "a\000" {
