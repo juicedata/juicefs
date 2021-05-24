@@ -228,13 +228,9 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	}
 
 	return m.txn(func(s *xorm.Session) error {
-		_, err = s.Insert(&setting{"format", string(data)})
-		if err != nil {
-			return err
-		}
-
+		var set = &setting{"format", string(data)}
 		now := time.Now()
-		_, err = s.Insert(&node{
+		var root = &node{
 			Inode:  1,
 			Type:   TypeDirectory,
 			Mode:   0777,
@@ -244,19 +240,16 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			Nlink:  2,
 			Length: 4 << 10,
 			Parent: 1,
-		})
-		if err != nil {
-			return err
 		}
-		_, err = s.Insert(
-			counter{"nextInode", 2}, // 1 is root
-			counter{"nextChunk", 1},
-			counter{"nextSession", 1},
-			counter{"usedSpace", 0},
-			counter{"totalInodes", 0},
-			counter{"nextCleanupSlices", 0},
-		)
-		return err
+		var cs = []counter{
+			{"nextInode", 2}, // 1 is root
+			{"nextChunk", 1},
+			{"nextSession", 1},
+			{"usedSpace", 0},
+			{"totalInodes", 0},
+			{"nextCleanupSlices", 0},
+		}
+		return mustInsert(s, set, root, &cs)
 	})
 }
 
@@ -280,8 +273,8 @@ func (m *dbMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
-		return s.Insert(&session{v, time.Now().Unix()})
+	err = m.txn(func(s *xorm.Session) error {
+		return mustInsert(s, &session{v, time.Now().Unix()})
 	})
 	if err != nil {
 		return fmt.Errorf("insert new session: %s", err)
@@ -341,6 +334,14 @@ func (m *dbMeta) nextInode() (Ino, error) {
 		m.freeInodes.maxid = v + 100
 	}
 	return Ino(v), err
+}
+
+func mustInsert(s *xorm.Session, beans ...interface{}) error {
+	inserted, err := s.Insert(beans...)
+	if err == nil && int(inserted) < len(beans) {
+		err = fmt.Errorf("%d records not inserted: %+v", len(beans)-int(inserted), beans)
+	}
+	return err
 }
 
 func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
@@ -605,10 +606,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	}
 	if err == nil {
 		if n, _ := r.RowsAffected(); n == 0 {
-			n, err = s.Insert(&chunk{inode, indx, buf})
-			if err == nil && n == 0 {
-				return fmt.Errorf("insert slice failed")
-			}
+			err = mustInsert(s, &chunk{inode, indx, buf})
 		}
 	}
 	return err
@@ -861,22 +859,19 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			n.Gid = pn.Gid
 		}
 
-		if _, err = s.Insert(&edge{parent, name, ino, _type}); err != nil {
+		if err = mustInsert(s, &edge{parent, name, ino, _type}, &n); err != nil {
 			return err
 		}
 		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
-		if _, err := s.Insert(&n); err != nil {
-			return err
-		}
 		if _type == TypeSymlink {
-			if _, err := s.Insert(&symlink{Inode: ino, Target: path}); err != nil {
+			if err = mustInsert(s, &symlink{Inode: ino, Target: path}); err != nil {
 				return err
 			}
 		}
 		m.parseAttr(&n, attr)
-		return err
+		return nil
 	})
 	if err == nil {
 		m.updateStats(align4K(0), 1)
@@ -970,14 +965,14 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			switch e.Type {
 			case TypeFile:
 				if opened {
-					if _, err := s.Insert(sustained{m.sid, e.Inode}); err != nil {
+					if err = mustInsert(s, sustained{m.sid, e.Inode}); err != nil {
 						return err
 					}
 					if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
 						return err
 					}
 				} else {
-					if _, err := s.Insert(delfile{e.Inode, n.Length, time.Now().Unix()}); err != nil {
+					if err = mustInsert(s, delfile{e.Inode, n.Length, time.Now().Unix()}); err != nil {
 						return err
 					}
 					if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
@@ -1219,11 +1214,11 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 						if _, err := s.Cols("nlink", "ctime").Update(&dn, &node{Inode: dn.Inode}); err != nil {
 							return err
 						}
-						if _, err := s.Insert(sustained{m.sid, dn.Inode}); err != nil {
+						if err = mustInsert(s, sustained{m.sid, dn.Inode}); err != nil {
 							return err
 						}
 					} else {
-						if _, err := s.Insert(delfile{dn.Inode, dn.Length, time.Now().Unix()}); err != nil {
+						if err = mustInsert(s, delfile{dn.Inode, dn.Length, time.Now().Unix()}); err != nil {
 							return err
 						}
 						if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
@@ -1252,10 +1247,8 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				return err
 			}
 		}
-		if n, err := s.Insert(&edge{parentDst, nameDst, sn.Inode, sn.Type}); err != nil {
+		if err = mustInsert(s, &edge{parentDst, nameDst, sn.Inode, sn.Type}); err != nil {
 			return err
-		} else if n != 1 {
-			return fmt.Errorf("insert edge(%d,%s) failed", parentDst, nameDst)
 		}
 		if parentDst != parentSrc {
 			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&dpn, &node{Inode: parentDst}); err != nil {
@@ -1322,7 +1315,7 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 		n.Nlink++
 		n.Ctime = now
 
-		if ok, err := s.Insert(&edge{Parent: parent, Name: name, Inode: inode, Type: n.Type}); err != nil || ok == 0 {
+		if err = mustInsert(s, &edge{Parent: parent, Name: name, Inode: inode, Type: n.Type}); err != nil {
 			return err
 		}
 		if _, err := s.Cols("mtime", "ctime").Update(&pn, &node{Inode: parent}); err != nil {
@@ -1475,7 +1468,7 @@ func (m *dbMeta) deleteInode(inode Ino) error {
 		if !ok {
 			return nil
 		}
-		if _, err := s.Insert(&delfile{inode, n.Length, time.Now().Unix()}); err != nil {
+		if err = mustInsert(s, &delfile{inode, n.Length, time.Now().Unix()}); err != nil {
 			return err
 		}
 		newSpace = -align4K(n.Length)
@@ -1590,11 +1583,11 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 				return err
 			}
 		} else {
-			if _, err := s.Insert(&chunk{inode, indx, buf}); err != nil {
+			if err = mustInsert(s, &chunk{inode, indx, buf}); err != nil {
 				return err
 			}
 		}
-		if _, err := s.Insert(chunkRef{slice.Chunkid, slice.Size, 1}); err != nil {
+		if err = mustInsert(s, chunkRef{slice.Chunkid, slice.Size, 1}); err != nil {
 			return err
 		}
 		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
@@ -1952,7 +1945,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return err
 		}
 		// create the key to tracking it
-		if n, err := s.Insert(chunkRef{chunkid, size, 1}); err != nil || n == 0 {
+		if err = mustInsert(s, chunkRef{chunkid, size, 1}); err != nil {
 			return err
 		}
 		ses := s
@@ -2088,7 +2081,7 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 	}
 	return errno(m.txn(func(s *xorm.Session) error {
 		var x = xattr{inode, name, value}
-		n, err := s.InsertOne(&x)
+		n, err := s.Insert(&x)
 		if err != nil || n == 0 {
 			_, err = s.Update(&x, &xattr{inode, name, nil})
 		}
