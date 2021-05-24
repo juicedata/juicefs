@@ -22,26 +22,24 @@ import (
 )
 
 type version struct {
-	major, minor, patch int
+	ver          string
+	major, minor int
 }
 
-var oldestSupportedVer = version{2, 2, 0}
+var oldestSupportedVer = version{"2.2.x", 2, 2}
 
 func parseVersion(v string) (ver version, err error) {
-	parts := strings.SplitN(v, ".", 3)
-	if len(parts) != 3 {
+	parts := strings.Split(v, ".")
+	if len(parts) < 2 {
 		err = fmt.Errorf("invalid version: %v", v)
 		return
 	}
+	ver.ver = v
 	ver.major, err = strconv.Atoi(parts[0])
 	if err != nil {
 		return
 	}
 	ver.minor, err = strconv.Atoi(parts[1])
-	if err != nil {
-		return
-	}
-	ver.patch, err = strconv.Atoi(parts[2])
 	return
 }
 
@@ -52,17 +50,11 @@ func (ver version) olderThan(v2 version) bool {
 	if ver.major > v2.major {
 		return false
 	}
-	if ver.minor < v2.minor {
-		return true
-	}
-	if ver.minor > v2.minor {
-		return false
-	}
-	return ver.patch < v2.patch
+	return ver.minor < v2.minor
 }
 
 func (ver version) String() string {
-	return fmt.Sprintf("%d.%d.%d", ver.major, ver.minor, ver.patch)
+	return ver.ver
 }
 
 type redisInfo struct {
