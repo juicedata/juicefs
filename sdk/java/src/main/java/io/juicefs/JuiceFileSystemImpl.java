@@ -285,7 +285,8 @@ public class JuiceFileSystemImpl extends FileSystem {
     this.ugi = UserGroupInformation.getCurrentUser();
     String user = ugi.getShortUserName();
     String group = "nogroup";
-    if (ugi.getGroupNames().length > 0) {
+    String groupingFile = getConf(conf, "grouping", null);
+    if (isEmpty(groupingFile) && ugi.getGroupNames().length > 0) {
       group = String.join(",", ugi.getGroupNames());
     }
     String superuser = getConf(conf, "superuser", "hdfs");
@@ -375,7 +376,6 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     String uidFile = getConf(conf, "uid-file", null);
-    String groupingFile = getConf(conf, "grouping", null);
     if (!isEmpty(uidFile) || !isEmpty(groupingFile)) {
       updateUidAndGrouping(uidFile, groupingFile);
       refreshUidAndGrouping(uidFile, groupingFile);
