@@ -18,17 +18,17 @@ package meta
 import "testing"
 
 func TestOlderThan(t *testing.T) {
-	v := version{2, 2, 10}
-	if !v.olderThan(version{6, 2, 0}) {
+	v := version{"2.2.10", 2, 2}
+	if !v.olderThan(version{"6.2", 6, 2}) {
 		t.Fatal("Expect true, got false.")
 	}
-	if !v.olderThan(version{2, 3, 0}) {
+	if !v.olderThan(version{"2.3", 2, 3}) {
 		t.Fatal("Expect true, got false.")
 	}
-	if !v.olderThan(version{2, 2, 12}) {
+	if v.olderThan(version{"2.2", 2, 2}) {
 		t.Fatal("Expect true, got false.")
 	}
-	if v.olderThan(version{2, 1, 0}) {
+	if v.olderThan(version{"2.1", 2, 1}) {
 		t.Fatal("Expect false, got true.")
 	}
 	if v.olderThan(v) {
@@ -54,8 +54,8 @@ func TestParseVersion(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to parse a valid version: %s", err)
 		}
-		if !(ver.major == 6 && ver.minor == 2 && ver.patch == 19) {
-			t.Fatalf("Expect %s, got %s", "6.2.19", ver)
+		if !(ver.major == 6 && ver.minor == 2) {
+			t.Fatalf("Expect %s, got %s", "6.2", ver)
 		}
 		if ver.String() != "6.2.19" {
 			t.Fatalf("Expect %s, got %s", "6.2.19", ver)
