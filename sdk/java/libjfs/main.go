@@ -432,6 +432,9 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 	if w == nil {
 		return
 	}
+	if uidstr == nil && grouping == nil {
+		return
+	}
 	if uidstr != nil {
 		usernames := make(map[string]int)
 		userIDs := make(map[int]string)
