@@ -18,4 +18,4 @@ dist/
 *.so
 libjfs.h
 .DS_Store
-
+docs/node_modules
