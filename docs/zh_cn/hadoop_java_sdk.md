@@ -4,7 +4,7 @@ JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的�
 
 > **注意**：
 >
-> 由于 JuiceFS 使用本地的 user 和 UID 映射。因此，在分布式环境下使用，需要[同步所有需要使用的 user 和 UID](sync_accounts_between_multiple_hosts.md) 到所有的 Hadoop 节点上，以避免权限问题。
+> 由于 JuiceFS 默认使用本地的 user 和 UID 映射。因此，在分布式环境下使用，需要[同步所有需要使用的 user 和 UID](sync_accounts_between_multiple_hosts.md) 到所有的 Hadoop 节点上，以避免权限问题，指定全局的用户列表和所属用户组的文件。
 
 ## Hadoop 兼容性
 
@@ -93,6 +93,9 @@ $ make
 | `juicefs.debug`           | `false` | 是否开启 debug 日志                                                                                                 |
 | `juicefs.access-log`      |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。 |
 | `juicefs.superuser`       | `hdfs`  | 超级用户                                                                                                            |
+| `juicefs.users`           | `null`  | 用户名以及UID列表文件的地址，比如 `jfs://name/users`。                                                                            |
+| `juicefs.groups`          | `null`  | 用户组、GID以及组成员列表文件的地址，比如 `jfs://name/groups`                                                                            |
+
 | `juicefs.push-gateway`    |         | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。                  |
 | `juicefs.push-interval`   | 10      | 推送数据到 Prometheus 的时间间隔，单位为秒。                                                                        |
 | `juicefs.push-auth`       |         | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。           |

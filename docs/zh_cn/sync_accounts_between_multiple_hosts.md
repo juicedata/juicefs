@@ -6,6 +6,8 @@ In order to make the permission experience intuitive to user (e.g. the files acc
 
 Here we provide a simple [Ansible](https://www.ansible.com/community) playbook to demonstrate how to ensure an account with same UID and GID on multiple hosts.
 
+**Note: You can use two files to specify the id for all users and groups.**
+
 
 
 ## Install ansible

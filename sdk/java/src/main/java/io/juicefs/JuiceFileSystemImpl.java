@@ -56,6 +56,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
+import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 
 /****************************************************************
@@ -84,8 +85,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   private FsPermission uMask;
   private String hflushMethod;
   private ScheduledExecutorService nodesFetcherThread;
-  private ScheduledExecutorService refreshGroupsThread;
-  private FileStatus lastFileStatus;
+  private ScheduledExecutorService refreshUidThread;
+  private Map<String, FileStatus> lastFileStatus = new HashMap<>();
   private static final DirectBufferPool bufferPool = new DirectBufferPool();
   private boolean metricsEnable = false;
 
@@ -103,7 +104,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public static interface Libjfs {
     long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
 
-    void jfs_update_grouping(long h, String grouping);
+    void jfs_update_uid_grouping(long h, String uidstr, String grouping);
 
     int jfs_term(long pid, long h);
 
@@ -284,7 +285,8 @@ public class JuiceFileSystemImpl extends FileSystem {
     this.ugi = UserGroupInformation.getCurrentUser();
     String user = ugi.getShortUserName();
     String group = "nogroup";
-    if (ugi.getGroupNames().length > 0) {
+    String groupingFile = getConf(conf, "grouping", null);
+    if (isEmpty(groupingFile) && ugi.getGroupNames().length > 0) {
       group = String.join(",", ugi.getGroupNames());
     }
     String superuser = getConf(conf, "superuser", "hdfs");
@@ -372,6 +374,69 @@ public class JuiceFileSystemImpl extends FileSystem {
       metricsEnable = true;
       JuiceFSInstrumentation.init(this, statistics);
     }
+
+    String uidFile = getConf(conf, "uid-file", null);
+    if (!isEmpty(uidFile) || !isEmpty(groupingFile)) {
+      updateUidAndGrouping(uidFile, groupingFile);
+      refreshUidAndGrouping(uidFile, groupingFile);
+    }
+  }
+
+  private boolean isEmpty(String str) {
+    return str == null || str.trim().isEmpty();
+  }
+
+  private String readFile(String file) {
+    Path path = new Path(file);
+    URI uri = path.toUri();
+    FileSystem fs;
+    try {
+      if (getScheme().equals(uri.getScheme()) &&
+              (name != null && name.equals(uri.getAuthority()))) {
+        fs = this;
+      } else {
+        fs = path.getFileSystem(getConf());
+      }
+
+      FileStatus lastStatus = lastFileStatus.get(file);
+      FileStatus status = fs.getFileStatus(path);
+      if (lastStatus != null && status.getModificationTime() == lastStatus.getModificationTime()
+              && status.getLen() == lastStatus.getLen()) {
+        return null;
+      }
+      FSDataInputStream in = fs.open(path);
+      String res = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
+      in.close();
+      lastFileStatus.put(file, status);
+      return res;
+    } catch (IOException e) {
+      LOG.warn(String.format("read %s failed", file), e);
+      return null;
+    }
+  }
+
+  private void updateUidAndGrouping(String uidFile, String groupFile) {
+    String uidstr = null;
+    if (uidFile != null && !"".equals(uidFile.trim())) {
+      uidstr = readFile(uidFile);
+    }
+    String grouping = null;
+    if (groupFile != null && !"".equals(groupFile.trim())) {
+      grouping = readFile(groupFile);
+    }
+
+    lib.jfs_update_uid_grouping(handle, uidstr, grouping);
+  }
+
+  private void refreshUidAndGrouping(String uidFile, String groupFile) {
+    refreshUidThread = Executors.newScheduledThreadPool(1, r -> {
+      Thread thread = new Thread(r, "Uid and group refresher");
+      thread.setDaemon(true);
+      return thread;
+    });
+    refreshUidThread.scheduleAtFixedRate(() -> {
+      updateUidAndGrouping(uidFile, groupFile);
+    }, 1, 1, TimeUnit.MINUTES);
   }
 
   private void initializeStorageIds(Configuration conf) throws IOException {
@@ -436,11 +501,11 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
-    String name = "libjfs.1.so";
+    String name = "libjfs.2.so";
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
     if (os.toLowerCase().contains("windows")) {
-      name = "libjfs1.dll";
+      name = "libjfs2.dll";
       dir = new File(System.getProperty("java.io.tmpdir"));
     }
     File libFile = new File(dir, name);
@@ -1547,8 +1612,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void close() throws IOException {
     super.close();
-    if (refreshGroupsThread != null) {
-      refreshGroupsThread.shutdownNow();
+    if (refreshUidThread != null) {
+      refreshUidThread.shutdownNow();
     }
     lib.jfs_term(Thread.currentThread().getId(), handle);
     if (nodesFetcherThread != null) {
