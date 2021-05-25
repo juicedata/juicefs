@@ -105,4 +105,4 @@ $ id alice
 uid=1201(alice) gid=500(staff) groups=500(staff)
 ```
 
-Read [sync account on multiple hosts](./how_to_sync_the_same_account.md) to resolve this problem.
+Read ["Sync Accounts between Multiple Hosts"](sync_accounts_between_multiple_hosts.md) to resolve this problem.
