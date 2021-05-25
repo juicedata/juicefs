@@ -46,8 +46,6 @@ $ sudo docker run -d --name minio \
 
 > **注意**：以上命令将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改数据持久化存储的位置。
 
-> **注意**：在不指定任何存储参数的情况下，JuiceFS 客户端会使用本地磁盘作为数据存储。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](how_to_setup_object_storage.md#local)查看详情。
-
 ## 三、安装 JuiceFS 客户端
 
 JuiceFS 同时支持 Linux、Windows、macOS 三大操作系统平台，你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，请根据实际使用的系统和架构选择对应的版本。
@@ -95,6 +93,8 @@ $ juicefs format \
 可以通过 `juicefs format -h` 命令，获得创建文件系统的完整帮助信息。
 
 > **注意**：你可以根据需要，创建无限多个 JuiceFS 文件系统。但需要注意的是，每个 Redis 数据库中只能创建一个文件系统。比如要再创建一个名为 `memory` 的文件系统时，可以使用 Redis 中的 2 号数据库，即 `redis://127.0.0.1:6379/2` 。
+
+> **注意**：如果不指定 `--storage` 选项，JuiceFS 客户端会使用本地磁盘作为数据存储。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](how_to_setup_object_storage.md#local)查看详情。
 
 ## 五、挂载 JuiceFS 文件系统
 
