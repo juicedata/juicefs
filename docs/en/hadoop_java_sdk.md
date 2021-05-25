@@ -169,8 +169,7 @@ Add configurations to `conf/flink-conf.yaml`. You could only setup Flink client 
 
 When the following components need to access JuiceFS, they should be restarted.
 
-**Note: Before restart, you need to confirm JuiceFS related configuration has been written to the configuration file of each component,
-usually you can find them in `core-site.xml` on the machine where the service of the component was deployed.**
+> **Note**: Before restart, you need to confirm JuiceFS related configuration has been written to the configuration file of each component, usually you can find them in `core-site.xml` on the machine where the service of the component was deployed.
 
 | Components | Services                   |
 | ---------- | --------                   |
@@ -218,10 +217,10 @@ Enable metrics reporting through following configurations:
 ```
 
 > **Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly. It is recommended to use the following command to clean up once every hour. The running Hadoop Java SDK will continue to update after the metrics are cleared, which basically does not affect the use.
-
-```bash
-$ curl -X DELETE http://host:9091/metrics/job/juicefs
-```
+>
+> ```bash
+> $ curl -X DELETE http://host:9091/metrics/job/juicefs
+> ```
 
 For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p8s_metrics.md).
 

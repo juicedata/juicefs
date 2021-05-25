@@ -88,19 +88,18 @@ $ make
 
 ### 其他配置
 
-| 配置项               | 默认值  | 描述                                                                                                                                      |
-| ------------------   | ------  | ------------------------------------------------------------                                                                              |
-| `juicefs.debug`      | `false` | 是否开启 debug 日志                                                                                                                       |
-| `juicefs.access-log` |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。                       |
-| `juicefs.superuser`  | `hdfs`  | 超级用户                                                                                                                                  |
-| `juicefs.users`      | `null`  | 用户名以及 UID 列表文件的地址，比如 `jfs://name/users`。文件格式为 `<username>:<UID>`，一行一个用户。                                     |
-| `juicefs.groups`     | `null`  | 用户组、GID 以及组成员列表文件的地址，比如 `jfs://name/groups`。文件格式为 `<group-name>:<GID>:<username1>,<username2>`，一行一个用户组。 |
-
-| `juicefs.push-gateway`    |         | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。                  |
-| `juicefs.push-interval`   | 10      | 推送数据到 Prometheus 的时间间隔，单位为秒。                                                                        |
-| `juicefs.push-auth`       |         | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。           |
-| `juicefs.fast-resolve`    | `true`  | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）                                                                   |
-| `juicefs.no-usage-report` | `false` | 是否上报数据，它只上报诸如版本号等使用量数据，不包含任何用户信息。                                                  |
+| 配置项                    | 默认值  | 描述                                                                                                                                      |
+| ------------------        | ------  | ------------------------------------------------------------                                                                              |
+| `juicefs.debug`           | `false` | 是否开启 debug 日志                                                                                                                       |
+| `juicefs.access-log`      |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。                       |
+| `juicefs.superuser`       | `hdfs`  | 超级用户                                                                                                                                  |
+| `juicefs.users`           | `null`  | 用户名以及 UID 列表文件的地址，比如 `jfs://name/users`。文件格式为 `<username>:<UID>`，一行一个用户。                                     |
+| `juicefs.groups`          | `null`  | 用户组、GID 以及组成员列表文件的地址，比如 `jfs://name/groups`。文件格式为 `<group-name>:<GID>:<username1>,<username2>`，一行一个用户组。 |
+| `juicefs.push-gateway`    |         | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。                                        |
+| `juicefs.push-interval`   | 10      | 推送数据到 Prometheus 的时间间隔，单位为秒。                                                                                              |
+| `juicefs.push-auth`       |         | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。                                 |
+| `juicefs.fast-resolve`    | `true`  | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）                                                                                         |
+| `juicefs.no-usage-report` | `false` | 是否上报数据，它只上报诸如版本号等使用量数据，不包含任何用户信息。                                                                        |
 
 当使用多个 JuiceFS 文件系统时，上述所有配置项均可对单个文件系统指定，需要将文件系统名字 `{JFS_NAME}` 放在配置项的中间，比如：
 
@@ -170,7 +169,7 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 
 当需要使用以下组件访问 JuiceFS 数据时，需要重启相关服务。
 
-**注意：在重启之前需要保证 JuiceFS 配置已经写入配置文件，通常可以查看机器上各组件配置的 `core-site.xml` 里面是否有 JuiceFS 相关配置。**
+> **注意**：在重启之前需要保证 JuiceFS 配置已经写入配置文件，通常可以查看机器上各组件配置的 `core-site.xml` 里面是否有 JuiceFS 相关配置。
 
 | 组件名 | 服务名                     |
 | ------ | -------------------------- |
@@ -218,10 +217,10 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 ```
 
 > **注意**：每一个使用 JuiceFS Hadoop Java SDK 的进程会有唯一的指标，而 Pushgateway 会一直记住所有收集到的指标，导致指标数持续积累占用过多内存，也会使得 Prometheus 抓取指标时变慢，建议定期清理 Pushgateway 上 `job` 为 `juicefs` 的指标。建议每个小时使用下面的命令清理一次，运行中的 Hadoop Java SDK 会在指标清空后继续更新，基本不影响使用。
-
-```bash
-$ curl -X DELETE http://host:9091/metrics/job/juicefs
-```
+>
+> ```bash
+> $ curl -X DELETE http://host:9091/metrics/job/juicefs
+> ```
 
 关于所有监控指标的描述，请查看 [JuiceFS 监控指标](p8s_metrics.md)。
 
