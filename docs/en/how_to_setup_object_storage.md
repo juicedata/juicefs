@@ -586,4 +586,16 @@ Writing ...
 
 ## Local disk <span id='local'></span>
 
-Writing ...
+When creating JuiceFS storage, if no storage type is specified, the local disk will be used to store data by default. The default storage path for root user is `/var/jfs`, and `~/.juicefs/local` is for ordinary users. 
+
+For example, using the local Redis database and local disk to create a JuiceFS storage named `test`:
+
+```shell
+$ ./juicefs format redis://localhost:6379/1 test
+```
+
+Local storage is only used to understand and experience the basic functions of JuiceFS. The created JuiceFS storage cannot be mounted by other clients in the network and can only be used on a stand-alone machine. 
+
+If you need to evaluate JuiceFS, it is recommended to use object storage services.
+
+> **Note**: JuiceFS storage created using local storage cannot be mounted by other hosts on the network. This is because the data sharing function of JuiceFS relies on the object storage and metadata service that can be accessed by all clients. If the storage service and metadata service used when creating JuiceFS storage cannot be accessed by other clients in the network, other clients cannot mount and use the JuiceFS storage.
