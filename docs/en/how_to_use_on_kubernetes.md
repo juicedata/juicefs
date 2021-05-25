@@ -184,7 +184,7 @@ For more details about JuiceFS CSI driver please refer to [JuiceFS CSI Driver](h
 
 ## Monitoring
 
-JuiceFS CSI driver can export [Prometheus](https://prometheus.io) metrics at port `9567`.
+JuiceFS CSI driver can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p8s_metrics.md).
 
 ### Configure Prometheus server
 
