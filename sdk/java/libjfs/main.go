@@ -25,6 +25,7 @@ package main
 // #include <utime.h>
 import "C"
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -423,6 +424,61 @@ func F(p uintptr) *wrapper {
 	fslock.Lock()
 	defer fslock.Unlock()
 	return handlers[p]
+}
+
+//export jfs_update_uid_grouping
+func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
+	w := F(h)
+	if w == nil {
+		return
+	}
+	var uids []pwent
+	if uidstr != nil {
+		for _, line := range strings.Split(C.GoString(uidstr), "\n") {
+			fields := strings.Split(line, ":")
+			if len(fields) < 2 {
+				continue
+			}
+			username := strings.TrimSpace(fields[0])
+			uid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
+			uids = append(uids, pwent{uid, username})
+		}
+
+		var buffer bytes.Buffer
+		for _, u := range uids {
+			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", u.name, u.id))
+		}
+		logger.Debugf("Update uids mapping\n %s", buffer.String())
+	}
+
+	var gids []pwent
+	var groups []string
+	if grouping != nil {
+		for _, line := range strings.Split(C.GoString(grouping), "\n") {
+			fields := strings.Split(line, ":")
+			if len(fields) < 2 {
+				continue
+			}
+			gname := strings.TrimSpace(fields[0])
+			gid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
+			gids = append(gids, pwent{gid, gname})
+			if len(fields) > 2 {
+				for _, user := range strings.Split(fields[len(fields)-1], ",") {
+					if strings.TrimSpace(user) == w.user {
+						groups = append(groups, gname)
+					}
+				}
+			}
+		}
+		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
+	}
+	w.m.update(uids, gids)
+
+	curGids := w.ctx.Gids()
+	if len(groups) > 0 {
+		curGids = w.lookupGids(strings.Join(groups, ","))
+	}
+	w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), curGids)
 }
 
 //export jfs_term
