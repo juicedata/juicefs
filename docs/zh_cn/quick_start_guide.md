@@ -67,7 +67,7 @@ $ sudo install juicefs /usr/local/bin
 
 > **提示**: 你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
 
-## 四、创建  JuiceFS 文件系统
+## 四、创建 JuiceFS 文件系统
 
 创建 JuiceFS 文件系统要使用 `format` 子命令，需要同时指定用来存储元数据的 Redis 数据库和用来存储实际数据的对象存储。
 
@@ -207,4 +207,3 @@ $ sudo fusermount -u /mnt/jfs
 
 - [Windows 系统使用 JuiceFS](juicefs_on_windows.md)
 - [macOS 系统使用 JuiceFS](juicefs_on_macos.md)
-

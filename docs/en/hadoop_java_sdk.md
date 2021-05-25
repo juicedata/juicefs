@@ -4,7 +4,7 @@ JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/c
 
 > **NOTICE**:
 >
-> JuiceFS use local mapping of user and UID. So, you should [sync all the needed users and their UIDs](sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error.
+> JuiceFS use local mapping of user and UID. So, you should [sync all the needed users and their UIDs](sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error. You can also specify a global user list and user group file, please refer to the [relevant configurations](#other-configurations).
 
 ## Hadoop Compatibility
 
@@ -30,7 +30,7 @@ $ make
 
 After compiling you could find the JAR file in `sdk/java/target` directory, e.g. `juicefs-hadoop-0.10.0.jar`. Beware that file with `original-` prefix, it doesn't contain third-party dependencies. It's recommended to use the JAR file with third-party dependencies.
 
-**Note: The SDK could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux.**
+> **Note**: The SDK could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux.
 
 Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Hadoop ecosystem component. It's recommended create a symbolic link to the JAR file. The following tables describe where the SDK be placed.
 
@@ -86,18 +86,20 @@ Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Ha
 | `juicefs.memory-size` | 300           | Total read/write buffering in MiB               |
 | `juicefs.prefetch`    | 3             | Prefetch N blocks in parallel                   |
 
-### Others
+### Other Configurations
 
-| Configuration             | Default Value | Description                                                                                                                                                       |
-| -------------             | ------------- | -----------                                                                                                                                                       |
-| `juicefs.debug`           | `false`       | Whether enable debug log                                                                                                                                          |
-| `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files. |
-| `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                    |
-| `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                           |
-| `juicefs.push-interval`   | 10            | Prometheus push interval in seconds                                                                                                                               |
-| `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                             |
-| `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                      |
-| `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.               |
+| Configuration             | Default Value | Description                                                                                                                                                             |
+| -------------             | ------------- | -----------                                                                                                                                                             |
+| `juicefs.debug`           | `false`       | Whether enable debug log                                                                                                                                                |
+| `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files.       |
+| `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                          |
+| `juicefs.users`           | `null`        | The path of username and UID list file, e.g. `jfs://name/users`. The file format is `<username>:<UID>`, one user per line.                                              |
+| `juicefs.groups`          | `null`        | The path of group name, GID and group members list file, e.g. `jfs://name/groups`. The file format is `<group-name>:<GID>:<username1>,<username2>`, one group per line. |
+| `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                 |
+| `juicefs.push-interval`   | 10            | Prometheus push interval in seconds                                                                                                                                     |
+| `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                   |
+| `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                            |
+| `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                     |
 
 When you use multiple JuiceFS file systems, all these configurations could be set to specific file system alone. You need put file system name in the middle of configuration, for example (replace `{JFS_NAME}` with appropriate value):
 
@@ -190,6 +192,8 @@ When `Class io.juicefs.JuiceFileSystem not found` or `No FilesSystem for scheme:
 $ hadoop fs -ls jfs://{JFS_NAME}/
 ```
 
+> **Note**: The `JFS_NAME` is the volume name when you format JuiceFS file system.
+
 ### Hive
 
 ```sql
@@ -219,7 +223,7 @@ Enable metrics reporting through following configurations:
 $ curl -X DELETE http://host:9091/metrics/job/juicefs
 ```
 
-For a description of all monitoring metrics, please see [JuiceFS Metrics](p8s_metrics.md).
+For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p8s_metrics.md).
 
 ## Benchmark
 
