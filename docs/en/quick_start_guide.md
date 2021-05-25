@@ -90,6 +90,8 @@ After executing the command, you will see output similar to the following, indic
 
 > **Note**: You can create as many JuiceFS file systems as you need. But it should be noted that only one file system can be created in each Redis database. For example, when you want to create another file system named `memory`, you have to use another database in Redis, such as No.2, which is `redis://127.0.0.1:6379/2`.
 
+> **Note**: If you don't specify `--storage` option, the JuiceFS client will use the local disk as data storage. When using local storage, JuiceFS can only be used on a local stand-alone machine and cannot be mounted by other clients in the network. [Click here](how_to_setup_object_storage.md#local) for details.
+
 ## 5. Mount JuiceFS file system
 
 After the JuiceFS file system is created, you can mount it on the operating system and use it. The following command mounts the `pics` file system to the `/mnt/jfs` directory.
