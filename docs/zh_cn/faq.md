@@ -105,4 +105,4 @@ $ id alice
 uid=1201(alice) gid=500(staff) groups=500(staff)
 ```
 
-阅读文档[「同步账号到多个主机」](../en/how_to_sync_the_same_account.md)解决这个问题。
+阅读文档[「多主机间同步账户」](sync_accounts_between_multiple_hosts.md)解决这个问题。

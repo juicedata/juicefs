@@ -78,7 +78,7 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生�
 - [缓存管理](docs/zh_cn/cache_management.md)
 - [故障诊断和分析](docs/zh_cn/fault_diagnosis_and_analysis.md)
 - [FUSE 挂载选项](docs/zh_cn/fuse_mount_options.md)
-- [同步账号到多个主机](docs/zh_cn/how_to_sync_the_same_account.md)
+- [多主机间同步账户](docs/zh_cn/sync_accounts_between_multiple_hosts.md)
 - [在 Kubernetes 中使用 JuiceFS](docs/zh_cn/how_to_use_on_kubernetes.md)
 - [在 Windows 中使用 JuiceFS](docs/zh_cn/windows.md)
 - [S3 网关](docs/zh_cn/s3_gateway.md)
