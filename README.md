@@ -43,7 +43,7 @@ JuiceFS relies on Redis to store file system metadata. Redis is a fast, open-sou
 
 ![JuiceFS Storage Format](docs/images/juicefs-storage-format-new.png)
 
-Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the default upper limit is 64 MiB. Each Chunk is composed of one or more **"Slice"**. The length of the slice is not fixed, depending on the way the file is written. Each slice will be further split into fixed-size **"Block"**, which is 4 MiB by default. Finally, these blocks will be stored in the object storage. At the same time, JuiceFS will store each file and its Chunks, Slices, Blocks and other metadata information in metadata engines. [Learn more](docs/en/how_juicefs_store_files)
+Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the default upper limit is 64 MiB. Each Chunk is composed of one or more **"Slice"**. The length of the slice is not fixed, depending on the way the file is written. Each slice will be further split into fixed-size **"Block"**, which is 4 MiB by default. Finally, these blocks will be stored in the object storage. At the same time, JuiceFS will store each file and its Chunks, Slices, Blocks and other metadata information in metadata engines. [Learn more](docs/en/how_juicefs_store_files.md)
 
 ![How JuiceFS stores your files](docs/images/how-juicefs-stores-files-new.png)
 
