@@ -604,9 +604,9 @@ JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端
 
 ## 本地磁盘 <span id='local'></span>
 
-在创建 JuiceFS 存储时，如果没有指定任何存储类型，会默认使用本地磁盘存储数据，默认存储路径为 `~/.juicefs/local`。
+在创建 JuiceFS 存储时，如果没有指定任何存储类型，会默认使用本地磁盘存储数据，root 用户默认存储路径为 `/var/jfs`，普通用户默认存储路径为 `~/.juicefs/local`。
 
-例如，以下命令使用本地的 redis 数据库和本地磁盘创建了一个名为 `test` 的 JuiceFS 存储：
+例如，以下命令使用本地的 Redis 数据库和本地磁盘创建了一个名为 `test` 的 JuiceFS 存储：
 
 ```
 $ ./juicefs format redis://localhost:6379/1 test

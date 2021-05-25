@@ -46,7 +46,7 @@ $ sudo docker run -d --name minio \
 
 > **注意**：以上命令将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改数据持久化存储的位置。
 
-> **注意**：在不指定任何存储参数的情况下，JuiceFS 客户端会使用本地磁盘作为数据存储，默认存储路径为 `~/.juicefs/local`。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](how_to_setup_object_storage.md#local)查看详情。
+> **注意**：在不指定任何存储参数的情况下，JuiceFS 客户端会使用本地磁盘作为数据存储。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](how_to_setup_object_storage.md#local)查看详情。
 
 ## 三、安装 JuiceFS 客户端
 
