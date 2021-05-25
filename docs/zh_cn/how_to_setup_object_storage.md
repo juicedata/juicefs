@@ -604,4 +604,14 @@ JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端
 
 ## 本地磁盘 <span id='local'></span>
 
-待编写......
+在创建 JuiceFS 存储时，如果没有指定任何存储类型，会默认使用本地磁盘存储数据，root 用户默认存储路径为 `/var/jfs`，普通用户默认存储路径为 `~/.juicefs/local`。
+
+例如，以下命令使用本地的 Redis 数据库和本地磁盘创建了一个名为 `test` 的 JuiceFS 存储：
+
+```
+$ ./juicefs format redis://localhost:6379/1 test
+```
+
+本地存储通常仅用于了解和体验 JuiceFS 的基本功能，创建的 JuiceFS 存储无法被网络内的其他客户端挂载，只能单机使用。如果你需要评估 JuiceFS，建议使用对象存储服务。
+
+> **注意**：使用本地存储创建的 JuiceFS 存储，无法被网络中的其他主机挂载使用。这是因为 JuiceFS 的数据共享功能依赖于可以被所有客户端访问到的对象存储和元数据服务，如果创建 JuiceFS 存储时使用的存储服务和元数据服务无法被网络内的其他客户端访问，那么，其他客户端就会因此而不能挂载和使用该 JuiceFS 存储。
