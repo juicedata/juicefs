@@ -45,14 +45,7 @@ func newMapping(salt string) *mapping {
 		groups:    make(map[string]int),
 		groupIDs:  make(map[int]string),
 	}
-	for _, u := range genAllUids() {
-		m.usernames[u.name] = u.id
-		m.userIDs[u.id] = u.name
-	}
-	for _, g := range genAllGids() {
-		m.groups[g.name] = g.id
-		m.groupIDs[g.id] = g.name
-	}
+	m.update(genAllUids(), genAllGids())
 	return m
 }
 
@@ -135,4 +128,17 @@ func (m *mapping) lookupGroupID(id int) string {
 	m.groups[name] = id
 	m.groupIDs[id] = name
 	return name
+}
+
+func (m *mapping) update(uids []pwent, gids []pwent) {
+	m.Lock()
+	defer m.Unlock()
+	for _, u := range uids {
+		m.usernames[u.name] = u.id
+		m.userIDs[u.id] = u.name
+	}
+	for _, g := range gids {
+		m.groups[g.name] = g.id
+		m.groupIDs[g.id] = g.name
+	}
 }

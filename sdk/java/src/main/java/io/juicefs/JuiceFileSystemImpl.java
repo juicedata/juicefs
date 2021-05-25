@@ -436,7 +436,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     });
     refreshUidThread.scheduleAtFixedRate(() -> {
       updateUidAndGrouping(uidFile, groupFile);
-    }, 0, 2, TimeUnit.MINUTES);
+    }, 1, 1, TimeUnit.MINUTES);
   }
 
   private void initializeStorageIds(Configuration conf) throws IOException {
@@ -501,11 +501,11 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
-    String name = "libjfs.1.so";
+    String name = "libjfs.2.so";
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
     if (os.toLowerCase().contains("windows")) {
-      name = "libjfs1.dll";
+      name = "libjfs2.dll";
       dir = new File(System.getProperty("java.io.tmpdir"));
     }
     File libFile = new File(dir, name);

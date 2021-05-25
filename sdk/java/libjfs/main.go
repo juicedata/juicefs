@@ -432,64 +432,53 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 	if w == nil {
 		return
 	}
-	if uidstr == nil && grouping == nil {
-		return
-	}
+	var uids []pwent
 	if uidstr != nil {
-		usernames := make(map[string]int)
-		userIDs := make(map[int]string)
 		for _, line := range strings.Split(C.GoString(uidstr), "\n") {
-			line = strings.TrimSpace(line)
 			fields := strings.Split(line, ":")
 			if len(fields) < 2 {
 				continue
 			}
 			username := strings.TrimSpace(fields[0])
 			uid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
-			usernames[username] = uid
-			userIDs[uid] = username
+			uids = append(uids, pwent{uid, username})
 		}
-		w.m.userIDs = userIDs
-		w.m.usernames = usernames
 
 		var buffer bytes.Buffer
-		for key, value := range usernames {
-			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", key, value))
+		for _, u := range uids {
+			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", u.name, u.id))
 		}
 		logger.Debugf("Update uids mapping\n %s", buffer.String())
 	}
 
+	var gids []pwent
 	var groups []string
 	if grouping != nil {
-		groupIDs := make(map[int]string)
-		groupsMap := make(map[string]int)
 		for _, line := range strings.Split(C.GoString(grouping), "\n") {
-			line = strings.TrimSpace(line)
 			fields := strings.Split(line, ":")
 			if len(fields) < 2 {
 				continue
 			}
 			gname := strings.TrimSpace(fields[0])
 			gid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
-			groupIDs[gid] = gname
-			groupsMap[gname] = gid
-			for _, user := range strings.Split(fields[len(fields)-1], ",") {
-				if strings.TrimSpace(user) == w.user {
-					groups = append(groups, gname)
+			gids = append(gids, pwent{gid, gname})
+			if len(fields) > 2 {
+				for _, user := range strings.Split(fields[len(fields)-1], ",") {
+					if strings.TrimSpace(user) == w.user {
+						groups = append(groups, gname)
+					}
 				}
 			}
 		}
-		w.m.groupIDs = groupIDs
-		w.m.groups = groupsMap
-
 		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
 	}
+	w.m.update(uids, gids)
 
-	gids := w.ctx.Gids()
+	curGids := w.ctx.Gids()
 	if len(groups) > 0 {
-		gids = w.lookupGids(strings.Join(groups, ","))
+		curGids = w.lookupGids(strings.Join(groups, ","))
 	}
-	w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), gids)
+	w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), curGids)
 }
 
 //export jfs_term
