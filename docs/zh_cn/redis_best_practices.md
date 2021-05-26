@@ -35,9 +35,9 @@ Once Redis servers and Sentinels are deployed, the `REDIS-URL` can be specified 
 $ ./juicefs mount rediss://:sentinelPass@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
 ```
 
-**Note**: The default port for Sentinel is 26379, but the above URL use 6379 (default port for Redis server) as the default, so the port for Sentinel is not optional.
+> **Note**: The default port for Sentinel is 26379, but the above URL use 6379 (default port for Redis server) as the default, so the port for Sentinel is not optional.
 
-**Note**: When the password is provided in the URL, it will also be used to connect Redis server. If they have different passwords, the passwords should be specified by enviroment viarables (`SENTINEL_PASSWORD` and `REDIS_PASSWORD`) separately.
+> **Note**: When the password is provided in the URL, it will also be used to connect Redis server. If they have different passwords, the passwords should be specified by enviroment viarables (`SENTINEL_PASSWORD` and `REDIS_PASSWORD`) separately.
 
 ## Data Durability
 
