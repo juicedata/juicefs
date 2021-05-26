@@ -245,6 +245,7 @@ func (p *profiler) flusher() {
 				os.Exit(0)
 			}
 		case paused = <-p.pause:
+			fmt.Printf("\n\033[97mPaused. Press [enter] to continue.\n\033[0m")
 			<-p.pause
 		case done = <-p.done:
 		}
