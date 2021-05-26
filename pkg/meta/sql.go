@@ -350,6 +350,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 	var err error
 	for i := 0; i < 50; i++ {
 		_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+			s.ForUpdate()
 			return nil, f(s)
 		})
 		// TODO: add other retryable errors here
