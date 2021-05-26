@@ -1,13 +1,13 @@
-# Meta Engines Benchmark
+# Metadata Engines Benchmark
 
 Conclusion first:
 
 - For pure metadata operations, MySQL costs about 3 ~ 5x times of Redis
-- For small I/O(~100KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis
-- For large I/O(~4MiB) workloads, total time costs with different meta engines show no obvious difference(object storage becomes the bottleneck)
+- For small I/O (~100 KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis
+- For large I/O (~4 MiB) workloads, total time costs with different metadata engines show no obvious difference (object storage becomes the bottleneck)
 
 
-Details are provided below. Please note all the tests are run with the same object storage(to save data), client and meta hosts; only meta engines differ.
+Details are provided below. Please note all the tests are run with the same object storage (to save data), client and metadata hosts; only metadata engines differ.
 
 ## Environment
 
@@ -23,7 +23,7 @@ Amazon S3.
 
 ### Meta Hosts
 
-- Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD(local storage for meta engines)
+- Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD (local storage for metadata engines)
 - Ubuntu 18.04.4 LTS
 - SSD is formated as ext4 and mounted on `/data`
 
@@ -44,13 +44,13 @@ Amazon S3.
 
 ## Tools
 
-All the following tests are run for each meta engine.
+All the following tests are run for each metadata engine.
 
 ### Golang Benchmark
 
 Simple benchmarks within the source code:  `pkg/meta/benchmarks_test.go`. 
 
-### Juicefs Bench
+### JuiceFS Bench
 
 JuiceFS provides a basic benchmark command:
 
@@ -74,7 +74,7 @@ client3 slots=4
 Test commands:
 
 ```bash
-# meta only
+# metadata only
 $ mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -b 3 -z 1 -I 100 -d /mnt/jfs
 
 # 12000 * 100KiB files
@@ -93,7 +93,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### Golang Benchmark
 
-- Shows time cost(us / op), smaller is better
+- Shows time cost (us / op), smaller is better
 - Number in parentheses is the multiple of Redis cost
 
 |      | Redis | MySQL |
@@ -123,7 +123,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 | read_1 | 71 | 236 (3.3) |
 | read_10 | 87 | 301 (3.5) |
 
-### Juicefs Bench
+### JuiceFS Bench
 
 |                | Redis          | MySQL          |
 | -------------- | -------------- | -------------- |
@@ -137,7 +137,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### mdtest
 
-- Shows rate(ops / sec), bigger is better
+- Shows rate (ops / sec), bigger is better
 
 |                    | Redis     | MySQL |
 | ------------------ | --------- | ----- |

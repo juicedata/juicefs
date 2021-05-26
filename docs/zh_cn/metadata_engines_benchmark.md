@@ -2,9 +2,9 @@
 
 首先展示结论:
 
-- 对于纯元数据操作，MySQL耗时约为Redis的3 ～ 5倍
-- 对于小IO（～100KiB）压力，使用MySQL引擎的操作总耗时大约是使用Redis引擎总耗时的1 ～ 3倍
-- 对于大IO（～4MiB）压力，使用不同元数据引擎的总耗时未见明显差异（此时对象存储成为瓶颈）
+- 对于纯元数据操作，MySQL 耗时约为 Redis 的3 ～ 5倍
+- 对于小IO（～100 KiB）压力，使用 MySQL 引擎的操作总耗时大约是使用 Redis 引擎总耗时的1 ～ 3倍
+- 对于大IO（～4 MiB）压力，使用不同元数据引擎的总耗时未见明显差异（此时对象存储成为瓶颈）
 
 以下提供了测试的具体细节。这些测试都运行在相同的对象存储（用来存放数据），客户端和元数据节点上；只有元数据引擎不同。
 
@@ -22,9 +22,9 @@ Amazon S3.
 
 ### 元数据节点
 
-- Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD(为元数据引擎提供本地存储)
+- Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD（为元数据引擎提供本地存储）
 - Ubuntu 18.04.4 LTS
-- SSD数据盘被格式化为ext4文件系统并挂载到`/data`目录
+- SSD 数据盘被格式化为 ext4 文件系统并挂载到 `/data` 目录
 
 ### 元数据引擎
 
@@ -47,11 +47,11 @@ Amazon S3.
 
 ### Golang Benchmark
 
-在源码中提供了简单的元数据基准测试:  `pkg/meta/benchmarks_test.go`。
+在源码中提供了简单的元数据基准测试: `pkg/meta/benchmarks_test.go`。
 
-### Juicefs Bench
+### JuiceFS Bench
 
-JuiceFS提供了一个基础的性能测试命令：
+JuiceFS 提供了一个基础的性能测试命令：
 
 ```bash
 $ ./juicefs bench /mnt/jfs
@@ -92,8 +92,8 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### Golang Benchmark
 
-- 展示了操作耗时（单位为微秒/op），数值越小越好
-- 括号内数字是该指标对比Redis的倍数
+- 展示了操作耗时（单位为 微秒/op），数值越小越好
+- 括号内数字是该指标对比 Redis 的倍数
 
 |      | Redis | MySQL |
 | ---- | ----- | ----- |
@@ -122,7 +122,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 | read_1 | 71 | 236 (3.3) |
 | read_10 | 87 | 301 (3.5) |
 
-### Juicefs Bench
+### JuiceFS Bench
 
 |                | Redis          | MySQL          |
 | -------------- | -------------- | -------------- |
