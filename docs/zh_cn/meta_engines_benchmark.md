@@ -1,58 +1,57 @@
-# Meta Engines Benchmark
+# 元数据引擎性能对比测试
 
-Conclusion first:
+首先展示结论:
 
-- For pure metadata operations, MySQL costs about 3 ~ 5x times of Redis
-- For small I/O(~100KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis
-- For large I/O(~4MiB) workloads, total time costs with different meta engines show no obvious difference(object storage becomes the bottleneck)
+- 对于纯元数据操作，MySQL耗时约为Redis的3 ～ 5倍
+- 对于小IO（～100KiB）压力，使用MySQL引擎的操作总耗时大约是使用Redis引擎总耗时的1 ～ 3倍
+- 对于大IO（～4MiB）压力，使用不同元数据引擎的总耗时未见明显差异（此时对象存储成为瓶颈）
 
+以下提供了测试的具体细节。这些测试都运行在相同的对象存储（用来存放数据），客户端和元数据节点上；只有元数据引擎不同。
 
-Details are provided below. Please note all the tests are run with the same object storage(to save data), client and meta hosts; only meta engines differ.
+## 测试环境
 
-## Environment
-
-### Object Storage
+### 对象存储
 
 Amazon S3.
 
-### Client Hosts
+### 客户端节点
 
 - Amazon c5.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network
 
 - Ubuntu 18.04.4 LTS
 
-### Meta Hosts
+### 元数据节点
 
-- Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD(local storage for meta engines)
+- Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD(为元数据引擎提供本地存储)
 - Ubuntu 18.04.4 LTS
-- SSD is formated as ext4 and mounted on `/data`
+- SSD数据盘被格式化为ext4文件系统并挂载到`/data`目录
 
-### Meta Engines
+### 元数据引擎
 
 #### Redis
 
-- Version: [6.2.3](https://download.redis.io/releases/redis-6.2.3.tar.gz)
-- Configuration:
+- 版本: [6.2.3](https://download.redis.io/releases/redis-6.2.3.tar.gz)
+- 配置:
   - appendonly: yes
   - appendfsync: everysec
   - dir: `/data/redis`
 
 #### MySQL
 
-- Version: 8.0.25
-- `/var/lib/mysql` is bind mounted on `/data/mysql`
+- 版本: 8.0.25
+- `/var/lib/mysql` 目录被绑定挂载到 `/data/mysql`
 
-## Tools
+## 测试工具
 
-All the following tests are run for each meta engine.
+每种元数据引擎都会运行以下所有测试。
 
 ### Golang Benchmark
 
-Simple benchmarks within the source code:  `pkg/meta/benchmarks_test.go`. 
+在源码中提供了简单的元数据基准测试:  `pkg/meta/benchmarks_test.go`。
 
 ### Juicefs Bench
 
-JuiceFS provides a basic benchmark command:
+JuiceFS提供了一个基础的性能测试命令：
 
 ```bash
 $ ./juicefs bench /mnt/jfs
@@ -60,9 +59,9 @@ $ ./juicefs bench /mnt/jfs
 
 ### mdtest
 
-- Version: mdtest-3.4.0+dev
+- 版本: mdtest-3.4.0+dev
 
-Run parallel tests on 3 client nodes:
+在3个客户端节点上并发执行测试：
 
 ```bash
 $ cat myhost
@@ -71,7 +70,7 @@ client2 slots=4
 client3 slots=4
 ```
 
-Test commands:
+测试命令:
 
 ```bash
 # meta only
@@ -83,18 +82,18 @@ $ mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-
 
 ### fio
 
-- Version: fio-3.1
+- 版本: fio-3.1
 
 ```bash
 fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --size=4G --numjobs=4 --end_fsync=1 --group_reporting
 ```
 
-## Results
+## 测试结果
 
 ### Golang Benchmark
 
-- Shows time cost(us / op), smaller is better
-- Number in parentheses is the multiple of Redis cost
+- 展示了操作耗时（单位为微秒/op），数值越小越好
+- 括号内数字是该指标对比Redis的倍数
 
 |      | Redis | MySQL |
 | ---- | ----- | ----- |
@@ -137,7 +136,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### mdtest
 
-- Shows rate(ops / sec), bigger is better
+- 展示了操作速率（每秒ops数），数值越大越好
 
 |                    | Redis     | MySQL |
 | ------------------ | --------- | ----- |
