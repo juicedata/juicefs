@@ -204,10 +204,10 @@ func (p *profiler) flush(timeStamp time.Time, keyStats []keyStat, done bool) {
 		output = append(output, fmt.Sprintf("%-14s %10d %15.0f %18d %14.1f",
 			s.key, s.sPtr.count, float64(s.sPtr.total)/float64(s.sPtr.count), s.sPtr.total, float64(s.sPtr.total)/float64(p.interval.Microseconds())*100.0))
 	}
-	printLines(output, p.tty)
 	if p.replay {
 		output[1] = fmt.Sprintln("\n[enter]Pause/Continue")
 	}
+	printLines(output, p.tty)
 }
 
 func (p *profiler) flusher() {
