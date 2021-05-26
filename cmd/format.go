@@ -151,7 +151,7 @@ func format(c *cli.Context) error {
 	name := c.Args().Get(1)
 	validName := regexp.MustCompile(`^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$`)
 	if !validName.MatchString(name) {
-		logger.Fatalf("invalid name: %s, only alphabet, number and - are allowed.", name)
+		logger.Fatalf("invalid name: %s, only alphabet, number and - are allowed, and the length should be 3 to 63 characters.", name)
 	}
 
 	compressor := compress.NewCompressor(c.String("compress"))
