@@ -35,11 +35,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	var err syscall.Errno
 	for {
 		err = errno(m.txn(func(s *xorm.Session) error {
-			var suffix string
-			if m.engine.DriverName() != "sqlite3" {
-				suffix = " for update"
-			}
-			rows, err := s.SQL("select * from jfs_flock where inode=?"+suffix, inode).Rows(&flock{Inode: inode})
+			rows, err := s.Rows(&flock{Inode: inode})
 			if err != nil {
 				return err
 			}
@@ -168,11 +164,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 				}
 				return err
 			}
-			var suffix string
-			if m.engine.DriverName() != "sqlite3" {
-				suffix = " for update"
-			}
-			rows, err := s.SQL("select * from jfs_plock where inode=?"+suffix, inode).Rows(&plock{Inode: inode})
+			rows, err := s.Rows(&plock{Inode: inode})
 			if err != nil {
 				return errno(err)
 			}
