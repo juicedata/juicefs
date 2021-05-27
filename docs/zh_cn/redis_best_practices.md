@@ -77,7 +77,7 @@ Please read the [official documentation](https://redis.io/topics/persistence) fo
 
 [Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis) is a fully managed, Redis-compatible in-memory data store built for the cloud. It provides [automatic failover](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html), [automatic backup](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/backups-automatic.html) features to ensure availability and durability.
 
-**Note: Amazon ElastiCache for Redis has two type: cluster mode disabled and cluster mode enabled. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use "cluster mode enabled" type.**
+> **Note**: Amazon ElastiCache for Redis has two type: cluster mode disabled and cluster mode enabled. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use "cluster mode enabled" type.
 
 ### Google Cloud Memorystore for Redis
 
@@ -91,10 +91,10 @@ Please read the [official documentation](https://redis.io/topics/persistence) fo
 
 [Alibaba Cloud ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis) is a database service that is compatible with native Redis protocols. It supports a hybrid of memory and hard disks for data persistence. ApsaraDB for Redis provides a highly available hot standby architecture and can scale to meet requirements for high-performance and low-latency read/write operations.
 
-**Note: ApsaraDB for Redis supports 3 type [architectures](https://www.alibabacloud.com/help/doc-detail/86132.htm): standard, cluster and read/write splitting. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use cluster type architecture.**
+> **Note**: ApsaraDB for Redis supports 3 type [architectures](https://www.alibabacloud.com/help/doc-detail/86132.htm): standard, cluster and read/write splitting. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use cluster type architecture.
 
 ### Tencent Cloud TencentDB for Redis
 
 [Tencent Cloud TencentDB for Redis](https://intl.cloud.tencent.com/product/crs) is a caching and storage service compatible with the Redis protocol. It features a rich variety of data structure options to help you develop different types of business scenarios, and offers a complete set of database services such as primary-secondary hot backup, automatic switchover for disaster recovery, data backup, failover, instance monitoring, online scaling and data rollback.
 
-**Note: TencentDB for Redis supports 2 type [architectures](https://intl.cloud.tencent.com/document/product/239/3205): standard and cluster. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use cluster type architecture.**
+> **Note**: TencentDB for Redis supports 2 type [architectures](https://intl.cloud.tencent.com/document/product/239/3205): standard and cluster. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use cluster type architecture.
