@@ -344,6 +344,23 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return err
 }
 
+func (m *dbMeta) shouldRetry(err error) bool {
+	if err == nil {
+		return false
+	}
+	// TODO: add other retryable errors here
+	msg := err.Error()
+	switch m.engine.DriverName() {
+	case "sqlite3":
+		return errors.Is(err, sqlite3.ErrBusy) || strings.Contains(msg, "database is locked")
+	case "mysql":
+		// MySQL, MariaDB or TiDB
+		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later")
+	default:
+		return false
+	}
+}
+
 func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
@@ -353,10 +370,9 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 			s.ForUpdate()
 			return nil, f(s)
 		})
-		// TODO: add other retryable errors here
-		if errors.Is(err, sqlite3.ErrBusy) || err != nil && (strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "try restarting transaction")) {
+		if m.shouldRetry(err) {
 			txRestart.Add(1)
-			logger.Debugf("conflicted transaction, restart it (tried %d)", i+1)
+			logger.Debugf("conflicted transaction, restart it (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		}
