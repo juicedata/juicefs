@@ -18,17 +18,17 @@ By executing the following command you can watch real time operations under the 
 $ juicefs profile MOUNTPOINT
 ```
 
-The result is sorted in a descending order by number.
+> **Tip**: The result is sorted in a descending order by total time.
 
 ### Replay Mode
 
-Running the profile command on an existing log file enables the **replay mode**:
+Running the `profile` command on an existing log file enables the **replay mode**:
 
-```
+```bash
 $ juicefs profile LOGFILE
 ```
 
-When debugging or analyzing perfomance issues, it is usually more practical to record access log first and then replay it(multiple times). For example:
+When debugging or analyzing perfomance issues, it is usually more practical to record access log first and then replay it (multiple times). For example:
 
 ```bash
 $ cat /jfs/.accesslog > /tmp/jfs-oplog
@@ -36,11 +36,11 @@ $ cat /jfs/.accesslog > /tmp/jfs-oplog
 $ juicefs profile /tmp/jfs-oplog
 ```
 
-The replay could be paused anytime by <kbd>enter/return</kbd>, and continues by pressing it again.
+> **Tip**: The replay could be paused anytime by <kbd>Enter/Return</kbd>, and continues by pressing it again.
 
 ## Filter
 
-Sometimes we are only interested in a certain user or process, then we can filter others out by specifying its IDs; e.g:
+Sometimes we are only interested in a certain user or process, then we can filter others out by specifying its IDs, e.g:
 
 ```bash
 $ juicefs profile /tmp/jfs-oplog --uid 12345
