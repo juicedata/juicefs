@@ -27,6 +27,10 @@ import org.xeustechnologies.jcl.JclUtils;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.concurrent.*;
+
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
 
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
@@ -39,6 +43,8 @@ public class JuiceFileSystem extends FilterFileSystem {
 
   private static boolean fileChecksumEnabled = false;
   private static boolean distcpPatched = false;
+
+  private ScheduledExecutorService emptier;
 
   static {
     jcl = new JarClassLoader();
@@ -74,6 +80,26 @@ public class JuiceFileSystem extends FilterFileSystem {
   public void initialize(URI uri, Configuration conf) throws IOException {
     super.initialize(uri, conf);
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
+    startTrashEmptier(conf);
+  }
+
+  private void startTrashEmptier(final Configuration conf) throws IOException {
+    long trashInterval =
+            conf.getLong(FS_TRASH_INTERVAL_KEY, FS_TRASH_INTERVAL_DEFAULT);
+    if (trashInterval == 0) {
+      return;
+    } else if (trashInterval < 0) {
+      throw new IOException("Cannot start trash emptier with negative interval."
+              + " Set " + FS_TRASH_INTERVAL_KEY + " to a positive value.");
+    }
+
+    emptier = Executors.newScheduledThreadPool(1, r -> {
+      Thread t = new Thread(r, "Trash Emptier");
+      t.setDaemon(true);
+      return t;
+    });
+
+    emptier.schedule(new Trash(this, conf).getEmptier(), 10, TimeUnit.MINUTES);
   }
 
   private String getConf(Configuration conf, String key, String value) {
@@ -129,6 +155,9 @@ public class JuiceFileSystem extends FilterFileSystem {
 
   @Override
   public void close() throws IOException {
+    if (this.emptier != null) {
+      emptier.shutdownNow();
+    }
     super.close();
   }
 }
