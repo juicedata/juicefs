@@ -13,12 +13,11 @@ Details are provided below. Please note all the tests are run with the same obje
 
 ### Object Storage
 
-Amazon S3.
+Amazon S3
 
 ### Client Hosts
 
 - Amazon c5.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network
-
 - Ubuntu 18.04.4 LTS
 
 ### Meta Hosts
@@ -48,7 +47,7 @@ All the following tests are run for each metadata engine.
 
 ### Golang Benchmark
 
-Simple benchmarks within the source code:  `pkg/meta/benchmarks_test.go`. 
+Simple benchmarks within the source code:  `pkg/meta/benchmarks_test.go`.
 
 ### JuiceFS Bench
 
@@ -93,35 +92,35 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### Golang Benchmark
 
-- Shows time cost (us / op), smaller is better
+- Shows time cost (us/op), smaller is better
 - Number in parentheses is the multiple of Redis cost
 
-|      | Redis | MySQL |
-| ---- | ----- | ----- |
-| mkdir | 421 | 1820 (4.3) |
-| mvdir | 586 | 2872 (4.9) |
-| rmdir | 504 | 2248 (4.5) |
-| readdir_10 | 220 | 1047 (4.8) |
-| readdir_1k | 1506 | 14354 (9.5) |
-| mknod | 442 | 1821 (4.1) |
-| create | 437 | 1768 (4.0) |
-| rename | 580 | 2840 (4.9) |
-| unlink | 456 | 2525 (5.5) |
-| lookup | 76 | 310 (4.1) |
-| getattr | 69 | 269 (3.9) |
-| setattr | 283 | 1023 (3.6) |
-| access | 69 | 269 (3.9) |
-| setxattr | 71 | 921 (13.0) |
-| getxattr | 68 | 242 (3.6) |
-| removexattr | 76 | 711 (9.4) |
-| listxattr_1 | 68 | 259 (3.8) |
-| listxattr_10 | 70 | 290 (4.1) |
-| link | 360 | 2058 (5.7) |
-| symlink | 429 | 2013 (4.7) |
-| newchunk | 69 | 0 (0.0) |
-| write | 368 | 2720 (7.4) |
-| read_1 | 71 | 236 (3.3) |
-| read_10 | 87 | 301 (3.5) |
+|              | Redis | MySQL       |
+| ----         | ----- | -----       |
+| mkdir        | 421   | 1820 (4.3)  |
+| mvdir        | 586   | 2872 (4.9)  |
+| rmdir        | 504   | 2248 (4.5)  |
+| readdir_10   | 220   | 1047 (4.8)  |
+| readdir_1k   | 1506  | 14354 (9.5) |
+| mknod        | 442   | 1821 (4.1)  |
+| create       | 437   | 1768 (4.0)  |
+| rename       | 580   | 2840 (4.9)  |
+| unlink       | 456   | 2525 (5.5)  |
+| lookup       | 76    | 310 (4.1)   |
+| getattr      | 69    | 269 (3.9)   |
+| setattr      | 283   | 1023 (3.6)  |
+| access       | 69    | 269 (3.9)   |
+| setxattr     | 71    | 921 (13.0)  |
+| getxattr     | 68    | 242 (3.6)   |
+| removexattr  | 76    | 711 (9.4)   |
+| listxattr_1  | 68    | 259 (3.8)   |
+| listxattr_10 | 70    | 290 (4.1)   |
+| link         | 360   | 2058 (5.7)  |
+| symlink      | 429   | 2013 (4.7)  |
+| newchunk     | 69    | 0 (0.0)     |
+| write        | 368   | 2720 (7.4)  |
+| read_1       | 71    | 236 (3.3)   |
+| read_10      | 87    | 301 (3.5)   |
 
 ### JuiceFS Bench
 
@@ -137,31 +136,30 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### mdtest
 
-- Shows rate (ops / sec), bigger is better
+- Shows rate (ops/sec), bigger is better
 
-|                    | Redis     | MySQL |
-| ------------------ | --------- | ----- |
-| EMPTY FILES        |           |       |
-| Directory creation | 282.694 | 215.366 |
-| Directory stat | 47474.718 | 12632.878 |
-| Directory removal | 330.430 | 198.588 |
-| File creation | 222.603 | 226.587 |
-| File stat | 45960.505 | 13012.763 |
-| File read | 49088.346 | 15622.533 |
-| File removal | 334.759 | 195.183 |
-| Tree creation | 956.797 | 390.026 |
-| Tree removal | 295.399 | 284.733 |
-| SMALL FILES |  |  |
-| File creation | 255.077 | 245.659 |
-| File stat | 51799.065 | 14191.255 |
-| File read | 47091.975 | 16794.314 |
-| File removal | 631.046 | 194.810 |
-| Tree creation | 749.869 | 339.375 |
-| Tree removal | 282.643 | 165.118 |
+|                    | Redis     | MySQL     |
+| ------------------ | --------- | -----     |
+| **EMPTY FILES**    |           |           |
+| Directory creation | 282.694   | 215.366   |
+| Directory stat     | 47474.718 | 12632.878 |
+| Directory removal  | 330.430   | 198.588   |
+| File creation      | 222.603   | 226.587   |
+| File stat          | 45960.505 | 13012.763 |
+| File read          | 49088.346 | 15622.533 |
+| File removal       | 334.759   | 195.183   |
+| Tree creation      | 956.797   | 390.026   |
+| Tree removal       | 295.399   | 284.733   |
+| **SMALL FILES**    |           |           |
+| File creation      | 255.077   | 245.659   |
+| File stat          | 51799.065 | 14191.255 |
+| File read          | 47091.975 | 16794.314 |
+| File removal       | 631.046   | 194.810   |
+| Tree creation      | 749.869   | 339.375   |
+| Tree removal       | 282.643   | 165.118   |
 
 ### fio
 
 |                 | Redis     | MySQL     |
 | --------------- | --------- | --------- |
 | Write bandwidth | 350 MiB/s | 360 MiB/s |
-
