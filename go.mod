@@ -45,8 +45,10 @@ require (
 	github.com/qiniu/api.v7/v7 v7.8.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/satori/uuid v1.2.0 // indirect
+	github.com/shirou/gopsutil v3.21.3+incompatible // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
+	github.com/tklauser/go-sysconf v0.3.6 // indirect
 	github.com/upyun/go-sdk/v3 v3.0.2
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
@@ -54,7 +56,7 @@ require (
 	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392
 	golang.org/x/net v0.0.0-20201216054612-986b41b23924
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
-	golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
+	golang.org/x/sys v0.0.0-20210316164454-77fc1eacc6aa
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 	google.golang.org/api v0.5.0
 	xorm.io/xorm v1.0.7
