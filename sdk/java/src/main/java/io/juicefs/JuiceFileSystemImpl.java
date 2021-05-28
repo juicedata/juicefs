@@ -365,6 +365,11 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     uMask = FsPermission.getUMask(conf);
+    String umaskStr = getConf(conf, "umask", null);
+    if (!isEmpty(umaskStr)) {
+      uMask = new FsPermission(umaskStr);
+    }
+
     hflushMethod = getConf(conf, "hflush", "writeback");
     initializeStorageIds(conf);
 
