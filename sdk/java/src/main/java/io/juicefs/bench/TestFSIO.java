@@ -445,7 +445,11 @@ public class TestFSIO {
   }
 
   void runTest(Class<? extends Callable<Long>> clazz) throws Exception {
-    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    ExecutorService pool = Executors.newFixedThreadPool(threads, r -> {
+      Thread t = new Thread(r);
+      t.setDaemon(true);
+      return t;
+    });
     List<Future<Long>> futures = new ArrayList<>(threads);
     for (int i = 0; i < threads; i++) {
       Callable<Long> t = clazz.getDeclaredConstructor(Integer.class, Configuration.class).newInstance(i, config);
