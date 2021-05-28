@@ -27,6 +27,9 @@ import org.xeustechnologies.jcl.JclUtils;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
@@ -39,6 +42,8 @@ public class JuiceFileSystem extends FilterFileSystem {
 
   private static boolean fileChecksumEnabled = false;
   private static boolean distcpPatched = false;
+
+  private ScheduledExecutorService emptier;
 
   static {
     jcl = new JarClassLoader();
@@ -74,6 +79,18 @@ public class JuiceFileSystem extends FilterFileSystem {
   public void initialize(URI uri, Configuration conf) throws IOException {
     super.initialize(uri, conf);
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
+    startTrashEmptier(conf);
+  }
+
+  private void startTrashEmptier(final Configuration conf) throws IOException {
+
+    emptier = Executors.newScheduledThreadPool(1, r -> {
+      Thread t = new Thread(r, "Trash Emptier");
+      t.setDaemon(true);
+      return t;
+    });
+
+    emptier.schedule(new Trash(this, conf).getEmptier(), 10, TimeUnit.MINUTES);
   }
 
   private String getConf(Configuration conf, String key, String value) {
@@ -129,6 +146,9 @@ public class JuiceFileSystem extends FilterFileSystem {
 
   @Override
   public void close() throws IOException {
+    if (this.emptier != null) {
+      emptier.shutdownNow();
+    }
     super.close();
   }
 }
