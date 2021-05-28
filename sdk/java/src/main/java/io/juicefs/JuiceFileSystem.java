@@ -84,14 +84,6 @@ public class JuiceFileSystem extends FilterFileSystem {
   }
 
   private void startTrashEmptier(final Configuration conf) throws IOException {
-    long trashInterval =
-            conf.getLong(FS_TRASH_INTERVAL_KEY, FS_TRASH_INTERVAL_DEFAULT);
-    if (trashInterval == 0) {
-      return;
-    } else if (trashInterval < 0) {
-      throw new IOException("Cannot start trash emptier with negative interval."
-              + " Set " + FS_TRASH_INTERVAL_KEY + " to a positive value.");
-    }
 
     emptier = Executors.newScheduledThreadPool(1, r -> {
       Thread t = new Thread(r, "Trash Emptier");
