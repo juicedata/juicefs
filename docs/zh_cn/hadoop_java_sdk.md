@@ -88,19 +88,19 @@ $ make
 
 ### 其他配置
 
-| 配置项                    | 默认值  | 描述                                                                                                                                      |
-| ------------------        | ------  | ------------------------------------------------------------                                                                              |
-| `juicefs.debug`           | `false` | 是否开启 debug 日志                                                                                                                       |
-| `juicefs.access-log`      |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。                       |
-| `juicefs.superuser`       | `hdfs`  | 超级用户                                                                                                                                  |
+| 配置项                    | 默认值  | 描述                                                                                                                                          |
+| ------------------        | ------  | ------------------------------------------------------------                                                                                  |
+| `juicefs.debug`           | `false` | 是否开启 debug 日志                                                                                                                           |
+| `juicefs.access-log`      |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。                           |
+| `juicefs.superuser`       | `hdfs`  | 超级用户                                                                                                                                      |
 | `juicefs.users`           | `null`  | 用户名以及 UID 列表文件的地址，比如 `jfs://name/etc/users`。文件格式为 `<username>:<UID>`，一行一个用户。                                     |
 | `juicefs.groups`          | `null`  | 用户组、GID 以及组成员列表文件的地址，比如 `jfs://name/etc/groups`。文件格式为 `<group-name>:<GID>:<username1>,<username2>`，一行一个用户组。 |
-| `juicefs.umask`          | `null`  | 格式为 022，如果没有此配置，默认值是 fs.permissions.umask-mode |
-| `juicefs.push-gateway`    |         | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。                                        |
-| `juicefs.push-interval`   | 10      | 推送数据到 Prometheus 的时间间隔，单位为秒。                                                                                              |
-| `juicefs.push-auth`       |         | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。                                 |
-| `juicefs.fast-resolve`    | `true`  | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）                                                                                         |
-| `juicefs.no-usage-report` | `false` | 是否上报数据，它只上报诸如版本号等使用量数据，不包含任何用户信息。                                                                        |
+| `juicefs.umask`           | `null`  | 创建文件和目录的 umask 值（如 `0022`），如果没有此配置，默认值是 `fs.permissions.umask-mode`。                                                |
+| `juicefs.push-gateway`    |         | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。                                            |
+| `juicefs.push-interval`   | 10      | 推送数据到 Prometheus 的时间间隔，单位为秒。                                                                                                  |
+| `juicefs.push-auth`       |         | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。                                     |
+| `juicefs.fast-resolve`    | `true`  | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）                                                                                             |
+| `juicefs.no-usage-report` | `false` | 是否上报数据，它只上报诸如版本号等使用量数据，不包含任何用户信息。                                                                            |
 
 当使用多个 JuiceFS 文件系统时，上述所有配置项均可对单个文件系统指定，需要将文件系统名字 `{JFS_NAME}` 放在配置项的中间，比如：
 
