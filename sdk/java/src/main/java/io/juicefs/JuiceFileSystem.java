@@ -27,10 +27,9 @@ import org.xeustechnologies.jcl.JclUtils;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.concurrent.*;
-
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_DEFAULT;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
