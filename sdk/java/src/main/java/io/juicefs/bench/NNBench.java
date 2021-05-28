@@ -507,7 +507,11 @@ public class NNBench {
       beforeRename = conf.getBoolean("test.nnbench.deleteBeforeRename", false);
 
       threadsPerMap = conf.getInt("test.nnbench.threadsPerMap", 1);
-      executorService = Executors.newFixedThreadPool(threadsPerMap);
+      executorService = Executors.newFixedThreadPool(threadsPerMap, r -> {
+        Thread t = new Thread(r);
+        t.setDaemon(true);
+        return t;
+      });
     }
 
     /**

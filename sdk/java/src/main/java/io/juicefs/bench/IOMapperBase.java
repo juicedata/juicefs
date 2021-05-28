@@ -79,7 +79,11 @@ public abstract class IOMapperBase<T> extends Configured
       hostName = "localhost";
     }
     threadPerMap = conf.getInt("test.threadsPerMap", 1);
-    pool = Executors.newFixedThreadPool(threadPerMap);
+    pool = Executors.newFixedThreadPool(threadPerMap, r -> {
+      Thread t = new Thread(r);
+      t.setDaemon(true);
+      return t;
+    });
   }
 
   @Override
