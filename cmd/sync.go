@@ -239,7 +239,7 @@ func syncFlags() *cli.Command {
 			},
 			&cli.BoolFlag{
 				Name:  "dry",
-				Usage: "don't copy file",
+				Usage: "Don't copy file",
 			},
 			&cli.BoolFlag{
 				Name:    "delete-src",
