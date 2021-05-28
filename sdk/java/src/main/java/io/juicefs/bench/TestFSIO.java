@@ -56,12 +56,14 @@ public class TestFSIO {
   private static int bufferSize = 1000000;
   private static long skipSize;
   private static String compression;
+  private static boolean randomBytes;
 
   private static final String USAGE =
           "Usage: " + TestFSIO.class.getSimpleName() +
                   " [genericOptions]" +
                   " -read [-random | -backward | -skip [-skipSize Size]] |" +
                   " -write | -append | -truncate | -clean" +
+                  " [-randomBytes]" +
                   " [-compression codecClassName]" +
                   " [-nrFiles N]" +
                   " [-threads N]" +
@@ -126,7 +128,9 @@ public class TestFSIO {
     }
 
     public byte[] fillBuffer() {
-      random.nextBytes(buffer);
+      if (randomBytes) {
+        random.nextBytes(buffer);
+      }
       return buffer;
     }
 
@@ -485,6 +489,8 @@ public class TestFSIO {
         testType = TestType.TEST_TYPE_READ;
       } else if (args[i].equals("-write")) {
         testType = TestType.TEST_TYPE_WRITE;
+      } else if (args[i].equals("-randomBytes")) {
+        randomBytes = true;
       } else if (args[i].equals("-append")) {
         testType = TestType.TEST_TYPE_APPEND;
       } else if (args[i].equals("-random")) {
@@ -527,6 +533,7 @@ public class TestFSIO {
       skipSize = bufferSize;
 
     LOG.info("nrFiles = " + nrFiles);
+    LOG.info("randomBytes = " + randomBytes);
     LOG.info("fileSize (MB) = " + TestDFSIO.toMB(size));
     LOG.info("bufferSize = " + bufferSize);
     if (skipSize > 0)
