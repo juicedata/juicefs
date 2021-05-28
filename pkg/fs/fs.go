@@ -675,7 +675,7 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Chmod").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chmod (%s,%o): %s", f.path, mode, errstr(err)) }()
-	if ctx.Uid() != f.info.attr.Uid {
+	if ctx.Uid() != 0 && ctx.Uid() != f.info.attr.Uid {
 		return syscall.EACCES
 	}
 	var attr = Attr{Mode: mode}
