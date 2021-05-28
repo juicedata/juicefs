@@ -95,6 +95,7 @@ Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Ha
 | `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                          |
 | `juicefs.users`           | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line.                                              |
 | `juicefs.groups`          | `null`        | The path of group name, GID and group members list file, e.g. `jfs://name/etc/groups`. The file format is `<group-name>:<GID>:<username1>,<username2>`, one group per line. |
+| `juicefs.umask`          | `null`  | like 022，default value from fs.permissions.umask-mode |
 | `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                 |
 | `juicefs.push-interval`   | 10            | Prometheus push interval in seconds                                                                                                                                     |
 | `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                   |
