@@ -1064,11 +1064,11 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if e.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		cnt, err := s.Count(&edge{Parent: e.Inode})
+		exist, err := s.Exist(&edge{Parent: e.Inode})
 		if err != nil {
 			return err
 		}
-		if cnt != 0 {
+		if exist {
 			return syscall.ENOTEMPTY
 		}
 
@@ -1173,11 +1173,11 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				return syscall.EEXIST
 			}
 			if de.Type == TypeDirectory {
-				cnt, err := s.Count(&edge{Parent: de.Inode})
+				exist, err := s.Exist(&edge{Parent: de.Inode})
 				if err != nil {
 					return err
 				}
-				if cnt != 0 {
+				if exist {
 					return syscall.ENOTEMPTY
 				}
 			} else {
