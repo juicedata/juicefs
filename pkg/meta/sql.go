@@ -1354,23 +1354,11 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	if eno != 0 {
 		return eno
 	}
-	*entries = nil
-	*entries = append(*entries, &Entry{
-		Inode: inode,
-		Name:  []byte("."),
-		Attr:  &attr,
-	})
 	var pattr Attr
 	eno = m.GetAttr(ctx, attr.Parent, &pattr)
 	if eno != 0 {
 		return eno
 	}
-	*entries = append(*entries, &Entry{
-		Inode: attr.Parent,
-		Name:  []byte(".."),
-		Attr:  &pattr,
-	})
-
 	dbSession := m.engine.Table(&edge{})
 	if plus != 0 {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
@@ -1379,6 +1367,18 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	if err := dbSession.Find(&nodes, &edge{Parent: inode}); err != nil {
 		return errno(err)
 	}
+
+	*entries = make([]*Entry, 0, 2+len(nodes))
+	*entries = append(*entries, &Entry{
+		Inode: inode,
+		Name:  []byte("."),
+		Attr:  &attr,
+	})
+	*entries = append(*entries, &Entry{
+		Inode: attr.Parent,
+		Name:  []byte(".."),
+		Attr:  &pattr,
+	})
 	for _, n := range nodes {
 		entry := &Entry{
 			Inode: n.Inode,
