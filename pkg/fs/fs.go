@@ -409,10 +409,6 @@ func (fs *FileSystem) Readlink(ctx meta.Context, link string) (path []byte, err 
 	if err != 0 {
 		return
 	}
-	err = fs.m.Access(ctx, fi.inode, mMaskR, fi.attr)
-	if err != 0 {
-		return
-	}
 	err = fs.m.ReadLink(ctx, fi.inode, &path)
 	return
 }
@@ -687,14 +683,29 @@ func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errn
 	defer trace.StartRegion(context.TODO(), "fs.Chown").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chown (%s,%d,%d): %s", f.path, uid, gid, errstr(err)) }()
-	if ctx.Uid() != 0 {
-		return syscall.EACCES
-	}
 	var flag uint16
 	if uid != uint32(f.info.Uid()) {
+		if ctx.Uid() != 0 {
+			return syscall.EACCES
+		}
 		flag |= meta.SetAttrUID
 	}
 	if gid != uint32(f.info.Gid()) {
+		if ctx.Uid() != 0 {
+			if ctx.Uid() != uint32(f.info.Uid()) {
+				return syscall.EACCES
+			}
+			var found = false
+			for _, g := range ctx.Gids() {
+				if gid == g {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return syscall.EACCES
+			}
+		}
 		flag |= meta.SetAttrGID
 	}
 	var attr = Attr{Uid: uid, Gid: gid}
@@ -914,7 +925,7 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 	f.Lock()
 	defer f.Unlock()
 	if f.entries == nil {
-		err = f.fs.m.Access(ctx, f.inode, mMaskR, f.info.attr)
+		err = f.fs.m.Access(ctx, f.inode, mMaskR|mMaskX, f.info.attr)
 		if err != 0 {
 			return nil, err
 		}
