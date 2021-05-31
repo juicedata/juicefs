@@ -300,6 +300,69 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 }
 
+func TestStickyBitRedis(t *testing.T) {
+	var conf Config
+	m, err := newRedisMeta("redis://127.0.0.1:6379/5", &conf)
+	if err != nil {
+		t.Skipf("redis is not available: %s", err)
+	}
+	m.(*redisMeta).rdb.FlushDB(context.Background())
+	testStickyBit(t, m)
+}
+
+func testStickyBit(t *testing.T, m Meta) {
+	_ = m.Init(Format{Name: "test"}, true)
+	ctx := Background
+	var parent, inode Ino
+	var attr = &Attr{}
+	defer m.Unlink(ctx, 1, "tmp")
+	m.Mkdir(ctx, 1, "tmp", 01777, 0, 0, &parent, attr)
+	ctxA := NewContext(1, 1, []uint32{1})
+	// file
+	m.Create(ctxA, parent, "f", 0777, 0, &inode, attr)
+	ctxB := NewContext(1, 2, []uint32{1})
+	if e := m.Unlink(ctxB, parent, "f"); e != syscall.EACCES {
+		t.Fatalf("unlink f: %s", e)
+	}
+	if e := m.Rename(ctxB, parent, "f", parent, "f2", &inode, attr); e != syscall.EACCES {
+		t.Fatalf("rename f: %s", e)
+	}
+	m.Create(ctxB, parent, "f2", 0777, 0, &inode, attr)
+	if e := m.Rename(ctxB, parent, "f2", parent, "f", &inode, attr); e != syscall.EACCES {
+		t.Fatalf("overwrite f: %s", e)
+	}
+	if e := m.Rename(ctxA, parent, "f", parent, "f2", &inode, attr); e != syscall.EACCES {
+		t.Fatalf("rename f: %s", e)
+	}
+	if e := m.Rename(ctxA, parent, "f", parent, "f3", &inode, attr); e != 0 {
+		t.Fatalf("rename f: %s", e)
+	}
+	if e := m.Unlink(ctxA, parent, "f3"); e != 0 {
+		t.Fatalf("unlink f3: %s", e)
+	}
+	// dir
+	m.Mkdir(ctxA, parent, "f", 0777, 0, 0, &inode, attr)
+	if e := m.Rmdir(ctxB, parent, "f"); e != syscall.EACCES {
+		t.Fatalf("rmdir f: %s", e)
+	}
+	if e := m.Rename(ctxB, parent, "f", parent, "f2", &inode, attr); e != syscall.EACCES {
+		t.Fatalf("rename f: %s", e)
+	}
+	m.Mkdir(ctxB, parent, "f2", 0777, 0, 0, &inode, attr)
+	if e := m.Rename(ctxB, parent, "f2", parent, "f", &inode, attr); e != syscall.EACCES {
+		t.Fatalf("overwrite f: %s", e)
+	}
+	if e := m.Rename(ctxA, parent, "f", parent, "f2", &inode, attr); e != syscall.EACCES {
+		t.Fatalf("rename f: %s", e)
+	}
+	if e := m.Rename(ctxA, parent, "f", parent, "f3", &inode, attr); e != 0 {
+		t.Fatalf("rename f: %s", e)
+	}
+	if e := m.Rmdir(ctxA, parent, "f3"); e != 0 {
+		t.Fatalf("rmdir f3: %s", e)
+	}
+}
+
 func TestLocksRedis(t *testing.T) {
 	var conf Config
 	m, err := newRedisMeta("redis://127.0.0.1:6379/5", &conf)
