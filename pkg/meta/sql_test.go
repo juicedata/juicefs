@@ -49,6 +49,15 @@ func TestMySQLClient(t *testing.T) {
 	testMetaClient(t, m)
 }
 
+func TestStickyBitSQL(t *testing.T) {
+	os.Remove("test.db")
+	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	testStickyBit(t, m)
+}
+
 func TestLocksSQL(t *testing.T) {
 	os.Remove("test1.db")
 	m, err := newSQLMeta("sqlite3", "test1.db", &Config{})

@@ -951,6 +951,9 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if !ok {
 			return syscall.ENOENT
 		}
+		if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+			return syscall.EACCES
+		}
 
 		now := time.Now().UnixNano() / 1e3
 		pn.Mtime = now
@@ -1064,6 +1067,19 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if e.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid {
+			var n = node{Inode: e.Inode}
+			ok, err = s.Get(&n)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if ctx.Uid() != n.Uid {
+				return syscall.EACCES
+			}
+		}
 		exist, err := s.Exist(&edge{Parent: e.Inode})
 		if err != nil {
 			return err
@@ -1172,6 +1188,13 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
 				return syscall.EEXIST
 			}
+			ok, err := s.Get(&dn)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
 			if de.Type == TypeDirectory {
 				exist, err := s.Exist(&edge{Parent: de.Inode})
 				if err != nil {
@@ -1181,13 +1204,6 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					return syscall.ENOTEMPTY
 				}
 			} else {
-				ok, err := s.Get(&dn)
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return syscall.ENOENT
-				}
 				dn.Nlink--
 				if dn.Nlink > 0 {
 					dn.Ctime = time.Now().UnixNano() / 1e3
@@ -1197,6 +1213,12 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					m.Unlock()
 				}
 			}
+			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
+				return syscall.EACCES
+			}
+		}
+		if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
+			return syscall.EACCES
 		}
 
 		now := time.Now().UnixNano() / 1e3
