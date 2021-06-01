@@ -49,7 +49,18 @@ $ sudo docker run -d --name some-nginx \
 
 ## Docker Volume Plugin
 
-JuiceFS 社区版本暂不支持
+JuiceFS 也支持使用 [volume plugin](https://docs.docker.com/engine/extend/) 方式访问。
 
+```
+$ docker plugin install juicedata/juicefs
+Plugin "juicedata/juicefs" is requesting the following privileges:
+ - network: [host]
+ - device: [/dev/fuse]
+ - capabilities: [CAP_SYS_ADMIN]
+Do you grant the above permissions? [y/N]
 
+$ docker volume create -d juicedata/juicefs:latest -o name={{VOLUME_NAME}} -o metaurl={{META_URL}} -o access-key={{ACCESS_KEY}} -o secret-key={{SECRET_KEY}} jfsvolume
+$ docker run -it -v jfsvolume:/opt busybox ls /opt
+```
 
+将上面 `{{VOLUME_NAME}}, {{META_URL}}, {{ACCESS_KEY}}, {{SECRET_KEY}}` 替换成你自己的文件系统配置。想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
