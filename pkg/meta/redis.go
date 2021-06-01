@@ -1109,6 +1109,9 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		r.parseAttr([]byte(rs[1].(string)), &attr)
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
+		if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+			return syscall.EACCES
+		}
 
 		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
 		if err != nil {
@@ -1193,12 +1196,13 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	return r.txn(ctx, func(tx *redis.Tx) error {
-		a, err := tx.Get(ctx, r.inodeKey(parent)).Bytes()
-		if err != nil {
-			return err
+		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
+		if rs[0] == nil || rs[1] == nil {
+			return redis.Nil
 		}
-		var pattr Attr
-		r.parseAttr(a, &pattr)
+		var pattr, attr Attr
+		r.parseAttr([]byte(rs[0].(string)), &pattr)
+		r.parseAttr([]byte(rs[1].(string)), &attr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -1225,6 +1229,10 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if cnt > 0 {
 			return syscall.ENOTEMPTY
 		}
+		if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+			return syscall.EACCES
+		}
+
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, r.entryKey(parent), name)
 			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
@@ -1350,6 +1358,21 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 	}
 
 	return r.txn(ctx, func(tx *redis.Tx) error {
+		rs, _ := tx.MGet(ctx, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
+		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
+			return redis.Nil
+		}
+		var sattr, dattr, iattr Attr
+		r.parseAttr([]byte(rs[0].(string)), &sattr)
+		if sattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		r.parseAttr([]byte(rs[1].(string)), &dattr)
+		if dattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		r.parseAttr([]byte(rs[2].(string)), &iattr)
+
 		buf, err = tx.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
 		if err != nil && err != redis.Nil {
 			return err
@@ -1364,6 +1387,11 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			if dino1 != dino || typ1 != dtyp {
 				return syscall.EAGAIN
 			}
+			a, err := tx.Get(ctx, r.inodeKey(dino)).Bytes()
+			if err != nil {
+				return err
+			}
+			r.parseAttr(a, &tattr)
 			if typ1 == TypeDirectory {
 				cnt, err := tx.HLen(ctx, r.entryKey(dino)).Result()
 				if err != nil {
@@ -1373,11 +1401,6 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					return syscall.ENOTEMPTY
 				}
 			} else {
-				a, err := tx.Get(ctx, r.inodeKey(dino)).Bytes()
-				if err != nil {
-					return err
-				}
-				r.parseAttr(a, &tattr)
 				tattr.Nlink--
 				if tattr.Nlink > 0 {
 					now := time.Now()
@@ -1388,6 +1411,9 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					opened = r.openFiles[dino] > 0
 					r.Unlock()
 				}
+			}
+			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
+				return syscall.EACCES
 			}
 		} else {
 			dino = 0
@@ -1401,30 +1427,19 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		if ino != ino1 {
 			return syscall.EAGAIN
 		}
+		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
+			return syscall.EACCES
+		}
 
-		rs, _ := tx.MGet(ctx, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
-		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
-			return redis.Nil
-		}
-		var sattr, dattr, iattr Attr
-		r.parseAttr([]byte(rs[0].(string)), &sattr)
-		if sattr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
 		now := time.Now()
 		sattr.Mtime = now.Unix()
 		sattr.Mtimensec = uint32(now.Nanosecond())
 		sattr.Ctime = now.Unix()
 		sattr.Ctimensec = uint32(now.Nanosecond())
-		r.parseAttr([]byte(rs[1].(string)), &dattr)
-		if dattr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
 		dattr.Mtime = now.Unix()
 		dattr.Mtimensec = uint32(now.Nanosecond())
 		dattr.Ctime = now.Unix()
 		dattr.Ctimensec = uint32(now.Nanosecond())
-		r.parseAttr([]byte(rs[2].(string)), &iattr)
 		iattr.Parent = parentDst
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
