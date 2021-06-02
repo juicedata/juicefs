@@ -18,11 +18,11 @@ $ sudo docker run -d --name redis \
 	redis redis-server --appendonly yes
 ```
 
-After the container is successfully created, you can use `redis://127.0.0.1:6379` to access the redis database.
+After the container is successfully created, you can use `redis://127.0.0.1:6379` to access the Redis database.
 
-> **Note**: The above command persists redis data in the `redis-data` data volume of docker, and you can modify the storage location of data persistence as needed.
+> **Note**: The above command persists Redis data in the `redis-data` data volume of docker, and you can modify the storage location of data persistence as needed.
 
-> **Security Tips**: The redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database via the Internet, it is strongly recommended to refer to [Redis official documentation](https: //redis.io/topics/security) Enable protected mode.
+> **Security Tips**: The Redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database via the Internet, it is strongly recommended to refer to [Redis official documentation](https: //redis.io/topics/security) Enable protected mode.
 
 For more information about Redis database, [click here to view](databases_for_metadata.md#Redis).
 
@@ -63,7 +63,7 @@ $ sudo install juicefs /usr/local/bin
 
 > **Note**: You can also build the JuiceFS client manually from the source code. [Learn more](client_compile_and_upgrade.md)
 
-## 4. Create JuiceFS file system 
+## 4. Create JuiceFS file system
 
 When creating a JuiceFS file system, you need to specify both the Redis database used to store metadata and the object storage used to store actual data.
 
@@ -138,7 +138,7 @@ Edit the `/etc/fstab` configuration file, start a new line, and add a record acc
 <REDIS-URL> <MOUNTPOINT> juicefs _netdev[,<MOUNT-OPTIONS>] 0 0
 ```
 
-- Please replace `<REDIS-URL>` with the actual redis database address in the format of `redis://<user>:<password>@<host>:<port>/<db>`, for example: `redis ://localhost:6379/1`.
+- Please replace `<REDIS-URL>` with the actual Redis database address in the format of `redis://<user>:<password>@<host>:<port>/<db>`, for example: `redis ://localhost:6379/1`.
 - Please replace `<MOUNTPOINT>` with the actual mount point of the file system, for example: `/jfs`.
 - If necessary, please replace `[,<MOUNT-OPTIONS>]` with the actual [mount option](command_reference.md#juicefs-mount) to be set, and multiple options are separated by commas.
 
@@ -203,4 +203,3 @@ $ sudo fusermount -u /mnt/jfs
 
 - [JuiceFS on Windows](juicefs_on_windows.md)
 - [JuiceFS on macOS](juicefs_on_macos.md)
-

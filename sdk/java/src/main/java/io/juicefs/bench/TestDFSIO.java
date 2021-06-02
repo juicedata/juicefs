@@ -38,7 +38,6 @@ import java.io.*;
 import java.text.DecimalFormat;
 import java.util.Date;
 import java.util.Locale;
-import java.util.Random;
 import java.util.StringTokenizer;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -84,6 +83,7 @@ public class TestDFSIO implements Tool {
                   " [genericOptions]" +
                   " -read [-random | -backward | -skip [-skipSize Size]] |" +
                   " -write | -append | -truncate | -clean" +
+                  " [-randomBytes]" +
                   " [-compression codecClassName]" +
                   " [-nrFiles N]" +
                   " [-size Size[B|KB|MB|GB|TB]]" +
@@ -257,12 +257,15 @@ public class TestDFSIO implements Tool {
   private abstract static class IOStatMapper extends IOMapperBase<Long> {
     protected CompressionCodec compressionCodec;
     private static final ThreadLocalRandom random = ThreadLocalRandom.current();
+    private boolean randomBytes;
 
     IOStatMapper() {
     }
 
     public byte[] getBuffer() {
-      random.nextBytes(buffer.get());
+      if (randomBytes) {
+        random.nextBytes(buffer.get());
+      }
       return buffer.get();
     }
 
@@ -275,6 +278,7 @@ public class TestDFSIO implements Tool {
       } catch (IOException e) {
         throw new RuntimeException("Cannot create file system.", e);
       }
+      randomBytes = conf.getBoolean("test.randomBytes", false);
 
       // grab compression
       String compression = getConf().get("test.io.compression.class", null);
@@ -678,6 +682,7 @@ public class TestDFSIO implements Tool {
     String compressionClass = null;
     boolean isSequential = false;
     String version = TestDFSIO.class.getSimpleName() + ".1.8";
+    boolean randomBytes = false;
 
     LOG.info(version);
     if (args.length == 0) {
@@ -690,6 +695,8 @@ public class TestDFSIO implements Tool {
         testType = TestType.TEST_TYPE_READ;
       } else if (args[i].equals("-write")) {
         testType = TestType.TEST_TYPE_WRITE;
+      } else if (args[i].equals("-randomBytes")) {
+        randomBytes = true;
       } else if (args[i].equals("-append")) {
         testType = TestType.TEST_TYPE_APPEND;
       } else if (args[i].equals("-random")) {
@@ -738,6 +745,7 @@ public class TestDFSIO implements Tool {
       skipSize = bufferSize;
 
     LOG.info("nrFiles = " + nrFiles);
+    LOG.info("randomBytes = " + randomBytes);
     LOG.info("nrBytes (MB) = " + toMB(nrBytes));
     LOG.info("bufferSize = " + bufferSize);
     if (skipSize > 0)
@@ -755,6 +763,7 @@ public class TestDFSIO implements Tool {
     config.setBoolean("dfs.support.append", true);
     config.setInt("test.threadsPerMap", threadsPerMap);
     config.set("test.basedir", baseDir);
+    config.setBoolean("test.randomBytes", randomBytes);
     FileSystem fs = new Path(getBaseDir(config)).getFileSystem(config);
 
     if (isSequential) {

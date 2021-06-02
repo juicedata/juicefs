@@ -6,7 +6,7 @@ This is a guide about Redis best practices. Redis is a critical component in Jui
 
 ---
 
-**Note: The following paragraphs are extracted from Redis official documentation. It may outdated, subject to latest version of the official documentation.**
+> **Note**: The following paragraphs are extracted from Redis official documentation. It may outdated, subject to latest version of the official documentation.
 
 ## High Availability
 
@@ -35,9 +35,9 @@ Once Redis servers and Sentinels are deployed, the `REDIS-URL` can be specified 
 $ ./juicefs mount rediss://:sentinelPass@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
 ```
 
-**Note**: The default port for Sentinel is 26379, but the above URL use 6379 (default port for Redis server) as the default, so the port for Sentinel is not optional.
+> **Note**: The default port for Sentinel is 26379, but the above URL use 6379 (default port for Redis server) as the default, so the port for Sentinel is not optional.
 
-**Note**: When the password is provided in the URL, it will also be used to connect Redis server. If they have different passwords, the passwords should be specified by enviroment viarables (`SENTINEL_PASSWORD` and `REDIS_PASSWORD`) separately.
+> **Note**: When the password is provided in the URL, it will also be used to connect Redis server. If they have different passwords, the passwords should be specified by enviroment viarables (`SENTINEL_PASSWORD` and `REDIS_PASSWORD`) separately.
 
 ## Data Durability
 
@@ -53,6 +53,22 @@ Redis provides a different range of [persistence](https://redis.io/topics/persis
 
 Please read the [official documentation](https://redis.io/topics/persistence) for more information.
 
+## Backing up Redis Data
+
+**Make Sure to Backup Your Database.** Disks break, instances in the cloud disappear, and so forth.
+
+By default Redis saves snapshots of the dataset on disk, in a binary file called `dump.rdb`. You can configure Redis to have it save the dataset every N seconds if there are at least M changes in the dataset, or you can manually call the [`SAVE`](https://redis.io/commands/save) or [`BGSAVE`](https://redis.io/commands/bgsave) commands.
+
+Redis is very data backup friendly since you can copy RDB files while the database is running: the RDB is never modified once produced, and while it gets produced it uses a temporary name and is renamed into its final destination atomically using `rename(2)` only when the new snapshot is complete.
+
+This means that copying the RDB file is completely safe while the server is running. This is what we suggest:
+
+- Create a cron job in your server creating hourly snapshots of the RDB file in one directory, and daily snapshots in a different directory.
+- Every time the cron script runs, make sure to call the `find` command to make sure too old snapshots are deleted: for instance you can take hourly snapshots for the latest 48 hours, and daily snapshots for one or two months. Make sure to name the snapshots with data and time information.
+- At least one time every day make sure to transfer an RDB snapshot _outside your data center_ or at least _outside the physical machine_ running your Redis instance.
+
+Please read the [official documentation](https://redis.io/topics/persistence) for more information.
+
 ---
 
 ## Recommended Managed Redis Service
@@ -61,7 +77,7 @@ Please read the [official documentation](https://redis.io/topics/persistence) fo
 
 [Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis) is a fully managed, Redis-compatible in-memory data store built for the cloud. It provides [automatic failover](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html), [automatic backup](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/backups-automatic.html) features to ensure availability and durability.
 
-**Note: Amazon ElastiCache for Redis has two type: cluster mode disabled and cluster mode enabled. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use "cluster mode enabled" type.**
+> **Note**: Amazon ElastiCache for Redis has two type: cluster mode disabled and cluster mode enabled. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use "cluster mode enabled" type.
 
 ### Google Cloud Memorystore for Redis
 
@@ -75,10 +91,10 @@ Please read the [official documentation](https://redis.io/topics/persistence) fo
 
 [Alibaba Cloud ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis) is a database service that is compatible with native Redis protocols. It supports a hybrid of memory and hard disks for data persistence. ApsaraDB for Redis provides a highly available hot standby architecture and can scale to meet requirements for high-performance and low-latency read/write operations.
 
-**Note: ApsaraDB for Redis supports 3 type [architectures](https://www.alibabacloud.com/help/doc-detail/86132.htm): standard, cluster and read/write splitting. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use cluster type architecture.**
+> **Note**: ApsaraDB for Redis supports 3 type [architectures](https://www.alibabacloud.com/help/doc-detail/86132.htm): standard, cluster and read/write splitting. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use cluster type architecture.
 
 ### Tencent Cloud TencentDB for Redis
 
 [Tencent Cloud TencentDB for Redis](https://intl.cloud.tencent.com/product/crs) is a caching and storage service compatible with the Redis protocol. It features a rich variety of data structure options to help you develop different types of business scenarios, and offers a complete set of database services such as primary-secondary hot backup, automatic switchover for disaster recovery, data backup, failover, instance monitoring, online scaling and data rollback.
 
-**Note: TencentDB for Redis supports 2 type [architectures](https://intl.cloud.tencent.com/document/product/239/3205): standard and cluster. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use cluster type architecture.**
+> **Note**: TencentDB for Redis supports 2 type [architectures](https://intl.cloud.tencent.com/document/product/239/3205): standard and cluster. Because JuiceFS uses [transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, so you couldn't use cluster type architecture.

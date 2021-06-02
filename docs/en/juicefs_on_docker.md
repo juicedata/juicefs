@@ -49,4 +49,18 @@ $ sudo docker run -d --name some-nginx \
 
 ## Docker Volume Plugin
 
-JuiceFS community version is not support it currently.
+We can also use [volume plugin](https://docs.docker.com/engine/extend/) to access JuiceFS.
+
+```
+$ docker plugin install juicedata/juicefs
+Plugin "juicedata/juicefs" is requesting the following privileges:
+ - network: [host]
+ - device: [/dev/fuse]
+ - capabilities: [CAP_SYS_ADMIN]
+Do you grant the above permissions? [y/N]
+
+$ docker volume create -d juicedata/juicefs:latest -o name={{VOLUME_NAME}} -o metaurl={{META_URL}} -o access-key={{ACCESS_KEY}} -o secret-key={{SECRET_KEY}} jfsvolume
+$ docker run -it -v jfsvolume:/opt busybox ls /opt
+```
+
+Replace above `{{VOLUME_NAME}}, {{META_URL}}, {{ACCESS_KEY}}, {{SECRET_KEY}}` to your own volume setting. For more details about JuiceFS volume plugin, refer [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) repository.

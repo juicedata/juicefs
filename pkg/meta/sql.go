@@ -344,18 +344,35 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return err
 }
 
+func (m *dbMeta) shouldRetry(err error) bool {
+	if err == nil {
+		return false
+	}
+	// TODO: add other retryable errors here
+	msg := err.Error()
+	switch m.engine.DriverName() {
+	case "sqlite3":
+		return errors.Is(err, sqlite3.ErrBusy) || strings.Contains(msg, "database is locked")
+	case "mysql":
+		// MySQL, MariaDB or TiDB
+		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later")
+	default:
+		return false
+	}
+}
+
 func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	var err error
 	for i := 0; i < 50; i++ {
 		_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+			s.ForUpdate()
 			return nil, f(s)
 		})
-		// TODO: add other retryable errors here
-		if errors.Is(err, sqlite3.ErrBusy) || err != nil && (strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "try restarting transaction")) {
+		if m.shouldRetry(err) {
 			txRestart.Add(1)
-			logger.Debugf("conflicted transaction, restart it (tried %d)", i+1)
+			logger.Debugf("conflicted transaction, restart it (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		}
@@ -934,6 +951,9 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if !ok {
 			return syscall.ENOENT
 		}
+		if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+			return syscall.EACCES
+		}
 
 		now := time.Now().UnixNano() / 1e3
 		pn.Mtime = now
@@ -1047,11 +1067,24 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if e.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		cnt, err := s.Count(&edge{Parent: e.Inode})
+		if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid {
+			var n = node{Inode: e.Inode}
+			ok, err = s.Get(&n)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if ctx.Uid() != n.Uid {
+				return syscall.EACCES
+			}
+		}
+		exist, err := s.Exist(&edge{Parent: e.Inode})
 		if err != nil {
 			return err
 		}
-		if cnt != 0 {
+		if exist {
 			return syscall.ENOTEMPTY
 		}
 
@@ -1155,22 +1188,22 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
 				return syscall.EEXIST
 			}
+			ok, err := s.Get(&dn)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
 			if de.Type == TypeDirectory {
-				cnt, err := s.Count(&edge{Parent: de.Inode})
+				exist, err := s.Exist(&edge{Parent: de.Inode})
 				if err != nil {
 					return err
 				}
-				if cnt != 0 {
+				if exist {
 					return syscall.ENOTEMPTY
 				}
 			} else {
-				ok, err := s.Get(&dn)
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return syscall.ENOENT
-				}
 				dn.Nlink--
 				if dn.Nlink > 0 {
 					dn.Ctime = time.Now().UnixNano() / 1e3
@@ -1180,6 +1213,12 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					m.Unlock()
 				}
 			}
+			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
+				return syscall.EACCES
+			}
+		}
+		if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
+			return syscall.EACCES
 		}
 
 		now := time.Now().UnixNano() / 1e3
@@ -1337,23 +1376,11 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	if eno != 0 {
 		return eno
 	}
-	*entries = nil
-	*entries = append(*entries, &Entry{
-		Inode: inode,
-		Name:  []byte("."),
-		Attr:  &attr,
-	})
 	var pattr Attr
 	eno = m.GetAttr(ctx, attr.Parent, &pattr)
 	if eno != 0 {
 		return eno
 	}
-	*entries = append(*entries, &Entry{
-		Inode: attr.Parent,
-		Name:  []byte(".."),
-		Attr:  &pattr,
-	})
-
 	dbSession := m.engine.Table(&edge{})
 	if plus != 0 {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
@@ -1362,6 +1389,18 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	if err := dbSession.Find(&nodes, &edge{Parent: inode}); err != nil {
 		return errno(err)
 	}
+
+	*entries = make([]*Entry, 0, 2+len(nodes))
+	*entries = append(*entries, &Entry{
+		Inode: inode,
+		Name:  []byte("."),
+		Attr:  &attr,
+	})
+	*entries = append(*entries, &Entry{
+		Inode: attr.Parent,
+		Name:  []byte(".."),
+		Attr:  &pattr,
+	})
 	for _, n := range nodes {
 		entry := &Entry{
 			Inode: n.Inode,

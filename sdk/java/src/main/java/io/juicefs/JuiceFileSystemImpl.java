@@ -285,7 +285,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     this.ugi = UserGroupInformation.getCurrentUser();
     String user = ugi.getShortUserName();
     String group = "nogroup";
-    String groupingFile = getConf(conf, "grouping", null);
+    String groupingFile = getConf(conf, "groups", null);
     if (isEmpty(groupingFile) && ugi.getGroupNames().length > 0) {
       group = String.join(",", ugi.getGroupNames());
     }
@@ -365,6 +365,11 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     uMask = FsPermission.getUMask(conf);
+    String umaskStr = getConf(conf, "umask", null);
+    if (!isEmpty(umaskStr)) {
+      uMask = new FsPermission(umaskStr);
+    }
+
     hflushMethod = getConf(conf, "hflush", "writeback");
     initializeStorageIds(conf);
 
@@ -375,7 +380,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       JuiceFSInstrumentation.init(this, statistics);
     }
 
-    String uidFile = getConf(conf, "uid-file", null);
+    String uidFile = getConf(conf, "users", null);
     if (!isEmpty(uidFile) || !isEmpty(groupingFile)) {
       updateUidAndGrouping(uidFile, groupingFile);
       refreshUidAndGrouping(uidFile, groupingFile);

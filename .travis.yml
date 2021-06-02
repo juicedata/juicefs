@@ -3,8 +3,10 @@ dist: xenial
 language: go
 go:
   - "1.14"
-env:
-  - DURATION=10 TEST_SUITE=all
+branches:
+  only:
+    - main
+    - /^release-.*$/
 addons:
   apt:
     packages:
@@ -24,7 +26,7 @@ before_script:
   - sudo make -C fstests setup
 script:
   - make test
-  - sudo DURATION=${DURATION} make -C fstests ${TEST_SUITE}
+  - sudo DURATION=10 make -C fstests all
   - make -C fstests flock
   - make -C sdk/java/libjfs
   - cd sdk/java

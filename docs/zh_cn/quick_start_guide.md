@@ -65,11 +65,11 @@ $ sudo install juicefs /usr/local/bin
 
 > **提示**: 你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
 
-## 四、创建  JuiceFS 文件系统
+## 四、创建 JuiceFS 文件系统
 
 创建 JuiceFS 文件系统要使用 `format` 子命令，需要同时指定用来存储元数据的 Redis 数据库和用来存储实际数据的对象存储。
 
-以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 redis 中的 `1` 号数据库存储元数据，使用 MinIO 中创建的 `pics` 存储桶存储实际数据。
+以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 Redis 中的 `1` 号数据库存储元数据，使用 MinIO 中创建的 `pics` 存储桶存储实际数据。
 
 ```shell
 $ juicefs format \
@@ -142,7 +142,7 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 <REDIS-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
 ```
 
-- 请将 `<REDIS-URL>` 替换成实际的 redis 数据库地址，格式为 `redis://<user>:<password>@<host>:<port>/<db>`，例如：`redis://localhost:6379/1`。
+- 请将 `<REDIS-URL>` 替换成实际的 Redis 数据库地址，格式为 `redis://<user>:<password>@<host>:<port>/<db>`，例如：`redis://localhost:6379/1`。
 - 请将 `<MOUNTPOINT>` 替换成文件系统实际的挂载点，例如：`/jfs`。
 - 如果需要，请将 `[,<MOUNT-OPTIONS>]` 替换为实际要设置的 [挂载选项](command_reference.md#juicefs-mount)，多个选项之间用逗号分隔。
 
@@ -207,4 +207,3 @@ $ sudo fusermount -u /mnt/jfs
 
 - [Windows 系统使用 JuiceFS](juicefs_on_windows.md)
 - [macOS 系统使用 JuiceFS](juicefs_on_macos.md)
-
