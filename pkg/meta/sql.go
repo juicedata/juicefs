@@ -291,7 +291,7 @@ func (m *dbMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	info, err := utils.GetLocalInfo(m.conf.MountPoint)
+	info, err := utils.GetLocalInfo(m.conf.MountPoint, m.conf.Tags)
 	if err != nil {
 		return fmt.Errorf("get local info: %s", err)
 	}
@@ -324,7 +324,7 @@ func (m *dbMeta) ListSessions(detail bool) ([]*Session, error) {
 			row.Info = []byte("{}")
 		}
 		if err = json.Unmarshal(row.Info, &s); err != nil {
-			logger.Warnf("corrupted session info; json error: %s", err)
+			logger.Errorf("corrupted session info; json error: %s", err)
 			continue
 		}
 		s.Sid = row.Sid
@@ -336,7 +336,7 @@ func (m *dbMeta) ListSessions(detail bool) ([]*Session, error) {
 				prows []plock
 			)
 			if err = m.engine.Find(&srows, &sustained{Sid: s.Sid}); err != nil {
-				logger.Warnf("find sustained %d: %s", s.Sid, err)
+				logger.Errorf("find sustained %d: %s", s.Sid, err)
 				continue
 			}
 			s.Sustained = make([]Ino, 0, len(srows))
@@ -345,7 +345,7 @@ func (m *dbMeta) ListSessions(detail bool) ([]*Session, error) {
 			}
 
 			if err = m.engine.Find(&frows, &flock{Sid: s.Sid}); err != nil {
-				logger.Warnf("find flock %d: %s", s.Sid, err)
+				logger.Errorf("find flock %d: %s", s.Sid, err)
 				continue
 			}
 			s.Flocks = make([]Flock, 0, len(frows))
@@ -354,7 +354,7 @@ func (m *dbMeta) ListSessions(detail bool) ([]*Session, error) {
 			}
 
 			if err = m.engine.Find(&prows, &plock{Sid: s.Sid}); err != nil {
-				logger.Warnf("find plock %d: %s", s.Sid, err)
+				logger.Errorf("find plock %d: %s", s.Sid, err)
 				continue
 			}
 			s.Plocks = make([]Plock, 0, len(prows))

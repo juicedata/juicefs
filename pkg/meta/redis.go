@@ -239,7 +239,7 @@ func (r *redisMeta) NewSession() error {
 		return fmt.Errorf("create session: %s", err)
 	}
 	logger.Debugf("session is %d", r.sid)
-	info, err := utils.GetLocalInfo(r.conf.MountPoint)
+	info, err := utils.GetLocalInfo(r.conf.MountPoint, r.conf.Tags)
 	if err != nil {
 		return fmt.Errorf("get local info: %s", err)
 	}

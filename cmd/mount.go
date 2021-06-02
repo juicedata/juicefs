@@ -89,6 +89,7 @@ func mount(c *cli.Context) error {
 		Strict:      true,
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
 		MountPoint:  mp,
+		Tags:        c.String("tags"),
 	})
 	format, err := m.Load()
 	if err != nil {
@@ -291,6 +292,10 @@ func clientFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
+		},
+		&cli.StringFlag{
+			Name:  "tags",
+			Usage: "user defined tags (splited by comma ',')",
 		},
 	}
 }

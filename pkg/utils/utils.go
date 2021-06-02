@@ -71,15 +71,20 @@ type LocalInfo struct {
 	Version    string
 	Hostname   string
 	MountPoint string
+	Tags       []string
 	ProcessID  int
 }
 
-func GetLocalInfo(mp string) ([]byte, error) {
+func GetLocalInfo(mp string, tagString string) ([]byte, error) {
 	host, err := os.Hostname()
 	if err != nil {
 		return nil, err
 	}
-	info := &LocalInfo{version.GetFullVersion(), host, mp, os.Getpid()}
+	tags := make([]string, 0)
+	if tagString != "" {
+		tags = append(tags, strings.Split(tagString, ",")...)
+	}
+	info := &LocalInfo{version.GetFullVersion(), host, mp, tags, os.Getpid()}
 	buf, err := json.Marshal(info)
 	if err != nil {
 		return nil, fmt.Errorf("json: %s", err)

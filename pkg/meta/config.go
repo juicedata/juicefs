@@ -21,6 +21,7 @@ type Config struct {
 	Retries     int
 	CaseInsensi bool
 	MountPoint  string
+	Tags        string
 }
 
 type Format struct {
