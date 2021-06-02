@@ -136,12 +136,26 @@ type Summary struct {
 	Dirs   uint64
 }
 
+type Flock struct {
+	Inode Ino
+	Owner uint64
+	Ltype string
+}
+
+type Plock struct {
+	Inode   Ino
+	Owner   uint64
+	Records []byte // FIXME: loadLocks
+}
+
 // Session contains detailed information of a client session
 type Session struct {
 	Sid       uint64
 	Heartbeat time.Time
 	utils.LocalInfo
-	Sustained []Ino
+	Sustained []Ino   `json:",omitempty"`
+	Flocks    []Flock `json:",omitempty"`
+	Plocks    []Plock `json:",omitempty"`
 }
 
 // Meta is a interface for a meta service for file system.

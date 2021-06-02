@@ -47,7 +47,7 @@ import (
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
 	Sessions: sessions -> [ $sid -> heartbeat ]
 	sustained: session$sid -> [$inode]
-	locked: locked$sid -> { lockf$inode or lockpinode }
+	locked: locked$sid -> { lockf$inode or lockp$inode }
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$chunkid_$size -> refcount
@@ -275,29 +275,58 @@ func (r *redisMeta) ListSessions(detail bool) ([]*Session, error) {
 		if err == redis.Nil { // legacy client has no info
 			info = []byte("{}")
 		} else if err != nil {
-			logger.Warnf("HGet %s %s: %s", sessionInfos, sid, err)
+			logger.Errorf("HGet %s %s: %s", sessionInfos, sid, err)
 			continue
 		}
-		var c Session // client session
-		if err := json.Unmarshal(info, &c); err != nil {
-			logger.Warnf("corrupted session info; json error: %s", err)
+		var s Session
+		if err := json.Unmarshal(info, &s); err != nil {
+			logger.Errorf("corrupted session info; json error: %s", err)
 			continue
 		}
-		c.Sid, _ = strconv.ParseUint(sid, 10, 64)
-		c.Heartbeat = time.Unix(int64(k.Score), 0)
+		s.Sid, _ = strconv.ParseUint(sid, 10, 64)
+		s.Heartbeat = time.Unix(int64(k.Score), 0)
 		if detail {
-			inodes, err := r.rdb.SMembers(ctx, r.sustained(int64(c.Sid))).Result()
+			inodes, err := r.rdb.SMembers(ctx, r.sustained(int64(s.Sid))).Result()
 			if err != nil {
-				logger.Warnf("SMembers %s: %s", sid, err)
+				logger.Errorf("SMembers %s: %s", sid, err)
 				continue
 			}
-			c.Sustained = make([]Ino, 0, len(inodes))
+			s.Sustained = make([]Ino, 0, len(inodes))
 			for _, sinode := range inodes {
-				inode, _ := strconv.ParseInt(sinode, 10, 0)
-				c.Sustained = append(c.Sustained, Ino(inode))
+				inode, _ := strconv.ParseUint(sinode, 10, 64)
+				s.Sustained = append(s.Sustained, Ino(inode))
+			}
+
+			locks, err := r.rdb.SMembers(ctx, r.lockedKey(int64(s.Sid))).Result()
+			if err != nil {
+				logger.Errorf("SMembers %s: %s", sid, err)
+				continue
+			}
+			s.Flocks = make([]Flock, 0, len(locks))
+			s.Plocks = make([]Plock, 0, len(locks))
+			for _, lock := range locks {
+				owners, err := r.rdb.HGetAll(ctx, lock).Result()
+				if err != nil {
+					logger.Errorf("HGetAll %s: %s", lock, err)
+					continue
+				}
+				isFlock := strings.HasPrefix(lock, "lockf")
+				inode, _ := strconv.ParseUint(lock[5:], 10, 64)
+				for k, v := range owners {
+					parts := strings.Split(k, "_")
+					if parts[0] != sid {
+						continue
+					}
+					owner, _ := strconv.ParseUint(parts[1], 16, 64)
+					if isFlock {
+						s.Flocks = append(s.Flocks, Flock{Ino(inode), owner, v})
+					} else {
+						s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, []byte(v)})
+					}
+				}
 			}
 		}
-		sessions = append(sessions, &c)
+		sessions = append(sessions, &s)
 	}
 
 	return sessions, nil
