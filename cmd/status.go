@@ -29,6 +29,22 @@ func status(ctx *cli.Context) error {
 		return fmt.Errorf("REDIS-URL is needed")
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+
+	if ctx.Bool("session") {
+		sessions, err := m.ListSessions()
+		if err != nil {
+			logger.Fatal("list sessions: %s", err)
+		}
+		for _, s := range sessions {
+			data, err := json.MarshalIndent(s, "", "  ")
+			if err != nil {
+				logger.Fatalf("json: %s", err)
+			}
+			fmt.Println(string(data))
+		}
+		return nil
+	}
+
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
@@ -49,5 +65,12 @@ func statusFlags() *cli.Command {
 		Usage:     "show status of JuiceFS",
 		ArgsUsage: "REDIS-URL",
 		Action:    status,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "session",
+				Aliases: []string{"s"},
+				Usage:   "list client sessions",
+			},
+		},
 	}
 }

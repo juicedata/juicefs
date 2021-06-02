@@ -295,6 +295,34 @@ func (m *dbMeta) NewSession() error {
 	return nil
 }
 
+func (m *dbMeta) ListSessions() ([]*Session, error) {
+	var s session
+	rows, err := m.engine.Rows(&s)
+	if err != nil {
+		return nil, err
+	}
+	var sessions []*Session
+	for rows.Next() {
+		s.Info = nil
+		if rows.Scan(&s) == nil {
+			var c Session      // client session
+			if s.Info == nil { // legacy client has no info
+				s.Info = []byte("{}")
+			}
+			if err := json.Unmarshal(s.Info, &c); err != nil {
+				logger.Warnf("corrupted session info; json error: %s", err)
+				continue
+			}
+			c.Sid = s.Sid
+			c.Heartbeat = time.Unix(s.Heartbeat, 0)
+			sessions = append(sessions, &c)
+		}
+	}
+	rows.Close()
+
+	return sessions, nil
+}
+
 func (m *dbMeta) OnMsg(mtype uint32, cb MsgCallback) {
 	m.msgCallbacks.Lock()
 	defer m.msgCallbacks.Unlock()
