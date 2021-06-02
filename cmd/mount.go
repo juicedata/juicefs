@@ -154,7 +154,7 @@ func mount(c *cli.Context) error {
 			Retries: 10,
 		},
 		Format:     format,
-		Version:    version.Version(),
+		Version:    version.GetFullVersion(),
 		Mountpoint: mp,
 		Chunk:      &chunkConf,
 	}
@@ -217,7 +217,7 @@ func mount(c *cli.Context) error {
 	}()
 
 	if !c.Bool("no-usage-report") {
-		go usage.ReportUsage(m, version.Version())
+		go usage.ReportUsage(m, version.GetFullVersion())
 	}
 	mount_main(conf, m, store, c)
 	return nil

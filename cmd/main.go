@@ -64,7 +64,7 @@ func main() {
 	app := &cli.App{
 		Name:      "juicefs",
 		Usage:     "A POSIX file system built on Redis and object storage.",
-		Version:   version.Version(),
+		Version:   version.GetFullVersion(),
 		Copyright: "AGPLv3",
 		Flags:     globalFlags(),
 		Commands: []*cli.Command{

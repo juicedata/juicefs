@@ -25,6 +25,7 @@ type Config struct {
 type Format struct {
 	Name        string
 	UUID        string
+	Version     string
 	Storage     string
 	Bucket      string
 	AccessKey   string
