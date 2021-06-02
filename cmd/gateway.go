@@ -204,13 +204,13 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 			Retries: 10,
 		},
 		Format:    format,
-		Version:   version.Version(),
+		Version:   version.GetFullVersion(),
 		AccessLog: c.String("access-log"),
 		Chunk:     &chunkConf,
 	}
 
 	if !c.Bool("no-usage-report") {
-		go usage.ReportUsage(m, "gateway "+version.Version())
+		go usage.ReportUsage(m, "gateway "+version.GetFullVersion())
 	}
 
 	jfs, err := fs.NewFileSystem(conf, m, store)

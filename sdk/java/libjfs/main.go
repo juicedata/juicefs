@@ -284,7 +284,7 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintptr {
 	name := C.GoString(cname)
 	debug.SetGCPercent(50)
-	object.UserAgent = "JuiceFS-SDK " + version.Version()
+	object.UserAgent = "JuiceFS-SDK " + version.GetFullVersion()
 	return getOrCreate(name, C.GoString(user), C.GoString(group), C.GoString(superuser), C.GoString(supergroup), func() *fs.FileSystem {
 		var jConf javaConf
 		err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
@@ -409,7 +409,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			FastResolve: jConf.FastResolve,
 		}
 		if !jConf.NoUsageReport {
-			go usage.ReportUsage(m, "java-sdk "+version.Version())
+			go usage.ReportUsage(m, "java-sdk "+version.GetFullVersion())
 		}
 		jfs, err := fs.NewFileSystem(conf, m, store)
 		if err != nil {

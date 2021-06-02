@@ -28,6 +28,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 	"xorm.io/xorm"
@@ -206,10 +207,11 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			old.SecretKey = "removed"
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
-			// only AccessKey and SecretKey can be safely updated.
+			// only AccessKey, SecretKey and Version can be safely updated.
 			format.UUID = old.UUID
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.Version = format.Version
 			if format != *old {
 				old.SecretKey = ""
 				format.SecretKey = ""
@@ -271,6 +273,20 @@ func (m *dbMeta) Load() (*Format, error) {
 }
 
 func (m *dbMeta) NewSession() error {
+	format, err := m.Load()
+	if err != nil {
+		return fmt.Errorf("load setting: %s", err)
+	}
+	formatVersion, err := version.ParseVersion(strings.SplitN(format.Version, " ", 1)[0])
+	if err != nil {
+		return err
+	}
+	if formatVersion.OlderThan(version.Version{Major: 0, Minor: 14, Patch: 0}) {
+		if err = m.engine.Sync2(new(session)); err != nil {
+			return err
+		}
+	}
+
 	v, err := m.incrCounter("nextSession", 1)
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)

@@ -95,7 +95,7 @@ func GetLocalInfo(mp string) ([]byte, error) {
 	if ip == "" {
 		return nil, fmt.Errorf("no IP found")
 	}
-	info := &LocalInfo{version.Version(), host, ip, mp, os.Getpid()}
+	info := &LocalInfo{version.GetFullVersion(), host, ip, mp, os.Getpid()}
 	buf, err := json.Marshal(info)
 	if err != nil {
 		return nil, fmt.Errorf("json: %s", err)

@@ -33,7 +33,7 @@ func status(ctx *cli.Context) error {
 	if ctx.Bool("session") {
 		sessions, err := m.ListSessions(ctx.Bool("detail"))
 		if err != nil {
-			logger.Fatal("list sessions: %s", err)
+			logger.Fatalf("list sessions: %s", err)
 		}
 		for _, s := range sessions {
 			data, err := json.MarshalIndent(s, "", "  ")

@@ -177,10 +177,11 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			old.SecretKey = "removed"
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
-			// only AccessKey and SecretKey can be safely updated.
+			// only AccessKey, SecretKey and Version can be safely updated.
 			format.UUID = old.UUID
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.Version = format.Version
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""

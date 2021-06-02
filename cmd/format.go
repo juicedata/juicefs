@@ -53,7 +53,7 @@ func fixObjectSize(s int) int {
 }
 
 func createStorage(format *meta.Format) (object.ObjectStorage, error) {
-	object.UserAgent = "JuiceFS-" + version.Version()
+	object.UserAgent = "JuiceFS-" + version.GetFullVersion()
 	var blob object.ObjectStorage
 	var err error
 	if format.Shards > 1 {
@@ -167,6 +167,7 @@ func format(c *cli.Context) error {
 	format := meta.Format{
 		Name:        name,
 		UUID:        uuid.New().String(),
+		Version:     version.GetFullVersion(),
 		Storage:     c.String("storage"),
 		Bucket:      c.String("bucket"),
 		AccessKey:   c.String("access-key"),
