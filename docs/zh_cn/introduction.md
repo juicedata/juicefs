@@ -13,7 +13,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
 7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](benchmark.md)；
-8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](../en/encrypt.md)；
+8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](encrypt.md)；
 9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
 10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
 
@@ -40,4 +40,3 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 现在，你可以参照 [快速上手指南](quick_start_guide.md) 立即开始使用 JuiceFS！
 
 如果你想了解 JuiceFS 工作原理，可以查看  [JuiceFS 的技术架构](architecture.md) 和 [JuiceFS 如何存储文件](how_juicefs_store_files.md)。
-
