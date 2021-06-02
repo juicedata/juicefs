@@ -23,6 +23,7 @@ import jnr.ffi.LibraryLoader;
 import jnr.ffi.Memory;
 import jnr.ffi.Pointer;
 import jnr.ffi.Runtime;
+import jnr.ffi.annotations.Encoding;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -50,6 +51,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.Executors;
@@ -102,15 +104,22 @@ public class JuiceFileSystemImpl extends FileSystem {
   private String callerContext;
 
   public static interface Libjfs {
-    long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
+    long jfs_init(@Encoding("UTF-8") String name,
+                  @Encoding("UTF-8") String jsonConf,
+                  @Encoding("UTF-8") String user,
+                  @Encoding("UTF-8") String group,
+                  @Encoding("UTF-8") String superuser,
+                  @Encoding("UTF-8") String supergroup);
 
-    void jfs_update_uid_grouping(long h, String uidstr, String grouping);
+    void jfs_update_uid_grouping(long h,
+                                 @Encoding("UTF-8") String uidstr,
+                                 @Encoding("UTF-8") String grouping);
 
     int jfs_term(long pid, long h);
 
-    int jfs_open(long pid, long h, String path, int flags);
+    int jfs_open(long pid, long h, @Encoding("UTF-8") String path, int flags);
 
-    int jfs_access(long pid, long h, String path, int flags);
+    int jfs_access(long pid, long h, @Encoding("UTF-8") String path, int flags);
 
     long jfs_lseek(long pid, int fd, long pos, int whence);
 
@@ -124,49 +133,49 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_close(long pid, int fd);
 
-    int jfs_create(long pid, long h, String path, short mode);
+    int jfs_create(long pid, long h, @Encoding("UTF-8") String path, short mode);
 
-    int jfs_truncate(long pid, long h, String path, long length);
+    int jfs_truncate(long pid, long h, @Encoding("UTF-8") String path, long length);
 
-    int jfs_delete(long pid, long h, String path);
+    int jfs_delete(long pid, long h, @Encoding("UTF-8") String path);
 
-    int jfs_rmr(long pid, long h, String path);
+    int jfs_rmr(long pid, long h, @Encoding("UTF-8") String path);
 
-    int jfs_mkdir(long pid, long h, String path, short mode);
+    int jfs_mkdir(long pid, long h, @Encoding("UTF-8") String path, short mode);
 
-    int jfs_rename(long pid, long h, String src, String dst);
+    int jfs_rename(long pid, long h, @Encoding("UTF-8") String src, @Encoding("UTF-8") String dst);
 
-    int jfs_symlink(long pid, long h, String target, String path);
+    int jfs_symlink(long pid, long h, @Encoding("UTF-8") String target, @Encoding("UTF-8") String path);
 
-    int jfs_readlink(long pid, long h, String path, Pointer buf, int bufsize);
+    int jfs_readlink(long pid, long h, @Encoding("UTF-8") String path, Pointer buf, int bufsize);
 
-    int jfs_stat1(long pid, long h, String path, Pointer buf);
+    int jfs_stat1(long pid, long h, @Encoding("UTF-8") String path, Pointer buf);
 
-    int jfs_lstat1(long pid, long h, String path, Pointer buf);
+    int jfs_lstat1(long pid, long h, @Encoding("UTF-8") String path, Pointer buf);
 
-    int jfs_summary(long pid, long h, String path, Pointer buf);
+    int jfs_summary(long pid, long h, @Encoding("UTF-8") String path, Pointer buf);
 
     int jfs_statvfs(long pid, long h, Pointer buf);
 
-    int jfs_chmod(long pid, long h, String path, int mode);
+    int jfs_chmod(long pid, long h, @Encoding("UTF-8") String path, int mode);
 
-    int jfs_setOwner(long pid, long h, String path, String user, String group);
+    int jfs_setOwner(long pid, long h, @Encoding("UTF-8") String path, @Encoding("UTF-8") String user, @Encoding("UTF-8") String group);
 
-    int jfs_utime(long pid, long h, String path, long mtime, long atime);
+    int jfs_utime(long pid, long h, @Encoding("UTF-8") String path, long mtime, long atime);
 
-    int jfs_chown(long pid, long h, String path);
+    int jfs_chown(long pid, long h, @Encoding("UTF-8") String path);
 
-    int jfs_listdir(long pid, long h, String path, int offset, Pointer buf, int size);
+    int jfs_listdir(long pid, long h, @Encoding("UTF-8") String path, int offset, Pointer buf, int size);
 
-    int jfs_concat(long pid, long h, String path, Pointer buf, int bufsize);
+    int jfs_concat(long pid, long h, @Encoding("UTF-8") String path, Pointer buf, int bufsize);
 
-    int jfs_setXattr(long pid, long h, String path, String name, Pointer value, int vlen, int mode);
+    int jfs_setXattr(long pid, long h, @Encoding("UTF-8") String path, @Encoding("UTF-8") String name, Pointer value, int vlen, int mode);
 
-    int jfs_getXattr(long pid, long h, String path, String name, Pointer buf, int size);
+    int jfs_getXattr(long pid, long h, @Encoding("UTF-8") String path, @Encoding("UTF-8") String name, Pointer buf, int size);
 
-    int jfs_listXattr(long pid, long h, String path, Pointer buf, int size);
+    int jfs_listXattr(long pid, long h, @Encoding("UTF-8") String path, Pointer buf, int size);
 
-    int jfs_removeXattr(long pid, long h, String path, String name);
+    int jfs_removeXattr(long pid, long h, @Encoding("UTF-8") String path, @Encoding("UTF-8") String name);
   }
 
   static int EPERM = -0x01;
@@ -1430,7 +1439,7 @@ public class JuiceFileSystemImpl extends FileSystem {
           results = rs;
         }
         // resolve symlink to target
-        Path p = makeQualified(new Path(f, new String(name)));
+        Path p = makeQualified(new Path(f, new String(name, StandardCharsets.UTF_8)));
         FileStatus st = newFileStatus(p, buf.slice(offset + 1), size, true);
         if (st.isSymlink() && !posixBehavior) {
           Path target = st.getSymlink();
@@ -1696,7 +1705,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (buf.getByte(off) == 0) {
         byte[] arr = new byte[off - last];
         buf.get(last, arr, 0, arr.length);
-        result.add(new String(arr));
+        result.add(new String(arr, StandardCharsets.UTF_8));
         last = off + 1;
       }
       off++;
