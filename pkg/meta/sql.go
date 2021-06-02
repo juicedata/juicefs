@@ -27,6 +27,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 	"xorm.io/xorm"
@@ -109,6 +110,7 @@ type plock struct {
 type session struct {
 	Sid       uint64 `xorm:"pk"`
 	Heartbeat int64  `xorm:"notnull"`
+	Info      []byte `xorm:"blob"`
 }
 
 type sustained struct {
@@ -273,8 +275,12 @@ func (m *dbMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
+	info, err := utils.GetLocalInfo()
+	if err != nil {
+		return fmt.Errorf("get local info: %s", err)
+	}
 	err = m.txn(func(s *xorm.Session) error {
-		return mustInsert(s, &session{v, time.Now().Unix()})
+		return mustInsert(s, &session{v, time.Now().Unix(), info})
 	})
 	if err != nil {
 		return fmt.Errorf("insert new session: %s", err)

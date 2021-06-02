@@ -16,9 +16,14 @@
 package utils
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
+	"net"
 	"os"
 	"strings"
+
+	"github.com/juicedata/juicefs/pkg/version"
 )
 
 // Min returns min of 2 int
@@ -61,4 +66,38 @@ func SplitDir(d string) []string {
 		dd = strings.Split(dd[0], ",")
 	}
 	return dd
+}
+
+type LocalInfo struct {
+	Version  string
+	Hostname string
+	IP       string
+}
+
+func GetLocalInfo() ([]byte, error) {
+	host, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+	var ip string
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			ip = ipnet.IP.String()
+			break // FIXME: pick a proper IP
+		}
+	}
+	if ip == "" {
+		return nil, fmt.Errorf("no IP found")
+	}
+	info := &LocalInfo{version.Version(), host, ip}
+	buf, err := json.Marshal(info)
+	if err != nil {
+		return nil, fmt.Errorf("json: %s", err)
+	}
+
+	return buf, nil
 }
