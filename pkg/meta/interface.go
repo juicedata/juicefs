@@ -141,7 +141,7 @@ type Session struct {
 	Sid       uint64
 	Heartbeat time.Time
 	utils.LocalInfo
-	// Locks []byte
+	Sustained []Ino
 }
 
 // Meta is a interface for a meta service for file system.
@@ -153,7 +153,7 @@ type Meta interface {
 	// NewSession creates a new client session.
 	NewSession() error
 	// ListSessions returns all client sessions.
-	ListSessions() ([]*Session, error)
+	ListSessions(detail bool) ([]*Session, error)
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno

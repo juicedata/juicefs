@@ -238,7 +238,7 @@ func (r *redisMeta) NewSession() error {
 		return fmt.Errorf("create session: %s", err)
 	}
 	logger.Debugf("session is %d", r.sid)
-	info, err := utils.GetLocalInfo()
+	info, err := utils.GetLocalInfo(r.conf.MountPoint)
 	if err != nil {
 		return fmt.Errorf("get local info: %s", err)
 	}
@@ -261,7 +261,7 @@ func (r *redisMeta) NewSession() error {
 	return nil
 }
 
-func (r *redisMeta) ListSessions() ([]*Session, error) {
+func (r *redisMeta) ListSessions(detail bool) ([]*Session, error) {
 	ctx := Background
 	keys, err := r.rdb.ZRangeWithScores(ctx, allSessions, 0, -1).Result()
 	if err != nil {
@@ -269,11 +269,12 @@ func (r *redisMeta) ListSessions() ([]*Session, error) {
 	}
 	sessions := make([]*Session, 0, len(keys))
 	for _, k := range keys {
-		info, err := r.rdb.HGet(ctx, sessionInfos, k.Member.(string)).Bytes()
+		sid := k.Member.(string)
+		info, err := r.rdb.HGet(ctx, sessionInfos, sid).Bytes()
 		if err == redis.Nil { // legacy client has no info
 			info = []byte("{}")
 		} else if err != nil {
-			logger.Warnf("redis error: %s", err)
+			logger.Warnf("HGet %s %s: %s", sessionInfos, sid, err)
 			continue
 		}
 		var c Session // client session
@@ -281,8 +282,20 @@ func (r *redisMeta) ListSessions() ([]*Session, error) {
 			logger.Warnf("corrupted session info; json error: %s", err)
 			continue
 		}
-		c.Sid, _ = strconv.ParseUint(k.Member.(string), 10, 64)
+		c.Sid, _ = strconv.ParseUint(sid, 10, 64)
 		c.Heartbeat = time.Unix(int64(k.Score), 0)
+		if detail {
+			inodes, err := r.rdb.SMembers(ctx, r.sustained(int64(c.Sid))).Result()
+			if err != nil {
+				logger.Warnf("SMembers %s: %s", sid, err)
+				continue
+			}
+			c.Sustained = make([]Ino, 0, len(inodes))
+			for _, sinode := range inodes {
+				inode, _ := strconv.ParseInt(sinode, 10, 0)
+				c.Sustained = append(c.Sustained, Ino(inode))
+			}
+		}
 		sessions = append(sessions, &c)
 	}
 

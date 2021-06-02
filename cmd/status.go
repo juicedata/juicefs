@@ -31,7 +31,7 @@ func status(ctx *cli.Context) error {
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 
 	if ctx.Bool("session") {
-		sessions, err := m.ListSessions()
+		sessions, err := m.ListSessions(ctx.Bool("detail"))
 		if err != nil {
 			logger.Fatal("list sessions: %s", err)
 		}
@@ -70,6 +70,10 @@ func statusFlags() *cli.Command {
 				Name:    "session",
 				Aliases: []string{"s"},
 				Usage:   "list client sessions",
+			},
+			&cli.BoolFlag{
+				Name:  "detail",
+				Usage: "show detailed information of sessions (only meaningful when combined with -s/--session)",
 			},
 		},
 	}

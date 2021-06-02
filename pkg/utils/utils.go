@@ -69,12 +69,14 @@ func SplitDir(d string) []string {
 }
 
 type LocalInfo struct {
-	Version  string
-	Hostname string
-	IP       string
+	Version    string
+	Hostname   string
+	IP         string
+	MountPoint string
+	ProcessID  int
 }
 
-func GetLocalInfo() ([]byte, error) {
+func GetLocalInfo(mp string) ([]byte, error) {
 	host, err := os.Hostname()
 	if err != nil {
 		return nil, err
@@ -93,7 +95,7 @@ func GetLocalInfo() ([]byte, error) {
 	if ip == "" {
 		return nil, fmt.Errorf("no IP found")
 	}
-	info := &LocalInfo{version.Version(), host, ip}
+	info := &LocalInfo{version.Version(), host, ip, mp, os.Getpid()}
 	buf, err := json.Marshal(info)
 	if err != nil {
 		return nil, fmt.Errorf("json: %s", err)

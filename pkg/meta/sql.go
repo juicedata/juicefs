@@ -275,7 +275,7 @@ func (m *dbMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	info, err := utils.GetLocalInfo()
+	info, err := utils.GetLocalInfo(m.conf.MountPoint)
 	if err != nil {
 		return fmt.Errorf("get local info: %s", err)
 	}
@@ -295,7 +295,7 @@ func (m *dbMeta) NewSession() error {
 	return nil
 }
 
-func (m *dbMeta) ListSessions() ([]*Session, error) {
+func (m *dbMeta) ListSessions(detail bool) ([]*Session, error) {
 	var s session
 	rows, err := m.engine.Rows(&s)
 	if err != nil {
@@ -315,6 +315,21 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 			}
 			c.Sid = s.Sid
 			c.Heartbeat = time.Unix(s.Heartbeat, 0)
+			if detail {
+				var i = sustained{Sid: c.Sid}
+				irows, err := m.engine.Rows(&i)
+				if err != nil {
+					logger.Warnf("scan sustained %d: %s", c.Sid, err)
+					continue
+				}
+				c.Sustained = make([]Ino, 0)
+				for irows.Next() {
+					if irows.Scan(&i) == nil {
+						c.Sustained = append(c.Sustained, i.Inode)
+					}
+				}
+				irows.Close()
+			}
 			sessions = append(sessions, &c)
 		}
 	}
