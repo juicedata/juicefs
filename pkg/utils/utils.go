@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"strings"
 
@@ -71,7 +70,6 @@ func SplitDir(d string) []string {
 type LocalInfo struct {
 	Version    string
 	Hostname   string
-	IP         string
 	MountPoint string
 	ProcessID  int
 }
@@ -81,21 +79,7 @@ func GetLocalInfo(mp string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return nil, err
-	}
-	var ip string
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			ip = ipnet.IP.String()
-			break // FIXME: pick a proper IP
-		}
-	}
-	if ip == "" {
-		return nil, fmt.Errorf("no IP found")
-	}
-	info := &LocalInfo{version.GetFullVersion(), host, ip, mp, os.Getpid()}
+	info := &LocalInfo{version.GetFullVersion(), host, mp, os.Getpid()}
 	buf, err := json.Marshal(info)
 	if err != nil {
 		return nil, fmt.Errorf("json: %s", err)
