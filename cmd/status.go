@@ -23,6 +23,28 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+type sections struct {
+	Setting  *meta.Format
+	Sessions []*meta.Session
+}
+
+func print(format string, v interface{}) {
+	var output []byte
+	var err error
+	switch format {
+	case "json":
+		output, err = json.Marshal(v)
+	case "json-pretty":
+		output, err = json.MarshalIndent(v, "", "  ")
+	default:
+		output, err = json.MarshalIndent(v, "", "  ") // TODO: plain text
+	}
+	if err != nil {
+		logger.Fatalf("format %s: %s", format, err)
+	}
+	fmt.Println(string(output))
+}
+
 func status(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
@@ -35,40 +57,23 @@ func status(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("get session: %s", err)
 		}
-		data, err := json.MarshalIndent(s, "", "  ")
-		if err != nil {
-			logger.Fatalf("json: %s", err)
-		}
-		fmt.Println(string(data))
+		print(ctx.String("format"), s)
 		return nil
 	}
 
-	// setting
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
 	format.SecretKey = ""
 	format.EncryptKey = ""
-	data, err := json.MarshalIndent(format, "", "  ")
-	if err != nil {
-		logger.Fatalf("json: %s", err)
-	}
-	fmt.Println(string(data))
 
-	// sessions
 	sessions, err := m.ListSessions()
 	if err != nil {
 		logger.Fatalf("list sessions: %s", err)
 	}
-	for _, s := range sessions {
-		data, err := json.MarshalIndent(s, "", "  ")
-		if err != nil {
-			logger.Fatalf("json: %s", err)
-		}
-		fmt.Println(string(data))
-	}
 
+	print(ctx.String("format"), &sections{format, sessions})
 	return nil
 }
 
@@ -83,6 +88,11 @@ func statusFlags() *cli.Command {
 				Name:    "session",
 				Aliases: []string{"s"},
 				Usage:   "show detailed information of the specified session (sid)",
+			},
+			&cli.StringFlag{
+				Name:    "format",
+				Aliases: []string{"f"},
+				Usage:   "format of output",
 			},
 		},
 	}
