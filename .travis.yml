@@ -2,7 +2,7 @@ os: linux
 dist: xenial
 language: go
 go:
-  - "1.14"
+  - "1.16"
 branches:
   only:
     - main
@@ -33,7 +33,7 @@ script:
   - sudo `which mvn` compile -B --quiet || sudo `which mvn` compile -B --quiet
   - sudo chmod 777 /jfs/tmp
   - sudo `which mvn` test -B
-  - sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet  
+  - sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet
   - cd ../../
   - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
   - sudo ./juicefs gc localhost
