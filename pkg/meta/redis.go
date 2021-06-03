@@ -266,73 +266,89 @@ func (r *redisMeta) NewSession() error {
 	return nil
 }
 
-func (r *redisMeta) ListSessions(detail bool) ([]*Session, error) {
+func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 	ctx := Background
-	keys, err := r.rdb.ZRangeWithScores(ctx, allSessions, 0, -1).Result()
+	info, err := r.rdb.HGet(ctx, sessionInfos, sid).Bytes()
+	if err == redis.Nil { // legacy client has no info
+		info = []byte("{}")
+	} else if err != nil {
+		return nil, fmt.Errorf("HGet %s %s: %s", sessionInfos, sid, err)
+	}
+	var s Session
+	if err := json.Unmarshal(info, &s); err != nil {
+		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
+	}
+	s.Sid, _ = strconv.ParseUint(sid, 10, 64)
+	if detail {
+		inodes, err := r.rdb.SMembers(ctx, r.sustained(int64(s.Sid))).Result()
+		if err != nil {
+			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
+		}
+		s.Sustained = make([]Ino, 0, len(inodes))
+		for _, sinode := range inodes {
+			inode, _ := strconv.ParseUint(sinode, 10, 64)
+			s.Sustained = append(s.Sustained, Ino(inode))
+		}
+
+		locks, err := r.rdb.SMembers(ctx, r.lockedKey(int64(s.Sid))).Result()
+		if err != nil {
+			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
+		}
+		s.Flocks = make([]Flock, 0, len(locks)) // greedy
+		s.Plocks = make([]Plock, 0, len(locks))
+		for _, lock := range locks {
+			owners, err := r.rdb.HGetAll(ctx, lock).Result()
+			if err != nil {
+				return nil, fmt.Errorf("HGetAll %s: %s", lock, err)
+			}
+			isFlock := strings.HasPrefix(lock, "lockf")
+			inode, _ := strconv.ParseUint(lock[5:], 10, 64)
+			for k, v := range owners {
+				parts := strings.Split(k, "_")
+				if parts[0] != sid {
+					continue
+				}
+				owner, _ := strconv.ParseUint(parts[1], 16, 64)
+				if isFlock {
+					s.Flocks = append(s.Flocks, Flock{Ino(inode), owner, v})
+				} else {
+					s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, []byte(v)})
+				}
+			}
+		}
+	}
+	return &s, nil
+}
+
+func (r *redisMeta) GetSession(sid uint64) (*Session, error) {
+	key := strconv.FormatUint(sid, 10)
+	score, err := r.rdb.ZScore(Background, allSessions, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	s, err := r.getSession(key, true)
+	if err != nil {
+		return nil, err
+	}
+	s.Heartbeat = time.Unix(int64(score), 0)
+	return s, nil
+}
+
+func (r *redisMeta) ListSessions() ([]*Session, error) {
+	keys, err := r.rdb.ZRangeWithScores(Background, allSessions, 0, -1).Result()
 	if err != nil {
 		return nil, err
 	}
 	sessions := make([]*Session, 0, len(keys))
 	for _, k := range keys {
-		sid := k.Member.(string)
-		info, err := r.rdb.HGet(ctx, sessionInfos, sid).Bytes()
-		if err == redis.Nil { // legacy client has no info
-			info = []byte("{}")
-		} else if err != nil {
-			logger.Errorf("HGet %s %s: %s", sessionInfos, sid, err)
+		s, err := r.getSession(k.Member.(string), false)
+		if err != nil {
+			logger.Errorf("get session: %s", err)
 			continue
 		}
-		var s Session
-		if err := json.Unmarshal(info, &s); err != nil {
-			logger.Errorf("corrupted session info; json error: %s", err)
-			continue
-		}
-		s.Sid, _ = strconv.ParseUint(sid, 10, 64)
 		s.Heartbeat = time.Unix(int64(k.Score), 0)
-		if detail {
-			inodes, err := r.rdb.SMembers(ctx, r.sustained(int64(s.Sid))).Result()
-			if err != nil {
-				logger.Errorf("SMembers %s: %s", sid, err)
-				continue
-			}
-			s.Sustained = make([]Ino, 0, len(inodes))
-			for _, sinode := range inodes {
-				inode, _ := strconv.ParseUint(sinode, 10, 64)
-				s.Sustained = append(s.Sustained, Ino(inode))
-			}
-
-			locks, err := r.rdb.SMembers(ctx, r.lockedKey(int64(s.Sid))).Result()
-			if err != nil {
-				logger.Errorf("SMembers %s: %s", sid, err)
-				continue
-			}
-			s.Flocks = make([]Flock, 0, len(locks)) // greedy
-			s.Plocks = make([]Plock, 0, len(locks))
-			for _, lock := range locks {
-				owners, err := r.rdb.HGetAll(ctx, lock).Result()
-				if err != nil {
-					logger.Errorf("HGetAll %s: %s", lock, err)
-					continue
-				}
-				isFlock := strings.HasPrefix(lock, "lockf")
-				inode, _ := strconv.ParseUint(lock[5:], 10, 64)
-				for k, v := range owners {
-					parts := strings.Split(k, "_")
-					if parts[0] != sid {
-						continue
-					}
-					owner, _ := strconv.ParseUint(parts[1], 16, 64)
-					if isFlock {
-						s.Flocks = append(s.Flocks, Flock{Ino(inode), owner, v})
-					} else {
-						s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, []byte(v)})
-					}
-				}
-			}
-		}
-		sessions = append(sessions, &s)
+		sessions = append(sessions, s)
 	}
-
 	return sessions, nil
 }
 

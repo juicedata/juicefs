@@ -30,6 +30,19 @@ func status(ctx *cli.Context) error {
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 
+	if sid := ctx.Uint64("session"); sid != 0 {
+		s, err := m.GetSession(sid)
+		if err != nil {
+			logger.Fatalf("get session: %s", err)
+		}
+		data, err := json.MarshalIndent(s, "", "  ")
+		if err != nil {
+			logger.Fatalf("json: %s", err)
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
 	// setting
 	format, err := m.Load()
 	if err != nil {
@@ -44,7 +57,7 @@ func status(ctx *cli.Context) error {
 	fmt.Println(string(data))
 
 	// sessions
-	sessions, err := m.ListSessions(ctx.Bool("detail"))
+	sessions, err := m.ListSessions()
 	if err != nil {
 		logger.Fatalf("list sessions: %s", err)
 	}
@@ -66,9 +79,10 @@ func statusFlags() *cli.Command {
 		ArgsUsage: "REDIS-URL",
 		Action:    status,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "detail",
-				Usage: "show more detailed information of sessions (sustained inodes, flocks and plocks)",
+			&cli.Uint64Flag{
+				Name:    "session",
+				Aliases: []string{"s"},
+				Usage:   "show detailed information of the specified session (sid)",
 			},
 		},
 	}

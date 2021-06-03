@@ -173,8 +173,10 @@ type Meta interface {
 	Load() (*Format, error)
 	// NewSession creates a new client session.
 	NewSession() error
+	// GetSession retrieves information of session with sid
+	GetSession(sid uint64) (*Session, error)
 	// ListSessions returns all client sessions.
-	ListSessions(detail bool) ([]*Session, error)
+	ListSessions() ([]*Session, error)
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno
