@@ -2118,22 +2118,14 @@ func (r *redisMeta) cleanupOldSliceRefs() {
 				logger.Warnf("mget slices: %s", err)
 				break
 			}
+			var todel []string
 			for i, v := range values {
 				if v == nil {
 					continue
 				}
-				if strings.HasPrefix(v.(string), "-") { // < 0
-					ps := strings.Split(ckeys[i], "_")
-					if len(ps) == 2 {
-						chunkid, _ := strconv.Atoi(ps[0][1:])
-						size, _ := strconv.Atoi(ps[1])
-						if chunkid > 0 && size > 0 {
-							r.deleteSlice(ctx, uint64(chunkid), uint32(size))
-						}
-					}
-					r.rdb.Del(ctx, ckeys[i])
-				} else if v == "0" {
-					r.rdb.Del(ctx, ckeys[i])
+				if strings.HasPrefix(v.(string), "-") || v == "0" { // < 0
+					// the objects will be deleted by gc
+					todel = append(todel, ckeys[i])
 				} else {
 					vv, _ := strconv.Atoi(v.(string))
 					r.rdb.HIncrBy(ctx, sliceRefs, ckeys[i], int64(vv))
@@ -2141,6 +2133,7 @@ func (r *redisMeta) cleanupOldSliceRefs() {
 					logger.Infof("move refs %d for slice %s", vv, ckeys[i])
 				}
 			}
+			r.rdb.Del(ctx, todel...)
 		}
 		if cursor == 0 {
 			break
@@ -2412,7 +2405,48 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
+func (r *redisMeta) cleanupLeakedInodes() {
+	var ctx = Background
+	var ikeys []string
+	var cursor uint64
+	var err error
+	for {
+		ikeys, cursor, err = r.rdb.Scan(ctx, cursor, "i*", 1000).Result()
+		if err != nil {
+			logger.Errorf("scan inodes: %s", err)
+			break
+		}
+		if len(ikeys) > 0 {
+			values, err := r.rdb.MGet(ctx, ikeys...).Result()
+			if err != nil {
+				logger.Warnf("mget inodes: %s", err)
+				break
+			}
+			for i, v := range values {
+				if v == nil {
+					continue
+				}
+				var attr Attr
+				r.parseAttr([]byte(v.(string)), &attr)
+				if attr.Nlink == 0 {
+					logger.Infof("found leaked inode: %s %+v", ikeys[i], attr)
+					// ino, _ := strconv.Atoi(ikeys[i][1:])
+					// err = r.deleteInode(Ino(ino))
+					// if err != nil {
+					// 	logger.Errorf("delete leaked inode %d : %s", ino, err)
+					// }
+				}
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	return
+}
+
 func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
+	r.cleanupLeakedInodes()
 	// try to find leaked chunks cause by 0.10-, remove it in 0.13
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
