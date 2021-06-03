@@ -21,17 +21,17 @@ import (
 	"strings"
 )
 
-type version struct {
+type redisVersion struct {
 	ver          string
 	major, minor int
 }
 
-var oldestSupportedVer = version{"2.2.x", 2, 2}
+var oldestSupportedVer = redisVersion{"2.2.x", 2, 2}
 
-func parseVersion(v string) (ver version, err error) {
+func parseRedisVersion(v string) (ver redisVersion, err error) {
 	parts := strings.Split(v, ".")
 	if len(parts) < 2 {
-		err = fmt.Errorf("invalid version: %v", v)
+		err = fmt.Errorf("invalid redisVersion: %v", v)
 		return
 	}
 	ver.ver = v
@@ -43,7 +43,7 @@ func parseVersion(v string) (ver version, err error) {
 	return
 }
 
-func (ver version) olderThan(v2 version) bool {
+func (ver redisVersion) olderThan(v2 redisVersion) bool {
 	if ver.major < v2.major {
 		return true
 	}
@@ -53,7 +53,7 @@ func (ver version) olderThan(v2 version) bool {
 	return ver.minor < v2.minor
 }
 
-func (ver version) String() string {
+func (ver redisVersion) String() string {
 	return ver.ver
 }
 
@@ -61,7 +61,7 @@ type redisInfo struct {
 	aofEnabled      bool
 	clusterEnabled  bool
 	maxMemoryPolicy string
-	version         string
+	redisVersion    string
 }
 
 func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
@@ -90,8 +90,8 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 				logger.Warnf("maxmemory_policy is %q, please set it to 'noeviction'.", val)
 			}
 		case "redis_version":
-			info.version = val
-			ver, err := parseVersion(val)
+			info.redisVersion = val
+			ver, err := parseRedisVersion(val)
 			if err != nil {
 				logger.Warnf("Failed to parse Redis server version %q: %s", ver, err)
 			} else {
