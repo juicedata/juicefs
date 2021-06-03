@@ -2405,12 +2405,13 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (r *redisMeta) cleanupLeakedInodes() {
+func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 	var ctx = Background
 	var keys []string
 	var cursor uint64
 	var err error
 	var foundInodes = make(map[Ino]struct{})
+	cutoff := time.Now().Add(time.Hour * -1)
 	for {
 		keys, cursor, err = r.rdb.Scan(ctx, cursor, "d*", 1000).Result()
 		if err != nil {
@@ -2453,16 +2454,14 @@ func (r *redisMeta) cleanupLeakedInodes() {
 				}
 				var attr Attr
 				r.parseAttr([]byte(v.(string)), &attr)
-				if attr.Nlink == 0 {
-					logger.Infof("found leaked inode: %s %+v", keys[i], attr)
-					// err = r.deleteInode(Ino(ino))
-					// if err != nil {
-					// 	logger.Errorf("delete leaked inode %d : %s", ino, err)
-					// }
-				} else {
-					ino, _ := strconv.Atoi(keys[i][1:])
-					if _, ok := foundInodes[Ino(ino)]; !ok {
-						logger.Infof("found dangling inode: %d %+v", ino, attr)
+				ino, _ := strconv.Atoi(keys[i][1:])
+				if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Atime, 0).Before(cutoff) {
+					logger.Infof("found dangling inode: %s %+v", keys[i], attr)
+					if delete {
+						err = r.deleteInode(Ino(ino))
+						if err != nil {
+							logger.Errorf("delete leaked inode %d : %s", ino, err)
+						}
 					}
 				}
 			}
@@ -2474,9 +2473,8 @@ func (r *redisMeta) cleanupLeakedInodes() {
 	return
 }
 
-func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
-	r.cleanupLeakedInodes()
-	// try to find leaked chunks cause by 0.10-, remove it in 0.13
+func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
+	r.cleanupLeakedInodes(delete)
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
 	*slices = nil

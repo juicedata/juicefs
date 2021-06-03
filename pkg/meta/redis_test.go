@@ -653,7 +653,7 @@ func testCompaction(t *testing.T, m Meta) {
 		logger.Fatalf("compactall: %s", st)
 	}
 	var slices []Slice
-	if st := m.ListSlices(ctx, &slices); st != 0 {
+	if st := m.ListSlices(ctx, &slices, false); st != 0 {
 		logger.Fatalf("list all slices: %s", st)
 	}
 
@@ -757,7 +757,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 
 	var ss []Slice
-	m.ListSlices(ctx, &ss)
+	m.ListSlices(ctx, &ss, false)
 	if len(ss) != 1 {
 		t.Fatalf("number of chunks: %d != 3, %+v", len(ss), ss)
 	}
@@ -767,7 +767,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 
 	time.Sleep(time.Millisecond * 100)
-	m.ListSlices(ctx, &ss)
+	m.ListSlices(ctx, &ss, false)
 	// the last chunk could be found and deleted
 	if len(ss) > 1 {
 		t.Fatalf("number of chunks: %d > 1, %+v", len(ss), ss)
