@@ -1,6 +1,11 @@
 module github.com/juicedata/juicefs
 
-go 1.14
+go 1.16
+
+retract (
+	v0.14.0 // Published accidentally.
+	v0.14.1 // Contains retractions only.
+)
 
 require (
 	cloud.google.com/go v0.39.0
