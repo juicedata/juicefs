@@ -270,6 +270,9 @@ func (m *dbMeta) Load() (*Format, error) {
 }
 
 func (m *dbMeta) NewSession() error {
+	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
+		return err
+	}
 	v, err := m.incrCounter("nextSession", 1)
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
