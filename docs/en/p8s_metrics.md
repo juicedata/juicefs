@@ -13,6 +13,8 @@ Below are descriptions of each metrics.
 | `vol_name` | Volume name      |
 | `mp`       | Mount point path |
 
+> **Tip**: When Prometheus scrapes a target, it attaches `instance` labels automatically to the scraped time series which serve to identify the scraped target, its format is `<host>:<port>`. Refer to [official document](https://prometheus.io/docs/concepts/jobs_instances) for more information.
+
 ## File system
 
 ### Metrics
