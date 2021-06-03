@@ -58,4 +58,4 @@ release:
 		juicedata/golang-cross:latest release --rm-dist
 
 test:
-	go test -cover ./pkg/... ./cmd/...
+	go test -v -cover ./pkg/... ./cmd/... || cat pkg/meta/bench-test.log

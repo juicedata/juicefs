@@ -13,6 +13,8 @@ JuiceFS 同时提供一个 [Grafana](https://grafana.com) 的 [dashboard 模板]
 | `vol_name` | Volume 名称 |
 | `mp`       | 挂载点路径  |
 
+> **提示**：Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识别不同的抓取目标，格式为 `<host>:<port>`。详见[官方文档](https://prometheus.io/docs/concepts/jobs_instances)。
+
 ## 文件系统
 
 ### 指标
