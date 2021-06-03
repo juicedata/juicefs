@@ -2407,17 +2407,42 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 
 func (r *redisMeta) cleanupLeakedInodes() {
 	var ctx = Background
-	var ikeys []string
+	var keys []string
 	var cursor uint64
 	var err error
+	var foundInodes = make(map[Ino]struct{})
 	for {
-		ikeys, cursor, err = r.rdb.Scan(ctx, cursor, "i*", 1000).Result()
+		keys, cursor, err = r.rdb.Scan(ctx, cursor, "d*", 1000).Result()
+		if err != nil {
+			logger.Errorf("scan dentry: %s", err)
+			return
+		}
+		if len(keys) > 0 {
+			for _, key := range keys {
+				ino, _ := strconv.Atoi(key[1:])
+				var entries []*Entry
+				eno := r.Readdir(ctx, Ino(ino), 0, &entries)
+				if eno != syscall.ENOENT && eno != 0 {
+					logger.Errorf("readdir %d: %s", eno)
+					return
+				}
+				for _, e := range entries {
+					foundInodes[e.Inode] = struct{}{}
+				}
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	for {
+		keys, cursor, err = r.rdb.Scan(ctx, cursor, "i*", 1000).Result()
 		if err != nil {
 			logger.Errorf("scan inodes: %s", err)
 			break
 		}
-		if len(ikeys) > 0 {
-			values, err := r.rdb.MGet(ctx, ikeys...).Result()
+		if len(keys) > 0 {
+			values, err := r.rdb.MGet(ctx, keys...).Result()
 			if err != nil {
 				logger.Warnf("mget inodes: %s", err)
 				break
@@ -2429,12 +2454,16 @@ func (r *redisMeta) cleanupLeakedInodes() {
 				var attr Attr
 				r.parseAttr([]byte(v.(string)), &attr)
 				if attr.Nlink == 0 {
-					logger.Infof("found leaked inode: %s %+v", ikeys[i], attr)
-					// ino, _ := strconv.Atoi(ikeys[i][1:])
+					logger.Infof("found leaked inode: %s %+v", keys[i], attr)
 					// err = r.deleteInode(Ino(ino))
 					// if err != nil {
 					// 	logger.Errorf("delete leaked inode %d : %s", ino, err)
 					// }
+				} else {
+					ino, _ := strconv.Atoi(keys[i][1:])
+					if _, ok := foundInodes[Ino(ino)]; !ok {
+						logger.Infof("found dangling inode: %d %+v", ino, attr)
+					}
 				}
 			}
 		}
