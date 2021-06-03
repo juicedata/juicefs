@@ -109,6 +109,7 @@ type plock struct {
 type session struct {
 	Sid       uint64 `xorm:"pk"`
 	Heartbeat int64  `xorm:"notnull"`
+	Info      []byte `xorm:"blob"`
 }
 
 type sustained struct {
@@ -273,8 +274,17 @@ func (m *dbMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
+	info, err := newSessionInfo()
+	if err != nil {
+		return fmt.Errorf("new session info: %s", err)
+	}
+	info.MountPoint = m.conf.MountPoint
+	data, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("json: %s", err)
+	}
 	err = m.txn(func(s *xorm.Session) error {
-		return mustInsert(s, &session{v, time.Now().Unix()})
+		return mustInsert(s, &session{v, time.Now().Unix(), data})
 	})
 	if err != nil {
 		return fmt.Errorf("insert new session: %s", err)

@@ -19,6 +19,8 @@ import (
 	"os"
 	"strings"
 	"syscall"
+
+	"github.com/juicedata/juicefs/pkg/version"
 )
 
 const (
@@ -131,6 +133,13 @@ type Summary struct {
 	Size   uint64
 	Files  uint64
 	Dirs   uint64
+}
+
+type SessionInfo struct {
+	Version    string
+	Hostname   string
+	MountPoint string
+	ProcessID  int
 }
 
 // Meta is a interface for a meta service for file system.
@@ -260,4 +269,12 @@ func NewClient(uri string, conf *Config) Meta {
 		logger.Fatalf("Meta is not available: %s", err)
 	}
 	return m
+}
+
+func newSessionInfo() (*SessionInfo, error) {
+	host, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	return &SessionInfo{Version: version.Version(), Hostname: host, ProcessID: os.Getpid()}, nil
 }

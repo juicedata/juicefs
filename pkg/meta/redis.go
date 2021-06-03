@@ -66,6 +66,7 @@ const usedSpace = "usedSpace"
 const totalInodes = "totalInodes"
 const delfiles = "delfiles"
 const allSessions = "sessions"
+const sessionInfos = "sessionInfos"
 const sliceRefs = "sliceRef"
 
 type redisMeta struct {
@@ -237,6 +238,16 @@ func (r *redisMeta) NewSession() error {
 		return fmt.Errorf("create session: %s", err)
 	}
 	logger.Debugf("session is %d", r.sid)
+	info, err := newSessionInfo()
+	if err != nil {
+		return fmt.Errorf("new session info: %s", err)
+	}
+	info.MountPoint = r.conf.MountPoint
+	data, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("json: %s", err)
+	}
+	r.rdb.HSet(Background, sessionInfos, r.sid, data)
 
 	r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result()
 	if err != nil {
@@ -1667,6 +1678,7 @@ func (r *redisMeta) cleanStaleSession(sid int64) {
 	}
 	if len(inodes) == 0 {
 		r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
+		r.rdb.HDel(ctx, sessionInfos, strconv.Itoa(int(sid)))
 		logger.Infof("cleanup session %d", sid)
 	}
 }
