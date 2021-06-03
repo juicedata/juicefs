@@ -302,30 +302,59 @@ func (m *dbMeta) NewSession() error {
 	return nil
 }
 
-func (m *dbMeta) ListSessions() ([]*Session, error) {
-	var s session
-	rows, err := m.engine.Rows(&s)
+func (m *dbMeta) ListSessions(detail bool) ([]*Session, error) {
+	var rows []session
+	err := m.engine.Find(&rows)
 	if err != nil {
 		return nil, err
 	}
-	var sessions []*Session
-	for rows.Next() {
-		s.Info = nil
-		if rows.Scan(&s) == nil {
-			var c Session      // client session
-			if s.Info == nil { // legacy client has no info
-				s.Info = []byte("{}")
-			}
-			if err := json.Unmarshal(s.Info, &c); err != nil {
-				logger.Warnf("corrupted session info; json error: %s", err)
+	sessions := make([]*Session, 0, len(rows))
+	for _, row := range rows {
+		var s Session
+		if row.Info == nil { // legacy client has no info
+			row.Info = []byte("{}")
+		}
+		if err = json.Unmarshal(row.Info, &s); err != nil {
+			logger.Errorf("corrupted session info; json error: %s", err)
+			continue
+		}
+		s.Sid = row.Sid
+		s.Heartbeat = time.Unix(row.Heartbeat, 0)
+		if detail {
+			var (
+				srows []sustained
+				frows []flock
+				prows []plock
+			)
+			if err = m.engine.Find(&srows, &sustained{Sid: s.Sid}); err != nil {
+				logger.Errorf("find sustained %d: %s", s.Sid, err)
 				continue
 			}
-			c.Sid = s.Sid
-			c.Heartbeat = time.Unix(s.Heartbeat, 0)
-			sessions = append(sessions, &c)
+			s.Sustained = make([]Ino, 0, len(srows))
+			for _, srow := range srows {
+				s.Sustained = append(s.Sustained, srow.Inode)
+			}
+
+			if err = m.engine.Find(&frows, &flock{Sid: s.Sid}); err != nil {
+				logger.Errorf("find flock %d: %s", s.Sid, err)
+				continue
+			}
+			s.Flocks = make([]Flock, 0, len(frows))
+			for _, frow := range frows {
+				s.Flocks = append(s.Flocks, Flock{frow.Inode, frow.Owner, string(frow.Ltype)})
+			}
+
+			if err = m.engine.Find(&prows, &plock{Sid: s.Sid}); err != nil {
+				logger.Errorf("find plock %d: %s", s.Sid, err)
+				continue
+			}
+			s.Plocks = make([]Plock, 0, len(prows))
+			for _, prow := range prows {
+				s.Plocks = append(s.Plocks, Plock{prow.Inode, prow.Owner, prow.Records})
+			}
 		}
+		sessions = append(sessions, &s)
 	}
-	rows.Close()
 
 	return sessions, nil
 }

@@ -143,11 +143,26 @@ type SessionInfo struct {
 	ProcessID  int
 }
 
+type Flock struct {
+	Inode Ino
+	Owner uint64
+	Ltype string
+}
+
+type Plock struct {
+	Inode   Ino
+	Owner   uint64
+	Records []byte // FIXME: loadLocks
+}
+
 // Session contains detailed information of a client session
 type Session struct {
 	Sid       uint64
 	Heartbeat time.Time
 	SessionInfo
+	Sustained []Ino   `json:",omitempty"`
+	Flocks    []Flock `json:",omitempty"`
+	Plocks    []Plock `json:",omitempty"`
 }
 
 // Meta is a interface for a meta service for file system.
@@ -159,7 +174,7 @@ type Meta interface {
 	// NewSession creates a new client session.
 	NewSession() error
 	// ListSessions returns all client sessions.
-	ListSessions() ([]*Session, error)
+	ListSessions(detail bool) ([]*Session, error)
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno
