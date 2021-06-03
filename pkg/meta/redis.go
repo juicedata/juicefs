@@ -2424,7 +2424,7 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 				var entries []*Entry
 				eno := r.Readdir(ctx, Ino(ino), 0, &entries)
 				if eno != syscall.ENOENT && eno != 0 {
-					logger.Errorf("readdir %d: %s", eno)
+					logger.Errorf("readdir %d: %s", ino, eno)
 					return
 				}
 				for _, e := range entries {
@@ -2470,7 +2470,6 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 			break
 		}
 	}
-	return
 }
 
 func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
