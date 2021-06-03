@@ -81,7 +81,6 @@ func main() {
 			profileFlags(),
 			statusFlags(),
 			warmupFlags(),
-			sessionsFlags(),
 		},
 	}
 
