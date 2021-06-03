@@ -266,6 +266,34 @@ func (r *redisMeta) NewSession() error {
 	return nil
 }
 
+func (r *redisMeta) ListSessions() ([]*Session, error) {
+	ctx := Background
+	keys, err := r.rdb.ZRangeWithScores(ctx, allSessions, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]*Session, 0, len(keys))
+	for _, k := range keys {
+		info, err := r.rdb.HGet(ctx, sessionInfos, k.Member.(string)).Bytes()
+		if err == redis.Nil { // legacy client has no info
+			info = []byte("{}")
+		} else if err != nil {
+			logger.Warnf("redis error: %s", err)
+			continue
+		}
+		var c Session // client session
+		if err := json.Unmarshal(info, &c); err != nil {
+			logger.Warnf("corrupted session info; json error: %s", err)
+			continue
+		}
+		c.Sid, _ = strconv.ParseUint(k.Member.(string), 10, 64)
+		c.Heartbeat = time.Unix(int64(k.Score), 0)
+		sessions = append(sessions, &c)
+	}
+
+	return sessions, nil
+}
+
 func (r *redisMeta) OnMsg(mtype uint32, cb MsgCallback) {
 	r.msgCallbacks.Lock()
 	defer r.msgCallbacks.Unlock()
