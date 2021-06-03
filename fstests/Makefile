@@ -35,4 +35,4 @@ secfs.test:
 flock:
 	git clone https://github.com/gofrs/flock.git
 	mkdir /jfs/tmp
-	cd flock && TMPDIR=/jfs/tmp go test .
+	cd flock && go get github.com/gofrs/flock && TMPDIR=/jfs/tmp go test .
