@@ -33,5 +33,7 @@ type Format struct {
 	Compression string
 	Shards      int
 	Partitions  int
+	Capacity    uint64
+	Inodes      uint64
 	EncryptKey  string `json:",omitempty"`
 }
