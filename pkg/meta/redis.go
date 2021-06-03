@@ -652,6 +652,9 @@ func errno(err error) syscall.Errno {
 	if err == redis.Nil {
 		return syscall.ENOENT
 	}
+	if strings.HasPrefix(err.Error(), "OOM") {
+		return syscall.ENOSPC
+	}
 	logger.Errorf("error: %s", err)
 	return syscall.EIO
 }
