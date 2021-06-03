@@ -242,7 +242,7 @@ func (c *rChunk) Remove() error {
 	}
 
 	lastIndx := (c.length - 1) / c.store.conf.BlockSize
-	deleted := false
+	var err error
 	for i := 0; i <= lastIndx; i++ {
 		// there could be multiple clients try to remove the same chunk in the same time,
 		// any of them should succeed if any blocks is removed
@@ -251,15 +251,11 @@ func (c *rChunk) Remove() error {
 		delete(c.store.pendingKeys, key)
 		c.store.pendingMutex.Unlock()
 		c.store.bcache.remove(key)
-		if c.delete(i) == nil {
-			deleted = true
+		if e := c.delete(i); e != nil {
+			err = e
 		}
 	}
-
-	if !deleted {
-		return errors.New("chunk not found")
-	}
-	return nil
+	return err
 }
 
 var pagePool = make(chan *Page, 128)
