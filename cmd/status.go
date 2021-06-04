@@ -28,7 +28,7 @@ type sections struct {
 	Sessions []*meta.Session
 }
 
-func print(v interface{}) {
+func printJson(v interface{}) {
 	output, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		logger.Fatalf("json: %s", err)
@@ -48,7 +48,7 @@ func status(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("get session: %s", err)
 		}
-		print(s)
+		printJson(s)
 		return nil
 	}
 
@@ -64,7 +64,7 @@ func status(ctx *cli.Context) error {
 		logger.Fatalf("list sessions: %s", err)
 	}
 
-	print(&sections{format, sessions})
+	printJson(&sections{format, sessions})
 	return nil
 }
 
