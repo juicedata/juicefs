@@ -28,19 +28,10 @@ type sections struct {
 	Sessions []*meta.Session
 }
 
-func print(format string, v interface{}) {
-	var output []byte
-	var err error
-	switch format {
-	case "json":
-		output, err = json.Marshal(v)
-	case "json-pretty":
-		output, err = json.MarshalIndent(v, "", "  ")
-	default:
-		output, err = json.MarshalIndent(v, "", "  ") // TODO: plain text
-	}
+func print(v interface{}) {
+	output, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		logger.Fatalf("format %s: %s", format, err)
+		logger.Fatalf("json: %s", err)
 	}
 	fmt.Println(string(output))
 }
@@ -57,7 +48,7 @@ func status(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("get session: %s", err)
 		}
-		print(ctx.String("format"), s)
+		print(s)
 		return nil
 	}
 
@@ -73,7 +64,7 @@ func status(ctx *cli.Context) error {
 		logger.Fatalf("list sessions: %s", err)
 	}
 
-	print(ctx.String("format"), &sections{format, sessions})
+	print(&sections{format, sessions})
 	return nil
 }
 
@@ -87,12 +78,7 @@ func statusFlags() *cli.Command {
 			&cli.Uint64Flag{
 				Name:    "session",
 				Aliases: []string{"s"},
-				Usage:   "show detailed information of the specified session (sid)",
-			},
-			&cli.StringFlag{
-				Name:    "format",
-				Aliases: []string{"f"},
-				Usage:   "format of output",
+				Usage:   "show detailed information (sustained inodes, locks) of the specified session (sid)",
 			},
 		},
 	}
