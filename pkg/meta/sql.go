@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -130,6 +131,7 @@ type freeID struct {
 type dbMeta struct {
 	sync.Mutex
 	conf   *Config
+	fmt    Format
 	engine *xorm.Engine
 
 	sid          uint64
@@ -141,6 +143,8 @@ type dbMeta struct {
 	msgCallbacks *msgCallbacks
 	newSpace     int64
 	newInodes    int64
+	usedSpace    int64
+	usedInodes   int64
 
 	freeMu     sync.Mutex
 	freeInodes freeID
@@ -205,10 +209,12 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			old.SecretKey = "removed"
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
-			// only AccessKey and SecretKey can be safely updated.
 			format.UUID = old.UUID
+			// these can be safely updated.
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.Capacity = format.Capacity
+			old.Inodes = format.Inodes
 			if format != *old {
 				old.SecretKey = ""
 				format.SecretKey = ""
@@ -228,6 +234,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		logger.Fatalf("json: %s", err)
 	}
 
+	m.fmt = format
 	return m.txn(func(s *xorm.Session) error {
 		var set = &setting{"format", string(data)}
 		now := time.Now()
@@ -261,12 +268,11 @@ func (m *dbMeta) Load() (*Format, error) {
 		return nil, err
 	}
 
-	var format Format
-	err = json.Unmarshal([]byte(s.Value), &format)
+	err = json.Unmarshal([]byte(s.Value), &m.fmt)
 	if err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
-	return &format, nil
+	return &m.fmt, nil
 }
 
 func (m *dbMeta) NewSession() error {
@@ -295,11 +301,35 @@ func (m *dbMeta) NewSession() error {
 	m.sid = v
 	logger.Debugf("session is %d", m.sid)
 
+	go m.refreshUsage()
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
 	go m.flushStats()
 	return nil
+}
+
+func (m *dbMeta) refreshUsage() {
+	for {
+		var c = counter{Name: "usedSpace"}
+		_, err := m.engine.Get(&c)
+		if err == nil {
+			atomic.StoreInt64(&m.usedSpace, c.Value)
+		}
+		c = counter{Name: "totalInodes"}
+		_, err = m.engine.Get(&c)
+		if err == nil {
+			atomic.StoreInt64(&m.usedInodes, c.Value)
+		}
+		time.Sleep(time.Second * 10)
+	}
+}
+
+func (r *dbMeta) checkQuota(size, inodes int64) bool {
+	if size > 0 && r.fmt.Capacity > 0 && atomic.LoadInt64(&r.usedSpace)+atomic.LoadInt64(&r.newSpace)+size > int64(r.fmt.Capacity) {
+		return true
+	}
+	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadInt64(&r.usedInodes)+atomic.LoadInt64(&r.newInodes)+inodes > int64(r.fmt.Inodes)
 }
 
 func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
@@ -490,18 +520,14 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 }
 
 func (m *dbMeta) updateStats(space int64, inodes int64) {
-	m.Lock()
-	m.newSpace += space
-	m.newInodes += inodes
-	m.Unlock()
+	atomic.AddInt64(&m.newSpace, space)
+	atomic.AddInt64(&m.newInodes, inodes)
 }
 
 func (m *dbMeta) flushStats() {
 	for {
-		m.Lock()
-		newSpace, newInodes := m.newSpace, m.newInodes
-		m.newSpace, m.newInodes = 0, 0
-		m.Unlock()
+		newSpace := atomic.SwapInt64(&m.newSpace, 0)
+		newInodes := atomic.SwapInt64(&m.newInodes, 0)
 		if newSpace != 0 || newInodes != 0 {
 			err := m.txn(func(s *xorm.Session) error {
 				_, err := s.Exec("UPDATE jfs_counter SET value=value+ (CASE name WHEN 'usedSpace' THEN ? ELSE ? END) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes)
@@ -517,10 +543,8 @@ func (m *dbMeta) flushStats() {
 }
 
 func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	m.Lock()
-	usedSpace := m.newSpace
-	inodes := m.newInodes
-	m.Unlock()
+	usedSpace := atomic.LoadInt64(&m.newSpace)
+	inodes := atomic.LoadInt64(&m.newInodes)
 	var c = counter{Name: "usedSpace"}
 	_, err := m.engine.Get(&c)
 	if err != nil {
@@ -532,10 +556,18 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 		usedSpace = 0
 	}
 	usedSpace = ((usedSpace >> 16) + 1) << 16 // aligned to 64K
-	*totalspace = 1 << 50
-	for *totalspace < uint64(usedSpace) {
-		*totalspace *= 2
+	if m.fmt.Capacity > 0 {
+		*totalspace = m.fmt.Capacity
+		if *totalspace < uint64(usedSpace) {
+			*totalspace = uint64(usedSpace)
+		}
+	} else {
+		*totalspace = 1 << 50
+		for *totalspace*8 < uint64(usedSpace)*10 {
+			*totalspace *= 2
+		}
 	}
+
 	*availspace = *totalspace - uint64(usedSpace)
 	c = counter{Name: "totalInodes"}
 	_, err = m.engine.Get(&c)
@@ -548,7 +580,15 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 		inodes = 0
 	}
 	*iused = uint64(inodes)
-	*iavail = 10 << 20
+	if m.fmt.Inodes > 0 {
+		if *iused > m.fmt.Inodes {
+			*iavail = 0
+		} else {
+			*iavail = m.fmt.Inodes - *iused
+		}
+	} else {
+		*iavail = 10 << 20
+	}
 	return 0
 }
 
@@ -769,6 +809,9 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			}
 		}
 		newSpace = align4K(length) - align4K(n.Length)
+		if m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
+		}
 		now := time.Now().UnixNano() / 1e3
 		n.Length = length
 		n.Mtime = now
@@ -827,6 +870,9 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := n.Length
 		newSpace = align4K(length) - align4K(n.Length)
+		if m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
+		}
 		now := time.Now().UnixNano() / 1e3
 		n.Length = length
 		n.Mtime = now
@@ -901,6 +947,9 @@ func (m *dbMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 }
 
 func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
 	ino, err := m.nextInode()
 	if err != nil {
 		return errno(err)
@@ -1693,6 +1742,9 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			newSpace = align4K(newleng) - align4K(n.Length)
 			n.Length = newleng
 		}
+		if m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
+		}
 		now := time.Now().UnixNano() / 1e3
 		n.Mtime = now
 		n.Ctime = now
@@ -1760,6 +1812,9 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		if newleng > nout.Length {
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
+		}
+		if m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
 		nout.Mtime = now
