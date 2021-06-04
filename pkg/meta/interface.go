@@ -214,7 +214,7 @@ type Meta interface {
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context) syscall.Errno
 	// ListSlices returns all slices used by all files.
-	ListSlices(ctx Context, slices *[]Slice) syscall.Errno
+	ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
