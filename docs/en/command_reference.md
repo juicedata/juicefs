@@ -72,6 +72,12 @@ size of block in KiB (default: 4096)
 `--compress value`\
 compression algorithm (lz4, zstd, none) (default: "none")
 
+`--capacity value`\
+the limit for space in GiB (default: unlimited)
+
+`--inodes value`\
+the limit for number of inodes (default: unlimited)
+
 `--shards value`\
 store the blocks into N buckets by hash of key (default: 0)
 

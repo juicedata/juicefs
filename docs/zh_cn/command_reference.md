@@ -71,6 +71,12 @@ juicefs format [command options] REDIS-URL NAME
 `--block-size value`\
 size of block in KiB (default: 4096)
 
+`--capacity value`\
+the limit for space in GiB (default: unlimited)
+
+`--inodes value`\
+the limit for number of inodes (default: unlimited)
+
 `--compress value`\
 compression algorithm (lz4, zstd, none) (default: "none")
 

@@ -172,6 +172,8 @@ func format(c *cli.Context) error {
 		AccessKey:   c.String("access-key"),
 		SecretKey:   c.String("secret-key"),
 		Shards:      c.Int("shards"),
+		Capacity:    c.Uint64("capacity") << 30,
+		Inodes:      c.Uint64("inodes"),
 		BlockSize:   fixObjectSize(c.Int("block-size")),
 		Compression: c.String("compress"),
 	}
@@ -243,6 +245,16 @@ func formatFlags() *cli.Command {
 				Name:  "block-size",
 				Value: 4096,
 				Usage: "size of block in KiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "capacity",
+				Value: 0,
+				Usage: "the limit for space in GiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "inodes",
+				Value: 0,
+				Usage: "the limit for number of inodes",
 			},
 			&cli.StringFlag{
 				Name:  "compress",
