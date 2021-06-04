@@ -174,6 +174,23 @@ $ cat /jfs/.accesslog
 
 JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_cn/how_to_setup_object_storage.md)。
 
+## 谁在使用
+
+<p>
+  <span><img height="60" src="docs/images/mi.png" /></span>
+  <span><img height="40" src="docs/images/lixiang.png" /></span>
+  <span><img height="70" src="docs/images/shopee.png" /></span>
+  <span><img height="60" src="docs/images/dingdong.png" /></span>
+  <span><img height="50" src="docs/images/qcloud.png" /></span>
+  <span><img height="50" src="docs/images/baiduyun.png" /></span>
+  <span><img height="" src="docs/images/sf.png" /></span>
+  <span><img height="" src="docs/images/bigo.png" /></span>
+  <span><img height="" src="docs/images/baoyinxiaofei.png" /></span>
+  <span><img height="40" src="docs/images/hangtianhongtu.png" /></span>
+</p>
+
+
+
 ## 状态
 
 JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，还不建议使用到生产环境中。如果你对它有兴趣，请尽早测试，并给我们[反馈](https://github.com/juicedata/juicefs/discussions)。
