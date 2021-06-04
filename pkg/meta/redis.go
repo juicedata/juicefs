@@ -652,6 +652,9 @@ func errno(err error) syscall.Errno {
 	if err == redis.Nil {
 		return syscall.ENOENT
 	}
+	if strings.HasPrefix(err.Error(), "OOM") {
+		return syscall.ENOSPC
+	}
 	logger.Errorf("error: %s", err)
 	return syscall.EIO
 }
@@ -2118,22 +2121,14 @@ func (r *redisMeta) cleanupOldSliceRefs() {
 				logger.Warnf("mget slices: %s", err)
 				break
 			}
+			var todel []string
 			for i, v := range values {
 				if v == nil {
 					continue
 				}
-				if strings.HasPrefix(v.(string), "-") { // < 0
-					ps := strings.Split(ckeys[i], "_")
-					if len(ps) == 2 {
-						chunkid, _ := strconv.Atoi(ps[0][1:])
-						size, _ := strconv.Atoi(ps[1])
-						if chunkid > 0 && size > 0 {
-							r.deleteSlice(ctx, uint64(chunkid), uint32(size))
-						}
-					}
-					r.rdb.Del(ctx, ckeys[i])
-				} else if v == "0" {
-					r.rdb.Del(ctx, ckeys[i])
+				if strings.HasPrefix(v.(string), "-") || v == "0" { // < 0
+					// the objects will be deleted by gc
+					todel = append(todel, ckeys[i])
 				} else {
 					vv, _ := strconv.Atoi(v.(string))
 					r.rdb.HIncrBy(ctx, sliceRefs, ckeys[i], int64(vv))
@@ -2141,6 +2136,7 @@ func (r *redisMeta) cleanupOldSliceRefs() {
 					logger.Infof("move refs %d for slice %s", vv, ckeys[i])
 				}
 			}
+			r.rdb.Del(ctx, todel...)
 		}
 		if cursor == 0 {
 			break
@@ -2412,8 +2408,75 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
-	// try to find leaked chunks cause by 0.10-, remove it in 0.13
+func (r *redisMeta) cleanupLeakedInodes(delete bool) {
+	var ctx = Background
+	var keys []string
+	var cursor uint64
+	var err error
+	var foundInodes = make(map[Ino]struct{})
+	cutoff := time.Now().Add(time.Hour * -1)
+	for {
+		keys, cursor, err = r.rdb.Scan(ctx, cursor, "d*", 1000).Result()
+		if err != nil {
+			logger.Errorf("scan dentry: %s", err)
+			return
+		}
+		if len(keys) > 0 {
+			for _, key := range keys {
+				ino, _ := strconv.Atoi(key[1:])
+				var entries []*Entry
+				eno := r.Readdir(ctx, Ino(ino), 0, &entries)
+				if eno != syscall.ENOENT && eno != 0 {
+					logger.Errorf("readdir %d: %s", ino, eno)
+					return
+				}
+				for _, e := range entries {
+					foundInodes[e.Inode] = struct{}{}
+				}
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	for {
+		keys, cursor, err = r.rdb.Scan(ctx, cursor, "i*", 1000).Result()
+		if err != nil {
+			logger.Errorf("scan inodes: %s", err)
+			break
+		}
+		if len(keys) > 0 {
+			values, err := r.rdb.MGet(ctx, keys...).Result()
+			if err != nil {
+				logger.Warnf("mget inodes: %s", err)
+				break
+			}
+			for i, v := range values {
+				if v == nil {
+					continue
+				}
+				var attr Attr
+				r.parseAttr([]byte(v.(string)), &attr)
+				ino, _ := strconv.Atoi(keys[i][1:])
+				if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Atime, 0).Before(cutoff) {
+					logger.Infof("found dangling inode: %s %+v", keys[i], attr)
+					if delete {
+						err = r.deleteInode(Ino(ino))
+						if err != nil {
+							logger.Errorf("delete leaked inode %d : %s", ino, err)
+						}
+					}
+				}
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+}
+
+func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
+	r.cleanupLeakedInodes(delete)
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
 	*slices = nil

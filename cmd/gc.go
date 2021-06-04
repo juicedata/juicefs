@@ -172,7 +172,7 @@ func gc(ctx *cli.Context) error {
 
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
-	r := m.ListSlices(c, &slices)
+	r := m.ListSlices(c, &slices, ctx.Bool("delete"))
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
