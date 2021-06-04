@@ -48,7 +48,7 @@ import (
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
 	Sessions: sessions -> [ $sid -> heartbeat ]
 	sustained: session$sid -> [$inode]
-	locked: locked$sid -> { lockf$inode or lockpinode }
+	locked: locked$sid -> { lockf$inode or lockp$inode }
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$chunkid_$size -> refcount
@@ -67,6 +67,7 @@ const usedSpace = "usedSpace"
 const totalInodes = "totalInodes"
 const delfiles = "delfiles"
 const allSessions = "sessions"
+const sessionInfos = "sessionInfos"
 const sliceRefs = "sliceRef"
 
 type redisMeta struct {
@@ -243,6 +244,16 @@ func (r *redisMeta) NewSession() error {
 		return fmt.Errorf("create session: %s", err)
 	}
 	logger.Debugf("session is %d", r.sid)
+	info, err := newSessionInfo()
+	if err != nil {
+		return fmt.Errorf("new session info: %s", err)
+	}
+	info.MountPoint = r.conf.MountPoint
+	data, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("json: %s", err)
+	}
+	r.rdb.HSet(Background, sessionInfos, r.sid, data)
 
 	r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result()
 	if err != nil {
@@ -277,6 +288,92 @@ func (r *redisMeta) checkQuota(size, inodes int64) bool {
 		return true
 	}
 	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadUint64(&r.usedInodes)+uint64(inodes) > r.fmt.Inodes
+}
+
+func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
+	ctx := Background
+	info, err := r.rdb.HGet(ctx, sessionInfos, sid).Bytes()
+	if err == redis.Nil { // legacy client has no info
+		info = []byte("{}")
+	} else if err != nil {
+		return nil, fmt.Errorf("HGet %s %s: %s", sessionInfos, sid, err)
+	}
+	var s Session
+	if err := json.Unmarshal(info, &s); err != nil {
+		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
+	}
+	s.Sid, _ = strconv.ParseUint(sid, 10, 64)
+	if detail {
+		inodes, err := r.rdb.SMembers(ctx, r.sustained(int64(s.Sid))).Result()
+		if err != nil {
+			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
+		}
+		s.Sustained = make([]Ino, 0, len(inodes))
+		for _, sinode := range inodes {
+			inode, _ := strconv.ParseUint(sinode, 10, 64)
+			s.Sustained = append(s.Sustained, Ino(inode))
+		}
+
+		locks, err := r.rdb.SMembers(ctx, r.lockedKey(int64(s.Sid))).Result()
+		if err != nil {
+			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
+		}
+		s.Flocks = make([]Flock, 0, len(locks)) // greedy
+		s.Plocks = make([]Plock, 0, len(locks))
+		for _, lock := range locks {
+			owners, err := r.rdb.HGetAll(ctx, lock).Result()
+			if err != nil {
+				return nil, fmt.Errorf("HGetAll %s: %s", lock, err)
+			}
+			isFlock := strings.HasPrefix(lock, "lockf")
+			inode, _ := strconv.ParseUint(lock[5:], 10, 64)
+			for k, v := range owners {
+				parts := strings.Split(k, "_")
+				if parts[0] != sid {
+					continue
+				}
+				owner, _ := strconv.ParseUint(parts[1], 16, 64)
+				if isFlock {
+					s.Flocks = append(s.Flocks, Flock{Ino(inode), owner, v})
+				} else {
+					s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, []byte(v)})
+				}
+			}
+		}
+	}
+	return &s, nil
+}
+
+func (r *redisMeta) GetSession(sid uint64) (*Session, error) {
+	key := strconv.FormatUint(sid, 10)
+	score, err := r.rdb.ZScore(Background, allSessions, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	s, err := r.getSession(key, true)
+	if err != nil {
+		return nil, err
+	}
+	s.Heartbeat = time.Unix(int64(score), 0)
+	return s, nil
+}
+
+func (r *redisMeta) ListSessions() ([]*Session, error) {
+	keys, err := r.rdb.ZRangeWithScores(Background, allSessions, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]*Session, 0, len(keys))
+	for _, k := range keys {
+		s, err := r.getSession(k.Member.(string), false)
+		if err != nil {
+			logger.Errorf("get session: %s", err)
+			continue
+		}
+		s.Heartbeat = time.Unix(int64(k.Score), 0)
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
 }
 
 func (r *redisMeta) OnMsg(mtype uint32, cb MsgCallback) {
@@ -1721,6 +1818,7 @@ func (r *redisMeta) cleanStaleSession(sid int64) {
 	}
 	if len(inodes) == 0 {
 		r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
+		r.rdb.HDel(ctx, sessionInfos, strconv.Itoa(int(sid)))
 		logger.Infof("cleanup session %d", sid)
 	}
 }
@@ -2178,22 +2276,14 @@ func (r *redisMeta) cleanupOldSliceRefs() {
 				logger.Warnf("mget slices: %s", err)
 				break
 			}
+			var todel []string
 			for i, v := range values {
 				if v == nil {
 					continue
 				}
-				if strings.HasPrefix(v.(string), "-") { // < 0
-					ps := strings.Split(ckeys[i], "_")
-					if len(ps) == 2 {
-						chunkid, _ := strconv.Atoi(ps[0][1:])
-						size, _ := strconv.Atoi(ps[1])
-						if chunkid > 0 && size > 0 {
-							r.deleteSlice(ctx, uint64(chunkid), uint32(size))
-						}
-					}
-					r.rdb.Del(ctx, ckeys[i])
-				} else if v == "0" {
-					r.rdb.Del(ctx, ckeys[i])
+				if strings.HasPrefix(v.(string), "-") || v == "0" { // < 0
+					// the objects will be deleted by gc
+					todel = append(todel, ckeys[i])
 				} else {
 					vv, _ := strconv.Atoi(v.(string))
 					r.rdb.HIncrBy(ctx, sliceRefs, ckeys[i], int64(vv))
@@ -2201,6 +2291,7 @@ func (r *redisMeta) cleanupOldSliceRefs() {
 					logger.Infof("move refs %d for slice %s", vv, ckeys[i])
 				}
 			}
+			r.rdb.Del(ctx, todel...)
 		}
 		if cursor == 0 {
 			break
@@ -2472,8 +2563,75 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
-	// try to find leaked chunks cause by 0.10-, remove it in 0.13
+func (r *redisMeta) cleanupLeakedInodes(delete bool) {
+	var ctx = Background
+	var keys []string
+	var cursor uint64
+	var err error
+	var foundInodes = make(map[Ino]struct{})
+	cutoff := time.Now().Add(time.Hour * -1)
+	for {
+		keys, cursor, err = r.rdb.Scan(ctx, cursor, "d*", 1000).Result()
+		if err != nil {
+			logger.Errorf("scan dentry: %s", err)
+			return
+		}
+		if len(keys) > 0 {
+			for _, key := range keys {
+				ino, _ := strconv.Atoi(key[1:])
+				var entries []*Entry
+				eno := r.Readdir(ctx, Ino(ino), 0, &entries)
+				if eno != syscall.ENOENT && eno != 0 {
+					logger.Errorf("readdir %d: %s", ino, eno)
+					return
+				}
+				for _, e := range entries {
+					foundInodes[e.Inode] = struct{}{}
+				}
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	for {
+		keys, cursor, err = r.rdb.Scan(ctx, cursor, "i*", 1000).Result()
+		if err != nil {
+			logger.Errorf("scan inodes: %s", err)
+			break
+		}
+		if len(keys) > 0 {
+			values, err := r.rdb.MGet(ctx, keys...).Result()
+			if err != nil {
+				logger.Warnf("mget inodes: %s", err)
+				break
+			}
+			for i, v := range values {
+				if v == nil {
+					continue
+				}
+				var attr Attr
+				r.parseAttr([]byte(v.(string)), &attr)
+				ino, _ := strconv.Atoi(keys[i][1:])
+				if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Atime, 0).Before(cutoff) {
+					logger.Infof("found dangling inode: %s %+v", keys[i], attr)
+					if delete {
+						err = r.deleteInode(Ino(ino))
+						if err != nil {
+							logger.Errorf("delete leaked inode %d : %s", ino, err)
+						}
+					}
+				}
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+}
+
+func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
+	r.cleanupLeakedInodes(delete)
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
 	*slices = nil

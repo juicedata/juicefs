@@ -110,6 +110,7 @@ type plock struct {
 type session struct {
 	Sid       uint64 `xorm:"pk"`
 	Heartbeat int64  `xorm:"notnull"`
+	Info      []byte `xorm:"blob"`
 }
 
 type sustained struct {
@@ -275,12 +276,24 @@ func (m *dbMeta) Load() (*Format, error) {
 }
 
 func (m *dbMeta) NewSession() error {
+	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
+		return err
+	}
 	v, err := m.incrCounter("nextSession", 1)
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
+	info, err := newSessionInfo()
+	if err != nil {
+		return fmt.Errorf("new session info: %s", err)
+	}
+	info.MountPoint = m.conf.MountPoint
+	data, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("json: %s", err)
+	}
 	err = m.txn(func(s *xorm.Session) error {
-		return mustInsert(s, &session{v, time.Now().Unix()})
+		return mustInsert(s, &session{v, time.Now().Unix(), data})
 	})
 	if err != nil {
 		return fmt.Errorf("insert new session: %s", err)
@@ -317,6 +330,79 @@ func (r *dbMeta) checkQuota(size, inodes int64) bool {
 		return true
 	}
 	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadInt64(&r.usedInodes)+atomic.LoadInt64(&r.newInodes)+inodes > int64(r.fmt.Inodes)
+}
+
+func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
+	var s Session
+	if row.Info == nil { // legacy client has no info
+		row.Info = []byte("{}")
+	}
+	if err := json.Unmarshal(row.Info, &s); err != nil {
+		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
+	}
+	s.Sid = row.Sid
+	s.Heartbeat = time.Unix(row.Heartbeat, 0)
+	if detail {
+		var (
+			srows []sustained
+			frows []flock
+			prows []plock
+		)
+		if err := m.engine.Find(&srows, &sustained{Sid: s.Sid}); err != nil {
+			return nil, fmt.Errorf("find sustained %d: %s", s.Sid, err)
+		}
+		s.Sustained = make([]Ino, 0, len(srows))
+		for _, srow := range srows {
+			s.Sustained = append(s.Sustained, srow.Inode)
+		}
+
+		if err := m.engine.Find(&frows, &flock{Sid: s.Sid}); err != nil {
+			return nil, fmt.Errorf("find flock %d: %s", s.Sid, err)
+		}
+		s.Flocks = make([]Flock, 0, len(frows))
+		for _, frow := range frows {
+			s.Flocks = append(s.Flocks, Flock{frow.Inode, frow.Owner, string(frow.Ltype)})
+		}
+
+		if err := m.engine.Find(&prows, &plock{Sid: s.Sid}); err != nil {
+			return nil, fmt.Errorf("find plock %d: %s", s.Sid, err)
+		}
+		s.Plocks = make([]Plock, 0, len(prows))
+		for _, prow := range prows {
+			s.Plocks = append(s.Plocks, Plock{prow.Inode, prow.Owner, prow.Records})
+		}
+	}
+	return &s, nil
+}
+
+func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
+	row := session{Sid: sid}
+	ok, err := m.engine.Get(&row)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("session not found: %d", sid)
+	}
+	return m.getSession(&row, true)
+}
+
+func (m *dbMeta) ListSessions() ([]*Session, error) {
+	var rows []session
+	err := m.engine.Find(&rows)
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]*Session, 0, len(rows))
+	for _, row := range rows {
+		s, err := m.getSession(&row, false)
+		if err != nil {
+			logger.Errorf("get session: %s", err)
+			continue
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
 }
 
 func (m *dbMeta) OnMsg(mtype uint32, cb MsgCallback) {
@@ -2113,7 +2199,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
+func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
 	var c chunk
 	rows, err := m.engine.Rows(&c)
 	if err != nil {
