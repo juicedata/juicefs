@@ -177,16 +177,16 @@ JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_c
 ## 谁在使用
 
 <p>
-  <span style="margin: 10px;"><img height="60" src="docs/images/mi.png" /></span>
-  <span style="margin: 10px;"><img height="40" src="docs/images/lixiang.png" /></span>
-  <span style="margin: 10px;"><img height="70" src="docs/images/shopee.png" /></span>
-  <span style="margin: 10px;"><img height="60" src="docs/images/dingdong.png" /></span>
-  <span style="margin: 10px;"><img height="50" src="docs/images/qcloud.png" /></span>
-  <span style="margin: 10px;"><img height="50" src="docs/images/baiduyun.png" /></span>
-  <span style="margin: 10px;"><img height="" src="docs/images/sf.png" /></span>
-  <span style="margin: 10px;"><img height="" src="docs/images/bigo.png" /></span>
-  <span style="margin: 10px;"><img height="" src="docs/images/baoyinxiaofei.png" /></span>
-  <span style="margin: 10px;"><img height="40" src="docs/images/hangtianhongtu.png" /></span>
+  <span><img height="60" src="docs/images/mi.png" /></span>
+  <span><img height="40" src="docs/images/lixiang.png" /></span>
+  <span><img height="70" src="docs/images/shopee.png" /></span>
+  <span><img height="60" src="docs/images/dingdong.png" /></span>
+  <span><img height="50" src="docs/images/qcloud.png" /></span>
+  <span><img height="50" src="docs/images/baiduyun.png" /></span>
+  <span><img height="" src="docs/images/sf.png" /></span>
+  <span><img height="" src="docs/images/bigo.png" /></span>
+  <span><img height="" src="docs/images/baoyinxiaofei.png" /></span>
+  <span><img height="40" src="docs/images/hangtianhongtu.png" /></span>
 </p>
 
 
