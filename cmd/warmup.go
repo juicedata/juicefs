@@ -53,6 +53,9 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 	if n, err := cf.Read(errs); err != nil || n != 1 {
 		logger.Fatalf("Read message: %d %s", n, err)
 	}
+	if errs[0] != 0 {
+		logger.Fatalf("Warm up failed: %d", errs[0])
+	}
 	logger.Infof("%d paths are warmed up", count)
 }
 
