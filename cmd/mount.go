@@ -195,6 +195,8 @@ func mount(c *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("Failed to make daemon: %s", err)
 		}
+	} else {
+		go checkMountpoint(conf.Format.Name, mp)
 	}
 
 	installHandler(mp)
