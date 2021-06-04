@@ -19,6 +19,9 @@ import (
 	"os"
 	"strings"
 	"syscall"
+	"time"
+
+	"github.com/juicedata/juicefs/pkg/version"
 )
 
 const (
@@ -133,14 +136,47 @@ type Summary struct {
 	Dirs   uint64
 }
 
+type SessionInfo struct {
+	Version    string
+	Hostname   string
+	MountPoint string
+	ProcessID  int
+}
+
+type Flock struct {
+	Inode Ino
+	Owner uint64
+	Ltype string
+}
+
+type Plock struct {
+	Inode   Ino
+	Owner   uint64
+	Records []byte // FIXME: loadLocks
+}
+
+// Session contains detailed information of a client session
+type Session struct {
+	Sid       uint64
+	Heartbeat time.Time
+	SessionInfo
+	Sustained []Ino   `json:",omitempty"`
+	Flocks    []Flock `json:",omitempty"`
+	Plocks    []Plock `json:",omitempty"`
+}
+
 // Meta is a interface for a meta service for file system.
 type Meta interface {
 	// Init is used to initialize a meta service.
 	Init(format Format, force bool) error
 	// Load loads the existing setting of a formatted volume from meta service.
 	Load() (*Format, error)
-	// NewSession create a new client session.
+	// NewSession creates a new client session.
 	NewSession() error
+	// GetSession retrieves information of session with sid
+	GetSession(sid uint64) (*Session, error)
+	// ListSessions returns all client sessions.
+	ListSessions() ([]*Session, error)
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno
@@ -260,4 +296,12 @@ func NewClient(uri string, conf *Config) Meta {
 		logger.Fatalf("Meta is not available: %s", err)
 	}
 	return m
+}
+
+func newSessionInfo() (*SessionInfo, error) {
+	host, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	return &SessionInfo{Version: version.Version(), Hostname: host, ProcessID: os.Getpid()}, nil
 }
