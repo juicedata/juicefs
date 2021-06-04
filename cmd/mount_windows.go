@@ -61,3 +61,6 @@ func mount_main(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, c *cli.Co
 	winfsp.Serve(conf, jfs, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"),
 		strings.HasSuffix(conf.Mountpoint, ":"))
 }
+
+func checkMountpoint(name, mp string) {
+}
