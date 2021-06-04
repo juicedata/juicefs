@@ -251,7 +251,7 @@ func formatFlags() *cli.Command {
 				Value: 0,
 				Usage: "the limit for space in GiB",
 			},
-			&cli.IntFlag{
+			&cli.Uint64Flag{
 				Name:  "inodes",
 				Value: 0,
 				Usage: "the limit for number of inodes",

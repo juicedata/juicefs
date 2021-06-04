@@ -142,8 +142,8 @@ type dbMeta struct {
 	msgCallbacks *msgCallbacks
 	newSpace     int64
 	newInodes    int64
-	curSpace     int64
-	curInodes    int64
+	usedSpace    int64
+	usedInodes   int64
 
 	freeMu     sync.Mutex
 	freeInodes freeID
@@ -301,22 +301,22 @@ func (m *dbMeta) refreshUsage() {
 		var c = counter{Name: "usedSpace"}
 		_, err := m.engine.Get(&c)
 		if err == nil {
-			atomic.StoreInt64(&m.curSpace, c.Value)
+			atomic.StoreInt64(&m.usedSpace, c.Value)
 		}
 		c = counter{Name: "totalInodes"}
 		_, err = m.engine.Get(&c)
 		if err == nil {
-			atomic.StoreInt64(&m.curInodes, c.Value)
+			atomic.StoreInt64(&m.usedInodes, c.Value)
 		}
 		time.Sleep(time.Second * 10)
 	}
 }
 
-func (r *dbMeta) checkQuota(newsize, inodes int64) bool {
-	if newsize > 0 && r.fmt.Capacity > 0 && atomic.LoadInt64(&r.curSpace)+atomic.LoadInt64(&r.newSpace)+newsize > int64(r.fmt.Capacity) {
+func (r *dbMeta) checkQuota(size, inodes int64) bool {
+	if size > 0 && r.fmt.Capacity > 0 && atomic.LoadInt64(&r.usedSpace)+atomic.LoadInt64(&r.newSpace)+size > int64(r.fmt.Capacity) {
 		return true
 	}
-	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadInt64(&r.curInodes)+atomic.LoadInt64(&r.newInodes)+inodes > int64(r.fmt.Inodes)
+	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadInt64(&r.usedInodes)+atomic.LoadInt64(&r.newInodes)+inodes > int64(r.fmt.Inodes)
 }
 
 func (m *dbMeta) OnMsg(mtype uint32, cb MsgCallback) {
@@ -470,10 +470,18 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 		usedSpace = 0
 	}
 	usedSpace = ((usedSpace >> 16) + 1) << 16 // aligned to 64K
-	*totalspace = 1 << 50
-	for *totalspace < uint64(usedSpace) {
-		*totalspace *= 2
+	if m.fmt.Capacity > 0 {
+		*totalspace = m.fmt.Capacity
+		if *totalspace < uint64(usedSpace) {
+			*totalspace = uint64(usedSpace)
+		}
+	} else {
+		*totalspace = 1 << 50
+		for *totalspace*8 < uint64(usedSpace)*10 {
+			*totalspace *= 2
+		}
 	}
+
 	*availspace = *totalspace - uint64(usedSpace)
 	c = counter{Name: "totalInodes"}
 	_, err = m.engine.Get(&c)
@@ -486,7 +494,15 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 		inodes = 0
 	}
 	*iused = uint64(inodes)
-	*iavail = 10 << 20
+	if m.fmt.Inodes > 0 {
+		if *iused > m.fmt.Inodes {
+			*iavail = 0
+		} else {
+			*iavail = m.fmt.Inodes - *iused
+		}
+	} else {
+		*iavail = 10 << 20
+	}
 	return 0
 }
 

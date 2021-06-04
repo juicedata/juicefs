@@ -77,8 +77,8 @@ type redisMeta struct {
 	txlocks [1024]sync.Mutex // Pessimistic locks to reduce conflict on Redis
 
 	sid          int64
-	used         uint64
-	totalInodes  uint64
+	usedSpace    uint64
+	usedInodes   uint64
 	openFiles    map[Ino]int
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
@@ -229,13 +229,11 @@ func (r *redisMeta) Load() (*Format, error) {
 	if err != nil {
 		return nil, err
 	}
-	var format Format
-	err = json.Unmarshal(body, &format)
+	err = json.Unmarshal(body, &r.fmt)
 	if err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
-	r.fmt = format
-	return &format, nil
+	return &r.fmt, nil
 }
 
 func (r *redisMeta) NewSession() error {
@@ -267,18 +265,18 @@ func (r *redisMeta) NewSession() error {
 func (r *redisMeta) refreshUsage() {
 	for {
 		used, _ := r.rdb.IncrBy(Background, usedSpace, 0).Result()
-		atomic.StoreUint64(&r.used, uint64(used))
+		atomic.StoreUint64(&r.usedSpace, uint64(used))
 		inodes, _ := r.rdb.IncrBy(Background, totalInodes, 0).Result()
-		atomic.StoreUint64(&r.totalInodes, uint64(inodes))
+		atomic.StoreUint64(&r.usedInodes, uint64(inodes))
 		time.Sleep(time.Second * 10)
 	}
 }
 
-func (r *redisMeta) checkQuota(newsize, inodes uint64) bool {
-	if newsize > 0 && r.fmt.Capacity > 0 && atomic.LoadUint64(&r.used)+newsize > r.fmt.Capacity {
+func (r *redisMeta) checkQuota(size, inodes int64) bool {
+	if size > 0 && r.fmt.Capacity > 0 && atomic.LoadUint64(&r.usedSpace)+uint64(size) > r.fmt.Capacity {
 		return true
 	}
-	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadUint64(&r.totalInodes)+inodes > r.fmt.Inodes
+	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadUint64(&r.usedInodes)+uint64(inodes) > r.fmt.Inodes
 }
 
 func (r *redisMeta) OnMsg(mtype uint32, cb MsgCallback) {
@@ -445,7 +443,15 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 		inodes = 0
 	}
 	*iused = uint64(inodes)
-	*iavail = 10 << 20
+	if r.fmt.Inodes > 0 {
+		if *iused > r.fmt.Inodes {
+			*iavail = 0
+		} else {
+			*iavail = r.fmt.Inodes - *iused
+		}
+	} else {
+		*iavail = 10 << 20
+	}
 	return 0
 }
 
@@ -780,7 +786,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		old := t.Length
 		var zeroChunks []uint32
 		if length > old {
-			if r.checkQuota(length-old, 0) {
+			if r.checkQuota(align4K(length)-align4K(old), 0) {
 				return syscall.ENOSPC
 			}
 			if (length-old)/ChunkSize >= 100 {
@@ -894,10 +900,10 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		}
 
 		old := t.Length
-		t.Length = length
-		if length > t.Length && r.checkQuota(length-t.Length, 0) {
+		if length > old && r.checkQuota(align4K(length)-align4K(old), 0) {
 			return syscall.ENOSPC
 		}
+		t.Length = length
 		now := time.Now()
 		t.Ctime = now.Unix()
 		t.Ctimensec = uint32(now.Nanosecond())
@@ -1881,7 +1887,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			added = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if added > 0 && r.checkQuota(uint64(added), 0) {
+		if r.checkQuota(added, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -1941,7 +1947,7 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			added = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if added > 0 && r.checkQuota(uint64(added), 0) {
+		if r.checkQuota(added, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
