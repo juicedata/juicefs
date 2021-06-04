@@ -47,7 +47,7 @@ import (
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
 	Sessions: sessions -> [ $sid -> heartbeat ]
 	sustained: session$sid -> [$inode]
-	locked: locked$sid -> { lockf$inode or lockpinode }
+	locked: locked$sid -> { lockf$inode or lockp$inode }
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$chunkid_$size -> refcount
@@ -66,6 +66,7 @@ const usedSpace = "usedSpace"
 const totalInodes = "totalInodes"
 const delfiles = "delfiles"
 const allSessions = "sessions"
+const sessionInfos = "sessionInfos"
 const sliceRefs = "sliceRef"
 
 type redisMeta struct {
@@ -237,6 +238,16 @@ func (r *redisMeta) NewSession() error {
 		return fmt.Errorf("create session: %s", err)
 	}
 	logger.Debugf("session is %d", r.sid)
+	info, err := newSessionInfo()
+	if err != nil {
+		return fmt.Errorf("new session info: %s", err)
+	}
+	info.MountPoint = r.conf.MountPoint
+	data, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("json: %s", err)
+	}
+	r.rdb.HSet(Background, sessionInfos, r.sid, data)
 
 	r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result()
 	if err != nil {
@@ -253,6 +264,92 @@ func (r *redisMeta) NewSession() error {
 	go r.cleanupDeletedFiles()
 	go r.cleanupSlices()
 	return nil
+}
+
+func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
+	ctx := Background
+	info, err := r.rdb.HGet(ctx, sessionInfos, sid).Bytes()
+	if err == redis.Nil { // legacy client has no info
+		info = []byte("{}")
+	} else if err != nil {
+		return nil, fmt.Errorf("HGet %s %s: %s", sessionInfos, sid, err)
+	}
+	var s Session
+	if err := json.Unmarshal(info, &s); err != nil {
+		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
+	}
+	s.Sid, _ = strconv.ParseUint(sid, 10, 64)
+	if detail {
+		inodes, err := r.rdb.SMembers(ctx, r.sustained(int64(s.Sid))).Result()
+		if err != nil {
+			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
+		}
+		s.Sustained = make([]Ino, 0, len(inodes))
+		for _, sinode := range inodes {
+			inode, _ := strconv.ParseUint(sinode, 10, 64)
+			s.Sustained = append(s.Sustained, Ino(inode))
+		}
+
+		locks, err := r.rdb.SMembers(ctx, r.lockedKey(int64(s.Sid))).Result()
+		if err != nil {
+			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
+		}
+		s.Flocks = make([]Flock, 0, len(locks)) // greedy
+		s.Plocks = make([]Plock, 0, len(locks))
+		for _, lock := range locks {
+			owners, err := r.rdb.HGetAll(ctx, lock).Result()
+			if err != nil {
+				return nil, fmt.Errorf("HGetAll %s: %s", lock, err)
+			}
+			isFlock := strings.HasPrefix(lock, "lockf")
+			inode, _ := strconv.ParseUint(lock[5:], 10, 64)
+			for k, v := range owners {
+				parts := strings.Split(k, "_")
+				if parts[0] != sid {
+					continue
+				}
+				owner, _ := strconv.ParseUint(parts[1], 16, 64)
+				if isFlock {
+					s.Flocks = append(s.Flocks, Flock{Ino(inode), owner, v})
+				} else {
+					s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, []byte(v)})
+				}
+			}
+		}
+	}
+	return &s, nil
+}
+
+func (r *redisMeta) GetSession(sid uint64) (*Session, error) {
+	key := strconv.FormatUint(sid, 10)
+	score, err := r.rdb.ZScore(Background, allSessions, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	s, err := r.getSession(key, true)
+	if err != nil {
+		return nil, err
+	}
+	s.Heartbeat = time.Unix(int64(score), 0)
+	return s, nil
+}
+
+func (r *redisMeta) ListSessions() ([]*Session, error) {
+	keys, err := r.rdb.ZRangeWithScores(Background, allSessions, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]*Session, 0, len(keys))
+	for _, k := range keys {
+		s, err := r.getSession(k.Member.(string), false)
+		if err != nil {
+			logger.Errorf("get session: %s", err)
+			continue
+		}
+		s.Heartbeat = time.Unix(int64(k.Score), 0)
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
 }
 
 func (r *redisMeta) OnMsg(mtype uint32, cb MsgCallback) {
@@ -1670,6 +1767,7 @@ func (r *redisMeta) cleanStaleSession(sid int64) {
 	}
 	if len(inodes) == 0 {
 		r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
+		r.rdb.HDel(ctx, sessionInfos, strconv.Itoa(int(sid)))
 		logger.Infof("cleanup session %d", sid)
 	}
 }

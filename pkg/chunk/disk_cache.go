@@ -80,7 +80,7 @@ func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config
 	if br < c.freeRatio || fr < c.freeRatio {
 		logger.Warnf("not enough space (%d%%) or inodes (%d%%) for caching in %s: free ratio should be >= %d%%", int(br*100), int(fr*100), c.dir, int(c.freeRatio*100))
 	}
-	logger.Infof("Created new cache store (%s): capacity (%d MB), free ratio (%d%%), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), pendingPages)
+	logger.Infof("Disk cache (%s): capacity (%d MB), free ratio (%d%%), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), pendingPages)
 	go c.flush()
 	go c.checkFreeSpace()
 	go c.refreshCacheKeys()
@@ -510,7 +510,6 @@ type CacheManager interface {
 }
 
 func newCacheManager(config *Config) CacheManager {
-	logger.Infof("Cache dirs: %s, capacity: %d MB", config.CacheDir, config.CacheSize)
 	if config.CacheDir == "memory" || config.CacheSize == 0 {
 		return newMemStore(config)
 	}
