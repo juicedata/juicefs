@@ -2058,7 +2058,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice) syscall.Errno {
+func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
 	var c chunk
 	rows, err := m.engine.Rows(&c)
 	if err != nil {
