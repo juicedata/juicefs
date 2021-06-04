@@ -14,7 +14,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.12.1-70 (2021-05-15 36937f5)
+   0.14-dev (2021-06-04 d9485fb)
 
 COMMANDS:
    format   format a volume
@@ -442,6 +442,11 @@ show status of JuiceFS
 ```
 juicefs status [command options] REDIS-URL
 ```
+
+### Options
+
+`--session value, -s value`\
+show detailed information (sustained inodes, locks) of the specified session (sid) (default: 0)
 
 ## juicefs warmup
 
