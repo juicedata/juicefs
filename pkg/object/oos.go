@@ -33,7 +33,7 @@ type oos struct {
 }
 
 func (s *oos) String() string {
-	return fmt.Sprintf("oos://%s", s.s3client.bucket)
+	return fmt.Sprintf("oos://%s/", s.s3client.bucket)
 }
 
 func (s *oos) Create() error {

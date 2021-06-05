@@ -32,7 +32,7 @@ type b2client struct {
 }
 
 func (c *b2client) String() string {
-	return fmt.Sprintf("b2://%s", c.bucket.Name())
+	return fmt.Sprintf("b2://%s/", c.bucket.Name())
 }
 
 func (c *b2client) Create() error {

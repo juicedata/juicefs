@@ -37,7 +37,7 @@ type yovole struct {
 
 func (u *yovole) String() string {
 	uri, _ := url.ParseRequestURI(u.endpoint)
-	return fmt.Sprintf("yovole://%s", uri.Host)
+	return fmt.Sprintf("yovole://%s/", uri.Host)
 }
 
 func yovoleSigner(req *http.Request, accessKey, secretKey, signName string) {

@@ -36,7 +36,7 @@ type up struct {
 }
 
 func (u *up) String() string {
-	return fmt.Sprintf("upyun://%s", u.c.Bucket)
+	return fmt.Sprintf("upyun://%s/", u.c.Bucket)
 }
 
 func (u *up) Create() error {

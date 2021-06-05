@@ -32,7 +32,7 @@ type speedy struct {
 
 func (s *speedy) String() string {
 	uri, _ := url.ParseRequestURI(s.endpoint)
-	return fmt.Sprintf("speedy://%s", uri.Host)
+	return fmt.Sprintf("speedy://%s/", uri.Host)
 }
 
 func (s *speedy) List(prefix, marker string, limit int64) ([]Object, error) {

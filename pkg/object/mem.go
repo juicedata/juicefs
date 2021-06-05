@@ -44,7 +44,7 @@ type memStore struct {
 }
 
 func (m *memStore) String() string {
-	return fmt.Sprintf("mem://%s", m.name)
+	return fmt.Sprintf("mem://%s/", m.name)
 }
 
 func (m *memStore) Head(key string) (Object, error) {

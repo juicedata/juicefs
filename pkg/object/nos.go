@@ -39,7 +39,7 @@ type nos struct {
 }
 
 func (s *nos) String() string {
-	return fmt.Sprintf("nos://%s", s.bucket)
+	return fmt.Sprintf("nos://%s/", s.bucket)
 }
 
 func (s *nos) Head(key string) (Object, error) {

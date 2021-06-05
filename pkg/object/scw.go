@@ -35,7 +35,7 @@ type scw struct {
 }
 
 func (s *scw) String() string {
-	return fmt.Sprintf("scw://%s", s.s3client.bucket)
+	return fmt.Sprintf("scw://%s/", s.s3client.bucket)
 }
 
 func (s *scw) Create() error {

@@ -35,7 +35,7 @@ type swiftOSS struct {
 }
 
 func (s *swiftOSS) String() string {
-	return fmt.Sprintf("swift://%s", s.container)
+	return fmt.Sprintf("swift://%s/", s.container)
 }
 
 func (s *swiftOSS) Create() error {

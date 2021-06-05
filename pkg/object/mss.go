@@ -52,7 +52,7 @@ type mss struct {
 
 func (u *mss) String() string {
 	uri, _ := url.ParseRequestURI(u.endpoint)
-	return fmt.Sprintf("mss://%s", uri.Host)
+	return fmt.Sprintf("mss://%s/", uri.Host)
 }
 
 var awskeys []string = []string{"x-amz-copy-source"}

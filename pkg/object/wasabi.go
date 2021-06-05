@@ -34,7 +34,7 @@ type wasabi struct {
 }
 
 func (s *wasabi) String() string {
-	return fmt.Sprintf("wasabi://%s", s.s3client.bucket)
+	return fmt.Sprintf("wasabi://%s/", s.s3client.bucket)
 }
 
 func (s *wasabi) Create() error {
