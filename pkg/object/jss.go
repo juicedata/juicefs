@@ -33,7 +33,7 @@ type jss struct {
 }
 
 func (j *jss) String() string {
-	return fmt.Sprintf("jss://%s", j.s3client.bucket)
+	return fmt.Sprintf("jss://%s/", j.s3client.bucket)
 }
 
 func (j *jss) Copy(dst, src string) error {

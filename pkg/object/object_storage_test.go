@@ -457,3 +457,12 @@ func TestSharding(t *testing.T) {
 	s, _ := NewSharded("mem", "%d", "", "", 10)
 	testStorage(t, s)
 }
+
+func TestNameString(t *testing.T) {
+	s, _ := newMem("test", "", "")
+	s = WithPrefix(s, "a/")
+	s = WithPrefix(s, "b/")
+	if s.String() != "mem://test/a/b/" {
+		t.Fatalf("name with two prefix does not match: %s", s.String())
+	}
+}

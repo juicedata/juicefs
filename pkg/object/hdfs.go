@@ -44,7 +44,7 @@ type hdfsclient struct {
 }
 
 func (h *hdfsclient) String() string {
-	return fmt.Sprintf("hdfs://%s", h.addr)
+	return fmt.Sprintf("hdfs://%s/", h.addr)
 }
 
 func (h *hdfsclient) path(key string) string {

@@ -32,7 +32,7 @@ func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 }
 
 func (p *withPrefix) String() string {
-	return fmt.Sprintf("%s/%s", p.os, p.prefix)
+	return fmt.Sprintf("%s%s", p.os, p.prefix)
 }
 
 func (p *withPrefix) Create() error {

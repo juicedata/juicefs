@@ -34,7 +34,7 @@ type space struct {
 }
 
 func (s *space) String() string {
-	return fmt.Sprintf("space://%s", s.s3client.bucket)
+	return fmt.Sprintf("space://%s/", s.s3client.bucket)
 }
 
 func (s *space) Create() error {

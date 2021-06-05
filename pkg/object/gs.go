@@ -42,7 +42,7 @@ type gs struct {
 }
 
 func (g *gs) String() string {
-	return fmt.Sprintf("gs://%s", g.bucket)
+	return fmt.Sprintf("gs://%s/", g.bucket)
 }
 
 func (g *gs) Create() error {

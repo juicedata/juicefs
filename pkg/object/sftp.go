@@ -145,7 +145,7 @@ func (f *sftpStore) putSftpConnection(pc **conn, err error) {
 }
 
 func (f *sftpStore) String() string {
-	return fmt.Sprintf("%s@%s:%s", f.config.User, f.host, f.root)
+	return fmt.Sprintf("%s@%s:%s/", f.config.User, f.host, f.root)
 }
 
 // always preserve suffix `/` for directory key

@@ -43,7 +43,7 @@ type qiniu struct {
 }
 
 func (q *qiniu) String() string {
-	return fmt.Sprintf("qiniu://%s", q.bucket)
+	return fmt.Sprintf("qiniu://%s/", q.bucket)
 }
 
 func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {

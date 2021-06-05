@@ -39,7 +39,7 @@ type COS struct {
 }
 
 func (c *COS) String() string {
-	return fmt.Sprintf("cos://%s", strings.Split(c.endpoint, ".")[0])
+	return fmt.Sprintf("cos://%s/", strings.Split(c.endpoint, ".")[0])
 }
 
 func (c *COS) Create() error {
