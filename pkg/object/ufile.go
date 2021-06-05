@@ -26,7 +26,7 @@ type ufile struct {
 
 func (u *ufile) String() string {
 	uri, _ := url.ParseRequestURI(u.endpoint)
-	return fmt.Sprintf("ufile://%s", uri.Host)
+	return fmt.Sprintf("ufile://%s/", uri.Host)
 }
 
 func ufileSigner(req *http.Request, accessKey, secretKey, signName string) {

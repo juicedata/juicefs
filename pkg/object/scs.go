@@ -37,7 +37,7 @@ type scsClient struct {
 }
 
 func (s *scsClient) String() string {
-	return fmt.Sprintf("scs://%s", s.bucket)
+	return fmt.Sprintf("scs://%s/", s.bucket)
 }
 
 func (s *scsClient) Create() error {

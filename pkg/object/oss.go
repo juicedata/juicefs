@@ -42,7 +42,7 @@ type ossClient struct {
 }
 
 func (o *ossClient) String() string {
-	return fmt.Sprintf("oss://%s", o.bucket.BucketName)
+	return fmt.Sprintf("oss://%s/", o.bucket.BucketName)
 }
 
 func (o *ossClient) Create() error {

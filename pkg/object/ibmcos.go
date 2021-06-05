@@ -38,7 +38,7 @@ type ibmcos struct {
 }
 
 func (s *ibmcos) String() string {
-	return fmt.Sprintf("ibmcos://%s", s.bucket)
+	return fmt.Sprintf("ibmcos://%s/", s.bucket)
 }
 
 func (s *ibmcos) Create() error {

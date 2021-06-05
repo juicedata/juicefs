@@ -38,7 +38,7 @@ type ceph struct {
 }
 
 func (c *ceph) String() string {
-	return fmt.Sprintf("ceph://%s", c.name)
+	return fmt.Sprintf("ceph://%s/", c.name)
 }
 
 func (c *ceph) Create() error {

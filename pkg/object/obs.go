@@ -39,7 +39,7 @@ type obsClient struct {
 }
 
 func (s *obsClient) String() string {
-	return fmt.Sprintf("obs://%s", s.bucket)
+	return fmt.Sprintf("obs://%s/", s.bucket)
 }
 
 func (s *obsClient) Create() error {

@@ -42,7 +42,7 @@ type s3client struct {
 }
 
 func (s *s3client) String() string {
-	return fmt.Sprintf("s3://%s", s.bucket)
+	return fmt.Sprintf("s3://%s/", s.bucket)
 }
 
 func (s *s3client) Create() error {

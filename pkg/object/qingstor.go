@@ -36,7 +36,7 @@ type qingstor struct {
 }
 
 func (q *qingstor) String() string {
-	return fmt.Sprintf("qingstor://%s", *q.bucket.Properties.BucketName)
+	return fmt.Sprintf("qingstor://%s/", *q.bucket.Properties.BucketName)
 }
 
 func (q *qingstor) Create() error {

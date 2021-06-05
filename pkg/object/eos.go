@@ -35,7 +35,7 @@ type eos struct {
 }
 
 func (s *eos) String() string {
-	return fmt.Sprintf("eos://%s", s.s3client.bucket)
+	return fmt.Sprintf("eos://%s/", s.s3client.bucket)
 }
 
 func (s *eos) Create() error {

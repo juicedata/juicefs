@@ -36,7 +36,7 @@ type wasb struct {
 }
 
 func (b *wasb) String() string {
-	return fmt.Sprintf("wasb://%s", b.container.Name)
+	return fmt.Sprintf("wasb://%s/", b.container.Name)
 }
 
 func (b *wasb) Create() error {

@@ -34,7 +34,7 @@ type redisStore struct {
 var c = context.TODO()
 
 func (r *redisStore) String() string {
-	return fmt.Sprintf("redis://%s", r.rdb.Options().Addr)
+	return fmt.Sprintf("redis://%s/", r.rdb.Options().Addr)
 }
 
 func (r *redisStore) Create() error {

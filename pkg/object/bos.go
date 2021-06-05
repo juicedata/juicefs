@@ -39,7 +39,7 @@ type bosclient struct {
 }
 
 func (q *bosclient) String() string {
-	return fmt.Sprintf("bos://%s", q.bucket)
+	return fmt.Sprintf("bos://%s/", q.bucket)
 }
 
 func (q *bosclient) Create() error {

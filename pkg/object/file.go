@@ -40,9 +40,9 @@ type filestore struct {
 
 func (d *filestore) String() string {
 	if runtime.GOOS == "windows" {
-		return "file:///" + d.root
+		return "file:///" + d.root + "/"
 	}
-	return "file://" + d.root
+	return "file://" + d.root + "/"
 }
 
 func (d *filestore) path(key string) string {
