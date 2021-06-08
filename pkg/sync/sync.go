@@ -35,7 +35,7 @@ import (
 
 // The max number of key per listing request
 const (
-	maxResults      = 10240
+	maxResults      = 1000
 	defaultPartSize = 5 << 20
 	maxBlock        = defaultPartSize * 2
 	markDelete      = -1
@@ -75,7 +75,7 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s start %q", store, start)
 
-	out := make(chan object.Object, maxResults)
+	out := make(chan object.Object, maxResults*10)
 
 	// As the result of object storage's List method doesn't include the marker key,
 	// we try List the marker key separately.
