@@ -235,6 +235,10 @@ func reorderOptions(app *cli.App, args []string) []string {
 				newArgs = append(newArgs, args[i])
 			}
 		} else {
+			if strings.HasPrefix(option, "-") {
+				logger.Errorf("unknown option: %s", option)
+				os.Exit(1)
+			}
 			others = append(others, option)
 		}
 	}
