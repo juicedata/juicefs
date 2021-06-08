@@ -31,7 +31,6 @@ require (
 	github.com/juju/ratelimit v1.0.1
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
-	github.com/kurin/blazer v0.2.1
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/minio/cli v1.22.0
