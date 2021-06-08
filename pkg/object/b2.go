@@ -45,7 +45,7 @@ func (c *b2client) getFileInfo(key string) (*backblaze.File, error) {
 		return nil, err
 	}
 	var buf [2]byte
-	r.Read(buf[:])
+	_, _ = r.Read(buf[:])
 	r.Close()
 	return f, nil
 }
@@ -146,10 +146,7 @@ func newB2(endpoint, keyID, applicationKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create B2 client: %s", err)
 	}
-	err = client.AuthorizeAccount()
-	if err != nil {
-		return nil, fmt.Errorf("auth client: %s", err)
-	}
+	client.MaxIdleUploads = 20
 	bucket, err := client.Bucket(name)
 	if err != nil {
 		logger.Warnf("access bucket %s: %s", name, err)
