@@ -2718,3 +2718,83 @@ func (r *redisMeta) checkServerConfig() {
 	_ = r.rdb.Ping(Background)
 	logger.Infof("Ping redis: %s", time.Since(start))
 }
+
+func (m *redisMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
+	a, err := m.rdb.Get(Background, m.inodeKey(inode)).Result()
+	if err != nil {
+		return nil, err
+	}
+	var attr Attr
+	m.parseAttr([]byte(a), &attr)
+	var slices []Slice
+	if attr.Typ == TypeFile {
+		_ = m.Read(Background, inode, 0, &slices)
+	}
+	return &DumpedEntry{
+		Name:   name,
+		Inode:  inode,
+		Attr:   dumpAttr(&attr),
+		Chunks: slices,
+	}, nil
+}
+
+func (m *redisMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
+	ctx := Background
+	keys, err := m.rdb.HGetAll(ctx, m.entryKey(inode)).Result()
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]*DumpedEntry, 0, len(keys))
+	for k, v := range keys {
+		typ, inode := m.parseEntry([]byte(v))
+		entry, err := m.dumpEntry(k, inode)
+		if err != nil {
+			return nil, err
+		}
+		if typ == TypeDirectory {
+			entry.Entries, err = m.dumpDir(inode)
+			if err != nil {
+				return nil, err
+			}
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+func (m *redisMeta) DumpMeta(w io.Writer) error {
+	format, err := m.Load()
+	if err != nil {
+		return err
+	}
+
+	space, err := m.rdb.IncrBy(Background, usedSpace, 0).Result()
+	if err != nil {
+		return err
+	}
+	inodes, err := m.rdb.IncrBy(Background, totalInodes, 0).Result()
+	if err != nil {
+		return err
+	}
+
+	tree, err := m.dumpEntry("/", 1)
+	if err != nil {
+		return err
+	}
+	tree.Entries, err = m.dumpDir(1)
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(DumpedMeta{
+		format,
+		&DumpedCounters{space, inodes},
+		nil,
+		nil,
+		tree,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	w.Write(data)
+	return nil
+}

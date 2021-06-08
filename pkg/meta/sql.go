@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2280,4 +2281,57 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		}
 		return err
 	}))
+}
+
+func (m *dbMeta) DumpEntry(name string, inode Ino) *DumpedEntry {
+	/*
+		info, err := m.rdb.Get(Background, m.inodeKey(inode)).Result()
+		if err != nil {
+			return nil
+		}
+		var attr Attr
+		m.parseAttr([]byte(info), &attr)
+		var slices []Slice
+		if attr.Typ == TypeFile {
+			_ = m.Read(Background, inode, 0, &slices)
+		}
+		return &DumpedEntry{Name: name, Inode: inode, Attr: attr, Chunks: slices}
+	*/
+	return nil
+}
+
+func (m *dbMeta) DumpDir(inode Ino) []*DumpedEntry {
+	/*
+		    ctx := Background
+			keys, err := m.rdb.HGetAll(ctx, m.entryKey(inode)).Result()
+			if err != nil {
+				return nil
+			}
+			entries := make([]*DumpedEntry, 0, len(keys))
+			for k, v := range keys {
+				typ, inode := m.parseEntry([]byte(v))
+				entry := m.DumpEntry(k, inode)
+				if typ == TypeDirectory {
+					entry.Entries = m.DumpDir(inode)
+				}
+				entries = append(entries, entry)
+			}
+			return entries
+	*/
+	return nil
+}
+
+func (m *dbMeta) DumpOther() (*Format, int64, int64) {
+	/*
+		format, _ := m.Load()
+		usedSpace, _ := m.rdb.IncrBy(Background, usedSpace, 0).Result()
+		usedInodes, _ := m.rdb.IncrBy(Background, totalInodes, 0).Result()
+
+		return format, usedSpace, usedInodes
+	*/
+	return nil, 0, 0
+}
+
+func (m *dbMeta) DumpMeta(w io.Writer) error {
+	return nil
 }
