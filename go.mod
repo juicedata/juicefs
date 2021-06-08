@@ -21,6 +21,7 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gonutz/w32/v2 v2.2.0
 	github.com/google/gops v0.3.13
+	github.com/google/readahead v0.0.0-20161222183148-eaceba169032 // indirect
 	github.com/google/uuid v1.1.2
 	github.com/hanwen/go-fuse/v2 v2.0.4-0.20210104155004-09a3c381714c
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5
@@ -40,6 +41,7 @@ require (
 	github.com/pengsrc/go-shared v0.2.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.10.0
+	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect
 	github.com/prometheus/client_golang v1.9.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/qiniu/api.v7/v7 v7.8.0
@@ -59,6 +61,7 @@ require (
 	golang.org/x/sys v0.0.0-20210316164454-77fc1eacc6aa
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 	google.golang.org/api v0.5.0
+	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	xorm.io/xorm v1.0.7
 )
 

@@ -20,126 +20,145 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
-	"github.com/kurin/blazer/b2"
+	"gopkg.in/kothar/go-backblaze.v0"
 )
 
 type b2client struct {
 	DefaultObjectStorage
-	client *b2.Client
-	bucket *b2.Bucket
-	cursor *b2.Cursor
+	bucket     *backblaze.Bucket
+	nextMarker string
 }
 
 func (c *b2client) String() string {
-	return fmt.Sprintf("b2://%s/", c.bucket.Name())
+	return fmt.Sprintf("b2://%s/", c.bucket.Name)
 }
 
 func (c *b2client) Create() error {
 	return nil
 }
 
-func (c *b2client) Head(key string) (Object, error) {
-	attr, err := c.bucket.Object(key).Attrs(ctx)
+func (c *b2client) getFileInfo(key string) (*backblaze.File, error) {
+	f, r, err := c.bucket.DownloadFileRangeByName(key, &backblaze.FileRange{Start: 0, End: 1})
 	if err != nil {
 		return nil, err
 	}
+	var buf [2]byte
+	r.Read(buf[:])
+	r.Close()
+	return f, nil
+}
 
+func (c *b2client) Head(key string) (Object, error) {
+	f, err := c.getFileInfo(key)
+	if err != nil {
+		return nil, err
+	}
 	return &obj{
-		attr.Name,
-		attr.Size,
-		attr.UploadTimestamp,
-		strings.HasSuffix(attr.Name, "/"),
+		f.Name,
+		f.ContentLength,
+		time.Unix(f.UploadTimestamp/1000, 0),
+		strings.HasSuffix(f.Name, "/"),
 	}, nil
 }
 
 func (c *b2client) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	obj := c.bucket.Object(key)
-	if _, err := obj.Attrs(ctx); err != nil {
-		return nil, err
+	if off == 0 && limit == -1 {
+		_, r, err := c.bucket.DownloadFileByName(key)
+		return r, err
 	}
-	return obj.NewRangeReader(ctx, off, limit), nil
+	if limit == -1 {
+		limit = 1 << 50
+	}
+	rang := &backblaze.FileRange{Start: off, End: off + limit - 1}
+	_, r, err := c.bucket.DownloadFileRangeByName(key, rang)
+	return r, err
 }
 
 func (c *b2client) Put(key string, data io.Reader) error {
-	w := c.bucket.Object(key).NewWriter(ctx)
-	if _, err := w.ReadFrom(data); err != nil {
-		w.Close()
-		return err
-	}
-	return w.Close()
+	_, err := c.bucket.UploadFile(key, nil, data)
+	return err
 }
 
-// TODO: support multipart upload
-
 func (c *b2client) Copy(dst, src string) error {
-	in, err := c.Get(src, 0, -1)
+	f, err := c.getFileInfo(src)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-	return c.Put(dst, in)
+	_, err = c.bucket.CopyFile(f.ID, dst, "", backblaze.FileMetaDirectiveCopy)
+	return err
 }
 
 func (c *b2client) Delete(key string) error {
-	return c.bucket.Object(key).Delete(ctx)
+	f, err := c.getFileInfo(key)
+	if err != nil {
+		if strings.HasPrefix(err.Error(), "not_found") {
+			return nil
+		}
+		return err
+	}
+	_, err = c.bucket.DeleteFileVersion(key, f.ID)
+	return err
 }
 
 func (c *b2client) List(prefix, marker string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
-	var cursor *b2.Cursor
-	if marker != "" {
-		cursor = c.cursor
-	} else {
-		cursor = &b2.Cursor{Prefix: prefix}
+	if marker == "" && c.nextMarker != "" {
+		marker = c.nextMarker
+		c.nextMarker = ""
 	}
-	c.cursor = nil
-	objects, nc, err := c.bucket.ListCurrentObjects(ctx, int(limit), cursor)
-	if err != nil && err != io.EOF {
+	resp, err := c.bucket.ListFileNamesWithPrefix(marker, int(limit), prefix, "")
+	if err != nil {
 		return nil, err
 	}
-	c.cursor = nc
 
-	n := len(objects)
+	n := len(resp.Files)
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
-		attr, err := objects[i].Attrs(ctx)
-		if err == nil {
-			// attr.LastModified is not correct
-			objs[i] = &obj{
-				attr.Name,
-				attr.Size,
-				attr.UploadTimestamp,
-				strings.HasSuffix(attr.Name, "/"),
-			}
+		f := resp.Files[i]
+		objs[i] = &obj{
+			f.Name,
+			f.ContentLength,
+			time.Unix(f.UploadTimestamp/1000, 0),
+			strings.HasSuffix(f.Name, "/"),
 		}
 	}
+	c.nextMarker = resp.NextFileName
 	return objs, nil
 }
 
-func newB2(endpoint, account, key string) (ObjectStorage, error) {
+// TODO: support multipart upload using S3 client
+
+func newB2(endpoint, keyID, applicationKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.Split(uri.Host, ".")
-	bucketName := hostParts[0]
-	client, err := b2.NewClient(ctx, account, key, b2.Transport(httpClient.Transport))
+	name := hostParts[0]
+	client, err := backblaze.NewB2(backblaze.Credentials{
+		KeyID:          keyID,
+		ApplicationKey: applicationKey,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create client: %v", err)
+		return nil, fmt.Errorf("create B2 client: %s", err)
 	}
-	bucket, err := client.Bucket(ctx, bucketName)
+	err = client.AuthorizeAccount()
 	if err != nil {
-		bucket, err = client.NewBucket(ctx, bucketName, &b2.BucketAttrs{
-			Type: "allPrivate",
-		})
+		return nil, fmt.Errorf("auth client: %s", err)
+	}
+	bucket, err := client.Bucket(name)
+	if err != nil {
+		logger.Warnf("access bucket %s: %s", name, err)
+		bucket, err = client.CreateBucket(name, "allPrivate")
 		if err != nil {
-			return nil, fmt.Errorf("Failed to create bucket: %v", err)
+			return nil, fmt.Errorf("create bucket %s: %s", name, err)
 		}
 	}
-	return &b2client{client: client, bucket: bucket}, nil
+	return &b2client{bucket: bucket}, nil
 }
 
 func init() {
