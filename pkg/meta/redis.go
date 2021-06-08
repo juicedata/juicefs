@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -2759,6 +2760,7 @@ func (m *redisMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
 		}
 		entries = append(entries, entry)
 	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	return entries, nil
 }
 
@@ -2785,9 +2787,13 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	if err != nil {
 		return err
 	}
+
 	data, err := json.MarshalIndent(DumpedMeta{
 		format,
-		&DumpedCounters{space, inodes},
+		&DumpedCounters{
+			UsedSpace:  space,
+			UsedInodes: inodes,
+		},
 		nil,
 		nil,
 		tree,

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2283,55 +2284,107 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	}))
 }
 
-func (m *dbMeta) DumpEntry(name string, inode Ino) *DumpedEntry {
-	/*
-		info, err := m.rdb.Get(Background, m.inodeKey(inode)).Result()
+func (m *dbMeta) dumpEntry(name string, inode Ino, n *node) (*DumpedEntry, error) {
+	if n == nil {
+		n = &node{Inode: inode}
+		ok, err := m.engine.Get(n)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-		var attr Attr
-		m.parseAttr([]byte(info), &attr)
-		var slices []Slice
-		if attr.Typ == TypeFile {
-			_ = m.Read(Background, inode, 0, &slices)
+		if !ok {
+			return nil, fmt.Errorf("inode %d not found", inode)
 		}
-		return &DumpedEntry{Name: name, Inode: inode, Attr: attr, Chunks: slices}
-	*/
-	return nil
+	}
+	if inode != n.Inode {
+		return nil, fmt.Errorf("inode %d != node inode %d", inode, n.Inode)
+	}
+	var attr Attr
+	m.parseAttr(n, &attr)
+	var slices []Slice
+	if attr.Typ == TypeFile {
+		_ = m.Read(Background, inode, 0, &slices)
+	}
+	return &DumpedEntry{
+		Name:   name,
+		Inode:  inode,
+		Attr:   dumpAttr(&attr),
+		Chunks: slices,
+	}, nil
 }
 
-func (m *dbMeta) DumpDir(inode Ino) []*DumpedEntry {
-	/*
-		    ctx := Background
-			keys, err := m.rdb.HGetAll(ctx, m.entryKey(inode)).Result()
+func (m *dbMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
+	dbSession := m.engine.Table(&edge{})
+	dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+	var nodes []namedNode
+	if err := dbSession.Find(&nodes, &edge{Parent: inode}); err != nil {
+		return nil, err
+	}
+	entries := make([]*DumpedEntry, 0, len(nodes))
+	for _, n := range nodes {
+		entry, err := m.dumpEntry(n.Name, n.Inode, &n.node)
+		if err != nil {
+			return nil, err
+		}
+		if n.Type == TypeDirectory {
+			entry.Entries, err = m.dumpDir(n.Inode)
 			if err != nil {
-				return nil
+				return nil, err
 			}
-			entries := make([]*DumpedEntry, 0, len(keys))
-			for k, v := range keys {
-				typ, inode := m.parseEntry([]byte(v))
-				entry := m.DumpEntry(k, inode)
-				if typ == TypeDirectory {
-					entry.Entries = m.DumpDir(inode)
-				}
-				entries = append(entries, entry)
-			}
-			return entries
-	*/
-	return nil
-}
-
-func (m *dbMeta) DumpOther() (*Format, int64, int64) {
-	/*
-		format, _ := m.Load()
-		usedSpace, _ := m.rdb.IncrBy(Background, usedSpace, 0).Result()
-		usedInodes, _ := m.rdb.IncrBy(Background, totalInodes, 0).Result()
-
-		return format, usedSpace, usedInodes
-	*/
-	return nil, 0, 0
+		}
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	return entries, nil
 }
 
 func (m *dbMeta) DumpMeta(w io.Writer) error {
+	format, err := m.Load()
+	if err != nil {
+		return nil
+	}
+
+	var rows []counter
+	err = m.engine.Find(&rows)
+	if err != nil {
+		return err
+	}
+	var counters DumpedCounters
+	for _, row := range rows {
+		switch row.Name {
+		case "usedSpace":
+			counters.UsedSpace = row.Value
+		case "totalInodes":
+			counters.UsedInodes = row.Value
+		case "nextInode":
+			counters.NextInode = row.Value
+		case "nextChunk":
+			counters.NextChunk = row.Value
+		case "nextSession":
+			counters.NextSession = row.Value
+		case "nextCleanupSlices":
+			counters.NextCleanupSlices = row.Value
+		}
+	}
+
+	tree, err := m.dumpEntry("/", 1, nil)
+	if err != nil {
+		return err
+	}
+	tree.Entries, err = m.dumpDir(1)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(DumpedMeta{
+		format,
+		&counters,
+		nil,
+		nil,
+		tree,
+	}, "", "  ")
+	if err != nil {
+		return nil
+	}
+	w.Write(data)
 	return nil
 }

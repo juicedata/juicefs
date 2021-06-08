@@ -16,8 +16,12 @@
 package meta
 
 type DumpedCounters struct {
-	UsedSpace  int64 `json:"usedSpace"`
-	UsedInodes int64 `json:"usedInodes"`
+	UsedSpace         int64 `json:"usedSpace"`
+	UsedInodes        int64 `json:"usedInodes"`
+	NextInode         int64 `json:"nextInodes"`
+	NextChunk         int64 `json:"nextChunk"`
+	NextSession       int64 `json:"nextSession"`
+	NextCleanupSlices int64 `json:"nextCleanupSlices"`
 }
 
 type DumpedDelFiles struct {
