@@ -1866,6 +1866,9 @@ func (r *redisMeta) refreshSession() {
 		now := time.Now()
 		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(now.Unix()), Member: strconv.Itoa(int(r.sid))})
 		time.Sleep(time.Minute)
+		if _, err := r.Load(); err != nil {
+			logger.Warnf("reload setting: %s", err)
+		}
 		go r.cleanStaleSessions()
 	}
 }

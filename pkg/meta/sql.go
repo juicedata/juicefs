@@ -1627,6 +1627,9 @@ func (m *dbMeta) refreshSession() {
 			}
 			return err
 		})
+		if _, err := m.Load(); err != nil {
+			logger.Warnf("reload setting: %s", err)
+		}
 		go m.cleanStaleSessions()
 	}
 }
