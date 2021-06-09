@@ -2721,22 +2721,57 @@ func (r *redisMeta) checkServerConfig() {
 }
 
 func (m *redisMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
-	a, err := m.rdb.Get(Background, m.inodeKey(inode)).Result()
-	if err != nil {
-		return nil, err
+	ctx := Background
+	e := &DumpedEntry{Name: name, Inode: inode}
+	st := m.txn(ctx, func(tx *redis.Tx) error {
+		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err != nil {
+			return err
+		}
+		attr := &Attr{}
+		m.parseAttr(a, attr)
+		e.Attr = dumpAttr(attr)
+
+		keys, err := tx.HGetAll(ctx, m.xattrKey(inode)).Result()
+		if err != nil {
+			return err
+		}
+		if len(keys) > 0 {
+			xattrs := make([]*DumpedXattr, 0, len(keys))
+			for k, v := range keys {
+				xattrs = append(xattrs, &DumpedXattr{k, v})
+			}
+			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+			e.Xattrs = xattrs
+		}
+
+		if attr.Typ == TypeFile {
+			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
+				vals, err := tx.LRange(ctx, m.chunkKey(inode, indx), 0, 1000000).Result()
+				if err != nil {
+					return err
+				}
+				ss := readSlices(vals)
+				slices := make([]*DumpedSlice, 0, len(ss))
+				for _, s := range ss {
+					slices = append(slices, &DumpedSlice{s.pos, s.chunkid, s.size, s.off, s.len})
+				}
+				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
+			}
+		} else if attr.Typ == TypeSymlink {
+			e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result()
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}, m.inodeKey(inode))
+	if st == 0 {
+		return e, nil
+	} else {
+		return nil, fmt.Errorf("dump entry error: %d", st)
 	}
-	var attr Attr
-	m.parseAttr([]byte(a), &attr)
-	var slices []Slice
-	if attr.Typ == TypeFile {
-		_ = m.Read(Background, inode, 0, &slices)
-	}
-	return &DumpedEntry{
-		Name:   name,
-		Inode:  inode,
-		Attr:   dumpAttr(&attr),
-		Chunks: slices,
-	}, nil
 }
 
 func (m *redisMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
@@ -2770,13 +2805,13 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		return err
 	}
 
-	space, err := m.rdb.IncrBy(Background, usedSpace, 0).Result()
-	if err != nil {
-		return err
-	}
-	inodes, err := m.rdb.IncrBy(Background, totalInodes, 0).Result()
-	if err != nil {
-		return err
+	ctx := Background
+	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextCleanupSlices"}...).Result()
+	cs := make([]int64, len(rs))
+	for i, r := range rs {
+		if r != nil {
+			cs[i], _ = strconv.ParseInt(r.(string), 10, 64)
+		}
 	}
 
 	tree, err := m.dumpEntry("/", 1)
@@ -2791,8 +2826,12 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	data, err := json.MarshalIndent(DumpedMeta{
 		format,
 		&DumpedCounters{
-			UsedSpace:  space,
-			UsedInodes: inodes,
+			UsedSpace:         cs[0],
+			UsedInodes:        cs[1],
+			NextInode:         cs[2],
+			NextChunk:         cs[3],
+			NextSession:       cs[4],
+			NextCleanupSlices: cs[5],
 		},
 		nil,
 		nil,
@@ -2805,39 +2844,105 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	return nil
 }
 
-func (m *redisMeta) loadEntry(parent Ino, entry *DumpedEntry) error {
-	attr := loadAttr(entry.Attr)
+func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) error {
+	ctx := Background
+	attr := loadAttr(e.Attr)
 	attr.Parent = parent
-	if attr.Typ == TypeFile {
-		attr.Length = entry.Attr.Length
-	} else if attr.Typ == TypeSymlink {
-		attr.Length = uint64(len(entry.Symlink))
-	} else if attr.Typ == TypeDirectory {
-		attr.Length = 4 << 10
+	// check hard link
+	a, err := m.rdb.Get(ctx, m.inodeKey(e.Inode)).Bytes()
+	if err != redis.Nil {
+		if err != nil {
+			return err
+		}
+		eattr := &Attr{}
+		m.parseAttr(a, eattr)
+		if attr.Typ != TypeFile || eattr.Typ != TypeFile {
+			return fmt.Errorf("inode conflict: %d", e.Inode)
+		}
+		if eattr.Ctime*1e9+int64(eattr.Ctimensec) >= attr.Ctime*1e9+int64(attr.Ctimensec) { // exist
+			attr = eattr
+			attr.Nlink++
+			return m.rdb.Set(ctx, m.inodeKey(e.Inode), m.marshal(attr), 0).Err()
+		}
+		// I'm newer, cleanup chunks and xattrs
+		attr.Nlink = eattr.Nlink + 1
+		p := m.rdb.Pipeline()
+		for indx := uint32(0); uint64(indx)*ChunkSize < eattr.Length; indx++ {
+			p.Del(ctx, m.chunkKey(e.Inode, indx))
+		}
+		p.Del(ctx, m.xattrKey(e.Inode))
+		if _, err = p.Exec(ctx); err != nil {
+			return err
+		}
+		cs.UsedSpace -= align4K(eattr.Length)
+		cs.UsedInodes -= 1
 	}
-	// TODO: symlink, xattr, chunks
-	err := m.rdb.Set(Background, m.inodeKey(entry.Inode), m.marshal(attr), 0).Err()
-	if err != nil {
-		return err
-	}
-	if len(entry.Entries) > 0 {
-		err = m.loadDir(entry.Inode, entry.Entries)
-	}
-	return err
-}
 
-func (m *redisMeta) loadDir(inode Ino, entries []*DumpedEntry) error {
-	var err error
-	dentries := make(map[string]interface{})
-	for _, e := range entries {
-		dentries[e.Name] = m.packEntry(typeFromString(e.Attr.Type), e.Inode)
-		err = m.loadEntry(inode, e)
+	if attr.Typ == TypeFile {
+		attr.Length = e.Attr.Length
+		for _, c := range e.Chunks {
+			if len(c.Slices) == 0 {
+				continue
+			}
+			slices := make([]string, 0, len(c.Slices))
+			for _, s := range c.Slices {
+				slices = append(slices, string(marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)))
+				if cs.NextChunk <= int64(s.Chunkid) {
+					cs.NextChunk = int64(s.Chunkid) + 1
+				}
+			}
+			_, err := m.rdb.RPush(ctx, m.chunkKey(e.Inode, c.Index), slices).Result()
+			if err != nil {
+				return err
+			}
+		}
+	} else if attr.Typ == TypeDirectory {
+		attr.Nlink = 2
+		for _, child := range e.Entries {
+			if child.Attr.Type == "directory" {
+				attr.Nlink++
+			}
+		}
+		attr.Length = 4 << 10
+		if len(e.Entries) > 0 {
+			if err := m.loadDir(e.Inode, e.Entries, cs); err != nil {
+				return err
+			}
+		}
+	} else if attr.Typ == TypeSymlink {
+		attr.Length = uint64(len(e.Symlink))
+		if err := m.rdb.Set(ctx, m.symKey(e.Inode), e.Symlink, 0).Err(); err != nil {
+			return err
+		}
+	}
+	cs.UsedSpace += align4K(attr.Length)
+	cs.UsedInodes += 1
+	if cs.NextInode <= int64(e.Inode) {
+		cs.NextInode = int64(e.Inode) + 1
+	}
+
+	if len(e.Xattrs) > 0 {
+		xattrs := make(map[string]interface{})
+		for _, x := range e.Xattrs {
+			xattrs[x.Name] = x.Value
+		}
+		_, err := m.rdb.HSet(ctx, m.xattrKey(e.Inode), xattrs).Result()
 		if err != nil {
 			return err
 		}
 	}
-	_, err = m.rdb.HSet(Background, m.entryKey(inode), dentries).Result()
-	return err
+	return m.rdb.Set(ctx, m.inodeKey(e.Inode), m.marshal(attr), 0).Err()
+}
+
+func (m *redisMeta) loadDir(inode Ino, entries []*DumpedEntry, cs *DumpedCounters) error {
+	dentries := make(map[string]interface{})
+	for _, e := range entries {
+		dentries[e.Name] = m.packEntry(typeFromString(e.Attr.Type), e.Inode)
+		if err := m.loadEntry(inode, e, cs); err != nil {
+			return err
+		}
+	}
+	return m.rdb.HSet(Background, m.entryKey(inode), dentries).Err()
 }
 
 func (m *redisMeta) LoadMeta(buf []byte) error {
@@ -2850,7 +2955,7 @@ func (m *redisMeta) LoadMeta(buf []byte) error {
 		return fmt.Errorf("Redis database is not empty")
 	}
 
-	var dm DumpedMeta
+	dm := &DumpedMeta{}
 	if err = json.Unmarshal(buf, &dm); err != nil {
 		return err
 	}
@@ -2863,16 +2968,21 @@ func (m *redisMeta) LoadMeta(buf []byte) error {
 		return err
 	}
 
+	counters := &DumpedCounters{}
+	if err = m.loadEntry(1, dm.FSTree, counters); err != nil {
+		return err
+	}
+	logger.Infof("Dumped counters: %+v", *dm.Counters)
+	logger.Infof("Loaded counters: %+v", *counters)
 	cs := make(map[string]interface{})
-	cs[usedSpace] = dm.Counters.UsedSpace
-	cs[totalInodes] = dm.Counters.UsedInodes
-	cs["nextInode"] = dm.Counters.NextInode
-	cs["nextChunk"] = dm.Counters.NextChunk
-	cs["nextSession"] = dm.Counters.NextSession
-	cs["nextCleanupSlices"] = dm.Counters.NextCleanupSlices
+	cs[usedSpace] = counters.UsedSpace
+	cs[totalInodes] = counters.UsedInodes
+	cs["nextInode"] = counters.NextInode
+	cs["nextChunk"] = counters.NextChunk
+	cs["nextSession"] = counters.NextSession
+	cs["nextCleanupSlices"] = counters.NextCleanupSlices
 	if err = m.rdb.MSet(ctx, cs).Err(); err != nil {
 		return err
 	}
-
-	return m.loadEntry(1, dm.FSTree)
+	return nil
 }

@@ -2294,22 +2294,49 @@ func (m *dbMeta) dumpEntry(name string, inode Ino, n *node) (*DumpedEntry, error
 		if !ok {
 			return nil, fmt.Errorf("inode %d not found", inode)
 		}
-	}
-	if inode != n.Inode {
+	} else if inode != n.Inode {
 		return nil, fmt.Errorf("inode %d != node inode %d", inode, n.Inode)
 	}
-	var attr Attr
-	m.parseAttr(n, &attr)
-	var slices []Slice
-	if attr.Typ == TypeFile {
-		_ = m.Read(Background, inode, 0, &slices)
+	attr := &Attr{}
+	m.parseAttr(n, attr)
+	e := &DumpedEntry{Name: name, Inode: inode, Attr: dumpAttr(attr)}
+
+	var rows []xattr
+	if err := m.engine.Find(&rows, &xattr{Inode: inode}); err != nil {
+		return nil, err
 	}
-	return &DumpedEntry{
-		Name:   name,
-		Inode:  inode,
-		Attr:   dumpAttr(&attr),
-		Chunks: slices,
-	}, nil
+	if len(rows) > 0 {
+		xattrs := make([]*DumpedXattr, 0, len(rows))
+		for _, x := range rows {
+			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
+		}
+		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+		e.Xattrs = xattrs
+	}
+
+	if attr.Typ == TypeFile {
+		var slices []Slice
+		for indx := uint64(0); indx*ChunkSize < attr.Length; indx++ {
+			if st := m.Read(Background, inode, uint32(indx), &slices); st != 0 {
+				return nil, fmt.Errorf("get slices of inode %d index %d: %d", inode, indx, st)
+			}
+			for _, s := range slices {
+				e.Slices = append(e.Slices, &DumpedSlice{s.Chunkid, s.Size, s.Off, s.Len})
+			}
+		}
+	} else if attr.Typ == TypeSymlink {
+		l := &symlink{Inode: inode}
+		ok, err := m.engine.Get(l)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("no link target for inode %d", inode)
+		}
+		e.Symlink = l.Target
+	}
+
+	return e, nil
 }
 
 func (m *dbMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
@@ -2348,7 +2375,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	var counters DumpedCounters
+	counters := &DumpedCounters{}
 	for _, row := range rows {
 		switch row.Name {
 		case "usedSpace":
@@ -2377,7 +2404,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 
 	data, err := json.MarshalIndent(DumpedMeta{
 		format,
-		&counters,
+		counters,
 		nil,
 		nil,
 		tree,

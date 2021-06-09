@@ -51,14 +51,32 @@ type DumpedAttr struct {
 	Rdev      uint32 `json:"rdev,omitempty"`
 }
 
+type DumpedSlice struct {
+	Pos     uint32 `json:"pos"`
+	Chunkid uint64 `json:"chunkid"`
+	Size    uint32 `json:"size"`
+	Off     uint32 `json:"off"`
+	Len     uint32 `json:"len"`
+}
+
+type DumpedChunk struct {
+	Index  uint32         `json:"index"`
+	Slices []*DumpedSlice `json:"slices"`
+}
+
+type DumpedXattr struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 type DumpedEntry struct {
 	Name    string         `json:"name"`
 	Inode   Ino            `json:"inode"`
 	Attr    *DumpedAttr    `json:"attr"`
-	Entries []*DumpedEntry `json:"entries,omitempty"`
-	Chunks  []Slice        `json:"chunks,omitempty"`
-	Xattrs  []xattr        `json:"xattrs,omitempty"`
 	Symlink string         `json:"symlink,omitempty"`
+	Xattrs  []*DumpedXattr `json:"xattrs,omitempty"`
+	Chunks  []*DumpedChunk `json:"chunks,omitempty"`
+	Entries []*DumpedEntry `json:"entries,omitempty"`
 }
 
 type DumpedMeta struct {
@@ -102,10 +120,10 @@ func loadAttr(d *DumpedAttr) *Attr {
 		Atimensec: d.Atimensec,
 		Mtimensec: d.Mtimensec,
 		Ctimensec: d.Ctimensec,
-		Nlink:     d.Nlink,
+		Nlink:     1,
 		Rdev:      d.Rdev,
 		Full:      true,
 	}
 	a.Typ = typeFromString(d.Type)
-	return a // Length and Parent not set
+	return a // Nlink, Length and Parent not set
 }
