@@ -183,6 +183,10 @@ func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 	return m, nil
 }
 
+func (m *dbMeta) Name() string {
+	return m.engine.DriverName()
+}
+
 func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(setting), new(counter)); err != nil {
 		logger.Fatalf("create table setting, counter: %s", err)

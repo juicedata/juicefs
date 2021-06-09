@@ -166,6 +166,10 @@ func newRedisMeta(url string, conf *Config) (Meta, error) {
 	return m, nil
 }
 
+func (r *redisMeta) Name() string {
+	return "redis"
+}
+
 func (r *redisMeta) Init(format Format, force bool) error {
 	body, err := r.rdb.Get(Background, "setting").Bytes()
 	if err != nil && err != redis.Nil {
