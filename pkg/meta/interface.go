@@ -167,6 +167,8 @@ type Session struct {
 
 // Meta is a interface for a meta service for file system.
 type Meta interface {
+	// Name of database
+	Name() string
 	// Init is used to initialize a meta service.
 	Init(format Format, force bool) error
 	// Load loads the existing setting of a formatted volume from meta service.

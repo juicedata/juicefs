@@ -39,6 +39,8 @@ type usage struct {
 	UsedInodes int64  `json:"usedInodes"`
 	Version    string `json:"version"`
 	Uptime     int64  `json:"uptime"`
+	MetaEngine string `json:"metaEngine"` // type of meta engine
+	DataStore  string `json:"dataStore"`  // type of object store
 }
 
 func sendUsage(u usage) error {
@@ -72,7 +74,9 @@ func ReportUsage(m meta.Meta, version string) {
 	var u usage
 	if format, err := m.Load(); err == nil {
 		u.VolumeID = format.UUID
+		u.DataStore = format.Storage
 	}
+	u.MetaEngine = m.Name()
 	u.SessionID = int64(rand.Uint32())
 	u.Version = version
 	var start = time.Now()
