@@ -128,6 +128,27 @@ func typeToString(_type uint8) string {
 	}
 }
 
+func typeFromString(s string) uint8 {
+	switch s {
+	case "regular":
+		return TypeFile
+	case "directory":
+		return TypeDirectory
+	case "symlink":
+		return TypeSymlink
+	case "fifo":
+		return TypeFIFO
+	case "blockdev":
+		return TypeBlockDev
+	case "chardev":
+		return TypeCharDev
+	case "socket":
+		return TypeSocket
+	default:
+		panic(s)
+	}
+}
+
 // SMode is the file mode including type and unix permission.
 func (a Attr) SMode() uint32 {
 	return typeToStatType(a.Typ) | uint32(a.Mode)
@@ -278,6 +299,7 @@ type Meta interface {
 	OnMsg(mtype uint32, cb MsgCallback)
 
 	DumpMeta(w io.Writer) error
+	LoadMeta(buf []byte) error
 }
 
 func removePassword(uri string) string {

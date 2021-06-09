@@ -2804,3 +2804,75 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	w.Write(data)
 	return nil
 }
+
+func (m *redisMeta) loadEntry(parent Ino, entry *DumpedEntry) error {
+	attr := loadAttr(entry.Attr)
+	attr.Parent = parent
+	if attr.Typ == TypeFile {
+		attr.Length = entry.Attr.Length
+	} else if attr.Typ == TypeSymlink {
+		attr.Length = uint64(len(entry.Symlink))
+	} else if attr.Typ == TypeDirectory {
+		attr.Length = 4 << 10
+	}
+	// TODO: symlink, xattr, chunks
+	err := m.rdb.Set(Background, m.inodeKey(entry.Inode), m.marshal(attr), 0).Err()
+	if err != nil {
+		return err
+	}
+	if len(entry.Entries) > 0 {
+		err = m.loadDir(entry.Inode, entry.Entries)
+	}
+	return err
+}
+
+func (m *redisMeta) loadDir(inode Ino, entries []*DumpedEntry) error {
+	var err error
+	dentries := make(map[string]interface{})
+	for _, e := range entries {
+		dentries[e.Name] = m.packEntry(typeFromString(e.Attr.Type), e.Inode)
+		err = m.loadEntry(inode, e)
+		if err != nil {
+			return err
+		}
+	}
+	_, err = m.rdb.HSet(Background, m.entryKey(inode), dentries).Result()
+	return err
+}
+
+func (m *redisMeta) LoadMeta(buf []byte) error {
+	ctx := Background
+	dbsize, err := m.rdb.DBSize(ctx).Result()
+	if err != nil {
+		return err
+	}
+	if dbsize > 0 {
+		return fmt.Errorf("Redis database is not empty")
+	}
+
+	var dm DumpedMeta
+	if err = json.Unmarshal(buf, &dm); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(dm.Setting, "", "")
+	if err != nil {
+		return err
+	}
+	if err = m.rdb.Set(ctx, "setting", data, 0).Err(); err != nil {
+		return err
+	}
+
+	cs := make(map[string]interface{})
+	cs[usedSpace] = dm.Counters.UsedSpace
+	cs[totalInodes] = dm.Counters.UsedInodes
+	cs["nextInode"] = dm.Counters.NextInode
+	cs["nextChunk"] = dm.Counters.NextChunk
+	cs["nextSession"] = dm.Counters.NextSession
+	cs["nextCleanupSlices"] = dm.Counters.NextCleanupSlices
+	if err = m.rdb.MSet(ctx, cs).Err(); err != nil {
+		return err
+	}
+
+	return m.loadEntry(1, dm.FSTree)
+}

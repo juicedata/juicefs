@@ -17,6 +17,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -24,7 +25,11 @@ import (
 )
 
 func importMeta(m meta.Meta, fname string) error {
-	return nil
+	buf, err := ioutil.ReadFile(fname)
+	if err != nil {
+		return err
+	}
+	return m.LoadMeta(buf)
 }
 
 func exportMeta(m meta.Meta, fname string) error {
@@ -33,7 +38,6 @@ func exportMeta(m meta.Meta, fname string) error {
 		return err
 	}
 	defer fp.Close()
-
 	return m.DumpMeta(fp)
 }
 

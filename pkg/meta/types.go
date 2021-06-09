@@ -89,3 +89,23 @@ func dumpAttr(a *Attr) *DumpedAttr {
 	}
 	return d
 }
+
+func loadAttr(d *DumpedAttr) *Attr {
+	a := &Attr{
+		// Flags:     0,
+		Mode:      d.Mode,
+		Uid:       d.Uid,
+		Gid:       d.Gid,
+		Atime:     d.Atime,
+		Mtime:     d.Mtime,
+		Ctime:     d.Ctime,
+		Atimensec: d.Atimensec,
+		Mtimensec: d.Mtimensec,
+		Ctimensec: d.Ctimensec,
+		Nlink:     d.Nlink,
+		Rdev:      d.Rdev,
+		Full:      true,
+	}
+	a.Typ = typeFromString(d.Type)
+	return a // Length and Parent not set
+}

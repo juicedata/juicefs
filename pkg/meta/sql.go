@@ -2388,3 +2388,97 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 	w.Write(data)
 	return nil
 }
+
+func (m *dbMeta) loadEntry(parent Ino, entry *DumpedEntry) error {
+	attr := loadAttr(entry.Attr)
+	attr.Parent = parent
+	if attr.Typ == TypeFile {
+		attr.Length = entry.Attr.Length
+	} else if attr.Typ == TypeSymlink {
+		attr.Length = uint64(len(entry.Symlink))
+	} else if attr.Typ == TypeDirectory {
+		attr.Length = 4 << 10
+	}
+	// TODO: symlink, xattr, chunks
+	err := m.txn(func(s *xorm.Session) error {
+		n := node{ // TODO: more
+			Inode: entry.Inode,
+			Type:  attr.Typ,
+			Flags: attr.Flags,
+		}
+		return mustInsert(s, &n)
+	})
+	if err != nil {
+		return err
+	}
+	if len(entry.Entries) > 0 {
+		err = m.loadDir(entry.Inode, entry.Entries)
+	}
+	return err
+}
+
+func (m *dbMeta) loadDir(inode Ino, entries []*DumpedEntry) error {
+	var err error
+	edges := make([]edge, 0, len(entries))
+	for _, entry := range entries {
+		e := edge{
+			Parent: inode,
+			Name:   entry.Name,
+			Inode:  entry.Inode,
+			Type:   typeFromString(entry.Attr.Type),
+		}
+		edges = append(edges, e)
+		err = m.loadEntry(inode, entry)
+		if err != nil {
+			return err
+		}
+	}
+	return m.txn(func(s *xorm.Session) error {
+		return mustInsert(s, edges)
+	})
+}
+
+func (m *dbMeta) LoadMeta(buf []byte) error {
+	tables, err := m.engine.DBMetas()
+	if err != nil {
+		return err
+	}
+	if len(tables) > 0 {
+		return fmt.Errorf("Database is not empty")
+	}
+	if err = m.engine.Sync2(new(setting), new(counter)); err != nil {
+		return fmt.Errorf("create table setting, counter: %s", err)
+	}
+	if err = m.engine.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
+		return fmt.Errorf("create table node, edge, symlink, xattr: %s", err)
+	}
+	if err = m.engine.Sync2(new(chunk), new(chunkRef)); err != nil {
+		return fmt.Errorf("create table chunk, chunk_ref: %s", err)
+	}
+	if err = m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
+		return fmt.Errorf("create table session, sustaind, delfile: %s", err)
+	}
+	if err = m.engine.Sync2(new(flock), new(plock)); err != nil {
+		return fmt.Errorf("create table flock, plock: %s", err)
+	}
+
+	var dm DumpedMeta
+	if err = json.Unmarshal(buf, &dm); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(dm.Setting, "", "")
+	if err != nil {
+		return err
+	}
+
+	err = m.txn(func(s *xorm.Session) error {
+		set := &setting{"format", string(data)}
+		return mustInsert(s, set)
+	})
+	if err != nil {
+		return err
+	}
+
+	return m.loadEntry(1, dm.FSTree)
+}
