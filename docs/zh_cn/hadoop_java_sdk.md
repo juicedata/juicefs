@@ -1,5 +1,30 @@
 # 在 Hadoop 环境使用 JuiceFS Java SDK
 
+* [Haddop 兼容性](#Hadoop-兼容性)
+* [编译](#编译)
+* [部署 JuiceFS Hadoop Java SDK](#部署-JuiceFS-Hadoop-Java-SDK)
+  + [发行版](#发行版)
+  + [社区开源组件](#社区开源组件)
+* [配置参数](#配置参数)
+  + [核心配置](#核心配置)
+  + [缓存配置](#缓存配置)
+  + [I/O 配置](#I/O-配置)
+  + [其他配置](#其他配置)
+  + [常用配置](#常用配置)
+  + [Hadoop 环境配置](#Hadoop-环境配置)
+    - [CDH6 环境配置](#CDH6-环境配置)
+    - [HDP 环境配置](#HDP-环境配置)
+  + [Flink 配置](#Flink-配置)
+* [重启相关服务](#重启相关服务)
+* [验证](#验证)
+  + [Hadoop](#Hadoop)
+  + [Hive](#Hive)
+* [指标收集](#指标收集)
+* [Benchmark](#Benchmark)
+  + [本地测试](#本地测试)
+  + [分布式测试](#分布式测试)
+* [FAQ](#FAQ)
+
 JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
 > **注意**：
@@ -146,7 +171,7 @@ $ make
 
 将配置参数加入到 Hadoop 配置文件 `core-site.xml` 中。
 
-#### CDH 6 环境配置
+#### CDH6 环境配置
 
 如果使用的是 CDH 6 版本，除了修改 `core-site` 外，还需要通过 YARN 服务界面修改 `mapreduce.application.classpath`，增加：
 
@@ -270,7 +295,7 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 | rename | 364  | 2.75       |
 | delete | 289  | 3.46       |
 
-#### IO 性能
+#### I/O 性能
 
 - 连续写
 
@@ -357,7 +382,7 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
   | rename | 5343  | 18.4       |
   | delete | 3576  | 27.6       |
 
-#### IO 性能
+#### I/O 性能
 
 - 连续写
 
