@@ -2798,18 +2798,20 @@ func (m *redisMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
 }
 
 func (m *redisMeta) DumpMeta(w io.Writer) error {
-	format, err := m.Load()
+	ctx := Background
+	zs, err := m.rdb.ZRangeWithScores(ctx, delfiles, 0, -1).Result()
 	if err != nil {
 		return err
 	}
-
-	ctx := Background
-	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextCleanupSlices"}...).Result()
-	cs := make([]int64, len(rs))
-	for i, r := range rs {
-		if r != nil {
-			cs[i], _ = strconv.ParseInt(r.(string), 10, 64)
+	dels := make([]*DumpedDelFile, 0, len(zs))
+	for _, z := range zs {
+		parts := strings.Split(z.Member.(string), ":")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid delfile string: %s", z.Member.(string))
 		}
+		inode, _ := strconv.ParseUint(parts[0], 10, 64)
+		length, _ := strconv.ParseUint(parts[1], 10, 64)
+		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
 
 	tree, err := m.dumpEntry("/", 1)
@@ -2818,6 +2820,40 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	}
 	if tree.Entries, err = m.dumpDir(1); err != nil {
 		return err
+	}
+
+	format, err := m.Load()
+	if err != nil {
+		return err
+	}
+
+	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextCleanupSlices"}...).Result()
+	cs := make([]int64, len(rs))
+	for i, r := range rs {
+		if r != nil {
+			cs[i], _ = strconv.ParseInt(r.(string), 10, 64)
+		}
+	}
+
+	keys, err := m.rdb.ZRange(ctx, allSessions, 0, -1).Result()
+	if err != nil {
+		return err
+	}
+	sessions := make([]*DumpedSustained, 0, len(keys))
+	for _, k := range keys {
+		sid, _ := strconv.ParseUint(k, 10, 64)
+		ss, err := m.rdb.SMembers(ctx, m.sustained(int64(sid))).Result()
+		if err != nil {
+			return err
+		}
+		if len(ss) > 0 {
+			inodes := make([]Ino, 0, len(ss))
+			for _, s := range ss {
+				inode, _ := strconv.ParseUint(s, 10, 64)
+				inodes = append(inodes, Ino(inode))
+			}
+			sessions = append(sessions, &DumpedSustained{sid, inodes})
+		}
 	}
 
 	data, err := json.MarshalIndent(DumpedMeta{
@@ -2830,15 +2866,15 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 			NextSession:       cs[4],
 			NextCleanupSlices: cs[5],
 		},
-		nil,
-		nil,
+		sessions,
+		dels,
 		tree,
 	}, "", "  ")
 	if err != nil {
 		return err
 	}
-	w.Write(data)
-	return nil
+	_, err = w.Write(data)
+	return err
 }
 
 func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) error {
@@ -2963,6 +2999,19 @@ func (m *redisMeta) LoadMeta(buf []byte) error {
 	}
 	if err = m.rdb.Set(ctx, "setting", data, 0).Err(); err != nil {
 		return err
+	}
+
+	if len(dm.DelFiles) > 0 {
+		zs := make([]*redis.Z, 0, len(dm.DelFiles))
+		for _, d := range dm.DelFiles {
+			zs = append(zs, &redis.Z{
+				Score:  float64(d.Expire),
+				Member: m.toDelete(d.Inode, d.Length),
+			})
+		}
+		if err = m.rdb.ZAdd(ctx, delfiles, zs...).Err(); err != nil {
+			return err
+		}
 	}
 
 	counters := &DumpedCounters{}

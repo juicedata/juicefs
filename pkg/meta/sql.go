@@ -2364,17 +2364,34 @@ func (m *dbMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
 }
 
 func (m *dbMeta) DumpMeta(w io.Writer) error {
+	var drows []delfile
+	if err := m.engine.Find(&drows); err != nil {
+		return err
+	}
+	dels := make([]*DumpedDelFile, 0, len(drows))
+	for _, row := range drows {
+		dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
+	}
+
+	tree, err := m.dumpEntry("/", 1)
+	if err != nil {
+		return err
+	}
+	if tree.Entries, err = m.dumpDir(1); err != nil {
+		return err
+	}
+
 	format, err := m.Load()
 	if err != nil {
 		return nil
 	}
 
-	var rows []counter
-	if err = m.engine.Find(&rows); err != nil {
+	var crows []counter
+	if err = m.engine.Find(&crows); err != nil {
 		return err
 	}
 	counters := &DumpedCounters{}
-	for _, row := range rows {
+	for _, row := range crows {
 		switch row.Name {
 		case "usedSpace":
 			counters.UsedSpace = row.Value
@@ -2391,26 +2408,31 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 		}
 	}
 
-	tree, err := m.dumpEntry("/", 1)
-	if err != nil {
+	var srows []sustained
+	if err = m.engine.Find(&srows); err != nil {
 		return err
 	}
-	if tree.Entries, err = m.dumpDir(1); err != nil {
-		return err
+	ss := make(map[uint64][]Ino)
+	for _, row := range srows {
+		ss[row.Sid] = append(ss[row.Sid], row.Inode)
+	}
+	sessions := make([]*DumpedSustained, 0, len(ss))
+	for k, v := range ss {
+		sessions = append(sessions, &DumpedSustained{k, v})
 	}
 
 	data, err := json.MarshalIndent(DumpedMeta{
 		format,
 		counters,
-		nil,
-		nil,
+		sessions,
+		dels,
 		tree,
 	}, "", "  ")
 	if err != nil {
 		return nil
 	}
-	w.Write(data)
-	return nil
+	_, err = w.Write(data)
+	return err
 }
 
 func (m *dbMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) error {
@@ -2574,6 +2596,16 @@ func (m *dbMeta) LoadMeta(buf []byte) error {
 	}
 	if _, err = m.engine.InsertOne(&setting{"format", string(data)}); err != nil {
 		return err
+	}
+
+	if len(dm.DelFiles) > 0 {
+		dels := make([]*delfile, 0, len(dm.DelFiles))
+		for _, d := range dm.DelFiles {
+			dels = append(dels, &delfile{d.Inode, d.Length, d.Expire})
+		}
+		if _, err = m.engine.Insert(dels); err != nil {
+			return nil
+		}
 	}
 
 	counters := &DumpedCounters{}

@@ -24,15 +24,15 @@ type DumpedCounters struct {
 	NextCleanupSlices int64 `json:"nextCleanupSlices"`
 }
 
-type DumpedDelFiles struct {
-	Inode  Ino
-	Length uint64
-	Second int
+type DumpedDelFile struct {
+	Inode  Ino    `json:"inode"`
+	Length uint64 `json:"length"`
+	Expire int64  `json:"expire"`
 }
 
 type DumpedSustained struct {
-	Session int64
-	Inodes  []Ino
+	Sid    uint64 `json:"sid"`
+	Inodes []Ino  `json:"inodes"`
 }
 
 type DumpedAttr struct {
@@ -82,8 +82,8 @@ type DumpedEntry struct {
 type DumpedMeta struct {
 	Setting   *Format
 	Counters  *DumpedCounters
-	DelFiles  []*DumpedDelFiles
 	Sustained []*DumpedSustained
+	DelFiles  []*DumpedDelFile
 	FSTree    *DumpedEntry
 }
 
