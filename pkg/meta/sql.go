@@ -2521,8 +2521,10 @@ func (m *dbMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) error
 			return err
 		}
 	}
-	cs.UsedSpace += align4K(n.Length)
-	cs.UsedInodes += 1
+	if e.Inode > 1 {
+		cs.UsedSpace += align4K(n.Length)
+		cs.UsedInodes += 1
+	}
 	if cs.NextInode <= int64(e.Inode) {
 		cs.NextInode = int64(e.Inode) + 1
 	}

@@ -2948,8 +2948,10 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 			return err
 		}
 	}
-	cs.UsedSpace += align4K(attr.Length)
-	cs.UsedInodes += 1
+	if e.Inode > 1 {
+		cs.UsedSpace += align4K(attr.Length)
+		cs.UsedInodes += 1
+	}
 	if cs.NextInode <= int64(e.Inode) {
 		cs.NextInode = int64(e.Inode) + 1
 	}
