@@ -1,5 +1,30 @@
 # Use JuiceFS Hadoop Java SDK
 
+* [Hadoop Compatibility](#Hadoop-Compatibility)
+* [Compiling](#Compiling)
+* [Deploy JuiceFS Hadoop Java SDK](#Deploy-JuiceFS-Hadoop-Java-SDK)
+  + [Hadoop Distribution](#Hadoop-Distribution)
+  + [Community Components](#Community-Components)
+* [Configurations](#Configurations)
+  + [Core Configurations](#Core-Configurations)
+  + [Cache Configurations](#Cache-Configurations)
+  + [I/O Configurations](#I/O-Configurations)
+  + [Other Configurations](#Other-Configurations)
+  + [Configurations Example](#Configurations-Example)
+  + [Configuration in Hadoop](#Configuration-in-Hadoop)
+    - [CDH6](#CDH6)
+    - [HDP](#HDP)
+  + [Configuration in Flink](#Configuration-in-Flink)
+* [Restart Services](#Restart-Services)
+* [Verification](#Verification)
+  + [Hadoop](#Hadoop)
+  + [Hive](#Hive)
+* [Metrics](#Metrics)
+* [Benchmark](#Benchmark)
+  + [Local Environment](#Local-environment)
+  + [Distribute Benchmark](#Distribute-Benchmark)
+* [FAQ](#FAQ)
+
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK to support variety of components in Hadoop ecosystem.
 
 > **NOTICE**:
@@ -146,7 +171,7 @@ When you use multiple JuiceFS file systems, all these configurations could be se
 
 Add configurations to `core-site.xml`.
 
-#### CDH 6
+#### CDH6
 
 Besides `core-site`, you also need to configure `mapreduce.application.classpath` of the YARN component, add:
 
@@ -269,7 +294,7 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 | rename    | 364  | 2.75       |
 | delete    | 289  | 3.46       |
 
-#### IO Performance
+#### I/O Performance
 
 - sequential write
 
@@ -355,7 +380,7 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
   | rename    | 5343  | 18.4       |
   | delete    | 3576  | 27.6       |
 
-#### IO Performance
+#### I/O Performance
 
 - sequential write
 
