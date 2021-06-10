@@ -2921,8 +2921,8 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 			slices := make([]string, 0, len(c.Slices))
 			for _, s := range c.Slices {
 				slices = append(slices, string(marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)))
-				if cs.NextChunk <= int64(s.Chunkid) {
-					cs.NextChunk = int64(s.Chunkid) + 1
+				if cs.NextChunk < int64(s.Chunkid) {
+					cs.NextChunk = int64(s.Chunkid)
 				}
 			}
 			if _, err = m.rdb.RPush(ctx, m.chunkKey(e.Inode, c.Index), slices).Result(); err != nil {
@@ -2952,8 +2952,8 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 		cs.UsedSpace += align4K(attr.Length)
 		cs.UsedInodes += 1
 	}
-	if cs.NextInode <= int64(e.Inode) {
-		cs.NextInode = int64(e.Inode) + 1
+	if cs.NextInode < int64(e.Inode) {
+		cs.NextInode = int64(e.Inode)
 	}
 
 	if len(e.Xattrs) > 0 {

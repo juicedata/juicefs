@@ -65,7 +65,7 @@ func backupFlags() *cli.Command {
 			&cli.StringFlag{
 				Name:    "export",
 				Aliases: []string{"o"},
-				Value:   "metadata-backup",
+				Value:   "juicefs-metadata.dump",
 				Usage:   "export metadata to a file",
 			},
 			&cli.StringFlag{

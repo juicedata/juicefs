@@ -2610,7 +2610,11 @@ func (m *dbMeta) LoadMeta(buf []byte) error {
 		}
 	}
 
-	counters := &DumpedCounters{}
+	counters := &DumpedCounters{
+		NextInode:   2,
+		NextChunk:   1,
+		NextSession: 1,
+	}
 	if err = m.loadEntry(1, dm.FSTree, counters); err != nil {
 		return err
 	}
