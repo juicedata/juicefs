@@ -2284,77 +2284,76 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	}))
 }
 
-func (m *dbMeta) dumpEntry(name string, inode Ino, n *node) (*DumpedEntry, error) {
-	if n == nil {
-		n = &node{Inode: inode}
+func (m *dbMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
+	e := &DumpedEntry{Name: name, Inode: inode}
+	return e, m.txn(func(s *xorm.Session) error {
+		n := &node{Inode: inode}
 		ok, err := m.engine.Get(n)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
-			return nil, fmt.Errorf("inode %d not found", inode)
+			return fmt.Errorf("inode %d not found", inode)
 		}
-	} else if inode != n.Inode {
-		return nil, fmt.Errorf("inode %d != node inode %d", inode, n.Inode)
-	}
-	attr := &Attr{}
-	m.parseAttr(n, attr)
-	e := &DumpedEntry{Name: name, Inode: inode, Attr: dumpAttr(attr)}
+		attr := &Attr{}
+		m.parseAttr(n, attr)
+		e.Attr = dumpAttr(attr)
 
-	var rows []xattr
-	if err := m.engine.Find(&rows, &xattr{Inode: inode}); err != nil {
-		return nil, err
-	}
-	if len(rows) > 0 {
-		xattrs := make([]*DumpedXattr, 0, len(rows))
-		for _, x := range rows {
-			xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
+		var rows []xattr
+		if err = m.engine.Find(&rows, &xattr{Inode: inode}); err != nil {
+			return err
 		}
-		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
-		e.Xattrs = xattrs
-	}
-
-	if attr.Typ == TypeFile {
-		var slices []Slice
-		for indx := uint64(0); indx*ChunkSize < attr.Length; indx++ {
-			if st := m.Read(Background, inode, uint32(indx), &slices); st != 0 {
-				return nil, fmt.Errorf("get slices of inode %d index %d: %d", inode, indx, st)
+		if len(rows) > 0 {
+			xattrs := make([]*DumpedXattr, 0, len(rows))
+			for _, x := range rows {
+				xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
 			}
-			for _, s := range slices {
-				e.Slices = append(e.Slices, &DumpedSlice{s.Chunkid, s.Size, s.Off, s.Len})
-			}
+			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+			e.Xattrs = xattrs
 		}
-	} else if attr.Typ == TypeSymlink {
-		l := &symlink{Inode: inode}
-		ok, err := m.engine.Get(l)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("no link target for inode %d", inode)
-		}
-		e.Symlink = l.Target
-	}
 
-	return e, nil
+		if attr.Typ == TypeFile {
+			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
+				c := &chunk{Inode: inode, Indx: indx}
+				if _, err = m.engine.Get(c); err != nil {
+					return err
+				}
+				ss := readSliceBuf(c.Slices)
+				slices := make([]*DumpedSlice, 0, len(ss))
+				for _, s := range ss {
+					slices = append(slices, &DumpedSlice{s.pos, s.chunkid, s.size, s.off, s.len})
+				}
+				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
+			}
+		} else if attr.Typ == TypeSymlink {
+			l := &symlink{Inode: inode}
+			ok, err = m.engine.Get(l)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("no link target for inode %d", inode)
+			}
+			e.Symlink = l.Target
+		}
+
+		return nil
+	})
 }
 
 func (m *dbMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
-	dbSession := m.engine.Table(&edge{})
-	dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
-	var nodes []namedNode
-	if err := dbSession.Find(&nodes, &edge{Parent: inode}); err != nil {
+	var edges []edge
+	if err := m.engine.Find(&edges, &edge{Parent: inode}); err != nil {
 		return nil, err
 	}
-	entries := make([]*DumpedEntry, 0, len(nodes))
-	for _, n := range nodes {
-		entry, err := m.dumpEntry(n.Name, n.Inode, &n.node)
+	entries := make([]*DumpedEntry, 0, len(edges))
+	for _, e := range edges {
+		entry, err := m.dumpEntry(e.Name, e.Inode)
 		if err != nil {
 			return nil, err
 		}
-		if n.Type == TypeDirectory {
-			entry.Entries, err = m.dumpDir(n.Inode)
-			if err != nil {
+		if e.Type == TypeDirectory {
+			if entry.Entries, err = m.dumpDir(e.Inode); err != nil {
 				return nil, err
 			}
 		}
@@ -2371,8 +2370,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 	}
 
 	var rows []counter
-	err = m.engine.Find(&rows)
-	if err != nil {
+	if err = m.engine.Find(&rows); err != nil {
 		return err
 	}
 	counters := &DumpedCounters{}
@@ -2393,12 +2391,11 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 		}
 	}
 
-	tree, err := m.dumpEntry("/", 1, nil)
+	tree, err := m.dumpEntry("/", 1)
 	if err != nil {
 		return err
 	}
-	tree.Entries, err = m.dumpDir(1)
-	if err != nil {
+	if tree.Entries, err = m.dumpDir(1); err != nil {
 		return err
 	}
 
@@ -2416,53 +2413,130 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 	return nil
 }
 
-func (m *dbMeta) loadEntry(parent Ino, entry *DumpedEntry) error {
-	attr := loadAttr(entry.Attr)
-	attr.Parent = parent
-	if attr.Typ == TypeFile {
-		attr.Length = entry.Attr.Length
-	} else if attr.Typ == TypeSymlink {
-		attr.Length = uint64(len(entry.Symlink))
-	} else if attr.Typ == TypeDirectory {
-		attr.Length = 4 << 10
-	}
-	// TODO: symlink, xattr, chunks
-	err := m.txn(func(s *xorm.Session) error {
-		n := node{ // TODO: more
-			Inode: entry.Inode,
-			Type:  attr.Typ,
-			Flags: attr.Flags,
-		}
-		return mustInsert(s, &n)
-	})
+func (m *dbMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) error {
+	logger.Debugf("Loading entry parent %d inode %d name %s", parent, e.Inode, e.Name)
+	session := m.engine.NewSession()
+	defer session.Close()
+	attr := loadAttr(e.Attr)
+	// check hard link
+	n := &node{Inode: e.Inode}
+	ok, err := session.Get(n)
 	if err != nil {
 		return err
 	}
-	if len(entry.Entries) > 0 {
-		err = m.loadDir(entry.Inode, entry.Entries)
-	}
-	return err
-}
-
-func (m *dbMeta) loadDir(inode Ino, entries []*DumpedEntry) error {
-	var err error
-	edges := make([]edge, 0, len(entries))
-	for _, entry := range entries {
-		e := edge{
-			Parent: inode,
-			Name:   entry.Name,
-			Inode:  entry.Inode,
-			Type:   typeFromString(entry.Attr.Type),
+	if ok {
+		eattr := &Attr{}
+		m.parseAttr(n, eattr)
+		if attr.Typ != TypeFile || eattr.Typ != TypeFile {
+			return fmt.Errorf("inode conflict: %d", e.Inode)
 		}
-		edges = append(edges, e)
-		err = m.loadEntry(inode, entry)
-		if err != nil {
+		n.Nlink = eattr.Nlink + 1
+		if eattr.Ctime*1e9+int64(eattr.Ctimensec) >= attr.Ctime*1e9+int64(attr.Ctimensec) {
+			_, err = session.Cols("nlink").Update(n, &node{Inode: e.Inode})
+			return err
+		}
+		// I'm newer, cleanup node, chunks and xattrs
+		if _, err = session.Delete(&node{Inode: e.Inode}); err != nil {
+			return err
+		}
+		if _, err = session.Delete(&chunk{Inode: e.Inode}); err != nil {
+			return err
+		}
+		if _, err = session.Delete(&xattr{Inode: e.Inode}); err != nil {
+			return err
+		}
+		cs.UsedSpace -= align4K(eattr.Length)
+		cs.UsedInodes -= 1
+	}
+
+	n.Type = attr.Typ
+	n.Flags = attr.Flags
+	n.Mode = attr.Mode
+	n.Uid = attr.Uid
+	n.Gid = attr.Gid
+	n.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
+	n.Mtime = attr.Mtime*1e6 + int64(attr.Atimensec)/1e3
+	n.Ctime = attr.Ctime*1e6 + int64(attr.Atimensec)/1e3
+	if n.Nlink == 0 {
+		n.Nlink = attr.Nlink
+	}
+	n.Rdev = attr.Rdev
+	n.Parent = parent
+	if n.Type == TypeFile {
+		n.Length = e.Attr.Length
+		if len(e.Chunks) > 0 {
+			chunks := make([]*chunk, 0, len(e.Chunks))
+			for _, c := range e.Chunks {
+				slices := make([]byte, 0, sliceBytes*len(c.Slices))
+				for _, s := range c.Slices {
+					slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
+					if cs.NextChunk <= int64(s.Chunkid) {
+						cs.NextChunk = int64(s.Chunkid) + 1
+					}
+				}
+				chunks = append(chunks, &chunk{e.Inode, c.Index, slices})
+			}
+			if err = mustInsert(session, chunks); err != nil {
+				return err
+			}
+		}
+	} else if n.Type == TypeDirectory {
+		n.Nlink = 2
+		for _, child := range e.Entries {
+			if child.Attr.Type == "directory" {
+				n.Nlink++
+			}
+		}
+		n.Length = 4 << 10
+		if len(e.Entries) > 0 {
+			if err = m.loadDir(e.Inode, e.Entries, cs); err != nil {
+				return err
+			}
+		}
+	} else if n.Type == TypeSymlink {
+		n.Length = uint64(len(e.Symlink))
+		if err = mustInsert(session, &symlink{e.Inode, e.Symlink}); err != nil {
 			return err
 		}
 	}
-	return m.txn(func(s *xorm.Session) error {
-		return mustInsert(s, edges)
-	})
+	cs.UsedSpace += align4K(n.Length)
+	cs.UsedInodes += 1
+	if cs.NextInode <= int64(e.Inode) {
+		cs.NextInode = int64(e.Inode) + 1
+	}
+
+	if len(e.Xattrs) > 0 {
+		xattrs := make([]*xattr, 0, len(e.Xattrs))
+		for _, x := range e.Xattrs {
+			xattrs = append(xattrs, &xattr{e.Inode, x.Name, []byte(x.Value)})
+		}
+		if err = mustInsert(session, xattrs); err != nil {
+			return err
+		}
+	}
+	return mustInsert(session, n)
+}
+
+func (m *dbMeta) loadDir(inode Ino, entries []*DumpedEntry, cs *DumpedCounters) error {
+	num := len(entries)
+	logger.Debugf("Loading directory inode %d, number of entries: %d", inode, num)
+	dentries := make([]*edge, 0, num)
+	for _, e := range entries {
+		dentries = append(dentries, &edge{
+			Parent: inode,
+			Name:   e.Name,
+			Inode:  e.Inode,
+			Type:   typeFromString(e.Attr.Type),
+		})
+		if err := m.loadEntry(inode, e, cs); err != nil {
+			return err
+		}
+	}
+	inserted, err := m.engine.Insert(dentries)
+	if err == nil && int(inserted) < num {
+		return fmt.Errorf("%d dentries not inserted for inode: %d", num-int(inserted), inode)
+	}
+	return err
 }
 
 func (m *dbMeta) LoadMeta(buf []byte) error {
@@ -2489,7 +2563,7 @@ func (m *dbMeta) LoadMeta(buf []byte) error {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
 
-	var dm DumpedMeta
+	dm := &DumpedMeta{}
 	if err = json.Unmarshal(buf, &dm); err != nil {
 		return err
 	}
@@ -2498,14 +2572,23 @@ func (m *dbMeta) LoadMeta(buf []byte) error {
 	if err != nil {
 		return err
 	}
-
-	err = m.txn(func(s *xorm.Session) error {
-		set := &setting{"format", string(data)}
-		return mustInsert(s, set)
-	})
-	if err != nil {
+	if _, err = m.engine.InsertOne(&setting{"format", string(data)}); err != nil {
 		return err
 	}
 
-	return m.loadEntry(1, dm.FSTree)
+	counters := &DumpedCounters{}
+	if err = m.loadEntry(1, dm.FSTree, counters); err != nil {
+		return err
+	}
+	logger.Infof("Dumped counters: %+v", *dm.Counters)
+	logger.Infof("Loaded counters: %+v", *counters)
+	cs := make([]*counter, 0, 6)
+	cs = append(cs, &counter{"usedSpace", counters.UsedSpace})
+	cs = append(cs, &counter{"totalInodes", counters.UsedInodes})
+	cs = append(cs, &counter{"nextInode", counters.NextInode})
+	cs = append(cs, &counter{"nextChunk", counters.NextChunk})
+	cs = append(cs, &counter{"nextSession", counters.NextSession})
+	cs = append(cs, &counter{"nextCleanupSlices", counters.NextCleanupSlices})
+	_, err = m.engine.Insert(cs)
+	return err
 }

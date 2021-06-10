@@ -2759,8 +2759,7 @@ func (m *redisMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
 				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 			}
 		} else if attr.Typ == TypeSymlink {
-			e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result()
-			if err != nil {
+			if e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result(); err != nil {
 				return err
 			}
 		}
@@ -2788,8 +2787,7 @@ func (m *redisMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
 			return nil, err
 		}
 		if typ == TypeDirectory {
-			entry.Entries, err = m.dumpDir(inode)
-			if err != nil {
+			if entry.Entries, err = m.dumpDir(inode); err != nil {
 				return nil, err
 			}
 		}
@@ -2818,8 +2816,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	tree.Entries, err = m.dumpDir(1)
-	if err != nil {
+	if tree.Entries, err = m.dumpDir(1); err != nil {
 		return err
 	}
 
@@ -2845,6 +2842,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 }
 
 func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) error {
+	logger.Debugf("Loading entry parent %d inode %d name %s", parent, e.Inode, e.Name)
 	ctx := Background
 	attr := loadAttr(e.Attr)
 	attr.Parent = parent
@@ -2891,8 +2889,7 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 					cs.NextChunk = int64(s.Chunkid) + 1
 				}
 			}
-			_, err := m.rdb.RPush(ctx, m.chunkKey(e.Inode, c.Index), slices).Result()
-			if err != nil {
+			if _, err = m.rdb.RPush(ctx, m.chunkKey(e.Inode, c.Index), slices).Result(); err != nil {
 				return err
 			}
 		}
@@ -2905,13 +2902,13 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 		}
 		attr.Length = 4 << 10
 		if len(e.Entries) > 0 {
-			if err := m.loadDir(e.Inode, e.Entries, cs); err != nil {
+			if err = m.loadDir(e.Inode, e.Entries, cs); err != nil {
 				return err
 			}
 		}
 	} else if attr.Typ == TypeSymlink {
 		attr.Length = uint64(len(e.Symlink))
-		if err := m.rdb.Set(ctx, m.symKey(e.Inode), e.Symlink, 0).Err(); err != nil {
+		if err = m.rdb.Set(ctx, m.symKey(e.Inode), e.Symlink, 0).Err(); err != nil {
 			return err
 		}
 	}
@@ -2926,8 +2923,7 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 		for _, x := range e.Xattrs {
 			xattrs[x.Name] = x.Value
 		}
-		_, err := m.rdb.HSet(ctx, m.xattrKey(e.Inode), xattrs).Result()
-		if err != nil {
+		if _, err = m.rdb.HSet(ctx, m.xattrKey(e.Inode), xattrs).Result(); err != nil {
 			return err
 		}
 	}
@@ -2935,6 +2931,7 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 }
 
 func (m *redisMeta) loadDir(inode Ino, entries []*DumpedEntry, cs *DumpedCounters) error {
+	logger.Debugf("Loading directory inode %d, number of entries: %d", inode, len(entries))
 	dentries := make(map[string]interface{})
 	for _, e := range entries {
 		dentries[e.Name] = m.packEntry(typeFromString(e.Attr.Type), e.Inode)
@@ -2977,12 +2974,9 @@ func (m *redisMeta) LoadMeta(buf []byte) error {
 	cs := make(map[string]interface{})
 	cs[usedSpace] = counters.UsedSpace
 	cs[totalInodes] = counters.UsedInodes
-	cs["nextInode"] = counters.NextInode
-	cs["nextChunk"] = counters.NextChunk
-	cs["nextSession"] = counters.NextSession
+	cs["nextinode"] = counters.NextInode
+	cs["nextchunk"] = counters.NextChunk
+	cs["nextsession"] = counters.NextSession
 	cs["nextCleanupSlices"] = counters.NextCleanupSlices
-	if err = m.rdb.MSet(ctx, cs).Err(); err != nil {
-		return err
-	}
-	return nil
+	return m.rdb.MSet(ctx, cs).Err()
 }
