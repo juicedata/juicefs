@@ -6,17 +6,23 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 - [利用 JuiceFS 把 MySQL 备份验证性能提升 10 倍](https://juicefs.com/blog/cn/posts/optimize-xtrabackup-prepare-by-oplog/)
 - [跨云数据搬迁利器：Juicesync](https://juicefs.com/blog/cn/posts/juicesync/)
+- [下厨房基于 JuiceFS 的 MySQL 备份实践](https://juicefs.com/blog/cn/posts/xiachufang-mysql-backup-practice-on-juicefs/)
+- [如何用 JuiceFS 归档备份 Nginx 日志](https://juicefs.com/blog/cn/posts/backup-nginx-logs-on-juicefs/)
 
 ## 大数据
 
 - [JuiceFS 如何帮助趣头条超大规模 HDFS 降负载](https://juicefs.com/blog/cn/posts/qutoutiao-big-data-platform-user-case/)
 - [ClickHouse 存算分离架构探索](https://juicefs.com/blog/cn/posts/clickhouse-disaggregated-storage-and-compute-practice/)
+- [使用 AWS Cloudformation 在 Amazon EMR 中一分钟配置 JuiceFS](https://aws.amazon.com/cn/blogs/china/use-aws-cloudformation-to-configure-juicefs-in-amazon-emr-in-one-minute/)
 - [巧用符号链接迁移 HDFS 数据至 JuiceFS](https://juicefs.com/blog/cn/posts/migrate-data-from-hdfs-to-juicefs/)
 - [使用 JuiceFS 在云上优化 Kylin 4.0 的存储性能](https://juicefs.com/blog/cn/posts/optimize-kylin-on-juicefs/)
+- [JuiceFS 在大搜车数据平台的实践](https://juicefs.com/blog/cn/posts/juicefs-practice-in-souche/)
 
 ## 数据共享
 
-- 
+- [基于 JuiceFS 搭建 Milvus 分布式集群](https://mp.weixin.qq.com/s/tMGx_TxoVfVYBdloFJSfSQ)
+- [如何解决 NAS 单点故障还顺便省了 90% 的成本？](https://juicefs.com/blog/cn/posts/modao-replace-nas-with-juicefs/)
+
 
 ## 异地灾备
 
