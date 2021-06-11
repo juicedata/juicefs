@@ -106,8 +106,8 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size())
 		}
 		now := time.Now()
-		if objs[0].Mtime().Before(now.Add(-10*time.Second)) || objs[0].Mtime().After(now.Add(time.Second*10)) {
-			t.Fatalf("Mtime of key should be within 10 seconds")
+		if objs[0].Mtime().Before(now.Add(-30*time.Second)) || objs[0].Mtime().After(now.Add(time.Second*30)) {
+			t.Fatalf("Mtime of key should be within 10 seconds, but got %s", objs[0].Mtime().Sub(now))
 		}
 	} else {
 		t.Fatalf("list failed: %s", err2.Error())
@@ -336,7 +336,10 @@ func TestB2(t *testing.T) {
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
 	}
-	b, _ := newB2("https://test.backblaze.com", os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"))
+	b, err := newB2("https://jfs-test.backblaze.com", os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"))
+	if err != nil {
+		t.Fatalf("create B2: %s", err)
+	}
 	testStorage(t, b)
 }
 
