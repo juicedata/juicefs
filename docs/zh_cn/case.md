@@ -20,7 +20,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 数据共享
 
-- [基于 JuiceFS 搭建 Milvus 分布式集群](https://mp.weixin.qq.com/s/tMGx_TxoVfVYBdloFJSfSQ)
+- [基于 JuiceFS 搭建 Milvus 分布式集群](https://juicefs.com/blog/cn/posts/build-milvus-distributed-cluster-based-on-juicefs)
 - [如何解决 NAS 单点故障还顺便省了 90% 的成本？](https://juicefs.com/blog/cn/posts/modao-replace-nas-with-juicefs/)
 
 
