@@ -2877,41 +2877,47 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	return err
 }
 
-func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) error {
-	logger.Debugf("Loading entry parent %d inode %d name %s", parent, e.Inode, e.Name)
-	ctx := Background
-	attr := loadAttr(e.Attr)
-	attr.Parent = parent
-	// check hard link
-	a, err := m.rdb.Get(ctx, m.inodeKey(e.Inode)).Bytes()
-	if err != redis.Nil {
-		if err != nil {
-			return err
-		}
-		eattr := &Attr{}
-		m.parseAttr(a, eattr)
-		if attr.Typ != TypeFile || eattr.Typ != TypeFile {
+func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
+	typ := typeFromString(e.Attr.Type)
+	if exist, ok := entries[e.Inode]; ok {
+		attr := e.Attr
+		eattr := exist.Attr
+		if typ != TypeFile || typeFromString(eattr.Type) != TypeFile {
 			return fmt.Errorf("inode conflict: %d", e.Inode)
 		}
-		if eattr.Ctime*1e9+int64(eattr.Ctimensec) >= attr.Ctime*1e9+int64(attr.Ctimensec) { // exist
-			attr = eattr
-			attr.Nlink++
-			return m.rdb.Set(ctx, m.inodeKey(e.Inode), m.marshal(attr), 0).Err()
+		eattr.Nlink++
+		if eattr.Ctime*1e9+int64(eattr.Ctimensec) < attr.Ctime*1e9+int64(attr.Ctimensec) {
+			attr.Nlink = eattr.Nlink
+			entries[e.Inode] = e
 		}
-		// I'm newer, cleanup chunks and xattrs
-		attr.Nlink = eattr.Nlink + 1
-		p := m.rdb.Pipeline()
-		for indx := uint32(0); uint64(indx)*ChunkSize < eattr.Length; indx++ {
-			p.Del(ctx, m.chunkKey(e.Inode, indx))
-		}
-		p.Del(ctx, m.xattrKey(e.Inode))
-		if _, err = p.Exec(ctx); err != nil {
-			return err
-		}
-		cs.UsedSpace -= align4K(eattr.Length)
-		cs.UsedInodes -= 1
+		return nil
 	}
+	entries[e.Inode] = e
+	if typ == TypeFile {
+		e.Attr.Nlink = 1 // reset
+	} else if typ == TypeDirectory {
+		e.Attr.Nlink = 2
+		for _, child := range e.Entries {
+			child.Parent = e.Inode
+			if typeFromString(child.Attr.Type) == TypeDirectory {
+				e.Attr.Nlink++
+			}
+			if err := collectEntry(child, entries); err != nil {
+				return err
+			}
+		}
+	} else if e.Attr.Nlink != 1 { // nlink should be 1 for other types
+		return fmt.Errorf("invalid nlink %d for inode %d type %s", e.Attr.Nlink, e.Inode, e.Attr.Type)
+	}
+	return nil
+}
 
+func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int) error {
+	logger.Debugf("Loading entry inode %d name %s", e.Inode, e.Name)
+	ctx := Background
+	attr := loadAttr(e.Attr)
+	attr.Parent = e.Parent
+	p := m.rdb.Pipeline()
 	if attr.Typ == TypeFile {
 		attr.Length = e.Attr.Length
 		for _, c := range e.Chunks {
@@ -2921,32 +2927,25 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 			slices := make([]string, 0, len(c.Slices))
 			for _, s := range c.Slices {
 				slices = append(slices, string(marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)))
+				refs[m.sliceKey(s.Chunkid, s.Size)]++
 				if cs.NextChunk < int64(s.Chunkid) {
 					cs.NextChunk = int64(s.Chunkid)
 				}
 			}
-			if _, err = m.rdb.RPush(ctx, m.chunkKey(e.Inode, c.Index), slices).Result(); err != nil {
-				return err
-			}
+			p.RPush(ctx, m.chunkKey(e.Inode, c.Index), slices)
 		}
 	} else if attr.Typ == TypeDirectory {
-		attr.Nlink = 2
-		for _, child := range e.Entries {
-			if child.Attr.Type == "directory" {
-				attr.Nlink++
-			}
-		}
 		attr.Length = 4 << 10
 		if len(e.Entries) > 0 {
-			if err = m.loadDir(e.Inode, e.Entries, cs); err != nil {
-				return err
+			dentries := make(map[string]interface{})
+			for _, c := range e.Entries {
+				dentries[c.Name] = m.packEntry(typeFromString(c.Attr.Type), c.Inode)
 			}
+			p.HSet(ctx, m.entryKey(e.Inode), dentries)
 		}
 	} else if attr.Typ == TypeSymlink {
 		attr.Length = uint64(len(e.Symlink))
-		if err = m.rdb.Set(ctx, m.symKey(e.Inode), e.Symlink, 0).Err(); err != nil {
-			return err
-		}
+		p.Set(ctx, m.symKey(e.Inode), e.Symlink, 0)
 	}
 	if e.Inode > 1 {
 		cs.UsedSpace += align4K(attr.Length)
@@ -2961,23 +2960,11 @@ func (m *redisMeta) loadEntry(parent Ino, e *DumpedEntry, cs *DumpedCounters) er
 		for _, x := range e.Xattrs {
 			xattrs[x.Name] = x.Value
 		}
-		if _, err = m.rdb.HSet(ctx, m.xattrKey(e.Inode), xattrs).Result(); err != nil {
-			return err
-		}
+		p.HSet(ctx, m.xattrKey(e.Inode), xattrs)
 	}
-	return m.rdb.Set(ctx, m.inodeKey(e.Inode), m.marshal(attr), 0).Err()
-}
-
-func (m *redisMeta) loadDir(inode Ino, entries []*DumpedEntry, cs *DumpedCounters) error {
-	logger.Debugf("Loading directory inode %d, number of entries: %d", inode, len(entries))
-	dentries := make(map[string]interface{})
-	for _, e := range entries {
-		dentries[e.Name] = m.packEntry(typeFromString(e.Attr.Type), e.Inode)
-		if err := m.loadEntry(inode, e, cs); err != nil {
-			return err
-		}
-	}
-	return m.rdb.HSet(Background, m.entryKey(inode), dentries).Err()
+	p.Set(ctx, m.inodeKey(e.Inode), m.marshal(attr), 0)
+	_, err := p.Exec(ctx)
+	return err
 }
 
 func (m *redisMeta) LoadMeta(buf []byte) error {
@@ -2994,15 +2981,35 @@ func (m *redisMeta) LoadMeta(buf []byte) error {
 	if err = json.Unmarshal(buf, &dm); err != nil {
 		return err
 	}
-
-	data, err := json.MarshalIndent(dm.Setting, "", "")
+	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err
 	}
-	if err = m.rdb.Set(ctx, "setting", data, 0).Err(); err != nil {
+
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries); err != nil {
 		return err
 	}
+	counters := &DumpedCounters{}
+	refs := make(map[string]int)
+	for _, entry := range entries {
+		if err = m.loadEntry(entry, counters, refs); err != nil {
+			return err
+		}
+	}
+	logger.Infof("Dumped counters: %+v", *dm.Counters)
+	logger.Infof("Loaded counters: %+v", *counters)
 
+	p := m.rdb.Pipeline()
+	p.Set(ctx, "setting", format, 0)
+	cs := make(map[string]interface{})
+	cs[usedSpace] = counters.UsedSpace
+	cs[totalInodes] = counters.UsedInodes
+	cs["nextinode"] = counters.NextInode
+	cs["nextchunk"] = counters.NextChunk
+	cs["nextsession"] = counters.NextSession
+	cs["nextCleanupSlices"] = counters.NextCleanupSlices
+	p.MSet(ctx, cs)
 	if len(dm.DelFiles) > 0 {
 		zs := make([]*redis.Z, 0, len(dm.DelFiles))
 		for _, d := range dm.DelFiles {
@@ -3011,23 +3018,17 @@ func (m *redisMeta) LoadMeta(buf []byte) error {
 				Member: m.toDelete(d.Inode, d.Length),
 			})
 		}
-		if err = m.rdb.ZAdd(ctx, delfiles, zs...).Err(); err != nil {
-			return err
+		p.ZAdd(ctx, delfiles, zs...)
+	}
+	slices := make(map[string]interface{})
+	for k, v := range refs {
+		if v != 1 {
+			slices[k] = v - 1
 		}
 	}
-
-	counters := &DumpedCounters{}
-	if err = m.loadEntry(1, dm.FSTree, counters); err != nil {
-		return err
+	if len(slices) > 0 {
+		p.HSet(ctx, sliceRefs, slices)
 	}
-	logger.Infof("Dumped counters: %+v", *dm.Counters)
-	logger.Infof("Loaded counters: %+v", *counters)
-	cs := make(map[string]interface{})
-	cs[usedSpace] = counters.UsedSpace
-	cs[totalInodes] = counters.UsedInodes
-	cs["nextinode"] = counters.NextInode
-	cs["nextchunk"] = counters.NextChunk
-	cs["nextsession"] = counters.NextSession
-	cs["nextCleanupSlices"] = counters.NextCleanupSlices
-	return m.rdb.MSet(ctx, cs).Err()
+	_, err = p.Exec(ctx)
+	return err
 }

@@ -73,6 +73,7 @@ type DumpedEntry struct {
 	Name    string         `json:"name"`
 	Inode   Ino            `json:"inode"`
 	Attr    *DumpedAttr    `json:"attr"`
+	Parent  Ino            `json:"-"`
 	Symlink string         `json:"symlink,omitempty"`
 	Xattrs  []*DumpedXattr `json:"xattrs,omitempty"`
 	Chunks  []*DumpedChunk `json:"chunks,omitempty"`
@@ -89,6 +90,7 @@ type DumpedMeta struct {
 
 func dumpAttr(a *Attr) *DumpedAttr {
 	d := &DumpedAttr{
+		Type:      typeToString(a.Typ),
 		Mode:      a.Mode,
 		Uid:       a.Uid,
 		Gid:       a.Gid,
@@ -101,7 +103,6 @@ func dumpAttr(a *Attr) *DumpedAttr {
 		Nlink:     a.Nlink,
 		Rdev:      a.Rdev,
 	}
-	d.Type = typeToString(a.Typ)
 	if a.Typ == TypeFile {
 		d.Length = a.Length
 	}
@@ -109,8 +110,9 @@ func dumpAttr(a *Attr) *DumpedAttr {
 }
 
 func loadAttr(d *DumpedAttr) *Attr {
-	a := &Attr{
+	return &Attr{
 		// Flags:     0,
+		Typ:       typeFromString(d.Type),
 		Mode:      d.Mode,
 		Uid:       d.Uid,
 		Gid:       d.Gid,
@@ -120,10 +122,8 @@ func loadAttr(d *DumpedAttr) *Attr {
 		Atimensec: d.Atimensec,
 		Mtimensec: d.Mtimensec,
 		Ctimensec: d.Ctimensec,
-		Nlink:     1,
+		Nlink:     d.Nlink,
 		Rdev:      d.Rdev,
 		Full:      true,
-	}
-	a.Typ = typeFromString(d.Type)
-	return a // Nlink, Length and Parent not set
+	} // Length and Parent not set
 }
