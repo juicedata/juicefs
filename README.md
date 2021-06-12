@@ -175,9 +175,11 @@ The last number on each line is the time (in seconds) current operation takes. Y
 
 JuiceFS supports almost all object storage services. [Learn more](docs/en/how_to_setup_object_storage.md#supported-object-storage).
 
-## Status
+## Who is using
 
-It's considered as beta quality, the storage format is not stabilized yet. It's not recommended to deploy it into production environment. Please test it with your use cases and give us [feedback](https://github.com/juicedata/juicefs/discussions).
+It's considered as beta quality, the storage format is not stabilized yet. If you want to use it in a production environment, please do a careful and serious evaluation first. If you are interested in it, please test it as soon as possible and give us [feedback](https://github.com/juicedata/juicefs/discussions).
+
+You are welcome to tell us after using JuiceFS and share your experience with everyone. We have also collected a summary list in [ADOPTERS.md](ADOPTERS.md), which also includes other open source projects used with JuiceFS.
 
 ## Roadmap
 
