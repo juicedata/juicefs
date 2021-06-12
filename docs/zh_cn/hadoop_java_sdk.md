@@ -98,20 +98,20 @@ $ make
 | `juicefs.cache-dir`          |        | 本地缓存目录，可以指定多个文件夹，用冒号 `:` 分隔，也可以使用通配符（比如 `*` ）。**通常应用没有权限创建这些目录，需要手动创建并给予 `0777` 权限，便于多个应用共享缓存数据。**                                                                                                            |
 | `juicefs.cache-size`         | 0      | 磁盘缓存容量，单位 MiB。如果配置多个目录，这是所有缓存目录的空间总和。                                                                                                                                                                                                                    |
 | `juicefs.cache-full-block`   | `true` | 是否缓存所有读取的数据块，`false` 表示只缓存随机读的数据块。                                                                                                                                                                                                                              |
-| `juicefs.free-space`         | 0.2    | 本地缓存目录的最小可用空间比例                                                                                                                                                                                                                                                            |
+| `juicefs.free-space`         | 0.1    | 本地缓存目录的最小可用空间比例                                                                                                                                                                                                                                                            |
 | `juicefs.discover-nodes-url` |        | 指定发现集群节点列表的方式，每 10 分钟刷新一次。<br /><br />YARN：`yarn`<br />Spark Standalone：`http://spark-master:web-ui-port/json/`<br />Spark ThriftServer：`http://thrift-server:4040/api/v1/applications/`<br />Presto：`http://coordinator:discovery-uri-port/v1/service/presto/` |
 
 ### I/O 配置
 
 | 配置项                | 默认值 | 描述                                                         |
 | ------------------    | ------ | ------------------------------------------------------------ |
-| `juicefs.max-uploads` | 50     | 上传数据的最大连接数                                         |
+| `juicefs.max-uploads` | 20     | 上传数据的最大连接数                                         |
 | `juicefs.get-timeout` | 5      | 下载一个对象的超时时间，单位为秒。                           |
 | `juicefs.put-timeout` | 60     | 上传一个对象的超时时间，单位为秒。                           |
 | `juicefs.memory-size` | 300    | 读写数据的缓冲区最大空间，单位为 MiB。                       |
-| `juicefs.prefetch`    | 3      | 预读数据块的最大并发数                                       |
+| `juicefs.prefetch`    | 1      | 预读数据块的线程数                                       |
 
-### 其他配置
+  ### 其他配置
 
 | 配置项                    | 默认值  | 描述                                                                                                                                          |
 | ------------------        | ------  | ------------------------------------------------------------                                                                                  |
