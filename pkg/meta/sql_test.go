@@ -50,8 +50,8 @@ func TestMySQLClient(t *testing.T) {
 }
 
 func TestStickyBitSQL(t *testing.T) {
-	os.Remove("test.db")
-	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
+	os.Remove("test3.db")
+	m, err := newSQLMeta("sqlite3", "test3.db", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
