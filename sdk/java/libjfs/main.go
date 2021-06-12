@@ -381,7 +381,11 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Readahead:      jConf.Readahead << 20,
 		}
 		if chunkConf.CacheDir != "memory" {
-			chunkConf.CacheDir = filepath.Join(chunkConf.CacheDir, format.UUID)
+			ds := utils.SplitDir(chunkConf.CacheDir)
+			for i := range ds {
+				ds[i] = filepath.Join(ds[i], format.UUID)
+			}
+			chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 		}
 		store := chunk.NewCachedStore(blob, chunkConf)
 		m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
