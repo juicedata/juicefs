@@ -310,35 +310,24 @@ public class JuiceFileSystemImpl extends FileSystem {
     for (String key : bkeys) {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
-    String pathListSeparator = ":";
-    String os = System.getProperty("os.name");
-    if (os.toLowerCase().contains("windows")) {
-      pathListSeparator = ";";
-    }
-    String[] cacheDirs = getConf(conf, "cache-dir", "memory").split(pathListSeparator);
-    for (int i = 0; i < cacheDirs.length; i++) {
-      if (!"memory".equals(cacheDirs[i])) {
-        cacheDirs[i] = new File(cacheDirs[i], name).toString();
-      }
-    }
-    obj.put("cacheDir", String.join(pathListSeparator, cacheDirs));
+    obj.put("cacheDir", getConf(conf, "cache-dir", "memory"));
     obj.put("cacheSize", Integer.valueOf(getConf(conf, "cache-size", "100")));
     obj.put("cacheFullBlock", Boolean.valueOf(getConf(conf, "cache-full-block", "true")));
     obj.put("metacache", Boolean.valueOf(getConf(conf, "metacache", "true")));
     obj.put("autoCreate", Boolean.valueOf(getConf(conf, "auto-create-cache-dir", "true")));
-    obj.put("maxUploads", Integer.valueOf(getConf(conf, "max-uploads", "50")));
+    obj.put("maxUploads", Integer.valueOf(getConf(conf, "max-uploads", "20")));
     obj.put("uploadLimit", Integer.valueOf(getConf(conf, "upload-limit", "0")));
     obj.put("getTimeout", Integer.valueOf(getConf(conf, "get-timeout", getConf(conf, "object-timeout", "5"))));
     obj.put("putTimeout", Integer.valueOf(getConf(conf, "put-timeout", getConf(conf, "object-timeout", "60"))));
     obj.put("memorySize", Integer.valueOf(getConf(conf, "memory-size", "300")));
-    obj.put("prefetch", Integer.valueOf(getConf(conf, "prefetch", "3")));
+    obj.put("prefetch", Integer.valueOf(getConf(conf, "prefetch", "1")));
     obj.put("readahead", Integer.valueOf(getConf(conf, "max-readahead", "0")));
     obj.put("pushGateway", getConf(conf, "push-gateway", ""));
     obj.put("pushInterval", Integer.valueOf(getConf(conf, "push-interval", "10")));
     obj.put("pushAuth", getConf(conf, "push-auth", ""));
     obj.put("fastResolve", Boolean.valueOf(getConf(conf, "fast-resolve", "true")));
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
-    obj.put("freeSpace", getConf(conf, "free-space", ""));
+    obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
     obj.put("accessLog", getConf(conf, "access-log", ""));
     String jsonConf = obj.toString(2);
     handle = lib.jfs_init(name, jsonConf, user, group, superuser, supergroup);

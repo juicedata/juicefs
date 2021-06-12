@@ -98,18 +98,18 @@ Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Ha
 | `juicefs.cache-dir`          |               | Directory paths of local cache. Use colon to separate multiple paths. Also support wildcard in path. **It's recommended create these directories manually and set `0777` permission so that different applications could share the cache data.**                                                      |
 | `juicefs.cache-size`         | 0             | Maximum size of local cache in MiB. It's the total size when set multiple cache directories.                                                                                                                                                                                                          |
 | `juicefs.cache-full-block`   | `true`        | Whether cache every read blocks, `false` means only cache random/small read blocks.                                                                                                                                                                                                                   |
-| `juicefs.free-space`         | 0.2           | Min free space ratio of cache directory                                                                                                                                                                                                                                                               |
+| `juicefs.free-space`         | 0.1           | Min free space ratio of cache directory                                                                                                                                                                                                                                                               |
 | `juicefs.discover-nodes-url` |               | The URL to discover cluster nodes, refresh every 10 minutes.<br /><br />YARN: `yarn`<br />Spark Standalone: `http://spark-master:web-ui-port/json/`<br />Spark ThriftServer: `http://thrift-server:4040/api/v1/applications/`<br />Presto: `http://coordinator:discovery-uri-port/v1/service/presto/` |
 
 ### I/O Configurations
 
 | Configuration         | Default Value | Description                                     |
 | -------------         | ------------- | -----------                                     |
-| `juicefs.max-uploads` | 50            | The max number of connections to upload         |
+| `juicefs.max-uploads` | 20            | The max number of connections to upload         |
 | `juicefs.get-timeout` | 5             | The max number of seconds to download an object |
 | `juicefs.put-timeout` | 60            | The max number of seconds to upload an object   |
 | `juicefs.memory-size` | 300           | Total read/write buffering in MiB               |
-| `juicefs.prefetch`    | 3             | Prefetch N blocks in parallel                   |
+| `juicefs.prefetch`    | 1             | Prefetch N blocks in parallel                   |
 
 ### Other Configurations
 

@@ -357,7 +357,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		logger.Infof("Data use %s", blob)
 		blob = object.WithMetrics(blob)
 
-		var freeSpaceRatio = 0.2
+		var freeSpaceRatio = 0.1
 		if jConf.FreeSpace != "" {
 			freeSpaceRatio, _ = strconv.ParseFloat(jConf.FreeSpace, 64)
 		}
