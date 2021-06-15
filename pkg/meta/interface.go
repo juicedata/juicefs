@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"io"
 	"os"
 	"strings"
 	"syscall"
@@ -103,6 +104,48 @@ func typeToStatType(_type uint8) uint32 {
 		return syscall.S_IFCHR
 	default:
 		panic(_type)
+	}
+}
+
+func typeToString(_type uint8) string {
+	switch _type {
+	case TypeFile:
+		return "regular"
+	case TypeDirectory:
+		return "directory"
+	case TypeSymlink:
+		return "symlink"
+	case TypeFIFO:
+		return "fifo"
+	case TypeBlockDev:
+		return "blockdev"
+	case TypeCharDev:
+		return "chardev"
+	case TypeSocket:
+		return "socket"
+	default:
+		return "unknown"
+	}
+}
+
+func typeFromString(s string) uint8 {
+	switch s {
+	case "regular":
+		return TypeFile
+	case "directory":
+		return TypeDirectory
+	case "symlink":
+		return TypeSymlink
+	case "fifo":
+		return TypeFIFO
+	case "blockdev":
+		return TypeBlockDev
+	case "chardev":
+		return TypeCharDev
+	case "socket":
+		return TypeSocket
+	default:
+		panic(s)
 	}
 }
 
@@ -256,6 +299,9 @@ type Meta interface {
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
+
+	DumpMeta(w io.Writer) error
+	LoadMeta(buf []byte) error
 }
 
 func removePassword(uri string) string {
