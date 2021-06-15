@@ -242,6 +242,9 @@ func (r *redisMeta) Load() (*Format, error) {
 }
 
 func (r *redisMeta) NewSession() error {
+	if r.conf.ReadOnly {
+		return nil
+	}
 	var err error
 	r.sid, err = r.rdb.Incr(Background, "nextsession").Result()
 	if err != nil {
@@ -851,6 +854,9 @@ func shouldRetry(err error, retryOnFailure bool) bool {
 }
 
 func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) syscall.Errno {
+	if r.conf.ReadOnly {
+		return syscall.EROFS
+	}
 	var err error
 	var khash = fnv.New32()
 	_, _ = khash.Write([]byte(keys[0]))
@@ -1901,10 +1907,13 @@ func (r *redisMeta) deleteInode(inode Ino) error {
 	return err
 }
 
-func (r *redisMeta) Open(ctx Context, inode Ino, flags uint8, attr *Attr) syscall.Errno {
+func (r *redisMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
 	var err syscall.Errno
 	if attr != nil {
 		err = r.GetAttr(ctx, inode, attr)
+	}
+	if r.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
+		return syscall.EROFS
 	}
 	if err == 0 {
 		r.Lock()
@@ -1964,7 +1973,7 @@ func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 	}
 	ss := readSlices(vals)
 	*chunks = buildSlice(ss)
-	if len(vals) >= 5 || len(*chunks) >= 5 {
+	if !r.conf.ReadOnly && (len(vals) >= 5 || len(*chunks) >= 5) {
 		go r.compactChunk(inode, indx, false)
 	}
 	return 0

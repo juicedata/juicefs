@@ -88,6 +88,7 @@ func mount(c *cli.Context) error {
 		Retries:     10,
 		Strict:      true,
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
+		ReadOnly:    c.Bool("read-only"),
 		MountPoint:  mp,
 	})
 	format, err := m.Load()
