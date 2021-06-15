@@ -2896,6 +2896,9 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
 	if typ == TypeFile {
 		e.Attr.Nlink = 1 // reset
 	} else if typ == TypeDirectory {
+		if e.Inode == 1 { // root inode
+			e.Parent = 1
+		}
 		e.Attr.Nlink = 2
 		for _, child := range e.Entries {
 			child.Parent = e.Inode
