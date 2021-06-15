@@ -25,14 +25,11 @@ import (
 
 func dump(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-ADDR is needed")
+	if ctx.Args().Len() < 2 {
+		return fmt.Errorf("META-ADDR and FILE are needed")
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
-	fname := "juicefs-metadata.dump"
-	if ctx.Args().Len() > 1 {
-		fname = ctx.Args().Get(1)
-	}
+	fname := ctx.Args().Get(1)
 	fp, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
@@ -45,7 +42,7 @@ func dumpFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "dump",
 		Usage:     "dump JuiceFS metadata into a standalone file",
-		ArgsUsage: "META-ADDR [FILE (default: juicefs-metadata.dump)]",
+		ArgsUsage: "META-ADDR FILE",
 		Action:    dump,
 	}
 }

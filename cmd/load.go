@@ -25,11 +25,8 @@ import (
 
 func load(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-ADDR is needed")
-	}
 	if ctx.Args().Len() < 2 {
-		return fmt.Errorf("FILE is needed")
+		return fmt.Errorf("META-ADDR and FILE are needed")
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	fname := ctx.Args().Get(1)

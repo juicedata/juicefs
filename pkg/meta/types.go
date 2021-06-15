@@ -47,7 +47,7 @@ type DumpedAttr struct {
 	Mtimensec uint32 `json:"mtimensec"`
 	Ctimensec uint32 `json:"ctimensec"`
 	Nlink     uint32 `json:"nlink"`
-	Length    uint64 `json:"length,omitempty"`
+	Length    uint64 `json:"length"`
 	Rdev      uint32 `json:"rdev,omitempty"`
 }
 
