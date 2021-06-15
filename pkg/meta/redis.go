@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -2724,4 +2725,320 @@ func (r *redisMeta) checkServerConfig() {
 	start := time.Now()
 	_ = r.rdb.Ping(Background)
 	logger.Infof("Ping redis: %s", time.Since(start))
+}
+
+func (m *redisMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
+	ctx := Background
+	e := &DumpedEntry{Name: name, Inode: inode}
+	st := m.txn(ctx, func(tx *redis.Tx) error {
+		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err != nil {
+			return err
+		}
+		attr := &Attr{}
+		m.parseAttr(a, attr)
+		e.Attr = dumpAttr(attr)
+
+		keys, err := tx.HGetAll(ctx, m.xattrKey(inode)).Result()
+		if err != nil {
+			return err
+		}
+		if len(keys) > 0 {
+			xattrs := make([]*DumpedXattr, 0, len(keys))
+			for k, v := range keys {
+				xattrs = append(xattrs, &DumpedXattr{k, v})
+			}
+			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+			e.Xattrs = xattrs
+		}
+
+		if attr.Typ == TypeFile {
+			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
+				vals, err := tx.LRange(ctx, m.chunkKey(inode, indx), 0, 1000000).Result()
+				if err != nil {
+					return err
+				}
+				ss := readSlices(vals)
+				slices := make([]*DumpedSlice, 0, len(ss))
+				for _, s := range ss {
+					slices = append(slices, &DumpedSlice{s.pos, s.chunkid, s.size, s.off, s.len})
+				}
+				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
+			}
+		} else if attr.Typ == TypeSymlink {
+			if e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result(); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}, m.inodeKey(inode))
+	if st == 0 {
+		return e, nil
+	} else {
+		return nil, fmt.Errorf("dump entry error: %d", st)
+	}
+}
+
+func (m *redisMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
+	ctx := Background
+	keys, err := m.rdb.HGetAll(ctx, m.entryKey(inode)).Result()
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]*DumpedEntry, 0, len(keys))
+	for k, v := range keys {
+		typ, inode := m.parseEntry([]byte(v))
+		entry, err := m.dumpEntry(k, inode)
+		if err != nil {
+			return nil, err
+		}
+		if typ == TypeDirectory {
+			if entry.Entries, err = m.dumpDir(inode); err != nil {
+				return nil, err
+			}
+		}
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	return entries, nil
+}
+
+func (m *redisMeta) DumpMeta(w io.Writer) error {
+	ctx := Background
+	zs, err := m.rdb.ZRangeWithScores(ctx, delfiles, 0, -1).Result()
+	if err != nil {
+		return err
+	}
+	dels := make([]*DumpedDelFile, 0, len(zs))
+	for _, z := range zs {
+		parts := strings.Split(z.Member.(string), ":")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid delfile string: %s", z.Member.(string))
+		}
+		inode, _ := strconv.ParseUint(parts[0], 10, 64)
+		length, _ := strconv.ParseUint(parts[1], 10, 64)
+		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
+	}
+
+	tree, err := m.dumpEntry("/", 1)
+	if err != nil {
+		return err
+	}
+	if tree.Entries, err = m.dumpDir(1); err != nil {
+		return err
+	}
+
+	format, err := m.Load()
+	if err != nil {
+		return err
+	}
+
+	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextCleanupSlices"}...).Result()
+	cs := make([]int64, len(rs))
+	for i, r := range rs {
+		if r != nil {
+			cs[i], _ = strconv.ParseInt(r.(string), 10, 64)
+		}
+	}
+
+	keys, err := m.rdb.ZRange(ctx, allSessions, 0, -1).Result()
+	if err != nil {
+		return err
+	}
+	sessions := make([]*DumpedSustained, 0, len(keys))
+	for _, k := range keys {
+		sid, _ := strconv.ParseUint(k, 10, 64)
+		ss, err := m.rdb.SMembers(ctx, m.sustained(int64(sid))).Result()
+		if err != nil {
+			return err
+		}
+		if len(ss) > 0 {
+			inodes := make([]Ino, 0, len(ss))
+			for _, s := range ss {
+				inode, _ := strconv.ParseUint(s, 10, 64)
+				inodes = append(inodes, Ino(inode))
+			}
+			sessions = append(sessions, &DumpedSustained{sid, inodes})
+		}
+	}
+
+	data, err := json.MarshalIndent(DumpedMeta{
+		format,
+		&DumpedCounters{
+			UsedSpace:         cs[0],
+			UsedInodes:        cs[1],
+			NextInode:         cs[2],
+			NextChunk:         cs[3],
+			NextSession:       cs[4],
+			NextCleanupSlices: cs[5],
+		},
+		sessions,
+		dels,
+		tree,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
+	typ := typeFromString(e.Attr.Type)
+	if exist, ok := entries[e.Inode]; ok {
+		attr := e.Attr
+		eattr := exist.Attr
+		if typ != TypeFile || typeFromString(eattr.Type) != TypeFile {
+			return fmt.Errorf("inode conflict: %d", e.Inode)
+		}
+		eattr.Nlink++
+		if eattr.Ctime*1e9+int64(eattr.Ctimensec) < attr.Ctime*1e9+int64(attr.Ctimensec) {
+			attr.Nlink = eattr.Nlink
+			entries[e.Inode] = e
+		}
+		return nil
+	}
+	entries[e.Inode] = e
+	if typ == TypeFile {
+		e.Attr.Nlink = 1 // reset
+	} else if typ == TypeDirectory {
+		if e.Inode == 1 { // root inode
+			e.Parent = 1
+		}
+		e.Attr.Nlink = 2
+		for _, child := range e.Entries {
+			child.Parent = e.Inode
+			if typeFromString(child.Attr.Type) == TypeDirectory {
+				e.Attr.Nlink++
+			}
+			if err := collectEntry(child, entries); err != nil {
+				return err
+			}
+		}
+	} else if e.Attr.Nlink != 1 { // nlink should be 1 for other types
+		return fmt.Errorf("invalid nlink %d for inode %d type %s", e.Attr.Nlink, e.Inode, e.Attr.Type)
+	}
+	return nil
+}
+
+func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int) error {
+	logger.Debugf("Loading entry inode %d name %s", e.Inode, e.Name)
+	ctx := Background
+	attr := loadAttr(e.Attr)
+	attr.Parent = e.Parent
+	p := m.rdb.Pipeline()
+	if attr.Typ == TypeFile {
+		attr.Length = e.Attr.Length
+		for _, c := range e.Chunks {
+			if len(c.Slices) == 0 {
+				continue
+			}
+			slices := make([]string, 0, len(c.Slices))
+			for _, s := range c.Slices {
+				slices = append(slices, string(marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)))
+				refs[m.sliceKey(s.Chunkid, s.Size)]++
+				if cs.NextChunk < int64(s.Chunkid) {
+					cs.NextChunk = int64(s.Chunkid)
+				}
+			}
+			p.RPush(ctx, m.chunkKey(e.Inode, c.Index), slices)
+		}
+	} else if attr.Typ == TypeDirectory {
+		attr.Length = 4 << 10
+		if len(e.Entries) > 0 {
+			dentries := make(map[string]interface{})
+			for _, c := range e.Entries {
+				dentries[c.Name] = m.packEntry(typeFromString(c.Attr.Type), c.Inode)
+			}
+			p.HSet(ctx, m.entryKey(e.Inode), dentries)
+		}
+	} else if attr.Typ == TypeSymlink {
+		attr.Length = uint64(len(e.Symlink))
+		p.Set(ctx, m.symKey(e.Inode), e.Symlink, 0)
+	}
+	if e.Inode > 1 {
+		cs.UsedSpace += align4K(attr.Length)
+		cs.UsedInodes += 1
+	}
+	if cs.NextInode < int64(e.Inode) {
+		cs.NextInode = int64(e.Inode)
+	}
+
+	if len(e.Xattrs) > 0 {
+		xattrs := make(map[string]interface{})
+		for _, x := range e.Xattrs {
+			xattrs[x.Name] = x.Value
+		}
+		p.HSet(ctx, m.xattrKey(e.Inode), xattrs)
+	}
+	p.Set(ctx, m.inodeKey(e.Inode), m.marshal(attr), 0)
+	_, err := p.Exec(ctx)
+	return err
+}
+
+func (m *redisMeta) LoadMeta(buf []byte) error {
+	ctx := Background
+	dbsize, err := m.rdb.DBSize(ctx).Result()
+	if err != nil {
+		return err
+	}
+	if dbsize > 0 {
+		return fmt.Errorf("Redis database is not empty")
+	}
+
+	dm := &DumpedMeta{}
+	if err = json.Unmarshal(buf, &dm); err != nil {
+		return err
+	}
+	format, err := json.MarshalIndent(dm.Setting, "", "")
+	if err != nil {
+		return err
+	}
+
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries); err != nil {
+		return err
+	}
+	counters := &DumpedCounters{}
+	refs := make(map[string]int)
+	for _, entry := range entries {
+		if err = m.loadEntry(entry, counters, refs); err != nil {
+			return err
+		}
+	}
+	logger.Infof("Dumped counters: %+v", *dm.Counters)
+	logger.Infof("Loaded counters: %+v", *counters)
+
+	p := m.rdb.Pipeline()
+	p.Set(ctx, "setting", format, 0)
+	cs := make(map[string]interface{})
+	cs[usedSpace] = counters.UsedSpace
+	cs[totalInodes] = counters.UsedInodes
+	cs["nextinode"] = counters.NextInode
+	cs["nextchunk"] = counters.NextChunk
+	cs["nextsession"] = counters.NextSession
+	cs["nextCleanupSlices"] = counters.NextCleanupSlices
+	p.MSet(ctx, cs)
+	if len(dm.DelFiles) > 0 {
+		zs := make([]*redis.Z, 0, len(dm.DelFiles))
+		for _, d := range dm.DelFiles {
+			zs = append(zs, &redis.Z{
+				Score:  float64(d.Expire),
+				Member: m.toDelete(d.Inode, d.Length),
+			})
+		}
+		p.ZAdd(ctx, delfiles, zs...)
+	}
+	slices := make(map[string]interface{})
+	for k, v := range refs {
+		if v != 1 {
+			slices[k] = v - 1
+		}
+	}
+	if len(slices) > 0 {
+		p.HSet(ctx, sliceRefs, slices)
+	}
+	_, err = p.Exec(ctx)
+	return err
 }

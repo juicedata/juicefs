@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2287,4 +2289,315 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		}
 		return err
 	}))
+}
+
+func (m *dbMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
+	e := &DumpedEntry{Name: name, Inode: inode}
+	return e, m.txn(func(s *xorm.Session) error {
+		n := &node{Inode: inode}
+		ok, err := m.engine.Get(n)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("inode %d not found", inode)
+		}
+		attr := &Attr{}
+		m.parseAttr(n, attr)
+		e.Attr = dumpAttr(attr)
+
+		var rows []xattr
+		if err = m.engine.Find(&rows, &xattr{Inode: inode}); err != nil {
+			return err
+		}
+		if len(rows) > 0 {
+			xattrs := make([]*DumpedXattr, 0, len(rows))
+			for _, x := range rows {
+				xattrs = append(xattrs, &DumpedXattr{x.Name, string(x.Value)})
+			}
+			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+			e.Xattrs = xattrs
+		}
+
+		if attr.Typ == TypeFile {
+			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
+				c := &chunk{Inode: inode, Indx: indx}
+				if _, err = m.engine.Get(c); err != nil {
+					return err
+				}
+				ss := readSliceBuf(c.Slices)
+				slices := make([]*DumpedSlice, 0, len(ss))
+				for _, s := range ss {
+					slices = append(slices, &DumpedSlice{s.pos, s.chunkid, s.size, s.off, s.len})
+				}
+				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
+			}
+		} else if attr.Typ == TypeSymlink {
+			l := &symlink{Inode: inode}
+			ok, err = m.engine.Get(l)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("no link target for inode %d", inode)
+			}
+			e.Symlink = l.Target
+		}
+
+		return nil
+	})
+}
+
+func (m *dbMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
+	var edges []edge
+	if err := m.engine.Find(&edges, &edge{Parent: inode}); err != nil {
+		return nil, err
+	}
+	entries := make([]*DumpedEntry, 0, len(edges))
+	for _, e := range edges {
+		entry, err := m.dumpEntry(e.Name, e.Inode)
+		if err != nil {
+			return nil, err
+		}
+		if e.Type == TypeDirectory {
+			if entry.Entries, err = m.dumpDir(e.Inode); err != nil {
+				return nil, err
+			}
+		}
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	return entries, nil
+}
+
+func (m *dbMeta) DumpMeta(w io.Writer) error {
+	var drows []delfile
+	if err := m.engine.Find(&drows); err != nil {
+		return err
+	}
+	dels := make([]*DumpedDelFile, 0, len(drows))
+	for _, row := range drows {
+		dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
+	}
+
+	tree, err := m.dumpEntry("/", 1)
+	if err != nil {
+		return err
+	}
+	if tree.Entries, err = m.dumpDir(1); err != nil {
+		return err
+	}
+
+	format, err := m.Load()
+	if err != nil {
+		return nil
+	}
+
+	var crows []counter
+	if err = m.engine.Find(&crows); err != nil {
+		return err
+	}
+	counters := &DumpedCounters{}
+	for _, row := range crows {
+		switch row.Name {
+		case "usedSpace":
+			counters.UsedSpace = row.Value
+		case "totalInodes":
+			counters.UsedInodes = row.Value
+		case "nextInode":
+			counters.NextInode = row.Value
+		case "nextChunk":
+			counters.NextChunk = row.Value
+		case "nextSession":
+			counters.NextSession = row.Value
+		case "nextCleanupSlices":
+			counters.NextCleanupSlices = row.Value
+		}
+	}
+
+	var srows []sustained
+	if err = m.engine.Find(&srows); err != nil {
+		return err
+	}
+	ss := make(map[uint64][]Ino)
+	for _, row := range srows {
+		ss[row.Sid] = append(ss[row.Sid], row.Inode)
+	}
+	sessions := make([]*DumpedSustained, 0, len(ss))
+	for k, v := range ss {
+		sessions = append(sessions, &DumpedSustained{k, v})
+	}
+
+	data, err := json.MarshalIndent(DumpedMeta{
+		format,
+		counters,
+		sessions,
+		dels,
+		tree,
+	}, "", "  ")
+	if err != nil {
+		return nil
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef) error {
+	logger.Debugf("Loading entry inode %d name %s", e.Inode, e.Name)
+	attr := e.Attr
+	n := &node{
+		Inode:  e.Inode,
+		Type:   typeFromString(attr.Type),
+		Mode:   attr.Mode,
+		Uid:    attr.Uid,
+		Gid:    attr.Gid,
+		Atime:  attr.Atime*1e6 + int64(attr.Atimensec)/1e3,
+		Mtime:  attr.Mtime*1e6 + int64(attr.Atimensec)/1e3,
+		Ctime:  attr.Ctime*1e6 + int64(attr.Atimensec)/1e3,
+		Nlink:  attr.Nlink,
+		Rdev:   attr.Rdev,
+		Parent: e.Parent,
+	} // Length not set
+	var beans []interface{}
+	if n.Type == TypeFile {
+		n.Length = attr.Length
+		chunks := make([]*chunk, 0, len(e.Chunks))
+		for _, c := range e.Chunks {
+			if len(c.Slices) == 0 {
+				continue
+			}
+			slices := make([]byte, 0, sliceBytes*len(c.Slices))
+			for _, s := range c.Slices {
+				slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
+				if refs[s.Chunkid] == nil {
+					refs[s.Chunkid] = &chunkRef{s.Chunkid, s.Size, 1}
+				} else {
+					refs[s.Chunkid].Refs++
+				}
+				if cs.NextChunk <= int64(s.Chunkid) {
+					cs.NextChunk = int64(s.Chunkid) + 1
+				}
+			}
+			chunks = append(chunks, &chunk{e.Inode, c.Index, slices})
+		}
+		if len(chunks) > 0 {
+			beans = append(beans, chunks)
+		}
+	} else if n.Type == TypeDirectory {
+		n.Length = 4 << 10
+		if len(e.Entries) > 0 {
+			edges := make([]*edge, 0, len(e.Entries))
+			for _, c := range e.Entries {
+				edges = append(edges, &edge{
+					Parent: e.Inode,
+					Name:   c.Name,
+					Inode:  c.Inode,
+					Type:   typeFromString(c.Attr.Type),
+				})
+			}
+			beans = append(beans, edges)
+		}
+	} else if n.Type == TypeSymlink {
+		n.Length = uint64(len(e.Symlink))
+		beans = append(beans, &symlink{e.Inode, e.Symlink})
+	}
+	if e.Inode > 1 {
+		cs.UsedSpace += align4K(n.Length)
+		cs.UsedInodes += 1
+	}
+	if cs.NextInode <= int64(e.Inode) {
+		cs.NextInode = int64(e.Inode) + 1
+	}
+
+	if len(e.Xattrs) > 0 {
+		xattrs := make([]*xattr, 0, len(e.Xattrs))
+		for _, x := range e.Xattrs {
+			xattrs = append(xattrs, &xattr{e.Inode, x.Name, []byte(x.Value)})
+		}
+		beans = append(beans, xattrs)
+	}
+	beans = append(beans, n)
+	s := m.engine.NewSession()
+	defer s.Close()
+	return mustInsert(s, beans...)
+}
+
+func (m *dbMeta) LoadMeta(buf []byte) error {
+	tables, err := m.engine.DBMetas()
+	if err != nil {
+		return err
+	}
+	if len(tables) > 0 {
+		return fmt.Errorf("Database is not empty")
+	}
+	if err = m.engine.Sync2(new(setting), new(counter)); err != nil {
+		return fmt.Errorf("create table setting, counter: %s", err)
+	}
+	if err = m.engine.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
+		return fmt.Errorf("create table node, edge, symlink, xattr: %s", err)
+	}
+	if err = m.engine.Sync2(new(chunk), new(chunkRef)); err != nil {
+		return fmt.Errorf("create table chunk, chunk_ref: %s", err)
+	}
+	if err = m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
+		return fmt.Errorf("create table session, sustaind, delfile: %s", err)
+	}
+	if err = m.engine.Sync2(new(flock), new(plock)); err != nil {
+		return fmt.Errorf("create table flock, plock: %s", err)
+	}
+
+	dm := &DumpedMeta{}
+	if err = json.Unmarshal(buf, &dm); err != nil {
+		return err
+	}
+	format, err := json.MarshalIndent(dm.Setting, "", "")
+	if err != nil {
+		return err
+	}
+
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries); err != nil {
+		return err
+	}
+	counters := &DumpedCounters{
+		NextInode:   2,
+		NextChunk:   1,
+		NextSession: 1,
+	}
+	refs := make(map[uint64]*chunkRef)
+	for _, entry := range entries {
+		if err = m.loadEntry(entry, counters, refs); err != nil {
+			return err
+		}
+	}
+	logger.Infof("Dumped counters: %+v", *dm.Counters)
+	logger.Infof("Loaded counters: %+v", *counters)
+
+	beans := make([]interface{}, 0, 4) // setting, counter, delfile, chunkRef
+	beans = append(beans, &setting{"format", string(format)})
+	cs := make([]*counter, 0, 6)
+	cs = append(cs, &counter{"usedSpace", counters.UsedSpace})
+	cs = append(cs, &counter{"totalInodes", counters.UsedInodes})
+	cs = append(cs, &counter{"nextInode", counters.NextInode})
+	cs = append(cs, &counter{"nextChunk", counters.NextChunk})
+	cs = append(cs, &counter{"nextSession", counters.NextSession})
+	cs = append(cs, &counter{"nextCleanupSlices", counters.NextCleanupSlices})
+	beans = append(beans, cs)
+	if len(dm.DelFiles) > 0 {
+		dels := make([]*delfile, 0, len(dm.DelFiles))
+		for _, d := range dm.DelFiles {
+			dels = append(dels, &delfile{d.Inode, d.Length, d.Expire})
+		}
+		beans = append(beans, dels)
+	}
+	if len(refs) > 0 {
+		cks := make([]*chunkRef, 0, len(refs))
+		for _, v := range refs {
+			cks = append(cks, v)
+		}
+		beans = append(beans, cks)
+	}
+	s := m.engine.NewSession()
+	defer s.Close()
+	return mustInsert(s, beans...)
 }
