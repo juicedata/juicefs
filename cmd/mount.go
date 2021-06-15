@@ -84,11 +84,17 @@ func mount(c *cli.Context) error {
 			logger.Fatalf("create %s: %s", mp, err)
 		}
 	}
+	var readOnly = c.Bool("read-only")
+	for _, o := range strings.Split(c.String("o"), ",") {
+		if o == "ro" {
+			readOnly = true
+		}
+	}
 	m := meta.NewClient(addr, &meta.Config{
 		Retries:     10,
 		Strict:      true,
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
-		ReadOnly:    c.Bool("read-only"),
+		ReadOnly:    readOnly,
 		MountPoint:  mp,
 	})
 	format, err := m.Load()

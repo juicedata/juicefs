@@ -214,6 +214,7 @@ func freeHandle(fd int) {
 
 type javaConf struct {
 	MetaURL        string `json:"meta"`
+	ReadOnly       bool   `json:readOnly`
 	CacheDir       string `json:"cacheDir"`
 	CacheSize      int64  `json:"cacheSize"`
 	FreeSpace      string `json:"freeSpace"`
@@ -313,7 +314,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		utils.InitLoggers(false)
 
 		addr := jConf.MetaURL
-		m := meta.NewClient(addr, &meta.Config{Retries: 10, Strict: true})
+		m := meta.NewClient(addr, &meta.Config{Retries: 10, Strict: true, ReadOnly: jConf.ReadOnly})
 		format, err := m.Load()
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
