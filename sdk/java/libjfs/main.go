@@ -214,7 +214,7 @@ func freeHandle(fd int) {
 
 type javaConf struct {
 	MetaURL        string `json:"meta"`
-	ReadOnly       bool   `json:readOnly`
+	ReadOnly       bool   `json:"readOnly"`
 	CacheDir       string `json:"cacheDir"`
 	CacheSize      int64  `json:"cacheSize"`
 	FreeSpace      string `json:"freeSpace"`
