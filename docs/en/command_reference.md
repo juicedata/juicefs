@@ -143,6 +143,9 @@ dir entry cache timeout in seconds (default: 1)
 `--enable-xattr`\
 enable extended attributes (xattr) (default: false)
 
+`--read-only`\
+allow lookup/read operations only (default: false)
+
 `--get-timeout value`\
 the max number of seconds to download an object (default: 60)
 

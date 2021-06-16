@@ -31,12 +31,6 @@ import (
 const O_ACCMODE = syscall.O_ACCMODE
 const F_UNLCK = syscall.F_UNLCK
 
-const (
-	MODE_MASK_R = 4
-	MODE_MASK_W = 2
-	MODE_MASK_X = 1
-)
-
 type Statfs struct {
 	Bsize  uint32
 	Blocks uint64

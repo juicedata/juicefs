@@ -412,7 +412,7 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 		return
 	}
 
-	err = m.Open(ctx, ino, uint8(flags), attr)
+	err = m.Open(ctx, ino, flags, attr)
 	if err != 0 {
 		return
 	}

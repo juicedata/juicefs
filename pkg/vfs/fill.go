@@ -94,7 +94,7 @@ func resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
 			break
 		}
 		if i > 0 {
-			if err = m.Access(ctx, parent, 1, attr); err != 0 {
+			if err = m.Access(ctx, parent, MODE_MASK_R|MODE_MASK_X, attr); err != 0 {
 				return err
 			}
 		}

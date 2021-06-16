@@ -263,7 +263,13 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 			if err != 0 {
 				return nil, err
 			}
-			err = fs.m.Open(ctx, fi.inode, uint8(flags), nil)
+			var oflags uint32 = syscall.O_RDONLY
+			if flags == vfs.MODE_MASK_W {
+				oflags = syscall.O_WRONLY
+			} else if flags&vfs.MODE_MASK_W != 0 {
+				oflags = syscall.O_RDWR
+			}
+			err = fs.m.Open(ctx, fi.inode, oflags, nil)
 			if err != 0 {
 				return
 			}

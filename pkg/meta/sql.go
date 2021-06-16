@@ -285,6 +285,9 @@ func (m *dbMeta) NewSession() error {
 	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
 		return err
 	}
+	if m.conf.ReadOnly {
+		return nil
+	}
 	v, err := m.incrCounter("nextSession", 1)
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
@@ -484,6 +487,9 @@ func (m *dbMeta) shouldRetry(err error) bool {
 }
 
 func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	var err error
@@ -1665,10 +1671,13 @@ func (m *dbMeta) deleteInode(inode Ino) error {
 	return err
 }
 
-func (m *dbMeta) Open(ctx Context, inode Ino, flags uint8, attr *Attr) syscall.Errno {
+func (m *dbMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
 	var err syscall.Errno
 	if attr != nil {
 		err = m.GetAttr(ctx, inode, attr)
+	}
+	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
+		return syscall.EROFS
 	}
 	if err == 0 {
 		m.Lock()
@@ -1709,7 +1718,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	}
 	ss := readSliceBuf(c.Slices)
 	*chunks = buildSlice(ss)
-	if len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5 {
+	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5) {
 		go m.compactChunk(inode, indx, false)
 	}
 	return 0
