@@ -190,7 +190,7 @@ Unmount a volume.
 ### Synopsis
 
 ```
-juicefs umount [options] MOUNTPOINT
+juicefs umount [command options] MOUNTPOINT
 ```
 
 ### Options

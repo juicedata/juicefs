@@ -63,7 +63,7 @@ COPYRIGHT:
 ### 使用
 
 ```
-juicefs format [命令选项] REDIS-URL NAME
+juicefs format [command options] REDIS-URL NAME
 ```
 
 ### 选项
@@ -113,7 +113,7 @@ RSA私钥的路径 (PEM)
 ### 使用
 
 ```
-juicefs mount [命令选项] REDIS-URL MOUNTPOINT
+juicefs mount [command options] REDIS-URL MOUNTPOINT
 ```
 
 ### 选项
@@ -190,7 +190,7 @@ juicefs mount [命令选项] REDIS-URL MOUNTPOINT
 ### 使用
 
 ```
-juicefs umount [命令选项] MOUNTPOINT
+juicefs umount [command options] MOUNTPOINT
 ```
 
 ### 选项
@@ -207,7 +207,7 @@ juicefs umount [命令选项] MOUNTPOINT
 ### 使用
 
 ```
-juicefs gateway [命令选项] REDIS-URL ADDRESS
+juicefs gateway [command options] REDIS-URL ADDRESS
 ```
 
 ### 选项
@@ -263,7 +263,7 @@ juicefs gateway [命令选项] REDIS-URL ADDRESS
 ### 使用
 
 ```
-juicefs sync [命令选项] SRC DST
+juicefs sync [command options] SRC DST
 ```
 
 ### 选项
@@ -340,7 +340,7 @@ juicefs rmr PATH ...
 ### 使用
 
 ```
-juicefs info [命令选项] PATH or INODE
+juicefs info [command options] PATH or INODE
 ```
 
 ### 选项
@@ -358,7 +358,7 @@ juicefs info [命令选项] PATH or INODE
 ### 使用
 
 ```
-juicefs bench [命令选项] PATH
+juicefs bench [command options] PATH
 ```
 
 ### 选项
@@ -384,7 +384,7 @@ juicefs bench [命令选项] PATH
 ### 使用
 
 ```
-juicefs gc [命令选项] REDIS-URL
+juicefs gc [command options] REDIS-URL
 ```
 
 ### 选项
@@ -407,7 +407,7 @@ juicefs gc [命令选项] REDIS-URL
 ### 使用
 
 ```
-juicefs fsck [命令选项] REDIS-URL
+juicefs fsck [command options] REDIS-URL
 ```
 
 ## juicefs profile
@@ -419,7 +419,7 @@ juicefs fsck [命令选项] REDIS-URL
 ### 使用
 
 ```
-juicefs profile [命令选项] MOUNTPOINT/LOGFILE
+juicefs profile [command options] MOUNTPOINT/LOGFILE
 ```
 
 ### 选项
@@ -445,7 +445,7 @@ juicefs profile [命令选项] MOUNTPOINT/LOGFILE
 ### 使用
 
 ```
-juicefs status [命令选项] REDIS-URL
+juicefs status [command options] REDIS-URL
 ```
 
 ### 选项
@@ -462,7 +462,7 @@ juicefs status [命令选项] REDIS-URL
 ### 使用
 
 ```
-juicefs warmup [命令选项] [PATH ...]
+juicefs warmup [command options] [PATH ...]
 ```
 
 ### 选项
@@ -485,7 +485,7 @@ juicefs warmup [命令选项] [PATH ...]
 ### 使用
 
 ```
-juicefs dump [命令选项] META-ADDR FILE
+juicefs dump [command options] META-ADDR FILE
 ```
 
 ## juicefs load
@@ -497,5 +497,5 @@ juicefs dump [命令选项] META-ADDR FILE
 ### 使用
 
 ```
-juicefs load [命令选项] META-ADDR FILE
+juicefs load [command options] META-ADDR FILE
 ```
