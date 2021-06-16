@@ -50,8 +50,6 @@ COPYRIGHT:
 
 在所有命令后面添加 `-h` 或 `--help`，即可获得该命令的参数列表和帮助信息。
 
-***Note:*** If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for the convenience.
-
 **注意**：如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](quick_start_guide.md) 了解安装相关内容。
 
 以下文档为您提供有关每个子命令的详细信息。
@@ -482,7 +480,7 @@ run in background (default: false)
 
 ### Description
 
-dump JuiceFS metadata into a standalone file
+dump metadata into a JSON file
 
 ### Synopsis
 
@@ -494,7 +492,7 @@ juicefs dump [command options] META-ADDR FILE
 
 ### Description
 
-load JuiceFS metadata from a previously dumped file
+load metadata from a previously dumped JSON file
 
 ### Synopsis
 

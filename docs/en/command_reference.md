@@ -480,7 +480,7 @@ run in background (default: false)
 
 ### Description
 
-dump JuiceFS metadata into a standalone file
+dump metadata into a JSON file
 
 ### Synopsis
 
@@ -492,7 +492,7 @@ juicefs dump [command options] META-ADDR FILE
 
 ### Description
 
-load JuiceFS metadata from a previously dumped file
+load metadata from a previously dumped JSON file
 
 ### Synopsis
 
