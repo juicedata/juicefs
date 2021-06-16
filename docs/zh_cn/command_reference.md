@@ -56,276 +56,276 @@ COPYRIGHT:
 
 ## juicefs format
 
-### Description
+### 描述
 
-Format a volume. It's the first step for initializing a new file system volume.
+格式化文件系统；这是使用新文件系统的第一步。
 
-### Synopsis
+### 使用
 
 ```
-juicefs format [command options] REDIS-URL NAME
+juicefs format [命令选项] REDIS-URL NAME
 ```
 
-### Options
+### 选项
 
 `--block-size value`\
-size of block in KiB (default: 4096)
+块大小；单位为 KiB (默认: 4096)
 
 `--capacity value`\
-the limit for space in GiB (default: unlimited)
+容量配额；单位为 GiB (默认: 不限制)
 
 `--inodes value`\
-the limit for number of inodes (default: unlimited)
+文件数配额 (默认: 不限制)
 
 `--compress value`\
-compression algorithm (lz4, zstd, none) (default: "none")
+压缩算法 (lz4, zstd, none) (默认: "none")
 
 `--shards value`\
-store the blocks into N buckets by hash of key (default: 0)
+将数据块根据名字哈希存入 N 个桶中 (默认: 0)
 
 `--storage value`\
-Object storage type (e.g. s3, gcs, oss, cos) (default: "file")
+对象存储类型 (例如 s3, gcs, oss, cos) (默认: "file")
 
 `--bucket value`\
-A bucket URL to store data (default: `"$HOME/.juicefs/local"` or `"/var/jfs"`)
+存储数据的桶路径 (默认: `"$HOME/.juicefs/local"` 或 `"/var/jfs"`)
 
 `--access-key value`\
-Access key for object storage (env `ACCESS_KEY`)
+对象存储的 Access key (env `ACCESS_KEY`)
 
 `--secret-key value`\
-Secret key for object storage (env `SECRET_KEY`)
+对象存储的 Secret key (env `SECRET_KEY`)
 
 `--encrypt-rsa-key value`\
-A path to RSA private key (PEM)
+RSA私钥的路径 (PEM)
 
 `--force`\
-overwrite existing format (default: false)
+强制覆盖当前的格式化配置 (默认: false)
 
 `--no-update`\
-don't update existing volume (default: false)
+不要修改已有的格式化配置 (默认: false)
 
 ## juicefs mount
 
-### Description
+### 描述
 
-Mount a volume. The volume shoud be formatted first.
+挂载一个已经格式化的文件系统。
 
-### Synopsis
+### 使用
 
 ```
-juicefs mount [command options] REDIS-URL MOUNTPOINT
+juicefs mount [命令选项] REDIS-URL MOUNTPOINT
 ```
 
-### Options
+### 选项
 
 `--metrics value`\
-address to export metrics (default: "127.0.0.1:9567")
+监控数据导出地址 (默认: "127.0.0.1:9567")
 
 `--no-usage-report`\
-do not send usage report (default: false)
+不发送使用量信息 (默认: false)
 
 `-d, --background`\
-run in background (default: false)
+后台运行 (默认: false)
 
 `--no-syslog`\
-disable syslog (default: false)
+禁用系统日志 (默认: false)
 
 `-o value`\
-other FUSE options (see [this document](fuse_mount_options.md) for more information)
+其他 FUSE 选项 (参见[此文档](fuse_mount_options.md)来了解更多信息)
 
 `--attr-cache value`\
-attributes cache timeout in seconds (default: 1)
+属性缓存过期时间；单位为秒 (默认: 1)
 
 `--entry-cache value`\
-file entry cache timeout in seconds (default: 1)
+文件项缓存过期时间；单位为秒 (默认: 1)
 
 `--dir-entry-cache value`\
-dir entry cache timeout in seconds (default: 1)
+目录项缓存过期时间；单位为秒 (默认: 1)
 
 `--enable-xattr`\
-enable extended attributes (xattr) (default: false)
+启用扩展属性 (xattr) 功能 (默认: false)
 
 `--read-only`\
-allow lookup/read operations only (default: false)
+只读模式 (默认: false)
 
 `--get-timeout value`\
-the max number of seconds to download an object (default: 60)
+下载一个对象的超时时间；单位为秒 (默认: 60)
 
 `--put-timeout value`\
-the max number of seconds to upload an object (default: 60)
+上传一个对象的超时时间；单位为秒 (默认: 60)
 
 `--io-retries value`\
-number of retries after network failure (default: 30)
+网络异常时的重试次数 (默认: 30)
 
 `--max-uploads value`\
-number of connections to upload (default: 20)
+上传对象的连接数 (默认: 20)
 
 `--buffer-size value`\
-total read/write buffering in MiB (default: 300)
+读写缓存的总大小；单位为 MiB (默认: 300)
 
 `--prefetch value`\
-prefetch N blocks in parallel (default: 1)
+并发预读 N 个块 (默认: 1)
 
 `--writeback`\
-upload objects in background (default: false)
+后台异步上传对象 (默认: false)
 
 `--cache-dir value`\
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`)
+本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)
 
 `--cache-size value`\
-size of cached objects in MiB (default: 1024)
+缓存对象的总大小；单位为 MiB (默认: 1024)
 
 `--free-space-ratio value`\
-min free space (ratio) (default: 0.1)
+最小剩余空间比例 (默认: 0.1)
 
 `--cache-partial-only`\
-cache only random/small read (default: false)
+仅缓存随机小块读 (默认: false)
 
 ## juicefs umount
 
-### Description
+### 描述
 
-Unmount a volume.
+卸载一个文件文件系统。
 
-### Synopsis
+### 使用
 
 ```
-juicefs umount [options] MOUNTPOINT
+juicefs umount [命令选项] MOUNTPOINT
 ```
 
-### Options
+### 选项
 
 `-f, --force`\
-unmount a busy mount point by force (default: false)
+强制卸载一个忙碌的文件系统 (默认: false)
 
 ## juicefs gateway
 
-### Description
+### 描述
 
-S3-compatible gateway.
+启动一个 S3 兼容的网关。
 
-### Synopsis
+### 使用
 
 ```
-juicefs gateway [command options] REDIS-URL ADDRESS
+juicefs gateway [命令选项] REDIS-URL ADDRESS
 ```
 
-### Options
+### 选项
 
 `--get-timeout value`\
-the max number of seconds to download an object (default: 60)
+下载一个对象的超时时间；单位为秒 (默认: 60)
 
 `--put-timeout value`\
-the max number of seconds to upload an object (default: 60)
+上传一个对象的超时时间；单位为秒 (默认: 60)
 
 `--io-retries value`\
-number of retries after network failure (default: 30)
+网络异常时的重试次数 (默认: 30)
 
 `--max-uploads value`\
-number of connections to upload (default: 20)
+上传对象的连接数 (默认: 20)
 
 `--buffer-size value`\
-total read/write buffering in MiB (default: 300)
+读写缓存的总大小；单位为 MiB (默认: 300)
 
 `--prefetch value`\
-prefetch N blocks in parallel (default: 3)
+并发预读 N 个块 (默认: 3)
 
 `--writeback`\
-upload objects in background (default: false)
+后台异步上传对象 (默认: false)
 
 `--cache-dir value`\
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
+本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
 
 `--cache-size value`\
-size of cached objects in MiB (default: 1024)
+缓存对象的总大小；单位为 MiB (默认: 1024)
 
 `--free-space-ratio value`\
-min free space (ratio) (default: 0.1)
+最小剩余空间比例 (默认: 0.1)
 
 `--cache-partial-only`\
-cache only random/small read (default: false)
+仅缓存随机小块读 (默认: false)
 
 `--access-log value`\
-path for JuiceFS access log
+访问日志的路径
 
 `--no-usage-report`\
-do not send usage report (default: false)
+不发送使用量信息 (默认: false)
 
 `--no-banner`\
-disable MinIO startup information (default: false)
+禁用 MinIO 的启动信息 (默认: false)
 
 ## juicefs sync
 
-### Description
+### 描述
 
-Sync between two storage.
+在两个存储系统之间同步数据。
 
-### Synopsis
+### 使用
 
 ```
-juicefs sync [command options] SRC DST
+juicefs sync [命令选项] SRC DST
 ```
 
-### Options
+### 选项
 
 `--start KEY, -s KEY`\
-the first KEY to sync
+同步的第一个对象名
 
 `--end KEY, -e KEY`\
-the last KEY to sync
+同步的最后一个对象名
 
 `--threads value, -p value`\
-number of concurrent threads (default: 10)
+并发线程数 (默认: 10)
 
 `--http-port PORT`\
-HTTP PORT to listen to (default: 6070)
+监听的 HTTP 端口 (默认: 6070)
 
 `--update, -u`\
-update existing file if the source is newer (default: false)
+当源文件更新时修改已存在的文件 (默认: false)
 
 `--force-update, -f`\
-always update existing file (default: false)
+强制修改已存在的文件 (默认: false)
 
 `--perms`\
-preserve permissions (default: false)
+保留权限设置 (默认: false)
 
 `--dirs`\
-Sync directories or holders (default: false)
+同步目录 (默认: false)
 
 `--dry`\
-don't copy file (default: false)
+不拷贝文件 (默认: false)
 
 `--delete-src, --deleteSrc`\
-delete objects from source after synced (default: false)
+同步后删除源存储的对象 (默认: false)
 
 `--delete-dst, --deleteDst`\
-delete extraneous objects from destination (default: false)
+删除目标存储下的不相关对象 (默认: false)
 
 `--exclude PATTERN`\
-exclude keys containing PATTERN (POSIX regular expressions)
+跳过包含 PATTERN (POSIX正则表达式) 的对象名
 
 `--include PATTERN`\
-only include keys containing PATTERN (POSIX regular expressions)
+仅同步包含 PATTERN (POSIX正则表达式) 的对象名
 
 `--manager value`\
-manager address
+管理者地址
 
 `--worker value`\
-hosts (seperated by comma) to launch worker
+工作节点列表 (使用逗号分隔)
 
 `--bwlimit value`\
-limit bandwidth in Mbps (0 means unlimited) (default: 0)
+限制最大带宽；单位为 Mbps (0 表示不限制) (默认: 0)
 
 `--no-https`\
-do not use HTTPS (default: false)
+不要使用 HTTPS (默认: false)
 
 ## juicefs rmr
 
-### Description
+### 描述
 
-Remove all files in directories recursively.
+递归删除指定目录下的所有文件。
 
-### Synopsis
+### 使用
 
 ```
 juicefs rmr PATH ...
@@ -333,169 +333,169 @@ juicefs rmr PATH ...
 
 ## juicefs info
 
-### Description
+### 描述
 
-Show internal information for given paths or inodes.
+显示指定路径或 inode 的内部信息。
 
-### Synopsis
+### 使用
 
 ```
-juicefs info [command options] PATH or INODE
+juicefs info [命令选项] PATH or INODE
 ```
 
-### Options
+### 选项
 
 `--inode, -i`\
-use inode instead of path (current dir should be inside JuiceFS) (default: false)
+使用inode号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认: false)
 
 
 ## juicefs bench
 
-### Description
+### 描述
 
-Run benchmark, include read/write/stat big and small files.
+跑一轮基准性能测试，包括对大文件和小文件的读/写/获取属性操作。
 
-### Synopsis
+### 使用
 
 ```
-juicefs bench [command options] PATH
+juicefs bench [命令选项] PATH
 ```
 
-### Options
+### 选项
 
 `--block-size value`\
-block size in MiB (default: 1)
+块大小；单位为 MiB (默认: 1)
 
 `--big-file-size value`\
-size of big file in MiB (default: 1024)
+大文件大小；单位为 MiB (默认: 1024)
 
 `--small-file-size value`\
-size of small file in MiB (default: 0.1)
+小文件大小；单位为 MiB (默认: 0.1)
 
 `--small-file-count value`\
-number of small files (default: 100)
+小文件数量 (默认: 100)
 
 ## juicefs gc
 
-### Description
+### 描述
 
-Collect any leaked objects.
+收集泄漏的对象。
 
-### Synopsis
+### 使用
 
 ```
-juicefs gc [command options] REDIS-URL
+juicefs gc [命令选项] REDIS-URL
 ```
 
-### Options
+### 选项
 
 `--delete`\
-deleted leaked objects (default: false)
+删除泄漏的对象 (默认: false)
 
 `--compact`\
-compact all chunks with more than 1 slices (default: false).
+整理所有文件的碎片 (默认: false).
 
 `--threads value`\
-number threads to delete leaked objects (default: 10)
+用于删除泄漏对象的线程数 (默认: 10)
 
 ## juicefs fsck
 
-### Description
+### 描述
 
-Check consistency of file system.
+检查文件系统一致性。
 
-### Synopsis
+### 使用
 
 ```
-juicefs fsck [command options] REDIS-URL
+juicefs fsck [命令选项] REDIS-URL
 ```
 
 ## juicefs profile
 
-### Description
+### 描述
 
-Analyze access log (Experimental).
+分析访问日志。
 
-### Synopsis
+### 使用
 
 ```
-juicefs profile [command options] MOUNTPOINT/LOGFILE
+juicefs profile [命令选项] MOUNTPOINT/LOGFILE
 ```
 
-### Options
+### 选项
 
 `--uid value, -u value`\
-track only specified UIDs(separated by comma ,)
+仅跟踪指定 UIDs (用逗号 , 分隔)
 
 `--gid value, -g value`\
-track only specified GIDs(separated by comma ,)
+仅跟踪指定 GIDs (用逗号 , 分隔)
 
 `--pid value, -p value`\
-track only specified PIDs(separated by comma ,)
+仅跟踪指定 PIDs (用逗号 , 分隔)
 
 `--interval value`\
-flush interval in seconds (default: 2)
+显示间隔；单位为秒 (默认: 2)
 
 ## juicefs status
 
-### Description
+### 描述
 
-show status of JuiceFS
+显示JuiceFS的状态。
 
-### Synopsis
+### 使用
 
 ```
-juicefs status [command options] REDIS-URL
+juicefs status [命令选项] REDIS-URL
 ```
 
-### Options
+### 选项
 
 `--session value, -s value`\
-show detailed information (sustained inodes, locks) of the specified session (sid) (default: 0)
+展示指定会话 (sid) 的具体信息 (默认: 0)
 
 ## juicefs warmup
 
-### Description
+### 描述
 
-build cache for target directories/files
+主动为指定目录/文件建立缓存。
 
-### Synopsis
+### 使用
 
 ```
-juicefs warmup [command options] [PATH ...]
+juicefs warmup [命令选项] [PATH ...]
 ```
 
-### Options
+### 选项
 
 `--file value, -f value`\
-file containing a list of paths
+指定一个包含一组路径的文件
 
 `--threads value, -p value`\
-number of concurrent workers (default: 50)
+并发的工作线程数 (默认: 50)
 
 `--background, -b`\
-run in background (default: false)
+后台运行 (默认: false)
 
 ## juicefs dump
 
-### Description
+### 描述
 
-dump metadata into a JSON file
+将元数据导出到一个JSON文件中。
 
-### Synopsis
+### 使用
 
 ```
-juicefs dump [command options] META-ADDR FILE
+juicefs dump [命令选项] META-ADDR FILE
 ```
 
 ## juicefs load
 
-### Description
+### 描述
 
-load metadata from a previously dumped JSON file
+从之前导出的JSON文件中加载元数据。
 
-### Synopsis
+### 使用
 
 ```
-juicefs load [command options] META-ADDR FILE
+juicefs load [命令选项] META-ADDR FILE
 ```
