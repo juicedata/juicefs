@@ -14,7 +14,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.14-dev (2021-06-04 d9485fb)
+   0.15-dev (2021-06-16 b5d0cd8)
 
 COMMANDS:
    format   format a volume
@@ -30,6 +30,8 @@ COMMANDS:
    profile  analyze access log (Experimental)
    status   show status of JuiceFS
    warmup   build cache for target directories/files
+   dump     dump JuiceFS metadata into a standalone file
+   load     load JuiceFS metadata from a previously dumped file
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -475,3 +477,27 @@ number of concurrent workers (default: 50)
 
 `--background, -b`\
 run in background (default: false)
+
+## juicefs dump
+
+### Description
+
+dump JuiceFS metadata into a standalone file
+
+### Synopsis
+
+```
+juicefs dump [command options] META-ADDR FILE
+```
+
+## juicefs load
+
+### Description
+
+load JuiceFS metadata from a previously dumped file
+
+### Synopsis
+
+```
+juicefs load [command options] META-ADDR FILE
+```
