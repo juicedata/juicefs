@@ -17,6 +17,7 @@ package utils
 
 import (
 	"io"
+	"math/rand"
 	"os"
 	"strings"
 )
@@ -61,4 +62,14 @@ func SplitDir(d string) []string {
 		dd = strings.Split(dd[0], ",")
 	}
 	return dd
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+func RandString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }
