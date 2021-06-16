@@ -618,7 +618,9 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		if m.conf.CaseInsensi {
 			// TODO: in SQL
 			if e := m.resolveCase(ctx, parent, name); e != nil {
-				*inode = e.Inode
+				if inode != nil {
+					*inode = e.Inode
+				}
 				if attr != nil {
 					return m.GetAttr(ctx, *inode, attr)
 				}
@@ -627,7 +629,9 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		}
 		return syscall.ENOENT
 	}
-	*inode = nn.Inode
+	if inode != nil {
+		*inode = nn.Inode
+	}
 	if attr != nil {
 		m.parseAttr(&nn.node, attr)
 	}
