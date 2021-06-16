@@ -109,6 +109,10 @@ func mount_flags() []cli.Flag {
 			Name:  "enable-xattr",
 			Usage: "enable extended attributes (xattr)",
 		},
+		&cli.BoolFlag{
+			Name:  "read-only",
+			Usage: "allow lookup/read operations only",
+		},
 	}
 }
 

@@ -20,6 +20,7 @@ type Config struct {
 	Strict      bool // update ctime
 	Retries     int
 	CaseInsensi bool
+	ReadOnly    bool
 	MountPoint  string
 }
 

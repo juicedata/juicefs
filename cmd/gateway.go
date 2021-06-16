@@ -143,8 +143,9 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	c := g.ctx
 	addr := c.Args().Get(0)
 	m := meta.NewClient(addr, &meta.Config{
-		Retries: 10,
-		Strict:  true,
+		Retries:  10,
+		Strict:   true,
+		ReadOnly: c.Bool("read-only"),
 	})
 	format, err := m.Load()
 	if err != nil {

@@ -23,6 +23,12 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
+const (
+	MODE_MASK_R = 4
+	MODE_MASK_W = 2
+	MODE_MASK_X = 1
+)
+
 func strerr(errno syscall.Errno) string {
 	if errno == 0 {
 		return "OK"
