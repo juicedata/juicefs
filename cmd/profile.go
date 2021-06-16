@@ -318,7 +318,7 @@ func profile(ctx *cli.Context) error {
 func profileFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "profile",
-		Usage:     "analyze access log (Experimental)",
+		Usage:     "analyze access log",
 		Action:    profile,
 		ArgsUsage: "MOUNTPOINT/LOGFILE",
 		Flags: []cli.Flag{

@@ -27,7 +27,7 @@ COMMANDS:
    bench    run benchmark to read/write/stat big/small files
    gc       collect any leaked objects
    fsck     Check consistency of file system
-   profile  analyze access log (Experimental)
+   profile  analyze access log
    status   show status of JuiceFS
    warmup   build cache for target directories/files
    dump     dump JuiceFS metadata into a standalone file
