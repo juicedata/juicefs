@@ -95,6 +95,7 @@ func mount(c *cli.Context) error {
 		Strict:      true,
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
 		ReadOnly:    readOnly,
+		OpenCache:   time.Duration(time.Duration(c.Float64("open-cache") * 1e9)),
 		MountPoint:  mp,
 	})
 	format, err := m.Load()
@@ -300,6 +301,12 @@ func clientFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
+		},
+
+		&cli.Float64Flag{
+			Name:  "open-cache",
+			Value: 0.0,
+			Usage: "open files cache timeout in seconds",
 		},
 	}
 }

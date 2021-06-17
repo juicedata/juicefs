@@ -143,9 +143,10 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	c := g.ctx
 	addr := c.Args().Get(0)
 	m := meta.NewClient(addr, &meta.Config{
-		Retries:  10,
-		Strict:   true,
-		ReadOnly: c.Bool("read-only"),
+		Retries:   10,
+		Strict:    true,
+		ReadOnly:  c.Bool("read-only"),
+		OpenCache: time.Duration(time.Duration(c.Float64("open-cache") * 1e9)),
 	})
 	format, err := m.Load()
 	if err != nil {
@@ -392,6 +393,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 	if eno != 0 {
 		return nil, jfsToObjectErr(ctx, eno)
 	}
+	defer f.Close(mctx)
 	entries, eno := f.Readdir(mctx, 10000)
 	if eno != 0 {
 		return nil, jfsToObjectErr(ctx, eno)
@@ -638,7 +640,7 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
-	f, eno := n.fs.Open(mctx, n.path(bucket, object), 0)
+	f, eno := n.fs.Open(mctx, n.path(bucket, object), vfs.MODE_MASK_R)
 	if eno != 0 {
 		return jfsToObjectErr(ctx, eno, bucket, object)
 	}

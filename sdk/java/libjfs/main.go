@@ -213,29 +213,30 @@ func freeHandle(fd int) {
 }
 
 type javaConf struct {
-	MetaURL        string `json:"meta"`
-	ReadOnly       bool   `json:"readOnly"`
-	CacheDir       string `json:"cacheDir"`
-	CacheSize      int64  `json:"cacheSize"`
-	FreeSpace      string `json:"freeSpace"`
-	AutoCreate     bool   `json:"autoCreate"`
-	CacheFullBlock bool   `json:"cacheFullBlock"`
-	Writeback      bool   `json:"writeback"`
-	OpenCache      bool   `json:"opencache"`
-	MemorySize     int    `json:"memorySize"`
-	Prefetch       int    `json:"prefetch"`
-	Readahead      int    `json:"readahead"`
-	UploadLimit    int    `json:"uploadLimit"`
-	MaxUploads     int    `json:"maxUploads"`
-	GetTimeout     int    `json:"getTimeout"`
-	PutTimeout     int    `json:"putTimeout"`
-	FastResolve    bool   `json:"fastResolve"`
-	Debug          bool   `json:"debug"`
-	NoUsageReport  bool   `json:"noUsageReport"`
-	AccessLog      string `json:"accessLog"`
-	PushGateway    string `json:"pushGateway"`
-	PushInterval   int    `json:"pushInterval"`
-	PushAuth       string `json:"pushAuth"`
+	MetaURL        string  `json:"meta"`
+	ReadOnly       bool    `json:"readOnly"`
+	OpenCache      float64 `json:"openCache"`
+	CacheDir       string  `json:"cacheDir"`
+	CacheSize      int64   `json:"cacheSize"`
+	FreeSpace      string  `json:"freeSpace"`
+	AutoCreate     bool    `json:"autoCreate"`
+	CacheFullBlock bool    `json:"cacheFullBlock"`
+	Writeback      bool    `json:"writeback"`
+	OpenCache      bool    `json:"opencache"`
+	MemorySize     int     `json:"memorySize"`
+	Prefetch       int     `json:"prefetch"`
+	Readahead      int     `json:"readahead"`
+	UploadLimit    int     `json:"uploadLimit"`
+	MaxUploads     int     `json:"maxUploads"`
+	GetTimeout     int     `json:"getTimeout"`
+	PutTimeout     int     `json:"putTimeout"`
+	FastResolve    bool    `json:"fastResolve"`
+	Debug          bool    `json:"debug"`
+	NoUsageReport  bool    `json:"noUsageReport"`
+	AccessLog      string  `json:"accessLog"`
+	PushGateway    string  `json:"pushGateway"`
+	PushInterval   int     `json:"pushInterval"`
+	PushAuth       string  `json:"pushAuth"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) uintptr {
@@ -314,7 +315,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		utils.InitLoggers(false)
 
 		addr := jConf.MetaURL
-		m := meta.NewClient(addr, &meta.Config{Retries: 10, Strict: true, ReadOnly: jConf.ReadOnly})
+		m := meta.NewClient(addr, &meta.Config{
+			Retries:   10,
+			Strict:    true,
+			ReadOnly:  jConf.ReadOnly,
+			OpenCache: time.Duration(time.Duration(jConf.OpenCache * 1e9)),
+		})
 		format, err := m.Load()
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
@@ -726,11 +732,10 @@ func jfs_stat1(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 	if w == nil {
 		return EINVAL
 	}
-	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
+	info, err := w.Stat(w.withPid(pid), C.GoString(cpath))
 	if err != 0 {
 		return errno(err)
 	}
-	info, _ := f.Stat()
 	return fill_stat(w, utils.NewNativeBuffer(toBuf(buf, 130)), info.(*fs.FileStat))
 }
 
@@ -758,6 +763,7 @@ func jfs_summary(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 	if err != 0 {
 		return errno(err)
 	}
+	defer f.Close(ctx)
 	summary, err := f.Summary(ctx, 0, 1)
 	if err != 0 {
 		return errno(err)
@@ -792,6 +798,7 @@ func jfs_chmod(pid int, h uintptr, cpath *C.char, mode C.mode_t) int {
 	if err != 0 {
 		return errno(err)
 	}
+	defer f.Close(w.withPid(pid))
 	return errno(f.Chmod(w.withPid(pid), uint16(mode)))
 }
 
@@ -805,6 +812,7 @@ func jfs_chown(pid int, h uintptr, cpath *C.char, uid uint32, gid uint32) int {
 	if err != 0 {
 		return errno(err)
 	}
+	defer f.Close(w.withPid(pid))
 	return errno(f.Chown(w.withPid(pid), uid, gid))
 }
 
@@ -818,6 +826,7 @@ func jfs_utime(pid int, h uintptr, cpath *C.char, mtime, atime int64) int {
 	if err != 0 {
 		return errno(err)
 	}
+	defer f.Close(ctx)
 	return errno(f.Utime(w.withPid(pid), atime, mtime))
 }
 
@@ -831,6 +840,7 @@ func jfs_setOwner(pid int, h uintptr, cpath *C.char, owner *C.char, group *C.cha
 	if err != 0 {
 		return errno(err)
 	}
+	defer f.Close()
 	st, _ := f.Stat()
 	uid := uint32(st.(*fs.FileStat).Uid())
 	gid := uint32(st.(*fs.FileStat).Gid())
@@ -909,7 +919,7 @@ func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int 
 	}
 	dst := C.GoString(_dst)
 	ctx := w.withPid(pid)
-	df, err := w.Open(ctx, dst, 2)
+	df, err := w.Open(ctx, dst, vfs.MODE_MASK_W)
 	if err != 0 {
 		return errno(err)
 	}
