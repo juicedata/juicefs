@@ -62,11 +62,12 @@ func main() {
 		Usage: "print only the version",
 	}
 	app := &cli.App{
-		Name:      "juicefs",
-		Usage:     "A POSIX file system built on Redis and object storage.",
-		Version:   version.Version(),
-		Copyright: "AGPLv3",
-		Flags:     globalFlags(),
+		Name:                 "juicefs",
+		Usage:                "A POSIX file system built on Redis and object storage.",
+		Version:              version.Version(),
+		Copyright:            "AGPLv3",
+		EnableBashCompletion: true,
+		Flags:                globalFlags(),
 		Commands: []*cli.Command{
 			formatFlags(),
 			mountFlags(),
@@ -237,10 +238,6 @@ func reorderOptions(app *cli.App, args []string) []string {
 				newArgs = append(newArgs, args[i])
 			}
 		} else {
-			if strings.HasPrefix(option, "-") {
-				logger.Errorf("unknown option: %s", option)
-				os.Exit(1)
-			}
 			others = append(others, option)
 		}
 	}
