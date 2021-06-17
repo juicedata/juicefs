@@ -840,7 +840,7 @@ func jfs_setOwner(pid int, h uintptr, cpath *C.char, owner *C.char, group *C.cha
 	if err != 0 {
 		return errno(err)
 	}
-	defer f.Close()
+	defer f.Close(w.withPid(pid))
 	st, _ := f.Stat()
 	uid := uint32(st.(*fs.FileStat).Uid())
 	gid := uint32(st.(*fs.FileStat).Gid())
