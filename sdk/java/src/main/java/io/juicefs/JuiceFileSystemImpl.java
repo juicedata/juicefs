@@ -306,7 +306,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     for (String key : keys) {
       obj.put(key, getConf(conf, key, ""));
     }
-    String[] bkeys = new String[]{"debug", "writeback", "opencache"};
+    String[] bkeys = new String[]{"debug", "writeback"};
     for (String key : bkeys) {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
