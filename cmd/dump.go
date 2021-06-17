@@ -41,7 +41,7 @@ func dump(ctx *cli.Context) error {
 func dumpFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "dump",
-		Usage:     "dump JuiceFS metadata into a standalone file",
+		Usage:     "dump metadata into a JSON file",
 		ArgsUsage: "META-ADDR FILE",
 		Action:    dump,
 	}
