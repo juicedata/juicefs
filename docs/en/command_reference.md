@@ -14,7 +14,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.14-dev (2021-06-04 d9485fb)
+   0.15-dev (2021-06-16 b5d0cd8)
 
 COMMANDS:
    format   format a volume
@@ -27,9 +27,11 @@ COMMANDS:
    bench    run benchmark to read/write/stat big/small files
    gc       collect any leaked objects
    fsck     Check consistency of file system
-   profile  analyze access log (Experimental)
+   profile  analyze access log
    status   show status of JuiceFS
    warmup   build cache for target directories/files
+   dump     dump JuiceFS metadata into a standalone file
+   load     load JuiceFS metadata from a previously dumped file
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -188,7 +190,7 @@ Unmount a volume.
 ### Synopsis
 
 ```
-juicefs umount [options] MOUNTPOINT
+juicefs umount [command options] MOUNTPOINT
 ```
 
 ### Options
@@ -412,7 +414,7 @@ juicefs fsck [command options] REDIS-URL
 
 ### Description
 
-Analyze access log (Experimental).
+Analyze access log.
 
 ### Synopsis
 
@@ -473,3 +475,27 @@ number of concurrent workers (default: 50)
 
 `--background, -b`\
 run in background (default: false)
+
+## juicefs dump
+
+### Description
+
+dump metadata into a JSON file
+
+### Synopsis
+
+```
+juicefs dump [command options] META-ADDR FILE
+```
+
+## juicefs load
+
+### Description
+
+load metadata from a previously dumped JSON file
+
+### Synopsis
+
+```
+juicefs load [command options] META-ADDR FILE
+```

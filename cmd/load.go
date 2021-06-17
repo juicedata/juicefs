@@ -40,7 +40,7 @@ func load(ctx *cli.Context) error {
 func loadFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "load",
-		Usage:     "load JuiceFS metadata from a previously dumped file",
+		Usage:     "load metadata from a previously dumped JSON file",
 		ArgsUsage: "META-ADDR FILE",
 		Action:    load,
 	}
