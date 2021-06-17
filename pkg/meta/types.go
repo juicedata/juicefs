@@ -70,14 +70,14 @@ type DumpedXattr struct {
 }
 
 type DumpedEntry struct {
-	Name    string         `json:"name"`
-	Inode   Ino            `json:"inode"`
-	Attr    *DumpedAttr    `json:"attr"`
-	Parent  Ino            `json:"-"`
-	Symlink string         `json:"symlink,omitempty"`
-	Xattrs  []*DumpedXattr `json:"xattrs,omitempty"`
-	Chunks  []*DumpedChunk `json:"chunks,omitempty"`
-	Entries []*DumpedEntry `json:"entries,omitempty"`
+	Name    string                  `json:"-"`
+	Inode   Ino                     `json:"inode"`
+	Attr    *DumpedAttr             `json:"attr"`
+	Parent  Ino                     `json:"-"`
+	Symlink string                  `json:"symlink,omitempty"`
+	Xattrs  []*DumpedXattr          `json:"xattrs,omitempty"`
+	Chunks  []*DumpedChunk          `json:"chunks,omitempty"`
+	Entries map[string]*DumpedEntry `json:"entries,omitempty"`
 }
 
 type DumpedMeta struct {
