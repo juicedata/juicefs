@@ -19,10 +19,12 @@ type openfiles struct {
 }
 
 func newOpenFiles(expire time.Duration) *openfiles {
-	return &openfiles{
+	of := &openfiles{
 		expire: expire,
 		files:  make(map[Ino]*openFile),
 	}
+	go of.cleanup()
+	return of
 }
 
 func (o *openfiles) cleanup() {
@@ -80,9 +82,6 @@ func (o *openfiles) Close(ino Ino) bool {
 	of, ok := o.files[ino]
 	if ok {
 		of.refs--
-		if of.refs <= 0 && of.lastCheck.Add(o.expire).Before(time.Now()) {
-			delete(o.files, ino)
-		}
 		return of.refs <= 0
 	}
 	return true
