@@ -96,7 +96,7 @@ juicefs format [command options] REDIS-URL NAME
 对象存储的 Secret key (env `SECRET_KEY`)
 
 `--encrypt-rsa-key value`\
-RSA私钥的路径 (PEM)
+RSA 私钥的路径 (PEM)
 
 `--force`\
 强制覆盖当前的格式化配置 (默认: false)
@@ -346,7 +346,7 @@ juicefs info [command options] PATH or INODE
 ### 选项
 
 `--inode, -i`\
-使用inode号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认: false)
+使用 inode 号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认: false)
 
 
 ## juicefs bench
@@ -440,7 +440,7 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 
 ### 描述
 
-显示JuiceFS的状态。
+显示 JuiceFS 的状态。
 
 ### 使用
 
@@ -480,7 +480,7 @@ juicefs warmup [command options] [PATH ...]
 
 ### 描述
 
-将元数据导出到一个JSON文件中。
+将元数据导出到一个 JSON 文件中。
 
 ### 使用
 
@@ -492,7 +492,7 @@ juicefs dump [command options] META-ADDR FILE
 
 ### 描述
 
-从之前导出的JSON文件中加载元数据。
+从之前导出的 JSON 文件中加载元数据。
 
 ### 使用
 
