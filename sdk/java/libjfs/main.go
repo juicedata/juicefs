@@ -222,7 +222,6 @@ type javaConf struct {
 	AutoCreate     bool    `json:"autoCreate"`
 	CacheFullBlock bool    `json:"cacheFullBlock"`
 	Writeback      bool    `json:"writeback"`
-	OpenCache      bool    `json:"opencache"`
 	MemorySize     int     `json:"memorySize"`
 	Prefetch       int     `json:"prefetch"`
 	Readahead      int     `json:"readahead"`
@@ -736,7 +735,7 @@ func jfs_stat1(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 	if err != 0 {
 		return errno(err)
 	}
-	return fill_stat(w, utils.NewNativeBuffer(toBuf(buf, 130)), info.(*fs.FileStat))
+	return fill_stat(w, utils.NewNativeBuffer(toBuf(buf, 130)), info)
 }
 
 //export jfs_lstat1
@@ -826,7 +825,7 @@ func jfs_utime(pid int, h uintptr, cpath *C.char, mtime, atime int64) int {
 	if err != 0 {
 		return errno(err)
 	}
-	defer f.Close(ctx)
+	defer f.Close(w.withPid(pid))
 	return errno(f.Utime(w.withPid(pid), atime, mtime))
 }
 
