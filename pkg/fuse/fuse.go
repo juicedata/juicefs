@@ -235,13 +235,15 @@ func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name str
 func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	_, fh, err := vfs.Open(ctx, Ino(in.NodeId), in.Flags)
+	entry, fh, err := vfs.Open(ctx, Ino(in.NodeId), in.Flags)
 	if err != 0 {
 		return fuse.Status(err)
 	}
 	out.Fh = fh
 	if vfs.IsSpecialNode(Ino(in.NodeId)) {
 		out.OpenFlags |= fuse.FOPEN_DIRECT_IO
+	} else if entry.Attr.KeepCache {
+		out.OpenFlags |= fuse.FOPEN_KEEP_CACHE
 	}
 	return 0
 }

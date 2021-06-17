@@ -15,12 +15,15 @@
 
 package meta
 
+import "time"
+
 // Config for clients.
 type Config struct {
 	Strict      bool // update ctime
 	Retries     int
 	CaseInsensi bool
 	ReadOnly    bool
+	OpenCache   time.Duration
 	MountPoint  string
 }
 
