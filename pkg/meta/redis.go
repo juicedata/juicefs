@@ -2736,9 +2736,9 @@ func (r *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis: %s", time.Since(start))
 }
 
-func (m *redisMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
+func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	ctx := Background
-	e := &DumpedEntry{Name: name, Inode: inode}
+	e := &DumpedEntry{Inode: inode}
 	st := m.txn(ctx, func(tx *redis.Tx) error {
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -2789,16 +2789,16 @@ func (m *redisMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
 	}
 }
 
-func (m *redisMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
+func (m *redisMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 	ctx := Background
 	keys, err := m.rdb.HGetAll(ctx, m.entryKey(inode)).Result()
 	if err != nil {
 		return nil, err
 	}
-	entries := make([]*DumpedEntry, 0, len(keys))
+	entries := make(map[string]*DumpedEntry)
 	for k, v := range keys {
 		typ, inode := m.parseEntry([]byte(v))
-		entry, err := m.dumpEntry(k, inode)
+		entry, err := m.dumpEntry(inode)
 		if err != nil {
 			return nil, err
 		}
@@ -2807,9 +2807,8 @@ func (m *redisMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
 				return nil, err
 			}
 		}
-		entries = append(entries, entry)
+		entries[k] = entry
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	return entries, nil
 }
 
@@ -2830,7 +2829,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
 
-	tree, err := m.dumpEntry("/", 1)
+	tree, err := m.dumpEntry(1)
 	if err != nil {
 		return err
 	}
@@ -2916,7 +2915,8 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
 			e.Parent = 1
 		}
 		e.Attr.Nlink = 2
-		for _, child := range e.Entries {
+		for name, child := range e.Entries {
+			child.Name = name
 			child.Parent = e.Inode
 			if typeFromString(child.Attr.Type) == TypeDirectory {
 				e.Attr.Nlink++
