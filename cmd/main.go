@@ -238,6 +238,9 @@ func reorderOptions(app *cli.App, args []string) []string {
 				newArgs = append(newArgs, args[i])
 			}
 		} else {
+			if strings.HasPrefix(option, "-") && !stringContains(args, "--generate-bash-completion") {
+				logger.Fatalf("unknown option: %s", option)
+			}
 			others = append(others, option)
 		}
 	}
