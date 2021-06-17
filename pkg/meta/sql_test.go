@@ -17,13 +17,27 @@
 package meta
 
 import (
+	"io/ioutil"
+	"log"
 	"os"
 	"testing"
 )
 
+func tempFile(t *testing.T) string {
+	fp, err := ioutil.TempFile("", "test-*.db")
+	if err != nil {
+		t.Fatalf("create temp file: %s", err)
+	}
+	if err = fp.Close(); err != nil {
+		log.Fatalf("close temp file: %s", err)
+	}
+	return fp.Name()
+}
+
 func TestSQLClient(t *testing.T) {
-	os.Remove("test.db")
-	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -50,8 +64,9 @@ func TestMySQLClient(t *testing.T) {
 }
 
 func TestStickyBitSQL(t *testing.T) {
-	os.Remove("test3.db")
-	m, err := newSQLMeta("sqlite3", "test3.db", &Config{})
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -59,8 +74,9 @@ func TestStickyBitSQL(t *testing.T) {
 }
 
 func TestLocksSQL(t *testing.T) {
-	os.Remove("test1.db")
-	m, err := newSQLMeta("sqlite3", "test1.db", &Config{})
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -68,8 +84,9 @@ func TestLocksSQL(t *testing.T) {
 }
 
 func TestConcurrentWriteSQL(t *testing.T) {
-	os.Remove("test1.db")
-	m, err := newSQLMeta("sqlite3", "test1.db", &Config{})
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -77,8 +94,9 @@ func TestConcurrentWriteSQL(t *testing.T) {
 }
 
 func TestCompactionSQL(t *testing.T) {
-	os.Remove("test2.db")
-	m, err := newSQLMeta("sqlite3", "test2.db", &Config{})
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -86,8 +104,9 @@ func TestCompactionSQL(t *testing.T) {
 }
 
 func TestTruncateAndDeleteSQL(t *testing.T) {
-	os.Remove("test.db")
-	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -95,8 +114,9 @@ func TestTruncateAndDeleteSQL(t *testing.T) {
 }
 
 func TestCopyFileRangeSQL(t *testing.T) {
-	os.Remove("test.db")
-	m, err := newSQLMeta("sqlite3", "test.db", &Config{})
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -104,8 +124,9 @@ func TestCopyFileRangeSQL(t *testing.T) {
 }
 
 func TestCaseIncensiSQL(t *testing.T) {
-	os.Remove("test.db")
-	m, err := newSQLMeta("sqlite3", "test.db", &Config{CaseInsensi: true})
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{CaseInsensi: true})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
