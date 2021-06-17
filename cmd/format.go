@@ -32,7 +32,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
@@ -79,6 +78,16 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 	return blob, nil
 }
 
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
 func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	if err := store.Put(key, bytes.NewReader(data)); err != nil {
 		if strings.Contains(err.Error(), "Access Denied") {
@@ -114,7 +123,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 
 func test(store object.ObjectStorage) error {
 	rand.Seed(int64(time.Now().UnixNano()))
-	key := "testing/" + utils.RandString(10)
+	key := "testing/" + randSeq(10)
 	data := make([]byte, 100)
 	rand.Read(data)
 	nRetry := 3
