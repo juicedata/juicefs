@@ -2304,8 +2304,8 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	}))
 }
 
-func (m *dbMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
-	e := &DumpedEntry{Name: name, Inode: inode}
+func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
+	e := &DumpedEntry{Inode: inode}
 	return e, m.txn(func(s *xorm.Session) error {
 		n := &node{Inode: inode}
 		ok, err := m.engine.Get(n)
@@ -2361,14 +2361,14 @@ func (m *dbMeta) dumpEntry(name string, inode Ino) (*DumpedEntry, error) {
 	})
 }
 
-func (m *dbMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
+func (m *dbMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 	var edges []edge
 	if err := m.engine.Find(&edges, &edge{Parent: inode}); err != nil {
 		return nil, err
 	}
-	entries := make([]*DumpedEntry, 0, len(edges))
+	entries := make(map[string]*DumpedEntry)
 	for _, e := range edges {
-		entry, err := m.dumpEntry(e.Name, e.Inode)
+		entry, err := m.dumpEntry(e.Inode)
 		if err != nil {
 			return nil, err
 		}
@@ -2377,9 +2377,8 @@ func (m *dbMeta) dumpDir(inode Ino) ([]*DumpedEntry, error) {
 				return nil, err
 			}
 		}
-		entries = append(entries, entry)
+		entries[e.Name] = entry
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	return entries, nil
 }
 
@@ -2393,7 +2392,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 		dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
 	}
 
-	tree, err := m.dumpEntry("/", 1)
+	tree, err := m.dumpEntry(1)
 	if err != nil {
 		return err
 	}

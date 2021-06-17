@@ -23,7 +23,6 @@
   "Sustained": [],
   "DelFiles": [],
   "FSTree": {
-    "name": "/",
     "inode": 1,
     "attr": {
       "type": "directory",
@@ -39,9 +38,8 @@
       "nlink": 3,
       "length": 0
     },
-    "entries": [
-      {
-        "name": "d1",
+    "entries": {
+      "d1": {
         "inode": 3,
         "attr": {
           "type": "directory",
@@ -57,9 +55,8 @@
           "nlink": 2,
           "length": 0
         },
-        "entries": [
-          {
-            "name": "f11",
+        "entries": {
+          "f11": {
             "inode": 4,
             "attr": {
               "type": "regular",
@@ -90,10 +87,9 @@
               }
             ]
           }
-        ]
+        }
       },
-      {
-        "name": "f1",
+      "f1": {
         "inode": 2,
         "attr": {
           "type": "regular",
@@ -144,8 +140,7 @@
           }
         ]
       },
-      {
-        "name": "l1",
+      "l1": {
         "inode": 4,
         "attr": {
           "type": "regular",
@@ -176,8 +171,7 @@
           }
         ]
       },
-      {
-        "name": "s1",
+      "s1": {
         "inode": 5,
         "attr": {
           "type": "symlink",
@@ -195,6 +189,6 @@
         },
         "symlink": "d1/f11"
       }
-    ]
+    }
   }
 }
