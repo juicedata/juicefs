@@ -1573,7 +1573,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					tattr.Ctime = now.Unix()
 					tattr.Ctimensec = uint32(now.Nanosecond())
 				} else if dtyp == TypeFile {
-					opened = r.of.IsOpen(*inode)
+					opened = r.of.IsOpen(dino)
 				}
 			}
 			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {

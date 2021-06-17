@@ -85,7 +85,7 @@ type Attr struct {
 
 	Parent    Ino  // inode of parent, only for Directory
 	Full      bool // the attributes are completed or not
-	KeepCache bool // whether the file is modified since last open
+	KeepCache bool // whether to keep the cached page or not
 }
 
 func typeToStatType(_type uint8) uint32 {
