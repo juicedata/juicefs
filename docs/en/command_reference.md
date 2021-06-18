@@ -47,9 +47,11 @@ COPYRIGHT:
    AGPLv3
 ```
 
-**Note:** If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience.
+> **Note**: If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience.
 
 ## Auto Completion
+
+> **Note**: This feature requires JuiceFS >= 0.15.0. It is implemented based on `github.com/urfave/cli/v2`. You can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
 
 To enable commands completion, simply source the script provided within `hack/autocomplete`. For example:
 
@@ -83,8 +85,6 @@ Alternatively, if you are using bash on a Linux system, you may just copy the sc
 $ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 $ source /etc/bash_completion.d/juicefs
 ```
-
-**Note:** This feature is implemented base on `github.com/urfave/cli/v2`, you can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
 
 ## Commands
 
