@@ -51,6 +51,8 @@ COPYRIGHT:
 
 ## Auto Completion
 
+> **Note**: This feature requires JuiceFS >= 0.15.0.
+
 To enable commands completion, simply source the script provided within `hack/autocomplete`. For example:
 
 Bash:
@@ -84,7 +86,7 @@ $ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 $ source /etc/bash_completion.d/juicefs
 ```
 
-**Note:** This feature is implemented base on `github.com/urfave/cli/v2`, you can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
+> **Note**: This feature is implemented base on `github.com/urfave/cli/v2`, you can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
 
 ## Commands
 
