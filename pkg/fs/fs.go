@@ -629,6 +629,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16) (f *File, 
 		fi = AttrToFileInfo(inode, attr)
 		fi.name = path.Base(p)
 		f = &File{}
+		f.flags = vfs.MODE_MASK_W
 		f.path = p
 		f.inode = fi.inode
 		f.info = fi
