@@ -36,6 +36,7 @@ type DumpedSustained struct {
 }
 
 type DumpedAttr struct {
+	Inode     Ino    `json:"inode"`
 	Type      string `json:"type"`
 	Mode      uint16 `json:"mode"`
 	Uid       uint32 `json:"uid"`
@@ -71,9 +72,8 @@ type DumpedXattr struct {
 
 type DumpedEntry struct {
 	Name    string                  `json:"-"`
-	Inode   Ino                     `json:"inode"`
-	Attr    *DumpedAttr             `json:"attr"`
 	Parent  Ino                     `json:"-"`
+	Attr    *DumpedAttr             `json:"attr"`
 	Symlink string                  `json:"symlink,omitempty"`
 	Xattrs  []*DumpedXattr          `json:"xattrs,omitempty"`
 	Chunks  []*DumpedChunk          `json:"chunks,omitempty"`
