@@ -47,11 +47,11 @@ COPYRIGHT:
    AGPLv3
 ```
 
-**注意：**如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](quick_start_guide.md) 了解安装相关内容。
+> **注意**：如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](quick_start_guide.md) 了解安装相关内容。
 
 ## 自动补全
 
-> **注意**：这个特性需要使用 0.15.0 及以上版本的 JuiceFS。
+> **注意**：这个特性需要使用 0.15.0 及以上版本的 JuiceFS。此特性基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
 
 通过加载 `hack/autocomplete` 下的对应脚本可以启用命令的自动补全，例如：
 
@@ -85,8 +85,6 @@ $ echo "source path/to/zsh_autocomplete" >> ~/.zshrc
 $ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 $ source /etc/bash_completion.d/juicefs
 ```
-
-> **注意**：此特性基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
 
 ## 命令列表
 
