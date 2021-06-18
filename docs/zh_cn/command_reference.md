@@ -51,17 +51,17 @@ COPYRIGHT:
 
 ## 自动补全
 
-> **注意**：这个特性需要使用 0.15.0 及以上版本的 JuiceFS。此特性基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
+> **注意**：此特性需要使用 0.15.0 及以上版本的 JuiceFS。它基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
 
 通过加载 `hack/autocomplete` 下的对应脚本可以启用命令的自动补全，例如：
 
-Bash:
+Bash：
 
 ```bash
 $ source hack/autocomplete/bash_autocomplete
 ```
 
-Zsh:
+Zsh：
 
 ```bash
 $ source hack/autocomplete/zsh_autocomplete

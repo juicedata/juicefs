@@ -51,7 +51,7 @@ COPYRIGHT:
 
 ## Auto Completion
 
-> **Note**: This feature requires JuiceFS >= 0.15.0. This feature is implemented base on `github.com/urfave/cli/v2`, you can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
+> **Note**: This feature requires JuiceFS >= 0.15.0. It is implemented base on `github.com/urfave/cli/v2`, you can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
 
 To enable commands completion, simply source the script provided within `hack/autocomplete`. For example:
 
