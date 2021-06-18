@@ -1918,7 +1918,7 @@ func (r *redisMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) sysca
 		return 0
 	}
 	var err syscall.Errno
-	if attr != nil {
+	if attr != nil && !attr.Full {
 		err = r.GetAttr(ctx, inode, attr)
 	}
 	if err == 0 {

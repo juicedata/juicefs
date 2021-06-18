@@ -259,7 +259,7 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 	}
 
 	if flags != 0 && !fi.IsDir() {
-		err = fs.m.Access(ctx, fi.inode, uint8(flags), nil)
+		err = fs.m.Access(ctx, fi.inode, uint8(flags), fi.attr)
 		if err != 0 {
 			return nil, err
 		}
@@ -269,7 +269,7 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 		} else if flags&vfs.MODE_MASK_W != 0 {
 			oflags = syscall.O_RDWR
 		}
-		err = fs.m.Open(ctx, fi.inode, oflags, nil)
+		err = fs.m.Open(ctx, fi.inode, oflags, fi.attr)
 		if err != 0 {
 			return
 		}
