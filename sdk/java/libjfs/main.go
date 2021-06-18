@@ -318,7 +318,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Retries:   10,
 			Strict:    true,
 			ReadOnly:  jConf.ReadOnly,
-			OpenCache: time.Duration(time.Duration(jConf.OpenCache * 1e9)),
+			OpenCache: time.Duration(jConf.OpenCache * 1e9),
 		})
 		format, err := m.Load()
 		if err != nil {

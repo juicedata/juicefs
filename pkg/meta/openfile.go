@@ -64,10 +64,8 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 		of = &openFile{}
 		of.chunks = make(map[uint32][]Slice)
 		o.files[ino] = of
-	} else if attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
-		if attr != nil {
-			attr.KeepCache = true
-		}
+	} else if attr != nil && attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
+		attr.KeepCache = true
 	} else {
 		of.chunks = make(map[uint32][]Slice)
 	}

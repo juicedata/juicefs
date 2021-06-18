@@ -146,7 +146,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Retries:   10,
 		Strict:    true,
 		ReadOnly:  c.Bool("read-only"),
-		OpenCache: time.Duration(time.Duration(c.Float64("open-cache") * 1e9)),
+		OpenCache: time.Duration(c.Float64("open-cache") * 1e9),
 	})
 	format, err := m.Load()
 	if err != nil {

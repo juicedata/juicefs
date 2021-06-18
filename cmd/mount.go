@@ -95,7 +95,7 @@ func mount(c *cli.Context) error {
 		Strict:      true,
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
 		ReadOnly:    readOnly,
-		OpenCache:   time.Duration(time.Duration(c.Float64("open-cache") * 1e9)),
+		OpenCache:   time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint:  mp,
 	})
 	format, err := m.Load()
