@@ -263,11 +263,6 @@ func (j *juice) Open(path string, flags int) (e int, fh uint64) {
 	return
 }
 
-func cache_mode(mattr uint8) (bool, bool) {
-	var direct_io, keep_cache bool
-	return direct_io, keep_cache
-}
-
 // Open opens a file.
 // The flags are a combination of the fuse.O_* constants.
 func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
@@ -281,11 +276,11 @@ func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
 	entry, fh, errno := vfs.Open(ctx, f.Inode(), uint32(fi.Flags))
 	if errno == 0 {
 		fi.Fh = fh
-		fi.DirectIo, fi.KeepCache = cache_mode(entry.Attr.Flags)
 		if vfs.IsSpecialNode(f.Inode()) {
 			fi.DirectIo = true
+		} else {
+			fi.KeepCache = entry.Attr.KeepCache
 		}
-		fi.NonSeekable = false
 		j.Lock()
 		j.handlers[fh] = f.Inode()
 		j.Unlock()
