@@ -2305,7 +2305,7 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 }
 
 func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
-	e := &DumpedEntry{Inode: inode}
+	e := &DumpedEntry{}
 	return e, m.txn(func(s *xorm.Session) error {
 		n := &node{Inode: inode}
 		ok, err := m.engine.Get(n)
@@ -2318,6 +2318,7 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		attr := &Attr{}
 		m.parseAttr(n, attr)
 		e.Attr = dumpAttr(attr)
+		e.Attr.Inode = inode
 
 		var rows []xattr
 		if err = m.engine.Find(&rows, &xattr{Inode: inode}); err != nil {
@@ -2450,15 +2451,16 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 	if err != nil {
 		return nil
 	}
-	_, err = w.Write(data)
+	_, err = w.Write(append(data, '\n'))
 	return err
 }
 
 func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef) error {
-	logger.Debugf("Loading entry inode %d name %s", e.Inode, e.Name)
+	inode := e.Attr.Inode
+	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
 	attr := e.Attr
 	n := &node{
-		Inode:  e.Inode,
+		Inode:  inode,
 		Type:   typeFromString(attr.Type),
 		Mode:   attr.Mode,
 		Uid:    attr.Uid,
@@ -2490,7 +2492,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 					cs.NextChunk = int64(s.Chunkid) + 1
 				}
 			}
-			chunks = append(chunks, &chunk{e.Inode, c.Index, slices})
+			chunks = append(chunks, &chunk{inode, c.Index, slices})
 		}
 		if len(chunks) > 0 {
 			beans = append(beans, chunks)
@@ -2501,9 +2503,9 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			edges := make([]*edge, 0, len(e.Entries))
 			for _, c := range e.Entries {
 				edges = append(edges, &edge{
-					Parent: e.Inode,
+					Parent: inode,
 					Name:   c.Name,
-					Inode:  c.Inode,
+					Inode:  c.Attr.Inode,
 					Type:   typeFromString(c.Attr.Type),
 				})
 			}
@@ -2511,20 +2513,20 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 		}
 	} else if n.Type == TypeSymlink {
 		n.Length = uint64(len(e.Symlink))
-		beans = append(beans, &symlink{e.Inode, e.Symlink})
+		beans = append(beans, &symlink{inode, e.Symlink})
 	}
-	if e.Inode > 1 {
+	if inode > 1 {
 		cs.UsedSpace += align4K(n.Length)
 		cs.UsedInodes += 1
 	}
-	if cs.NextInode <= int64(e.Inode) {
-		cs.NextInode = int64(e.Inode) + 1
+	if cs.NextInode <= int64(inode) {
+		cs.NextInode = int64(inode) + 1
 	}
 
 	if len(e.Xattrs) > 0 {
 		xattrs := make([]*xattr, 0, len(e.Xattrs))
 		for _, x := range e.Xattrs {
-			xattrs = append(xattrs, &xattr{e.Inode, x.Name, []byte(x.Value)})
+			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(x.Value)})
 		}
 		beans = append(beans, xattrs)
 	}

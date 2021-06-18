@@ -2738,7 +2738,7 @@ func (r *redisMeta) checkServerConfig() {
 
 func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	ctx := Background
-	e := &DumpedEntry{Inode: inode}
+	e := &DumpedEntry{}
 	st := m.txn(ctx, func(tx *redis.Tx) error {
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -2747,6 +2747,7 @@ func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		attr := &Attr{}
 		m.parseAttr(a, attr)
 		e.Attr = dumpAttr(attr)
+		e.Attr.Inode = inode
 
 		keys, err := tx.HGetAll(ctx, m.xattrKey(inode)).Result()
 		if err != nil {
@@ -2888,36 +2889,37 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = w.Write(data)
+	_, err = w.Write(append(data, '\n'))
 	return err
 }
 
 func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
 	typ := typeFromString(e.Attr.Type)
-	if exist, ok := entries[e.Inode]; ok {
+	inode := e.Attr.Inode
+	if exist, ok := entries[inode]; ok {
 		attr := e.Attr
 		eattr := exist.Attr
 		if typ != TypeFile || typeFromString(eattr.Type) != TypeFile {
-			return fmt.Errorf("inode conflict: %d", e.Inode)
+			return fmt.Errorf("inode conflict: %d", inode)
 		}
 		eattr.Nlink++
 		if eattr.Ctime*1e9+int64(eattr.Ctimensec) < attr.Ctime*1e9+int64(attr.Ctimensec) {
 			attr.Nlink = eattr.Nlink
-			entries[e.Inode] = e
+			entries[inode] = e
 		}
 		return nil
 	}
-	entries[e.Inode] = e
+	entries[inode] = e
 	if typ == TypeFile {
 		e.Attr.Nlink = 1 // reset
 	} else if typ == TypeDirectory {
-		if e.Inode == 1 { // root inode
+		if inode == 1 { // root inode
 			e.Parent = 1
 		}
 		e.Attr.Nlink = 2
 		for name, child := range e.Entries {
 			child.Name = name
-			child.Parent = e.Inode
+			child.Parent = inode
 			if typeFromString(child.Attr.Type) == TypeDirectory {
 				e.Attr.Nlink++
 			}
@@ -2926,13 +2928,14 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
 			}
 		}
 	} else if e.Attr.Nlink != 1 { // nlink should be 1 for other types
-		return fmt.Errorf("invalid nlink %d for inode %d type %s", e.Attr.Nlink, e.Inode, e.Attr.Type)
+		return fmt.Errorf("invalid nlink %d for inode %d type %s", e.Attr.Nlink, inode, e.Attr.Type)
 	}
 	return nil
 }
 
 func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int) error {
-	logger.Debugf("Loading entry inode %d name %s", e.Inode, e.Name)
+	inode := e.Attr.Inode
+	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
 	ctx := Background
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
@@ -2951,27 +2954,27 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 					cs.NextChunk = int64(s.Chunkid)
 				}
 			}
-			p.RPush(ctx, m.chunkKey(e.Inode, c.Index), slices)
+			p.RPush(ctx, m.chunkKey(inode, c.Index), slices)
 		}
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
 		if len(e.Entries) > 0 {
 			dentries := make(map[string]interface{})
 			for _, c := range e.Entries {
-				dentries[c.Name] = m.packEntry(typeFromString(c.Attr.Type), c.Inode)
+				dentries[c.Name] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			}
-			p.HSet(ctx, m.entryKey(e.Inode), dentries)
+			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
 	} else if attr.Typ == TypeSymlink {
 		attr.Length = uint64(len(e.Symlink))
-		p.Set(ctx, m.symKey(e.Inode), e.Symlink, 0)
+		p.Set(ctx, m.symKey(inode), e.Symlink, 0)
 	}
-	if e.Inode > 1 {
+	if inode > 1 {
 		cs.UsedSpace += align4K(attr.Length)
 		cs.UsedInodes += 1
 	}
-	if cs.NextInode < int64(e.Inode) {
-		cs.NextInode = int64(e.Inode)
+	if cs.NextInode < int64(inode) {
+		cs.NextInode = int64(inode)
 	}
 
 	if len(e.Xattrs) > 0 {
@@ -2979,9 +2982,9 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		for _, x := range e.Xattrs {
 			xattrs[x.Name] = x.Value
 		}
-		p.HSet(ctx, m.xattrKey(e.Inode), xattrs)
+		p.HSet(ctx, m.xattrKey(inode), xattrs)
 	}
-	p.Set(ctx, m.inodeKey(e.Inode), m.marshal(attr), 0)
+	p.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 	_, err := p.Exec(ctx)
 	return err
 }
