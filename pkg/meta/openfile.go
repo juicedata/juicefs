@@ -7,8 +7,8 @@ import (
 
 type openFile struct {
 	attr      Attr
-	lastCheck time.Time
 	refs      int
+	lastCheck time.Time
 	chunks    map[uint32][]Slice
 }
 
@@ -32,7 +32,7 @@ func (o *openfiles) cleanup() {
 		o.Lock()
 		cutoff := time.Now().Add(-time.Hour)
 		for ino, of := range o.files {
-			if of.refs == 0 && of.lastCheck.Before(cutoff) {
+			if of.refs <= 0 && of.lastCheck.Before(cutoff) {
 				delete(o.files, ino)
 			}
 		}
@@ -64,8 +64,10 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 		of = &openFile{}
 		of.chunks = make(map[uint32][]Slice)
 		o.files[ino] = of
-	} else if attr != nil && attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
-		attr.KeepCache = true
+	} else if attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
+		if attr != nil {
+			attr.KeepCache = true
+		}
 	} else {
 		of.chunks = make(map[uint32][]Slice)
 	}
@@ -105,8 +107,6 @@ func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 	if ok {
 		if attr.Mtime != of.attr.Mtime || attr.Mtimensec != of.attr.Mtimensec {
 			of.chunks = make(map[uint32][]Slice)
-		} else {
-			attr.KeepCache = true
 		}
 		of.attr = *attr
 		of.lastCheck = time.Now()
