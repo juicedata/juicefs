@@ -4,9 +4,10 @@
 
 ## 概览
 
-在终端输入 `juicefs` 并执行，你就会看到所有可用的子命令。另外，你可以在每个子命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
+在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
 
-```
+```bash
+$ juicefs -h
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
 
@@ -46,27 +47,60 @@ COPYRIGHT:
    AGPLv3
 ```
 
-用法：`juicefs [global options] command [command options] [arguments...]`
+**注意：**如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](quick_start_guide.md) 了解安装相关内容。
 
-在所有命令后面添加 `-h` 或 `--help`，即可获得该命令的参数列表和帮助信息。
+## 自动补全
 
-**注意**：如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](quick_start_guide.md) 了解安装相关内容。
+通过加载 `hack/autocomplete` 下的对应脚本可以启用命令的自动补全，例如：
 
-以下文档为您提供有关每个子命令的详细信息。
+Bash:
 
-## juicefs format
+```bash
+$ source hack/autocomplete/bash_autocomplete
+```
 
-### 描述
+Zsh:
+
+```bash
+$ source hack/autocomplete/zsh_autocomplete
+```
+
+请注意自动补全功能仅对当前会话有效。如果你希望对所有新会话都启用此功能，请将 `source` 命令添加到 `.bashrc` 或 `.zshrc` 中：
+
+```bash
+$ echo "source path/to/bash_autocomplete" >> ~/.bashrc
+```
+
+或
+
+```bash
+$ echo "source path/to/zsh_autocomplete" >> ~/.zshrc
+```
+
+另外，如果你是在 Linux 系统上使用 bash，也可以直接将脚本拷贝到 `/etc/bash_completion.d` 目录并将其重命名为 `juicefs`：
+
+```bash
+$ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
+$ source /etc/bash_completion.d/juicefs
+```
+
+**注意：**此特性基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
+
+## 命令列表
+
+### juicefs format
+
+#### 描述
 
 格式化文件系统；这是使用新文件系统的第一步。
 
-### 使用
+#### 使用
 
 ```
 juicefs format [command options] REDIS-URL NAME
 ```
 
-### 选项
+#### 选项
 
 `--block-size value`\
 块大小；单位为 KiB (默认: 4096)
@@ -104,19 +138,19 @@ RSA 私钥的路径 (PEM)
 `--no-update`\
 不要修改已有的格式化配置 (默认: false)
 
-## juicefs mount
+### juicefs mount
 
-### 描述
+#### 描述
 
 挂载一个已经格式化的文件系统。
 
-### 使用
+#### 使用
 
 ```
 juicefs mount [command options] REDIS-URL MOUNTPOINT
 ```
 
-### 选项
+#### 选项
 
 `--metrics value`\
 监控数据导出地址 (默认: "127.0.0.1:9567")
@@ -181,36 +215,36 @@ juicefs mount [command options] REDIS-URL MOUNTPOINT
 `--cache-partial-only`\
 仅缓存随机小块读 (默认: false)
 
-## juicefs umount
+### juicefs umount
 
-### 描述
+#### 描述
 
 卸载一个文件文件系统。
 
-### 使用
+#### 使用
 
 ```
 juicefs umount [command options] MOUNTPOINT
 ```
 
-### 选项
+#### 选项
 
 `-f, --force`\
 强制卸载一个忙碌的文件系统 (默认: false)
 
-## juicefs gateway
+### juicefs gateway
 
-### 描述
+#### 描述
 
 启动一个 S3 兼容的网关。
 
-### 使用
+#### 使用
 
 ```
 juicefs gateway [command options] REDIS-URL ADDRESS
 ```
 
-### 选项
+#### 选项
 
 `--get-timeout value`\
 下载一个对象的超时时间；单位为秒 (默认: 60)
@@ -254,19 +288,19 @@ juicefs gateway [command options] REDIS-URL ADDRESS
 `--no-banner`\
 禁用 MinIO 的启动信息 (默认: false)
 
-## juicefs sync
+### juicefs sync
 
-### 描述
+#### 描述
 
 在两个存储系统之间同步数据。
 
-### 使用
+#### 使用
 
 ```
 juicefs sync [command options] SRC DST
 ```
 
-### 选项
+#### 选项
 
 `--start KEY, -s KEY`\
 同步的第一个对象名
@@ -319,49 +353,49 @@ juicefs sync [command options] SRC DST
 `--no-https`\
 不要使用 HTTPS (默认: false)
 
-## juicefs rmr
+### juicefs rmr
 
-### 描述
+#### 描述
 
 递归删除指定目录下的所有文件。
 
-### 使用
+#### 使用
 
 ```
 juicefs rmr PATH ...
 ```
 
-## juicefs info
+### juicefs info
 
-### 描述
+#### 描述
 
 显示指定路径或 inode 的内部信息。
 
-### 使用
+#### 使用
 
 ```
 juicefs info [command options] PATH or INODE
 ```
 
-### 选项
+#### 选项
 
 `--inode, -i`\
 使用 inode 号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认: false)
 
 
-## juicefs bench
+### juicefs bench
 
-### 描述
+#### 描述
 
 跑一轮基准性能测试，包括对大文件和小文件的读/写/获取属性操作。
 
-### 使用
+#### 使用
 
 ```
 juicefs bench [command options] PATH
 ```
 
-### 选项
+#### 选项
 
 `--block-size value`\
 块大小；单位为 MiB (默认: 1)
@@ -375,19 +409,19 @@ juicefs bench [command options] PATH
 `--small-file-count value`\
 小文件数量 (默认: 100)
 
-## juicefs gc
+### juicefs gc
 
-### 描述
+#### 描述
 
 收集泄漏的对象。
 
-### 使用
+#### 使用
 
 ```
 juicefs gc [command options] REDIS-URL
 ```
 
-### 选项
+#### 选项
 
 `--delete`\
 删除泄漏的对象 (默认: false)
@@ -398,31 +432,31 @@ juicefs gc [command options] REDIS-URL
 `--threads value`\
 用于删除泄漏对象的线程数 (默认: 10)
 
-## juicefs fsck
+### juicefs fsck
 
-### 描述
+#### 描述
 
 检查文件系统一致性。
 
-### 使用
+#### 使用
 
 ```
 juicefs fsck [command options] REDIS-URL
 ```
 
-## juicefs profile
+### juicefs profile
 
-### 描述
+#### 描述
 
 分析访问日志。
 
-### 使用
+#### 使用
 
 ```
 juicefs profile [command options] MOUNTPOINT/LOGFILE
 ```
 
-### 选项
+#### 选项
 
 `--uid value, -u value`\
 仅跟踪指定 UIDs (用逗号 , 分隔)
@@ -436,36 +470,36 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 `--interval value`\
 显示间隔；单位为秒 (默认: 2)
 
-## juicefs status
+### juicefs status
 
-### 描述
+#### 描述
 
 显示 JuiceFS 的状态。
 
-### 使用
+#### 使用
 
 ```
 juicefs status [command options] REDIS-URL
 ```
 
-### 选项
+#### 选项
 
 `--session value, -s value`\
 展示指定会话 (sid) 的具体信息 (默认: 0)
 
-## juicefs warmup
+### juicefs warmup
 
-### 描述
+#### 描述
 
 主动为指定目录/文件建立缓存。
 
-### 使用
+#### 使用
 
 ```
 juicefs warmup [command options] [PATH ...]
 ```
 
-### 选项
+#### 选项
 
 `--file value, -f value`\
 指定一个包含一组路径的文件
@@ -476,25 +510,25 @@ juicefs warmup [command options] [PATH ...]
 `--background, -b`\
 后台运行 (默认: false)
 
-## juicefs dump
+### juicefs dump
 
-### 描述
+#### 描述
 
 将元数据导出到一个 JSON 文件中。
 
-### 使用
+#### 使用
 
 ```
 juicefs dump [command options] META-ADDR FILE
 ```
 
-## juicefs load
+### juicefs load
 
-### 描述
+#### 描述
 
 从之前导出的 JSON 文件中加载元数据。
 
-### 使用
+#### 使用
 
 ```
 juicefs load [command options] META-ADDR FILE

@@ -4,9 +4,10 @@ There are many commands to help you manage your file system. This page provides 
 
 ## Overview
 
-If you run `juicefs` by itself, it will print all available subcommands. In addition, you can add `-h/--help` flag after each subcommand to get more information of that subcommand.
+If you run `juicefs` by itself, it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information of it.
 
-```
+```bash
+$ juicefs -h
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
 
@@ -46,27 +47,60 @@ COPYRIGHT:
    AGPLv3
 ```
 
-Usage: `juicefs [global options] command [command options] [arguments...]`
+**Note:** If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience.
 
-Add `-h` or `--help` after all commands, getting arguments list and help information.
+## Auto Completion
 
-***Note:*** If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for the convenience.
+To enable commands completion, simply source the script provided within `hack/autocomplete`. For example:
 
-The documentation below gives you detailed information about each subcommand.
+Bash:
 
-## juicefs format
+```bash
+$ source hack/autocomplete/bash_autocomplete
+```
 
-### Description
+Zsh:
+
+```bash
+$ source hack/autocomplete/zsh_autocomplete
+```
+
+Please note the auto-completion is only enabled for the current session. If you want it for all new sessions, add the `source` command to `.bashrc` or `.zshrc`:
+
+```bash
+$ echo "source path/to/bash_autocomplete" >> ~/.bashrc
+```
+
+or
+
+```bash
+$ echo "source path/to/zsh_autocomplete" >> ~/.zshrc
+```
+
+Alternatively, if you are using bash on a Linux system, you may just copy the script to `/etc/bash_completion.d` and rename it to `juicefs`:
+
+```bash
+$ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
+$ source /etc/bash_completion.d/juicefs
+```
+
+**Note:** This feature is implemented base on `github.com/urfave/cli/v2`, you can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
+
+## Commands
+
+### juicefs format
+
+#### Description
 
 Format a volume. It's the first step for initializing a new file system volume.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs format [command options] REDIS-URL NAME
 ```
 
-### Options
+#### Options
 
 `--block-size value`\
 size of block in KiB (default: 4096)
@@ -104,19 +138,19 @@ overwrite existing format (default: false)
 `--no-update`\
 don't update existing volume (default: false)
 
-## juicefs mount
+### juicefs mount
 
-### Description
+#### Description
 
 Mount a volume. The volume shoud be formatted first.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs mount [command options] REDIS-URL MOUNTPOINT
 ```
 
-### Options
+#### Options
 
 `--metrics value`\
 address to export metrics (default: "127.0.0.1:9567")
@@ -181,36 +215,36 @@ min free space (ratio) (default: 0.1)
 `--cache-partial-only`\
 cache only random/small read (default: false)
 
-## juicefs umount
+### juicefs umount
 
-### Description
+#### Description
 
 Unmount a volume.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs umount [command options] MOUNTPOINT
 ```
 
-### Options
+#### Options
 
 `-f, --force`\
 unmount a busy mount point by force (default: false)
 
-## juicefs gateway
+### juicefs gateway
 
-### Description
+#### Description
 
 S3-compatible gateway.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs gateway [command options] REDIS-URL ADDRESS
 ```
 
-### Options
+#### Options
 
 `--get-timeout value`\
 the max number of seconds to download an object (default: 60)
@@ -254,19 +288,19 @@ do not send usage report (default: false)
 `--no-banner`\
 disable MinIO startup information (default: false)
 
-## juicefs sync
+### juicefs sync
 
-### Description
+#### Description
 
 Sync between two storage.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs sync [command options] SRC DST
 ```
 
-### Options
+#### Options
 
 `--start KEY, -s KEY`\
 the first KEY to sync
@@ -319,49 +353,49 @@ limit bandwidth in Mbps (0 means unlimited) (default: 0)
 `--no-https`\
 do not use HTTPS (default: false)
 
-## juicefs rmr
+### juicefs rmr
 
-### Description
+#### Description
 
 Remove all files in directories recursively.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs rmr PATH ...
 ```
 
-## juicefs info
+### juicefs info
 
-### Description
+#### Description
 
 Show internal information for given paths or inodes.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs info [command options] PATH or INODE
 ```
 
-### Options
+#### Options
 
 `--inode, -i`\
 use inode instead of path (current dir should be inside JuiceFS) (default: false)
 
 
-## juicefs bench
+### juicefs bench
 
-### Description
+#### Description
 
 Run benchmark, include read/write/stat big and small files.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs bench [command options] PATH
 ```
 
-### Options
+#### Options
 
 `--block-size value`\
 block size in MiB (default: 1)
@@ -375,19 +409,19 @@ size of small file in MiB (default: 0.1)
 `--small-file-count value`\
 number of small files (default: 100)
 
-## juicefs gc
+### juicefs gc
 
-### Description
+#### Description
 
 Collect any leaked objects.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs gc [command options] REDIS-URL
 ```
 
-### Options
+#### Options
 
 `--delete`\
 deleted leaked objects (default: false)
@@ -398,31 +432,31 @@ compact all chunks with more than 1 slices (default: false).
 `--threads value`\
 number threads to delete leaked objects (default: 10)
 
-## juicefs fsck
+### juicefs fsck
 
-### Description
+#### Description
 
 Check consistency of file system.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs fsck [command options] REDIS-URL
 ```
 
-## juicefs profile
+### juicefs profile
 
-### Description
+#### Description
 
 Analyze access log.
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs profile [command options] MOUNTPOINT/LOGFILE
 ```
 
-### Options
+#### Options
 
 `--uid value, -u value`\
 track only specified UIDs(separated by comma ,)
@@ -436,36 +470,36 @@ track only specified PIDs(separated by comma ,)
 `--interval value`\
 flush interval in seconds (default: 2)
 
-## juicefs status
+### juicefs status
 
-### Description
+#### Description
 
 show status of JuiceFS
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs status [command options] REDIS-URL
 ```
 
-### Options
+#### Options
 
 `--session value, -s value`\
 show detailed information (sustained inodes, locks) of the specified session (sid) (default: 0)
 
-## juicefs warmup
+### juicefs warmup
 
-### Description
+#### Description
 
 build cache for target directories/files
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs warmup [command options] [PATH ...]
 ```
 
-### Options
+#### Options
 
 `--file value, -f value`\
 file containing a list of paths
@@ -476,25 +510,25 @@ number of concurrent workers (default: 50)
 `--background, -b`\
 run in background (default: false)
 
-## juicefs dump
+### juicefs dump
 
-### Description
+#### Description
 
 dump metadata into a JSON file
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs dump [command options] META-ADDR FILE
 ```
 
-## juicefs load
+### juicefs load
 
-### Description
+#### Description
 
 load metadata from a previously dumped JSON file
 
-### Synopsis
+#### Synopsis
 
 ```
 juicefs load [command options] META-ADDR FILE
