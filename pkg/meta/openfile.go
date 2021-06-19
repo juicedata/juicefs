@@ -88,6 +88,9 @@ func (o *openfiles) Close(ino Ino) bool {
 }
 
 func (o *openfiles) Check(ino Ino, attr *Attr) bool {
+	if attr == nil {
+		panic("attr is nil")
+	}
 	o.Lock()
 	defer o.Unlock()
 	of, ok := o.files[ino]
@@ -99,6 +102,9 @@ func (o *openfiles) Check(ino Ino, attr *Attr) bool {
 }
 
 func (o *openfiles) Update(ino Ino, attr *Attr) bool {
+	if attr == nil {
+		panic("attr is nil")
+	}
 	o.Lock()
 	defer o.Unlock()
 	of, ok := o.files[ino]
