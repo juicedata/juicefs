@@ -48,7 +48,6 @@ func (o *openfiles) OpenCheck(ino Ino, attr *Attr) bool {
 	if ok && time.Since(of.lastCheck) < o.expire {
 		if attr != nil {
 			*attr = of.attr
-			attr.KeepCache = true
 		}
 		of.refs++
 		return true
@@ -65,13 +64,15 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 		of.chunks = make(map[uint32][]Slice)
 		o.files[ino] = of
 	} else if attr != nil && attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
-		attr.KeepCache = true
+		attr.KeepCache = of.attr.KeepCache
 	} else {
 		of.chunks = make(map[uint32][]Slice)
 	}
 	if attr != nil {
 		of.attr = *attr
 	}
+	// next open can keep cache if not modified
+	of.attr.KeepCache = true
 	of.refs++
 	of.lastCheck = time.Now()
 }
@@ -111,6 +112,7 @@ func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 	if ok {
 		if attr.Mtime != of.attr.Mtime || attr.Mtimensec != of.attr.Mtimensec {
 			of.chunks = make(map[uint32][]Slice)
+			of.attr.KeepCache = false
 		}
 		of.attr = *attr
 		of.lastCheck = time.Now()
