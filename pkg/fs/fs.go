@@ -130,6 +130,7 @@ type File struct {
 	fs    *FileSystem
 
 	sync.Mutex
+	flags    uint32
 	offset   int64
 	rdata    vfs.FileReader
 	wdata    vfs.FileWriter
@@ -258,21 +259,19 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 	}
 
 	if flags != 0 && !fi.IsDir() {
-		if ctx.Uid() != 0 {
-			err = fs.m.Access(ctx, fi.inode, uint8(flags), nil)
-			if err != 0 {
-				return nil, err
-			}
-			var oflags uint32 = syscall.O_RDONLY
-			if flags == vfs.MODE_MASK_W {
-				oflags = syscall.O_WRONLY
-			} else if flags&vfs.MODE_MASK_W != 0 {
-				oflags = syscall.O_RDWR
-			}
-			err = fs.m.Open(ctx, fi.inode, oflags, nil)
-			if err != 0 {
-				return
-			}
+		err = fs.m.Access(ctx, fi.inode, uint8(flags), fi.attr)
+		if err != 0 {
+			return nil, err
+		}
+		var oflags uint32 = syscall.O_RDONLY
+		if flags == vfs.MODE_MASK_W {
+			oflags = syscall.O_WRONLY
+		} else if flags&vfs.MODE_MASK_W != 0 {
+			oflags = syscall.O_RDWR
+		}
+		err = fs.m.Open(ctx, fi.inode, oflags, fi.attr)
+		if err != 0 {
+			return
 		}
 	}
 
@@ -281,6 +280,7 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 	f.inode = fi.inode
 	f.info = fi
 	f.fs = fs
+	f.flags = flags
 	return
 }
 
@@ -629,6 +629,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16) (f *File, 
 		fi = AttrToFileInfo(inode, attr)
 		fi.name = path.Base(p)
 		f = &File{}
+		f.flags = vfs.MODE_MASK_W
 		f.path = p
 		f.inode = fi.inode
 		f.info = fi
@@ -875,17 +876,20 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 	defer func() { f.fs.log(l, "Close (%s): %s", f.path, errstr(err)) }()
 	f.Lock()
 	defer f.Unlock()
-	f.offset = 0
-	if f.rdata != nil {
-		rdata := f.rdata
-		f.rdata = nil
-		time.AfterFunc(time.Second, func() {
-			rdata.Close(meta.Background)
-		})
-	}
-	if f.wdata != nil {
-		err = f.wdata.Close(meta.Background)
-		f.wdata = nil
+	if f.flags != 0 && !f.info.IsDir() {
+		f.offset = 0
+		if f.rdata != nil {
+			rdata := f.rdata
+			f.rdata = nil
+			time.AfterFunc(time.Second, func() {
+				rdata.Close(meta.Background)
+			})
+		}
+		if f.wdata != nil {
+			err = f.wdata.Close(meta.Background)
+			f.wdata = nil
+		}
+		f.fs.m.Close(ctx, f.inode)
 	}
 	return
 }

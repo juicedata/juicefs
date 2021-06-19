@@ -306,13 +306,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     for (String key : keys) {
       obj.put(key, getConf(conf, key, ""));
     }
-    String[] bkeys = new String[]{"debug", "writeback", "opencache"};
+    String[] bkeys = new String[]{"debug", "writeback"};
     for (String key : bkeys) {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
     obj.put("readOnly", Boolean.valueOf(getConf(conf, "read-only", "false")));
     obj.put("cacheDir", getConf(conf, "cache-dir", "memory"));
     obj.put("cacheSize", Integer.valueOf(getConf(conf, "cache-size", "100")));
+    obj.put("openCache", Float.valueOf(getConf(conf, "open-cache", "0.0")));
     obj.put("cacheFullBlock", Boolean.valueOf(getConf(conf, "cache-full-block", "true")));
     obj.put("metacache", Boolean.valueOf(getConf(conf, "metacache", "true")));
     obj.put("autoCreate", Boolean.valueOf(getConf(conf, "auto-create-cache-dir", "true")));

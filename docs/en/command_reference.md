@@ -176,6 +176,9 @@ file entry cache timeout in seconds (default: 1)
 `--dir-entry-cache value`\
 dir entry cache timeout in seconds (default: 1)
 
+`--open-cache value`\
+open file cache timeout in seconds (default: 0)
+
 `--enable-xattr`\
 enable extended attributes (xattr) (default: false)
 
