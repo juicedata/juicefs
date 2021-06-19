@@ -82,8 +82,10 @@ type Attr struct {
 	Nlink     uint32 // number of links (sub-directories or hardlinks)
 	Length    uint64 // length of regular file
 	Rdev      uint32 // device number
-	Parent    Ino    // inode of parent, only for Directory
-	Full      bool   // the attributes are completed or not
+
+	Parent    Ino  // inode of parent, only for Directory
+	Full      bool // the attributes are completed or not
+	KeepCache bool // whether to keep the cached page or not
 }
 
 func typeToStatType(_type uint8) uint32 {

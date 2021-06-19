@@ -81,7 +81,7 @@ type redisMeta struct {
 	sid          int64
 	usedSpace    uint64
 	usedInodes   uint64
-	openFiles    map[Ino]int
+	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	deleting     chan int
@@ -153,7 +153,7 @@ func newRedisMeta(url string, conf *Config) (Meta, error) {
 	m := &redisMeta{
 		conf:         conf,
 		rdb:          rdb,
-		openFiles:    make(map[Ino]int),
+		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		deleting:     make(chan int, 2),
@@ -775,9 +775,15 @@ func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		c, cancel = context.WithTimeout(ctx, time.Millisecond*300)
 		defer cancel()
 	}
+	if r.conf.OpenCache > 0 && r.of.Check(inode, attr) {
+		return 0
+	}
 	a, err := r.rdb.Get(c, r.inodeKey(inode)).Bytes()
 	if err == nil {
 		r.parseAttr(a, attr)
+		if r.conf.OpenCache > 0 {
+			r.of.Update(inode, attr)
+		}
 	}
 	if err != nil && inode == 1 {
 		err = nil
@@ -881,6 +887,7 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 }
 
 func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
@@ -987,6 +994,7 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 	if size == 0 {
 		return syscall.EINVAL
 	}
+	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
@@ -1229,9 +1237,7 @@ func (r *redisMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cum
 func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno {
 	err := r.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
 	if err == 0 && inode != nil {
-		r.Lock()
-		r.openFiles[*inode] = 1
-		r.Unlock()
+		r.of.Open(*inode, attr)
 	}
 	return err
 }
@@ -1287,9 +1293,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		attr.Nlink--
 		var opened bool
 		if _type == TypeFile && attr.Nlink == 0 {
-			r.Lock()
-			opened = r.openFiles[inode] > 0
-			r.Unlock()
+			opened = r.of.IsOpen(inode)
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -1569,9 +1573,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					tattr.Ctime = now.Unix()
 					tattr.Ctimensec = uint32(now.Nanosecond())
 				} else if dtyp == TypeFile {
-					r.Lock()
-					opened = r.openFiles[dino] > 0
-					r.Unlock()
+					opened = r.of.IsOpen(dino)
 				}
 			}
 			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
@@ -1909,27 +1911,27 @@ func (r *redisMeta) deleteInode(inode Ino) error {
 }
 
 func (r *redisMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	var err syscall.Errno
-	if attr != nil {
-		err = r.GetAttr(ctx, inode, attr)
-	}
 	if r.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
+	if r.conf.OpenCache > 0 && r.of.OpenCheck(inode, attr) {
+		return 0
+	}
+	var err syscall.Errno
+	if attr != nil && !attr.Full {
+		err = r.GetAttr(ctx, inode, attr)
+	}
 	if err == 0 {
-		r.Lock()
-		r.openFiles[inode] = r.openFiles[inode] + 1
-		r.Unlock()
+		// TODO: tracking update in Redis
+		r.of.Open(inode, attr)
 	}
 	return 0
 }
 
 func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
-	r.Lock()
-	defer r.Unlock()
-	refs := r.openFiles[inode]
-	if refs <= 1 {
-		delete(r.openFiles, inode)
+	if r.of.Close(inode) {
+		r.Lock()
+		defer r.Unlock()
 		if r.removedFiles[inode] {
 			delete(r.removedFiles, inode)
 			go func() {
@@ -1938,8 +1940,6 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 				}
 			}()
 		}
-	} else {
-		r.openFiles[inode] = refs - 1
 	}
 	return 0
 }
@@ -1968,12 +1968,17 @@ func buildSlice(ss []*slice) []Slice {
 }
 
 func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
+	if cs, ok := r.of.ReadChunk(inode, indx); ok {
+		*chunks = cs
+		return 0
+	}
 	vals, err := r.rdb.LRange(ctx, r.chunkKey(inode, indx), 0, 1000000).Result()
 	if err != nil {
 		return errno(err)
 	}
 	ss := readSlices(vals)
 	*chunks = buildSlice(ss)
+	r.of.CacheChunk(inode, indx, *chunks)
 	if !r.conf.ReadOnly && (len(vals) >= 5 || len(*chunks) >= 5) {
 		go r.compactChunk(inode, indx, false)
 	}
@@ -1989,6 +1994,7 @@ func (r *redisMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32,
 }
 
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+	defer func() { r.of.InvalidateChunk(inode, indx) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		var attr Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
@@ -2030,6 +2036,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 }
 
 func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
+	defer func() { r.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(fin), r.inodeKey(fout)).Result()
 		if err != nil {
@@ -2523,6 +2530,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
 		r.deleteSlice(ctx, chunkid, size)
 	} else if errno == 0 {
+		r.of.InvalidateChunk(inode, indx)
 		// reset it to zero
 		r.rdb.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), -1)
 		r.cleanupZeroRef(r.sliceKey(chunkid, size))

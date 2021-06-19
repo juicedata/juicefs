@@ -137,7 +137,7 @@ type dbMeta struct {
 	engine *xorm.Engine
 
 	sid          uint64
-	openFiles    map[Ino]int
+	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	deleting     chan int
@@ -173,7 +173,7 @@ func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 	m := &dbMeta{
 		conf:         conf,
 		engine:       engine,
-		openFiles:    make(map[Ino]int),
+		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		deleting:     make(chan int, 2),
@@ -666,6 +666,9 @@ func (m *dbMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall
 }
 
 func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
+		return 0
+	}
 	var n = node{Inode: inode}
 	ok, err := m.engine.Get(&n)
 	if err != nil && inode == 1 {
@@ -682,6 +685,9 @@ func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		return syscall.ENOENT
 	}
 	m.parseAttr(&n, attr)
+	if m.conf.OpenCache > 0 {
+		m.of.Update(inode, attr)
+	}
 	return 0
 }
 
@@ -772,6 +778,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 }
 
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
 		var n = node{Inode: inode}
@@ -861,6 +868,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
+	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
 		var n = node{Inode: inode}
@@ -1054,9 +1062,7 @@ func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask
 func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno {
 	err := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
 	if err == 0 && inode != nil {
-		m.Lock()
-		m.openFiles[*inode] = 1
-		m.Unlock()
+		m.of.Open(*inode, attr)
 	}
 	return err
 }
@@ -1113,9 +1119,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		n.Ctime = now
 		var opened bool
 		if e.Type == TypeFile && n.Nlink == 0 {
-			m.Lock()
-			opened = m.openFiles[Ino(e.Inode)] > 0
-			m.Unlock()
+			opened = m.of.IsOpen(e.Inode)
 		}
 
 		if _, err := s.Delete(&edge{Parent: parent, Name: name}); err != nil {
@@ -1359,9 +1363,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				if dn.Nlink > 0 {
 					dn.Ctime = time.Now().UnixNano() / 1e3
 				} else if dn.Type == TypeFile {
-					m.Lock()
-					opened = m.openFiles[Ino(dn.Inode)] > 0
-					m.Unlock()
+					opened = m.of.IsOpen(dn.Inode)
 				}
 			}
 			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
@@ -1676,27 +1678,26 @@ func (m *dbMeta) deleteInode(inode Ino) error {
 }
 
 func (m *dbMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
+	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
+		return syscall.EROFS
+	}
+	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
+		return 0
+	}
 	var err syscall.Errno
 	if attr != nil {
 		err = m.GetAttr(ctx, inode, attr)
 	}
-	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
-		return syscall.EROFS
-	}
 	if err == 0 {
-		m.Lock()
-		m.openFiles[inode] = m.openFiles[inode] + 1
-		m.Unlock()
+		m.of.Open(inode, attr)
 	}
 	return 0
 }
 
 func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {
-	m.Lock()
-	defer m.Unlock()
-	refs := m.openFiles[inode]
-	if refs <= 1 {
-		delete(m.openFiles, inode)
+	if m.of.Close(inode) {
+		m.Lock()
+		defer m.Unlock()
 		if m.removedFiles[inode] {
 			delete(m.removedFiles, inode)
 			go func() {
@@ -1708,13 +1709,15 @@ func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {
 				}
 			}()
 		}
-	} else {
-		m.openFiles[inode] = refs - 1
 	}
 	return 0
 }
 
 func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
+	if cs, ok := m.of.ReadChunk(inode, indx); ok {
+		*chunks = cs
+		return 0
+	}
 	var c chunk
 	_, err := m.engine.Where("inode=? and indx=?", inode, indx).Get(&c)
 	if err != nil {
@@ -1722,6 +1725,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	}
 	ss := readSliceBuf(c.Slices)
 	*chunks = buildSlice(ss)
+	m.of.CacheChunk(inode, indx, *chunks)
 	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5) {
 		go m.compactChunk(inode, indx, false)
 	}
@@ -1746,6 +1750,7 @@ func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, ch
 }
 
 func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
 		var n = node{Inode: inode}
@@ -1803,6 +1808,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 
 func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
 	var newSpace int64
+	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
 		var nin, nout = node{Inode: fin}, node{Inode: fout}
 		ok, err := s.Get(&nin)
@@ -2176,6 +2182,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
 		m.deleteSlice(chunkid, size)
 	} else if err == nil {
+		m.of.InvalidateChunk(inode, indx)
 		for _, s := range ss {
 			var ref = chunkRef{Chunkid: s.chunkid}
 			ok, err := m.engine.Get(&ref)
