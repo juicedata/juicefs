@@ -4,24 +4,21 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. Juic
 
 ## Data backup and recovery
 
-- [用 JuiceFS 备份 NGINX 日志](archive-nginx-log-in-juicefs.md)
-- [基于 JuiceFS 的 MySQL 备份、验证和恢复方案]()
+- [JuiceFS for archive NGINX logs](https://juicefs.com/docs/en/archive_nginx_log_in_juicefs.html)
+- [JuiceFS for MySQL backup, verification and recovery](https://juicefs.com/docs/en/backup_mysql_in_juicefs.html)
+- [Customer Stories: Xiachufang MySQL backup practice on JuiceFS](https://juicefs.com/blog/en/posts/xiachufang-mysql-backup-practice-on-juicefs/)
 
 ## Big Data
 
-- 
+- [How to effectively reduce the load of HDFS cluster for Qutoutiao(NASDAQ:QTT)](https://juicefs.com/blog/en/posts/qutoutiao-big-data-platform-user-case/)
+- [How does the Globalegrow data platform achieve both speed and money savings?](https://juicefs.com/blog/en/posts/globalegrow-big-data-platform-user-case/)
+- [How to make HBase faster, more stable, and cheaper](https://juicefs.com/blog/en/posts/how-to-make-hbase-faster-more-stable-and-cheaper/)
+- [Exploring storage and computing separation for ClickHouse](https://juicefs.com/blog/en/posts/clickhouse-disaggregated-storage-and-compute-practice/)
 
 ## Data sharing
 
-- 
-
-## Remote disaster preparedness
-
-- 
-
-## Artificial Intelligence
-
-- 
+- [Building a Milvus Cluster Based on JuiceFS](https://juicefs.com/blog/en/posts/build-milvus-distributed-cluster-based-on-juicefs/)
+ 
 
 ## Contribution
 
