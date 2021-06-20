@@ -1996,6 +1996,11 @@ func (r *redisMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32,
 	return errno(err)
 }
 
+func (r *redisMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
+	r.of.InvalidateChunk(inode, indx)
+	return 0
+}
+
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
 	defer func() { r.of.InvalidateChunk(inode, indx) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {

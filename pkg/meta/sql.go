@@ -1752,6 +1752,11 @@ func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, ch
 	return errno(err)
 }
 
+func (m *dbMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
+	m.of.InvalidateChunk(inode, indx)
+	return 0
+}
+
 func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
