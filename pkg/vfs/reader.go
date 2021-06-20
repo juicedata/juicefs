@@ -222,7 +222,7 @@ func (s *sliceReader) run() {
 		s.currentPos = 0 // start again from beginning
 		err = syscall.EIO
 		f.tried++
-		f.r.m.InvalidateChunkCache(meta.Background, inode, indx)
+		_ = f.r.m.InvalidateChunkCache(meta.Background, inode, indx)
 		if f.tried >= f.r.maxRetries {
 			s.done(err, 0)
 		} else {
