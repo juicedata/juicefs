@@ -469,13 +469,11 @@ func testLocks(t *testing.T, m Meta) {
 				err = st
 			}
 			count++
-			logger.Infof("locked by %d", i)
 			time.Sleep(time.Millisecond)
 			count--
 			if count > 0 {
 				logger.Fatalf("count should be be zero but got %d", count)
 			}
-			logger.Infof("unlocked by %d", i)
 			if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, 0, 0xFFFF, uint32(i)); st != 0 {
 				logger.Fatalf("plock unlock: %s", st)
 				err = st

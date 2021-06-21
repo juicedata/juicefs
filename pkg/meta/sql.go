@@ -2312,7 +2312,7 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 		if err != nil || n == 0 {
 			if m.engine.DriverName() == "postgres" {
 				// cleanup failed session
-				s.Rollback()
+				_ = s.Rollback()
 			}
 			_, err = s.Update(&x, &xattr{inode, name, nil})
 		}
