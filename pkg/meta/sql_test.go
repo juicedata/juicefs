@@ -60,7 +60,18 @@ func TestMySQLClient(t *testing.T) {
 	m.engine.DropTables(&sustained{})
 	m.engine.DropTables(&xattr{})
 	m.engine.DropTables(&delfile{})
+	m.engine.DropTables(&flock{})
+	m.engine.DropTables(&plock{})
+
+	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m)
+	testCopyFileRange(t, m)
+	m.conf.CaseInsensi = true
+	testCaseIncensi(t, m)
 }
 
 func TestStickyBitSQL(t *testing.T) {

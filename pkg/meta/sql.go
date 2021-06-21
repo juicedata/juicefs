@@ -1385,6 +1385,9 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			spn.Nlink--
 			dpn.Nlink++
 		}
+		if inode != nil {
+			*inode = sn.Inode
+		}
 		m.parseAttr(&sn, attr)
 
 		if n, err := s.Delete(&edge{Parent: parentSrc, Name: se.Name}); err != nil {
