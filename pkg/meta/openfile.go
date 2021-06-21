@@ -112,7 +112,8 @@ func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 	if ok {
 		if attr.Mtime != of.attr.Mtime || attr.Mtimensec != of.attr.Mtimensec {
 			of.chunks = make(map[uint32][]Slice)
-			of.attr.KeepCache = false
+		} else {
+			attr.KeepCache = of.attr.KeepCache
 		}
 		of.attr = *attr
 		of.lastCheck = time.Now()
