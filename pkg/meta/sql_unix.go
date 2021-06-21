@@ -35,6 +35,12 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	var err syscall.Errno
 	for {
 		err = errno(m.txn(func(s *xorm.Session) error {
+			if exists, err := s.Get(&node{Inode: inode}); err != nil || !exists {
+				if err == nil && !exists {
+					err = syscall.ENOENT
+				}
+				return err
+			}
 			rows, err := s.Rows(&flock{Inode: inode})
 			if err != nil {
 				return err
@@ -143,6 +149,12 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 	lock := plockRecord{ltype, pid, start, end}
 	for {
 		err = errno(m.txn(func(s *xorm.Session) error {
+			if exists, err := s.Get(&node{Inode: inode}); err != nil || !exists {
+				if err == nil && !exists {
+					err = syscall.ENOENT
+				}
+				return err
+			}
 			if ltype == syscall.F_UNLCK {
 				var l = plock{Inode: inode, Owner: owner, Sid: m.sid}
 				ok, err := m.engine.Get(&l)

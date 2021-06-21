@@ -1611,6 +1611,9 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			sattr.Nlink--
 			dattr.Nlink++
 		}
+		if inode != nil {
+			*inode = ino
+		}
 		if attr != nil {
 			*attr = iattr
 		}
