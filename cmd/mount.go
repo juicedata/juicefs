@@ -306,7 +306,7 @@ func clientFlags() []cli.Flag {
 		&cli.Float64Flag{
 			Name:  "open-cache",
 			Value: 0.0,
-			Usage: "open files cache timeout in seconds",
+			Usage: "open files cache timeout in seconds (0 means disable this feature)",
 		},
 	}
 }

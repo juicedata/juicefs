@@ -176,9 +176,6 @@ file entry cache timeout in seconds (default: 1)
 `--dir-entry-cache value`\
 dir entry cache timeout in seconds (default: 1)
 
-`--open-cache value`\
-open file cache timeout in seconds (default: 0)
-
 `--enable-xattr`\
 enable extended attributes (xattr) (default: false)
 
@@ -217,6 +214,9 @@ min free space (ratio) (default: 0.1)
 
 `--cache-partial-only`\
 cache only random/small read (default: false)
+
+`--open-cache value`\
+open file cache timeout in seconds (0 means disable this feature) (default: 0)
 
 ### juicefs umount
 
@@ -281,6 +281,9 @@ min free space (ratio) (default: 0.1)
 
 `--cache-partial-only`\
 cache only random/small read (default: false)
+
+`--open-cache value`\
+open file cache timeout in seconds (0 means disable this feature) (default: 0)
 
 `--access-log value`\
 path for JuiceFS access log
