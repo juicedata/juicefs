@@ -30,6 +30,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 	"xorm.io/xorm"
@@ -473,6 +474,9 @@ func (m *dbMeta) shouldRetry(err error) bool {
 	if err == nil {
 		return false
 	}
+	if _, ok := err.(syscall.Errno); ok {
+		return false
+	}
 	// TODO: add other retryable errors here
 	msg := err.Error()
 	switch m.engine.DriverName() {
@@ -481,6 +485,8 @@ func (m *dbMeta) shouldRetry(err error) bool {
 	case "mysql":
 		// MySQL, MariaDB or TiDB
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later")
+	case "postgres":
+		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected")
 	default:
 		return false
 	}
@@ -542,7 +548,7 @@ func (m *dbMeta) flushStats() {
 		newInodes := atomic.SwapInt64(&m.newInodes, 0)
 		if newSpace != 0 || newInodes != 0 {
 			err := m.txn(func(s *xorm.Session) error {
-				_, err := s.Exec("UPDATE jfs_counter SET value=value+ (CASE name WHEN 'usedSpace' THEN ? ELSE ? END) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes)
+				_, err := s.Exec("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN ? ELSE ? END) AS BIGINT) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes)
 				return err
 			})
 			if err != nil {
@@ -765,7 +771,8 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {
 	var r sql.Result
 	var err error
-	if m.engine.DriverName() == "sqlite3" {
+	driver := m.engine.DriverName()
+	if driver == "sqlite3" || driver == "postgres" {
 		r, err = s.Exec("update jfs_chunk set slices=slices || ? where inode=? AND indx=?", buf, inode, indx)
 	} else {
 		r, err = s.Exec("update jfs_chunk set slices=concat(slices, ?) where inode=? AND indx=?", buf, inode, indx)
@@ -2303,6 +2310,10 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 		var x = xattr{inode, name, value}
 		n, err := s.Insert(&x)
 		if err != nil || n == 0 {
+			if m.engine.DriverName() == "postgres" {
+				// cleanup failed session
+				s.Rollback()
+			}
 			_, err = s.Update(&x, &xattr{inode, name, nil})
 		}
 		return err

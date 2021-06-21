@@ -469,11 +469,13 @@ func testLocks(t *testing.T, m Meta) {
 				err = st
 			}
 			count++
+			logger.Infof("locked by %d", i)
 			time.Sleep(time.Millisecond)
 			count--
 			if count > 0 {
 				logger.Fatalf("count should be be zero but got %d", count)
 			}
+			logger.Infof("unlocked by %d", i)
 			if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, 0, 0xFFFF, uint32(i)); st != 0 {
 				logger.Fatalf("plock unlock: %s", st)
 				err = st
@@ -743,7 +745,11 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
-	if st := m.Write(ctx, inode, 0, 100, Slice{1, 100, 0, 100}); st != 0 {
+	var cid uint64
+	if st := m.NewChunk(ctx, inode, 0, 100, &cid); st != 0 {
+		t.Fatalf("new chunk: %s", st)
+	}
+	if st := m.Write(ctx, inode, 0, 100, Slice{cid, 100, 0, 100}); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	if st := m.Truncate(ctx, inode, 0, 200<<20, attr); st != 0 {
