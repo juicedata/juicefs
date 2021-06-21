@@ -1049,6 +1049,7 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 }
 
 func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		var cur Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
@@ -1173,6 +1174,7 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 		}
 	}
 	attr.Parent = parent
+	attr.Full = true
 	if inode != nil {
 		*inode = ino
 	}
@@ -1258,7 +1260,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	if _type == TypeDirectory {
 		return syscall.EPERM
 	}
-
+	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil || rs[1] == nil {
@@ -1670,6 +1672,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 }
 
 func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if err != nil {
@@ -1994,6 +1997,11 @@ func (r *redisMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32,
 		*chunkid = cid
 	}
 	return errno(err)
+}
+
+func (r *redisMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
+	r.of.InvalidateChunk(inode, indx)
+	return 0
 }
 
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
