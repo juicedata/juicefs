@@ -46,6 +46,7 @@ The following table lists the object storage services supported by JuiceFS. Clic
 | [DigitalOcean Spaces Object Storage](#do-spaces)          | `space`    |
 | [Wasabi Cloud Object Storage](#wasabi)                    | `wasabi`   |
 | [Storj DCS](#storj-dcs)                                   | `s3`       |
+| [Vultr Object Storage](#vultr)                            | `s3`       |
 | [Alibaba Cloud Object Storage Service](#aliyun-oss)       | `oss`      |
 | [Tencent Cloud Object Storage](#qcloud-cos)               | `cos`      |
 | [Huawei Cloud Object Storage Service](#huawei-obs)        | `obs`      |
@@ -229,8 +230,6 @@ $ ./juicefs format \
 
 ## Storj DCS <span id='storj-dcs'></span>
 
-When using Storj DCS to create a JuiceFS file system, please refer to [this document](https://docs.storj.io/api-reference/s3-compatible-gateway) to learn how to create access key and secret key.
-
 Storj DCS is an S3-compatible storage, just use `s3` for `--storage` option. The setting format of the `--bucket` option is `https://gateway.<region>.storjshare.io/<bucket>`, please replace `<region>` with the storage region you actually use. There are currently three avaliable regions: `us1`, `ap1` and `eu1`. For example:
 
 ```shell
@@ -241,6 +240,23 @@ $ juicefs format \
 	--secret-key <your-sceret-key> \
 	redis://localhost/1 my-jfs
 ```
+
+Please refer to [this document](https://docs.storj.io/api-reference/s3-compatible-gateway) to learn how to create access key and secret key.
+
+## Vultr Object Storage <span id='vultr'></span>
+
+Vultr Object Storage is an S3-compatible storage, use `s3` for `--storage` option. The `--bucket` option is `https://<bucket>.<region>.vultrobjects.com/`. Currently there is one region available: `ewr1`. For example:
+
+```shell
+$ juicefs format \
+	--storage s3 \
+	--bucket https://<bucket>.ewr1.vultrobjects.com/ \
+	--access-key <your-access-key> \
+	--secret-key <your-sceret-key> \
+	redis://localhost/1 my-jfs
+```
+
+Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage/).
 
 ## Alibaba Cloud Object Storage Service <span id='aliyun-oss'></span>
 

@@ -46,6 +46,7 @@ $ juicefs format --storage s3 \
 | [DigitalOcean Spaces](#do-space)       | `space`    |
 | [Wasabi](#wasabi)                      | `wasabi`   |
 | [Storj DCS](#storj-dcs)                | `s3`       |
+| [Vultr 对象存储](#vultr)                | `s3`       |
 | [阿里云 OSS](#aliyun-oss)              | `oss`      |
 | [腾讯云 COS](#qcloud-cos)              | `cos`      |
 | [华为云 OBS](#huawei-obs)              | `obs`      |
@@ -241,6 +242,22 @@ $ juicefs format \
 	--secret-key <your-sceret-key> \
 	redis://localhost/1 my-jfs
 ```
+
+## Vultr 对象存储 <span id='vultr'></span>
+
+Vultr 的对象存储是跟 S3 完全兼容的，可以使用 `s3` 作为 `--storage` 选项. `--bucket` 需要设置为 `https://<bucket>.<region>.vultrobjects.com/`. 当前只有一个区域可用: `ewr1`. 比如:
+
+```shell
+$ juicefs format \
+	--storage s3 \
+	--bucket https://<bucket>.ewr1.vultrobjects.com/ \
+	--access-key <your-access-key> \
+	--secret-key <your-sceret-key> \
+	redis://localhost/1 my-jfs
+```
+
+访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage/) 中找到。
+
 
 ## 阿里云 OSS <span id='aliyun-oss'></span>
 
