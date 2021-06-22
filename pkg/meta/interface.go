@@ -342,7 +342,12 @@ func NewClient(uri string, conf *Config) Meta {
 		if p < 0 {
 			logger.Fatalf("invalid uri: %s", uri)
 		}
-		m, err = newSQLMeta(uri[:p], uri[p+3:], conf)
+		driver := uri[:p]
+		if driver == "postgres" {
+			m, err = newSQLMeta(driver, uri, conf)
+		} else {
+			m, err = newSQLMeta(driver, uri[p+3:], conf)
+		}
 	}
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)
