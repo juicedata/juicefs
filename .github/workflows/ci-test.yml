@@ -6,7 +6,7 @@ on:
       - ci-enhanced
 
 jobs:
-  releaser:
+  ci-test:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
