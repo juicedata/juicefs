@@ -743,7 +743,11 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
-	if st := m.Write(ctx, inode, 0, 100, Slice{1, 100, 0, 100}); st != 0 {
+	var cid uint64
+	if st := m.NewChunk(ctx, inode, 0, 100, &cid); st != 0 {
+		t.Fatalf("new chunk: %s", st)
+	}
+	if st := m.Write(ctx, inode, 0, 100, Slice{cid, 100, 0, 100}); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	if st := m.Truncate(ctx, inode, 0, 200<<20, attr); st != 0 {
