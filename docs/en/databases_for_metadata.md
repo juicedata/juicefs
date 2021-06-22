@@ -64,6 +64,41 @@ $ sudo juicefs mount -d redis://192.168.1.6:6379/1 /mnt/jfs
 
 If you are interested, you can check [Redis Best Practices](redis_best_practices.md).
 
+## PostgreSQL
+
+PostgreSQL is one of the most popular open source relational databases in the world, and is often used as the preferred database for Web applications.
+
+You can easily buy a managed PostgreSQL database service on the cloud computing platform, or follow the [Quick Start Guide](https://www.postgresqltutorial.com/postgresql-getting-started/).
+
+Other PostgreSQL-compatible databases (such as CockRoachDB) can also be used as meta engine.
+
+### Create a file system
+
+When using PostgreSQL as the metadata storage engine, the following format is usually used to access the database:
+
+```shell
+postgres://[<username>:<password>@]<IP or Domain name>[:5432]/<database-name>[?parameters]
+```
+
+For example:
+
+```shell
+$ juicefs format --storage minio \
+	--bucket http://192.168.1.6:9000/jfs \
+	--access-key minioadmin \
+	--secret-key minioadmin \
+	postgres://user:password@192.168.1.6:5432/juicefs?sslmode=disable \
+	pics
+```
+
+For more connection parameters, [click here to view](https://pkg.go.dev/github.com/lib/pq#hdr-Connection_String_Parameters).
+
+### Mount a file system
+
+```shell
+$ sudo juicefs mount -d postgres://user:password@192.168.1.6:5432/juicefs?sslmode=disable /mnt/jfs
+```
+
 ## MySQL
 
 > MySQL is one of the most popular open source relational databases in the world, and is often used as the preferred database for Web applications.
@@ -175,7 +210,7 @@ $ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 
 Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for stand-alone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 
-## TiDB
+## FoundationDB
 
 Coming soon...
 
@@ -183,6 +218,3 @@ Coming soon...
 
 Coming soon...
 
-## PostgreSQL
-
-Coming soon...
