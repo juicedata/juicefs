@@ -16,10 +16,10 @@
 package main
 
 import (
-	"crypto/rand"
 	"fmt"
 	"io/ioutil"
 	"math"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,127 +37,125 @@ type Benchmark struct {
 	fileSizeMiB    float64
 	blockSizeMiB   float64
 	count          int
-	filenames      []string
-	done           int
+	threads        int
 }
 
-func (bm *Benchmark) writeOneFile(filename string, buf []byte, blockCount int) ([]float64, error) {
-	timeTaken := make([]float64, 0, blockCount)
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0777)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	for i := 0; i < blockCount; i++ {
-		start := time.Now()
-		if _, err = file.Write(buf); err != nil {
-			return nil, err
-		}
-		if i == blockCount-1 {
-			file.Close()
-		}
-		cost := time.Since(start)
-		timeTaken = append(timeTaken, cost.Seconds())
-		bm.done += 1
-		if isatty.IsTerminal(os.Stdout.Fd()) {
-			fmt.Printf("\rwriting files: %.2f %%", float64(bm.done*100)/float64(bm.count*blockCount))
-		}
-	}
-	return timeTaken, nil
-}
-
-func (bm *Benchmark) readOneFile(filename string, blockSize int, blockCount int) ([]float64, error) {
-	timeTaken := make([]float64, 0, blockCount)
-	file, err := os.OpenFile(filename, os.O_RDONLY, 0777)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	buf := make([]byte, blockSize)
-	for {
-		start := time.Now()
-		_, err = file.Read(buf)
+func writeFiles(prefix string, fCount, bSize, bCount int, progress chan<- bool) {
+	for i := 0; i < fCount; i++ {
+		fname := fmt.Sprintf("%s.%d", prefix, i)
+		fp, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
-			break
+			logger.Fatalf("Failed to open file %s: %s", fname, err)
 		}
-		cost := time.Since(start)
-		timeTaken = append(timeTaken, cost.Seconds())
-		if isatty.IsTerminal(os.Stdout.Fd()) {
-			fmt.Printf("\rreading files: %.2f %%", float64(bm.done*100)/float64(bm.count*blockCount))
+		buf := make([]byte, bSize)
+		rand.Read(buf)
+		for j := 0; j < bCount; j++ {
+			if _, err = fp.Write(buf); err != nil {
+				logger.Fatalf("Failed to write file %s: %s", fname, err)
+			}
+			progress <- true
 		}
-
-		bm.done += 1
+		fp.Close()
 	}
-	return timeTaken, nil
 }
 
-func (bm *Benchmark) statOneFile(filename string) float64 {
+func readFiles(prefix string, fCount, bSize, bCount int, progress chan<- bool) {
+	for i := 0; i < fCount; i++ {
+		fname := fmt.Sprintf("%s.%d", prefix, i)
+		fp, err := os.Open(fname)
+		if err != nil {
+			logger.Fatalf("Failed to open file %s: %s", fname, err)
+		}
+		buf := make([]byte, bSize)
+		for j := 0; j < bCount; j++ {
+			if n, err := fp.Read(buf); err != nil || n != bSize {
+				logger.Fatalf("Failed to read file %s: %d %s", fname, n, err)
+			}
+			progress <- true
+		}
+		fp.Close()
+	}
+}
+
+func statFiles(prefix string, fCount int, progress chan<- bool) {
+	for i := 0; i < fCount; i++ {
+		fname := fmt.Sprintf("%s.%d", prefix, i)
+		if _, err := os.Stat(fname); err != nil {
+			logger.Fatalf("Failed to stat file %s: %s", fname, err)
+		}
+		progress <- true
+	}
+}
+
+func (bm *Benchmark) ReadFileTest() float64 {
+	blockCount := int(bm.fileSizeMiB / bm.blockSizeMiB)
+	blockSize := int(bm.blockSizeMiB * (1 << 20))
+	progress := make(chan bool, bm.threads)
 	start := time.Now()
-	_, _ = os.Stat(filename)
-	bm.done += 1
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		fmt.Printf("\rstating files: %.2f %%", float64(bm.done*100)/float64(bm.count))
+	for i := 0; i < bm.threads; i++ {
+		prefix := fmt.Sprintf("%s.%d", bm.filenamePrefix, i)
+		go readFiles(prefix, bm.count, blockSize, blockCount, progress)
+	}
+	totalBlocks := bm.threads * bm.count * blockCount
+	for count := 0; count < totalBlocks; count++ {
+		<-progress
+		if count%100 == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
+			fmt.Printf("\rreading files: %.2f %%", float64(count*100)/float64(totalBlocks))
+		}
 	}
 	return time.Since(start).Seconds()
 }
 
-func (bm *Benchmark) ReadFileTest() ([]float64, float64) {
-	blockCount := int(math.Ceil(bm.fileSizeMiB / bm.blockSizeMiB))
+func (bm *Benchmark) WriteFileTest() float64 {
+	blockCount := int(bm.fileSizeMiB / bm.blockSizeMiB)
 	blockSize := int(bm.blockSizeMiB * (1 << 20))
-	timeTaken := make([]float64, 0, len(bm.filenames))
-	bm.done = 0
-
-	for _, filename := range bm.filenames {
-		if costs, err := bm.readOneFile(filename, blockSize, blockCount); err == nil {
-			timeTaken = append(timeTaken, costs...)
-		} else {
-			logger.Fatalf("Failed to read file %s: %s", filename, err)
+	progress := make(chan bool, bm.threads)
+	start := time.Now()
+	for i := 0; i < bm.threads; i++ {
+		prefix := fmt.Sprintf("%s.%d", bm.filenamePrefix, i)
+		go writeFiles(prefix, bm.count, blockSize, blockCount, progress)
+	}
+	totalBlocks := bm.threads * bm.count * blockCount
+	for count := 0; count < totalBlocks; count++ {
+		<-progress
+		if count%100 == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
+			fmt.Printf("\rwriting files: %.2f %%", float64(count*100)/float64(totalBlocks))
 		}
 	}
-	totalSizeMiB := bm.fileSizeMiB * float64(len(bm.filenames))
-	return timeTaken, totalSizeMiB
+	return time.Since(start).Seconds()
 }
 
-func (bm *Benchmark) WriteFileTest() ([]float64, float64) {
-	blockCount := int(math.Ceil(bm.fileSizeMiB / bm.blockSizeMiB))
-	blockSize := int(math.Min(bm.blockSizeMiB, bm.fileSizeMiB) * (1 << 20))
-	timeTaken := make([]float64, 10)
-	bm.done = 0
-	buf := make([]byte, blockSize)
-	_, _ = rand.Read(buf)
-
-	for i := 0; i < bm.count; i++ {
-		filename := fmt.Sprintf("%s.%d", bm.filenamePrefix, i)
-		if costs, err := bm.writeOneFile(filename, buf, blockCount); err == nil {
-			timeTaken = append(timeTaken, costs...)
-			bm.filenames = append(bm.filenames, filename)
-		} else {
-			logger.Fatalf("Failed to write file %s: %s", filename, err)
+func (bm *Benchmark) StatFileTest() float64 {
+	progress := make(chan bool, bm.threads)
+	start := time.Now()
+	for i := 0; i < bm.threads; i++ {
+		prefix := fmt.Sprintf("%s.%d", bm.filenamePrefix, i)
+		go statFiles(prefix, bm.count, progress)
+	}
+	totalFiles := bm.threads * bm.count
+	for count := 0; count < totalFiles; count++ {
+		<-progress
+		if count%100 == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
+			fmt.Printf("\rstating files: %.2f %%", float64(count*100)/float64(totalFiles))
 		}
 	}
-	totalSizeMiB := bm.fileSizeMiB * float64(bm.count)
-	return timeTaken, totalSizeMiB
-
+	return time.Since(start).Seconds()
 }
 
-func (bm *Benchmark) StatFileTest() []float64 {
-	bm.done = 0
-	timeTaken := make([]float64, 0, len(bm.filenames))
-	for _, filename := range bm.filenames {
-		timeTaken = append(timeTaken, bm.statOneFile(filename))
-	}
-	return timeTaken
-}
-
-func newBenchmark(filenamePrefix string, fileSizeMiB float64, blockSize float64, count int) *Benchmark {
-	return &Benchmark{
+func newBenchmark(filenamePrefix string, fileSize, blockSize float64, count, threads int) *Benchmark {
+	bm := &Benchmark{
 		filenamePrefix: filenamePrefix,
-		fileSizeMiB:    fileSizeMiB,
-		blockSizeMiB:   blockSize,
 		count:          count,
-		done:           0,
+		threads:        threads,
 	}
+	if fileSize < blockSize {
+		bm.fileSizeMiB = fileSize
+		bm.blockSizeMiB = fileSize
+	} else {
+		bm.fileSizeMiB = blockSize * math.Ceil(fileSize/blockSize)
+		bm.blockSizeMiB = blockSize
+	}
+	return bm
 }
 
 func readStats(path string) map[string]float64 {
@@ -201,6 +199,7 @@ func benchmark(c *cli.Context) error {
 	bigFileSize := c.Float64("big-file-size")
 	smallFileSize := c.Float64("small-file-size")
 	smallFileCount := c.Int("small-file-count")
+	threads := c.Int("threads")
 
 	if c.NArg() > 0 {
 		dest = c.Args().Get(0)
@@ -225,24 +224,14 @@ func benchmark(c *cli.Context) error {
 	}
 	var purgeCmd *exec.Cmd
 	if os.Getuid() != 0 {
-		purgeCmdArgs = append([]string{"sudo"}, purgeCmdArgs...)
 		purgeCmd = exec.Command("sudo", purgeCmdArgs...)
 	} else {
 		purgeCmd = exec.Command(purgeCmdArgs[0], purgeCmdArgs[1:]...)
 	}
 
-	sum := func(timeCost []float64) float64 {
-		var s float64
-		for _, t := range timeCost {
-			s += t
-		}
-		return s
-	}
-
-	bigFileTest := newBenchmark(filepath.Join(dest, "bigfile"), bigFileSize, blockSize, 1)
-	timeTaken, totalSizeMiB := bigFileTest.WriteFileTest()
-
-	fmt.Printf("\rWritten a big file (%.2f MiB): (%.2f MiB/s)\n", bigFileTest.fileSizeMiB, totalSizeMiB/sum(timeTaken))
+	bm := newBenchmark(filepath.Join(dest, "bigfile"), bigFileSize, blockSize, 1, threads)
+	cost := bm.WriteFileTest()
+	fmt.Printf("\rWritten %d * 1 big files (%.2f MiB): (%.2f MiB/s)\n", bm.threads, bm.fileSizeMiB, bm.fileSizeMiB*float64(bm.count*bm.threads)/cost)
 
 	if os.Getuid() != 0 {
 		fmt.Println("Cleaning kernel cache, may ask for root privilege...")
@@ -253,28 +242,29 @@ func benchmark(c *cli.Context) error {
 	if os.Getuid() != 0 {
 		fmt.Println("Kernel cache cleaned")
 	}
-	timeTaken, totalSizeMiB = bigFileTest.ReadFileTest()
-	fmt.Printf("\rRead a big file (%.2f MiB): (%.2f MiB/s)\n", bigFileTest.fileSizeMiB, totalSizeMiB/sum(timeTaken))
 
-	smallFileTest := newBenchmark(filepath.Join(dest, "smallfile"), smallFileSize, blockSize, smallFileCount)
-	timeTaken, _ = smallFileTest.WriteFileTest()
-	fmt.Printf("\rWritten %d small files (%.2f KiB): %.1f files/s, %.1f ms for each file\n", smallFileTest.count, smallFileTest.fileSizeMiB*1024, float64(smallFileTest.count)/sum(timeTaken), sum(timeTaken)*1000/float64(smallFileTest.count))
+	cost = bm.ReadFileTest()
+	fmt.Printf("\rRead %d * 1 big file (%.2f MiB): (%.2f MiB/s)\n", bm.threads, bm.fileSizeMiB, bm.fileSizeMiB*float64(bm.count*bm.threads)/cost)
 
-	purgeCmd = exec.Command(purgeCmd.Path, purgeCmd.Args[1:]...)
-	if err := purgeCmd.Run(); err != nil {
-		return err
-	}
-
-	timeTaken, _ = smallFileTest.ReadFileTest()
-	fmt.Printf("\rRead %d small files (%.2f KiB): %.1f files/s, %.1f ms for each file\n", smallFileTest.count, smallFileTest.fileSizeMiB*1024, float64(smallFileTest.count)/sum(timeTaken), sum(timeTaken)*1000/float64(smallFileTest.count))
+	bm = newBenchmark(filepath.Join(dest, "smallfile"), smallFileSize, blockSize, smallFileCount, threads)
+	cost = bm.WriteFileTest()
+	fmt.Printf("\rWritten %d * %d small files (%.2f KiB): %.1f files/s, %.2f ms for each file\n", bm.threads, bm.count, bm.fileSizeMiB*1024, float64(bm.threads*bm.count)/cost, cost*1000/float64(bm.threads*bm.count))
 
 	purgeCmd = exec.Command(purgeCmd.Path, purgeCmd.Args[1:]...)
 	if err := purgeCmd.Run(); err != nil {
 		return err
 	}
 
-	timeTaken = smallFileTest.StatFileTest()
-	fmt.Printf("\rStated %d files: %.1f files/s, %.1f ms for each file\n", smallFileTest.count, float64(smallFileTest.count)/sum(timeTaken), sum(timeTaken)*1000/float64(smallFileTest.count))
+	cost = bm.ReadFileTest()
+	fmt.Printf("\rRead %d * %d small files (%.2f KiB): %.1f files/s, %.2f ms for each file\n", bm.threads, bm.count, bm.fileSizeMiB*1024, float64(bm.threads*bm.count)/cost, cost*1000/float64(bm.threads*bm.count))
+
+	purgeCmd = exec.Command(purgeCmd.Path, purgeCmd.Args[1:]...)
+	if err := purgeCmd.Run(); err != nil {
+		return err
+	}
+
+	cost = bm.StatFileTest()
+	fmt.Printf("\rStated %d * %d files: %.1f files/s, %.2f ms for each file\n", bm.threads, bm.count, float64(bm.threads*bm.count)/cost, cost*1000/float64(bm.threads*bm.count))
 
 	rmrCmd := exec.Command("rm", "-rf", dest)
 	if err := rmrCmd.Run(); err != nil {
@@ -287,7 +277,7 @@ func benchmark(c *cli.Context) error {
 			return stats2["juicefs_"+n] - stats["juicefs_"+n]
 		}
 		show := func(title, name string) {
-			fmt.Printf("%s: %.0f, avg: %.1f ms\n", title, st(name+"_total"),
+			fmt.Printf("%s: %.0f, avg: %.2f ms\n", title, st(name+"_total"),
 				st(name+"_sum")/st(name+"_total")*1000)
 		}
 		show("FUSE operation", "fuse_ops_durations_histogram_seconds")
@@ -329,6 +319,12 @@ func benchmarkFlags() *cli.Command {
 				Name:  "small-file-count",
 				Value: 100,
 				Usage: "number of small files",
+			},
+			&cli.IntFlag{
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   1,
+				Usage:   "number of concurrent threads",
 			},
 		},
 	}
