@@ -14,7 +14,6 @@ package: libjfs/target/libjfs.so.gz
 docker-package:
 	docker run --rm --mount "type=bind,src=$(GOROOT),target=/go" \
 		--mount "type=bind,src=$(HOME)/go,target=/root/go" \
-		--env GOPROXY=https://goproxy.cn \
 		--mount "type=bind,src=$(shell pwd)/../../,target=/workspace/juicefs" \
 		--workdir /workspace/juicefs juicedata/sdk-builder \
 		/bin/bash -c 'cd sdk/java && make'
