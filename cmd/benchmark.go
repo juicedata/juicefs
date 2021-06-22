@@ -322,7 +322,7 @@ func benchmarkFlags() *cli.Command {
 			},
 			&cli.IntFlag{
 				Name:    "threads",
-				Aliases: []string{"t"},
+				Aliases: []string{"p"},
 				Value:   3,
 				Usage:   "number of concurrent threads",
 			},
