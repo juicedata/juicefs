@@ -40,7 +40,7 @@ type Benchmark struct {
 	threads        int
 }
 
-func writeFiles(prefix string, fCount, bSize, bCount int, cost chan<- bool) {
+func writeFiles(prefix string, fCount, bSize, bCount int, progress chan<- bool) {
 	for i := 0; i < fCount; i++ {
 		fname := fmt.Sprintf("%s.%d", prefix, i)
 		fp, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -53,13 +53,13 @@ func writeFiles(prefix string, fCount, bSize, bCount int, cost chan<- bool) {
 			if _, err = fp.Write(buf); err != nil {
 				logger.Fatalf("Failed to write file %s: %s", fname, err)
 			}
-			cost <- true
+			progress <- true
 		}
 		fp.Close()
 	}
 }
 
-func readFiles(prefix string, fCount, bSize, bCount int, cost chan<- bool) {
+func readFiles(prefix string, fCount, bSize, bCount int, progress chan<- bool) {
 	for i := 0; i < fCount; i++ {
 		fname := fmt.Sprintf("%s.%d", prefix, i)
 		fp, err := os.Open(fname)
@@ -71,34 +71,34 @@ func readFiles(prefix string, fCount, bSize, bCount int, cost chan<- bool) {
 			if n, err := fp.Read(buf); err != nil || n != bSize {
 				logger.Fatalf("Failed to read file %s: %d %s", fname, n, err)
 			}
-			cost <- true
+			progress <- true
 		}
 		fp.Close()
 	}
 }
 
-func statFiles(prefix string, fCount int, cost chan<- bool) {
+func statFiles(prefix string, fCount int, progress chan<- bool) {
 	for i := 0; i < fCount; i++ {
 		fname := fmt.Sprintf("%s.%d", prefix, i)
 		if _, err := os.Stat(fname); err != nil {
 			logger.Fatalf("Failed to stat file %s: %s", fname, err)
 		}
-		cost <- true
+		progress <- true
 	}
 }
 
 func (bm *Benchmark) ReadFileTest() float64 {
 	blockCount := int(bm.fileSizeMiB / bm.blockSizeMiB)
 	blockSize := int(bm.blockSizeMiB * (1 << 20))
-	cost := make(chan bool, bm.threads)
+	progress := make(chan bool, bm.threads)
 	start := time.Now()
 	for i := 0; i < bm.threads; i++ {
 		prefix := fmt.Sprintf("%s.%d", bm.filenamePrefix, i)
-		go readFiles(prefix, bm.count, blockSize, blockCount, cost)
+		go readFiles(prefix, bm.count, blockSize, blockCount, progress)
 	}
 	totalBlocks := bm.threads * bm.count * blockCount
 	for count := 0; count < totalBlocks; count++ {
-		<-cost
+		<-progress
 		if count%100 == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
 			fmt.Printf("\rreading files: %.2f %%", float64(count*100)/float64(totalBlocks))
 		}
@@ -109,15 +109,15 @@ func (bm *Benchmark) ReadFileTest() float64 {
 func (bm *Benchmark) WriteFileTest() float64 {
 	blockCount := int(bm.fileSizeMiB / bm.blockSizeMiB)
 	blockSize := int(bm.blockSizeMiB * (1 << 20))
-	cost := make(chan bool, bm.threads)
+	progress := make(chan bool, bm.threads)
 	start := time.Now()
 	for i := 0; i < bm.threads; i++ {
 		prefix := fmt.Sprintf("%s.%d", bm.filenamePrefix, i)
-		go writeFiles(prefix, bm.count, blockSize, blockCount, cost)
+		go writeFiles(prefix, bm.count, blockSize, blockCount, progress)
 	}
 	totalBlocks := bm.threads * bm.count * blockCount
 	for count := 0; count < totalBlocks; count++ {
-		<-cost
+		<-progress
 		if count%100 == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
 			fmt.Printf("\rwriting files: %.2f %%", float64(count*100)/float64(totalBlocks))
 		}
@@ -126,15 +126,15 @@ func (bm *Benchmark) WriteFileTest() float64 {
 }
 
 func (bm *Benchmark) StatFileTest() float64 {
-	cost := make(chan bool, bm.threads)
+	progress := make(chan bool, bm.threads)
 	start := time.Now()
 	for i := 0; i < bm.threads; i++ {
 		prefix := fmt.Sprintf("%s.%d", bm.filenamePrefix, i)
-		go statFiles(prefix, bm.count, cost)
+		go statFiles(prefix, bm.count, progress)
 	}
 	totalFiles := bm.threads * bm.count
 	for count := 0; count < totalFiles; count++ {
-		<-cost
+		<-progress
 		if count%100 == 0 && isatty.IsTerminal(os.Stdout.Fd()) {
 			fmt.Printf("\rstating files: %.2f %%", float64(count*100)/float64(totalFiles))
 		}
@@ -323,7 +323,7 @@ func benchmarkFlags() *cli.Command {
 			&cli.IntFlag{
 				Name:    "threads",
 				Aliases: []string{"p"},
-				Value:   3,
+				Value:   1,
 				Usage:   "number of concurrent threads",
 			},
 		},
