@@ -31,7 +31,7 @@ func load(ctx *cli.Context) error {
 	}
 	var buf []byte
 	var err error
-	if ctx.Args().Len() == 1 || ctx.Args().Get(1) == "--" {
+	if ctx.Args().Len() == 1 {
 		buf, err = ioutil.ReadAll(os.Stdin)
 	} else {
 		buf, err = ioutil.ReadFile(ctx.Args().Get(1))

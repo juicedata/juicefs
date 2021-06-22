@@ -30,7 +30,7 @@ func dump(ctx *cli.Context) error {
 		return fmt.Errorf("META-ADDR is needed")
 	}
 	var fp io.WriteCloser
-	if ctx.Args().Len() == 1 || ctx.Args().Get(1) == "--" {
+	if ctx.Args().Len() == 1 {
 		fp = os.Stdout
 	} else {
 		var err error
