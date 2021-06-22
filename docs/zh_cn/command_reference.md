@@ -185,6 +185,9 @@ juicefs mount [command options] REDIS-URL MOUNTPOINT
 `--read-only`\
 只读模式 (默认: false)
 
+`--subdir`\
+将某个子目录挂载为根 (默认: "")
+
 `--get-timeout value`\
 下载一个对象的超时时间；单位为秒 (默认: 60)
 
@@ -524,6 +527,11 @@ juicefs warmup [command options] [PATH ...]
 ```
 juicefs dump [command options] META-ADDR FILE
 ```
+
+#### 选项
+
+`--subdir value`\
+只导出一个子目录。
 
 ### juicefs load
 

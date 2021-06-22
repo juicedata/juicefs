@@ -138,6 +138,7 @@ type dbMeta struct {
 
 	sid          uint64
 	of           *openfiles
+	root         Ino
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	deleting     chan int
@@ -182,7 +183,16 @@ func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
 			callbacks: make(map[uint32]MsgCallback),
 		},
 	}
-	return m, nil
+	m.root = 1
+	m.root, err = lookupSubdir(m, conf.Subdir)
+	return m, err
+}
+
+func (m *dbMeta) checkRoot(inode Ino) Ino {
+	if inode == 1 {
+		return m.root
+	}
+	return inode
 }
 
 func (m *dbMeta) Name() string {
@@ -605,6 +615,7 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 }
 
 func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	parent = m.checkRoot(parent)
 	dbSession := m.engine.Table(&edge{})
 	if attr != nil {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
@@ -666,6 +677,7 @@ func (m *dbMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall
 }
 
 func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	inode = m.checkRoot(inode)
 	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
 		return 0
 	}
@@ -692,6 +704,7 @@ func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(func(s *xorm.Session) error {
 		var cur = node{Inode: inode}
@@ -975,6 +988,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 	if m.checkQuota(4<<10, 1) {
 		return syscall.ENOSPC
 	}
+	parent = m.checkRoot(parent)
 	ino, err := m.nextInode()
 	if err != nil {
 		return errno(err)
@@ -1069,6 +1083,7 @@ func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumas
 }
 
 func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
+	parent = m.checkRoot(parent)
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
@@ -1194,6 +1209,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.ENOTEMPTY
 	}
 
+	parent = m.checkRoot(parent)
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
@@ -1268,6 +1284,8 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
+	parentSrc = m.checkRoot(parentSrc)
+	parentDst = m.checkRoot(parentDst)
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
 		var spn = node{Inode: parentSrc}
@@ -1473,6 +1491,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 }
 
 func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	parent = m.checkRoot(parent)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
@@ -1530,10 +1549,14 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 }
 
 func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+	inode = m.checkRoot(inode)
 	var attr Attr
 	eno := m.GetAttr(ctx, inode, &attr)
 	if eno != 0 {
 		return eno
+	}
+	if inode == m.root {
+		attr.Parent = m.root
 	}
 	var pattr Attr
 	eno = m.GetAttr(ctx, attr.Parent, &pattr)
@@ -2264,6 +2287,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.E
 }
 
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
+	inode = m.checkRoot(inode)
 	var x = xattr{Inode: inode, Name: name}
 	ok, err := m.engine.Get(&x)
 	if err != nil {
@@ -2277,6 +2301,7 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 }
 
 func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
+	inode = m.checkRoot(inode)
 	var x = xattr{Inode: inode}
 	rows, err := m.engine.Where("inode = ?", inode).Rows(&x)
 	if err != nil {
@@ -2299,6 +2324,7 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 	if name == "" {
 		return syscall.EINVAL
 	}
+	inode = m.checkRoot(inode)
 	return errno(m.txn(func(s *xorm.Session) error {
 		var x = xattr{inode, name, value}
 		n, err := s.Insert(&x)
@@ -2313,6 +2339,7 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	if name == "" {
 		return syscall.EINVAL
 	}
+	inode = m.checkRoot(inode)
 	return errno(m.txn(func(s *xorm.Session) error {
 		n, err := s.Delete(&xattr{Inode: inode, Name: name})
 		if n == 0 {
@@ -2411,11 +2438,11 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 		dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
 	}
 
-	tree, err := m.dumpEntry(1)
+	tree, err := m.dumpEntry(m.root)
 	if err != nil {
 		return err
 	}
-	if tree.Entries, err = m.dumpDir(1); err != nil {
+	if tree.Entries, err = m.dumpDir(m.root); err != nil {
 		return err
 	}
 
@@ -2587,6 +2614,7 @@ func (m *dbMeta) LoadMeta(buf []byte) error {
 		return err
 	}
 
+	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
 	if err = collectEntry(dm.FSTree, entries); err != nil {
 		return err

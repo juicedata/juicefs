@@ -97,6 +97,7 @@ func mount(c *cli.Context) error {
 		ReadOnly:    readOnly,
 		OpenCache:   time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint:  mp,
+		Subdir:      c.String("subdir"),
 	})
 	format, err := m.Load()
 	if err != nil {
@@ -303,10 +304,18 @@ func clientFlags() []cli.Flag {
 			Usage: "cache only random/small read",
 		},
 
+		&cli.BoolFlag{
+			Name:  "read-only",
+			Usage: "allow lookup/read operations only",
+		},
 		&cli.Float64Flag{
 			Name:  "open-cache",
 			Value: 0.0,
 			Usage: "open files cache timeout in seconds",
+		},
+		&cli.StringFlag{
+			Name:  "subdir",
+			Usage: "mount a sub-directory as root",
 		},
 	}
 }

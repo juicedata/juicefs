@@ -78,6 +78,7 @@ type redisMeta struct {
 	rdb     *redis.Client
 	txlocks [1024]sync.Mutex // Pessimistic locks to reduce conflict on Redis
 
+	root         Ino
 	sid          int64
 	usedSpace    uint64
 	usedInodes   uint64
@@ -164,7 +165,38 @@ func newRedisMeta(url string, conf *Config) (Meta, error) {
 	}
 
 	m.checkServerConfig()
-	return m, nil
+	m.root = 1
+	m.root, err = lookupSubdir(m, conf.Subdir)
+	return m, err
+}
+
+func lookupSubdir(m Meta, subdir string) (Ino, error) {
+	var root Ino = 1
+	for subdir != "" {
+		ps := strings.SplitN(subdir, "/", 2)
+		if ps[0] != "" {
+			var attr Attr
+			r := m.Lookup(Background, root, ps[0], &root, &attr)
+			if r != 0 {
+				return 0, fmt.Errorf("lookup subdir %s: %s", ps[0], r)
+			}
+			if attr.Typ != TypeDirectory {
+				return 0, fmt.Errorf("%s is not a redirectory", ps[0])
+			}
+		}
+		if len(ps) == 1 {
+			break
+		}
+		subdir = ps[1]
+	}
+	return root, nil
+}
+
+func (r *redisMeta) checkRoot(inode Ino) Ino {
+	if inode == 1 {
+		return r.root
+	}
+	return inode
 }
 
 func (r *redisMeta) Name() string {
@@ -610,7 +642,7 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	var foundIno Ino
 	var encodedAttr []byte
 	var err error
-
+	parent = r.checkRoot(parent)
 	entryKey := r.entryKey(parent)
 	if len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
 		var res interface{}
@@ -684,6 +716,7 @@ func (r *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 	if len(r.shaResolve) == 0 || r.conf.CaseInsensi {
 		return syscall.ENOTSUP
 	}
+	parent = r.checkRoot(parent)
 	args := []string{parent.String(), path,
 		strconv.FormatUint(uint64(ctx.Uid()), 10),
 		strconv.FormatUint(uint64(ctx.Gid()), 10)}
@@ -770,6 +803,7 @@ func (r *redisMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysc
 
 func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	var c context.Context = ctx
+	inode = r.checkRoot(inode)
 	if inode == 1 {
 		var cancel func()
 		c, cancel = context.WithTimeout(ctx, time.Millisecond*300)
@@ -1049,6 +1083,7 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 }
 
 func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+	inode = r.checkRoot(inode)
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		var cur Attr
@@ -1147,6 +1182,7 @@ func (r *redisMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mod
 }
 
 func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	parent = r.checkRoot(parent)
 	if r.checkQuota(4<<10, 1) {
 		return syscall.ENOSPC
 	}
@@ -1245,6 +1281,7 @@ func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cu
 }
 
 func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
+	parent = r.checkRoot(parent)
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
 	if err == redis.Nil && r.conf.CaseInsensi {
 		if e := r.resolveCase(ctx, parent, name); e != nil {
@@ -1347,6 +1384,7 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
+	parent = r.checkRoot(parent)
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
 	if err == redis.Nil && r.conf.CaseInsensi {
 		if e := r.resolveCase(ctx, parent, name); e != nil {
@@ -1484,6 +1522,8 @@ func Remove(r Meta, ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
+	parentSrc = r.checkRoot(parentSrc)
+	parentDst = r.checkRoot(parentDst)
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 	if err == redis.Nil && r.conf.CaseInsensi {
 		if e := r.resolveCase(ctx, parentSrc, nameSrc); e != nil {
@@ -1672,6 +1712,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 }
 
 func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	parent = r.checkRoot(parent)
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
@@ -1720,6 +1761,7 @@ func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr
 }
 
 func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+	inode = r.checkRoot(inode)
 	var attr Attr
 	if err := r.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
@@ -1732,6 +1774,9 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 		},
 	}
 	if attr.Parent > 0 {
+		if inode == r.root {
+			attr.Parent = r.root
+		}
 		*entries = append(*entries, &Entry{
 			Inode: attr.Parent,
 			Name:  []byte(".."),
@@ -2705,6 +2750,7 @@ func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscal
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
+	inode = r.checkRoot(inode)
 	var err error
 	*vbuff, err = r.rdb.HGet(ctx, r.xattrKey(inode), name).Bytes()
 	if err == redis.Nil {
@@ -2714,6 +2760,7 @@ func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte)
 }
 
 func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
+	inode = r.checkRoot(inode)
 	vals, err := r.rdb.HKeys(ctx, r.xattrKey(inode)).Result()
 	if err != nil {
 		return errno(err)
@@ -2727,11 +2774,13 @@ func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 }
 
 func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) syscall.Errno {
+	inode = r.checkRoot(inode)
 	_, err := r.rdb.HSet(ctx, r.xattrKey(inode), name, value).Result()
 	return errno(err)
 }
 
 func (r *redisMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
+	inode = r.checkRoot(inode)
 	n, err := r.rdb.HDel(ctx, r.xattrKey(inode), name).Result()
 	if n == 0 {
 		err = ENOATTR
@@ -2849,11 +2898,11 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
 
-	tree, err := m.dumpEntry(1)
+	tree, err := m.dumpEntry(m.root)
 	if err != nil {
 		return err
 	}
-	if tree.Entries, err = m.dumpDir(1); err != nil {
+	if tree.Entries, err = m.dumpDir(m.root); err != nil {
 		return err
 	}
 
@@ -3027,6 +3076,7 @@ func (m *redisMeta) LoadMeta(buf []byte) error {
 		return err
 	}
 
+	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
 	if err = collectEntry(dm.FSTree, entries); err != nil {
 		return err

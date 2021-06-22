@@ -185,6 +185,9 @@ enable extended attributes (xattr) (default: false)
 `--read-only`\
 allow lookup/read operations only (default: false)
 
+`--subdir`\
+mount a sub-directory as root (default: "")
+
 `--get-timeout value`\
 the max number of seconds to download an object (default: 60)
 
@@ -524,6 +527,11 @@ dump metadata into a JSON file
 ```
 juicefs dump [command options] META-ADDR FILE
 ```
+
+#### Options
+
+`--subdir value`\
+only dump a sub-directory.
 
 ### juicefs load
 
