@@ -18,6 +18,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/urfave/cli/v2"
@@ -25,15 +26,20 @@ import (
 
 func load(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 2 {
-		return fmt.Errorf("META-ADDR and FILE are needed")
+	if ctx.Args().Len() < 1 {
+		return fmt.Errorf("META-ADDR is needed")
 	}
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
-	fname := ctx.Args().Get(1)
-	buf, err := ioutil.ReadFile(fname)
+	var buf []byte
+	var err error
+	if ctx.Args().Len() == 1 || ctx.Args().Get(1) == "--" {
+		buf, err = ioutil.ReadAll(os.Stdin)
+	} else {
+		buf, err = ioutil.ReadFile(ctx.Args().Get(1))
+	}
 	if err != nil {
 		return err
 	}
+	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	return m.LoadMeta(buf)
 }
 
@@ -41,7 +47,7 @@ func loadFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "load",
 		Usage:     "load metadata from a previously dumped JSON file",
-		ArgsUsage: "META-ADDR FILE",
+		ArgsUsage: "META-ADDR [FILE]",
 		Action:    load,
 	}
 }
