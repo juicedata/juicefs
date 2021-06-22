@@ -39,7 +39,7 @@ jobs:
         run: sudo chown -R $USER $HOME/go/pkg/mod
 
       - name: Build SDK
-        run: make -C sdk/java docker-package
+        run: make -C sdk/java docker-package && sudo chown -R $USER sdk/java/target
 
       - name: Canonicalize SDK name
         run: |
