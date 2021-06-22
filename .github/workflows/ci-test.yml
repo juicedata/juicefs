@@ -1,0 +1,49 @@
+name: release
+
+on:
+  push:
+    branch:
+      - ci-enhanced
+
+jobs:
+  releaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.14.x'
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: setup release environment
+        run: |-
+          echo 'GITHUB_TOKEN=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}' > .release-env
+
+      - name: goreleaser snapshot
+        run: make snapshot
+
+      - name: Cache local Maven repository
+        id: cache-maven
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Chown go module cache
+        run: sudo chown -R $USER $HOME/go/pkg/mod
+
+      - name: Build SDK
+        run: make -C sdk/java docker-package
+
+      - name: Canonicalize SDK name
+        run: |
+          sdk1=$(ls sdk/java/target/juicefs-hadoop-*.jar)
+          sdk2=$(echo $sdk1 | sed 's@^\(.*\)\.jar$@\1-linux-amd64.jar@')
+          mv $sdk1 $sdk2
+        shell: bash
