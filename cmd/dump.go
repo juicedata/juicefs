@@ -28,7 +28,7 @@ func dump(ctx *cli.Context) error {
 	if ctx.Args().Len() < 2 {
 		return fmt.Errorf("META-ADDR and FILE are needed")
 	}
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
 	fname := ctx.Args().Get(1)
 	fp, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -44,5 +44,11 @@ func dumpFlags() *cli.Command {
 		Usage:     "dump metadata into a JSON file",
 		ArgsUsage: "META-ADDR FILE",
 		Action:    dump,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "subdir",
+				Usage: "only dump a sub-directory.",
+			},
+		},
 	}
 }
