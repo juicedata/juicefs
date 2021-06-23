@@ -16,7 +16,7 @@
 package meta
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +28,16 @@ const (
 	jsonIndent    = "  "
 	jsonWriteSize = 64 << 10
 )
+
+type bufWriter struct {
+	bufio.Writer
+}
+
+func (bw *bufWriter) write(s string) {
+	if _, err := bw.WriteString(s); err != nil {
+		panic(err)
+	}
+}
 
 type DumpedCounters struct {
 	UsedSpace         int64 `json:"usedSpace"`
@@ -94,42 +104,42 @@ type DumpedEntry struct {
 	Entries map[string]*DumpedEntry `json:"entries,omitempty"`
 }
 
-func (de *DumpedEntry) writeJSON(w io.Writer, buf *bytes.Buffer, depth int) error {
+func (de *DumpedEntry) writeJSON(bw *bufWriter, depth int) error {
 	prefix := strings.Repeat(jsonIndent, depth)
 	fieldPrefix := prefix + jsonIndent
-	buf.WriteString(fmt.Sprintf("\n%s\"%s\": {", prefix, de.Name))
+	bw.write(fmt.Sprintf("\n%s\"%s\": {", prefix, de.Name))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
 		return err
 	}
-	buf.WriteString(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
+	bw.write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Symlink) > 0 {
-		buf.WriteString(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, de.Symlink))
+		bw.write(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, de.Symlink))
 	}
 	if len(de.Xattrs) > 0 {
 		if data, err = json.Marshal(de.Xattrs); err != nil {
 			return err
 		}
-		buf.WriteString(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
+		bw.write(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
 	}
 	if len(de.Chunks) == 1 {
 		if data, err = json.Marshal(de.Chunks); err != nil {
 			return err
 		}
-		buf.WriteString(fmt.Sprintf(",\n%s\"chunks\": %s", fieldPrefix, data))
+		bw.write(fmt.Sprintf(",\n%s\"chunks\": %s", fieldPrefix, data))
 	} else if len(de.Chunks) > 1 {
 		chunkPrefix := fieldPrefix + jsonIndent
-		buf.WriteString(fmt.Sprintf(",\n%s\"chunks\": [", fieldPrefix))
+		bw.write(fmt.Sprintf(",\n%s\"chunks\": [", fieldPrefix))
 		for i, c := range de.Chunks {
 			if data, err = json.Marshal(c); err != nil {
 				return err
 			}
-			buf.WriteString(fmt.Sprintf("\n%s%s", chunkPrefix, data))
+			bw.write(fmt.Sprintf("\n%s%s", chunkPrefix, data))
 			if i != len(de.Chunks)-1 {
-				buf.WriteByte(',')
+				bw.write(",")
 			}
 		}
-		buf.WriteString(fmt.Sprintf("\n%s]", fieldPrefix))
+		bw.write(fmt.Sprintf("\n%s]", fieldPrefix))
 	}
 	if len(de.Entries) > 0 {
 		entries := make([]*DumpedEntry, 0, len(de.Entries))
@@ -138,22 +148,19 @@ func (de *DumpedEntry) writeJSON(w io.Writer, buf *bytes.Buffer, depth int) erro
 			entries = append(entries, v)
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-		buf.WriteString(fmt.Sprintf(",\n%s\"entries\": {", fieldPrefix))
+		bw.write(fmt.Sprintf(",\n%s\"entries\": {", fieldPrefix))
 		for i, e := range entries {
-			if err = e.writeJSON(w, buf, depth+2); err != nil {
+			if err = e.writeJSON(bw, depth+2); err != nil {
 				return err
 			}
 			if i != len(entries)-1 {
-				buf.WriteByte(',')
+				bw.write(",")
 			}
 		}
-		buf.WriteString(fmt.Sprintf("\n%s}", fieldPrefix))
+		bw.write(fmt.Sprintf("\n%s}", fieldPrefix))
 	}
-	buf.WriteString(fmt.Sprintf("\n%s}", prefix))
-	if buf.Len() >= jsonWriteSize {
-		_, err = buf.WriteTo(w)
-	}
-	return err
+	bw.write(fmt.Sprintf("\n%s}", prefix))
+	return nil
 }
 
 type DumpedMeta struct {
@@ -171,16 +178,14 @@ func (dm *DumpedMeta) writeJSON(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	buf := bytes.NewBuffer(data[:len(data)-2]) // delete \n}
-	buf.Grow(jsonWriteSize)
-	buf.WriteByte(',')
+	bw := &bufWriter{*bufio.NewWriterSize(w, jsonWriteSize)}
+	bw.write(string(append(data[:len(data)-2], ','))) // delete \n}
 	tree.Name = "FSTree"
-	if err = tree.writeJSON(w, buf, 1); err != nil {
+	if err = tree.writeJSON(bw, 1); err != nil {
 		return err
 	}
-	buf.WriteString("\n}\n")
-	_, err = buf.WriteTo(w)
-	return err
+	bw.write("\n}\n")
+	return bw.Flush()
 }
 
 func dumpAttr(a *Attr) *DumpedAttr {
