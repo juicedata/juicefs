@@ -2940,7 +2940,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		}
 	}
 
-	data, err := json.MarshalIndent(DumpedMeta{
+	dm := &DumpedMeta{
 		format,
 		&DumpedCounters{
 			UsedSpace:         cs[0],
@@ -2953,12 +2953,8 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		sessions,
 		dels,
 		tree,
-	}, "", "  ")
-	if err != nil {
-		return err
 	}
-	_, err = w.Write(append(data, '\n'))
-	return err
+	return dm.writeJSON(w)
 }
 
 func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
@@ -3057,7 +3053,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 	return err
 }
 
-func (m *redisMeta) LoadMeta(buf []byte) error {
+func (m *redisMeta) LoadMeta(r io.Reader) error {
 	ctx := Background
 	dbsize, err := m.rdb.DBSize(ctx).Result()
 	if err != nil {
@@ -3067,8 +3063,9 @@ func (m *redisMeta) LoadMeta(buf []byte) error {
 		return fmt.Errorf("Redis database is not empty")
 	}
 
+	dec := json.NewDecoder(r)
 	dm := &DumpedMeta{}
-	if err = json.Unmarshal(buf, &dm); err != nil {
+	if err = dec.Decode(dm); err != nil {
 		return err
 	}
 	format, err := json.MarshalIndent(dm.Setting, "", "")
