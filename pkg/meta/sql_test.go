@@ -47,7 +47,7 @@ func TestSQLClient(t *testing.T) {
 func TestMySQLClient(t *testing.T) {
 	m, err := newSQLMeta("mysql", "root:@/dev", &Config{})
 	if err != nil {
-		t.Skipf("create meta: %s", err)
+		t.Fatalf("create meta: %s", err)
 	}
 	m.engine.DropTables(&setting{})
 	m.engine.DropTables(&counter{})
@@ -77,7 +77,7 @@ func TestMySQLClient(t *testing.T) {
 func TestPostgresQLClient(t *testing.T) {
 	m, err := newSQLMeta("postgres", "postgres://localhost:5432/test?sslmode=disable", &Config{})
 	if err != nil {
-		t.Skipf("create meta: %s", err)
+		t.Fatalf("create meta: %s", err)
 	}
 	m.engine.DropTables(&setting{})
 	m.engine.DropTables(&counter{})
