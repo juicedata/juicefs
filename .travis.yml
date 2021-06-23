@@ -1,6 +1,8 @@
 os: linux
 dist: xenial
 language: go
+services:
+  - mysql
 go:
   - "1.14"
 branches:
@@ -19,6 +21,7 @@ addons:
 install: true
 before_script:
   - export GO111MODULE=on
+  - sudo mysql -e "create database dev;"
   - make
   - make juicefs.exe
   - make -C sdk/java/libjfs libjfs.dll

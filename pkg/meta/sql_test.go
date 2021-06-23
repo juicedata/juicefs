@@ -47,7 +47,7 @@ func TestSQLClient(t *testing.T) {
 func TestMySQLClient(t *testing.T) {
 	m, err := newSQLMeta("mysql", "root:@/dev", &Config{})
 	if err != nil {
-		t.Skipf("create meta: %s", err)
+		t.Fatalf("create meta: %s", err)
 	}
 	m.engine.DropTables(&setting{})
 	m.engine.DropTables(&counter{})
