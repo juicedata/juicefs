@@ -66,7 +66,7 @@ $ sudo juicefs mount -d redis://192.168.1.6:6379/1 /mnt/jfs
 
 ## PostgreSQL
 
-PostgreSQL 是一款世界级的开源数据库，有完善的生态和丰富的应用场景，也可以用来作为 JuiceFS 的元数据引擎。
+> PostgreSQL 是一款世界级的开源数据库，有完善的生态和丰富的应用场景，也可以用来作为 JuiceFS 的元数据引擎。
 
 许多云计算平台都提供托管的 PostgreSQL 数据库服务，也可以按照[使用向导](https://www.postgresqltutorial.com/postgresql-getting-started/)自己部署一个。
 
