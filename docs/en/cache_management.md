@@ -22,21 +22,15 @@ Attribute, entry and direntry are cached for 1 second by default, to speedup loo
 
 > **Note**: This feature requires JuiceFS >= 0.15.0.
 
-Attributes are cached in client automatically when `open()` a file. If [`--open-cache`](command_reference.md#juicefs-mount) option is set (value should greater than 0) and when the cache timeout hasn't reached, `getattr()` call will return immediately. When any of the following conditions are met, attributes cache will be updated:
+Attributes are cached in client automatically when `open()` a file. If [`--open-cache`](command_reference.md#juicefs-mount) option is set (value should greater than 0) and when the cache timeout hasn't reached, `getattr()` call will return immediately.
 
-- Reopen a file
-- Call `getattr()` and `--open-cache` cache timeout is reached
+Chunks and slices information are cached in client automatically when `read()` a file (refer to [here](how_juicefs_store_files.md) to learn what are chunk and slice). When `read()` same file and same chunk again, slices will be returned immediately. When reopen a file and its modification time (mtime) hasn't changed, these cache will be reused.
 
-Chunks and slices information are cached in client automatically when `read()` a file (refer to [here](how_juicefs_store_files.md) to learn what are chunk and slice). When `read()` same file and same chunk again, slices will be returned immediately. When reopen a file and its modification time (mtime) hasn't changed, these cache will be reused. When any of the following conditions are met, chunks and slices cache will be invalidated:
-
-- Reopen a file and its modification time (mtime) has changed
-- Call `write()`, `link()`, `unlink()`, `truncate()`, `fallocate()` and `copy_file_range()`.
-
-All metadata cache will be removed in the background automatically when one file hasn't been opened by any process in the last hour.
+All metadata cache in client will be removed in the background automatically when one file hasn't been opened by any process in a period of time (default is 1 hour).
 
 ### Consistency
 
-If only one client is connected, the cached metadata will be invalidated automatically upon modification. No impact on consistency.
+JuiceFS provides close-to-open consistency. It means once a file is closed, the following open and read are guaranteed see the data written before close, either in same host or different host. Particularly, within same mount point, read can see all data written before it immediately (no need to reopen the file).
 
 In case multiple clients, the only way to invalidate metadata cache in the kernel is waiting for timeout.
 
