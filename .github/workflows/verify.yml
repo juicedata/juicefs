@@ -38,13 +38,13 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install g++-multilib libacl1-dev attr redis-server
+        sudo apt-get install g++-multilib gcc-mingw-w64
 
     - name: Build linux target
       run: GOPATH=$HOME/go make
 
     - name: build lite
-      run: GOPATH=$HOME/go make juicefs-lite
+      run: GOPATH=$HOME/go make juicefs.lite
 
     - name: build windows
       run: GOPATH=$HOME/go make juicefs.exe
