@@ -525,7 +525,7 @@ juicefs warmup [command options] [PATH ...]
 #### 使用
 
 ```
-juicefs dump [command options] META-ADDR [FILE]
+juicefs dump [command options] META-URL [FILE]
 ```
 
 如果没有指定导出文件路径，会导出到标准输出。
@@ -544,7 +544,7 @@ juicefs dump [command options] META-ADDR [FILE]
 #### 使用
 
 ```
-juicefs load [command options] META-ADDR [FILE]
+juicefs load [command options] META-URL [FILE]
 ```
 
 如果没有指定导入文件路径，会从标准输入导入。

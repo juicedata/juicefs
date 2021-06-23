@@ -27,7 +27,7 @@ import (
 func load(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-ADDR is needed")
+		return fmt.Errorf("META-URL is needed")
 	}
 	var buf []byte
 	var err error
@@ -47,7 +47,7 @@ func loadFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "load",
 		Usage:     "load metadata from a previously dumped JSON file",
-		ArgsUsage: "META-ADDR [FILE]",
+		ArgsUsage: "META-URL [FILE]",
 		Action:    load,
 	}
 }

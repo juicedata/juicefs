@@ -525,7 +525,7 @@ dump metadata into a JSON file
 #### Synopsis
 
 ```
-juicefs dump [command options] META-ADDR [FILE]
+juicefs dump [command options] META-URL [FILE]
 ```
 
 When the FILE is not provided, STDOUT will be used instead.
@@ -544,7 +544,7 @@ load metadata from a previously dumped JSON file
 #### Synopsis
 
 ```
-juicefs load [command options] META-ADDR [FILE]
+juicefs load [command options] META-URL [FILE]
 ```
 
 When the FILE is not provided, STDIN will be used instead.
