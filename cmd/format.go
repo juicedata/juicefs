@@ -239,7 +239,7 @@ func formatFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "format",
 		Usage:     "format a volume",
-		ArgsUsage: "REDIS-URL NAME",
+		ArgsUsage: "META-URL NAME",
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:  "block-size",

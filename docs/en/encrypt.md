@@ -77,7 +77,7 @@ $ openssl genrsa -out my-priv-key.pem -aes256 2048
 2. Provide the key during format:
 
 ```shell
-$ juicefs format --encrypt-rsa-key my-priv-key.pem REDIS-URI NAME
+$ juicefs format --encrypt-rsa-key my-priv-key.pem META-URL NAME
 ```
 
 > **Note**: If the private key is protected by a passphrase, it should be specified using `JFS_RSA_PASSPHRASE` for `juicefs mount`.

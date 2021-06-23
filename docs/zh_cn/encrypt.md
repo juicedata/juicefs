@@ -59,7 +59,7 @@ $ openssl genrsa -out my-priv-key.pem -aes256 2048
 2. 在格式化时提供该密钥
 
 ```shell
-$ juicefs format --encrypt-rsa-key my-priv-key.pem REDIS-URI NAME
+$ juicefs format --encrypt-rsa-key my-priv-key.pem META-URL NAME
 ```
 
 > **注意**：如果私钥受密码保护，在执行 `juicefs mount` 时应使用 `JFS_RSA_PASSPHRASE` 来指定该密码。

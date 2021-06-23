@@ -27,7 +27,7 @@ import (
 func dump(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-ADDR is needed")
+		return fmt.Errorf("META-URL is needed")
 	}
 	var fp io.WriteCloser
 	if ctx.Args().Len() == 1 {
@@ -48,7 +48,7 @@ func dumpFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "dump",
 		Usage:     "dump metadata into a JSON file",
-		ArgsUsage: "META-ADDR [FILE]",
+		ArgsUsage: "META-URL [FILE]",
 		Action:    dump,
 		Flags: []cli.Flag{
 			&cli.StringFlag{

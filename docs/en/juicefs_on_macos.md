@@ -41,7 +41,7 @@ $ juicefs mount redis://192.168.1.8:6379/1 ~/music
 
 ## 4. Automatically mount JuiceFS on boot
 
-Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `REDIS-URL` and `MOUNTPOINT` with appropriate value):
+Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `META-URL` and `MOUNTPOINT` with appropriate value):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -54,7 +54,7 @@ Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Re
         <array>
                 <string>PATH-TO-JUICEFS</string>
                 <string>mount</string>
-                <string>REDIS-URL</string>
+                <string>META-URL</string>
                 <string>MOUNTPOINT</string>
         </array>
         <key>RunAtLoad</key>

@@ -7,10 +7,10 @@ This is a guide about how to mount JuiceFS automatically at boot.
 Copy `juicefs` as `/sbin/mount.juicefs`, then edit `/etc/fstab` with following line:
 
 ```
-<REDIS-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
+<META-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
 ```
 
-The format of `<REDIS-URL>` is `redis://<user>:<password>@<host>:<port>/<db>`, e.g. `redis://localhost:6379/1`. And replace `<MOUNTPOINT>` with specific path you wanna mount JuiceFS to, e.g. `/jfs`. If you need set [mount options](command_reference.md#juicefs-mount), replace `[,<MOUNT-OPTIONS>]` with comma separated options list. The following line is an example:
+The format of `<META-URL>` is `redis://<user>:<password>@<host>:<port>/<db>`, e.g. `redis://localhost:6379/1`. And replace `<MOUNTPOINT>` with specific path you wanna mount JuiceFS to, e.g. `/jfs`. If you need set [mount options](command_reference.md#juicefs-mount), replace `[,<MOUNT-OPTIONS>]` with comma separated options list. The following line is an example:
 
 ```
 redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=2048     0  0
@@ -24,7 +24,7 @@ $ sudo chkconfig --add netfs
 
 ## macOS
 
-Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `REDIS-URL` and `MOUNTPOINT` with appropriate value):
+Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `META-URL` and `MOUNTPOINT` with appropriate value):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -37,7 +37,7 @@ Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Re
         <array>
                 <string>PATH-TO-JUICEFS</string>
                 <string>mount</string>
-                <string>REDIS-URL</string>
+                <string>META-URL</string>
                 <string>MOUNTPOINT</string>
         </array>
         <key>RunAtLoad</key>
