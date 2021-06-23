@@ -41,17 +41,13 @@ jobs:
         sudo apt-get install g++-multilib libacl1-dev attr redis-server
 
     - name: Build linux target
-      run: |
-        export GOPATH=$HOME/go
-        make
+      run: GOPATH=$HOME/go make
 
-    - name: Set up for fstests
-      run: sudo make -C fstests setup
+    - name: build lite
+      run: GOPATH=$HOME/go make juicefs-lite
 
-    - name: Unit tests
-      run: make test
+    - name: build windows
+      run: GOPATH=$HOME/go make juicefs.exe
 
-    - name: Run all tests
-      run: make -C fstests fsx xattrs flock healthcheck
-
-
+    - name: build libjfs.dll
+      run: GOPATH=$HOME/go make -C sdk/java/libjfs libjfs.dll
