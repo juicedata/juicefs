@@ -4,7 +4,7 @@ To improve the performance, JuiceFS supports caching in multiple levels to reduc
 
 ## Metadata Cache
 
-JuiceFS caches metadata in the kernel to improve the performance.
+JuiceFS caches metadata in the kernel and client (i.e. JuiceFS process) to improve the performance.
 
 ### Metadata Cache in Kernel
 
@@ -18,9 +18,19 @@ Three kinds of metadata can be cached in kernel: attribute, entry (file) and dir
 
 Attribute, entry and direntry are cached for 1 second by default, to speedup lookup and getattr operations.
 
+### Metadata Cache in Client
+
+> **Note**: This feature requires JuiceFS >= 0.15.0.
+
+Attributes are cached in client automatically when `open()` a file. If [`--open-cache`](command_reference.md#juicefs-mount) option is set (value should greater than 0) and when the cache timeout hasn't reached, `getattr()` and `open()` call will return immediately.
+
+Chunks and slices information are cached in client automatically when `read()` a file (refer to [here](how_juicefs_store_files.md) to learn what are chunk and slice). When `read()` same file and same chunk again, slices will be returned immediately.
+
+All metadata cache of one file will be removed in the background automatically when this file hasn't been opened by any process in a period of time (default is 1 hour).
+
 ### Consistency
 
-If only one client is connected, the cached metadata will be invalidated automatically upon modification. No impact on consistency.
+JuiceFS provides close-to-open consistency. It means once a file is closed, the following open and read are guaranteed see the data written before close, either in same host or different host. Particularly, within same mount point, read can see all data written before it immediately (no need to reopen the file).
 
 In case multiple clients, the only way to invalidate metadata cache in the kernel is waiting for timeout.
 
@@ -32,7 +42,7 @@ Data cache is also provided in JuiceFS to improve performance, including page ca
 
 ### Data Cache in Kernel
 
-Kernel will cache content of recently visited files automatically. When the file is reopened, the content can be fetched from kernel cache directly for best performance.
+Kernel will cache content of recently visited files automatically. When the file is reopened and its modification time (mtime) hasn't changed, the content can be fetched from kernel cache directly for best performance.
 
 Reading the same file in JuiceFS repeatedly will be extremely fast, with milliseconds latency and gigabytes throughput.
 
