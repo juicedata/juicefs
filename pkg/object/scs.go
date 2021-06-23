@@ -41,7 +41,11 @@ func (s *scsClient) String() string {
 }
 
 func (s *scsClient) Create() error {
-	return s.c.PutBucket(s.bucket, scs.ACLPrivate)
+	err := s.c.PutBucket(s.bucket, scs.ACLPrivate)
+	if err != nil && isExists(err) {
+		err = nil
+	}
+	return err
 }
 
 func (s *scsClient) Head(key string) (Object, error) {

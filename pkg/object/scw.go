@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -36,24 +35,6 @@ type scw struct {
 
 func (s *scw) String() string {
 	return fmt.Sprintf("scw://%s/", s.s3client.bucket)
-}
-
-func (s *scw) Create() error {
-	if _, err := s.List("", "", 1); err == nil {
-		return nil
-	}
-	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeBucketAlreadyExists:
-				err = nil
-			case s3.ErrCodeBucketAlreadyOwnedByYou:
-				err = nil
-			}
-		}
-	}
-	return err
 }
 
 func newScw(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
