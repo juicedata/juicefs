@@ -22,11 +22,11 @@ Attribute, entry and direntry are cached for 1 second by default, to speedup loo
 
 > **Note**: This feature requires JuiceFS >= 0.15.0.
 
-Attributes are cached in client automatically when `open()` a file. If [`--open-cache`](command_reference.md#juicefs-mount) option is set (value should greater than 0) and when the cache timeout hasn't reached, `getattr()` call will return immediately.
+Attributes are cached in client automatically when `open()` a file. If [`--open-cache`](command_reference.md#juicefs-mount) option is set (value should greater than 0) and when the cache timeout hasn't reached, `getattr()` and `open()` call will return immediately.
 
-Chunks and slices information are cached in client automatically when `read()` a file (refer to [here](how_juicefs_store_files.md) to learn what are chunk and slice). When `read()` same file and same chunk again, slices will be returned immediately. When reopen a file and its modification time (mtime) hasn't changed, these cache will be reused.
+Chunks and slices information are cached in client automatically when `read()` a file (refer to [here](how_juicefs_store_files.md) to learn what are chunk and slice). When `read()` same file and same chunk again, slices will be returned immediately.
 
-All metadata cache in client will be removed in the background automatically when one file hasn't been opened by any process in a period of time (default is 1 hour).
+All metadata cache of one file will be removed in the background automatically when this file hasn't been opened by any process in a period of time (default is 1 hour).
 
 ### Consistency
 
