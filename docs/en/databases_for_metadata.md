@@ -66,11 +66,11 @@ If you are interested, you can check [Redis Best Practices](redis_best_practices
 
 ## PostgreSQL
 
-PostgreSQL is one of the most popular open source relational databases in the world, and is often used as the preferred database for Web applications.
+> PostgreSQL is one of the most popular open source relational databases in the world, and is often used as the preferred database for Web applications.
 
 You can easily buy a managed PostgreSQL database service on the cloud computing platform, or follow the [Quick Start Guide](https://www.postgresqltutorial.com/postgresql-getting-started/).
 
-Other PostgreSQL-compatible databases (such as CockRoachDB) can also be used as meta engine.
+Other PostgreSQL-compatible databases (such as CockroachDB) can also be used as meta engine.
 
 ### Create a file system
 
@@ -217,4 +217,3 @@ Coming soon...
 ## TiKV
 
 Coming soon...
-
