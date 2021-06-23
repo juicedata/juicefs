@@ -276,6 +276,8 @@ type Meta interface {
 	NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno
 	// Write put a slice of data on top of the given chunk.
 	Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno
+	// InvalidateChunkCache invalidate chunk cache
+	InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno
 	// CopyFileRange copies part of a file to another one.
 	CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno
 
@@ -340,7 +342,12 @@ func NewClient(uri string, conf *Config) Meta {
 		if p < 0 {
 			logger.Fatalf("invalid uri: %s", uri)
 		}
-		m, err = newSQLMeta(uri[:p], uri[p+3:], conf)
+		driver := uri[:p]
+		if driver == "postgres" {
+			m, err = newSQLMeta(driver, uri, conf)
+		} else {
+			m, err = newSQLMeta(driver, uri[p+3:], conf)
+		}
 	}
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)

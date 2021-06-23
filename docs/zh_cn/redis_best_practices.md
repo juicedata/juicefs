@@ -29,7 +29,7 @@ There're some [fundamental things](https://redis.io/topics/sentinel#fundamental-
 
 Please read the [official documentation](https://redis.io/topics/sentinel) for more information.
 
-Once Redis servers and Sentinels are deployed, the `REDIS-URL` can be specified as `[redis[s]://][USER:PASSWORD@]MASTERNAME,SENTINEL_ADDRS:SENTINEL_PORT[/DB]`, for example:
+Once Redis servers and Sentinels are deployed, the `META-URL` can be specified as `[redis[s]://][USER:PASSWORD@]MASTERNAME,SENTINEL_ADDRS:SENTINEL_PORT[/DB]`, for example:
 
 ```bash
 $ ./juicefs mount rediss://:sentinelPass@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs

@@ -1,6 +1,9 @@
 os: linux
 dist: xenial
 language: go
+services:
+  - mysql
+  - postgresql
 go:
   - "1.14"
 branches:
@@ -19,10 +22,9 @@ addons:
 install: true
 before_script:
   - export GO111MODULE=on
+  - sudo mysql -e "create database dev;"
+  - psql -c 'create database test;' -U postgres
   - make
-  - make juicefs.exe
-  - make -C sdk/java/libjfs libjfs.dll
-  - make juicefs.lite
   - sudo make -C fstests setup
 script:
   - make test

@@ -39,7 +39,7 @@ func printJson(v interface{}) {
 func status(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("REDIS-URL is needed")
+		return fmt.Errorf("META-URL is needed")
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 
@@ -72,7 +72,7 @@ func statusFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
 		Usage:     "show status of JuiceFS",
-		ArgsUsage: "REDIS-URL",
+		ArgsUsage: "META-URL",
 		Action:    status,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{

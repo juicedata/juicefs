@@ -97,7 +97,7 @@ $ source /etc/bash_completion.d/juicefs
 #### 使用
 
 ```
-juicefs format [command options] REDIS-URL NAME
+juicefs format [command options] META-URL NAME
 ```
 
 #### 选项
@@ -147,7 +147,7 @@ RSA 私钥的路径 (PEM)
 #### 使用
 
 ```
-juicefs mount [command options] REDIS-URL MOUNTPOINT
+juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
 #### 选项
@@ -184,6 +184,9 @@ juicefs mount [command options] REDIS-URL MOUNTPOINT
 
 `--read-only`\
 只读模式 (默认: false)
+
+`--subdir`\
+将某个子目录挂载为根 (默认: "")
 
 `--get-timeout value`\
 下载一个对象的超时时间；单位为秒 (默认: 60)
@@ -244,7 +247,7 @@ juicefs umount [command options] MOUNTPOINT
 #### 使用
 
 ```
-juicefs gateway [command options] REDIS-URL ADDRESS
+juicefs gateway [command options] META-URL ADDRESS
 ```
 
 #### 选项
@@ -421,7 +424,7 @@ juicefs bench [command options] PATH
 #### 使用
 
 ```
-juicefs gc [command options] REDIS-URL
+juicefs gc [command options] META-URL
 ```
 
 #### 选项
@@ -444,7 +447,7 @@ juicefs gc [command options] REDIS-URL
 #### 使用
 
 ```
-juicefs fsck [command options] REDIS-URL
+juicefs fsck [command options] META-URL
 ```
 
 ### juicefs profile
@@ -482,7 +485,7 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 #### 使用
 
 ```
-juicefs status [command options] REDIS-URL
+juicefs status [command options] META-URL
 ```
 
 #### 选项
@@ -522,8 +525,15 @@ juicefs warmup [command options] [PATH ...]
 #### 使用
 
 ```
-juicefs dump [command options] META-ADDR FILE
+juicefs dump [command options] META-URL [FILE]
 ```
+
+如果没有指定导出文件路径，会导出到标准输出。
+
+#### 选项
+
+`--subdir value`\
+只导出一个子目录。
 
 ### juicefs load
 
@@ -534,5 +544,7 @@ juicefs dump [command options] META-ADDR FILE
 #### 使用
 
 ```
-juicefs load [command options] META-ADDR FILE
+juicefs load [command options] META-URL [FILE]
 ```
+
+如果没有指定导入文件路径，会从标准输入导入。

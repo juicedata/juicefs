@@ -47,7 +47,7 @@ func TestSQLClient(t *testing.T) {
 func TestMySQLClient(t *testing.T) {
 	m, err := newSQLMeta("mysql", "root:@/dev", &Config{})
 	if err != nil {
-		t.Skipf("create meta: %s", err)
+		t.Fatalf("create meta: %s", err)
 	}
 	m.engine.DropTables(&setting{})
 	m.engine.DropTables(&counter{})
@@ -60,7 +60,48 @@ func TestMySQLClient(t *testing.T) {
 	m.engine.DropTables(&sustained{})
 	m.engine.DropTables(&xattr{})
 	m.engine.DropTables(&delfile{})
+	m.engine.DropTables(&flock{})
+	m.engine.DropTables(&plock{})
+
+	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m)
+	testCopyFileRange(t, m)
+	m.conf.CaseInsensi = true
+	testCaseIncensi(t, m)
+}
+
+func TestPostgresQLClient(t *testing.T) {
+	m, err := newSQLMeta("postgres", "postgres://localhost:5432/test?sslmode=disable", &Config{})
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	m.engine.DropTables(&setting{})
+	m.engine.DropTables(&counter{})
+	m.engine.DropTables(&node{})
+	m.engine.DropTables(&edge{})
+	m.engine.DropTables(&symlink{})
+	m.engine.DropTables(&chunk{})
+	m.engine.DropTables(&chunkRef{})
+	m.engine.DropTables(&session{})
+	m.engine.DropTables(&sustained{})
+	m.engine.DropTables(&xattr{})
+	m.engine.DropTables(&delfile{})
+	m.engine.DropTables(&flock{})
+	m.engine.DropTables(&plock{})
+
+	testTruncateAndDelete(t, m)
+	testMetaClient(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m)
+	testCopyFileRange(t, m)
+	m.conf.CaseInsensi = true
+	testCaseIncensi(t, m)
 }
 
 func TestStickyBitSQL(t *testing.T) {

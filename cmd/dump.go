@@ -17,6 +17,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -25,16 +26,21 @@ import (
 
 func dump(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 2 {
-		return fmt.Errorf("META-ADDR and FILE are needed")
+	if ctx.Args().Len() < 1 {
+		return fmt.Errorf("META-URL is needed")
 	}
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
-	fname := ctx.Args().Get(1)
-	fp, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
+	var fp io.WriteCloser
+	if ctx.Args().Len() == 1 {
+		fp = os.Stdout
+	} else {
+		var err error
+		fp, err = os.OpenFile(ctx.Args().Get(1), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+		defer fp.Close()
 	}
-	defer fp.Close()
+	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
 	return m.DumpMeta(fp)
 }
 
@@ -42,7 +48,13 @@ func dumpFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "dump",
 		Usage:     "dump metadata into a JSON file",
-		ArgsUsage: "META-ADDR FILE",
+		ArgsUsage: "META-URL [FILE]",
 		Action:    dump,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "subdir",
+				Usage: "only dump a sub-directory.",
+			},
+		},
 	}
 }

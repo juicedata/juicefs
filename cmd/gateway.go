@@ -73,7 +73,7 @@ func gatewayFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "gateway",
 		Usage:     "S3-compatible gateway",
-		ArgsUsage: "REDIS-URL ADDRESS",
+		ArgsUsage: "META-URL ADDRESS",
 		Flags:     flags,
 		Action:    gateway,
 	}

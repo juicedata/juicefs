@@ -26,11 +26,6 @@ jobs:
       - name: goreleaser release
         run: make release
 
-      - name: Set up Java
-        uses: actions/setup-java@v1
-        with:
-          java-version: '8'
-
       - name: Cache local Maven repository
         id: cache-maven
         uses: actions/cache@v2
@@ -44,7 +39,7 @@ jobs:
         run: sudo chown -R $USER $HOME/go/pkg/mod
 
       - name: Build SDK
-        run: make -C sdk/java
+        run: make -C sdk/java docker-package && sudo chown -R $USER sdk/java/target
 
       - name: Canonicalize SDK name
         run: |

@@ -25,6 +25,7 @@ type Config struct {
 	ReadOnly    bool
 	OpenCache   time.Duration
 	MountPoint  string
+	Subdir      string
 }
 
 type Format struct {

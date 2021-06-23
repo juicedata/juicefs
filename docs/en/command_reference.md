@@ -97,7 +97,7 @@ Format a volume. It's the first step for initializing a new file system volume.
 #### Synopsis
 
 ```
-juicefs format [command options] REDIS-URL NAME
+juicefs format [command options] META-URL NAME
 ```
 
 #### Options
@@ -147,7 +147,7 @@ Mount a volume. The volume shoud be formatted first.
 #### Synopsis
 
 ```
-juicefs mount [command options] REDIS-URL MOUNTPOINT
+juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
 #### Options
@@ -181,6 +181,9 @@ enable extended attributes (xattr) (default: false)
 
 `--read-only`\
 allow lookup/read operations only (default: false)
+
+`--subdir`\
+mount a sub-directory as root (default: "")
 
 `--get-timeout value`\
 the max number of seconds to download an object (default: 60)
@@ -244,7 +247,7 @@ S3-compatible gateway.
 #### Synopsis
 
 ```
-juicefs gateway [command options] REDIS-URL ADDRESS
+juicefs gateway [command options] META-URL ADDRESS
 ```
 
 #### Options
@@ -424,7 +427,7 @@ Collect any leaked objects.
 #### Synopsis
 
 ```
-juicefs gc [command options] REDIS-URL
+juicefs gc [command options] META-URL
 ```
 
 #### Options
@@ -447,7 +450,7 @@ Check consistency of file system.
 #### Synopsis
 
 ```
-juicefs fsck [command options] REDIS-URL
+juicefs fsck [command options] META-URL
 ```
 
 ### juicefs profile
@@ -485,7 +488,7 @@ show status of JuiceFS
 #### Synopsis
 
 ```
-juicefs status [command options] REDIS-URL
+juicefs status [command options] META-URL
 ```
 
 #### Options
@@ -525,8 +528,15 @@ dump metadata into a JSON file
 #### Synopsis
 
 ```
-juicefs dump [command options] META-ADDR FILE
+juicefs dump [command options] META-URL [FILE]
 ```
+
+When the FILE is not provided, STDOUT will be used instead.
+
+#### Options
+
+`--subdir value`\
+only dump a sub-directory.
 
 ### juicefs load
 
@@ -537,5 +547,7 @@ load metadata from a previously dumped JSON file
 #### Synopsis
 
 ```
-juicefs load [command options] META-ADDR FILE
+juicefs load [command options] META-URL [FILE]
 ```
+
+When the FILE is not provided, STDIN will be used instead.
