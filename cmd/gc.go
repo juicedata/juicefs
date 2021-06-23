@@ -36,7 +36,7 @@ func gcFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "gc",
 		Usage:     "collect any leaked objects",
-		ArgsUsage: "REDIS-URL",
+		ArgsUsage: "META-URL",
 		Action:    gc,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -104,7 +104,7 @@ func showProgress(p *gcProgress) {
 func gc(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("REDIS-URL is needed")
+		return fmt.Errorf("META-URL is needed")
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	format, err := m.Load()

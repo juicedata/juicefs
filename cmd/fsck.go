@@ -31,7 +31,7 @@ func checkFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "fsck",
 		Usage:     "Check consistency of file system",
-		ArgsUsage: "REDIS-URL",
+		ArgsUsage: "META-URL",
 		Action:    fsck,
 	}
 }
@@ -39,7 +39,7 @@ func checkFlags() *cli.Command {
 func fsck(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("REDIS-URL is needed")
+		return fmt.Errorf("META-URL is needed")
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	format, err := m.Load()

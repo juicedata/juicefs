@@ -97,7 +97,7 @@ $ source /etc/bash_completion.d/juicefs
 #### 使用
 
 ```
-juicefs format [command options] REDIS-URL NAME
+juicefs format [command options] META-URL NAME
 ```
 
 #### 选项
@@ -147,7 +147,7 @@ RSA 私钥的路径 (PEM)
 #### 使用
 
 ```
-juicefs mount [command options] REDIS-URL MOUNTPOINT
+juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
 #### 选项
@@ -247,7 +247,7 @@ juicefs umount [command options] MOUNTPOINT
 #### 使用
 
 ```
-juicefs gateway [command options] REDIS-URL ADDRESS
+juicefs gateway [command options] META-URL ADDRESS
 ```
 
 #### 选项
@@ -424,7 +424,7 @@ juicefs bench [command options] PATH
 #### 使用
 
 ```
-juicefs gc [command options] REDIS-URL
+juicefs gc [command options] META-URL
 ```
 
 #### 选项
@@ -447,7 +447,7 @@ juicefs gc [command options] REDIS-URL
 #### 使用
 
 ```
-juicefs fsck [command options] REDIS-URL
+juicefs fsck [command options] META-URL
 ```
 
 ### juicefs profile
@@ -485,7 +485,7 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 #### 使用
 
 ```
-juicefs status [command options] REDIS-URL
+juicefs status [command options] META-URL
 ```
 
 #### 选项

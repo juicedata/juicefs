@@ -135,10 +135,10 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 Edit the `/etc/fstab` configuration file, start a new line, and add a record according to the following format:
 
 ```
-<REDIS-URL> <MOUNTPOINT> juicefs _netdev[,<MOUNT-OPTIONS>] 0 0
+<META-URL> <MOUNTPOINT> juicefs _netdev[,<MOUNT-OPTIONS>] 0 0
 ```
 
-- Please replace `<REDIS-URL>` with the actual Redis database address in the format of `redis://<user>:<password>@<host>:<port>/<db>`, for example: `redis ://localhost:6379/1`.
+- Please replace `<META-URL>` with the actual Redis database address in the format of `redis://<user>:<password>@<host>:<port>/<db>`, for example: `redis ://localhost:6379/1`.
 - Please replace `<MOUNTPOINT>` with the actual mount point of the file system, for example: `/jfs`.
 - If necessary, please replace `[,<MOUNT-OPTIONS>]` with the actual [mount option](command_reference.md#juicefs-mount) to be set, and multiple options are separated by commas.
 

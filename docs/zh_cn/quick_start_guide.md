@@ -139,10 +139,10 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 编辑 `/etc/fstab` 配置文件，另起新行，参照以下格式添加一条记录：
 
 ```
-<REDIS-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
+<META-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
 ```
 
-- 请将 `<REDIS-URL>` 替换成实际的 Redis 数据库地址，格式为 `redis://<user>:<password>@<host>:<port>/<db>`，例如：`redis://localhost:6379/1`。
+- 请将 `<META-URL>` 替换成实际的 Redis 数据库地址，格式为 `redis://<user>:<password>@<host>:<port>/<db>`，例如：`redis://localhost:6379/1`。
 - 请将 `<MOUNTPOINT>` 替换成文件系统实际的挂载点，例如：`/jfs`。
 - 如果需要，请将 `[,<MOUNT-OPTIONS>]` 替换为实际要设置的 [挂载选项](command_reference.md#juicefs-mount)，多个选项之间用逗号分隔。
 

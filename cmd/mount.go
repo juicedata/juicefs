@@ -324,7 +324,7 @@ func mountFlags() *cli.Command {
 	cmd := &cli.Command{
 		Name:      "mount",
 		Usage:     "mount a volume",
-		ArgsUsage: "REDIS-URL MOUNTPOINT",
+		ArgsUsage: "META-URL MOUNTPOINT",
 		Action:    mount,
 		Flags: []cli.Flag{
 			&cli.StringFlag{

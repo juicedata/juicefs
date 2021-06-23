@@ -97,7 +97,7 @@ Format a volume. It's the first step for initializing a new file system volume.
 #### Synopsis
 
 ```
-juicefs format [command options] REDIS-URL NAME
+juicefs format [command options] META-URL NAME
 ```
 
 #### Options
@@ -147,7 +147,7 @@ Mount a volume. The volume shoud be formatted first.
 #### Synopsis
 
 ```
-juicefs mount [command options] REDIS-URL MOUNTPOINT
+juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
 #### Options
@@ -247,7 +247,7 @@ S3-compatible gateway.
 #### Synopsis
 
 ```
-juicefs gateway [command options] REDIS-URL ADDRESS
+juicefs gateway [command options] META-URL ADDRESS
 ```
 
 #### Options
@@ -424,7 +424,7 @@ Collect any leaked objects.
 #### Synopsis
 
 ```
-juicefs gc [command options] REDIS-URL
+juicefs gc [command options] META-URL
 ```
 
 #### Options
@@ -447,7 +447,7 @@ Check consistency of file system.
 #### Synopsis
 
 ```
-juicefs fsck [command options] REDIS-URL
+juicefs fsck [command options] META-URL
 ```
 
 ### juicefs profile
@@ -485,7 +485,7 @@ show status of JuiceFS
 #### Synopsis
 
 ```
-juicefs status [command options] REDIS-URL
+juicefs status [command options] META-URL
 ```
 
 #### Options
