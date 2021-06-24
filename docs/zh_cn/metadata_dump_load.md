@@ -12,7 +12,7 @@ $ juicefs dump redis://192.168.1.6:6379 meta.dump --subdir /path/in/juicefs
 
 另外，也可以使用 `jq` 等工具对导出文件进行分析。
 
-> **注意**：为保证服务稳定，请不要在线上环境dump过于大的目录
+> **注意**：为保证服务稳定，请不要在线上环境 dump 过于大的目录。
 
 ## 元数据跨引擎迁移
 
@@ -36,4 +36,3 @@ $ juicefs dump redis://192.168.1.6:6379 | juicefs load mysql://user:password@(19
 ## 元数据备份
 
 通过 dump 获得的 JSON 文件还可以作为一份人类友好的简单备份，方便用户有需要时离线查看。但正如之前提到的，此文件内容无法保证正确性。欲获得完整的元数据备份，请使用各个引擎对应的带有快照功能的备份工具，如 [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) 和 [mysqldump](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html)。
-
