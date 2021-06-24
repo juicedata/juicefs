@@ -16,7 +16,6 @@
 package meta
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
@@ -31,11 +30,12 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	case *redisMeta:
 		r.rdb.FlushDB(ctx)
 	}
-	buf, err := ioutil.ReadFile(fname)
+	fp, err := os.Open(fname)
 	if err != nil {
-		t.Fatalf("read file: %s", fname)
+		t.Fatalf("open file: %s", fname)
 	}
-	if err = m.LoadMeta(buf); err != nil {
+	defer fp.Close()
+	if err = m.LoadMeta(fp); err != nil {
 		t.Fatalf("load meta: %s", err)
 	}
 

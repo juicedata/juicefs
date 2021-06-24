@@ -17,7 +17,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -29,18 +29,19 @@ func load(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		return fmt.Errorf("META-URL is needed")
 	}
-	var buf []byte
-	var err error
+	var fp io.ReadCloser
 	if ctx.Args().Len() == 1 {
-		buf, err = ioutil.ReadAll(os.Stdin)
+		fp = os.Stdin
 	} else {
-		buf, err = ioutil.ReadFile(ctx.Args().Get(1))
-	}
-	if err != nil {
-		return err
+		var err error
+		fp, err = os.Open(ctx.Args().Get(1))
+		if err != nil {
+			return err
+		}
+		defer fp.Close()
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
-	return m.LoadMeta(buf)
+	return m.LoadMeta(fp)
 }
 
 func loadFlags() *cli.Command {

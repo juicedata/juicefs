@@ -305,7 +305,7 @@ type Meta interface {
 	OnMsg(mtype uint32, cb MsgCallback)
 
 	DumpMeta(w io.Writer) error
-	LoadMeta(buf []byte) error
+	LoadMeta(r io.Reader) error
 }
 
 func removePassword(uri string) string {

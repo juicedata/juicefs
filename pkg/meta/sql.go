@@ -2497,18 +2497,14 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 		sessions = append(sessions, &DumpedSustained{k, v})
 	}
 
-	data, err := json.MarshalIndent(DumpedMeta{
+	dm := DumpedMeta{
 		format,
 		counters,
 		sessions,
 		dels,
 		tree,
-	}, "", "  ")
-	if err != nil {
-		return nil
 	}
-	_, err = w.Write(append(data, '\n'))
-	return err
+	return dm.writeJSON(w)
 }
 
 func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef) error {
@@ -2592,7 +2588,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	return mustInsert(s, beans...)
 }
 
-func (m *dbMeta) LoadMeta(buf []byte) error {
+func (m *dbMeta) LoadMeta(r io.Reader) error {
 	tables, err := m.engine.DBMetas()
 	if err != nil {
 		return err
@@ -2616,10 +2612,12 @@ func (m *dbMeta) LoadMeta(buf []byte) error {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
 
+	dec := json.NewDecoder(r)
 	dm := &DumpedMeta{}
-	if err = json.Unmarshal(buf, &dm); err != nil {
+	if err = dec.Decode(dm); err != nil {
 		return err
 	}
+
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err
