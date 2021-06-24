@@ -45,17 +45,18 @@ func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }
 
+func isExists(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, s3.ErrCodeBucketAlreadyExists) || strings.Contains(msg, s3.ErrCodeBucketAlreadyOwnedByYou)
+}
+
 func (s *s3client) Create() error {
+	if _, err := s.List("", "", 1); err == nil {
+		return nil
+	}
 	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeBucketAlreadyExists:
-				err = nil
-			case s3.ErrCodeBucketAlreadyOwnedByYou:
-				err = nil
-			}
-		}
+	if err != nil && isExists(err) {
+		err = nil
 	}
 	return err
 }

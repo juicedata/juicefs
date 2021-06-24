@@ -47,8 +47,7 @@ func (o *ossClient) String() string {
 
 func (o *ossClient) Create() error {
 	err := o.bucket.Client.CreateBucket(o.bucket.BucketName)
-	// ignore error if bucket is already created
-	if err != nil && strings.Contains(err.Error(), "BucketAlreadyExists") {
+	if err != nil && isExists(err) {
 		err = nil
 	}
 	return err

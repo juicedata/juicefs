@@ -44,7 +44,7 @@ func (q *bosclient) String() string {
 
 func (q *bosclient) Create() error {
 	_, err := q.c.PutBucket(q.bucket)
-	if err != nil && strings.Contains(err.Error(), "BucketAlreadyExists") {
+	if err != nil && isExists(err) {
 		err = nil
 	}
 	return err
