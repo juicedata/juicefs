@@ -12,7 +12,7 @@ $ juicefs dump redis://192.168.1.6:6379 meta.dump --subdir /path/in/juicefs
 
 Moreover, you can use tools like `jq` to analyze the exported file.
 
-> **Note**: please don't dump a too big directory in online system as it may slow the server.
+> **Note**: Please don't dump a too big directory in online system as it may slow the server.
 
 ## Metadata Migration Between Engines
 
@@ -23,7 +23,7 @@ $ juicefs dump redis://192.168.1.6:6379 meta.dump
 $ juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
 ```
 
-for small file systems you can also run:
+For small file systems you can also run:
 
 ```bash
 $ juicefs dump redis://192.168.1.6:6379 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
