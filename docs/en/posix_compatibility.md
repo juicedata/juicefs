@@ -1,4 +1,4 @@
-# POSIX Compatibility 
+# POSIX Compatibility
 
 JuiceFS passed all of the 8813 tests in latest [pjdfstest](https://github.com/pjd/pjdfstest).
 
@@ -15,7 +15,7 @@ Result: PASS
 
 Besides the things covered by pjdfstest, JuiceFS provides:
 
-- Close-to-open consistency. Once a file is closed, the following open and read can see the data written before close. Within same mount point, read can see all data written before it.
+- Close-to-open consistency. Once a file is closed, the following open and read are guaranteed see the data written before close. Within same mount point, read can see all data written before it immediately.
 - Rename and all other metadata operations are atomic guaranteed by Redis transaction.
 - Open files remain accessible after unlink from same mount point.
 - Mmap is supported (tested with FSx).
