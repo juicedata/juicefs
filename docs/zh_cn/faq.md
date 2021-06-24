@@ -2,13 +2,13 @@
 
 ## 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](../en/how_to_setup_object_storage.md#supported-object-storage)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](how_to_setup_object_storage.md#supported-object-storage)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ## 是否可以使用 Redis 集群版？
 
 不可以。JuiceFS 使用了 Redis 的[事务功能](https://redis.io/topics/transactions)来保证元数据操作的原子性，而分布式版还不支持分布式事务。哨兵节点或者其它的 Redis 高可用方法是需要的。
 
-请查看[「Redis 最佳实践」](../en/redis_best_practices.md)了解更多信息。
+请查看[「Redis 最佳实践」](redis_best_practices.md)了解更多信息。
 
 ## JuiceFS 与 XXX 的区别是什么？
 
@@ -22,31 +22,33 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 
 ## JuiceFS 支持随机读写吗？
 
-支持，包括通过 mmap 等进行的随机读写。目前 JuiceFS 主要是对顺序读写进行了大量优化，对随机读写的优化也在进行中。如果想要更好的随机读性能，建议关闭压缩（[`--compress none`](../en/command_reference.md#juicefs-format)）。
+支持，包括通过 mmap 等进行的随机读写。目前 JuiceFS 主要是对顺序读写进行了大量优化，对随机读写的优化也在进行中。如果想要更好的随机读性能，建议关闭压缩（[`--compress none`](command_reference.md#juicefs-format)）。
 
 ## 数据更新什么时候会对其它客户端可见？
 
-所有的元数据更新都是立即对其它客户端可见。通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
+所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](cache_management.md#consistency)了解更多信息。
 
-调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者 5 秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
+通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
 
-请查看[「客户端写缓存」](../en/cache_management.md#write-cache-in-client)了解更多信息。
+调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者数秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
+
+请查看[「客户端写缓存」](cache_management.md#write-cache-in-client)了解更多信息。
 
 ## 怎么快速地拷贝大量小文件到 JuiceFS？
 
-请在挂载时加上 [`--writeback` 选项](../en/command_reference.md#juicefs-mount)，它会先把数据写入本机的缓存，然后再异步上传到对象存储，会比直接上传到对象存储快很多倍。
+请在挂载时加上 [`--writeback` 选项](command_reference.md#juicefs-mount)，它会先把数据写入本机的缓存，然后再异步上传到对象存储，会比直接上传到对象存储快很多倍。
 
-请查看[「客户端写缓存」](../en/cache_management.md#write-cache-in-client)了解更多信息。
+请查看[「客户端写缓存」](cache_management.md#write-cache-in-client)了解更多信息。
 
 ## 可以用 `root` 以外的用户挂载吗？
 
 可以，JuiceFS 可以由任何用户挂载。默认的缓存目录是 `$HOME/.juicefs/cache`（macOS）或者 `/var/jfsCache`（Linux），请确保该用户对这个目录有写权限，或者切换到其它有权限的目录。
 
-请查看[「客户端读缓存」](../en/cache_management.md#read-cache-in-client)了解更多信息。
+请查看[「客户端读缓存」](cache_management.md#read-cache-in-client)了解更多信息。
 
 ## 怎么卸载 JuiceFS 文件系统？
 
-请使用 [`juicefs umount`](../en/command_reference.md#juicefs-umount) 命令卸载。
+请使用 [`juicefs umount`](command_reference.md#juicefs-umount) 命令卸载。
 
 ## 怎么升级 JuiceFS 客户端？
 
@@ -59,7 +61,7 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 这个问题有两种解决方法：
 
 1. 用 root 用户执行 `juicefs mount` 命令
-2. 修改 FUSE 的配置文件以及增加 `allow_other` 挂载选项，请查看[这个文档](../en/fuse_mount_options.md#allow_other)了解更多信息。
+2. 修改 FUSE 的配置文件以及增加 `allow_other` 挂载选项，请查看[这个文档](fuse_mount_options.md#allow_other)了解更多信息。
 
 ## `/go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1` 或者 `/go/pkg/tool/linux_amd64/compile: signal: killed`
 

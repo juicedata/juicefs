@@ -2,6 +2,14 @@
 
 To improve the performance, JuiceFS supports caching in multiple levels to reduce the latency and increase throughput, including metadata cache and data cache.
 
+## Consistency
+
+JuiceFS guarantees close-to-open consistency. It means once a file is closed, the following open and read are guaranteed see the data written before close, either in same machine or different machine. Particularly, within same mount point, read can see all data written before it immediately (no need to reopen the file).
+
+In case multiple clients, the only way to invalidate metadata cache in the kernel is waiting for timeout.
+
+In extreme condition, it is possible that the modification made in client A is not visible to client B in a short time window.
+
 ## Metadata Cache
 
 JuiceFS caches metadata in the kernel and client (i.e. JuiceFS process) to improve the performance.
@@ -27,14 +35,6 @@ Attributes are cached in client automatically when `open()` a file. If [`--open-
 Chunks and slices information are cached in client automatically when `read()` a file (refer to [here](how_juicefs_store_files.md) to learn what are chunk and slice). When `read()` same file and same chunk again, slices will be returned immediately.
 
 All metadata cache of one file will be removed in the background automatically when this file hasn't been opened by any process in a period of time (default is 1 hour).
-
-### Consistency
-
-JuiceFS provides close-to-open consistency. It means once a file is closed, the following open and read are guaranteed see the data written before close, either in same host or different host. Particularly, within same mount point, read can see all data written before it immediately (no need to reopen the file).
-
-In case multiple clients, the only way to invalidate metadata cache in the kernel is waiting for timeout.
-
-In extreme condition, it is possible that the modification made in client A is not visible to client B in a short time window.
 
 ## Data Cache
 
