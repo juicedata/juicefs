@@ -25,9 +25,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
-	awss3 "github.com/aws/aws-sdk-go/service/s3"
 	"github.com/ks3sdklib/aws-sdk-go/aws"
 	"github.com/ks3sdklib/aws-sdk-go/aws/credentials"
 	"github.com/ks3sdklib/aws-sdk-go/service/s3"
@@ -44,15 +42,8 @@ func (s *ks3) String() string {
 }
 func (s *ks3) Create() error {
 	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case awss3.ErrCodeBucketAlreadyExists:
-				err = nil
-			case awss3.ErrCodeBucketAlreadyOwnedByYou:
-				err = nil
-			}
-		}
+	if err != nil && isExists(err) {
+		err = nil
 	}
 	return err
 }

@@ -37,10 +37,6 @@ func (m *minio) String() string {
 	return *m.s3client.ses.Config.Endpoint
 }
 
-func (m *minio) Create() error {
-	return m.s3client.Create()
-}
-
 func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {

@@ -44,10 +44,8 @@ func (c *COS) String() string {
 
 func (c *COS) Create() error {
 	_, err := c.c.Bucket.Put(ctx, nil)
-	if err != nil {
-		if e, ok := err.(*cos.ErrorResponse); ok && e.Code == "BucketAlreadyOwnedByYou" {
-			err = nil
-		}
+	if err != nil && isExists(err) {
+		err = nil
 	}
 	return err
 }

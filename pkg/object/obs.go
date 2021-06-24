@@ -47,10 +47,8 @@ func (s *obsClient) Create() error {
 	params.Bucket = s.bucket
 	params.Location = s.region
 	_, err := s.c.CreateBucket(params)
-	if err != nil {
-		if obsError, ok := err.(obs.ObsError); ok && obsError.Code == "BucketAlreadyOwnedByYou" {
-			err = nil
-		}
+	if err != nil && isExists(err) {
+		err = nil
 	}
 	return err
 }
