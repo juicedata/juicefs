@@ -14,7 +14,7 @@ Basically, starting from a root directory (default to `/`), it does a depth-firs
 
 Metadata engines of JuiceFS usually have corresponding backup tools, such as [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) and [mysqldump](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html), which implement database backups. One advantage of `juicefs dump` is that the JSON format can be handled very easily, and can be loaded by different engines. In practice, you may pick one or use two backup strategies together.
 
-> **Note**: only metadata backup is discussed here; a complete solution to file system backup should at lease include backup strategy for object storage as well, like delayed deletion, multi-version, etc.
+> **Note**: Only metadata backup is discussed here; a complete solution to file system backup should at least include backup strategy for object storage as well, like delayed deletion, multi-version, etc.
 
 ## Metadata Recovery
 
