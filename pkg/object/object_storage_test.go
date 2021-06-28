@@ -66,41 +66,41 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
 	}
 
-	s = WithPrefix(s, "unit-test")
-	defer s.Delete("/test")
-	k := "/large"
+	s = WithPrefix(s, "unit-test/")
+	defer s.Delete("test")
+	k := "large"
 	defer s.Delete(k)
 
-	_, err := s.Get("/not_exists", 0, -1)
+	_, err := s.Get("not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
 	}
 
 	br := []byte("hello")
-	if err := s.Put("/test", bytes.NewReader(br)); err != nil {
+	if err := s.Put("test", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 
-	if d, e := get(s, "/test", 0, -1); d != "hello" {
+	if d, e := get(s, "test", 0, -1); d != "hello" {
 		t.Fatalf("expect hello, but got %v, error:%s", d, e)
 	}
-	if d, e := get(s, "/test", 2, -1); d != "llo" {
+	if d, e := get(s, "test", 2, -1); d != "llo" {
 		t.Fatalf("expect llo, but got %v, error:%s", d, e)
 	}
-	if d, e := get(s, "/test", 2, 2); d != "ll" {
+	if d, e := get(s, "test", 2, 2); d != "ll" {
 		t.Fatalf("expect ll, but got %v, error:%s", d, e)
 	}
-	if d, e := get(s, "/test", 4, 2); d != "o" {
+	if d, e := get(s, "test", 4, 2); d != "o" {
 		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
 	}
 
-	objs, err2 := listAll(s, "", "/", 1)
+	objs, err2 := listAll(s, "", "", 1)
 	if err2 == nil {
 		if len(objs) != 1 {
 			t.Fatalf("List should return 1 keys, but got %d", len(objs))
 		}
-		if objs[0].Key() != "/test" {
-			t.Fatalf("First key should be /test, but got %s", objs[0].Key())
+		if objs[0].Key() != "test" {
+			t.Fatalf("First key should be test, but got %s", objs[0].Key())
 		}
 		if !strings.Contains(s.String(), "encrypted") && objs[0].Size() != 5 {
 			t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size())
@@ -113,7 +113,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("list failed: %s", err2.Error())
 	}
 
-	objs, err2 = listAll(s, "", "/test2", 1)
+	objs, err2 = listAll(s, "", "test2", 1)
 	if err2 != nil {
 		t.Fatalf("list3 failed: %s", err2.Error())
 	} else if len(objs) != 0 {
@@ -125,23 +125,23 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	f.Seek(0, 0)
 	os.Remove(f.Name())
 	defer f.Close()
-	if err := s.Put("/file", f); err != nil {
+	if err := s.Put("file", f); err != nil {
 		t.Fatalf("failed to put from file")
-	} else if _, err := s.Head("/file"); err != nil {
-		t.Fatalf("/file should exists")
+	} else if _, err := s.Head("file"); err != nil {
+		t.Fatalf("file should exists")
 	} else {
-		s.Delete("/file")
+		s.Delete("file")
 	}
 
-	if _, err := s.Head("/test"); err != nil {
+	if _, err := s.Head("test"); err != nil {
 		t.Fatalf("check exists failed: %s", err.Error())
 	}
 
-	if err := s.Delete("/test"); err != nil {
+	if err := s.Delete("test"); err != nil {
 		t.Fatalf("delete failed: %s", err)
 	}
 
-	if err := s.Delete("/test"); err != nil {
+	if err := s.Delete("test"); err != nil {
 		t.Fatalf("delete non exists: %v", err)
 	}
 
@@ -185,14 +185,14 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 
 	// Copy empty objects
-	defer s.Delete("/empty")
-	if err := s.Put("/empty", bytes.NewReader([]byte{})); err != nil {
+	defer s.Delete("empty")
+	if err := s.Put("empty", bytes.NewReader([]byte{})); err != nil {
 		t.Fatalf("PUT empty object failed: %s", err.Error())
 	}
 
 	// Copy `/` suffixed object
-	defer s.Delete("/slash/")
-	if err := s.Put("/slash/", bytes.NewReader([]byte{})); err != nil {
+	defer s.Delete("slash/")
+	if err := s.Put("slash/", bytes.NewReader([]byte{})); err != nil {
 		t.Fatalf("PUT `/` suffixed object failed: %s", err.Error())
 	}
 }
@@ -420,6 +420,14 @@ func TestYovole(t *testing.T) {
 		t.SkipNow()
 	}
 	s, _ := newYovole(os.Getenv("OS2_TEST_BUCKET"), os.Getenv("OS2_ACCESS_KEY"), os.Getenv("OS2_SECRET_KEY"))
+	testStorage(t, s)
+}
+
+func TestWebDAV(t *testing.T) {
+	if os.Getenv("WEBDAV_TEST_BUCKET") == "" {
+		t.SkipNow()
+	}
+	s, _ := newWebDAV(os.Getenv("WEBDAV_TEST_BUCKET"), "", "")
 	testStorage(t, s)
 }
 

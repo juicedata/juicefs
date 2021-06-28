@@ -16,6 +16,7 @@ require (
 	github.com/billziss-gh/cgofuse v1.4.0
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
+	github.com/emersion/go-webdav v0.3.0
 	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/go-sql-driver/mysql v1.5.0
