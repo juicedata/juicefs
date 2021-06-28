@@ -21,8 +21,8 @@
   + [Hive](#hive)
 * [Metrics](#metrics)
 * [Benchmark](#benchmark)
-  + [Local Environment](#local-environment)
-  + [Distribute Benchmark](#distribute-benchmark)
+  + [Local Benchmark](#local-benchmark)
+  + [Distributed Benchmark](#distributed-benchmark)
 * [FAQ](#faq)
 
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK to support variety of components in Hadoop ecosystem.
@@ -254,7 +254,7 @@ For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p
 
 JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 
-### Local environment
+### Local Benchmark
 #### Meta
 
 - create
@@ -317,9 +317,9 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 | write     | 453               |
 | read      | 141               |
 
-### Distribute Benchmark
+### Distributed Benchmark
 
-Distribute benchmark use MapReduce program to test meta and IO throughput performance
+Distributed benchmark use MapReduce program to test meta and IO throughput performance
 
 Enough resources should be provided to make sure all Map task can be started at the same time
 
