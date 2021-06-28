@@ -2,7 +2,7 @@
 
 * [Haddop 兼容性](#Hadoop-兼容性)
 * [编译](#编译)
-* [部署 JuiceFS Hadoop Java SDK](#部署-JuiceFS-Hadoop-Java-SDK)
+* [部署 JuiceFS Hadoop Java SDK](#部署-juicefs-hadoop-java-sdk)
   + [发行版](#发行版)
   + [社区开源组件](#社区开源组件)
 * [配置参数](#配置参数)
@@ -11,19 +11,19 @@
   + [I/O 配置](#io-配置)
   + [其他配置](#其他配置)
   + [常用配置](#常用配置)
-  + [Hadoop 环境配置](#Hadoop-环境配置)
-    - [CDH6 环境配置](#CDH6-环境配置)
-    - [HDP 环境配置](#HDP-环境配置)
-  + [Flink 配置](#Flink-配置)
+  + [Hadoop 环境配置](#hadoop-环境配置)
+    - [CDH6 环境配置](#cdh6-环境配置)
+    - [HDP 环境配置](#hdp-环境配置)
+  + [Flink 配置](#flink-配置)
 * [重启相关服务](#重启相关服务)
 * [验证](#验证)
-  + [Hadoop](#Hadoop)
-  + [Hive](#Hive)
+  + [Hadoop](#hadoop)
+  + [Hive](#hive)
 * [指标收集](#指标收集)
-* [Benchmark](#Benchmark)
+* [Benchmark](#benchmark)
   + [本地测试](#本地测试)
   + [分布式测试](#分布式测试)
-* [FAQ](#FAQ)
+* [FAQ](#faq)
 
 JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的各种应用。
 
@@ -138,7 +138,7 @@ $ make
 
 ### 常用配置
 
-**注意：替换 `juicefs.meta` 配置中的 `{HOST}`、`{PORT}` 和 `{DB}` 变量为实际的值。**
+> **注意**：替换 `juicefs.meta` 配置中的 `{HOST}`、`{PORT}` 和 `{DB}` 变量为实际的值。
 
 ```xml
 <property>

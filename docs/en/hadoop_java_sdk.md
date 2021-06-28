@@ -1,29 +1,29 @@
 # Use JuiceFS Hadoop Java SDK
 
-* [Hadoop Compatibility](#Hadoop-Compatibility)
-* [Compiling](#Compiling)
-* [Deploy JuiceFS Hadoop Java SDK](#Deploy-JuiceFS-Hadoop-Java-SDK)
-  + [Hadoop Distribution](#Hadoop-Distribution)
-  + [Community Components](#Community-Components)
-* [Configurations](#Configurations)
-  + [Core Configurations](#Core-Configurations)
-  + [Cache Configurations](#Cache-Configurations)
-  + [I/O Configurations](#I/O-Configurations)
-  + [Other Configurations](#Other-Configurations)
-  + [Configurations Example](#Configurations-Example)
-  + [Configuration in Hadoop](#Configuration-in-Hadoop)
-    - [CDH6](#CDH6)
-    - [HDP](#HDP)
-  + [Configuration in Flink](#Configuration-in-Flink)
-* [Restart Services](#Restart-Services)
-* [Verification](#Verification)
-  + [Hadoop](#Hadoop)
-  + [Hive](#Hive)
-* [Metrics](#Metrics)
-* [Benchmark](#Benchmark)
-  + [Local Environment](#Local-environment)
-  + [Distribute Benchmark](#Distribute-Benchmark)
-* [FAQ](#FAQ)
+* [Hadoop Compatibility](#hadoop-compatibility)
+* [Compiling](#compiling)
+* [Deploy JuiceFS Hadoop Java SDK](#deploy-juicefs-hadoop-java-sdk)
+  + [Hadoop Distribution](#hadoop-distribution)
+  + [Community Components](#community-components)
+* [Configurations](#configurations)
+  + [Core Configurations](#core-configurations)
+  + [Cache Configurations](#cache-configurations)
+  + [I/O Configurations](#io-configurations)
+  + [Other Configurations](#other-configurations)
+  + [Configurations Example](#configurations-example)
+  + [Configuration in Hadoop](#configuration-in-hadoop)
+    - [CDH6](#cdh6)
+    - [HDP](#hdp)
+  + [Configuration in Flink](#configuration-in-flink)
+* [Restart Services](#restart-services)
+* [Verification](#verification)
+  + [Hadoop](#hadoop)
+  + [Hive](#hive)
+* [Metrics](#metrics)
+* [Benchmark](#benchmark)
+  + [Local Environment](#local-environment)
+  + [Distribute Benchmark](#distribute-benchmark)
+* [FAQ](#faq)
 
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK to support variety of components in Hadoop ecosystem.
 
@@ -138,7 +138,7 @@ When you use multiple JuiceFS file systems, all these configurations could be se
 
 ### Configurations Example
 
-**Note: Replace `{HOST}`, `{PORT}` and `{DB}` in `juicefs.meta` with appropriate values.**
+> **Note**: Replace `{HOST}`, `{PORT}` and `{DB}` in `juicefs.meta` with appropriate values.
 
 ```xml
 <property>
