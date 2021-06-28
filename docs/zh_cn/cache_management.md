@@ -50,7 +50,7 @@ JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的
 
 当重复读 JuiceFS 中的同一个文件时，速度会非常快，延时可低至微秒，吞吐量可以到每秒数 GiB。
 
-当前的 JuiceFS 客户端还未启用内核的写入缓存功能。从 [Linux 内核 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e) 开始，FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，意味着 `write()` 系统调用会很快完成。你可以在执行 `juicefs mount` 命令时通过 [`-o writeback_cache`](fuse_mount_options.md#writebck_cache) 选项来开启 writeback-cache 模式。当需要频繁写入小数据时（如 100 字节左右），推荐开启这个模式。
+当前的 JuiceFS 客户端还未启用内核的写入缓存功能。从 [Linux 内核 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e) 开始，FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，意味着 `write()` 系统调用会很快完成。你可以在执行 `juicefs mount` 命令时通过 [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) 选项来开启 writeback-cache 模式。当需要频繁写入小数据时（如 100 字节左右），推荐开启这个模式。
 
 ### 客户端读缓存
 
@@ -69,7 +69,7 @@ JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的
 --cache-partial-only      cache only random/small read (default: false)
 ```
 
-JuiceFS 客户端会尽可能快地把从对象存储下载的数据（包括新上传的数据）写入到缓存目录中，不做压缩和加密。**因为 JuiceFS 会为所有写入对象存储的数据生成唯一的名字，而且所有对象不会被修改，因此不用担心缓存的数据的失效问题。**缓存在使用空间到达上限时（或者磁盘空间快满时）会自动进行清理，目前的规则是根据访问时间，优先清理不频繁访问的文件。
+JuiceFS 客户端会尽可能快地把从对象存储下载的数据（包括新上传的数据）写入到缓存目录中，不做压缩和加密。**因为 JuiceFS 会为所有写入对象存储的数据生成唯一的名字，而且所有对象不会被修改，因此不用担心缓存的数据的失效问题。** 缓存在使用空间到达上限时（或者磁盘空间快满时）会自动进行清理，目前的规则是根据访问时间，优先清理不频繁访问的文件。
 
 数据的本地缓存可以有效地提高随机读的性能，建议使用更快的存储介质和更大的缓存空间来提升对随机读性能要求高的应用的性能，比如 MySQL、Elasticsearch、ClickHouse 等。
 

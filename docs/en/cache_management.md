@@ -50,7 +50,7 @@ Kernel will cache content of recently visited files automatically. When the file
 
 Reading the same file in JuiceFS repeatedly will be extremely fast, with milliseconds latency and gigabytes throughput.
 
-Write cache in the kernel is not enabled by default. Start from [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means the `write()` syscall can often complete very fast. You could enable writeback-cache mode by [`-o writeback_cache`](fuse_mount_options.md#writebck_cache) option when run `juicefs mount` command. It's recommended enable it when write very small data (e.g. 100 bytes) frequently.
+Write cache in the kernel is not enabled by default. Start from [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means the `write()` syscall can often complete very fast. You could enable writeback-cache mode by [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) option when run `juicefs mount` command. It's recommended enable it when write very small data (e.g. 100 bytes) frequently.
 
 ### Read Cache in Client
 
