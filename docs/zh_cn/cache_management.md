@@ -1,14 +1,22 @@
-# Cache Management
+# 缓存管理
 
-To improve the performance, JuiceFS supports caching in multiple levels to reduce the latency and increase throughput, including metadata cache and data cache.
+为了提高性能，JuiceFS 实现了多种缓存机制来降低访问的时延和提高吞吐量，包括元数据缓存、数据缓存。
 
-## Metadata Cache
+## 一致性
 
-JuiceFS caches metadata in the kernel to improve the performance.
+JuiceFS 保证关闭再打开（close-to-open）一致性。意味着一旦一个文件写入完成并关闭，之后的打开和读操作保证可以访问之前写入的数据，不管是在同一台机器或者不同的机器。特别地，在同一个挂载点内，所有写入的数据都可以立即读（不需要重新打开文件）。
 
-### Metadata Cache in Kernel
+当多个客户端同时使用时，内核中缓存的元数据只能通过时间失效，客户端中缓存的元数据会根据所有客户端的修改自动失效。
 
-Three kinds of metadata can be cached in kernel: attribute, entry (file) and direntry (directory). The timeout is configurable through the [following options](command_reference.md#juicefs-mount):
+极端情况下可能出现在 A 机器做了修改操作，再去 B 机器访问时，B 机器还未能看到更新的情况。
+
+## 元数据缓存
+
+JuiceFS 支持在内核和客户端内存（也就是 JuiceFS 进程）中缓存元数据以提升元数据的访问性能。
+
+### 内核元数据缓存
+
+在内核中可以缓存三种元数据：属性（attribute)、文件项（entry）和目录项（direntry），它们可以通过如下[三个参数](command_reference.md#juicefs-mount)控制缓存时间：
 
 ```
 --attr-cache value       attributes cache timeout in seconds (default: 1)
@@ -16,37 +24,43 @@ Three kinds of metadata can be cached in kernel: attribute, entry (file) and dir
 --dir-entry-cache value  dir entry cache timeout in seconds (default: 1)
 ```
 
-Attribute, entry and direntry are cached for 1 second by default, to speedup lookup and getattr operations.
+默认会缓存属性、文件项和目录项，保留 1 秒，以提高 lookup 和 getattr 的性能。
 
-### Consistency
+### 客户端内存元数据缓存
 
-If only one client is connected, the cached metadata will be invalidated automatically upon modification. No impact on consistency.
+> **注意**：此特性需要使用 0.15.0 及以上版本的 JuiceFS。
 
-In case multiple clients, the only way to invalidate metadata cache in the kernel is waiting for timeout.
+当打开（`open()`）一个文件时对应的文件属性（attribute）会被自动缓存在客户端内存。如果设置了 [`--open-cache`](command_reference.md#juicefs-mount) 选项（值需要大于 0）并且还没有到达设置的缓存超时时间，`getattr()` 以及 `open()` 请求会立即返回。
 
-In extreme condition, it is possible that the modification made in client A is not visible to client B in a short time window.
+当读取（`read()`）一个文件时 chunk 和 slice 信息会被自动缓存在客户端内存（请查阅[这里](how_juicefs_store_files.md)了解什么是 chunk 和 slice）。如果再次读取同一个文件的相同 chunk，会立即返回 slice 信息。
 
-## Data Cache
+当一个文件在一定时间内（默认为 1 小时）没有被任何进程打开过，它的所有客户端内存元数据缓存会在后台被自动删除。
 
-Data cache is also provided in JuiceFS to improve performance, including page cache in the kernel and local cache in client host.
+### 建议
 
-### Data Cache in Kernel
+当对元数据的访问很频繁，并且不要求多机的实时一致性时，可以启用元数据缓存以提高性能。
 
-Kernel will cache content of recently visited files automatically. When the file is reopened, the content can be fetched from kernel cache directly for best performance.
+## 数据缓存
 
-Reading the same file in JuiceFS repeatedly will be extremely fast, with milliseconds latency and gigabytes throughput.
+JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的页缓存和客户端所在机器的本地缓存。
 
-Write cache in the kernel is not enabled by default. Start from [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means the `write()` syscall can often complete very fast. You could enable writeback-cache mode by `-o writeback_cache` option when run `juicefs mount` command. It's recommended enable it when write very small data (e.g. 100 bytes) frequently.
+### 内核中数据缓存
 
-### Read Cache in Client
+对于已经读过的文件，内核会把它的内容自动缓存下来，下次再打开的时候，如果文件没有被更新（即 mtime 没有更新），就可以直接从内核中的缓存读获得最好的性能。
 
-The client will perform prefetch and cache automatically to improve sequence read performance according to the read mode in the application.
+当重复读 JuiceFS 中的同一个文件时，速度会非常快，延时可低至低至微秒，吞吐量可以到每秒数 GiB。
 
-By default, JuiceFS client will prefetch 3 blocks in parallel when read data. You can configure it through `--prefetch` option.
+当前的 JuiceFS 客户端还未启用内核的写入缓存功能。从 [Linux 内核 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e) 开始，FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，意味着 `write()` 系统调用会很快完成。你可以在执行 `juicefs mount` 命令时通过 `-o writeback_cache` 选项来开启 writeback-cache 模式。当需要频繁写入小数据时（如 100 字节左右），推荐开启这个模式。
 
-A few data will be cached in memory (300MiB by default) and can be configured with `--buffer-size` option. More data will be cached in the local file system. Any local file system based on HDD, SSD or memory is fine.
+### 客户端读缓存
 
-Local cache can be configured with the [following options](command_reference.md#juicefs-mount):
+客户端会根据应用读数据的模式，自动做预读和缓存操作以提高顺序读的性能。
+
+默认情况下，JuiceFS 客户端会在读取数据时并发预读 3 个 block（请查阅[这里](how_juicefs_store_files.md)了解什么是 block）。你可以通过 `--prefetch` 选项配置。
+
+客户端会把最近的少量数据缓存到客户端内存中（默认为 300MiB），可以通过 `--buffer-size` 选项配置。同时把更多的数据缓存到本地文件系统中，可以是基于硬盘、SSD 或者内存的任意本地文件系统。
+
+本地缓存可以通过[以下选项](command_reference.md#juicefs-mount)来调整：
 
 ```
 --cache-dir value         directory paths of local cache, use colon to separate multiple paths (default: "$HOME/.juicefs/cache" or "/var/jfsCache")
@@ -55,32 +69,32 @@ Local cache can be configured with the [following options](command_reference.md#
 --cache-partial-only      cache only random/small read (default: false)
 ```
 
-JuiceFS client will write the data downloaded from object storage (including also the data newly uploaded) into cache directory, uncompressed and no encryption. Since JuiceFS will generate a unique key for all data written to object storage, and all objects are immutable, the cache data will never expire. When cache grows over the size limit (or disk full), it will be automatically cleaned up. The current rule is compare access time, less frequent access file will be cleaned first.
+JuiceFS 客户端会尽可能快地把从对象存储下载的数据（包括新上传的数据）写入到缓存目录中，不做压缩和加密。因为 JuiceFS 会为所有写入对象存储的数据生成唯一的名字，而且所有对象不会被修改，因此不用担心缓存的数据的失效问题。缓存在使用空间到达上限时（或者磁盘空间快满时）会自动进行清理，目前的规则是根据访问时间，优先清理不频繁访问的文件。
 
-Local cache will effectively improve random read performance. It is recommended to use faster speed storage and larger cache size to accelerate the application that requires high performance in random read, e.g. MySQL, Elasticsearch, ClickHouse and etc.
+数据的本地缓存可以有效地提高随机读的性能，建议使用更快的存储介质和更大的缓存空间来提升对随机读性能要求高的应用的性能，比如 MySQL、Elasticsearch、ClickHouse 等。
 
-### Write Cache in Client
+### 客户端写缓存
 
-The Client will cache the data written by application in memory. It is flushed to object storage until a chunk is filled full or forced by application with close or fsync. When an application calls `fsync()` or `close()`, the client will not return until data is uploaded to object storage and metadata server is notified, ensuring data integrity. Asynchronous uploading may help to improve performance if local storage is reliable. In this case, `close()` will not be blocked while data is being uploaded to object storage, instead it will return immediately when data is written to local cache directory.
+客户端会把应用写的数据缓存在内存中，当一个 chunk 被写满，或者应用强制写入（`close()` 或者 `fsync()`），或者一定时间之后再写入到对象存储中。当应用调用 `fsync()` 或者 `close()` 时，客户端会等数据写入到对象存储并且通知元数据服务后才返回，以确保数据安全。在某些情况下，如果本地存储是可靠的，可以通过启用异步上传到对象的方式来提高性能。此时 `close()` 不会等待数据写入到对象存储，而是写入到本地缓存目录就返回。
 
-Asynchronous upload can be enabled with the following parameter:
+异步上传模式可以通过下面的选项启用：
 
 ```
 --writeback  upload objects in background (default: false)
 ```
 
-When there is a demand to write lots of small files in a short period, `--writeback` is recommended to improve write performance. After the job is done, remove this option and remount to disable it. For the scenario with massive random write (for example, during MySQL incremental backup), `--writeback` is also recommended.
+当需要短时间写入大量小文件时，建议使用 `--writeback` 参数挂载以提高写入性能，写入完成之后再去掉它重新挂载。或者在有大量随机写时 (比如应用 MySQL 的增量备份时），也建议启用 `--writeback`。
 
-**Warning: When `--writeback` is enabled, never delete content in `<cache-dir>/rawstaging`. Otherwise data will get lost.**
+> **警告**：在 `--writeback` 开启时，千万不能删除 `<cache-dir>/<UUID>/rawstaging` 中的内容，否则会导致数据丢失。
 
-Note that when `--writeback` is enabled, the reliability of data write is somehow depending on the cache reliability. It should be used with caution when reliability is important.
+开启 `--writeback` 时，缓存本身的可靠性与数据写入的可靠性直接相关，对此要求高的场景应谨慎使用。
 
-`--writeback` is disabled by default.
+默认情况下 `--writeback` 不开启。
 
-## Frequent Asked Questions
+## 常见问题
 
-### Why 60 GiB disk spaces are occupied while I set cache size to 50 GiB?
+### 为什么我设置了缓存容量为 50 GiB，但实际占用了 60 GiB 的空间？
 
-It is difficult to calculate the exact disk space used by cached data in local file system. Currently, JuiceFS estimates it by accumulating all sizes of cached objects with a fixed overhead (4 KiB). It may be the different than the result from `du` command.
+对同样一批缓存数据，很难精确计算它们在不同的本地文件系统上所占用的存储空间，目前是通过累加所有被缓存对象的大小并附加固定的开销（4KiB）来估算得到的，与 `du` 得到的数值并不完全一致。
 
-When the free space of the file system where is low, JuiceFS will remove cached objects to avoid filling out.
+当缓存目录所在文件系统空间不足时，客户端会尽量减少缓存使用量来防止缓存盘被写满。

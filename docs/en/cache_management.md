@@ -6,7 +6,7 @@ To improve the performance, JuiceFS supports caching in multiple levels to reduc
 
 JuiceFS guarantees close-to-open consistency. It means once a file is closed, the following open and read are guaranteed see the data written before close, either in same machine or different machine. Particularly, within same mount point, read can see all data written before it immediately (no need to reopen the file).
 
-In case multiple clients, the only way to invalidate metadata cache in the kernel is waiting for timeout.
+In case multiple clients, the only way to invalidate metadata cache in the kernel is waiting for timeout. Metadata cache in client memory is invalidated automatically on modification.
 
 In extreme condition, it is possible that the modification made in client A is not visible to client B in a short time window.
 
@@ -36,6 +36,10 @@ Chunks and slices information are cached in client automatically when `read()` a
 
 All metadata cache of one file will be removed in the background automatically when this file hasn't been opened by any process in a period of time (default is 1 hour).
 
+### Suggestion
+
+Enable metadata cache will improve performance when metadata is accessed frequently and temporary inconsistency among multiple clients is tolerable.
+
 ## Data Cache
 
 Data cache is also provided in JuiceFS to improve performance, including page cache in the kernel and local cache in client host.
@@ -52,7 +56,7 @@ Write cache in the kernel is not enabled by default. Start from [Linux kernel 3.
 
 The client will perform prefetch and cache automatically to improve sequence read performance according to the read mode in the application.
 
-By default, JuiceFS client will prefetch 3 blocks in parallel when read data. You can configure it through `--prefetch` option.
+By default, JuiceFS client will prefetch 3 blocks (refer to [here](how_juicefs_store_files.md) to learn what is block) in parallel when read data. You can configure it through `--prefetch` option.
 
 A few data will be cached in memory (300MiB by default) and can be configured with `--buffer-size` option. More data will be cached in the local file system. Any local file system based on HDD, SSD or memory is fine.
 
@@ -71,9 +75,9 @@ Local cache will effectively improve random read performance. It is recommended 
 
 ### Write Cache in Client
 
-The Client will cache the data written by application in memory. It is flushed to object storage until a chunk is filled full or forced by application with close or fsync. When an application calls `fsync()` or `close()`, the client will not return until data is uploaded to object storage and metadata server is notified, ensuring data integrity. Asynchronous uploading may help to improve performance if local storage is reliable. In this case, `close()` will not be blocked while data is being uploaded to object storage, instead it will return immediately when data is written to local cache directory.
+The Client will cache the data written by application in memory. It is flushed to object storage until a chunk is filled full or forced by application with `close()`/`fsync()` or after a while. When an application calls `fsync()` or `close()`, the client will not return until data is uploaded to object storage and metadata server is notified, ensuring data integrity. Asynchronous uploading may help to improve performance if local storage is reliable. In this case, `close()` will not be blocked while data is being uploaded to object storage, instead it will return immediately when data is written to local cache directory.
 
-Asynchronous upload can be enabled with the following parameter:
+Asynchronous upload can be enabled with the following option:
 
 ```
 --writeback  upload objects in background (default: false)
@@ -81,7 +85,7 @@ Asynchronous upload can be enabled with the following parameter:
 
 When there is a demand to write lots of small files in a short period, `--writeback` is recommended to improve write performance. After the job is done, remove this option and remount to disable it. For the scenario with massive random write (for example, during MySQL incremental backup), `--writeback` is also recommended.
 
-**Warning: When `--writeback` is enabled, never delete content in `<cache-dir>/rawstaging`. Otherwise data will get lost.**
+> **Warning**: When `--writeback` is enabled, never delete content in `<cache-dir>/<UUID>/rawstaging`. Otherwise data will get lost.
 
 Note that when `--writeback` is enabled, the reliability of data write is somehow depending on the cache reliability. It should be used with caution when reliability is important.
 
