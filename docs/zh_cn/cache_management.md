@@ -52,9 +52,9 @@ JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的
 
 客户端会根据应用读数据的模式，自动做预读和缓存操作以提高顺序读的性能。
 
-默认情况下，JuiceFS 客户端会在读取数据时并发预读 3 个 block（请查阅[这里](how_juicefs_store_files.md)了解什么是 block）。你可以通过 `--prefetch` 选项配置。
+默认情况下，JuiceFS 客户端会在读取数据时并发预读 1 个 block（请查阅[这里](how_juicefs_store_files.md)了解什么是 block）。你可以通过 `--prefetch` 选项配置。
 
-客户端会把最近的少量数据缓存到客户端内存中（默认为 300MiB），可以通过 `--buffer-size` 选项配置。同时把更多的数据缓存到本地文件系统中，可以是基于硬盘、SSD 或者内存的任意本地文件系统。
+数据会缓存到本地文件系统中，可以是基于硬盘、SSD 或者内存的任意本地文件系统。
 
 本地缓存可以通过[以下选项](command_reference.md#juicefs-mount)来调整：
 

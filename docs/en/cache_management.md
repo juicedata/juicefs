@@ -52,9 +52,9 @@ Write cache in the kernel is not enabled by default. Start from [Linux kernel 3.
 
 The client will perform prefetch and cache automatically to improve sequence read performance according to the read mode in the application.
 
-By default, JuiceFS client will prefetch 3 blocks (refer to [here](how_juicefs_store_files.md) to learn what is block) in parallel when read data. You can configure it through `--prefetch` option.
+By default, JuiceFS client will prefetch 1 blocks (refer to [here](how_juicefs_store_files.md) to learn what is block) in parallel when read data. You can configure it through `--prefetch` option.
 
-A few data will be cached in memory (300MiB by default) and can be configured with `--buffer-size` option. More data will be cached in the local file system. Any local file system based on HDD, SSD or memory is fine.
+Data will be cached in the local file system. Any local file system based on HDD, SSD or memory is fine.
 
 Local cache can be configured with the [following options](command_reference.md#juicefs-mount):
 

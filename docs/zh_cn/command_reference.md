@@ -268,7 +268,7 @@ juicefs gateway [command options] META-URL ADDRESS
 读写缓存的总大小；单位为 MiB (默认: 300)
 
 `--prefetch value`\
-并发预读 N 个块 (默认: 3)
+并发预读 N 个块 (默认: 1)
 
 `--writeback`\
 后台异步上传对象 (默认: false)
