@@ -1,6 +1,6 @@
 # 在 Hadoop 环境使用 JuiceFS Java SDK
 
-* [Haddop 兼容性](#Hadoop-兼容性)
+* [Haddop 兼容性](#hadoop-兼容性)
 * [编译](#编译)
 * [部署 JuiceFS Hadoop Java SDK](#部署-juicefs-hadoop-java-sdk)
   + [发行版](#发行版)
