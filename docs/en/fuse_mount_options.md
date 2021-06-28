@@ -16,6 +16,6 @@ This option overrides the security measure restricting file access to the user m
 
 ## writeback_cache
 
-**Note: This mount option requires at least version 3.15 Linux kernel.**
+> **Note**: This mount option requires at least version 3.15 Linux kernel.
 
 FUSE supports ["writeback-cache mode"](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means the `write()` syscall can often complete very fast. It's recommended enable this mount option when write very small data (e.g. 100 bytes) frequently.

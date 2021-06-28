@@ -50,7 +50,7 @@ JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的
 
 当重复读 JuiceFS 中的同一个文件时，速度会非常快，延时可低至微秒，吞吐量可以到每秒数 GiB。
 
-当前的 JuiceFS 客户端还未启用内核的写入缓存功能。从 [Linux 内核 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e) 开始，FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，意味着 `write()` 系统调用会很快完成。你可以在执行 `juicefs mount` 命令时通过 [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) 选项来开启 writeback-cache 模式。当需要频繁写入小数据时（如 100 字节左右），推荐开启这个模式。
+当前的 JuiceFS 客户端还未启用内核的写入缓存功能。从 [Linux 内核 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e) 开始，FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，意味着 `write()` 系统调用通常可以非常快速地完成。你可以在执行 `juicefs mount` 命令时通过 [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) 选项来开启 writeback-cache 模式。当频繁写入非常小的数据（如 100 字节左右）时，建议启用此挂载选项。
 
 ### 客户端读缓存
 
