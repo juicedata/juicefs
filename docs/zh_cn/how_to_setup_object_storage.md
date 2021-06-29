@@ -598,7 +598,7 @@ $ ./juicefs format \
 
 ## WebDAV <span id='webdav'></span>
 
-[WebDAV](https://en.wikipedia.org/wiki/WebDAV) 是 HTTP 的扩展协议，允许客户端读写 Web 资源。JuiceFS 0.15+ 支持使用 WebDAV 协议的存储系统作为后端数据存储。
+[WebDAV](https://en.wikipedia.org/wiki/WebDAV) 是 HTTP 的扩展协议，有利于用户间协同编辑和管理存储在万维网服务器的文档。JuiceFS 0.15+ 支持使用 WebDAV 协议的存储系统作为后端数据存储。
 
 你需要将 `--storage` 设置为 `webdav`，并通过 `--bucket` 来指定访问 WebDAV 的地址。如果存储系统启用了用户验证，用户名和密码可以通过 `--access-key` 和 `--secret-key` 来指定，例如：
 
