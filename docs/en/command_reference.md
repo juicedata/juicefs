@@ -268,7 +268,7 @@ number of connections to upload (default: 20)
 total read/write buffering in MiB (default: 300)
 
 `--prefetch value`\
-prefetch N blocks in parallel (default: 3)
+prefetch N blocks in parallel (default: 1)
 
 `--writeback`\
 upload objects in background (default: false)

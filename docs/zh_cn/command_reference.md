@@ -176,9 +176,6 @@ juicefs mount [command options] META-URL MOUNTPOINT
 `--dir-entry-cache value`\
 目录项缓存过期时间；单位为秒 (默认: 1)
 
-`--open-cache value`\
-打开的文件的缓存过期时间；单位为秒 (默认: 0)
-
 `--enable-xattr`\
 启用扩展属性 (xattr) 功能 (默认: false)
 
@@ -220,6 +217,9 @@ juicefs mount [command options] META-URL MOUNTPOINT
 
 `--cache-partial-only`\
 仅缓存随机小块读 (默认: false)
+
+`--open-cache value`\
+打开的文件的缓存过期时间；单位为秒 (默认: 0)
 
 ### juicefs umount
 
@@ -268,7 +268,7 @@ juicefs gateway [command options] META-URL ADDRESS
 读写缓存的总大小；单位为 MiB (默认: 300)
 
 `--prefetch value`\
-并发预读 N 个块 (默认: 3)
+并发预读 N 个块 (默认: 1)
 
 `--writeback`\
 后台异步上传对象 (默认: false)

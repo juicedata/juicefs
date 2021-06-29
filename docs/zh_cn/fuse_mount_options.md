@@ -18,6 +18,6 @@ $ juicefs mount -d -o allow_other,writeback_cache localhost ~/jfs
 
 ## writeback_cache
 
-**注意：该挂载选项仅在 Linux 3.15 及以上版本内核上支持。**
+> **注意**：该挂载选项仅在 Linux 3.15 及以上版本内核上支持。
 
-FUSE 支持 ["writeback-cache 模式"](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，这意味着 `write()` 系统调用通常可以非常快速地完成。当频繁写入非常小的数据（例如：100 bytes）时，建议启用此挂载选项。
+FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，这意味着 `write()` 系统调用通常可以非常快速地完成。当频繁写入非常小的数据（如 100 字节左右）时，建议启用此挂载选项。
