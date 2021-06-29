@@ -582,8 +582,8 @@ $ ./juicefs format \
 ## WebDAV <span id='webdav'></span>
 
 [WebDAV](https://en.wikipedia.org/wiki/WebDAV) is an extension of the Hypertext Transfer Protocol (HTTP)
-that not allows clients to perform remote Web content authoring operations. For a storage that speaks WebDAV, JuiceFS can use
-it as the data store.
+that facilitates collaborative editing and management of documents stored on the WWW server among users.
+Starting from JuiceFS v0.15+, for a storage that speaks WebDAV, JuiceFS can use it as the data store.
 
 You need set `--storage` to `webdav`, and `--bucket` to the endpoint of WebDAV. If basic authorization is enable, username and password should be provided as `--access-key` and `--secret-key`, for example:
 
