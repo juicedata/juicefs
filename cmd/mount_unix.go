@@ -73,7 +73,7 @@ func makeDaemon(c *cli.Context, name, mp string) error {
 		}
 		var err error
 		logfile := c.String("logfile")
-		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
+		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			logger.Errorf("open log file %s: %s", logfile, err)
 		}
