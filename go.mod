@@ -28,7 +28,7 @@ require (
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/jcmturner/gokrb5/v8 v8.4.2
-	github.com/juicedata/godaemon v0.0.0-20210118074000-659b6681b236
+	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juju/ratelimit v1.0.1
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142

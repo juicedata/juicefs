@@ -48,7 +48,7 @@ func mount_flags() []cli.Flag {
 	}
 }
 
-func makeDaemon(name, mp string) error {
+func makeDaemon(c *cli.Context, name, mp string) error {
 	logger.Warnf("Cannot run in background in Windows.")
 	return nil
 }

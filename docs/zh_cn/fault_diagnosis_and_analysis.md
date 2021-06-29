@@ -2,7 +2,7 @@
 
 ## 错误日志
 
-当 JuiceFS 通过 `-d` 选项在后台运行时，日志会输出到 syslog。取决于你使用的操作系统，你可以通过不同的命令获取日志：
+当 JuiceFS 通过 `-d` 选项在后台运行时，日志会输出到系统日志和 /var/log/juicefs.log (v0.15+)。取决于你使用的操作系统，你可以通过不同的命令获取日志：
 
 ```bash
 # macOS
@@ -13,6 +13,9 @@ $ cat /var/log/syslog | grep 'juicefs'
 
 # CentOS based system
 $ cat /var/log/messages | grep 'juicefs'
+
+# v0.15+
+$ tail -n 100 /var/log/juicefs.log
 ```
 
 日志等级有 4 种。你可以使用 `grep` 命令过滤显示不同等级的日志信息，从而进行性能统计和故障追踪。
