@@ -94,10 +94,9 @@ func mount_flags() []cli.Flag {
 			Usage: "disable syslog",
 		},
 		&cli.StringFlag{
-			Name:    "logfile",
-			Aliases: []string{"l"},
-			Value:   "/var/log/juicefs.log",
-			Usage:   "logging into this file when running in background",
+			Name:  "log",
+			Value: "/var/log/juicefs.log",
+			Usage: "logging into this file when running in background",
 		},
 		&cli.StringFlag{
 			Name:  "o",
