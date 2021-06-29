@@ -65,6 +65,7 @@ $ juicefs format --storage s3 \
 | [Ceph Object Gateway (RGW)](#ceph-rgw) | `s3`       |
 | [Swift](#swift)                        | `swift`    |
 | [MinIO](#minio)                        | `minio`    |
+| [WebDAV](#webdav)                      | `webdav`   |
 | [HDFS](#hdfs)                          | `hdfs`     |
 | [Redis](#redis)                        | `redis`    |
 | [本地磁盘](#local)                     | `file`     |
@@ -592,6 +593,21 @@ $ ./juicefs format \
     --storage minio \
     --bucket http://<endpoint>/<bucket> \
     ... \
+    localhost test
+```
+
+## WebDAV <span id='webdav'></span>
+
+[WebDAV](https://en.wikipedia.org/wiki/WebDAV) 是 HTTP 的扩展协议，有利于用户间协同编辑和管理存储在万维网服务器的文档。JuiceFS 0.15+ 支持使用 WebDAV 协议的存储系统作为后端数据存储。
+
+你需要将 `--storage` 设置为 `webdav`，并通过 `--bucket` 来指定访问 WebDAV 的地址。如果存储系统启用了用户验证，用户名和密码可以通过 `--access-key` 和 `--secret-key` 来指定，例如：
+
+```bash
+$ ./juicefs format \
+    --storage webdav \
+    --bucket http://<endpoint>/ \
+    --access-key <username> \
+    --secret-key <password> \
     localhost test
 ```
 
