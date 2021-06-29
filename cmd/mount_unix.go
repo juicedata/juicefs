@@ -48,8 +48,9 @@ func checkMountpoint(name, mp string) {
 	logger.Fatalf("fail to mount after 10 seconds, please mount in foreground")
 }
 
-func makeDaemon(name, mp string) error {
-	onExit := func(stage int) error {
+func makeDaemon(c *cli.Context, name, mp string) error {
+	var attrs godaemon.DaemonAttr
+	attrs.OnExit = func(stage int) error {
 		if stage != 0 {
 			return nil
 		}
@@ -70,8 +71,14 @@ func makeDaemon(name, mp string) error {
 				}
 			}
 		}
+		var err error
+		logfile := c.String("logfile")
+		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
+		if err != nil {
+			logger.Errorf("open log file %s: %s", logfile, err)
+		}
 	}
-	_, _, err := godaemon.MakeDaemon(&godaemon.DaemonAttr{OnExit: onExit})
+	_, _, err := godaemon.MakeDaemon(&attrs)
 	return err
 }
 
@@ -85,6 +92,11 @@ func mount_flags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "no-syslog",
 			Usage: "disable syslog",
+		},
+		&cli.StringFlag{
+			Name:  "log",
+			Value: "/var/log/juicefs.log",
+			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
 			Name:  "o",
