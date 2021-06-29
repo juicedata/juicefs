@@ -65,6 +65,7 @@ The following table lists the object storage services supported by JuiceFS. Clic
 | [Ceph Object Gateway (RGW)](#ceph-rgw)                    | `s3`       |
 | [Swift](#swift)                                           | `swift`    |
 | [MinIO](#minio)                                           | `minio`    |
+| [WebDAV](#webdav)                                         | `webdav`   |
 | [HDFS](#hdfs)                                             | `hdfs`     |
 | [Redis](#redis)                                           | `redis`    |
 | [Local disk](#local)                                      | `file`     |
@@ -575,6 +576,23 @@ $ ./juicefs format \
     --storage minio \
     --bucket http://<endpoint>/<bucket> \
     ... \
+    localhost test
+```
+
+## WebDAV <span id='webdav'></span>
+
+[WebDAV](https://en.wikipedia.org/wiki/WebDAV) is an extension of the Hypertext Transfer Protocol (HTTP)
+that not allows clients to perform remote Web content authoring operations. For a storage that speaks WebDAV, JuiceFS can use
+it as the data store.
+
+You need set `--storage` to `webdav`, and `--bucket` to the endpoint of WebDAV. If basic authorization is enable, username and password should be provided as `--access-key` and `--secret-key`, for example:
+
+```bash
+$ ./juicefs format \
+    --storage webdav \
+    --bucket http://<endpoint>/ \
+    --access-key <username> \
+    --secret-key <password> \
     localhost test
 ```
 
