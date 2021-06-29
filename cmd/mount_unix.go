@@ -96,7 +96,7 @@ func mount_flags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "log",
 			Value: "/var/log/juicefs.log",
-			Usage: "logging into this file when running in background",
+			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
 			Name:  "o",
