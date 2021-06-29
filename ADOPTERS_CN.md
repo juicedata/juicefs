@@ -7,7 +7,7 @@
 | [小米](https://www.mi.com) (HK:01810)              | Production | AI                   |
 | [理想汽车](https://www.lixiang.com) (NASDAQ:LI)    | Production | 大数据，AI           |
 | [Shopee](https://shopee.com)                       | Production | 大数据               |
-| [叮咚买菜](https://www.100.me)                     | Production | 大数据               |
+| [叮咚买菜](https://www.100.me) (NYSE:DDL)          | Production | 大数据               |
 | [尧信](https://www.yaoxinhd.com)                   | Production | 大数据，共享文件存储 |
 | [顺丰速运](https://www.sf-express.com) (SZ:002352) | Testing    | 大数据，共享文件存储 |
 | [BIGO](https://bigo.tv)                            | Testing    | AI                   |

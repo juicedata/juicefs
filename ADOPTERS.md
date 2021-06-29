@@ -7,7 +7,7 @@ For users of JuiceFS:
 | [Xiaomi](https://www.mi.com) (HK:01810)              | Production | AI                   |
 | [Li Auto Inc.](https://www.lixiang.com) (NASDAQ:LI)    | Production | Big Data, AI           |
 | [Shopee](https://shopee.com)                       | Production | Big Data              |
-| [Dingdong Fresh](https://www.100.me)                     | Production | Big Data             |
+| [Dingdong Fresh](https://www.100.me) (NYSE:DDL)           | Production | Big Data             |
 | [Yaoxin Financing Re-Guarantee](https://www.yaoxinhd.com) | Production | Big Data, File Sharing |
 | [SF-Express](https://www.sf-express.com) (SZ:002352) | Testing    | Big Data, File Sharing |
 | [BIGO](https://bigo.tv)                            | Testing    | AI                   |
