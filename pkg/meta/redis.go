@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -842,7 +843,7 @@ func errno(err error) syscall.Errno {
 	if strings.HasPrefix(err.Error(), "OOM") {
 		return syscall.ENOSPC
 	}
-	logger.Errorf("error: %s", err)
+	logger.Errorf("error: %s\n%s", err, debug.Stack())
 	return syscall.EIO
 }
 
