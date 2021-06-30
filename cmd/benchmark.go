@@ -53,9 +53,11 @@ func writeFiles(prefix string, fCount, bSize, bCount int, progress chan<- bool) 
 			if _, err = fp.Write(buf); err != nil {
 				logger.Fatalf("Failed to write file %s: %s", fname, err)
 			}
+			if j == bCount-1 {
+				_ = fp.Close()
+			}
 			progress <- true
 		}
-		fp.Close()
 	}
 }
 
