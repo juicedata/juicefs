@@ -184,8 +184,7 @@ You are welcome to tell us after using JuiceFS and share your experience with ev
 ## Roadmap
 
 - Stabilize storage format
-- Support TiKV as meta engine
-- Migrate metadata between engines
+- Support TiKV/FoundationDB as meta engine
 
 ## Reporting Issues
 
