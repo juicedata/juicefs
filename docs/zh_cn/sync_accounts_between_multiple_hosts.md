@@ -8,9 +8,9 @@ JuiceFS 支持 POSIX 兼容的 ACL，以目录或文件的粒度管理权限。�
 
 **注意：您可以使用两个文件来指定所有用户和组的 ID。**
 
-## 安装 ansible
+## 安装 Ansible
 
-选择一个主机作为 [控制节点](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements)，它可以使用 `ssh` 以 `root` 或其他在 sudo 用户组的身份，访问所有。在此主机上安装 ansible。阅读 [安装 Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) 了解更多安装细节。
+选择一个主机作为 [控制节点](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements)，它可以使用 `ssh` 以 `root` 或其他在 sudo 用户组的身份，访问所有。在此主机上安装 Ansible。阅读 [安装 Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) 了解更多安装细节。
 
 ## 确保所有主机上的帐户相同
 
