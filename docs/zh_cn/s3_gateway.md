@@ -1,6 +1,6 @@
 # S3 网关
 
-JuiceFS S3 网关是一项提供 S3 兼容接口的服务。这意味着您可以通过现有工具与 JuiceFS 进行交互，例如 AWS CLI、s3cmd、MinIO 客户端 (`mc`)。JuiceFS S3 网关基于 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)。
+JuiceFS S3 网关是一个提供 S3 兼容接口的服务。这意味着您可以通过现有工具与 JuiceFS 进行交互，例如 AWS CLI、s3cmd、MinIO 客户端 (`mc`)。JuiceFS S3 网关基于 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)。
 
 ## 先决条件
 
@@ -17,11 +17,11 @@ JuiceFS S3 网关是 v0.11.0 中引入的功能，请确保您拥有最新版本
 --no-banner         禁用 MinIO 启动信息（默认：false）
 ```
 
-`--access-log` 选项控制 JuiceFS 的 [访问日志](fault_diagnosis_and_analysis.md#access-log) 的存储位置。默认情况下，不会存储访问日志。`--no-banner` 选项控制是否禁用 MinIO 的日志。
+`--access-log` 选项控制 JuiceFS 的 [访问日志](fault_diagnosis_and_analysis.md#访问日志) 的存储位置。默认情况下，不会存储访问日志。`--no-banner` 选项控制是否禁用 MinIO 的日志。
 
 MinIO S3 网关需要在启动前配置两个环境变量：`MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD`。您可以将它们设置为任何值，但必须满足长度要求。`MINIO_ROOT_USER` 长度至少应为 3 个字符，而 `MINIO_ROOT_PASSWORD` 长度至少应为 8 个字符。
 
-以下命令展示了如何运行网关，Redis地址是 `localhost:6379`，网关监听 `localhost:9000`。
+以下命令展示了如何运行网关，Redis 地址是 `localhost:6379`，网关监听在 `localhost:9000`。
 
 ```bash
 $ export MINIO_ROOT_USER=admin
@@ -57,9 +57,9 @@ $ aws --endpoint-url http://localhost:9000 s3 ls
 $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 ```
 
-## 使用 MinIO Client
+## 使用 MinIO 客户端
 
-从 [https://docs.min.io/docs/minio-client-complete-guide.html](https://docs.min.io/docs/minio-client-complete-guide.html) 安装 MinIO client，然后添加一个名为 `juicefs` 的新主机：
+从 [https://docs.min.io/docs/minio-client-complete-guide.html](https://docs.min.io/docs/minio-client-complete-guide.html) 安装 MinIO 客户端，然后添加一个名为 `juicefs` 的新主机：
 
 ```bash
 $ mc alias set juicefs http://localhost:9000 admin 12345678 --api S3v4
