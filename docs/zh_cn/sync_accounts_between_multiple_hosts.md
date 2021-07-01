@@ -1,24 +1,20 @@
 # JuiceFS 多主机间同步账户
 
-JuiceFS supports POSIX compatible ACL to manage permissions in the granularity of directory or file. The behavior is the same as a local file system.
+JuiceFS 支持 POSIX 兼容的 ACL，以目录或文件的粒度管理权限。该行为与本地文件系统相同。
 
-In order to make the permission experience intuitive to user (e.g. the files accessible by user A in host X should be accessible in host Y with the same user), the same user who want to access JuiceFS should have the same UID and GID on all hosts.
+为了让用户获得直观的权限管理体验（例如，用户 A 在主机 X 中访问的文件，在主机 Y 中也应该可以用相同的用户身份访问），想要访问 JuiceFS 存储的同一个用户，应该在所有主机上具有相同的 UID 和 GID。
 
-Here we provide a simple [Ansible](https://www.ansible.com/community) playbook to demonstrate how to ensure an account with same UID and GID on multiple hosts.
+在这里，我们提供了一个简单的 [Ansible](https://www.ansible.com/community) playbook 来演示如何确保一个帐户在多个主机上具有相同的 UID 和 GID。
 
-**Note: You can use two files to specify the id for all users and groups.**
+**注意：您可以使用两个文件来指定所有用户和组的 ID。**
 
+## 安装 Ansible
 
+选择一个主机作为 [控制节点](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements)，它可以使用 `ssh` 以 `root` 或其他在 sudo 用户组的身份，访问所有。在此主机上安装 Ansible。阅读 [安装 Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) 了解更多安装细节。
 
-## Install ansible
+## 确保所有主机上的帐户相同
 
-Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Install ansible on this host. Read [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for more installation details.
-
-
-
-## Ensure the same account on all hosts
-
-Create an empty directory `account-sync` , save below content in `play.yaml` under this directory.
+创建一个空目录 `account-sync` ，将下面的内容保存在该目录下的 `play.yaml` 中。
 
 ```yaml
 ---
@@ -38,11 +34,9 @@ Create an empty directory `account-sync` , save below content in `play.yaml` und
         state: present
 ```
 
+在该目录下创建一个名为 `hosts` 的文件，将所有需要创建账号的主机的 IP 地址放置在该文件中，每行一个 IP。
 
-
-Create a file named `hosts` in this directory, place IP addresses of all hosts need to create account in this file, each line with a host's IP.
-
-Here we ensure an account `alice` with UID 1200 and  group `staff` with GID 500 on 2 hosts:
+在这里，我们确保在 2 台主机上使用 UID 1200 的帐户 `alice` 和 GID 500 的 `staff` 组：
 
 ```
 ~/account-sync$ cat hosts
@@ -70,9 +64,9 @@ PLAY RECAP *********************************************************************
 172.16.255.180             : ok=3    changed=1    unreachable=0    failed=0
 ```
 
-Now the new account `alice:staff` has been created on these 2 hosts.
+现在已经在这 2 台主机上创建了新帐户 `alice:staff`。
 
-If the UID or GID specified has been allocated to another user or group on some hosts, the creation would failed.
+如果指定的 UID 或 GID 已分配给某些主机上的另一个用户或组，则创建将失败。
 
 ```
 ~/account-sync$ ansible-playbook -i hosts -u root --ssh-extra-args "-o StrictHostKeyChecking=no" \
@@ -97,13 +91,13 @@ PLAY RECAP *********************************************************************
 172.16.255.180             : ok=1    changed=0    unreachable=0    failed=1
 ```
 
-In above example,  the group ID 1000 has been allocated to another group on host `172.16.255.180` , we should **change the GID**  or **delete the group with GID 1000** on host `172.16.255.180` , then run the playbook again.
+在上面的示例中，组 ID 1000 已分配给主机 `172.16.255.180` 上的另一个组，我们应该 **更改 GID** 或 **删除主机 `172.16.255.180` 上 GID 为 1000** 的组，然后再次运行 playbook。
 
 
 
-> **CAUTION**
+> **小心**
 >
-> If the user account has already existed on the host and we change it to another UID or GID value, the user may loss permissions to the files and directories which they previously have. For example:
+> 如果用户帐户已经存在于主机上，并且我们将其更改为另一个 UID 或 GID 值，则用户可能会失去对他们以前拥有的文件和目录的权限。例如：
 >
 > ```
 > $ ls -l /tmp/hello.txt
@@ -112,14 +106,14 @@ In above example,  the group ID 1000 has been allocated to another group on host
 > uid=1200(alice) gid=500(staff) groups=500(staff)
 > ```
 >
-> We change the UID of alice from 1200 to 1201
+> 我们将 alice 的 UID 从 1200 改为 1201
 >
 > ```
 > ~/account-sync$ ansible-playbook -i hosts -u root --ssh-extra-args "-o StrictHostKeyChecking=no" \
 > --extra-vars "group=staff gid=500 user=alice uid=1201" play.yaml
 > ```
 >
-> Now we have no permission to remove this file as its owner is not alice:
+> 现在我们没有权限删除这个文件，因为它的所有者不是 alice：
 >
 > ```
 > $ ls -l /tmp/hello.txt
