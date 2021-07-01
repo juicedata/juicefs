@@ -17,8 +17,6 @@
 
 ## 测试环境
 
-In the following test results, all mdtest tests based on the c5.large EC2 instance (2 CPU, 4G RAM), Ubuntu 18.04 LTS (Kernel 5.4.0) system, JuiceFS use redis (version 4.0.9) running on a c5.large EC2 instance in the same available zone to store metadata.
-
 在下面的测试结果中，所有 mdtest 均在亚马逊云 c5.large EC2 实例（2 CPU，4G RAM），Ubuntu 18.04 LTS（Kernel 5.4.0）系统上进行，JuiceFS 使用的 Redis（4.0.9版本）实例运行在相同区域的 c5.large EC2 实例上。
 
 JuiceFS 挂载命令：
