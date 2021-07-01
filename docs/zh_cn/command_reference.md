@@ -165,7 +165,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 禁用系统日志 (默认: false)
 
 `--log value`\
-后台运行时日志文件的位置 (默认: /var/log/juicefs.log)
+后台运行时日志文件的位置 (默认: `/var/log/juicefs.log`)
 
 `-o value`\
 其他 FUSE 选项 (参见[此文档](fuse_mount_options.md)来了解更多信息)
