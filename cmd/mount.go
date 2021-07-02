@@ -72,7 +72,7 @@ func installHandler(mp string) {
 func mount(c *cli.Context) error {
 	setLoggerLevel(c)
 	if c.Args().Len() < 1 {
-		logger.Fatalf("Redis URL and mountpoint are required")
+		logger.Fatalf("Meta URL and mountpoint are required")
 	}
 	addr := c.Args().Get(0)
 	if c.Args().Len() < 2 {
