@@ -84,7 +84,7 @@ func gateway(c *cli.Context) error {
 	utils.InitLoggers(false)
 
 	if c.Args().Len() < 2 {
-		logger.Fatalf("Redis URL and listen address are required")
+		logger.Fatalf("Meta URL and listen address are required")
 	}
 	address := c.Args().Get(1)
 	gw = &GateWay{c}
