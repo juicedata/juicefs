@@ -141,7 +141,7 @@ func test(store object.ObjectStorage) error {
 func format(c *cli.Context) error {
 	setLoggerLevel(c)
 	if c.Args().Len() < 1 {
-		logger.Fatalf("Redis URL and name are required")
+		logger.Fatalf("Meta URL and name are required")
 	}
 	m := meta.NewClient(c.Args().Get(0), &meta.Config{Retries: 2})
 
