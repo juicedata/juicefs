@@ -51,13 +51,14 @@ JuiceFS supports Linux, Windows, and MacOS. You can download the latest pre-comp
 Take the x86-based Linux system as an example, download the compressed package containing `linux-amd64` in the file name:
 
 ```shell
-$ wget https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.12.1-linux-amd64.tar.gz
+$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 Unzip and install:
 
 ```shell
-$ tar -zxf juicefs-0.12.1-linux-amd64.tar.gz
+$ tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
