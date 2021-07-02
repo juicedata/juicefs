@@ -53,13 +53,14 @@ JuiceFS 同时支持 Linux、Windows、macOS 三大操作系统平台，你可�
 以 x86 架构的 Linux 系统为例，下载文件名包含 `linux-amd64` 的压缩包：
 
 ```shell
-$ wget https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.12.1-linux-amd64.tar.gz
+$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 解压并安装：
 
 ```shell
-$ tar -zxf juicefs-0.12.1-linux-amd64.tar.gz
+$ tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
