@@ -25,7 +25,8 @@ import (
 	"xorm.io/xorm"
 )
 
-func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
+func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, block bool) syscall.Errno {
+	owner := int64(owner_)
 	if ltype == syscall.F_UNLCK {
 		return errno(m.txn(func(s *xorm.Session) error {
 			_, err := s.Delete(&flock{Inode: inode, Owner: owner, Sid: m.sid})
@@ -47,7 +48,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 			}
 			type key struct {
 				sid uint64
-				o   uint64
+				o   int64
 			}
 			var locks = make(map[key]flock)
 			var l flock
@@ -95,7 +96,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	return err
 }
 
-func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
 	if *ltype == syscall.F_UNLCK {
 		*start = 0
 		*end = 0
@@ -103,13 +104,14 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, star
 		return 0
 	}
 
+	owner := int64(owner_)
 	rows, err := m.engine.Rows(&plock{Inode: inode})
 	if err != nil {
 		return errno(err)
 	}
 	type key struct {
 		sid uint64
-		o   uint64
+		o   int64
 	}
 	var locks = make(map[key][]byte)
 	var l plock
@@ -144,9 +146,10 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, star
 	return 0
 }
 
-func (m *dbMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
 	var err syscall.Errno
 	lock := plockRecord{ltype, pid, start, end}
+	owner := int64(owner_)
 	for {
 		err = errno(m.txn(func(s *xorm.Session) error {
 			if exists, err := s.Get(&node{Inode: inode}); err != nil || !exists {
@@ -182,7 +185,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 			}
 			type key struct {
 				sid   uint64
-				owner uint64
+				owner int64
 			}
 			var locks = make(map[key][]byte)
 			var l plock
