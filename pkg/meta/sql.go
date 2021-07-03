@@ -99,14 +99,14 @@ type xattr struct {
 type flock struct {
 	Inode Ino    `xorm:"notnull unique(flock)"`
 	Sid   uint64 `xorm:"notnull unique(flock)"`
-	Owner uint64 `xorm:"notnull unique(flock)"`
+	Owner int64  `xorm:"notnull unique(flock)"`
 	Ltype byte   `xorm:"notnull"`
 }
 
 type plock struct {
 	Inode   Ino    `xorm:"notnull unique(plock)"`
 	Sid     uint64 `xorm:"notnull unique(plock)"`
-	Owner   uint64 `xorm:"notnull unique(plock)"`
+	Owner   int64  `xorm:"notnull unique(plock)"`
 	Records []byte `xorm:"blob notnull"`
 }
 
@@ -381,7 +381,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 		}
 		s.Flocks = make([]Flock, 0, len(frows))
 		for _, frow := range frows {
-			s.Flocks = append(s.Flocks, Flock{frow.Inode, frow.Owner, string(frow.Ltype)})
+			s.Flocks = append(s.Flocks, Flock{frow.Inode, uint64(frow.Owner), string(frow.Ltype)})
 		}
 
 		if err := m.engine.Find(&prows, &plock{Sid: s.Sid}); err != nil {
@@ -389,7 +389,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 		}
 		s.Plocks = make([]Plock, 0, len(prows))
 		for _, prow := range prows {
-			s.Plocks = append(s.Plocks, Plock{prow.Inode, prow.Owner, prow.Records})
+			s.Plocks = append(s.Plocks, Plock{prow.Inode, uint64(prow.Owner), prow.Records})
 		}
 	}
 	return &s, nil
