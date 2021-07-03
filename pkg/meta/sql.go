@@ -296,6 +296,10 @@ func (m *dbMeta) NewSession() error {
 	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
 		return err
 	}
+	// update the owner from uint64 to int64
+	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
+		logger.Fatalf("update table flock, plock: %s", err)
+	}
 	if m.conf.ReadOnly {
 		return nil
 	}
