@@ -557,15 +557,19 @@ func (m *dbMeta) updateStats(space int64, inodes int64) {
 }
 
 func (m *dbMeta) flushStats() {
+	var inttype = "BIGINT"
+	if m.engine.DriverName() == "mysql" {
+		inttype = "SIGNED"
+	}
 	for {
 		newSpace := atomic.SwapInt64(&m.newSpace, 0)
 		newInodes := atomic.SwapInt64(&m.newInodes, 0)
 		if newSpace != 0 || newInodes != 0 {
 			err := m.txn(func(s *xorm.Session) error {
-				_, err := s.Exec("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN ? ELSE ? END) AS BIGINT) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes)
+				_, err := s.Exec("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN ? ELSE ? END) AS "+inttype+") WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes)
 				return err
 			})
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
 				logger.Warnf("update stats: %s", err)
 				m.updateStats(newSpace, newInodes)
 			}
