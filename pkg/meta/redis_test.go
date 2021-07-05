@@ -184,6 +184,10 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("link f3 -> f: %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f3")
+	if st := m.Link(ctx, inode, 1, "F3", attr); st != 0 { // CaseInsensi = false
+		t.Fatalf("link F3 -> f: %s", st)
+	}
+	_ = m.Unlink(ctx, 1, "F3")
 	if st := m.Link(ctx, parent, 1, "d2", attr); st != syscall.EPERM {
 		t.Fatalf("link d2 -> d: %s", st)
 	}
@@ -545,11 +549,20 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "Foo", 1, "bar", &inode, attr); st != 0 {
 		t.Fatalf("rename Foo to bar should be OK, but got %s", st)
 	}
+	if st := m.Create(ctx, 1, "Foo", 0755, 0, &inode, attr); st != 0 {
+		t.Fatalf("create Foo should be OK")
+	}
 	if st := m.Lookup(ctx, 1, "Bar", &inode, attr); st != 0 {
 		t.Fatalf("lookup Bar should be OK")
 	}
+	if st := m.Link(ctx, inode, 1, "foo", attr); st != syscall.EEXIST {
+		t.Fatalf("link should fail with EEXIST")
+	}
 	if st := m.Unlink(ctx, 1, "Bar"); st != 0 {
 		t.Fatalf("unlink Bar should be OK")
+	}
+	if st := m.Unlink(ctx, 1, "foo"); st != 0 {
+		t.Fatalf("unlink foo should be OK")
 	}
 	if st := m.Mkdir(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("mkdir Foo should be OK")
