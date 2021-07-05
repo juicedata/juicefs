@@ -216,6 +216,11 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("create table flock, plock: %s", err)
 	}
+	if m.engine.DriverName() == "mysql" {
+		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL"); err != nil {
+			logger.Fatalf("alter collate for edge: %s", err)
+		}
+	}
 
 	old, err := m.Load()
 	if err != nil {
@@ -295,6 +300,11 @@ func (m *dbMeta) Load() (*Format, error) {
 func (m *dbMeta) NewSession() error {
 	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
 		return err
+	}
+	if m.engine.DriverName() == "mysql" {
+		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL"); err != nil {
+			return err
+		}
 	}
 	// update the owner from uint64 to int64
 	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
@@ -1120,6 +1130,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if !ok && m.conf.CaseInsensi {
 			if ee := m.resolveCase(ctx, parent, name); ee != nil {
 				ok = true
+				e.Name = string(ee.Name)
 				e.Inode = ee.Inode
 				e.Type = ee.Attr.Typ
 			}
@@ -1154,7 +1165,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			opened = m.of.IsOpen(e.Inode)
 		}
 
-		if _, err := s.Delete(&edge{Parent: parent, Name: name}); err != nil {
+		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
 		if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
@@ -1246,6 +1257,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if ee := m.resolveCase(ctx, parent, name); ee != nil {
 				ok = true
 				e.Inode = ee.Inode
+				e.Name = string(ee.Name)
 				e.Type = ee.Attr.Typ
 			}
 		}
@@ -1280,7 +1292,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		pn.Nlink--
 		pn.Mtime = now
 		pn.Ctime = now
-		if _, err := s.Delete(&edge{Parent: parent, Name: name}); err != nil {
+		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
 		if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
@@ -1324,6 +1336,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				ok = true
 				se.Inode = e.Inode
 				se.Name = string(e.Name)
+				se.Type = e.Attr.Typ
 			}
 		}
 		if !ok {
