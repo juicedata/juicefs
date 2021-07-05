@@ -1746,6 +1746,8 @@ func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr
 			return err
 		} else if err == nil {
 			return syscall.EEXIST
+		} else if err == redis.Nil && r.conf.CaseInsensi && r.resolveCase(ctx, parent, name) != nil {
+			return syscall.EEXIST
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
