@@ -565,7 +565,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 		t.Fatalf("unlink foo should be OK")
 	}
 	if st := m.Mkdir(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {
-		t.Fatalf("mkdir Foo should be OK")
+		t.Fatalf("mkdir Foo should be OK, but got %s", st)
 	}
 	if st := m.Rmdir(ctx, 1, "foo"); st != 0 {
 		t.Fatalf("rmdir foo should be OK")
