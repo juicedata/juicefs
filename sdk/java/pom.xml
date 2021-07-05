@@ -5,7 +5,7 @@
 	<name>juicefs-hadoop</name>
 	<description>Hadoop FileSystem implementation for JuiceFS</description>
 	<artifactId>juicefs-hadoop</artifactId>
-	<version>0.15-dev</version>
+	<version>0.16-dev</version>
 	<packaging>jar</packaging>
 	<properties>
 		<hadoop.version>3.0.0</hadoop.version>
