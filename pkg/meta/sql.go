@@ -216,6 +216,11 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("create table flock, plock: %s", err)
 	}
+	if m.engine.DriverName() == "mysql" {
+		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) NOT NULL COLLATE utf8mb4_0900_as_cs"); err != nil {
+			logger.Fatalf("alter collate for edge: %s", err)
+		}
+	}
 
 	old, err := m.Load()
 	if err != nil {
@@ -295,6 +300,11 @@ func (m *dbMeta) Load() (*Format, error) {
 func (m *dbMeta) NewSession() error {
 	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
 		return err
+	}
+	if m.engine.DriverName() == "mysql" {
+		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) NOT NULL COLLATE utf8mb4_0900_as_cs"); err != nil {
+			return err
+		}
 	}
 	// update the owner from uint64 to int64
 	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
