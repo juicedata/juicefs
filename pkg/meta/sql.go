@@ -569,7 +569,7 @@ func (m *dbMeta) flushStats() {
 				_, err := s.Exec("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN ? ELSE ? END) AS "+inttype+") WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes)
 				return err
 			})
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
 				logger.Warnf("update stats: %s", err)
 				m.updateStats(newSpace, newInodes)
 			}
