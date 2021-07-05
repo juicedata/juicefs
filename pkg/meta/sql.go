@@ -217,7 +217,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		logger.Fatalf("create table flock, plock: %s", err)
 	}
 	if m.engine.DriverName() == "mysql" {
-		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) NOT NULL COLLATE utf8mb4_0900_as_cs"); err != nil {
+		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL"); err != nil {
 			logger.Fatalf("alter collate for edge: %s", err)
 		}
 	}
@@ -302,7 +302,7 @@ func (m *dbMeta) NewSession() error {
 		return err
 	}
 	if m.engine.DriverName() == "mysql" {
-		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) NOT NULL COLLATE utf8mb4_0900_as_cs"); err != nil {
+		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL"); err != nil {
 			return err
 		}
 	}
