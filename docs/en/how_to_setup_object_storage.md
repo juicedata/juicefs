@@ -79,7 +79,7 @@ S3 supports [two style endpoint URI](https://docs.aws.amazon.com/AmazonS3/latest
 
 The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia) is `us-east-1`. You could find all available regions at [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions).
 
-***Note: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.***
+> **Note**: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.
 
 JuiceFS supports both types of endpoint since v0.12 (before v0.12, only virtual hosted-style were supported). So when you format a volume, the `--bucket` option can be either virtual hosted-style URI or path-style URI. For example:
 
@@ -151,7 +151,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-***Note: For Azure China user, the value of `EndpointSuffix` is `core.chinacloudapi.cn`.***
+> **Note**: For Azure China user, the value of `EndpointSuffix` is `core.chinacloudapi.cn`.
 
 ## Backblaze B2 Cloud Storage <span id='backblaze-b2'></span>
 
