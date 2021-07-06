@@ -614,16 +614,16 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
-  private BlockLocation makeLocation(long inode, long start, long len) {
+  private BlockLocation makeLocation(long code, long start, long len) {
     long index = (start + len / 2) / blocksize / 4;
     BlockLocation blockLocation;
     String[] ns = new String[cacheReplica];
     String[] hs = new String[cacheReplica];
-    String host = cachedHosts.getOrDefault(hash.get(inode + "-" + index), "localhost");
+    String host = cachedHosts.getOrDefault(hash.get(code + "-" + index), "localhost");
     ns[0] = host + ":50010";
     hs[0] = host;
     for (int i = 1; i < cacheReplica; i++) {
-      String h = hash.get(inode + "-" + (index + i));
+      String h = hash.get(code + "-" + (index + i));
       ns[i] = h + ":50010";
       hs[i] = h;
     }
@@ -664,12 +664,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (file.getLen() <= start + len) {
       len = file.getLen() - start;
     }
-    long inode = file.getAccessTime() - file.getModificationTime();
+    long code = normalizePath(file.getPath()).hashCode();
     BlockLocation[] locs = new BlockLocation[(int) (len / blocksize) + 2];
     int indx = 0;
     while (len > 0) {
       long blen = len < blocksize ? len : blocksize - start % blocksize;
-      locs[indx] = makeLocation(inode, start, blen);
+      locs[indx] = makeLocation(code, start, blen);
       start += blen;
       len -= blen;
       indx++;
@@ -1378,15 +1378,15 @@ public class JuiceFileSystemImpl extends FileSystem {
     FsPermission perm = new FsPermission((short) ((mode & 0777) | (stickybit << 9)));
     long length = buf.getLongLong(4);
     long mtime = buf.getLongLong(12);
-    long inode = buf.getLongLong(20);
+    long atime = buf.getLongLong(20);
     String user = buf.getString(28);
     String group = buf.getString(28 + user.length() + 1);
     assert (30 + user.length() + group.length() == size);
     if (readlink && ((mode >> 27) & 1) == 1) {
-      return new FileStatus(length, isdir, 1, blocksize, mtime, mtime + inode, perm, user, group,
+      return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group,
               getLinkTarget(p), p);
     } else {
-      return new FileStatus(length, isdir, 1, blocksize, mtime, mtime + inode, perm, user, group, p);
+      return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group, p);
     }
   }
 
