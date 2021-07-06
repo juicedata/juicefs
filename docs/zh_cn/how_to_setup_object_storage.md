@@ -79,7 +79,7 @@ S3 支持  [两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/Amaz
 
 其中 `<region>` 要替换成实际的区域代码，比如：美国西部（俄勒冈）的区域代码为 `us-west-2`。[点此查看](https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions)所有的区域代码。
 
-**注意**：AWS 中国的用户，应使用 `amazonaws.com.cn` 域名。相应的区域代码信息[点此查看](https://docs.amazonaws.cn/aws/latest/userguide/endpoints-arns.html)。
+> **注意**：AWS 中国的用户，应使用 `amazonaws.com.cn` 域名。相应的区域代码信息[点此查看](https://docs.amazonaws.cn/aws/latest/userguide/endpoints-arns.html)。
 
 JuiceFS v0.12 之前的版本仅支持虚拟托管类型。v0.12 以及之后的版本两种风格都支持。因此，在创建文件系统时，`--bucket` 选项既可以使用虚拟托管类型的链接，也可以使用路径类型的链接，例如：
 
