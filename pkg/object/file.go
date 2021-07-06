@@ -151,11 +151,6 @@ func (d *filestore) Delete(key string) error {
 	return err
 }
 
-func isSymlinkAndDir(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.IsDir()
-}
-
 // walk recursively descends path, calling w.
 func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 	err := walkFn(path, info, nil)
@@ -170,25 +165,16 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 		return nil
 	}
 
-	names, err := readDirNames(path)
+	infos, err := readDirSorted(path)
 	if err != nil {
 		return walkFn(path, info, err)
 	}
 
-	for _, name := range names {
-		filename := filepath.Join(path, name)
-		fileInfo, err := os.Stat(filename)
-		if err != nil {
-			if err := walkFn(filename, fileInfo, err); err != nil && err != filepath.SkipDir {
-				return err
-			}
-		} else {
-			err = walk(filename, fileInfo, walkFn)
-			if err != nil {
-				if !fileInfo.IsDir() || err != filepath.SkipDir {
-					return err
-				}
-			}
+	for _, fi := range infos {
+		p := filepath.Join(path, fi.Name())
+		err = walk(p, fi, walkFn)
+		if err != nil && err != filepath.SkipDir {
+			return err
 		}
 	}
 	return nil
@@ -213,28 +199,37 @@ func Walk(root string, walkFn filepath.WalkFunc) error {
 	return err
 }
 
-// readDirNames reads the directory named by dirname and returns
+type mInfo struct {
+	name string
+	os.FileInfo
+}
+
+func (m *mInfo) Name() string {
+	return m.name
+}
+
+// readDirSorted reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func readDirNames(dirname string) ([]string, error) {
+func readDirSorted(dirname string) ([]os.FileInfo, error) {
 	f, err := os.Open(dirname)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	fi, err := f.Readdir(-1)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, len(fi))
-	for i := range fi {
-		if fi[i].IsDir() || isSymlinkAndDir(filepath.Join(dirname, fi[i].Name())) {
-			names[i] = fi[i].Name() + dirSuffix
-		} else {
-			names[i] = fi[i].Name()
+	fis, err := f.Readdir(-1)
+	for i, fi := range fis {
+		if !fi.IsDir() && !fi.Mode().IsRegular() {
+			// follow symlink
+			f, _ := os.Stat(filepath.Join(dirname, fi.Name()))
+			fi = &mInfo{fi.Name(), f}
+			fis[i] = fi
+		}
+		if fi.IsDir() {
+			fis[i] = &mInfo{fi.Name() + dirSuffix, fi}
 		}
 	}
-	sort.Strings(names)
-	return names, nil
+	sort.Slice(fis, func(i, j int) bool { return fis[i].Name() < fis[j].Name() })
+	return fis, err
 }
 
 func (d *filestore) List(prefix, marker string, limit int64) ([]Object, error) {
