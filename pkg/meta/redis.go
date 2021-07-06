@@ -1673,7 +1673,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 							pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(dino)))
 						} else {
-							pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, dattr.Length)})
+							pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, tattr.Length)})
 							pipe.Del(ctx, r.inodeKey(dino))
 							pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
 							pipe.Decr(ctx, totalInodes)
