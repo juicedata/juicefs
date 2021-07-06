@@ -1705,7 +1705,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 				r.removedFiles[dino] = true
 				r.Unlock()
 			} else {
-				go r.deleteFile(dino, dattr.Length, "")
+				go r.deleteFile(dino, tattr.Length, "")
 			}
 		}
 		return err
