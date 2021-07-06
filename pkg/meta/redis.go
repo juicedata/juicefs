@@ -2777,18 +2777,27 @@ func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 }
 
 func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) syscall.Errno {
+	if name == "" {
+		return syscall.EINVAL
+	}
 	inode = r.checkRoot(inode)
 	_, err := r.rdb.HSet(ctx, r.xattrKey(inode), name, value).Result()
 	return errno(err)
 }
 
 func (r *redisMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
+	if name == "" {
+		return syscall.EINVAL
+	}
 	inode = r.checkRoot(inode)
 	n, err := r.rdb.HDel(ctx, r.xattrKey(inode), name).Result()
-	if n == 0 {
-		err = ENOATTR
+	if err != nil {
+		return errno(err)
+	} else if n == 0 {
+		return ENOATTR
+	} else {
+		return 0
 	}
-	return errno(err)
 }
 
 func (r *redisMeta) checkServerConfig() {

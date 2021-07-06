@@ -2374,10 +2374,13 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	inode = m.checkRoot(inode)
 	return errno(m.txn(func(s *xorm.Session) error {
 		n, err := s.Delete(&xattr{Inode: inode, Name: name})
-		if n == 0 {
-			err = ENOATTR
+		if err != nil {
+			return err
+		} else if n == 0 {
+			return ENOATTR
+		} else {
+			return nil
 		}
-		return err
 	}))
 }
 
