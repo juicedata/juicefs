@@ -42,6 +42,8 @@ Data cache is also provided in JuiceFS to improve performance, including page ca
 
 ### Data Cache in Kernel
 
+> **Note**: This feature requires JuiceFS >= 0.15.0.
+
 Kernel will cache content of recently visited files automatically. When the file is reopened and its modification time (mtime) hasn't changed, the content can be fetched from kernel cache directly for best performance.
 
 Reading the same file in JuiceFS repeatedly will be extremely fast, with milliseconds latency and gigabytes throughput.
