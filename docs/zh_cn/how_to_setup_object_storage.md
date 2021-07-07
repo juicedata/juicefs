@@ -517,7 +517,7 @@ $ sudo apt-get install librados-dev
 $ sudo yum install librados-devel
 ```
 
-然后为 Ceph 编译 JuiceFS（要求 Go 1.14+ 和 GCC 5.4+）：
+然后为 Ceph 编译 JuiceFS（要求 Go 1.15+ 和 GCC 5.4+）：
 
 ```bash
 $ make juicefs.ceph
