@@ -933,6 +933,12 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
+		if length == t.Length {
+			if attr != nil {
+				*attr = t
+			}
+			return nil
+		}
 		old := t.Length
 		var zeroChunks []uint32
 		if length > old {
