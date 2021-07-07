@@ -843,18 +843,20 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			}
 			var c chunk
 			var zeroChunks []uint32
-			rows, err := s.Where("inode = ? AND indx > ? AND indx < ?", inode, old/ChunkSize, length/ChunkSize).Cols("indx").Rows(&c)
-			if err != nil {
-				return err
-			}
-			for rows.Next() {
-				if err = rows.Scan(&c); err != nil {
-					rows.Close()
+			if length/ChunkSize-old/ChunkSize > 1 {
+				rows, err := s.Where("inode = ? AND indx > ? AND indx < ?", inode, old/ChunkSize, length/ChunkSize).Cols("indx").Rows(&c)
+				if err != nil {
 					return err
 				}
-				zeroChunks = append(zeroChunks, c.Indx)
+				for rows.Next() {
+					if err = rows.Scan(&c); err != nil {
+						rows.Close()
+						return err
+					}
+					zeroChunks = append(zeroChunks, c.Indx)
+				}
+				rows.Close()
 			}
-			rows.Close()
 
 			l := uint32(length - old)
 			if length > (old/ChunkSize+1)*ChunkSize {
