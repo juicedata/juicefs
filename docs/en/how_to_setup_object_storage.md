@@ -510,7 +510,7 @@ $ sudo apt-get install librados-dev
 $ sudo yum install librados-devel
 ```
 
-Then compile JuiceFS for Ceph (ensure you have Go 1.14+ and GCC 5.4+):
+Then compile JuiceFS for Ceph (ensure you have Go 1.15+ and GCC 5.4+):
 
 ```bash
 $ make juicefs.ceph
