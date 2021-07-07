@@ -6,21 +6,15 @@ import com.beust.jcommander.Parameters;
 import com.sun.management.OperatingSystemMXBean;
 import org.apache.commons.cli.ParseException;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.VersionInfo;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
-import java.net.URI;
 import java.nio.file.*;
 import java.text.DecimalFormat;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.SynchronousQueue;
 import java.util.stream.Stream;
 
 public class Main {
@@ -278,257 +272,11 @@ public class Main {
     public abstract String getCommand();
   }
 
-  @Parameters(commandDescription = "BenchMark FileSystem")
-  private static class CommandBenchmark extends Command {
-
-    @Parameter(names = {"--fs", "-fs"}, description = "FileSystem")
-    String fs;
-
-    @Parameter(names = {"--big-file-size", "-big-file-size"})
-    float bigFileSizeMiB = 1024;
-
-    @Parameter(names = {"--small-file-size", "-small-file-size"})
-    float smallFileSizeMiB = 0.1f;
-
-    @Parameter(names = {"--small-file-count", "-small-file-count"})
-    int smallFileCount = 100;
-
-    @Parameter(names = {"--threads", "-threads"})
-    int threads = 1;
-
-    @Parameter(names = {"--bufferSize", "-bufferSize"})
-    int bufferSizeMiB = 1;
-
-    private final String BIG_FILE_BASE_PATH = "/tmp/jfs-bench-big-file";
-    private final String SMALL_FILE_BASE_PATH = "/tmp/jfs-bench-small-file";
-
-    private Configuration conf;
-    private org.apache.hadoop.fs.FileSystem fileSystem;
-    private ExecutorService threadPool;
-    private byte[] buffer;
-    private int bufferSize;
-
-    private void init() {
-      if (conf == null) {
-        this.conf = new Configuration();
-        this.threadPool = Executors.newFixedThreadPool(threads, r -> {
-          Thread t = new Thread(r, "io thread");
-          t.setDaemon(true);
-          return t;
-        });
-        bufferSize = bufferSizeMiB << 20;
-        buffer = new byte[bufferSize];
-        try {
-          fileSystem = org.apache.hadoop.fs.FileSystem.newInstance(URI.create(fs), conf);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-    }
-
-    private void write(String prefix, long fileSize, int count, int threads) throws IOException {
-      int blocks = (int) ((fileSize + bufferSize - 1) / bufferSize) * threads * count;
-      SynchronousQueue<Integer> queue = new SynchronousQueue<>();
-      for (int i = 0; i < threads; i++) {
-        String dir = prefix + "/thread-" + i;
-        fileSystem.mkdirs(new org.apache.hadoop.fs.Path(dir));
-        threadPool.execute(() -> {
-          for (int j = 0; j < count; j++) {
-            String fileName = dir + "/file-" + j;
-            try (FSDataOutputStream out = fileSystem.create(new org.apache.hadoop.fs.Path(fileName), false, bufferSize)) {
-              long nrRemaining;
-              for (nrRemaining = fileSize; nrRemaining > 0; nrRemaining -= bufferSize) {
-                int curSize = (bufferSize < nrRemaining) ? bufferSize : (int) nrRemaining;
-                out.write(buffer, 0, curSize);
-                queue.put(1);
-              }
-            } catch (IOException e) {
-              e.printStackTrace();
-              System.exit(1);
-            } catch (InterruptedException ignored) {
-            }
-          }
-        });
-      }
-      print(blocks, queue);
-    }
-
-    private void read(String prefix, long fileSize, int count, int threads) throws IOException {
-      int blocks = (int) ((fileSize + bufferSize - 1) / bufferSize) * threads * count;
-      SynchronousQueue<Integer> queue = new SynchronousQueue<>();
-      for (int i = 0; i < threads; i++) {
-        String dir = prefix + "/thread-" + i;
-        threadPool.execute(() -> {
-          for (int j = 0; j < count; j++) {
-            String fileName = dir + "/file-" + j;
-            try (FSDataInputStream in = fileSystem.open(new org.apache.hadoop.fs.Path(fileName), bufferSize)) {
-              long nrRemaining;
-              for (nrRemaining = fileSize; nrRemaining > 0; nrRemaining -= bufferSize) {
-                int curSize = (bufferSize < nrRemaining) ? bufferSize : (int) nrRemaining;
-                in.readFully(buffer, 0, curSize);
-                queue.put(1);
-              }
-            } catch (IOException e) {
-              e.printStackTrace();
-              System.exit(1);
-            } catch (InterruptedException ignored) {
-            }
-          }
-        });
-      }
-      print(blocks, queue);
-    }
-
-    private void stat(String prefix, int count, int threads) throws IOException {
-      int blocks = threads * count;
-      SynchronousQueue<Integer> queue = new SynchronousQueue<>();
-      for (int i = 0; i < threads; i++) {
-        String dir = prefix + "/thread-" + i;
-        fileSystem.mkdirs(new org.apache.hadoop.fs.Path(dir));
-        threadPool.execute(() -> {
-          for (int j = 0; j < count; j++) {
-            String fileName = dir + "/file-" + j;
-            try {
-              fileSystem.getFileStatus(new org.apache.hadoop.fs.Path(fileName));
-              queue.put(1);
-            } catch (IOException e) {
-              e.printStackTrace();
-              System.exit(1);
-            } catch (InterruptedException ignored) {
-            }
-          }
-        });
-      }
-      print(blocks, queue);
-    }
-
-    private void print(int blocks, SynchronousQueue<Integer> queue) {
-      int finished = 0;
-      while (finished < blocks) {
-        try {
-          finished += queue.take();
-        } catch (InterruptedException e) {
-          return;
-        }
-        int ratio = finished * 100 / blocks;
-        System.out.print(ratio + "%");
-        for (int j = 0; j <= String.valueOf(ratio).length(); j++) {
-          System.out.print("\b");
-        }
-      }
-    }
-
-    void writeBigFile() {
-      System.out.print("writing files ");
-      long cost;
-      try {
-        fileSystem.delete(new org.apache.hadoop.fs.Path(BIG_FILE_BASE_PATH), true);
-        long start = System.currentTimeMillis();
-        long fileSize = (long) bigFileSizeMiB * 1024 * 1024;
-        write(BIG_FILE_BASE_PATH, fileSize, 1, threads);
-        long end = System.currentTimeMillis();
-        cost = end - start;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-      System.out.printf("\rWritten %d * 1 big files (%.0f MiB): (%.1f MiB/s)%n",
-              threads, bigFileSizeMiB, (threads * bigFileSizeMiB * 1000) / cost);
-    }
-
-
-    void readBigFile() {
-      System.out.print("reading files ");
-      long cost;
-      try {
-        long start = System.currentTimeMillis();
-        long fileSize = (long) bigFileSizeMiB * 1024 * 1024;
-        read(BIG_FILE_BASE_PATH, fileSize, 1, threads);
-        long end = System.currentTimeMillis();
-        cost = end - start;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-      System.out.printf("\rRead %d * 1 big files (%.0f MiB): (%.1f MiB/s)%n",
-              threads, bigFileSizeMiB, (threads * bigFileSizeMiB * 1000) / cost);
-
-    }
-
-    void writeSmallFiles() {
-      System.out.print("writing small files ");
-      long cost;
-      try {
-        fileSystem.delete(new org.apache.hadoop.fs.Path(SMALL_FILE_BASE_PATH), true);
-        long start = System.currentTimeMillis();
-        long fileSize = (long) (smallFileSizeMiB * 1024 * 1024);
-        write(SMALL_FILE_BASE_PATH, fileSize, smallFileCount, threads);
-        long end = System.currentTimeMillis();
-        cost = end - start;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-
-      System.out.printf("\rWritten %d * %d small files (%.0f KiB): (%.1f files/s), %.2f ms for each file%n",
-              threads, smallFileCount, smallFileSizeMiB * 1024, (float) (threads * smallFileCount) * 1000 / cost, (float) cost / (threads * smallFileCount));
-    }
-
-    void readSmallFiles() {
-      System.out.print("reading small files ");
-      long cost;
-      try {
-        long start = System.currentTimeMillis();
-        long fileSize = (long) (smallFileSizeMiB * 1024 * 1024);
-        read(SMALL_FILE_BASE_PATH, fileSize, smallFileCount, threads);
-        long end = System.currentTimeMillis();
-        cost = end - start;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-      System.out.printf("\rRead %d * %d small files (%.0f KiB): (%.1f files/s), %.2f ms for each file%n",
-              threads, smallFileCount, smallFileSizeMiB * 1024, (float) (threads * smallFileCount) * 1000 / cost, (float) cost / (threads * smallFileCount));
-    }
-
-    void statFiles() {
-      System.out.print("stating files ");
-      long cost;
-      try {
-        long start = System.currentTimeMillis();
-        stat(SMALL_FILE_BASE_PATH, smallFileCount, threads);
-        long end = System.currentTimeMillis();
-        cost = end - start;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-      System.out.printf("\rStated %d * %d files: (%.1f files/s), %.2f ms for each file%n",
-              threads, smallFileCount, (float) (threads * smallFileCount) * 1000 / cost, (float) cost / (threads * smallFileCount));
-    }
-
-    public void run() {
-      init();
-      writeBigFile();
-      readBigFile();
-      writeSmallFiles();
-      readSmallFiles();
-      statFiles();
-    }
-
-    @Override
-    public String getCommand() {
-      return "bench";
-    }
-
-    @Override
-    public void close() throws IOException {
-      threadPool.shutdown();
-    }
-  }
-
   public static void main(String[] args) throws ParseException, IOException {
     Main main = new Main();
-    Command benchmark = new CommandBenchmark();
     Command showInfo = new CommandShowInfo();
     JCommander jc = JCommander.newBuilder()
             .addObject(main)
-            .addCommand(benchmark.getCommand(), benchmark)
             .addCommand(showInfo.getCommand(), showInfo)
             .build();
     jc.parse(args);
