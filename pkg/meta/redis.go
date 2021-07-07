@@ -1062,6 +1062,8 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		}
 		t.Length = length
 		now := time.Now()
+		t.Mtime = now.Unix()
+		t.Mtimensec = uint32(now.Nanosecond())
 		t.Ctime = now.Unix()
 		t.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -2067,6 +2069,9 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return err
 		}
 		r.parseAttr(a, &attr)
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		var added int64
 		if newleng > attr.Length {
