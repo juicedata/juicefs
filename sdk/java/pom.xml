@@ -41,6 +41,10 @@
 							<pattern>org.objectweb.asm</pattern>
 							<shadedPattern>juice.org.objectweb.asm</shadedPattern>
 						</relocation>
+						<relocation>
+							<pattern>com.beust</pattern>
+							<shadedPattern>juice.com.beust</shadedPattern>
+						</relocation>
 					</relocations>
 				</configuration>
 			</plugin>
@@ -50,6 +54,18 @@
 				<configuration>
 					<source>8</source>
 					<target>8</target>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<addClasspath>true</addClasspath>
+							<mainClass>io.juicefs.Main</mainClass> <!-- 你的主类名 -->
+						</manifest>
+					</archive>
 				</configuration>
 			</plugin>
 		</plugins>
@@ -118,6 +134,11 @@
 			<groupId>org.javassist</groupId>
 			<artifactId>javassist</artifactId>
 			<version>3.25.0-GA</version>
+		</dependency>
+		<dependency>
+			<groupId>com.beust</groupId>
+			<artifactId>jcommander</artifactId>
+			<version>1.81</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hive</groupId>
