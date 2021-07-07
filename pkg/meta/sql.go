@@ -835,51 +835,51 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			m.parseAttr(&n, attr)
 			return nil
 		}
-
-		if length < n.Length {
+		old := n.Length
+		newSpace = align4K(length) - align4K(old)
+		if length > old {
+			if m.checkQuota(newSpace, 0) {
+				return syscall.ENOSPC
+			}
 			var c chunk
-			indx := uint32(length / ChunkSize)
-			var buf []byte
-			if uint32(n.Length/ChunkSize) == indx {
-				buf = marshalSlice(uint32(length%ChunkSize), 0, 0, 0, uint32(n.Length-length))
-			} else {
-				buf = marshalSlice(uint32(length%ChunkSize), 0, 0, 0, ChunkSize-uint32(length%ChunkSize))
-			}
-			err = m.appendSlice(s, inode, indx, buf)
-			if err != nil {
-				return err
-			}
-			var indexes []uint32
-			rows, err := s.Where("inode = ? AND indx > ?", inode, indx).Cols("indx").Rows(&c)
+			var zeroChunks []uint32
+			rows, err := s.Where("inode = ? AND indx > ? AND indx < ?", inode, old/ChunkSize, length/ChunkSize).Cols("indx").Rows(&c)
 			if err != nil {
 				return err
 			}
 			for rows.Next() {
-				err = rows.Scan(&c)
-				if err != nil {
+				if err = rows.Scan(&c); err != nil {
 					rows.Close()
 					return err
 				}
-				indexes = append(indexes, c.Indx)
+				zeroChunks = append(zeroChunks, c.Indx)
 			}
 			rows.Close()
-			for _, indx := range indexes {
-				err = m.appendSlice(s, inode, indx, marshalSlice(0, 0, 0, 0, ChunkSize))
-				if err != nil {
+
+			l := uint32(length - old)
+			if length > (old/ChunkSize+1)*ChunkSize {
+				l = ChunkSize - uint32(old%ChunkSize)
+			}
+			if err = m.appendSlice(s, inode, uint32(old/ChunkSize), marshalSlice(uint32(old%ChunkSize), 0, 0, 0, l)); err != nil {
+				return err
+			}
+			buf := marshalSlice(0, 0, 0, 0, ChunkSize)
+			for _, indx := range zeroChunks {
+				if err = m.appendSlice(s, inode, indx, buf); err != nil {
+					return err
+				}
+			}
+			if length > (old/ChunkSize+1)*ChunkSize && length%ChunkSize > 0 {
+				if err = m.appendSlice(s, inode, uint32(length/ChunkSize), marshalSlice(0, 0, 0, 0, uint32(length%ChunkSize))); err != nil {
 					return err
 				}
 			}
 		}
-		newSpace = align4K(length) - align4K(n.Length)
-		if m.checkQuota(newSpace, 0) {
-			return syscall.ENOSPC
-		}
-		now := time.Now().UnixNano() / 1e3
 		n.Length = length
+		now := time.Now().UnixNano() / 1e3
 		n.Mtime = now
 		n.Ctime = now
-		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: n.Inode})
-		if err != nil {
+		if _, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: n.Inode}); err != nil {
 			return err
 		}
 		m.parseAttr(&n, attr)
@@ -1742,7 +1742,7 @@ func (m *dbMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.
 		return 0
 	}
 	var err syscall.Errno
-	if attr != nil {
+	if attr != nil && !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}
 	if err == 0 {
