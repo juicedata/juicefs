@@ -34,7 +34,6 @@ public class Main {
 
     @Override
     public void close() throws IOException {
-
     }
 
     static class CacheDisk {
@@ -120,7 +119,7 @@ public class Main {
         DecimalFormat df = new DecimalFormat("0.00");
         float freeRatio = (float) freeSize / diskSize;
         final StringJoiner sj = new StringJoiner("\n");
-        sj.add(name + ":");
+        sj.add("    " + name + ":");
         if (cacheDirs.size() == 1) {
           sj.add("\tcacheDir=" + cacheDirs.get(0));
         } else {
@@ -141,7 +140,7 @@ public class Main {
     }
 
     private void showJFSConf() {
-      System.out.println("######## JUICEFS CONF ########");
+      System.out.println("JUICEFS CONF:");
       Map<String, String> jfsConf = conf.getValByRegex("juicefs*");
       StringBuilder sb = new StringBuilder();
       for (Map.Entry<String, String> entry : jfsConf.entrySet()) {
@@ -151,23 +150,23 @@ public class Main {
     }
 
     private void showCacheInfo() {
-      System.out.println("######## CACHE INFO ########");
+      System.out.println("CACHE INFO:");
       final Map<String, String> cacheDir = conf.getValByRegex("juicefs.*cache-dir");
       final Map<String, String> cacheSize = conf.getValByRegex("juicefs.*cache-size");
 
       for (Map.Entry<String, String> entry : cacheSize.entrySet()) {
         String jfsName = entry.getKey().split("\\.").length == 3 ? entry.getKey().split("\\.")[1] : "";
         if (!jfsName.equals("")) {
-          System.out.println("######## " + jfsName);
+          System.out.println("- " + jfsName);
         }
-        System.out.println("cacheSize=" + cacheSize.getOrDefault("juicefs." + jfsName + ".cache-size",
+        System.out.println("\tcacheSize=" + cacheSize.getOrDefault("juicefs." + jfsName + ".cache-size",
                 cacheSize.getOrDefault("juicefs.cache-size", "1024")) + "MiB");
       }
 
       for (Map.Entry<String, String> entry : cacheDir.entrySet()) {
         String jfsName = entry.getKey().split("\\.").length == 3 ? entry.getKey().split("\\.")[1] : "";
         if (!jfsName.equals("")) {
-          System.out.println("######## " + jfsName);
+          System.out.println("- " + jfsName);
         }
         Map<String, List<String>> disk2Dirs = new HashMap<>();
         List<String> expandDirs = new ArrayList<>();
@@ -191,7 +190,6 @@ public class Main {
       }
       try {
         String pname = Shell.execCommand("sh", "-c", "df -P " + dir + " | tail -1 | cut -d' ' -f 1 | rev | cut -d '/' -f 1 | rev").trim();
-        System.out.println(pname + " xxxxxxxxxxxxxxxxx");
         return Shell.execCommand("sh", "-c", "basename \"$(readlink -f \"/sys/class/block/" + pname + "/..\")\"").trim();
       } catch (IOException e) {
         throw new RuntimeException(e);
@@ -237,7 +235,7 @@ public class Main {
     }
 
     private void showEnv() throws IOException {
-      System.out.println("######## ENV ########");
+      System.out.println("ENV");
       Map<String, String> env = new LinkedHashMap<>();
 
       env.put("cpu", String.valueOf(Runtime.getRuntime().availableProcessors()));
@@ -246,9 +244,10 @@ public class Main {
       env.put("total_mem", (osmxb.getTotalPhysicalMemorySize() >> 30) + "GiB");
       env.put("free_mem", (osmxb.getFreePhysicalMemorySize() >> 30) + "GiB");
       env.put("file.encoding", System.getProperty("file.encoding"));
-      env.put("os", System.getProperty("os.name"));
       env.put("linux", Shell.execCommand("uname", "-r").trim());
       env.put("hadoop", VersionInfo.getVersion());
+      env.put("java.version", System.getProperty("java.version"));
+      env.put("java.home", System.getProperty("java.home"));
 
       StringBuilder sb = new StringBuilder();
       for (Map.Entry<String, String> entry : env.entrySet()) {
