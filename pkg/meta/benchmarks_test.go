@@ -29,6 +29,7 @@ const (
 	sqlAddr = "sqlite3://juicefs.db"
 	// sqlAddr = "mysql://root:@/juicefs" // MySQL
 	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/juicefs" // TiDB
+	kvAddr = "tikv://127.0.0.1:2379"
 )
 
 /*
@@ -593,6 +594,11 @@ func BenchmarkSQLDir(b *testing.B) {
 	benchmarkDir(b, m)
 }
 
+func BenchmarkKVDir(b *testing.B) {
+	m := NewClient(kvAddr, &Config{})
+	benchmarkDir(b, m)
+}
+
 func benchmarkFile(b *testing.B, m Meta) {
 	_ = m.Init(Format{Name: "benchmarkFile"}, true)
 	_ = m.NewSession()
@@ -616,6 +622,11 @@ func BenchmarkSQLFile(b *testing.B) {
 	benchmarkFile(b, m)
 }
 
+func BenchmarkKVFile(b *testing.B) {
+	m := NewClient(kvAddr, &Config{})
+	benchmarkFile(b, m)
+}
+
 func benchmarkXattr(b *testing.B, m Meta) {
 	_ = m.Init(Format{Name: "benchmarkXattr"}, true)
 	_ = m.NewSession()
@@ -633,6 +644,11 @@ func BenchmarkRedisXattr(b *testing.B) {
 
 func BenchmarkSQLXattr(b *testing.B) {
 	m := NewClient(sqlAddr, &Config{})
+	benchmarkXattr(b, m)
+}
+
+func BenchmarkKVXattr(b *testing.B) {
+	m := NewClient(kvAddr, &Config{})
 	benchmarkXattr(b, m)
 }
 
@@ -655,6 +671,11 @@ func BenchmarkSQLLink(b *testing.B) {
 	benchmarkLink(b, m)
 }
 
+func BenchmarkKVLink(b *testing.B) {
+	m := NewClient(kvAddr, &Config{})
+	benchmarkLink(b, m)
+}
+
 func benchmarkData(b *testing.B, m Meta) {
 	_ = m.Init(Format{Name: "benchmarkData"}, true)
 	_ = m.NewSession()
@@ -671,5 +692,10 @@ func BenchmarkRedisData(b *testing.B) {
 
 func BenchmarkSQLData(b *testing.B) {
 	m := NewClient(sqlAddr, &Config{})
+	benchmarkData(b, m)
+}
+
+func BenchmarkKVData(b *testing.B) {
+	m := NewClient(kvAddr, &Config{})
 	benchmarkData(b, m)
 }

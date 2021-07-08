@@ -342,11 +342,17 @@ func NewClient(uri string, conf *Config) Meta {
 		if p < 0 {
 			logger.Fatalf("invalid uri: %s", uri)
 		}
-		driver := uri[:p]
-		if driver == "postgres" {
+		switch driver := uri[:p]; driver {
+		case "postgres":
 			m, err = newSQLMeta(driver, uri, conf)
-		} else {
+		case "mysql":
+			fallthrough
+		case "sqlite3":
 			m, err = newSQLMeta(driver, uri[p+3:], conf)
+		case "tikv":
+			m, err = newKVMeta(driver, uri[p+3:], conf)
+		default:
+			logger.Fatalf("Invalid driver: %s", driver)
 		}
 	}
 	if err != nil {

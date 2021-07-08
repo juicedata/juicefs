@@ -34,7 +34,7 @@ require (
 	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
 	github.com/lib/pq v1.8.0
 	github.com/mattn/go-isatty v0.0.12
-	github.com/mattn/go-sqlite3 v1.14.0
+	github.com/mattn/go-sqlite3 v2.0.1+incompatible
 	github.com/minio/cli v1.22.0
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go v6.0.14+incompatible
@@ -51,15 +51,16 @@ require (
 	github.com/shirou/gopsutil v3.21.3+incompatible // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
+	github.com/tikv/client-go/v2 v2.0.0-alpha
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
 	github.com/upyun/go-sdk/v3 v3.0.2
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible
 	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392
-	golang.org/x/net v0.0.0-20201216054612-986b41b23924
+	golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
-	golang.org/x/sys v0.0.0-20210316164454-77fc1eacc6aa
+	golang.org/x/sys v0.0.0-20210324051608-47abb6519492
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 	google.golang.org/api v0.5.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
@@ -67,4 +68,5 @@ require (
 )
 
 replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20210222051636-e7cabdf948f4
+
 replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20210629082323-0ec79f5f0a45
