@@ -1,23 +1,22 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+/*
+ * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
+ *
+ * This program is free software: you can use, redistribute, and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3
+ * or later ("AGPL"), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 package io.juicefs.bench;
 
+import com.beust.jcommander.Parameter;
+import com.beust.jcommander.Parameters;
+import io.juicefs.Main;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -32,7 +31,10 @@ import org.apache.hadoop.io.SequenceFile.CompressionType;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.*;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -41,44 +43,33 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * This program executes a specified operation that applies load to
- * the NameNode.
- * <p>
- * When run simultaneously on multiple nodes, this program functions
- * as a stress-test and benchmark for namenode, especially when
- * the number of bytes written to each file is small.
- * <p>
- * Valid operations are:
- * create_write
- * open_read
- * rename
- * delete
- * <p>
- * NOTE: The open_read, rename and delete operations assume that the files
- * they operate on are already available. The create_write operation
- * must be run before running the other operations.
- */
-
-public class NNBench {
+@Parameters(commandDescription = "Distributed create/open/rename/delete meta benchmark")
+public class NNBench extends Main.Command {
   private static final Log LOG = LogFactory.getLog(
           NNBench.class);
 
   protected static String CONTROL_DIR_NAME = "control";
   protected static String OUTPUT_DIR_NAME = "output";
   protected static String DATA_DIR_NAME = "data";
-  protected static final String DEFAULT_RES_FILE_NAME = "NNBench_results.log";
-  protected static final String NNBENCH_VERSION = "Meta Benchmark 1.0";
 
-  public static String operation = "none";
-  public static long numberOfMaps = 1l; // default is 1
-  public static long numberOfReduces = 1l; // default is 1
   public static long startTime =
-          System.currentTimeMillis() + (20 * 1000); // default is 'now' + 1min
-  public static long numberOfFiles = 1l; // default is 1
-  public static String baseDir = "/benchmarks/NNBench";  // default
-  public static int threadsPerMap = 1;
-  public static boolean deleteBeforeRename = false;
+          System.currentTimeMillis() + (30 * 1000); // default is 'now' + 30s
+
+  @Parameter(description = "[create | open | rename | delete]", required = true)
+  public static String operation;
+  @Parameter(names = {"-maps"}, description = "number of maps")
+  public long numberOfMaps = 1l; // default is 1
+  @Parameter(names = {"-files"}, description = "number of files per thread")
+  public long numberOfFiles = 1l; // default is 1
+  @Parameter(names = {"-threads"}, description = "threads per map")
+  public int threadsPerMap = 1;
+  public long numberOfReduces = 1l; // default is 1
+  @Parameter(names = {"-baseDir"}, description = "full path of dir on FileSystem", required = true)
+  public String baseDir = "/benchmarks/NNBench";  // default
+  @Parameter(names = {"-deleteBeforeRename"}, description = "delete files before or after rename operation")
+  public static boolean deleteBeforeRename;
+  @Parameter(names = {"-local"}, description = "run in local single process")
+  private boolean local;
 
   // Supported operations
   private static final String OP_CREATE = "create";
@@ -98,7 +89,7 @@ public class NNBench {
    *
    * @throws IOException on error
    */
-  private static void cleanupBeforeTestrun() throws IOException {
+  private void cleanupBeforeTestrun() throws IOException {
     FileSystem tempFS = new Path(baseDir).getFileSystem(config);
 
     // Delete the data directory only if it is the create/write operation
@@ -116,7 +107,7 @@ public class NNBench {
    *
    * @throws IOException on error
    */
-  private static void createControlFiles() throws IOException {
+  private void createControlFiles() throws IOException {
     FileSystem tempFS = new Path(baseDir).getFileSystem(config);
     LOG.info("Creating " + numberOfMaps + " control files");
 
@@ -139,130 +130,11 @@ public class NNBench {
   }
 
   /**
-   * Display version
-   */
-  private static void displayVersion() {
-    System.out.println(NNBENCH_VERSION);
-  }
-
-  /**
-   * Display usage
-   */
-  private static void displayUsage() {
-    String usage =
-            "Usage: nnbench <options>\n" +
-                    "Options:\n" +
-                    "\t-operation <Available operations are " + OP_CREATE + " " +
-                    OP_OPEN + " " + OP_RENAME + " " + OP_DELETE + ". " +
-                    "This option is mandatory>\n" +
-                    "\t * NOTE: The open, rename and delete operations assume " +
-                    "that the files they operate on, are already available. " +
-                    "The create operation must be run before running the " +
-                    "other operations.\n" +
-                    "\t-maps <number of maps. default is 1. This is not mandatory>\n" +
-                    "\t-reduces <number of reduces. default is 1. This is not mandatory>\n" +
-                    "\t-startTime <time to start, given in seconds from the epoch. " +
-                    "Make sure this is far enough into the future, so all maps " +
-                    "(operations) will start at the same time>. " +
-                    "default is launch time + 2 mins. This is not mandatory \n" +
-                    "\t-numberOfFiles <number of files to create. default is 1. " +
-                    "This is not mandatory>\n" +
-                    "\t-baseDir <base FS path. default is /becnhmarks/NNBench. " +
-                    "This is not mandatory>\n" +
-                    "\t-deleteBeforeRename\n" +
-                    "\t-help: Display the help statement\n";
-
-
-    System.out.println(usage);
-  }
-
-  /**
-   * check for arguments and fail if the values are not specified
-   *
-   * @param index  positional number of an argument in the list of command
-   *               line's arguments
-   * @param length total number of arguments
-   */
-  public static void checkArgs(final int index, final int length) {
-    if (index == length) {
-      displayUsage();
-      System.exit(-1);
-    }
-  }
-
-  /**
-   * Parse input arguments
-   *
-   * @param args array of command line's parameters to be parsed
-   */
-  public static void parseInputs(final String[] args) {
-    // If there are no command line arguments, exit
-    if (args.length == 0) {
-      displayUsage();
-      System.exit(-1);
-    }
-
-    // Parse command line args
-    for (int i = 0; i < args.length; i++) {
-      if (args[i].equals("-operation")) {
-        operation = args[++i];
-      } else if (args[i].equals("-maps")) {
-        checkArgs(i + 1, args.length);
-        numberOfMaps = Long.parseLong(args[++i]);
-      } else if (args[i].equals("-reduces")) {
-        checkArgs(i + 1, args.length);
-        numberOfReduces = Long.parseLong(args[++i]);
-      } else if (args[i].equals("-startTime")) {
-        checkArgs(i + 1, args.length);
-        startTime = Long.parseLong(args[++i]) * 1000;
-      } else if (args[i].equals("-numberOfFiles")) {
-        checkArgs(i + 1, args.length);
-        numberOfFiles = Long.parseLong(args[++i]);
-      } else if (args[i].equals("-baseDir")) {
-        checkArgs(i + 1, args.length);
-        baseDir = args[++i];
-      } else if (args[i].equals("-threadsPerMap")) {
-        checkArgs(i + 1, args.length);
-        threadsPerMap = Integer.parseInt(args[++i]);
-      } else if (args[i].equals("-deleteBeforeRename")) {
-        deleteBeforeRename = true;
-        ++i;
-      } else if (args[i].equals("-help")) {
-        displayUsage();
-        System.exit(-1);
-      }
-    }
-
-    LOG.info("Test Inputs: ");
-    LOG.info("           Test Operation: " + operation);
-    LOG.info("               Start time: " + sdf.format(new Date(startTime)));
-    LOG.info("           Number of maps: " + numberOfMaps);
-    LOG.info("        Number of reduces: " + numberOfReduces);
-    LOG.info("          Number of files: " + numberOfFiles);
-    LOG.info("                 Base dir: " + baseDir);
-    LOG.info("          Threads per map: " + threadsPerMap);
-
-    // Set user-defined parameters, so the map method can access the values
-    config.set("test.nnbench.operation", operation);
-    config.setLong("test.nnbench.maps", numberOfMaps);
-    config.setLong("test.nnbench.reduces", numberOfReduces);
-    config.setLong("test.nnbench.starttime", startTime);
-    config.setLong("test.nnbench.numberoffiles", numberOfFiles);
-    config.set("test.nnbench.basedir", baseDir);
-    config.setInt("test.nnbench.threadsPerMap", threadsPerMap);
-    config.setBoolean("test.nnbench.deleteBeforeRename", deleteBeforeRename);
-
-    config.set("test.nnbench.datadir.name", DATA_DIR_NAME);
-    config.set("test.nnbench.outputdir.name", OUTPUT_DIR_NAME);
-    config.set("test.nnbench.controldir.name", CONTROL_DIR_NAME);
-  }
-
-  /**
    * Analyze the results
    *
    * @throws IOException on error
    */
-  private static void analyzeResults() throws IOException {
+  private void analyzeResults() throws IOException {
     final FileSystem fs = new Path(baseDir).getFileSystem(config);
     Path reduceFile = new Path(new Path(baseDir, OUTPUT_DIR_NAME),
             "part-00000");
@@ -313,7 +185,7 @@ public class NNBench {
     if (operation.equals(OP_CREATE)) {
       resultTPSLine1 = "                           TPS: Create: " +
               (int) (totalTimeTPS);
-      resultALLine1 = "                   Avg Lat (ms): Create: " + avgLatency;
+      resultALLine1 = "                  Avg Lat (ms): Create: " + avgLatency;
     } else if (operation.equals(OP_OPEN)) {
       resultTPSLine1 = "                             TPS: Open: " +
               (int) totalTimeTPS;
@@ -330,7 +202,6 @@ public class NNBench {
 
     String resultLines[] = {
             "-------------- NNBench -------------- : ",
-            "                               Version: " + NNBENCH_VERSION,
             "                           Date & time: " + sdf.format(new Date(
                     System.currentTimeMillis())),
             "",
@@ -339,8 +210,7 @@ public class NNBench {
                     sdf.format(new Date(startTime)),
             "                           Maps to run: " + numberOfMaps,
             "                       Threads per map: " + threadsPerMap,
-            "                        Reduces to run: " + numberOfReduces,
-            "                       Number of files: " + numberOfFiles,
+            "                      Files per thread: " + numberOfFiles,
             "            Successful file operations: " + successfulFileOps,
             "",
             "        # maps that missed the barrier: " + lateMaps,
@@ -355,13 +225,9 @@ public class NNBench {
             "             RAW DATA: # of exceptions: " + numOfExceptions,
             ""};
 
-    PrintStream res = new PrintStream(new FileOutputStream(
-            DEFAULT_RES_FILE_NAME, true));
-
     // Write to a file and also dump to log
     for (int i = 0; i < resultLines.length; i++) {
       LOG.info(resultLines[i]);
-      res.println(resultLines[i]);
     }
   }
 
@@ -370,7 +236,7 @@ public class NNBench {
    *
    * @throws IOException on error
    */
-  public static void runTests() throws IOException {
+  public void runTests() throws IOException {
 
     JobConf job = new JobConf(config, NNBench.class);
 
@@ -397,14 +263,13 @@ public class NNBench {
   /**
    * Validate the inputs
    */
-  public static void validateInputs() {
+  public void validateInputs() {
     // If it is not one of the four operations, then fail
     if (!operation.equals(OP_CREATE) &&
             !operation.equals(OP_OPEN) &&
             !operation.equals(OP_RENAME) &&
             !operation.equals(OP_DELETE)) {
       System.err.println("Error: Unknown operation: " + operation);
-      displayUsage();
       System.exit(-1);
     }
 
@@ -412,55 +277,126 @@ public class NNBench {
     // Hadoop allows the number of maps to be 0
     if (numberOfMaps < 0) {
       System.err.println("Error: Number of maps must be a positive number");
-      displayUsage();
       System.exit(-1);
     }
 
     // If number of reduces is a negative number or 0, then fail
     if (numberOfReduces <= 0) {
       System.err.println("Error: Number of reduces must be a positive number");
-      displayUsage();
       System.exit(-1);
     }
 
     // If number of files is a negative number, then fail
     if (numberOfFiles < 0) {
       System.err.println("Error: Number of files must be a positive number");
-      displayUsage();
       System.exit(-1);
     }
-
   }
 
-  /**
-   * Main method for running the NNBench benchmarks
-   *
-   * @param args array of command line arguments
-   * @throws IOException indicates a problem with test startup
-   */
-  public static void main(String[] args) throws IOException {
-    // Display the application version string
-    displayVersion();
+  @Override
+  public void init() throws IOException {
+    LOG.info("Test Inputs: ");
+    LOG.info("           Test Operation: " + operation);
+    LOG.info("               Start time: " + sdf.format(new Date(startTime)));
+    if (!local) {
+      LOG.info("           Number of maps: " + numberOfMaps);
+    }
+    LOG.info("Number of threads per map: " + threadsPerMap);
+    LOG.info("          Number of files: " + numberOfFiles);
+    LOG.info("                 Base dir: " + baseDir);
 
-    // Parse the inputs
-    parseInputs(args);
+    // Set user-defined parameters, so the map method can access the values
+    config.set("test.nnbench.operation", operation);
+    config.setLong("test.nnbench.maps", numberOfMaps);
+    config.setLong("test.nnbench.reduces", numberOfReduces);
+    config.setLong("test.nnbench.starttime", startTime);
+    config.setLong("test.nnbench.numberoffiles", numberOfFiles);
+    config.set("test.nnbench.basedir", baseDir);
+    config.setInt("test.nnbench.threadsPerMap", threadsPerMap);
+    config.setBoolean("test.nnbench.deleteBeforeRename", deleteBeforeRename);
+    config.setBoolean("test.nnbench.local", local);
 
-    // Validate inputs
+    config.set("test.nnbench.datadir.name", DATA_DIR_NAME);
+    config.set("test.nnbench.outputdir.name", OUTPUT_DIR_NAME);
+    config.set("test.nnbench.controldir.name", CONTROL_DIR_NAME);
+  }
+
+  @Override
+  public void run() throws IOException {
     validateInputs();
-
-    // Clean up files before the test run
     cleanupBeforeTestrun();
-
-    // Create control files before test run
+    if (local) {
+      localRun();
+      return;
+    }
     createControlFiles();
-
-    // Run the tests as a map reduce job
     runTests();
-
-    // Analyze results
     analyzeResults();
   }
 
+  private void localRun() {
+    NNBenchMapper mapper = new NNBenchMapper();
+    mapper.configure(new JobConf(config));
+
+    ExecutorService pool = Executors.newFixedThreadPool(threadsPerMap, r -> {
+      Thread t = new Thread(r);
+      t.setDaemon(true);
+      return t;
+    });
+
+    long start = System.currentTimeMillis();
+    for (int i = 0; i < threadsPerMap; i++) {
+      int threadNum = i;
+      pool.submit(() -> {
+        try {
+          mapper.doMap(Collections.synchronizedList(new ArrayList<>()), 0, threadNum);
+        } catch (IOException e) {
+          e.printStackTrace();
+          System.exit(1);
+          throw new RuntimeException(e);
+        }
+      });
+    }
+    pool.shutdown();
+    try {
+      pool.awaitTermination(1, TimeUnit.DAYS);
+    } catch (InterruptedException ignored) {
+    }
+    long end = System.currentTimeMillis();
+    double totalTimeTPS =
+            (double) (1000 * threadsPerMap * numberOfFiles) / (end - start);
+    String[] resultLines = {
+            "-------------- NNBench -------------- : ",
+            "                           Date & time: " + sdf.format(new Date(
+                    System.currentTimeMillis())),
+            "",
+            "                        Test Operation: " + operation,
+            "                            Start time: " +
+                    sdf.format(new Date(startTime)),
+            "                               Threads: " + threadsPerMap,
+            "                      Files per thread: " + numberOfFiles,
+            "            Successful file operations: " + threadsPerMap * numberOfFiles,
+            "",
+            "                           TPS: Create: " + (int) (totalTimeTPS),
+            "                  Avg Lat (ms): Create: " + String.format("%.2f", (double) (end - start) / (threadsPerMap * numberOfFiles)),
+            "",
+            "           RAW DATA: Job Duration (ms): " + (end - start),
+            ""};
+
+    for (int i = 0; i < resultLines.length; i++) {
+      LOG.info(resultLines[i]);
+    }
+  }
+
+  @Override
+  public String getCommand() {
+    return "nnbench";
+  }
+
+  @Override
+  public void close() throws IOException {
+
+  }
 
   /**
    * Mapper class
@@ -476,6 +412,7 @@ public class NNBench {
     String op = null;
     final int MAX_OPERATION_EXCEPTIONS = 1000;
     int threadsPerMap = 1;
+    boolean local;
 
     ExecutorService executorService;
 
@@ -493,7 +430,7 @@ public class NNBench {
      */
     public void configure(JobConf conf) {
       setConf(conf);
-
+      local = conf.getBoolean("test.nnbench.local", false);
       try {
         baseDir = conf.get("test.nnbench.basedir");
         filesystem = new Path(baseDir).getFileSystem(conf);
@@ -530,6 +467,9 @@ public class NNBench {
      * without interruption; false otherwise
      */
     private boolean barrier() {
+      if (local) {
+        return true;
+      }
       long startTime = getConf().getLong("test.nnbench.starttime", 0l);
       long currentTime = System.currentTimeMillis();
       long sleepTime = startTime - currentTime;
@@ -574,7 +514,7 @@ public class NNBench {
 
       executorService.shutdown();
       try {
-        executorService.awaitTermination(1000, TimeUnit.HOURS);
+        executorService.awaitTermination(1, TimeUnit.DAYS);
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
@@ -641,7 +581,7 @@ public class NNBench {
      * Create operation.
      */
     private void doCreate(long mapId,
-                          AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
+                          AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) throws IOException {
       FSDataOutputStream out;
 
       for (long l = 0L; l < numberOfFiles; l++) {
@@ -662,6 +602,7 @@ public class NNBench {
             LOG.info("Exception recorded in op: " +
                     "Create", e);
             numOfExceptions.getAndIncrement();
+            throw e;
           }
         }
       }
@@ -671,7 +612,7 @@ public class NNBench {
      * Open operation
      */
     private void doOpen(long mapId,
-                        AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
+                        AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) throws IOException {
       FSDataInputStream input;
 
       for (long l = 0L; l < numberOfFiles; l++) {
@@ -691,6 +632,7 @@ public class NNBench {
           } catch (IOException e) {
             LOG.info("Exception recorded in op: OpenRead " + e);
             numOfExceptions.getAndIncrement();
+            throw e;
           }
         }
       }
@@ -700,7 +642,7 @@ public class NNBench {
      * Rename operation
      */
     private void doRenameOp(long mapId,
-                            AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
+                            AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) throws IOException {
       for (long l = 0L; l < numberOfFiles; l++) {
         Path filePath = new Path(new Path(baseDir, dataDirName),
                 new Path(String.valueOf(mapId), new Path(String.valueOf(threadNum), "file_" + l)));
@@ -719,6 +661,7 @@ public class NNBench {
           } catch (IOException e) {
             LOG.info("Exception recorded in op: Rename");
             numOfExceptions.getAndIncrement();
+            throw e;
           }
         }
       }
@@ -728,7 +671,7 @@ public class NNBench {
      * Delete operation
      */
     private void doDeleteOp(long mapId,
-                            AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) {
+                            AtomicLong successfulFileOps, AtomicInteger numOfExceptions, AtomicLong totalTime, int threadNum) throws IOException {
       for (long l = 0L; l < numberOfFiles; l++) {
         Path filePath;
         if (beforeRename) {
@@ -751,6 +694,7 @@ public class NNBench {
           } catch (IOException e) {
             LOG.info("Exception in recorded op: Delete");
             numOfExceptions.getAndIncrement();
+            throw e;
           }
         }
       }

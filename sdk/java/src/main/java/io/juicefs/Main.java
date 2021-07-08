@@ -4,6 +4,8 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import com.sun.management.OperatingSystemMXBean;
+import io.juicefs.bench.NNBench;
+import io.juicefs.bench.TestDFSIO;
 import org.apache.commons.cli.ParseException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.util.Shell;
@@ -23,9 +25,24 @@ public class Main {
   @Parameter(names = {"--help", "-h", "-help"}, help = true)
   private boolean help = false;
 
-  @Parameters(commandDescription = "Show JuiceFS Information")
-  private static class CommandShowInfo extends Command implements Closeable {
+  public abstract static class Command implements Closeable {
+    @Parameter(names = {"--help", "-h", "-help"}, help = true)
+    public boolean help;
 
+    public Command() {
+      COMMAND.put(getCommand(), this);
+    }
+
+    public abstract void init() throws IOException;
+
+    public abstract void run() throws IOException;
+
+    public abstract String getCommand();
+
+  }
+
+  @Parameters(commandDescription = "Show JuiceFS Information")
+  private static class CommandShowInfo extends Command {
     @Override
     public void close() throws IOException {
     }
@@ -131,6 +148,11 @@ public class Main {
 
     public CommandShowInfo() {
       conf = new Configuration();
+    }
+
+    @Override
+    public void init() throws IOException {
+
     }
 
     private void showJFSConf() {
@@ -262,22 +284,17 @@ public class Main {
     }
   }
 
-  abstract static class Command implements Closeable {
-    public Command() {
-      COMMAND.put(getCommand(), this);
-    }
-
-    public abstract void run() throws IOException;
-
-    public abstract String getCommand();
-  }
 
   public static void main(String[] args) throws ParseException, IOException {
     Main main = new Main();
     Command showInfo = new CommandShowInfo();
+    Command dfsio = new TestDFSIO();
+    Command nnbench = new NNBench();
     JCommander jc = JCommander.newBuilder()
             .addObject(main)
             .addCommand(showInfo.getCommand(), showInfo)
+            .addCommand(dfsio.getCommand(), dfsio)
+            .addCommand(nnbench.getCommand(), nnbench)
             .build();
     jc.parse(args);
 
@@ -286,7 +303,13 @@ public class Main {
       return;
     }
 
-    COMMAND.get(jc.getParsedCommand()).run();
-    COMMAND.get(jc.getParsedCommand()).close();
+    Command command = COMMAND.get(jc.getParsedCommand());
+    if (command.help) {
+      jc.getCommands().get(jc.getParsedCommand()).usage();
+      return;
+    }
+    command.init();
+    command.run();
+    command.close();
   }
 }
