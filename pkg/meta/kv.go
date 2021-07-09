@@ -268,7 +268,7 @@ func (m *kvMeta) nextInode() (Ino, error) {
 		m.freeInodes.next++
 		return Ino(v), nil
 	}
-	v, err := m.client.incrBy(m.counterKey("nextInode"), 100)
+	v, err := m.incrCounter(m.counterKey("nextInode"), 100)
 	if err == nil {
 		m.freeInodes.next = uint64(v) + 1
 		m.freeInodes.maxid = uint64(v) + 100
@@ -284,7 +284,7 @@ func (m *kvMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, ch
 		m.freeChunks.next++
 		return 0
 	}
-	v, err := m.client.incrBy(m.counterKey("nextChunk"), 1000)
+	v, err := m.incrCounter(m.counterKey("nextChunk"), 1000)
 	if err == nil {
 		*chunkid = uint64(v)
 		m.freeChunks.next = uint64(v) + 1
@@ -319,7 +319,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 		if err != nil {
 			logger.Fatalf("json: %s", err)
 		}
-		return m.client.sets(m.counterKey("setting"), data)
+		return m.setValues(m.counterKey("setting"), data)
 	}
 
 	data, err := json.MarshalIndent(format, "", "")
@@ -364,7 +364,7 @@ func (m *kvMeta) NewSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
-	v, err := m.client.incrBy(m.counterKey("nextSession"), 1)
+	v, err := m.incrCounter(m.counterKey("nextSession"), 1)
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
@@ -379,7 +379,7 @@ func (m *kvMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("json: %s", err)
 	}
-	if err = m.client.sets(m.sessionInfoKey(m.sid), data); err != nil {
+	if err = m.setValues(m.sessionInfoKey(m.sid), data); err != nil {
 		return fmt.Errorf("set session info: %s", err)
 	}
 
@@ -393,7 +393,7 @@ func (m *kvMeta) NewSession() error {
 
 func (m *kvMeta) refreshSession() {
 	for {
-		_ = m.client.sets(m.sessionKey(m.sid), m.packTime(time.Now().Unix()))
+		_ = m.setValues(m.sessionKey(m.sid), m.packTime(time.Now().Unix()))
 		time.Sleep(time.Minute)
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
@@ -418,9 +418,9 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 			todel = append(todel, key)
 		}
 	}
-	_, err = m.client.dels(todel...)
+	_, err = m.deleteKeys(todel...)
 	if err == nil && len(keys) == len(todel) {
-		_, err = m.client.dels(m.sessionKey(sid), m.sessionInfoKey(sid))
+		_, err = m.deleteKeys(m.sessionKey(sid), m.sessionInfoKey(sid))
 		logger.Infof("cleanup session %d: %s", sid, err)
 	}
 }
@@ -492,11 +492,11 @@ func (m *kvMeta) flushStats() {
 /*
 func (m *kvMeta) refreshUsage() {
 	for {
-		used, err := m.client.incrBy(m.counterKey(usedSpace), 0)
+		used, err := m.incrCounter(m.counterKey(usedSpace), 0)
 		if err == nil {
 			atomic.StoreInt64(&m.usedSpace, used)
 		}
-		inodes, err := m.client.incrBy(m.counterKey(totalInodes), 0)
+		inodes, err := m.incrCounter(m.counterKey(totalInodes), 0)
 		if err == nil {
 			atomic.StoreInt64(&m.usedInodes, inodes)
 		}
@@ -537,7 +537,8 @@ func (m *kvMeta) shouldRetry(err error) bool {
 	if _, ok := err.(syscall.Errno); ok {
 		return false
 	}
-	return true // FIXME: only true for retryable error
+	// TODO: add other retryable errors here
+	return strings.Contains(err.Error(), "write conflict")
 }
 
 func (m *kvMeta) txn(f func(tx kvTxn) error) error {
@@ -557,6 +558,32 @@ func (m *kvMeta) txn(f func(tx kvTxn) error) error {
 		break
 	}
 	return err
+}
+
+func (m *kvMeta) setValues(args ...[]byte) error {
+	return m.txn(func(tx kvTxn) error {
+		tx.sets(args...)
+		return nil
+	})
+}
+
+func (m *kvMeta) incrCounter(key []byte, value int64) (int64, error) {
+	var old int64
+	err := m.txn(func(tx kvTxn) error {
+		old = tx.incrBy(key, value)
+		return nil
+	})
+	return old, err
+}
+
+func (m *kvMeta) deleteKeys(keys ...[]byte) (int, error) {
+	var count int
+	err := m.txn(func(tx kvTxn) error {
+		count = len(tx.gets(keys...))
+		tx.dels(keys...)
+		return nil
+	})
+	return count, err
 }
 
 func (m *kvMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
@@ -1497,7 +1524,7 @@ func (m *kvMeta) Close(ctx Context, inode Ino) syscall.Errno {
 			delete(m.removedFiles, inode)
 			go func() {
 				if err := m.deleteInode(inode); err == nil {
-					_, _ = m.client.dels(m.sustainedKey(m.sid, inode))
+					_, _ = m.deleteKeys(m.sustainedKey(m.sid, inode))
 				}
 			}()
 		}
@@ -1626,7 +1653,7 @@ func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 		return syscall.EINVAL
 	}
 	inode = m.checkRoot(inode)
-	return errno(m.client.sets(m.xattrKey(inode, name), value))
+	return errno(m.setValues(m.xattrKey(inode, name), value))
 }
 
 func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
@@ -1634,7 +1661,7 @@ func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		return syscall.EINVAL
 	}
 	inode = m.checkRoot(inode)
-	n, err := m.client.dels(m.xattrKey(inode, name))
+	n, err := m.deleteKeys(m.xattrKey(inode, name))
 	if err != nil {
 		return errno(err)
 	} else if n == 0 {

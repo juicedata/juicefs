@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 
 	// "github.com/apple/foundationdb/bindings/go/src/fdb"
 
@@ -50,9 +49,6 @@ type tkvClient interface {
 	gets(keys ...[]byte) ([][]byte, error) // FIXME: not the same as kvTxn
 	scanKeys(prefix []byte) ([][]byte, error)
 	scanValues(prefix []byte) (map[string][]byte, error)
-	sets(args ...[]byte) error
-	incrBy(key []byte, value int64) (int64, error)
-	dels(keys ...[]byte) (int, error)
 	txn(f func(kvTxn) error) error
 }
 
@@ -306,72 +302,6 @@ func (c *tikvClient) scanValues(prefix []byte) (map[string][]byte, error) {
 		}
 	}
 	return ret, nil
-}
-
-func (c *tikvClient) sets(args ...[]byte) error {
-	tx, err := c.client.Begin()
-	if err != nil {
-		return err
-	}
-	for i := 0; i < len(args); i += 2 {
-		key, val := args[i], args[i+1]
-		if err := tx.Set(key, val); err != nil {
-			return err
-		}
-	}
-	return tx.Commit(context.Background())
-}
-
-func (c *tikvClient) incrBy(key []byte, value int64) (int64, error) {
-	tx, err := c.client.Begin()
-	if err != nil {
-		return 0, err
-	}
-	var old int64
-	buf, err := tx.Get(context.TODO(), key)
-	if tikverr.IsErrNotFound(err) {
-	} else if err != nil {
-		return 0, err
-	} else {
-		if len(buf) != 8 {
-			return 0, fmt.Errorf("invalid counter value: %v", buf)
-		}
-		old = int64(endian.Uint64(buf)) // FIXME: uint <-> int
-	}
-	if value == 0 {
-		return old, nil
-	}
-	new := old + value
-	if new < 0 {
-		new = 0
-	}
-	buf = make([]byte, 8)
-	endian.PutUint64(buf, uint64(new))
-	if err = tx.Set(key, buf); err != nil {
-		return 0, err
-	}
-	return old, tx.Commit(context.Background())
-}
-
-func (c *tikvClient) dels(keys ...[]byte) (int, error) {
-	tx, err := c.client.Begin()
-	if err != nil {
-		return 0, err
-	}
-	var count int
-	for _, key := range keys {
-		_, err := tx.Get(context.TODO(), key)
-		if tikverr.IsErrNotFound(err) {
-			continue
-		} else if err != nil {
-			return 0, err
-		}
-		if err = tx.Delete(key); err != nil {
-			return 0, err
-		}
-		count++
-	}
-	return count, tx.Commit(context.Background())
 }
 
 func (c *tikvClient) txn(f func(kvTxn) error) error {
