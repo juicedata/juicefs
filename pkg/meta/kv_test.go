@@ -1,3 +1,5 @@
+// +build kv
+
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -25,7 +27,7 @@ func TestTiKVClient(t *testing.T) {
 	if err != nil {
 		t.Skipf("create meta: %s", err)
 	}
-	// TODO: cleanup
+	// TODO: reset
 
 	// testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
@@ -34,6 +36,6 @@ func TestTiKVClient(t *testing.T) {
 	testConcurrentWrite(t, m)
 	// testCompaction(t, m)
 	// testCopyFileRange(t, m)
-	m.conf.CaseInsensi = true
+	m.(*kvMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
 }

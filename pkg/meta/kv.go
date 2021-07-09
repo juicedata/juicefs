@@ -1,3 +1,5 @@
+// +build kv
+
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -54,7 +56,12 @@ type kvMeta struct {
 	freeChunks freeID
 }
 
-func newKVMeta(driver, addr string, conf *Config) (*kvMeta, error) {
+func init() {
+	Register("tikv", newKVMeta)
+	// Register("fdb", newKVMeta)
+}
+
+func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	client, err := newTkvClient(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect driver %s addr %s: %s", driver, addr, err)
