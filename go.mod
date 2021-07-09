@@ -13,14 +13,16 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
 	github.com/aws/aws-sdk-go v1.35.20
 	github.com/baidubce/bce-sdk-go v0.9.47
+	github.com/baiyubin/aliyun-sts-go-sdk v0.0.0-20180326062324-cfa1a18b161f // indirect
 	github.com/billziss-gh/cgofuse v1.4.0
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
+	github.com/dnaeon/go-vcr v1.2.0 // indirect
 	github.com/emersion/go-webdav v0.3.0
 	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/gonutz/w32/v2 v2.2.0
+	github.com/gonutz/w32/v2 v2.2.0 // indirect
 	github.com/google/gops v0.3.13
 	github.com/google/readahead v0.0.0-20161222183148-eaceba169032 // indirect
 	github.com/google/uuid v1.1.2
@@ -51,16 +53,16 @@ require (
 	github.com/shirou/gopsutil v3.21.3+incompatible // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
-	github.com/tikv/client-go/v2 v2.0.0-alpha
+	github.com/tikv/client-go/v2 v2.0.0-alpha.0.20210709052506-aadf3cf62721
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
 	github.com/upyun/go-sdk/v3 v3.0.2
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible
 	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392
-	golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
+	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
-	golang.org/x/sys v0.0.0-20210324051608-47abb6519492
+	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 	google.golang.org/api v0.5.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
