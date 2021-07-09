@@ -17,6 +17,7 @@ package object
 
 import (
 	"io"
+	"io/ioutil"
 
 	"github.com/juju/ratelimit"
 )
@@ -58,6 +59,6 @@ func (p *bwlimit) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (p *bwlimit) Put(key string, in io.Reader) error {
-	in = &limitedReader{io.NopCloser(in), p.upLimit}
+	in = &limitedReader{ioutil.NopCloser(in), p.upLimit}
 	return p.ObjectStorage.Put(key, in)
 }
