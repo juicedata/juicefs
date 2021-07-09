@@ -25,7 +25,7 @@ The following table shows difference of main features between Alluxio and JuiceF
 
 ### Storage format
 
-The [storage format](architecture.md) of one file in JuiceFS consists of three levels: chunk, slice and block. A file will be split into multiple blocks, and be compressed and encrypted (optional) store into object storage.
+The [storage format](how_juicefs_store_files.md) of one file in JuiceFS consists of three levels: chunk, slice and block. A file will be split into multiple blocks, and be compressed and encrypted (optional) store into object storage.
 
 Alluxio stores file as object to UFS. The file doesn't be split info blocks like JuiceFS does.
 
@@ -69,4 +69,4 @@ JuiceFS supports data encryption in transit and at rest. Alluxio community editi
 
 Alluxio's architecture can be divided into 3 components: master, worker and client. A typical cluster consists of a single leading master, standby masters, a job master, standby job masters, workers, and job workers. You need operation these masters and workers by yourself.
 
-JuiceFS uses Redis or [others](databases_for_metadata.md) as the metadata service. You could use service managed by public cloud provider easily as JuiceFS's metadata service. There isn't any operation needed.
+JuiceFS uses Redis or [others](databases_for_metadata.md) as the metadata engine. You could use service managed by public cloud provider easily as JuiceFS's metadata engine. There isn't any operation needed.
