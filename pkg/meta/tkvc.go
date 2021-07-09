@@ -106,7 +106,9 @@ func (tx *tikvTxn) scanRange(begin, end []byte) [][]byte {
 	var ret [][]byte
 	for it.Valid() {
 		ret = append(ret, it.Key())
-		it.Next()
+		if err = it.Next(); err != nil {
+			panic(err)
+		}
 	}
 	return ret
 }
@@ -123,7 +125,9 @@ func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 	var ret [][]byte
 	for it.Valid() {
 		ret = append(ret, it.Key())
-		it.Next()
+		if err = it.Next(); err != nil {
+			panic(err)
+		}
 	}
 	return ret
 }
@@ -140,7 +144,9 @@ func (tx *tikvTxn) scanValues(prefix []byte) map[string][]byte {
 	ret := make(map[string][]byte)
 	for it.Valid() {
 		ret[string(it.Key())] = it.Value()
-		it.Next()
+		if err = it.Next(); err != nil {
+			panic(err)
+		}
 	}
 	return ret
 }
@@ -270,7 +276,9 @@ func (c *tikvClient) scanKeys(prefix []byte) ([][]byte, error) {
 	var ret [][]byte
 	for it.Valid() {
 		ret = append(ret, it.Key())
-		it.Next()
+		if err = it.Next(); err != nil {
+			return ret, err
+		}
 	}
 	return ret, nil
 }
@@ -291,7 +299,9 @@ func (c *tikvClient) scanValues(prefix []byte) (map[string][]byte, error) {
 	ret := make(map[string][]byte)
 	for it.Valid() {
 		ret[string(it.Key())] = it.Value()
-		it.Next()
+		if err = it.Next(); err != nil {
+			return ret, err
+		}
 	}
 	return ret, nil
 }

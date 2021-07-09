@@ -97,17 +97,17 @@ func (m *kvMeta) fmtKey(size int, args ...interface{}) []byte {
 	b := utils.NewBuffer(uint32(len(m.prefix) + size))
 	b.Put(m.prefix)
 	for _, a := range args {
-		switch a.(type) {
+		switch a := a.(type) {
 		case byte:
-			b.Put8(a.(byte))
+			b.Put8(a)
 		case uint32:
-			b.Put32(a.(uint32))
+			b.Put32(a)
 		case uint64:
-			b.Put64(a.(uint64))
+			b.Put64(a)
 		case Ino:
-			b.LEPut64(uint64(a.(Ino)))
+			b.LEPut64(uint64(a))
 		case string:
-			b.Put([]byte(a.(string)))
+			b.Put([]byte(a))
 		default:
 			logger.Fatalf("invalid type %T, value %v", a, a)
 		}
@@ -386,7 +386,7 @@ func (m *kvMeta) NewSession() error {
 
 func (m *kvMeta) refreshSession() {
 	for {
-		m.client.sets(m.sessionKey(m.sid), m.packTime(time.Now().Unix()))
+		_ = m.client.sets(m.sessionKey(m.sid), m.packTime(time.Now().Unix()))
 		time.Sleep(time.Minute)
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
@@ -511,6 +511,7 @@ func (m *kvMeta) OnMsg(mtype uint32, cb MsgCallback) {
 	m.msgCallbacks.callbacks[mtype] = cb
 }
 
+/* TODO: add back later when needed
 func (m *kvMeta) newMsg(mid uint32, args ...interface{}) error {
 	m.msgCallbacks.Lock()
 	cb, ok := m.msgCallbacks.callbacks[mid]
@@ -520,6 +521,7 @@ func (m *kvMeta) newMsg(mid uint32, args ...interface{}) error {
 	}
 	return fmt.Errorf("message %d is not supported", mid)
 }
+*/
 
 func (m *kvMeta) shouldRetry(err error) bool {
 	if err == nil {
@@ -1488,7 +1490,7 @@ func (m *kvMeta) Close(ctx Context, inode Ino) syscall.Errno {
 			delete(m.removedFiles, inode)
 			go func() {
 				if err := m.deleteInode(inode); err == nil {
-					m.client.dels(m.sustainedKey(m.sid, inode))
+					_, _ = m.client.dels(m.sustainedKey(m.sid, inode))
 				}
 			}()
 		}
@@ -1572,13 +1574,9 @@ func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {}
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {}
 */
 
-func (m *kvMeta) deleteFile(inode Ino, length uint64) {
-	return
-}
+func (m *kvMeta) deleteFile(inode Ino, length uint64) {}
 
-func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
-	return
-}
+func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {}
 
 func (m *kvMeta) CompactAll(ctx Context) syscall.Errno {
 	return syscall.ENOTSUP
