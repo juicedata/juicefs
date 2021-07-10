@@ -32,12 +32,12 @@ Please read the [official documentation](https://redis.io/topics/sentinel) for m
 Once Redis servers and Sentinels are deployed, the `META-URL` can be specified as `[redis[s]://][USER:PASSWORD@]MASTERNAME,SENTINEL_ADDRS:SENTINEL_PORT[/DB]`, for example:
 
 ```bash
-$ ./juicefs mount rediss://:sentinelPass@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
+$ ./juicefs mount rediss://:password@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
 ```
 
-> **Note**: The default port for Sentinel is 26379, but the above URL use 6379 (default port for Redis server) as the default, so the port for Sentinel is not optional.
-
-> **Note**: When the password is provided in the URL, it will also be used to connect Redis server. If they have different passwords, the passwords should be specified by enviroment viarables (`SENTINEL_PASSWORD` and `REDIS_PASSWORD`) separately.
+> **Note**: For v0.16+, the password in the URL will be used to connect Redis server, the password for Sentinel
+should be provided using enviroment viarables `SENTINEL_PASSWORD`. For early versions, the password is used for both
+Redis server and Sentinel, they can be overrided by enviroment viarables `SENTINEL_PASSWORD` and `REDIS_SERVER`.
 
 ## Data Durability
 
