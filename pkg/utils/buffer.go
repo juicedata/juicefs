@@ -112,12 +112,6 @@ func (b *Buffer) Put64(v uint64) {
 	b.off += 8
 }
 
-// LEPut64 appends uint64 in little-endian order to Buffer, ignoring the endian of b
-func (b *Buffer) LEPut64(v uint64) {
-	binary.LittleEndian.PutUint64(b.buf[b.off:b.off+8], v)
-	b.off += 8
-}
-
 // Get64 returns uint64
 func (b *Buffer) Get64() uint64 {
 	v := b.endian.Uint64(b.buf[b.off : b.off+8])
