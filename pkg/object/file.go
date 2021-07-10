@@ -20,11 +20,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -112,27 +114,35 @@ func (d *filestore) Put(key string, in io.Reader) error {
 		return os.MkdirAll(p, os.FileMode(0755))
 	}
 
-	if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0755)); err != nil {
-		return err
-	}
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
+	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil && os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0755)); err != nil {
+			return err
+		}
+		f, err = os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	}
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp)
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmp)
+		}
+	}()
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(f, in, *buf)
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	err = f.Close()
 	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, p)
+	err = os.Rename(tmp, p)
+	return err
 }
 
 func (d *filestore) Copy(dst, src string) error {
