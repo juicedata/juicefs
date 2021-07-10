@@ -101,8 +101,13 @@ type msgCallbacks struct {
 	callbacks map[uint32]MsgCallback
 }
 
+func init() {
+	Register("redis", newRedisMeta)
+}
+
 // newRedisMeta return a meta store using Redis.
-func newRedisMeta(url string, conf *Config) (Meta, error) {
+func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
+	url := driver + "://" + addr
 	opt, err := redis.ParseURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", url, err)

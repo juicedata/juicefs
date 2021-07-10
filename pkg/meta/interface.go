@@ -321,6 +321,14 @@ func removePassword(uri string) string {
 	return uri[:sp+3+cp] + uri[p:]
 }
 
+type Creator func(driver, addr string, conf *Config) (Meta, error)
+
+var metaDrivers = make(map[string]Creator)
+
+func Register(name string, register Creator) {
+	metaDrivers[name] = register
+}
+
 // NewClient creates a Meta client for given uri.
 func NewClient(uri string, conf *Config) Meta {
 	if !strings.Contains(uri, "://") {
@@ -333,22 +341,16 @@ func NewClient(uri string, conf *Config) Meta {
 			uri = uri[:p+1] + os.Getenv("META_PASSWORD") + uri[p+1:]
 		}
 	}
-	var m Meta
-	var err error
-	if strings.HasPrefix(uri, "redis") {
-		m, err = newRedisMeta(uri, conf)
-	} else {
-		p := strings.Index(uri, "://")
-		if p < 0 {
-			logger.Fatalf("invalid uri: %s", uri)
-		}
-		driver := uri[:p]
-		if driver == "postgres" {
-			m, err = newSQLMeta(driver, uri, conf)
-		} else {
-			m, err = newSQLMeta(driver, uri[p+3:], conf)
-		}
+	p := strings.Index(uri, "://")
+	if p < 0 {
+		logger.Fatalf("invalid uri: %s", uri)
 	}
+	driver := uri[:p]
+	f, ok := metaDrivers[driver]
+	if !ok {
+		logger.Fatalf("Invalid meta driver: %s", driver)
+	}
+	m, err := f(driver, uri[p+3:], conf)
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)
 	}

@@ -34,6 +34,22 @@ func tempFile(t *testing.T) string {
 	return fp.Name()
 }
 
+func resetDB(m *dbMeta) {
+	m.engine.DropTables(&setting{})
+	m.engine.DropTables(&counter{})
+	m.engine.DropTables(&node{})
+	m.engine.DropTables(&edge{})
+	m.engine.DropTables(&symlink{})
+	m.engine.DropTables(&chunk{})
+	m.engine.DropTables(&chunkRef{})
+	m.engine.DropTables(&session{})
+	m.engine.DropTables(&sustained{})
+	m.engine.DropTables(&xattr{})
+	m.engine.DropTables(&delfile{})
+	m.engine.DropTables(&flock{})
+	m.engine.DropTables(&plock{})
+}
+
 func TestSQLClient(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
@@ -49,19 +65,7 @@ func TestMySQLClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
-	m.engine.DropTables(&setting{})
-	m.engine.DropTables(&counter{})
-	m.engine.DropTables(&node{})
-	m.engine.DropTables(&edge{})
-	m.engine.DropTables(&symlink{})
-	m.engine.DropTables(&chunk{})
-	m.engine.DropTables(&chunkRef{})
-	m.engine.DropTables(&session{})
-	m.engine.DropTables(&sustained{})
-	m.engine.DropTables(&xattr{})
-	m.engine.DropTables(&delfile{})
-	m.engine.DropTables(&flock{})
-	m.engine.DropTables(&plock{})
+	resetDB(m.(*dbMeta))
 
 	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
@@ -70,28 +74,16 @@ func TestMySQLClient(t *testing.T) {
 	testConcurrentWrite(t, m)
 	testCompaction(t, m)
 	testCopyFileRange(t, m)
-	m.conf.CaseInsensi = true
+	m.(*dbMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
 }
 
 func TestPostgresQLClient(t *testing.T) {
-	m, err := newSQLMeta("postgres", "postgres://localhost:5432/test?sslmode=disable", &Config{})
+	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
-	m.engine.DropTables(&setting{})
-	m.engine.DropTables(&counter{})
-	m.engine.DropTables(&node{})
-	m.engine.DropTables(&edge{})
-	m.engine.DropTables(&symlink{})
-	m.engine.DropTables(&chunk{})
-	m.engine.DropTables(&chunkRef{})
-	m.engine.DropTables(&session{})
-	m.engine.DropTables(&sustained{})
-	m.engine.DropTables(&xattr{})
-	m.engine.DropTables(&delfile{})
-	m.engine.DropTables(&flock{})
-	m.engine.DropTables(&plock{})
+	resetDB(m.(*dbMeta))
 
 	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
@@ -100,7 +92,7 @@ func TestPostgresQLClient(t *testing.T) {
 	testConcurrentWrite(t, m)
 	testCompaction(t, m)
 	testCopyFileRange(t, m)
-	m.conf.CaseInsensi = true
+	m.(*dbMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
 }
 
