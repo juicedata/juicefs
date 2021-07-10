@@ -184,6 +184,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	}
 	logger.Infof("Data use %s", blob)
 	blob = object.WithMetrics(blob)
+	blob = object.NewLimited(blob, c.Int64("upload-limit")*1e6/8, c.Int64("download-limit")*1e6/8)
 
 	store := chunk.NewCachedStore(blob, chunkConf)
 	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {

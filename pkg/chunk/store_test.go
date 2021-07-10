@@ -103,7 +103,6 @@ func TestAsyncStore(t *testing.T) {
 	f.WriteString("good")
 	f.Close()
 	conf.Writeback = true
-	conf.UploadLimit = 0
 	_ = NewCachedStore(mem, conf)
 	time.Sleep(time.Millisecond * 10) // wait for scan to finish
 	if _, err := mem.Get("chunks/0/0/123_0_4", 0, -1); err != nil {

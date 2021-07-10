@@ -606,7 +606,6 @@ type Config struct {
 	Writeback      bool
 	Partitions     int
 	BlockSize      int
-	UploadLimit    int
 	GetTimeout     time.Duration
 	PutTimeout     time.Duration
 	CacheFullBlock bool
