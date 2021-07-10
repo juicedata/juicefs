@@ -19,6 +19,7 @@ package meta
 
 import (
 	"context"
+	"encoding/binary"
 
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
