@@ -75,6 +75,12 @@ type kvMeta struct {
 }
 
 func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
+	p := strings.Index(addr, "/")
+	var prefix string
+	if p > 0 {
+		prefix = addr[p+1:]
+		addr = addr[:p]
+	}
 	client, err := newTkvClient(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect driver %s addr %s: %s", driver, addr, err)
@@ -87,6 +93,7 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	m := &kvMeta{
 		conf:         conf,
 		client:       client,
+		prefix:       []byte(prefix),
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
@@ -96,10 +103,7 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 			callbacks: make(map[uint32]MsgCallback),
 		},
 	}
-	p := strings.Index(addr, "/")
-	if p > 0 {
-		m.prefix = []byte(addr[p+1:])
-	}
+
 	m.root = 1
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
@@ -149,7 +153,7 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
 		case uint64:
 			b.Put64(a)
 		case Ino:
-			binary.LittleEndian.PutUint64(b.Get(8), uint64(a))
+			m.encodeInode(a, b.Get(8))
 		case string:
 			b.Put([]byte(a))
 		default:
@@ -226,13 +230,12 @@ func (m *kvMeta) sustainedKey(sid uint64, inode Ino) []byte {
 	return m.fmtKey("SS", sid, inode)
 }
 
-func (m *kvMeta) parseInode(key []byte) Ino {
-	prefix := len(m.prefix) + 10 // "SS" + sid
-	b := utils.FromBuffer(key[prefix:])
-	if b.Len() != 8 {
-		panic("invalid inode value")
-	}
-	return Ino(b.Get64())
+func (m *kvMeta) encodeInode(ino Ino, buf []byte) {
+	binary.LittleEndian.PutUint64(buf, uint64(ino))
+}
+
+func (m *kvMeta) decodeInode(buf []byte) Ino {
+	return Ino(binary.LittleEndian.Uint64(buf)) // "SS" + sid
 }
 
 func (m *kvMeta) delfileKey(inode Ino, length uint64) []byte {
@@ -290,9 +293,7 @@ func (m *kvMeta) parseAttr(buf []byte, attr *Attr) {
 	attr.Nlink = rb.Get32()
 	attr.Length = rb.Get64()
 	attr.Rdev = rb.Get32()
-	if rb.Left() >= 8 {
-		attr.Parent = Ino(rb.Get64())
-	}
+	attr.Parent = Ino(rb.Get64())
 	attr.Full = true
 	logger.Tracef("attr: %v -> %v", buf, attr)
 }
@@ -468,7 +469,7 @@ func (m *kvMeta) NewSession() error {
 		return fmt.Errorf("set session info: %s", err)
 	}
 
-	// go m.refreshUsage() // NOTE: probably not need this anymore
+	go m.refreshUsage()
 	go m.refreshSession()
 	// go m.cleanupDeletedFiles()
 	// go m.cleanupSlices()
@@ -489,14 +490,14 @@ func (m *kvMeta) refreshSession() {
 
 func (m *kvMeta) cleanStaleSession(sid uint64) {
 	// TODO: release locks
-	keys, err := m.scanKeys(m.fmtKey(10, "SS", sid))
+	keys, err := m.scanKeys(m.fmtKey("SS", sid))
 	if err != nil {
 		logger.Warnf("scan stale session %d: %s", sid, err)
 		return
 	}
 	var todel [][]byte
 	for _, key := range keys {
-		inode := m.parseInode(key)
+		inode := m.decodeInode(key[len(m.prefix)+10:])
 		if err := m.deleteInode(inode); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
 		} else {
@@ -512,7 +513,7 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 
 func (m *kvMeta) cleanStaleSessions() {
 	// TODO: once per minute
-	vals, err := m.scanValues(m.fmtKey(2, "SH"))
+	vals, err := m.scanValues(m.fmtKey("SH"))
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -546,26 +547,12 @@ func (m *kvMeta) flushStats() {
 		newSpace := atomic.SwapInt64(&m.newSpace, 0)
 		newInodes := atomic.SwapInt64(&m.newInodes, 0)
 		if newSpace != 0 || newInodes != 0 {
-			var used, inodes int64
 			err := m.txn(func(tx kvTxn) error {
-				used = tx.incrBy(m.counterKey(usedSpace), newSpace)
-				inodes = tx.incrBy(m.counterKey(totalInodes), newInodes)
+				tx.incrBy(m.counterKey(usedSpace), newSpace)
+				tx.incrBy(m.counterKey(totalInodes), newInodes)
 				return nil
 			})
 			if err == nil {
-				if used+newSpace >= 0 {
-					atomic.StoreInt64(&m.usedSpace, used+newSpace)
-				} else {
-					logger.Warnf("negative usedSpace: used %d newSpace %d", used, newSpace)
-					atomic.StoreInt64(&m.usedSpace, 0)
-				}
-				if inodes+newInodes >= 0 {
-					atomic.StoreInt64(&m.usedInodes, inodes+newInodes)
-				} else {
-					logger.Warnf("negative usedInodes: used %d newSpace %d", inodes, newInodes)
-					atomic.StoreInt64(&m.usedInodes, 0)
-				}
-			} else {
 				logger.Warnf("update stats: %s", err)
 				m.updateStats(newSpace, newInodes)
 			}
@@ -574,7 +561,6 @@ func (m *kvMeta) flushStats() {
 	}
 }
 
-/*
 func (m *kvMeta) refreshUsage() {
 	for {
 		used, err := m.incrCounter(m.counterKey(usedSpace), 0)
@@ -588,7 +574,6 @@ func (m *kvMeta) refreshUsage() {
 		time.Sleep(time.Second * 10)
 	}
 }
-*/
 
 func (m *kvMeta) checkQuota(size, inodes int64) bool {
 	if size > 0 && m.fmt.Capacity > 0 && atomic.LoadInt64(&m.usedSpace)+atomic.LoadInt64(&m.newSpace)+size > int64(m.fmt.Capacity) {
