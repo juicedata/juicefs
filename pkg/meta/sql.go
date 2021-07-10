@@ -156,17 +156,16 @@ type dbMeta struct {
 }
 
 func init() {
-	register("mysql", newSQLMeta)
-	register("sqlite3", newSQLMeta)
-	register("postgres", newSQLMeta)
+	Register("mysql", newSQLMeta)
+	Register("sqlite3", newSQLMeta)
+	Register("postgres", newSQLMeta)
 }
 
-func newSQLMeta(url string, conf *Config) (Meta, error) {
-	driver := strings.Split(url, "://")[0]
-	if driver != "postgres" {
-		url = url[len(driver)+3:]
+func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
+	if driver == "postgres" {
+		addr = driver + "://" + addr
 	}
-	engine, err := xorm.NewEngine(driver, url)
+	engine, err := xorm.NewEngine(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}

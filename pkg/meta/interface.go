@@ -321,12 +321,12 @@ func removePassword(uri string) string {
 	return uri[:sp+3+cp] + uri[p:]
 }
 
-type creator func(url string, conf *Config) (Meta, error)
+type Creator func(driver, addr string, conf *Config) (Meta, error)
 
-var drivers = make(map[string]creator)
+var metaDrivers = make(map[string]Creator)
 
-func register(name string, register creator) {
-	drivers[name] = register
+func Register(name string, register Creator) {
+	metaDrivers[name] = register
 }
 
 // NewClient creates a Meta client for given uri.
@@ -346,11 +346,11 @@ func NewClient(uri string, conf *Config) Meta {
 		logger.Fatalf("invalid uri: %s", uri)
 	}
 	driver := uri[:p]
-	f, ok := drivers[driver]
+	f, ok := metaDrivers[driver]
 	if !ok {
 		logger.Fatalf("Invalid meta driver: %s", driver)
 	}
-	m, err := f(uri, conf)
+	m, err := f(driver, uri[p+3:], conf)
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)
 	}
