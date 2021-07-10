@@ -115,8 +115,29 @@ func (m *kvMeta) Name() string {
 	return m.client.name()
 }
 
-func (m *kvMeta) fmtKey(size int, args ...interface{}) []byte {
-	b := utils.NewBuffer(uint32(len(m.prefix) + size))
+func (m *kvMeta) keyLen(args ...interface{}) int {
+	var c int
+	for _, a := range args {
+		switch a := a.(type) {
+		case byte:
+			c++
+		case uint32:
+			c += 4
+		case uint64:
+			c += 8
+		case Ino:
+			c += 8
+		case string:
+			c += len(a)
+		default:
+			logger.Fatalf("invalid type %T, value %v", a, a)
+		}
+	}
+	return c
+}
+
+func (m *kvMeta) fmtKey(args ...interface{}) []byte {
+	b := utils.NewBuffer(uint32(len(m.prefix) + m.keyLen(args...)))
 	b.Put(m.prefix)
 	for _, a := range args {
 		switch a := a.(type) {
@@ -137,34 +158,53 @@ func (m *kvMeta) fmtKey(size int, args ...interface{}) []byte {
 	return b.Bytes()
 }
 
+/**
+  Ino iiiiiiii
+  Indx nnnn
+  name ...
+  chunkid cccccccc
+  session  ssssssss
+
+All keys:
+  C...            counter
+  AiiiiiiiiI      inode attribute
+  AiiiiiiiiD...   dentry
+  AiiiiiiiiCnnnn  file chunks
+  AiiiiiiiiS      symlink target
+  AiiiiiiiiX...   extented attribute
+  Diiiiiiiinnnn   delete inodes
+  Kccccccccnnnn   slice refs
+  SHssssssss      session heartbeat
+  SIssssssss      session info
+  SSssssssssiiiiiiii sustained inode
+*/
+
 func (m *kvMeta) inodeKey(inode Ino) []byte {
-	return m.fmtKey(10, byte('A'), inode, byte('i')) // 2 + 8
+	return m.fmtKey("A", inode, "I")
 }
 
 func (m *kvMeta) entryKey(parent Ino, name string) []byte {
-	return m.fmtKey(10+len(name), byte('A'), parent, byte('d'), name)
+	return m.fmtKey("A", parent, "D", name)
 }
 
 func (m *kvMeta) chunkKey(inode Ino, indx uint32) []byte {
-	return m.fmtKey(14, byte('A'), inode, byte('c'), indx) // 2 + 8 + 4
+	return m.fmtKey("A", inode, "C", indx)
 }
 
-/*
-func (m *kvMeta) sliceKey(parent Ino, name string) []byte {
-	return m.fmtKey('K')
+func (m *kvMeta) sliceKey(chunkid uint64, size uint32) []byte {
+	return m.fmtKey('K', chunkid, size)
 }
-*/
 
 func (m *kvMeta) symKey(inode Ino) []byte {
-	return m.fmtKey(10, byte('A'), inode, byte('s'))
+	return m.fmtKey("A", inode, "S")
 }
 
 func (m *kvMeta) xattrKey(inode Ino, name string) []byte {
-	return m.fmtKey(10+len(name), byte('A'), inode, byte('x'), name)
+	return m.fmtKey("A", inode, "X", name)
 }
 
 func (m *kvMeta) sessionKey(sid uint64) []byte {
-	return m.fmtKey(10, "SH", sid) // 2 + 8
+	return m.fmtKey("SH", sid)
 }
 
 func (m *kvMeta) parseSid(key []byte) uint64 {
@@ -177,11 +217,11 @@ func (m *kvMeta) parseSid(key []byte) uint64 {
 }
 
 func (m *kvMeta) sessionInfoKey(sid uint64) []byte {
-	return m.fmtKey(10, "SI", sid) // 2 + 8
+	return m.fmtKey("SI", sid)
 }
 
 func (m *kvMeta) sustainedKey(sid uint64, inode Ino) []byte {
-	return m.fmtKey(18, "SS", sid, inode) // 2 + 8 + 8
+	return m.fmtKey("SS", sid, inode)
 }
 
 func (m *kvMeta) parseInode(key []byte) Ino {
@@ -193,12 +233,12 @@ func (m *kvMeta) parseInode(key []byte) Ino {
 	return Ino(b.Get64())
 }
 
-func (m *kvMeta) delfileKey(inode Ino, length uint64) []byte { // FIXME: maybe delete :?
-	return m.fmtKey(18, byte('D'), inode, byte(':'), length) // 2 + 8 + 8
+func (m *kvMeta) delfileKey(inode Ino, length uint64) []byte {
+	return m.fmtKey("D", inode, length)
 }
 
 func (m *kvMeta) counterKey(key string) []byte {
-	return m.fmtKey(1+len(key), byte('C'), key)
+	return m.fmtKey("C", key)
 }
 
 func (m *kvMeta) packTime(now int64) []byte {
