@@ -23,7 +23,7 @@ import (
 )
 
 func TestTiKVClient(t *testing.T) {
-	m, err := newKVMeta("tikv", "127.0.0.1:2379", &Config{})
+	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{})
 	if err != nil {
 		t.Skipf("create meta: %s", err)
 	}

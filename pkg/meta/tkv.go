@@ -198,7 +198,7 @@ func (m *kvMeta) chunkKey(inode Ino, indx uint32) []byte {
 }
 
 func (m *kvMeta) sliceKey(chunkid uint64, size uint32) []byte {
-	return m.fmtKey('K', chunkid, size)
+	return m.fmtKey("K", chunkid, size)
 }
 
 func (m *kvMeta) symKey(inode Ino) []byte {
@@ -504,9 +504,9 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 			todel = append(todel, key)
 		}
 	}
-	_, err = m.deleteKeys(todel...)
+	err = m.deleteKeys(todel...)
 	if err == nil && len(keys) == len(todel) {
-		_, err = m.deleteKeys(m.sessionKey(sid), m.sessionInfoKey(sid))
+		err = m.deleteKeys(m.sessionKey(sid), m.sessionInfoKey(sid))
 		logger.Infof("cleanup session %d: %s", sid, err)
 	}
 }
@@ -552,7 +552,7 @@ func (m *kvMeta) flushStats() {
 				tx.incrBy(m.counterKey(totalInodes), newInodes)
 				return nil
 			})
-			if err == nil {
+			if err != nil {
 				logger.Warnf("update stats: %s", err)
 				m.updateStats(newSpace, newInodes)
 			}
@@ -646,14 +646,11 @@ func (m *kvMeta) incrCounter(key []byte, value int64) (int64, error) {
 	return old, err
 }
 
-func (m *kvMeta) deleteKeys(keys ...[]byte) (int, error) {
-	var count int
-	err := m.txn(func(tx kvTxn) error {
-		count = len(tx.gets(keys...))
+func (m *kvMeta) deleteKeys(keys ...[]byte) error {
+	return m.txn(func(tx kvTxn) error {
 		tx.dels(keys...)
 		return nil
 	})
-	return count, err
 }
 
 func (m *kvMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
@@ -1143,7 +1140,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.EPERM
 		}
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
-		if len(rs) < 2 {
+		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
 		}
 		var pattr, attr Attr
@@ -1234,7 +1231,7 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOTDIR
 		}
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
-		if len(rs) < 2 {
+		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
 		}
 		var pattr, attr Attr
@@ -1290,7 +1287,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			return nil
 		}
 		rs := tx.gets(m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino))
-		if len(rs) < 3 {
+		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return syscall.ENOENT
 		}
 		var sattr, dattr, iattr, tattr Attr
@@ -1424,7 +1421,7 @@ func (m *kvMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(func(tx kvTxn) error {
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
-		if len(rs) < 2 {
+		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
 		}
 		var pattr, iattr Attr
@@ -1599,7 +1596,7 @@ func (m *kvMeta) Close(ctx Context, inode Ino) syscall.Errno {
 			delete(m.removedFiles, inode)
 			go func() {
 				if err := m.deleteInode(inode); err == nil {
-					_, _ = m.deleteKeys(m.sustainedKey(m.sid, inode))
+					_ = m.deleteKeys(m.sustainedKey(m.sid, inode))
 				}
 			}()
 		}
@@ -1736,14 +1733,14 @@ func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		return syscall.EINVAL
 	}
 	inode = m.checkRoot(inode)
-	n, err := m.deleteKeys(m.xattrKey(inode, name))
+	value, err := m.get(m.xattrKey(inode, name))
 	if err != nil {
 		return errno(err)
-	} else if n == 0 {
-		return ENOATTR
-	} else {
-		return 0
 	}
+	if value == nil {
+		return ENOATTR
+	}
+	return errno(m.deleteKeys(m.xattrKey(inode, name)))
 }
 
 func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {

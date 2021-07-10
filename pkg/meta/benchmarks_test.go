@@ -29,7 +29,7 @@ const (
 	sqlAddr = "sqlite3://juicefs.db"
 	// sqlAddr = "mysql://root:@/juicefs" // MySQL
 	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/juicefs" // TiDB
-	kvAddr = "tikv://127.0.0.1:2379"
+	tkvAddr = "tikv://127.0.0.1:2379"
 )
 
 /*
@@ -594,8 +594,8 @@ func BenchmarkSQLDir(b *testing.B) {
 	benchmarkDir(b, m)
 }
 
-func BenchmarkKVDir(b *testing.B) {
-	m := NewClient(kvAddr, &Config{})
+func BenchmarkTKVDir(b *testing.B) {
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkDir(b, m)
 }
 
@@ -622,8 +622,8 @@ func BenchmarkSQLFile(b *testing.B) {
 	benchmarkFile(b, m)
 }
 
-func BenchmarkKVFile(b *testing.B) {
-	m := NewClient(kvAddr, &Config{})
+func BenchmarkTKVFile(b *testing.B) {
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkFile(b, m)
 }
 
@@ -647,8 +647,8 @@ func BenchmarkSQLXattr(b *testing.B) {
 	benchmarkXattr(b, m)
 }
 
-func BenchmarkKVXattr(b *testing.B) {
-	m := NewClient(kvAddr, &Config{})
+func BenchmarkTKVXattr(b *testing.B) {
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkXattr(b, m)
 }
 
@@ -671,8 +671,8 @@ func BenchmarkSQLLink(b *testing.B) {
 	benchmarkLink(b, m)
 }
 
-func BenchmarkKVLink(b *testing.B) {
-	m := NewClient(kvAddr, &Config{})
+func BenchmarkTKVLink(b *testing.B) {
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkLink(b, m)
 }
 
@@ -695,7 +695,7 @@ func BenchmarkSQLData(b *testing.B) {
 	benchmarkData(b, m)
 }
 
-func BenchmarkKVData(b *testing.B) {
-	m := NewClient(kvAddr, &Config{})
+func BenchmarkTKVData(b *testing.B) {
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkData(b, m)
 }

@@ -54,7 +54,7 @@ func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
 	if err != nil {
 		panic(err)
 	}
-	values := make([][]byte, len(ret))
+	values := make([][]byte, len(keys))
 	for i, key := range keys {
 		values[i] = ret[string(key)]
 	}
