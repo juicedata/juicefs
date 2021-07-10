@@ -196,9 +196,9 @@ scrape_configs:
     kubernetes_sd_configs:
     - role: pod
     relabel_configs:
-    - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_name]
+    - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
       action: keep
-      regex: kube-system;juicefs-csi-node-.+
+      regex: juicefs-mount
     - source_labels: [__address__]
       action: replace
       regex: ([^:]+)(:\d+)?
