@@ -88,7 +88,6 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m := &kvMeta{
 		conf:         conf,
-		prefix:       []byte("jfs"),
 		client:       client,
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
@@ -98,6 +97,10 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
+	}
+	p := strings.Index(addr, "/")
+	if p > 0 {
+		m.prefix = []byte(addr[p+1:])
 	}
 	m.root = 1
 	m.root, err = lookupSubdir(m, conf.Subdir)
@@ -166,6 +169,7 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
   session  ssssssss
 
 All keys:
+  setting         format
   C...            counter
   AiiiiiiiiI      inode attribute
   AiiiiiiiiD...   dentry
@@ -401,7 +405,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 		if err != nil {
 			logger.Fatalf("json: %s", err)
 		}
-		return m.setValue(m.counterKey("setting"), data)
+		return m.setValue(m.fmtKey("setting"), data)
 	}
 
 	data, err := json.MarshalIndent(format, "", "")
@@ -422,7 +426,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 	attr.Length = 4 << 10
 	attr.Parent = 1
 	return m.txn(func(tx kvTxn) error {
-		tx.set(m.counterKey("setting"), data)
+		tx.set(m.fmtKey("setting"), data)
 		tx.set(m.inodeKey(1), m.marshal(&attr))
 		if tx.incrBy(m.counterKey("nextInode"), 2) != 0 || tx.incrBy(m.counterKey("nextChunk"), 1) != 0 {
 			return fmt.Errorf("counter was not zero")
@@ -432,7 +436,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 }
 
 func (m *kvMeta) Load() (*Format, error) {
-	body, err := m.get(m.counterKey("setting"))
+	body, err := m.get(m.fmtKey("setting"))
 	if err != nil || body == nil {
 		return nil, err
 	}
