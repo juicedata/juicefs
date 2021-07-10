@@ -110,19 +110,7 @@ func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 }
 
 func (tx *tikvTxn) scanValues(prefix []byte) map[string][]byte {
-	it, err := tx.Iter(prefix, tx.nextKey(prefix))
-	if err != nil {
-		panic(err)
-	}
-	defer it.Close()
-	ret := make(map[string][]byte)
-	for it.Valid() {
-		ret[string(it.Key())] = it.Value()
-		if err = it.Next(); err != nil {
-			panic(err)
-		}
-	}
-	return ret
+	return tx.scanRange(prefix, tx.nextKey(prefix))
 }
 
 func (tx *tikvTxn) exist(prefix []byte) bool {
@@ -153,15 +141,14 @@ func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
 		if len(buf) != 8 {
 			panic("invalid counter value")
 		}
-		old = int64(endian.Uint64(buf)) // FIXME: uint <-> int
+		old = int64(endian.Uint64(buf))
 	}
-	new := old + value
 	if value != 0 {
 		buf = make([]byte, 8)
-		endian.PutUint64(buf, uint64(new))
+		endian.PutUint64(buf, uint64(old+value))
 		tx.set(key, buf)
 	}
-	return new
+	return old
 }
 
 func (tx *tikvTxn) dels(keys ...[]byte) {
