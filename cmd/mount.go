@@ -143,6 +143,7 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	blob = object.WithMetrics(blob)
+	blob = object.NewLimited(blob, c.Int64("upload-limit")*1e6/8, c.Int64("download-limit")*1e6/8)
 	store := chunk.NewCachedStore(blob, chunkConf)
 	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
@@ -274,12 +275,22 @@ func clientFlags() []cli.Flag {
 			Value: 300,
 			Usage: "total read/write buffering in MB",
 		},
+		&cli.Int64Flag{
+			Name:  "upload-limit",
+			Value: 0,
+			Usage: "bandwidth limit for upload in Mbps",
+		},
+		&cli.Int64Flag{
+			Name:  "download-limit",
+			Value: 0,
+			Usage: "bandwidth limit for download in Mbps",
+		},
+
 		&cli.IntFlag{
 			Name:  "prefetch",
 			Value: 1,
 			Usage: "prefetch N blocks in parallel",
 		},
-
 		&cli.BoolFlag{
 			Name:  "writeback",
 			Usage: "upload objects in background",
