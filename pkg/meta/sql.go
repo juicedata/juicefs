@@ -155,8 +155,17 @@ type dbMeta struct {
 	freeChunks freeID
 }
 
-func newSQLMeta(driver, dsn string, conf *Config) (*dbMeta, error) {
-	engine, err := xorm.NewEngine(driver, dsn)
+func init() {
+	Register("mysql", newSQLMeta)
+	Register("sqlite3", newSQLMeta)
+	Register("postgres", newSQLMeta)
+}
+
+func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
+	if driver == "postgres" {
+		addr = driver + "://" + addr
+	}
+	engine, err := xorm.NewEngine(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
