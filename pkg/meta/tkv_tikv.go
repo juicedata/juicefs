@@ -141,11 +141,11 @@ func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
 		if len(buf) != 8 {
 			panic("invalid counter value")
 		}
-		old = int64(endian.Uint64(buf))
+		old = int64(binary.BigEndian.Uint64(buf))
 	}
 	if value != 0 {
 		buf = make([]byte, 8)
-		endian.PutUint64(buf, uint64(old+value))
+		binary.BigEndian.PutUint64(buf, uint64(old+value))
 		tx.set(key, buf)
 	}
 	return old

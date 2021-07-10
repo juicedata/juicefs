@@ -31,8 +31,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
-var endian = binary.LittleEndian
-
 type kvTxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
