@@ -63,7 +63,7 @@
 					<archive>
 						<manifest>
 							<addClasspath>true</addClasspath>
-							<mainClass>io.juicefs.Main</mainClass> <!-- 你的主类名 -->
+							<mainClass>io.juicefs.Main</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
