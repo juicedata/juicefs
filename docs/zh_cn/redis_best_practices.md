@@ -10,7 +10,7 @@
 
 ## 高可用性
 
-[Redis 哨兵](https://redis.io/topics/哨兵) 是 Redis 官方的高可用解决方案。它提供以下功能：
+[Redis 哨兵](https://redis.io/topics/sentinel) 是 Redis 官方的高可用解决方案。它提供以下功能：
 
 - **监控**，哨兵会不断检查您的 master 实例和 replica 实例是否按预期工作。
 - **通知**，当受监控的 Redis 实例出现问题时，哨兵可以通过 API 通知系统管理员或其他计算机程序。
@@ -25,18 +25,17 @@
 2. 这三个哨兵实例应放置在彼此独立的计算机或虚拟机中。例如，分别位于不同的可用区域上的不同物理服务器或虚拟机上。
 3. **由于 Redis 使用异步复制，无法保证在发生故障时能够保留已确认的写入。** 然而，有一些部署 哨兵的方法，可以使丢失写入的窗口限于某些时刻，当然还有其他不太安全的部署方法。
 4. 如果您不在开发环境中经常进行测试，就无法确保 HA 的设置是安全的。在条件允许的情况，如果能够在生产环境中进行验证则更好。错误的配置往往都是在你难以预期和响应的时间出现（比如，凌晨 3 点你的 master 节点悄然罢工）。
-5. **哨兵、Docker 或其他形式的网络地址转换或端口映射应谨慎混用**：Docker 执行端口重映射，会破坏其他哨兵进程的哨兵自动发现以及 master 的 replicas 列表。 查看本文档后面有关哨兵和 Docker 的部分以获取更多信息。
+5. **哨兵、Docker 或其他形式的网络地址转换或端口映射应谨慎混用**：Docker 执行端口重映射，会破坏其他哨兵进程的哨兵自动发现以及 master 的 replicas 列表。
 
 更多信息请阅读[官方文档](https://redis.io/topics/sentinel)。
 
-部署了 Redis 服务器和哨兵以后，`META-URL` 可以指定为 `[redis[s]://][USER:PASSWORD@]MASTERNAME,SENTINEL_ADDRS:哨兵_PORT[/DB]`，例如：
+部署了 Redis 服务器和哨兵以后，`META-URL` 可以指定为 `redis[s]://[[USER]:PASSWORD@]MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`，例如：
 
 ```bash
-$ ./juicefs mount rediss://:password@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
+$ ./juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
 ```
 
-> **注意**：对于 v0.16+ 版本，URL 中提供密码会用于连接 Redis 服务器，哨兵的密码需要用环境遍历 `SENTINEL_PASSWORD` 指定。对于更早的版本，
-URL 中的密码会用于连接 Redis 和 哨兵，也都通过环境变量 `SENTINEL_PASSWORD` 和`REDIS_PASSWORD` 来覆盖。
+> **注意**：对于 v0.16+ 版本，URL 中提供的密码会用于连接 Redis 服务器，哨兵的密码需要用环境变量 `SENTINEL_PASSWORD` 指定。对于更早的版本，URL 中的密码会同时用于连接 Redis 服务器和哨兵，也可以通过环境变量 `SENTINEL_PASSWORD` 和 `REDIS_PASSWORD` 来覆盖。
 
 ## 数据持久性
 

@@ -25,19 +25,19 @@ There're some [fundamental things](https://redis.io/topics/sentinel#fundamental-
 2. The three Sentinel instances should be placed into computers or virtual machines that are believed to fail in an independent way. So for example different physical servers or Virtual Machines executed on different availability zones.
 3. **Sentinel + Redis distributed system does not guarantee that acknowledged writes are retained during failures, since Redis uses asynchronous replication.** However there are ways to deploy Sentinel that make the window to lose writes limited to certain moments, while there are other less secure ways to deploy it.
 4. There is no HA setup which is safe if you don't test from time to time in development environments, or even better if you can, in production environments, if they work. You may have a misconfiguration that will become apparent only when it's too late (at 3am when your master stops working).
-5. **Sentinel, Docker, or other forms of Network Address Translation or Port Mapping should be mixed with care**: Docker performs port remapping, breaking Sentinel auto discovery of other Sentinel processes and the list of replicas for a master. Check the section about Sentinel and Docker later in this document for more information.
+5. **Sentinel, Docker, or other forms of Network Address Translation or Port Mapping should be mixed with care**: Docker performs port remapping, breaking Sentinel auto discovery of other Sentinel processes and the list of replicas for a master.
 
 Please read the [official documentation](https://redis.io/topics/sentinel) for more information.
 
-Once Redis servers and Sentinels are deployed, the `META-URL` can be specified as `[redis[s]://][USER:PASSWORD@]MASTERNAME,SENTINEL_ADDRS:SENTINEL_PORT[/DB]`, for example:
+Once Redis servers and Sentinels are deployed, the `META-URL` can be specified as `redis[s]://[[USER]:PASSWORD@]MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`, for example:
 
 ```bash
-$ ./juicefs mount rediss://:password@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
+$ ./juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
 ```
 
-> **Note**: For v0.16+, the password in the URL will be used to connect Redis server, the password for Sentinel
-should be provided using enviroment viarables `SENTINEL_PASSWORD`. For early versions, the password is used for both
-Redis server and Sentinel, they can be overrided by enviroment viarables `SENTINEL_PASSWORD` and `REDIS_SERVER`.
+> **Note**: For v0.16+, the `PASSWORD` in the URL will be used to connect Redis server, the password for Sentinel
+> should be provided using environment variable `SENTINEL_PASSWORD`. For early versions, the `PASSWORD` is used for both
+> Redis server and Sentinel, they can be overrode by environment variables `SENTINEL_PASSWORD` and `REDIS_PASSWORD`.
 
 ## Data Durability
 
