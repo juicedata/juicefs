@@ -15,7 +15,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.15-dev (2021-06-16 b5d0cd8)
+   0.16-dev (2021-07-12 d0a9d87)
 
 COMMANDS:
    format   format a volume
@@ -31,8 +31,8 @@ COMMANDS:
    profile  analyze access log
    status   show status of JuiceFS
    warmup   build cache for target directories/files
-   dump     dump JuiceFS metadata into a standalone file
-   load     load JuiceFS metadata from a previously dumped file
+   dump     dump metadata into a JSON file
+   load     load metadata from a previously dumped JSON file
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -203,6 +203,12 @@ juicefs mount [command options] META-URL MOUNTPOINT
 `--buffer-size value`\
 读写缓存的总大小；单位为 MiB (默认: 300)
 
+`--upload-limit value`\
+上传带宽限制，单位为 Mbps (默认: 0)
+
+`--download-limit value`\
+下载带宽限制，单位为 Mbps (默认: 0)
+
 `--prefetch value`\
 并发预读 N 个块 (默认: 1)
 
@@ -269,6 +275,12 @@ juicefs gateway [command options] META-URL ADDRESS
 
 `--buffer-size value`\
 读写缓存的总大小；单位为 MiB (默认: 300)
+
+`--upload-limit value`\
+上传带宽限制，单位为 Mbps (默认: 0)
+
+`--download-limit value`\
+下载带宽限制，单位为 Mbps (默认: 0)
 
 `--prefetch value`\
 并发预读 N 个块 (默认: 1)
