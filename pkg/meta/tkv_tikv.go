@@ -187,6 +187,7 @@ func (c *tikvClient) txn(f func(kvTxn) error) error {
 		return err
 	}
 	if !tx.IsReadOnly() {
+		tx.SetEnable1PC(true)
 		err = tx.Commit(context.Background())
 	}
 	return err
