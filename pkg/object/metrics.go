@@ -16,6 +16,7 @@
 package object
 
 import (
+	"fmt"
 	"io"
 	"time"
 
@@ -77,7 +78,10 @@ func (counter *readCounter) Close() error {
 
 // Seek call the Seek in underlying reader.
 func (counter *readCounter) Seek(offset int64, whence int) (int64, error) {
-	return counter.Reader.(io.Seeker).Seek(offset, whence)
+	if s, ok := counter.Reader.(io.Seeker); ok {
+		return s.Seek(offset, whence)
+	}
+	return 0, fmt.Errorf("%v does not support Seek()", counter.Reader)
 }
 
 type withMetrics struct {
