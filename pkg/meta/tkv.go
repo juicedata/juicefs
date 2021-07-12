@@ -213,13 +213,12 @@ func (m *kvMeta) sessionKey(sid uint64) []byte {
 	return m.fmtKey("SH", sid)
 }
 
-func (m *kvMeta) parseSid(key []byte) uint64 {
-	prefix := len(m.prefix) + 2 // "SH"
-	b := utils.FromBuffer(key[prefix:])
-	if b.Len() != 8 {
+func (m *kvMeta) parseSid(key string) uint64 {
+	buf := []byte(key[len(m.prefix)+2:]) // "SH"
+	if len(buf) != 8 {
 		panic("invalid sid value")
 	}
-	return b.Get64()
+	return binary.BigEndian.Uint64(buf)
 }
 
 func (m *kvMeta) sessionInfoKey(sid uint64) []byte {
@@ -235,7 +234,7 @@ func (m *kvMeta) encodeInode(ino Ino, buf []byte) {
 }
 
 func (m *kvMeta) decodeInode(buf []byte) Ino {
-	return Ino(binary.LittleEndian.Uint64(buf)) // "SS" + sid
+	return Ino(binary.LittleEndian.Uint64(buf))
 }
 
 func (m *kvMeta) delfileKey(inode Ino, length uint64) []byte {
@@ -497,7 +496,7 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 	}
 	var todel [][]byte
 	for _, key := range keys {
-		inode := m.decodeInode(key[len(m.prefix)+10:])
+		inode := m.decodeInode(key[len(m.prefix)+10:]) // "SS" + sid
 		if err := m.deleteInode(inode); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
 		} else {
@@ -521,7 +520,7 @@ func (m *kvMeta) cleanStaleSessions() {
 	var ids []uint64
 	for k, v := range vals {
 		if m.parseTime(v) < time.Now().Add(time.Minute*-5).Unix() {
-			ids = append(ids, m.parseSid([]byte(k)))
+			ids = append(ids, m.parseSid(k))
 		}
 	}
 	for _, sid := range ids {
@@ -529,12 +528,66 @@ func (m *kvMeta) cleanStaleSessions() {
 	}
 }
 
+func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
+	info, err := m.get(m.sessionInfoKey(sid))
+	if err != nil {
+		return nil, err
+	}
+	if info == nil {
+		info = []byte("{}")
+	}
+	var s Session
+	if err = json.Unmarshal(info, &s); err != nil {
+		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
+	}
+	s.Sid = sid
+	if detail {
+		inodes, err := m.scanKeys(m.fmtKey("SS", sid))
+		if err != nil {
+			return nil, err
+		}
+		s.Sustained = make([]Ino, 0, len(inodes))
+		for _, sinode := range inodes {
+			inode := m.decodeInode(sinode[len(m.prefix)+10:]) // "SS" + sid
+			s.Sustained = append(s.Sustained, inode)
+		}
+		// TODO: locks
+	}
+	return &s, nil
+}
+
 func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
-	return nil, fmt.Errorf("not supported")
+	value, err := m.get(m.sessionKey(sid))
+	if err != nil {
+		return nil, err
+	}
+	if value == nil {
+		return nil, fmt.Errorf("session not found: %d", sid)
+	}
+	s, err := m.getSession(sid, true)
+	if err != nil {
+		return nil, err
+	}
+	s.Heartbeat = time.Unix(m.parseTime(value), 0)
+	return s, nil
 }
 
 func (m *kvMeta) ListSessions() ([]*Session, error) {
-	return nil, fmt.Errorf("not supported")
+	vals, err := m.scanValues(m.fmtKey("SH"))
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]*Session, 0, len(vals))
+	for k, v := range vals {
+		s, err := m.getSession(m.parseSid(k), false)
+		if err != nil {
+			logger.Errorf("get session: %s", err)
+			continue
+		}
+		s.Heartbeat = time.Unix(m.parseTime(v), 0)
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
 }
 
 func (m *kvMeta) updateStats(space int64, inodes int64) {
