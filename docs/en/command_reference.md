@@ -15,7 +15,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.15-dev (2021-06-16 b5d0cd8)
+   0.16-dev (2021-07-12 d0a9d87)
 
 COMMANDS:
    format   format a volume
@@ -31,8 +31,8 @@ COMMANDS:
    profile  analyze access log
    status   show status of JuiceFS
    warmup   build cache for target directories/files
-   dump     dump JuiceFS metadata into a standalone file
-   load     load JuiceFS metadata from a previously dumped file
+   dump     dump metadata into a JSON file
+   load     load metadata from a previously dumped JSON file
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -203,6 +203,12 @@ number of connections to upload (default: 20)
 `--buffer-size value`\
 total read/write buffering in MiB (default: 300)
 
+`--upload-limit value`\
+bandwidth limit for upload in Mbps (default: 0)
+
+`--download-limit value`\
+bandwidth limit for download in Mbps (default: 0)
+
 `--prefetch value`\
 prefetch N blocks in parallel (default: 1)
 
@@ -269,6 +275,12 @@ number of connections to upload (default: 20)
 
 `--buffer-size value`\
 total read/write buffering in MiB (default: 300)
+
+`--upload-limit value`\
+bandwidth limit for upload in Mbps (default: 0)
+
+`--download-limit value`\
+bandwidth limit for download in Mbps (default: 0)
 
 `--prefetch value`\
 prefetch N blocks in parallel (default: 1)
