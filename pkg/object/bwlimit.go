@@ -16,6 +16,7 @@
 package object
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -33,6 +34,14 @@ func (l *limitedReader) Read(buf []byte) (int, error) {
 		l.r.Wait(int64(n))
 	}
 	return n, err
+}
+
+// Seek call the Seek in underlying reader.
+func (l *limitedReader) Seek(offset int64, whence int) (int64, error) {
+	if s, ok := l.ReadCloser.(io.Seeker); ok {
+		return s.Seek(offset, whence)
+	}
+	return 0, fmt.Errorf("%v does not support Seek()", l.ReadCloser)
 }
 
 type bwlimit struct {
