@@ -261,7 +261,7 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation create -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar nnbench create -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
   此命令会 create 10000 个空文件
@@ -269,7 +269,7 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 - open
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation open -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar nnbench open -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
   此命令会 open 10000 个文件，并不读取数据
@@ -277,36 +277,36 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 - rename
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar nnbench rename -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
 - delete
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation delete -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar nnbench delete -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
 - 参考值
 
 | 操作   | TPS  | 时延（ms） |
 | ------ | ---- | ----       |
-| create | 546  | 1.83       |
-| open   | 1135 | 0.88       |
-| rename | 364  | 2.75       |
-| delete | 289  | 3.46       |
+| create | 644  | 1.55       |
+| open   | 3467 | 0.29       |
+| rename | 483  | 2.07       |
+| delete | 506  | 1.97       |
 
 #### I/O 性能
 
-- 连续写
+- 顺序写
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -write -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar dfsio -write -size 20000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO -local
   ```
 
-- 连续读
+- 顺序读
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -read -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar dfsio -read -size 20000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO -local
   ```
 
   如果多次运行此命令，可能会出现数据被缓存到了系统缓存而导致读取速度非常快，只需清除 JuiceFS 的本地磁盘缓存即可
@@ -315,8 +315,8 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 
 | 操作   | 吞吐（MB/s） |
 | ------ | ----         |
-| write  | 453          |
-| read   | 141          |
+| write  | 647          |
+| read   | 111          |
 
 如果机器的网络带宽比较低，则一般能达到网络带宽瓶颈
 
@@ -333,31 +333,31 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation create -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar nnbench create -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
   ```
 
   此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会创建 1000 个空文件，总共 100000 个空文件
 
-- create
+- open
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation open -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar nnbench open -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
   ```
 
   此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 open 1000 个文件，总共 open 100000 个文件
 
-- create
+- rename
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation rename -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar nnbench rename -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
   ```
 
   此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 rename 1000 个文件，总共 rename 100000 个文件
 
-- create
+- delete
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation delete -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar nnbench delete -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
   ```
 
   此命令会启动 10 个 map task，每个 task 有 10 个线程，每个线程会 delete 1000 个文件，总共 delete 100000 个文件
@@ -368,26 +368,26 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 
   | 操作   | IOPS | 时延（ms） |
   | ------ | ---- | ----       |
-  | create | 2307 | 3.6        |
-  | open   | 3215 | 2.3        |
-  | rename | 1700 | 5.22       |
-  | delete | 1378 | 6.7        |
+  | create | 4178 | 2.2        |
+  | open   | 9407 | 0.8        |
+  | rename | 3197 | 2.9       |
+  | delete | 3060 | 3.0        |
 
   - 100 并发
 
   | 操作   | IOPS  | 时延（ms） |
   | ------ | ----  | ----       |
-  | create | 8375  | 11.5       |
-  | open   | 12691 | 7.5        |
-  | rename | 5343  | 18.4       |
-  | delete | 3576  | 27.6       |
+  | create | 11773  | 7.9       |
+  | open   | 34083 | 2.4        |
+  | rename | 8995  | 10.8       |
+  | delete | 7191  | 13.6       |
 
 #### I/O 性能
 
 - 连续写
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -write -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar dfsio -write -maps 10 -size 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO
   ```
 
   此命令会启动 10 个 map task，每个 task 写入 10000MB 的数据
@@ -395,7 +395,7 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 - 连续读
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -read -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar dfsio -read -maps 10 -size 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO
   ```
 
   此命令会启动 10 个 map task，每个 task 读取 10000MB 的数据
@@ -405,8 +405,8 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 
 | 操作   | 平均吞吐（MB/s） | 总吞吐（MB/s） |
 | ------ | ----             | ----           |
-| write  | 180              | 1792           |
-| read   | 141              | 1409           |
+| write  | 198              | 1835           |
+| read   | 124              | 1234           |
 
 
 ## FAQ

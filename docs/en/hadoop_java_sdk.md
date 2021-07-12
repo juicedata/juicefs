@@ -260,7 +260,7 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation create -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar nnbench create -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
   It creates 10000 empty files without write data
@@ -268,7 +268,7 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 - open
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation open -numberOfFiles 10000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar nnbench open -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
   It opens 10000 files without read data
@@ -276,36 +276,36 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 - rename
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation rename -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar nnbench rename -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
 - delete
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBenchWithoutMR -operation delete -numberOfFiles 10000 -bytesPerBlock 134217728 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench_local
+  hadoop jar juicefs-hadoop.jar nnbench delete -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
 - for reference
 
 | Operation | TPS  | Delay (ms) |
 | --------- | ---  | ---------- |
-| create    | 546  | 1.83       |
-| open      | 1135 | 0.88       |
-| rename    | 364  | 2.75       |
-| delete    | 289  | 3.46       |
+| create | 644  | 1.55       |
+| open   | 3467 | 0.29       |
+| rename | 483  | 2.07       |
+| delete | 506  | 1.97       |
 
 #### I/O Performance
 
 - sequential write
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -write -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar dfsio -write -size 20000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO -local
   ```
 
 - sequential read
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestFSIO -read -fileSize 20000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar dfsio -read -size 20000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO -local
   ```
 
   When run the cmd for the second time, the result may be much better than the first run. It's because the data was cached in memory, just clean the local disk cache.
@@ -314,8 +314,8 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 
 | Operation | Throughput (MB/s) |
 | --------- | ----------------- |
-| write     | 453               |
-| read      | 141               |
+| write  | 647          |
+| read   | 111          |
 
 ### Distributed Benchmark
 
@@ -330,32 +330,32 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 - create
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation create -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar nnbench create -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
   ```
 
   10 map task, each has 10 threads, each thread create 1000 empty file. 100000 files in total
 
-- create
+- open
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation open -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar nnbench open -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
   ```
 
   10 map task, each has 10 threads, each thread open 1000 file. 100000 files in total
 
-- create
+- rename
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation rename -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar nnbench rename -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
   ```
 
   10 map task, each has 10 threads, each thread rename 1000 file. 100000 files in total
 
 
-- create
+- delete
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.NNBench -operation delete -threadsPerMap 10 -maps 10 -numberOfFiles 1000 -baseDir jfs://{JFS_NAME}/benchmarks/nnbench
+  hadoop jar juicefs-hadoop.jar nnbench delete -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
   ```
 
   10 map task, each has 10 threads, each thread delete 1000 file. 100000 files in total
@@ -366,26 +366,26 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
   | Operation | TPS  | Delay (ms) |
   | --------- | ---  | ---------- |
-  | create    | 2307 | 3.6        |
-  | open      | 3215 | 2.3        |
-  | rename    | 1700 | 5.22       |
-  | delete    | 1378 | 6.7        |
+  | create | 4178 | 2.2        |
+  | open   | 9407 | 0.8        |
+  | rename | 3197 | 2.9       |
+  | delete | 3060 | 3.0        |
 
     - 100 threads
 
   | Operation | TPS   | Delay (ms) |
   | --------- | ---   | ---------- |
-  | create    | 8375  | 11.5       |
-  | open      | 12691 | 7.5        |
-  | rename    | 5343  | 18.4       |
-  | delete    | 3576  | 27.6       |
+  | create | 11773  | 7.9       |
+  | open   | 34083 | 2.4        |
+  | rename | 8995  | 10.8       |
+  | delete | 7191  | 13.6       |
 
 #### I/O Performance
 
 - sequential write
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -write -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar dfsio -write -maps 10 -size 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO
   ```
 
   10 map task, each task write 10000MB random data sequentially
@@ -393,7 +393,7 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 - sequential read
 
   ```shell
-  hadoop jar juicefs-hadoop.jar io.juicefs.bench.TestDFSIO -read -nrFiles 10 -fileSize 10000 -baseDir jfs://{JFS_NAME}/benchmarks/fsio
+  hadoop jar juicefs-hadoop.jar dfsio -read -maps 10 -size 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO
   ```
 
   10 map task, each task read 10000MB random data sequentially
@@ -403,8 +403,8 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
 | Operation | Total Throughput (MB/s) |
 | --------- | ----------------------- |
-| write     | 1792                    |
-| read      | 1409                    |
+| write     | 1835                    |
+| read      | 1234                    |
 
 
 ## FAQ
