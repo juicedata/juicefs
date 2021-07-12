@@ -10,34 +10,32 @@
 
 ## 高可用性
 
-[Redis Sentinel](https://redis.io/topics/sentinel) 是 Redis 官方的高可用解决方案。它提供以下功能：
+[Redis 哨兵](https://redis.io/topics/sentinel) 是 Redis 官方的高可用解决方案。它提供以下功能：
 
-- **监控**，Sentinel 会不断检查您的 master 实例和 replica 实例是否按预期工作。
-- **通知**，当受监控的 Redis 实例出现问题时，Sentinel 可以通过 API 通知系统管理员或其他计算机程序。
-- **自动故障转移**，如果 master 没有按预期工作，Sentinel 可以启动一个故障转移过程，其中一个 replica 被提升为 master，其他的副本被重新配置为使用新的 master，应用程序在连接 Redis 服务器时会被告知新的地址。
-- **配置提供程序**，Sentinel 会充当客户端服务发现的权威来源：客户端连接到 Sentinel 以获取当前 Redis 主节点的地址。如果发生故障转移，Sentinel 会报告新地址。
+- **监控**，哨兵会不断检查您的 master 实例和 replica 实例是否按预期工作。
+- **通知**，当受监控的 Redis 实例出现问题时，哨兵可以通过 API 通知系统管理员或其他计算机程序。
+- **自动故障转移**，如果 master 没有按预期工作，哨兵可以启动一个故障转移过程，其中一个 replica 被提升为 master，其他的副本被重新配置为使用新的 master，应用程序在连接 Redis 服务器时会被告知新的地址。
+- **配置提供程序**，哨兵会充当客户端服务发现的权威来源：客户端连接到哨兵以获取当前 Redis 主节点的地址。如果发生故障转移，哨兵会报告新地址。
 
-**Redis 2.8 开始提供稳定版本的 Redis Sentinel**。Redis 2.6 提供的第一版 Redis Sentinel 已被弃用，不建议使用。
+**Redis 2.8 开始提供稳定版本的 Redis 哨兵**。Redis 2.6 提供的第一版 Redis 哨兵已被弃用，不建议使用。
 
-在使用 Redis Sentinel 之前，您需要了解一些[基础知识](https://redis.io/topics/sentinel#fundamental-things-to-know-about-sentinel-before-deploying)：
+在使用 Redis 哨兵之前，您需要了解一些[基础知识](https://redis.io/topics/sentinel#fundamental-things-to-know-about-sentinel-before-deploying)：
 
-1. 您至少需要三个 Sentinel 实例才能进行稳健的部署。
-2. 这三个 Sentinel 实例应放置在彼此独立的计算机或虚拟机中。例如，分别位于不同的可用区域上的不同物理服务器或虚拟机上。
-3. **由于 Redis 使用异步复制，Sentinel + Redis 分布式系统无法保证在发生故障时能够保留已确认的写入。** 然而，有一些部署 Sentinel 的方法，可以使丢失写入的窗口限于某些时刻，当然还有其他不太安全的部署方法。
+1. 您至少需要三个哨兵实例才能进行稳健的部署。
+2. 这三个哨兵实例应放置在彼此独立的计算机或虚拟机中。例如，分别位于不同的可用区域上的不同物理服务器或虚拟机上。
+3. **由于 Redis 使用异步复制，无法保证在发生故障时能够保留已确认的写入。** 然而，有一些部署 哨兵的方法，可以使丢失写入的窗口限于某些时刻，当然还有其他不太安全的部署方法。
 4. 如果您不在开发环境中经常进行测试，就无法确保 HA 的设置是安全的。在条件允许的情况，如果能够在生产环境中进行验证则更好。错误的配置往往都是在你难以预期和响应的时间出现（比如，凌晨 3 点你的 master 节点悄然罢工）。
-5. **Sentinel、Docker 或其他形式的网络地址转换或端口映射应谨慎混用**：Docker 执行端口重映射，会破坏其他 Sentinel 进程的 Sentinel 自动发现以及 master 的 replicas 列表。 查看本文档后面有关 Sentinel 和 Docker 的部分以获取更多信息。
+5. **哨兵、Docker 或其他形式的网络地址转换或端口映射应谨慎混用**：Docker 执行端口重映射，会破坏其他哨兵进程的哨兵自动发现以及 master 的 replicas 列表。
 
 更多信息请阅读[官方文档](https://redis.io/topics/sentinel)。
 
-部署了 Redis 服务器和 Sentinels 以后，`META-URL` 可以指定为 `[redis[s]://][USER:PASSWORD@]MASTERNAME,SENTINEL_ADDRS:SENTINEL_PORT[/DB]`，例如：
+部署了 Redis 服务器和哨兵以后，`META-URL` 可以指定为 `redis[s]://[[USER]:PASSWORD@]MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`，例如：
 
 ```bash
-$ ./juicefs mount rediss://:sentinelPass@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
+$ ./juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 ```
 
-> **注意**：Sentinel 的默认端口是 26379，但是上面的 URL 使用 6379（Redis 的默认端口）作为默认端口，所以 Sentinel 的端口不是可选的。
-
-> **注意**：当 URL 中提供密码时，也会用于连接 Redis 服务器。 如果他们有不同的密码，密码应该由环境变量（`SENTINEL_PASSWORD` 和`REDIS_PASSWORD`）分别指定。
+> **注意**：对于 v0.16+ 版本，URL 中提供的密码会用于连接 Redis 服务器，哨兵的密码需要用环境变量 `SENTINEL_PASSWORD` 指定。对于更早的版本，URL 中的密码会同时用于连接 Redis 服务器和哨兵，也可以通过环境变量 `SENTINEL_PASSWORD` 和 `REDIS_PASSWORD` 来覆盖。
 
 ## 数据持久性
 

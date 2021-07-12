@@ -119,24 +119,21 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.MasterName = ps[0]
 		fopt.SentinelAddrs = ps[1:]
 		_, port, _ := net.SplitHostPort(fopt.SentinelAddrs[len(fopt.SentinelAddrs)-1])
-		if port != "" {
-			for i := range fopt.SentinelAddrs {
-				h, p, _ := net.SplitHostPort(fopt.SentinelAddrs[i])
-				if p == "" {
-					fopt.SentinelAddrs[i] = net.JoinHostPort(h, port)
-				}
+		if port == "" {
+			port = "26379"
+		}
+		for i, addr := range fopt.SentinelAddrs {
+			h, p, _ := net.SplitHostPort(addr)
+			if p == "" {
+				fopt.SentinelAddrs[i] = net.JoinHostPort(h, port)
 			}
 		}
-		// Assume Redis server and sentinel have the same password.
-		fopt.SentinelPassword = opt.Password
 		fopt.Username = opt.Username
 		fopt.Password = opt.Password
-		if fopt.SentinelPassword == "" && os.Getenv("SENTINEL_PASSWORD") != "" {
-			fopt.SentinelPassword = os.Getenv("SENTINEL_PASSWORD")
-		}
 		if fopt.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
 			fopt.Password = os.Getenv("REDIS_PASSWORD")
 		}
+		fopt.SentinelPassword = os.Getenv("SENTINEL_PASSWORD")
 		fopt.DB = opt.DB
 		fopt.TLSConfig = opt.TLSConfig
 		fopt.MaxRetries = conf.Retries
