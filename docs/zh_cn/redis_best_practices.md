@@ -32,7 +32,7 @@
 部署了 Redis 服务器和哨兵以后，`META-URL` 可以指定为 `redis[s]://[[USER]:PASSWORD@]MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`，例如：
 
 ```bash
-$ ./juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
+$ ./juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 ```
 
 > **注意**：对于 v0.16+ 版本，URL 中提供的密码会用于连接 Redis 服务器，哨兵的密码需要用环境变量 `SENTINEL_PASSWORD` 指定。对于更早的版本，URL 中的密码会同时用于连接 Redis 服务器和哨兵，也可以通过环境变量 `SENTINEL_PASSWORD` 和 `REDIS_PASSWORD` 来覆盖。

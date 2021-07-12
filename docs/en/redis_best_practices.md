@@ -32,7 +32,7 @@ Please read the [official documentation](https://redis.io/topics/sentinel) for m
 Once Redis servers and Sentinels are deployed, the `META-URL` can be specified as `redis[s]://[[USER]:PASSWORD@]MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`, for example:
 
 ```bash
-$ ./juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:5000/2 ~/jfs
+$ ./juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 ```
 
 > **Note**: For v0.16+, the `PASSWORD` in the URL will be used to connect Redis server, the password for Sentinel
