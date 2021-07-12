@@ -1,20 +1,20 @@
 # Kubernetes 使用 JuiceFS
 
-JuiceFS provides the [CSI driver](https://github.com/juicedata/juicefs-csi-driver) for Kubernetes.
+JuiceFS 为 Kubernetes 环境提供了 [CSI Driver](https://github.com/juicedata/juicefs-csi-driver)。
 
 
-## Prerequisites
+## 先决条件
 
 - Kubernetes 1.14+
 
 
-## Installation
+## 安装
 
-### Install with Helm
+### 通过 Helm 安装
 
-To install Helm, refer to the [Helm install guide](https://github.com/helm/helm#install), Helm 3 is required.
+首先参考 [Helm 安装指南](https://github.com/helm/helm#install)安装 Helm，需要 Helm 3 及以上版本。
 
-1. Prepare a file `values.yaml` with access information about Redis and object storage (take Amazon S3 `us-east-1` as an example)
+1. 准备一个叫做 `values.yaml` 的文件，其中包含 Redis 和对象存储的访问信息（这里以 Amazon S3 的 `us-east-1` 区域为例）：
 
 ```yaml
 storageClasses:
@@ -30,9 +30,9 @@ storageClasses:
     bucket: "https://juicefs-test.s3.us-east-1.amazonaws.com"
 ```
 
-Here we assign AWS [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) for the EC2 Kuberentes node, otherwise the `accessKey` and `secretKey` cannot be empty. We use ElastiCache for Redis as the meta store.
+这里我们给 Kubernetes 节点的 EC2 实例分配了 AWS [IAM 角色](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html)，否则 `accessKey` 和 `secretKey` 不能为空。这里以 ElastiCache for Redis 作为元数据引擎。
 
-2. Install
+2. 安装
 
 ```shell
 helm repo add juicefs-csi-driver https://juicedata.github.io/juicefs-csi-driver/
@@ -40,9 +40,9 @@ helm repo update
 helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install -f ./values.yaml
 ```
 
-3. Check the deployment
+3. 检查部署
 
-- Check pods are running: the deployment will launch a `StatefulSet` named `juicefs-csi-controller` with replica `1` and a `DaemonSet` named `juicefs-csi-node`, so run `kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver` should see `n+1` (where `n` is the number of worker nodes of the Kubernetes cluster) pods is running. For example:
+- 检查 pods 正在运行：部署会启动一个叫做 `juicefs-csi-controller` 的 `StatefulSet`（副本数为 1）以及一个叫做 `juicefs-csi-node` 的 `DaemonSet`，因此运行 `kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver` 命令将会看到 `n+1` 个 pods 正在运行（其中 `n` 是 Kubernetes 集群节点的数量）。例如：
 
 ```sh
 $ kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
@@ -51,9 +51,10 @@ juicefs-csi-controller-0   3/3     Running   0          22m
 juicefs-csi-node-v9tzb     3/3     Running   0          14m
 ```
 
-- Check secret: `kubectl -n kube-system describe secret juicefs-sc-secret` will show the secret with above `backend` fields in `values.yaml`:
+- 检查 Secret：`kubectl -n kube-system describe secret juicefs-sc-secret` 命令将会显示和上面 `values.yaml` 文件中的 `backend` 字段对应的 Secret 信息：
 
-```
+```sh
+$ kubectl -n kube-system describe secret juicefs-sc-secret
 Name:         juicefs-sc-secret
 Namespace:    kube-system
 Labels:       app.kubernetes.io/instance=juicefs-csi-driver
@@ -76,30 +77,31 @@ secret-key:  0 bytes
 storage:     2 bytes
 ```
 
-- Check storage class: `kubectl get sc juicefs-sc` will show the storage class like this:
+- 检查存储类（storage class）：`kubectl get sc juicefs-sc` 命令将会显示类如下面的存储类：
 
-```
+```sh
+$ kubectl get sc juicefs-sc
 NAME         PROVISIONER       RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
 juicefs-sc   csi.juicefs.com   Retain          Immediate           false                  69m
 ```
 
-### Install with kubectl
+### 通过 kubectl 安装
 
-1. Deploy the driver:
+1. 部署 CSI Driver：
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
 ```
 
-Here we use the `juicedata/juicefs-csi-driver:latest` image, if we want to use the specified tag such as `v0.7.0` , we should download the deploy YAML file and modified it:
+这里我们使用 `juicedata/juicefs-csi-driver:latest` 镜像，如果你希望使用特定标签的镜像（例如 `v0.7.0`），你需要下载部署的 YAML 文件并修改它：
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@juicedata/juicefs-csi-driver@juicedata/juicefs-csi-driver:v0.7.0@' | kubectl apply -f -
 ```
 
-2. Create storage class
+2. 创建存储类
 
-- Create secret `juicefs-sc-secret`:
+- 创建叫做 `juicefs-sc-secret` 的 Secret：
 
 ```bash
 kubectl -n kube-system create secret generic juicefs-sc-secret \
@@ -112,7 +114,7 @@ kubectl -n kube-system create secret generic juicefs-sc-secret \
 
 ```
 
-- Create storage class use `kubectl apply`:
+- 通过 `kubectl apply` 创建存储类：
 
 ```yaml
 apiVersion: storage.k8s.io/v1
@@ -130,9 +132,9 @@ volumeBindingMode: Immediate
 ```
 
 
-## Use JuiceFS
+## 使用 JuiceFS
 
-Now we can use JuiceFS in our pods.  Here we create a `PVC` and refer to it in a pod as an example:
+现在我们可以在 pods 中使用 JuiceFS。这里我们创建了一个 `PersistentVolumeClaim` 并在一个 pod 中使用它：
 
 ```yaml
 apiVersion: v1
@@ -169,7 +171,7 @@ spec:
       claimName: juicefs-pvc
 ```
 
-Save above content to a file named like `juicefs-app.yaml`, then use command `kubectl apply -f juicefs-app.yaml` to bootstrap the pod. After that, you can check the status of pod:
+将以上内容保存到一个类似叫做 `juicefs-app.yaml` 的文件中，然后运行 `kubectl apply -f juicefs-app.yaml` 命令来启动这个 pod。运行完以后，你可以检查 pod 的状态：
 
 ```sh
 $ kubectl get pod juicefs-app
@@ -177,18 +179,18 @@ NAME          READY     STATUS    RESTARTS   AGE
 juicefs-app   1/1       Running   0          10m
 ```
 
-If the status of pod is not `Running` (e.g. `ContainerCreating`), there may have some issues. Please refer to the [troubleshooting](https://github.com/juicedata/juicefs-csi-driver/blob/master/docs/troubleshooting.md) document.
+如果 pod 的状态不是 `Running`（例如 `ContainerCreating`），应该是存在一些问题。请参考[故障处理](https://github.com/juicedata/juicefs-csi-driver/blob/master/docs/troubleshooting.md)文档。
 
-For more details about JuiceFS CSI driver please refer to [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver).
+如果想了解更多关于 JuiceFS CSI Driver 的信息，请参考[项目主页](https://github.com/juicedata/juicefs-csi-driver)。
 
 
-## Monitoring
+## 监控
 
-JuiceFS CSI driver can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p8s_metrics.md).
+JuiceFS CSI Driver 可以在 `9567` 端口导出 [Prometheus](https://prometheus.io) 指标。关于所有监控指标的详细描述，请参考 [JuiceFS 监控指标](p8s_metrics.md)。
 
-### Configure Prometheus server
+### 配置 Prometheus 服务
 
-Add a job to `prometheus.yml`:
+新增一个任务到 `prometheus.yml`：
 
 ```yaml
 scrape_configs:
@@ -209,7 +211,7 @@ scrape_configs:
       action: replace
 ```
 
-Here we assume the Prometheus server is running inside Kubernetes cluster, if your prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable from Prometheus server, refer to [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
+这里我们假设 Prometheus 服务运行在 Kubernetes 集群中，如果你的 Prometheus 服务运行在 Kubernetes 集群之外，请确保 Prometheus 服务可以访问 Kubernetes 节点，请参考[这个 issue](https://github.com/prometheus/prometheus/issues/4633) 添加 `api_server` 和 `tls_config` 配置到以上文件：
 
 ```yaml
 scrape_configs:
@@ -227,6 +229,6 @@ scrape_configs:
     ...
 ```
 
-### Configure Grafana dashboard
+### 配置 Grafana 仪表盘
 
-We provide a [dashboard template](../en/k8s_grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
+JuiceFS 为 [Grafana](https://grafana.com) 提供了一个[仪表盘模板](../en/k8s_grafana_template.json)，可以导入到 Grafana 中用于展示 Prometheus 收集的监控指标。
