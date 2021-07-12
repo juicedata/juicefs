@@ -81,7 +81,7 @@ func (counter *readCounter) Seek(offset int64, whence int) (int64, error) {
 	if s, ok := counter.Reader.(io.Seeker); ok {
 		return s.Seek(offset, whence)
 	}
-	return 0, fmt.Errorf("%v does not support Seek()", counter.Reader)
+	return 0, fmt.Errorf("%+v does not support Seek()", counter.Reader)
 }
 
 type withMetrics struct {

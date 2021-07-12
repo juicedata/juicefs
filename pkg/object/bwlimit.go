@@ -18,18 +18,17 @@ package object
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	"github.com/juju/ratelimit"
 )
 
 type limitedReader struct {
-	io.ReadCloser
+	io.Reader
 	r *ratelimit.Bucket
 }
 
 func (l *limitedReader) Read(buf []byte) (int, error) {
-	n, err := l.ReadCloser.Read(buf)
+	n, err := l.Reader.Read(buf)
 	if l.r != nil {
 		l.r.Wait(int64(n))
 	}
@@ -38,10 +37,18 @@ func (l *limitedReader) Read(buf []byte) (int, error) {
 
 // Seek call the Seek in underlying reader.
 func (l *limitedReader) Seek(offset int64, whence int) (int64, error) {
-	if s, ok := l.ReadCloser.(io.Seeker); ok {
+	if s, ok := l.Reader.(io.Seeker); ok {
 		return s.Seek(offset, whence)
 	}
-	return 0, fmt.Errorf("%v does not support Seek()", l.ReadCloser)
+	return 0, fmt.Errorf("%+v does not support Seek()", l.Reader)
+}
+
+// Close closes the underlying reader
+func (l *limitedReader) Close() error {
+	if rc, ok := l.Reader.(io.Closer); ok {
+		return rc.Close()
+	}
+	return nil
 }
 
 type bwlimit struct {
@@ -68,6 +75,6 @@ func (p *bwlimit) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (p *bwlimit) Put(key string, in io.Reader) error {
-	in = &limitedReader{ioutil.NopCloser(in), p.upLimit}
+	in = &limitedReader{in, p.upLimit}
 	return p.ObjectStorage.Put(key, in)
 }
