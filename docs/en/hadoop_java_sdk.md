@@ -103,13 +103,15 @@ Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Ha
 
 ### I/O Configurations
 
-| Configuration         | Default Value | Description                                     |
-| -------------         | ------------- | -----------                                     |
-| `juicefs.max-uploads` | 20            | The max number of connections to upload         |
-| `juicefs.get-timeout` | 5             | The max number of seconds to download an object |
-| `juicefs.put-timeout` | 60            | The max number of seconds to upload an object   |
-| `juicefs.memory-size` | 300           | Total read/write buffering in MiB               |
-| `juicefs.prefetch`    | 1             | Prefetch N blocks in parallel                   |
+| Configuration            | Default Value | Description                                     |
+| -------------            | ------------- | -----------                                     |
+| `juicefs.max-uploads`    | 20            | The max number of connections to upload         |
+| `juicefs.get-timeout`    | 5             | The max number of seconds to download an object |
+| `juicefs.put-timeout`    | 60            | The max number of seconds to upload an object   |
+| `juicefs.memory-size`    | 300           | Total read/write buffering in MiB               |
+| `juicefs.prefetch`       | 1             | Prefetch N blocks in parallel                   |
+| `juicefs.upload-limit`   | 0             | Bandwidth limit for upload in Mbps              |
+| `juicefs.download-limit` | 0             | Bandwidth limit for download in Mbps            |
 
 ### Other Configurations
 
