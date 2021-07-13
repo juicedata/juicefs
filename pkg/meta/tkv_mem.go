@@ -28,6 +28,9 @@ func init() {
 }
 
 func newTkvClient(driver, addr string) (tkvClient, error) {
+	if driver != "memkv" {
+		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "memkv")
+	}
 	return &memKV{
 		items: make(map[string]*kvItem),
 	}, nil
