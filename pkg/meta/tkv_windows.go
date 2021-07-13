@@ -1,4 +1,4 @@
-// +build tikv fdb
+// +build tikv
 
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
@@ -15,27 +15,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-//nolint:errcheck
 package meta
 
-import (
-	"testing"
+import "syscall"
+
+const (
+	F_UNLCK = syscall.ENOTSUP
+	F_RDLCK = syscall.ENOTSUP
+	F_WRLCK = syscall.ENOTSUP
 )
-
-func TestTiKVClient(t *testing.T) {
-	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{})
-	if err != nil {
-		t.Skipf("create meta: %s", err)
-	}
-	// TODO: reset
-
-	// testTruncateAndDelete(t, m)
-	testMetaClient(t, m)
-	testStickyBit(t, m)
-	testLocks(t, m)
-	testConcurrentWrite(t, m)
-	// testCompaction(t, m)
-	// testCopyFileRange(t, m)
-	m.(*kvMeta).conf.CaseInsensi = true
-	testCaseIncensi(t, m)
-}
