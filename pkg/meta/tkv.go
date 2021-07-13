@@ -1,5 +1,3 @@
-// +build tikv fdb
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -179,6 +177,8 @@ All keys:
   AiiiiiiiiS         symlink target
   AiiiiiiiiX...      extented attribute
   Diiiiiiiinnnn      delete inodes
+  Fiiiiiiii          Flocks
+  Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
   SHssssssss         session heartbeat
   SIssssssss         session info
@@ -207,6 +207,14 @@ func (m *kvMeta) symKey(inode Ino) []byte {
 
 func (m *kvMeta) xattrKey(inode Ino, name string) []byte {
 	return m.fmtKey("A", inode, "X", name)
+}
+
+func (m *kvMeta) flockKey(inode Ino) []byte {
+	return m.fmtKey("F", inode)
+}
+
+func (m *kvMeta) plockKey(inode Ino) []byte {
+	return m.fmtKey("P", inode)
 }
 
 func (m *kvMeta) sessionKey(sid uint64) []byte {
@@ -488,7 +496,54 @@ func (m *kvMeta) refreshSession() {
 }
 
 func (m *kvMeta) cleanStaleSession(sid uint64) {
-	// TODO: release locks
+	// release locks
+	flocks, err := m.scanValues(m.fmtKey("F"))
+	if err != nil {
+		logger.Warnf("scan flock for stale session %d: %s", sid, err)
+		return
+	}
+	for k, v := range flocks {
+		ls := unmarshalFlock(v)
+		for o := range ls {
+			if o.sid == sid {
+				err = m.txn(func(tx kvTxn) error {
+					v := tx.get([]byte(k))
+					ls := unmarshalFlock(v)
+					delete(ls, o)
+					tx.set([]byte(k), marshalFlock(ls))
+					return nil
+				})
+				if err != nil {
+					logger.Warnf("remove flock for stale session %d: %s", sid, err)
+					return
+				}
+			}
+		}
+	}
+	plocks, err := m.scanValues(m.fmtKey("P"))
+	if err != nil {
+		logger.Warnf("scan plock for stale session %d: %s", sid, err)
+		return
+	}
+	for k, v := range plocks {
+		ls := unmarshalFlock(v)
+		for o := range ls {
+			if o.sid == sid {
+				err = m.txn(func(tx kvTxn) error {
+					v := tx.get([]byte(k))
+					ls := unmarshalPlock(v)
+					delete(ls, o)
+					tx.set([]byte(k), marshalPlock(ls))
+					return nil
+				})
+				if err != nil {
+					logger.Warnf("remove plock for stale session %d: %s", sid, err)
+					return
+				}
+			}
+		}
+	}
+
 	keys, err := m.scanKeys(m.fmtKey("SS", sid))
 	if err != nil {
 		logger.Warnf("scan stale session %d: %s", sid, err)
@@ -551,7 +606,32 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			inode := m.decodeInode(sinode[len(m.prefix)+10:]) // "SS" + sid
 			s.Sustained = append(s.Sustained, inode)
 		}
-		// TODO: locks
+		flocks, err := m.scanValues(m.fmtKey("F"))
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range flocks {
+			inode := m.decodeInode([]byte(k[len(m.prefix)+1:])) // "F"
+			ls := unmarshalFlock(v)
+			for o, l := range ls {
+				if o.sid == sid {
+					s.Flocks = append(s.Flocks, Flock{inode, o.sid, string(l)})
+				}
+			}
+		}
+		plocks, err := m.scanValues(m.fmtKey("P"))
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range plocks {
+			inode := m.decodeInode([]byte(k[len(m.prefix)+1:])) // "P"
+			ls := unmarshalPlock(v)
+			for o, l := range ls {
+				if o.sid == sid {
+					s.Plocks = append(s.Plocks, Plock{inode, o.sid, l})
+				}
+			}
+		}
 	}
 	return &s, nil
 }
@@ -1892,18 +1972,6 @@ func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 		return ENOATTR
 	}
 	return errno(m.deleteKeys(m.xattrKey(inode, name)))
-}
-
-func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
-	return syscall.ENOTSUP
-}
-
-func (m *kvMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
-	return syscall.ENOTSUP
-}
-
-func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
-	return syscall.ENOTSUP
 }
 
 func (m *kvMeta) DumpMeta(w io.Writer) error {

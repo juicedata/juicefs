@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
+ * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
  * This program is free software: you can use, redistribute, and/or modify
  * it under the terms of the GNU Affero General Public License, version 3
@@ -17,14 +17,10 @@ package meta
 
 import "syscall"
 
-func (m *dbMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
-	return syscall.ENOSYS
-}
+const ENOATTR = syscall.ENODATA
 
-func (m *dbMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
-	return syscall.ENOSYS
-}
-
-func (m *dbMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
-	return syscall.ENOSYS
-}
+const (
+	F_UNLCK = 1
+	F_RDLCK = 2
+	F_WRLCK = 3
+)
