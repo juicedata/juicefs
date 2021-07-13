@@ -102,8 +102,24 @@ func TestLoadDump(t *testing.T) {
 			t.Fatalf("dump meta: %s", err)
 		}
 	})
+	t.Run("Metadata Engine: TKV", func(t *testing.T) {
+		m := testLoad(t, "memkv://test/jfs", sampleFile)
+		// m := testLoad(t, "tikv://127.0.0.1:2379/jfs", sampleFile)
+		fp, err := os.OpenFile("tkv.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			t.Fatalf("open file: %s", "tkv.dump")
+		}
+		defer fp.Close()
+		if err = m.DumpMeta(fp); err != nil {
+			t.Fatalf("dump meta: %s", err)
+		}
+	})
 
 	cmd := exec.Command("diff", "redis.dump", "sqlite3.dump")
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("diff: %s", out)
+	}
+	cmd = exec.Command("diff", "redis.dump", "tkv.dump")
 	if out, err := cmd.Output(); err != nil {
 		t.Fatalf("diff: %s", out)
 	}
