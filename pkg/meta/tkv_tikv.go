@@ -177,7 +177,12 @@ func (c *tikvClient) isEmpty() bool {
 	if err != nil {
 		panic(err)
 	}
-	return tx.Len() == 0
+	it, err := tx.Iter(nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	defer it.Close()
+	return !it.Valid()
 }
 
 func (c *tikvClient) txn(f func(kvTxn) error) error {
