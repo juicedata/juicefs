@@ -45,7 +45,6 @@ type kvTxn interface {
 
 type tkvClient interface {
 	name() string
-	isEmpty() bool
 	txn(f func(kvTxn) error) error
 }
 
@@ -2178,7 +2177,15 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 }
 
 func (m *kvMeta) LoadMeta(r io.Reader) error {
-	if !m.client.isEmpty() {
+	var exist bool
+	err := m.txn(func(tx kvTxn) error {
+		exist = tx.exist(m.fmtKey())
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if exist {
 		return fmt.Errorf("Database %s is not empty", m.Name())
 	}
 

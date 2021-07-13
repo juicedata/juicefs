@@ -82,6 +82,9 @@ func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 }
 
 func (tx *tikvTxn) nextKey(key []byte) []byte {
+	if len(key) == 0 {
+		return nil
+	}
 	next := make([]byte, len(key))
 	copy(next, key)
 	p := len(next) - 1
@@ -170,19 +173,6 @@ type tikvClient struct {
 
 func (c *tikvClient) name() string {
 	return "TiKV"
-}
-
-func (c *tikvClient) isEmpty() bool {
-	tx, err := c.client.Begin()
-	if err != nil {
-		panic(err)
-	}
-	it, err := tx.Iter(nil, nil)
-	if err != nil {
-		panic(err)
-	}
-	defer it.Close()
-	return !it.Valid()
 }
 
 func (c *tikvClient) txn(f func(kvTxn) error) error {
