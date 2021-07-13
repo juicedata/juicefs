@@ -159,6 +159,10 @@ func (c *memKV) name() string {
 	return "memkv"
 }
 
+func (c *memKV) isEmpty() bool {
+	return len(c.items) == 0
+}
+
 func (c *memKV) txn(f func(kvTxn) error) error {
 	tx := &memTxn{
 		store:    c,

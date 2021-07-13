@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +45,7 @@ type kvTxn interface {
 
 type tkvClient interface {
 	name() string
+	isEmpty() bool
 	txn(f func(kvTxn) error) error
 }
 
@@ -253,13 +255,13 @@ func (m *kvMeta) counterKey(key string) []byte {
 	return m.fmtKey("C", key)
 }
 
-func (m *kvMeta) packTime(now int64) []byte {
+func (m *kvMeta) packInt64(value int64) []byte {
 	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(now))
+	binary.BigEndian.PutUint64(b, uint64(value))
 	return b
 }
 
-func (m *kvMeta) parseTime(buf []byte) int64 {
+func (m *kvMeta) parseInt64(buf []byte) int64 {
 	if len(buf) != 8 {
 		panic("invalid time value")
 	}
@@ -486,7 +488,7 @@ func (m *kvMeta) NewSession() error {
 
 func (m *kvMeta) refreshSession() {
 	for {
-		_ = m.setValue(m.sessionKey(m.sid), m.packTime(time.Now().Unix()))
+		_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 		time.Sleep(time.Minute)
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
@@ -574,7 +576,7 @@ func (m *kvMeta) cleanStaleSessions() {
 	}
 	var ids []uint64
 	for k, v := range vals {
-		if m.parseTime(v) < time.Now().Add(time.Minute*-5).Unix() {
+		if m.parseInt64(v) < time.Now().Add(time.Minute*-5).Unix() {
 			ids = append(ids, m.parseSid(k))
 		}
 	}
@@ -648,7 +650,7 @@ func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.Heartbeat = time.Unix(m.parseTime(value), 0)
+	s.Heartbeat = time.Unix(m.parseInt64(value), 0)
 	return s, nil
 }
 
@@ -664,7 +666,7 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 			logger.Errorf("get session: %s", err)
 			continue
 		}
-		s.Heartbeat = time.Unix(m.parseTime(v), 0)
+		s.Heartbeat = time.Unix(m.parseInt64(v), 0)
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
@@ -1311,7 +1313,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 					tx.set(m.inodeKey(inode), m.marshal(&attr))
 					tx.set(m.sustainedKey(m.sid, inode), []byte{1})
 				} else {
-					tx.set(m.delfileKey(inode, attr.Length), m.packTime(now.Unix()))
+					tx.set(m.delfileKey(inode, attr.Length), m.packInt64(now.Unix()))
 					tx.dels(m.inodeKey(inode))
 					newSpace, newInode = -align4K(attr.Length), -1
 				}
@@ -1509,7 +1511,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 						tx.set(m.inodeKey(dino), m.marshal(&tattr))
 						tx.set(m.sustainedKey(m.sid, dino), []byte{1})
 					} else {
-						tx.set(m.delfileKey(dino, tattr.Length), m.packTime(now.Unix()))
+						tx.set(m.delfileKey(dino, tattr.Length), m.packInt64(now.Unix()))
 						tx.dels(m.inodeKey(dino))
 						newSpace, newInode = -align4K(tattr.Length), -1
 					}
@@ -1692,7 +1694,7 @@ func (m *kvMeta) deleteInode(inode Ino) error {
 			return nil
 		}
 		m.parseAttr(a, &attr)
-		tx.set(m.delfileKey(inode, attr.Length), m.packTime(time.Now().Unix()))
+		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(time.Now().Unix()))
 		tx.dels(m.inodeKey(inode))
 		newSpace = -align4K(attr.Length)
 		return nil
@@ -1974,9 +1976,257 @@ func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	return errno(m.deleteKeys(m.xattrKey(inode, name)))
 }
 
-func (m *kvMeta) DumpMeta(w io.Writer) error {
-	return syscall.ENOTSUP
+func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
+	e := &DumpedEntry{}
+	return e, m.txn(func(tx kvTxn) error {
+		a := tx.get(m.inodeKey(inode))
+		if a == nil {
+			return fmt.Errorf("inode %d not found", inode)
+		}
+		attr := &Attr{}
+		m.parseAttr(a, attr)
+		e.Attr = dumpAttr(attr)
+		e.Attr.Inode = inode
+
+		vals := tx.scanValues(m.xattrKey(inode, ""))
+		if len(vals) > 0 {
+			xattrs := make([]*DumpedXattr, 0, len(vals))
+			for k, v := range vals {
+				xattrs = append(xattrs, &DumpedXattr{k[len(m.prefix)+10:], string(v)}) // "A" + inode + "X"
+			}
+			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+			e.Xattrs = xattrs
+		}
+
+		if attr.Typ == TypeFile {
+			vals = tx.scanRange(m.chunkKey(inode, 0), m.chunkKey(inode, uint32(attr.Length/ChunkSize)+1))
+			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
+				v, ok := vals[string(m.chunkKey(inode, indx))]
+				if !ok {
+					continue
+				}
+				ss := readSliceBuf(v)
+				slices := make([]*DumpedSlice, 0, len(ss))
+				for _, s := range ss {
+					slices = append(slices, &DumpedSlice{s.pos, s.chunkid, s.size, s.off, s.len})
+				}
+				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
+			}
+		} else if attr.Typ == TypeSymlink {
+			l := tx.get(m.symKey(inode))
+			if l == nil {
+				return fmt.Errorf("no link target for inode %d", inode)
+			}
+			e.Symlink = string(l)
+		}
+
+		return nil
+	})
 }
+
+func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
+	vals, err := m.scanValues(m.entryKey(inode, ""))
+	if err != nil {
+		return nil, err
+	}
+	entries := make(map[string]*DumpedEntry)
+	for k, v := range vals {
+		typ, inode := m.parseEntry([]byte(v))
+		entry, err := m.dumpEntry(inode)
+		if err != nil {
+			return nil, err
+		}
+		if typ == TypeDirectory {
+			if entry.Entries, err = m.dumpDir(inode); err != nil {
+				return nil, err
+			}
+		}
+		entries[k[len(m.prefix)+10:]] = entry // "A" + inode + "D"
+	}
+	return entries, nil
+}
+
+func (m *kvMeta) DumpMeta(w io.Writer) error {
+	vals, err := m.scanValues(m.fmtKey("D"))
+	if err != nil {
+		return nil
+	}
+	dels := make([]*DumpedDelFile, 0, len(vals))
+	for k, v := range vals {
+		b := utils.FromBuffer([]byte(k[len(m.prefix)+1:])) // "D"
+		if b.Len() != 16 {
+			return fmt.Errorf("invalid delfileKey: %s", k)
+		}
+		inode := m.decodeInode(b.Get(8))
+		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
+	}
+
+	tree, err := m.dumpEntry(m.root)
+	if err != nil {
+		return err
+	}
+	if tree.Entries, err = m.dumpDir(m.root); err != nil {
+		return err
+	}
+
+	format, err := m.Load()
+	if err != nil {
+		return nil
+	}
+
+	var rs [][]byte
+	err = m.txn(func(tx kvTxn) error {
+		rs = tx.gets(m.counterKey(usedSpace),
+			m.counterKey(totalInodes),
+			m.counterKey("nextInode"),
+			m.counterKey("nextChunk"),
+			m.counterKey("nextSession"),
+			m.counterKey("nextCleanupSlices"))
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	cs := make([]int64, len(rs))
+	for i, r := range rs {
+		if r != nil {
+			cs[i] = m.parseInt64(r)
+		}
+	}
+
+	vals, err = m.scanValues(m.fmtKey("SS"))
+	if err != nil {
+		return nil
+	}
+	ss := make(map[uint64][]Ino)
+	for k, _ := range vals {
+		b := utils.FromBuffer([]byte(k[len(m.prefix)+2:])) // "SS"
+		if b.Len() != 16 {
+			return fmt.Errorf("invalid sustainedKey: %s", k)
+		}
+		sid := b.Get64()
+		inode := m.decodeInode(b.Get(8))
+		ss[sid] = append(ss[sid], inode)
+	}
+	sessions := make([]*DumpedSustained, 0, len(ss))
+	for k, v := range ss {
+		sessions = append(sessions, &DumpedSustained{k, v})
+	}
+
+	dm := DumpedMeta{
+		format,
+		&DumpedCounters{
+			UsedSpace:         cs[0],
+			UsedInodes:        cs[1],
+			NextInode:         cs[2],
+			NextChunk:         cs[3],
+			NextSession:       cs[4],
+			NextCleanupSlices: cs[5],
+		},
+		sessions,
+		dels,
+		tree,
+	}
+	return dm.writeJSON(w)
+}
+
+func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int64) error {
+	inode := e.Attr.Inode
+	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	attr := loadAttr(e.Attr)
+	attr.Parent = e.Parent
+	return m.txn(func(tx kvTxn) error {
+		if attr.Typ == TypeFile {
+			attr.Length = e.Attr.Length
+			for _, c := range e.Chunks {
+				if len(c.Slices) == 0 {
+					continue
+				}
+				slices := make([]byte, 0, sliceBytes*len(c.Slices))
+				for _, s := range c.Slices {
+					slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
+					refs[string(m.sliceKey(s.Chunkid, s.Size))]++
+					if cs.NextChunk <= int64(s.Chunkid) {
+						cs.NextChunk = int64(s.Chunkid) + 1
+					}
+				}
+				tx.set(m.chunkKey(inode, c.Index), slices)
+			}
+		} else if attr.Typ == TypeDirectory {
+			attr.Length = 4 << 10
+			for _, c := range e.Entries {
+				tx.set(m.entryKey(inode, c.Name), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode))
+			}
+		} else if attr.Typ == TypeSymlink {
+			attr.Length = uint64(len(e.Symlink))
+			tx.set(m.symKey(inode), []byte(e.Symlink))
+		}
+		if inode > 1 {
+			cs.UsedSpace += align4K(attr.Length)
+			cs.UsedInodes += 1
+		}
+		if cs.NextInode <= int64(inode) {
+			cs.NextInode = int64(inode) + 1
+		}
+
+		for _, x := range e.Xattrs {
+			tx.set(m.xattrKey(inode, x.Name), []byte(x.Value))
+		}
+		tx.set(m.inodeKey(inode), m.marshal(attr))
+		return nil
+	})
+}
+
 func (m *kvMeta) LoadMeta(r io.Reader) error {
-	return syscall.ENOTSUP
+	if !m.client.isEmpty() {
+		return fmt.Errorf("Database %s is not empty", m.Name())
+	}
+
+	dec := json.NewDecoder(r)
+	dm := &DumpedMeta{}
+	if err := dec.Decode(dm); err != nil {
+		return err
+	}
+	format, err := json.MarshalIndent(dm.Setting, "", "")
+	if err != nil {
+		return err
+	}
+
+	dm.FSTree.Attr.Inode = 1
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries); err != nil {
+		return err
+	}
+	counters := &DumpedCounters{
+		NextInode:   2,
+		NextChunk:   1,
+		NextSession: 1,
+	}
+	refs := make(map[string]int64)
+	for _, entry := range entries {
+		if err = m.loadEntry(entry, counters, refs); err != nil {
+			return err
+		}
+	}
+	logger.Infof("Dumped counters: %+v", *dm.Counters)
+	logger.Infof("Loaded counters: %+v", *counters)
+
+	return m.txn(func(tx kvTxn) error {
+		tx.set(m.fmtKey("setting"), format)
+		tx.set(m.counterKey(usedSpace), m.packInt64(counters.UsedSpace))
+		tx.set(m.counterKey(totalInodes), m.packInt64(counters.UsedInodes))
+		tx.set(m.counterKey("nextInode"), m.packInt64(counters.NextInode))
+		tx.set(m.counterKey("nextChunk"), m.packInt64(counters.NextChunk))
+		tx.set(m.counterKey("nextSession"), m.packInt64(counters.NextSession))
+		tx.set(m.counterKey("nextCleanupSlices"), m.packInt64(counters.NextCleanupSlices))
+		for _, d := range dm.DelFiles {
+			tx.set(m.delfileKey(d.Inode, d.Length), m.packInt64(d.Expire))
+		}
+		for k, v := range refs {
+			if v > 1 {
+				tx.set([]byte(k), m.packInt64(v-1))
+			}
+		}
+		return nil
+	})
 }

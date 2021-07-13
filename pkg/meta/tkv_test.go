@@ -21,7 +21,7 @@ import (
 )
 
 func TestTKVClient(t *testing.T) {
-	m, err := newKVMeta("memkv", "", &Config{})
+	m, err := newKVMeta("memkv", "test/jfs", &Config{})
 	// m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)

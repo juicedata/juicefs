@@ -172,6 +172,14 @@ func (c *tikvClient) name() string {
 	return "TiKV"
 }
 
+func (c *tikvClient) isEmpty() bool {
+	tx, err := c.client.Begin()
+	if err != nil {
+		panic(err)
+	}
+	return tx.Len() == 0
+}
+
 func (c *tikvClient) txn(f func(kvTxn) error) error {
 	tx, err := c.client.Begin()
 	if err != nil {
