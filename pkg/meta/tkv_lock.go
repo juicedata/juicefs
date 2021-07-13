@@ -1,5 +1,3 @@
-// +build tikv
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -30,7 +28,7 @@ type lockOwner struct {
 }
 
 func marshalFlock(ls map[lockOwner]byte) []byte {
-	b := utils.NewBuffer(uint32(len(ls)) * 9)
+	b := utils.NewBuffer(uint32(len(ls)) * 17)
 	for o, l := range ls {
 		b.Put64(o.sid)
 		b.Put64(o.owner)
@@ -59,21 +57,24 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 		err = m.txn(func(tx kvTxn) error {
 			v := tx.get(ikey)
 			ls := unmarshalFlock(v)
-			if ltype == F_UNLCK {
+			switch ltype {
+			case F_UNLCK:
 				delete(ls, lkey)
-			} else if ltype == F_RDLCK {
+			case F_RDLCK:
 				for _, l := range ls {
 					if l == 'W' {
 						return syscall.EAGAIN
 					}
 				}
 				ls[lkey] = 'R'
-			} else {
+			case F_WRLCK:
 				delete(ls, lkey)
 				if len(ls) > 0 {
 					return syscall.EAGAIN
 				}
 				ls[lkey] = 'W'
+			default:
+				return syscall.EINVAL
 			}
 			if len(ls) == 0 {
 				tx.dels(ikey)

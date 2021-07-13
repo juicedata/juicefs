@@ -1,5 +1,3 @@
-// +build tikv fdb
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -22,12 +20,11 @@ import (
 	"testing"
 )
 
-func TestTiKVClient(t *testing.T) {
-	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{})
+func TestTKVClient(t *testing.T) {
+	m, err := newKVMeta("memkv", "", &Config{})
 	if err != nil {
 		t.Skipf("create meta: %s", err)
 	}
-	// TODO: reset
 
 	// testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
