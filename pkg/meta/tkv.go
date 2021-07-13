@@ -197,9 +197,9 @@ func (m *kvMeta) chunkKey(inode Ino, indx uint32) []byte {
 	return m.fmtKey("A", inode, "C", indx)
 }
 
-// func (m *kvMeta) sliceKey(chunkid uint64, size uint32) []byte {
-// 	return m.fmtKey("K", chunkid, size)
-// }
+func (m *kvMeta) sliceKey(chunkid uint64, size uint32) []byte {
+	return m.fmtKey("K", chunkid, size)
+}
 
 func (m *kvMeta) symKey(inode Ino) []byte {
 	return m.fmtKey("A", inode, "S")
