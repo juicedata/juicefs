@@ -169,19 +169,19 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
   session  ssssssss
 
 All keys:
-  setting         format
-  C...            counter
-  AiiiiiiiiI      inode attribute
-  AiiiiiiiiD...   dentry
-  AiiiiiiiiCnnnn  file chunks
-  AiiiiiiiiS      symlink target
-  AiiiiiiiiX...   extented attribute
-  Diiiiiiiinnnn   delete inodes
-  Fiiiiiiii       Flocks
-  Piiiiiiii       POSIX locks
-  Kccccccccnnnn   slice refs
-  SHssssssss      session heartbeat
-  SIssssssss      session info
+  setting            format
+  C...               counter
+  AiiiiiiiiI         inode attribute
+  AiiiiiiiiD...      dentry
+  AiiiiiiiiCnnnn     file chunks
+  AiiiiiiiiS         symlink target
+  AiiiiiiiiX...      extented attribute
+  Diiiiiiiinnnn      delete inodes
+  Fiiiiiiii          Flocks
+  Piiiiiiii          POSIX locks
+  Kccccccccnnnn      slice refs
+  SHssssssss         session heartbeat
+  SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
 */
 
