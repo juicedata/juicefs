@@ -28,13 +28,13 @@ func init() {
 }
 
 func newTkvClient(driver, addr string) (tkvClient, error) {
-	return &memKv{
+	return &memKV{
 		items: make(map[string]*kvItem),
 	}, nil
 }
 
 type memTxn struct {
-	store    *memKv
+	store    *memKV
 	observed map[string]int
 	buffer   map[string][]byte
 }
@@ -48,21 +48,15 @@ func (tx *memTxn) get(key []byte) []byte {
 	v, ok := tx.store.items[string(key)]
 	if ok {
 		tx.observed[string(key)] = v.ver
-		return v.v
+		return v.value
 	}
 	return nil
 }
 
 func (tx *memTxn) gets(keys ...[]byte) [][]byte {
-	tx.store.Lock()
-	defer tx.store.Unlock()
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
-		v, ok := tx.store.items[string(key)]
-		if ok {
-			tx.observed[string(key)] = v.ver
-			values[i] = v.v
-		}
+		values[i] = tx.get(key)
 	}
 	return values
 }
@@ -74,8 +68,9 @@ func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	end := string(end_)
 	ret := make(map[string][]byte)
 	for k, v := range tx.store.items {
-		if k >= begin && (end == "" || k < end) && v.v != nil {
-			ret[k] = v.v
+		if k >= begin && (end == "" || k < end) && len(v.value) > 0 {
+			tx.observed[string(k)] = v.ver
+			ret[k] = v.value
 		}
 	}
 	return ret
@@ -148,20 +143,20 @@ func (tx *memTxn) dels(keys ...[]byte) {
 }
 
 type kvItem struct {
-	ver int
-	v   []byte
+	ver   int
+	value []byte
 }
 
-type memKv struct {
+type memKV struct {
 	sync.Mutex
 	items map[string]*kvItem
 }
 
-func (c *memKv) name() string {
+func (c *memKV) name() string {
 	return "memkv"
 }
 
-func (c *memKv) txn(f func(kvTxn) error) error {
+func (c *memKV) txn(f func(kvTxn) error) error {
 	tx := &memTxn{
 		store:    c,
 		observed: make(map[string]int),
@@ -177,19 +172,19 @@ func (c *memKv) txn(f func(kvTxn) error) error {
 	c.Lock()
 	defer c.Unlock()
 	for k, ver := range tx.observed {
-		v := c.items[k]
-		if v.ver > ver {
-			return fmt.Errorf("write conflict: %s %d > %d", k, v.ver, ver)
+		it := c.items[k]
+		if it.ver > ver {
+			return fmt.Errorf("write conflict: %s %d > %d", k, it.ver, ver)
 		}
 	}
 	for k, value := range tx.buffer {
-		v := c.items[k]
-		if v == nil {
-			v = &kvItem{}
-			c.items[k] = v
+		it := c.items[k]
+		if it == nil {
+			it = &kvItem{}
+			c.items[k] = it
 		}
-		v.ver++
-		v.v = value
+		it.ver++
+		it.value = value
 	}
 	return nil
 }

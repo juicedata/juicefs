@@ -177,6 +177,8 @@ All keys:
   AiiiiiiiiS      symlink target
   AiiiiiiiiX...   extented attribute
   Diiiiiiiinnnn   delete inodes
+  Fiiiiiiii       Flocks
+  Piiiiiiii       POSIX locks
   Kccccccccnnnn   slice refs
   SHssssssss      session heartbeat
   SIssssssss      session info
@@ -609,7 +611,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			return nil, err
 		}
 		for k, v := range flocks {
-			inode := m.decodeInode([]byte(k[1:])) // "F" + inode
+			inode := m.decodeInode([]byte(k[len(m.prefix)+1:])) // "F"
 			ls := unmarshalFlock(v)
 			for o, l := range ls {
 				if o.sid == sid {
@@ -622,7 +624,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			return nil, err
 		}
 		for k, v := range plocks {
-			inode := m.decodeInode([]byte(k[1:])) // "P" + inode
+			inode := m.decodeInode([]byte(k[len(m.prefix)+1:])) // "P"
 			ls := unmarshalPlock(v)
 			for o, l := range ls {
 				if o.sid == sid {
