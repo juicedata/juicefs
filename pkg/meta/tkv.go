@@ -2099,7 +2099,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 		return nil
 	}
 	ss := make(map[uint64][]Ino)
-	for k, _ := range vals {
+	for k := range vals {
 		b := utils.FromBuffer([]byte(k[len(m.prefix)+2:])) // "SS"
 		if b.Len() != 16 {
 			return fmt.Errorf("invalid sustainedKey: %s", k)
