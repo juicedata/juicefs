@@ -61,7 +61,7 @@ func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
-func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
+func (tx *tikvTxn) scanRange0(begin, end []byte, filter func(k, v []byte) bool) map[string][]byte {
 	it, err := tx.Iter(begin, end)
 	if err != nil {
 		panic(err)
@@ -69,12 +69,20 @@ func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 	defer it.Close()
 	var ret = make(map[string][]byte)
 	for it.Valid() {
-		ret[string(it.Key())] = it.Value()
+		key := it.Key()
+		value := it.Value()
+		if filter == nil || filter(key, value) {
+			ret[string(key)] = value
+		}
 		if err = it.Next(); err != nil {
 			panic(err)
 		}
 	}
 	return ret
+}
+
+func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
+	return scanRange0(begin, end, nil)
 }
 
 func (tx *tikvTxn) nextKey(key []byte) []byte {
@@ -110,8 +118,8 @@ func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 	return ret
 }
 
-func (tx *tikvTxn) scanValues(prefix []byte) map[string][]byte {
-	return tx.scanRange(prefix, tx.nextKey(prefix))
+func (tx *tikvTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
+	return tx.scanRange0(prefix, tx.nextKey(prefix), filter)
 }
 
 func (tx *tikvTxn) exist(prefix []byte) bool {

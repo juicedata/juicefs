@@ -95,18 +95,24 @@ func (tx *memTxn) nextKey(key []byte) []byte {
 
 func (tx *memTxn) scanKeys(prefix []byte) [][]byte {
 	var keys [][]byte
-	for k := range tx.scanValues(prefix) {
+	for k := range tx.scanValues(prefix, nil) {
 		keys = append(keys, []byte(k))
 	}
 	return keys
 }
 
-func (tx *memTxn) scanValues(prefix []byte) map[string][]byte {
-	return tx.scanRange(prefix, tx.nextKey(prefix))
+func (tx *memTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
+	res := tx.scanRange(prefix, tx.nextKey(prefix))
+	for k, v := range res {
+		if filter != nil && !filter([]byte(k), v) {
+			delete(res, string(k))
+		}
+	}
+	return res
 }
 
 func (tx *memTxn) exist(prefix []byte) bool {
-	return len(tx.scanValues(prefix)) > 0
+	return len(tx.scanKeys(prefix)) > 0
 }
 
 func (tx *memTxn) set(key, value []byte) {

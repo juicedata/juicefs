@@ -20,18 +20,37 @@ import (
 	"testing"
 )
 
+func TestMemKV(t *testing.T) {
+	c, _ := newTkvClient("memkv", "")
+	var count int64
+	c.txn(func(tx kvTxn) error {
+		count = tx.incrBy([]byte("counter"), -1)
+		return nil
+	})
+	if count != 0 {
+		t.Fatalf("counter should be 0, but got %d", count)
+	}
+	c.txn(func(tx kvTxn) error {
+		count = tx.incrBy([]byte("counter"), 0)
+		return nil
+	})
+	if count != -1 {
+		t.Fatalf("counter should be -1, but got %d", count)
+	}
+}
+
 func TestTKVClient(t *testing.T) {
 	m, err := newKVMeta("memkv", "", &Config{})
 	if err != nil {
 		t.Skipf("create meta: %s", err)
 	}
 
-	// testTruncateAndDelete(t, m)
+	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
 	testConcurrentWrite(t, m)
-	// testCompaction(t, m)
+	testCompaction(t, m)
 	testCopyFileRange(t, m)
 	m.(*kvMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
