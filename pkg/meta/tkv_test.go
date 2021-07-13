@@ -35,7 +35,7 @@ func TestTiKVClient(t *testing.T) {
 	// testLocks(t, m)
 	testConcurrentWrite(t, m)
 	// testCompaction(t, m)
-	// testCopyFileRange(t, m)
+	testCopyFileRange(t, m)
 	m.(*kvMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
 }
