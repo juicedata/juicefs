@@ -80,6 +80,9 @@ func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 }
 
 func (tx *memTxn) nextKey(key []byte) []byte {
+	if len(key) == 0 {
+		return nil
+	}
 	next := make([]byte, len(key))
 	copy(next, key)
 	p := len(next) - 1

@@ -82,6 +82,9 @@ func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 }
 
 func (tx *tikvTxn) nextKey(key []byte) []byte {
+	if len(key) == 0 {
+		return nil
+	}
 	next := make([]byte, len(key))
 	copy(next, key)
 	p := len(next) - 1
