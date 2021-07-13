@@ -1,5 +1,3 @@
-// +build !windows
-
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -30,7 +28,7 @@ import (
 func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	ikey := r.flockKey(inode)
 	lkey := r.ownerKey(owner)
-	if ltype == syscall.F_UNLCK {
+	if ltype == F_UNLCK {
 		_, err := r.rdb.HDel(ctx, ikey, lkey).Result()
 		return errno(err)
 	}
@@ -41,7 +39,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			if err != nil {
 				return err
 			}
-			if ltype == syscall.F_RDLCK {
+			if ltype == F_RDLCK {
 				for _, v := range owners {
 					if v == "W" {
 						return syscall.EAGAIN
@@ -68,7 +66,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 		if !block || err != syscall.EAGAIN {
 			break
 		}
-		if ltype == syscall.F_WRLCK {
+		if ltype == F_WRLCK {
 			time.Sleep(time.Millisecond * 1)
 		} else {
 			time.Sleep(time.Millisecond * 10)
@@ -146,7 +144,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	}
 	i = 0
 	for i < len(ls) {
-		if ls[i].ltype == syscall.F_UNLCK || ls[i].start == ls[i].end {
+		if ls[i].ltype == F_UNLCK || ls[i].start == ls[i].end {
 			// remove empty one
 			copy(ls[i:], ls[i+1:])
 			ls = ls[:len(ls)-1]
@@ -163,7 +161,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 }
 
 func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
-	if *ltype == syscall.F_UNLCK {
+	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
 		*pid = 0
@@ -179,7 +177,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 		ls := loadLocks([]byte(d))
 		for _, l := range ls {
 			// find conflicted locks
-			if (*ltype == syscall.F_WRLCK || l.ltype == syscall.F_WRLCK) && *end > l.start && *start < l.end {
+			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end > l.start && *start < l.end {
 				*ltype = l.ltype
 				*start = l.start
 				*end = l.end
@@ -193,7 +191,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 			}
 		}
 	}
-	*ltype = syscall.F_UNLCK
+	*ltype = F_UNLCK
 	*start = 0
 	*end = 0
 	*pid = 0
@@ -207,7 +205,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	lock := plockRecord{ltype, pid, start, end}
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
-			if ltype == syscall.F_UNLCK {
+			if ltype == F_UNLCK {
 				d, err := tx.HGet(ctx, ikey, lkey).Result()
 				if err != nil {
 					return err
@@ -237,7 +235,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				ls := loadLocks([]byte(d))
 				for _, l := range ls {
 					// find conflicted locks
-					if (ltype == syscall.F_WRLCK || l.ltype == syscall.F_WRLCK) && end > l.start && start < l.end {
+					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end > l.start && start < l.end {
 						return syscall.EAGAIN
 					}
 				}
@@ -254,7 +252,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 		if !block || err != syscall.EAGAIN {
 			break
 		}
-		if ltype == syscall.F_WRLCK {
+		if ltype == F_WRLCK {
 			time.Sleep(time.Millisecond * 1)
 		} else {
 			time.Sleep(time.Millisecond * 10)

@@ -1,5 +1,3 @@
-// +build tikv
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -19,8 +17,10 @@ package meta
 
 import "syscall"
 
+const ENOATTR = syscall.ENODATA
+
 const (
-	F_UNLCK = syscall.ENOTSUP
-	F_RDLCK = syscall.ENOTSUP
-	F_WRLCK = syscall.ENOTSUP
+	F_UNLCK = 1
+	F_RDLCK = 2
+	F_WRLCK = 3
 )

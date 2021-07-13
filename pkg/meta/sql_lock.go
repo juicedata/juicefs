@@ -1,5 +1,3 @@
-// +build !windows
-
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -27,7 +25,7 @@ import (
 
 func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, block bool) syscall.Errno {
 	owner := int64(owner_)
-	if ltype == syscall.F_UNLCK {
+	if ltype == F_UNLCK {
 		return errno(m.txn(func(s *xorm.Session) error {
 			_, err := s.Delete(&flock{Inode: inode, Owner: owner, Sid: m.sid})
 			return err
@@ -59,7 +57,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 			}
 			rows.Close()
 
-			if ltype == syscall.F_RDLCK {
+			if ltype == F_RDLCK {
 				for _, l := range locks {
 					if l.Ltype == 'W' {
 						return syscall.EAGAIN
@@ -84,7 +82,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 		if !block || err != syscall.EAGAIN {
 			break
 		}
-		if ltype == syscall.F_WRLCK {
+		if ltype == F_WRLCK {
 			time.Sleep(time.Millisecond * 1)
 		} else {
 			time.Sleep(time.Millisecond * 10)
@@ -97,7 +95,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 }
 
 func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
-	if *ltype == syscall.F_UNLCK {
+	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
 		*pid = 0
@@ -126,7 +124,7 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, sta
 		ls := loadLocks([]byte(d))
 		for _, l := range ls {
 			// find conflicted locks
-			if (*ltype == syscall.F_WRLCK || l.ltype == syscall.F_WRLCK) && *end > l.start && *start < l.end {
+			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end > l.start && *start < l.end {
 				*ltype = l.ltype
 				*start = l.start
 				*end = l.end
@@ -139,7 +137,7 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, sta
 			}
 		}
 	}
-	*ltype = syscall.F_UNLCK
+	*ltype = F_UNLCK
 	*start = 0
 	*end = 0
 	*pid = 0
@@ -158,7 +156,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				}
 				return err
 			}
-			if ltype == syscall.F_UNLCK {
+			if ltype == F_UNLCK {
 				var l = plock{Inode: inode, Owner: owner, Sid: m.sid}
 				ok, err := m.engine.Get(&l)
 				if err != nil {
@@ -203,7 +201,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				ls := loadLocks([]byte(d))
 				for _, l := range ls {
 					// find conflicted locks
-					if (ltype == syscall.F_WRLCK || l.ltype == syscall.F_WRLCK) && end > l.start && start < l.end {
+					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end > l.start && start < l.end {
 						return syscall.EAGAIN
 					}
 				}
@@ -225,7 +223,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 		if !block || err != syscall.EAGAIN {
 			break
 		}
-		if ltype == syscall.F_WRLCK {
+		if ltype == F_WRLCK {
 			time.Sleep(time.Millisecond * 1)
 		} else {
 			time.Sleep(time.Millisecond * 10)
