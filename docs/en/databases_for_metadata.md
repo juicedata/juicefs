@@ -210,10 +210,10 @@ $ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 
 Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for stand-alone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 
-## FoundationDB
+## TiKV
 
 Coming soon...
 
-## TiKV
+## FoundationDB
 
 Coming soon...

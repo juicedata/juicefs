@@ -1,6 +1,6 @@
 # Use JuiceFS on Kubernetes
 
-JuiceFS provides the [CSI driver](https://github.com/juicedata/juicefs-csi-driver) for Kubernetes.
+JuiceFS provides the [CSI Driver](https://github.com/juicedata/juicefs-csi-driver) for Kubernetes.
 
 
 ## Prerequisites
@@ -14,7 +14,7 @@ JuiceFS provides the [CSI driver](https://github.com/juicedata/juicefs-csi-drive
 
 To install Helm, refer to the [Helm install guide](https://github.com/helm/helm#install), Helm 3 is required.
 
-1. Prepare a file `values.yaml` with access information about Redis and object storage (take Amazon S3 `us-east-1` as an example)
+1. Prepare a file `values.yaml` with access information about Redis and object storage (take Amazon S3 `us-east-1` as an example):
 
 ```yaml
 storageClasses:
@@ -30,7 +30,7 @@ storageClasses:
     bucket: "https://juicefs-test.s3.us-east-1.amazonaws.com"
 ```
 
-Here we assign AWS [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) for the EC2 Kuberentes node, otherwise the `accessKey` and `secretKey` cannot be empty. We use ElastiCache for Redis as the meta store.
+Here we assign AWS [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) for the EC2 Kubernetes node, otherwise the `accessKey` and `secretKey` cannot be empty. We use ElastiCache for Redis as the meta store.
 
 2. Install
 
@@ -53,7 +53,8 @@ juicefs-csi-node-v9tzb     3/3     Running   0          14m
 
 - Check secret: `kubectl -n kube-system describe secret juicefs-sc-secret` will show the secret with above `backend` fields in `values.yaml`:
 
-```
+```sh
+$ kubectl -n kube-system describe secret juicefs-sc-secret
 Name:         juicefs-sc-secret
 Namespace:    kube-system
 Labels:       app.kubernetes.io/instance=juicefs-csi-driver
@@ -78,7 +79,8 @@ storage:     2 bytes
 
 - Check storage class: `kubectl get sc juicefs-sc` will show the storage class like this:
 
-```
+```sh
+$ kubectl get sc juicefs-sc
 NAME         PROVISIONER       RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
 juicefs-sc   csi.juicefs.com   Retain          Immediate           false                  69m
 ```
@@ -91,7 +93,7 @@ juicefs-sc   csi.juicefs.com   Retain          Immediate           false        
 kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
 ```
 
-Here we use the `juicedata/juicefs-csi-driver:latest` image, if we want to use the specified tag such as `v0.7.0` , we should download the deploy YAML file and modified it:
+Here we use the `juicedata/juicefs-csi-driver:latest` image, if you want to use the specified tag such as `v0.7.0`, you should download the deploy YAML file and modified it:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@juicedata/juicefs-csi-driver@juicedata/juicefs-csi-driver:v0.7.0@' | kubectl apply -f -
@@ -132,7 +134,7 @@ volumeBindingMode: Immediate
 
 ## Use JuiceFS
 
-Now we can use JuiceFS in our pods.  Here we create a `PVC` and refer to it in a pod as an example:
+Now we can use JuiceFS in our pods. Here we create a `PersistentVolumeClaim` and refer to it in a pod as an example:
 
 ```yaml
 apiVersion: v1
@@ -179,12 +181,12 @@ juicefs-app   1/1       Running   0          10m
 
 If the status of pod is not `Running` (e.g. `ContainerCreating`), there may have some issues. Please refer to the [troubleshooting](https://github.com/juicedata/juicefs-csi-driver/blob/master/docs/troubleshooting.md) document.
 
-For more details about JuiceFS CSI driver please refer to [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver).
+For more details about JuiceFS CSI Driver please refer to [project homepage](https://github.com/juicedata/juicefs-csi-driver).
 
 
 ## Monitoring
 
-JuiceFS CSI driver can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p8s_metrics.md).
+JuiceFS CSI Driver can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p8s_metrics.md).
 
 ### Configure Prometheus server
 
@@ -209,7 +211,7 @@ scrape_configs:
       action: replace
 ```
 
-Here we assume the Prometheus server is running inside Kubernetes cluster, if your prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable from Prometheus server, refer to [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
+Here we assume the Prometheus server is running inside Kubernetes cluster, if your Prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable from Prometheus server, refer to [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
 
 ```yaml
 scrape_configs:
@@ -229,4 +231,4 @@ scrape_configs:
 
 ### Configure Grafana dashboard
 
-We provide a [dashboard template](./k8s_grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
+JuiceFS provides a [dashboard template](./k8s_grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
