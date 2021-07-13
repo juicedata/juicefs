@@ -82,7 +82,7 @@ func (tx *tikvTxn) scanRange0(begin, end []byte, filter func(k, v []byte) bool) 
 }
 
 func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
-	return scanRange0(begin, end, nil)
+	return tx.scanRange0(begin, end, nil)
 }
 
 func (tx *tikvTxn) nextKey(key []byte) []byte {
