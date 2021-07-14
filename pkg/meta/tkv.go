@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -35,7 +36,7 @@ type kvTxn interface {
 	gets(keys ...[]byte) [][]byte
 	scanRange(begin, end []byte) map[string][]byte
 	scanKeys(prefix []byte) [][]byte
-	scanValues(prefix []byte) map[string][]byte
+	scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
 	append(key []byte, value []byte) []byte
@@ -344,10 +345,10 @@ func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 	return keys, err
 }
 
-func (m *kvMeta) scanValues(prefix []byte) (map[string][]byte, error) {
+func (m *kvMeta) scanValues(prefix []byte, filter func(k, v []byte) bool) (map[string][]byte, error) {
 	var values map[string][]byte
 	err := m.txn(func(tx kvTxn) error {
-		values = tx.scanValues(prefix)
+		values = tx.scanValues(prefix, filter)
 		return nil
 	})
 	return values, err
@@ -503,7 +504,7 @@ func (m *kvMeta) refreshSession() {
 
 func (m *kvMeta) cleanStaleSession(sid uint64) {
 	// release locks
-	flocks, err := m.scanValues(m.fmtKey("F"))
+	flocks, err := m.scanValues(m.fmtKey("F"), nil)
 	if err != nil {
 		logger.Warnf("scan flock for stale session %d: %s", sid, err)
 		return
@@ -526,7 +527,7 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 			}
 		}
 	}
-	plocks, err := m.scanValues(m.fmtKey("P"))
+	plocks, err := m.scanValues(m.fmtKey("P"), nil)
 	if err != nil {
 		logger.Warnf("scan plock for stale session %d: %s", sid, err)
 		return
@@ -573,7 +574,7 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 
 func (m *kvMeta) cleanStaleSessions() {
 	// TODO: once per minute
-	vals, err := m.scanValues(m.fmtKey("SH"))
+	vals, err := m.scanValues(m.fmtKey("SH"), nil)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -612,7 +613,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			inode := m.decodeInode(sinode[len(m.prefix)+10:]) // "SS" + sid
 			s.Sustained = append(s.Sustained, inode)
 		}
-		flocks, err := m.scanValues(m.fmtKey("F"))
+		flocks, err := m.scanValues(m.fmtKey("F"), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -625,7 +626,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 				}
 			}
 		}
-		plocks, err := m.scanValues(m.fmtKey("P"))
+		plocks, err := m.scanValues(m.fmtKey("P"), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -659,7 +660,7 @@ func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
 }
 
 func (m *kvMeta) ListSessions() ([]*Session, error) {
-	vals, err := m.scanValues(m.fmtKey("SH"))
+	vals, err := m.scanValues(m.fmtKey("SH"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -727,7 +728,6 @@ func (m *kvMeta) OnMsg(mtype uint32, cb MsgCallback) {
 	m.msgCallbacks.callbacks[mtype] = cb
 }
 
-/* TODO: add back later when needed
 func (m *kvMeta) newMsg(mid uint32, args ...interface{}) error {
 	m.msgCallbacks.Lock()
 	cb, ok := m.msgCallbacks.callbacks[mid]
@@ -737,7 +737,6 @@ func (m *kvMeta) newMsg(mid uint32, args ...interface{}) error {
 	}
 	return fmt.Errorf("message %d is not supported", mid)
 }
-*/
 
 func (m *kvMeta) shouldRetry(err error) bool {
 	if err == nil {
@@ -1618,7 +1617,7 @@ func (m *kvMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	})
 
 	// TODO: handle big directory
-	vals, err := m.scanValues(m.entryKey(inode, ""))
+	vals, err := m.scanValues(m.entryKey(inode, ""), nil)
 	if err != nil {
 		return errno(err)
 	}
@@ -1912,21 +1911,202 @@ func (m *dbMeta) cleanupDeletedFiles() {}
 
 func (m *dbMeta) cleanupSlices() {}
 
-func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {}
 
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {}
 */
 
-func (m *kvMeta) deleteFile(inode Ino, length uint64) {}
-
-func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {}
-
-func (m *kvMeta) CompactAll(ctx Context) syscall.Errno {
-	return syscall.ENOTSUP
+func (r *kvMeta) cleanupZeroRef(chunkid uint64, size uint32) {
+	_ = r.txn(func(tx kvTxn) error {
+		v := tx.incrBy(r.fmtKey(chunkid, size), 0)
+		if v != 0 {
+			return syscall.EINVAL
+		}
+		tx.dels(r.fmtKey(chunkid, size))
+		return nil
+	})
 }
 
-func (m *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
-	return syscall.ENOTSUP
+func (m *kvMeta) deleteSlice(chunkid uint64, size uint32) {
+	m.deleting <- 1
+	defer func() { <-m.deleting }()
+	err := m.newMsg(DeleteChunk, chunkid, size)
+	if err != nil {
+		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
+	} else {
+		err := m.deleteKeys(m.sliceKey(chunkid, size))
+		if err != nil {
+			logger.Errorf("delete slice %d: %s", chunkid, err)
+		}
+	}
+}
+
+func (m *kvMeta) deleteFile(inode Ino, length uint64) {}
+
+func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
+	if !force {
+		// avoid too many or duplicated compaction
+		m.Lock()
+		k := uint64(inode) + (uint64(indx) << 32)
+		if len(m.compacting) > 10 || m.compacting[k] {
+			m.Unlock()
+			return
+		}
+		m.compacting[k] = true
+		m.Unlock()
+		defer func() {
+			m.Lock()
+			delete(m.compacting, k)
+			m.Unlock()
+		}()
+	}
+
+	buf, err := m.get(m.chunkKey(inode, indx))
+	if err != nil {
+		return
+	}
+
+	var ss []*slice
+	var chunks []Slice
+	var skipped int
+	var pos, size uint32
+	for skipped < len(buf) {
+		// the slices will be formed as a tree after buildSlice(),
+		// we should create new one (or remove the link in tree)
+		ss = readSliceBuf(buf[skipped:])
+		// copy the first slice so it will not be updated by buildSlice
+		first := *ss[0]
+		chunks = buildSlice(ss)
+		pos, size = 0, 0
+		if chunks[0].Chunkid == 0 {
+			pos = chunks[0].Len
+			chunks = chunks[1:]
+		}
+		for _, s := range chunks {
+			size += s.Len
+		}
+		if first.len < (1<<20) || first.len*5 < size {
+			// it's too small
+			break
+		}
+		isFirst := func(pos uint32, s Slice) bool {
+			return pos == first.pos && s.Chunkid == first.chunkid && s.Off == first.off && s.Len == first.len
+		}
+		if !isFirst(pos, chunks[0]) {
+			// it's not the first slice, compact it
+			break
+		}
+		skipped += sliceBytes
+	}
+	if len(ss) < 2 {
+		return
+	}
+
+	var chunkid uint64
+	st := m.NewChunk(Background, 0, 0, 0, &chunkid)
+	if st != 0 {
+		return
+	}
+	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped/sliceBytes, pos, len(ss), size)
+	err = m.newMsg(CompactChunk, chunks, chunkid)
+	if err != nil {
+		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
+		return
+	}
+	err = m.txn(func(tx kvTxn) error {
+		buf2, err := m.get(m.chunkKey(inode, indx))
+		if err != nil {
+			return err
+		}
+		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
+			logger.Infof("chunk %d:%d was changed %d -> %d", inode, indx, len(buf), len(buf2))
+			return syscall.EINVAL
+		}
+
+		buf2 = append(append(buf2[:skipped], marshalSlice(pos, chunkid, size, 0, size)...), buf2[len(buf):]...)
+		tx.set(m.chunkKey(inode, indx), buf2)
+		// create the key to tracking it
+		tx.set(m.sliceKey(chunkid, size), make([]byte, 8))
+		for _, s := range ss {
+			tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+		}
+		return nil
+	})
+	// there could be false-negative that the compaction is successful, double-check
+	if err != nil {
+		logger.Warnf("compact %d:%d failed: %s", inode, indx, err)
+		refs, e := m.get(m.sliceKey(chunkid, size))
+		if e == nil {
+			if len(refs) > 0 {
+				err = nil
+			} else {
+				logger.Infof("compacted chunk %d was not used", chunkid)
+				err = syscall.EINVAL
+			}
+		}
+	}
+
+	if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINVAL {
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
+		m.deleteSlice(chunkid, size)
+	} else if err == nil {
+		m.of.InvalidateChunk(inode, indx)
+		m.cleanupZeroRef(chunkid, size)
+		for _, s := range ss {
+			refs, err := m.incrCounter(m.sliceKey(s.chunkid, s.size), 0)
+			if err == nil && refs < 0 {
+				m.deleteSlice(s.chunkid, s.size)
+			}
+		}
+	} else {
+		logger.Warnf("compact %d %d: %s", inode, indx, err)
+	}
+	go func() {
+		// wait for the current compaction to finish
+		time.Sleep(time.Millisecond * 10)
+		m.compactChunk(inode, indx, force)
+	}()
+}
+
+func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
+	// AiiiiiiiiCnnnn     file chunks
+	klen := len(r.prefix) + 1 + 8 + 1 + 4
+	result, err := r.scanValues(r.fmtKey("A"), func(k, v []byte) bool {
+		return len(k) == klen && k[len(r.prefix)+1+8] == 'C' && len(v) > sliceBytes
+	})
+	if err != nil {
+		logger.Warnf("scan chunks: %s", err)
+		return errno(err)
+	}
+	for k, value := range result {
+		key := []byte(k[len(r.prefix)+1:])
+		inode := r.decodeInode(key[:8])
+		indx := binary.BigEndian.Uint32(key[9:])
+		logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, len(value)/sliceBytes)
+		r.compactChunk(inode, indx, true)
+	}
+	return 0
+}
+
+func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
+	*slices = nil
+	// AiiiiiiiiCnnnn     file chunks
+	klen := len(r.prefix) + 1 + 8 + 1 + 4
+	result, err := r.scanValues(r.fmtKey("A"), func(k, v []byte) bool {
+		return len(k) == klen && k[len(r.prefix)+1+8] == 'C'
+	})
+	if err != nil {
+		logger.Warnf("scan chunks: %s", err)
+		return errno(err)
+	}
+	for _, value := range result {
+		ss := readSliceBuf(value)
+		for _, s := range ss {
+			if s.chunkid > 0 {
+				*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+			}
+		}
+	}
+	return 0
 }
 
 func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
@@ -1992,7 +2172,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
 
-		vals := tx.scanValues(m.xattrKey(inode, ""))
+		vals := tx.scanValues(m.xattrKey(inode, ""), nil)
 		if len(vals) > 0 {
 			xattrs := make([]*DumpedXattr, 0, len(vals))
 			for k, v := range vals {
@@ -2029,7 +2209,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 }
 
 func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
-	vals, err := m.scanValues(m.entryKey(inode, ""))
+	vals, err := m.scanValues(m.entryKey(inode, ""), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2051,7 +2231,7 @@ func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 }
 
 func (m *kvMeta) DumpMeta(w io.Writer) error {
-	vals, err := m.scanValues(m.fmtKey("D"))
+	vals, err := m.scanValues(m.fmtKey("D"), nil)
 	if err != nil {
 		return err
 	}
@@ -2098,7 +2278,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 		}
 	}
 
-	vals, err = m.scanValues(m.fmtKey("SS"))
+	vals, err = m.scanValues(m.fmtKey("SS"), nil)
 	if err != nil {
 		return err
 	}

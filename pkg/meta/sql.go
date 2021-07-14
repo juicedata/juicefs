@@ -2218,9 +2218,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
 		return
 	}
-	err = m.txn(func(s *xorm.Session) error {
+	err = m.txn(func(ses *xorm.Session) error {
 		var c2 = chunk{Inode: inode}
-		_, err := s.Where("indx=?", indx).Get(&c2)
+		_, err := ses.Where("indx=?", indx).Get(&c2)
 		if err != nil {
 			return err
 		}
@@ -2230,14 +2230,13 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		}
 
 		c2.Slices = append(append(c2.Slices[:skipped], marshalSlice(pos, chunkid, size, 0, size)...), c2.Slices[len(c.Slices):]...)
-		if _, err := s.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
+		if _, err := ses.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
 			return err
 		}
 		// create the key to tracking it
-		if err = mustInsert(s, chunkRef{chunkid, size, 1}); err != nil {
+		if err = mustInsert(ses, chunkRef{chunkid, size, 1}); err != nil {
 			return err
 		}
-		ses := s
 		for _, s := range ss {
 			if _, err := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
 				return err

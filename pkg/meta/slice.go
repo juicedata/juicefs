@@ -111,6 +111,9 @@ func readSlices(vals []string) []*slice {
 }
 
 func readSliceBuf(buf []byte) []*slice {
+	if len(buf)%sliceBytes != 0 {
+		panic(len(buf))
+	}
 	nSlices := len(buf) / sliceBytes
 	slices := make([]slice, nSlices)
 	ss := make([]*slice, nSlices)
