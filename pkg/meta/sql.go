@@ -269,7 +269,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	m.fmt = format
 	return m.txn(func(s *xorm.Session) error {
 		if ok {
-			_, err = m.engine.Update(&setting{"format", string(data)}, &setting{Name: "format"})
+			_, err = s.Update(&setting{"format", string(data)}, &setting{Name: "format"})
 			return err
 		}
 
