@@ -362,8 +362,8 @@ func (m *kvMeta) nextInode() (Ino, error) {
 		if err != nil {
 			return 0, err
 		}
-		m.freeInodes.next = v - 100
-		m.freeInodes.maxid = v
+		m.freeInodes.next = uint64(v) - 100
+		m.freeInodes.maxid = uint64(v)
 	}
 	n := m.freeInodes.next
 	m.freeInodes.next++
@@ -378,8 +378,8 @@ func (m *kvMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, ch
 		if err != nil {
 			return errno(err)
 		}
-		m.freeChunks.next = v - 1000
-		m.freeChunks.maxid = v
+		m.freeChunks.next = uint64(v) - 1000
+		m.freeChunks.maxid = uint64(v)
 	}
 	*chunkid = m.freeChunks.next
 	m.freeChunks.next++
@@ -468,7 +468,7 @@ func (m *kvMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	m.sid = v
+	m.sid = uint64(v)
 	logger.Debugf("session is %d", m.sid)
 	info, err := newSessionInfo()
 	if err != nil {
@@ -705,11 +705,11 @@ func (m *kvMeta) refreshUsage() {
 	for {
 		used, err := m.incrCounter(m.counterKey(usedSpace), 0)
 		if err == nil {
-			atomic.StoreInt64(&m.usedSpace, int64(used))
+			atomic.StoreInt64(&m.usedSpace, used)
 		}
 		inodes, err := m.incrCounter(m.counterKey(totalInodes), 0)
 		if err == nil {
-			atomic.StoreInt64(&m.usedInodes, int64(inodes))
+			atomic.StoreInt64(&m.usedInodes, inodes)
 		}
 		time.Sleep(time.Second * 10)
 	}
@@ -775,13 +775,13 @@ func (m *kvMeta) setValue(key, value []byte) error {
 	})
 }
 
-func (m *kvMeta) incrCounter(key []byte, value int64) (uint64, error) {
+func (m *kvMeta) incrCounter(key []byte, value int64) (int64, error) {
 	var new int64
 	err := m.txn(func(tx kvTxn) error {
 		new = tx.incrBy(key, value)
 		return nil
 	})
-	return uint64(new), err
+	return new, err
 }
 
 func (m *kvMeta) deleteKeys(keys ...[]byte) error {
