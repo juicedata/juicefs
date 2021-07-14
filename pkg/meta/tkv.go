@@ -1910,57 +1910,53 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-func (r *kvMeta) cleanupDeletedFiles() {
+func (m *kvMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
-		klen := len(r.prefix) + 1 + 8 + 8
-		vals, _ := r.scanValues(r.fmtKey("D"), func(k, v []byte) bool {
-			return len(k) == klen && len(v) == 8
-		})
+		klen := len(m.prefix) + 1 + 8 + 8
 		now := time.Now().Unix()
-		for k, val := range vals {
-			if r.parseInt64(val)+60 < now {
-				key := []byte(k)[len(r.prefix)+1:]
-				inode := r.decodeInode(key[:8])
-				length := uint64(r.parseInt64(key[8:]))
-				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
-				r.deleteFile(inode, length)
-			}
+		vals, _ := m.scanValues(m.fmtKey("D"), func(k, v []byte) bool {
+			// filter out invalid ones
+			return len(k) == klen && len(v) == 8 && m.parseInt64(v)+60 < now
+		})
+		for k := range vals {
+			key := []byte(k)[len(m.prefix)+1:]
+			// inode is encoded as little endian, so we can't use utils.Buffer here
+			inode := m.decodeInode(key[:8])
+			length := uint64(m.parseInt64(key[8:]))
+			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
+			m.deleteFile(inode, length)
 		}
 	}
 }
 
-func (r *kvMeta) cleanupSlices() {
+func (m *kvMeta) cleanupSlices() {
 	for {
-		// once per hour
 		time.Sleep(time.Hour)
 
+		// once per hour
 		now := time.Now().Unix()
-		last, err := r.get(r.fmtKey("nextCleanupSlices"))
-		if err != nil || r.parseInt64(last)+3600 > now {
+		last, err := m.get(m.counterKey("nextCleanupSlices"))
+		if err != nil || m.parseInt64(last)+3600 > now {
 			continue
 		}
-		_ = r.txn(func(tx kvTxn) error {
-			tx.set(r.fmtKey("nextCleanupSlices"), r.packInt64(now))
-			return nil
-		})
+		_ = m.setValue(m.counterKey("nextCleanupSlices"), m.packInt64(now))
 
-		klen := len(r.prefix) + 1 + 8 + 4
-		vals, _ := r.scanValues(r.fmtKey("K"), func(k, v []byte) bool {
-			return len(k) == klen && len(v) == 8
+		klen := len(m.prefix) + 1 + 8 + 4
+		// the counters are always little endian
+		vals, _ := m.scanValues(m.fmtKey("K"), func(k, v []byte) bool {
+			// filter out invalid ones
+			return len(k) == klen && len(v) == 8 && int64(binary.LittleEndian.Uint64(v)) <= 0
 		})
-		for k, val := range vals {
-			refs := int64(binary.LittleEndian.Uint64(val))
-			if refs > 0 {
-				continue
-			}
-			key := []byte(k)[len(r.prefix)+1:]
-			chunkid := uint64(r.parseInt64(key[:8]))
-			size := binary.LittleEndian.Uint32(key[8:])
+		for k, v := range vals {
+			rb := utils.FromBuffer([]byte(k)[len(m.prefix)+1:])
+			chunkid := rb.Get64()
+			size := rb.Get32()
+			refs := int64(binary.LittleEndian.Uint64(v))
 			if refs < 0 {
-				r.deleteSlice(chunkid, size)
+				m.deleteSlice(chunkid, size)
 			} else {
-				r.cleanupZeroRef(chunkid, size)
+				m.cleanupZeroRef(chunkid, size)
 			}
 		}
 	}
