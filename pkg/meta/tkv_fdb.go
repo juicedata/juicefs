@@ -140,6 +140,17 @@ func (c *fdbClient) txn(f func(kvTxn) error) error {
 		return err
 	}
 
+	defer func(e *error) {
+		if r := recover(); r != nil {
+			fe, ok := r.(error)
+			if ok {
+				*e = fe
+			} else {
+				panic(r)
+			}
+		}
+	}(&err)
+
 	err = f(&fdbTxn{tx})
 	if err != nil {
 		tx.Reset()
@@ -152,6 +163,7 @@ func newTkvClient(driver, clusterFile string) (tkvClient, error) {
 	if driver != "fdb" {
 		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "fdb")
 	}
+	fdb.MustAPIVersion(630)
 	db, err := fdb.OpenDatabase(clusterFile)
 	return &fdbClient{db}, err
 }
