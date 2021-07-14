@@ -3083,7 +3083,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	if dbsize > 0 {
-		return fmt.Errorf("Redis database is not empty")
+		return fmt.Errorf("Database %s is not empty", m.Name())
 	}
 
 	dec := json.NewDecoder(r)
@@ -3133,7 +3133,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	}
 	slices := make(map[string]interface{})
 	for k, v := range refs {
-		if v != 1 {
+		if v > 1 {
 			slices[k] = v - 1
 		}
 	}

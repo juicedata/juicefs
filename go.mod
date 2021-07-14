@@ -17,12 +17,11 @@ require (
 	github.com/billziss-gh/cgofuse v1.4.0
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
+	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/dnaeon/go-vcr v1.2.0 // indirect
 	github.com/emersion/go-webdav v0.3.0
-	github.com/go-ini/ini v1.62.0 // indirect
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/gonutz/w32/v2 v2.2.0 // indirect
 	github.com/google/gops v0.3.13
 	github.com/google/readahead v0.0.0-20161222183148-eaceba169032 // indirect
 	github.com/google/uuid v1.1.2
@@ -33,7 +32,7 @@ require (
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juju/ratelimit v1.0.1
 	github.com/kr/fs v0.1.0 // indirect
-	github.com/ks3sdklib/aws-sdk-go v0.0.0-20180820074416-dafab05ad142
+	github.com/ks3sdklib/aws-sdk-go v1.0.12
 	github.com/lib/pq v1.8.0
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-sqlite3 v2.0.1+incompatible

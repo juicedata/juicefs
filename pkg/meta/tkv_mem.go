@@ -28,6 +28,9 @@ func init() {
 }
 
 func newTkvClient(driver, addr string) (tkvClient, error) {
+	if driver != "memkv" {
+		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "memkv")
+	}
 	return &memKV{
 		items: make(map[string]*kvItem),
 	}, nil
@@ -77,6 +80,9 @@ func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 }
 
 func (tx *memTxn) nextKey(key []byte) []byte {
+	if len(key) == 0 {
+		return nil
+	}
 	next := make([]byte, len(key))
 	copy(next, key)
 	p := len(next) - 1

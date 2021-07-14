@@ -20,6 +20,7 @@ package meta
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
@@ -30,6 +31,9 @@ func init() {
 }
 
 func newTkvClient(driver, addr string) (tkvClient, error) {
+	if driver != "tikv" {
+		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "tikv")
+	}
 	client, err := tikv.NewTxnClient([]string{addr})
 	return &tikvClient{client}, err
 }
@@ -86,6 +90,9 @@ func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 }
 
 func (tx *tikvTxn) nextKey(key []byte) []byte {
+	if len(key) == 0 {
+		return nil
+	}
 	next := make([]byte, len(key))
 	copy(next, key)
 	p := len(next) - 1

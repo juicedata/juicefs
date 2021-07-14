@@ -2628,7 +2628,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	if len(tables) > 0 {
-		return fmt.Errorf("Database is not empty")
+		return fmt.Errorf("Database %s is not empty", m.Name())
 	}
 	if err = m.engine.Sync2(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
