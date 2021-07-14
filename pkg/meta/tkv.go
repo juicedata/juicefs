@@ -444,7 +444,10 @@ func (m *kvMeta) Init(format Format, force bool) error {
 
 func (m *kvMeta) Load() (*Format, error) {
 	body, err := m.get(m.fmtKey("setting"))
-	if err != nil || body == nil {
+	if err == nil && body == nil {
+		err = fmt.Errorf("database is not formatted")
+	}
+	if err != nil {
 		return nil, err
 	}
 	err = json.Unmarshal(body, &m.fmt)
@@ -2048,7 +2051,7 @@ func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 func (m *kvMeta) DumpMeta(w io.Writer) error {
 	vals, err := m.scanValues(m.fmtKey("D"))
 	if err != nil {
-		return nil
+		return err
 	}
 	dels := make([]*DumpedDelFile, 0, len(vals))
 	for k, v := range vals {
@@ -2070,7 +2073,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 
 	format, err := m.Load()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	var rs [][]byte
@@ -2095,7 +2098,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 
 	vals, err = m.scanValues(m.fmtKey("SS"))
 	if err != nil {
-		return nil
+		return err
 	}
 	ss := make(map[uint64][]Ino)
 	for k := range vals {

@@ -295,7 +295,10 @@ func (m *dbMeta) Init(format Format, force bool) error {
 func (m *dbMeta) Load() (*Format, error) {
 	var s = setting{Name: "format"}
 	ok, err := m.engine.Get(&s)
-	if err != nil || !ok {
+	if err == nil && !ok {
+		err = fmt.Errorf("database is not formatted")
+	}
+	if err != nil {
 		return nil, err
 	}
 
