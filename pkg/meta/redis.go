@@ -265,7 +265,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 func (r *redisMeta) Load() (*Format, error) {
 	body, err := r.rdb.Get(Background, "setting").Bytes()
 	if err == redis.Nil {
-		return nil, fmt.Errorf("no volume found")
+		return nil, fmt.Errorf("database is not formatted")
 	}
 	if err != nil {
 		return nil, err

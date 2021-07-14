@@ -231,11 +231,18 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		}
 	}
 
-	old, err := m.Load()
+	var s = setting{Name: "format"}
+	ok, err := m.engine.Get(&s)
 	if err != nil {
 		return err
 	}
-	if old != nil {
+
+	if ok {
+		var old Format
+		err = json.Unmarshal([]byte(s.Value), &old)
+		if err != nil {
+			return fmt.Errorf("json: %s", err)
+		}
 		if force {
 			old.SecretKey = "removed"
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
@@ -246,27 +253,26 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
-			if format != *old {
+			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""
 				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
 			}
 		}
-		data, err := json.MarshalIndent(format, "", "")
-		if err != nil {
-			logger.Fatalf("json: %s", err)
-		}
-		_, err = m.engine.Update(&setting{"format", string(data)}, &setting{Name: "format"})
-		return err
 	}
 
 	data, err := json.MarshalIndent(format, "", "")
 	if err != nil {
-		logger.Fatalf("json: %s", err)
+		return fmt.Errorf("json: %s", err)
 	}
 
 	m.fmt = format
 	return m.txn(func(s *xorm.Session) error {
+		if ok {
+			_, err = s.Update(&setting{"format", string(data)}, &setting{Name: "format"})
+			return err
+		}
+
 		var set = &setting{"format", string(data)}
 		now := time.Now()
 		var root = &node{
@@ -295,7 +301,10 @@ func (m *dbMeta) Init(format Format, force bool) error {
 func (m *dbMeta) Load() (*Format, error) {
 	var s = setting{Name: "format"}
 	ok, err := m.engine.Get(&s)
-	if err != nil || !ok {
+	if err == nil && !ok {
+		err = fmt.Errorf("database is not formatted")
+	}
+	if err != nil {
 		return nil, err
 	}
 
@@ -2494,7 +2503,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 
 	format, err := m.Load()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	var crows []counter
