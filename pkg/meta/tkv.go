@@ -388,11 +388,17 @@ func (m *kvMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, ch
 }
 
 func (m *kvMeta) Init(format Format, force bool) error {
-	old, err := m.Load()
+	body, err := m.get(m.fmtKey("setting"))
 	if err != nil {
 		return err
 	}
-	if old != nil {
+
+	if body != nil {
+		var old Format
+		err = json.Unmarshal(body, &old)
+		if err != nil {
+			return fmt.Errorf("json: %s", err)
+		}
 		if force {
 			old.SecretKey = "removed"
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
@@ -403,17 +409,12 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
-			if format != *old {
+			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""
 				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
 			}
 		}
-		data, err := json.MarshalIndent(format, "", "")
-		if err != nil {
-			logger.Fatalf("json: %s", err)
-		}
-		return m.setValue(m.fmtKey("setting"), data)
 	}
 
 	data, err := json.MarshalIndent(format, "", "")
@@ -422,22 +423,24 @@ func (m *kvMeta) Init(format Format, force bool) error {
 	}
 
 	m.fmt = format
-	// root inode
-	var attr Attr
-	attr.Typ = TypeDirectory
-	attr.Mode = 0777
-	ts := time.Now().Unix()
-	attr.Atime = ts
-	attr.Mtime = ts
-	attr.Ctime = ts
-	attr.Nlink = 2
-	attr.Length = 4 << 10
-	attr.Parent = 1
 	return m.txn(func(tx kvTxn) error {
 		tx.set(m.fmtKey("setting"), data)
-		tx.set(m.inodeKey(1), m.marshal(&attr))
-		if tx.incrBy(m.counterKey("nextInode"), 2) != 0 || tx.incrBy(m.counterKey("nextChunk"), 1) != 0 {
-			return fmt.Errorf("counter was not zero")
+		if body == nil {
+			// root inode
+			var attr Attr
+			attr.Typ = TypeDirectory
+			attr.Mode = 0777
+			ts := time.Now().Unix()
+			attr.Atime = ts
+			attr.Mtime = ts
+			attr.Ctime = ts
+			attr.Nlink = 2
+			attr.Length = 4 << 10
+			attr.Parent = 1
+			tx.set(m.inodeKey(1), m.marshal(&attr))
+			tx.incrBy(m.counterKey("nextInode"), 2)
+			tx.incrBy(m.counterKey("nextChunk"), 1)
+			tx.incrBy(m.counterKey("nextSession"), 1)
 		}
 		return nil
 	})
@@ -445,7 +448,10 @@ func (m *kvMeta) Init(format Format, force bool) error {
 
 func (m *kvMeta) Load() (*Format, error) {
 	body, err := m.get(m.fmtKey("setting"))
-	if err != nil || body == nil {
+	if err == nil && body == nil {
+		err = fmt.Errorf("database is not formatted")
+	}
+	if err != nil {
 		return nil, err
 	}
 	err = json.Unmarshal(body, &m.fmt)
@@ -2228,7 +2234,7 @@ func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 func (m *kvMeta) DumpMeta(w io.Writer) error {
 	vals, err := m.scanValues(m.fmtKey("D"))
 	if err != nil {
-		return nil
+		return err
 	}
 	dels := make([]*DumpedDelFile, 0, len(vals))
 	for k, v := range vals {
@@ -2250,7 +2256,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 
 	format, err := m.Load()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	var rs [][]byte
@@ -2275,7 +2281,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 
 	vals, err = m.scanValues(m.fmtKey("SS"))
 	if err != nil {
-		return nil
+		return err
 	}
 	ss := make(map[uint64][]Ino)
 	for k := range vals {
