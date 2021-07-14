@@ -421,10 +421,10 @@ func (m *kvMeta) Init(format Format, force bool) error {
 		logger.Fatalf("json: %s", err)
 	}
 
-	m.fmt = format
 	return m.txn(func(tx kvTxn) error {
 		tx.set(m.fmtKey("setting"), data)
 		if body == nil {
+			m.fmt = format
 			// root inode
 			var attr Attr
 			attr.Typ = TypeDirectory

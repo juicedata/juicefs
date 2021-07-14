@@ -269,7 +269,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	m.fmt = format
 	return m.txn(func(s *xorm.Session) error {
 		if ok {
-			_, err = s.Update(&setting{"format", string(data)}, &setting{Name: "format"})
+			_, err = m.engine.Update(&setting{"format", string(data)}, &setting{Name: "format"})
 			return err
 		}
 
@@ -491,18 +491,17 @@ func (m *dbMeta) incrCounter(name string, batch int64) (uint64, error) {
 func (m *dbMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
-	if m.freeInodes.next == m.freeInodes.maxid {
-		v, err := m.incrCounter("nextInode", 100)
-		if err == nil {
-			m.freeInodes.next = v + 1
-			m.freeInodes.maxid = v + 100
-		} else {
-			return 0, err
-		}
+	if m.freeInodes.next < m.freeInodes.maxid {
+		v := m.freeInodes.next
+		m.freeInodes.next++
+		return Ino(v), nil
 	}
-	v := m.freeInodes.next
-	m.freeInodes.next++
-	return Ino(v), nil
+	v, err := m.incrCounter("nextInode", 100)
+	if err == nil {
+		m.freeInodes.next = v + 1
+		m.freeInodes.maxid = v + 100
+	}
+	return Ino(v), err
 }
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {

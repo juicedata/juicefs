@@ -82,6 +82,10 @@ func TestLoadDump(t *testing.T) {
 			t.Fatalf("open file: %s", "redis.dump")
 		}
 		defer fp.Close()
+		r := m.(*redisMeta)
+		r.rdb.Incr(Background, "nextinode") // Redis counter is 1 smaller
+		r.rdb.Incr(Background, "nextchunk")
+		r.rdb.Incr(Background, "nextsession")
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
