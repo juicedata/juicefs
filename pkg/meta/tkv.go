@@ -165,6 +165,7 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
 
 /**
   Ino iiiiiiii
+  Length llllllll
   Indx nnnn
   name ...
   chunkid cccccccc
@@ -178,7 +179,7 @@ All keys:
   AiiiiiiiiCnnnn     file chunks
   AiiiiiiiiS         symlink target
   AiiiiiiiiX...      extented attribute
-  Diiiiiiiinnnn      delete inodes
+  Diiiiiiiillllllll  delete inodes
   Fiiiiiiii          Flocks
   Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
@@ -485,8 +486,8 @@ func (m *kvMeta) NewSession() error {
 
 	go m.refreshUsage()
 	go m.refreshSession()
-	// go m.cleanupDeletedFiles()
-	// go m.cleanupSlices()
+	go m.cleanupDeletedFiles()
+	go m.cleanupSlices()
 	go m.flushStats()
 	return nil
 }
@@ -1909,11 +1910,61 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-/* TODO
-func (m *dbMeta) cleanupDeletedFiles() {}
+func (r *kvMeta) cleanupDeletedFiles() {
+	for {
+		time.Sleep(time.Minute)
+		klen := len(r.prefix) + 1 + 8 + 8
+		vals, _ := r.scanValues(r.fmtKey("D"), func(k, v []byte) bool {
+			return len(k) == klen && len(v) == 8
+		})
+		now := time.Now().Unix()
+		for k, val := range vals {
+			if r.parseInt64(val)+60 < now {
+				key := []byte(k)[len(r.prefix)+1:]
+				inode := r.decodeInode(key[:8])
+				length := uint64(r.parseInt64(key[8:]))
+				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
+				r.deleteFile(inode, length)
+			}
+		}
+	}
+}
 
-func (m *dbMeta) cleanupSlices() {}
-*/
+func (r *kvMeta) cleanupSlices() {
+	for {
+		// once per hour
+		time.Sleep(time.Hour)
+
+		now := time.Now().Unix()
+		last, err := r.get(r.fmtKey("nextCleanupSlices"))
+		if err != nil || r.parseInt64(last)+3600 > now {
+			continue
+		}
+		_ = r.txn(func(tx kvTxn) error {
+			tx.set(r.fmtKey("nextCleanupSlices"), r.packInt64(now))
+			return nil
+		})
+
+		klen := len(r.prefix) + 1 + 8 + 4
+		vals, _ := r.scanValues(r.fmtKey("K"), func(k, v []byte) bool {
+			return len(k) == klen && len(v) == 8
+		})
+		for k, val := range vals {
+			refs := int64(binary.LittleEndian.Uint64(val))
+			if refs > 0 {
+				continue
+			}
+			key := []byte(k)[len(r.prefix)+1:]
+			chunkid := uint64(r.parseInt64(key[:8]))
+			size := binary.LittleEndian.Uint32(key[8:])
+			if refs < 0 {
+				r.deleteSlice(chunkid, size)
+			} else {
+				r.cleanupZeroRef(chunkid, size)
+			}
+		}
+	}
+}
 
 func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 	key := m.chunkKey(inode, indx)
