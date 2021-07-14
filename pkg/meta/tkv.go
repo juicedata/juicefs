@@ -2173,7 +2173,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
 
-		vals := tx.scanValues(m.xattrKey(inode, ""))
+		vals := tx.scanValues(m.xattrKey(inode, ""), nil)
 		if len(vals) > 0 {
 			xattrs := make([]*DumpedXattr, 0, len(vals))
 			for k, v := range vals {
@@ -2210,7 +2210,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 }
 
 func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
-	vals, err := m.scanValues(m.entryKey(inode, ""))
+	vals, err := m.scanValues(m.entryKey(inode, ""), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2232,7 +2232,7 @@ func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 }
 
 func (m *kvMeta) DumpMeta(w io.Writer) error {
-	vals, err := m.scanValues(m.fmtKey("D"))
+	vals, err := m.scanValues(m.fmtKey("D"), nil)
 	if err != nil {
 		return err
 	}
@@ -2279,7 +2279,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 		}
 	}
 
-	vals, err = m.scanValues(m.fmtKey("SS"))
+	vals, err = m.scanValues(m.fmtKey("SS"), nil)
 	if err != nil {
 		return err
 	}
