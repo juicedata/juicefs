@@ -624,6 +624,8 @@ func testCompaction(t *testing.T, m Meta) {
 		r.compactChunk(inode, 1, true)
 	case *dbMeta:
 		r.compactChunk(inode, 1, true)
+	case *kvMeta:
+		r.compactChunk(inode, 1, true)
 	}
 	var cs []Slice
 	_ = m.Read(ctx, inode, 1, &cs)
@@ -645,6 +647,8 @@ func testCompaction(t *testing.T, m Meta) {
 	case *redisMeta:
 		r.compactChunk(inode, 0, true)
 	case *dbMeta:
+		r.compactChunk(inode, 0, true)
+	case *kvMeta:
 		r.compactChunk(inode, 0, true)
 	}
 	var chunks []Slice

@@ -2580,7 +2580,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			for i := skipped; i > 0; i-- {
 				pipe.LPush(ctx, key, vals[i-1])
 			}
-			pipe.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), 1) // create the key to tracking it
+			pipe.HSet(ctx, sliceRefs, r.sliceKey(chunkid, size), "0") // create the key to tracking it
 			for _, s := range ss {
 				rs = append(rs, pipe.Decr(ctx, r.sliceKey(s.chunkid, s.size)))
 			}
@@ -2598,13 +2598,11 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	if errno == syscall.EINVAL {
-		r.rdb.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), -2)
+		r.rdb.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), -1)
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
 		r.deleteSlice(ctx, chunkid, size)
 	} else if errno == 0 {
 		r.of.InvalidateChunk(inode, indx)
-		// reset it to zero
-		r.rdb.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), -1)
 		r.cleanupZeroRef(r.sliceKey(chunkid, size))
 		for i, s := range ss {
 			if rs[i].Err() == nil && rs[i].Val() < 0 {
