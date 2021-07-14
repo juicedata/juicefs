@@ -357,34 +357,33 @@ func (m *kvMeta) scanValues(prefix []byte, filter func(k, v []byte) bool) (map[s
 func (m *kvMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
-	if m.freeInodes.next < m.freeInodes.maxid {
-		v := m.freeInodes.next
-		m.freeInodes.next++
-		return Ino(v), nil
+	if m.freeInodes.next >= m.freeInodes.maxid {
+		v, err := m.incrCounter(m.counterKey("nextInode"), 100)
+		if err != nil {
+			return 0, err
+		}
+		m.freeInodes.next = uint64(v) - 100
+		m.freeInodes.maxid = uint64(v)
 	}
-	v, err := m.incrCounter(m.counterKey("nextInode"), 100)
-	if err == nil {
-		m.freeInodes.next = uint64(v) + 1
-		m.freeInodes.maxid = uint64(v) + 100
-	}
-	return Ino(v), err
+	n := m.freeInodes.next
+	m.freeInodes.next++
+	return Ino(n), nil
 }
 
 func (m *kvMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
-	if m.freeChunks.next < m.freeChunks.maxid {
-		*chunkid = m.freeChunks.next
-		m.freeChunks.next++
-		return 0
+	if m.freeChunks.next >= m.freeChunks.maxid {
+		v, err := m.incrCounter(m.counterKey("nextChunk"), 1000)
+		if err != nil {
+			return errno(err)
+		}
+		m.freeChunks.next = uint64(v) - 1000
+		m.freeChunks.maxid = uint64(v)
 	}
-	v, err := m.incrCounter(m.counterKey("nextChunk"), 1000)
-	if err == nil {
-		*chunkid = uint64(v)
-		m.freeChunks.next = uint64(v) + 1
-		m.freeChunks.maxid = uint64(v) + 1000
-	}
-	return errno(err)
+	*chunkid = m.freeChunks.next
+	m.freeChunks.next++
+	return 0
 }
 
 func (m *kvMeta) Init(format Format, force bool) error {
@@ -777,12 +776,12 @@ func (m *kvMeta) setValue(key, value []byte) error {
 }
 
 func (m *kvMeta) incrCounter(key []byte, value int64) (int64, error) {
-	var old int64
+	var new int64
 	err := m.txn(func(tx kvTxn) error {
-		old = tx.incrBy(key, value)
+		new = tx.incrBy(key, value)
 		return nil
 	})
-	return old, err
+	return new, err
 }
 
 func (m *kvMeta) deleteKeys(keys ...[]byte) error {

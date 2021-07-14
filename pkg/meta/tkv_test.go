@@ -27,8 +27,8 @@ func TestMemKV(t *testing.T) {
 		count = tx.incrBy([]byte("counter"), -1)
 		return nil
 	})
-	if count != 0 {
-		t.Fatalf("counter should be 0, but got %d", count)
+	if count != -1 {
+		t.Fatalf("counter should be -1, but got %d", count)
 	}
 	c.txn(func(tx kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 0)
@@ -36,6 +36,13 @@ func TestMemKV(t *testing.T) {
 	})
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
+	}
+	c.txn(func(tx kvTxn) error {
+		count = tx.incrBy([]byte("counter"), 1)
+		return nil
+	})
+	if count != 0 {
+		t.Fatalf("counter should be 0, but got %d", count)
 	}
 }
 
