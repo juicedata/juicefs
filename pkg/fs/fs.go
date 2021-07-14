@@ -794,13 +794,6 @@ func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 	if int64(len(b))+offset > f.info.Size() {
 		b = b[:f.info.Size()-offset]
 	}
-	if f.wdata != nil {
-		eno := f.wdata.Flush(ctx)
-		if eno != 0 {
-			err = eno
-			return
-		}
-	}
 	if f.rdata == nil {
 		f.rdata = f.fs.reader.Open(f.inode, uint64(f.info.Size()))
 	}
@@ -848,10 +841,6 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 		f.wdata = nil
 		return
 	}
-	if offset+int64(len(b)) > int64(f.info.attr.Length) {
-		f.info.attr.Length = uint64(offset + int64(len(b)))
-	}
-	f.fs.reader.Invalidate(f.inode, uint64(offset), uint64(len(b)))
 	writtenSizeHistogram.Observe(float64(len(b)))
 	return len(b), 0
 }
