@@ -785,6 +785,9 @@ func (m *kvMeta) incrCounter(key []byte, value int64) (int64, error) {
 }
 
 func (m *kvMeta) deleteKeys(keys ...[]byte) error {
+	if len(keys) == 0 {
+		return nil
+	}
 	return m.txn(func(tx kvTxn) error {
 		tx.dels(keys...)
 		return nil
