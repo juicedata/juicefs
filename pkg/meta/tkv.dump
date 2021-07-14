@@ -1,0 +1,52 @@
+{
+  "Setting": {
+    "Name": "backup-test",
+    "UUID": "faa27c8f-edab-4791-a4e0-1620b732b343",
+    "Storage": "file",
+    "Bucket": "/Users/juicefs/.juicefs/local/",
+    "AccessKey": "",
+    "BlockSize": 4096,
+    "Compression": "none",
+    "Shards": 0,
+    "Partitions": 0,
+    "Capacity": 0,
+    "Inodes": 0
+  },
+  "Counters": {
+    "usedSpace": 16384,
+    "usedInodes": 4,
+    "nextInodes": 6,
+    "nextChunk": 5,
+    "nextSession": 1,
+    "nextCleanupSlices": 0
+  },
+  "Sustained": [],
+  "DelFiles": [],
+  "FSTree": {
+    "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1623746645,"ctime":1623746645,"atimensec":0,"mtimensec":0,"ctimensec":0,"nlink":3,"length":0},
+    "entries": {
+      "d1": {
+        "attr": {"inode":3,"type":"directory","mode":493,"uid":501,"gid":20,"atime":1623746591,"mtime":1623746610,"ctime":1623746610,"atimensec":959224000,"mtimensec":959224000,"ctimensec":959224000,"nlink":2,"length":0},
+        "entries": {
+          "f11": {
+            "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590000,"mtimensec":591590000,"ctimensec":591590000,"nlink":2,"length":12},
+            "chunks": [{"index":0,"slices":[{"pos":0,"chunkid":2,"size":12,"off":0,"len":12}]}]
+          }
+        }
+      },
+      "f1": {
+        "attr": {"inode":2,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746580,"mtime":1623746661,"ctime":1623746661,"atimensec":219686000,"mtimensec":219686000,"ctimensec":219686000,"nlink":1,"length":24},
+        "xattrs": [{"name":"k","value":"v"}],
+        "chunks": [{"index":0,"slices":[{"pos":0,"chunkid":1,"size":6,"off":0,"len":6},{"pos":0,"chunkid":3,"size":12,"off":0,"len":12},{"pos":0,"chunkid":4,"size":24,"off":0,"len":24}]}]
+      },
+      "l1": {
+        "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590000,"mtimensec":591590000,"ctimensec":591590000,"nlink":2,"length":12},
+        "chunks": [{"index":0,"slices":[{"pos":0,"chunkid":2,"size":12,"off":0,"len":12}]}]
+      },
+      "s1": {
+        "attr": {"inode":5,"type":"symlink","mode":420,"uid":501,"gid":20,"atime":1623746645,"mtime":1623746645,"ctime":1623746645,"atimensec":984144000,"mtimensec":984144000,"ctimensec":984144000,"nlink":1,"length":0},
+        "symlink": "d1/f11"
+      }
+    }
+  }
+}

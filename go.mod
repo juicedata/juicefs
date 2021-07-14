@@ -11,6 +11,7 @@ require (
 	github.com/IBM/ibm-cos-sdk-go v1.6.0
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
+	github.com/apple/foundationdb/bindings/go v0.0.0-20210617183757-c3ccd7d23675 // indirect
 	github.com/aws/aws-sdk-go v1.35.20
 	github.com/baidubce/bce-sdk-go v0.9.47
 	github.com/baiyubin/aliyun-sts-go-sdk v0.0.0-20180326062324-cfa1a18b161f // indirect

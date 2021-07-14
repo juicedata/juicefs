@@ -95,26 +95,6 @@ func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	return ret
 }
 
-func (tx *memTxn) nextKey(key []byte) []byte {
-	if len(key) == 0 {
-		return nil
-	}
-	next := make([]byte, len(key))
-	copy(next, key)
-	p := len(next) - 1
-	for {
-		next[p]++
-		if next[p] != 0 {
-			break
-		}
-		p--
-		if p < 0 {
-			panic("can't scan keys for 0xFF")
-		}
-	}
-	return next
-}
-
 func (tx *memTxn) scanKeys(prefix []byte) [][]byte {
 	var keys [][]byte
 	for k := range tx.scanValues(prefix, nil) {
@@ -124,7 +104,7 @@ func (tx *memTxn) scanKeys(prefix []byte) [][]byte {
 }
 
 func (tx *memTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
-	res := tx.scanRange(prefix, tx.nextKey(prefix))
+	res := tx.scanRange(prefix, nextKey(prefix))
 	for k, v := range res {
 		if filter != nil && !filter([]byte(k), v) {
 			delete(res, k)
@@ -141,10 +121,9 @@ func (tx *memTxn) set(key, value []byte) {
 	tx.buffer[string(key)] = value
 }
 
-func (tx *memTxn) append(key []byte, value []byte) []byte {
+func (tx *memTxn) append(key []byte, value []byte) {
 	new := append(tx.get(key), value...)
 	tx.set(key, new)
-	return new
 }
 
 func (tx *memTxn) incrBy(key []byte, value int64) int64 {

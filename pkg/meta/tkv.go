@@ -40,7 +40,7 @@ type kvTxn interface {
 	scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
-	append(key []byte, value []byte) []byte
+	append(key []byte, value []byte)
 	incrBy(key []byte, value int64) int64
 	dels(keys ...[]byte)
 }
@@ -48,6 +48,26 @@ type kvTxn interface {
 type tkvClient interface {
 	name() string
 	txn(f func(kvTxn) error) error
+}
+
+func nextKey(key []byte) []byte {
+	if len(key) == 0 {
+		return []byte{0xFF} // 0xFF is reserved in fdb
+	}
+	next := make([]byte, len(key))
+	copy(next, key)
+	p := len(next) - 1
+	for {
+		next[p]++
+		if next[p] != 0 {
+			break
+		}
+		p--
+		if p < 0 {
+			panic("can't scan keys for 0xFF")
+		}
+	}
+	return next
 }
 
 type kvMeta struct {
@@ -1976,11 +1996,17 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
+		tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
-		needCompact = (len(val)/sliceBytes)%100 == 99
+		// needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
 	})
+	go func() {
+		val, _ := m.get(m.chunkKey(inode, indx))
+		if (len(val)/sliceBytes)%20 == 19 {
+			m.compactChunk(inode, indx, false)
+		}
+	}()
 	if err == nil {
 		if needCompact {
 			go m.compactChunk(inode, indx, false)

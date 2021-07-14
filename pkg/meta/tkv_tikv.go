@@ -97,28 +97,8 @@ func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 	return tx.scanRange0(begin, end, nil)
 }
 
-func (tx *tikvTxn) nextKey(key []byte) []byte {
-	if len(key) == 0 {
-		return nil
-	}
-	next := make([]byte, len(key))
-	copy(next, key)
-	p := len(next) - 1
-	for {
-		next[p]++
-		if next[p] != 0 {
-			break
-		}
-		p--
-		if p < 0 {
-			panic("can't scan keys for 0xFF")
-		}
-	}
-	return next
-}
-
 func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
-	it, err := tx.Iter(prefix, tx.nextKey(prefix))
+	it, err := tx.Iter(prefix, nextKey(prefix))
 	if err != nil {
 		panic(err)
 	}
@@ -134,11 +114,11 @@ func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 }
 
 func (tx *tikvTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
-	return tx.scanRange0(prefix, tx.nextKey(prefix), filter)
+	return tx.scanRange0(prefix, nextKey(prefix), filter)
 }
 
 func (tx *tikvTxn) exist(prefix []byte) bool {
-	it, err := tx.Iter(prefix, tx.nextKey(prefix))
+	it, err := tx.Iter(prefix, nextKey(prefix))
 	if err != nil {
 		panic(err)
 	}
@@ -152,10 +132,9 @@ func (tx *tikvTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *tikvTxn) append(key []byte, value []byte) []byte {
+func (tx *tikvTxn) append(key []byte, value []byte) {
 	new := append(tx.get(key), value...)
 	tx.set(key, new)
-	return new
 }
 
 func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
@@ -203,6 +182,7 @@ func (c *tikvClient) txn(f func(kvTxn) error) error {
 		}
 	}(&err)
 	if err = f(&tikvTxn{tx}); err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	if !tx.IsReadOnly() {
