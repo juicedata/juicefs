@@ -1909,6 +1909,17 @@ func (m *dbMeta) cleanupSlices() {}
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {}
 */
 
+func (r *kvMeta) cleanupZeroRef(chunkid uint64, size uint32) {
+	_ = r.txn(func(tx kvTxn) error {
+		v := tx.incrBy(r.fmtKey(chunkid, size), 0)
+		if v != 0 {
+			return syscall.EINVAL
+		}
+		tx.dels(r.fmtKey(chunkid, size))
+		return nil
+	})
+}
+
 func (m *kvMeta) deleteSlice(chunkid uint64, size uint32) {
 	m.deleting <- 1
 	defer func() { <-m.deleting }()
@@ -2033,6 +2044,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.deleteSlice(chunkid, size)
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
+		m.cleanupZeroRef(chunkid, size)
 		for _, s := range ss {
 			refs, err := m.incrCounter(m.sliceKey(s.chunkid, s.size), 0)
 			if err == nil && refs < 0 {
