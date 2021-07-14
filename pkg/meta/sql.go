@@ -481,8 +481,8 @@ func (m *dbMeta) incrCounter(name string, batch int64) (uint64, error) {
 		if err != nil {
 			return err
 		}
-		v = c.Value
-		_, err = s.Cols("value").Update(&counter{Value: c.Value + batch}, &counter{Name: name})
+		v = c.Value + batch
+		_, err = s.Cols("value").Update(&counter{Value: v}, &counter{Name: name})
 		return err
 	})
 	return uint64(v), err
@@ -491,17 +491,17 @@ func (m *dbMeta) incrCounter(name string, batch int64) (uint64, error) {
 func (m *dbMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
-	if m.freeInodes.next < m.freeInodes.maxid {
-		v := m.freeInodes.next
-		m.freeInodes.next++
-		return Ino(v), nil
+	if m.freeInodes.next >= m.freeInodes.maxid {
+		v, err := m.incrCounter("nextInode", 100)
+		if err != nil {
+			return 0, err
+		}
+		m.freeInodes.next = v - 100
+		m.freeInodes.maxid = v
 	}
-	v, err := m.incrCounter("nextInode", 100)
-	if err == nil {
-		m.freeInodes.next = v + 1
-		m.freeInodes.maxid = v + 100
-	}
-	return Ino(v), err
+	n := m.freeInodes.next
+	m.freeInodes.next++
+	return Ino(n), nil
 }
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
@@ -1812,18 +1812,17 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
-	if m.freeChunks.next < m.freeChunks.maxid {
-		*chunkid = m.freeChunks.next
-		m.freeChunks.next++
-		return 0
+	if m.freeChunks.next >= m.freeChunks.maxid {
+		v, err := m.incrCounter("nextChunk", 1000)
+		if err != nil {
+			return errno(err)
+		}
+		m.freeChunks.next = v - 1000
+		m.freeChunks.maxid = v
 	}
-	v, err := m.incrCounter("nextChunk", 1000)
-	if err == nil {
-		*chunkid = v
-		m.freeChunks.next = v + 1
-		m.freeChunks.maxid = v + 1000
-	}
-	return errno(err)
+	*chunkid = m.freeChunks.next
+	m.freeChunks.next++
+	return 0
 }
 
 func (m *dbMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
@@ -2661,7 +2660,6 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = dec.Decode(dm); err != nil {
 		return err
 	}
-
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err

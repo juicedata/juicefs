@@ -2970,9 +2970,9 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		&DumpedCounters{
 			UsedSpace:         cs[0],
 			UsedInodes:        cs[1],
-			NextInode:         cs[2],
-			NextChunk:         cs[3],
-			NextSession:       cs[4],
+			NextInode:         cs[2] + 1, // Redis counter is 1 smaller than sql/tkv
+			NextChunk:         cs[3] + 1,
+			NextSession:       cs[4] + 1,
 			NextCleanupSlices: cs[5],
 		},
 		sessions,
