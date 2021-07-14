@@ -151,20 +151,21 @@ func (tx *tikvTxn) append(key []byte, value []byte) []byte {
 }
 
 func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
-	var old int64
+	var new int64
 	buf := tx.get(key)
 	if len(buf) > 0 {
 		if len(buf) != 8 {
 			panic("invalid counter value")
 		}
-		old = int64(binary.BigEndian.Uint64(buf))
+		new = int64(binary.BigEndian.Uint64(buf))
 	}
 	if value != 0 {
+		new += value
 		buf = make([]byte, 8)
-		binary.BigEndian.PutUint64(buf, uint64(old+value))
+		binary.BigEndian.PutUint64(buf, uint64(new))
 		tx.set(key, buf)
 	}
-	return old
+	return new
 }
 
 func (tx *tikvTxn) dels(keys ...[]byte) {

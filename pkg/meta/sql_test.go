@@ -50,7 +50,7 @@ func resetDB(m *dbMeta) {
 	m.engine.DropTables(&plock{})
 }
 
-func TestSQLClient(t *testing.T) {
+func TestSQLiteClient(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
 	m, err := newSQLMeta("sqlite3", tmp, &Config{})
@@ -96,7 +96,7 @@ func TestPostgresQLClient(t *testing.T) {
 	testCaseIncensi(t, m)
 }
 
-func TestStickyBitSQL(t *testing.T) {
+func TestStickyBitSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
 	m, err := newSQLMeta("sqlite3", tmp, &Config{})
@@ -106,7 +106,7 @@ func TestStickyBitSQL(t *testing.T) {
 	testStickyBit(t, m)
 }
 
-func TestLocksSQL(t *testing.T) {
+func TestLocksSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
 	m, err := newSQLMeta("sqlite3", tmp, &Config{})
@@ -116,7 +116,7 @@ func TestLocksSQL(t *testing.T) {
 	testLocks(t, m)
 }
 
-func TestConcurrentWriteSQL(t *testing.T) {
+func TestConcurrentWriteSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
 	m, err := newSQLMeta("sqlite3", tmp, &Config{})
@@ -126,7 +126,7 @@ func TestConcurrentWriteSQL(t *testing.T) {
 	testConcurrentWrite(t, m)
 }
 
-func TestCompactionSQL(t *testing.T) {
+func TestCompactionSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
 	m, err := newSQLMeta("sqlite3", tmp, &Config{})
@@ -136,7 +136,7 @@ func TestCompactionSQL(t *testing.T) {
 	testCompaction(t, m)
 }
 
-func TestTruncateAndDeleteSQL(t *testing.T) {
+func TestTruncateAndDeleteSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
 	m, err := newSQLMeta("sqlite3", tmp, &Config{})
@@ -146,7 +146,7 @@ func TestTruncateAndDeleteSQL(t *testing.T) {
 	testTruncateAndDelete(t, m)
 }
 
-func TestCopyFileRangeSQL(t *testing.T) {
+func TestCopyFileRangeSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
 	m, err := newSQLMeta("sqlite3", tmp, &Config{})
@@ -156,7 +156,7 @@ func TestCopyFileRangeSQL(t *testing.T) {
 	testCopyFileRange(t, m)
 }
 
-func TestCaseIncensiSQL(t *testing.T) {
+func TestCaseIncensiSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
 	m, err := newSQLMeta("sqlite3", tmp, &Config{CaseInsensi: true})
