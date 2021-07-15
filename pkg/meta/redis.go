@@ -2934,7 +2934,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		return err
 	}
 
-	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextCleanupSlices"}...).Result()
+	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession"}...).Result()
 	cs := make([]int64, len(rs))
 	for i, r := range rs {
 		if r != nil {
@@ -2966,12 +2966,11 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	dm := &DumpedMeta{
 		format,
 		&DumpedCounters{
-			UsedSpace:         cs[0],
-			UsedInodes:        cs[1],
-			NextInode:         cs[2] + 1, // Redis counter is 1 smaller than sql/tkv
-			NextChunk:         cs[3] + 1,
-			NextSession:       cs[4] + 1,
-			NextCleanupSlices: cs[5],
+			UsedSpace:   cs[0],
+			UsedInodes:  cs[1],
+			NextInode:   cs[2] + 1, // Redis counter is 1 smaller than sql/tkv
+			NextChunk:   cs[3] + 1,
+			NextSession: cs[4] + 1,
 		},
 		sessions,
 		dels,
@@ -3119,7 +3118,6 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	cs["nextinode"] = counters.NextInode
 	cs["nextchunk"] = counters.NextChunk
 	cs["nextsession"] = counters.NextSession
-	cs["nextCleanupSlices"] = counters.NextCleanupSlices
 	p.MSet(ctx, cs)
 	if len(dm.DelFiles) > 0 {
 		zs := make([]*redis.Z, 0, len(dm.DelFiles))
