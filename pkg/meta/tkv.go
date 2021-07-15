@@ -1918,7 +1918,7 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 	err := m.txn(func(tx kvTxn) error {
 		buf := tx.get(key)
 		slices = readSliceBuf(buf)
-		tx.set(key, []byte{})
+		tx.dels(key)
 		for _, s := range slices {
 			r := tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
 			if r < 0 {
@@ -1964,12 +1964,7 @@ func (m *kvMeta) deleteFile(inode Ino, length uint64) {
 		logger.Warnf("delete chunks of inode %d: %s", inode, err)
 		return
 	}
-	var vals [][]byte
-	m.txn(func(tx kvTxn) error {
-		vals = tx.gets(keys...)
-		return nil
-	})
-	for i := range vals {
+	for i := range keys {
 		idx := binary.BigEndian.Uint32(keys[i][len(m.prefix)+10:])
 		err := m.deleteChunk(inode, idx)
 		if err != nil {
