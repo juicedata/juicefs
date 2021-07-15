@@ -2034,6 +2034,7 @@ func (m *kvMeta) deleteFile(inode Ino, length uint64) {
 			return
 		}
 	}
+	_ = m.deleteKeys(m.delfileKey(inode, length))
 }
 
 func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
