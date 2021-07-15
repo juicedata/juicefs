@@ -29,6 +29,9 @@ juicefs.lite: Makefile cmd/*.go pkg/*/*.go
 juicefs.tikv: Makefile cmd/*.go pkg/*/*.go
 	go build -tags tikv -ldflags="$(LDFLAGS)"  -o juicefs.tikv ./cmd
 
+juicefs.fdb: Makefile cmd/*.go pkg/*/*.go
+	go build -tags fdb -ldflags="$(LDFLAGS)"  -o juicefs.fdb ./cmd
+
 juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 	go build -tags ceph -ldflags="$(LDFLAGS)"  -o juicefs.ceph ./cmd
 

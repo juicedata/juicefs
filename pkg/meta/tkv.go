@@ -39,7 +39,7 @@ type kvTxn interface {
 	scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
-	append(key []byte, value []byte) []byte
+	append(key []byte, value []byte)
 	incrBy(key []byte, value int64) int64
 	dels(keys ...[]byte)
 }
@@ -47,6 +47,26 @@ type kvTxn interface {
 type tkvClient interface {
 	name() string
 	txn(f func(kvTxn) error) error
+}
+
+func nextKey(key []byte) []byte {
+	if len(key) == 0 {
+		return []byte{0xFF} // 0xFF is reserved in fdb
+	}
+	next := make([]byte, len(key))
+	copy(next, key)
+	p := len(next) - 1
+	for {
+		next[p]++
+		if next[p] != 0 {
+			break
+		}
+		p--
+		if p < 0 {
+			panic("can't scan keys for 0xFF")
+		}
+	}
+	return next
 }
 
 type kvMeta struct {
@@ -75,11 +95,13 @@ type kvMeta struct {
 }
 
 func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
-	p := strings.Index(addr, "/")
 	var prefix string
-	if p > 0 {
-		prefix = addr[p+1:]
-		addr = addr[:p]
+	if driver == "tikv" {
+		p := strings.Index(addr, "/")
+		if p > 0 {
+			prefix = addr[p+1:]
+			addr = addr[:p]
+		}
 	}
 	client, err := newTkvClient(driver, addr)
 	if err != nil {
@@ -758,7 +780,7 @@ func (m *kvMeta) shouldRetry(err error) bool {
 		return false
 	}
 	// TODO: add other retryable errors here
-	return strings.Contains(err.Error(), "write conflict")
+	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "conflict with another transaction") || strings.Contains(err.Error(), "Operation aborted")
 }
 
 func (m *kvMeta) txn(f func(tx kvTxn) error) error {
@@ -1806,13 +1828,16 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
+		tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
-		if (len(val)/sliceBytes)%20 == 0 {
-			go m.compactChunk(inode, indx, false)
-		}
 		return nil
 	})
+	go func() {
+		val, _ := m.get(m.chunkKey(inode, indx))
+		if (len(val)/sliceBytes)%20 == 19 {
+			m.compactChunk(inode, indx, false)
+		}
+	}()
 	if err == nil {
 		m.updateStats(newSpace, 0)
 	}
