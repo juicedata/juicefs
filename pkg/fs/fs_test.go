@@ -16,10 +16,12 @@
 package fs
 
 import (
+	"io"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
@@ -34,14 +36,38 @@ func TestFileSystem(t *testing.T) {
 	var conf = vfs.Config{
 		Meta: &meta.Config{},
 		Chunk: &chunk.Config{
-			BlockSize: 4096,
+			BlockSize:  format.BlockSize << 10,
+			MaxUpload:  1,
+			BufferSize: 100 << 20,
 		},
 	}
-	store := chunk.NewDiskStore("/tmp")
+	objStore, _ := object.CreateStorage("mem", "", "", "")
+	store := chunk.NewCachedStore(objStore, *conf.Chunk)
 	fs, _ := NewFileSystem(&conf, m, store)
 	ctx := meta.Background
-	if _, err := fs.Create(ctx, "/hello", 0644); err != 0 {
+	fs.Delete(ctx, "/hello")
+	f, err := fs.Create(ctx, "/hello", 0644)
+	if err != 0 {
 		t.Fatalf("create /hello: %s", err)
+	}
+	if n, err := f.Write(ctx, []byte("world")); err != 0 || n != 5 {
+		t.Fatalf("write 5 bytes: %d %s", n, err)
+	}
+	var buf = make([]byte, 10)
+	if n, err := f.Pread(ctx, buf, 2); err != nil || n != 3 || string(buf[:n]) != "rld" {
+		t.Fatalf("pread(2): %d %s %s", n, err, string(buf[:n]))
+	}
+	if n, err := f.Seek(ctx, -3, io.SeekEnd); err != nil || n != 2 {
+		t.Fatalf("seek 3 bytes before end: %d %s", n, err)
+	}
+	if n, err := f.Write(ctx, []byte("t")); err != 0 || n != 1 {
+		t.Fatalf("write 5 bytes: %d %s", n, err)
+	}
+	if n, err := f.Seek(ctx, -2, io.SeekCurrent); err != nil || n != 1 {
+		t.Fatalf("seek 2 bytes before current: %d %s", n, err)
+	}
+	if n, err := f.Read(ctx, buf); err != nil || n != 4 || string(buf[:n]) != "otld" {
+		t.Fatalf("read(): %d %s %s", n, err, string(buf[:n]))
 	}
 	defer fs.Delete(ctx, "/hello")
 	if _, err := fs.Stat(ctx, "/hello"); err != 0 {
