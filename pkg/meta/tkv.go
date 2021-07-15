@@ -1913,10 +1913,28 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 func (m *dbMeta) cleanupDeletedFiles() {}
 
 func (m *dbMeta) cleanupSlices() {}
-
-
-func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {}
 */
+
+func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
+	key := m.chunkKey(inode, indx)
+	var slices []*slice
+	err := m.txn(func(tx kvTxn) error {
+		buf := tx.get(key)
+		slices = readSliceBuf(buf)
+		tx.dels(key)
+		for _, s := range slices {
+			r := tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+			if r < 0 {
+				go m.deleteSlice(s.chunkid, s.size)
+			}
+		}
+		return nil
+	})
+	if err != syscall.Errno(0) {
+		return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", key, err)
+	}
+	return nil
+}
 
 func (r *kvMeta) cleanupZeroRef(chunkid uint64, size uint32) {
 	_ = r.txn(func(tx kvTxn) error {
@@ -1943,7 +1961,21 @@ func (m *kvMeta) deleteSlice(chunkid uint64, size uint32) {
 	}
 }
 
-func (m *kvMeta) deleteFile(inode Ino, length uint64) {}
+func (m *kvMeta) deleteFile(inode Ino, length uint64) {
+	keys, err := m.scanKeys(m.fmtKey("A", inode, "C"))
+	if err != nil {
+		logger.Warnf("delete chunks of inode %d: %s", inode, err)
+		return
+	}
+	for i := range keys {
+		idx := binary.BigEndian.Uint32(keys[i][len(m.prefix)+10:])
+		err := m.deleteChunk(inode, idx)
+		if err != nil {
+			logger.Warnf("delete chunk %s: %s", keys[i], err)
+			return
+		}
+	}
+}
 
 func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if !force {
