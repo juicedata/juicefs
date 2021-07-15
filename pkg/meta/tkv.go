@@ -2500,7 +2500,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		tx.set(m.counterKey("nextChunk"), packCounter(counters.NextChunk))
 		tx.set(m.counterKey("nextSession"), packCounter(counters.NextSession))
 		for _, d := range dm.DelFiles {
-			tx.set(m.delfileKey(d.Inode, d.Length), packCounter(d.Expire))
+			tx.set(m.delfileKey(d.Inode, d.Length), m.packInt64(d.Expire))
 		}
 		for k, v := range refs {
 			if v > 1 {
