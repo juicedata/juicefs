@@ -18,7 +18,6 @@
 package meta
 
 import (
-	"encoding/binary"
 	"fmt"
 	"sync"
 )
