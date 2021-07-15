@@ -233,7 +233,7 @@ CREATE TABLE IF NOT EXISTS person
 
 ## Metrics
 
-JuiceFS Hadoop Java SDK supports reporting metrics to [Prometheus Pushgateway](https://github.com/prometheus/pushgateway), then you can use [Grafana](https://grafana.com) and [dashboard template](k8s_grafana_template.json) to visualize these metrics.
+JuiceFS Hadoop Java SDK supports reporting metrics to [Prometheus Pushgateway](https://github.com/prometheus/pushgateway), then you can use [Grafana](https://grafana.com) and [dashboard template](grafana_template.json) to visualize these metrics.
 
 Enable metrics reporting through following configurations:
 
