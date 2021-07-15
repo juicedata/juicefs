@@ -35,7 +35,7 @@ type DumpedCounters struct {
 	NextInode         int64 `json:"nextInodes"`
 	NextChunk         int64 `json:"nextChunk"`
 	NextSession       int64 `json:"nextSession"`
-	NextCleanupSlices int64 `json:"nextCleanupSlices"`
+	NextCleanupSlices int64 `json:"nextCleanupSlices"` // deprecated, always 0
 }
 
 type DumpedDelFile struct {
