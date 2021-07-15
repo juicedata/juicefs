@@ -19,7 +19,6 @@ package meta
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 
 	tikverr "github.com/tikv/client-go/v2/error"
@@ -154,16 +153,11 @@ func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
 	var new int64
 	buf := tx.get(key)
 	if len(buf) > 0 {
-		if len(buf) != 8 {
-			panic("invalid counter value")
-		}
-		new = int64(binary.LittleEndian.Uint64(buf))
+		new = parseCounter(buf)
 	}
 	if value != 0 {
 		new += value
-		buf = make([]byte, 8)
-		binary.LittleEndian.PutUint64(buf, uint64(new))
-		tx.set(key, buf)
+		tx.set(key, packCounter(new))
 	}
 	return new
 }
