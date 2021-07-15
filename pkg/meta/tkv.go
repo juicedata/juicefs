@@ -165,6 +165,7 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
 
 /**
   Ino iiiiiiii
+  Length llllllll
   Indx nnnn
   name ...
   chunkid cccccccc
@@ -178,7 +179,7 @@ All keys:
   AiiiiiiiiCnnnn     file chunks
   AiiiiiiiiS         symlink target
   AiiiiiiiiX...      extented attribute
-  Diiiiiiiinnnn      delete inodes
+  Diiiiiiiillllllll  delete inodes
   Fiiiiiiii          Flocks
   Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
@@ -263,9 +264,22 @@ func (m *kvMeta) packInt64(value int64) []byte {
 
 func (m *kvMeta) parseInt64(buf []byte) int64 {
 	if len(buf) != 8 {
-		panic("invalid time value")
+		panic("invalid value")
 	}
 	return int64(binary.BigEndian.Uint64(buf))
+}
+
+func packCounter(value int64) []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(value))
+	return b
+}
+
+func parseCounter(buf []byte) int64 {
+	if len(buf) != 8 {
+		panic("invalid counter value")
+	}
+	return int64(binary.LittleEndian.Uint64(buf))
 }
 
 func (m *kvMeta) packEntry(_type uint8, inode Ino) []byte {
@@ -276,10 +290,8 @@ func (m *kvMeta) packEntry(_type uint8, inode Ino) []byte {
 }
 
 func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
-	if len(buf) != 9 {
-		panic("invalid entry")
-	}
-	return buf[0], Ino(binary.BigEndian.Uint64(buf[1:]))
+	b := utils.FromBuffer(buf)
+	return b.Get8(), Ino(b.Get64())
 }
 
 func (m *kvMeta) parseAttr(buf []byte, attr *Attr) {
@@ -485,8 +497,8 @@ func (m *kvMeta) NewSession() error {
 
 	go m.refreshUsage()
 	go m.refreshSession()
-	// go m.cleanupDeletedFiles()
-	// go m.cleanupSlices()
+	go m.cleanupDeletedFiles()
+	go m.cleanupSlices()
 	go m.flushStats()
 	return nil
 }
@@ -1909,11 +1921,55 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-/* TODO
-func (m *dbMeta) cleanupDeletedFiles() {}
+func (m *kvMeta) cleanupDeletedFiles() {
+	for {
+		time.Sleep(time.Minute)
+		klen := len(m.prefix) + 1 + 8 + 8
+		now := time.Now().Unix()
+		vals, _ := m.scanValues(m.fmtKey("D"), func(k, v []byte) bool {
+			// filter out invalid ones
+			return len(k) == klen && len(v) == 8 && m.parseInt64(v)+60 < now
+		})
+		for k := range vals {
+			rb := utils.FromBuffer([]byte(k)[len(m.prefix)+1:])
+			inode := m.decodeInode(rb.Get(8))
+			length := rb.Get64()
+			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
+			m.deleteFile(inode, length)
+		}
+	}
+}
 
-func (m *dbMeta) cleanupSlices() {}
-*/
+func (m *kvMeta) cleanupSlices() {
+	for {
+		time.Sleep(time.Hour)
+
+		// once per hour
+		now := time.Now().Unix()
+		last, err := m.get(m.counterKey("nextCleanupSlices"))
+		if err != nil || m.parseInt64(last)+3600 > now {
+			continue
+		}
+		_ = m.setValue(m.counterKey("nextCleanupSlices"), m.packInt64(now))
+
+		klen := len(m.prefix) + 1 + 8 + 4
+		vals, _ := m.scanValues(m.fmtKey("K"), func(k, v []byte) bool {
+			// filter out invalid ones
+			return len(k) == klen && len(v) == 8 && parseCounter(v) <= 0
+		})
+		for k, v := range vals {
+			rb := utils.FromBuffer([]byte(k)[len(m.prefix)+1:])
+			chunkid := rb.Get64()
+			size := rb.Get32()
+			refs := parseCounter(v)
+			if refs < 0 {
+				m.deleteSlice(chunkid, size)
+			} else {
+				m.cleanupZeroRef(chunkid, size)
+			}
+		}
+	}
+}
 
 func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 	key := m.chunkKey(inode, indx)
@@ -2299,8 +2355,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 			m.counterKey(totalInodes),
 			m.counterKey("nextInode"),
 			m.counterKey("nextChunk"),
-			m.counterKey("nextSession"),
-			m.counterKey("nextCleanupSlices"))
+			m.counterKey("nextSession"))
 		return nil
 	})
 	if err != nil {
@@ -2309,7 +2364,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 	cs := make([]int64, len(rs))
 	for i, r := range rs {
 		if r != nil {
-			cs[i] = m.parseInt64(r)
+			cs[i] = parseCounter(r)
 		}
 	}
 
@@ -2335,12 +2390,11 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 	dm := DumpedMeta{
 		format,
 		&DumpedCounters{
-			UsedSpace:         cs[0],
-			UsedInodes:        cs[1],
-			NextInode:         cs[2],
-			NextChunk:         cs[3],
-			NextSession:       cs[4],
-			NextCleanupSlices: cs[5],
+			UsedSpace:   cs[0],
+			UsedInodes:  cs[1],
+			NextInode:   cs[2],
+			NextChunk:   cs[3],
+			NextSession: cs[4],
 		},
 		sessions,
 		dels,
@@ -2440,18 +2494,17 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	return m.txn(func(tx kvTxn) error {
 		tx.set(m.fmtKey("setting"), format)
-		tx.set(m.counterKey(usedSpace), m.packInt64(counters.UsedSpace))
-		tx.set(m.counterKey(totalInodes), m.packInt64(counters.UsedInodes))
-		tx.set(m.counterKey("nextInode"), m.packInt64(counters.NextInode))
-		tx.set(m.counterKey("nextChunk"), m.packInt64(counters.NextChunk))
-		tx.set(m.counterKey("nextSession"), m.packInt64(counters.NextSession))
-		tx.set(m.counterKey("nextCleanupSlices"), m.packInt64(counters.NextCleanupSlices))
+		tx.set(m.counterKey(usedSpace), packCounter(counters.UsedSpace))
+		tx.set(m.counterKey(totalInodes), packCounter(counters.UsedInodes))
+		tx.set(m.counterKey("nextInode"), packCounter(counters.NextInode))
+		tx.set(m.counterKey("nextChunk"), packCounter(counters.NextChunk))
+		tx.set(m.counterKey("nextSession"), packCounter(counters.NextSession))
 		for _, d := range dm.DelFiles {
 			tx.set(m.delfileKey(d.Inode, d.Length), m.packInt64(d.Expire))
 		}
 		for k, v := range refs {
 			if v > 1 {
-				tx.set([]byte(k), m.packInt64(v-1))
+				tx.set([]byte(k), packCounter(v-1))
 			}
 		}
 		return nil
