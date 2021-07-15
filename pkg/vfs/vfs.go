@@ -16,6 +16,7 @@
 package vfs
 
 import (
+	"encoding/json"
 	"runtime"
 	"syscall"
 	"time"
@@ -406,6 +407,8 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 			openAccessLog(fh)
 		case statsInode:
 			h.data = collectMetrics()
+		case configInode:
+			h.data, _ = json.MarshalIndent(config, "", " ")
 		}
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: ino, Attr: n.attr}
@@ -877,7 +880,10 @@ func RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno) {
 
 var logger = utils.GetLogger("juicefs")
 
+var config *Config
+
 func Init(conf *Config, m_ meta.Meta, store_ chunk.ChunkStore) {
+	config = conf
 	m = m_
 	store = store_
 	reader = NewDataReader(conf, m, store)
