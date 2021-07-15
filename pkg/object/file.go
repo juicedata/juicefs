@@ -175,15 +175,18 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 		return nil
 	}
 
-	infos, err := readDirSorted(path)
+	entries, err := readDirSorted(path)
 	if err != nil {
 		return walkFn(path, info, err)
 	}
 
-	for _, fi := range infos {
-		p := filepath.Join(path, fi.Name())
-		err = walk(p, fi, walkFn)
-		if err != nil && err != filepath.SkipDir {
+	for _, e := range entries {
+		p := filepath.Join(path, e.Name())
+		in, err := e.Info()
+		if err == nil {
+			err = walk(p, in, walkFn)
+		}
+		if err != nil && err != filepath.SkipDir && !os.IsNotExist(err) {
 			return err
 		}
 	}
@@ -209,37 +212,47 @@ func Walk(root string, walkFn filepath.WalkFunc) error {
 	return err
 }
 
-type mInfo struct {
+type mEntry struct {
+	os.DirEntry
 	name string
-	os.FileInfo
+	fi   os.FileInfo
 }
 
-func (m *mInfo) Name() string {
+func (m *mEntry) Name() string {
 	return m.name
+}
+
+func (m *mEntry) Info() (os.FileInfo, error) {
+	if m.fi != nil {
+		return m.fi, nil
+	}
+	return m.DirEntry.Info()
 }
 
 // readDirSorted reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func readDirSorted(dirname string) ([]os.FileInfo, error) {
+func readDirSorted(dirname string) ([]os.DirEntry, error) {
 	f, err := os.Open(dirname)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	fis, err := f.Readdir(-1)
-	for i, fi := range fis {
-		if !fi.IsDir() && !fi.Mode().IsRegular() {
+	entries, err := f.ReadDir(-1)
+	for i, e := range entries {
+		if e.IsDir() {
+			entries[i] = &mEntry{e, e.Name() + dirSuffix, nil}
+		} else if !e.Type().IsRegular() {
 			// follow symlink
-			f, _ := os.Stat(filepath.Join(dirname, fi.Name()))
-			fi = &mInfo{fi.Name(), f}
-			fis[i] = fi
-		}
-		if fi.IsDir() {
-			fis[i] = &mInfo{fi.Name() + dirSuffix, fi}
+			fi, _ := os.Stat(filepath.Join(dirname, e.Name()))
+			name := e.Name()
+			if fi.IsDir() {
+				name = e.Name() + dirSuffix
+			}
+			entries[i] = &mEntry{e, name, fi}
 		}
 	}
-	sort.Slice(fis, func(i, j int) bool { return fis[i].Name() < fis[j].Name() })
-	return fis, err
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	return entries, err
 }
 
 func (d *filestore) List(prefix, marker string, limit int64) ([]Object, error) {
