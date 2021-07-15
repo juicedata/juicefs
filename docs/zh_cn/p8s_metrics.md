@@ -2,7 +2,7 @@
 
 JuiceFS 为每个文件系统提供一个 [Prometheus](https://prometheus.io) API。默认的 API 地址是 `http://localhost:9567/metrics`，你可以在执行 [`juicefs mount`](command_reference.md#juicefs-mount) 命令时通过 `--metrics` 选项自定义这个地址。
 
-JuiceFS 同时提供一个 [Grafana](https://grafana.com) 的 [dashboard 模板](../en/k8s_grafana_template.json)，将模板导入以后就可以展示这些收集上来的监控指标。
+JuiceFS 同时提供一个 [Grafana](https://grafana.com) 的 [dashboard 模板](../en/grafana_template.json)，将模板导入以后就可以展示这些收集上来的监控指标。
 
 以下是对各项指标含义的说明。
 

@@ -2146,9 +2146,12 @@
       {
         "allValue": null,
         "current": {
+          "selected": false,
           "text": "dogfood",
           "value": "dogfood"
         },
+        "datasource": "${Source}",
+        "definition": "label_values(juicefs_uptime, vol_name)",
         "description": null,
         "error": null,
         "hide": 0,
@@ -2156,17 +2159,16 @@
         "label": null,
         "multi": false,
         "name": "name",
-        "options": [
-          {
-            "selected": false,
-            "text": "test",
-            "value": "test"
-          }
-        ],
-        "query": "test",
-        "queryValue": "",
+        "options": [],
+        "query": {
+          "query": "label_values(juicefs_uptime, vol_name)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
         "skipUrlSync": false,
-        "type": "custom"
+        "sort": 0,
+        "type": "query"
       }
     ]
   },
