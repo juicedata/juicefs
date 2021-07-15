@@ -2521,8 +2521,6 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 			counters.NextChunk = row.Value
 		case "nextSession":
 			counters.NextSession = row.Value
-		case "nextCleanupSlices":
-			counters.NextCleanupSlices = row.Value
 		}
 	}
 
@@ -2691,7 +2689,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	cs = append(cs, &counter{"nextInode", counters.NextInode})
 	cs = append(cs, &counter{"nextChunk", counters.NextChunk})
 	cs = append(cs, &counter{"nextSession", counters.NextSession})
-	cs = append(cs, &counter{"nextCleanupSlices", counters.NextCleanupSlices})
+	cs = append(cs, &counter{"nextCleanupSlices", 0})
 	beans = append(beans, cs)
 	if len(dm.DelFiles) > 0 {
 		dels := make([]*delfile, 0, len(dm.DelFiles))
