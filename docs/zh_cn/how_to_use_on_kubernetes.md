@@ -14,7 +14,7 @@ JuiceFS 为 Kubernetes 环境提供了 [CSI Driver](https://github.com/juicedata
 
 首先参考[「Helm 安装指南」](https://github.com/helm/helm#install)安装 Helm，需要 Helm 3 及以上版本。
 
-1. 准备一个叫做 `values.yaml` 的文件，其中包含 Redis 和对象存储的访问信息（这里以 Amazon S3 的 `us-east-1` 区域为例）：
+1. 准备一个叫做 `values.yaml` 的文件，其中包含元数据引擎（如 Redis）和对象存储的访问信息（这里以 Amazon S3 的 `us-east-1` 区域为例）：
 
 ```yaml
 storageClasses:
