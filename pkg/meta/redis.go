@@ -287,6 +287,7 @@ func (r *redisMeta) NewSession() error {
 		return fmt.Errorf("create session: %s", err)
 	}
 	logger.Debugf("session is %d", r.sid)
+	r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
 	info, err := newSessionInfo()
 	if err != nil {
 		return fmt.Errorf("new session info: %s", err)
@@ -1940,9 +1941,8 @@ func (r *redisMeta) cleanStaleSessions() {
 
 func (r *redisMeta) refreshSession() {
 	for {
-		now := time.Now()
-		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(now.Unix()), Member: strconv.Itoa(int(r.sid))})
 		time.Sleep(time.Minute)
+		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
 		if _, err := r.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
