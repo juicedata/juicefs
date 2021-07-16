@@ -46,7 +46,7 @@ $ juicefs format --storage s3 \
 | [DigitalOcean Spaces](#do-space)       | `space`    |
 | [Wasabi](#wasabi)                      | `wasabi`   |
 | [Storj DCS](#storj-dcs)                | `s3`       |
-| [Vultr 对象存储](#vultr)                | `s3`       |
+| [Vultr 对象存储](#vultr)               | `s3`       |
 | [阿里云 OSS](#aliyun-oss)              | `oss`      |
 | [腾讯云 COS](#qcloud-cos)              | `cos`      |
 | [华为云 OBS](#huawei-obs)              | `obs`      |
@@ -68,6 +68,7 @@ $ juicefs format --storage s3 \
 | [WebDAV](#webdav)                      | `webdav`   |
 | [HDFS](#hdfs)                          | `hdfs`     |
 | [Redis](#redis)                        | `redis`    |
+| [TiKV](#tikv)                          | `tikv`     |
 | [本地磁盘](#local)                     | `file`     |
 
 ## Amazon S3 <span id='aws-s3'></span>
@@ -631,9 +632,35 @@ JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端
 
 对于 HA 群集，可以像下面这样一起指定 NameNodes 的地址：`--bucket=namenode1:port,namenode2:port`。
 
-## Redis <span id='redis'></span>
+## Redis
 
-待编写......
+[Redis](https://redis.io) 是一个开源全内存数据存储，广泛用于数据库、缓存以及消息队列场景。除了将 Redis 作为 JuiceFS 的元数据引擎以外，Redis 还可以作为数据存储。推荐使用 Redis 存储数据量较小的数据，如应用配置。
+
+`--bucket` 选项格式为 `redis://<host>:<port>/<db>`。`--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
+
+```bash
+$ ./juicefs format \
+    --storage redis \
+    --bucket redis://<host>:<port>/<db> \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    localhost test
+```
+
+## TiKV
+
+[TiKV](https://tikv.org) 是一个高度可扩展、低延迟且易于使用的键值数据库。它提供原始和符合 ACID 的事务键值 API。
+
+`--bucket` 选项格式类似 `<host>:<port>,<host>:<port>,<host>:<port>`，其中 `<host>` 是 Placement Driver（PD）的地址。`--access-key` 和 `--secret-key` 选项没有作用，可以省略。例如：
+
+```bash
+$ ./juicefs format \
+    --storage tikv \
+    --bucket "<host>:<port>,<host>:<port>,<host>:<port>" \
+    ... \
+    localhost test
+```
 
 ## 本地磁盘 <span id='local'></span>
 

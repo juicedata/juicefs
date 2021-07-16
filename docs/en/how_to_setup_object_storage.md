@@ -2,7 +2,7 @@
 
 By reading [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS Store Files](how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database.
 
-## Storage setting options 
+## Storage setting options
 
 When creating a JuiceFS file system, setting up data storage generally involves the following options:
 
@@ -68,6 +68,7 @@ The following table lists the object storage services supported by JuiceFS. Clic
 | [WebDAV](#webdav)                                         | `webdav`   |
 | [HDFS](#hdfs)                                             | `hdfs`     |
 | [Redis](#redis)                                           | `redis`    |
+| [TiKV](#tikv)                                             | `tikv`     |
 | [Local disk](#local)                                      | `file`     |
 
 ## S3 <span id='aws-s3'></span>
@@ -614,13 +615,39 @@ JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_D
 
 For HA cluster, the addresses of NameNodes can be specified together like this: `--bucket=namenode1:port,namenode2:port`.
 
-## Redis <span id='redis'></span>
+## Redis
 
-Writing ...
+[Redis](https://redis.io) is an open source, in-memory data structure store, used as a database, cache, and message broker. In addition to using Redis as the metadata engine of JuiceFS, Redis can also be used as data storage. It is recommended to use Redis to store data with a small amount of data, such as application configuration.
+
+The `--bucket` option format is `redis://<host>:<port>/<db>`. The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
+
+```bash
+$ ./juicefs format \
+    --storage redis \
+    --bucket redis://<host>:<port>/<db> \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    localhost test
+```
+
+## TiKV
+
+[TiKV](https://tikv.org) is a highly scalable, low latency, and easy to use key-value database. It provides both raw and ACID-compliant transactional key-value API.
+
+The `--bucket` option format is like `<host>:<port>,<host>:<port>,<host>:<port>`, the `<host>` is the address of Placement Driver (PD). The `--access-key` and `--secret-key` options have no effect and can be omitted. For example:
+
+```bash
+$ ./juicefs format \
+    --storage tikv \
+    --bucket "<host>:<port>,<host>:<port>,<host>:<port>" \
+    ... \
+    localhost test
+```
 
 ## Local disk <span id='local'></span>
 
-When creating JuiceFS storage, if no storage type is specified, the local disk will be used to store data by default. The default storage path for root user is `/var/jfs`, and `~/.juicefs/local` is for ordinary users. 
+When creating JuiceFS storage, if no storage type is specified, the local disk will be used to store data by default. The default storage path for root user is `/var/jfs`, and `~/.juicefs/local` is for ordinary users.
 
 For example, using the local Redis database and local disk to create a JuiceFS storage named `test`:
 
@@ -628,7 +655,7 @@ For example, using the local Redis database and local disk to create a JuiceFS s
 $ ./juicefs format redis://localhost:6379/1 test
 ```
 
-Local storage is only used to understand and experience the basic functions of JuiceFS. The created JuiceFS storage cannot be mounted by other clients in the network and can only be used on a stand-alone machine. 
+Local storage is only used to understand and experience the basic functions of JuiceFS. The created JuiceFS storage cannot be mounted by other clients in the network and can only be used on a stand-alone machine.
 
 If you need to evaluate JuiceFS, it is recommended to use object storage services.
 
