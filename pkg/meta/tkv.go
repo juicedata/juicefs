@@ -263,6 +263,9 @@ func (m *kvMeta) packInt64(value int64) []byte {
 }
 
 func (m *kvMeta) parseInt64(buf []byte) int64 {
+	if len(buf) == 0 {
+		return 0
+	}
 	if len(buf) != 8 {
 		panic("invalid value")
 	}
@@ -276,6 +279,9 @@ func packCounter(value int64) []byte {
 }
 
 func parseCounter(buf []byte) int64 {
+	if len(buf) == 0 {
+		return 0
+	}
 	if len(buf) != 8 {
 		panic("invalid counter value")
 	}
