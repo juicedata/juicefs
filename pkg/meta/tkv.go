@@ -482,6 +482,7 @@ func (m *kvMeta) NewSession() error {
 	}
 	m.sid = uint64(v)
 	logger.Debugf("session is %d", m.sid)
+	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 	info, err := newSessionInfo()
 	if err != nil {
 		return fmt.Errorf("new session info: %s", err)
@@ -505,8 +506,8 @@ func (m *kvMeta) NewSession() error {
 
 func (m *kvMeta) refreshSession() {
 	for {
-		_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 		time.Sleep(time.Minute)
+		_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
