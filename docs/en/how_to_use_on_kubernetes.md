@@ -14,7 +14,7 @@ JuiceFS provides the [CSI Driver](https://github.com/juicedata/juicefs-csi-drive
 
 To install Helm, refer to the [Helm install guide](https://github.com/helm/helm#install), Helm 3 is required.
 
-1. Prepare a file `values.yaml` with access information about Redis and object storage (take Amazon S3 `us-east-1` as an example):
+1. Prepare a file `values.yaml` with access information about metadata engine (e.g. Redis) and object storage (take Amazon S3 `us-east-1` as an example):
 
 ```yaml
 storageClasses:
