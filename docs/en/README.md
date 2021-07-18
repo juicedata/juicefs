@@ -55,6 +55,6 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [Comparison with others](comparison_with_others.md)
   - [Usage tracking](usage_tracking.md)
 - [Scenarios & Cases](case.md)
-- [FAQ](FAQ.md)
+- [FAQ](faq.md)
 - [Release Notes](release_notes.md)
 - [Glossary](glossary.md)
