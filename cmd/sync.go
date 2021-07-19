@@ -29,8 +29,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
 )
@@ -158,19 +156,14 @@ const USAGE = `juicefs [options] sync [options] SRC DST
 SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`
 
 func doSync(c *cli.Context) error {
+	setLoggerLevel(c)
+
 	if c.Args().Len() != 2 {
 		logger.Errorf(USAGE)
 		return nil
 	}
 	config := sync.NewConfigFromCli(c)
 	go func() { _ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", config.HTTPPort), nil) }()
-
-	if config.Verbose {
-		utils.SetLogLevel(logrus.DebugLevel)
-	} else if config.Quiet {
-		utils.SetLogLevel(logrus.ErrorLevel)
-	}
-	utils.InitLoggers(false)
 
 	// Windows support `\` and `/` as its separator, Unix only use `/`
 	srcURL := strings.Replace(c.Args().Get(0), "\\", "/", -1)
