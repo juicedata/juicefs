@@ -29,7 +29,7 @@ const (
 	sqlAddr = "sqlite3://juicefs.db"
 	// sqlAddr = "mysql://root:@/juicefs" // MySQL
 	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/juicefs" // TiDB
-	tkvAddr = "tikv://127.0.0.1:2379"
+	tkvAddr = "tikv://127.0.0.1:2379/juicefs"
 )
 
 /*
@@ -678,6 +678,8 @@ func BenchmarkTKVLink(b *testing.B) {
 
 func benchmarkData(b *testing.B, m Meta) {
 	_ = m.Init(Format{Name: "benchmarkData"}, true)
+	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
+	m.OnMsg(CompactChunk, func(args ...interface{}) error { return nil })
 	_ = m.NewSession()
 	b.Run("newchunk", func(b *testing.B) { benchNewChunk(b, m) })
 	b.Run("write", func(b *testing.B) { benchWrite(b, m) })
