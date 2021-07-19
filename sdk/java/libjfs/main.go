@@ -312,7 +312,6 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		} else {
 			utils.SetLogLevel(logrus.WarnLevel)
 		}
-		utils.InitLoggers(false)
 
 		addr := jConf.MetaURL
 		m := meta.NewClient(addr, &meta.Config{

@@ -81,7 +81,6 @@ func gatewayFlags() *cli.Command {
 
 func gateway(c *cli.Context) error {
 	setLoggerLevel(c)
-	utils.InitLoggers(false)
 
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Meta URL and listen address are required")
