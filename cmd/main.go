@@ -84,7 +84,6 @@ func main() {
 			warmupFlags(),
 			dumpFlags(),
 			loadFlags(),
-			showConfFlags(),
 		},
 	}
 
