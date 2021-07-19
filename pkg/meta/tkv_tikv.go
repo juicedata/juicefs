@@ -20,6 +20,7 @@ package meta
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
@@ -33,7 +34,8 @@ func newTkvClient(driver, addr string) (tkvClient, error) {
 	if driver != "tikv" {
 		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "tikv")
 	}
-	client, err := tikv.NewTxnClient([]string{addr})
+	pds := strings.Split(addr, ",")
+	client, err := tikv.NewTxnClient(pds)
 	return &tikvClient{client}, err
 }
 
