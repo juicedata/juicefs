@@ -1310,12 +1310,14 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.EPERM
 	}
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	var opened bool
+	var attr Attr
+	eno := r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil || rs[1] == nil {
 			return redis.Nil
 		}
-		var pattr, attr Attr
+		var pattr Attr
 		r.parseAttr([]byte(rs[0].(string)), &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -1342,7 +1344,6 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 
 		attr.Nlink--
-		var opened bool
 		if _type == TypeFile && attr.Nlink == 0 {
 			opened = r.of.IsOpen(inode)
 		}
@@ -1376,17 +1377,19 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 			return nil
 		})
-		if err == nil && _type == TypeFile && attr.Nlink == 0 {
-			if opened {
-				r.Lock()
-				r.removedFiles[inode] = true
-				r.Unlock()
-			} else {
-				go r.deleteFile(inode, attr.Length, "")
-			}
-		}
+
 		return err
 	}, r.entryKey(parent), r.inodeKey(parent), r.inodeKey(inode))
+	if eno == 0 && _type == TypeFile && attr.Nlink == 0 {
+		if opened {
+			r.Lock()
+			r.removedFiles[inode] = true
+			r.Unlock()
+		} else {
+			go r.deleteFile(inode, attr.Length, "")
+		}
+	}
+	return eno
 }
 
 func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -1577,7 +1580,9 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		}
 	}
 
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	var opened bool
+	var tattr Attr
+	eno := r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return redis.Nil
@@ -1597,8 +1602,6 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		if err != nil && err != redis.Nil {
 			return err
 		}
-		var tattr Attr
-		var opened bool
 		if err == nil {
 			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
 				return syscall.EEXIST
@@ -1710,17 +1713,18 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(&iattr), 0)
 			return nil
 		})
-		if err == nil && dino > 0 && dtyp == TypeFile {
-			if opened {
-				r.Lock()
-				r.removedFiles[dino] = true
-				r.Unlock()
-			} else {
-				go r.deleteFile(dino, tattr.Length, "")
-			}
-		}
 		return err
 	}, keys...)
+	if eno == 0 && dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
+		if opened {
+			r.Lock()
+			r.removedFiles[dino] = true
+			r.Unlock()
+		} else {
+			go r.deleteFile(dino, tattr.Length, "")
+		}
+	}
+	return eno
 }
 
 func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
@@ -2064,7 +2068,8 @@ func (r *redisMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sy
 
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
 	defer func() { r.of.InvalidateChunk(inode, indx) }()
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	var needCompact bool
+	eno := r.txn(ctx, func(tx *redis.Tx) error {
 		var attr Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -2100,11 +2105,15 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			}
 			return nil
 		})
-		if err == nil && rpush.Val()%20 == 0 {
-			go r.compactChunk(inode, indx, false)
+		if err == nil {
+			needCompact = rpush.Val()%20 == 19
 		}
 		return err
 	}, r.inodeKey(inode))
+	if eno == 0 && needCompact {
+		go r.compactChunk(inode, indx, false)
+	}
+	return eno
 }
 
 func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
