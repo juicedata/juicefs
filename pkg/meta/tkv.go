@@ -1283,6 +1283,10 @@ func (m *kvMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumas
 
 func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	parent = m.checkRoot(parent)
+	var _type uint8
+	var inode Ino
+	var attr Attr
+	var opened bool
 	var newSpace, newInode int64
 	err := m.txn(func(tx kvTxn) error {
 		buf := tx.get(m.entryKey(parent, name))
@@ -1295,7 +1299,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if buf == nil {
 			return syscall.ENOENT
 		}
-		_type, inode := m.parseEntry(buf)
+		_type, inode = m.parseEntry(buf)
 		if _type == TypeDirectory {
 			return syscall.EPERM
 		}
@@ -1303,7 +1307,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
 		}
-		var pattr, attr Attr
+		var pattr Attr
 		m.parseAttr(rs[0], &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -1321,7 +1325,6 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 		attr.Nlink--
-		var opened bool
 		if _type == TypeFile && attr.Nlink == 0 {
 			opened = m.of.IsOpen(inode)
 		}
@@ -1350,6 +1353,9 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				newSpace, newInode = -align4K(0), -1
 			}
 		}
+		return nil
+	})
+	if err == nil {
 		if _type == TypeFile && attr.Nlink == 0 {
 			if opened {
 				m.Lock()
@@ -1359,9 +1365,6 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				go m.deleteFile(inode, attr.Length)
 			}
 		}
-		return nil
-	})
-	if err == nil {
 		m.updateStats(newSpace, newInode)
 	}
 	return errno(err)
@@ -1427,6 +1430,10 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
+	var opened bool
+	var dino Ino
+	var dtyp uint8
+	var tattr Attr
 	var newSpace, newInode int64
 	err := m.txn(func(tx kvTxn) error {
 		buf := tx.get(m.entryKey(parentSrc, nameSrc))
@@ -1450,7 +1457,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return syscall.ENOENT
 		}
-		var sattr, dattr, iattr, tattr Attr
+		var sattr, dattr, iattr Attr
 		m.parseAttr(rs[0], &sattr)
 		if sattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
@@ -1461,9 +1468,6 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		}
 		m.parseAttr(rs[2], &iattr)
 
-		var opened bool
-		var dino Ino
-		var dtyp uint8
 		dbuf := tx.get(m.entryKey(parentDst, nameDst))
 		if dbuf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
@@ -1559,7 +1563,10 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		if parentDst != parentSrc {
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
-		if dino > 0 && dtyp == TypeFile {
+		return nil
+	})
+	if err == nil {
+		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			if opened {
 				m.Lock()
 				m.removedFiles[dino] = true
@@ -1568,9 +1575,6 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				go m.deleteFile(dino, tattr.Length)
 			}
 		}
-		return nil
-	})
-	if err == nil {
 		m.updateStats(newSpace, newInode)
 	}
 	return errno(err)
@@ -1790,6 +1794,7 @@ func (m *kvMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sysca
 func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
+	var needCompact bool
 	err := m.txn(func(tx kvTxn) error {
 		var attr Attr
 		a := tx.get(m.inodeKey(inode))
@@ -1816,11 +1821,14 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		if (len(val)/sliceBytes)%20 == 0 {
-			go m.compactChunk(inode, indx, false)
+			needCompact = true
 		}
 		return nil
 	})
 	if err == nil {
+		if needCompact {
+			go m.compactChunk(inode, indx, false)
+		}
 		m.updateStats(newSpace, 0)
 	}
 	return errno(err)
