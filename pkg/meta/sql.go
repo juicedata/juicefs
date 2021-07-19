@@ -1130,6 +1130,8 @@ func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumas
 func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	parent = m.checkRoot(parent)
 	var newSpace, newInode int64
+	var n node
+	var opened bool
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
@@ -1162,7 +1164,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.EPERM
 		}
 
-		var n = node{Inode: e.Inode}
+		n.Inode = e.Inode
 		ok, err = s.Get(&n)
 		if err != nil {
 			return err
@@ -1180,7 +1182,6 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pn.Ctime = now
 		n.Nlink--
 		n.Ctime = now
-		var opened bool
 		if e.Type == TypeFile && n.Nlink == 0 {
 			opened = m.of.IsOpen(e.Inode)
 		}
@@ -1230,18 +1231,18 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				newSpace, newInode = -align4K(0), -1
 			}
 		}
-		if err == nil && e.Type == TypeFile && n.Nlink == 0 {
-			if opened {
-				m.Lock()
-				m.removedFiles[Ino(e.Inode)] = true
-				m.Unlock()
-			} else {
-				go m.deleteFile(e.Inode, n.Length)
-			}
-		}
 		return err
 	})
 	if err == nil {
+		if n.Type == TypeFile && n.Nlink == 0 {
+			if opened {
+				m.Lock()
+				m.removedFiles[Ino(n.Inode)] = true
+				m.Unlock()
+			} else {
+				go m.deleteFile(n.Inode, n.Length)
+			}
+		}
 		m.updateStats(newSpace, newInode)
 	}
 	return errno(err)
@@ -1333,6 +1334,9 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
+	var opened bool
+	var dino Ino
+	var dn node
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
 		var spn = node{Inode: parentSrc}
@@ -1403,9 +1407,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				de.Name = string(e.Name)
 			}
 		}
-		var opened bool
-		var dino Ino
-		var dn = node{Inode: de.Inode}
+		dn.Inode = de.Inode
 		if ok {
 			dino = Ino(de.Inode)
 			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
@@ -1521,7 +1523,10 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		if _, err := s.Cols("ctime").Update(&sn, &node{Inode: sn.Inode}); err != nil {
 			return err
 		}
-		if err == nil && dino > 0 && dn.Type == TypeFile {
+		return err
+	})
+	if err == nil {
+		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
 			if opened {
 				m.Lock()
 				m.removedFiles[dino] = true
@@ -1530,9 +1535,6 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				go m.deleteFile(dino, dn.Length)
 			}
 		}
-		return err
-	})
-	if err == nil {
 		m.updateStats(newSpace, newInode)
 	}
 	return errno(err)
@@ -1833,6 +1835,7 @@ func (m *dbMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sysca
 func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
+	var needCompact bool
 	err := m.txn(func(s *xorm.Session) error {
 		var n = node{Inode: inode}
 		ok, err := s.Get(&n)
@@ -1877,11 +1880,14 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
 		if (len(ck.Slices)/sliceBytes)%20 == 19 {
-			go m.compactChunk(inode, indx, false)
+			needCompact = true
 		}
 		return err
 	})
 	if err == nil {
+		if needCompact {
+			go m.compactChunk(inode, indx, false)
+		}
 		m.updateStats(newSpace, 0)
 	}
 	return errno(err)
