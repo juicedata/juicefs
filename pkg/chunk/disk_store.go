@@ -112,4 +112,6 @@ func (s *diskStore) FillCache(chunkid uint64, length uint32) error {
 	return fmt.Errorf("Not Supported")
 }
 
+func (s *diskStore) UsedMemory() int64 { return 0 }
+
 var _ ChunkStore = &diskStore{}

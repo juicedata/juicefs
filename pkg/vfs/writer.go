@@ -281,6 +281,10 @@ func (f *fileWriter) totalSlices() int {
 	return cnt
 }
 
+func usedBufferSize() int64 {
+	return utils.UsedMemory() - store.UsedMemory()
+}
+
 func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
 	for {
 		if f.totalSlices() < 1000 {
@@ -288,10 +292,10 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if utils.UsedMemory() > f.w.bufferSize {
+	if usedBufferSize() > f.w.bufferSize {
 		// slow down
 		time.Sleep(time.Millisecond * 10)
-		for utils.UsedMemory() > f.w.bufferSize*2 {
+		for usedBufferSize() > f.w.bufferSize*2 {
 			time.Sleep(time.Millisecond * 100)
 		}
 	}

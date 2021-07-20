@@ -832,4 +832,8 @@ func (store *cachedStore) FillCache(chunkid uint64, length uint32) error {
 	return nil // currently errors are skipped
 }
 
+func (store *cachedStore) UsedMemory() int64 {
+	return store.bcache.usedMemory()
+}
+
 var _ ChunkStore = &cachedStore{}
