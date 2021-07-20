@@ -44,8 +44,8 @@ type Config struct {
 	Chunk       *chunk.Config
 	Version     string
 	Mountpoint  string
-	FastResolve bool
-	AccessLog   string
+	FastResolve bool   `json:",omitempty"`
+	AccessLog   string `json:",omitempty"`
 }
 
 var (
@@ -408,19 +408,8 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 		case statsInode:
 			h.data = collectMetrics()
 		case configInode:
-			format := *config.Format
-			format.SecretKey = ""
-			format.EncryptKey = ""
-			conf := &Config{
-				Meta:        config.Meta,
-				Format:      &format,
-				Version:     config.Version,
-				Chunk:       config.Chunk,
-				Mountpoint:  config.Mountpoint,
-				FastResolve: config.FastResolve,
-				AccessLog:   config.AccessLog,
-			}
-			h.data, _ = json.MarshalIndent(conf, "", " ")
+			config.Format.RemoveSecret()
+			h.data, _ = json.MarshalIndent(config, "", " ")
 		}
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: ino, Attr: n.attr}
