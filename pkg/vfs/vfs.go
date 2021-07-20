@@ -408,7 +408,19 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 		case statsInode:
 			h.data = collectMetrics()
 		case configInode:
-			h.data, _ = json.MarshalIndent(config, "", " ")
+			format := *config.Format
+			format.SecretKey = ""
+			format.EncryptKey = ""
+			conf := &Config{
+				Meta:        config.Meta,
+				Format:      &format,
+				Version:     config.Version,
+				Chunk:       config.Chunk,
+				Mountpoint:  config.Mountpoint,
+				FastResolve: config.FastResolve,
+				AccessLog:   config.AccessLog,
+			}
+			h.data, _ = json.MarshalIndent(conf, "", " ")
 		}
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: ino, Attr: n.attr}
