@@ -2106,7 +2106,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return nil
 		})
 		if err == nil {
-			needCompact = rpush.Val()%20 == 19
+			needCompact = rpush.Val()%100 == 99
 		}
 		return err
 	}, r.inodeKey(inode))
@@ -2515,7 +2515,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	var ctx = Background
-	vals, err := r.rdb.LRange(ctx, r.chunkKey(inode, indx), 0, 200).Result()
+	vals, err := r.rdb.LRange(ctx, r.chunkKey(inode, indx), 0, 1000).Result()
 	if err != nil {
 		return
 	}
