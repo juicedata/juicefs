@@ -43,8 +43,8 @@ func Free(b []byte) {
 	pools[powerOf2(cap(b))].Put(&b)
 }
 
-// UsedMemory returns the memory used
-func UsedMemory() int64 {
+// AllocMemory returns the allocated memory
+func AllocMemory() int64 {
 	return atomic.LoadInt64(&used)
 }
 
