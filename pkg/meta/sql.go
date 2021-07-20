@@ -1879,7 +1879,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			return err
 		}
 		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
-		if (len(ck.Slices)/sliceBytes)%20 == 19 {
+		if (len(ck.Slices)/sliceBytes)%100 == 99 {
 			needCompact = true
 		}
 		return err

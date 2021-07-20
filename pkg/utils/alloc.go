@@ -16,50 +16,62 @@
 package utils
 
 import (
+	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
-var slabs = make(map[uintptr][]byte)
 var used int64
-var slabsMutex sync.Mutex
 
 // Alloc returns size bytes memory from Go heap.
 func Alloc(size int) []byte {
-	b := make([]byte, size)
-	ptr := unsafe.Pointer(&b[0])
-	slabsMutex.Lock()
-	slabs[uintptr(ptr)] = b
-	used += int64(size)
-	slabsMutex.Unlock()
-	return b
+	zeros := powerOf2(size)
+	b := *pools[zeros].Get().(*[]byte)
+	if cap(b) < size {
+		panic(fmt.Sprintf("%d < %d", cap(b), size))
+	}
+	atomic.AddInt64(&used, int64(cap(b)))
+	return b[:size]
 }
 
 // Free returns memory to Go heap.
-func Free(buf []byte) {
-	// buf could be zero when writing
-	p := unsafe.Pointer(&buf[:1][0])
-	slabsMutex.Lock()
-	if b, ok := slabs[uintptr(p)]; !ok {
-		panic("invalid pointer")
-	} else {
-		used -= int64(len(b))
-	}
-	delete(slabs, uintptr(p))
-	slabsMutex.Unlock()
+func Free(b []byte) {
+	// buf could be zero length
+	atomic.AddInt64(&used, -int64(cap(b)))
+	pools[powerOf2(cap(b))].Put(&b)
 }
 
 // UsedMemory returns the memory used
-// function is thread safe
 func UsedMemory() int64 {
-	slabsMutex.Lock()
-	defer slabsMutex.Unlock()
-	return used
+	return atomic.LoadInt64(&used)
+}
+
+var pools []*sync.Pool
+
+func powerOf2(s int) int {
+	var bits int
+	var p int = 1
+	for p < s {
+		bits++
+		p *= 2
+	}
+	return bits
 }
 
 func init() {
+	pools = make([]*sync.Pool, 30) // 1 - 1G
+	for i := 0; i < 30; i++ {
+		func(bits int) {
+			pools[i] = &sync.Pool{
+				New: func() interface{} {
+					b := make([]byte, 1<<bits)
+					return &b
+				},
+			}
+		}(i)
+	}
 	go func() {
 		for {
 			time.Sleep(time.Minute * 10)
