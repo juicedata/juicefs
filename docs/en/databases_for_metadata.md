@@ -222,7 +222,7 @@ When using TiKV as the metadata storage engine, specify parameters as the follow
 tikv://<pd_addr>[,<pd_addr>...]/<prefix>
 ```
 
-The **`prefix`** is a user-defined string, which can be used to distinguish multiple file systems when they share the same TiKV cluster. For example:
+The `prefix` is a user-defined string, which can be used to distinguish multiple file systems when they share the same TiKV cluster. For example:
 
 ```shell
 $ juicefs.tikv format --storage minio \

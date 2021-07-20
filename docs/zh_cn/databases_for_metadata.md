@@ -222,7 +222,7 @@ TiKV 的测试环境搭建非常简单，使用官方提供的 `TiUP` 工具即�
 tikv://<pd_addr>[,<pd_addr>...]/<prefix>
 ```
 
-其中 **`prefix`** 是用户自定义的字符串，当多个文件系统共用一个 TiKV 集群时可用来区分；示例如下：
+其中 `prefix` 是用户自定义的字符串，当多个文件系统共用一个 TiKV 集群时可用来区分；示例如下：
 
 ```shell
 $ juicefs.tikv format --storage minio \
