@@ -50,6 +50,13 @@ Amazon S3
 - Version: 8.0.25
 - `/var/lib/mysql` is bind mounted on `/data/mysql`
 
+### TiKV
+
+- Version: 5.1.0
+- Configuration:
+  - deploy_dir: `/data/tikv-deploy`
+  - data_dir: `/data/tikv-data`
+
 ## Tools
 
 All the following tests are run for each metadata engine.

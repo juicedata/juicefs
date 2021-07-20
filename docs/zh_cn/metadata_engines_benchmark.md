@@ -49,6 +49,13 @@ Amazon S3
 - 版本: 8.0.25
 - `/var/lib/mysql` 目录被绑定挂载到 `/data/mysql`
 
+### TiKV
+
+- 版本: 5.1.0
+- 配置:
+  - deploy_dir: `/data/tikv-deploy`
+  - data_dir: `/data/tikv-data`
+
 ## 测试工具
 
 每种元数据引擎都会运行以下所有测试。
