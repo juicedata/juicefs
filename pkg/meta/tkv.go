@@ -1820,7 +1820,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Ctimensec = uint32(now.Nanosecond())
 		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
-		if (len(val)/sliceBytes)%20 == 0 {
+		if (len(val)/sliceBytes)%100 == 99 {
 			needCompact = true
 		}
 		return nil

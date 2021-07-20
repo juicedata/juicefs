@@ -16,6 +16,7 @@
 package vfs
 
 import (
+	"math/rand"
 	"runtime"
 	"sync"
 	"syscall"
@@ -270,7 +271,23 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 	return s.write(ctx, off-s.off, data)
 }
 
+func (f *fileWriter) totalSlices() int {
+	var cnt int
+	f.Lock()
+	for _, c := range f.chunks {
+		cnt += len(c.slices)
+	}
+	f.Unlock()
+	return cnt
+}
+
 func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
+	for {
+		if f.totalSlices() < 1000 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 	if utils.UsedMemory() > f.w.bufferSize {
 		// slow down
 		time.Sleep(time.Millisecond * 10)
@@ -415,11 +432,15 @@ func (w *dataWriter) flushAll() {
 		for _, f := range w.files {
 			f.refs++
 			w.Unlock()
+			tooMany := f.totalSlices() > 800
 			f.Lock()
 
-			for _, c := range f.chunks {
-				for _, s := range c.slices {
-					if !s.freezed && (now.Sub(s.started) > flushDuration || now.Sub(s.lastMod) > time.Second) {
+			lastBit := uint32(rand.Int() % 2) // choose half of chunks randomly
+			for i, c := range f.chunks {
+				hs := len(c.slices) / 2
+				for j, s := range c.slices {
+					if !s.freezed && (now.Sub(s.started) > flushDuration || now.Sub(s.lastMod) > time.Second ||
+						tooMany && i%2 == lastBit && j <= hs) {
 						s.freezed = true
 						go s.flushData()
 					}
@@ -430,7 +451,7 @@ func (w *dataWriter) flushAll() {
 			w.Lock()
 		}
 		w.Unlock()
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * 100)
 	}
 }
 
