@@ -90,7 +90,7 @@ func mount(c *cli.Context) error {
 			readOnly = true
 		}
 	}
-	m := meta.NewClient(addr, &meta.Config{
+	metaConf := &meta.Config{
 		Retries:     10,
 		Strict:      true,
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
@@ -98,7 +98,8 @@ func mount(c *cli.Context) error {
 		OpenCache:   time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint:  mp,
 		Subdir:      c.String("subdir"),
-	})
+	}
+	m := meta.NewClient(addr, metaConf)
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
@@ -161,9 +162,7 @@ func mount(c *cli.Context) error {
 	}
 
 	conf := &vfs.Config{
-		Meta: &meta.Config{
-			Retries: 10,
-		},
+		Meta:       metaConf,
 		Format:     format,
 		Version:    version.Version(),
 		Mountpoint: mp,

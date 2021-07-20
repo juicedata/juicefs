@@ -212,12 +212,7 @@ func format(c *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("format: %s", err)
 	}
-	if format.SecretKey != "" {
-		format.SecretKey = "removed"
-	}
-	if format.EncryptKey != "" {
-		format.EncryptKey = "removed"
-	}
+	format.RemoveSecret()
 	logger.Infof("Volume is formatted as %+v", format)
 	return nil
 }

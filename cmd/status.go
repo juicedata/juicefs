@@ -56,8 +56,7 @@ func status(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	format.SecretKey = ""
-	format.EncryptKey = ""
+	format.RemoveSecret()
 
 	sessions, err := m.ListSessions()
 	if err != nil {
