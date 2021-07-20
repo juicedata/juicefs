@@ -56,9 +56,10 @@ func (c *memcache) cache(key string, p *Page, force bool) {
 	if _, ok := c.pages[key]; ok {
 		return
 	}
-	p.Acquire()
-	size := int64(cap(p.Data))
-	c.pages[key] = memItem{time.Now(), p}
+	size := int64(len(p.Data))
+	buf := make([]byte, size)
+	copy(buf, p.Data)
+	c.pages[key] = memItem{time.Now(), NewPage(buf)}
 	c.used += size + 4096
 	if c.used > c.capacity {
 		c.cleanup()
