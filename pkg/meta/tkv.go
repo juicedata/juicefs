@@ -93,7 +93,7 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	m := &kvMeta{
 		conf:         conf,
 		client:       client,
-		prefix:       []byte(prefix),
+		prefix:       append([]byte(prefix), 0xFD),
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
