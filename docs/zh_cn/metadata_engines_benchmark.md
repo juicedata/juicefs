@@ -15,6 +15,10 @@
 
 ## 测试环境
 
+### JuiceFS 版本
+
+juicefs version 0.16-dev (2021-07-20 9efa870)
+
 ### 对象存储
 
 Amazon S3

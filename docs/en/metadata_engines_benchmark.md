@@ -16,6 +16,10 @@ Details are provided below. Please note all the tests are run with the same obje
 
 ## Environment
 
+### JuiceFS Version
+
+juicefs version 0.16-dev (2021-07-20 9efa870)
+
 ### Object Storage
 
 Amazon S3
