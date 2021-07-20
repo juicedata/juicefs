@@ -43,3 +43,12 @@ type Format struct {
 	Inodes      uint64
 	EncryptKey  string `json:",omitempty"`
 }
+
+func (f *Format) RemoveSecret() {
+	if f.SecretKey != "" {
+		f.SecretKey = "removed"
+	}
+	if f.EncryptKey != "" {
+		f.EncryptKey = "removed"
+	}
+}
