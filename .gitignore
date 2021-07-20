@@ -11,7 +11,10 @@ fstests/secfs.test
 !fstests/Makefile
 jfs
 /juicefs
+/juicefs.ceph
 /juicefs.exe
+/juicefs.lite
+/juicefs.tikv
 dist/
 *.rdb
 .release-env

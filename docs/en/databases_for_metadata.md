@@ -20,10 +20,10 @@ You can easily buy a cloud Redis database service on the cloud computing platfor
 
 ```shell
 $ sudo docker run -d --name redis \
-	-v redis-data:/data \
-	-p 6379:6379 \
-	--restart unless-stopped \
-	redis redis-server --appendonly yes
+    -v redis-data:/data \
+    -p 6379:6379 \
+    --restart unless-stopped \
+    redis redis-server --appendonly yes
 ```
 
 > **Note**: The above command persists Redis data in Docker's `redis-data` data volume. You can modify the storage location of data persistence as needed.
@@ -46,12 +46,12 @@ For example, the following command will create a JuiceFS file system named `pics
 
 ```shell
 $ juicefs format \
-	--storage minio \
-	--bucket http://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	redis://192.168.1.6:6379/1 \
-	pics
+    --storage minio \
+    --bucket http://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    redis://192.168.1.6:6379/1 \
+    pics
 ```
 
 ### Mount a file system
@@ -84,11 +84,11 @@ For example:
 
 ```shell
 $ juicefs format --storage minio \
-	--bucket http://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	postgres://user:password@192.168.1.6:5432/juicefs?sslmode=disable \
-	pics
+    --bucket http://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    postgres://user:password@192.168.1.6:5432/juicefs?sslmode=disable \
+    pics
 ```
 
 For more connection parameters, [click here to view](https://pkg.go.dev/github.com/lib/pq#hdr-Connection_String_Parameters).
@@ -107,14 +107,14 @@ You can easily buy a cloud MySQL database service on the cloud computing platfor
 
 ```shell
 $ sudo docker run -d --name mysql \
-	-p 3306:3306 \
-	-v mysql-data:/var/lib/mysql \
-	-e MYSQL_ROOT_PASSWORD=password \
-	-e MYSQL_DATABASE=juicefs \
-	-e MYSQL_USER=user \
-	-e MYSQL_PASSWORD=password \
-	--restart unless-stopped \
-	mysql
+    -p 3306:3306 \
+    -v mysql-data:/var/lib/mysql \
+    -e MYSQL_ROOT_PASSWORD=password \
+    -e MYSQL_DATABASE=juicefs \
+    -e MYSQL_USER=user \
+    -e MYSQL_PASSWORD=password \
+    --restart unless-stopped \
+    mysql
 ```
 
 In order to make it easier for you to start the test quickly, the above code directly sets the password of the root user, the database named juicefs, and the user and user used to manage the database through the `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD` environment variables. Password, you can adjust the corresponding values of the above environment variables according to actual needs, or you can [click here to view](https://hub.docker.com/_/mysql) Docker to create more content of MySQL image.
@@ -133,11 +133,11 @@ For example:
 
 ```shell
 $ juicefs format --storage minio \
-	--bucket http://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	mysql://user:password@(192.168.1.6:3306)/juicefs \
-	pics
+    --bucket http://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    mysql://user:password@(192.168.1.6:3306)/juicefs \
+    pics
 ```
 
 For more examples of MySQL database address format, [click here to view](https://github.com/Go-SQL-Driver/MySQL/#examples).
@@ -156,25 +156,25 @@ Because MariaDB is highly compatible with MySQL, there is no difference in usage
 
 ```shell
 $ sudo docker run -d --name mariadb \
-	-p 3306:3306 \
-	-v mysql-data:/var/lib/mysql \
-	-e MYSQL_ROOT_PASSWORD=password \
-	-e MYSQL_DATABASE=juicefs \
-	-e MYSQL_USER=user \
-	-e MYSQL_PASSWORD=password \
-	--restart unless-stopped \
-	mariadb
+    -p 3306:3306 \
+    -v mysql-data:/var/lib/mysql \
+    -e MYSQL_ROOT_PASSWORD=password \
+    -e MYSQL_DATABASE=juicefs \
+    -e MYSQL_USER=user \
+    -e MYSQL_PASSWORD=password \
+    --restart unless-stopped \
+    mariadb
 ```
 
 When creating and mounting a file system, keep the MySQL syntax, for example:
 
 ```shell
 $ juicefs format --storage minio \
-	--bucket http://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	mysql://user:password@(192.168.1.6:3306)/juicefs \
-	pics
+    --bucket http://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    mysql://user:password@(192.168.1.6:3306)/juicefs \
+    pics
 ```
 
 ## SQLite
@@ -185,11 +185,11 @@ The SQLite database has only one file, which is very flexible to create and use.
 
 ```shell
 $ juicefs format --storage minio \
-	--bucket https://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	sqlite3://my-jfs.db \
-	pics
+    --bucket https://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    sqlite3://my-jfs.db \
+    pics
 ```
 
 Executing the above command will automatically create a database file named `my-jfs.db` in the current directory, **please take good care of this file**！
@@ -210,9 +210,9 @@ $ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 
 ## TiKV
 
-> [TiKV](https://github.com/tikv/tikv) is a distributed transactional key-value database. It is originally developed by [PingCap](https://pingcap.com/) as the storage layer for their flagship product [TiDB](https://github.com/pingcap/tidb). Now TiKV is an independent open source project, and is also a granduated project of [CNCF](https://www.cncf.io/projects/).
+> [TiKV](https://github.com/tikv/tikv) is a distributed transactional key-value database. It is originally developed by [PingCAP](https://pingcap.com) as the storage layer for their flagship product [TiDB](https://github.com/pingcap/tidb). Now TiKV is an independent open source project, and is also a granduated project of [CNCF](https://www.cncf.io/projects).
 
-With the help of official tool `TiUP`, you can easily build a local playground for testing; refer [here](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/) for details. In production, usually at lease three hosts are required to store three data replicas; refer to the [official document](https://tikv.org/docs/5.1/deploy/install/install/) for all steps.
+With the help of official tool `TiUP`, you can easily build a local playground for testing; refer [here](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/) for details. In production, usually at least three hosts are required to store three data replicas; refer to the [official document](https://tikv.org/docs/5.1/deploy/install/install/) for all steps.
 
 ### Create a file system
 
@@ -222,18 +222,18 @@ When using TiKV as the metadata storage engine, specify parameters as the follow
 tikv://<pd_addr>[,<pd_addr>...]/<prefix>
 ```
 
-The **prefix** is a user-defined string, which can be used to distinguish multiple file systems when they share the same TiKV cluster. For example:
+The **`prefix`** is a user-defined string, which can be used to distinguish multiple file systems when they share the same TiKV cluster. For example:
 
 ```shell
 $ juicefs.tikv format --storage minio \
-	--bucket https://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs \
-	pics
+    --bucket https://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs \
+    pics
 ```
 
-> **Note**: By default the released binary doesn't support TiKV; users need to compile it from source code: `make juicefs.tikv`
+> **Note**: By default the released binary doesn't support TiKV; users need to compile it from source code: `make juicefs.tikv`.
 
 ### Mount a file system
 
