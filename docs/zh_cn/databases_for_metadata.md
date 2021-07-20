@@ -20,10 +20,10 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 
 ```shell
 $ sudo docker run -d --name redis \
-	-v redis-data:/data \
-	-p 6379:6379 \
-	--restart unless-stopped \
-	redis redis-server --appendonly yes
+    -v redis-data:/data \
+    -p 6379:6379 \
+    --restart unless-stopped \
+    redis redis-server --appendonly yes
 ```
 
 > **注意**：以上命令将 Redis 的数据持久化在 Docker 的 redis-data 数据卷当中，你可以按需修改数据持久化的存储位置。
@@ -46,12 +46,12 @@ redis://<IP or Domain name>:6379
 
 ```shell
 $ juicefs format \
-	--storage minio \
-	--bucket http://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	redis://192.168.1.6:6379/1 \
-	pics
+    --storage minio \
+    --bucket http://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    redis://192.168.1.6:6379/1 \
+    pics
 ```
 
 ### 挂载文件系统
@@ -84,11 +84,11 @@ postgres://[<username>:<password>@]<IP or Domain name>[:5432]/<database-name>[?p
 
 ```shell
 $ juicefs format --storage minio \
-	--bucket http://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	postgres://user:password@192.168.1.6:5432/juicefs?sslmode=disable \
-	pics
+    --bucket http://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    postgres://user:password@192.168.1.6:5432/juicefs?sslmode=disable \
+    pics
 ```
 
 更多的连接参数，请 [参考这里](https://pkg.go.dev/github.com/lib/pq#hdr-Connection_String_Parameters).
@@ -107,14 +107,14 @@ $ sudo juicefs mount -d postgres://user:password@192.168.1.6:5432/juicefs?sslmod
 
 ```shell
 $ sudo docker run -d --name mysql \
-	-p 3306:3306 \
-	-v mysql-data:/var/lib/mysql \
-	-e MYSQL_ROOT_PASSWORD=password \
-	-e MYSQL_DATABASE=juicefs \
-	-e MYSQL_USER=user \
-	-e MYSQL_PASSWORD=password \
-	--restart unless-stopped \
-	mysql
+    -p 3306:3306 \
+    -v mysql-data:/var/lib/mysql \
+    -e MYSQL_ROOT_PASSWORD=password \
+    -e MYSQL_DATABASE=juicefs \
+    -e MYSQL_USER=user \
+    -e MYSQL_PASSWORD=password \
+    --restart unless-stopped \
+    mysql
 ```
 
 为了方便你快速开始测试，以上代码直接通过 `MYSQL_ROOT_PASSWORD`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD` 环境变量分别设置了 root 用户的密码、名为 juicefs 的数据库以及用于管理该数据库的用户和密码，你可以根据实际需要调整上述环境变量对应的值，也可以 [点此查看](https://hub.docker.com/_/mysql)  Docker 中创建 MySQL 容器的更多内容。
@@ -133,11 +133,11 @@ mysql://<username>:<password>@(<IP or Domain name>:3306)/<database-name>
 
 ```shell
 $ juicefs format --storage minio \
-	--bucket http://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	mysql://user:password@(192.168.1.6:3306)/juicefs \
-	pics
+    --bucket http://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    mysql://user:password@(192.168.1.6:3306)/juicefs \
+    pics
 ```
 
 更多 MySQL 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
@@ -156,25 +156,25 @@ $ sudo juicefs mount -d mysql://user:password@(192.168.1.6:3306)/juicefs /mnt/jf
 
 ```shell
 $ sudo docker run -d --name mariadb \
-	-p 3306:3306 \
-	-v mysql-data:/var/lib/mysql \
-	-e MYSQL_ROOT_PASSWORD=password \
-	-e MYSQL_DATABASE=juicefs \
-	-e MYSQL_USER=user \
-	-e MYSQL_PASSWORD=password \
-	--restart unless-stopped \
-	mariadb
+    -p 3306:3306 \
+    -v mysql-data:/var/lib/mysql \
+    -e MYSQL_ROOT_PASSWORD=password \
+    -e MYSQL_DATABASE=juicefs \
+    -e MYSQL_USER=user \
+    -e MYSQL_PASSWORD=password \
+    --restart unless-stopped \
+    mariadb
 ```
 
 在创建和挂载文件系统时，则保持 MySQL 的语法，例如：
 
 ```shell
 $ juicefs format --storage minio \
-	--bucket http://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	mysql://user:password@(192.168.1.6:3306)/juicefs \
-	pics
+    --bucket http://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    mysql://user:password@(192.168.1.6:3306)/juicefs \
+    pics
 ```
 
 ## SQLite
@@ -185,11 +185,11 @@ SQLite 数据库只有一个文件，创建和使用都非常灵活，用它作�
 
 ```shell
 $ juicefs format --storage minio \
-	--bucket https://192.168.1.6:9000/jfs \
-	--access-key minioadmin \
-	--secret-key minioadmin \
-	sqlite3://my-jfs.db \
-	pics
+    --bucket https://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    sqlite3://my-jfs.db \
+    pics
 ```
 
 执行以上命令会自动在当前目录中创建名为 `my-jfs.db` 的数据库文件，请 **务必妥善保管** 这个数据库文件！
@@ -206,13 +206,40 @@ $ sudo juicefs mount -d sqlite3://my-jfs.db
 $ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 ```
 
-### 注意
-
-由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，通常只有数据库所在的主机可以访问它。因此，SQLite 数据库更适合单机使用，对于多台服务器共享同一文件系统的情况，建议使用 Redis 或 MySQL 等数据库。
+> **注意**：由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，通常只有数据库所在的主机可以访问它。因此，SQLite 数据库更适合单机使用，对于多台服务器共享同一文件系统的情况，建议使用 Redis 或 MySQL 等数据库。
 
 ## TiKV
 
-即将推出......
+> [TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCAP](https://pingcap.com) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects) 毕业。
+
+TiKV 的测试环境搭建非常简单，使用官方提供的 `TiUP` 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/5.1/deploy/install/install/)。
+
+### 创建文件系统
+
+使用 TiKV 作为元数据引擎时，需要使用如下格式来指定参数：
+
+```shell
+tikv://<pd_addr>[,<pd_addr>...]/<prefix>
+```
+
+其中 `prefix` 是用户自定义的字符串，当多个文件系统共用一个 TiKV 集群时可用来区分；示例如下：
+
+```shell
+$ juicefs.tikv format --storage minio \
+    --bucket https://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
+    tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs \
+    pics
+```
+
+> **注意**：目前发布的二进制文件默认并不支持 TiKV，使用时需要用户从源码编译：`make juicefs.tikv`。
+
+### 挂载文件系统
+
+```shell
+$ sudo juicefs.tikv mount -d tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs /mnt/jfs
+```
 
 ## FoundationDB
 
