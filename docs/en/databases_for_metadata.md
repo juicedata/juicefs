@@ -206,13 +206,40 @@ If the database is not in the current directory, you need to specify the absolut
 $ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 ```
 
-### Notice
-
-Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for stand-alone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
+> **Note**: Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for stand-alone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 
 ## TiKV
 
-Coming soon...
+> [TiKV](https://github.com/tikv/tikv) is a distributed transactional key-value database. It is originally developed by [PingCap](https://pingcap.com/) as the storage layer for their flagship product [TiDB](https://github.com/pingcap/tidb). Now TiKV is an independent open source project, and is also a granduated project of [CNCF](https://www.cncf.io/projects/).
+
+With the help of official tool `TiUP`, you can easily build a local playground for testing; refer [here](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/) for details. In production, usually at lease three hosts are required to store three data replicas; refer to the [official document](https://tikv.org/docs/5.1/deploy/install/install/) for all steps.
+
+### Create a file system
+
+When using TiKV as the metadata storage engine, specify parameters as the following format:
+
+```shell
+tikv://<pd_addr>[,<pd_addr>...]/<prefix>
+```
+
+The **prefix** is a user-defined string, which can be used to distinguish multiple file systems when they share the same TiKV cluster. For example:
+
+```shell
+$ juicefs.tikv format --storage minio \
+	--bucket https://192.168.1.6:9000/jfs \
+	--access-key minioadmin \
+	--secret-key minioadmin \
+	tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs \
+	pics
+```
+
+> **Note**: By default the released binary doesn't support TiKV; users need to compile it from source code: `make juicefs.tikv`
+
+### Mount a file system
+
+```shell
+$ sudo juicefs.tikv mount -d tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs /mnt/jfs
+```
 
 ## FoundationDB
 

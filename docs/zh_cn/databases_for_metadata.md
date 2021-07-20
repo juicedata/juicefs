@@ -206,13 +206,40 @@ $ sudo juicefs mount -d sqlite3://my-jfs.db
 $ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 ```
 
-### 注意
-
-由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，通常只有数据库所在的主机可以访问它。因此，SQLite 数据库更适合单机使用，对于多台服务器共享同一文件系统的情况，建议使用 Redis 或 MySQL 等数据库。
+> **注意**：由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，通常只有数据库所在的主机可以访问它。因此，SQLite 数据库更适合单机使用，对于多台服务器共享同一文件系统的情况，建议使用 Redis 或 MySQL 等数据库。
 
 ## TiKV
 
-即将推出......
+> [TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCap](https://pingcap.com/) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects/) 毕业。
+
+TiKV 的测试环境搭建非常简单，使用官方提供的 `TiUP` 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/5.1/deploy/install/install/)。
+
+### 创建文件系统
+
+使用 TiKV 作为元数据引擎时，需要使用如下格式来指定参数：
+
+```shell
+tikv://<pd_addr>[,<pd_addr>...]/<prefix>
+```
+
+其中 **prefix** 是用户自定义的字符串，当多个文件系统共用一个 TiKV 集群时可用来区分；示例如下：
+
+```shell
+$ juicefs.tikv format --storage minio \
+	--bucket https://192.168.1.6:9000/jfs \
+	--access-key minioadmin \
+	--secret-key minioadmin \
+	tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs \
+	pics
+```
+
+> **注意**：目前发布的二进制文件默认并不支持 TiKV，使用时需要用户从源码编译：`make juicefs.tikv`
+
+### 挂载文件系统
+
+```shell
+$ sudo juicefs.tikv mount -d tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs /mnt/jfs
+```
 
 ## FoundationDB
 
