@@ -900,6 +900,9 @@ func (m *kvMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		if err != nil {
 			return errno(err)
 		}
+		if a == nil {
+			return syscall.ENOENT
+		}
 		m.parseAttr(a, attr)
 	}
 	return 0
