@@ -282,7 +282,7 @@ func (f *fileWriter) totalSlices() int {
 }
 
 func (w *dataWriter) usedBufferSize() int64 {
-	return utils.AllocMemory() - store.UsedMemory()
+	return utils.AllocMemory() - w.store.UsedMemory()
 }
 
 func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
