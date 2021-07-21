@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -46,6 +47,7 @@ type pendingFile struct {
 }
 
 type cacheStore struct {
+	totalPages int64
 	sync.Mutex
 	dir       string
 	mode      os.FileMode
@@ -87,14 +89,14 @@ func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config
 	return c
 }
 
+func (c *cacheStore) usedMemory() int64 {
+	return atomic.LoadInt64(&c.totalPages)
+}
+
 func (cache *cacheStore) stats() (int64, int64) {
 	cache.Lock()
 	defer cache.Unlock()
-	var pendingBytes int64
-	for _, p := range cache.pages {
-		pendingBytes += int64(len(p.Data))
-	}
-	return int64(len(cache.pages) + len(cache.keys)), cache.used + pendingBytes
+	return int64(len(cache.pages) + len(cache.keys)), cache.used + cache.usedMemory()
 }
 
 func (cache *cacheStore) checkFreeSpace() {
@@ -128,6 +130,7 @@ func (cache *cacheStore) cache(key string, p *Page, force bool) {
 	}
 	p.Acquire()
 	cache.pages[key] = p
+	atomic.AddInt64(&cache.totalPages, int64(cap(p.Data)))
 	select {
 	case cache.pending <- pendingFile{key, p}:
 	default:
@@ -140,6 +143,7 @@ func (cache *cacheStore) cache(key string, p *Page, force bool) {
 			logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 			cacheDrops.Add(1)
 			delete(cache.pages, key)
+			atomic.AddInt64(&cache.totalPages, -int64(cap(p.Data)))
 			p.Release()
 		}
 	}
@@ -265,6 +269,7 @@ func (cache *cacheStore) flush() {
 		}
 		cache.Lock()
 		delete(cache.pages, w.key)
+		atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
 		cache.Unlock()
 		w.page.Release()
 	}
@@ -507,6 +512,7 @@ type CacheManager interface {
 	stage(key string, data []byte, keepCache bool) (string, error)
 	scanStaging() map[string]string
 	stats() (int64, int64)
+	usedMemory() int64
 }
 
 func newCacheManager(config *Config) CacheManager {
@@ -546,6 +552,14 @@ func newCacheManager(config *Config) CacheManager {
 
 func (m *cacheManager) getStore(key string) *cacheStore {
 	return m.stores[keyHash(key)%uint32(len(m.stores))]
+}
+
+func (m *cacheManager) usedMemory() int64 {
+	var used int64
+	for _, s := range m.stores {
+		used += s.usedMemory()
+	}
+	return used
 }
 
 func (m *cacheManager) stats() (int64, int64) {

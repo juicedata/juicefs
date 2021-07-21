@@ -41,6 +41,12 @@ func newMemStore(config *Config) *memcache {
 	return c
 }
 
+func (c *memcache) usedMemory() int64 {
+	c.Lock()
+	defer c.Unlock()
+	return c.used
+}
+
 func (c *memcache) stats() (int64, int64) {
 	c.Lock()
 	defer c.Unlock()
@@ -56,11 +62,10 @@ func (c *memcache) cache(key string, p *Page, force bool) {
 	if _, ok := c.pages[key]; ok {
 		return
 	}
-	size := int64(len(p.Data))
-	buf := make([]byte, size)
-	copy(buf, p.Data)
-	c.pages[key] = memItem{time.Now(), NewPage(buf)}
-	c.used += size + 4096
+	size := int64(cap(p.Data))
+	p.Acquire()
+	c.pages[key] = memItem{time.Now(), p}
+	c.used += size
 	if c.used > c.capacity {
 		c.cleanup()
 	}
@@ -68,7 +73,7 @@ func (c *memcache) cache(key string, p *Page, force bool) {
 
 func (c *memcache) delete(key string, p *Page) {
 	size := int64(cap(p.Data))
-	c.used -= size + 4096
+	c.used -= size
 	p.Release()
 	delete(c.pages, key)
 }

@@ -51,7 +51,7 @@ func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int)
 }
 
 func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chunkid uint64) error {
-	for utils.UsedMemory() > int64(conf.BufferSize)*3/2 {
+	for utils.AllocMemory()-store.UsedMemory() > int64(conf.BufferSize)*3/2 {
 		time.Sleep(time.Millisecond * 100)
 	}
 	var size uint32
