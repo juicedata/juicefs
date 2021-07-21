@@ -83,9 +83,11 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 	finfo, err := f.Stat()
 	if err != nil {
+		f.Close()
 		return nil, err
 	}
 	if finfo.IsDir() {
+		f.Close()
 		return ioutil.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
@@ -104,7 +106,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 			return ioutil.NopCloser(bytes.NewBuffer(buf[:n])), nil
 		}
 	}
-	return f, err
+	return f, nil
 }
 
 func (d *filestore) Put(key string, in io.Reader) error {
@@ -150,6 +152,7 @@ func (d *filestore) Copy(dst, src string) error {
 	if err != nil {
 		return err
 	}
+	defer r.Close()
 	return d.Put(dst, r)
 }
 
