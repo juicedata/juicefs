@@ -229,7 +229,7 @@ $ juicefs.tikv format --storage minio \
     --bucket https://192.168.1.6:9000/jfs \
     --access-key minioadmin \
     --secret-key minioadmin \
-    tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs \
+    tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs \
     pics
 ```
 
