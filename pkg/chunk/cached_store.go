@@ -654,6 +654,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	if err != nil {
 		return fmt.Errorf("get %s: %s", key, err)
 	}
+	defer in.Close()
 	needed := store.compressor.CompressBound(len(page.Data))
 	var n int
 	if needed > len(page.Data) {
@@ -661,7 +662,6 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		defer c.Release()
 		var cn int
 		cn, err = io.ReadFull(in, c.Data)
-		in.Close()
 		if err != nil && (cn == 0 || err != io.ErrUnexpectedEOF) {
 			return err
 		}
