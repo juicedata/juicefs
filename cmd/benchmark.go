@@ -166,6 +166,7 @@ func readStats(path string) map[string]float64 {
 		logger.Warnf("open %s: %s", path, err)
 		return nil
 	}
+	defer f.Close()
 	d, err := ioutil.ReadAll(f)
 	if err != nil {
 		logger.Warnf("read %s: %s", path, err)

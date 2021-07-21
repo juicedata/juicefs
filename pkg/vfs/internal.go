@@ -17,6 +17,7 @@ package vfs
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -199,6 +200,43 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 			go fillCache(paths, int(concurrent))
 		}
 		return []byte{uint8(0)}
+	case meta.MetricSchema:
+		wb := utils.NewBuffer(4)
+		mfs, err := prometheus.DefaultGatherer.Gather()
+		if err != nil {
+			msg := err.Error()
+			wb.Put32(uint32(len(msg)))
+			return append(wb.Bytes(), []byte(msg)...)
+		}
+		schema := make(map[string]string)
+		for _, mf := range mfs {
+			for _, m := range mf.Metric {
+				var name string = *mf.Name
+				for _, l := range m.Label {
+					if *l.Name != "mp" && *l.Name != "vol_name" {
+						name += "_" + *l.Value
+					}
+				}
+				switch *mf.Type {
+				case io_prometheus_client.MetricType_GAUGE:
+					schema[name] = "gauge"
+				case io_prometheus_client.MetricType_COUNTER:
+					schema[name] = "counter"
+				case io_prometheus_client.MetricType_HISTOGRAM:
+					schema[name] = "histogram"
+				case io_prometheus_client.MetricType_SUMMARY:
+					schema[name] = "summary"
+				}
+			}
+		}
+		data, err := json.Marshal(schema)
+		if err != nil {
+			msg := err.Error()
+			wb.Put32(uint32(len(msg)))
+			return append(wb.Bytes(), []byte(msg)...)
+		}
+		wb.Put32(uint32(len(data)))
+		return append(wb.Bytes(), data...)
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
 		return []byte{uint8(syscall.EINVAL & 0xff)}
