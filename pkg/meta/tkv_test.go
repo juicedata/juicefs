@@ -22,6 +22,7 @@ import (
 
 func TestMemKV(t *testing.T) {
 	c, _ := newTkvClient("memkv", "")
+	c = withPrefix(c, []byte("jfs"))
 	var count int64
 	c.txn(func(tx kvTxn) error {
 		count = tx.incrBy([]byte("counter"), -1)

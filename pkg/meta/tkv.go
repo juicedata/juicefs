@@ -53,7 +53,6 @@ type kvMeta struct {
 	sync.Mutex
 	conf   *Config
 	fmt    Format
-	prefix []byte
 	client tkvClient
 
 	sid          uint64
@@ -92,8 +91,7 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m := &kvMeta{
 		conf:         conf,
-		client:       client,
-		prefix:       append([]byte(prefix), 0xFD),
+		client:       withPrefix(client, append([]byte(prefix), 0xFD)),
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
@@ -142,8 +140,7 @@ func (m *kvMeta) keyLen(args ...interface{}) int {
 }
 
 func (m *kvMeta) fmtKey(args ...interface{}) []byte {
-	b := utils.NewBuffer(uint32(len(m.prefix) + m.keyLen(args...)))
-	b.Put(m.prefix)
+	b := utils.NewBuffer(uint32(m.keyLen(args...)))
 	for _, a := range args {
 		switch a := a.(type) {
 		case byte:
@@ -225,7 +222,7 @@ func (m *kvMeta) sessionKey(sid uint64) []byte {
 }
 
 func (m *kvMeta) parseSid(key string) uint64 {
-	buf := []byte(key[len(m.prefix)+2:]) // "SH"
+	buf := []byte(key[2:]) // "SH"
 	if len(buf) != 8 {
 		panic("invalid sid value")
 	}
@@ -577,7 +574,7 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 	}
 	var todel [][]byte
 	for _, key := range keys {
-		inode := m.decodeInode(key[len(m.prefix)+10:]) // "SS" + sid
+		inode := m.decodeInode(key[10:]) // "SS" + sid
 		if err := m.deleteInode(inode); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
 		} else {
@@ -629,7 +626,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 		}
 		s.Sustained = make([]Ino, 0, len(inodes))
 		for _, sinode := range inodes {
-			inode := m.decodeInode(sinode[len(m.prefix)+10:]) // "SS" + sid
+			inode := m.decodeInode(sinode[10:]) // "SS" + sid
 			s.Sustained = append(s.Sustained, inode)
 		}
 		flocks, err := m.scanValues(m.fmtKey("F"), nil)
@@ -637,7 +634,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			return nil, err
 		}
 		for k, v := range flocks {
-			inode := m.decodeInode([]byte(k[len(m.prefix)+1:])) // "F"
+			inode := m.decodeInode([]byte(k[1:])) // "F"
 			ls := unmarshalFlock(v)
 			for o, l := range ls {
 				if o.sid == sid {
@@ -650,7 +647,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			return nil, err
 		}
 		for k, v := range plocks {
-			inode := m.decodeInode([]byte(k[len(m.prefix)+1:])) // "P"
+			inode := m.decodeInode([]byte(k[1:])) // "P"
 			ls := unmarshalPlock(v)
 			for o, l := range ls {
 				if o.sid == sid {
@@ -1942,14 +1939,14 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 func (m *kvMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
-		klen := len(m.prefix) + 1 + 8 + 8
+		klen := 1 + 8 + 8
 		now := time.Now().Unix()
 		vals, _ := m.scanValues(m.fmtKey("D"), func(k, v []byte) bool {
 			// filter out invalid ones
 			return len(k) == klen && len(v) == 8 && m.parseInt64(v)+60 < now
 		})
 		for k := range vals {
-			rb := utils.FromBuffer([]byte(k)[len(m.prefix)+1:])
+			rb := utils.FromBuffer([]byte(k)[1:])
 			inode := m.decodeInode(rb.Get(8))
 			length := rb.Get64()
 			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
@@ -1970,13 +1967,13 @@ func (m *kvMeta) cleanupSlices() {
 		}
 		_ = m.setValue(m.counterKey("nextCleanupSlices"), m.packInt64(now))
 
-		klen := len(m.prefix) + 1 + 8 + 4
+		klen := 1 + 8 + 4
 		vals, _ := m.scanValues(m.fmtKey("K"), func(k, v []byte) bool {
 			// filter out invalid ones
 			return len(k) == klen && len(v) == 8 && parseCounter(v) <= 0
 		})
 		for k, v := range vals {
-			rb := utils.FromBuffer([]byte(k)[len(m.prefix)+1:])
+			rb := utils.FromBuffer([]byte(k)[1:])
 			chunkid := rb.Get64()
 			size := rb.Get32()
 			refs := parseCounter(v)
@@ -2045,7 +2042,7 @@ func (m *kvMeta) deleteFile(inode Ino, length uint64) {
 		return
 	}
 	for i := range keys {
-		idx := binary.BigEndian.Uint32(keys[i][len(m.prefix)+10:])
+		idx := binary.BigEndian.Uint32(keys[i][10:])
 		err := m.deleteChunk(inode, idx)
 		if err != nil {
 			logger.Warnf("delete chunk %d:%d: %s", inode, idx, err)
@@ -2182,16 +2179,16 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 
 func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 	// AiiiiiiiiCnnnn     file chunks
-	klen := len(r.prefix) + 1 + 8 + 1 + 4
+	klen := 1 + 8 + 1 + 4
 	result, err := r.scanValues(r.fmtKey("A"), func(k, v []byte) bool {
-		return len(k) == klen && k[len(r.prefix)+1+8] == 'C' && len(v) > sliceBytes
+		return len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes
 	})
 	if err != nil {
 		logger.Warnf("scan chunks: %s", err)
 		return errno(err)
 	}
 	for k, value := range result {
-		key := []byte(k[len(r.prefix)+1:])
+		key := []byte(k[1:])
 		inode := r.decodeInode(key[:8])
 		indx := binary.BigEndian.Uint32(key[9:])
 		logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, len(value)/sliceBytes)
@@ -2203,9 +2200,9 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
 	*slices = nil
 	// AiiiiiiiiCnnnn     file chunks
-	klen := len(r.prefix) + 1 + 8 + 1 + 4
+	klen := 1 + 8 + 1 + 4
 	result, err := r.scanValues(r.fmtKey("A"), func(k, v []byte) bool {
-		return len(k) == klen && k[len(r.prefix)+1+8] == 'C'
+		return len(k) == klen && k[1+8] == 'C'
 	})
 	if err != nil {
 		logger.Warnf("scan chunks: %s", err)
@@ -2289,7 +2286,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		if len(vals) > 0 {
 			xattrs := make([]*DumpedXattr, 0, len(vals))
 			for k, v := range vals {
-				xattrs = append(xattrs, &DumpedXattr{k[len(m.prefix)+10:], string(v)}) // "A" + inode + "X"
+				xattrs = append(xattrs, &DumpedXattr{k[10:], string(v)}) // "A" + inode + "X"
 			}
 			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
 			e.Xattrs = xattrs
@@ -2338,7 +2335,7 @@ func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 				return nil, err
 			}
 		}
-		entries[k[len(m.prefix)+10:]] = entry // "A" + inode + "D"
+		entries[k[10:]] = entry // "A" + inode + "D"
 	}
 	return entries, nil
 }
@@ -2350,7 +2347,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 	}
 	dels := make([]*DumpedDelFile, 0, len(vals))
 	for k, v := range vals {
-		b := utils.FromBuffer([]byte(k[len(m.prefix)+1:])) // "D"
+		b := utils.FromBuffer([]byte(k[1:])) // "D"
 		if b.Len() != 16 {
 			return fmt.Errorf("invalid delfileKey: %s", k)
 		}
@@ -2396,7 +2393,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 	}
 	ss := make(map[uint64][]Ino)
 	for k := range vals {
-		b := utils.FromBuffer([]byte(k[len(m.prefix)+2:])) // "SS"
+		b := utils.FromBuffer([]byte(k[2:])) // "SS"
 		if b.Len() != 16 {
 			return fmt.Errorf("invalid sustainedKey: %s", k)
 		}
