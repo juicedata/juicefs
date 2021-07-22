@@ -5,7 +5,7 @@
 * [概览](#概览)
 * [自动补全](#自动补全)
 * [命令列表](#命令列表)
-   * [juicefs format](#juicefs format)
+   * [juicefs format](#'juicefs format')
    * [juicefs mount](#juicefs mount)
    * [juicefs umount](#juicefs umount)
    * [juicefs gateway](#juicefs gateway)
