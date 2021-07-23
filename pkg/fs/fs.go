@@ -807,6 +807,9 @@ func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 	}
 
 	got, eno := f.rdata.Read(ctx, uint64(offset), b)
+	for eno == syscall.EAGAIN {
+		got, eno = f.rdata.Read(ctx, uint64(offset), b)
+	}
 	if eno != 0 {
 		err = eno
 		return

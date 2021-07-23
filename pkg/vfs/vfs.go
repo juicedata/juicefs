@@ -560,6 +560,9 @@ func Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err s
 
 	writer.Flush(ctx, ino)
 	n, err = h.reader.Read(ctx, off, buf)
+	for err == syscall.EAGAIN {
+		n, err = h.reader.Read(ctx, off, buf)
+	}
 	if err == syscall.ENOENT {
 		err = syscall.EBADF
 	}

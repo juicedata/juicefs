@@ -94,7 +94,6 @@ type sliceReader struct {
 	block      *frange
 	state      sstate
 	page       *chunk.Page
-	need       uint64
 	currentPos uint32
 	lastAccess time.Time
 	refs       uint16
@@ -191,15 +190,13 @@ func (s *sliceReader) run() {
 
 	s.currentPos = 0
 	if s.block.off > length {
-		s.need = 0
+		s.block.len = 0
 		s.state = READY
 		s.done(0, 0)
 	} else if s.block.end() > length {
-		s.need = length - s.block.off
-	} else {
-		s.need = s.block.len
+		s.block.len = length - s.block.off
 	}
-	need := s.need
+	need := s.block.len
 	f.Unlock()
 
 	p := s.page.Slice(0, int(need))
@@ -579,7 +576,7 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 	start := time.Now()
 	for _, req := range reqs {
 		s := req.s
-		for s.state != READY && uint64(s.currentPos) < req.end() {
+		for s.state != READY && uint64(s.currentPos) < s.block.len {
 			if s.cond.WaitWithTimeout(time.Second) {
 				if ctx.Canceled() {
 					logger.Warnf("read %d interrupted after %d", f.inode, time.Since(start))
@@ -590,27 +587,20 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 				return 0, f.err
 			}
 		}
-		if s.need < s.block.len {
-			break // short read
-		}
 	}
 
-	var shortRead = false
 	var n int
 	for _, req := range reqs {
 		s := req.s
-		if req.off < s.need && s.block.off+req.off < f.length {
-			if req.end() > s.need {
-				req.len = s.need - req.off
-				shortRead = true
+		if req.off < s.block.len && s.block.off+req.off < f.length {
+			if req.end() > s.block.len {
+				logger.Warnf("not enough bytes (%d < %d), restart read", s.block.len, req.end())
+				return 0, syscall.EAGAIN
 			}
 			if s.block.off+req.end() > f.length {
 				req.len = f.length - s.block.off - req.off
 			}
 			n += copy(buf[n:], s.page.Data[req.off:req.end()])
-		}
-		if shortRead {
-			break
 		}
 	}
 	return n, 0
