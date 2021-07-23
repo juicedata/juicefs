@@ -17,6 +17,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 	"strings"
 	"time"
 
@@ -66,7 +69,6 @@ func fsck(ctx *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
-	logger.Infof("Listing all blocks ...")
 	blob = object.WithPrefix(blob, "chunks/")
 	objs, err := osync.ListAll(blob, "", "")
 	if err != nil {
@@ -74,7 +76,20 @@ func fsck(ctx *cli.Context) error {
 	}
 	var blocks = make(map[string]int64)
 	var totalBlockBytes int64
+
+	var total int64
+	dynamicPros := mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	dynamicProsName := "Listing all blocks"
+	// new bar with 'trigger complete event' disabled, because total is zero
+	dynamicBar := dynamicPros.Add(total,
+		mpb.NewBarFiller(mpb.BarStyle().Tip(`-`, `\`, `|`, `/`)),
+		mpb.PrependDecorators(decor.Name(dynamicProsName, decor.WC{W: len(dynamicProsName) + 1, C: decor.DidentRight}), decor.CountersNoUnit("%d / %d")),
+		mpb.AppendDecorators(decor.Percentage()),
+	)
+
 	for obj := range objs {
+		total += 1
+		dynamicBar.SetTotal(total, false)
 		if obj == nil {
 			break // failed listing
 		}
@@ -90,10 +105,12 @@ func fsck(ctx *cli.Context) error {
 		name := parts[2]
 		blocks[name] = obj.Size()
 		totalBlockBytes += obj.Size()
+		dynamicBar.Increment()
 	}
+	dynamicBar.SetTotal(total, true)
+	dynamicPros.Wait()
 	logger.Infof("Found %d blocks (%d bytes)", len(blocks), totalBlockBytes)
 
-	logger.Infof("Listing all slices ...")
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
 	r := m.ListSlices(c, &slices, false)
@@ -103,6 +120,24 @@ func fsck(ctx *cli.Context) error {
 	keys := make(map[uint64]uint32)
 	var totalBytes uint64
 	var lost, lostBytes int
+
+	singlePros := mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	singleBarName := "Listing all slices"
+	// adding a single bar, which will inherit container's width
+	singleBar := singlePros.Add(int64(len(slices)),
+		// progress bar filler with customized style
+		mpb.NewBarFiller(mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟")),
+		mpb.PrependDecorators(
+			// display our name with one space on the right
+			decor.Name(singleBarName, decor.WC{W: len(singleBarName) + 1, C: decor.DidentRight}),
+			// replace ETA decorator with "done" message, OnComplete event
+			decor.OnComplete(
+				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 4}), "done",
+			),
+		),
+		mpb.AppendDecorators(decor.Percentage()),
+	)
+
 	for _, s := range slices {
 		keys[s.Chunkid] = s.Size
 		totalBytes += uint64(s.Size)
@@ -121,7 +156,10 @@ func fsck(ctx *cli.Context) error {
 				}
 			}
 		}
+		singleBar.Increment()
 	}
+	dynamicBar.SetTotal(-1, true)
+	singlePros.Wait()
 	logger.Infof("Used by %d slices (%d bytes)", len(keys), totalBytes)
 	if lost > 0 {
 		logger.Fatalf("%d object is lost (%d bytes)", lost, lostBytes)
