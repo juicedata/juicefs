@@ -139,11 +139,12 @@ type File struct {
 }
 
 func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSystem, error) {
+	reader := vfs.NewDataReader(conf, m, d)
 	fs := &FileSystem{
 		m:      m,
 		conf:   conf,
-		reader: vfs.NewDataReader(conf, m, d),
-		writer: vfs.NewDataWriter(conf, m, d),
+		reader: reader,
+		writer: vfs.NewDataWriter(conf, m, d, reader),
 	}
 	if conf.AccessLog != "" {
 		f, err := os.OpenFile(conf.AccessLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -851,7 +852,6 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	if offset+int64(len(b)) > int64(f.info.attr.Length) {
 		f.info.attr.Length = uint64(offset + int64(len(b)))
 	}
-	f.fs.reader.Invalidate(f.inode, uint64(offset), uint64(len(b)))
 	writtenSizeHistogram.Observe(float64(len(b)))
 	return len(b), 0
 }

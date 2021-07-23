@@ -925,6 +925,11 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 }
 
 func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+	f := r.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
@@ -1037,6 +1042,11 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 	}
 	if size == 0 {
 		return syscall.EINVAL
+	}
+	f := r.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
 	}
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
@@ -2040,6 +2050,11 @@ func buildSlice(ss []*slice) []Slice {
 }
 
 func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
+	f := r.of.find(inode)
+	if f != nil {
+		f.RLock()
+		defer f.RUnlock()
+	}
 	if cs, ok := r.of.ReadChunk(inode, indx); ok {
 		*chunks = cs
 		return 0
@@ -2071,6 +2086,11 @@ func (r *redisMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sy
 }
 
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+	f := r.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { r.of.InvalidateChunk(inode, indx) }()
 	var needCompact bool
 	eno := r.txn(ctx, func(tx *redis.Tx) error {
@@ -2121,6 +2141,11 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 }
 
 func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
+	f := r.of.find(fout)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { r.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(fin), r.inodeKey(fout)).Result()

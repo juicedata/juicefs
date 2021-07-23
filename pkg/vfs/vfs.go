@@ -600,7 +600,6 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 	}
 	writtenSizeHistogram.Observe(float64(len(buf)))
 	reader.Truncate(ino, writer.GetLength(ino))
-	reader.Invalidate(ino, off, uint64(len(buf)))
 	return
 }
 
@@ -888,7 +887,7 @@ func Init(conf *Config, m_ meta.Meta, store_ chunk.ChunkStore) {
 	m = m_
 	store = store_
 	reader = NewDataReader(conf, m, store)
-	writer = NewDataWriter(conf, m, store)
+	writer = NewDataWriter(conf, m, store, reader)
 	handles = make(map[Ino][]*handle)
 }
 

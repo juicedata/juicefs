@@ -6,6 +6,7 @@ import (
 )
 
 type openFile struct {
+	sync.RWMutex
 	attr      Attr
 	refs      int
 	lastCheck time.Time
@@ -161,4 +162,10 @@ func (o *openfiles) InvalidateChunk(ino Ino, indx uint32) {
 		}
 		of.lastCheck = time.Unix(0, 0)
 	}
+}
+
+func (o *openfiles) find(ino Ino) *openFile {
+	o.Lock()
+	defer o.Unlock()
+	return o.files[ino]
 }
