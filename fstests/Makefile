@@ -12,7 +12,7 @@ fsracer: healthcheck secfs.test/tools/bin/fsracer
 	make healthcheck
 
 fsx: healthcheck secfs.test/tools/bin/fsx
-	secfs.test/tools/bin/fsx -d $(DURATION) -p 10000 -F 10000000 /tmp/fsx.out
+	secfs.test/tools/bin/fsx -d $(DURATION) -p 10000 -F 10000000 /jfs/fsx.out
 	make healthcheck
 
 setup:

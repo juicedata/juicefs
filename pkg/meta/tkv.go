@@ -1051,27 +1051,30 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			}
 			return nil
 		}
-		old := t.Length
-		newSpace = align4K(length) - align4K(old)
-		if length > old {
+		newSpace = align4K(length) - align4K(t.Length)
+		if newSpace > 0 {
 			if m.checkQuota(newSpace, 0) {
 				return syscall.ENOSPC
 			}
-			if length/ChunkSize-old/ChunkSize > 1 {
-				zeroChunks := tx.scanRange(m.chunkKey(inode, uint32(old/ChunkSize)+1), m.chunkKey(inode, uint32(length/ChunkSize)))
-				buf := marshalSlice(0, 0, 0, 0, ChunkSize)
-				for key, value := range zeroChunks {
-					tx.set([]byte(key), append(value, buf...))
-				}
+		}
+		var left, right = t.Length, length
+		if left > right {
+			right, left = left, right
+		}
+		if right/ChunkSize-left/ChunkSize > 1 {
+			zeroChunks := tx.scanRange(m.chunkKey(inode, uint32(left/ChunkSize)+1), m.chunkKey(inode, uint32(right/ChunkSize)))
+			buf := marshalSlice(0, 0, 0, 0, ChunkSize)
+			for key, value := range zeroChunks {
+				tx.set([]byte(key), append(value, buf...))
 			}
-			l := uint32(length - old)
-			if length > (old/ChunkSize+1)*ChunkSize {
-				l = ChunkSize - uint32(old%ChunkSize)
-			}
-			tx.append(m.chunkKey(inode, uint32(old/ChunkSize)), marshalSlice(uint32(old%ChunkSize), 0, 0, 0, l))
-			if length > (old/ChunkSize+1)*ChunkSize && length%ChunkSize > 0 {
-				tx.append(m.chunkKey(inode, uint32(length/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(length%ChunkSize)))
-			}
+		}
+		l := uint32(right - left)
+		if right > (left/ChunkSize+1)*ChunkSize {
+			l = ChunkSize - uint32(left%ChunkSize)
+		}
+		tx.append(m.chunkKey(inode, uint32(left/ChunkSize)), marshalSlice(uint32(left%ChunkSize), 0, 0, 0, l))
+		if right > (left/ChunkSize+1)*ChunkSize && right%ChunkSize > 0 {
+			tx.append(m.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 		}
 		t.Length = length
 		now := time.Now()
