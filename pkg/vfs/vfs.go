@@ -441,6 +441,14 @@ func Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Attr) (err s
 		err = syscall.EFBIG
 		return
 	}
+	hs := findAllHandles(ino)
+	for _, h := range hs {
+		if !h.Wlock(ctx) {
+			err = syscall.EINTR
+			return
+		}
+		defer h.Wunlock()
+	}
 	writer.Flush(ctx, ino)
 	err = m.Truncate(ctx, ino, 0, uint64(size), attr)
 	if err != 0 {
