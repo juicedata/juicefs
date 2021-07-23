@@ -1164,7 +1164,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.EPERM
 		}
 
-		n.Inode = e.Inode
+		n = node{Inode: e.Inode}
 		ok, err = s.Get(&n)
 		if err != nil {
 			return err
@@ -1182,6 +1182,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pn.Ctime = now
 		n.Nlink--
 		n.Ctime = now
+		opened = false
 		if e.Type == TypeFile && n.Nlink == 0 {
 			opened = m.of.IsOpen(e.Inode)
 		}
@@ -1407,7 +1408,9 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				de.Name = string(e.Name)
 			}
 		}
-		dn.Inode = de.Inode
+		opened = false
+		dino = 0
+		dn = node{Inode: de.Inode}
 		if ok {
 			dino = Ino(de.Inode)
 			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
@@ -1879,8 +1882,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			return err
 		}
 		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
-		if (len(ck.Slices)/sliceBytes)%100 == 99 {
-			needCompact = true
+		if err == nil {
+			needCompact = (len(ck.Slices)/sliceBytes)%100 == 99
 		}
 		return err
 	})
