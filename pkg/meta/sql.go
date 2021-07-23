@@ -853,46 +853,47 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			m.parseAttr(&n, attr)
 			return nil
 		}
-		old := n.Length
-		newSpace = align4K(length) - align4K(old)
-		if length > old {
-			if m.checkQuota(newSpace, 0) {
-				return syscall.ENOSPC
-			}
-			var c chunk
-			var zeroChunks []uint32
-			if length/ChunkSize-old/ChunkSize > 1 {
-				rows, err := s.Where("inode = ? AND indx > ? AND indx < ?", inode, old/ChunkSize, length/ChunkSize).Cols("indx").Rows(&c)
-				if err != nil {
-					return err
-				}
-				for rows.Next() {
-					if err = rows.Scan(&c); err != nil {
-						rows.Close()
-						return err
-					}
-					zeroChunks = append(zeroChunks, c.Indx)
-				}
-				rows.Close()
-			}
-
-			l := uint32(length - old)
-			if length > (old/ChunkSize+1)*ChunkSize {
-				l = ChunkSize - uint32(old%ChunkSize)
-			}
-			if err = m.appendSlice(s, inode, uint32(old/ChunkSize), marshalSlice(uint32(old%ChunkSize), 0, 0, 0, l)); err != nil {
+		newSpace = align4K(length) - align4K(n.Length)
+		if newSpace > 0 && m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
+		}
+		var c chunk
+		var zeroChunks []uint32
+		var left, right = n.Length, length
+		if left > right {
+			right, left = left, right
+		}
+		if right/ChunkSize-left/ChunkSize > 1 {
+			rows, err := s.Where("inode = ? AND indx > ? AND indx < ?", inode, left/ChunkSize, right/ChunkSize).Cols("indx").Rows(&c)
+			if err != nil {
 				return err
 			}
-			buf := marshalSlice(0, 0, 0, 0, ChunkSize)
-			for _, indx := range zeroChunks {
-				if err = m.appendSlice(s, inode, indx, buf); err != nil {
+			for rows.Next() {
+				if err = rows.Scan(&c); err != nil {
+					rows.Close()
 					return err
 				}
+				zeroChunks = append(zeroChunks, c.Indx)
 			}
-			if length > (old/ChunkSize+1)*ChunkSize && length%ChunkSize > 0 {
-				if err = m.appendSlice(s, inode, uint32(length/ChunkSize), marshalSlice(0, 0, 0, 0, uint32(length%ChunkSize))); err != nil {
-					return err
-				}
+			rows.Close()
+		}
+
+		l := uint32(right - left)
+		if right > (left/ChunkSize+1)*ChunkSize {
+			l = ChunkSize - uint32(left%ChunkSize)
+		}
+		if err = m.appendSlice(s, inode, uint32(left/ChunkSize), marshalSlice(uint32(left%ChunkSize), 0, 0, 0, l)); err != nil {
+			return err
+		}
+		buf := marshalSlice(0, 0, 0, 0, ChunkSize)
+		for _, indx := range zeroChunks {
+			if err = m.appendSlice(s, inode, indx, buf); err != nil {
+				return err
+			}
+		}
+		if right > (left/ChunkSize+1)*ChunkSize && right%ChunkSize > 0 {
+			if err = m.appendSlice(s, inode, uint32(right/ChunkSize), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize))); err != nil {
+				return err
 			}
 		}
 		n.Length = length

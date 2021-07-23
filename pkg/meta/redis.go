@@ -942,39 +942,41 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			}
 			return nil
 		}
-		old := t.Length
+		newSpace := align4K(length) - align4K(t.Length)
+		if newSpace > 0 && r.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
+		}
 		var zeroChunks []uint32
-		if length > old {
-			if r.checkQuota(align4K(length)-align4K(old), 0) {
-				return syscall.ENOSPC
-			}
-			if (length-old)/ChunkSize >= 100 {
-				// super large
-				var cursor uint64
-				var keys []string
-				for {
-					keys, cursor, err = tx.Scan(ctx, cursor, fmt.Sprintf("c%d_*", inode), 10000).Result()
+		var left, right = t.Length, length
+		if left > right {
+			right, left = left, right
+		}
+		if (right-left)/ChunkSize >= 100 {
+			// super large
+			var cursor uint64
+			var keys []string
+			for {
+				keys, cursor, err = tx.Scan(ctx, cursor, fmt.Sprintf("c%d_*", inode), 10000).Result()
+				if err != nil {
+					return err
+				}
+				for _, key := range keys {
+					indx, err := strconv.Atoi(strings.Split(key, "_")[1])
 					if err != nil {
-						return err
+						logger.Errorf("parse %s: %s", key, err)
+						continue
 					}
-					for _, key := range keys {
-						indx, err := strconv.Atoi(strings.Split(key, "_")[1])
-						if err != nil {
-							logger.Errorf("parse %s: %s", key, err)
-							continue
-						}
-						if uint64(indx) > old/ChunkSize && uint64(indx) < length/ChunkSize {
-							zeroChunks = append(zeroChunks, uint32(indx))
-						}
-					}
-					if cursor <= 0 {
-						break
+					if uint64(indx) > left/ChunkSize && uint64(indx) < right/ChunkSize {
+						zeroChunks = append(zeroChunks, uint32(indx))
 					}
 				}
-			} else {
-				for i := old/ChunkSize + 1; i < length/ChunkSize; i++ {
-					zeroChunks = append(zeroChunks, uint32(i))
+				if cursor <= 0 {
+					break
 				}
+			}
+		} else {
+			for i := left/ChunkSize + 1; i < right/ChunkSize; i++ {
+				zeroChunks = append(zeroChunks, uint32(i))
 			}
 		}
 		t.Length = length
@@ -985,22 +987,20 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		t.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&t), 0)
-			if length > old {
-				// zero out from old to length
-				var l = uint32(length - old)
-				if length > (old/ChunkSize+1)*ChunkSize {
-					l = ChunkSize - uint32(old%ChunkSize)
-				}
-				pipe.RPush(ctx, r.chunkKey(inode, uint32(old/ChunkSize)), marshalSlice(uint32(old%ChunkSize), 0, 0, 0, l))
-				buf := marshalSlice(0, 0, 0, 0, ChunkSize)
-				for _, indx := range zeroChunks {
-					pipe.RPushX(ctx, r.chunkKey(inode, indx), buf)
-				}
-				if length > (old/ChunkSize+1)*ChunkSize && length%ChunkSize > 0 {
-					pipe.RPush(ctx, r.chunkKey(inode, uint32(length/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(length%ChunkSize)))
-				}
+			// zero out from left to right
+			var l = uint32(right - left)
+			if right > (left/ChunkSize+1)*ChunkSize {
+				l = ChunkSize - uint32(left%ChunkSize)
 			}
-			pipe.IncrBy(ctx, usedSpace, align4K(length)-align4K(old))
+			pipe.RPush(ctx, r.chunkKey(inode, uint32(left/ChunkSize)), marshalSlice(uint32(left%ChunkSize), 0, 0, 0, l))
+			buf := marshalSlice(0, 0, 0, 0, ChunkSize)
+			for _, indx := range zeroChunks {
+				pipe.RPushX(ctx, r.chunkKey(inode, indx), buf)
+			}
+			if right > (left/ChunkSize+1)*ChunkSize && right%ChunkSize > 0 {
+				pipe.RPush(ctx, r.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
+			}
+			pipe.IncrBy(ctx, usedSpace, newSpace)
 			return nil
 		})
 		if err == nil {
