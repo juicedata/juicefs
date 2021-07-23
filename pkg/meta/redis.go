@@ -1002,9 +1002,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			if right > (left/ChunkSize+1)*ChunkSize && right%ChunkSize > 0 {
 				pipe.RPush(ctx, r.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 			}
-			if length > old {
-				pipe.IncrBy(ctx, usedSpace, align4K(length)-align4K(old))
-			}
+			pipe.IncrBy(ctx, usedSpace, align4K(length)-align4K(old))
 			return nil
 		})
 		if err == nil {
