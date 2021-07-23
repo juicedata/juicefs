@@ -1327,6 +1327,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
+		attr = Attr{}
 		r.parseAttr([]byte(rs[1].(string)), &attr)
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
@@ -1344,6 +1345,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 
 		attr.Nlink--
+		opened = false
 		if _type == TypeFile && attr.Nlink == 0 {
 			opened = r.of.IsOpen(inode)
 		}
@@ -1602,6 +1604,8 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		if err != nil && err != redis.Nil {
 			return err
 		}
+		tattr = Attr{}
+		opened = false
 		if err == nil {
 			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
 				return syscall.EEXIST

@@ -1315,6 +1315,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		attr = Attr{}
 		m.parseAttr(rs[1], &attr)
 		if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 			return syscall.EACCES
@@ -1328,6 +1329,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 		attr.Nlink--
+		opened = false
 		if _type == TypeFile && attr.Nlink == 0 {
 			opened = m.of.IsOpen(inode)
 		}
@@ -1470,7 +1472,11 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			return syscall.ENOTDIR
 		}
 		m.parseAttr(rs[2], &iattr)
+		tattr = Attr{}
 
+		opened = false
+		dino = 0
+		dtyp = 0
 		dbuf := tx.get(m.entryKey(parentDst, nameDst))
 		if dbuf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
@@ -1823,9 +1829,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Ctimensec = uint32(now.Nanosecond())
 		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
-		if (len(val)/sliceBytes)%100 == 99 {
-			needCompact = true
-		}
+		needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
 	})
 	if err == nil {
