@@ -854,10 +854,8 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return nil
 		}
 		newSpace = align4K(length) - align4K(n.Length)
-		if length > n.Length {
-			if m.checkQuota(newSpace, 0) {
-				return syscall.ENOSPC
-			}
+		if newSpace > 0 && m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
 		}
 		var c chunk
 		var zeroChunks []uint32

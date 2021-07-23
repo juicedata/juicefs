@@ -942,14 +942,12 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			}
 			return nil
 		}
-		old := t.Length
-		if length > old {
-			if r.checkQuota(align4K(length)-align4K(old), 0) {
-				return syscall.ENOSPC
-			}
+		newSpace := align4K(length) - align4K(t.Length)
+		if newSpace > 0 && r.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
 		}
 		var zeroChunks []uint32
-		var left, right = old, length
+		var left, right = t.Length, length
 		if left > right {
 			right, left = left, right
 		}
@@ -1002,7 +1000,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			if right > (left/ChunkSize+1)*ChunkSize && right%ChunkSize > 0 {
 				pipe.RPush(ctx, r.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 			}
-			pipe.IncrBy(ctx, usedSpace, align4K(length)-align4K(old))
+			pipe.IncrBy(ctx, usedSpace, newSpace)
 			return nil
 		})
 		if err == nil {

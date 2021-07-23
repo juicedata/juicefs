@@ -1052,10 +1052,8 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return nil
 		}
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 {
-			if m.checkQuota(newSpace, 0) {
-				return syscall.ENOSPC
-			}
+		if newSpace > 0 && m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
 		}
 		var left, right = t.Length, length
 		if left > right {
