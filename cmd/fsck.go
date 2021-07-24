@@ -17,6 +17,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 	"strings"
 	"time"
 
@@ -94,12 +97,28 @@ func fsck(ctx *cli.Context) error {
 	logger.Infof("Found %d blocks (%d bytes)", len(blocks), totalBlockBytes)
 
 	logger.Infof("Listing all slices ...")
+	var total int64
+	process := mpb.New(mpb.WithWidth(32), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	bar := process.AddSpinner(total,
+		mpb.PrependDecorators(
+			// display our name with one space on the right
+			decor.Name("listed slices counter:", decor.WC{W: len("listed slices counter:") + 1, C: decor.DidentRight}),
+			decor.CurrentNoUnit("%d"),
+		),
+		mpb.BarFillerClearOnComplete(),
+	)
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
-	r := m.ListSlices(c, &slices, false, true)
+	r := m.ListSlices(c, &slices, false, func() {
+		bar.SetTotal(total+2048, false)
+		bar.Increment()
+	})
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
+	bar.SetTotal(-1, true)
+	process.Wait()
+
 	keys := make(map[uint64]uint32)
 	var totalBytes uint64
 	var lost, lostBytes int

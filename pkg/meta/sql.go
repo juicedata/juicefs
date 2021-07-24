@@ -21,9 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 	"io"
 	"sort"
 	"strings"
@@ -2346,22 +2343,8 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress bool) syscall.Errno {
+func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno {
 	var c chunk
-	var total int64
-	var process *mpb.Progress
-	var bar *mpb.Bar
-	if showProgress {
-		process = mpb.New(mpb.WithWidth(32), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
-		bar = process.AddSpinner(total,
-			mpb.PrependDecorators(
-				// display our name with one space on the right
-				decor.Name("listed slices counter:", decor.WC{W: len("listed slices counter:") + 1, C: decor.DidentRight}),
-				decor.CurrentNoUnit("%d"),
-			),
-			mpb.BarFillerClearOnComplete(),
-		)
-	}
 	rows, err := m.engine.Rows(&c)
 	if err != nil {
 		return errno(err)
@@ -2378,19 +2361,11 @@ func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgr
 		for _, s := range ss {
 			if s.chunkid > 0 {
 				*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
-				if bar != nil {
-					// while total is unknown,
-					// set it to a positive number which is greater than current total,
-					// to make sure no complete event is triggered by next IncrBy call.
-					bar.SetTotal(total+2048, false)
-					bar.Increment()
+				if showProgress != nil {
+					showProgress()
 				}
 			}
 		}
-	}
-	if bar != nil && process != nil {
-		bar.SetTotal(-1, true)
-		process.Wait()
 	}
 	return 0
 }

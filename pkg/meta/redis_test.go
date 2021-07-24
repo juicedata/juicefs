@@ -19,6 +19,9 @@ package meta
 import (
 	"bytes"
 	"context"
+	"github.com/sirupsen/logrus"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 	"sync"
 	"syscall"
 	"testing"
@@ -671,7 +674,7 @@ func testCompaction(t *testing.T, m Meta) {
 		logger.Fatalf("compactall: %s", st)
 	}
 	var slices []Slice
-	if st := m.ListSlices(ctx, &slices, false, false); st != 0 {
+	if st := m.ListSlices(ctx, &slices, false, nil); st != 0 {
 		logger.Fatalf("list all slices: %s", st)
 	}
 
@@ -777,9 +780,21 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if st := m.Truncate(ctx, inode, 0, (300<<20)+10, attr); st != 0 {
 		t.Fatalf("truncate file %s", st)
 	}
-
+	var total int64
+	process := mpb.New(mpb.WithWidth(32), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	bar := process.AddSpinner(total,
+		mpb.PrependDecorators(
+			// display our name with one space on the right
+			decor.Name("listed slices counter:", decor.WC{W: len("listed slices counter:") + 1, C: decor.DidentRight}),
+			decor.CurrentNoUnit("%d"),
+		),
+		mpb.BarFillerClearOnComplete(),
+	)
 	var ss []Slice
-	m.ListSlices(ctx, &ss, false, false)
+	m.ListSlices(ctx, &ss, false, func() {
+		bar.SetTotal(total+2048, false)
+		bar.Increment()
+	})
 	if len(ss) != 1 {
 		t.Fatalf("number of chunks: %d != 1, %+v", len(ss), ss)
 	}
@@ -789,7 +804,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 
 	time.Sleep(time.Millisecond * 100)
-	m.ListSlices(ctx, &ss, false, true)
+	m.ListSlices(ctx, &ss, false, nil)
 	// the last chunk could be found and deleted
 	if len(ss) > 1 {
 		t.Fatalf("number of chunks: %d > 1, %+v", len(ss), ss)
