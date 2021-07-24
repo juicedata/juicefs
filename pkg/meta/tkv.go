@@ -20,6 +20,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 	"io"
 	"sort"
 	"strings"
@@ -2230,7 +2233,21 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
+func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress bool) syscall.Errno {
+	var total int64
+	var process *mpb.Progress
+	var bar *mpb.Bar
+	if showProgress {
+		process = mpb.New(mpb.WithWidth(32), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+		bar = process.AddSpinner(total,
+			mpb.PrependDecorators(
+				// display our name with one space on the right
+				decor.Name("listed slices counter:", decor.WC{W: len("listed slices counter:") + 1, C: decor.DidentRight}),
+				decor.CurrentNoUnit("%d"),
+			),
+			mpb.BarFillerClearOnComplete(),
+		)
+	}
 	*slices = nil
 	// AiiiiiiiiCnnnn     file chunks
 	klen := len(r.prefix) + 1 + 8 + 1 + 4
@@ -2246,8 +2263,19 @@ func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.E
 		for _, s := range ss {
 			if s.chunkid > 0 {
 				*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+				if bar != nil {
+					// while total is unknown,
+					// set it to a positive number which is greater than current total,
+					// to make sure no complete event is triggered by next IncrBy call.
+					bar.SetTotal(total+2048, false)
+					bar.Increment()
+				}
 			}
 		}
+	}
+	if bar != nil && process != nil {
+		bar.SetTotal(-1, true)
+		process.Wait()
 	}
 	return 0
 }

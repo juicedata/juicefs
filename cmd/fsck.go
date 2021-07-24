@@ -96,7 +96,7 @@ func fsck(ctx *cli.Context) error {
 	logger.Infof("Listing all slices ...")
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
-	r := m.ListSlices(c, &slices, false)
+	r := m.ListSlices(c, &slices, false, true)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
