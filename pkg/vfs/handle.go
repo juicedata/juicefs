@@ -170,6 +170,12 @@ func newHandle(inode Ino) *handle {
 	return h
 }
 
+func findAllHandles(inode Ino) []*handle {
+	hanleLock.Lock()
+	defer hanleLock.Unlock()
+	return handles[inode]
+}
+
 func findHandle(inode Ino, fh uint64) *handle {
 	hanleLock.Lock()
 	defer hanleLock.Unlock()

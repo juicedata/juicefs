@@ -1033,6 +1033,11 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 }
 
 func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
 	err := m.txn(func(tx kvTxn) error {
@@ -1107,6 +1112,11 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	}
 	if size == 0 {
 		return syscall.EINVAL
+	}
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
@@ -1779,6 +1789,11 @@ func (m *kvMeta) Close(ctx Context, inode Ino) syscall.Errno {
 }
 
 func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
+	f := m.of.find(inode)
+	if f != nil {
+		f.RLock()
+		defer f.RUnlock()
+	}
 	if cs, ok := m.of.ReadChunk(inode, indx); ok {
 		*chunks = cs
 		return 0
@@ -1802,6 +1817,11 @@ func (m *kvMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sysca
 }
 
 func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
 	var needCompact bool
@@ -1844,6 +1864,11 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
 	var newSpace int64
+	f := m.of.find(fout)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(tx kvTxn) error {
 		rs := tx.gets(m.inodeKey(fin), m.inodeKey(fout))
