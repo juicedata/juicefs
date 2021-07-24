@@ -2713,7 +2713,8 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 	}
 }
 
-func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
+func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno {
+
 	r.cleanupLeakedInodes(delete)
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
@@ -2740,6 +2741,10 @@ func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscal
 			for _, s := range ss {
 				if s.chunkid > 0 {
 					*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+					if showProgress != nil {
+						showProgress()
+					}
+
 				}
 			}
 		}

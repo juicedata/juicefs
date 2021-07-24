@@ -2202,7 +2202,7 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
+func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno {
 	*slices = nil
 	// AiiiiiiiiCnnnn     file chunks
 	klen := len(r.prefix) + 1 + 8 + 1 + 4
@@ -2218,6 +2218,9 @@ func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.E
 		for _, s := range ss {
 			if s.chunkid > 0 {
 				*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+				if showProgress != nil {
+					showProgress()
+				}
 			}
 		}
 	}
