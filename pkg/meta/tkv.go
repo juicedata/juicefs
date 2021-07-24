@@ -2108,39 +2108,11 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 
-	var ss []*slice
-	var chunks []Slice
-	var skipped int
-	var pos, size uint32
-	for skipped < len(buf) {
-		// the slices will be formed as a tree after buildSlice(),
-		// we should create new one (or remove the link in tree)
-		ss = readSliceBuf(buf[skipped:])
-		// copy the first slice so it will not be updated by buildSlice
-		first := *ss[0]
-		chunks = buildSlice(ss)
-		pos, size = 0, 0
-		if chunks[0].Chunkid == 0 {
-			pos = chunks[0].Len
-			chunks = chunks[1:]
-		}
-		for _, s := range chunks {
-			size += s.Len
-		}
-		if first.len < (1<<20) || first.len*5 < size {
-			// it's too small
-			break
-		}
-		isFirst := func(pos uint32, s Slice) bool {
-			return pos == first.pos && s.Chunkid == first.chunkid && s.Off == first.off && s.Len == first.len
-		}
-		if !isFirst(pos, chunks[0]) {
-			// it's not the first slice, compact it
-			break
-		}
-		skipped += sliceBytes
-	}
-	if len(ss) < 2 {
+	ss := readSliceBuf(buf)
+	skipped := skipSome(ss)
+	ss = ss[skipped:]
+	pos, size, chunks := compactChunk(ss)
+	if len(ss) < 2 || size == 0 {
 		return
 	}
 
