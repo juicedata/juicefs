@@ -2026,29 +2026,6 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	return 0
 }
 
-func buildSlice(ss []*slice) []Slice {
-	var root *slice
-	for _, s := range ss {
-		if root != nil {
-			var right *slice
-			s.left, right = root.cut(s.pos)
-			_, s.right = right.cut(s.pos + s.len)
-		}
-		root = s
-	}
-	var pos uint32
-	var chunks []Slice
-	root.visit(func(s *slice) {
-		if s.pos > pos {
-			chunks = append(chunks, Slice{Size: s.pos - pos, Len: s.pos - pos})
-			pos = s.pos
-		}
-		chunks = append(chunks, Slice{Chunkid: s.chunkid, Size: s.size, Off: s.off, Len: s.len})
-		pos += s.len
-	})
-	return chunks
-}
-
 func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
 	f := r.of.find(inode)
 	if f != nil {
@@ -2548,44 +2525,17 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if err != nil {
 		return
 	}
-	chunkid, err := r.rdb.Incr(ctx, "nextchunk").Uint64()
-	if err != nil {
+
+	ss := readSlices(vals)
+	skipped := skipSome(ss)
+	ss = ss[skipped:]
+	pos, size, chunks := compactChunk(ss)
+	if len(ss) < 2 || size == 0 {
 		return
 	}
 
-	var ss []*slice
-	var chunks []Slice
-	var skipped int
-	var pos, size uint32
-	for skipped < len(vals) {
-		// the slices will be formed as a tree after buildSlice(),
-		// we should create new one (or remove the link in tree)
-		ss = readSlices(vals[skipped:])
-		// copy the first slice so it will not be updated by buildSlice
-		first := *ss[0]
-		chunks = buildSlice(ss)
-		pos, size = 0, 0
-		if chunks[0].Chunkid == 0 {
-			pos = chunks[0].Len
-			chunks = chunks[1:]
-		}
-		for _, s := range chunks {
-			size += s.Len
-		}
-		if first.len < (1<<20) || first.len*5 < size {
-			// it's too small
-			break
-		}
-		isFirst := func(pos uint32, s Slice) bool {
-			return pos == first.pos && s.Chunkid == first.chunkid && s.Off == first.off && s.Len == first.len
-		}
-		if !isFirst(pos, chunks[0]) {
-			// it's not the first slice, compact it
-			break
-		}
-		skipped++
-	}
-	if len(ss) < 2 {
+	chunkid, err := r.rdb.Incr(ctx, "nextchunk").Uint64()
+	if err != nil {
 		return
 	}
 
