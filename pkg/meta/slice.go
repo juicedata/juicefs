@@ -167,10 +167,9 @@ func skipSome(chunk []*slice) int {
 	var total = len(chunk)
 	for skipped < total {
 		ss := chunk[skipped:]
-		// copy the first slice so it will not be updated by buildSlice
 		pos, size, c := compactChunk(ss)
 		first := ss[0]
-		if first.len < (1<<20) || first.len*5 < size {
+		if first.len < (1<<20) || first.len*5 < size || size == 0 {
 			// it's too small
 			break
 		}
