@@ -58,6 +58,9 @@ func (tx *prefixTxn) scanKeys(prefix []byte) [][]byte {
 
 func (tx *prefixTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
 	r := tx.kvTxn.scanValues(tx.realKey(prefix), func(k, v []byte) bool {
+		if filter == nil {
+			return true
+		}
 		return filter(tx.origKey(k), v)
 	})
 	m := make(map[string][]byte, len(r))
