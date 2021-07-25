@@ -20,6 +20,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 	"io"
 	"sort"
 	"strings"
@@ -2326,10 +2329,13 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	})
 }
 
-func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
+func (m *kvMeta) dumpDir(inode Ino, showProgress func(totalIncr, currentIncr int64)) (map[string]*DumpedEntry, error) {
 	vals, err := m.scanValues(m.entryKey(inode, ""), nil)
 	if err != nil {
 		return nil, err
+	}
+	if showProgress != nil {
+		showProgress(int64(len(vals)), 0)
 	}
 	entries := make(map[string]*DumpedEntry)
 	for k, v := range vals {
@@ -2339,11 +2345,14 @@ func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 			return nil, err
 		}
 		if typ == TypeDirectory {
-			if entry.Entries, err = m.dumpDir(inode); err != nil {
+			if entry.Entries, err = m.dumpDir(inode, showProgress); err != nil {
 				return nil, err
 			}
 		}
 		entries[k[len(m.prefix)+10:]] = entry // "A" + inode + "D"
+		if showProgress != nil {
+			showProgress(0, 1)
+		}
 	}
 	return entries, nil
 }
@@ -2363,13 +2372,32 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
 
+	p := mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	var total int64
+	barName := "Dump dir progress:"
+	bar := p.Add(total,
+		mpb.NewBarFiller(mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟")),
+		mpb.PrependDecorators(
+			decor.Name(barName, decor.WC{W: len(barName) + 1, C: decor.DidentRight}),
+		),
+		mpb.PrependDecorators(decor.CountersNoUnit("%d / %d")),
+		mpb.AppendDecorators(
+			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
+		),
+	)
 	tree, err := m.dumpEntry(m.root)
 	if err != nil {
 		return err
 	}
-	if tree.Entries, err = m.dumpDir(m.root); err != nil {
+	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}); err != nil {
 		return err
 	}
+	bar.SetTotal(-1, true)
+	p.Wait()
 
 	format, err := m.Load()
 	if err != nil {
@@ -2500,11 +2528,31 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
+	p := mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	var total int64
+	barName := "CollectEntry progress:"
+	bar := p.Add(total,
+		mpb.NewBarFiller(mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟")),
+		mpb.PrependDecorators(
+			decor.Name(barName, decor.WC{W: len(barName) + 1, C: decor.DidentRight}),
+		),
+		mpb.PrependDecorators(decor.CountersNoUnit("%d / %d")),
+		mpb.AppendDecorators(
+			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
+		),
+	)
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries); err != nil {
+	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}); err != nil {
 		return err
 	}
+	bar.SetTotal(-1, true)
+	p.Wait()
+
 	counters := &DumpedCounters{
 		NextInode:   2,
 		NextChunk:   1,

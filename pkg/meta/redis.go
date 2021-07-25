@@ -21,6 +21,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 	"hash/fnv"
 	"io"
 	"math/rand"
@@ -2874,11 +2877,14 @@ func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	}
 }
 
-func (m *redisMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
+func (m *redisMeta) dumpDir(inode Ino, showProgress func(totalIncr, currentIncr int64)) (map[string]*DumpedEntry, error) {
 	ctx := Background
 	keys, err := m.rdb.HGetAll(ctx, m.entryKey(inode)).Result()
 	if err != nil {
 		return nil, err
+	}
+	if showProgress != nil {
+		showProgress(int64(len(keys)), 0)
 	}
 	entries := make(map[string]*DumpedEntry)
 	for k, v := range keys {
@@ -2888,11 +2894,14 @@ func (m *redisMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 			return nil, err
 		}
 		if typ == TypeDirectory {
-			if entry.Entries, err = m.dumpDir(inode); err != nil {
+			if entry.Entries, err = m.dumpDir(inode, showProgress); err != nil {
 				return nil, err
 			}
 		}
 		entries[k] = entry
+		if showProgress != nil {
+			showProgress(0, 1)
+		}
 	}
 	return entries, nil
 }
@@ -2918,9 +2927,30 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if tree.Entries, err = m.dumpDir(m.root); err != nil {
+
+	p := mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	var total int64
+	barName := "Dump dir progress:"
+	bar := p.Add(total,
+		mpb.NewBarFiller(mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟")),
+		mpb.PrependDecorators(
+			decor.Name(barName, decor.WC{W: len(barName) + 1, C: decor.DidentRight}),
+		),
+		mpb.PrependDecorators(decor.CountersNoUnit("%d / %d")),
+		mpb.AppendDecorators(
+			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
+		),
+	)
+
+	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}); err != nil {
 		return err
 	}
+	bar.SetTotal(-1, true)
+	p.Wait()
 
 	format, err := m.Load()
 	if err != nil {
@@ -2972,7 +3002,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	return dm.writeJSON(w)
 }
 
-func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
+func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
 	typ := typeFromString(e.Attr.Type)
 	inode := e.Attr.Inode
 	if exist, ok := entries[inode]; ok {
@@ -2989,6 +3019,20 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
 		return nil
 	}
 	entries[inode] = e
+
+	if showProgress != nil {
+		if typ == TypeFile {
+			showProgress(0, 1)
+		} else if typ == TypeDirectory {
+			if inode == 1 {
+				//root inode total +1 should before then current +1
+				//otherwise the progress bar will appear 1/0 at a moment in time
+				showProgress(1, 0)
+			}
+			showProgress(int64(len(e.Entries)), 1)
+		}
+	}
+
 	if typ == TypeFile {
 		e.Attr.Nlink = 1 // reset
 	} else if typ == TypeDirectory {
@@ -3002,7 +3046,7 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry) error {
 			if typeFromString(child.Attr.Type) == TypeDirectory {
 				e.Attr.Nlink++
 			}
-			if err := collectEntry(child, entries); err != nil {
+			if err := collectEntry(child, entries, showProgress); err != nil {
 				return err
 			}
 		}
@@ -3088,11 +3132,32 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
+	progress := mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	var total int64
+	barName := "CollectEntry progress:"
+	bar := progress.Add(total,
+		mpb.NewBarFiller(mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟")),
+		mpb.PrependDecorators(
+			decor.Name(barName, decor.WC{W: len(barName) + 1, C: decor.DidentRight}),
+		),
+		mpb.PrependDecorators(decor.CountersNoUnit("%d / %d")),
+		mpb.AppendDecorators(
+			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
+		),
+	)
+
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries); err != nil {
+	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}); err != nil {
 		return err
 	}
+	bar.SetTotal(-1, true)
+	progress.Wait()
+
 	counters := &DumpedCounters{}
 	refs := make(map[string]int)
 	for _, entry := range entries {
