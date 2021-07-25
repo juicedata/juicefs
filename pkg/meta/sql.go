@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/sirupsen/logrus"
 	"io"
 	"sort"
 	"strings"
@@ -2470,10 +2472,13 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	})
 }
 
-func (m *dbMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
+func (m *dbMeta) dumpDir(inode Ino, showProgress func(totalIncr, currentIncr int64)) (map[string]*DumpedEntry, error) {
 	var edges []edge
 	if err := m.engine.Find(&edges, &edge{Parent: inode}); err != nil {
 		return nil, err
+	}
+	if showProgress != nil {
+		showProgress(int64(len(edges)), 0)
 	}
 	entries := make(map[string]*DumpedEntry)
 	for _, e := range edges {
@@ -2482,11 +2487,14 @@ func (m *dbMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 			return nil, err
 		}
 		if e.Type == TypeDirectory {
-			if entry.Entries, err = m.dumpDir(e.Inode); err != nil {
+			if entry.Entries, err = m.dumpDir(e.Inode, showProgress); err != nil {
 				return nil, err
 			}
 		}
 		entries[e.Name] = entry
+		if showProgress != nil {
+			showProgress(0, 1)
+		}
 	}
 	return entries, nil
 }
@@ -2505,9 +2513,18 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if tree.Entries, err = m.dumpDir(m.root); err != nil {
+
+	var total int64
+	p, bar := utils.NewDynProgressBar("Dump dir progress:", logger.WriterLevel(logrus.InfoLevel))
+	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}); err != nil {
 		return err
 	}
+	bar.SetTotal(-1, true)
+	p.Wait()
 
 	format, err := m.Load()
 	if err != nil {
@@ -2672,11 +2689,20 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
+	var total int64
+	p, bar := utils.NewDynProgressBar("CollectEntry progress:", logger.WriterLevel(logrus.InfoLevel))
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries); err != nil {
+	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}); err != nil {
 		return err
 	}
+	bar.SetTotal(-1, true)
+	p.Wait()
+
 	counters := &DumpedCounters{
 		NextInode:   2,
 		NextChunk:   1,
