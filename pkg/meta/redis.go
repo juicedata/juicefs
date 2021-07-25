@@ -22,8 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 	"hash/fnv"
 	"io"
 	"math/rand"
@@ -2928,20 +2926,8 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		return err
 	}
 
-	p := mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
 	var total int64
-	barName := "Dump dir progress:"
-	bar := p.Add(total,
-		mpb.NewBarFiller(mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟")),
-		mpb.PrependDecorators(
-			decor.Name(barName, decor.WC{W: len(barName) + 1, C: decor.DidentRight}),
-		),
-		mpb.PrependDecorators(decor.CountersNoUnit("%d / %d")),
-		mpb.AppendDecorators(
-			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
-		),
-	)
-
+	p, bar := utils.NewDynProgressBar("Dump dir progress:", logger.WriterLevel(logrus.InfoLevel))
 	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
@@ -3132,20 +3118,8 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
-	progress := mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
 	var total int64
-	barName := "CollectEntry progress:"
-	bar := progress.Add(total,
-		mpb.NewBarFiller(mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟")),
-		mpb.PrependDecorators(
-			decor.Name(barName, decor.WC{W: len(barName) + 1, C: decor.DidentRight}),
-		),
-		mpb.PrependDecorators(decor.CountersNoUnit("%d / %d")),
-		mpb.AppendDecorators(
-			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
-		),
-	)
-
+	progress, bar := utils.NewDynProgressBar("CollectEntry progress:", logger.WriterLevel(logrus.InfoLevel))
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
 	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
