@@ -198,6 +198,7 @@ func (c *chunkWriter) commitThread() {
 		if err == 0 {
 			var ss = meta.Slice{Chunkid: s.id, Size: s.length, Off: s.soff, Len: s.slen}
 			err = f.w.m.Write(meta.Background, f.inode, c.indx, s.off, ss)
+			f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
 		}
 
 		f.Lock()
@@ -410,16 +411,18 @@ type dataWriter struct {
 	sync.Mutex
 	m          meta.Meta
 	store      chunk.ChunkStore
+	reader     DataReader
 	blockSize  int
 	bufferSize int64
 	files      map[Ino]*fileWriter
 	maxRetries uint32
 }
 
-func NewDataWriter(conf *Config, m meta.Meta, store chunk.ChunkStore) DataWriter {
+func NewDataWriter(conf *Config, m meta.Meta, store chunk.ChunkStore, reader DataReader) DataWriter {
 	w := &dataWriter{
 		m:          m,
 		store:      store,
+		reader:     reader,
 		blockSize:  conf.Chunk.BlockSize,
 		bufferSize: int64(conf.Chunk.BufferSize),
 		files:      make(map[Ino]*fileWriter),

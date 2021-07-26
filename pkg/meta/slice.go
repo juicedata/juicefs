@@ -124,3 +124,63 @@ func readSliceBuf(buf []byte) []*slice {
 	}
 	return ss
 }
+
+func buildSlice(ss []*slice) []Slice {
+	var root *slice
+	for i := range ss {
+		s := new(slice)
+		*s = *ss[i]
+		var right *slice
+		s.left, right = root.cut(s.pos)
+		_, s.right = right.cut(s.pos + s.len)
+		root = s
+	}
+	var pos uint32
+	var chunk []Slice
+	root.visit(func(s *slice) {
+		if s.pos > pos {
+			chunk = append(chunk, Slice{Size: s.pos - pos, Len: s.pos - pos})
+			pos = s.pos
+		}
+		chunk = append(chunk, Slice{Chunkid: s.chunkid, Size: s.size, Off: s.off, Len: s.len})
+		pos += s.len
+	})
+	return chunk
+}
+
+func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
+	var chunk = buildSlice(ss)
+	var pos uint32
+	if len(chunk) > 0 && chunk[0].Chunkid == 0 {
+		pos = chunk[0].Len
+		chunk = chunk[1:]
+	}
+	var size uint32
+	for _, c := range chunk {
+		size += uint32(c.Len)
+	}
+	return pos, size, chunk
+}
+
+func skipSome(chunk []*slice) int {
+	var skipped int
+	var total = len(chunk)
+	for skipped < total {
+		ss := chunk[skipped:]
+		pos, size, c := compactChunk(ss)
+		first := ss[0]
+		if first.len < (1<<20) || first.len*5 < size || size == 0 {
+			// it's too small
+			break
+		}
+		isFirst := func(pos uint32, s Slice) bool {
+			return pos == first.pos && s.Chunkid == first.chunkid && s.Off == first.off && s.Len == first.len
+		}
+		if !isFirst(pos, c[0]) {
+			// it's not the first slice, compact it
+			break
+		}
+		skipped++
+	}
+	return skipped
+}

@@ -28,6 +28,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -1030,6 +1032,11 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 }
 
 func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
 	err := m.txn(func(tx kvTxn) error {
@@ -1048,27 +1055,28 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			}
 			return nil
 		}
-		old := t.Length
-		newSpace = align4K(length) - align4K(old)
-		if length > old {
-			if m.checkQuota(newSpace, 0) {
-				return syscall.ENOSPC
+		newSpace = align4K(length) - align4K(t.Length)
+		if newSpace > 0 && m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
+		}
+		var left, right = t.Length, length
+		if left > right {
+			right, left = left, right
+		}
+		if right/ChunkSize-left/ChunkSize > 1 {
+			zeroChunks := tx.scanRange(m.chunkKey(inode, uint32(left/ChunkSize)+1), m.chunkKey(inode, uint32(right/ChunkSize)))
+			buf := marshalSlice(0, 0, 0, 0, ChunkSize)
+			for key, value := range zeroChunks {
+				tx.set([]byte(key), append(value, buf...))
 			}
-			if length/ChunkSize-old/ChunkSize > 1 {
-				zeroChunks := tx.scanRange(m.chunkKey(inode, uint32(old/ChunkSize)+1), m.chunkKey(inode, uint32(length/ChunkSize)))
-				buf := marshalSlice(0, 0, 0, 0, ChunkSize)
-				for key, value := range zeroChunks {
-					tx.set([]byte(key), append(value, buf...))
-				}
-			}
-			l := uint32(length - old)
-			if length > (old/ChunkSize+1)*ChunkSize {
-				l = ChunkSize - uint32(old%ChunkSize)
-			}
-			tx.append(m.chunkKey(inode, uint32(old/ChunkSize)), marshalSlice(uint32(old%ChunkSize), 0, 0, 0, l))
-			if length > (old/ChunkSize+1)*ChunkSize && length%ChunkSize > 0 {
-				tx.append(m.chunkKey(inode, uint32(length/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(length%ChunkSize)))
-			}
+		}
+		l := uint32(right - left)
+		if right > (left/ChunkSize+1)*ChunkSize {
+			l = ChunkSize - uint32(left%ChunkSize)
+		}
+		tx.append(m.chunkKey(inode, uint32(left/ChunkSize)), marshalSlice(uint32(left%ChunkSize), 0, 0, 0, l))
+		if right > (left/ChunkSize+1)*ChunkSize && right%ChunkSize > 0 {
+			tx.append(m.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 		}
 		t.Length = length
 		now := time.Now()
@@ -1103,6 +1111,11 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	}
 	if size == 0 {
 		return syscall.EINVAL
+	}
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
@@ -1312,6 +1325,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		attr = Attr{}
 		m.parseAttr(rs[1], &attr)
 		if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 			return syscall.EACCES
@@ -1325,6 +1339,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 		attr.Nlink--
+		opened = false
 		if _type == TypeFile && attr.Nlink == 0 {
 			opened = m.of.IsOpen(inode)
 		}
@@ -1467,7 +1482,11 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			return syscall.ENOTDIR
 		}
 		m.parseAttr(rs[2], &iattr)
+		tattr = Attr{}
 
+		opened = false
+		dino = 0
+		dtyp = 0
 		dbuf := tx.get(m.entryKey(parentDst, nameDst))
 		if dbuf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
@@ -1769,6 +1788,11 @@ func (m *kvMeta) Close(ctx Context, inode Ino) syscall.Errno {
 }
 
 func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
+	f := m.of.find(inode)
+	if f != nil {
+		f.RLock()
+		defer f.RUnlock()
+	}
 	if cs, ok := m.of.ReadChunk(inode, indx); ok {
 		*chunks = cs
 		return 0
@@ -1792,6 +1816,11 @@ func (m *kvMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sysca
 }
 
 func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
 	var needCompact bool
@@ -1820,9 +1849,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Ctimensec = uint32(now.Nanosecond())
 		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
-		if (len(val)/sliceBytes)%100 == 99 {
-			needCompact = true
-		}
+		needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
 	})
 	if err == nil {
@@ -1836,6 +1863,11 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
 	var newSpace int64
+	f := m.of.find(fout)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(tx kvTxn) error {
 		rs := tx.gets(m.inodeKey(fin), m.inodeKey(fout))
@@ -2075,39 +2107,11 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 
-	var ss []*slice
-	var chunks []Slice
-	var skipped int
-	var pos, size uint32
-	for skipped < len(buf) {
-		// the slices will be formed as a tree after buildSlice(),
-		// we should create new one (or remove the link in tree)
-		ss = readSliceBuf(buf[skipped:])
-		// copy the first slice so it will not be updated by buildSlice
-		first := *ss[0]
-		chunks = buildSlice(ss)
-		pos, size = 0, 0
-		if chunks[0].Chunkid == 0 {
-			pos = chunks[0].Len
-			chunks = chunks[1:]
-		}
-		for _, s := range chunks {
-			size += s.Len
-		}
-		if first.len < (1<<20) || first.len*5 < size {
-			// it's too small
-			break
-		}
-		isFirst := func(pos uint32, s Slice) bool {
-			return pos == first.pos && s.Chunkid == first.chunkid && s.Off == first.off && s.Len == first.len
-		}
-		if !isFirst(pos, chunks[0]) {
-			// it's not the first slice, compact it
-			break
-		}
-		skipped += sliceBytes
-	}
-	if len(ss) < 2 {
+	ss := readSliceBuf(buf)
+	skipped := skipSome(ss)
+	ss = ss[skipped:]
+	pos, size, chunks := compactChunk(ss)
+	if len(ss) < 2 || size == 0 {
 		return
 	}
 
@@ -2197,7 +2201,7 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.Errno {
+func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno {
 	*slices = nil
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
@@ -2213,6 +2217,9 @@ func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool) syscall.E
 		for _, s := range ss {
 			if s.chunkid > 0 {
 				*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+				if showProgress != nil {
+					showProgress()
+				}
 			}
 		}
 	}
@@ -2318,10 +2325,13 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	})
 }
 
-func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
+func (m *kvMeta) dumpDir(inode Ino, showProgress func(totalIncr, currentIncr int64)) (map[string]*DumpedEntry, error) {
 	vals, err := m.scanValues(m.entryKey(inode, ""), nil)
 	if err != nil {
 		return nil, err
+	}
+	if showProgress != nil {
+		showProgress(int64(len(vals)), 0)
 	}
 	entries := make(map[string]*DumpedEntry)
 	for k, v := range vals {
@@ -2331,11 +2341,14 @@ func (m *kvMeta) dumpDir(inode Ino) (map[string]*DumpedEntry, error) {
 			return nil, err
 		}
 		if typ == TypeDirectory {
-			if entry.Entries, err = m.dumpDir(inode); err != nil {
+			if entry.Entries, err = m.dumpDir(inode, showProgress); err != nil {
 				return nil, err
 			}
 		}
 		entries[k[10:]] = entry // "A" + inode + "D"
+		if showProgress != nil {
+			showProgress(0, 1)
+		}
 	}
 	return entries, nil
 }
@@ -2355,13 +2368,21 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
 
+	var total int64
+	p, bar := utils.NewDynProgressBar("Dump dir progress:", logger.WriterLevel(logrus.InfoLevel))
 	tree, err := m.dumpEntry(m.root)
 	if err != nil {
 		return err
 	}
-	if tree.Entries, err = m.dumpDir(m.root); err != nil {
+	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}); err != nil {
 		return err
 	}
+	bar.SetTotal(-1, true)
+	p.Wait()
 
 	format, err := m.Load()
 	if err != nil {
@@ -2492,11 +2513,20 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
+	var total int64
+	p, bar := utils.NewDynProgressBar("CollectEntry progress:", logger.WriterLevel(logrus.InfoLevel))
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries); err != nil {
+	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}); err != nil {
 		return err
 	}
+	bar.SetTotal(-1, true)
+	p.Wait()
+
 	counters := &DumpedCounters{
 		NextInode:   2,
 		NextChunk:   1,

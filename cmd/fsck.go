@@ -17,6 +17,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/sirupsen/logrus"
 	"strings"
 	"time"
 
@@ -94,12 +96,20 @@ func fsck(ctx *cli.Context) error {
 	logger.Infof("Found %d blocks (%d bytes)", len(blocks), totalBlockBytes)
 
 	logger.Infof("Listing all slices ...")
+	var total int64
+	progressCounter, bar := utils.NewProgressCounter("listed slices counter:", logger.WriterLevel(logrus.InfoLevel))
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
-	r := m.ListSlices(c, &slices, false)
+	r := m.ListSlices(c, &slices, false, func() {
+		bar.SetTotal(total+2048, false)
+		bar.Increment()
+	})
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
+	bar.SetTotal(-1, true)
+	progressCounter.Wait()
+
 	keys := make(map[uint64]uint32)
 	var totalBytes uint64
 	var lost, lostBytes int

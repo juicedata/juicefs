@@ -17,6 +17,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
 	"strings"
@@ -170,12 +172,20 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("list all blocks: %s", err)
 	}
 
+	var total int64
+	processCounter, bar := utils.NewProgressCounter("listed slices counter:", logger.WriterLevel(logrus.InfoLevel))
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
-	r := m.ListSlices(c, &slices, ctx.Bool("delete"))
+	r := m.ListSlices(c, &slices, ctx.Bool("delete"), func() {
+		bar.SetTotal(total+2048, false)
+		bar.Increment()
+	})
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
+	bar.SetTotal(-1, true)
+	processCounter.Wait()
+
 	keys := make(map[uint64]uint32)
 	var totalBytes uint64
 	for _, s := range slices {
