@@ -41,7 +41,11 @@ func load(ctx *cli.Context) error {
 		defer fp.Close()
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
-	return m.LoadMeta(fp)
+	if err := m.LoadMeta(fp); err != nil {
+		return err
+	}
+	logger.Infof("Load metadata from %s success", ctx.Args().Get(1))
+	return nil
 }
 
 func loadFlags() *cli.Command {
