@@ -1092,26 +1092,29 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			return err
 		}
 		var foundIno Ino
-		var foundAttr Attr
+		var foundType uint8
 		if ok {
-			foundAttr.Typ, foundIno = e.Type, e.Inode
+			foundType, foundIno = e.Type, e.Inode
 		} else if m.conf.CaseInsensi {
 			if entry := m.resolveCase(ctx, parent, name); entry != nil {
-				foundAttr.Typ, foundIno = entry.Attr.Typ, entry.Inode
+				foundType, foundIno = entry.Attr.Typ, entry.Inode
 			}
 		}
 		if foundIno != 0 {
-			if foundAttr.Typ == TypeFile {
+			if foundType == TypeFile {
 				foundNode := node{Inode: foundIno}
 				ok, err = s.Get(&foundNode)
-				if err == nil && ok {
-					m.parseAttr(&foundNode, &foundAttr)
+				if err != nil {
+					return err
+				} else if ok {
+					m.parseAttr(&foundNode, attr)
+				} else {
+					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
+				}
+				if inode != nil {
+					*inode = foundIno
 				}
 			}
-			if inode != nil {
-				*inode = foundIno
-			}
-			attr = &foundAttr
 			return syscall.EEXIST
 		}
 

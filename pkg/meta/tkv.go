@@ -1246,25 +1246,26 @@ func (m *kvMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 
 		buf := tx.get(m.entryKey(parent, name))
 		var foundIno Ino
-		var foundAttr Attr
+		var foundType uint8
 		if buf != nil {
-			foundAttr.Typ, foundIno = m.parseEntry(buf)
+			foundType, foundIno = m.parseEntry(buf)
 		} else if m.conf.CaseInsensi {
 			if entry := m.resolveCase(ctx, parent, name); entry != nil {
-				foundAttr.Typ, foundIno = entry.Attr.Typ, entry.Inode
+				foundType, foundIno = entry.Attr.Typ, entry.Inode
 			}
 		}
 		if foundIno != 0 {
-			if foundAttr.Typ == TypeFile {
+			if foundType == TypeFile {
 				a = tx.get(m.inodeKey(foundIno))
 				if a != nil {
-					m.parseAttr(a, &foundAttr)
+					m.parseAttr(a, attr)
+				} else {
+					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
+				}
+				if inode != nil {
+					*inode = foundIno
 				}
 			}
-			if inode != nil {
-				*inode = foundIno
-			}
-			attr = &foundAttr
 			return syscall.EEXIST
 		}
 

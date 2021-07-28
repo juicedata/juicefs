@@ -1253,25 +1253,28 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 			return err
 		}
 		var foundIno Ino
-		var foundAttr Attr
+		var foundType uint8
 		if err == nil {
-			foundAttr.Typ, foundIno = r.parseEntry(buf)
+			foundType, foundIno = r.parseEntry(buf)
 		} else if r.conf.CaseInsensi { // err == redis.Nil
 			if entry := r.resolveCase(ctx, parent, name); entry != nil {
-				foundAttr.Typ, foundIno = entry.Attr.Typ, entry.Inode
+				foundType, foundIno = entry.Attr.Typ, entry.Inode
 			}
 		}
 		if foundIno != 0 {
-			if foundAttr.Typ == TypeFile {
+			if foundType == TypeFile {
 				a, err = tx.Get(ctx, r.inodeKey(foundIno)).Bytes()
 				if err == nil {
-					r.parseAttr(a, &foundAttr)
+					r.parseAttr(a, attr)
+				} else if err == redis.Nil {
+					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
+				} else {
+					return err
+				}
+				if inode != nil {
+					*inode = foundIno
 				}
 			}
-			if inode != nil {
-				*inode = foundIno
-			}
-			attr = &foundAttr
 			return syscall.EEXIST
 		}
 
