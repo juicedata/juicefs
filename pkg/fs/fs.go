@@ -625,7 +625,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16) (f *File, 
 	if err != 0 {
 		return
 	}
-	err = fs.m.Create(ctx, fi.inode, path.Base(p), mode&07777, 0, 0, &inode, attr)
+	err = fs.m.Create(ctx, fi.inode, path.Base(p), mode&07777, 0, syscall.O_EXCL, &inode, attr)
 	if err == 0 {
 		fi = AttrToFileInfo(inode, attr)
 		fi.name = path.Base(p)
