@@ -55,11 +55,11 @@ Alluxio 中的元数据操作有两个步骤：第一步是修改 Alluxio master
 
 Alluxio 根据需要从 UFS 加载元数据，并且它在启动时没有关于 UFS 的信息。默认情况下，Alluxio 期望对 UFS 的所有修改都通过 Alluxio 进行。如果直接对 UFS 进行更改，则需要手动或定期在 Alluxio 和 UFS 之间同步元数据。正如[「原子元数据操作」](#原子元数据操作)部分所说，两步元数据操作可能会导致不一致。
 
-JuiceFS 提供元数据和数据的强一致性。**JuiceFS 的元数据服务是唯一的真实来源（single source of truth），不是 UFS 的镜像。**元数据服务不依赖对象存储来获取元数据。对象存储只是被视为无限制的块存储。JuiceFS 和对象存储之间没有任何不一致之处。
+JuiceFS 提供元数据和数据的强一致性。**JuiceFS 的元数据服务是唯一的真实来源（single source of truth），不是 UFS 的镜像。** 元数据服务不依赖对象存储来获取元数据。对象存储只是被视为无限制的块存储。JuiceFS 和对象存储之间没有任何不一致之处。
 
 ### 数据压缩
 
-JuiceFS 支持使用 [LZ4](https://lz4.gi​​thub.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 来压缩您的所有数据。Alluxio 没有这个功能。
+JuiceFS 支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 来压缩您的所有数据。Alluxio 没有这个功能。
 
 ### 数据加密
 
