@@ -17,7 +17,7 @@ Arguments of mdtest are adjusted to ensure the command can be finished in 5 minu
 
 ## Testing Environment
 
-In the following test results, all mdtest tests based on the c5.large EC2 instance (2 CPU, 4G RAM), Ubuntu 18.04 LTS (Kernel 5.4.0) system, JuiceFS use redis (version 4.0.9) running on a c5.large EC2 instance in the same available zone to store metadata.
+In the following test results, all mdtest tests based on the c5.large EC2 instance (2 CPU, 4G RAM), Ubuntu 18.04 LTS (Kernel 5.4.0) system, JuiceFS use Redis (version 4.0.9) running on a c5.large EC2 instance in the same available zone to store metadata.
 
 JuiceFS mount command:
 
