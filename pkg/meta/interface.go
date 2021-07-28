@@ -265,7 +265,7 @@ type Meta interface {
 	// Readdir returns all entries for given directory, which include attributes if plus is true.
 	Readdir(ctx Context, inode Ino, wantattr uint8, entries *[]*Entry) syscall.Errno
 	// Create creates a file in a directory with given name.
-	Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno
+	Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	// Open checks permission on a node and track it as open.
 	Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno
 	// Close a file.

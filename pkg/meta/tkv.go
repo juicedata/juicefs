@@ -28,9 +28,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/sirupsen/logrus"
 )
 
 type kvTxn interface {
@@ -1246,7 +1245,26 @@ func (m *kvMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		}
 
 		buf := tx.get(m.entryKey(parent, name))
-		if buf != nil || buf == nil && m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
+		var foundIno Ino
+		var foundAttr Attr
+		if buf != nil {
+			foundAttr.Typ, foundIno = m.parseEntry(buf)
+		} else if m.conf.CaseInsensi {
+			if entry := m.resolveCase(ctx, parent, name); entry != nil {
+				foundAttr.Typ, foundIno = entry.Attr.Typ, entry.Inode
+			}
+		}
+		if foundIno != 0 {
+			if foundAttr.Typ == TypeFile {
+				a = tx.get(m.inodeKey(foundIno))
+				if a != nil {
+					m.parseAttr(a, &foundAttr)
+				}
+			}
+			if inode != nil {
+				*inode = foundIno
+			}
+			attr = &foundAttr
 			return syscall.EEXIST
 		}
 
@@ -1286,8 +1304,11 @@ func (m *kvMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask
 	return m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, inode, attr)
 }
 
-func (m *kvMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno {
+func (m *kvMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	err := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
+	if err == syscall.EEXIST && attr.Typ == TypeFile && (flags&syscall.O_EXCL) == 0 {
+		err = 0
+	}
 	if err == 0 && inode != nil {
 		m.of.Open(*inode, attr)
 	}

@@ -21,8 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/sirupsen/logrus"
 	"io"
 	"sort"
 	"strings"
@@ -32,9 +30,11 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/juicedata/juicefs/pkg/utils"
 	_ "github.com/lib/pq"
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/names"
 )
@@ -1091,7 +1091,27 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		if err != nil {
 			return err
 		}
-		if ok || !ok && m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
+		var foundIno Ino
+		var foundAttr Attr
+		if ok {
+			foundAttr.Typ, foundIno = e.Type, e.Inode
+		} else if m.conf.CaseInsensi {
+			if entry := m.resolveCase(ctx, parent, name); entry != nil {
+				foundAttr.Typ, foundIno = entry.Attr.Typ, entry.Inode
+			}
+		}
+		if foundIno != 0 {
+			if foundAttr.Typ == TypeFile {
+				foundNode := node{Inode: foundIno}
+				ok, err = s.Get(&foundNode)
+				if err == nil && ok {
+					m.parseAttr(&foundNode, &foundAttr)
+				}
+			}
+			if inode != nil {
+				*inode = foundIno
+			}
+			attr = &foundAttr
 			return syscall.EEXIST
 		}
 
@@ -1132,8 +1152,11 @@ func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask
 	return m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, inode, attr)
 }
 
-func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno {
+func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	err := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
+	if err == syscall.EEXIST && attr.Typ == TypeFile && (flags&syscall.O_EXCL) == 0 {
+		err = 0
+	}
 	if err == 0 && inode != nil {
 		m.of.Open(*inode, attr)
 	}

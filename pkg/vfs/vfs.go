@@ -373,7 +373,7 @@ func Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, fl
 
 	var inode Ino
 	var attr = &Attr{}
-	err = m.Create(ctx, parent, name, mode&07777, cumask, &inode, attr)
+	err = m.Create(ctx, parent, name, mode&07777, cumask, flags, &inode, attr)
 	if runtime.GOOS == "darwin" && err == syscall.ENOENT {
 		err = syscall.EACCES
 	}
@@ -381,7 +381,8 @@ func Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, fl
 		return
 	}
 
-	fh = newFileHandle(inode, 0, flags)
+	UpdateLength(inode, attr)
+	fh = newFileHandle(inode, attr.Length, flags)
 	entry = &meta.Entry{Inode: inode, Attr: attr}
 	return
 }
