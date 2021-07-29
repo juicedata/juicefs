@@ -12,6 +12,16 @@ Through active interaction with community users, we found that many application 
 
 **But you need to pay special attention**, in the process of using the JuiceFS file system, no matter which database you choose to store metadata, please **make sure to ensure the security of the metadata**! Once the metadata is damaged or lost, it will directly cause the corresponding data to be completely damaged or lost, and in serious cases may directly cause the entire file system to be damaged.
 
+JuiceFS supported Metadata Engines:
+
+* [Redis](#Redis)
+* [PostgreSQL](#PostgreSQL)
+* [MySQL](#MySQL)
+* [MariaDB](#MariaDB)
+* [SQLite](#SQLite)
+* [TiKV](#TiKV)
+* [FoundationDB](#FoundationDB)
+
 ## Redis
 
 > [Redis](https://redis.io/) is an open source (BSD license) memory-based key-value storage system, often used as a database, cache, and message broker.
