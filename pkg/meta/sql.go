@@ -1101,7 +1101,7 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 			}
 		}
 		if foundIno != 0 {
-			if foundType == TypeFile {
+			if _type == TypeFile {
 				foundNode := node{Inode: foundIno}
 				ok, err = s.Get(&foundNode)
 				if err != nil {
@@ -1157,7 +1157,7 @@ func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask
 
 func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	err := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
-	if err == syscall.EEXIST && attr.Typ == TypeFile && (flags&syscall.O_EXCL) == 0 {
+	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		err = 0
 	}
 	if err == 0 && inode != nil {

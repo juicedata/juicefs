@@ -1262,7 +1262,7 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 			}
 		}
 		if foundIno != 0 {
-			if foundType == TypeFile {
+			if _type == TypeFile {
 				a, err = tx.Get(ctx, r.inodeKey(foundIno)).Bytes()
 				if err == nil {
 					r.parseAttr(a, attr)
@@ -1317,7 +1317,7 @@ func (r *redisMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cum
 
 func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	err := r.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
-	if err == syscall.EEXIST && attr.Typ == TypeFile && (flags&syscall.O_EXCL) == 0 {
+	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		err = 0
 	}
 	if err == 0 && inode != nil {
