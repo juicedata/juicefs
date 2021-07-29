@@ -12,6 +12,16 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 
 **但需要特别注意的是**，在使用 JuiceFS 文件系统的过程中，不论你选择哪种数据库存储元数据，请 **务必确保元数据的安全**！元数据一旦损坏或丢失，将直接导致对应数据彻底损坏或丢失，严重的可能直接导致整个文件系统发生损毁。
 
+JuiceFS 已经支持的元数据存储引擎：
+
+* [Redis](#Redis)
+* [PostgreSQL](#PostgreSQL)
+* [MySQL](#MySQL)
+* [MariaDB](#MariaDB)
+* [SQLite](#SQLite)
+* [TiKV](#TiKV)
+* [FoundationDB](#FoundationDB)
+
 ## Redis
 
 > [Redis](https://redis.io/) 是一款开源的（BSD许可）基于内存的键值存储系统，常被用作数据库、缓存和消息代理。
