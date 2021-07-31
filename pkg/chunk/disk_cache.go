@@ -298,7 +298,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 
 func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
 	stagingPath := cache.stagePath(key)
-	err := cache.flushPage(stagingPath, data, true)
+	err := cache.flushPage(stagingPath, data, false)
 	if err == nil && cache.capacity > 0 && keepCache {
 		path := cache.cachePath(key)
 		cache.createDir(filepath.Dir(path))
