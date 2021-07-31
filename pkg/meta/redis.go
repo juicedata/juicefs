@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"hash/fnv"
 	"io"
 	"math/rand"
@@ -37,6 +36,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -2571,7 +2571,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 			pipe.HSet(ctx, sliceRefs, r.sliceKey(chunkid, size), "0") // create the key to tracking it
 			for _, s := range ss {
-				rs = append(rs, pipe.Decr(ctx, r.sliceKey(s.chunkid, s.size)))
+				rs = append(rs, pipe.HIncrBy(ctx, sliceRefs, r.sliceKey(s.chunkid, s.size), -1))
 			}
 			return nil
 		})
