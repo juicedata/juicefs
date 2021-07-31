@@ -21,8 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/sirupsen/logrus"
 	"io"
 	"sort"
 	"strings"
@@ -35,8 +33,11 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/names"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type setting struct {
@@ -318,6 +319,10 @@ func (m *dbMeta) Load() (*Format, error) {
 }
 
 func (m *dbMeta) NewSession() error {
+	go m.refreshUsage()
+	if m.conf.ReadOnly {
+		return nil
+	}
 	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
 		return err
 	}
@@ -330,9 +335,7 @@ func (m *dbMeta) NewSession() error {
 	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("update table flock, plock: %s", err)
 	}
-	if m.conf.ReadOnly {
-		return nil
-	}
+
 	v, err := m.incrCounter("nextSession", 1)
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
@@ -355,7 +358,6 @@ func (m *dbMeta) NewSession() error {
 	m.sid = v
 	logger.Debugf("session is %d", m.sid)
 
-	go m.refreshUsage()
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()

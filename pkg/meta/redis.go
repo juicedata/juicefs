@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"hash/fnv"
 	"io"
 	"math/rand"
@@ -37,6 +36,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -279,6 +279,7 @@ func (r *redisMeta) Load() (*Format, error) {
 }
 
 func (r *redisMeta) NewSession() error {
+	go r.refreshUsage()
 	if r.conf.ReadOnly {
 		return nil
 	}
@@ -311,7 +312,6 @@ func (r *redisMeta) NewSession() error {
 		r.shaResolve = ""
 	}
 
-	go r.refreshUsage()
 	go r.refreshSession()
 	go r.cleanupDeletedFiles()
 	go r.cleanupSlices()
