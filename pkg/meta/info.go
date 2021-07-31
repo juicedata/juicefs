@@ -72,6 +72,9 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 			continue
 		}
 		kvPair := strings.SplitN(l, ":", 2)
+		if len(kvPair) < 2 {
+			continue
+		}
 		key, val := kvPair[0], kvPair[1]
 		switch key {
 		case "aof_enabled":
