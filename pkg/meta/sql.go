@@ -37,8 +37,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/names"
-
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type setting struct {
