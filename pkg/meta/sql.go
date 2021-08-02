@@ -30,14 +30,13 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/juicedata/juicefs/pkg/utils"
 	_ "github.com/lib/pq"
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/names"
-
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type setting struct {
@@ -1108,7 +1107,30 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		if err != nil {
 			return err
 		}
-		if ok || !ok && m.conf.CaseInsensi && m.resolveCase(ctx, parent, name) != nil {
+		var foundIno Ino
+		var foundType uint8
+		if ok {
+			foundType, foundIno = e.Type, e.Inode
+		} else if m.conf.CaseInsensi {
+			if entry := m.resolveCase(ctx, parent, name); entry != nil {
+				foundType, foundIno = entry.Attr.Typ, entry.Inode
+			}
+		}
+		if foundIno != 0 {
+			if _type == TypeFile && attr != nil {
+				foundNode := node{Inode: foundIno}
+				ok, err = s.Get(&foundNode)
+				if err != nil {
+					return err
+				} else if ok {
+					m.parseAttr(&foundNode, attr)
+				} else {
+					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
+				}
+				if inode != nil {
+					*inode = foundIno
+				}
+			}
 			return syscall.EEXIST
 		}
 
@@ -1149,8 +1171,14 @@ func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask
 	return m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, inode, attr)
 }
 
-func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno {
+func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
+	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
+		err = 0
+	}
 	if err == 0 && inode != nil {
 		m.of.Open(*inode, attr)
 	}

@@ -36,9 +36,8 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/sirupsen/logrus"
-
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/sirupsen/logrus"
 )
 
 /*
@@ -1249,12 +1248,33 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 			return syscall.ENOTDIR
 		}
 
-		err = tx.HGet(ctx, r.entryKey(parent), name).Err()
+		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
 		if err != nil && err != redis.Nil {
 			return err
-		} else if err == nil {
-			return syscall.EEXIST
-		} else if err == redis.Nil && r.conf.CaseInsensi && r.resolveCase(ctx, parent, name) != nil {
+		}
+		var foundIno Ino
+		var foundType uint8
+		if err == nil {
+			foundType, foundIno = r.parseEntry(buf)
+		} else if r.conf.CaseInsensi { // err == redis.Nil
+			if entry := r.resolveCase(ctx, parent, name); entry != nil {
+				foundType, foundIno = entry.Attr.Typ, entry.Inode
+			}
+		}
+		if foundIno != 0 {
+			if _type == TypeFile {
+				a, err = tx.Get(ctx, r.inodeKey(foundIno)).Bytes()
+				if err == nil {
+					r.parseAttr(a, attr)
+				} else if err == redis.Nil {
+					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
+				} else {
+					return err
+				}
+				if inode != nil {
+					*inode = foundIno
+				}
+			}
 			return syscall.EEXIST
 		}
 
@@ -1295,8 +1315,14 @@ func (r *redisMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cum
 	return r.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, inode, attr)
 }
 
-func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, inode *Ino, attr *Attr) syscall.Errno {
+func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := r.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
+	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
+		err = 0
+	}
 	if err == 0 && inode != nil {
 		r.of.Open(*inode, attr)
 	}
