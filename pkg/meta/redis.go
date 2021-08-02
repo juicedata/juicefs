@@ -1316,6 +1316,9 @@ func (r *redisMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cum
 }
 
 func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := r.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
 	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		err = 0
