@@ -37,6 +37,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/names"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type setting struct {
@@ -211,6 +213,25 @@ func (m *dbMeta) Name() string {
 	return m.engine.DriverName()
 }
 
+func (m *dbMeta) updateCollate() {
+	if r, err := m.engine.Query("show create table jfs_edge"); err != nil {
+		logger.Fatalf("show table jfs_edge: %s", err.Error())
+	} else {
+		createTable := string(r[0]["Create Table"])
+		// the default collate is case-insensitive
+		if !strings.Contains(createTable, "SET utf8mb4 COLLATE utf8mb4_bin") {
+			_, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
+			if err != nil && strings.Contains(err.Error(), "Error 1071: Specified key was too long; max key length is 767 bytes") {
+				// MySQL 5.6 supports key length up to 767 bytes, so reduce the length of name to 190 chars
+				_, err = m.engine.Exec("alter table jfs_edge modify name varchar (190) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
+			}
+			if err != nil {
+				logger.Fatalf("update collate: %s", err)
+			}
+		}
+	}
+}
+
 func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(setting), new(counter)); err != nil {
 		logger.Fatalf("create table setting, counter: %s", err)
@@ -228,9 +249,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		logger.Fatalf("create table flock, plock: %s", err)
 	}
 	if m.engine.DriverName() == "mysql" {
-		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL"); err != nil {
-			logger.Fatalf("alter collate for edge: %s", err)
-		}
+		m.updateCollate()
 	}
 
 	var s = setting{Name: "format"}
@@ -318,21 +337,21 @@ func (m *dbMeta) Load() (*Format, error) {
 }
 
 func (m *dbMeta) NewSession() error {
+	go m.refreshUsage()
+	if m.conf.ReadOnly {
+		return nil
+	}
 	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
 		return err
 	}
 	if m.engine.DriverName() == "mysql" {
-		if _, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL"); err != nil {
-			return err
-		}
+		m.updateCollate()
 	}
 	// update the owner from uint64 to int64
 	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("update table flock, plock: %s", err)
 	}
-	if m.conf.ReadOnly {
-		return nil
-	}
+
 	v, err := m.incrCounter("nextSession", 1)
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
@@ -355,7 +374,6 @@ func (m *dbMeta) NewSession() error {
 	m.sid = v
 	logger.Debugf("session is %d", m.sid)
 
-	go m.refreshUsage()
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()

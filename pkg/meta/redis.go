@@ -278,6 +278,7 @@ func (r *redisMeta) Load() (*Format, error) {
 }
 
 func (r *redisMeta) NewSession() error {
+	go r.refreshUsage()
 	if r.conf.ReadOnly {
 		return nil
 	}
@@ -310,7 +311,6 @@ func (r *redisMeta) NewSession() error {
 		r.shaResolve = ""
 	}
 
-	go r.refreshUsage()
 	go r.refreshSession()
 	go r.cleanupDeletedFiles()
 	go r.cleanupSlices()
@@ -2597,7 +2597,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 			pipe.HSet(ctx, sliceRefs, r.sliceKey(chunkid, size), "0") // create the key to tracking it
 			for _, s := range ss {
-				rs = append(rs, pipe.Decr(ctx, r.sliceKey(s.chunkid, s.size)))
+				rs = append(rs, pipe.HIncrBy(ctx, sliceRefs, r.sliceKey(s.chunkid, s.size), -1))
 			}
 			return nil
 		})

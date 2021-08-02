@@ -477,6 +477,7 @@ func (m *kvMeta) Load() (*Format, error) {
 }
 
 func (m *kvMeta) NewSession() error {
+	go m.refreshUsage()
 	if m.conf.ReadOnly {
 		return nil
 	}
@@ -500,7 +501,6 @@ func (m *kvMeta) NewSession() error {
 		return fmt.Errorf("set session info: %s", err)
 	}
 
-	go m.refreshUsage()
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
