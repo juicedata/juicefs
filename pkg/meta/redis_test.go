@@ -19,13 +19,14 @@ package meta
 import (
 	"bytes"
 	"context"
-	"github.com/sirupsen/logrus"
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 )
 
 func TestRedisClient(t *testing.T) {
@@ -83,7 +84,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Access(ctx, parent, 4, attr); st != 0 {
 		t.Fatalf("access d: %s", st)
 	}
-	if st := m.Create(ctx, parent, "f", 0650, 022, &inode, attr); st != 0 {
+	if st := m.Create(ctx, parent, "f", 0650, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
 	defer m.Unlink(ctx, parent, "f")
@@ -176,7 +177,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", 1, "f2", &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> f2: %s", st)
 	}
-	if st := m.Create(ctx, 1, "f", 0644, 022, &inode, attr); st != 0 {
+	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
@@ -326,8 +327,8 @@ func testStickyBit(t *testing.T, m Meta) {
 	m.Mkdir(ctx, 1, "tmp2", 0777, 0, 0, &normal, attr)
 	ctxA := NewContext(1, 1, []uint32{1})
 	// file
-	m.Create(ctxA, sticky, "f", 0777, 0, &inode, attr)
-	m.Create(ctxA, normal, "f", 0777, 0, &inode, attr)
+	m.Create(ctxA, sticky, "f", 0777, 0, 0, &inode, attr)
+	m.Create(ctxA, normal, "f", 0777, 0, 0, &inode, attr)
 	ctxB := NewContext(1, 2, []uint32{1})
 	if e := m.Unlink(ctxB, sticky, "f"); e != syscall.EACCES {
 		t.Fatalf("unlink f: %s", e)
@@ -338,7 +339,7 @@ func testStickyBit(t *testing.T, m Meta) {
 	if e := m.Rename(ctxB, sticky, "f", normal, "f2", &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename f: %s", e)
 	}
-	m.Create(ctxB, sticky, "f2", 0777, 0, &inode, attr)
+	m.Create(ctxB, sticky, "f2", 0777, 0, 0, &inode, attr)
 	if e := m.Rename(ctxB, sticky, "f2", sticky, "f", &inode, attr); e != syscall.EACCES {
 		t.Fatalf("overwrite f: %s", e)
 	}
@@ -399,7 +400,7 @@ func testLocks(t *testing.T, m Meta) {
 	var inode Ino
 	var attr = &Attr{}
 	defer m.Unlink(ctx, 1, "f")
-	if st := m.Create(ctx, 1, "f", 0644, 0, &inode, attr); st != 0 {
+	if st := m.Create(ctx, 1, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
 	// flock
@@ -508,7 +509,7 @@ func testRemove(t *testing.T, m Meta) {
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
-	if st := m.Create(ctx, 1, "f", 0644, 0, &inode, attr); st != 0 {
+	if st := m.Create(ctx, 1, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
 	if st := Remove(m, ctx, 1, "f"); st != 0 {
@@ -520,7 +521,7 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, parent, "d2", 0755, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/d2: %s", st)
 	}
-	if st := m.Create(ctx, parent, "f", 0644, 0, &inode, attr); st != 0 {
+	if st := m.Create(ctx, parent, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/f: %s", st)
 	}
 	if st := Remove(m, ctx, 1, "d"); st != 0 {
@@ -542,8 +543,11 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
-	_ = m.Create(ctx, 1, "foo", 0755, 0, &inode, attr)
-	if st := m.Create(ctx, 1, "Foo", 0755, 0, &inode, attr); st != syscall.EEXIST {
+	_ = m.Create(ctx, 1, "foo", 0755, 0, 0, &inode, attr)
+	if st := m.Create(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("create Foo should be ok")
+	}
+	if st := m.Create(ctx, 1, "Foo", 0755, 0, syscall.O_EXCL, &inode, attr); st != syscall.EEXIST {
 		t.Fatalf("create should fail with EEXIST")
 	}
 	if st := m.Lookup(ctx, 1, "Foo", &inode, attr); st != 0 {
@@ -552,7 +556,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "Foo", 1, "bar", &inode, attr); st != 0 {
 		t.Fatalf("rename Foo to bar should be OK, but got %s", st)
 	}
-	if st := m.Create(ctx, 1, "Foo", 0755, 0, &inode, attr); st != 0 {
+	if st := m.Create(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create Foo should be OK")
 	}
 	if st := m.Lookup(ctx, 1, "Bar", &inode, attr); st != 0 {
@@ -602,7 +606,7 @@ func testCompaction(t *testing.T, m Meta) {
 	var inode Ino
 	var attr = &Attr{}
 	_ = m.Unlink(ctx, 1, "f")
-	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
+	if st := m.Create(ctx, 1, "f", 0650, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
 	defer func() {
@@ -708,7 +712,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	var inode Ino
 	var attr = &Attr{}
 	_ = m.Unlink(ctx, 1, "f")
-	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
+	if st := m.Create(ctx, 1, "f", 0650, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
@@ -760,7 +764,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if st := m.Truncate(ctx, 1, 0, 4<<10, attr); st != syscall.EPERM {
 		t.Fatalf("truncate dir %s", st)
 	}
-	if st := m.Create(ctx, 1, "f", 0650, 022, &inode, attr); st != 0 {
+	if st := m.Create(ctx, 1, "f", 0650, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
@@ -832,11 +836,11 @@ func testCopyFileRange(t *testing.T, m Meta) {
 	var attr = &Attr{}
 	_ = m.Unlink(ctx, 1, "fin")
 	_ = m.Unlink(ctx, 1, "fout")
-	if st := m.Create(ctx, 1, "fin", 0650, 022, &iin, attr); st != 0 {
+	if st := m.Create(ctx, 1, "fin", 0650, 022, 0, &iin, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "fin")
-	if st := m.Create(ctx, 1, "fout", 0650, 022, &iout, attr); st != 0 {
+	if st := m.Create(ctx, 1, "fout", 0650, 022, 0, &iout, attr); st != 0 {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "fout")
