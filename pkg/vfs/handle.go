@@ -213,8 +213,8 @@ func newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
 	switch flags & O_ACCMODE {
 	case syscall.O_RDONLY:
 		h.reader = reader.Open(inode, length)
-	case syscall.O_WRONLY:
-		h.writer = writer.Open(inode, length)
+	case syscall.O_WRONLY: // FUSE writeback_cache mode need reader even for WRONLY
+		fallthrough
 	case syscall.O_RDWR:
 		h.reader = reader.Open(inode, length)
 		h.writer = writer.Open(inode, length)
