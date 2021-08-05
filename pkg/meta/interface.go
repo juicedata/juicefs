@@ -38,8 +38,6 @@ const (
 	Info = 1003
 	// FillCache is a message to build cache for target directories/files
 	FillCache = 1004
-	// MetricSchema is a message to list available metric schemas
-	MetricSchema = 1005
 )
 
 const (

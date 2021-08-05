@@ -16,15 +16,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
@@ -37,8 +34,8 @@ const (
 	YELLOW
 	BLUE
 	MAGENTA
-	// CYAN
-	// GRAY
+	CYAN
+	WHITE
 )
 
 const (
@@ -49,37 +46,13 @@ const (
 	// BOLD_SEQ       = "\033[1m"
 )
 
-const defaultSchema = `{
-	"alloc": "go_memstats_alloc_bytes",
-	"sys":   "go_memstats_sys_bytes",
-	"Fop":   "juicefs_fuse_ops_durations_histogram_seconds",
-	"Frd":   "juicefs_fuse_read_size_bytes",
-	"Fwr":   "juicefs_fuse_written_size_bytes",
-	"Mtx":   "juicefs_transaction_durations_histogram_seconds",
-	"Crd":   "juicefs_blockcache_read_hist_seconds",
-	"Cwr":   "juicefs_blockcache_write_hist_seconds",
-	"mem":   "juicefs_memory"
-}`
-
 type statsWatcher struct {
 	mp            string
 	tty           bool
+	header        string
 	interval      time.Duration
-	schema        []*section
+	sections      []*section
 	last, current map[string]float64
-}
-
-type item struct {
-	nick string
-	name string
-	typ  string // gauge, counter, histogram, summary
-}
-
-type section struct {
-	name      string
-	header    string
-	subHeader string
-	items     []*item
 }
 
 func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool) string {
@@ -98,123 +71,108 @@ func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool
 	return fmt.Sprintf("%s%s%dm%s%s", useq, cseq, color, msg, RESET_SEQ)
 }
 
-func (w *statsWatcher) loadSchema(schema string, listOnly bool) {
-	/* --- load all schema --- */
-	f := openController(w.mp)
-	if f == nil {
-		logger.Fatalf("open controller file: %s", w.mp)
-	}
-	defer f.Close()
-	wb := utils.NewBuffer(8)
-	wb.Put32(meta.MetricSchema)
-	wb.Put32(0)
-	if _, err := f.Write(wb.Bytes()); err != nil {
-		logger.Fatalf("write message: %s", err)
-	}
-	data := make([]byte, 4)
-	if n, err := f.Read(data); err != nil || n != 4 {
-		logger.Fatalf("read size: %d %s", n, err)
-	}
-	rb := utils.ReadBuffer(data)
-	size := rb.Get32()
-	data = make([]byte, size)
-	if n, err := f.Read(data); err != nil || n != int(size) {
-		logger.Fatalf("read data: expect %d got %d error %s", size, n, err)
-	}
-	schemaAll := make(map[string]string)
-	if err := json.Unmarshal(data, &schemaAll); err != nil {
-		logger.Fatalf("load all schema: %s %s", data, err)
-	}
-	if listOnly {
-		schemaList := make([]*item, 0, len(schemaAll))
-		for name, typ := range schemaAll {
-			schemaList = append(schemaList, &item{name: name, typ: typ})
-		}
-		sort.Slice(schemaList, func(i, j int) bool { return schemaList[i].name < schemaList[j].name })
-		fmt.Printf("%-60s Type\n", "Name")
-		for _, s := range schemaList {
-			fmt.Printf("%-60s %s\n", s.name, s.typ)
-		}
-		return
-	}
+const (
+	metricU64     = 0x1
+	metricTime    = 0x2
+	metricGauge   = 0x4
+	metricCounter = 0x8
+	metricHist    = 0x10
+)
 
-	/* --- load interested --- */
-	interested := make(map[string]string)
-	if err := json.Unmarshal([]byte(schema), &interested); err != nil {
-		logger.Fatalf("load schema: %s %s", schema, err)
-	}
-	sectionMap := make(map[string]*section)
-	for nick, name := range interested {
-		if len(nick) > 5 {
-			logger.Fatalf("nick %s is too long (must be <= 5)", nick)
-		}
-		typ, ok := schemaAll[name]
-		if !ok {
-			logger.Fatalf("field %s not found", name)
-		}
-		sectionName := name
-		if index := strings.IndexByte(name, '_'); index > 0 {
-			sectionName = name[:index]
-		}
-		s, ok := sectionMap[sectionName]
-		if !ok {
-			s = &section{name: sectionName}
-			sectionMap[sectionName] = s
-		}
-		s.items = append(s.items, &item{nick, name, typ})
-	}
+type item struct {
+	nick string // must be size <= 5
+	name string
+	typ  uint8
+}
 
-	/* --- format headers --- */
-	sections := make([]*section, 0, len(sectionMap))
-	for _, s := range sectionMap {
-		sort.Slice(s.items, func(i, j int) bool { return s.items[i].nick < s.items[j].nick })
-		var width int
-		var b strings.Builder // subHeader
+type section struct {
+	name  string
+	items []*item
+}
+
+func (w *statsWatcher) buildSchema(schema string, detail bool) {
+	for _, r := range schema {
+		var s section
+		switch r {
+		case 's':
+			s.name = "sys"
+			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCounter})
+			s.items = append(s.items, &item{"mem", "juicefs_memory", metricGauge})
+		case 'f':
+			s.name = "fuse"
+			if detail {
+				s.items = append(s.items, &item{"ops", "juicefs_fuse_ops_durations_histogram_seconds", metricTime | metricHist})
+			}
+			s.items = append(s.items, &item{"read", "juicefs_fuse_read_size_bytes_sum", metricCounter})
+			s.items = append(s.items, &item{"write", "juicefs_fuse_written_size_bytes_sum", metricCounter})
+		case 'm':
+			s.name = "meta"
+			s.items = append(s.items, &item{"tx", "juicefs_transaction_durations_histogram_seconds", metricTime | metricHist})
+		case 'o':
+			s.name = "object"
+			s.items = append(s.items, &item{"get", "juicefs_object_request_data_bytes_GET", metricCounter})
+			if detail {
+				s.items = append(s.items, &item{"get_c", "juicefs_object_request_durations_histogram_seconds_GET", metricTime | metricHist})
+			}
+			s.items = append(s.items, &item{"put", "juicefs_object_request_data_bytes_PUT", metricCounter})
+			if detail {
+				s.items = append(s.items, &item{"put_c", "juicefs_object_request_durations_histogram_seconds_PUT", metricTime | metricHist})
+				s.items = append(s.items, &item{"del_c", "juicefs_object_request_durations_histogram_seconds_DELETE", metricTime | metricHist})
+			}
+		case 'g':
+			s.name = "go"
+			s.items = append(s.items, &item{"alloc", "go_memstats_alloc_bytes", metricGauge})
+			s.items = append(s.items, &item{"sys", "go_memstats_sys_bytes", metricGauge})
+		default:
+			fmt.Printf("Warning: no items defined for %c", r)
+			continue
+		}
+		w.sections = append(w.sections, &s)
+	}
+	if len(w.sections) == 0 {
+		logger.Fatalln("no section to watch, please check the schema string")
+	}
+}
+
+func padding(name string, width int, char byte) string {
+	pad := width - len(name)
+	if pad < 0 {
+		pad = 0
+		name = name[0:width]
+	}
+	prefix := (pad + 1) / 2
+	buf := make([]byte, width)
+	for i := 0; i < prefix; i++ {
+		buf[i] = char
+	}
+	copy(buf[prefix:], name)
+	for i := prefix + len(name); i < width; i++ {
+		buf[i] = char
+	}
+	return string(buf)
+}
+
+func (w *statsWatcher) formatHeader() {
+	headers := make([]string, len(w.sections))
+	subHeaders := make([]string, len(w.sections))
+	for i, s := range w.sections {
+		subs := make([]string, 0, len(s.items))
 		for _, it := range s.items {
-			width += 6 // 5 chars + 1 space
-			if l := len(it.nick); l < 5 {
-				_, _ = b.WriteString(strings.Repeat(" ", 5-l))
-			}
-			_, _ = b.WriteString(w.colorize(it.nick, BLUE, false, true))
-			_ = b.WriteByte(' ')
-			if it.typ == "histogram" {
-				width += 6
-				_, _ = b.WriteString("  ")
-				_, _ = b.WriteString(w.colorize("avg", BLUE, false, true))
-				_ = b.WriteByte(' ')
+			subs = append(subs, w.colorize(padding(it.nick, 5, ' '), BLUE, false, true))
+			if it.typ&metricHist != 0 {
+				if it.typ&metricTime != 0 {
+					subs = append(subs, w.colorize(" lat ", BLUE, false, true))
+				} else {
+					subs = append(subs, w.colorize(" avg ", BLUE, false, true))
+				}
 			}
 		}
-		s.subHeader = b.String()[:b.Len()-1]
-		width -= 1
-		pad := width - len(s.name)
-		if pad < 0 {
-			pad = 0
-			s.name = s.name[0:width]
-		}
-		prefix := pad / 2
-		s.header = fmt.Sprintf("%s%s%s", strings.Repeat("-", prefix), s.name, strings.Repeat("-", pad-prefix))
-		s.header = w.colorize(s.header, BLUE, true, false)
-		sections = append(sections, s)
+		width := 6*len(subs) - 1 // nick(5) + space(1)
+		subHeaders[i] = strings.Join(subs, " ")
+		headers[i] = w.colorize(padding(s.name, width, '-'), BLUE, true, false)
 	}
-
-	sort.Slice(sections, func(i, j int) bool { return sections[i].name < sections[j].name })
-	w.schema = sections
-}
-
-func (w *statsWatcher) loadStats() {
-	w.last = w.current
-	w.current = readStats(path.Join(w.mp, ".stats"))
-}
-
-func (w *statsWatcher) printHeader() {
-	headers := make([]string, len(w.schema))
-	subHeaders := make([]string, len(w.schema))
-	for i, s := range w.schema {
-		headers[i] = s.header
-		subHeaders[i] = s.subHeader
-	}
-	fmt.Printf("%s\n", strings.Join(headers, " "))
-	fmt.Printf("%s\n", strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
+	w.header = fmt.Sprintf("%s\n%s", strings.Join(headers, " "),
+		strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
 }
 
 func (w *statsWatcher) formatValue(v float64) string {
@@ -223,63 +181,95 @@ func (w *statsWatcher) formatValue(v float64) string {
 	case v < 0.0:
 		logger.Fatalf("invalid value %f", v)
 	case v == 0.0:
-		return w.colorize("    0", BLACK, false, false)
+		return w.colorize("   0 ", BLACK, false, false)
+	case v < 10.0 && v-float64(int(v)) != 0.0:
+		ret = fmt.Sprintf("%4.2f ", v)
 	case v < 100.0 && v-float64(int(v)) != 0.0:
-		ret = fmt.Sprintf("%5.2f", v)
-	case v < 1000.0 && v-float64(int(v)) != 0.0:
-		ret = fmt.Sprintf("%5.1f", v)
+		ret = fmt.Sprintf("%4.1f ", v)
 	case v < 10000.0:
-		ret = fmt.Sprintf("%5.f", v)
+		ret = fmt.Sprintf("%4.f ", v)
 	}
 	if ret != "" {
 		return w.colorize(ret, RED, false, false)
 	}
 
-	switch vi := uint64(v); {
+	var (
+		vi    uint64
+		unit  string
+		color int
+	)
+	switch vi = uint64(v); {
 	case vi>>10 < 10000:
-		return w.colorize(fmt.Sprintf("%4dK", vi>>10), YELLOW, false, false)
+		vi, unit, color = vi>>10, "K", YELLOW
 	case vi>>20 < 10000:
-		return w.colorize(fmt.Sprintf("%4dM", vi>>20), GREEN, false, false)
+		vi, unit, color = vi>>20, "M", GREEN
 	case vi>>30 < 10000:
-		ret = fmt.Sprintf("%4dG", vi>>30)
+		vi, unit, color = vi>>30, "G", MAGENTA
 	case vi>>40 < 10000:
-		ret = fmt.Sprintf("%4dT", vi>>40)
+		vi, unit, color = vi>>40, "T", MAGENTA
 	default:
-		ret = fmt.Sprintf("%4dP", vi>>50)
+		vi, unit, color = vi>>50, "P", MAGENTA
 	}
-	return w.colorize(ret, MAGENTA, false, false)
+	return w.colorize(fmt.Sprintf("%4d", vi), color, false, false) +
+		w.colorize(unit, BLACK, false, false)
 }
 
-func (w *statsWatcher) printDiff() {
-	values := make([]string, len(w.schema))
-	for i, s := range w.schema {
-		var b strings.Builder
-		for _, it := range s.items {
-			switch it.typ {
-			case "gauge":
-				_, _ = b.WriteString(w.formatValue(w.current[it.name]))
-			case "counter":
-				_, _ = b.WriteString(w.formatValue(w.current[it.name] - w.last[it.name]))
-			case "histogram":
-				count := w.current[it.name+"_total"] - w.last[it.name+"_total"]
-				_, _ = b.WriteString(w.formatValue(count))
-				_ = b.WriteByte(' ')
-				if count != 0 {
-					cost := w.current[it.name+"_sum"] - w.last[it.name+"_sum"]
-					if strings.Contains(it.name, "_seconds") { // FIXME: seconds -> ms
-						cost *= 1000
-					}
-					_, _ = b.WriteString(w.formatValue(cost / count))
-				} else {
-					_, _ = b.WriteString(w.formatValue(0.0))
-				}
-			case "summary":
-			}
-			_ = b.WriteByte(' ')
-		}
-		values[i] = b.String()[:b.Len()-1]
+func (w *statsWatcher) formatCPUValue(v float64) string {
+	var ret string
+	var color int
+	switch v = v * 100.0; true {
+	case v < 0.0:
+		logger.Fatalf("invalid value %f", v)
+	case v == 0.0:
+		ret, color = " 0.0", WHITE
+	case v < 30.0:
+		ret, color = fmt.Sprintf("%4.1f", v), GREEN
+	case v < 100.0:
+		ret, color = fmt.Sprintf("%4.1f", v), YELLOW
+	default:
+		ret, color = fmt.Sprintf("%4.f", v), RED
 	}
-	fmt.Printf("%s\n", strings.Join(values, w.colorize("|", BLUE, true, false)))
+	return w.colorize(ret, color, false, false) +
+		w.colorize("%", BLACK, false, false)
+}
+
+func (w *statsWatcher) printDiff(interval float64) {
+	values := make([]string, len(w.sections))
+	for i, s := range w.sections {
+		vals := make([]string, 0, len(s.items))
+		for _, it := range s.items {
+			switch it.typ & 0xFC {
+			case metricGauge:
+				vals = append(vals, w.formatValue(w.current[it.name]))
+			case metricCounter:
+				v := (w.current[it.name] - w.last[it.name]) / interval
+				if it.nick == "cpu" {
+					vals = append(vals, w.formatCPUValue(v))
+				} else {
+					vals = append(vals, w.formatValue(v))
+				}
+			case metricHist:
+				count := w.current[it.name+"_total"] - w.last[it.name+"_total"]
+				vals = append(vals, w.formatValue(count/interval))
+				if count != 0.0 {
+					cost := w.current[it.name+"_sum"] - w.last[it.name+"_sum"]
+					if it.typ&metricTime != 0 {
+						cost *= 1000 // s -> ms
+					}
+					vals = append(vals, w.formatValue(cost/count))
+				} else {
+					vals = append(vals, w.formatValue(0.0))
+				}
+			}
+		}
+		values[i] = strings.Join(vals, " ")
+	}
+	fmt.Println(strings.Join(values, w.colorize("|", BLUE, true, false)))
+}
+
+func (w *statsWatcher) loadStats() {
+	w.last = w.current
+	w.current = readStats(path.Join(w.mp, ".stats"))
 }
 
 func stats(ctx *cli.Context) error {
@@ -296,31 +286,29 @@ func stats(ctx *cli.Context) error {
 		logger.Fatalf("path %s is not a mount point", mp)
 	}
 
+	interval := ctx.Int64("interval")
 	watcher := &statsWatcher{
 		mp:       mp,
 		tty:      !ctx.Bool("nocolor") && isatty.IsTerminal(os.Stdout.Fd()),
-		interval: time.Second * time.Duration(ctx.Int64("interval")),
+		interval: time.Second * time.Duration(interval),
 		last:     make(map[string]float64),
 		current:  make(map[string]float64),
 	}
+	watcher.buildSchema(ctx.String("schema"), ctx.Bool("detail"))
+	watcher.formatHeader()
+
 	var count int
-	schema := ctx.String("schema")
-	if schema == "" {
-		schema = defaultSchema
-	}
-	watcher.loadSchema(schema, ctx.Bool("list"))
-	if ctx.Bool("list") {
-		return nil
-	}
+	ticker := time.NewTicker(watcher.interval)
+	defer ticker.Stop()
 	watcher.loadStats()
 	for {
 		if count%30 == 0 {
-			watcher.printHeader()
+			fmt.Println(watcher.header)
 		}
 		count++
-		time.Sleep(watcher.interval)
+		<-ticker.C
 		watcher.loadStats()
-		watcher.printDiff()
+		watcher.printDiff(float64(interval))
 	}
 }
 
@@ -338,16 +326,16 @@ func statsFlags() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "schema",
-				Usage: "displayed schema defined as a JSON string",
+				Value: "sfmo",
+				Usage: "schema string that controls the output sections (s: sys, f: fuse, m: meta, o: object, g: go)",
 			},
 			&cli.BoolFlag{
 				Name:  "nocolor",
 				Usage: "disable colors",
 			},
 			&cli.BoolFlag{
-				Name:    "list",
-				Aliases: []string{"l"},
-				Usage:   "list available schemas and exit",
+				Name:  "detail",
+				Usage: "show more detailed information, including ops, lat, etc.",
 			},
 		},
 	}
