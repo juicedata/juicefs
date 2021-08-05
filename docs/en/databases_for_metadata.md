@@ -235,7 +235,7 @@ tikv://<pd_addr>[,<pd_addr>...]/<prefix>
 The `prefix` is a user-defined string, which can be used to distinguish multiple file systems when they share the same TiKV cluster. For example:
 
 ```shell
-$ juicefs.tikv format --storage minio \
+$ juicefs format --storage minio \
     --bucket https://192.168.1.6:9000/jfs \
     --access-key minioadmin \
     --secret-key minioadmin \
@@ -243,12 +243,10 @@ $ juicefs.tikv format --storage minio \
     pics
 ```
 
-> **Note**: By default the released binary doesn't support TiKV; users need to compile it from source code: `make juicefs.tikv`.
-
 ### Mount a file system
 
 ```shell
-$ sudo juicefs.tikv mount -d tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs /mnt/jfs
+$ sudo juicefs mount -d tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs /mnt/jfs
 ```
 
 ## FoundationDB

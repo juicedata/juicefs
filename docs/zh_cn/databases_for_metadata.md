@@ -235,7 +235,7 @@ tikv://<pd_addr>[,<pd_addr>...]/<prefix>
 其中 `prefix` 是用户自定义的字符串，当多个文件系统共用一个 TiKV 集群时可用来区分；示例如下：
 
 ```shell
-$ juicefs.tikv format --storage minio \
+$ juicefs format --storage minio \
     --bucket https://192.168.1.6:9000/jfs \
     --access-key minioadmin \
     --secret-key minioadmin \
@@ -243,12 +243,10 @@ $ juicefs.tikv format --storage minio \
     pics
 ```
 
-> **注意**：目前发布的二进制文件默认并不支持 TiKV，使用时需要用户从源码编译：`make juicefs.tikv`。
-
 ### 挂载文件系统
 
 ```shell
-$ sudo juicefs.tikv mount -d tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs /mnt/jfs
+$ sudo juicefs mount -d tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs /mnt/jfs
 ```
 
 ## FoundationDB
