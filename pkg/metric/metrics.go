@@ -39,6 +39,12 @@ var (
 		_, rss := utils.MemoryUsage()
 		return float64(rss)
 	})
+	allocated = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "allocated_memory",
+		Help: "Allocated memory by off-heap pages.",
+	}, func() float64 {
+		return float64(utils.AllocMemory())
+	})
 	uptime = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "uptime",
 		Help: "Total running time in seconds.",
@@ -58,6 +64,7 @@ var (
 func UpdateMetrics(m meta.Meta) {
 	prometheus.MustRegister(cpu)
 	prometheus.MustRegister(memory)
+	prometheus.MustRegister(allocated)
 	prometheus.MustRegister(uptime)
 	prometheus.MustRegister(usedSpace)
 	prometheus.MustRegister(usedInodes)

@@ -34,8 +34,8 @@ const (
 	YELLOW
 	BLUE
 	MAGENTA
-	CYAN
-	WHITE
+	// CYAN
+	WHITE = 37
 )
 
 const (
@@ -72,7 +72,7 @@ func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool
 }
 
 const (
-	metricU64     = 0x1
+	// metricU64     = 0x1
 	metricTime    = 0x2
 	metricGauge   = 0x4
 	metricCounter = 0x8
@@ -98,6 +98,10 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 			s.name = "sys"
 			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCounter})
 			s.items = append(s.items, &item{"mem", "juicefs_memory", metricGauge})
+			if detail {
+				s.items = append(s.items, &item{"alloc", "juicefs_allocated_memory", metricGauge})
+			}
+			s.items = append(s.items, &item{"buf", "juicefs_used_buffer_size_bytes", metricGauge})
 		case 'f':
 			s.name = "fuse"
 			if detail {
@@ -124,7 +128,7 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 			s.items = append(s.items, &item{"alloc", "go_memstats_alloc_bytes", metricGauge})
 			s.items = append(s.items, &item{"sys", "go_memstats_sys_bytes", metricGauge})
 		default:
-			fmt.Printf("Warning: no items defined for %c", r)
+			fmt.Printf("Warning: no item defined for %c\n", r)
 			continue
 		}
 		w.sections = append(w.sections, &s)

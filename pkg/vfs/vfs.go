@@ -66,6 +66,15 @@ var (
 		Help:    "size of write distributions.",
 		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
 	})
+	usedBufferSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "used_buffer_size_bytes",
+		Help: "size of currently used buffer.",
+	}, func() float64 {
+		if dw, ok := writer.(*dataWriter); ok {
+			return float64(dw.usedBufferSize())
+		}
+		return 0.0
+	})
 )
 
 func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
@@ -906,6 +915,7 @@ func Init(conf *Config, m_ meta.Meta, store_ chunk.ChunkStore) {
 func InitMetrics() {
 	prometheus.MustRegister(readSizeHistogram)
 	prometheus.MustRegister(writtenSizeHistogram)
+	prometheus.MustRegister(usedBufferSize)
 	prometheus.MustRegister(handlersGause)
 	prometheus.MustRegister(opsDurationsHistogram)
 	prometheus.MustRegister(compactSizeHistogram)
