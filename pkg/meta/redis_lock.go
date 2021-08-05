@@ -149,7 +149,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 			copy(ls[i:], ls[i+1:])
 			ls = ls[:len(ls)-1]
 		} else {
-			if i+1 < len(ls) && ls[i].ltype == ls[i+1].ltype && ls[i].end == ls[i+1].start {
+			if i+1 < len(ls) && ls[i].ltype == ls[i+1].ltype && ls[i].pid == ls[i+1].pid && ls[i].end == ls[i+1].start {
 				// combine continuous range
 				ls[i].end = ls[i+1].end
 				ls[i+1].start = ls[i+1].end
