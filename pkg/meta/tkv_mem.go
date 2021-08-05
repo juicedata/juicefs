@@ -26,10 +26,8 @@ func init() {
 	Register("memkv", newKVMeta)
 }
 
-func newMockClient(driver, addr string) (tkvClient, error) {
-	return &memKV{
-		items: make(map[string]*kvItem),
-	}, nil
+func newMockClient() (tkvClient, error) {
+	return &memKV{items: make(map[string]*kvItem)}, nil
 }
 
 type memTxn struct {

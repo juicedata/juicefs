@@ -30,7 +30,7 @@ func init() {
 
 func newTkvClient(driver, addr string) (tkvClient, error) {
 	if driver == "memkv" {
-		return newMockClient(driver, addr)
+		return newMockClient()
 	}
 	if driver != "tikv" {
 		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "tikv")
