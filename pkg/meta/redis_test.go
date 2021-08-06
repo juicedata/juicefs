@@ -449,12 +449,15 @@ func testLocks(t *testing.T, m Meta) {
 	if st := m.Setlk(ctx, inode, 2, false, syscall.F_WRLCK, 0, 0xFFFF, 10); st != 0 {
 		t.Fatalf("plock wlock: %s", st)
 	}
+	if st := m.Setlk(ctx, inode, 2, false, syscall.F_WRLCK, 0x1FFF, 0xFFFF, 20); st != 0 {
+		t.Fatalf("plock wlock: %s", st)
+	}
 	if st := m.Setlk(ctx, inode, o1, false, syscall.F_WRLCK, 0, 0xFFFF, 1); st != syscall.EAGAIN {
 		t.Fatalf("plock rlock: %s", st)
 	}
 	var ltype, pid uint32 = syscall.F_WRLCK, 1
-	var start, end uint64 = 0, 0xFFFF
-	if st := m.Getlk(ctx, inode, o1, &ltype, &start, &end, &pid); st != 0 || ltype != syscall.F_WRLCK || pid != 10 || start != 0 || end != 0xFFFF {
+	var start, end uint64 = 0x1FFF, 0xFFFF
+	if st := m.Getlk(ctx, inode, o1, &ltype, &start, &end, &pid); st != 0 || ltype != syscall.F_WRLCK || pid != 20 || start != 0x1FFF || end != 0xFFFF {
 		t.Fatalf("plock get rlock: %s, %d %d %x %x", st, ltype, pid, start, end)
 	}
 	if st := m.Setlk(ctx, inode, 2, false, syscall.F_UNLCK, 0, 0x2FFFF, 1); st != 0 {
