@@ -92,7 +92,7 @@ type section struct {
 	items []*item
 }
 
-func (w *statsWatcher) buildSchema(schema string, detail bool) {
+func (w *statsWatcher) buildSchema(schema string, verbosity uint) {
 	for _, r := range schema {
 		var s section
 		switch r {
@@ -101,7 +101,7 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCPU | metricCounter})
 			s.items = append(s.items, &item{"mem", "juicefs_memory", metricGauge})
 			s.items = append(s.items, &item{"buf", "juicefs_used_buffer_size_bytes", metricGauge})
-			if detail {
+			if verbosity > 0 {
 				s.items = append(s.items, &item{"cache", "juicefs_store_cache_size_bytes", metricGauge})
 			}
 		case 'f':
@@ -112,7 +112,7 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 		case 'm':
 			s.name = "meta"
 			s.items = append(s.items, &item{"ops", "juicefs_meta_ops_durations_histogram_seconds", metricTime | metricHist})
-			if detail {
+			if verbosity > 0 {
 				s.items = append(s.items, &item{"txn", "juicefs_transaction_durations_histogram_seconds", metricTime | metricHist})
 				s.items = append(s.items, &item{"retry", "juicefs_transaction_restart", metricCount | metricCounter})
 			}
@@ -123,11 +123,11 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 		case 'o':
 			s.name = "object"
 			s.items = append(s.items, &item{"get", "juicefs_object_request_data_bytes_GET", metricByte | metricCounter})
-			if detail {
+			if verbosity > 0 {
 				s.items = append(s.items, &item{"get_c", "juicefs_object_request_durations_histogram_seconds_GET", metricTime | metricHist})
 			}
 			s.items = append(s.items, &item{"put", "juicefs_object_request_data_bytes_PUT", metricByte | metricCounter})
-			if detail {
+			if verbosity > 0 {
 				s.items = append(s.items, &item{"put_c", "juicefs_object_request_durations_histogram_seconds_PUT", metricTime | metricHist})
 				s.items = append(s.items, &item{"del_c", "juicefs_object_request_durations_histogram_seconds_DELETE", metricTime | metricHist})
 			}
@@ -321,7 +321,7 @@ func stats(ctx *cli.Context) error {
 		last:     make(map[string]float64),
 		current:  make(map[string]float64),
 	}
-	watcher.buildSchema(ctx.String("schema"), ctx.Bool("detail"))
+	watcher.buildSchema(ctx.String("schema"), ctx.Uint("verbosity"))
 	watcher.formatHeader()
 
 	var count int
@@ -356,13 +356,13 @@ func statsFlags() *cli.Command {
 				Value: "ufmco",
 				Usage: "schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
 			},
+			&cli.UintFlag{
+				Name:  "verbosity",
+				Usage: "verbosity level, 0 or 1 is enough for most cases",
+			},
 			&cli.BoolFlag{
 				Name:  "nocolor",
 				Usage: "disable colors",
-			},
-			&cli.BoolFlag{
-				Name:  "detail",
-				Usage: "show more detailed information, including ops, lat, etc.",
 			},
 		},
 	}
