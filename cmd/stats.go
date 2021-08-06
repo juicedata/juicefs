@@ -56,7 +56,7 @@ type statsWatcher struct {
 }
 
 func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool) string {
-	if !w.tty {
+	if !w.tty || msg == "" || msg == " " {
 		return msg
 	}
 	var cseq, useq string
@@ -72,11 +72,13 @@ func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool
 }
 
 const (
-	// metricU64     = 0x1
-	metricTime    = 0x2
-	metricGauge   = 0x4
-	metricCounter = 0x8
-	metricHist    = 0x10
+	// metricU64     = 1
+	// metricCount   = 1 << 1
+	metricTime    = 1 << 2
+	metricCPU     = 1 << 3
+	metricGauge   = 1 << 4
+	metricCounter = 1 << 5
+	metricHist    = 1 << 6
 )
 
 type item struct {
@@ -96,7 +98,7 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 		switch r {
 		case 's':
 			s.name = "sys"
-			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCounter})
+			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCPU | metricCounter})
 			s.items = append(s.items, &item{"mem", "juicefs_memory", metricGauge})
 			if detail {
 				s.items = append(s.items, &item{"alloc", "juicefs_allocated_memory", metricGauge})
@@ -104,14 +106,12 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 			s.items = append(s.items, &item{"buf", "juicefs_used_buffer_size_bytes", metricGauge})
 		case 'f':
 			s.name = "fuse"
-			if detail {
-				s.items = append(s.items, &item{"ops", "juicefs_fuse_ops_durations_histogram_seconds", metricTime | metricHist})
-			}
+			s.items = append(s.items, &item{"ops", "juicefs_fuse_ops_durations_histogram_seconds", metricTime | metricHist})
 			s.items = append(s.items, &item{"read", "juicefs_fuse_read_size_bytes_sum", metricCounter})
 			s.items = append(s.items, &item{"write", "juicefs_fuse_written_size_bytes_sum", metricCounter})
 		case 'm':
 			s.name = "meta"
-			s.items = append(s.items, &item{"tx", "juicefs_transaction_durations_histogram_seconds", metricTime | metricHist})
+			s.items = append(s.items, &item{"txn", "juicefs_transaction_durations_histogram_seconds", metricTime | metricHist})
 		case 'o':
 			s.name = "object"
 			s.items = append(s.items, &item{"get", "juicefs_object_request_data_bytes_GET", metricCounter})
@@ -123,6 +123,11 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 				s.items = append(s.items, &item{"put_c", "juicefs_object_request_durations_histogram_seconds_PUT", metricTime | metricHist})
 				s.items = append(s.items, &item{"del_c", "juicefs_object_request_durations_histogram_seconds_DELETE", metricTime | metricHist})
 			}
+		case 'c':
+			s.name = "blockcache"
+			s.items = append(s.items, &item{"hit", "juicefs_blockcache_hit_bytes", metricCounter})
+			s.items = append(s.items, &item{"miss", "juicefs_blockcache_miss_bytes", metricCounter})
+			s.items = append(s.items, &item{"write", "juicefs_blockcache_write_bytes", metricCounter})
 		case 'g':
 			s.name = "go"
 			s.items = append(s.items, &item{"alloc", "go_memstats_alloc_bytes", metricGauge})
@@ -179,36 +184,29 @@ func (w *statsWatcher) formatHeader() {
 		strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
 }
 
-func (w *statsWatcher) formatValue(v float64) string {
-	var ret string
-	switch {
-	case v < 0.0:
+func (w *statsWatcher) formatU64(v float64, isByte bool) string {
+	if v < 0.0 {
 		logger.Fatalf("invalid value %f", v)
-	case v == 0.0:
-		return w.colorize("   0 ", BLACK, false, false)
-	case v < 10.0 && v-float64(int(v)) != 0.0:
-		ret = fmt.Sprintf("%4.2f ", v)
-	case v < 100.0 && v-float64(int(v)) != 0.0:
-		ret = fmt.Sprintf("%4.1f ", v)
-	case v < 10000.0:
-		ret = fmt.Sprintf("%4.f ", v)
 	}
-	if ret != "" {
-		return w.colorize(ret, RED, false, false)
-	}
-
-	var (
-		vi    uint64
-		unit  string
-		color int
-	)
+	var vi uint64
+	var unit string
+	var color int
 	switch vi = uint64(v); {
+	case vi == 0:
+		unit, color = " ", BLACK
+	case vi < 10000:
+		if isByte {
+			unit = "B"
+		} else {
+			unit = " "
+		}
+		color = RED
 	case vi>>10 < 10000:
 		vi, unit, color = vi>>10, "K", YELLOW
 	case vi>>20 < 10000:
 		vi, unit, color = vi>>20, "M", GREEN
 	case vi>>30 < 10000:
-		vi, unit, color = vi>>30, "G", MAGENTA
+		vi, unit, color = vi>>30, "G", BLUE
 	case vi>>40 < 10000:
 		vi, unit, color = vi>>40, "T", MAGENTA
 	default:
@@ -218,10 +216,30 @@ func (w *statsWatcher) formatValue(v float64) string {
 		w.colorize(unit, BLACK, false, false)
 }
 
-func (w *statsWatcher) formatCPUValue(v float64) string {
+func (w *statsWatcher) formatTime(v float64) string {
 	var ret string
 	var color int
-	switch v = v * 100.0; true {
+	switch {
+	case v < 0.0:
+		logger.Fatalf("invalid value %f", v)
+	case v == 0.0:
+		ret, color = "   0 ", BLACK
+	case v < 10.0:
+		ret, color = fmt.Sprintf("%4.2f ", v), GREEN
+	case v < 100.0:
+		ret, color = fmt.Sprintf("%4.1f ", v), YELLOW
+	case v < 10000.0:
+		ret, color = fmt.Sprintf("%4.f ", v), RED
+	default: // FIXME: 1e3?
+		ret, color = fmt.Sprintf("%4.f ", v), RED
+	}
+	return w.colorize(ret, color, false, false)
+}
+
+func (w *statsWatcher) formatCPU(v float64) string {
+	var ret string
+	var color int
+	switch v = v * 100.0; {
 	case v < 0.0:
 		logger.Fatalf("invalid value %f", v)
 	case v == 0.0:
@@ -242,27 +260,27 @@ func (w *statsWatcher) printDiff(interval float64) {
 	for i, s := range w.sections {
 		vals := make([]string, 0, len(s.items))
 		for _, it := range s.items {
-			switch it.typ & 0xFC {
-			case metricGauge:
-				vals = append(vals, w.formatValue(w.current[it.name]))
-			case metricCounter:
+			switch it.typ & 0xF0 {
+			case metricGauge: // currently must be metricByte
+				vals = append(vals, w.formatU64(w.current[it.name], true))
+			case metricCounter: // cpu or metricByte
 				v := (w.current[it.name] - w.last[it.name]) / interval
-				if it.nick == "cpu" {
-					vals = append(vals, w.formatCPUValue(v))
+				if it.typ&metricCPU != 0 {
+					vals = append(vals, w.formatCPU(v))
 				} else {
-					vals = append(vals, w.formatValue(v))
+					vals = append(vals, w.formatU64(v, true))
 				}
-			case metricHist:
+			case metricHist: // metricTime
 				count := w.current[it.name+"_total"] - w.last[it.name+"_total"]
-				vals = append(vals, w.formatValue(count/interval))
+				vals = append(vals, w.formatU64(count/interval, false))
 				if count != 0.0 {
 					cost := w.current[it.name+"_sum"] - w.last[it.name+"_sum"]
 					if it.typ&metricTime != 0 {
 						cost *= 1000 // s -> ms
 					}
-					vals = append(vals, w.formatValue(cost/count))
+					vals = append(vals, w.formatTime(cost/count))
 				} else {
-					vals = append(vals, w.formatValue(0.0))
+					vals = append(vals, w.formatTime(0.0))
 				}
 			}
 		}
@@ -330,8 +348,8 @@ func statsFlags() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "schema",
-				Value: "sfmo",
-				Usage: "schema string that controls the output sections (s: sys, f: fuse, m: meta, o: object, g: go)",
+				Value: "sfmoc",
+				Usage: "schema string that controls the output sections (s: sys, f: fuse, m: meta, o: object, c: blockcache, g: go)",
 			},
 			&cli.BoolFlag{
 				Name:  "nocolor",
