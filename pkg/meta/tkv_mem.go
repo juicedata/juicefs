@@ -1,4 +1,4 @@
-// +build !tikv,!fdb
+// +build !fdb
 
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
@@ -26,13 +26,8 @@ func init() {
 	Register("memkv", newKVMeta)
 }
 
-func newTkvClient(driver, addr string) (tkvClient, error) {
-	if driver != "memkv" {
-		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "memkv")
-	}
-	return &memKV{
-		items: make(map[string]*kvItem),
-	}, nil
+func newMockClient() (tkvClient, error) {
+	return &memKV{items: make(map[string]*kvItem)}, nil
 }
 
 type memTxn struct {

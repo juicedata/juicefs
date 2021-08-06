@@ -14,7 +14,6 @@ jfs
 /juicefs.ceph
 /juicefs.exe
 /juicefs.lite
-/juicefs.tikv
 dist/
 *.rdb
 .release-env

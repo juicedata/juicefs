@@ -1,5 +1,3 @@
-// +build tikv
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -31,6 +29,9 @@ func init() {
 }
 
 func newTkvClient(driver, addr string) (tkvClient, error) {
+	if driver == "memkv" {
+		return newMockClient()
+	}
 	if driver != "tikv" {
 		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "tikv")
 	}

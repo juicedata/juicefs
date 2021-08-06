@@ -26,9 +26,6 @@ juicefs.lite: Makefile cmd/*.go pkg/*/*.go
 	go build -tags nogateway,nocos,nobos,nohdfs,noibmcos,nobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs \
 		-ldflags="$(LDFLAGS)" -o juicefs.lite ./cmd
 
-juicefs.tikv: Makefile cmd/*.go pkg/*/*.go
-	go build -tags tikv -ldflags="$(LDFLAGS)"  -o juicefs.tikv ./cmd
-
 juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 	go build -tags ceph -ldflags="$(LDFLAGS)"  -o juicefs.ceph ./cmd
 
