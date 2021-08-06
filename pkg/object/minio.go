@@ -34,7 +34,7 @@ type minio struct {
 }
 
 func (m *minio) String() string {
-	return *m.s3client.ses.Config.Endpoint
+	return fmt.Sprintf("minio://%s/%s/", *m.s3client.ses.Config.Endpoint, m.s3client.bucket)
 }
 
 func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
