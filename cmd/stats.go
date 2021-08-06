@@ -47,12 +47,11 @@ const (
 )
 
 type statsWatcher struct {
-	mp            string
-	tty           bool
-	header        string
-	interval      time.Duration
-	sections      []*section
-	last, current map[string]float64
+	tty      bool
+	interval uint
+	path     string
+	header   string
+	sections []*section
 }
 
 func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool) string {
@@ -187,16 +186,16 @@ func (w *statsWatcher) formatHeader() {
 		strings.Join(subHeaders, w.colorize("|", BLUE, true, false)))
 }
 
-func (w *statsWatcher) formatU64(v float64, isByte bool) string {
+func (w *statsWatcher) formatU64(v float64, dark, isByte bool) string {
 	if v < 0.0 {
 		logger.Fatalf("invalid value %f", v)
+	} else if v == 0.0 {
+		return w.colorize("   0 ", BLACK, false, false)
 	}
 	var vi uint64
 	var unit string
 	var color int
 	switch vi = uint64(v); {
-	case vi == 0:
-		unit, color = " ", BLACK
 	case vi < 10000:
 		if isByte {
 			unit = "B"
@@ -215,18 +214,18 @@ func (w *statsWatcher) formatU64(v float64, isByte bool) string {
 	default:
 		vi, unit, color = vi>>50, "P", CYAN
 	}
-	return w.colorize(fmt.Sprintf("%4d", vi), color, false, false) +
+	return w.colorize(fmt.Sprintf("%4d", vi), color, dark, false) +
 		w.colorize(unit, BLACK, false, false)
 }
 
-func (w *statsWatcher) formatTime(v float64) string {
+func (w *statsWatcher) formatTime(v float64, dark bool) string {
 	var ret string
 	var color int
 	switch {
 	case v < 0.0:
 		logger.Fatalf("invalid value %f", v)
 	case v == 0.0:
-		ret, color = "   0 ", BLACK
+		ret, color, dark = "   0 ", BLACK, false
 	case v < 10.0:
 		ret, color = fmt.Sprintf("%4.2f ", v), GREEN
 	case v < 100.0:
@@ -236,10 +235,10 @@ func (w *statsWatcher) formatTime(v float64) string {
 	default:
 		ret, color = fmt.Sprintf("%1.e", v), MAGENTA
 	}
-	return w.colorize(ret, color, false, false)
+	return w.colorize(ret, color, dark, false)
 }
 
-func (w *statsWatcher) formatCPU(v float64) string {
+func (w *statsWatcher) formatCPU(v float64, dark bool) string {
 	var ret string
 	var color int
 	switch v = v * 100.0; {
@@ -254,49 +253,56 @@ func (w *statsWatcher) formatCPU(v float64) string {
 	default:
 		ret, color = fmt.Sprintf("%4.f", v), RED
 	}
-	return w.colorize(ret, color, false, false) +
+	return w.colorize(ret, color, dark, false) +
 		w.colorize("%", BLACK, false, false)
 }
 
-func (w *statsWatcher) printDiff(interval float64) {
+func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
+	if !w.tty && dark {
+		return
+	}
 	values := make([]string, len(w.sections))
 	for i, s := range w.sections {
 		vals := make([]string, 0, len(s.items))
 		for _, it := range s.items {
 			switch it.typ & 0xF0 {
 			case metricGauge: // currently must be metricByte
-				vals = append(vals, w.formatU64(w.current[it.name], true))
+				vals = append(vals, w.formatU64(right[it.name], dark, true))
 			case metricCounter:
-				v := (w.current[it.name] - w.last[it.name]) / interval
+				v := (right[it.name] - left[it.name])
+				if !dark {
+					v /= float64(w.interval)
+				}
 				if it.typ&metricByte != 0 {
-					vals = append(vals, w.formatU64(v, true))
+					vals = append(vals, w.formatU64(v, dark, true))
 				} else if it.typ&metricCPU != 0 {
-					vals = append(vals, w.formatCPU(v))
+					vals = append(vals, w.formatCPU(v, dark))
 				} else { // metricCount
-					vals = append(vals, w.formatU64(v, false))
+					vals = append(vals, w.formatU64(v, dark, false))
 				}
 			case metricHist: // metricTime
-				count := w.current[it.name+"_total"] - w.last[it.name+"_total"]
-				vals = append(vals, w.formatU64(count/interval, false))
+				count := right[it.name+"_total"] - left[it.name+"_total"]
+				var avg float64
 				if count != 0.0 {
-					cost := w.current[it.name+"_sum"] - w.last[it.name+"_sum"]
+					cost := right[it.name+"_sum"] - left[it.name+"_sum"]
 					if it.typ&metricTime != 0 {
 						cost *= 1000 // s -> ms
 					}
-					vals = append(vals, w.formatTime(cost/count))
-				} else {
-					vals = append(vals, w.formatTime(0.0))
+					avg = cost / count
 				}
+				if !dark {
+					count /= float64(w.interval)
+				}
+				vals = append(vals, w.formatU64(count, dark, false), w.formatTime(avg, dark))
 			}
 		}
 		values[i] = strings.Join(vals, " ")
 	}
-	fmt.Println(strings.Join(values, w.colorize("|", BLUE, true, false)))
-}
-
-func (w *statsWatcher) loadStats() {
-	w.last = w.current
-	w.current = readStats(path.Join(w.mp, ".stats"))
+	if w.tty && dark {
+		fmt.Printf("%s\r", strings.Join(values, w.colorize("|", BLUE, true, false)))
+	} else {
+		fmt.Printf("%s\n", strings.Join(values, w.colorize("|", BLUE, true, false)))
+	}
 }
 
 func stats(ctx *cli.Context) error {
@@ -313,29 +319,35 @@ func stats(ctx *cli.Context) error {
 		logger.Fatalf("path %s is not a mount point", mp)
 	}
 
-	interval := ctx.Int64("interval")
 	watcher := &statsWatcher{
-		mp:       mp,
 		tty:      !ctx.Bool("nocolor") && isatty.IsTerminal(os.Stdout.Fd()),
-		interval: time.Second * time.Duration(interval),
-		last:     make(map[string]float64),
-		current:  make(map[string]float64),
+		interval: ctx.Uint("interval"),
+		path:     path.Join(mp, ".stats"),
 	}
 	watcher.buildSchema(ctx.String("schema"), ctx.Uint("verbosity"))
 	watcher.formatHeader()
 
-	var count int
-	ticker := time.NewTicker(watcher.interval)
+	var tick uint
+	var start, last, current map[string]float64
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	watcher.loadStats()
+	current = readStats(watcher.path)
+	start = current
+	last = current
 	for {
-		if count%30 == 0 {
+		if tick%(watcher.interval*30) == 0 {
 			fmt.Println(watcher.header)
 		}
-		count++
+		if tick%watcher.interval == 0 {
+			watcher.printDiff(start, current, false)
+			start = current
+		} else {
+			watcher.printDiff(last, current, true)
+		}
+		last = current
+		tick++
 		<-ticker.C
-		watcher.loadStats()
-		watcher.printDiff(float64(interval))
+		current = readStats(watcher.path)
 	}
 }
 
@@ -346,15 +358,15 @@ func statsFlags() *cli.Command {
 		Action:    stats,
 		ArgsUsage: "MOUNTPOINT",
 		Flags: []cli.Flag{
-			&cli.Int64Flag{
-				Name:  "interval",
-				Value: 1,
-				Usage: "interval in seconds between each update",
-			},
 			&cli.StringFlag{
 				Name:  "schema",
 				Value: "ufmco",
 				Usage: "schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
+			},
+			&cli.UintFlag{
+				Name:  "interval",
+				Value: 1,
+				Usage: "interval in seconds between each update",
 			},
 			&cli.UintFlag{
 				Name:  "verbosity",
