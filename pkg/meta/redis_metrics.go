@@ -28,7 +28,7 @@ var (
 		Help: "The number of times a transaction is restarted.",
 	})
 	opDist = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "operation_durations_histogram_seconds",
+		Name:    "meta_ops_durations_histogram_seconds",
 		Help:    "Operation latency distributions.",
 		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 	})

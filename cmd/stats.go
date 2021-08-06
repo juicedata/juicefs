@@ -111,7 +111,7 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 			s.items = append(s.items, &item{"write", "juicefs_fuse_written_size_bytes_sum", metricByte | metricCounter})
 		case 'm':
 			s.name = "meta"
-			s.items = append(s.items, &item{"ops", "juicefs_operation_durations_histogram_seconds", metricTime | metricHist})
+			s.items = append(s.items, &item{"ops", "juicefs_meta_ops_durations_histogram_seconds", metricTime | metricHist})
 			if detail {
 				s.items = append(s.items, &item{"txn", "juicefs_transaction_durations_histogram_seconds", metricTime | metricHist})
 				s.items = append(s.items, &item{"retry", "juicefs_transaction_restart", metricCount | metricCounter})
