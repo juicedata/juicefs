@@ -75,6 +75,15 @@ var (
 		}
 		return 0.0
 	})
+	storeCacheSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "store_cache_size_bytes",
+		Help: "size of store cache.",
+	}, func() float64 {
+		if dw, ok := writer.(*dataWriter); ok {
+			return float64(dw.store.UsedMemory())
+		}
+		return 0.0
+	})
 )
 
 func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
@@ -916,6 +925,7 @@ func InitMetrics() {
 	prometheus.MustRegister(readSizeHistogram)
 	prometheus.MustRegister(writtenSizeHistogram)
 	prometheus.MustRegister(usedBufferSize)
+	prometheus.MustRegister(storeCacheSize)
 	prometheus.MustRegister(handlersGause)
 	prometheus.MustRegister(opsDurationsHistogram)
 	prometheus.MustRegister(compactSizeHistogram)

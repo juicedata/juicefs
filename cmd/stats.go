@@ -72,13 +72,13 @@ func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool
 }
 
 const (
-	// metricU64     = 1
-	// metricCount   = 1 << 1
-	metricTime    = 1 << 2
-	metricCPU     = 1 << 3
-	metricGauge   = 1 << 4
-	metricCounter = 1 << 5
-	metricHist    = 1 << 6
+	metricByte = 1 << iota
+	metricCount
+	metricTime
+	metricCPU
+	metricGauge
+	metricCounter
+	metricHist
 )
 
 type item struct {
@@ -96,38 +96,41 @@ func (w *statsWatcher) buildSchema(schema string, detail bool) {
 	for _, r := range schema {
 		var s section
 		switch r {
-		case 's':
-			s.name = "sys"
+		case 'u':
+			s.name = "usage"
 			s.items = append(s.items, &item{"cpu", "juicefs_cpu_usage", metricCPU | metricCounter})
 			s.items = append(s.items, &item{"mem", "juicefs_memory", metricGauge})
-			if detail {
-				s.items = append(s.items, &item{"alloc", "juicefs_allocated_memory", metricGauge})
-			}
 			s.items = append(s.items, &item{"buf", "juicefs_used_buffer_size_bytes", metricGauge})
+			if detail {
+				s.items = append(s.items, &item{"cache", "juicefs_store_cache_size_bytes", metricGauge})
+			}
 		case 'f':
 			s.name = "fuse"
 			s.items = append(s.items, &item{"ops", "juicefs_fuse_ops_durations_histogram_seconds", metricTime | metricHist})
-			s.items = append(s.items, &item{"read", "juicefs_fuse_read_size_bytes_sum", metricCounter})
-			s.items = append(s.items, &item{"write", "juicefs_fuse_written_size_bytes_sum", metricCounter})
+			s.items = append(s.items, &item{"read", "juicefs_fuse_read_size_bytes_sum", metricByte | metricCounter})
+			s.items = append(s.items, &item{"write", "juicefs_fuse_written_size_bytes_sum", metricByte | metricCounter})
 		case 'm':
 			s.name = "meta"
-			s.items = append(s.items, &item{"txn", "juicefs_transaction_durations_histogram_seconds", metricTime | metricHist})
+			s.items = append(s.items, &item{"ops", "juicefs_operation_durations_histogram_seconds", metricTime | metricHist})
+			if detail {
+				s.items = append(s.items, &item{"txn", "juicefs_transaction_durations_histogram_seconds", metricTime | metricHist})
+				s.items = append(s.items, &item{"retry", "juicefs_transaction_restart", metricCount | metricCounter})
+			}
+		case 'c':
+			s.name = "blockcache"
+			s.items = append(s.items, &item{"read", "juicefs_blockcache_hit_bytes", metricByte | metricCounter})
+			s.items = append(s.items, &item{"write", "juicefs_blockcache_write_bytes", metricByte | metricCounter})
 		case 'o':
 			s.name = "object"
-			s.items = append(s.items, &item{"get", "juicefs_object_request_data_bytes_GET", metricCounter})
+			s.items = append(s.items, &item{"get", "juicefs_object_request_data_bytes_GET", metricByte | metricCounter})
 			if detail {
 				s.items = append(s.items, &item{"get_c", "juicefs_object_request_durations_histogram_seconds_GET", metricTime | metricHist})
 			}
-			s.items = append(s.items, &item{"put", "juicefs_object_request_data_bytes_PUT", metricCounter})
+			s.items = append(s.items, &item{"put", "juicefs_object_request_data_bytes_PUT", metricByte | metricCounter})
 			if detail {
 				s.items = append(s.items, &item{"put_c", "juicefs_object_request_durations_histogram_seconds_PUT", metricTime | metricHist})
 				s.items = append(s.items, &item{"del_c", "juicefs_object_request_durations_histogram_seconds_DELETE", metricTime | metricHist})
 			}
-		case 'c':
-			s.name = "blockcache"
-			s.items = append(s.items, &item{"hit", "juicefs_blockcache_hit_bytes", metricCounter})
-			s.items = append(s.items, &item{"miss", "juicefs_blockcache_miss_bytes", metricCounter})
-			s.items = append(s.items, &item{"write", "juicefs_blockcache_write_bytes", metricCounter})
 		case 'g':
 			s.name = "go"
 			s.items = append(s.items, &item{"alloc", "go_memstats_alloc_bytes", metricGauge})
@@ -263,12 +266,14 @@ func (w *statsWatcher) printDiff(interval float64) {
 			switch it.typ & 0xF0 {
 			case metricGauge: // currently must be metricByte
 				vals = append(vals, w.formatU64(w.current[it.name], true))
-			case metricCounter: // cpu or metricByte
+			case metricCounter:
 				v := (w.current[it.name] - w.last[it.name]) / interval
-				if it.typ&metricCPU != 0 {
-					vals = append(vals, w.formatCPU(v))
-				} else {
+				if it.typ&metricByte != 0 {
 					vals = append(vals, w.formatU64(v, true))
+				} else if it.typ&metricCPU != 0 {
+					vals = append(vals, w.formatCPU(v))
+				} else { // metricCount
+					vals = append(vals, w.formatU64(v, false))
 				}
 			case metricHist: // metricTime
 				count := w.current[it.name+"_total"] - w.last[it.name+"_total"]
@@ -348,8 +353,8 @@ func statsFlags() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "schema",
-				Value: "sfmoc",
-				Usage: "schema string that controls the output sections (s: sys, f: fuse, m: meta, o: object, c: blockcache, g: go)",
+				Value: "ufmco",
+				Usage: "schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
 			},
 			&cli.BoolFlag{
 				Name:  "nocolor",

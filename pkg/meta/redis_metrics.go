@@ -27,9 +27,15 @@ var (
 		Name: "transaction_restart",
 		Help: "The number of times a transaction is restarted.",
 	})
+	opDist = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "operation_durations_histogram_seconds",
+		Help:    "Operation latency distributions.",
+		Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+	})
 )
 
 func InitMetrics() {
 	prometheus.MustRegister(txDist)
 	prometheus.MustRegister(txRestart)
+	prometheus.MustRegister(opDist)
 }

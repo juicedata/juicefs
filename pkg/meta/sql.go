@@ -625,6 +625,7 @@ func (m *dbMeta) flushStats() {
 }
 
 func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+	defer timeit(time.Now())
 	usedSpace := atomic.LoadInt64(&m.newSpace)
 	inodes := atomic.LoadInt64(&m.newInodes)
 	var c = counter{Name: "usedSpace"}
@@ -675,6 +676,7 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 }
 
 func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	dbSession := m.engine.Table(&edge{})
 	if attr != nil {
@@ -741,6 +743,7 @@ func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
 		return 0
 	}
+	defer timeit(time.Now())
 	var n = node{Inode: inode}
 	ok, err := m.engine.Get(&n)
 	if err != nil && inode == 1 {
@@ -764,6 +767,7 @@ func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(func(s *xorm.Session) error {
@@ -853,6 +857,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 }
 
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -951,6 +956,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
+	defer timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1024,6 +1030,7 @@ func (m *dbMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
 		*path = target.([]byte)
 		return 0
 	}
+	defer timeit(time.Now())
 	var l = symlink{Inode: inode}
 	ok, err := m.engine.Get(&l)
 	if err != nil {
@@ -1038,10 +1045,12 @@ func (m *dbMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
 }
 
 func (m *dbMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	return m.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
 }
 
 func (m *dbMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	return m.mknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
 }
 
@@ -1168,14 +1177,16 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 }
 
 func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	return m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, inode, attr)
+	defer timeit(time.Now())
+	return m.mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 }
 
 func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	if attr == nil {
 		attr = &Attr{}
 	}
-	err := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
+	err := m.mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
 	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		err = 0
 	}
@@ -1186,6 +1197,7 @@ func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumas
 }
 
 func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
+	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	var newSpace, newInode int64
 	var n node
@@ -1314,7 +1326,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-
+	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
@@ -1391,6 +1403,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
 	var opened bool
@@ -1602,6 +1615,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 }
 
 func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(func(s *xorm.Session) error {
@@ -1674,6 +1688,7 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	if eno != 0 {
 		return eno
 	}
+	defer timeit(time.Now())
 	dbSession := m.engine.Table(&edge{})
 	if plus != 0 {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
@@ -1863,6 +1878,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 		*chunks = cs
 		return 0
 	}
+	defer timeit(time.Now())
 	var c chunk
 	_, err := m.engine.Where("inode=? and indx=?", inode, indx).Get(&c)
 	if err != nil {
@@ -1899,6 +1915,7 @@ func (m *dbMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sysca
 }
 
 func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+	defer timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1965,6 +1982,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 }
 
 func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
+	defer timeit(time.Now())
 	f := m.of.find(fout)
 	if f != nil {
 		f.Lock()
@@ -2390,6 +2408,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgr
 }
 
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	var x = xattr{Inode: inode, Name: name}
 	ok, err := m.engine.Get(&x)
@@ -2404,6 +2423,7 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 }
 
 func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	var x = xattr{Inode: inode}
 	rows, err := m.engine.Where("inode = ?", inode).Rows(&x)
@@ -2427,6 +2447,7 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 	if name == "" {
 		return syscall.EINVAL
 	}
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.txn(func(s *xorm.Session) error {
 		var x = xattr{inode, name, value}
@@ -2446,6 +2467,7 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	if name == "" {
 		return syscall.EINVAL
 	}
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.txn(func(s *xorm.Session) error {
 		n, err := s.Delete(&xattr{Inode: inode, Name: name})
