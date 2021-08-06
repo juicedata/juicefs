@@ -34,8 +34,8 @@ const (
 	YELLOW
 	BLUE
 	MAGENTA
-	// CYAN
-	WHITE = 37
+	CYAN
+	WHITE
 )
 
 const (
@@ -213,7 +213,7 @@ func (w *statsWatcher) formatU64(v float64, isByte bool) string {
 	case vi>>40 < 10000:
 		vi, unit, color = vi>>40, "T", MAGENTA
 	default:
-		vi, unit, color = vi>>50, "P", MAGENTA
+		vi, unit, color = vi>>50, "P", CYAN
 	}
 	return w.colorize(fmt.Sprintf("%4d", vi), color, false, false) +
 		w.colorize(unit, BLACK, false, false)
@@ -233,8 +233,8 @@ func (w *statsWatcher) formatTime(v float64) string {
 		ret, color = fmt.Sprintf("%4.1f ", v), YELLOW
 	case v < 10000.0:
 		ret, color = fmt.Sprintf("%4.f ", v), RED
-	default: // FIXME: 1e3?
-		ret, color = fmt.Sprintf("%4.f ", v), RED
+	default:
+		ret, color = fmt.Sprintf("%1.e", v), MAGENTA
 	}
 	return w.colorize(ret, color, false, false)
 }
