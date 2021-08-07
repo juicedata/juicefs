@@ -109,6 +109,7 @@ func (p *profiler) reader() {
 	if err := scanner.Err(); err != nil {
 		logger.Fatalf("Reading log file failed with error: %s", err)
 	}
+	close(p.entryChan)
 	if p.replay {
 		p.done <- true
 	}
@@ -166,6 +167,33 @@ func (p *profiler) counter() {
 			stats = make(map[string]*stat)
 		}
 	}
+}
+
+func (p *profiler) fastCounter() {
+	var start, last time.Time
+	stats := make(map[string]*stat)
+	for entry := range p.entryChan {
+		if entry == nil {
+			continue
+		}
+		if !p.isValid(entry) {
+			continue
+		}
+		if start.IsZero() {
+			start = entry.ts
+		}
+		last = entry.ts
+		value, ok := stats[entry.op]
+		if !ok {
+			value = &stat{}
+			stats[entry.op] = value
+		}
+		value.count++
+		value.total += entry.latency
+	}
+	p.statsChan <- stats
+	p.printTime <- start
+	p.printTime <- last
 }
 
 func printLines(lines []string, tty bool) {
@@ -276,6 +304,10 @@ func profile(ctx *cli.Context) error {
 	} else { // log file to be replayed
 		replay = true
 	}
+	nodelay := ctx.Int64("interval") == 0
+	if nodelay && !replay {
+		logger.Fatalf("Interval must be > 0 for real time mode!")
+	}
 	file, err := os.Open(logPath)
 	if err != nil {
 		logger.Fatalf("Failed to open log file %s: %s", logPath, err)
@@ -300,9 +332,26 @@ func profile(ctx *cli.Context) error {
 	}
 
 	go prof.reader()
+	if nodelay {
+		go prof.fastCounter()
+		stats := <-prof.statsChan
+		start := <-prof.printTime
+		last := <-prof.printTime
+		keyStats := make([]keyStat, 0, len(stats))
+		for k, s := range stats {
+			keyStats = append(keyStats, keyStat{k, s})
+		}
+		sort.Slice(keyStats, func(i, j int) bool { // reversed
+			return keyStats[i].sPtr.total > keyStats[j].sPtr.total
+		})
+		prof.replay = false
+		prof.interval = last.Sub(start)
+		prof.flush(last, keyStats, <-prof.done)
+		return nil
+	}
+
 	go prof.counter()
 	go prof.flusher()
-
 	var input string
 	for {
 		fmt.Scanln(&input)
@@ -340,7 +389,7 @@ func profileFlags() *cli.Command {
 			&cli.Int64Flag{
 				Name:  "interval",
 				Value: 2,
-				Usage: "flush interval in seconds",
+				Usage: "flush interval in seconds; set it to 0 when replaying a log file to get an immediate result",
 			},
 		},
 	}
