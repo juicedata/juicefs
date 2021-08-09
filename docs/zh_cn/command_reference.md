@@ -509,7 +509,7 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 仅跟踪指定 PIDs (用逗号 , 分隔)
 
 `--interval value`\
-显示间隔；单位为秒 (默认: 2)
+显示间隔；在回放模式中将其设置为 0 可以立即得到整体的统计结果；单位为秒 (默认: 2)
 
 ### juicefs stats
 

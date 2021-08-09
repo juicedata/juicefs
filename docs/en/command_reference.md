@@ -512,7 +512,7 @@ track only specified GIDs(separated by comma ,)
 track only specified PIDs(separated by comma ,)
 
 `--interval value`\
-flush interval in seconds (default: 2)
+flush interval in seconds; set it to 0 when replaying a log file to get an immediate result (default: 2)
 
 ### juicefs stats
 

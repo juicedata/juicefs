@@ -36,7 +36,9 @@ $ cat /jfs/.accesslog > /tmp/jfs-oplog
 $ juicefs profile /tmp/jfs-oplog
 ```
 
-> **Tip**: The replay could be paused anytime by <kbd>Enter/Return</kbd>, and continues by pressing it again.
+> **Tip 1**: The replay could be paused anytime by <kbd>Enter/Return</kbd>, and continues by pressing it again.
+>
+> **Tip 2**: Setting `--interval 0` will replay the whole log file as fast as possible, and show the result as if it was within one interval.
 
 ## Filter
 
