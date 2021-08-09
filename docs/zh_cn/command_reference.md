@@ -34,7 +34,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.16-dev (2021-07-12 d0a9d87)
+   0.16-dev (2021-08-09 2f17d86)
 
 COMMANDS:
    format   format a volume
@@ -48,6 +48,7 @@ COMMANDS:
    gc       collect any leaked objects
    fsck     Check consistency of file system
    profile  analyze access log
+   stats    show runtime stats
    status   show status of JuiceFS
    warmup   build cache for target directories/files
    dump     dump metadata into a JSON file
@@ -509,6 +510,36 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 
 `--interval value`\
 显示间隔；单位为秒 (默认: 2)
+
+### juicefs stats
+
+#### 描述
+
+展示实时的性能统计信息.
+
+#### 使用
+
+```
+juicefs stats [command options] MOUNTPOINT
+```
+
+#### 选项
+
+`--schema value`\
+
+控制输出内容的标题字符串 (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go) (默认: "ufmco")
+
+`--interval value`\
+
+更新间隔；单位为秒 (默认: 1)
+
+`--verbosity value`\
+
+详细级别；通常 0 或 1 已足够 (默认: 0)
+
+`--nocolor`\
+
+禁用颜色显示 (默认: false)
 
 ### juicefs status
 
