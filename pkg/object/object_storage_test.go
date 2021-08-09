@@ -84,7 +84,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if d, e := get(s, "test", 0, -1); d != "hello" {
 		t.Fatalf("expect hello, but got %v, error:%s", d, e)
 	}
-	if d, e := get(s, "test", 2, -1); d != "llo" {
+	if d, e := get(s, "test", 2, 3); d != "llo" {
 		t.Fatalf("expect llo, but got %v, error:%s", d, e)
 	}
 	if d, e := get(s, "test", 2, 2); d != "ll" {
