@@ -445,6 +445,8 @@ github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d/go.mod h1:+NfK9FKe
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5 h1:9cpB9emicKlvo6mRm/fYEcTkiM8SPgJ+gTc/GXQH6V8=
 github.com/huaweicloud/huaweicloud-sdk-go-obs v0.0.0-20190127152727-3a9e1f8023d5/go.mod h1:l7VUhRbTKCzdOacdT4oWCwATKyvZqUOlOqr0Ous3k4s=
+github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.1+incompatible h1:EFjtiulITiEktaZrr0OPlymTmrlpvSAa/xvv08kTQEU=
+github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.1+incompatible/go.mod h1:l7VUhRbTKCzdOacdT4oWCwATKyvZqUOlOqr0Ous3k4s=
 github.com/hudl/fargo v1.3.0/go.mod h1:y3CKSmjA+wD2gak7sUSXTAoopbhU08POFhmITJgmKTg=
 github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099 h1:heHZCso/ytvpYr+hp2cDxlZfA/jTw46aHSvT9kZnJ7o=
 github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099/go.mod h1:h44tqw4M3GN0Woo9KBStxJxm8huNi+9+tOHoeqSvhaY=

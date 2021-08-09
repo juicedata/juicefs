@@ -19,6 +19,8 @@ package object
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -87,19 +89,38 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (s *obsClient) Put(key string, in io.Reader) error {
 	var body io.ReadSeeker
+	var vlen int64
+	var sum []byte
 	if b, ok := in.(io.ReadSeeker); ok {
+		var err error
+		h := md5.New()
+		vlen, err = io.Copy(h, b)
+		if err != nil {
+			return err
+		}
+		_, err = b.Seek(0, io.SeekStart)
+		if err != nil {
+			return err
+		}
+		sum = h.Sum(nil)
 		body = b
 	} else {
 		data, err := ioutil.ReadAll(in)
 		if err != nil {
 			return err
 		}
+		vlen = int64(len(data))
+		s := md5.Sum(data)
+		sum = s[:]
 		body = bytes.NewReader(data)
 	}
+
 	params := &obs.PutObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key
 	params.Body = body
+	params.ContentLength = vlen
+	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 
 	_, err := s.c.PutObject(params)
 	return err
@@ -165,6 +186,9 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	params.UploadId = uploadID
 	params.Body = bytes.NewReader(body)
 	params.PartNumber = num
+	params.PartSize = int64(len(body))
+	sum := md5.Sum(body)
+	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	resp, err := s.c.UploadPart(params)
 	if err != nil {
 		return nil, err
@@ -281,7 +305,8 @@ func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 
 	// Empty proxy url string has no effect
-	c, err := obs.New(accessKey, secretKey, endpoint, obs.WithProxyUrl(urlString))
+	// there is a bug in the retry of PUT (did not call Seek(0,0) before retry), so disable the retry here
+	c, err := obs.New(accessKey, secretKey, endpoint, obs.WithProxyUrl(urlString), obs.WithMaxRetryCount(0))
 	if err != nil {
 		return nil, fmt.Errorf("fail to initialize OBS: %q", err)
 	}
