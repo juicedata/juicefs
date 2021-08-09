@@ -364,3 +364,7 @@ func newSessionInfo() (*SessionInfo, error) {
 	}
 	return &SessionInfo{Version: version.Version(), Hostname: host, ProcessID: os.Getpid()}, nil
 }
+
+func timeit(start time.Time) {
+	opDist.Observe(time.Since(start).Seconds())
+}
