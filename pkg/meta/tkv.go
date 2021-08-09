@@ -812,6 +812,7 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 }
 
 func (m *kvMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+	defer timeit(time.Now())
 	var used, inodes int64
 	err := m.txn(func(tx kvTxn) error {
 		used = tx.incrBy(m.counterKey(usedSpace), 0)
@@ -870,6 +871,7 @@ func (m *kvMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 }
 
 func (m *kvMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	buf, err := m.get(m.entryKey(parent, name))
 	if err != nil {
@@ -936,6 +938,7 @@ func (m *kvMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
 		return 0
 	}
+	defer timeit(time.Now())
 	a, err := m.get(m.inodeKey(inode))
 	if err != nil && inode == 1 {
 		err = nil
@@ -958,6 +961,7 @@ func (m *kvMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(func(tx kvTxn) error {
@@ -1031,6 +1035,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 }
 
 func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1111,6 +1116,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
+	defer timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1179,6 +1185,7 @@ func (m *kvMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
 		*path = target.([]byte)
 		return 0
 	}
+	defer timeit(time.Now())
 	target, err := m.get(m.symKey(inode))
 	if err != nil {
 		return errno(err)
@@ -1192,10 +1199,12 @@ func (m *kvMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
 }
 
 func (m *kvMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	return m.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
 }
 
 func (m *kvMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	return m.mknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
 }
 
@@ -1302,14 +1311,16 @@ func (m *kvMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 }
 
 func (m *kvMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	return m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, inode, attr)
+	defer timeit(time.Now())
+	return m.mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 }
 
 func (m *kvMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	if attr == nil {
 		attr = &Attr{}
 	}
-	err := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, inode, attr)
+	err := m.mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
 	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		err = 0
 	}
@@ -1320,6 +1331,7 @@ func (m *kvMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumas
 }
 
 func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
+	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	var _type uint8
 	var inode Ino
@@ -1417,6 +1429,7 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
+	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	err := m.txn(func(tx kvTxn) error {
 		buf := tx.get(m.entryKey(parent, name))
@@ -1468,6 +1481,7 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
 	var opened bool
@@ -1625,6 +1639,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 }
 
 func (m *kvMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(func(tx kvTxn) error {
@@ -1670,6 +1685,7 @@ func (m *kvMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
 	}
+	defer timeit(time.Now())
 	if inode == m.root {
 		attr.Parent = m.root
 	}
@@ -1822,6 +1838,7 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 		*chunks = cs
 		return 0
 	}
+	defer timeit(time.Now())
 	val, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
 		return errno(err)
@@ -1841,6 +1858,7 @@ func (m *kvMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sysca
 }
 
 func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+	defer timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1887,6 +1905,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 }
 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
+	defer timeit(time.Now())
 	var newSpace int64
 	f := m.of.find(fout)
 	if f != nil {
@@ -2252,6 +2271,7 @@ func (r *kvMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgr
 }
 
 func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	buf, err := m.get(m.xattrKey(inode, name))
 	if err != nil {
@@ -2265,6 +2285,7 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 }
 
 func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	keys, err := m.scanKeys(m.xattrKey(inode, ""))
 	if err != nil {
@@ -2283,6 +2304,7 @@ func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 	if name == "" {
 		return syscall.EINVAL
 	}
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.setValue(m.xattrKey(inode, name), value))
 }
@@ -2291,6 +2313,7 @@ func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	if name == "" {
 		return syscall.EINVAL
 	}
+	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	value, err := m.get(m.xattrKey(inode, name))
 	if err != nil {

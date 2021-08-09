@@ -80,6 +80,7 @@ func main() {
 			gcFlags(),
 			checkFlags(),
 			profileFlags(),
+			statsFlags(),
 			statusFlags(),
 			warmupFlags(),
 			dumpFlags(),
