@@ -36,7 +36,9 @@ $ cat /jfs/.accesslog > /tmp/jfs-oplog
 $ juicefs profile /tmp/jfs-oplog
 ```
 
-> **提示**：可以随时按键盘上的 <kbd>Enter/Return</kbd> 暂停/继续回放。
+> **提示 1**：可以随时按键盘上的 <kbd>Enter/Return</kbd> 暂停/继续回放。
+>
+> **提示 2**：如果设置 `--interval 0`，将立即回放完整个日志文件并显示整体统计结果。
 
 ## 过滤
 

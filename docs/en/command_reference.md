@@ -34,7 +34,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.16-dev (2021-07-12 d0a9d87)
+   0.16-dev (2021-08-09 2f17d86)
 
 COMMANDS:
    format   format a volume
@@ -48,6 +48,7 @@ COMMANDS:
    gc       collect any leaked objects
    fsck     Check consistency of file system
    profile  analyze access log
+   stats    show runtime stats
    status   show status of JuiceFS
    warmup   build cache for target directories/files
    dump     dump metadata into a JSON file
@@ -511,7 +512,33 @@ track only specified GIDs(separated by comma ,)
 track only specified PIDs(separated by comma ,)
 
 `--interval value`\
-flush interval in seconds (default: 2)
+flush interval in seconds; set it to 0 when replaying a log file to get an immediate result (default: 2)
+
+### juicefs stats
+
+#### Description
+
+show runtime stats.
+
+#### Synopsis
+
+```
+juicefs stats [command options] MOUNTPOINT
+```
+
+#### Options
+
+`--schema value`\
+schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go) (default: "ufmco")
+
+`--interval value`\
+interval in seconds between each update (default: 1)
+
+`--verbosity value`\
+verbosity level, 0 or 1 is enough for most cases (default: 0)
+
+`--nocolor`\
+disable colors (default: false)
 
 ### juicefs status
 
