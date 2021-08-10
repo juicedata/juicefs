@@ -17,8 +17,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
 	"strings"
@@ -29,9 +27,13 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
+
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 )
 
 func gcFlags() *cli.Command {
@@ -58,49 +60,19 @@ func gcFlags() *cli.Command {
 	}
 }
 
-type gcProgress struct {
-	total       int
-	found       int // valid slices
-	leaked      int
-	leakedBytes int64
+type objCounter struct {
+	count *mpb.Bar
+	bytes *mpb.Bar
 }
 
-func showProgress(p *gcProgress) {
-	var lastDone []int
-	var lastTime []time.Time
-	for {
-		if p.total == 0 {
-			time.Sleep(time.Millisecond * 10)
-			continue
-		}
-		var width int = 55
-		a := width * p.found / (p.total + p.leaked)
-		b := width * p.leaked / (p.total + p.leaked)
-		var bar [80]byte
-		for i := 0; i < width; i++ {
-			if i < a {
-				bar[i] = '='
-			} else if i < a+b {
-				bar[i] = '-'
-			} else {
-				bar[i] = ' '
-			}
-		}
-		now := time.Now()
-		lastDone = append(lastDone, p.found+p.leaked)
-		lastTime = append(lastTime, now)
-		for len(lastTime) > 18 { // 5 seconds
-			lastDone = lastDone[1:]
-			lastTime = lastTime[1:]
-		}
-		if len(lastTime) > 1 {
-			n := len(lastTime) - 1
-			d := lastTime[n].Sub(lastTime[0]).Seconds()
-			fps := float64(lastDone[n]-lastDone[0]) / d
-			fmt.Printf("[%s] % 8d % 2d%% % 4.0f/s \r", string(bar[:]), p.total+p.leaked, (p.found+p.leaked)*100/(p.total+p.leaked), fps)
-		}
-		time.Sleep(time.Millisecond * 300)
-	}
+func (c *objCounter) add(size int64) {
+	c.count.Increment()
+	c.bytes.IncrInt64(size)
+}
+
+func (c *objCounter) done() {
+	c.count.SetTotal(0, true)
+	c.bytes.SetTotal(0, true)
 }
 
 func gc(ctx *cli.Context) error {
@@ -172,19 +144,15 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("list all blocks: %s", err)
 	}
 
-	var total int64
-	processCounter, bar := utils.NewProgressCounter("listed slices counter:", logger.WriterLevel(logrus.InfoLevel))
+	progress, bar := utils.NewProgressCounter("listed slices counter:")
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
-	r := m.ListSlices(c, &slices, ctx.Bool("delete"), func() {
-		bar.SetTotal(total+2048, false)
-		bar.Increment()
-	})
+	r := m.ListSlices(c, &slices, ctx.Bool("delete"), bar.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
-	bar.SetTotal(-1, true)
-	processCounter.Wait()
+	bar.SetTotal(0, true)
+	progress.Wait()
 
 	keys := make(map[uint64]uint32)
 	var totalBytes uint64
@@ -194,14 +162,29 @@ func gc(ctx *cli.Context) error {
 	}
 	logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
 
-	var p = gcProgress{total: len(keys)}
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		go showProgress(&p)
+	var total int64 = int64(len(keys))
+	progress, bar = utils.NewDynProgressBar("scanning objects:", false)
+	bar.SetTotal(total, false)
+	addSpinner := func(name string) *objCounter {
+		count := progress.AddSpinner(0,
+			mpb.PrependDecorators(
+				decor.Name(fmt.Sprintf("%10s count:", name), decor.WC{W: 18, C: decor.DidentRight}),
+				decor.CurrentNoUnit("%d"),
+			),
+			mpb.BarFillerClearOnComplete(),
+		)
+		bytes := progress.AddSpinner(0,
+			mpb.PrependDecorators(
+				decor.Name(fmt.Sprintf("%10s bytes:", name), decor.WC{W: 18, C: decor.DidentRight}),
+				decor.CurrentKibiByte("% d"),
+			),
+			mpb.BarFillerClearOnComplete(),
+		)
+		return &objCounter{count, bytes}
 	}
+	valid, leaked, skipped := addSpinner("valid"), addSpinner("leaked"), addSpinner("skipped")
 
-	var skipped, skippedBytes int64
 	maxMtime := time.Now().Add(time.Hour * -1)
-
 	var leakedObj = make(chan string, 10240)
 	var wg sync.WaitGroup
 	for i := 0; i < ctx.Int("threads"); i++ {
@@ -217,8 +200,9 @@ func gc(ctx *cli.Context) error {
 	}
 
 	foundLeaked := func(obj object.Object) {
-		p.leakedBytes += obj.Size()
-		p.leaked++
+		total++
+		bar.SetTotal(total, false)
+		leaked.add(obj.Size())
 		if ctx.Bool("delete") {
 			leakedObj <- obj.Key()
 		}
@@ -232,8 +216,8 @@ func gc(ctx *cli.Context) error {
 		}
 		if obj.Mtime().After(maxMtime) || obj.Mtime().Unix() == 0 {
 			logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
-			skippedBytes += obj.Size()
-			skipped++
+			bar.Increment()
+			skipped.add(obj.Size())
 			continue
 		}
 
@@ -247,6 +231,7 @@ func gc(ctx *cli.Context) error {
 		if len(parts) != 3 {
 			continue
 		}
+		bar.Increment()
 		cid, _ := strconv.Atoi(parts[0])
 		size := keys[uint64(cid)]
 		if size == 0 {
@@ -261,28 +246,29 @@ func gc(ctx *cli.Context) error {
 				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
 			} else if (indx+1)*csize == int(size) {
-				p.found++
-			}
+				valid.add(0)
+			} // FIXME: else?
 		} else {
 			if indx*chunkConf.BlockSize+csize != int(size) {
 				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
 			} else {
-				p.found++
+				valid.add(0)
 			}
 		}
 	}
 	close(leakedObj)
 	wg.Wait()
+	bar.SetTotal(0, true)
+	valid.done()
+	leaked.done()
+	skipped.done()
+	progress.Wait()
 
-	if p.leaked > 0 {
-		logger.Infof("found %d leaked objects (%d bytes), skipped %d (%d bytes)", p.leaked, p.leakedBytes, skipped, skippedBytes)
-		if !ctx.Bool("delete") {
-			logger.Infof("Please add `--delete` to clean them")
-		}
-	} else {
-		logger.Infof("scan %d objects, no leaked found", p.found)
+	logger.Infof("scanned %d objects, %d valid, %d leaked (%d bytes), %d skipped (%d bytes)",
+		bar.Current(), valid.count.Current(), leaked.count.Current(), leaked.bytes.Current(), skipped.count.Current(), skipped.bytes.Current())
+	if leaked.count.Current() > 0 && !ctx.Bool("delete") {
+		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
-
 	return nil
 }

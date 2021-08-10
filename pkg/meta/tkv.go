@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/sirupsen/logrus"
 )
 
 type kvTxn interface {
@@ -2416,12 +2415,14 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
 
-	var total int64
-	p, bar := utils.NewDynProgressBar("Dump dir progress:", logger.WriterLevel(logrus.InfoLevel))
 	tree, err := m.dumpEntry(m.root)
 	if err != nil {
 		return err
 	}
+
+	var total int64 = 1 //root
+	progress, bar := utils.NewDynProgressBar("Dump dir progress:", false)
+	bar.Increment()
 	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
@@ -2429,8 +2430,11 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 	}); err != nil {
 		return err
 	}
-	bar.SetTotal(-1, true)
-	p.Wait()
+	if bar.Current() != total {
+		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
+	}
+	bar.SetTotal(0, true)
+	progress.Wait()
 
 	format, err := m.Load()
 	if err != nil {
@@ -2561,8 +2565,8 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
-	var total int64
-	p, bar := utils.NewDynProgressBar("CollectEntry progress:", logger.WriterLevel(logrus.InfoLevel))
+	var total int64 = 1 // root
+	progress, bar := utils.NewDynProgressBar("CollectEntry progress:", false)
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
 	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
@@ -2572,8 +2576,11 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	}); err != nil {
 		return err
 	}
-	bar.SetTotal(-1, true)
-	p.Wait()
+	if bar.Current() != total {
+		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
+	}
+	bar.SetTotal(0, true)
+	progress.Wait()
 
 	counters := &DumpedCounters{
 		NextInode:   2,

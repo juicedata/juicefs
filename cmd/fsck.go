@@ -17,8 +17,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/sirupsen/logrus"
 	"strings"
 	"time"
 
@@ -26,7 +24,11 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/urfave/cli/v2"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 )
 
 func checkFlags() *cli.Command {
@@ -96,24 +98,37 @@ func fsck(ctx *cli.Context) error {
 	logger.Infof("Found %d blocks (%d bytes)", len(blocks), totalBlockBytes)
 
 	logger.Infof("Listing all slices ...")
-	var total int64
-	progressCounter, bar := utils.NewProgressCounter("listed slices counter:", logger.WriterLevel(logrus.InfoLevel))
+	progress, bar := utils.NewProgressCounter("listed slices counter:")
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
-	r := m.ListSlices(c, &slices, false, func() {
-		bar.SetTotal(total+2048, false)
-		bar.Increment()
-	})
+	r := m.ListSlices(c, &slices, false, bar.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
-	bar.SetTotal(-1, true)
-	progressCounter.Wait()
+	bar.SetTotal(0, true)
+	progress.Wait()
+
+	progress, bar = utils.NewDynProgressBar("scanning slices:", false)
+	bar.SetTotal(int64(len(slices)), false)
+	lost := progress.AddSpinner(0,
+		mpb.PrependDecorators(
+			decor.Name("     lost count:", decor.WC{W: 17, C: decor.DidentRight}),
+			decor.CurrentNoUnit("%d"),
+		),
+		mpb.BarFillerClearOnComplete(),
+	)
+	lostBytes := progress.AddSpinner(0,
+		mpb.PrependDecorators(
+			decor.Name("     lost bytes:", decor.WC{W: 17, C: decor.DidentRight}),
+			decor.CurrentKibiByte("% d"),
+		),
+		mpb.BarFillerClearOnComplete(),
+	)
 
 	keys := make(map[uint64]uint32)
 	var totalBytes uint64
-	var lost, lostBytes int
 	for _, s := range slices {
+		bar.Increment()
 		keys[s.Chunkid] = s.Size
 		totalBytes += uint64(s.Size)
 		n := (s.Size - 1) / uint32(chunkConf.BlockSize)
@@ -126,15 +141,19 @@ func fsck(ctx *cli.Context) error {
 			if _, ok := blocks[key]; !ok {
 				if _, err := blob.Head(key); err != nil {
 					logger.Errorf("can't find block %s: %s", key, err)
-					lost++
-					lostBytes += sz
+					lost.Increment()
+					lostBytes.IncrBy(sz)
 				}
 			}
 		}
 	}
+	bar.SetTotal(0, true) // should be complete
+	lost.SetTotal(0, true)
+	lostBytes.SetTotal(0, true)
+	progress.Wait()
 	logger.Infof("Used by %d slices (%d bytes)", len(keys), totalBytes)
-	if lost > 0 {
-		logger.Fatalf("%d object is lost (%d bytes)", lost, lostBytes)
+	if lost.Current() > 0 {
+		logger.Fatalf("%d object is lost (%d bytes)", lost.Current(), lostBytes.Current())
 	}
 
 	return nil
