@@ -46,6 +46,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
   - [POSIX 兼容性](posix_compatibility.md)
   - [JuiceFS 缓存管理](cache_management.md)
   - [JuiceFS 性能诊断](operations_profiling.md)
+  - [JuiceFS 性能统计监控](stats_watcher.md)
   - [JuiceFS 故障诊断和分析](fault_diagnosis_and_analysis.md)
   - [JuiceFS 监控指标](p8s_metrics.md)
   - [FUSE 挂载选项](fuse_mount_options.md)
