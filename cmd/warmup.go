@@ -121,7 +121,7 @@ func warmup(ctx *cli.Context) error {
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, batchMax)
-	progress, bar := utils.NewDynProgressBar("warming up paths:", background)
+	progress, bar := utils.NewDynProgressBar("warming up paths: ", background)
 	bar.SetTotal(int64(len(paths)), false)
 	var index int
 	for _, path := range paths {

@@ -77,8 +77,7 @@ func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
 	}
 	bar := progress.AddBar(0,
 		mpb.PrependDecorators(
-			// display our title with one space on the right
-			decor.Name(title, decor.WC{W: len(title) + 1, C: decor.DidentRight}),
+			decor.Name(title, decor.WCSyncWidth),
 			decor.CountersNoUnit("%d / %d"),
 		),
 		mpb.AppendDecorators(
@@ -96,12 +95,21 @@ func NewProgressCounter(title string) (*mpb.Progress, *mpb.Bar) {
 	} else {
 		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil))
 	}
-	bar := progress.AddSpinner(0,
+	bar := progress.Add(0,
+		NewSpinner(),
 		mpb.PrependDecorators(
-			decor.Name(title, decor.WC{W: len(title) + 1, C: decor.DidentRight}),
-			decor.CurrentNoUnit("%d"),
+			decor.Name(title, decor.WCSyncWidth),
+			decor.CurrentNoUnit("%d", decor.WCSyncWidthR),
 		),
 		mpb.BarFillerClearOnComplete(),
 	)
 	return progress, bar
+}
+
+func NewSpinner() mpb.BarFiller {
+	spinnerStyle := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	for i, s := range spinnerStyle {
+		spinnerStyle[i] = "\033[1;32m" + s + "\033[0m"
+	}
+	return mpb.NewBarFiller(mpb.SpinnerStyle(spinnerStyle...))
 }

@@ -144,7 +144,7 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("list all blocks: %s", err)
 	}
 
-	progress, bar := utils.NewProgressCounter("listed slices counter:")
+	progress, bar := utils.NewProgressCounter("listed slices counter: ")
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
 	r := m.ListSlices(c, &slices, ctx.Bool("delete"), bar.Increment)
@@ -155,28 +155,31 @@ func gc(ctx *cli.Context) error {
 	progress.Wait()
 
 	keys := make(map[uint64]uint32)
+	var total int64
 	var totalBytes uint64
 	for _, s := range slices {
 		keys[s.Chunkid] = s.Size
+		total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1 // s.Size should be > 0
 		totalBytes += uint64(s.Size)
 	}
 	logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
 
-	var total int64 = int64(len(keys))
-	progress, bar = utils.NewDynProgressBar("scanning objects:", false)
+	progress, bar = utils.NewDynProgressBar("scanning objects: ", false)
 	bar.SetTotal(total, false)
 	addSpinner := func(name string) *objCounter {
-		count := progress.AddSpinner(0,
+		count := progress.Add(0,
+			utils.NewSpinner(),
 			mpb.PrependDecorators(
-				decor.Name(fmt.Sprintf("%10s count:", name), decor.WC{W: 18, C: decor.DidentRight}),
-				decor.CurrentNoUnit("%d"),
+				decor.Name(name+" count: ", decor.WCSyncWidth),
+				decor.CurrentNoUnit("%d", decor.WCSyncWidthR),
 			),
 			mpb.BarFillerClearOnComplete(),
 		)
-		bytes := progress.AddSpinner(0,
+		bytes := progress.Add(0,
+			utils.NewSpinner(),
 			mpb.PrependDecorators(
-				decor.Name(fmt.Sprintf("%10s bytes:", name), decor.WC{W: 18, C: decor.DidentRight}),
-				decor.CurrentKibiByte("% d"),
+				decor.Name(name+" bytes: ", decor.WCSyncWidth),
+				decor.CurrentKibiByte("% d", decor.WCSyncWidthR),
 			),
 			mpb.BarFillerClearOnComplete(),
 		)
@@ -245,9 +248,9 @@ func gc(ctx *cli.Context) error {
 			if (indx+1)*csize > int(size) {
 				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
-			} else if (indx+1)*csize == int(size) {
+			} else {
 				valid.add(0)
-			} // FIXME: else?
+			}
 		} else {
 			if indx*chunkConf.BlockSize+csize != int(size) {
 				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*chunkConf.BlockSize+csize, size)

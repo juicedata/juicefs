@@ -98,7 +98,7 @@ func fsck(ctx *cli.Context) error {
 	logger.Infof("Found %d blocks (%d bytes)", len(blocks), totalBlockBytes)
 
 	logger.Infof("Listing all slices ...")
-	progress, bar := utils.NewProgressCounter("listed slices counter:")
+	progress, bar := utils.NewProgressCounter("listed slices counter: ")
 	var c = meta.NewContext(0, 0, []uint32{0})
 	var slices []meta.Slice
 	r := m.ListSlices(c, &slices, false, bar.Increment)
@@ -108,19 +108,21 @@ func fsck(ctx *cli.Context) error {
 	bar.SetTotal(0, true)
 	progress.Wait()
 
-	progress, bar = utils.NewDynProgressBar("scanning slices:", false)
+	progress, bar = utils.NewDynProgressBar("scanning slices: ", false)
 	bar.SetTotal(int64(len(slices)), false)
-	lost := progress.AddSpinner(0,
+	lost := progress.Add(0,
+		utils.NewSpinner(),
 		mpb.PrependDecorators(
-			decor.Name("     lost count:", decor.WC{W: 17, C: decor.DidentRight}),
-			decor.CurrentNoUnit("%d"),
+			decor.Name("lost count: ", decor.WCSyncWidth),
+			decor.CurrentNoUnit("%d", decor.WCSyncWidthR),
 		),
 		mpb.BarFillerClearOnComplete(),
 	)
-	lostBytes := progress.AddSpinner(0,
+	lostBytes := progress.Add(0,
+		utils.NewSpinner(),
 		mpb.PrependDecorators(
-			decor.Name("     lost bytes:", decor.WC{W: 17, C: decor.DidentRight}),
-			decor.CurrentKibiByte("% d"),
+			decor.Name("lost bytes: ", decor.WCSyncWidth),
+			decor.CurrentKibiByte("% d", decor.WCSyncWidthR),
 		),
 		mpb.BarFillerClearOnComplete(),
 	)

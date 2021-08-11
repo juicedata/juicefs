@@ -2581,7 +2581,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) error {
 	}
 
 	var total int64 = 1 // root
-	progress, bar := utils.NewDynProgressBar("Dump dir progress:", false)
+	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
 	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
 		total += totalIncr
@@ -2760,7 +2760,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 
 	var total int64 = 1 // root
-	progress, bar := utils.NewDynProgressBar("CollectEntry progress:", false)
+	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
 	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
