@@ -145,7 +145,29 @@ func mount(c *cli.Context) error {
 	logger.Infof("Data use %s", blob)
 	blob = object.WithMetrics(blob)
 	blob = object.NewLimited(blob, c.Int64("upload-limit")*1e6/8, c.Int64("download-limit")*1e6/8)
-	store := chunk.NewCachedStore(blob, chunkConf)
+	cStore := chunk.NewCachedStore(blob, chunkConf)
+	var store = cStore
+
+	if c.String("mode") == "tiered" {
+		logger.Infof("Mode use %s", "tiered")
+		tieredConfig := chunk.TieredConfig{
+			Config:               chunkConf,
+			TieredDiskDir:        c.String("tiered-disk-dir"),
+			TieredDiskMode:       os.FileMode(0600),
+			TieredDiskSize:       int64(c.Int("tiered-disk-size")),
+			TieredDiskFreeSpace:  float32(c.Float64("tiered-disk-free-space-ratio")),
+			TieredDiskBufferSize: chunkConf.BufferSize,
+		}
+
+		ds := utils.SplitDir(tieredConfig.TieredDiskDir)
+		for i := range ds {
+			ds[i] = filepath.Join(ds[i], format.UUID)
+		}
+		tieredConfig.TieredDiskDir = strings.Join(ds, string(os.PathListSeparator))
+
+		store = chunk.NewTieredStore(cStore, &blob, tieredConfig)
+	}
+
 	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
 		length := args[1].(uint32)
@@ -236,6 +258,7 @@ func mount(c *cli.Context) error {
 
 func clientFlags() []cli.Flag {
 	var defaultCacheDir = "/var/jfsCache"
+	var defaultTieredDiskDir = "/var/jfsTieredDisk"
 	switch runtime.GOOS {
 	case "darwin":
 		fallthrough
@@ -246,6 +269,7 @@ func clientFlags() []cli.Flag {
 			return nil
 		}
 		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
+		defaultTieredDiskDir = path.Join(homeDir, ".juicefs", "jfsTieredDisk")
 	}
 	return []cli.Flag{
 		&cli.IntFlag{
@@ -325,6 +349,20 @@ func clientFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "subdir",
 			Usage: "mount a sub-directory as root",
+		},
+		&cli.StringFlag{
+			Name:  "mode",
+			Usage: "cache/tiered. default: cache",
+		},
+		&cli.StringFlag{
+			Name:  "tiered-disk-dir",
+			Value: defaultTieredDiskDir,
+			Usage: "directory paths of local disk, use colon to separate multiple paths",
+		},
+		&cli.IntFlag{
+			Name:  "tiered-disk-size",
+			Value: 1<<10,
+			Usage: "size of disk objects in MiB",
 		},
 	}
 }
