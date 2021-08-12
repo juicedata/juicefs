@@ -18,6 +18,8 @@
 package main
 
 import (
+	"bytes"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -124,7 +126,40 @@ func mount_flags() []cli.Flag {
 	}
 }
 
+func disableUpdatedb() {
+	path := "/etc/updatedb.conf"
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return
+	}
+	fstype := "fuse.juicefs"
+	if bytes.Contains(data, []byte(fstype)) {
+		return
+	}
+	// assume that fuse.sshfs is already in PRUNEFS
+	knownFS := "fuse.sshfs"
+	p1 := bytes.Index(data, []byte("PRUNEFS"))
+	p2 := bytes.Index(data, []byte(knownFS))
+	if p1 > 0 && p2 > p1 {
+		var nd []byte
+		nd = append(nd, data[:p2]...)
+		nd = append(nd, fstype...)
+		nd = append(nd, ' ')
+		nd = append(nd, data[p2:]...)
+		err = ioutil.WriteFile(path, nd, 0644)
+		if err != nil {
+			logger.Warnf("update %s: %s", path, err)
+		} else {
+			logger.Infof("Add %s into PRUNEFS of %s", fstype, path)
+		}
+	}
+}
+
 func mount_main(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, c *cli.Context) {
+	if os.Getuid() == 0 && os.Getpid() != 1 {
+		disableUpdatedb()
+	}
+
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Mountpoint)
 	err := fuse.Serve(conf, c.String("o"), c.Float64("attr-cache"), c.Float64("entry-cache"), c.Float64("dir-entry-cache"), c.Bool("enable-xattr"))
 	if err != nil {
