@@ -16,11 +16,13 @@
 package utils
 
 import (
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/mattn/go-isatty"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 )
 
 // Min returns min of 2 int
@@ -65,16 +67,19 @@ func SplitDir(d string) []string {
 	return dd
 }
 
-//NewDynProgressBar init a dynamic progress bar,the title will appears at the head of the progress bar
-func NewDynProgressBar(title string, w io.Writer) (*mpb.Progress, *mpb.Bar) {
-	progress := mpb.New(mpb.WithWidth(64), mpb.WithOutput(w))
-	bar := progress.Add(0,
-		mpb.NewBarFiller(mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟")),
+// NewDynProgressBar init a dynamic progress bar,the title will appears at the head of the progress bar
+func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
+	var progress *mpb.Progress
+	if !quiet && isatty.IsTerminal(os.Stdout.Fd()) {
+		progress = mpb.New(mpb.WithWidth(64))
+	} else {
+		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil))
+	}
+	bar := progress.AddBar(0,
 		mpb.PrependDecorators(
-			// display our title with one space on the right
-			decor.Name(title, decor.WC{W: len(title) + 1, C: decor.DidentRight}),
+			decor.Name(title, decor.WCSyncWidth),
+			decor.CountersNoUnit("%d / %d"),
 		),
-		mpb.PrependDecorators(decor.CountersNoUnit("%d / %d")),
 		mpb.AppendDecorators(
 			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
 		),
@@ -82,15 +87,29 @@ func NewDynProgressBar(title string, w io.Writer) (*mpb.Progress, *mpb.Bar) {
 	return progress, bar
 }
 
-//NewProgressCounter init a progress counter
-func NewProgressCounter(title string, w io.Writer) (*mpb.Progress, *mpb.Bar) {
-	process := mpb.New(mpb.WithWidth(64), mpb.WithOutput(w))
-	bar := process.AddSpinner(0,
+// NewProgressCounter init a progress counter
+func NewProgressCounter(title string) (*mpb.Progress, *mpb.Bar) {
+	var progress *mpb.Progress
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		progress = mpb.New(mpb.WithWidth(64))
+	} else {
+		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil))
+	}
+	bar := progress.Add(0,
+		NewSpinner(),
 		mpb.PrependDecorators(
-			decor.Name(title, decor.WC{W: len(title) + 1, C: decor.DidentRight}),
-			decor.CurrentNoUnit("%d"),
+			decor.Name(title, decor.WCSyncWidth),
+			decor.CurrentNoUnit("%d", decor.WCSyncWidthR),
 		),
 		mpb.BarFillerClearOnComplete(),
 	)
-	return process, bar
+	return progress, bar
+}
+
+func NewSpinner() mpb.BarFiller {
+	spinnerStyle := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	for i, s := range spinnerStyle {
+		spinnerStyle[i] = "\033[1;32m" + s + "\033[0m"
+	}
+	return mpb.NewBarFiller(mpb.SpinnerStyle(spinnerStyle...))
 }

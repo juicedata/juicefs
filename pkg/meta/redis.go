@@ -37,7 +37,6 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/sirupsen/logrus"
 )
 
 /*
@@ -2790,7 +2789,6 @@ func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showPr
 					if showProgress != nil {
 						showProgress()
 					}
-
 				}
 			}
 		}
@@ -2975,8 +2973,9 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		return err
 	}
 
-	var total int64
-	p, bar := utils.NewDynProgressBar("Dump dir progress:", logger.WriterLevel(logrus.InfoLevel))
+	var total int64 = 1 // root
+	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
+	bar.Increment()
 	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
@@ -2984,8 +2983,11 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	}); err != nil {
 		return err
 	}
-	bar.SetTotal(-1, true)
-	p.Wait()
+	if bar.Current() != total {
+		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
+	}
+	bar.SetTotal(0, true) // FIXME: current != total
+	progress.Wait()
 
 	format, err := m.Load()
 	if err != nil {
@@ -3040,6 +3042,14 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
 	typ := typeFromString(e.Attr.Type)
 	inode := e.Attr.Inode
+	if showProgress != nil {
+		if typ == TypeDirectory {
+			showProgress(int64(len(e.Entries)), 1)
+		} else {
+			showProgress(0, 1)
+		}
+	}
+
 	if exist, ok := entries[inode]; ok {
 		attr := e.Attr
 		eattr := exist.Attr
@@ -3054,19 +3064,6 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress fun
 		return nil
 	}
 	entries[inode] = e
-
-	if showProgress != nil {
-		if typ == TypeFile {
-			showProgress(0, 1)
-		} else if typ == TypeDirectory {
-			if inode == 1 {
-				//root inode total +1 should before then current +1
-				//otherwise the progress bar will appear 1/0 at a moment in time
-				showProgress(1, 0)
-			}
-			showProgress(int64(len(e.Entries)), 1)
-		}
-	}
 
 	if typ == TypeFile {
 		e.Attr.Nlink = 1 // reset
@@ -3167,8 +3164,8 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
-	var total int64
-	progress, bar := utils.NewDynProgressBar("CollectEntry progress:", logger.WriterLevel(logrus.InfoLevel))
+	var total int64 = 1 // root
+	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
 	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
@@ -3178,7 +3175,10 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	}); err != nil {
 		return err
 	}
-	bar.SetTotal(-1, true)
+	if bar.Current() != total {
+		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
+	}
+	bar.SetTotal(0, true) // FIXME: current != total
 	progress.Wait()
 
 	counters := &DumpedCounters{}
