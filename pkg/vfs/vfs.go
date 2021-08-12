@@ -544,7 +544,7 @@ func Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err s
 				}
 				n = copy(buf, data)
 			}
-			if off > 2<<20 {
+			if len(h.data) > 2<<20 {
 				// drop first part to avoid OOM
 				h.off += 1 << 20
 				h.data = h.data[1<<20:]
