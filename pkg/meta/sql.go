@@ -1751,7 +1751,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 			done = false
 		} else {
 			_ = m.txn(func(ses *xorm.Session) error {
-				_, err = ses.Delete(&s)
+				_, err = ses.Delete(&sustained{Sid: sid, Inode: inode})
 				return err
 			})
 		}
