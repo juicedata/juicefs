@@ -2205,7 +2205,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 				return err
 			}
 		}
-		n, err := ses.Delete(&c)
+		n, err := ses.Delete(chunk{Inode: c.Inode, Indx: c.Indx})
 		if err == nil && n == 0 {
 			err = fmt.Errorf("chunk %d:%d changed, try restarting transaction", inode, indx)
 		}
@@ -2240,6 +2240,7 @@ func (m *dbMeta) deleteFile(inode Ino, length uint64) {
 	for _, indx := range indexes {
 		err = m.deleteChunk(inode, indx)
 		if err != nil {
+			logger.Debugf("deleteChunk inode %d index %d error: %s", inode, indx, err)
 			return
 		}
 	}
