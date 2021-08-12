@@ -44,7 +44,7 @@ func dump(ctx *cli.Context) error {
 	if err := m.DumpMeta(fp); err != nil {
 		return err
 	}
-	logger.Infof("Dump metadata into %s success", ctx.Args().Get(1))
+	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))
 	return nil
 }
 

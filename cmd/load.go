@@ -44,7 +44,7 @@ func load(ctx *cli.Context) error {
 	if err := m.LoadMeta(fp); err != nil {
 		return err
 	}
-	logger.Infof("Load metadata from %s success", ctx.Args().Get(1))
+	logger.Infof("Load metadata from %s succeed", ctx.Args().Get(1))
 	return nil
 }
 
