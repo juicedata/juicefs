@@ -41,17 +41,20 @@ var (
 
 type readCounter struct {
 	io.Reader
-	method string
+	readOnce bool
+	method   string
 }
 
 func newReadCounter(r io.Reader, method string) *readCounter {
-	return &readCounter{r, method}
+	return &readCounter{r, false, method}
 }
 
 // Read update metrics while reading data.
 func (counter *readCounter) Read(buf []byte) (int, error) {
 	n, err := counter.Reader.Read(buf)
-	dataBytes.WithLabelValues(counter.method).Add(float64(n))
+	if !counter.readOnce {
+		dataBytes.WithLabelValues(counter.method).Add(float64(n))
+	}
 	return n, err
 }
 
@@ -64,7 +67,9 @@ func (counter *readCounter) WriteTo(w io.Writer) (n int64, err error) {
 		defer bufPool.Put(buf)
 		n, err = io.CopyBuffer(w, counter.Reader, *buf)
 	}
-	dataBytes.WithLabelValues(counter.method).Add(float64(n))
+	if !counter.readOnce {
+		dataBytes.WithLabelValues(counter.method).Add(float64(n))
+	}
 	return
 }
 
@@ -79,7 +84,18 @@ func (counter *readCounter) Close() error {
 // Seek call the Seek in underlying reader.
 func (counter *readCounter) Seek(offset int64, whence int) (int64, error) {
 	if s, ok := counter.Reader.(io.Seeker); ok {
-		return s.Seek(offset, whence)
+		current, err := s.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return current, err
+		}
+		after, err := s.Seek(offset, whence)
+		if err != nil {
+			return after, err
+		}
+		if current > 0 && after == 0 {
+			counter.readOnce = true
+		}
+		return after, err
 	}
 	return 0, fmt.Errorf("%+v does not support Seek()", counter.Reader)
 }
