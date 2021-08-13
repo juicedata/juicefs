@@ -41,6 +41,7 @@ require (
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/ncw/swift v1.0.53
 	github.com/pengsrc/go-shared v0.2.0 // indirect
+	github.com/pingcap/log v0.0.0-20210317133921-96f4fcab92a4
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.10.0
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect

@@ -270,6 +270,8 @@ func setLoggerLevel(c *cli.Context) {
 		utils.SetLogLevel(logrus.DebugLevel)
 	} else if c.Bool("quiet") {
 		utils.SetLogLevel(logrus.WarnLevel)
+	} else {
+		utils.SetLogLevel(logrus.InfoLevel)
 	}
 	setupAgent(c)
 }
