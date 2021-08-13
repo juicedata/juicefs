@@ -530,7 +530,9 @@ func (c *wChunk) upload(indx int) {
 				c.syncUpload(key, block)
 			} else {
 				c.errors <- nil
-				go c.asyncUpload(key, block, stagingPath)
+				if c.store.conf.UploadOnFull() {
+					go c.asyncUpload(key, block, stagingPath)
+				}
 			}
 		} else {
 			c.syncUpload(key, block)
@@ -604,6 +606,7 @@ type Config struct {
 	Compress       string
 	MaxUpload      int
 	Writeback      bool
+	WritebackMode  string
 	Partitions     int
 	BlockSize      int
 	GetTimeout     time.Duration
@@ -612,6 +615,10 @@ type Config struct {
 	BufferSize     int
 	Readahead      int
 	Prefetch       int
+}
+
+func (c *Config) UploadOnFull() bool {
+	return c.WritebackMode == "upload-on-full"
 }
 
 type cachedStore struct {
@@ -741,6 +748,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 			_, used := store.bcache.stats()
 			return float64(used)
 		}))
+
 	go store.uploadStaging()
 	return store
 }

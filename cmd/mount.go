@@ -121,6 +121,7 @@ func mount(c *cli.Context) error {
 		PutTimeout: time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:  c.Int("max-uploads"),
 		Writeback:  c.Bool("writeback"),
+		WritebackMode:  c.String("writebackMode"),
 		Prefetch:   c.Int("prefetch"),
 		BufferSize: c.Int("buffer-size") << 20,
 
