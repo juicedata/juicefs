@@ -30,6 +30,8 @@ JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/c
 > **NOTICE**:
 >
 > JuiceFS use local mapping of user and UID. So, you should [sync all the needed users and their UIDs](sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error. You can also specify a global user list and user group file, please refer to the [relevant configurations](#other-configurations).
+>
+> JuiceFS Hadoop Java SDK need extra 4 * ``juicefs.memory-size`` off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
 
 ## Hadoop Compatibility
 
