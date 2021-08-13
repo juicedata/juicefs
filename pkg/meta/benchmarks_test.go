@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -32,11 +34,10 @@ const (
 	tkvAddr = "tikv://127.0.0.1:2379/juicefs"
 )
 
-/*
 func init() {
-	utils.SetOutFile("bench-test.log")
+	utils.SetLogLevel(logrus.InfoLevel)
+	// utils.SetOutFile("bench-test.log")
 }
-*/
 
 func encodeSlices(size int) []string {
 	w := utils.NewBuffer(24)
