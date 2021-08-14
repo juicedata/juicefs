@@ -30,6 +30,8 @@ JuiceFS 提供兼容 HDFS 接口的 Java 客户端来支持 Hadoop 生态中的�
 > **注意**：
 >
 > 由于 JuiceFS 默认使用本地的 user 和 UID 映射。因此，在分布式环境下使用，需要[同步所有需要使用的 user 和 UID](sync_accounts_between_multiple_hosts.md) 到所有的 Hadoop 节点上，以避免权限问题。也可以指定一个全局的用户列表和所属用户组文件，具体请参见[相关配置](#其他配置)。
+> 
+> JuiceFS Hadoop Java SDK 最多需要额外使用 4 * ``juicefs.memory-size`` 的 off-heap 内存用来加速读写性能，默认情况下，最多需要额外 1.2 GB 内存（取决于写入负载）。
 
 ## Hadoop 兼容性
 
