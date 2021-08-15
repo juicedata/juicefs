@@ -121,7 +121,7 @@ func mount(c *cli.Context) error {
 		PutTimeout: time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:  c.Int("max-uploads"),
 		Writeback:  c.Bool("writeback"),
-		WritebackMode:  c.String("writebackMode"),
+		DelayUpload:  c.String("delay-upload"),
 		Prefetch:   c.Int("prefetch"),
 		BufferSize: c.Int("buffer-size") << 20,
 
@@ -132,6 +132,9 @@ func mount(c *cli.Context) error {
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
 	}
+
+	chunkConf.ValidateParams()
+
 	if chunkConf.CacheDir != "memory" {
 		ds := utils.SplitDir(chunkConf.CacheDir)
 		for i := range ds {
@@ -293,6 +296,10 @@ func clientFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "writeback",
 			Usage: "upload objects in background",
+		},
+		&cli.StringFlag{
+			Name:  "deploy-upload",
+			Usage: "upload objects with delay time in h(our),m(inute),s(econds)",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",

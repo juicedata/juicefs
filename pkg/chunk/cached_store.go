@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -530,7 +531,7 @@ func (c *wChunk) upload(indx int) {
 				c.syncUpload(key, block)
 			} else {
 				c.errors <- nil
-				if c.store.conf.UploadOnFull() {
+				if c.store.conf.DelayUpload == "" {
 					go c.asyncUpload(key, block, stagingPath)
 				}
 			}
@@ -606,7 +607,7 @@ type Config struct {
 	Compress       string
 	MaxUpload      int
 	Writeback      bool
-	WritebackMode  string
+	DelayUpload    string
 	Partitions     int
 	BlockSize      int
 	GetTimeout     time.Duration
@@ -617,8 +618,30 @@ type Config struct {
 	Prefetch       int
 }
 
-func (c *Config) UploadOnFull() bool {
-	return c.WritebackMode == "upload-on-full"
+func (c *Config) ValidateParams() {
+	if !c.Writeback && c.DelayUpload != "" {
+		logger.Fatalf("writeback should be set true before congiure deploy-upload")
+	}
+	if matched, _ := regexp.MatchString("\\d+[h|H|m|M|S|s]", c.DelayUpload); !matched {
+		logger.Fatalf("deploy-upload supports suffixs: h(our),m(inute),s(econds)")
+	}
+}
+
+// h,m,s
+func (c *Config) DelayUploadSeconds() uint32 {
+	timeValue, _ := strconv.Atoi(c.DelayUpload[0 : len(c.DelayUpload)-2])
+	suffix := strings.ToLower(c.DelayUpload[len(c.DelayUpload)-1:])
+	var seconds = time.Now().Unix()
+	switch suffix {
+	case "h":
+		seconds = int64(timeValue) * 60 * 60
+	case "m":
+		seconds = int64(timeValue) * 60
+	case "s":
+		seconds = int64(timeValue)
+	}
+
+	return uint32(seconds)
 }
 
 type cachedStore struct {
@@ -750,6 +773,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		}))
 
 	go store.uploadStaging()
+	go store.cleanupDelayStaging()
 	return store
 }
 
@@ -763,6 +787,67 @@ func parseObjOrigSize(key string) int {
 	return l
 }
 
+func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
+	block, err := ioutil.ReadFile(stagingPath)
+	if err != nil {
+		logger.Errorf("open %s: %s", stagingPath, err)
+		return
+	}
+	buf := make([]byte, store.compressor.CompressBound(len(block)))
+	n, err := store.compressor.Compress(buf, block)
+	if err != nil {
+		logger.Errorf("compress chunk %s: %s", stagingPath, err)
+		return
+	}
+	compressed := buf[:n]
+
+	if strings.Count(key, "_") == 1 {
+		// add size at the end
+		key = fmt.Sprintf("%s_%d", key, len(block))
+	}
+	try := 0
+	for {
+		err := store.storage.Put(key, bytes.NewReader(compressed))
+		if err == nil {
+			break
+		}
+		logger.Infof("upload %s: %s (try %d)", key, err, try)
+		try++
+		time.Sleep(time.Second * time.Duration(try*try))
+	}
+	store.bcache.uploaded(key, len(block))
+	os.Remove(stagingPath)
+}
+
+func (store *cachedStore) cleanupDelayStaging() {
+	stores := store.bcache.(*cacheManager).stores
+	fschan := make(chan map[string]string)
+
+	for i := range stores {
+		go func(i int) {
+			fschan <- stores[i].scanStaging()
+		}(i)
+	}
+	for range stores {
+		fs := <-fschan
+		for key, path := range fs {
+			store.currentUpload <- true
+			go func(key, stagingPath string) {
+				defer func() {
+					<-store.currentUpload
+				}()
+				fileInfo, _ := os.Stat(stagingPath)
+				isTimeout := time.Now().Unix()-fileInfo.ModTime().Unix() > int64(store.conf.DelayUploadSeconds())
+				if isTimeout {
+					store.uploadStagingFile(key, stagingPath)
+				}
+
+			}(key, path)
+		}
+	}
+
+}
+
 func (store *cachedStore) uploadStaging() {
 	staging := store.bcache.scanStaging()
 	for key, path := range staging {
@@ -771,35 +856,7 @@ func (store *cachedStore) uploadStaging() {
 			defer func() {
 				<-store.currentUpload
 			}()
-			block, err := ioutil.ReadFile(stagingPath)
-			if err != nil {
-				logger.Errorf("open %s: %s", stagingPath, err)
-				return
-			}
-			buf := make([]byte, store.compressor.CompressBound(len(block)))
-			n, err := store.compressor.Compress(buf, block)
-			if err != nil {
-				logger.Errorf("compress chunk %s: %s", stagingPath, err)
-				return
-			}
-			compressed := buf[:n]
-
-			if strings.Count(key, "_") == 1 {
-				// add size at the end
-				key = fmt.Sprintf("%s_%d", key, len(block))
-			}
-			try := 0
-			for {
-				err := store.storage.Put(key, bytes.NewReader(compressed))
-				if err == nil {
-					break
-				}
-				logger.Infof("upload %s: %s (try %d)", key, err, try)
-				try++
-				time.Sleep(time.Second * time.Duration(try*try))
-			}
-			store.bcache.uploaded(key, len(block))
-			os.Remove(stagingPath)
+			store.uploadStagingFile(key, stagingPath)
 		}(key, path)
 	}
 }
