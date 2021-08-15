@@ -113,16 +113,21 @@ func mount(c *cli.Context) error {
 	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(metricLabels,
 		prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.DefaultRegisterer))
 
+	if !c.Bool("writeback") && c.IsSet("delay-upload"){
+		logger.Warnf("writeback should be set true before congiure deploy-upload")
+	}
+
 	chunkConf := chunk.Config{
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
 
-		GetTimeout: time.Second * time.Duration(c.Int("get-timeout")),
-		PutTimeout: time.Second * time.Duration(c.Int("put-timeout")),
-		MaxUpload:  c.Int("max-uploads"),
-		Writeback:  c.Bool("writeback"),
-		Prefetch:   c.Int("prefetch"),
-		BufferSize: c.Int("buffer-size") << 20,
+		GetTimeout:  time.Second * time.Duration(c.Int("get-timeout")),
+		PutTimeout:  time.Second * time.Duration(c.Int("put-timeout")),
+		MaxUpload:   c.Int("max-uploads"),
+		Writeback:   c.Bool("writeback"),
+		DelayUpload: c.Duration("delay-upload"),
+		Prefetch:    c.Int("prefetch"),
+		BufferSize:  c.Int("buffer-size") << 20,
 
 		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
@@ -131,6 +136,7 @@ func mount(c *cli.Context) error {
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
 	}
+
 	if chunkConf.CacheDir != "memory" {
 		ds := utils.SplitDir(chunkConf.CacheDir)
 		for i := range ds {
@@ -292,6 +298,11 @@ func clientFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "writeback",
 			Usage: "upload objects in background",
+		},
+		&cli.DurationFlag{
+			Name:  "delay-upload",
+			Value: time.Duration(0),
+			Usage: "upload objects with delay time.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
