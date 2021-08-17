@@ -229,10 +229,10 @@ With the help of official tool `TiUP`, you can easily build a local playground f
 When using TiKV as the metadata storage engine, specify parameters as the following format:
 
 ```shell
-tikv://<pd_addr>[,<pd_addr>...][/<prefix>]
+tikv://<pd_addr>[,<pd_addr>...]/<prefix>
 ```
 
-The `prefix` is an optional, user-defined string, which can be used to distinguish multiple file systems or applications when they share the same TiKV cluster. For example:
+The `prefix` is an user-defined string, which can be used to distinguish multiple file systems or applications when they share the same TiKV cluster. For example:
 
 ```shell
 $ juicefs format --storage minio \
