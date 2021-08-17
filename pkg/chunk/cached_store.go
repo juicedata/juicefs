@@ -437,7 +437,7 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 		// release the memory and wait
 		block.Release()
 		c.store.pendingMutex.Lock()
-		c.store.pendingKeys[key] = true
+		c.store.pendingKeys[key] = int32(blockSize)
 		c.store.pendingMutex.Unlock()
 		defer func() {
 			c.store.pendingMutex.Lock()
@@ -454,7 +454,7 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 			c.store.pendingMutex.Lock()
 			ok := c.store.pendingKeys[key]
 			c.store.pendingMutex.Unlock()
-			if ok {
+			if ok > 0 {
 				logger.Errorf("read stagging file %s: %s", stagingPath, err)
 			} else {
 				logger.Debugf("%s is not needed, drop it", key)
@@ -530,7 +530,13 @@ func (c *wChunk) upload(indx int) {
 				c.syncUpload(key, block)
 			} else {
 				c.errors <- nil
-				go c.asyncUpload(key, block, stagingPath)
+				if c.store.conf.DelayUpload.Seconds() == 0 {
+					go c.asyncUpload(key, block, stagingPath)
+				} else {
+					c.store.pendingMutex.Lock()
+					c.store.pendingKeys[key] = int32(blen)
+					c.store.pendingMutex.Unlock()
+				}
 			}
 		} else {
 			c.syncUpload(key, block)
@@ -604,6 +610,7 @@ type Config struct {
 	Compress       string
 	MaxUpload      int
 	Writeback      bool
+	DelayUpload    time.Duration
 	Partitions     int
 	BlockSize      int
 	GetTimeout     time.Duration
@@ -621,7 +628,7 @@ type cachedStore struct {
 	conf          Config
 	group         *Controller
 	currentUpload chan bool
-	pendingKeys   map[string]bool
+	pendingKeys   map[string]int32
 	pendingMutex  sync.Mutex
 	compressor    compress.Compressor
 	seekable      bool
@@ -698,7 +705,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		compressor:    compressor,
 		seekable:      compressor.CompressBound(0) == 0,
 		bcache:        newCacheManager(&config),
-		pendingKeys:   make(map[string]bool),
+		pendingKeys:   make(map[string]int32),
 		group:         &Controller{},
 	}
 	if config.CacheSize == 0 {
@@ -742,6 +749,14 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 			return float64(used)
 		}))
 	go store.uploadStaging()
+	if store.conf.CacheDir != "memory" {
+		go func() {
+			for {
+				store.cleanDelayStaging()
+				time.Sleep(time.Minute)
+			}
+		}()
+	}
 	return store
 }
 
@@ -755,6 +770,118 @@ func parseObjOrigSize(key string) int {
 	return l
 }
 
+func (store *cachedStore) uploadStagingFile(key string, stagingPath string) int {
+	block, err := ioutil.ReadFile(stagingPath)
+	if err != nil {
+		logger.Errorf("open %s: %s", stagingPath, err)
+		return 0
+	}
+	buf := make([]byte, store.compressor.CompressBound(len(block)))
+	n, err := store.compressor.Compress(buf, block)
+	if err != nil {
+		logger.Errorf("compress chunk %s: %s", stagingPath, err)
+		return 0
+	}
+	compressed := buf[:n]
+
+	if strings.Count(key, "_") == 1 {
+		// add size at the end
+		key = fmt.Sprintf("%s_%d", key, len(block))
+	}
+	try := 0
+	for {
+		err := store.storage.Put(key, bytes.NewReader(compressed))
+		if err == nil {
+			break
+		}
+		logger.Infof("upload %s: %s (try %d)", key, err, try)
+		try++
+		time.Sleep(time.Second * time.Duration(try*try))
+	}
+	store.bcache.uploaded(key, len(block))
+	os.Remove(stagingPath)
+	return len(block)
+}
+
+func computeFreeGoal(innerStore *cacheStore, br float32, freeRatio float32) int64 {
+	total, _, _, _ := getDiskUsage(innerStore.dir)
+	var goal int64
+	toFree := int64(float32(total) * (freeRatio - br))
+	if toFree > innerStore.used {
+		goal = innerStore.used
+	} else {
+		goal = toFree
+	}
+	return goal
+}
+
+func (store *cachedStore) cleanDelayStaging() {
+	cacheStoreKeys := make(map[*cacheStore]map[string]cacheItem)
+
+	var maxLen = len(store.pendingKeys)
+	if maxLen > 10000 {
+		maxLen = 10000
+	}
+	store.pendingMutex.Lock()
+	var count = 0
+	for key, blockSize := range store.pendingKeys {
+		if count > maxLen {
+			break
+		}
+		innerStore := store.bcache.getStore(key)
+		if _, ok := cacheStoreKeys[innerStore]; !ok {
+			cacheStoreKeys[innerStore] = make(map[string]cacheItem)
+		}
+		innerStore.Lock()
+		cacheStoreKeys[innerStore][key] = cacheItem{
+			size:  blockSize,
+			atime: innerStore.keys[key].atime,
+		}
+		innerStore.Unlock()
+		count += 1
+	}
+	store.pendingMutex.Unlock()
+
+	uploadByKey := func(key string, stagingPath string) {
+		store.currentUpload <- true
+		go func(key string, stagingPath string) {
+			store.uploadStagingFile(key, stagingPath)
+			store.pendingMutex.Lock()
+			delete(store.pendingKeys, key)
+			store.pendingMutex.Unlock()
+			<-store.currentUpload
+		}(key, stagingPath)
+	}
+
+	for innerStore, keys := range cacheStoreKeys {
+		go func(innerStore *cacheStore, keys map[string]cacheItem) {
+			// clean all block atime > delay-upload
+			leftKeys := make(map[string]cacheItem)
+			for key, ci := range keys {
+				isTimeout := time.Now().Unix()-int64(ci.atime) > int64(store.conf.DelayUpload.Seconds())
+				if isTimeout {
+					uploadByKey(key, innerStore.stagePath(key))
+				} else {
+					leftKeys[key] = ci
+				}
+			}
+
+			// if the free disk < freeRatio, try to remove old block
+			br, fr := innerStore.curFreeRatio()
+			freeRatio := innerStore.freeRatio * 1.5
+			if br >= freeRatio && fr >= freeRatio {
+				return
+			}
+			goal := computeFreeGoal(innerStore, br, freeRatio)
+
+			toDelKeys := TwoRandomEvict(leftKeys, goal)
+			for _, key := range *toDelKeys {
+				uploadByKey(key, innerStore.stagePath(key))
+			}
+		}(innerStore, keys)
+	}
+}
+
 func (store *cachedStore) uploadStaging() {
 	staging := store.bcache.scanStaging()
 	for key, path := range staging {
@@ -763,35 +890,7 @@ func (store *cachedStore) uploadStaging() {
 			defer func() {
 				<-store.currentUpload
 			}()
-			block, err := ioutil.ReadFile(stagingPath)
-			if err != nil {
-				logger.Errorf("open %s: %s", stagingPath, err)
-				return
-			}
-			buf := make([]byte, store.compressor.CompressBound(len(block)))
-			n, err := store.compressor.Compress(buf, block)
-			if err != nil {
-				logger.Errorf("compress chunk %s: %s", stagingPath, err)
-				return
-			}
-			compressed := buf[:n]
-
-			if strings.Count(key, "_") == 1 {
-				// add size at the end
-				key = fmt.Sprintf("%s_%d", key, len(block))
-			}
-			try := 0
-			for {
-				err := store.storage.Put(key, bytes.NewReader(compressed))
-				if err == nil {
-					break
-				}
-				logger.Infof("upload %s: %s (try %d)", key, err, try)
-				try++
-				time.Sleep(time.Second * time.Duration(try*try))
-			}
-			store.bcache.uploaded(key, len(block))
-			os.Remove(stagingPath)
+			store.uploadStagingFile(key, stagingPath)
 		}(key, path)
 	}
 }
