@@ -513,6 +513,7 @@ type CacheManager interface {
 	scanStaging() map[string]string
 	stats() (int64, int64)
 	usedMemory() int64
+	getStore(key string) *cacheStore
 }
 
 func newCacheManager(config *Config) CacheManager {

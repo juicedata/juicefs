@@ -41,6 +41,10 @@ func newMemStore(config *Config) *memcache {
 	return c
 }
 
+func (m *memcache) getStore(key string) *cacheStore {
+	return  nil
+}
+
 func (c *memcache) usedMemory() int64 {
 	c.Lock()
 	defer c.Unlock()
