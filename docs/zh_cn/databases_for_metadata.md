@@ -229,10 +229,10 @@ TiKV 的测试环境搭建非常简单，使用官方提供的 `TiUP` 工具即�
 使用 TiKV 作为元数据引擎时，需要使用如下格式来指定参数：
 
 ```shell
-tikv://<pd_addr>[,<pd_addr>...]/<prefix>
+tikv://<pd_addr>[,<pd_addr>...][/<prefix>]
 ```
 
-其中 `prefix` 是用户自定义的字符串，当多个文件系统共用一个 TiKV 集群时可用来区分；示例如下：
+其中 `prefix` 是一个可选的、用户自定义的字符串，当多个文件系统共用一个 TiKV 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
 ```shell
 $ juicefs format --storage minio \
