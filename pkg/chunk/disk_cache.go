@@ -107,7 +107,7 @@ func (cache *cacheStore) checkFreeSpace() {
 	for {
 		br, fr := cache.curFreeRatio()
 		if br < cache.freeRatio || fr < cache.freeRatio {
-			logger.Debugf("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
+			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
 			cache.cleanup()
 			cache.Unlock()
@@ -407,12 +407,12 @@ func (cache *cacheStore) uploadStaging() {
 	var cnt int
 	var lastKey string
 	var lastValue cacheItem
-	// for each two random keys, then compare the access time, evict the older one
+	// for each two random keys, then compare the access time, upload the older one
 	for key, value := range cache.keys {
-		cache.Unlock()
 		if value.size != 0 {
 			continue // read cache
 		}
+		cache.Unlock()
 		if cnt == 0 || lastValue.atime > value.atime {
 			lastKey = key
 			lastValue = value
@@ -429,6 +429,10 @@ func (cache *cacheStore) uploadStaging() {
 		if toFree < 0 {
 			break
 		}
+	}
+	if cnt > 0 {
+		cache.uploader(lastKey, cache.stagePath(lastKey))
+		logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
 	}
 }
 

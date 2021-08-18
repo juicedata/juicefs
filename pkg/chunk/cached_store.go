@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -530,9 +529,10 @@ func (c *wChunk) upload(indx int) {
 				c.syncUpload(key, block)
 			} else {
 				c.errors <- nil
-				if c.store.conf.DelayUpload.Seconds() == 0 {
+				if c.store.conf.DelayUpload == 0 {
 					go c.asyncUpload(key, block, stagingPath)
 				} else {
+					block.Release()
 					c.store.pendingMutex.Lock()
 					c.store.pendingKeys[key] = time.Now()
 					c.store.pendingMutex.Unlock()
@@ -748,7 +748,8 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 			_, used := store.bcache.stats()
 			return float64(used)
 		}))
-	if store.conf.CacheDir != "memory" && store.conf.DelayUpload > 0 {
+	if store.conf.CacheDir != "memory" && store.conf.Writeback && store.conf.DelayUpload > 0 {
+		logger.Infof("delay uploading by %s", store.conf.DelayUpload)
 		go func() {
 			for {
 				store.uploadDelayedStaging()
@@ -780,33 +781,50 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 			<-store.currentUpload
 		}()
 
-		block, err := ioutil.ReadFile(stagingPath)
+		f, err := os.Open(stagingPath)
 		if err != nil {
 			logger.Errorf("open %s: %s", stagingPath, err)
 			return
 		}
-		buf := make([]byte, store.compressor.CompressBound(len(block)))
-		n, err := store.compressor.Compress(buf, block)
+		blockSize := parseObjOrigSize(key)
+		block := NewOffPage(blockSize)
+		_, err = io.ReadFull(f, block.Data)
+		f.Close()
+		if err != nil {
+			block.Release()
+			logger.Errorf("read %s: %s", stagingPath, err)
+			return
+		}
+		buf := NewOffPage(store.compressor.CompressBound(blockSize))
+		defer buf.Release()
+		n, err := store.compressor.Compress(buf.Data, block.Data)
+		block.Release()
 		if err != nil {
 			logger.Errorf("compress chunk %s: %s", stagingPath, err)
 			return
 		}
-		compressed := buf[:n]
+		compressed := buf.Data[:n]
 		try := 0
 		for {
+			st := time.Now()
 			err := store.storage.Put(key, bytes.NewReader(compressed))
+			used := time.Since(st)
+			logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
+			if used > SlowRequest {
+				logger.Infof("slow request: PUT %v (%s, %.3fs)", key, err, used.Seconds())
+			}
 			if err == nil {
 				break
 			}
-			logger.Infof("upload %s: %s (try %d)", key, err, try)
+			logger.Warnf("upload %s: %s (try %d)", key, err, try)
 			try++
 			time.Sleep(time.Second * time.Duration(try*try))
 		}
-		store.bcache.uploaded(key, len(block))
+		store.bcache.uploaded(key, blockSize)
 		store.pendingMutex.Lock()
 		delete(store.pendingKeys, key)
 		store.pendingMutex.Unlock()
-		os.Remove(stagingPath)
+		_ = os.Remove(stagingPath)
 	}()
 }
 
