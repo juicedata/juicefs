@@ -42,7 +42,7 @@ func newMemStore(config *Config) *memcache {
 }
 
 func (m *memcache) getStore(key string) *cacheStore {
-	return  nil
+	return nil
 }
 
 func (c *memcache) usedMemory() int64 {
@@ -130,3 +130,4 @@ func (c *memcache) stage(key string, data []byte, keepCache bool) (string, error
 }
 func (c *memcache) uploaded(key string, size int)  {}
 func (c *memcache) scanStaging() map[string]string { return nil }
+func (c *memcache) stagePath(key string) string    { return "" }
