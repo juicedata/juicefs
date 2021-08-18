@@ -288,7 +288,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	cache.Lock()
 	defer cache.Unlock()
 	it, ok := cache.keys[key]
-	if ok {
+	if ok && it.size > 0 {
 		cache.used -= int64(it.size + 4096)
 	}
 	if atime == 0 {
@@ -297,7 +297,9 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	} else {
 		cache.keys[key] = cacheItem{size, atime}
 	}
-	cache.used += int64(size + 4096)
+	if size > 0 {
+		cache.used += int64(size + 4096)
+	}
 
 	if cache.used > cache.capacity {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
@@ -312,7 +314,7 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 		path := cache.cachePath(key)
 		cache.createDir(filepath.Dir(path))
 		if err := os.Link(stagingPath, path); err == nil {
-			cache.add(key, 0, uint32(time.Now().Unix()))
+			cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
 		} else {
 			logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
 		}
@@ -360,7 +362,7 @@ func (cache *cacheStore) cleanup() {
 	var now = uint32(time.Now().Unix())
 	// for each two random keys, then compare the access time, evict the older one
 	for key, value := range cache.keys {
-		if value.size == 0 {
+		if value.size < 0 {
 			continue // staging
 		}
 		if cnt == 0 || lastValue.atime > value.atime {
@@ -409,30 +411,36 @@ func (cache *cacheStore) uploadStaging() {
 	var lastValue cacheItem
 	// for each two random keys, then compare the access time, upload the older one
 	for key, value := range cache.keys {
-		if value.size != 0 {
+		if value.size > 0 {
 			continue // read cache
 		}
-		cache.Unlock()
-		if cnt == 0 || lastValue.atime > value.atime {
+
+		// pick the bigger one if they were accessed within the same minute
+		if cnt == 0 || lastValue.atime/60 > value.atime/60 ||
+			lastValue.atime/60 == value.atime/60 && lastValue.size > value.size { // both size are < 0
 			lastKey = key
 			lastValue = value
 		}
 		cnt++
 		if cnt > 1 {
+			cache.Unlock()
 			cache.uploader(lastKey, cache.stagePath(lastKey))
 			logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
+			cache.Lock()
 			// the size in keys should be updated
-			toFree -= int64(cache.keys[lastKey].size + 4096)
+			toFree -= int64(-lastValue.size + 4096)
 			cnt = 0
 		}
-		cache.Lock()
+
 		if toFree < 0 {
 			break
 		}
 	}
 	if cnt > 0 {
+		cache.Unlock()
 		cache.uploader(lastKey, cache.stagePath(lastKey))
 		logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
+		cache.Lock()
 	}
 }
 
@@ -464,7 +472,7 @@ func (cache *cacheStore) scanCached() {
 				}
 				atime := uint32(getAtime(fi).Unix())
 				if getNlink(fi) > 1 {
-					cache.add(key, 0, atime)
+					cache.add(key, -int32(fi.Size()), atime)
 				} else {
 					cache.add(key, int32(fi.Size()), atime)
 				}
