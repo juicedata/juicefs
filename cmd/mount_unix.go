@@ -21,7 +21,9 @@ import (
 	"bytes"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -85,6 +87,16 @@ func makeDaemon(c *cli.Context, name, mp string) error {
 }
 
 func mount_flags() []cli.Flag {
+	var defaultLogDir = "/var/log"
+	switch runtime.GOOS {
+	case "darwin":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Fatalf("%v", err)
+			return nil
+		}
+		defaultLogDir = path.Join(homeDir, ".juicefs")
+	}
 	return []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "d",
@@ -97,7 +109,7 @@ func mount_flags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "log",
-			Value: "/var/log/juicefs.log",
+			Value: path.Join(defaultLogDir, "juicefs.log"),
 			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
