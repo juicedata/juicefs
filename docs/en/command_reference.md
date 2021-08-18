@@ -185,7 +185,7 @@ run in background (default: false)
 disable syslog (default: false)
 
 `--log value`\
-path of log file when running in background (default: `/var/log/juicefs.log`)
+path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)
 
 `-o value`\
 other FUSE options (see [this document](fuse_mount_options.md) for more information)
