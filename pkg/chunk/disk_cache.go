@@ -19,6 +19,7 @@ import (
 	"errors"
 	"hash/fnv"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,12 +57,13 @@ type cacheStore struct {
 	pending   chan pendingFile
 	pages     map[string]*Page
 
-	used    int64
-	keys    map[string]cacheItem
-	scanned bool
+	used     int64
+	keys     map[string]cacheItem
+	scanned  bool
+	uploader func(key, path string)
 }
 
-func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config) *cacheStore {
+func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string)) *cacheStore {
 	if config.CacheMode == 0 {
 		config.CacheMode = 0600 // only owner can read/write cache
 	}
@@ -76,6 +78,7 @@ func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config
 		keys:      make(map[string]cacheItem),
 		pending:   make(chan pendingFile, pendingPages),
 		pages:     make(map[string]*Page),
+		uploader:  uploader,
 	}
 	c.createDir(c.dir)
 	br, fr := c.curFreeRatio()
@@ -86,6 +89,7 @@ func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config
 	go c.flush()
 	go c.checkFreeSpace()
 	go c.refreshCacheKeys()
+	go c.scanStaging()
 	return c
 }
 
@@ -103,10 +107,15 @@ func (cache *cacheStore) checkFreeSpace() {
 	for {
 		br, fr := cache.curFreeRatio()
 		if br < cache.freeRatio || fr < cache.freeRatio {
-			logger.Debugf("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
+			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
 			cache.cleanup()
 			cache.Unlock()
+
+			br, fr := cache.curFreeRatio()
+			if br < cache.freeRatio || fr < cache.freeRatio {
+				cache.uploadStaging()
+			}
 		}
 		time.Sleep(time.Second)
 	}
@@ -279,7 +288,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	cache.Lock()
 	defer cache.Unlock()
 	it, ok := cache.keys[key]
-	if ok {
+	if ok && it.size > 0 {
 		cache.used -= int64(it.size + 4096)
 	}
 	if atime == 0 {
@@ -288,7 +297,9 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	} else {
 		cache.keys[key] = cacheItem{size, atime}
 	}
-	cache.used += int64(size + 4096)
+	if size > 0 {
+		cache.used += int64(size + 4096)
+	}
 
 	if cache.used > cache.capacity {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
@@ -303,7 +314,7 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 		path := cache.cachePath(key)
 		cache.createDir(filepath.Dir(path))
 		if err := os.Link(stagingPath, path); err == nil {
-			cache.add(key, 0, uint32(time.Now().Unix()))
+			cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
 		} else {
 			logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
 		}
@@ -351,7 +362,7 @@ func (cache *cacheStore) cleanup() {
 	var now = uint32(time.Now().Unix())
 	// for each two random keys, then compare the access time, evict the older one
 	for key, value := range cache.keys {
-		if value.size == 0 {
+		if value.size < 0 {
 			continue // staging
 		}
 		if cnt == 0 || lastValue.atime > value.atime {
@@ -382,6 +393,57 @@ func (cache *cacheStore) cleanup() {
 	cache.Lock()
 }
 
+func (cache *cacheStore) uploadStaging() {
+	cache.Lock()
+	defer cache.Unlock()
+	if !cache.scanned || cache.uploader == nil {
+		return
+	}
+
+	var toFree int64
+	br, fr := cache.curFreeRatio()
+	if br < cache.freeRatio || fr < cache.freeRatio {
+		total, _, _, _ := getDiskUsage(cache.dir)
+		toFree = int64(float64(total)*float64(cache.freeRatio) - math.Min(float64(br), float64(fr)))
+	}
+	var cnt int
+	var lastKey string
+	var lastValue cacheItem
+	// for each two random keys, then compare the access time, upload the older one
+	for key, value := range cache.keys {
+		if value.size > 0 {
+			continue // read cache
+		}
+
+		// pick the bigger one if they were accessed within the same minute
+		if cnt == 0 || lastValue.atime/60 > value.atime/60 ||
+			lastValue.atime/60 == value.atime/60 && lastValue.size > value.size { // both size are < 0
+			lastKey = key
+			lastValue = value
+		}
+		cnt++
+		if cnt > 1 {
+			cache.Unlock()
+			cache.uploader(lastKey, cache.stagePath(lastKey))
+			logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
+			cache.Lock()
+			// the size in keys should be updated
+			toFree -= int64(-lastValue.size + 4096)
+			cnt = 0
+		}
+
+		if toFree < 0 {
+			break
+		}
+	}
+	if cnt > 0 {
+		cache.Unlock()
+		cache.uploader(lastKey, cache.stagePath(lastKey))
+		logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
+		cache.Lock()
+	}
+}
+
 func (cache *cacheStore) scanCached() {
 	cache.Lock()
 	cache.used = 0
@@ -410,7 +472,7 @@ func (cache *cacheStore) scanCached() {
 				}
 				atime := uint32(getAtime(fi).Unix())
 				if getNlink(fi) > 1 {
-					cache.add(key, 0, atime)
+					cache.add(key, -int32(fi.Size()), atime)
 				} else {
 					cache.add(key, int32(fi.Size()), atime)
 				}
@@ -425,11 +487,14 @@ func (cache *cacheStore) scanCached() {
 	cache.Unlock()
 }
 
-func (cache *cacheStore) scanStaging() map[string]string {
+func (cache *cacheStore) scanStaging() {
+	if cache.uploader == nil {
+		return
+	}
+
 	var start = time.Now()
 	var oneMinAgo = start.Add(-time.Minute)
-
-	stagingBlocks := make(map[string]string)
+	var count int
 	stagingPrefix := filepath.Join(cache.dir, stagingDir)
 	logger.Debugf("Scan %s to find staging blocks", stagingPrefix)
 	_ = filepath.Walk(stagingPrefix, func(path string, fi os.FileInfo, err error) error {
@@ -447,15 +512,15 @@ func (cache *cacheStore) scanStaging() map[string]string {
 				if runtime.GOOS == "windows" {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
-				stagingBlocks[key] = path
+				cache.uploader(key, path)
+				count++
 			}
 		}
 		return nil
 	})
-	if len(stagingBlocks) > 0 {
-		logger.Infof("Found %d staging blocks (%d bytes) in %s with %s", len(stagingBlocks), cache.used, cache.dir, time.Since(start))
+	if count > 0 {
+		logger.Infof("Found %d staging blocks (%d bytes) in %s with %s", count, cache.used, cache.dir, time.Since(start))
 	}
-	return stagingBlocks
 }
 
 type cacheManager struct {
@@ -510,13 +575,12 @@ type CacheManager interface {
 	load(key string) (ReadCloser, error)
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
-	scanStaging() map[string]string
+	stagePath(key string) string
 	stats() (int64, int64)
 	usedMemory() int64
-	getStore(key string) *cacheStore
 }
 
-func newCacheManager(config *Config) CacheManager {
+func newCacheManager(config *Config, uploader func(key, path string)) CacheManager {
 	if config.CacheDir == "memory" || config.CacheSize == 0 {
 		return newMemStore(config)
 	}
@@ -546,7 +610,7 @@ func newCacheManager(config *Config) CacheManager {
 	// 20% of buffer could be used for pending pages
 	pendingPages := config.BufferSize * 2 / 10 / config.BlockSize / len(dirs)
 	for i, d := range dirs {
-		m.stores[i] = newCacheStore(strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config)
+		m.stores[i] = newCacheStore(strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config, uploader)
 	}
 	return m
 }
@@ -574,9 +638,6 @@ func (m *cacheManager) stats() (int64, int64) {
 }
 
 func (m *cacheManager) cache(key string, p *Page, force bool) {
-	if len(m.stores) == 0 {
-		return
-	}
 	m.getStore(key).cache(key, p, force)
 }
 
@@ -587,44 +648,21 @@ type ReadCloser interface {
 }
 
 func (m *cacheManager) load(key string) (ReadCloser, error) {
-	if len(m.stores) == 0 {
-		return nil, errors.New("no cache dir")
-	}
 	return m.getStore(key).load(key)
 }
 
 func (m *cacheManager) remove(key string) {
-	if len(m.stores) > 0 {
-		m.getStore(key).remove(key)
-	}
+	m.getStore(key).remove(key)
 }
 
 func (m *cacheManager) stage(key string, data []byte, keepCache bool) (string, error) {
-	if len(m.stores) == 0 {
-		return "", errors.New("no cache dir")
-	}
 	return m.getStore(key).stage(key, data, keepCache)
 }
 
-func (m *cacheManager) uploaded(key string, size int) {
-	if len(m.stores) > 0 {
-		m.getStore(key).uploaded(key, size)
-	}
+func (m *cacheManager) stagePath(key string) string {
+	return m.getStore(key).stagePath(key)
 }
 
-func (m *cacheManager) scanStaging() map[string]string {
-	fschan := make(chan map[string]string)
-	for i := range m.stores {
-		go func(i int) {
-			fschan <- m.stores[i].scanStaging()
-		}(i)
-	}
-	files := make(map[string]string)
-	for range m.stores {
-		fs := <-fschan
-		for k, p := range fs {
-			files[k] = p
-		}
-	}
-	return files
+func (m *cacheManager) uploaded(key string, size int) {
+	m.getStore(key).uploaded(key, size)
 }

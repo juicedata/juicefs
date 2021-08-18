@@ -97,14 +97,14 @@ func TestAsyncStore(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "")
 	conf := defaultConf
 	conf.CacheDir = "/tmp/testdirAsync"
-	p := filepath.Join(conf.CacheDir, stagingDir, "chunks/0/0/123_0")
+	p := filepath.Join(conf.CacheDir, stagingDir, "chunks/0/0/123_0_4")
 	os.MkdirAll(filepath.Dir(p), 0744)
 	f, _ := os.Create(p)
 	f.WriteString("good")
 	f.Close()
 	conf.Writeback = true
 	_ = NewCachedStore(mem, conf)
-	time.Sleep(time.Millisecond * 10) // wait for scan to finish
+	time.Sleep(time.Millisecond * 50) // wait for scan to finish
 	if _, err := mem.Get("chunks/0/0/123_0_4", 0, -1); err != nil {
 		t.Fatalf("staging object should be upload")
 	}
