@@ -113,7 +113,7 @@ func (cache *cacheStore) checkFreeSpace() {
 			cache.Unlock()
 
 			br, fr := cache.curFreeRatio()
-			if br < cache.freeRatio/2 || fr < cache.freeRatio/2 {
+			if br < cache.freeRatio || fr < cache.freeRatio {
 				cache.uploadStaging()
 			}
 		}
