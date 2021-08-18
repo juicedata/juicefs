@@ -41,10 +41,6 @@ func newMemStore(config *Config) *memcache {
 	return c
 }
 
-func (m *memcache) getStore(key string) *cacheStore {
-	return nil
-}
-
 func (c *memcache) usedMemory() int64 {
 	c.Lock()
 	defer c.Unlock()
@@ -128,6 +124,5 @@ func (c *memcache) cleanup() {
 func (c *memcache) stage(key string, data []byte, keepCache bool) (string, error) {
 	return "", errors.New("not supported")
 }
-func (c *memcache) uploaded(key string, size int)  {}
-func (c *memcache) scanStaging() map[string]string { return nil }
-func (c *memcache) stagePath(key string) string    { return "" }
+func (c *memcache) uploaded(key string, size int) {}
+func (c *memcache) stagePath(key string) string   { return "" }
