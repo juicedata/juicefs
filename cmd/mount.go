@@ -113,7 +113,7 @@ func mount(c *cli.Context) error {
 	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(metricLabels,
 		prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.DefaultRegisterer))
 
-	if !c.Bool("writeback") && c.IsSet("delay-upload") {
+	if !c.Bool("writeback") && c.IsSet("upload-delay") {
 		logger.Warnf("delayed upload only work in writeback mode")
 	}
 
@@ -125,7 +125,7 @@ func mount(c *cli.Context) error {
 		PutTimeout:  time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:   c.Int("max-uploads"),
 		Writeback:   c.Bool("writeback"),
-		DelayUpload: c.Duration("delay-upload"),
+		UploadDelay: c.Duration("upload-delay"),
 		Prefetch:    c.Int("prefetch"),
 		BufferSize:  c.Int("buffer-size") << 20,
 
@@ -300,9 +300,8 @@ func clientFlags() []cli.Flag {
 			Usage: "upload objects in background",
 		},
 		&cli.DurationFlag{
-			Name:  "delay-upload",
-			Value: time.Duration(0),
-			Usage: "delay uploading objects (\"s\", \"m\", \"h\")",
+			Name:  "upload-delay",
+			Usage: "delayed duration for uploading objects (\"s\", \"m\", \"h\")",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",

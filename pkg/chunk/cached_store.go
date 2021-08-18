@@ -529,7 +529,7 @@ func (c *wChunk) upload(indx int) {
 				c.syncUpload(key, block)
 			} else {
 				c.errors <- nil
-				if c.store.conf.DelayUpload == 0 {
+				if c.store.conf.UploadDelay == 0 {
 					go c.asyncUpload(key, block, stagingPath)
 				} else {
 					block.Release()
@@ -610,7 +610,7 @@ type Config struct {
 	Compress       string
 	MaxUpload      int
 	Writeback      bool
-	DelayUpload    time.Duration
+	UploadDelay    time.Duration
 	Partitions     int
 	BlockSize      int
 	GetTimeout     time.Duration
@@ -748,16 +748,16 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 			_, used := store.bcache.stats()
 			return float64(used)
 		}))
-	if store.conf.CacheDir != "memory" && store.conf.Writeback && store.conf.DelayUpload > 0 {
-		logger.Infof("delay uploading by %s", store.conf.DelayUpload)
+	if store.conf.CacheDir != "memory" && store.conf.Writeback && store.conf.UploadDelay > 0 {
+		logger.Infof("delay uploading by %s", store.conf.UploadDelay)
 		go func() {
 			for {
-				store.uploadDelayedStaging()
-				if store.conf.DelayUpload > time.Minute {
+				if store.conf.UploadDelay > time.Minute {
 					time.Sleep(time.Minute)
 				} else {
-					time.Sleep(store.conf.DelayUpload)
+					time.Sleep(store.conf.UploadDelay)
 				}
+				store.uploadDelayedStaging()
 			}
 		}()
 	}
@@ -830,7 +830,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 
 func (store *cachedStore) uploadDelayedStaging() {
 	store.pendingMutex.Lock()
-	cutoff := time.Now().Add(-store.conf.DelayUpload)
+	cutoff := time.Now().Add(-store.conf.UploadDelay)
 	for key, added := range store.pendingKeys {
 		store.pendingMutex.Unlock()
 		if added.Before(cutoff) {
