@@ -113,8 +113,8 @@ func mount(c *cli.Context) error {
 	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(metricLabels,
 		prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.DefaultRegisterer))
 
-	if !c.Bool("writeback") && c.IsSet("delay-upload"){
-		logger.Warnf("writeback should be set true before congiure deploy-upload")
+	if !c.Bool("writeback") && c.IsSet("delay-upload") {
+		logger.Warnf("delayed upload only work in writeback mode")
 	}
 
 	chunkConf := chunk.Config{
@@ -302,7 +302,7 @@ func clientFlags() []cli.Flag {
 		&cli.DurationFlag{
 			Name:  "delay-upload",
 			Value: time.Duration(0),
-			Usage: "upload objects with delay time.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"",
+			Usage: "delay uploading objects (\"s\", \"m\", \"h\")",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",

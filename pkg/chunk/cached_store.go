@@ -748,11 +748,15 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 			_, used := store.bcache.stats()
 			return float64(used)
 		}))
-	if store.conf.CacheDir != "memory" {
+	if store.conf.CacheDir != "memory" && store.conf.DelayUpload > 0 {
 		go func() {
 			for {
 				store.uploadDelayedStaging()
-				time.Sleep(time.Minute)
+				if store.conf.DelayUpload > time.Minute {
+					time.Sleep(time.Minute)
+				} else {
+					time.Sleep(store.conf.DelayUpload)
+				}
 			}
 		}()
 	}
@@ -774,9 +778,6 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	go func() {
 		defer func() {
 			<-store.currentUpload
-			store.pendingMutex.Lock()
-			delete(store.pendingKeys, key)
-			store.pendingMutex.Unlock()
 		}()
 
 		block, err := ioutil.ReadFile(stagingPath)
@@ -802,6 +803,9 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 			time.Sleep(time.Second * time.Duration(try*try))
 		}
 		store.bcache.uploaded(key, len(block))
+		store.pendingMutex.Lock()
+		delete(store.pendingKeys, key)
+		store.pendingMutex.Unlock()
 		os.Remove(stagingPath)
 	}()
 }
