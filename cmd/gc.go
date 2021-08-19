@@ -249,14 +249,14 @@ func gc(ctx *cli.Context) error {
 				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
 			} else {
-				valid.add(0)
+				valid.add(obj.Size())
 			}
 		} else {
 			if indx*chunkConf.BlockSize+csize != int(size) {
 				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
 			} else {
-				valid.add(0)
+				valid.add(obj.Size())
 			}
 		}
 	}
