@@ -499,12 +499,10 @@ $ ./juicefs format \
 
 ## Ceph RADOS <span id='ceph-rados'></span>
 
-[Ceph存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。  `librados` API 使您可以与这两种类型的守护程序进行交互：
+[Ceph 存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。 `librados` API 使您可以与这两种类型的守护程序进行交互：
 
 - [Ceph Monitor](https://docs.ceph.com/en/latest/rados/configuration/common/#monitors) 维护群集映射的主副本
 - [Ceph OSD Daemon (OSD)](https://docs.ceph.com/en/latest/rados/configuration/common/#osds) 将数据作为对象存储在存储节点上
-
-JuiceFS supports the use of native Ceph APIs based on `librados`. You need install `librados` library and build `juicefs` binary separately.
 
 JuiceFS 支持使用基于 `librados` 的本地 Ceph API。您需要分别安装 `librados` 库并重新编译 `juicefs` 二进制文件。
 
@@ -525,8 +523,6 @@ $ make juicefs.ceph
 ```
 
 [存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。` --secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
-
-For connect to Ceph Monitor, `librados` will read Ceph configuration file by search default locations and the first found is used. The locations are:
 
 为了连接到 Ceph Monitor，`librados` 将通过搜索默认位置读取 Ceph 的配置文件，并使用找到的第一个。 这些位置是：
 
