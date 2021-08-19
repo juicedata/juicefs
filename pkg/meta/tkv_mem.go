@@ -18,13 +18,19 @@
 package meta
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"sync"
 )
 
 func init() {
 	Register("memkv", newKVMeta)
 }
+
+const settingKey = "\xFDsetting"
+const settingPath = "/tmp/juicefs.setting.json"
 
 func newMockClient() (tkvClient, error) {
 	return &memKV{items: make(map[string]*kvItem)}, nil
@@ -42,6 +48,15 @@ func (tx *memTxn) get(key []byte) []byte {
 	}
 	tx.store.Lock()
 	defer tx.store.Unlock()
+	if bytes.Equal(key, []byte(settingKey)) && tx.store.items[settingKey] == nil {
+		d, _ := ioutil.ReadFile(settingPath)
+		var buffer map[string][]byte
+		_ = json.Unmarshal(d, &buffer)
+		for k, v := range buffer {
+			// "\xFD" become "\uFFFD"
+			tx.store.items["\xFD"+k[3:]] = &kvItem{1, v}
+		}
+	}
 	v, ok := tx.store.items[string(key)]
 	if ok {
 		tx.observed[string(key)] = v.ver
@@ -178,6 +193,11 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 		if it.ver > ver {
 			return fmt.Errorf("write conflict: %s %d > %d", k, it.ver, ver)
 		}
+	}
+	_, ok := tx.buffer[settingKey]
+	if ok {
+		d, _ := json.Marshal(tx.buffer)
+		_ = ioutil.WriteFile(settingPath, d, 0644)
 	}
 	for k, value := range tx.buffer {
 		it := c.items[k]
