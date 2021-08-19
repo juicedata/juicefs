@@ -26,20 +26,20 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const batchMax = 10240
+const batchMax = 126976 // 128 - 4 KiB
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, batch []string, count int, threads uint, background bool) {
-	paths := strings.Join(batch[:count], "\n")
+func sendCommand(cf *os.File, batch []byte, count int, threads uint, background bool) {
+	batch = batch[:len(batch)-1]
 	var back uint8
 	if background {
 		back = 1
 	}
-	wb := utils.NewBuffer(8 + 4 + 3 + uint32(len(paths)))
+	wb := utils.NewBuffer(8 + 4 + 3 + uint32(len(batch)))
 	wb.Put32(meta.FillCache)
-	wb.Put32(4 + 3 + uint32(len(paths)))
-	wb.Put32(uint32(len(paths)))
-	wb.Put([]byte(paths))
+	wb.Put32(4 + 3 + uint32(len(batch)))
+	wb.Put32(uint32(len(batch)))
+	wb.Put(batch)
 	wb.Put16(uint16(threads))
 	wb.Put8(back)
 	if _, err := cf.Write(wb.Bytes()); err != nil {
@@ -120,27 +120,29 @@ func warmup(ctx *cli.Context) error {
 	threads := ctx.Uint("threads")
 	background := ctx.Bool("background")
 	start := len(mp)
-	batch := make([]string, batchMax)
 	progress, bar := utils.NewDynProgressBar("warming up paths: ", background)
 	bar.SetTotal(int64(len(paths)), false)
-	var index int
+	batch := make([]byte, 0, batchMax)
+	var count int
 	for _, path := range paths {
 		if strings.HasPrefix(path, mp) {
-			batch[index] = path[start:]
-			index++
+			batch = append(batch, []byte(path[start:])...)
+			batch = append(batch, '\n')
+			count++
 		} else {
 			logger.Warnf("Path %s is not under mount point %s", path, mp)
 			continue
 		}
-		if index >= batchMax {
-			sendCommand(controller, batch, index, threads, background)
-			bar.IncrBy(index)
-			index = 0
+		if len(batch) >= batchMax-4096 {
+			sendCommand(controller, batch, count, threads, background)
+			bar.IncrBy(count)
+			batch = batch[:0]
+			count = 0
 		}
 	}
-	if index > 0 {
-		sendCommand(controller, batch, index, threads, background)
-		bar.IncrBy(index)
+	if count > 0 {
+		sendCommand(controller, batch, count, threads, background)
+		bar.IncrBy(count)
 	}
 	bar.SetTotal(0, true)
 	progress.Wait()
