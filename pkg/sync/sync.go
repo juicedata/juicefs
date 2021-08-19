@@ -145,11 +145,13 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
 			objs, err = store.List("", marker, maxResults)
-			for err != nil {
+			count := 0
+			for err != nil && count < 3 {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
 				objs, err = store.List("", marker, maxResults)
+				count++
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 			if err != nil {
