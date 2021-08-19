@@ -34,7 +34,7 @@ type _file struct {
 func fillCache(paths []string, concurrent int) {
 	logger.Infof("start to warmup %d paths with %d workers", len(paths), concurrent)
 	start := time.Now()
-	todo := make(chan _file, 10240)
+	todo := make(chan _file, 2048)
 	wg := sync.WaitGroup{}
 	for i := 0; i < concurrent; i++ {
 		wg.Add(1)
