@@ -604,7 +604,10 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 
 	if ino == controlInode {
 		h.data = append(h.data, buf...)
-		h.data = append(h.data, handleInternalMsg(ctx, buf)...)
+		ret := handleInternalMsg(ctx, h.data)
+		if len(ret) != 1 || ret[0] != uint8(syscall.EAGAIN) {
+			h.data = append(h.data, ret...)
+		}
 		return
 	}
 

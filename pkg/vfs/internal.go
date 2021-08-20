@@ -149,8 +149,11 @@ func handleInternalMsg(ctx Context, msg []byte) []byte {
 	r := utils.ReadBuffer(msg)
 	cmd := r.Get32()
 	size := int(r.Get32())
-	if r.Left() != int(size) {
-		logger.Warnf("broken message: %d %d != %d", cmd, size, r.Left())
+	if r.Left() < int(size) {
+		logger.Infof("message not complete: %d %d > %d", cmd, size, r.Left())
+		return []byte{uint8(syscall.EAGAIN & 0xff)}
+	} else if r.Left() > int(size) {
+		logger.Warnf("broken message: %d %d < %d", cmd, size, r.Left())
 		return []byte{uint8(syscall.EIO & 0xff)}
 	}
 	switch cmd {
