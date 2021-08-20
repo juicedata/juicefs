@@ -608,7 +608,7 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 		cmd := rb.Get32()
 		size := int(rb.Get32())
 		if rb.Left() < int(size) {
-			logger.Infof("message not complete: %d %d > %d", cmd, size, rb.Left())
+			logger.Debugf("message not complete: %d %d > %d", cmd, size, rb.Left())
 			return
 		}
 		h.data = append(h.data, h.pending...)
