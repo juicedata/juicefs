@@ -145,14 +145,7 @@ func collectMetrics() []byte {
 	return w.Bytes()
 }
 
-func handleInternalMsg(ctx Context, msg []byte) []byte {
-	r := utils.ReadBuffer(msg)
-	cmd := r.Get32()
-	size := int(r.Get32())
-	if r.Left() != int(size) {
-		logger.Warnf("broken message: %d %d != %d", cmd, size, r.Left())
-		return []byte{uint8(syscall.EIO & 0xff)}
-	}
+func handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
 	switch cmd {
 	case meta.Rmr:
 		inode := Ino(r.Get64())
