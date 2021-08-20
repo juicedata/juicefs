@@ -26,7 +26,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 
 ---
 
-[架构](#架构) | [开始使用](#开始使用) | [运维管理](#运维管理) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [状态](#状态) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
+[架构](#架构) | [开始使用](#开始使用) | [进阶主题](#进阶主题) | [POSIX 兼容性](#posix-兼容性测试) | [性能测试](#性能测试) | [支持的对象存储](#支持的对象存储) | [谁在使用](#谁在使用) | [产品路线图](#产品路线图) | [反馈问题](#反馈问题) | [贡献](#贡献) | [社区](#社区) | [使用量收集](#使用量收集) | [开源协议](#开源协议) | [致谢](#致谢) | [FAQ](#faq)
 
 ---
 
@@ -60,15 +60,15 @@ JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高�
 
 请参照 [快速上手指南](docs/zh_cn/quick_start_guide.md) 立即开始使用 JuiceFS！
 
-## 命令索引
+### 命令索引
 
 请点击 [这里](docs/zh_cn/command_reference.md) 查看所有子命令以及命令行参数。
 
-## Kubernetes
+### Kubernetes
 
 在 Kubernetes 中使用 JuiceFS 非常便捷，请查看 [这个文档](docs/zh_cn/how_to_use_on_kubernetes.md) 了解更多信息。
 
-## Hadoop Java SDK
+### Hadoop Java SDK
 
 JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生态结合。
 

@@ -27,7 +27,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
 
 ---
 
-[Architecture](#architecture) | [Getting Started](#getting-started) | [Administration](#administration) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
+[Architecture](#architecture) | [Getting Started](#getting-started) | [Advanced Topics](#advanced-topics) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Who is using](#who-is-using) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
 
 ---
 
@@ -61,15 +61,15 @@ To create a JuiceFS, you need the following 3 preparations:
 
 Please refer to [Quick Start Guide](docs/en/quick_start_guide.md) to start using JuiceFS immediately!
 
-## Command Reference
+### Command Reference
 
 There is a [command reference](docs/en/command_reference.md) to see all options of the subcommand.
 
-## Kubernetes
+### Kubernetes
 
 [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md) is so easy, have a try.
 
-## Hadoop Java SDK
+### Hadoop Java SDK
 
 If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_sdk.md).
 

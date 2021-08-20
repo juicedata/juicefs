@@ -40,7 +40,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [JuiceFS enable S3 Gateway](s3_gateway.md)
   - [JuiceFS client compilation and upgrade](client_compile_and_upgrade.md)
 - [Command Reference](command_reference.md)
-- **Advanced Topic**
+- **Advanced Topics**
   - [Redis best practices](redis_best_practices.md)
   - [JuiceFS benchmark](benchmark.md)
   - [JuiceFS metadata engines benchmark](metadata_engines_benchmark.md)
