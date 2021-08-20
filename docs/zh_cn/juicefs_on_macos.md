@@ -12,7 +12,7 @@ JuiceFS 支持在 macOS 系统中创建和挂载文件系统。但你需要先�
 
 ```shell
 $ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
-$ curl -fsSL "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz" -o "juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
+$ curl -OL "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
 ```
 
 解压并安装：
@@ -21,6 +21,8 @@ $ curl -fsSL "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATE
 $ tar -zxf "juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
+
+> **提示**：你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
 
 ## 3. 挂载 JuiceFS 文件系统
 

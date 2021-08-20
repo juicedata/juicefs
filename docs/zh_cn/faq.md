@@ -12,7 +12,7 @@
 
 ## JuiceFS 与 XXX 的区别是什么？
 
-请查看[「与其它项目比较」](comparison_with_others.md)文档了解更多信息。
+请查看[「同类技术比较」](comparison_with_others.md)文档了解更多信息。
 
 ## JuiceFS 的性能如何？
 
@@ -26,25 +26,25 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 
 ## 数据更新什么时候会对其它客户端可见？
 
-所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](cache_management.md#consistency)了解更多信息。
+所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](cache_management.md#一致性)了解更多信息。
 
 通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
 
 调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者数秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
 
-请查看[「客户端写缓存」](cache_management.md#write-cache-in-client)了解更多信息。
+请查看[「客户端写缓存」](cache_management.md#客户端写缓存)了解更多信息。
 
 ## 怎么快速地拷贝大量小文件到 JuiceFS？
 
 请在挂载时加上 [`--writeback` 选项](command_reference.md#juicefs-mount)，它会先把数据写入本机的缓存，然后再异步上传到对象存储，会比直接上传到对象存储快很多倍。
 
-请查看[「客户端写缓存」](cache_management.md#write-cache-in-client)了解更多信息。
+请查看[「客户端写缓存」](cache_management.md#客户端写缓存)了解更多信息。
 
 ## 可以用 `root` 以外的用户挂载吗？
 
 可以，JuiceFS 可以由任何用户挂载。默认的缓存目录是 `$HOME/.juicefs/cache`（macOS）或者 `/var/jfsCache`（Linux），请确保该用户对这个目录有写权限，或者切换到其它有权限的目录。
 
-请查看[「客户端读缓存」](cache_management.md#read-cache-in-client)了解更多信息。
+请查看[「客户端读缓存」](cache_management.md#客户端读缓存)了解更多信息。
 
 ## 怎么卸载 JuiceFS 文件系统？
 

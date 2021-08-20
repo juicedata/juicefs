@@ -11,15 +11,18 @@ JuiceFS supports creating and mounting file systems in macOS. But you need to in
 You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest), download the compressed package containing `darwin-amd64` in the file name, for example:
 
 ```shell
-$ curl -fsSL https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.12.1-darwin-amd64.tar.gz -o juicefs-0.12.1-darwin-amd64.tar.gz
+$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+$ curl -OL "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
 ```
 
 Unzip and install:
 
 ```shell
-$ tar -zxf juicefs-0.12.1-darwin-amd64.tar.gz
+$ tar -zxf "juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
+
+> **Note**: You can also build the JuiceFS client manually from the source code. [Learn more](client_compile_and_upgrade.md)
 
 ## 3. Mount JuiceFS file system
 

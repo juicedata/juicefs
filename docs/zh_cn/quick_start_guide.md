@@ -64,7 +64,7 @@ $ tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
-> **提示**: 你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
+> **提示**：你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
 
 ## 4. 创建 JuiceFS 文件系统
 

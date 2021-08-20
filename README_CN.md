@@ -230,6 +230,6 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ### JuiceFS 与 XXX 的区别是什么？
 
-请查看[「与其它项目比较」](docs/zh_cn/comparison_with_others.md)文档了解更多信息。
+请查看[「同类技术比较」](docs/zh_cn/comparison_with_others.md)文档了解更多信息。
 
 更多 FAQ 请查看[完整列表](docs/zh_cn/faq.md)。
