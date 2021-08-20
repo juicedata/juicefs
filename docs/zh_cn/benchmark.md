@@ -25,7 +25,7 @@ Used: 23.4s, CPU: 69.1%, MEM: 147.0 MiB
 
 [![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
 
-结果表明，JuiceFS 可以提供比另外两个工具大 10 倍的吞吐量，[了解更多](../en/fio.md)。
+结果表明，JuiceFS 可以提供比另外两个工具大 10 倍的吞吐量，[了解更多](fio.md)。
 
 ### 元数据 IOPS
 
@@ -33,4 +33,4 @@ Used: 23.4s, CPU: 69.1%, MEM: 147.0 MiB
 
 [![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
 
-结果表明，JuiceFS 可以提供比另外两个工具更高的元数据 IOPS，[了解更多](../en/mdtest.md)。
+结果表明，JuiceFS 可以提供比另外两个工具更高的元数据 IOPS，[了解更多](mdtest.md)。

@@ -8,7 +8,7 @@
 
 > 还不了解 JuiceFS？可以先查阅 [JuiceFS 是什么？](introduction.md)
 
-## 一、准备 Redis 数据库
+## 1. 准备 Redis 数据库
 
 你可以很容易的在云计算平台购买到各种配置的云 Redis 数据库，但如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 Redis 数据库实例：
 
@@ -28,7 +28,7 @@ $ sudo docker run -d --name redis \
 
 有关 Redis 数据库相关的更多内容，[点此查看](databases_for_metadata.md#Redis)。
 
-## 二、准备对象存储
+## 2. 准备对象存储
 
 和 Redis 数据库一样，几乎所有的公有云计算平台都提供对象存储服务。因为 JuiceFS 支持几乎所有主流平台的对象存储服务，因此你可以根据个人偏好自由选择。你可以查看我们的 [对象存储支持列表和设置指南](how_to_setup_object_storage.md)，其中列出了 JuiceFS 目前支持的所有对象存储服务，以及具体的使用方法。
 
@@ -46,7 +46,7 @@ $ sudo docker run -d --name minio \
 
 > **注意**：以上命令将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改数据持久化存储的位置。
 
-## 三、安装 JuiceFS 客户端
+## 3. 安装 JuiceFS 客户端
 
 JuiceFS 同时支持 Linux、Windows、macOS 三大操作系统平台，你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，请根据实际使用的系统和架构选择对应的版本。
 
@@ -64,9 +64,9 @@ $ tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
-> **提示**: 你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
+> **提示**：你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
 
-## 四、创建 JuiceFS 文件系统
+## 4. 创建 JuiceFS 文件系统
 
 创建 JuiceFS 文件系统要使用 `format` 子命令，需要同时指定用来存储元数据的 Redis 数据库和用来存储实际数据的对象存储。
 
@@ -97,7 +97,7 @@ $ juicefs format \
 
 > **注意**：如果不指定 `--storage` 选项，JuiceFS 客户端会使用本地磁盘作为数据存储。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](how_to_setup_object_storage.md#local)查看详情。
 
-## 五、挂载 JuiceFS 文件系统
+## 5. 挂载 JuiceFS 文件系统
 
 JuiceFS 文件系统创建完成以后，接下来就可以把它挂载到操作系统上使用了。以下命令将 `pics` 文件系统挂载到 `/mnt/jfs` 目录中。
 
@@ -127,7 +127,7 @@ JuiceFS:pics   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
 
 > **注意**：默认情况下， JuiceFS 的缓存位于 `/var/jfsCache` 目录，为了获得该目录的读写权限，这里使用了 sudo 命令，以管理员权限挂载的 JuiceFS 文件系统。普通用户在读写 `/mnt/jfs` 时，需要为用户赋予该目录的操作权限。
 
-## 六、开机自动挂载 JuiceFS
+## 6. 开机自动挂载 JuiceFS
 
 将  `juicefs` 客户端重命名为 `mount.juicefs` 并复制到 `/sbin/` 目录：
 
@@ -159,7 +159,7 @@ redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeb
 $ sudo chkconfig --add netfs
 ```
 
-## 七、卸载文件系统
+## 7. 卸载文件系统
 
 如果你需要卸载 JuiceFS 文件系统，可以先执行 `df` 命令查看系统中已挂载的文件系统信息：
 
@@ -188,7 +188,7 @@ $ sudo juicefs umount /mnt/jfs
 exit status 1
 ```
 
-发生这种情况，可能是因为某些程序正在读写文件系统中的文件。为了确保数据安全，你应该首先排查是哪些程序正在与文件系统中的文件进行交互，并尝试结束他们之间的交互动作，然后再重新执行卸载命令。
+发生这种情况，可能是因为某些程序正在读写文件系统中的文件。为了确保数据安全，你应该首先排查是哪些程序正在与文件系统中的文件进行交互（例如通过 `lsof` 命令），并尝试结束他们之间的交互动作，然后再重新执行卸载命令。
 
 > **风险提示**：以下内容包含的命令可能会导致文件损坏、丢失，请务必谨慎操作！
 
@@ -206,5 +206,5 @@ $ sudo fusermount -u /mnt/jfs
 
 ## 你可能需要
 
-- [Windows 系统使用 JuiceFS](juicefs_on_windows.md)
 - [macOS 系统使用 JuiceFS](juicefs_on_macos.md)
+- [Windows 系统使用 JuiceFS](juicefs_on_windows.md)
