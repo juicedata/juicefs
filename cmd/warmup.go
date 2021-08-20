@@ -26,8 +26,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const batchMax = 10240
-
 // send fill-cache command to controller file
 func sendCommand(cf *os.File, batch []string, count int, threads uint, background bool) {
 	paths := strings.Join(batch[:count], "\n")
@@ -56,7 +54,7 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 	if errs[0] != 0 {
 		logger.Fatalf("Warm up failed: %d", errs[0])
 	}
-	logger.Infof("%d paths are warmed up", count)
+	// logger.Infof("%d paths are warmed up", count)
 }
 
 func warmup(ctx *cli.Context) error {
@@ -118,6 +116,7 @@ func warmup(ctx *cli.Context) error {
 	defer controller.Close()
 
 	threads := ctx.Uint("threads")
+	batchMax := ctx.Uint("batch-max")
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, batchMax)
@@ -132,7 +131,7 @@ func warmup(ctx *cli.Context) error {
 			logger.Warnf("Path %s is not under mount point %s", path, mp)
 			continue
 		}
-		if index >= batchMax {
+		if uint(index) >= batchMax {
 			sendCommand(controller, batch, index, threads, background)
 			bar.IncrBy(index)
 			index = 0
@@ -165,6 +164,11 @@ func warmupFlags() *cli.Command {
 				Aliases: []string{"p"},
 				Value:   50,
 				Usage:   "number of concurrent workers",
+			},
+			&cli.UintFlag{
+				Name:  "batch-max",
+				Value: 10240,
+				Usage: "max number of paths for each request",
 			},
 			&cli.BoolFlag{
 				Name:    "background",
