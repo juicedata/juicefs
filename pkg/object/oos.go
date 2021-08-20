@@ -80,6 +80,7 @@ func newOOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("OOS session: %s", err)
 	}
+	ses.Handlers.Build.PushFront(disableSha256Func)
 	return &oos{s3client{bucket, s3.New(ses), ses}}, nil
 }
 

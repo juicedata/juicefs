@@ -29,11 +29,22 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 const awsDefaultRegion = "us-east-1"
+
+var disableSha256Func = func(r *request.Request) {
+	if op := r.Operation.Name; r.ClientInfo.ServiceID != "S3" || !(op == "PutObject" || op == "UploadPart") {
+		return
+	}
+	if len(r.HTTPRequest.Header.Get("X-Amz-Content-Sha256")) != 0 {
+		return
+	}
+	r.HTTPRequest.Header.Set("X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD")
+}
 
 type s3client struct {
 	bucket string
@@ -276,6 +287,7 @@ func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("fail to create aws session: %s", err)
 		}
+		ses.Handlers.Build.PushFront(disableSha256Func)
 		service = s3.New(ses)
 		result, err = service.GetBucketLocation(&s3.GetBucketLocationInput{
 			Bucket: aws.String(bucketName),
@@ -387,6 +399,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
+	ses.Handlers.Build.PushFront(disableSha256Func)
 	return &s3client{bucketName, s3.New(ses), ses}, nil
 }
 

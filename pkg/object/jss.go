@@ -68,6 +68,7 @@ func newJSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, err
 	}
+	ses.Handlers.Build.PushFront(disableSha256Func)
 	return &jss{s3client{bucket, s3.New(ses), ses}}, nil
 }
 
