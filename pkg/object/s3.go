@@ -355,7 +355,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		}
 	} else {
 		// [BUCKET].[ENDPOINT]
-		hostParts := strings.SplitN(uri.Host, ".", 2)
+		hostParts := strings.Split(uri.Host, ".")
 		if len(hostParts) == 1 {
 			// take endpoint as bucketname
 			bucketName = hostParts[0]
@@ -374,8 +374,9 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 				region = parseRegion(endpoint)
 			} else {
 				// compatible s3
-				bucketName = hostParts[0]
-				ep = hostParts[1]
+				l := len(hostParts)
+				bucketName = strings.Join(hostParts[:l-4], ".")
+				ep = strings.Join(hostParts[l-4:], ".")
 				region = awsDefaultRegion
 			}
 		}
