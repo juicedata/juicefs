@@ -58,8 +58,9 @@ type handle struct {
 	cond    *utils.Cond
 
 	// internal files
-	off  uint64
-	data []byte
+	off     uint64
+	data    []byte
+	pending []byte
 }
 
 func (h *handle) addOp(ctx Context) {
