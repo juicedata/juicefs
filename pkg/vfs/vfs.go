@@ -604,9 +604,16 @@ func Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno)
 
 	if ino == controlInode {
 		h.data = append(h.data, buf...)
-		ret := handleInternalMsg(ctx, h.data)
-		if len(ret) != 1 || ret[0] != uint8(syscall.EAGAIN) {
-			h.data = append(h.data, ret...)
+		rb := utils.ReadBuffer(h.data)
+		cmd := rb.Get32()
+		size := int(rb.Get32())
+		if rb.Left() == int(size) {
+			h.data = append(h.data, handleInternalMsg(ctx, cmd, rb)...)
+		} else if rb.Left() < int(size) {
+			logger.Infof("message not complete: %d %d > %d", cmd, size, rb.Left())
+		} else {
+			logger.Warnf("broken message: %d %d < %d", cmd, size, rb.Left())
+			h.data = append(h.data, uint8(syscall.EIO&0xff))
 		}
 		return
 	}
