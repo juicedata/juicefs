@@ -68,6 +68,7 @@ func newScw(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("aws session: %s", err)
 	}
+	ses.Handlers.Build.PushFront(disableSha256Func)
 	return &scw{s3client{bucket, s3.New(ses), ses}}, nil
 }
 
