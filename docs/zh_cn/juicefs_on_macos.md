@@ -11,15 +11,18 @@ JuiceFS 支持在 macOS 系统中创建和挂载文件系统。但你需要先�
 你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，下载文件名包含 `darwin-amd64` 的压缩包，例如：
 
 ```shell
-$ curl -fsSL https://github.com/juicedata/juicefs/releases/download/v0.12.1/juicefs-0.12.1-darwin-amd64.tar.gz -o juicefs-0.12.1-darwin-amd64.tar.gz
+$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+$ curl -OL "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
 ```
 
 解压并安装：
 
 ```shell
-$ tar -zxf juicefs-0.12.1-darwin-amd64.tar.gz
+$ tar -zxf "juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
+
+> **提示**：你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
 
 ## 3. 挂载 JuiceFS 文件系统
 
@@ -41,7 +44,7 @@ $ juicefs mount redis://192.168.1.8:6379/1 ~/music
 
 ## 4. 开机自动挂载 JuiceFS
 
-Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `META-URL` and `MOUNTPOINT` with appropriate value):
+在 `~/Library/LaunchAgents` 下创建一个名为 `io.juicefs.<NAME>.plist` 的文件。将 `<NAME>` 替换为 JuiceFS 卷的名称。将以下内容添加到文件中（同样，用适当的值替换 `NAME`、`PATH-TO-JUICEFS`、`META-URL` 和 `MOUNTPOINT`）：
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -63,7 +66,7 @@ Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Re
 </plist>
 ```
 
-Use following commands to load the file created in the previous step and test whether the loading is successful. **Please ensure Redis server is already running.**
+使用以下命令加载上一步创建的文件，测试加载是否成功。**请确保 Redis 服务器已经在运行。**
 
 ```bash
 $ launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
@@ -71,7 +74,7 @@ $ launchctl start ~/Library/LaunchAgents/io.juicefs.<NAME>
 $ ls <MOUNTPOINT>
 ```
 
-If mount failed, you can add following configuration to `io.juicefs.<NAME>.plist` file for debug purpose:
+如果挂载失败，您可以将以下配置添加到 `io.juicefs.<NAME>.plist` 文件中以进行调试：
 
 ```xml
         <key>StandardOutPath</key>
@@ -80,7 +83,7 @@ If mount failed, you can add following configuration to `io.juicefs.<NAME>.plist
         <string>/tmp/juicefs.err</string>
 ```
 
-Use following commands to reload the latest configuration and inspect the output:
+使用以下命令重新加载最新配置并检查输出：
 
 ```bash
 $ launchctl unload ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
@@ -89,13 +92,13 @@ $ cat /tmp/juicefs.out
 $ cat /tmp/juicefs.err
 ```
 
-If you install Redis server by Homebrew, you could use following command to start it at boot:
+如果你通过 Homebrew 安装 Redis 服务器，则可以使用以下命令在开机时启动它：
 
 ```bash
 $ brew services start redis
 ```
 
-Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Redis server is loaded:
+然后在 `io.juicefs.<NAME>.plist` 文件中添加以下配置以确保 Redis 服务器已加载：
 
 ```xml
         <key>KeepAlive</key>
@@ -106,3 +109,35 @@ Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Re
 ```
 
 ## 5. 卸载文件系统
+
+执行 `umount` 子命令卸载 JuiceFS 文件系统：
+
+```shell
+$ juicefs umount ~/music
+```
+
+> **提示**：执行 `juicefs umount -h` 命令，可以获取卸载命令的详细帮助信息。
+
+### 卸载失败
+
+如果执行命令后，文件系统卸载失败，提示 `Device or resource busy`：
+
+```shell
+2021-05-09 22:42:55.757097 I | fusermount: failed to unmount ~/music: Device or resource busy
+exit status 1
+```
+
+发生这种情况，可能是因为某些程序正在读写文件系统中的文件。为了确保数据安全，你应该首先排查是哪些程序正在与文件系统中的文件进行交互（例如通过 `lsof` 命令），并尝试结束他们之间的交互动作，然后再重新执行卸载命令。
+
+> **风险提示**：以下内容包含的命令可能会导致文件损坏、丢失，请务必谨慎操作！
+
+当然，在你能够确保数据安全的前提下，也可以在卸载命令中添加 `--force` 或 `-f` 参数，强制卸载文件系统：
+
+```shell
+$ juicefs umount --force ~/music
+```
+
+## 你可能需要
+
+- [Linux 系统使用 JuiceFS](juicefs_on_linux.md)
+- [Windows 系统使用 JuiceFS](juicefs_on_windows.md)

@@ -27,7 +27,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
 
 ---
 
-[Architecture](#architecture) | [Getting Started](#getting-started) | [Administration](#administration) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Status](#status) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
+[Architecture](#architecture) | [Getting Started](#getting-started) | [Advanced Topics](#advanced-topics) | [POSIX Compatibility](#posix-compatibility) | [Performance Benchmark](#performance-benchmark) | [Supported Object Storage](#supported-object-storage) | [Who is using](#who-is-using) | [Roadmap](#roadmap) | [Reporting Issues](#reporting-issues) | [Contributing](#contributing) | [Community](#community) | [Usage Tracking](#usage-tracking) | [License](#license) | [Credits](#credits) | [FAQ](#faq)
 
 ---
 
@@ -73,18 +73,17 @@ There is a [command reference](docs/en/command_reference.md) to see all options 
 
 If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_sdk.md).
 
-## Administration
+## Advanced Topics
 
 - [Redis Best Practices](docs/en/redis_best_practices.md)
-- [Mount JuiceFS at Boot](docs/en/mount_at_boot.md)
 - [How to Setup Object Storage](docs/en/how_to_setup_object_storage.md)
 - [Cache Management](docs/en/cache_management.md)
 - [Fault Diagnosis and Analysis](docs/en/fault_diagnosis_and_analysis.md)
 - [FUSE Mount Options](docs/en/fuse_mount_options.md)
-- [Sync Accounts between Multiple Hosts](docs/en/sync_accounts_between_multiple_hosts.md)
-- [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
 - [Using JuiceFS on Windows](docs/en/juicefs_on_windows.md)
 - [S3 Gateway](docs/en/s3_gateway.md)
+
+Please refer to [JuiceFS User Manual](docs/en/README.md) for more information.
 
 ## POSIX Compatibility
 
@@ -186,7 +185,7 @@ You are welcome to tell us after using JuiceFS and share your experience with ev
 ## Roadmap
 
 - Stabilize storage format
-- Support TiKV/FoundationDB as meta engine
+- Support FoundationDB as meta engine
 
 ## Reporting Issues
 

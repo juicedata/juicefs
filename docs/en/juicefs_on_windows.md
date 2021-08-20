@@ -6,7 +6,7 @@ JuiceFS supports creating and mounting file systems in Windows. But you need to 
 
 > **[WinFsp](https://github.com/billziss-gh/winfsp)** is an open source Windows file system agent, it provides a FUSE emulation layer, so that the JuiceFS client can mount the file system to Windows.
 
-## 2. Install JuiceFS on Windows 
+## 2. Install JuiceFS on Windows
 
 You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest), take Windows 10 system as an example, the download file name contains `windows-amd64`, decompress and `juicefs.exe` is JuiceFS client.
 
@@ -67,3 +67,7 @@ If you need to cancel the boot mount, please refer to [step 2](#2-set-boot-up) t
 
 ## 5. Unmount a JuiceFS
 
+## Go further
+
+- [JuiceFS on Linux](juicefs_on_linux.md)
+- [JuiceFS on macOS](juicefs_on_macos.md)

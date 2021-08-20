@@ -173,7 +173,7 @@ You can see that the mount point of the file system `pics` is `/mnt/jfs`, execut
 $ sudo juicefs umount /mnt/jfs
 ```
 
-> **Prompt**: Execute the `juicefs umount -h` command to obtain detailed help information for the umount command.
+> **Prompt**: Execute the `juicefs umount -h` command to obtain detailed help information for the unmount command.
 
 ### Unmount failed
 
@@ -184,7 +184,7 @@ If a file system fails to be unmounted after executing the command, it will prom
 exit status 1
 ```
 
-This can happen because some programs are reading and writing files in the file system. To ensure data security, you should first check which programs are interacting with files in the file system, and try to end the interaction between them, and then execute the uninstall command again.
+This can happen because some programs are reading and writing files in the file system. To ensure data security, you should first check which programs are interacting with files in the file system (e.g. through the `lsof` command), and try to end the interaction between them, and then execute the uninstall command again.
 
 > **Risk Tips**: The commands contained in the following content may cause files damage or loss, please be cautious!
 
@@ -202,5 +202,5 @@ $ sudo fusermount -u /mnt/jfs
 
 ## Go further
 
-- [JuiceFS on Windows](juicefs_on_windows.md)
 - [JuiceFS on macOS](juicefs_on_macos.md)
+- [JuiceFS on Windows](juicefs_on_windows.md)
