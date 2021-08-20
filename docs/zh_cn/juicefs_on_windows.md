@@ -45,7 +45,7 @@ $ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access
 创建一个 VBS 脚本，例如：`juicefs-music.vbs`。根据实际情况修改以下内容：
 
 ```vbscript
-set ws=WScript.CreateObject("WScript.Shell") 
+set ws=WScript.CreateObject("WScript.Shell")
 ws.Run "C:\juicefs\juicefs.exe mount redis://192.168.1.8:6379/1 Z:",0
 ```
 
@@ -67,3 +67,7 @@ ws.Run "C:\juicefs\juicefs.exe mount redis://192.168.1.8:6379/1 Z:",0
 
 ## 5. 卸载文件系统
 
+## 你可能需要
+
+- [Linux 系统使用 JuiceFS](juicefs_on_linux.md)
+- [macOS 系统使用 JuiceFS](juicefs_on_macos.md)

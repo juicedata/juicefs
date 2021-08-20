@@ -60,30 +60,29 @@ JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高�
 
 请参照 [快速上手指南](docs/zh_cn/quick_start_guide.md) 立即开始使用 JuiceFS！
 
-### 命令索引
+## 命令索引
 
 请点击 [这里](docs/zh_cn/command_reference.md) 查看所有子命令以及命令行参数。
 
-### Kubernetes
+## Kubernetes
 
 在 Kubernetes 中使用 JuiceFS 非常便捷，请查看 [这个文档](docs/zh_cn/how_to_use_on_kubernetes.md) 了解更多信息。
 
-### Hadoop Java SDK
+## Hadoop Java SDK
 
 JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/hadoop_java_sdk.md) 与 Hadoop 生态结合。
 
-## 运维管理
+## 进阶主题
 
 - [Redis 最佳实践](docs/zh_cn/redis_best_practices.md)
-- [开机自动挂载 JuiceFS](docs/zh_cn/mount_at_boot.md)
 - [如何设置对象存储](docs/zh_cn/how_to_setup_object_storage.md)
 - [缓存管理](docs/zh_cn/cache_management.md)
 - [故障诊断和分析](docs/zh_cn/fault_diagnosis_and_analysis.md)
 - [FUSE 挂载选项](docs/zh_cn/fuse_mount_options.md)
-- [多主机间同步账户](docs/zh_cn/sync_accounts_between_multiple_hosts.md)
-- [在 Kubernetes 中使用 JuiceFS](docs/zh_cn/how_to_use_on_kubernetes.md)
-- [在 Windows 中使用 JuiceFS](docs/zh_cn/windows.md)
+- [在 Windows 中使用 JuiceFS](docs/zh_cn/juicefs_on_windows.md)
 - [S3 网关](docs/zh_cn/s3_gateway.md)
+
+请查阅 [JuiceFS 用户手册](docs/zh_cn/README.md) 了解更多信息。
 
 ## POSIX 兼容性测试
 
@@ -138,7 +137,7 @@ Used: 23.4s, CPU: 69.1%, MEM: 147.0 MiB
 
 ![Sequential Read Write Benchmark](docs/images/sequential-read-write-benchmark.svg)
 
-上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](docs/en/fio.md)。
+上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](docs/zh_cn/fio.md)。
 
 ### 元数据性能
 
@@ -146,7 +145,7 @@ Used: 23.4s, CPU: 69.1%, MEM: 147.0 MiB
 
 ![Metadata Benchmark](docs/images/metadata-benchmark.svg)
 
-上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](docs/en/mdtest.md)。
+上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](docs/zh_cn/mdtest.md)。
 
 ### 性能分析
 
@@ -185,7 +184,7 @@ JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，如
 ## 产品路线图
 
 - 稳定存储格式
-- 支持使用 TiKV、FoundationDB 做元数据引擎
+- 支持使用 FoundationDB 做元数据引擎
 
 ## 反馈问题
 
@@ -221,16 +220,16 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ### 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](docs/en/how_to_setup_object_storage.md#supported-object-storage)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](docs/zh_cn/how_to_setup_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ### 是否可以使用 Redis 集群版？
 
 不可以。JuiceFS 使用了 Redis 的[事务功能](https://redis.io/topics/transactions)来保证元数据操作的原子性，而分布式版还不支持分布式事务。哨兵节点或者其他的 Redis 高可用方法是需要的。
 
-请查看[「Redis 最佳实践」](docs/en/redis_best_practices.md)了解更多信息。
+请查看[「Redis 最佳实践」](docs/zh_cn/redis_best_practices.md)了解更多信息。
 
 ### JuiceFS 与 XXX 的区别是什么？
 
-请查看[「与其它项目比较」](docs/en/comparison_with_others.md)文档了解更多信息。
+请查看[「与其它项目比较」](docs/zh_cn/comparison_with_others.md)文档了解更多信息。
 
 更多 FAQ 请查看[完整列表](docs/zh_cn/faq.md)。

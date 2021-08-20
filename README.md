@@ -61,30 +61,29 @@ To create a JuiceFS, you need the following 3 preparations:
 
 Please refer to [Quick Start Guide](docs/en/quick_start_guide.md) to start using JuiceFS immediately!
 
-### Command Reference
+## Command Reference
 
 There is a [command reference](docs/en/command_reference.md) to see all options of the subcommand.
 
-### Kubernetes
+## Kubernetes
 
 [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md) is so easy, have a try.
 
-### Hadoop Java SDK
+## Hadoop Java SDK
 
 If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/hadoop_java_sdk.md).
 
-## Administration
+## Advanced Topics
 
 - [Redis Best Practices](docs/en/redis_best_practices.md)
-- [Mount JuiceFS at Boot](docs/en/mount_at_boot.md)
 - [How to Setup Object Storage](docs/en/how_to_setup_object_storage.md)
 - [Cache Management](docs/en/cache_management.md)
 - [Fault Diagnosis and Analysis](docs/en/fault_diagnosis_and_analysis.md)
 - [FUSE Mount Options](docs/en/fuse_mount_options.md)
-- [Sync Accounts between Multiple Hosts](docs/en/sync_accounts_between_multiple_hosts.md)
-- [Using JuiceFS on Kubernetes](docs/en/how_to_use_on_kubernetes.md)
 - [Using JuiceFS on Windows](docs/en/juicefs_on_windows.md)
 - [S3 Gateway](docs/en/s3_gateway.md)
+
+Please refer to [JuiceFS User Manual](docs/en/README.md) for more information.
 
 ## POSIX Compatibility
 
@@ -186,7 +185,7 @@ You are welcome to tell us after using JuiceFS and share your experience with ev
 ## Roadmap
 
 - Stabilize storage format
-- Support TiKV/FoundationDB as meta engine
+- Support FoundationDB as meta engine
 
 ## Reporting Issues
 

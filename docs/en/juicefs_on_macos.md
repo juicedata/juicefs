@@ -6,7 +6,7 @@ JuiceFS supports creating and mounting file systems in macOS. But you need to in
 
 > [macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems, allowing JuiceFS client to mount the file system to macOS.
 
-## 2. Install JuiceFS on macOS 
+## 2. Install JuiceFS on macOS
 
 You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest), download the compressed package containing `darwin-amd64` in the file name, for example:
 
@@ -106,3 +106,35 @@ Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Re
 ```
 
 ## 5. Unmount a JuiceFS
+
+Execute the `umount` subcommand to unmount the JuiceFS file system:
+
+```shell
+$ juicefs umount ~/music
+```
+
+> **Prompt**: Execute the `juicefs umount -h` command to obtain detailed help information for the unmount command.
+
+### Unmount failed
+
+If a file system fails to be unmounted after executing the command, it will prompt `Device or resource busy`:
+
+```shell
+2021-05-09 22:42:55.757097 I | fusermount: failed to unmount ~/music: Device or resource busy
+exit status 1
+```
+
+This can happen because some programs are reading and writing files in the file system. To ensure data security, you should first check which programs are interacting with files in the file system (e.g. through the `lsof` command), and try to end the interaction between them, and then execute the uninstall command again.
+
+> **Risk Tips**: The commands contained in the following content may cause files damage or loss, please be cautious!
+
+Of course, you can also add the `--force` or `-f` parameter to the unmount command to force the file system to be unmounted, but you have to bear the possible catastrophic consequences:
+
+```shell
+$ juicefs umount --force ~/music
+```
+
+## Go further
+
+- [JuiceFS on Linux](juicefs_on_linux.md)
+- [JuiceFS on Windows](juicefs_on_windows.md)
