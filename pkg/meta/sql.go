@@ -2284,7 +2284,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if st != 0 {
 		return
 	}
-	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped/sliceBytes, pos, len(ss), size)
+	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
 	err = m.newMsg(CompactChunk, chunks, chunkid)
 	if err != nil {
 		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
@@ -2301,7 +2301,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return syscall.EINVAL
 		}
 
-		c2.Slices = append(append(c2.Slices[:skipped], marshalSlice(pos, chunkid, size, 0, size)...), c2.Slices[len(c.Slices):]...)
+		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, chunkid, size, 0, size)...), c2.Slices[len(c.Slices):]...)
 		if _, err := ses.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
 			return err
 		}
