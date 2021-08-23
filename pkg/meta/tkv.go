@@ -1843,6 +1843,9 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 		return errno(err)
 	}
 	ss := readSliceBuf(val)
+	if ss == nil {
+		return syscall.EIO
+	}
 	*chunks = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *chunks)
 	if !m.conf.ReadOnly && (len(val)/sliceBytes >= 5 || len(*chunks) >= 5) {
