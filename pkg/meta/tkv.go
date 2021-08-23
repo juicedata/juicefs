@@ -1891,7 +1891,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Ctimensec = uint32(now.Nanosecond())
 		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
-		needCompact = (len(val)/sliceBytes)%100 == 99
+		needCompact = (len(val)/sliceBytes)%50 == 49
 		return nil
 	})
 	if err == nil {
@@ -2163,23 +2163,20 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if st != 0 {
 		return
 	}
-	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped/sliceBytes, pos, len(ss), size)
+	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
 	err = m.newMsg(CompactChunk, chunks, chunkid)
 	if err != nil {
 		logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
 		return
 	}
 	err = m.txn(func(tx kvTxn) error {
-		buf2, err := m.get(m.chunkKey(inode, indx))
-		if err != nil {
-			return err
-		}
+		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
 			logger.Infof("chunk %d:%d was changed %d -> %d", inode, indx, len(buf), len(buf2))
 			return syscall.EINVAL
 		}
 
-		buf2 = append(append(buf2[:skipped], marshalSlice(pos, chunkid, size, 0, size)...), buf2[len(buf):]...)
+		buf2 = append(append(buf2[:skipped*sliceBytes], marshalSlice(pos, chunkid, size, 0, size)...), buf2[len(buf):]...)
 		tx.set(m.chunkKey(inode, indx), buf2)
 		// create the key to tracking it
 		tx.set(m.sliceKey(chunkid, size), make([]byte, 8))

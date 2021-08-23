@@ -2301,7 +2301,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return syscall.EINVAL
 		}
 
-		c2.Slices = append(append(c2.Slices[:skipped], marshalSlice(pos, chunkid, size, 0, size)...), c2.Slices[len(c.Slices):]...)
+		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, chunkid, size, 0, size)...), c2.Slices[len(c.Slices):]...)
 		if _, err := ses.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
 			return err
 		}
