@@ -22,7 +22,7 @@ require (
 	github.com/emersion/go-webdav v0.3.0
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/google/btree v1.0.1 // indirect
+	github.com/google/btree v1.0.1
 	github.com/google/gops v0.3.13
 	github.com/google/readahead v0.0.0-20161222183148-eaceba169032 // indirect
 	github.com/google/uuid v1.1.2

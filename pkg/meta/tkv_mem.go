@@ -64,8 +64,10 @@ func (tx *memTxn) get(key []byte) []byte {
 	if it != nil {
 		tx.observed[k] = it.ver
 		return it.value
+	} else {
+		tx.observed[k] = 0
+		return nil
 	}
-	return nil
 }
 
 func (tx *memTxn) gets(keys ...[]byte) [][]byte {
@@ -223,7 +225,9 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 	defer c.Unlock()
 	for k, ver := range tx.observed {
 		it := c.get(k)
-		if it == nil || it.ver > ver {
+		if it == nil && ver != 0 {
+			return fmt.Errorf("write conflict: %s was version %d, now deleted", k, ver)
+		} else if it != nil && it.ver > ver {
 			return fmt.Errorf("write conflict: %s %d > %d", k, it.ver, ver)
 		}
 	}
