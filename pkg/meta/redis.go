@@ -102,6 +102,7 @@ type msgCallbacks struct {
 
 func init() {
 	Register("redis", newRedisMeta)
+	Register("rediss", newRedisMeta)
 }
 
 // newRedisMeta return a meta store using Redis.
