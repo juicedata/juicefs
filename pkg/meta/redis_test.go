@@ -591,6 +591,10 @@ func TestCompaction(t *testing.T) {
 	testCompaction(t, m)
 }
 
+type compactor interface {
+	compactChunk(inode Ino, indx uint32, force bool)
+}
+
 func testCompaction(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
 	var l sync.Mutex
@@ -629,13 +633,8 @@ func testCompaction(t *testing.T, m Meta) {
 	if len(cs1) != 5 {
 		t.Fatalf("expect 5 slices, but got %+v", cs1)
 	}
-	switch r := m.(type) {
-	case *redisMeta:
-		r.compactChunk(inode, 1, true)
-	case *dbMeta:
-		r.compactChunk(inode, 1, true)
-	case *kvMeta:
-		r.compactChunk(inode, 1, true)
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 1, true)
 	}
 	var cs []Slice
 	_ = m.Read(ctx, inode, 1, &cs)
@@ -644,8 +643,8 @@ func testCompaction(t *testing.T, m Meta) {
 	}
 
 	// append
-	var size uint32 = 1000000
-	for i := 0; i < 50; i++ {
+	var size uint32 = 100000
+	for i := 0; i < 200; i++ {
 		var chunkid uint64
 		m.NewChunk(ctx, inode, 0, 0, &chunkid)
 		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: chunkid, Size: size, Len: size}); st != 0 {
@@ -653,13 +652,8 @@ func testCompaction(t *testing.T, m Meta) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	switch r := m.(type) {
-	case *redisMeta:
-		r.compactChunk(inode, 0, true)
-	case *dbMeta:
-		r.compactChunk(inode, 0, true)
-	case *kvMeta:
-		r.compactChunk(inode, 0, true)
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 0, true)
 	}
 	var chunks []Slice
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
@@ -672,8 +666,8 @@ func testCompaction(t *testing.T, m Meta) {
 	for _, s := range chunks {
 		total += s.Len
 	}
-	if total != size*50 {
-		t.Fatalf("size of slice should be %d, but got %d", size*50, total)
+	if total != size*200 {
+		t.Fatalf("size of slice should be %d, but got %d", size*200, total)
 	}
 
 	// TODO: check result if that's predictable
