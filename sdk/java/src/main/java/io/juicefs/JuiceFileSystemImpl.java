@@ -853,9 +853,9 @@ public class JuiceFileSystemImpl extends FileSystem {
       int got;
       if (b.hasArray()) {
         got = read(pos, b.array(), b.position(), b.remaining());
-        statistics.incrementBytesRead(-got);
         if (got <= 0)
           return got;
+        statistics.incrementBytesRead(-got);
       } else {
         assert b.isDirect();
         long address = ((DirectBuffer) b).address() + b.position();
