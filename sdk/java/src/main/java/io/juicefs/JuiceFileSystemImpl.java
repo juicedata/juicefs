@@ -833,8 +833,8 @@ public class JuiceFileSystemImpl extends FileSystem {
       while (b.hasRemaining() && buf.hasRemaining()) {
         b.put(buf.get());
         got++;
-        statistics.incrementBytesRead(1);
       }
+      statistics.incrementBytesRead(got);
       if (!b.hasRemaining())
         return got;
       int more = read(position, b);
@@ -853,6 +853,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       int got;
       if (b.hasArray()) {
         got = read(pos, b.array(), b.position(), b.remaining());
+        statistics.incrementBytesRead(-got);
         if (got <= 0)
           return got;
       } else {
