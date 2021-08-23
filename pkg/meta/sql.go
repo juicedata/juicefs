@@ -1884,6 +1884,9 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 		return errno(err)
 	}
 	ss := readSliceBuf(c.Slices)
+	if ss == nil {
+		return syscall.EIO
+	}
 	*chunks = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *chunks)
 	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5) {

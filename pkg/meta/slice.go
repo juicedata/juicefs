@@ -112,7 +112,8 @@ func readSlices(vals []string) []*slice {
 
 func readSliceBuf(buf []byte) []*slice {
 	if len(buf)%sliceBytes != 0 {
-		panic(len(buf))
+		logger.Errorf("corrupt slices: len=%d", len(buf))
+		return nil
 	}
 	nSlices := len(buf) / sliceBytes
 	slices := make([]slice, nSlices)
