@@ -787,6 +787,7 @@ public class JuiceFileSystemImpl extends FileSystem {
         buf.limit(0);
         return false; // EOF
       }
+      statistics.incrementBytesRead(-read);
       buf.position(0);
       buf.limit(read);
       position += read;
@@ -833,12 +834,11 @@ public class JuiceFileSystemImpl extends FileSystem {
       while (b.hasRemaining() && buf.hasRemaining()) {
         b.put(buf.get());
         got++;
-        statistics.incrementBytesRead(1);
       }
+      statistics.incrementBytesRead(got);
       if (!b.hasRemaining())
         return got;
       int more = read(position, b);
-      statistics.incrementBytesRead(more);
       if (more <= 0)
         return got > 0 ? got : -1;
       position += more;
@@ -866,6 +866,7 @@ public class JuiceFileSystemImpl extends FileSystem {
           throw error(got, path);
         if (got == 0)
           return -1;
+        statistics.incrementBytesRead(got);
       }
       b.position(b.position() + got);
       return got;

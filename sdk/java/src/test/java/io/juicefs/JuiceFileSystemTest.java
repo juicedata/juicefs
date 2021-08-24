@@ -317,23 +317,32 @@ public class JuiceFileSystemTest extends TestCase {
     statistics.reset();
     Path path = new Path("/hello");
     FSDataOutputStream out = fs.create(path, true);
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 1 << 20; i++) {
       out.writeBytes("hello\n");
     }
     out.close();
     FSDataInputStream in = fs.open(path);
 
-    ByteBuffer buf = ByteBuffer.allocateDirect(6 * 1000);
+    int readSize = 512 << 10;
+
+    ByteBuffer buf = ByteBuffer.allocateDirect(readSize);
     while (buf.hasRemaining()) {
-      int readCount = in.read(buf);
+      in.read(buf);
     }
-    assertEquals(6000, statistics.getBytesRead());
+    assertEquals(readSize, statistics.getBytesRead());
+
+    in.seek(0);
+    buf = ByteBuffer.allocate(readSize);
+    while (buf.hasRemaining()) {
+      in.read(buf);
+    }
+    assertEquals(readSize * 2, statistics.getBytesRead());
 
     in.read(0, new byte[3000], 0, 3000);
-    assertEquals(9000, statistics.getBytesRead());
+    assertEquals(readSize * 2 + 3000, statistics.getBytesRead());
 
     in.read(3000, new byte[6000], 0, 3000);
-    assertEquals(12000, statistics.getBytesRead());
+    assertEquals(readSize * 2 + 3000 + 3000, statistics.getBytesRead());
 
   }
 
