@@ -838,7 +838,6 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (!b.hasRemaining())
         return got;
       int more = read(position, b);
-      statistics.incrementBytesRead(more);
       if (more <= 0)
         return got > 0 ? got : -1;
       position += more;
@@ -855,7 +854,6 @@ public class JuiceFileSystemImpl extends FileSystem {
         got = read(pos, b.array(), b.position(), b.remaining());
         if (got <= 0)
           return got;
-        statistics.incrementBytesRead(-got);
       } else {
         assert b.isDirect();
         long address = ((DirectBuffer) b).address() + b.position();
@@ -867,6 +865,7 @@ public class JuiceFileSystemImpl extends FileSystem {
           throw error(got, path);
         if (got == 0)
           return -1;
+        statistics.incrementBytesRead(got);
       }
       b.position(b.position() + got);
       return got;
