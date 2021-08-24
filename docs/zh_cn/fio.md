@@ -48,7 +48,7 @@ JuiceFS 挂载命令:
 
 ```
 ./juicefs format --storage=s3 --bucket=https://<BUCKET>.s3.<REGION>.amazonaws.com localhost benchmark
-./juicefs mount --maxUpload=150 --ioretries=20 localhost /jfs
+./juicefs mount --max-uploads=150 --io-retries=20 localhost /jfs
 ```
 
 EFS 挂载命令 (与配置说明中一致):
