@@ -442,7 +442,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 	m.fmt = format
 	return m.txn(func(tx kvTxn) error {
 		tx.set(m.fmtKey("setting"), data)
-		if body == nil {
+		if body == nil || m.client.name() == "memkv" {
 			// root inode
 			var attr Attr
 			attr.Typ = TypeDirectory
