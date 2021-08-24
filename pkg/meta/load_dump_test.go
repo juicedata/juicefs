@@ -99,6 +99,7 @@ func TestLoadDump(t *testing.T) {
 		}
 	})
 	t.Run("Metadata Engine: TKV", func(t *testing.T) {
+		os.Remove(settingPath)
 		m := testLoad(t, "memkv://test/jfs", sampleFile)
 		// m := testLoad(t, "tikv://127.0.0.1:2379/jfs", sampleFile)
 		fp, err := os.OpenFile("tkv.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
