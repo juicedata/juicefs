@@ -787,6 +787,7 @@ public class JuiceFileSystemImpl extends FileSystem {
         buf.limit(0);
         return false; // EOF
       }
+      statistics.incrementBytesRead(-read);
       buf.position(0);
       buf.limit(read);
       position += read;
