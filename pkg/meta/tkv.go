@@ -91,7 +91,7 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m := &kvMeta{
 		conf:         conf,
-		client:       withPrefix(client, append([]byte(prefix), 0xFD)),
+		client:       client,
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
@@ -100,6 +100,9 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
+	}
+	if driver != "memkv" {
+		m.client = withPrefix(m.client, append([]byte(prefix), 0xFD))
 	}
 
 	m.root = 1

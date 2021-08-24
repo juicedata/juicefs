@@ -18,7 +18,6 @@
 package meta
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -31,11 +30,19 @@ func init() {
 	Register("memkv", newKVMeta)
 }
 
-const settingKey = "\xFDsetting"
 const settingPath = "/tmp/juicefs.setting.json"
 
 func newMockClient() (tkvClient, error) {
-	return &memKV{items: btree.New(2)}, nil
+	client := &memKV{items: btree.New(2), temp: &kvItem{}}
+	if d, err := ioutil.ReadFile(settingPath); err == nil {
+		var buffer map[string][]byte
+		if err = json.Unmarshal(d, &buffer); err == nil {
+			for k, v := range buffer {
+				client.set(k, v) // not locked
+			}
+		}
+	}
+	return client, nil
 }
 
 type memTxn struct {
@@ -51,15 +58,6 @@ func (tx *memTxn) get(key []byte) []byte {
 	}
 	tx.store.Lock()
 	defer tx.store.Unlock()
-	if bytes.Equal(key, []byte(settingKey)) && tx.store.get(k) == nil {
-		d, _ := ioutil.ReadFile(settingPath)
-		var buffer map[string][]byte
-		_ = json.Unmarshal(d, &buffer)
-		for k, v := range buffer {
-			// "\xFD" become "\uFFFD"
-			tx.store.set("\xFD"+k[3:], v)
-		}
-	}
 	it := tx.store.get(k)
 	if it != nil {
 		tx.observed[k] = it.ver
@@ -180,6 +178,7 @@ func (it *kvItem) Less(o btree.Item) bool {
 type memKV struct {
 	sync.Mutex
 	items *btree.BTree
+	temp  *kvItem
 }
 
 func (c *memKV) name() string {
@@ -187,7 +186,8 @@ func (c *memKV) name() string {
 }
 
 func (c *memKV) get(key string) *kvItem {
-	it := c.items.Get(&kvItem{key: key})
+	c.temp.key = key
+	it := c.items.Get(c.temp)
 	if it != nil {
 		return it.(*kvItem)
 	}
@@ -195,11 +195,12 @@ func (c *memKV) get(key string) *kvItem {
 }
 
 func (c *memKV) set(key string, value []byte) {
+	c.temp.key = key
 	if value == nil {
-		c.items.Delete(&kvItem{key: key})
+		c.items.Delete(c.temp)
 		return
 	}
-	it := c.items.Get(&kvItem{key: key})
+	it := c.items.Get(c.temp)
 	if it != nil {
 		it.(*kvItem).ver++
 		it.(*kvItem).value = value
@@ -231,10 +232,11 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 			return fmt.Errorf("write conflict: %s %d > %d", k, it.ver, ver)
 		}
 	}
-	_, ok := tx.buffer[settingKey]
-	if ok {
+	if _, ok := tx.buffer["setting"]; ok { // formatting
 		d, _ := json.Marshal(tx.buffer)
-		_ = ioutil.WriteFile(settingPath, d, 0644)
+		if err := ioutil.WriteFile(settingPath, d, 0644); err != nil {
+			return err
+		}
 	}
 	for k, value := range tx.buffer {
 		c.set(k, value)
