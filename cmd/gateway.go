@@ -942,6 +942,16 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	return
 }
 
+func (n *jfsObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return
+	}
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return
+}
+
 func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, parts []minio.CompletePart, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return
