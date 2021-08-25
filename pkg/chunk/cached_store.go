@@ -189,7 +189,7 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		used := time.Since(st)
 		logger.Debugf("GET %s RANGE(%d,%d) (%s, %.3fs)", key, boff, len(p), err, used.Seconds())
 		if used > SlowRequest {
-			logger.Infof("slow request: GET %s (%s, %.3fs)", key, err, used.Seconds())
+			logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
 		}
 		c.store.fetcher.fetch(key)
 		if err == nil {
@@ -229,7 +229,7 @@ func (c *rChunk) delete(indx int) error {
 	used := time.Since(st)
 	logger.Debugf("DELETE %v (%v, %.3fs)", key, err, used.Seconds())
 	if used > SlowRequest {
-		logger.Infof("slow request: DELETE %v (%s, %.3fs)", key, err, used.Seconds())
+		logger.Infof("slow request: DELETE %v (%v, %.3fs)", key, err, used.Seconds())
 	}
 	return err
 }
@@ -376,7 +376,7 @@ func (c *wChunk) put(key string, p *Page) error {
 		used := time.Since(st)
 		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
 		if used > SlowRequest {
-			logger.Infof("slow request: PUT %v (%s, %.3fs)", key, err, used.Seconds())
+			logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
 		}
 		return err
 	}, c.store.conf.PutTimeout)
@@ -654,7 +654,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		used := time.Since(st)
 		logger.Debugf("GET %s (%s, %.3fs)", key, err, used.Seconds())
 		if used > SlowRequest {
-			logger.Infof("slow request: GET %s (%s, %.3fs)", key, err, used.Seconds())
+			logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
 		}
 		tried++
 	}
@@ -811,7 +811,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 			used := time.Since(st)
 			logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
 			if used > SlowRequest {
-				logger.Infof("slow request: PUT %v (%s, %.3fs)", key, err, used.Seconds())
+				logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
 			}
 			if err == nil {
 				break
