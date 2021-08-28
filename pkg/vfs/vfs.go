@@ -87,14 +87,7 @@ var (
 )
 
 func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
-	defer func() {
-		logit(ctx, "lookup (%d,%s): %s%s", parent, name, strerr(err), (*Entry)(entry))
-	}()
 	nleng := len(name)
-	if nleng > maxName {
-		err = syscall.ENAMETOOLONG
-		return
-	}
 	var inode Ino
 	var attr = &Attr{}
 	if parent == rootID {
@@ -106,7 +99,13 @@ func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscal
 			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
 			return
 		}
-
+	}
+	defer func() {
+		logit(ctx, "lookup (%d,%s): %s%s", parent, name, strerr(err), (*Entry)(entry))
+	}()
+	if nleng > maxName {
+		err = syscall.ENAMETOOLONG
+		return
 	}
 	err = m.Lookup(ctx, parent, name, &inode, attr)
 	if err != 0 {
