@@ -124,7 +124,7 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, sta
 		ls := loadLocks([]byte(d))
 		for _, l := range ls {
 			// find conflicted locks
-			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end > l.start && *start < l.end {
+			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end >= l.start && *start <= l.end {
 				*ltype = l.ltype
 				*start = l.start
 				*end = l.end
@@ -201,7 +201,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				ls := loadLocks([]byte(d))
 				for _, l := range ls {
 					// find conflicted locks
-					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end > l.start && start < l.end {
+					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end >= l.start && start <= l.end {
 						return syscall.EAGAIN
 					}
 				}

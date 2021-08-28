@@ -116,43 +116,60 @@ func insertLocks(ls []plockRecord, i int, nl plockRecord) []plockRecord {
 
 func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	// ls is ordered by l.start without overlap
-	var i int
-	for i < len(ls) && nl.end > nl.start {
+	for i := 0; i < len(ls) && nl.start <= nl.end; i++ {
 		l := ls[i]
-		if l.end < nl.start {
-		} else if l.start < nl.start {
-			ls = insertLocks(ls, i+1, plockRecord{nl.ltype, nl.pid, nl.start, l.end})
-			ls[i].end = nl.start
-			i++
-			nl.start = l.end
-		} else if l.end < nl.end {
-			ls[i].ltype = nl.ltype
-			ls[i].start = nl.start
-			nl.start = l.end
-		} else if l.start < nl.end {
+		if nl.start > l.end {
+			// l: |---|
+			// n:        |---|
+		} else if nl.end < l.start {
+			// l:        |---|
+			// n: |---|
 			ls = insertLocks(ls, i, nl)
-			ls[i+1].start = nl.end
-			nl.start = nl.end
+			nl.start = nl.end + 1 // break
+		} else if nl.start <= l.start {
+			if nl.end < l.end {
+				// l:   |---|   |-----|
+				// n: |---|     |---|
+				ls = insertLocks(ls, i, nl)
+				ls[i+1].start = nl.end + 1
+				nl.start = nl.end + 1
+			} else {
+				// l:   |---|       |---|   |---|     |---|
+				// n: |-------|   |-----|   |-----|   |---|
+				ls[i].ltype, ls[i].pid, ls[i].start = nl.ltype, nl.pid, nl.start
+				nl.start = l.end + 1
+			}
 		} else {
-			ls = insertLocks(ls, i, nl)
-			nl.start = nl.end
+			if nl.end < l.end {
+				// l: |-------|
+				// n:   |---|
+				ls[i].end = nl.start - 1
+				ls = insertLocks(ls, i+1, plockRecord{nl.ltype, nl.pid, nl.start, nl.end})
+				ls = insertLocks(ls, i+2, plockRecord{l.ltype, l.pid, nl.end + 1, l.end})
+				nl.start = nl.end + 1
+			} else {
+				// l: |---|     |-----|
+				// n:   |---|     |---|
+				ls[i].end = nl.start - 1
+				ls = insertLocks(ls, i+1, plockRecord{nl.ltype, nl.pid, nl.start, l.end})
+				nl.start = l.end + 1
+				i++
+			}
 		}
-		i++
 	}
-	if nl.start < nl.end {
+	if nl.start <= nl.end {
 		ls = append(ls, nl)
 	}
-	i = 0
-	for i < len(ls) {
-		if ls[i].ltype == F_UNLCK || ls[i].start == ls[i].end {
+	for i := 0; i < len(ls); {
+		if ls[i].ltype == F_UNLCK || ls[i].start > ls[i].end {
 			// remove empty one
 			copy(ls[i:], ls[i+1:])
 			ls = ls[:len(ls)-1]
 		} else {
-			if i+1 < len(ls) && ls[i].ltype == ls[i+1].ltype && ls[i].pid == ls[i+1].pid && ls[i].end == ls[i+1].start {
+			if i+1 < len(ls) && ls[i].ltype == ls[i+1].ltype && ls[i].pid == ls[i+1].pid && ls[i].end+1 == ls[i+1].start {
 				// combine continuous range
 				ls[i].end = ls[i+1].end
-				ls[i+1].start = ls[i+1].end
+				ls[i+1].start = ls[i+1].end + 1
 			}
 			i++
 		}
@@ -177,7 +194,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 		ls := loadLocks([]byte(d))
 		for _, l := range ls {
 			// find conflicted locks
-			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end > l.start && *start < l.end {
+			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end >= l.start && *start <= l.end {
 				*ltype = l.ltype
 				*start = l.start
 				*end = l.end
@@ -235,7 +252,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				ls := loadLocks([]byte(d))
 				for _, l := range ls {
 					// find conflicted locks
-					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end > l.start && start < l.end {
+					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end >= l.start && start <= l.end {
 						return syscall.EAGAIN
 					}
 				}
