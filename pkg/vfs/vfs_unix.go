@@ -19,6 +19,7 @@ package vfs
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"syscall"
@@ -202,8 +203,8 @@ func (l lockType) String() string {
 	}
 }
 
-func Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *uint64, typ *uint32, pid *uint32) (err syscall.Errno) {
-	logit(ctx, "getlk (%d,%016X): %s (%d,%d,%s,%d)", ino, owner, strerr(err), *start, *len, lockType(*typ), *pid)
+func Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end *uint64, typ *uint32, pid *uint32) (err syscall.Errno) {
+	logit(ctx, "getlk (%d,%016X): %s (%d,%d,%s,%d)", ino, owner, strerr(err), *start, *end, lockType(*typ), *pid)
 	if lockType(*typ).String() == "X" {
 		return syscall.EINVAL
 	}
@@ -215,7 +216,10 @@ func Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *uint64, ty
 		err = syscall.EBADF
 		return
 	}
-	err = m.Getlk(ctx, ino, owner, typ, start, len, pid)
+	err = m.Getlk(ctx, ino, owner, typ, start, end, pid)
+	if *end > 0 && *end < math.MaxUint64 {
+		*end--
+	}
 	return
 }
 
@@ -238,6 +242,9 @@ func Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ
 	h.addOp(ctx)
 	defer h.removeOp(ctx)
 
+	if end < math.MaxUint64 {
+		end++
+	}
 	err = m.Setlk(ctx, ino, owner, block, typ, start, end, pid)
 	if err == 0 {
 		h.Lock()
