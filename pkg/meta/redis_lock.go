@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -105,61 +106,37 @@ func dumpLocks(ls []plockRecord) []byte {
 	return wb.Bytes()
 }
 
-func insertLocks(ls []plockRecord, i int, nl plockRecord) []plockRecord {
-	nls := make([]plockRecord, len(ls)+1)
-	copy(nls[:i], ls[:i])
-	nls[i] = nl
-	copy(nls[i+1:], ls[i:])
-	ls = nls
-	return ls
-}
-
 func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	// ls is ordered by l.start without overlap
 	for i := 0; i < len(ls) && nl.start <= nl.end; i++ {
 		l := ls[i]
-		if nl.start > l.end {
-			// l: |---|
-			// n:        |---|
-		} else if nl.end < l.start {
-			// l:        |---|
-			// n: |---|
-			ls = insertLocks(ls, i, nl)
-			nl.start = nl.end + 1 // break
-		} else if nl.start <= l.start {
-			if nl.end < l.end {
-				// l:   |---|   |-----|
-				// n: |---|     |---|
-				ls = insertLocks(ls, i, nl)
-				ls[i+1].start = nl.end + 1
-				nl.start = nl.end + 1
-			} else {
-				// l:   |---|       |---|   |---|     |---|
-				// n: |-------|   |-----|   |-----|   |---|
-				ls[i].ltype, ls[i].pid, ls[i].start = nl.ltype, nl.pid, nl.start
-				nl.start = l.end + 1
+		if nl.start < l.start && nl.end >= l.start {
+			// split nl
+			ls = append(ls, nl)
+			ls[len(ls)-1].end = l.start - 1
+			nl.start = l.start
+		}
+		if nl.start == l.start {
+			ls[i].ltype = nl.ltype // update l
+			ls[i].pid = nl.pid
+			if l.end > nl.end {
+				// split l
+				ls[i].end = nl.end
+				l.start = nl.end + 1
+				ls = append(ls, l)
 			}
-		} else {
-			if nl.end < l.end {
-				// l: |-------|
-				// n:   |---|
-				ls[i].end = nl.start - 1
-				ls = insertLocks(ls, i+1, plockRecord{nl.ltype, nl.pid, nl.start, nl.end})
-				ls = insertLocks(ls, i+2, plockRecord{l.ltype, l.pid, nl.end + 1, l.end})
-				nl.start = nl.end + 1
-			} else {
-				// l: |---|     |-----|
-				// n:   |---|     |---|
-				ls[i].end = nl.start - 1
-				ls = insertLocks(ls, i+1, plockRecord{nl.ltype, nl.pid, nl.start, l.end})
-				nl.start = l.end + 1
-				i++
-			}
+			nl.start = ls[i].end + 1
+		} else if nl.start > l.start && nl.end < l.end {
+			// split l
+			ls[i].end = nl.start - 1
+			l.start = nl.start
+			ls = append(ls, l)
 		}
 	}
 	if nl.start <= nl.end {
 		ls = append(ls, nl)
 	}
+	sort.Slice(ls, func(i, j int) bool { return ls[i].start < ls[j].start })
 	for i := 0; i < len(ls); {
 		if ls[i].ltype == F_UNLCK || ls[i].start > ls[i].end {
 			// remove empty one
