@@ -87,14 +87,7 @@ var (
 )
 
 func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
-	defer func() {
-		logit(ctx, "lookup (%d,%s): %s%s", parent, name, strerr(err), (*Entry)(entry))
-	}()
 	nleng := len(name)
-	if nleng > maxName {
-		err = syscall.ENAMETOOLONG
-		return
-	}
 	var inode Ino
 	var attr = &Attr{}
 	if parent == rootID {
@@ -106,7 +99,13 @@ func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscal
 			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
 			return
 		}
-
+	}
+	defer func() {
+		logit(ctx, "lookup (%d,%s): %s%s", parent, name, strerr(err), (*Entry)(entry))
+	}()
+	if nleng > maxName {
+		err = syscall.ENAMETOOLONG
+		return
 	}
 	err = m.Lookup(ctx, parent, name, &inode, attr)
 	if err != 0 {
@@ -118,12 +117,12 @@ func Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscal
 }
 
 func GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
-	defer func() { logit(ctx, "getattr (%d): %s%s", ino, strerr(err), (*Entry)(entry)) }()
 	if IsSpecialNode(ino) && getInternalNode(ino) != nil {
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
 		return
 	}
+	defer func() { logit(ctx, "getattr (%d): %s%s", ino, strerr(err), (*Entry)(entry)) }()
 	var attr = &Attr{}
 	err = m.GetAttr(ctx, ino, attr)
 	if err != 0 {
@@ -407,13 +406,6 @@ func Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, fl
 
 func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
 	var attr = &Attr{}
-	defer func() {
-		if entry != nil {
-			logit(ctx, "open (%d): %s [fh:%d]", ino, strerr(err), fh)
-		} else {
-			logit(ctx, "open (%d): %s", ino, strerr(err))
-		}
-	}()
 	if IsSpecialNode(ino) {
 		if ino != controlInode && (flags&O_ACCMODE) != syscall.O_RDONLY {
 			err = syscall.EACCES
@@ -434,7 +426,13 @@ func Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err
 		entry = &meta.Entry{Inode: ino, Attr: n.attr}
 		return
 	}
-
+	defer func() {
+		if entry != nil {
+			logit(ctx, "open (%d): %s [fh:%d]", ino, strerr(err), fh)
+		} else {
+			logit(ctx, "open (%d): %s", ino, strerr(err))
+		}
+	}()
 	err = m.Open(ctx, ino, flags, attr)
 	if err != 0 {
 		return
@@ -483,7 +481,6 @@ func ReleaseHandler(ino Ino, fh uint64) {
 }
 
 func Release(ctx Context, ino Ino, fh uint64) (err syscall.Errno) {
-	defer func() { logit(ctx, "release (%d): %s", ino, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		if ino == logInode {
 			closeAccessLog(fh)
@@ -491,6 +488,7 @@ func Release(ctx Context, ino Ino, fh uint64) (err syscall.Errno) {
 		releaseHandle(ino, fh)
 		return
 	}
+	defer func() { logit(ctx, "release (%d): %s", ino, strerr(err)) }()
 	if fh > 0 {
 		f := findHandle(ino, fh)
 		if f != nil {
@@ -549,7 +547,6 @@ func Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err s
 				h.off += 1 << 20
 				h.data = h.data[1<<20:]
 			}
-			logit(ctx, "read (%d,%d,%d): OK (%d)", ino, size, off, n)
 		}
 		return
 	}
@@ -765,10 +762,10 @@ func doFsync(ctx Context, h *handle) (err syscall.Errno) {
 }
 
 func Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err syscall.Errno) {
-	defer func() { logit(ctx, "flush (%d): %s", ino, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		return
 	}
+	defer func() { logit(ctx, "flush (%d): %s", ino, strerr(err)) }()
 	h := findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
