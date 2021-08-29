@@ -108,7 +108,8 @@ func dumpLocks(ls []plockRecord) []byte {
 
 func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	// ls is ordered by l.start without overlap
-	for i := 0; i < len(ls) && nl.start <= nl.end; i++ {
+	size := len(ls)
+	for i := 0; i < size && nl.start <= nl.end; i++ {
 		l := ls[i]
 		if nl.start < l.start && nl.end >= l.start {
 			// split nl
@@ -121,6 +122,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 			l.end = nl.start - 1
 			ls = append(ls, l)
 			ls[i].start = nl.start
+			l = ls[i]
 		}
 		if nl.start == l.start {
 			ls[i].ltype = nl.ltype // update l
