@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -105,54 +106,50 @@ func dumpLocks(ls []plockRecord) []byte {
 	return wb.Bytes()
 }
 
-func insertLocks(ls []plockRecord, i int, nl plockRecord) []plockRecord {
-	nls := make([]plockRecord, len(ls)+1)
-	copy(nls[:i], ls[:i])
-	nls[i] = nl
-	copy(nls[i+1:], ls[i:])
-	ls = nls
-	return ls
-}
-
 func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	// ls is ordered by l.start without overlap
-	var i int
-	for i < len(ls) && nl.end > nl.start {
+	size := len(ls)
+	for i := 0; i < size && nl.start <= nl.end; i++ {
 		l := ls[i]
-		if l.end < nl.start {
-		} else if l.start < nl.start {
-			ls = insertLocks(ls, i+1, plockRecord{nl.ltype, nl.pid, nl.start, l.end})
-			ls[i].end = nl.start
-			i++
-			nl.start = l.end
-		} else if l.end < nl.end {
-			ls[i].ltype = nl.ltype
-			ls[i].start = nl.start
-			nl.start = l.end
-		} else if l.start < nl.end {
-			ls = insertLocks(ls, i, nl)
-			ls[i+1].start = nl.end
-			nl.start = nl.end
-		} else {
-			ls = insertLocks(ls, i, nl)
-			nl.start = nl.end
+		if nl.start < l.start && nl.end >= l.start {
+			// split nl
+			ls = append(ls, nl)
+			ls[len(ls)-1].end = l.start - 1
+			nl.start = l.start
 		}
-		i++
+		if nl.start > l.start && nl.start <= l.end {
+			// split l
+			l.end = nl.start - 1
+			ls = append(ls, l)
+			ls[i].start = nl.start
+			l = ls[i]
+		}
+		if nl.start == l.start {
+			ls[i].ltype = nl.ltype // update l
+			ls[i].pid = nl.pid
+			if l.end > nl.end {
+				// split l
+				ls[i].end = nl.end
+				l.start = nl.end + 1
+				ls = append(ls, l)
+			}
+			nl.start = ls[i].end + 1
+		}
 	}
-	if nl.start < nl.end {
+	if nl.start <= nl.end {
 		ls = append(ls, nl)
 	}
-	i = 0
-	for i < len(ls) {
-		if ls[i].ltype == F_UNLCK || ls[i].start == ls[i].end {
+	sort.Slice(ls, func(i, j int) bool { return ls[i].start < ls[j].start })
+	for i := 0; i < len(ls); {
+		if ls[i].ltype == F_UNLCK || ls[i].start > ls[i].end {
 			// remove empty one
 			copy(ls[i:], ls[i+1:])
 			ls = ls[:len(ls)-1]
 		} else {
-			if i+1 < len(ls) && ls[i].ltype == ls[i+1].ltype && ls[i].pid == ls[i+1].pid && ls[i].end == ls[i+1].start {
+			if i+1 < len(ls) && ls[i].ltype == ls[i+1].ltype && ls[i].pid == ls[i+1].pid && ls[i].end+1 == ls[i+1].start {
 				// combine continuous range
 				ls[i].end = ls[i+1].end
-				ls[i+1].start = ls[i+1].end
+				ls[i+1].start = ls[i+1].end + 1
 			}
 			i++
 		}
@@ -177,7 +174,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 		ls := loadLocks([]byte(d))
 		for _, l := range ls {
 			// find conflicted locks
-			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end > l.start && *start < l.end {
+			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end >= l.start && *start <= l.end {
 				*ltype = l.ltype
 				*start = l.start
 				*end = l.end
@@ -235,7 +232,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 				ls := loadLocks([]byte(d))
 				for _, l := range ls {
 					// find conflicted locks
-					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end > l.start && start < l.end {
+					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end >= l.start && start <= l.end {
 						return syscall.EAGAIN
 					}
 				}
