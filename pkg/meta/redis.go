@@ -2853,7 +2853,7 @@ func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, 
 			if ok, err := tx.HExists(c, key, name).Result(); err != nil {
 				return err
 			} else if !ok {
-				return syscall.ENOATTR
+				return ENOATTR
 			}
 			_, err := r.rdb.HSet(ctx, key, name, value).Result()
 			return err

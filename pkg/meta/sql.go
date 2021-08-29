@@ -2474,7 +2474,7 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 		case XattrReplace:
 			n, err = s.Update(&x, &xattr{inode, name, nil})
 			if err == nil && n == 0 {
-				err = syscall.ENOATTR
+				err = ENOATTR
 			}
 		default:
 			return syscall.EINVAL

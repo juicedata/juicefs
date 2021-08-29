@@ -2320,7 +2320,7 @@ func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 		case XattrReplace:
 			v := tx.get(key)
 			if v == nil {
-				return syscall.ENOATTR
+				return ENOATTR
 			}
 		default:
 			return syscall.EINVAL

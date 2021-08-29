@@ -280,7 +280,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.RemoveXattr(ctx, inode, "a"); st != 0 {
 		t.Fatalf("setxattr: %s", st)
 	}
-	if st := m.SetXattr(ctx, inode, "a", []byte("v"), XattrReplace); st != syscall.ENOATTR {
+	if st := m.SetXattr(ctx, inode, "a", []byte("v"), XattrReplace); st != ENOATTR {
 		t.Fatalf("setxattr: %s", st)
 	}
 	if st := m.SetXattr(ctx, inode, "a", []byte("v3"), XattrCreate); st != 0 {
