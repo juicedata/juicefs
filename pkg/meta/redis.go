@@ -2827,14 +2827,39 @@ func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 	return 0
 }
 
-func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) syscall.Errno {
+func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags int) syscall.Errno {
 	if name == "" {
 		return syscall.EINVAL
 	}
 	defer timeit(time.Now())
 	inode = r.checkRoot(inode)
-	_, err := r.rdb.HSet(ctx, r.xattrKey(inode), name, value).Result()
-	return errno(err)
+	c := Background
+	key := r.xattrKey(inode)
+	return r.txn(ctx, func(tx *redis.Tx) error {
+		switch flags {
+		case XattrCreateOrReplace:
+			_, err := r.rdb.HSet(ctx, key, name, value).Result()
+			return err
+		case XattrCreate:
+			ok, err := tx.HSetNX(c, key, name, value).Result()
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.EEXIST
+			}
+			return nil
+		case XattrReplace:
+			if ok, err := tx.HExists(c, key, name).Result(); err != nil {
+				return err
+			} else if !ok {
+				return syscall.ENOATTR
+			}
+			_, err := r.rdb.HSet(ctx, key, name, value).Result()
+			return err
+		}
+		return syscall.EINVAL
+	}, key)
 }
 
 func (r *redisMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {

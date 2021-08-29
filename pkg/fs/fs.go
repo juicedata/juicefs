@@ -469,10 +469,10 @@ func (fs *FileSystem) CopyFileRange(ctx meta.Context, src string, soff uint64, d
 	return
 }
 
-func (fs *FileSystem) SetXattr(ctx meta.Context, p string, name string, value []byte, mode int) (err syscall.Errno) {
+func (fs *FileSystem) SetXattr(ctx meta.Context, p string, name string, value []byte, flags int) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.SetXattr").End()
 	l := vfs.NewLogContext(ctx)
-	defer func() { fs.log(l, "SetXAttr (%s,%s,%d): %s", p, name, len(value), errstr(err)) }()
+	defer func() { fs.log(l, "SetXAttr (%s,%s,%d,%d): %s", p, name, len(value), flags, errstr(err)) }()
 	fi, err := fs.lookup(ctx, p, true)
 	if err != 0 {
 		return
@@ -481,7 +481,7 @@ func (fs *FileSystem) SetXattr(ctx meta.Context, p string, name string, value []
 	if err != 0 {
 		return
 	}
-	err = fs.m.SetXattr(ctx, fi.inode, name, value)
+	err = fs.m.SetXattr(ctx, fi.inode, name, value, flags)
 	return
 }
 

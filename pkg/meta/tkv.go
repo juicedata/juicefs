@@ -2302,13 +2302,33 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	return 0
 }
 
-func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) syscall.Errno {
+func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags int) syscall.Errno {
 	if name == "" {
 		return syscall.EINVAL
 	}
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
-	return errno(m.setValue(m.xattrKey(inode, name), value))
+	key := m.xattrKey(inode, name)
+	err := m.txn(func(tx kvTxn) error {
+		switch flags {
+		case XattrCreateOrReplace:
+		case XattrCreate:
+			v := tx.get(key)
+			if v != nil {
+				return syscall.EEXIST
+			}
+		case XattrReplace:
+			v := tx.get(key)
+			if v == nil {
+				return syscall.ENOATTR
+			}
+		default:
+			return syscall.EINVAL
+		}
+		tx.set(key, value)
+		return nil
+	})
+	return errno(err)
 }
 
 func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {

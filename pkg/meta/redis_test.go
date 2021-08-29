@@ -264,10 +264,10 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 
 	// xattr
-	if st := m.SetXattr(ctx, inode, "a", []byte("v")); st != 0 {
+	if st := m.SetXattr(ctx, inode, "a", []byte("v"), XattrCreateOrReplace); st != 0 {
 		t.Fatalf("setxattr: %s", st)
 	}
-	if st := m.SetXattr(ctx, inode, "a", []byte("v2")); st != 0 {
+	if st := m.SetXattr(ctx, inode, "a", []byte("v2"), XattrCreateOrReplace); st != 0 {
 		t.Fatalf("setxattr: %s", st)
 	}
 	var value []byte
@@ -278,6 +278,21 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("listxattr: %s %v", st, value)
 	}
 	if st := m.RemoveXattr(ctx, inode, "a"); st != 0 {
+		t.Fatalf("setxattr: %s", st)
+	}
+	if st := m.SetXattr(ctx, inode, "a", []byte("v"), XattrReplace); st != syscall.ENOATTR {
+		t.Fatalf("setxattr: %s", st)
+	}
+	if st := m.SetXattr(ctx, inode, "a", []byte("v3"), XattrCreate); st != 0 {
+		t.Fatalf("setxattr: %s", st)
+	}
+	if st := m.SetXattr(ctx, inode, "a", []byte("v3"), XattrCreate); st != syscall.EEXIST {
+		t.Fatalf("setxattr: %s", st)
+	}
+	if st := m.SetXattr(ctx, inode, "a", []byte("v4"), XattrReplace); st != 0 {
+		t.Fatalf("setxattr: %s", st)
+	}
+	if st := m.SetXattr(ctx, inode, "a", []byte("v5"), 5); st != syscall.EINVAL {
 		t.Fatalf("setxattr: %s", st)
 	}
 

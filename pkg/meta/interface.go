@@ -51,6 +51,12 @@ const (
 )
 
 const (
+	XattrCreateOrReplace = 0
+	XattrCreate          = 1
+	XattrReplace         = 2
+)
+
+const (
 	// SetAttrMode is a mask to update a attribute of node
 	SetAttrMode = 1 << iota
 	SetAttrUID
@@ -286,7 +292,7 @@ type Meta interface {
 	// ListXattr returns all extended attributes of a node.
 	ListXattr(ctx Context, inode Ino, dbuff *[]byte) syscall.Errno
 	// SetXattr update the extended attribute of a node.
-	SetXattr(ctx Context, inode Ino, name string, value []byte) syscall.Errno
+	SetXattr(ctx Context, inode Ino, name string, value []byte, flags int) syscall.Errno
 	// RemoveXattr removes the extended attribute of a node.
 	RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	// Flock tries to put a lock on given file.
