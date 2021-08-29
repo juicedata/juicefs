@@ -160,7 +160,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				var l = plock{Inode: inode, Owner: owner, Sid: m.sid}
 				ok, err := m.engine.Get(&l)
 				if err != nil {
-					return errno(err)
+					return err
 				}
 				if !ok {
 					return nil
@@ -179,7 +179,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 			}
 			rows, err := s.Rows(&plock{Inode: inode})
 			if err != nil {
-				return errno(err)
+				return err
 			}
 			type key struct {
 				sid   uint64
