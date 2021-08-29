@@ -116,6 +116,12 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 			ls[len(ls)-1].end = l.start - 1
 			nl.start = l.start
 		}
+		if nl.start > l.start && nl.start <= l.end {
+			// split l
+			l.end = nl.start - 1
+			ls = append(ls, l)
+			ls[i].start = nl.start
+		}
 		if nl.start == l.start {
 			ls[i].ltype = nl.ltype // update l
 			ls[i].pid = nl.pid
@@ -126,11 +132,6 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 				ls = append(ls, l)
 			}
 			nl.start = ls[i].end + 1
-		} else if nl.start > l.start && nl.start <= l.end {
-			// split l
-			ls[i].end = nl.start - 1
-			l.start = nl.start
-			ls = append(ls, l)
 		}
 	}
 	if nl.start <= nl.end {
