@@ -24,3 +24,9 @@ const (
 	F_RDLCK = 2
 	F_WRLCK = 3
 )
+
+const (
+	XattrCreateOrReplace = 0
+	XattrCreate          = 1
+	XattrReplace         = 2
+)

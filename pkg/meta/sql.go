@@ -2446,7 +2446,7 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	return 0
 }
 
-func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) syscall.Errno {
+func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags int) syscall.Errno {
 	if name == "" {
 		return syscall.EINVAL
 	}
@@ -2454,13 +2454,30 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte) sys
 	inode = m.checkRoot(inode)
 	return errno(m.txn(func(s *xorm.Session) error {
 		var x = xattr{inode, name, value}
-		n, err := s.Insert(&x)
-		if err != nil || n == 0 {
-			if m.engine.DriverName() == "postgres" {
-				// cleanup failed session
-				_ = s.Rollback()
+		var err error
+		var n int64
+		switch flags {
+		case XattrCreateOrReplace:
+			n, err = s.Insert(&x)
+			if err != nil || n == 0 {
+				if m.engine.DriverName() == "postgres" {
+					// cleanup failed session
+					_ = s.Rollback()
+				}
+				_, err = s.Update(&x, &xattr{inode, name, nil})
 			}
-			_, err = s.Update(&x, &xattr{inode, name, nil})
+		case XattrCreate:
+			n, err = s.Insert(&x)
+			if err != nil || n == 0 {
+				err = syscall.EEXIST
+			}
+		case XattrReplace:
+			n, err = s.Update(&x, &xattr{inode, name, nil})
+			if err == nil && n == 0 {
+				err = ENOATTR
+			}
+		default:
+			return syscall.EINVAL
 		}
 		return err
 	}))
