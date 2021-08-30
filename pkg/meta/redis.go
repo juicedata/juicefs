@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -1302,8 +1303,11 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		if ctx.Value(CtxKey("behavior")) == "Hadoop" {
+		if pattr.Mode&02000 != 0 || ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
 			attr.Gid = pattr.Gid
+			if _type == TypeDirectory && runtime.GOOS == "linux" {
+				attr.Mode |= pattr.Mode & 02000
+			}
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
