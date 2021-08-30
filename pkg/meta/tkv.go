@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -1294,8 +1295,11 @@ func (m *kvMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		if ctx.Value(CtxKey("behavior")) == "Hadoop" {
+		if pattr.Mode&02000 != 0 || ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
 			attr.Gid = pattr.Gid
+			if _type == TypeDirectory && runtime.GOOS == "linux" {
+				attr.Mode |= pattr.Mode & 02000
+			}
 		}
 
 		tx.set(m.entryKey(parent, name), m.packEntry(_type, ino))
