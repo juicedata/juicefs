@@ -847,7 +847,7 @@ func SetXattr(ctx Context, ino Ino, name string, value []byte, flags int) (err s
 		err = syscall.ENOTSUP
 		return
 	}
-	err = m.SetXattr(ctx, ino, name, value)
+	err = m.SetXattr(ctx, ino, name, value, flags)
 	return
 }
 

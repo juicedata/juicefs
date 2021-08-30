@@ -636,7 +636,14 @@ func jfs_setXattr(pid int, h uintptr, path *C.char, name *C.char, value uintptr,
 	if w == nil {
 		return EINVAL
 	}
-	return errno(w.SetXattr(w.withPid(pid), C.GoString(path), C.GoString(name), toBuf(value, vlen), mode))
+	var flags int
+	switch mode {
+	case 1:
+		flags = meta.XattrCreate
+	case 2:
+		flags = meta.XattrReplace
+	}
+	return errno(w.SetXattr(w.withPid(pid), C.GoString(path), C.GoString(name), toBuf(value, vlen), flags))
 }
 
 //export jfs_getXattr

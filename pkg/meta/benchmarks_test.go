@@ -373,7 +373,7 @@ func benchSetXattr(b *testing.B, m Meta) {
 	value := []byte("value0")
 	for i := 0; i < b.N; i++ {
 		value[5] = byte(i%10 + 48)
-		if err := m.SetXattr(ctx, inode, "key", value); err != 0 {
+		if err := m.SetXattr(ctx, inode, "key", value, 0); err != 0 {
 			b.Fatalf("setxattr: %s", err)
 		}
 	}
@@ -388,7 +388,7 @@ func benchGetXattr(b *testing.B, m Meta) {
 	if err := m.Create(ctx, parent, "fxattr", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
-	if err := m.SetXattr(ctx, inode, "key", []byte("value")); err != 0 {
+	if err := m.SetXattr(ctx, inode, "key", []byte("value"), 0); err != 0 {
 		b.Fatalf("setxattr: %s", err)
 	}
 	var buf []byte
@@ -412,7 +412,7 @@ func benchRemoveXattr(b *testing.B, m Meta) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		if err := m.SetXattr(ctx, inode, "key", []byte("value")); err != 0 {
+		if err := m.SetXattr(ctx, inode, "key", []byte("value"), 0); err != 0 {
 			b.Fatalf("setxattr: %s", err)
 		}
 		b.StartTimer()
@@ -432,7 +432,7 @@ func benchListXattr(b *testing.B, m Meta, n int) {
 		b.Fatalf("create: %s", err)
 	}
 	for j := 0; j < n; j++ {
-		if err := m.SetXattr(ctx, inode, fmt.Sprintf("key%d", j), []byte("value")); err != 0 {
+		if err := m.SetXattr(ctx, inode, fmt.Sprintf("key%d", j), []byte("value"), 0); err != 0 {
 			b.Fatalf("setxattr: %s", err)
 		}
 	}
