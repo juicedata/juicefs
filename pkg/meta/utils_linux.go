@@ -8,3 +8,9 @@ const (
 	F_RDLCK = syscall.F_RDLCK
 	F_WRLCK = syscall.F_WRLCK
 )
+
+const (
+	XattrCreateOrReplace = 0
+	XattrCreate          = sys.XATTR_CREATE
+	XattrReplace         = sys.XATTR_REPLACE
+)

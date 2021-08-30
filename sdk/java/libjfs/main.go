@@ -631,10 +631,17 @@ func jfs_truncate(pid int, h uintptr, path *C.char, length uint64) int {
 }
 
 //export jfs_setXattr
-func jfs_setXattr(pid int, h uintptr, path *C.char, name *C.char, value uintptr, vlen int, flags int) int {
+func jfs_setXattr(pid int, h uintptr, path *C.char, name *C.char, value uintptr, vlen int, mode int) int {
 	w := F(h)
 	if w == nil {
 		return EINVAL
+	}
+	var flags int
+	switch mode {
+	case 1:
+		flags = meta.XattrCreate
+	case 2:
+		flags = meta.XattrReplace
 	}
 	return errno(w.SetXattr(w.withPid(pid), C.GoString(path), C.GoString(name), toBuf(value, vlen), flags))
 }

@@ -51,12 +51,6 @@ const (
 )
 
 const (
-	XattrCreateOrReplace = 0
-	XattrCreate          = 1
-	XattrReplace         = 2
-)
-
-const (
 	// SetAttrMode is a mask to update a attribute of node
 	SetAttrMode = 1 << iota
 	SetAttrUID
