@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -1151,8 +1152,11 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		n.Atime = now
 		n.Mtime = now
 		n.Ctime = now
-		if ctx.Value(CtxKey("behavior")) == "Hadoop" {
+		if pn.Mode&02000 != 0 || ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
 			n.Gid = pn.Gid
+			if _type == TypeDirectory && runtime.GOOS == "linux" {
+				n.Mode |= pn.Mode & 02000
+			}
 		}
 
 		if err = mustInsert(s, &edge{parent, name, ino, _type}, &n); err != nil {
