@@ -122,13 +122,11 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	// check owner permission
 	var p1, c1 Ino
-	if st := m.Mkdir(ctx2, 1, "d1", 02777, 022, 0, &p1, attr); st != 0 {
+	if st := m.Mkdir(ctx2, 1, "d1", 02766, 022, 0, &p1, attr); st != 0 {
 		t.Fatalf("mkdir d1: %s", st)
 	}
 	attr.Gid = 1
 	m.SetAttr(ctx, p1, SetAttrGID, 0, attr)
-	attr.Mode |= 02000
-	m.SetAttr(ctx, p1, SetAttrMode, 0, attr)
 	if attr.Mode&02000 == 0 {
 		t.Fatalf("SGID is lost")
 	}
