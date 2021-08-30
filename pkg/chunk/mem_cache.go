@@ -63,6 +63,8 @@ func (c *memcache) cache(key string, p *Page, force bool) {
 		return
 	}
 	size := int64(cap(p.Data))
+	cacheWrites.Add(1)
+	cacheWriteBytes.Add(float64(size))
 	p.Acquire()
 	c.pages[key] = memItem{time.Now(), p}
 	c.used += size
@@ -112,6 +114,7 @@ func (c *memcache) cleanup() {
 		cnt++
 		if cnt > 1 {
 			logger.Debugf("remove %s from cache, age: %d", lastKey, now.Sub(lastValue.atime))
+			cacheEvicts.Add(1)
 			c.delete(lastKey, lastValue.page)
 			cnt = 0
 			if c.used < c.capacity {
