@@ -1,6 +1,10 @@
 package meta
 
-import "syscall"
+import (
+	"syscall"
+
+	sys "golang.org/x/sys/unix"
+)
 
 const ENOATTR = syscall.ENODATA
 const (
