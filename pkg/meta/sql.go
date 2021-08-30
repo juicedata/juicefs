@@ -1153,9 +1153,9 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		n.Mtime = now
 		n.Ctime = now
 		if pn.Mode&02000 != 0 || ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
-			attr.Gid = pn.Gid
+			n.Gid = pn.Gid
 			if _type == TypeDirectory && runtime.GOOS == "linux" {
-				attr.Mode |= pn.Mode & 02000
+				n.Mode |= pn.Mode & 02000
 			}
 		}
 

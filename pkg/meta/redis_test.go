@@ -125,10 +125,14 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx2, 1, "d1", 02777, 022, 0, &p1, attr); st != 0 {
 		t.Fatalf("mkdir d1: %s", st)
 	}
+	attr.Gid = 1
+	m.SetAttr(ctx, p1, SetAttrGID, 0, attr)
+	attr.Mode |= 02000
+	m.SetAttr(ctx, p1, SetAttrMode, 0, attr)
 	if attr.Mode&02000 == 0 {
 		t.Fatalf("SGID is lost")
 	}
-	var ctx3 = NewContext(0, 2, []uint32{2})
+	var ctx3 = NewContext(2, 2, []uint32{2})
 	if st := m.Mkdir(ctx3, p1, "d2", 0777, 022, 0, &c1, attr); st != 0 {
 		t.Fatalf("mkdir d2: %s", st)
 	}
