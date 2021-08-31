@@ -18,6 +18,7 @@
 package meta
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"sync"
@@ -34,7 +35,12 @@ const settingPath = "/tmp/juicefs.memkv.setting.json"
 func newMockClient() (tkvClient, error) {
 	client := &memKV{items: btree.New(2), temp: &kvItem{}}
 	if d, err := ioutil.ReadFile(settingPath); err == nil {
-		client.set("setting", d)
+		var buffer map[string][]byte
+		if err = json.Unmarshal(d, &buffer); err == nil {
+			for k, v := range buffer {
+				client.set(k, v) // not locked
+			}
+		}
 	}
 	return client, nil
 }
@@ -226,7 +232,8 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 			return fmt.Errorf("write conflict: %s %d > %d", k, it.ver, ver)
 		}
 	}
-	if d, ok := tx.buffer["setting"]; ok {
+	if _, ok := tx.buffer["setting"]; ok {
+		d, _ := json.Marshal(tx.buffer)
 		if err := ioutil.WriteFile(settingPath, d, 0644); err != nil {
 			return err
 		}
