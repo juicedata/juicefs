@@ -46,11 +46,13 @@ In order to make JuiceFS works with other components, it usually takes 2 steps:
 
 You need first installing Go 1.13+, JDK 8+ and Maven, then run following commands:
 
-> **Note**: The SDK contains native code, it could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux. For better compatability, please use older version glibc if possible.
-
 > **Note**: If Ceph RADOS is used to store data, you need to install librados-dev and build ``libjfs.so`` with ``-tag ceph``.
 
+> **Tip**: For users in China, it's recommended to set a local Maven mirror to speed-up compilation, e.g. [Aliyun Maven Mirror](https://maven.aliyun.com).
+
 ### Linux or macOS
+
+> **Note**: The built SDK contains native code, it could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux. For better compatability, please use older version glibc if possible.
 
   ```shell
   $ cd sdk/java
@@ -66,7 +68,6 @@ Righ now, you can cross compile the SDK in Linux or macOS，please install [ming
   $ make win
   ```
 
-> **Tip**: For users in China, it's recommended to set a local Maven mirror to speed-up compilation, e.g. [Aliyun Maven Mirror](https://maven.aliyun.com).
 
 ## Deploy JuiceFS Hadoop Java SDK
 
