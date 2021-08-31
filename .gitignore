@@ -8,6 +8,7 @@ ltmain.sh
 .vscode
 .idea
 fstests/secfs.test
+fstests/flock
 !fstests/Makefile
 jfs
 /juicefs
