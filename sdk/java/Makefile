@@ -17,3 +17,8 @@ docker-package:
 		--mount "type=bind,src=$(shell pwd)/../../,target=/workspace/juicefs" \
 		--workdir /workspace/juicefs juicedata/sdk-builder \
 		/bin/bash -c 'cd sdk/java && make'
+
+win: win-package package
+
+win-package: ../../pkg/*/*.go libjfs/*.go
+	make -C libjfs win
