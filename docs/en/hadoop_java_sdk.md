@@ -46,10 +46,23 @@ In order to make JuiceFS works with other components, it usually takes 2 steps:
 
 You need first installing Go 1.13+, JDK 8+ and Maven, then run following commands:
 
-```shell
-$ cd sdk/java
-$ make
-```
+> **Note**: The SDK could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux.
+
+### run in Mac/Linux env
+
+  ```shell
+  $ cd sdk/java
+  $ make
+  ```
+
+### run in Windows env
+
+compile under Linux or Mac machine，``mingw-w64`` is required
+
+  ```shell
+  $ cd sdk/java
+  $ make win
+  ```
 
 > **Tip**: For users in China, it's recommended to set a local Maven mirror to speed-up compilation, e.g. [Aliyun Maven Mirror](https://maven.aliyun.com).
 

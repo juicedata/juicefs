@@ -46,18 +46,29 @@ JuiceFS Hadoop Java SDK 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以�
 
 你需要先安装 Go 1.13+、JDK 8+ 以及 Maven 工具，然后运行以下命令：
 
-```shell
-$ cd sdk/java
-$ make
-```
+**注意：编译后的 JAR 文件只能部署在相同的系统环境中，例如在 Linux 中编译则只能用于 Linux 环境。**
+
+### Mac/Linux 环境运行
+  
+  ```shell
+  $ cd sdk/java
+  $ make
+  ```
+
+### Windows 环境运行
+
+需要在 Mac 或者 Linux 环境下编译，需要先安装 ``mingw-w64``
+
+  ```shell
+  $ cd sdk/java
+  $ make win
+  ```
 
 > **提示**：对于中国用户，建议设置更快的 Maven 镜像仓库以加速编译，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
 
 ## 部署 JuiceFS Hadoop Java SDK
 
 当编译完成后，你可以在 `sdk/java/target` 目录下找到编译好的 JAR 文件，例如 `juicefs-hadoop-0.10.0.jar`。注意带有 `original-` 前缀的 JAR 文件是不包含第三方依赖的，推荐使用包含第三方依赖的 JAR 文件。
-
-**注意：编译后的 JAR 文件只能部署在相同的系统环境中，例如在 Linux 中编译则只能用于 Linux 环境。**
 
 然后将对应的 JAR 文件和 `$JAVA_HOME/lib/tools.jar` 放到 Hadoop 生态各组件的 classpath 里。常见路径如下，建议将 JAR 文件放置在一个地方，然后其他地方均通过符号链接的方式放置。
 

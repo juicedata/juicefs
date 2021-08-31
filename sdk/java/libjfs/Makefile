@@ -10,6 +10,10 @@ LDFLAGS += -X $(PKG).revision=$(REVISION) \
 
 all: target/libjfs.so.gz
 
+win: libjfs.dll
+	mkdir -p target
+	gzip -c libjfs.dll > target/libjfs.so.gz
+
 target/libjfs.so.gz: libjfs.so
 	mkdir -p target
 	gzip -c libjfs.so > target/libjfs.so.gz
