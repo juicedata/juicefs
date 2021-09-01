@@ -147,7 +147,7 @@ func (fs *fileSystem) Rmdir(cancel <-chan struct{}, header *fuse.InHeader, name 
 func (fs *fileSystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, oldName string, newName string) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	err := vfs.Rename(ctx, Ino(in.NodeId), oldName, Ino(in.Newdir), newName)
+	err := vfs.Rename(ctx, Ino(in.NodeId), oldName, Ino(in.Newdir), newName, int(in.Flags))
 	return fuse.Status(err)
 }
 

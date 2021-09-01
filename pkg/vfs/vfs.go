@@ -263,8 +263,11 @@ func Readlink(ctx Context, ino Ino) (path []byte, err syscall.Errno) {
 	return
 }
 
-func Rename(ctx Context, parent Ino, name string, newparent Ino, newname string) (err syscall.Errno) {
+func Rename(ctx Context, parent Ino, name string, newparent Ino, newname string, flags int) (err syscall.Errno) {
 	defer func() { logit(ctx, "rename (%d,%s,%d,%s): %s", parent, name, newparent, newname, strerr(err)) }()
+	if flags != 0 {
+		return syscall.ENOTSUP
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EACCES
 		return
