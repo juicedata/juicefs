@@ -1598,7 +1598,7 @@ func Remove(r Meta, ctx Context, parent Ino, name string) syscall.Errno {
 	return emptyEntry(r, ctx, parent, name, inode, concurrent)
 }
 
-func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
+func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	parentSrc = r.checkRoot(parentSrc)
 	parentDst = r.checkRoot(parentDst)
@@ -2836,7 +2836,7 @@ func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 	return 0
 }
 
-func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags int) syscall.Errno {
+func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	if name == "" {
 		return syscall.EINVAL
 	}

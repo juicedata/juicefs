@@ -636,7 +636,7 @@ func jfs_setXattr(pid int, h uintptr, path *C.char, name *C.char, value uintptr,
 	if w == nil {
 		return EINVAL
 	}
-	var flags int
+	var flags uint32
 	switch mode {
 	case 1:
 		flags = meta.XattrCreate

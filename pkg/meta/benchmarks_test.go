@@ -150,7 +150,7 @@ func benchMvdir(b *testing.B, m Meta) { // rename dir
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := m.Rename(ctx, parent, fmt.Sprintf("d%d", i), parent, fmt.Sprintf("d%d", i+1), nil, nil); err != 0 {
+		if err := m.Rename(ctx, parent, fmt.Sprintf("d%d", i), parent, fmt.Sprintf("d%d", i+1), 0, nil, nil); err != 0 {
 			b.Fatalf("rename dir: %s", err)
 		}
 	}
@@ -261,7 +261,7 @@ func benchRename(b *testing.B, m Meta) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := m.Rename(ctx, parent, fmt.Sprintf("f%d", i), parent, fmt.Sprintf("f%d", i+1), nil, nil); err != 0 {
+		if err := m.Rename(ctx, parent, fmt.Sprintf("f%d", i), parent, fmt.Sprintf("f%d", i+1), 0, nil, nil); err != 0 {
 			b.Fatalf("rename file: %s", err)
 		}
 	}

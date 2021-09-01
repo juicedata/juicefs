@@ -147,7 +147,7 @@ func (fs *fileSystem) Rmdir(cancel <-chan struct{}, header *fuse.InHeader, name 
 func (fs *fileSystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, oldName string, newName string) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	err := vfs.Rename(ctx, Ino(in.NodeId), oldName, Ino(in.Newdir), newName, int(in.Flags))
+	err := vfs.Rename(ctx, Ino(in.NodeId), oldName, Ino(in.Newdir), newName, in.Flags)
 	return fuse.Status(err)
 }
 
@@ -203,7 +203,7 @@ func (fs *fileSystem) ListXAttr(cancel <-chan struct{}, header *fuse.InHeader, d
 func (fs *fileSystem) SetXAttr(cancel <-chan struct{}, in *fuse.SetXAttrIn, attr string, data []byte) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	err := vfs.SetXattr(ctx, Ino(in.NodeId), attr, data, int(in.Flags))
+	err := vfs.SetXattr(ctx, Ino(in.NodeId), attr, data, in.Flags)
 	return fuse.Status(err)
 }
 

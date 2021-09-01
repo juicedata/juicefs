@@ -181,20 +181,20 @@ func testMetaClient(t *testing.T, m Meta) {
 	} else if string(entries[0].Name) != "." || string(entries[1].Name) != ".." || string(entries[2].Name) != "f" {
 		t.Fatalf("entries: %+v", entries)
 	}
-	if st := m.Rename(ctx, parent, "f", 1, "f2", &inode, attr); st != 0 {
+	if st := m.Rename(ctx, parent, "f", 1, "f2", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename d/f -> f2: %s", st)
 	}
 	defer func() {
 		_ = m.Unlink(ctx, 1, "f2")
 	}()
-	if st := m.Rename(ctx, 1, "f2", 1, "f2", &inode, attr); st != 0 {
+	if st := m.Rename(ctx, 1, "f2", 1, "f2", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> f2: %s", st)
 	}
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
-	if st := m.Rename(ctx, 1, "f2", 1, "f", &inode, attr); st != 0 {
+	if st := m.Rename(ctx, 1, "f2", 1, "f", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> f: %s", st)
 	}
 	if st := m.Link(ctx, inode, 1, "f3", attr); st != 0 {
@@ -361,23 +361,23 @@ func testStickyBit(t *testing.T, m Meta) {
 	if e := m.Unlink(ctxB, sticky, "f"); e != syscall.EACCES {
 		t.Fatalf("unlink f: %s", e)
 	}
-	if e := m.Rename(ctxB, sticky, "f", sticky, "f2", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxB, sticky, "f", sticky, "f2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename f: %s", e)
 	}
-	if e := m.Rename(ctxB, sticky, "f", normal, "f2", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxB, sticky, "f", normal, "f2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename f: %s", e)
 	}
 	m.Create(ctxB, sticky, "f2", 0777, 0, 0, &inode, attr)
-	if e := m.Rename(ctxB, sticky, "f2", sticky, "f", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxB, sticky, "f2", sticky, "f", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("overwrite f: %s", e)
 	}
-	if e := m.Rename(ctxA, sticky, "f", sticky, "f2", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxA, sticky, "f", sticky, "f2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename f: %s", e)
 	}
-	if e := m.Rename(ctxA, normal, "f", sticky, "f2", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxA, normal, "f", sticky, "f2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename f: %s", e)
 	}
-	if e := m.Rename(ctxA, sticky, "f", sticky, "f3", &inode, attr); e != 0 {
+	if e := m.Rename(ctxA, sticky, "f", sticky, "f3", 0, &inode, attr); e != 0 {
 		t.Fatalf("rename f: %s", e)
 	}
 	if e := m.Unlink(ctxA, sticky, "f3"); e != 0 {
@@ -389,23 +389,23 @@ func testStickyBit(t *testing.T, m Meta) {
 	if e := m.Rmdir(ctxB, sticky, "d"); e != syscall.EACCES {
 		t.Fatalf("rmdir d: %s", e)
 	}
-	if e := m.Rename(ctxB, sticky, "d", sticky, "d2", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxB, sticky, "d", sticky, "d2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename d: %s", e)
 	}
-	if e := m.Rename(ctxB, sticky, "d", normal, "d2", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxB, sticky, "d", normal, "d2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename d: %s", e)
 	}
 	m.Mkdir(ctxB, sticky, "d2", 0777, 0, 0, &inode, attr)
-	if e := m.Rename(ctxB, sticky, "d2", sticky, "d", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxB, sticky, "d2", sticky, "d", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("overwrite d: %s", e)
 	}
-	if e := m.Rename(ctxA, sticky, "d", sticky, "d2", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxA, sticky, "d", sticky, "d2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename d: %s", e)
 	}
-	if e := m.Rename(ctxA, normal, "d", sticky, "d2", &inode, attr); e != syscall.EACCES {
+	if e := m.Rename(ctxA, normal, "d", sticky, "d2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename d: %s", e)
 	}
-	if e := m.Rename(ctxA, sticky, "d", sticky, "d3", &inode, attr); e != 0 {
+	if e := m.Rename(ctxA, sticky, "d", sticky, "d3", 0, &inode, attr); e != 0 {
 		t.Fatalf("rename d: %s", e)
 	}
 	if e := m.Rmdir(ctxA, sticky, "d3"); e != 0 {
@@ -584,7 +584,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	if st := m.Lookup(ctx, 1, "Foo", &inode, attr); st != 0 {
 		t.Fatalf("lookup Foo should be OK")
 	}
-	if st := m.Rename(ctx, 1, "Foo", 1, "bar", &inode, attr); st != 0 {
+	if st := m.Rename(ctx, 1, "Foo", 1, "bar", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename Foo to bar should be OK, but got %s", st)
 	}
 	if st := m.Create(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {

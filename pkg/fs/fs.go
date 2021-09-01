@@ -383,7 +383,7 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string) (
 	if err != 0 {
 		return
 	}
-	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), nil, nil)
+	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), 0, nil, nil)
 	return
 }
 
@@ -469,7 +469,7 @@ func (fs *FileSystem) CopyFileRange(ctx meta.Context, src string, soff uint64, d
 	return
 }
 
-func (fs *FileSystem) SetXattr(ctx meta.Context, p string, name string, value []byte, flags int) (err syscall.Errno) {
+func (fs *FileSystem) SetXattr(ctx meta.Context, p string, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.SetXattr").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "SetXAttr (%s,%s,%d,%d): %s", p, name, len(value), flags, errstr(err)) }()
