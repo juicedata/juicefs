@@ -491,10 +491,7 @@ func (m *kvMeta) NewSession() error {
 	m.sid = uint64(v)
 	logger.Debugf("session is %d", m.sid)
 	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
-	info, err := newSessionInfo()
-	if err != nil {
-		return fmt.Errorf("new session info: %s", err)
-	}
+	info := newSessionInfo()
 	info.MountPoint = m.conf.MountPoint
 	data, err := json.Marshal(info)
 	if err != nil {

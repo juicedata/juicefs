@@ -357,12 +357,13 @@ func NewClient(uri string, conf *Config) Meta {
 	return m
 }
 
-func newSessionInfo() (*SessionInfo, error) {
+func newSessionInfo() *SessionInfo {
 	host, err := os.Hostname()
 	if err != nil {
-		return nil, err
+		logger.Warnf("Failed to get hostname: %s", err)
+		host = ""
 	}
-	return &SessionInfo{Version: version.Version(), Hostname: host, ProcessID: os.Getpid()}, nil
+	return &SessionInfo{Version: version.Version(), Hostname: host, ProcessID: os.Getpid()}
 }
 
 func timeit(start time.Time) {
