@@ -1373,7 +1373,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var attr Attr
 	eno := r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
-		if rs[0] == nil || rs[1] == nil {
+		if rs[0] == nil {
 			return redis.Nil
 		}
 		var pattr Attr
@@ -1387,11 +1387,14 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
 		attr = Attr{}
-		r.parseAttr([]byte(rs[1].(string)), &attr)
-		attr.Ctime = now.Unix()
-		attr.Ctimensec = uint32(now.Nanosecond())
-		if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
-			return syscall.EACCES
+		if rs[1] != nil {
+			r.parseAttr([]byte(rs[1].(string)), &attr)
+			attr.Ctime = now.Unix()
+			attr.Ctimensec = uint32(now.Nanosecond())
+			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+				return syscall.EACCES
+			}
+			attr.Nlink--
 		}
 
 		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
@@ -1403,7 +1406,6 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.EAGAIN
 		}
 
-		attr.Nlink--
 		opened = false
 		if _type == TypeFile && attr.Nlink == 0 {
 			opened = r.of.IsOpen(inode)
@@ -1480,12 +1482,11 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
-		if rs[0] == nil || rs[1] == nil {
+		if rs[0] == nil {
 			return redis.Nil
 		}
 		var pattr, attr Attr
 		r.parseAttr([]byte(rs[0].(string)), &pattr)
-		r.parseAttr([]byte(rs[1].(string)), &attr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
@@ -1512,8 +1513,11 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if cnt > 0 {
 			return syscall.ENOTEMPTY
 		}
-		if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
-			return syscall.EACCES
+		if rs[1] != nil {
+			r.parseAttr([]byte(rs[1].(string)), &attr)
+			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+				return syscall.EACCES
+			}
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
