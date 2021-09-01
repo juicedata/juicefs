@@ -290,10 +290,7 @@ func (r *redisMeta) NewSession() error {
 	}
 	logger.Debugf("session is %d", r.sid)
 	r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
-	info, err := newSessionInfo()
-	if err != nil {
-		return fmt.Errorf("new session info: %s", err)
-	}
+	info := newSessionInfo()
 	info.MountPoint = r.conf.MountPoint
 	data, err := json.Marshal(info)
 	if err != nil {
