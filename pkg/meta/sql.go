@@ -350,24 +350,31 @@ func (m *dbMeta) NewSession() error {
 		logger.Fatalf("update table flock, plock: %s", err)
 	}
 
-	v, err := m.incrCounter("nextSession", 1)
-	if err != nil {
-		return fmt.Errorf("create session: %s", err)
-	}
-	info, err := newSessionInfo()
-	if err != nil {
-		return fmt.Errorf("new session info: %s", err)
-	}
+	info := newSessionInfo()
 	info.MountPoint = m.conf.MountPoint
 	data, err := json.Marshal(info)
 	if err != nil {
 		return fmt.Errorf("json: %s", err)
 	}
-	err = m.txn(func(s *xorm.Session) error {
-		return mustInsert(s, &session{v, time.Now().Unix(), data})
-	})
-	if err != nil {
-		return fmt.Errorf("insert new session: %s", err)
+	var v uint64
+	for {
+		v, err = m.incrCounter("nextSession", 1)
+		if err != nil {
+			return fmt.Errorf("create session: %s", err)
+		}
+		err = m.txn(func(s *xorm.Session) error {
+			return mustInsert(s, &session{v, time.Now().Unix(), data})
+		})
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			logger.Warnf("session id %d is already used", v)
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("insert new session: %s", err)
+		}
 	}
 	m.sid = v
 	logger.Debugf("session is %d", m.sid)
