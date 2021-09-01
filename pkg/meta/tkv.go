@@ -1492,7 +1492,14 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if flags&^(RenameNoReplace|RenameExchange) != 0 {
+		return syscall.ENOTSUP
+	}
+	if flags&RenameNoReplace != 0 && flags&RenameExchange != 0 {
+		return syscall.EINVAL
+	}
 	defer timeit(time.Now())
+	exchange := flags&RenameExchange != 0
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
 	var opened bool
@@ -1532,50 +1539,9 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			return syscall.ENOTDIR
 		}
 		m.parseAttr(rs[2], &iattr)
-		tattr = Attr{}
-
-		opened = false
-		dino = 0
-		dtyp = 0
-		dbuf := tx.get(m.entryKey(parentDst, nameDst))
-		if dbuf == nil && m.conf.CaseInsensi {
-			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
-				nameDst = string(e.Name)
-				dbuf = m.packEntry(e.Attr.Typ, e.Inode)
-			}
-		}
-		if dbuf != nil {
-			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
-				return syscall.EEXIST
-			}
-			dtyp, dino = m.parseEntry(dbuf)
-			a := tx.get(m.inodeKey(dino))
-			if a == nil {
-				return syscall.ENOENT
-			}
-			m.parseAttr(a, &tattr)
-			if dtyp == TypeDirectory {
-				if tx.exist(m.entryKey(dino, "")) {
-					return syscall.ENOTEMPTY
-				}
-			} else {
-				tattr.Nlink--
-				if tattr.Nlink > 0 {
-					now := time.Now()
-					tattr.Ctime = now.Unix()
-					tattr.Ctimensec = uint32(now.Nanosecond())
-				} else if dtyp == TypeFile {
-					opened = m.of.IsOpen(dino)
-				}
-			}
-			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
-				return syscall.EACCES
-			}
-		}
 		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
 			return syscall.EACCES
 		}
-
 		now := time.Now()
 		sattr.Mtime = now.Unix()
 		sattr.Mtimensec = uint32(now.Nanosecond())
@@ -1588,6 +1554,82 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		iattr.Parent = parentDst
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
+
+		tattr = Attr{}
+		opened = false
+		dino = 0
+		dtyp = 0
+		dbuf := tx.get(m.entryKey(parentDst, nameDst))
+		if dbuf == nil && m.conf.CaseInsensi {
+			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
+				nameDst = string(e.Name)
+				dbuf = m.packEntry(e.Attr.Typ, e.Inode)
+			}
+		}
+		if dbuf != nil {
+			if ctx.Value(CtxKey("behavior")) == "Hadoop" || flags&RenameNoReplace != 0 {
+				return syscall.EEXIST
+			}
+			dtyp, dino = m.parseEntry(dbuf)
+			a := tx.get(m.inodeKey(dino))
+			if a == nil {
+				return syscall.ENOENT // corrupt entry
+			}
+			m.parseAttr(a, &tattr)
+			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
+				return syscall.EACCES
+			}
+			if !exchange {
+				if dtyp == TypeDirectory {
+					if tx.exist(m.entryKey(dino, "")) {
+						return syscall.ENOTEMPTY
+					}
+				} else {
+					tattr.Nlink--
+					if tattr.Nlink > 0 {
+						tattr.Ctime = now.Unix()
+						tattr.Ctimensec = uint32(now.Nanosecond())
+					} else if dtyp == TypeFile {
+						opened = m.of.IsOpen(dino)
+					}
+				}
+				if dtyp != TypeDirectory && tattr.Nlink > 0 {
+					tx.set(m.inodeKey(dino), m.marshal(&tattr))
+				} else {
+					if dtyp == TypeFile {
+						if opened {
+							tx.set(m.inodeKey(dino), m.marshal(&tattr))
+							tx.set(m.sustainedKey(m.sid, dino), []byte{1})
+						} else {
+							tx.set(m.delfileKey(dino, tattr.Length), m.packInt64(now.Unix()))
+							tx.dels(m.inodeKey(dino))
+							newSpace, newInode = -align4K(tattr.Length), -1
+						}
+					} else {
+						if dtyp == TypeDirectory {
+							dattr.Nlink--
+						} else if dtyp == TypeSymlink {
+							tx.dels(m.symKey(dino))
+						}
+						tx.dels(m.inodeKey(dino))
+						newSpace, newInode = -align4K(0), -1
+					}
+					tx.dels(tx.scanKeys(m.xattrKey(dino, ""))...)
+				}
+				// tx.dels(m.entryKey(parentDst, nameDst))
+			} else { // exchange
+				tattr.Ctime = now.Unix()
+				tattr.Ctimensec = uint32(now.Nanosecond())
+				if dtyp == TypeDirectory && parentSrc != parentDst {
+					dattr.Nlink--
+					sattr.Nlink++
+				}
+				tx.set(m.inodeKey(dino), m.marshal(&tattr))
+			}
+		} else if exchange {
+			return syscall.ENOENT
+		}
+
 		if typ == TypeDirectory && parentSrc != parentDst {
 			sattr.Nlink--
 			dattr.Nlink++
@@ -1599,42 +1641,20 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			*attr = iattr
 		}
 
-		tx.dels(m.entryKey(parentSrc, nameSrc))
-		if dino > 0 {
-			if dtyp != TypeDirectory && tattr.Nlink > 0 {
-				tx.set(m.inodeKey(dino), m.marshal(&tattr))
-			} else {
-				if dtyp == TypeFile {
-					if opened {
-						tx.set(m.inodeKey(dino), m.marshal(&tattr))
-						tx.set(m.sustainedKey(m.sid, dino), []byte{1})
-					} else {
-						tx.set(m.delfileKey(dino, tattr.Length), m.packInt64(now.Unix()))
-						tx.dels(m.inodeKey(dino))
-						newSpace, newInode = -align4K(tattr.Length), -1
-					}
-				} else {
-					if dtyp == TypeDirectory {
-						dattr.Nlink--
-					} else if dtyp == TypeSymlink {
-						tx.dels(m.symKey(dino))
-					}
-					tx.dels(m.inodeKey(dino))
-					newSpace, newInode = -align4K(0), -1
-				}
-				tx.dels(tx.scanKeys(m.xattrKey(dino, ""))...)
-			}
-			tx.dels(m.entryKey(parentDst, nameDst))
+		if !exchange {
+			tx.dels(m.entryKey(parentSrc, nameSrc))
+		} else { // dbuf != nil
+			tx.set(m.entryKey(parentSrc, nameSrc), dbuf)
 		}
-		tx.set(m.entryKey(parentDst, nameDst), buf)
 		tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
 		tx.set(m.inodeKey(ino), m.marshal(&iattr))
+		tx.set(m.entryKey(parentDst, nameDst), buf)
 		if parentDst != parentSrc {
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
 		return nil
 	})
-	if err == nil {
+	if err == nil && !exchange {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			if opened {
 				m.Lock()

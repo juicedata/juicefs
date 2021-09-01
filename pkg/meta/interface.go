@@ -51,8 +51,8 @@ const (
 )
 
 const (
-	// RenameNoReplace = 1 << iota
-	RenameExchange = 2
+	RenameNoReplace = 1 << iota
+	RenameExchange
 	// RenameWhiteout
 )
 
