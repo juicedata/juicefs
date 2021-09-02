@@ -72,7 +72,24 @@ $ docker run -it -v jfsvolume:/opt busybox ls /opt
 
 这种方法是将 JuiceFS 文件系统直接在 Docker 容器中进行挂载和使用，相比第一种方式，在容器中直接挂载 JuiceFS 可以缩小文件被误操作的几率。谁使用谁挂载，也让容器管理更清晰直观。
 
-由于在容器中进行文件系统挂载需要将 JuiceFS 客户端拷贝到容器，在常规的容器管理过程中，需要把下载或拷贝 JuiceFS 客户端以及挂载文件系统的过程写入 Dockerfile，然后重新构建镜像。
+由于在容器中进行文件系统挂载需要将 JuiceFS 客户端拷贝到容器，在常规的容器管理过程中，需要把下载或拷贝 JuiceFS 客户端以及挂载文件系统的过程写入 Dockerfile，然后重新构建镜像。例如，你可以参考以下 Dockerfile，将 JuiceFS 客户端打包到 Alpine 镜像。
+
+```
+FROM alpine:latest
+LABEL maintainer="Juicedata <https://juicefs.com>"
+
+# Install JuiceFS client
+RUN apk add --no-cache curl && \
+  JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v') && \
+  wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" && \
+  tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" && \
+  install juicefs /usr/bin && \
+  rm juicefs "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" && \
+  rm -rf /var/cache/apk/* && \
+  apk del curl
+
+ENTRYPOINT ["/usr/bin/juicefs", "mount"]
+```
 
 另外，由于在容器中使用 FUSE 需要相应的权限，在创建容器时，需要指定 `--privileged=true` 选项，比如：
 
