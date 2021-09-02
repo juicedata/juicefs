@@ -25,13 +25,13 @@ By default, the `allow_other` option is only allowed to be used by the root user
 
 Edit the configuration file of FUSE, usually `/etc/fuse.conf`:
 
-```
+```sh
 $ sudo nano /etc/fuse.conf
 ```
 
 Delete the `# ` symbol in front of `user_allow_other` in the configuration file, and modify it as follows:
 
-```
+```conf
 # /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
 
 # Set the maximum number of FUSE mounts allowed to non-root users.
@@ -46,7 +46,7 @@ user_allow_other
 
 After the `allow_other` of FUSE is enabled, you need to re-mount the JuiceFS file systemd with the `allow_other` option, for example:
 
-```
+```sh
 $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
@@ -54,7 +54,7 @@ $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 
 We can also use [volume plugin](https://docs.docker.com/engine/extend/) to access JuiceFS.
 
-```
+```sh
 $ docker plugin install juicedata/juicefs
 Plugin "juicedata/juicefs" is requesting the following privileges:
  - network: [host]
@@ -66,7 +66,7 @@ $ docker volume create -d juicedata/juicefs:latest -o name={{VOLUME_NAME}} -o me
 $ docker run -it -v jfsvolume:/opt busybox ls /opt
 ```
 
-Replace above `{{VOLUME_NAME}}, {{META_URL}}, {{ACCESS_KEY}}, {{SECRET_KEY}}` to your own volume setting. For more details about JuiceFS volume plugin, refer [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) repository.
+Replace above `{{VOLUME_NAME}}`, `{{META_URL}}`, `{{ACCESS_KEY}}`, `{{SECRET_KEY}}` to your own volume setting. For more details about JuiceFS volume plugin, refer [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) repository.
 
 ## 3. Mount JuiceFS in a Container
 
@@ -74,7 +74,7 @@ This method is to mount and use the JuiceFS storage directly in the Docker conta
 
 Since the file system mounting in the container needs to copy the JuiceFS client to the container, the process of downloading or copying the JuiceFS client and mounting the file system needs to be written into the Dockerfile, and then rebuilt the image. For example, you can refer to the following Dockerfile to package the JuiceFS client into the Alpine image.
 
-```
+```dockerfile
 FROM alpine:latest
 LABEL maintainer="Juicedata <https://juicefs.com>"
 
