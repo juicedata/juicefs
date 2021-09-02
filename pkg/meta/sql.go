@@ -1453,7 +1453,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		if !ok {
 			return syscall.ENOENT
 		}
-		if parentSrc == parentDst && nameSrc == nameDst {
+		if parentSrc == parentDst && se.Name == nameDst {
 			if inode != nil {
 				*inode = Ino(se.Inode)
 			}
@@ -1522,7 +1522,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				return syscall.EACCES
 			}
 			if !exchange {
-				if dn.Type == TypeDirectory {
+				if de.Type == TypeDirectory {
 					exist, err := s.Exist(&edge{Parent: de.Inode})
 					if err != nil {
 						return err
@@ -1534,41 +1534,41 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					dn.Nlink--
 					if dn.Nlink > 0 {
 						dn.Ctime = now
-					} else if dn.Type == TypeFile {
+					} else if de.Type == TypeFile {
 						opened = m.of.IsOpen(dn.Inode)
 					}
 				}
-				if dn.Type != TypeDirectory && dn.Nlink > 0 {
-					if _, err := s.Update(dn, &node{Inode: dn.Inode}); err != nil {
+				if de.Type != TypeDirectory && dn.Nlink > 0 {
+					if _, err := s.Update(dn, &node{Inode: dino}); err != nil {
 						return err
 					}
 				} else {
-					if dn.Type == TypeFile {
+					if de.Type == TypeFile {
 						if opened {
-							if _, err := s.Cols("nlink", "ctime").Update(&dn, &node{Inode: dn.Inode}); err != nil {
+							if _, err := s.Cols("nlink", "ctime").Update(&dn, &node{Inode: dino}); err != nil {
 								return err
 							}
-							if err = mustInsert(s, sustained{m.sid, dn.Inode}); err != nil {
+							if err = mustInsert(s, sustained{m.sid, dino}); err != nil {
 								return err
 							}
 						} else {
-							if err = mustInsert(s, delfile{dn.Inode, dn.Length, time.Now().Unix()}); err != nil {
+							if err = mustInsert(s, delfile{dino, dn.Length, time.Now().Unix()}); err != nil {
 								return err
 							}
-							if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
+							if _, err := s.Delete(&node{Inode: dino}); err != nil {
 								return err
 							}
 							newSpace, newInode = -align4K(dn.Length), -1
 						}
 					} else {
-						if dn.Type == TypeDirectory {
+						if de.Type == TypeDirectory {
 							dn.Nlink--
-						} else if dn.Type == TypeSymlink {
-							if _, err := s.Delete(&symlink{Inode: dn.Inode}); err != nil {
+						} else if de.Type == TypeSymlink {
+							if _, err := s.Delete(&symlink{Inode: dino}); err != nil {
 								return err
 							}
 						}
-						if _, err := s.Delete(&node{Inode: dn.Inode}); err != nil {
+						if _, err := s.Delete(&node{Inode: dino}); err != nil {
 							return err
 						}
 						newSpace, newInode = -align4K(0), -1
@@ -1582,11 +1582,11 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				}
 			} else { // exchange
 				dn.Ctime = now
-				if dn.Type == TypeDirectory && parentSrc != parentDst {
+				if de.Type == TypeDirectory && parentSrc != parentDst {
 					dpn.Nlink--
 					spn.Nlink++
 				}
-				if _, err := s.Cols("ctime").Update(dn, &node{Inode: dn.Inode}); err != nil {
+				if _, err := s.Cols("ctime").Update(dn, &node{Inode: dino}); err != nil {
 					return err
 				}
 			}
@@ -1594,7 +1594,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			return syscall.ENOENT
 		}
 
-		if sn.Type == TypeDirectory && parentSrc != parentDst {
+		if se.Type == TypeDirectory && parentSrc != parentDst {
 			spn.Nlink--
 			dpn.Nlink++
 		}
@@ -1609,8 +1609,14 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			} else if n != 1 {
 				return fmt.Errorf("delete src failed")
 			}
+			if err = mustInsert(s, &edge{parentDst, de.Name, se.Inode, se.Type}); err != nil {
+				return err
+			}
 		} else {
 			if _, err := s.Cols("inode", "type").Update(&de, &edge{Parent: parentSrc, Name: se.Name}); err != nil {
+				return err
+			}
+			if _, err := s.Cols("inode", "type").Update(&se, &edge{Parent: parentDst, Name: de.Name}); err != nil {
 				return err
 			}
 		}
@@ -1618,9 +1624,6 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			return err
 		}
 		if _, err := s.Cols("ctime").Update(&sn, &node{Inode: sn.Inode}); err != nil {
-			return err
-		}
-		if err = mustInsert(s, &edge{parentDst, nameDst, sn.Inode, sn.Type}); err != nil {
 			return err
 		}
 		if parentDst != parentSrc {
