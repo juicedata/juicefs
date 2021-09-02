@@ -6,7 +6,7 @@
 
 这种方法是将 JuiceFS 挂载点中的目录映射给 Docker 容器。比如， JuiceFS 文件系统挂载在 `/mnt/jfs` 目录，在创建容器时可以这样将 JuiceFS 存储映射到 Docker 容器：
 
-```
+```sh
 $ sudo docker run -d --name nginx \
   -v /mnt/jfs/html:/usr/share/nginx/html \
   -p 8080:80 \
@@ -15,7 +15,7 @@ $ sudo docker run -d --name nginx \
 
 但需要注意，默认情况下，只有挂载 JuiceFS 存储的用户有存储的读写权限，当你需要将 JuiceFS 存储映射给 Docker 容器使用时，如果你没有使用 root 身份挂载 JuiceFS 存储，则需要先开启 FUSE 的 `user_allow_other` 选项，然后再添加  `-o allow_other` 选项重新挂载 JuiceFS 文件系统。
 
-> **注意**：使用 root 用户身份或使用 sudo 挂载的 JuiceFS 存储，会自动添加 `allow_other`选项，无需手动设置。
+> **注意**：使用 root 用户身份或使用 sudo 挂载的 JuiceFS 存储，会自动添加 `allow_other` 选项，无需手动设置。
 
 ### FUSE 设置
 
@@ -25,13 +25,13 @@ $ sudo docker run -d --name nginx \
 
 编辑 FUSE 的配置文件，通常是 `/etc/fuse.conf`：
 
-```
+```sh
 $ sudo nano /etc/fuse.conf
 ```
 
 将配置文件中的 `user_allow_other` 前面的 `#` 注释符删掉，修改后类似下面这样：
 
-```
+```conf
 # /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
 
 # Set the maximum number of FUSE mounts allowed to non-root users.
@@ -46,7 +46,7 @@ user_allow_other
 
 FUSE 的 `user_allow_other` 启用后，你需要重新挂载 JuiceFS 文件系统，使用 `-o` 选项设置 `allow_other`，例如：
 
-```
+```sh
 $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
@@ -54,7 +54,7 @@ $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 
 JuiceFS 也支持使用 [volume plugin](https://docs.docker.com/engine/extend/) 方式访问。
 
-```
+```sh
 $ docker plugin install juicedata/juicefs
 Plugin "juicedata/juicefs" is requesting the following privileges:
  - network: [host]
@@ -66,7 +66,7 @@ $ docker volume create -d juicedata/juicefs:latest -o name={{VOLUME_NAME}} -o me
 $ docker run -it -v jfsvolume:/opt busybox ls /opt
 ```
 
-将上面 `{{VOLUME_NAME}}, {{META_URL}}, {{ACCESS_KEY}}, {{SECRET_KEY}}` 替换成你自己的文件系统配置。想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
+将上面 `{{VOLUME_NAME}}`、`{{META_URL}}`、`{{ACCESS_KEY}}`、`{{SECRET_KEY}}` 替换成你自己的文件系统配置。想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
 
 ## 3. 在 Docker 容器中挂载 JuiceFS
 
@@ -74,7 +74,7 @@ $ docker run -it -v jfsvolume:/opt busybox ls /opt
 
 由于在容器中进行文件系统挂载需要将 JuiceFS 客户端拷贝到容器，在常规的容器管理过程中，需要把下载或拷贝 JuiceFS 客户端以及挂载文件系统的过程写入 Dockerfile，然后重新构建镜像。例如，你可以参考以下 Dockerfile，将 JuiceFS 客户端打包到 Alpine 镜像。
 
-```
+```dockerfile
 FROM alpine:latest
 LABEL maintainer="Juicedata <https://juicefs.com>"
 
@@ -93,7 +93,7 @@ ENTRYPOINT ["/usr/bin/juicefs", "mount"]
 
 另外，由于在容器中使用 FUSE 需要相应的权限，在创建容器时，需要指定 `--privileged=true` 选项，比如：
 
-```
+```sh
 $ sudo docker run -d --name nginx \
   -v /mnt/jfs/html:/usr/share/nginx/html \
   -p 8080:80 \
