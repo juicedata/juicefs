@@ -1,10 +1,23 @@
 # JuiceFS on Docker
 
+There are  three ways to use JuiceFS on Docker:
+
+## 1. Volume Mapping
+
+This method is to map the directories in the JuiceFS mount point to the Docker container. For example, the JuiceFS storage is mounted in the `/mnt/jfs` directory. When creating a container, you can map JuiceFS storage to the Docker container as follows:
+
+```shell
+$ sudo docker run -d --name nginx \
+  -v /mnt/jfs/html:/usr/share/nginx/html \
+  -p 8080:80 \
+  nginx
+```
+
 By default, only the user who mounts the JuiceFS storage has the access permissions for the storage. When you need to map the JuiceFS storage to a Docker container, if you are not using the root identity to mount the JuiceFS storage, you need to turn on the FUSE `user_allow_other` first, and then re-mount the JuiceFS with `-o allow_other` option.
 
 > **Note**: JuiceFS storage mounted with root user identity or `sudo` will automatically add the `allow_other` option, no manual setting is required.
 
-## FUSE Setting
+### FUSE Setting
 
 By default, the `allow_other` option is only allowed to be used by the root user. In order to allow other users to use this mount option, the FUSE configuration file needs to be modified.
 
@@ -29,7 +42,7 @@ Delete the `# ` symbol in front of `user_allow_other` in the configuration file,
 user_allow_other
 ```
 
-### Re-mount JuiceFS
+#### Re-mount JuiceFS
 
 After the `allow_other` of FUSE is enabled, you need to re-mount the JuiceFS file systemd with the `allow_other` option, for example:
 
@@ -37,17 +50,7 @@ After the `allow_other` of FUSE is enabled, you need to re-mount the JuiceFS fil
 $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
-### Mapping storage to a Docker container
-
-When mapping persistent storage for a Docker container, there is no difference between using JuiceFS storage and using local storage. Assuming you mount the JuiceFS file system to the `/mnt/jfs` directory, you can map the storage when creating a Docker container, like this:
-
-```
-$ sudo docker run -d --name some-nginx \
-	-v /mnt/jfs/html:/usr/share/nginx/html \
-	nginx
-```
-
-## Docker Volume Plugin
+## 2. Docker Volume Plugin
 
 We can also use [volume plugin](https://docs.docker.com/engine/extend/) to access JuiceFS.
 
@@ -64,3 +67,37 @@ $ docker run -it -v jfsvolume:/opt busybox ls /opt
 ```
 
 Replace above `{{VOLUME_NAME}}, {{META_URL}}, {{ACCESS_KEY}}, {{SECRET_KEY}}` to your own volume setting. For more details about JuiceFS volume plugin, refer [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) repository.
+
+## 3. Mount JuiceFS in a Container
+
+This method is to mount and use the JuiceFS storage directly in the Docker container. Compared with the first method, directly mounting JuiceFS in the container can reduce the chance of file misoperation. It also makes container management clearer and more intuitive.
+
+Since the file system mounting in the container needs to copy the JuiceFS client to the container, the process of downloading or copying the JuiceFS client and mounting the file system needs to be written into the Dockerfile, and then rebuilt the image. For example, you can refer to the following Dockerfile to package the JuiceFS client into the Alpine image.
+
+```
+FROM alpine:latest
+LABEL maintainer="Juicedata <https://juicefs.com>"
+
+# Install JuiceFS client
+RUN apk add --no-cache curl && \
+  JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v') && \
+  wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" && \
+  tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" && \
+  install juicefs /usr/bin && \
+  rm juicefs "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" && \
+  rm -rf /var/cache/apk/* && \
+  apk del curl
+
+ENTRYPOINT ["/usr/bin/juicefs", "mount"]
+```
+
+In addition, since the use of FUSE in the container requires corresponding permissions, when creating the container, you need to specify the `--privileged=true` option, for example:
+
+```shell
+$ sudo docker run -d --name nginx \
+  -v /mnt/jfs/html:/usr/share/nginx/html \
+  -p 8080:80 \
+  --privileged=true \
+  nginx-with-jfs
+```
+
