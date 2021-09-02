@@ -100,4 +100,3 @@ $ sudo docker run -d --name nginx \
   --privileged=true \
   nginx-with-jfs
 ```
-
