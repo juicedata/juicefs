@@ -248,7 +248,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 仅缓存随机小块读 (默认: false)
 
 `--open-cache value`\
-打开的文件的缓存过期时间；单位为秒 (默认: 0)
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
 
 ### juicefs umount
 
