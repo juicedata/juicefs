@@ -181,6 +181,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	} else if string(entries[0].Name) != "." || string(entries[1].Name) != ".." || string(entries[2].Name) != "f" {
 		t.Fatalf("entries: %+v", entries)
 	}
+	if st := m.Rename(ctx, parent, "f", 1, "f2", RenameWhiteout, &inode, attr); st != syscall.ENOTSUP {
+		t.Fatalf("rename d/f -> f2: %s", st)
+	}
 	if st := m.Rename(ctx, parent, "f", 1, "f2", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename d/f -> f2: %s", st)
 	}
@@ -190,12 +193,27 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", 1, "f2", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> f2: %s", st)
 	}
+	if st := m.Rename(ctx, 1, "f2", 1, "f", RenameExchange, &inode, attr); st != syscall.ENOENT {
+		t.Fatalf("rename f2 -> f: %s", st)
+	}
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
+	if st := m.Rename(ctx, 1, "f2", 1, "f", RenameNoReplace, &inode, attr); st != syscall.EEXIST {
+		t.Fatalf("rename f2 -> f: %s", st)
+	}
 	if st := m.Rename(ctx, 1, "f2", 1, "f", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> f: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f", 1, "d", RenameExchange, &inode, attr); st != 0 {
+		t.Fatalf("rename f <-> d: %s", st)
+	}
+	if st := m.Lookup(ctx, 1, "f", &inode, attr); st != 0 || inode != parent {
+		t.Fatalf("lookup f: %s; inode %d expect %d", st, inode, parent)
+	}
+	if st := m.Rename(ctx, 1, "d", 1, "f", RenameExchange, &inode, attr); st != 0 {
+		t.Fatalf("rename d <-> f: %s", st)
 	}
 	if st := m.Link(ctx, inode, 1, "f3", attr); st != 0 {
 		t.Fatalf("link f3 -> f: %s", st)

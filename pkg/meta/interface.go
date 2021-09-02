@@ -53,7 +53,7 @@ const (
 const (
 	RenameNoReplace = 1 << iota
 	RenameExchange
-	// RenameWhiteout
+	RenameWhiteout
 )
 
 const (
