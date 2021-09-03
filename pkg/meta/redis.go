@@ -1689,7 +1689,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			return err
 		}
 		if err == nil {
-			if ctx.Value(CtxKey("behavior")) == "Hadoop" || flags&RenameNoReplace != 0 {
+			if flags&RenameNoReplace != 0 {
 				return syscall.EEXIST
 			}
 			dtyp1, dino1 := r.parseEntry(dbuf)

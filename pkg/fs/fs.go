@@ -363,10 +363,10 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
 	return
 }
 
-func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string) (err syscall.Errno) {
+func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, flags uint32) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Rename").End()
 	l := vfs.NewLogContext(ctx)
-	defer func() { fs.log(l, "Rename (%s,%s): %s", oldpath, newpath, errstr(err)) }()
+	defer func() { fs.log(l, "Rename (%s,%s,%d): %s", oldpath, newpath, flags, errstr(err)) }()
 	oldfi, err := fs.lookup(ctx, path.Dir(oldpath), true)
 	if err != 0 {
 		return
@@ -383,7 +383,7 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string) (
 	if err != 0 {
 		return
 	}
-	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), 0, nil, nil)
+	err = fs.m.Rename(ctx, oldfi.inode, path.Base(oldpath), newfi.inode, path.Base(newpath), flags, nil, nil)
 	return
 }
 
