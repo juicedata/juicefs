@@ -51,6 +51,12 @@ const (
 )
 
 const (
+	RenameNoReplace = 1 << iota
+	RenameExchange
+	RenameWhiteout
+)
+
+const (
 	// SetAttrMode is a mask to update a attribute of node
 	SetAttrMode = 1 << iota
 	SetAttrUID
@@ -259,7 +265,7 @@ type Meta interface {
 	// Rename move an entry from a source directory to another with given name.
 	// The targeted entry will be overwrited if it's a file or empty directory.
 	// For Hadoop, the target should not be overwritten.
-	Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno
+	Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	// Link creates an entry for node.
 	Link(ctx Context, inodeSrc, parent Ino, name string, attr *Attr) syscall.Errno
 	// Readdir returns all entries for given directory, which include attributes if plus is true.
@@ -286,7 +292,7 @@ type Meta interface {
 	// ListXattr returns all extended attributes of a node.
 	ListXattr(ctx Context, inode Ino, dbuff *[]byte) syscall.Errno
 	// SetXattr update the extended attribute of a node.
-	SetXattr(ctx Context, inode Ino, name string, value []byte, flags int) syscall.Errno
+	SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	// RemoveXattr removes the extended attribute of a node.
 	RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	// Flock tries to put a lock on given file.

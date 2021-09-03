@@ -179,7 +179,7 @@ func (j *juice) Readlink(path string) (e int, target string) {
 func (j *juice) Rename(oldpath string, newpath string) (e int) {
 	ctx := j.newContext()
 	defer trace(oldpath, newpath)(&e)
-	e = errorconv(j.fs.Rename(ctx, oldpath, newpath))
+	e = errorconv(j.fs.Rename(ctx, oldpath, newpath, 0))
 	return
 }
 

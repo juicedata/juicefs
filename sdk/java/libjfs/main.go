@@ -618,7 +618,7 @@ func jfs_rename(pid int, h uintptr, oldpath *C.char, newpath *C.char) int {
 	if w == nil {
 		return EINVAL
 	}
-	return errno(w.Rename(w.withPid(pid), C.GoString(oldpath), C.GoString(newpath)))
+	return errno(w.Rename(w.withPid(pid), C.GoString(oldpath), C.GoString(newpath), meta.RenameNoReplace))
 }
 
 //export jfs_truncate
@@ -636,7 +636,7 @@ func jfs_setXattr(pid int, h uintptr, path *C.char, name *C.char, value uintptr,
 	if w == nil {
 		return EINVAL
 	}
-	var flags int
+	var flags uint32
 	switch mode {
 	case 1:
 		flags = meta.XattrCreate
