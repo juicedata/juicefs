@@ -46,7 +46,7 @@ In order to make JuiceFS works with other components, it usually takes 2 steps:
 
 You need first installing Go 1.13+, JDK 8+ and Maven, then run following commands:
 
-> **Note**: If Ceph RADOS is used to store data, you need to install librados-dev and build ``libjfs.so`` with ``-tag ceph``.
+> **Note**: If Ceph RADOS is used to store data, you need to install librados-dev and build `libjfs.so` with `-tag ceph`.
 
 > **Tip**: For users in China, it's recommended to set a local Maven mirror to speed-up compilation, e.g. [Aliyun Maven Mirror](https://maven.aliyun.com).
 
@@ -61,7 +61,7 @@ You need first installing Go 1.13+, JDK 8+ and Maven, then run following command
 
 ### Windows
 
-Righ now, you can cross compile the SDK in Linux or macOS，please install [mingw-w64](https://www.mingw-w64.org/) first.
+Righ now, you can cross compile the SDK in Linux or macOS, please install [mingw-w64](https://www.mingw-w64.org/) first.
 
   ```shell
   $ cd sdk/java
