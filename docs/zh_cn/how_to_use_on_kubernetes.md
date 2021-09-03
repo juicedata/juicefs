@@ -126,7 +126,7 @@ kind: Secret
 metadata:
   name: juicefs-sc-secret
   namespace: kube-system
-type: Opaqu
+type: Opaque
 stringData:
   name: "test"
   metaurl: "redis://juicefs.afyq4z.0001.use1.cache.amazonaws.com/3"
@@ -405,7 +405,8 @@ spec:
           image: linuxserver/nginx
           ports:
             - containerPort: 80
-          privileged: true
+          securityContext:
+            privileged: true
 ```
 
 > ⚠️ **风险提示**：容器启用 `privileged: true` 特权模式以后，就具备了访问宿主机所有设备的权限，即拥有了对宿主机内核的完全控制权限。使用不当会带来严重的安全隐患，请您在使用此方式之前进行充分的安全评估。
