@@ -277,6 +277,42 @@ pvc-b670c8a1-2962-497c-afa2-33bc8b8bb05d   10Pi       RWX            Retain     
 
 如果想了解更多关于 JuiceFS CSI Driver 的信息，请参考[项目主页](https://github.com/juicedata/juicefs-csi-driver)。
 
+### 创建更多 JuiceFS 存储类
+
+你可以根据实际需要重复前面的步骤，通过 JuiceFS CSI Driver 创建任意数量的存储类。但要注意修改存储类的名称以及 JuiceFS 文件系统的配置信息，避免与已创建的存储类冲突。例如，使用 Helm 时可以创建一个名为 `jfs2.yaml` 的配置文件：
+
+```yaml
+storageClasses:
+- name: jfs-sc2
+  enabled: true
+  reclaimPolicy: Retain
+  backend:
+    name: "jfs-2"
+    metaurl: "redis://example.abc.0001.use1.cache.amazonaws.com/3"
+    storage: "s3"
+    accessKey: ""
+    secretKey: ""
+    bucket: "https://jfs2.s3.us-east-1.amazonaws.com"
+```
+
+执行 Helm 命令进行部署：
+
+```shell
+$ helm repo add juicefs-csi-driver https://juicedata.github.io/juicefs-csi-driver/
+$ helm repo update
+$ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install -f ./jfs2.yaml
+```
+
+查看集群中存储类的情况：
+
+```shell
+$ kubectl get sc
+NAME                 PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+juicefs-sc           csi.juicefs.com            Retain          Immediate           false                  88m
+juicefs-sc2          csi.juicefs.com            Retain          Immediate           false                  13m
+standard (default)   k8s.io/minikube-hostpath   Delete          Immediate           false                  128m
+```
+
 
 ### 监控
 
