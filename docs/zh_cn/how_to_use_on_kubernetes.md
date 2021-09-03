@@ -45,9 +45,9 @@ storageClasses:
         memory: "<memory-request>"
 ```
 
-在支持`角色管理`的云平台，可以通过为 Kubernetes 节点分配`服务角色`，实现对象存储 API 免密钥访问。这种情况下无需设置配置文件中的 `accessKey` 和 `secretKey`。
+在支持「角色管理」的云平台，可以通过为 Kubernetes 节点分配「服务角色」，实现对象存储 API 免密钥访问。这种情况下无需设置配置文件中的 `accessKey` 和 `secretKey`。
 
-2. 依次执行以下三条命令，通过 helm 部署 JuiceFS CSI Driver。
+2. 依次执行以下三条命令，通过 Helm 部署 JuiceFS CSI Driver。
 
 ```shell
 $ helm repo add juicefs-csi-driver https://juicedata.github.io/juicefs-csi-driver/
