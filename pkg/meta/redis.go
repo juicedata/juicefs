@@ -1667,28 +1667,14 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			return syscall.ENOTDIR
 		}
 		r.parseAttr([]byte(rs[2].(string)), &iattr)
-		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
-			return syscall.EACCES
-		}
-		now := time.Now()
-		sattr.Mtime = now.Unix()
-		sattr.Mtimensec = uint32(now.Nanosecond())
-		sattr.Ctime = now.Unix()
-		sattr.Ctimensec = uint32(now.Nanosecond())
-		dattr.Mtime = now.Unix()
-		dattr.Mtimensec = uint32(now.Nanosecond())
-		dattr.Ctime = now.Unix()
-		dattr.Ctimensec = uint32(now.Nanosecond())
-		iattr.Parent = parentDst
-		iattr.Ctime = now.Unix()
-		iattr.Ctimensec = uint32(now.Nanosecond())
 
-		tattr = Attr{}
-		opened = false
 		dbuf, err := tx.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
 		if err != nil && err != redis.Nil {
 			return err
 		}
+		now := time.Now()
+		tattr = Attr{}
+		opened = false
 		if err == nil {
 			if flags == RenameNoReplace {
 				return syscall.EEXIST
@@ -1702,10 +1688,14 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 				return err
 			}
 			r.parseAttr(a, &tattr)
-			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
-				return syscall.EACCES
-			}
-			if !exchange {
+			if exchange {
+				tattr.Ctime = now.Unix()
+				tattr.Ctimensec = uint32(now.Nanosecond())
+				if dtyp == TypeDirectory && parentSrc != parentDst {
+					dattr.Nlink--
+					sattr.Nlink++
+				}
+			} else {
 				if dtyp == TypeDirectory {
 					cnt, err := tx.HLen(ctx, r.entryKey(dino)).Result()
 					if err != nil {
@@ -1723,22 +1713,16 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 						opened = r.of.IsOpen(dino)
 					}
 				}
-			} else {
-				tattr.Ctime = now.Unix()
-				tattr.Ctimensec = uint32(now.Nanosecond())
-				if dtyp == TypeDirectory && parentSrc != parentDst {
-					dattr.Nlink--
-					sattr.Nlink++
-				}
+			}
+			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
+				return syscall.EACCES
 			}
 		} else {
 			if exchange {
 				return syscall.ENOENT
 			}
-			dino = 0
-			dtyp = 0
+			dino, dtyp = 0, 0
 		}
-
 		buf, err := tx.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 		if err != nil {
 			return err
@@ -1747,6 +1731,21 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		if ino1 != ino || typ1 != typ {
 			return syscall.EAGAIN
 		}
+		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
+			return syscall.EACCES
+		}
+
+		sattr.Mtime = now.Unix()
+		sattr.Mtimensec = uint32(now.Nanosecond())
+		sattr.Ctime = now.Unix()
+		sattr.Ctimensec = uint32(now.Nanosecond())
+		dattr.Mtime = now.Unix()
+		dattr.Mtimensec = uint32(now.Nanosecond())
+		dattr.Ctime = now.Unix()
+		dattr.Ctimensec = uint32(now.Nanosecond())
+		iattr.Parent = parentDst
+		iattr.Ctime = now.Unix()
+		iattr.Ctimensec = uint32(now.Nanosecond())
 		if typ == TypeDirectory && parentSrc != parentDst {
 			sattr.Nlink--
 			dattr.Nlink++
@@ -1757,9 +1756,11 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		if attr != nil {
 			*attr = iattr
 		}
-
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			if !exchange {
+			if exchange { // dbuf, tattr are valid
+				pipe.HSet(ctx, r.entryKey(parentSrc), nameSrc, dbuf)
+				pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
+			} else {
 				pipe.HDel(ctx, r.entryKey(parentSrc), nameSrc)
 				if dino > 0 {
 					if dtyp != TypeDirectory && tattr.Nlink > 0 {
@@ -1787,11 +1788,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 						}
 						pipe.Del(ctx, r.xattrKey(dino))
 					}
-					// pipe.HDel(ctx, r.entryKey(parentDst), nameDst)
 				}
-			} else { // dbuf, tattr are valid
-				pipe.HSet(ctx, r.entryKey(parentSrc), nameSrc, dbuf)
-				pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 			}
 			pipe.Set(ctx, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(&iattr), 0)

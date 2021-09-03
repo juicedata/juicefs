@@ -1540,26 +1540,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			return syscall.ENOTDIR
 		}
 		m.parseAttr(rs[2], &iattr)
-		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
-			return syscall.EACCES
-		}
-		now := time.Now()
-		sattr.Mtime = now.Unix()
-		sattr.Mtimensec = uint32(now.Nanosecond())
-		sattr.Ctime = now.Unix()
-		sattr.Ctimensec = uint32(now.Nanosecond())
-		dattr.Mtime = now.Unix()
-		dattr.Mtimensec = uint32(now.Nanosecond())
-		dattr.Ctime = now.Unix()
-		dattr.Ctimensec = uint32(now.Nanosecond())
-		iattr.Parent = parentDst
-		iattr.Ctime = now.Unix()
-		iattr.Ctimensec = uint32(now.Nanosecond())
 
-		tattr = Attr{}
-		opened = false
-		dino = 0
-		dtyp = 0
 		dbuf := tx.get(m.entryKey(parentDst, nameDst))
 		if dbuf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
@@ -1567,6 +1548,9 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				dbuf = m.packEntry(e.Attr.Typ, e.Inode)
 			}
 		}
+		now := time.Now()
+		tattr = Attr{}
+		opened = false
 		if dbuf != nil {
 			if flags == RenameNoReplace {
 				return syscall.EEXIST
@@ -1577,10 +1561,14 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				return syscall.ENOENT // corrupt entry
 			}
 			m.parseAttr(a, &tattr)
-			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
-				return syscall.EACCES
-			}
-			if !exchange {
+			if exchange {
+				tattr.Ctime = now.Unix()
+				tattr.Ctimensec = uint32(now.Nanosecond())
+				if dtyp == TypeDirectory && parentSrc != parentDst {
+					dattr.Nlink--
+					sattr.Nlink++
+				}
+			} else {
 				if dtyp == TypeDirectory {
 					if tx.exist(m.entryKey(dino, "")) {
 						return syscall.ENOTEMPTY
@@ -1594,6 +1582,48 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 						opened = m.of.IsOpen(dino)
 					}
 				}
+			}
+			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
+				return syscall.EACCES
+			}
+		} else {
+			if exchange {
+				return syscall.ENOENT
+			}
+			dino, dtyp = 0, 0
+		}
+		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
+			return syscall.EACCES
+		}
+
+		sattr.Mtime = now.Unix()
+		sattr.Mtimensec = uint32(now.Nanosecond())
+		sattr.Ctime = now.Unix()
+		sattr.Ctimensec = uint32(now.Nanosecond())
+		dattr.Mtime = now.Unix()
+		dattr.Mtimensec = uint32(now.Nanosecond())
+		dattr.Ctime = now.Unix()
+		dattr.Ctimensec = uint32(now.Nanosecond())
+		iattr.Parent = parentDst
+		iattr.Ctime = now.Unix()
+		iattr.Ctimensec = uint32(now.Nanosecond())
+		if typ == TypeDirectory && parentSrc != parentDst {
+			sattr.Nlink--
+			dattr.Nlink++
+		}
+		if inode != nil {
+			*inode = ino
+		}
+		if attr != nil {
+			*attr = iattr
+		}
+
+		if exchange { // dino > 0
+			tx.set(m.entryKey(parentSrc, nameSrc), dbuf)
+			tx.set(m.inodeKey(dino), m.marshal(&tattr))
+		} else {
+			tx.dels(m.entryKey(parentSrc, nameSrc))
+			if dino > 0 {
 				if dtyp != TypeDirectory && tattr.Nlink > 0 {
 					tx.set(m.inodeKey(dino), m.marshal(&tattr))
 				} else {
@@ -1617,35 +1647,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					}
 					tx.dels(tx.scanKeys(m.xattrKey(dino, ""))...)
 				}
-				// tx.dels(m.entryKey(parentDst, nameDst))
-			} else { // exchange
-				tattr.Ctime = now.Unix()
-				tattr.Ctimensec = uint32(now.Nanosecond())
-				if dtyp == TypeDirectory && parentSrc != parentDst {
-					dattr.Nlink--
-					sattr.Nlink++
-				}
-				tx.set(m.inodeKey(dino), m.marshal(&tattr))
 			}
-		} else if exchange {
-			return syscall.ENOENT
-		}
-
-		if typ == TypeDirectory && parentSrc != parentDst {
-			sattr.Nlink--
-			dattr.Nlink++
-		}
-		if inode != nil {
-			*inode = ino
-		}
-		if attr != nil {
-			*attr = iattr
-		}
-
-		if !exchange {
-			tx.dels(m.entryKey(parentSrc, nameSrc))
-		} else { // dbuf != nil
-			tx.set(m.entryKey(parentSrc, nameSrc), dbuf)
 		}
 		tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
 		tx.set(m.inodeKey(ino), m.marshal(&iattr))

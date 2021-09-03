@@ -1427,19 +1427,8 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	var dn node
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
-		var spn = node{Inode: parentSrc}
-		ok, err := s.Get(&spn)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return syscall.ENOENT
-		}
-		if spn.Type != TypeDirectory {
-			return syscall.ENOTDIR
-		}
 		var se = edge{Parent: parentSrc, Name: nameSrc}
-		ok, err = s.Get(&se)
+		ok, err := s.Get(&se)
 		if err != nil {
 			return err
 		}
@@ -1447,8 +1436,8 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			if e := m.resolveCase(ctx, parentSrc, nameSrc); e != nil {
 				ok = true
 				se.Inode = e.Inode
-				se.Name = string(e.Name)
 				se.Type = e.Attr.Typ
+				se.Name = string(e.Name)
 			}
 		}
 		if !ok {
@@ -1460,18 +1449,17 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			}
 			return nil
 		}
-		var sn = node{Inode: se.Inode}
-		ok, err = s.Get(&sn)
+		var spn = node{Inode: parentSrc}
+		ok, err = s.Get(&spn)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			return syscall.ENOENT
 		}
-		if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
-			return syscall.EACCES
+		if spn.Type != TypeDirectory {
+			return syscall.ENOTDIR
 		}
-
 		var dpn = node{Inode: parentDst}
 		ok, err = s.Get(&dpn)
 		if err != nil {
@@ -1483,13 +1471,14 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		if dpn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		now := time.Now().UnixNano() / 1e3
-		spn.Mtime = now
-		spn.Ctime = now
-		dpn.Mtime = now
-		dpn.Ctime = now
-		sn.Parent = parentDst
-		sn.Ctime = now
+		var sn = node{Inode: se.Inode}
+		ok, err = s.Get(&sn)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
 
 		var de = edge{Parent: parentDst, Name: nameDst}
 		ok, err = s.Get(&de)
@@ -1504,8 +1493,8 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				de.Name = string(e.Name)
 			}
 		}
+		now := time.Now().UnixNano() / 1e3
 		opened = false
-		dino = 0
 		dn = node{Inode: de.Inode}
 		if ok {
 			if flags == RenameNoReplace {
@@ -1519,10 +1508,13 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			if !ok {
 				return syscall.ENOENT // corrupt entry
 			}
-			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
-				return syscall.EACCES
-			}
-			if !exchange {
+			if exchange {
+				dn.Ctime = now
+				if de.Type == TypeDirectory && parentSrc != parentDst {
+					dpn.Nlink--
+					spn.Nlink++
+				}
+			} else {
 				if de.Type == TypeDirectory {
 					exist, err := s.Exist(&edge{Parent: de.Inode})
 					if err != nil {
@@ -1539,6 +1531,52 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 						opened = m.of.IsOpen(dn.Inode)
 					}
 				}
+			}
+			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
+				return syscall.EACCES
+			}
+		} else {
+			if exchange {
+				return syscall.ENOENT
+			}
+			dino = 0
+		}
+		if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
+			return syscall.EACCES
+		}
+
+		spn.Mtime = now
+		spn.Ctime = now
+		dpn.Mtime = now
+		dpn.Ctime = now
+		sn.Parent = parentDst
+		sn.Ctime = now
+		if se.Type == TypeDirectory && parentSrc != parentDst {
+			spn.Nlink--
+			dpn.Nlink++
+		}
+		if inode != nil {
+			*inode = sn.Inode
+		}
+		m.parseAttr(&sn, attr)
+
+		if exchange {
+			if _, err := s.Cols("inode", "type").Update(&de, &edge{Parent: parentSrc, Name: se.Name}); err != nil {
+				return err
+			}
+			if _, err := s.Cols("inode", "type").Update(&se, &edge{Parent: parentDst, Name: de.Name}); err != nil {
+				return err
+			}
+			if _, err := s.Cols("ctime").Update(dn, &node{Inode: dino}); err != nil {
+				return err
+			}
+		} else {
+			if n, err := s.Delete(&edge{Parent: parentSrc, Name: se.Name}); err != nil {
+				return err
+			} else if n != 1 {
+				return fmt.Errorf("delete src failed")
+			}
+			if dino > 0 {
 				if de.Type != TypeDirectory && dn.Nlink > 0 {
 					if _, err := s.Update(dn, &node{Inode: dino}); err != nil {
 						return err
@@ -1581,43 +1619,8 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				if _, err := s.Delete(&edge{Parent: parentDst, Name: de.Name}); err != nil {
 					return err
 				}
-			} else { // exchange
-				dn.Ctime = now
-				if de.Type == TypeDirectory && parentSrc != parentDst {
-					dpn.Nlink--
-					spn.Nlink++
-				}
-				if _, err := s.Cols("ctime").Update(dn, &node{Inode: dino}); err != nil {
-					return err
-				}
-			}
-		} else if exchange {
-			return syscall.ENOENT
-		}
-
-		if se.Type == TypeDirectory && parentSrc != parentDst {
-			spn.Nlink--
-			dpn.Nlink++
-		}
-		if inode != nil {
-			*inode = sn.Inode
-		}
-		m.parseAttr(&sn, attr)
-
-		if !exchange {
-			if n, err := s.Delete(&edge{Parent: parentSrc, Name: se.Name}); err != nil {
-				return err
-			} else if n != 1 {
-				return fmt.Errorf("delete src failed")
 			}
 			if err = mustInsert(s, &edge{parentDst, de.Name, se.Inode, se.Type}); err != nil {
-				return err
-			}
-		} else {
-			if _, err := s.Cols("inode", "type").Update(&de, &edge{Parent: parentSrc, Name: se.Name}); err != nil {
-				return err
-			}
-			if _, err := s.Cols("inode", "type").Update(&se, &edge{Parent: parentDst, Name: de.Name}); err != nil {
 				return err
 			}
 		}
