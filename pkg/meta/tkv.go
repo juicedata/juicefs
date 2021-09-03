@@ -1492,14 +1492,15 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	if flags&^(RenameNoReplace|RenameExchange) != 0 {
+	switch flags {
+	case 0, RenameNoReplace, RenameExchange:
+	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
 		return syscall.ENOTSUP
-	}
-	if flags&RenameNoReplace != 0 && flags&RenameExchange != 0 {
+	default:
 		return syscall.EINVAL
 	}
 	defer timeit(time.Now())
-	exchange := flags&RenameExchange != 0
+	exchange := flags == RenameExchange
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
 	var opened bool
@@ -1567,7 +1568,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			}
 		}
 		if dbuf != nil {
-			if flags&RenameNoReplace != 0 {
+			if flags == RenameNoReplace {
 				return syscall.EEXIST
 			}
 			dtyp, dino = m.parseEntry(dbuf)
