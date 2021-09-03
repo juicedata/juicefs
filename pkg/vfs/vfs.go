@@ -263,11 +263,10 @@ func Readlink(ctx Context, ino Ino) (path []byte, err syscall.Errno) {
 	return
 }
 
-func Rename(ctx Context, parent Ino, name string, newparent Ino, newname string, flags int) (err syscall.Errno) {
-	defer func() { logit(ctx, "rename (%d,%s,%d,%s): %s", parent, name, newparent, newname, strerr(err)) }()
-	if flags != 0 {
-		return syscall.ENOTSUP
-	}
+func Rename(ctx Context, parent Ino, name string, newparent Ino, newname string, flags uint32) (err syscall.Errno) {
+	defer func() {
+		logit(ctx, "rename (%d,%s,%d,%s,%d): %s", parent, name, newparent, newname, flags, strerr(err))
+	}()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EACCES
 		return
@@ -281,7 +280,7 @@ func Rename(ctx Context, parent Ino, name string, newparent Ino, newname string,
 		return
 	}
 
-	err = m.Rename(ctx, parent, name, newparent, newname, nil, nil)
+	err = m.Rename(ctx, parent, name, newparent, newname, flags, nil, nil)
 	return
 }
 
@@ -820,7 +819,7 @@ const (
 	xattrMaxSize = 65536
 )
 
-func SetXattr(ctx Context, ino Ino, name string, value []byte, flags int) (err syscall.Errno) {
+func SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer func() { logit(ctx, "setxattr (%d,%s,%d,%d): %s", ino, name, len(value), flags, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM

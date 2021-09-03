@@ -607,7 +607,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		logger.Errorf("copy %s to %s: %s", src, tmp, err)
 		return
 	}
-	eno = n.fs.Rename(mctx, tmp, dst)
+	eno = n.fs.Rename(mctx, tmp, dst, 0)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
 		logger.Errorf("rename %s to %s: %s", tmp, dst, err)
@@ -764,7 +764,7 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 	if dir != "" {
 		_ = n.mkdirAll(ctx, dir, os.FileMode(0755))
 	}
-	if eno := n.fs.Rename(mctx, tmpname, object); eno != 0 {
+	if eno := n.fs.Rename(mctx, tmpname, object, 0); eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object)
 		return
 	}
@@ -987,7 +987,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		}
 	}
 
-	eno = n.fs.Rename(mctx, tmp, name)
+	eno = n.fs.Rename(mctx, tmp, name, 0)
 	if eno != 0 {
 		_ = n.fs.Delete(mctx, tmp)
 		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)

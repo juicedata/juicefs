@@ -1595,8 +1595,16 @@ func Remove(r Meta, ctx Context, parent Ino, name string) syscall.Errno {
 	return emptyEntry(r, ctx, parent, name, inode, concurrent)
 }
 
-func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, inode *Ino, attr *Attr) syscall.Errno {
+func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	switch flags {
+	case 0, RenameNoReplace, RenameExchange:
+	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
+		return syscall.ENOTSUP
+	default:
+		return syscall.EINVAL
+	}
 	defer timeit(time.Now())
+	exchange := flags == RenameExchange
 	parentSrc = r.checkRoot(parentSrc)
 	parentDst = r.checkRoot(parentDst)
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
@@ -1630,8 +1638,10 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 	}
 	keys := []string{r.entryKey(parentSrc), r.inodeKey(parentSrc), r.inodeKey(ino), r.entryKey(parentDst), r.inodeKey(parentDst)}
 
+	var opened bool
 	var dino Ino
 	var dtyp uint8
+	var tattr Attr
 	if err == nil {
 		dtyp, dino = r.parseEntry(buf)
 		keys = append(keys, r.inodeKey(dino))
@@ -1639,9 +1649,6 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			keys = append(keys, r.entryKey(dino))
 		}
 	}
-
-	var opened bool
-	var tattr Attr
 	eno := r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
@@ -1658,18 +1665,19 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		}
 		r.parseAttr([]byte(rs[2].(string)), &iattr)
 
-		buf, err = tx.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
+		dbuf, err := tx.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
 		if err != nil && err != redis.Nil {
 			return err
 		}
+		now := time.Now()
 		tattr = Attr{}
 		opened = false
 		if err == nil {
-			if ctx.Value(CtxKey("behavior")) == "Hadoop" {
+			if flags == RenameNoReplace {
 				return syscall.EEXIST
 			}
-			typ1, dino1 := r.parseEntry(buf)
-			if dino1 != dino || typ1 != dtyp {
+			dtyp1, dino1 := r.parseEntry(dbuf)
+			if dino1 != dino || dtyp1 != dtyp {
 				return syscall.EAGAIN
 			}
 			a, err := tx.Get(ctx, r.inodeKey(dino)).Bytes()
@@ -1677,44 +1685,53 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 				return err
 			}
 			r.parseAttr(a, &tattr)
-			if typ1 == TypeDirectory {
-				cnt, err := tx.HLen(ctx, r.entryKey(dino)).Result()
-				if err != nil {
-					return err
-				}
-				if cnt != 0 {
-					return syscall.ENOTEMPTY
+			if exchange {
+				tattr.Ctime = now.Unix()
+				tattr.Ctimensec = uint32(now.Nanosecond())
+				if dtyp == TypeDirectory && parentSrc != parentDst {
+					dattr.Nlink--
+					sattr.Nlink++
 				}
 			} else {
-				tattr.Nlink--
-				if tattr.Nlink > 0 {
-					now := time.Now()
-					tattr.Ctime = now.Unix()
-					tattr.Ctimensec = uint32(now.Nanosecond())
-				} else if dtyp == TypeFile {
-					opened = r.of.IsOpen(dino)
+				if dtyp == TypeDirectory {
+					cnt, err := tx.HLen(ctx, r.entryKey(dino)).Result()
+					if err != nil {
+						return err
+					}
+					if cnt != 0 {
+						return syscall.ENOTEMPTY
+					}
+				} else {
+					tattr.Nlink--
+					if tattr.Nlink > 0 {
+						tattr.Ctime = now.Unix()
+						tattr.Ctimensec = uint32(now.Nanosecond())
+					} else if dtyp == TypeFile {
+						opened = r.of.IsOpen(dino)
+					}
 				}
 			}
 			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
 				return syscall.EACCES
 			}
 		} else {
-			dino = 0
+			if exchange {
+				return syscall.ENOENT
+			}
+			dino, dtyp = 0, 0
 		}
-
 		buf, err := tx.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 		if err != nil {
 			return err
 		}
-		_, ino1 := r.parseEntry(buf)
-		if ino != ino1 {
+		typ1, ino1 := r.parseEntry(buf)
+		if ino1 != ino || typ1 != typ {
 			return syscall.EAGAIN
 		}
 		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
 			return syscall.EACCES
 		}
 
-		now := time.Now()
 		sattr.Mtime = now.Unix()
 		sattr.Mtimensec = uint32(now.Nanosecond())
 		sattr.Ctime = now.Unix()
@@ -1736,48 +1753,51 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		if attr != nil {
 			*attr = iattr
 		}
-
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HDel(ctx, r.entryKey(parentSrc), nameSrc)
-			pipe.Set(ctx, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
-			if dino > 0 {
-				if dtyp != TypeDirectory && tattr.Nlink > 0 {
-					pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
-				} else {
-					if dtyp == TypeFile {
-						if opened {
-							pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
-							pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(dino)))
+			if exchange { // dbuf, tattr are valid
+				pipe.HSet(ctx, r.entryKey(parentSrc), nameSrc, dbuf)
+				pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
+			} else {
+				pipe.HDel(ctx, r.entryKey(parentSrc), nameSrc)
+				if dino > 0 {
+					if dtyp != TypeDirectory && tattr.Nlink > 0 {
+						pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
+					} else {
+						if dtyp == TypeFile {
+							if opened {
+								pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
+								pipe.SAdd(ctx, r.sustained(r.sid), strconv.Itoa(int(dino)))
+							} else {
+								pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, tattr.Length)})
+								pipe.Del(ctx, r.inodeKey(dino))
+								pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
+								pipe.Decr(ctx, totalInodes)
+							}
 						} else {
-							pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, tattr.Length)})
+							if dtyp == TypeDirectory {
+								dattr.Nlink--
+							} else if dtyp == TypeSymlink {
+								pipe.Del(ctx, r.symKey(dino))
+							}
 							pipe.Del(ctx, r.inodeKey(dino))
-							pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
+							pipe.IncrBy(ctx, usedSpace, -align4K(0))
 							pipe.Decr(ctx, totalInodes)
 						}
-					} else {
-						if dtyp == TypeDirectory {
-							dattr.Nlink--
-						} else if dtyp == TypeSymlink {
-							pipe.Del(ctx, r.symKey(dino))
-						}
-						pipe.Del(ctx, r.inodeKey(dino))
-						pipe.IncrBy(ctx, usedSpace, -align4K(0))
-						pipe.Decr(ctx, totalInodes)
+						pipe.Del(ctx, r.xattrKey(dino))
 					}
-					pipe.Del(ctx, r.xattrKey(dino))
 				}
-				pipe.HDel(ctx, r.entryKey(parentDst), nameDst)
 			}
+			pipe.Set(ctx, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
+			pipe.Set(ctx, r.inodeKey(ino), r.marshal(&iattr), 0)
 			pipe.HSet(ctx, r.entryKey(parentDst), nameDst, buf)
 			if parentDst != parentSrc {
 				pipe.Set(ctx, r.inodeKey(parentDst), r.marshal(&dattr), 0)
 			}
-			pipe.Set(ctx, r.inodeKey(ino), r.marshal(&iattr), 0)
 			return nil
 		})
 		return err
 	}, keys...)
-	if eno == 0 && dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
+	if eno == 0 && !exchange && dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 		if opened {
 			r.Lock()
 			r.removedFiles[dino] = true
@@ -2833,7 +2853,7 @@ func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 	return 0
 }
 
-func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags int) syscall.Errno {
+func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	if name == "" {
 		return syscall.EINVAL
 	}

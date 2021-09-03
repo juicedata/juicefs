@@ -46,25 +46,24 @@ JuiceFS Hadoop Java SDK 同时兼容 Hadoop 2.x 以及 Hadoop 3.x 环境，以�
 
 你需要先安装 Go 1.13+、JDK 8+ 以及 Maven 工具，然后运行以下命令：
 
+> **注意**：如果使用 Ceph 的 RADOS 来存储数据，需要安装 librados-dev 并且在编译 `libjfs.so` 时加上 `-tag ceph`。
+
 > **提示**：对于中国用户，建议设置更快的 Maven 镜像仓库以加速编译，比如[阿里云 Maven 仓库](https://maven.aliyun.com)。
 
 ### Linux or macOS
 
-需要先安装 GCC、Make 等编译工具，然后再 JuiceFS 的源代码目录执行下面的命令：
+需要先安装 GCC、Make 等编译工具，然后在 JuiceFS 的源代码目录执行下面的命令：
   
   ```shell
   $ cd sdk/java
   $ make
   ```
 
-> **注意**：编译后的 JAR 文件包含二进制代码，只能部署在相同的系统环境中，例如在 Linux 中编译则只能用于 Linux 环境。其中的二进制代码会依赖 glibc, 尽量使用低版本的系统来编译以获得更好地兼容性
-
-> **注意**: 如果使用 Ceph 的 RADOS 来存储数据，需要安装 librados-dev 并且在编译 ``libjfs.so`` 时加上 ``-tag ceph``
+> **注意**：编译后的 JAR 文件包含二进制代码，只能部署在相同的系统环境中，例如在 Linux 中编译则只能用于 Linux 环境。其中的二进制代码会依赖 glibc, 尽量使用低版本的系统来编译以获得更好的兼容性。
 
 ### Windows 
 
-目前支持在 Linux 或者 macOS 中通过交叉编译得到可用于 Windows 环境的 SDK，需要先安装 [mingw-w64](https://www.mingw-w64.org/)，
-然后在 JuiceFS 的源代码目录执行下面的命令
+目前支持在 Linux 或者 macOS 中通过交叉编译得到可用于 Windows 环境的 SDK，需要先安装 [mingw-w64](https://www.mingw-w64.org/)，然后在 JuiceFS 的源代码目录执行下面的命令：
 
   ```shell
   $ cd sdk/java
