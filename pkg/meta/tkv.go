@@ -1383,6 +1383,8 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			attr.Nlink--
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
 		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 		pattr.Mtime = now.Unix()
@@ -1476,6 +1478,8 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
 
 		now := time.Now()

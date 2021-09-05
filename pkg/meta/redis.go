@@ -1395,6 +1395,8 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				return syscall.EACCES
 			}
 			attr.Nlink--
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
 
 		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
@@ -1518,6 +1520,8 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {

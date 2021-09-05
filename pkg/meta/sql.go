@@ -1254,6 +1254,8 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 			n.Nlink--
 			n.Ctime = now
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
 		}
 		defer func() { m.of.InvalidateChunk(e.Inode, 0xFFFFFFFE) }()
 
@@ -1374,6 +1376,8 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 			if ok && ctx.Uid() != n.Uid {
 				return syscall.EACCES
+			} else if !ok {
+				logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
 			}
 		}
 		exist, err := s.Exist(&edge{Parent: e.Inode})
