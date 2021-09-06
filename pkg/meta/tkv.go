@@ -1362,7 +1362,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.EPERM
 		}
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
-		if rs[0] == nil || rs[1] == nil {
+		if rs[0] == nil {
 			return syscall.ENOENT
 		}
 		var pattr Attr
@@ -1371,23 +1371,27 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOTDIR
 		}
 		attr = Attr{}
-		m.parseAttr(rs[1], &attr)
-		if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
-			return syscall.EACCES
+		opened = false
+		now := time.Now()
+		if rs[1] != nil {
+			m.parseAttr(rs[1], &attr)
+			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+				return syscall.EACCES
+			}
+			attr.Ctime = now.Unix()
+			attr.Ctimensec = uint32(now.Nanosecond())
+			attr.Nlink--
+			if _type == TypeFile && attr.Nlink == 0 {
+				opened = m.of.IsOpen(inode)
+			}
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
 		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
-		now := time.Now()
 		pattr.Mtime = now.Unix()
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
-		attr.Ctime = now.Unix()
-		attr.Ctimensec = uint32(now.Nanosecond())
-		attr.Nlink--
-		opened = false
-		if _type == TypeFile && attr.Nlink == 0 {
-			opened = m.of.IsOpen(inode)
-		}
 
 		tx.dels(m.entryKey(parent, name))
 		tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
@@ -1455,7 +1459,7 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOTDIR
 		}
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
-		if rs[0] == nil || rs[1] == nil {
+		if rs[0] == nil {
 			return syscall.ENOENT
 		}
 		var pattr, attr Attr
@@ -1466,9 +1470,13 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if tx.exist(m.entryKey(inode, "")) {
 			return syscall.ENOTEMPTY
 		}
-		m.parseAttr(rs[1], &attr)
-		if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
-			return syscall.EACCES
+		if rs[1] != nil {
+			m.parseAttr(rs[1], &attr)
+			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+				return syscall.EACCES
+			}
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
 
 		now := time.Now()
