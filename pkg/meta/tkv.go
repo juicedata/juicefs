@@ -1374,6 +1374,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return syscall.ENOTDIR
 		}
 		attr = Attr{}
+		opened = false
 		now := time.Now()
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
@@ -1383,6 +1384,9 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			attr.Nlink--
+			if _type == TypeFile && attr.Nlink == 0 {
+				opened = m.of.IsOpen(inode)
+			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
@@ -1391,10 +1395,6 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
-		opened = false
-		if _type == TypeFile && attr.Nlink == 0 {
-			opened = m.of.IsOpen(inode)
-		}
 
 		tx.dels(m.entryKey(parent, name))
 		tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)

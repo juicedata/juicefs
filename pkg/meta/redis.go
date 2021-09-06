@@ -1387,6 +1387,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
 		attr = Attr{}
+		opened = false
 		if rs[1] != nil {
 			r.parseAttr([]byte(rs[1].(string)), &attr)
 			attr.Ctime = now.Unix()
@@ -1395,6 +1396,9 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				return syscall.EACCES
 			}
 			attr.Nlink--
+			if _type == TypeFile && attr.Nlink == 0 {
+				opened = r.of.IsOpen(inode)
+			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
@@ -1406,11 +1410,6 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		_type2, inode2 := r.parseEntry(buf)
 		if _type2 != _type || inode2 != inode {
 			return syscall.EAGAIN
-		}
-
-		opened = false
-		if _type == TypeFile && attr.Nlink == 0 {
-			opened = r.of.IsOpen(inode)
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {

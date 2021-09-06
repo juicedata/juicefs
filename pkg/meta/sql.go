@@ -1248,12 +1248,16 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return err
 		}
 		now := time.Now().UnixNano() / 1e3
+		opened = false
 		if ok {
 			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 				return syscall.EACCES
 			}
 			n.Nlink--
 			n.Ctime = now
+			if n.Type == TypeFile && n.Nlink == 0 {
+				opened = m.of.IsOpen(e.Inode)
+			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
 		}
@@ -1261,10 +1265,6 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 
 		pn.Mtime = now
 		pn.Ctime = now
-		opened = false
-		if e.Type == TypeFile && n.Nlink == 0 {
-			opened = m.of.IsOpen(e.Inode)
-		}
 
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
