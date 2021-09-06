@@ -1254,23 +1254,24 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if err != nil {
 			return err
 		}
-		if !ok {
-			return syscall.ENOENT
-		}
-		if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
-			return syscall.EACCES
+		now := time.Now().UnixNano() / 1e3
+		opened = false
+		if ok {
+			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+				return syscall.EACCES
+			}
+			n.Nlink--
+			n.Ctime = now
+			if n.Type == TypeFile && n.Nlink == 0 {
+				opened = m.of.IsOpen(e.Inode)
+			}
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
 		}
 		defer func() { m.of.InvalidateChunk(e.Inode, 0xFFFFFFFE) }()
 
-		now := time.Now().UnixNano() / 1e3
 		pn.Mtime = now
 		pn.Ctime = now
-		n.Nlink--
-		n.Ctime = now
-		opened = false
-		if e.Type == TypeFile && n.Nlink == 0 {
-			opened = m.of.IsOpen(e.Inode)
-		}
 
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
@@ -1380,11 +1381,10 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if err != nil {
 				return err
 			}
-			if !ok {
-				return syscall.ENOENT
-			}
-			if ctx.Uid() != n.Uid {
+			if ok && ctx.Uid() != n.Uid {
 				return syscall.EACCES
+			} else if !ok {
+				logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
 			}
 		}
 		exist, err := s.Exist(&edge{Parent: e.Inode})
