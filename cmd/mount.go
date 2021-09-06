@@ -237,7 +237,7 @@ func mount(c *cli.Context) error {
 		go usage.ReportUsage(m, version.Version())
 	}
 	mount_main(conf, m, store, c)
-	return nil
+	return m.CloseSession()
 }
 
 func clientFlags() []cli.Flag {

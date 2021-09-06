@@ -226,6 +226,8 @@ type Meta interface {
 	Load() (*Format, error)
 	// NewSession creates a new client session.
 	NewSession() error
+	// CloseSession does cleanup and close the session.
+	CloseSession() error
 	// GetSession retrieves information of session with sid
 	GetSession(sid uint64) (*Session, error)
 	// ListSessions returns all client sessions.

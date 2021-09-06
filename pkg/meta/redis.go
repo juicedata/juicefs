@@ -89,6 +89,7 @@ type redisMeta struct {
 	deleting     chan int
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
+	umounting    bool
 
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
@@ -312,6 +313,14 @@ func (r *redisMeta) NewSession() error {
 	go r.refreshSession()
 	go r.cleanupDeletedFiles()
 	go r.cleanupSlices()
+	return nil
+}
+
+func (r *redisMeta) CloseSession() error {
+	r.Lock()
+	r.umounting = true
+	r.Unlock()
+	r.cleanStaleSession(r.sid, true)
 	return nil
 }
 
@@ -1973,7 +1982,7 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 	return 0
 }
 
-func (r *redisMeta) cleanStaleSession(sid int64) {
+func (r *redisMeta) cleanStaleSession(sid int64, sync bool) {
 	var ctx = Background
 	key := r.sustained(sid)
 	inodes, err := r.rdb.SMembers(ctx, key).Result()
@@ -1983,7 +1992,7 @@ func (r *redisMeta) cleanStaleSession(sid int64) {
 	}
 	for _, sinode := range inodes {
 		inode, _ := strconv.ParseInt(sinode, 10, 0)
-		if err := r.deleteInode(Ino(inode)); err != nil {
+		if err := r.deleteInode(Ino(inode), sync); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
 		} else {
 			r.rdb.SRem(ctx, key, sinode)
@@ -2024,7 +2033,7 @@ func (r *redisMeta) cleanStaleSessions() {
 	staleSessions, _ := r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
 	for _, ssid := range staleSessions {
 		sid, _ := strconv.Atoi(ssid)
-		r.cleanStaleSession(int64(sid))
+		r.cleanStaleSession(int64(sid), false)
 	}
 
 	rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
@@ -2037,7 +2046,13 @@ func (r *redisMeta) cleanStaleSessions() {
 func (r *redisMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
+		r.Lock()
+		if r.umounting {
+			r.Unlock()
+			return
+		}
 		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
+		r.Unlock()
 		if _, err := r.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
@@ -2045,7 +2060,7 @@ func (r *redisMeta) refreshSession() {
 	}
 }
 
-func (r *redisMeta) deleteInode(inode Ino) error {
+func (r *redisMeta) deleteInode(inode Ino, sync bool) error {
 	var attr Attr
 	var ctx = Background
 	a, err := r.rdb.Get(ctx, r.inodeKey(inode)).Bytes()
@@ -2064,7 +2079,11 @@ func (r *redisMeta) deleteInode(inode Ino) error {
 		return nil
 	})
 	if err == nil {
-		go r.deleteFile(inode, attr.Length, "")
+		if sync {
+			r.deleteFile(inode, attr.Length, "")
+		} else {
+			go r.deleteFile(inode, attr.Length, "")
+		}
 	}
 	return err
 }
@@ -2094,7 +2113,7 @@ func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		if r.removedFiles[inode] {
 			delete(r.removedFiles, inode)
 			go func() {
-				if err := r.deleteInode(inode); err == nil {
+				if err := r.deleteInode(inode, false); err == nil {
 					r.rdb.SRem(ctx, r.sustained(r.sid), strconv.Itoa(int(inode)))
 				}
 			}()
@@ -2779,7 +2798,7 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 				if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Atime, 0).Before(cutoff) {
 					logger.Infof("found dangling inode: %s %+v", keys[i], attr)
 					if delete {
-						err = r.deleteInode(Ino(ino))
+						err = r.deleteInode(Ino(ino), false)
 						if err != nil {
 							logger.Errorf("delete leaked inode %d : %s", ino, err)
 						}
