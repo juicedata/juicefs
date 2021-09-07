@@ -673,31 +673,32 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	}()
 
 	err = errors.New("Not downloaded")
-	var n int
 	var in io.ReadCloser
 	tried := 0
-	needed := store.compressor.CompressBound(len(page.Data))
-	compressed := needed > len(page.Data)
-	var buf []byte
-	if compressed {
-		c := NewOffPage(needed)
-		defer c.Release()
-		buf = c.Data
-	} else {
-		buf = page.Data
-	}
 	start := time.Now()
 	// it will be retried outside
 	for err != nil && tried < 2 {
 		time.Sleep(time.Second * time.Duration(tried*tried))
 		if tried > 0 {
 			logger.Warnf("GET %s: %s; retrying", key, err)
+			objectReqErrors.Add(1)
 			start = time.Now()
 		}
 		in, err = store.storage.Get(key, 0, -1)
 		tried++
 	}
+	var n int
+	var buf []byte
+	needed := store.compressor.CompressBound(len(page.Data))
+	compressed := needed > len(page.Data)
 	if err == nil {
+		if compressed {
+			c := NewOffPage(needed)
+			defer c.Release()
+			buf = c.Data
+		} else {
+			buf = page.Data
+		}
 		n, err = io.ReadFull(in, buf)
 		in.Close()
 	}
