@@ -565,7 +565,7 @@ func (m *kvMeta) cleanStaleSession(sid uint64, sync bool) {
 		return
 	}
 	for k, v := range plocks {
-		ls := unmarshalFlock(v)
+		ls := unmarshalPlock(v)
 		for o := range ls {
 			if o.sid == sid {
 				err = m.txn(func(tx kvTxn) error {
