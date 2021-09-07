@@ -151,6 +151,7 @@ type dbMeta struct {
 	newInodes    int64
 	usedSpace    int64
 	usedInodes   int64
+	umounting    bool
 
 	freeMu     sync.Mutex
 	freeInodes freeID
@@ -383,6 +384,14 @@ func (m *dbMeta) NewSession() error {
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
 	go m.flushStats()
+	return nil
+}
+
+func (m *dbMeta) CloseSession() error {
+	m.Lock()
+	m.umounting = true
+	m.Unlock()
+	m.cleanStaleSession(m.sid, true)
 	return nil
 }
 
@@ -1770,7 +1779,7 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	return 0
 }
 
-func (m *dbMeta) cleanStaleSession(sid uint64) {
+func (m *dbMeta) cleanStaleSession(sid uint64, sync bool) {
 	// release locks
 	_, _ = m.engine.Delete(flock{Sid: sid})
 	_, _ = m.engine.Delete(plock{Sid: sid})
@@ -1792,7 +1801,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 
 	done := true
 	for _, inode := range inodes {
-		if err := m.deleteInode(inode); err != nil {
+		if err := m.deleteInode(inode, sync); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
 			done = false
 		} else {
@@ -1802,7 +1811,6 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 			})
 		}
 	}
-
 	if done {
 		_ = m.txn(func(ses *xorm.Session) error {
 			_, err = ses.Delete(&session{Sid: sid})
@@ -1813,7 +1821,6 @@ func (m *dbMeta) cleanStaleSession(sid uint64) {
 }
 
 func (m *dbMeta) cleanStaleSessions() {
-	// TODO: once per minute
 	var s session
 	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Rows(&s)
 	if err != nil {
@@ -1828,13 +1835,18 @@ func (m *dbMeta) cleanStaleSessions() {
 	}
 	rows.Close()
 	for _, sid := range ids {
-		m.cleanStaleSession(sid)
+		m.cleanStaleSession(sid, false)
 	}
 }
 
 func (m *dbMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
+		m.Lock()
+		if m.umounting {
+			m.Unlock()
+			return
+		}
 		_ = m.txn(func(ses *xorm.Session) error {
 			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
 			if err == nil && n == 0 {
@@ -1845,6 +1857,7 @@ func (m *dbMeta) refreshSession() {
 			}
 			return err
 		})
+		m.Unlock()
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
@@ -1852,7 +1865,7 @@ func (m *dbMeta) refreshSession() {
 	}
 }
 
-func (m *dbMeta) deleteInode(inode Ino) error {
+func (m *dbMeta) deleteInode(inode Ino, sync bool) error {
 	var n = node{Inode: inode}
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
@@ -1872,7 +1885,11 @@ func (m *dbMeta) deleteInode(inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		go m.deleteFile(inode, n.Length)
+		if sync {
+			m.deleteFile(inode, n.Length)
+		} else {
+			go m.deleteFile(inode, n.Length)
+		}
 	}
 	return err
 }
@@ -1901,7 +1918,7 @@ func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		if m.removedFiles[inode] {
 			delete(m.removedFiles, inode)
 			go func() {
-				if err := m.deleteInode(inode); err == nil {
+				if err := m.deleteInode(inode, false); err == nil {
 					_ = m.txn(func(ses *xorm.Session) error {
 						_, err := ses.Delete(&sustained{m.sid, inode})
 						return err

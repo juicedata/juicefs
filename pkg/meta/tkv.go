@@ -68,6 +68,7 @@ type kvMeta struct {
 	newInodes    int64
 	usedSpace    int64
 	usedInodes   int64
+	umounting    bool
 
 	freeMu     sync.Mutex
 	freeInodes freeID
@@ -508,10 +509,24 @@ func (m *kvMeta) NewSession() error {
 	return nil
 }
 
+func (m *kvMeta) CloseSession() error {
+	m.Lock()
+	m.umounting = true
+	m.Unlock()
+	m.cleanStaleSession(m.sid, true)
+	return nil
+}
+
 func (m *kvMeta) refreshSession() {
 	for {
 		time.Sleep(time.Minute)
+		m.Lock()
+		if m.umounting {
+			m.Unlock()
+			return
+		}
 		_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
+		m.Unlock()
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
@@ -519,7 +534,7 @@ func (m *kvMeta) refreshSession() {
 	}
 }
 
-func (m *kvMeta) cleanStaleSession(sid uint64) {
+func (m *kvMeta) cleanStaleSession(sid uint64, sync bool) {
 	// release locks
 	flocks, err := m.scanValues(m.fmtKey("F"), nil)
 	if err != nil {
@@ -550,7 +565,7 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 		return
 	}
 	for k, v := range plocks {
-		ls := unmarshalFlock(v)
+		ls := unmarshalPlock(v)
 		for o := range ls {
 			if o.sid == sid {
 				err = m.txn(func(tx kvTxn) error {
@@ -576,7 +591,7 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 	var todel [][]byte
 	for _, key := range keys {
 		inode := m.decodeInode(key[10:]) // "SS" + sid
-		if err := m.deleteInode(inode); err != nil {
+		if err := m.deleteInode(inode, sync); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
 		} else {
 			todel = append(todel, key)
@@ -590,7 +605,6 @@ func (m *kvMeta) cleanStaleSession(sid uint64) {
 }
 
 func (m *kvMeta) cleanStaleSessions() {
-	// TODO: once per minute
 	vals, err := m.scanValues(m.fmtKey("SH"), nil)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
@@ -603,7 +617,7 @@ func (m *kvMeta) cleanStaleSessions() {
 		}
 	}
 	for _, sid := range ids {
-		m.cleanStaleSession(sid)
+		m.cleanStaleSession(sid, false)
 	}
 }
 
@@ -1813,7 +1827,7 @@ func (m *kvMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	return 0
 }
 
-func (m *kvMeta) deleteInode(inode Ino) error {
+func (m *kvMeta) deleteInode(inode Ino, sync bool) error {
 	var attr Attr
 	var newSpace int64
 	err := m.txn(func(tx kvTxn) error {
@@ -1829,7 +1843,11 @@ func (m *kvMeta) deleteInode(inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		go m.deleteFile(inode, attr.Length)
+		if sync {
+			m.deleteFile(inode, attr.Length)
+		} else {
+			go m.deleteFile(inode, attr.Length)
+		}
 	}
 	return err
 }
@@ -1858,7 +1876,7 @@ func (m *kvMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		if m.removedFiles[inode] {
 			delete(m.removedFiles, inode)
 			go func() {
-				if err := m.deleteInode(inode); err == nil {
+				if err := m.deleteInode(inode, false); err == nil {
 					_ = m.deleteKeys(m.sustainedKey(m.sid, inode))
 				}
 			}()

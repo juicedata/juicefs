@@ -74,6 +74,7 @@ func TestMySQLClient(t *testing.T) {
 	testConcurrentWrite(t, m)
 	testCompaction(t, m)
 	testCopyFileRange(t, m)
+	testCloseSession(t, m)
 	m.(*dbMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
 }
@@ -92,6 +93,7 @@ func TestPostgresQLClient(t *testing.T) {
 	testConcurrentWrite(t, m)
 	testCompaction(t, m)
 	testCopyFileRange(t, m)
+	testCloseSession(t, m)
 	m.(*dbMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
 }
@@ -154,6 +156,16 @@ func TestCopyFileRangeSQLite(t *testing.T) {
 		t.Fatalf("create meta: %s", err)
 	}
 	testCopyFileRange(t, m)
+}
+
+func TestCloseSessionSQLite(t *testing.T) {
+	tmp := tempFile(t)
+	defer os.Remove(tmp)
+	m, err := newSQLMeta("sqlite3", tmp, &Config{})
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	testCloseSession(t, m)
 }
 
 func TestCaseIncensiSQLite(t *testing.T) {
