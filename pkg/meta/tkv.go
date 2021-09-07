@@ -763,7 +763,7 @@ func (m *kvMeta) shouldRetry(err error) bool {
 		return false
 	}
 	// TODO: add other retryable errors here
-	return strings.Contains(err.Error(), "write conflict")
+	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "TxnLockNotFound")
 }
 
 func (m *kvMeta) txn(f func(tx kvTxn) error) error {
