@@ -106,7 +106,9 @@ func (w *webdav) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(out, in)
+	wbuf := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf)
+	_, err = io.CopyBuffer(out, in, *wbuf)
 	if err != nil {
 		return err
 	}

@@ -94,7 +94,9 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	if b, ok := in.(io.ReadSeeker); ok {
 		var err error
 		h := md5.New()
-		vlen, err = io.Copy(h, b)
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+		vlen, err = io.CopyBuffer(h, in, *buf)
 		if err != nil {
 			return err
 		}
