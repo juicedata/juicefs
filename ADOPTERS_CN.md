@@ -20,6 +20,6 @@
 此外在社区生态方面，
 
 - 旷视团队贡献了 [Python SDK](https://github.com/megvii-research/juicefs-python)。
-- 百度 PaddlePaddle 团队准备将 JuiceFS 缓存加速特性集成到 paddle-operator 中，[PR 正在 eview](https://github.com/PaddleFlow/paddle-operator/pull/69)。
+- 百度 PaddlePaddle 团队准备将 JuiceFS 缓存加速特性集成到 paddle-operator 中，[PR 正在 review](https://github.com/PaddleFlow/paddle-operator/pull/69)。
 
 欢迎你在使用 JuiceFS 后，向大家分享你的使用经验，可以直接向这个列表提交 Pull Request，或者联系我们 hello@juicedata.io。
