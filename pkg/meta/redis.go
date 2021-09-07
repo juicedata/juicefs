@@ -1983,63 +1983,55 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 }
 
 func (r *redisMeta) cleanStaleSession(sid int64, sync bool) {
+	// release locks
 	var ctx = Background
-	key := r.sustained(sid)
+	key := r.lockedKey(sid)
 	inodes, err := r.rdb.SMembers(ctx, key).Result()
 	if err != nil {
 		logger.Warnf("SMembers %s: %s", key, err)
 		return
 	}
-	for _, sinode := range inodes {
-		inode, _ := strconv.ParseInt(sinode, 10, 0)
-		if err := r.deleteInode(Ino(inode), sync); err != nil {
-			logger.Errorf("Failed to delete inode %d: %s", inode, err)
-		} else {
-			r.rdb.SRem(ctx, key, sinode)
-		}
-	}
-	if len(inodes) == 0 {
-		r.rdb.ZRem(ctx, allSessions, strconv.Itoa(int(sid)))
-		r.rdb.HDel(ctx, sessionInfos, strconv.Itoa(int(sid)))
-		logger.Infof("cleanup session %d", sid)
-	}
-}
-
-func (r *redisMeta) cleanStaleLocks(ssid string) {
-	var ctx = Background
-	key := "locked" + ssid
-	inodes, err := r.rdb.SMembers(ctx, key).Result()
-	if err != nil {
-		logger.Warnf("SMembers %s: %s", key, err)
-		return
-	}
+	ssid := strconv.FormatInt(sid, 10)
 	for _, k := range inodes {
 		owners, _ := r.rdb.HKeys(ctx, k).Result()
 		for _, o := range owners {
 			if strings.Split(o, "_")[0] == ssid {
 				err = r.rdb.HDel(ctx, k, o).Err()
-				logger.Infof("cleanup lock on %s from session %s: %s", k, ssid, err)
+				logger.Infof("cleanup lock on %s from session %d: %s", k, sid, err)
 			}
 		}
 		r.rdb.SRem(ctx, key, k)
 	}
+
+	key = r.sustained(sid)
+	inodes, err = r.rdb.SMembers(ctx, key).Result()
+	if err != nil {
+		logger.Warnf("SMembers %s: %s", key, err)
+		return
+	}
+	done := true
+	for _, sinode := range inodes {
+		inode, _ := strconv.ParseInt(sinode, 10, 0)
+		if err := r.deleteInode(Ino(inode), sync); err != nil {
+			logger.Errorf("Failed to delete inode %d: %s", inode, err)
+			done = false
+		} else {
+			r.rdb.SRem(ctx, key, sinode)
+		}
+	}
+	if done {
+		r.rdb.HDel(ctx, sessionInfos, ssid)
+		r.rdb.ZRem(ctx, allSessions, ssid)
+		logger.Infof("cleanup session %d", sid)
+	}
 }
 
 func (r *redisMeta) cleanStaleSessions() {
-	// TODO: once per minute
-	now := time.Now()
-	var ctx = Background
-	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -5).Unix())), Count: 100}
-	staleSessions, _ := r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
+	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(time.Now().Add(time.Minute * -5).Unix())), Count: 100}
+	staleSessions, _ := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
 	for _, ssid := range staleSessions {
 		sid, _ := strconv.Atoi(ssid)
 		r.cleanStaleSession(int64(sid), false)
-	}
-
-	rng = &redis.ZRangeBy{Max: strconv.Itoa(int(now.Add(time.Minute * -3).Unix())), Count: 100}
-	staleSessions, _ = r.rdb.ZRangeByScore(ctx, allSessions, rng).Result()
-	for _, sid := range staleSessions {
-		r.cleanStaleLocks(sid)
 	}
 }
 
