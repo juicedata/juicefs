@@ -61,6 +61,7 @@ func TestTKVClient(t *testing.T) {
 	testConcurrentWrite(t, m)
 	testCompaction(t, m)
 	testCopyFileRange(t, m)
+	testCloseSession(t, m)
 	m.(*kvMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
 }
