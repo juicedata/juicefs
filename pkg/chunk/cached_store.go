@@ -82,6 +82,20 @@ var (
 		Help:    "write cached block latency distribution",
 		Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
 	})
+
+	objectReqsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "object_request_durations_histogram_seconds",
+		Help:    "Object requests latency distributions.",
+		Buckets: prometheus.ExponentialBuckets(0.01, 1.5, 25),
+	}, []string{"method"})
+	objectReqErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "object_request_errors",
+		Help: "failed requests to object store",
+	})
+	objectDataBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "object_request_data_bytes",
+		Help: "Object requests size in bytes.",
+	}, []string{"method"})
 )
 
 // chunk for read only
@@ -186,15 +200,22 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		// partial read
 		st := time.Now()
 		in, err := c.store.storage.Get(key, int64(boff), int64(len(p)))
+		if err == nil {
+			n, err = io.ReadFull(in, p)
+			in.Close()
+		}
 		used := time.Since(st)
 		logger.Debugf("GET %s RANGE(%d,%d) (%s, %.3fs)", key, boff, len(p), err, used.Seconds())
 		if used > SlowRequest {
 			logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
 		}
+		objectDataBytes.WithLabelValues("GET").Add(float64(n))
+		objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
 		c.store.fetcher.fetch(key)
 		if err == nil {
-			defer in.Close()
-			return io.ReadFull(in, p)
+			return n, nil
+		} else {
+			objectReqErrors.Add(1)
 		}
 	}
 
@@ -230,6 +251,10 @@ func (c *rChunk) delete(indx int) error {
 	logger.Debugf("DELETE %v (%v, %.3fs)", key, err, used.Seconds())
 	if used > SlowRequest {
 		logger.Infof("slow request: DELETE %v (%v, %.3fs)", key, err, used.Seconds())
+	}
+	objectReqsHistogram.WithLabelValues("DELETE").Observe(used.Seconds())
+	if err != nil {
+		objectReqErrors.Add(1)
 	}
 	return err
 }
@@ -377,6 +402,11 @@ func (c *wChunk) put(key string, p *Page) error {
 		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
 		if used > SlowRequest {
 			logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
+		}
+		objectDataBytes.WithLabelValues("PUT").Add(float64(len(p.Data)))
+		objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
+		if err != nil {
+			objectReqErrors.Add(1)
 		}
 		return err
 	}, c.store.conf.PutTimeout)
@@ -649,36 +679,49 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	// it will be retried outside
 	for err != nil && tried < 2 {
 		time.Sleep(time.Second * time.Duration(tried*tried))
-		st := time.Now()
-		in, err = store.storage.Get(key, 0, -1)
-		used := time.Since(st)
-		logger.Debugf("GET %s (%s, %.3fs)", key, err, used.Seconds())
-		if used > SlowRequest {
-			logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
+		if tried > 0 {
+			logger.Warnf("GET %s: %s; retrying", key, err)
+			objectReqErrors.Add(1)
+			start = time.Now()
 		}
+		in, err = store.storage.Get(key, 0, -1)
 		tried++
 	}
+	var n int
+	var buf []byte
+	needed := store.compressor.CompressBound(len(page.Data))
+	compressed := needed > len(page.Data)
+	if err == nil {
+		if compressed {
+			c := NewOffPage(needed)
+			defer c.Release()
+			buf = c.Data
+		} else {
+			buf = page.Data
+		}
+		n, err = io.ReadFull(in, buf)
+		in.Close()
+	}
+	used := time.Since(start)
+	logger.Debugf("GET %s (%s, %.3fs)", key, err, used.Seconds())
+	if used > SlowRequest {
+		logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
+	}
+	if compressed && err == io.ErrUnexpectedEOF {
+		err = nil
+	}
+	objectDataBytes.WithLabelValues("GET").Add(float64(n))
+	objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
 	if err != nil {
+		objectReqErrors.Add(1)
 		return fmt.Errorf("get %s: %s", key, err)
 	}
-	defer in.Close()
-	needed := store.compressor.CompressBound(len(page.Data))
-	var n int
-	if needed > len(page.Data) {
-		c := NewOffPage(needed)
-		defer c.Release()
-		var cn int
-		cn, err = io.ReadFull(in, c.Data)
-		if err != nil && (cn == 0 || err != io.ErrUnexpectedEOF) {
-			return err
-		}
-		n, err = store.compressor.Decompress(page.Data, c.Data[:cn])
-	} else {
-		n, err = io.ReadFull(in, page.Data)
+	if compressed {
+		n, err = store.compressor.Decompress(page.Data, buf[:n])
 	}
 	if err != nil || n < len(page.Data) {
 		return fmt.Errorf("read %s fully: %s (%d < %d) after %s (tried %d)", key, err, n, len(page.Data),
-			time.Since(start), tried)
+			used, tried)
 	}
 	if cache {
 		store.bcache.cache(key, page, forceCache)
@@ -748,6 +791,10 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 			_, used := store.bcache.stats()
 			return float64(used)
 		}))
+	_ = prometheus.Register(objectReqsHistogram)
+	_ = prometheus.Register(objectReqErrors)
+	_ = prometheus.Register(objectDataBytes)
+
 	if store.conf.CacheDir != "memory" && store.conf.Writeback && store.conf.UploadDelay > 0 {
 		logger.Infof("delay uploading by %s", store.conf.UploadDelay)
 		go func() {
@@ -813,8 +860,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 			if used > SlowRequest {
 				logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
 			}
+			objectDataBytes.WithLabelValues("PUT").Add(float64(len(compressed)))
+			objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
 			if err == nil {
 				break
+			} else {
+				objectReqErrors.Add(1)
 			}
 			logger.Warnf("upload %s: %s (try %d)", key, err, try)
 			try++
