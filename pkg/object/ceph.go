@@ -208,7 +208,7 @@ func newCeph(endpoint, cluster, user string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Can't create connection to cluster %s for user %s: %s", cluster, user, err)
 	}
-	if os.Getenv("NO_CHECK_OBJECT_STORAGE") != "" {
+	if os.Getenv("NO_CHECK_OBJECT_STORAGE") == "" {
 		if err := conn.ReadDefaultConfigFile(); err != nil {
 			return nil, fmt.Errorf("Can't read default config file: %s", err)
 		}
