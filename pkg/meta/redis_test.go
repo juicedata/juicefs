@@ -987,6 +987,9 @@ func testCloseSession(t *testing.T, m Meta) {
 	case *kvMeta:
 		s, err = m.getSession(sid, true)
 	}
+	if err != nil {
+		t.Fatalf("get session: %s", err)
+	}
 	var empty SessionInfo
 	if s.SessionInfo != empty {
 		t.Fatalf("incorrect session info %+v", s.SessionInfo)
