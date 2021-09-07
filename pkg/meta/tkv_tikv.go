@@ -178,7 +178,7 @@ type tikvClient struct {
 }
 
 func (c *tikvClient) name() string {
-	return "TiKV"
+	return "tikv"
 }
 
 func (c *tikvClient) txn(f func(kvTxn) error) error {
