@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -207,11 +208,13 @@ func newCeph(endpoint, cluster, user string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Can't create connection to cluster %s for user %s: %s", cluster, user, err)
 	}
-	if err := conn.ReadDefaultConfigFile(); err != nil {
-		logger.Fatalf("Can't read default config file: %s", err)
-	}
-	if err := conn.Connect(); err != nil {
-		return nil, fmt.Errorf("Can't connect to cluster %s: %s", cluster, err)
+	if os.Getenv("NO_CHECK_OBJECT_STORAGE") == "" {
+		if err := conn.ReadDefaultConfigFile(); err != nil {
+			return nil, fmt.Errorf("Can't read default config file: %s", err)
+		}
+		if err := conn.Connect(); err != nil {
+			return nil, fmt.Errorf("Can't connect to cluster %s: %s", cluster, err)
+		}
 	}
 	return &ceph{
 		name: name,
