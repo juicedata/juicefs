@@ -361,7 +361,6 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			logger.Fatalf("object storage: %s", err)
 		}
 		logger.Infof("Data use %s", blob)
-		blob = object.WithMetrics(blob)
 		blob = object.NewLimited(blob, int64(jConf.UploadLimit)*1e6/8, int64(jConf.DownloadLimit)*1e6/8)
 
 		var freeSpaceRatio = 0.1
