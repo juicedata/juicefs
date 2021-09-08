@@ -8,6 +8,24 @@ JuiceFS supports creating and mounting file systems in macOS. But you need to in
 
 ## 2. Install JuiceFS on macOS
 
+There are three ways to install the JuiceFS client on macOS.
+
+### Homebrew
+
+First, add the Tap:
+
+```bash
+$ brew tap juicedata/homebrew-tap
+```
+
+Then, install the client:
+
+```bash
+$ brew install juicefs
+```
+
+### Pre-compiled version
+
 You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest), download the compressed package containing `darwin-amd64` in the file name, for example:
 
 ```shell
@@ -22,7 +40,11 @@ $ tar -zxf "juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
-> **Note**: You can also build the JuiceFS client manually from the source code. [Learn more](client_compile_and_upgrade.md)
+> **Note**: Apple M1 chip can directly use the pre-compiled version of `darwin-amd64`, and macOS will automatically translate it through Rosetta 2. If you want to use the native version for M1, please compile it yourself.
+
+### Compile from source
+
+You can also build the JuiceFS client manually from the source code. [Learn more](client_compile_and_upgrade.md)
 
 ## 3. Mount JuiceFS file system
 
