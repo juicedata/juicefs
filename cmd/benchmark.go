@@ -286,7 +286,7 @@ func benchmark(c *cli.Context) error {
 		show("FUSE operation", "fuse_ops_durations_histogram_seconds")
 		show("Update meta", "transaction_durations_histogram_seconds")
 		show("Put object", "object_request_durations_histogram_seconds_PUT")
-		show("Get object first byte", "object_request_durations_histogram_seconds_GET")
+		show("Get object", "object_request_durations_histogram_seconds_GET")
 		show("Delete object", "object_request_durations_histogram_seconds_DELETE")
 		show("Write into cache", "blockcache_write_hist_seconds")
 		show("Read from cache", "blockcache_read_hist_seconds")
