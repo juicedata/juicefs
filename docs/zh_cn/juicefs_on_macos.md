@@ -8,6 +8,24 @@ JuiceFS 支持在 macOS 系统中创建和挂载文件系统。但你需要先�
 
 ## 2. macOS 上安装 JuiceFS
 
+您可以参考以下三种方法在 macOS 系统上安装 JuiceFS 客户端。
+
+### 通过 Homebrew 安装
+
+第一步，添加 Tap：
+
+```bash
+$ brew tap juicedata/homebrew-tap
+```
+
+第二步，安装客户端：
+
+```bash
+$ brew install juicefs
+```
+
+### 手动安装
+
 你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，下载文件名包含 `darwin-amd64` 的压缩包，例如：
 
 ```shell
@@ -22,7 +40,11 @@ $ tar -zxf "juicefs-${JFS_LATEST_TAG}-darwin-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
-> **提示**：你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
+> **注意**：Apple M1 芯片也可以直接使用 `darwin-amd64` 架构的预编译版本，macOS 会自动通过 Rosetta 2 转译。如果希望使用 M1 原生版本，可以自行编译安装。
+
+### 编译安装
+
+你也可以从源代码手动编译 JuiceFS 客户端，[查看详情](client_compile_and_upgrade.md)。
 
 ## 3. 挂载 JuiceFS 文件系统
 
