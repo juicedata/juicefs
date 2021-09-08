@@ -12,13 +12,13 @@ There are three ways to install the JuiceFS client on macOS.
 
 ### Homebrew
 
-First, add the Tap.
+First, add the Tap:
 
 ```bash
 $ brew tap juicedata/homebrew-tap
 ```
 
-Then, install the client.
+Then, install the client:
 
 ```bash
 $ brew install juicefs
