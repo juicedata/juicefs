@@ -187,9 +187,7 @@ func (w *statsWatcher) formatHeader() {
 }
 
 func (w *statsWatcher) formatU64(v float64, dark, isByte bool) string {
-	if v < 0.0 {
-		logger.Fatalf("invalid value %f", v)
-	} else if v == 0.0 {
+	if v <= 0.0 {
 		return w.colorize("   0 ", BLACK, false, false)
 	}
 	var vi uint64
@@ -222,9 +220,7 @@ func (w *statsWatcher) formatTime(v float64, dark bool) string {
 	var ret string
 	var color int
 	switch {
-	case v < 0.0:
-		logger.Fatalf("invalid value %f", v)
-	case v == 0.0:
+	case v <= 0.0:
 		ret, color, dark = "   0 ", BLACK, false
 	case v < 10.0:
 		ret, color = fmt.Sprintf("%4.2f ", v), GREEN
@@ -242,9 +238,7 @@ func (w *statsWatcher) formatCPU(v float64, dark bool) string {
 	var ret string
 	var color int
 	switch v = v * 100.0; {
-	case v < 0.0:
-		logger.Fatalf("invalid value %f", v)
-	case v == 0.0:
+	case v <= 0.0:
 		ret, color = " 0.0", WHITE
 	case v < 30.0:
 		ret, color = fmt.Sprintf("%4.1f", v), GREEN
@@ -283,7 +277,7 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 			case metricHist: // metricTime
 				count := right[it.name+"_total"] - left[it.name+"_total"]
 				var avg float64
-				if count != 0.0 {
+				if count > 0.0 {
 					cost := right[it.name+"_sum"] - left[it.name+"_sum"]
 					if it.typ&metricTime != 0 {
 						cost *= 1000 // s -> ms
@@ -354,7 +348,7 @@ func stats(ctx *cli.Context) error {
 func statsFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "stats",
-		Usage:     "show runtime stats",
+		Usage:     "show runtime statistics",
 		Action:    stats,
 		ArgsUsage: "MOUNTPOINT",
 		Flags: []cli.Flag{
