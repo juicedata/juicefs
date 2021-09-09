@@ -36,7 +36,7 @@ import (
 var resultRange = map[string][4]float64{
 	"bigwr":   {100, 200, 10, 50},
 	"bigrd":   {100, 200, 10, 50},
-	"smallwr": {20, 33.3, 30, 50},
+	"smallwr": {12.5, 20, 50, 80},
 	"smallrd": {50, 100, 10, 20},
 	"stat":    {20, 1000, 1, 5},
 	"fuse":    {0, 0, 0.5, 2},
@@ -171,6 +171,10 @@ func (bm *benchmark) colorize(item string, value, cost float64, prec int) (strin
 		r, ok := resultRange[item]
 		if !ok {
 			logger.Fatalf("Invalid item: %s", item)
+		}
+		if item == "smallwr" || item == "smallrd" || item == "stat" {
+			r[0] *= float64(bm.threads)
+			r[1] *= float64(bm.threads)
 		}
 		var color int
 		if value > r[1] { // max
@@ -314,11 +318,11 @@ func bench(ctx *cli.Context) error {
 	}
 	if b := bm.big; b != nil {
 		total := bm.threads * b.fcount * b.bcount
-		b.wbar, b.rbar = addBar("BigWrite", total), addBar("BigRead", total)
+		b.wbar, b.rbar = addBar("WriteBig", total), addBar("ReadBig", total)
 	}
 	if s := bm.small; s != nil {
 		total := bm.threads * s.fcount * s.bcount
-		s.wbar, s.rbar, s.sbar = addBar("SmallWrite", total), addBar("SmallRead", total), addBar("Stat", bm.threads*s.fcount)
+		s.wbar, s.rbar, s.sbar = addBar("WriteSmall", total), addBar("ReadSmall", total), addBar("Stat", bm.threads*s.fcount)
 	}
 
 	/* --- Run Benchmark --- */
