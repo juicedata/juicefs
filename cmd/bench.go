@@ -51,7 +51,7 @@ var resultRange = map[string][4]float64{
 type benchCase struct {
 	bm               *benchmark
 	name             string
-	fsize, bsize     int      // file/block size in KiB
+	fsize, bsize     int      // file/block size in Bytes
 	fcount, bcount   int      // file/block count
 	wbar, rbar, sbar *mpb.Bar // progress bar for write/read/stat
 }
@@ -134,13 +134,14 @@ func (bc *benchCase) run(test string) float64 {
 	return time.Since(start).Seconds()
 }
 
+// blockSize, bigSize in MiB; smallSize in KiB
 func newBenchmark(tmpdir string, blockSize, bigSize, smallSize, smallCount, threads int) *benchmark {
 	bm := &benchmark{threads: threads, tmpdir: tmpdir}
 	if bigSize > 0 {
-		bm.big = bm.newCase("bigfile", bigSize, 1, blockSize)
+		bm.big = bm.newCase("bigfile", bigSize<<20, 1, blockSize<<20)
 	}
 	if smallSize > 0 && smallCount > 0 {
-		bm.small = bm.newCase("smallfile", smallSize, smallCount, blockSize)
+		bm.small = bm.newCase("smallfile", smallSize<<10, smallCount, blockSize<<20)
 	}
 	return bm
 }
@@ -253,7 +254,7 @@ func bench(ctx *cli.Context) error {
 		tmpdir = ctx.Args().First()
 	}
 	tmpdir = filepath.Join(tmpdir, fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
-	bm := newBenchmark(tmpdir, int(ctx.Uint("block-size")<<10), int(ctx.Uint("big-file-size")<<10),
+	bm := newBenchmark(tmpdir, int(ctx.Uint("block-size")), int(ctx.Uint("big-file-size")),
 		int(ctx.Uint("small-file-size")), int(ctx.Uint("small-file-count")), int(ctx.Uint("threads")))
 	if bm.big == nil && bm.small == nil {
 		return os.ErrInvalid
@@ -329,7 +330,7 @@ func bench(ctx *cli.Context) error {
 	if b := bm.big; b != nil {
 		cost := b.run("write")
 		line := [3]string{"Write big file"}
-		line[1], line[2] = bm.colorize("bigwr", float64((b.fsize>>10)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
+		line[1], line[2] = bm.colorize("bigwr", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
 		line[1] += " MiB/s"
 		line[2] += " s/file"
 		result = append(result, line)
@@ -337,7 +338,7 @@ func bench(ctx *cli.Context) error {
 
 		cost = b.run("read")
 		line[0] = "Read big file"
-		line[1], line[2] = bm.colorize("bigrd", float64((b.fsize>>10)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
+		line[1], line[2] = bm.colorize("bigrd", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
 		line[1] += " MiB/s"
 		line[2] += " s/file"
 		result = append(result, line)
