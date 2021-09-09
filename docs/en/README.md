@@ -45,6 +45,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [JuiceFS benchmark](benchmark.md)
   - [JuiceFS metadata engines benchmark](metadata_engines_benchmark.md)
   - [JuiceFS metadata backup and recovery](metadata_dump_load.md)
+  - [Data Encryption](encrypt.md)
   - [POSIX Compatibility](posix_compatibility.md)
   - [JuiceFS cache management](cache_management.md)
   - [JuiceFS operations profiling](operations_profiling.md)
