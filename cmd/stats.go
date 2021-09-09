@@ -17,8 +17,10 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -303,6 +305,32 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 	} else {
 		fmt.Printf("%s\n", strings.Join(values, w.colorize("|", BLUE, true, false)))
 	}
+}
+
+func readStats(path string) map[string]float64 {
+	f, err := os.Open(path)
+	if err != nil {
+		logger.Warnf("open %s: %s", path, err)
+		return nil
+	}
+	defer f.Close()
+	d, err := ioutil.ReadAll(f)
+	if err != nil {
+		logger.Warnf("read %s: %s", path, err)
+		return nil
+	}
+	stats := make(map[string]float64)
+	lines := strings.Split(string(d), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) == 2 {
+			stats[fields[0]], err = strconv.ParseFloat(fields[1], 64)
+			if err != nil {
+				logger.Warnf("parse %s: %s", fields[1], err)
+			}
+		}
+	}
+	return stats
 }
 
 func stats(ctx *cli.Context) error {
