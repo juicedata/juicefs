@@ -43,6 +43,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
   - [JuiceFS 性能测试](benchmark.md)
   - [JuiceFS 元数据引擎对比测试](metadata_engines_benchmark.md)
   - [JuiceFS 元数据备份和恢复](metadata_dump_load.md)
+  - [数据加密](encrypt.md)
   - [POSIX 兼容性](posix_compatibility.md)
   - [JuiceFS 缓存管理](cache_management.md)
   - [JuiceFS 性能诊断](operations_profiling.md)
