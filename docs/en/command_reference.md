@@ -69,6 +69,8 @@ COPYRIGHT:
 
 > **Note**: If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience.
 
+> **Note**: If the command option is boolean type (such as `--debug` option), there is no need to set a specific value when specifying this type of option. For example, it should not be written like `--debug true`, and directly written as `--debug`. If it is specified, it means this option takes effect, otherwise it does not take effect.
+
 ## Auto Completion
 
 > **Note**: This feature requires JuiceFS >= 0.15.0. It is implemented based on `github.com/urfave/cli/v2`. You can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
@@ -202,12 +204,6 @@ dir entry cache timeout in seconds (default: 1)
 `--enable-xattr`\
 enable extended attributes (xattr) (default: false)
 
-`--read-only`\
-allow lookup/read operations only (default: false)
-
-`--subdir`\
-mount a sub-directory as root (default: "")
-
 `--get-timeout value`\
 the max number of seconds to download an object (default: 60)
 
@@ -247,8 +243,14 @@ min free space (ratio) (default: 0.1)
 `--cache-partial-only`\
 cache only random/small read (default: false)
 
+`--read-only`\
+allow lookup/read operations only (default: false)
+
 `--open-cache value`\
 open file cache timeout in seconds (0 means disable this feature) (default: 0)
+
+`--subdir value`\
+mount a sub-directory as root (default: "")
 
 ### juicefs umount
 
@@ -320,8 +322,14 @@ min free space (ratio) (default: 0.1)
 `--cache-partial-only`\
 cache only random/small read (default: false)
 
+`--read-only`\
+allow lookup/read operations only (default: false)
+
 `--open-cache value`\
 open file cache timeout in seconds (0 means disable this feature) (default: 0)
+
+`--subdir value`\
+mount a sub-directory as root (default: "")
 
 `--access-log value`\
 path for JuiceFS access log
@@ -452,6 +460,9 @@ size of small file in MiB (default: 0.1)
 
 `--small-file-count value`\
 number of small files (default: 100)
+
+`--threads value, -p value`\
+number of concurrent threads (default: 1)
 
 ### juicefs gc
 
