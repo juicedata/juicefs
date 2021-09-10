@@ -50,7 +50,7 @@ The initial Access Key and Secret Key of the root user are both `minioadmin`.
 
 After the container is successfully created, use `http://127.0.0.1:9000` to access the MinIO management interface. The initial Access Key and Secret Key of the root user are both `minioadmin`.
 
-> **Note**: The latest Minio includes a new web console, the above command sets and maps port `9900` through  `--console-address ":9900"`  option. In addtion, it maps the data path in the MinIO container to the `minio-data` folder in the current directory. You can modify these options as needed.
+> **Note**: The latest MinIO includes a new web console, the above command sets and maps port `9900` through  `--console-address ":9900"`  option. In addtion, it maps the data path in the MinIO container to the `minio-data` folder in the current directory. You can modify these options as needed.
 
 ## 3. JuiceFS Client
 
