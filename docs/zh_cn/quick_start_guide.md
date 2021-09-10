@@ -32,19 +32,25 @@ $ sudo docker run -d --name redis \
 
 和 Redis 数据库一样，几乎所有的公有云计算平台都提供对象存储服务。因为 JuiceFS 支持几乎所有主流平台的对象存储服务，因此你可以根据个人偏好自由选择。你可以查看我们的 [对象存储支持列表和设置指南](how_to_setup_object_storage.md)，其中列出了 JuiceFS 目前支持的所有对象存储服务，以及具体的使用方法。
 
-当然，如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 MinIO 对象存储实例：
+当然，如果你只是想要快速评估 JuiceFS，使用 Docker 可以很轻松的在本地电脑运行一个 MinIO 对象存储实例：
 
 ```shell
 $ sudo docker run -d --name minio \
-	-v $PWD/minio-data:/data \
-	-p 9000:9000 \
-	--restart unless-stopped \
-	minio/minio server /data
+    -p 9000:9000 \
+    -p 9900:9900 \
+    -v $PWD/minio-data:/data \
+    --restart unless-stopped \
+    minio/minio server /data --console-address ":9900"
 ```
 
-容器创建成功以后，使用 `http://127.0.0.1:9000` 访问 MinIO 管理界面，root 用户初始的 Access Key 和 Secret Key 均为 `minioadmin`。
+容器创建成功以后使用以下地址访问：
 
-> **注意**：以上命令将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改数据持久化存储的位置。
+- **MinIO 管理界面**：http://127.0.0.1:9900
+- **MinIO API**：http://127.0.0.1:9000
+
+对象存储初始的 Access Key 和 Secret Key 均为 `minioadmin`。
+
+> **注意**：最新的 minio 集成了新版控制台界面，以上命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口。另外，还将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数。
 
 ## 3. 安装 JuiceFS 客户端
 
