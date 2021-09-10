@@ -69,6 +69,8 @@ COPYRIGHT:
 
 > **注意**：如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](quick_start_guide.md) 了解安装相关内容。
 
+> **注意**：如果命令选项是布尔（boolean）类型（例如 `--debug` 选项），在指定此类型选项时无需设置具体的值。例如不应该像 `--debug true` 这样写，直接写作 `--debug` 即可。指定了即代表此选项生效，反之不生效。
+
 ## 自动补全
 
 > **注意**：此特性需要使用 0.15.0 及以上版本的 JuiceFS。它基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
@@ -202,12 +204,6 @@ juicefs mount [command options] META-URL MOUNTPOINT
 `--enable-xattr`\
 启用扩展属性 (xattr) 功能 (默认: false)
 
-`--read-only`\
-只读模式 (默认: false)
-
-`--subdir`\
-将某个子目录挂载为根 (默认: "")
-
 `--get-timeout value`\
 下载一个对象的超时时间；单位为秒 (默认: 60)
 
@@ -247,8 +243,14 @@ juicefs mount [command options] META-URL MOUNTPOINT
 `--cache-partial-only`\
 仅缓存随机小块读 (默认: false)
 
+`--read-only`\
+只读模式 (默认: false)
+
 `--open-cache value`\
 打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
+
+`--subdir value`\
+将某个子目录挂载为根 (默认: "")
 
 ### juicefs umount
 
@@ -319,6 +321,15 @@ juicefs gateway [command options] META-URL ADDRESS
 
 `--cache-partial-only`\
 仅缓存随机小块读 (默认: false)
+
+`--read-only`\
+只读模式 (默认: false)
+
+`--open-cache value`\
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
+
+`--subdir value`\
+将某个子目录挂载为根 (默认: "")
 
 `--access-log value`\
 访问日志的路径
@@ -450,6 +461,9 @@ juicefs bench [command options] PATH
 `--small-file-count value`\
 小文件数量 (默认: 100)
 
+`--threads value, -p value`\
+并发线程数 (默认: 1)
+
 ### juicefs gc
 
 #### 描述
@@ -500,13 +514,13 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 #### 选项
 
 `--uid value, -u value`\
-仅跟踪指定 UIDs (用逗号 , 分隔)
+仅跟踪指定 UIDs (用逗号分隔)
 
 `--gid value, -g value`\
-仅跟踪指定 GIDs (用逗号 , 分隔)
+仅跟踪指定 GIDs (用逗号分隔)
 
 `--pid value, -p value`\
-仅跟踪指定 PIDs (用逗号 , 分隔)
+仅跟踪指定 PIDs (用逗号分隔)
 
 `--interval value`\
 显示间隔；在回放模式中将其设置为 0 可以立即得到整体的统计结果；单位为秒 (默认: 2)
