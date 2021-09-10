@@ -76,7 +76,7 @@ func main() {
 			syncFlags(),
 			rmrFlags(),
 			infoFlags(),
-			benchmarkFlags(),
+			benchFlags(),
 			gcFlags(),
 			checkFlags(),
 			profileFlags(),
