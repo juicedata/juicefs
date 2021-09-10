@@ -50,7 +50,7 @@ $ sudo docker run -d --name minio \
 
 对象存储初始的 Access Key 和 Secret Key 均为 `minioadmin`。
 
-> **注意**：最新的 minio 集成了新版控制台界面，以上命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口。另外，还将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数。
+> **注意**：最新的 MinIO 集成了新版控制台界面，以上命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口。另外，还将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数。
 
 ## 3. 安装 JuiceFS 客户端
 
