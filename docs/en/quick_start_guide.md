@@ -34,15 +34,23 @@ Of course, if you just want to quickly evaluate JuiceFS, you can use Docker to q
 
 ```shell
 $ sudo docker run -d --name minio \
-	-v $PWD/minio-data:/data \
-	-p 9000:9000 \
-	--restart unless-stopped \
-	minio/minio server /data
+    -p 9000:9000 \
+    -p 9900:9900 \
+    -v $PWD/minio-data:/data \
+    --restart unless-stopped \
+    minio/minio server /data --console-address ":9900"
 ```
+
+Then, access the service:
+
+- **MinIO Web Console**：http://127.0.0.1:9900
+- **MinIO API**：http://127.0.0.1:9000
+
+The initial Access Key and Secret Key of the root user are both `minioadmin`.
 
 After the container is successfully created, use `http://127.0.0.1:9000` to access the MinIO management interface. The initial Access Key and Secret Key of the root user are both `minioadmin`.
 
-> **Note**: The above command maps the data path of MinIO object storage to the `minio-data` folder in the current directory, and you can modify the location of the data persistent storage as needed.
+> **Note**: The latest Minio includes a new web console, the above command sets and maps port `9900` through  `--console-address ":9900"`  option. In addtion, it maps the data path in the MinIO container to the `minio-data` folder in the current directory. You can modify these options as needed.
 
 ## 3. JuiceFS Client
 
