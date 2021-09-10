@@ -2,11 +2,32 @@
 
 这是一份关于 Redis 的最佳实践指南。Redis 是 JuiceFS 架构中的关键组件，它负责存储所有元数据并响应客户端对元数据的操作。Redis 出现任何问题（服务不可用或数据丢失），都会对用户体验造成影响。
 
-**强烈建议使用公有云上的托管 Redis 服务。** 更多信息，请参阅[「推荐的 Redis 托管服务」](#推荐的redis-托管服务)。如果您需要在生产环境中自主维护 Redis，请继续阅读以下内容。
+**强烈建议使用公有云上的托管 Redis 服务。** 更多信息，请参阅[「推荐的 Redis 托管服务」](#推荐的-redis-托管服务)。如果您需要在生产环境中自主维护 Redis，请继续阅读以下内容。
+
+## 内存使用量
+
+JuiceFS 元数据引擎的使用空间主要与文件系统中的文件数量有关，根据我们的经验，每一个文件的元数据会大约占用 300 字节内存。因此，如果要存储 1 亿个文件，大约需要 30GiB 内存。
+
+你可以通过 Redis 的 [`INFO memory`](https://redis.io/commands/info) 命令查看具体的内存使用量，例如：
+
+```
+> INFO memory
+used_memory: 19167628056
+used_memory_human: 17.85G
+used_memory_rss: 20684886016
+used_memory_rss_human: 19.26G
+...
+used_memory_overhead: 5727954464
+...
+used_memory_dataset: 13439673592
+used_memory_dataset_perc: 70.12%
+```
+
+其中 `used_memory_rss` 是 Redis 实际使用的总内存大小，这里既包含了存储在 Redis 中的数据大小（也就是上面的 `used_memory_dataset`），也包含了一些 Redis 的[系统开销](https://redis.io/commands/memory-stats)（也就是上面的 `used_memory_overhead`）。前面提到每个文件的元数据大约占用 300 字节是通过 `used_memory_dataset` 来计算的，如果你发现你的 JuiceFS 文件系统中单个文件元数据占用空间远大于 300 字节，可以尝试运行 [`juicefs gc`](command_reference.md#juicefs-gc) 命令来清理可能存在的冗余数据。
 
 ---
 
-> **注**：以下内容摘自 Redis 官方文档。它可能已经过时，请以官方文档的最新版本为准。
+> **注意**：以下内容摘自 Redis 官方文档。它可能已经过时，请以官方文档的最新版本为准。
 
 ## 高可用性
 
