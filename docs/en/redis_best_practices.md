@@ -4,6 +4,27 @@ This is a guide about Redis best practices. Redis is a critical component in Jui
 
 **It's highly recommended use Redis service managed by public cloud provider if possible.** See ["Recommended Managed Redis Service"](#recommended-managed-redis-service) for more information. If you still need operate Redis by yourself in production environment, continue read following contents.
 
+## Memory usage
+
+The space used by the JuiceFS metadata engine is mainly related to the number of files in the file system. According to our experience, the metadata of each file occupies approximately 300 bytes of memory. Therefore, if you want to store 100 million files, approximately 30 GiB of memory is required.
+
+You can check the specific memory usage through Redis's [`INFO memory`](https://redis.io/commands/info) command, for example:
+
+```
+> INFO memory
+used_memory: 19167628056
+used_memory_human: 17.85G
+used_memory_rss: 20684886016
+used_memory_rss_human: 19.26G
+...
+used_memory_overhead: 5727954464
+...
+used_memory_dataset: 13439673592
+used_memory_dataset_perc: 70.12%
+```
+
+Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above), but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier, the metadata of each file occupies about 300 bytes and is calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](command_reference.md#juicefs-gc) command to clean up possible redundant data.
+
 ---
 
 > **Note**: The following paragraphs are extracted from Redis official documentation. It may outdated, subject to latest version of the official documentation.
