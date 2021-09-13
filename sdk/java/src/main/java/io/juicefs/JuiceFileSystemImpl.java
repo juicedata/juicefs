@@ -1232,6 +1232,11 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (getFileStatus(dst).getLen() == 0) {
       throw new IOException(dst + "is empty");
     }
+    for (Path src : srcs) {
+      if (!exists(src)) {
+        throw new FileNotFoundException(src.toString());
+      }
+    }
     byte[][] srcbytes = new byte[srcs.length][];
     int bufsize = 0;
     for (int i = 0; i < srcs.length; i++) {
@@ -1243,11 +1248,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     for (int i = 0; i < srcs.length; i++) {
       buf.put(offset, srcbytes[i], 0, srcbytes[i].length);
       buf.putByte(offset + srcbytes[i].length, (byte) 0);
-      offset += srcbytes.length + 1;
+      offset += srcbytes[i].length + 1;
     }
     int r = lib.jfs_concat(Thread.currentThread().getId(), handle, normalizePath(dst), buf, bufsize);
     if (r < 0) {
       throw error(r, dst);
+    }
+    for (Path src : srcs) {
+      delete(src, false);
     }
   }
 
