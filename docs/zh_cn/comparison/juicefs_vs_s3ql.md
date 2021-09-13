@@ -1,4 +1,4 @@
-## JuiceFS 对比 S3QL
+# JuiceFS 对比 S3QL
 
 与 JuiceFS 类似，[S3QL](https://github.com/s3ql/s3ql) 也是一款由对象存储和数据库组合驱动的开源网络文件系统，所有存入的数据会被分块后存储到亚马逊 S3、Backblaze B2、OpenStack Swift 等主流的对象存储中，相应的元数据会存储在数据库中。
 
