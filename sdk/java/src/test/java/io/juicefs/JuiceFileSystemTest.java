@@ -16,6 +16,7 @@
 package io.juicefs;
 
 import junit.framework.TestCase;
+import org.apache.commons.io.IOUtils;
 import org.apache.flink.runtime.fs.hdfs.HadoopRecoverableWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
@@ -420,5 +421,27 @@ public class JuiceFileSystemTest extends TestCase {
 
   public void testFlinkHadoopRecoverableWriter() throws Exception {
     new HadoopRecoverableWriter(fs);
+  }
+
+  public void testConcat() throws Exception {
+    Path trg = new Path("/concat");
+    Path src1 = new Path("/tmp/concat1");
+    Path src2 = new Path("/tmp/concat2");
+    FSDataOutputStream ou = fs.create(trg);
+    ou.write("hello".getBytes());
+    ou.close();
+    FSDataOutputStream sou1 = fs.create(src1);
+    sou1.write("hello".getBytes());
+    sou1.close();
+    FSDataOutputStream sou2 = fs.create(src2);
+    sou2.write("hello".getBytes());
+    sou2.close();
+    fs.concat(trg, new Path[]{src1, src2} );
+    FSDataInputStream in = fs.open(trg);
+    assertEquals("hellohellohello", IOUtils.toString(in));
+    in.close();
+    // src should be deleted after concat
+    assertFalse(fs.exists(src1));
+    assertFalse(fs.exists(src2));
   }
 }
