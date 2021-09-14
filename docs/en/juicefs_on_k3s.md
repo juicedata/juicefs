@@ -1,4 +1,4 @@
-# K3s uses JuiceFS to persist data
+# Use JuiceFS on K3s
 
 [K3s](https://k3s.io/) is a functionally optimized lightweight Kubernetes distribution that is fully compatible with Kubernetes, that is, almost all operations on Kubernetes can be performed on K3s. K3s has packaged the entire container orchestration system into a binary program with a capacity of less than 100MB, which greatly reduces the environment dependency and installation of deploying Kubernetes production clusters. In contrast, K3s has lower performance requirements for the operating system, and ARM devices such as Raspberry Pi can be used to form a cluster.
 
@@ -11,7 +11,7 @@ K3s has very low **minimum requirements** for hardware:
 - **Memory**：512MB+（recommend 1GB+）
 - **CPU**：1 core
 
-When deploying a production cluster, you can usually use the Raspberry Pi 4B (4 core 8G) as the starting point for the hardware of a node. For details, see [Hardware Requirements](https://rancher.com/docs/k3s/latest/en/installation /installation-requirements/#hardware).
+When deploying a production cluster, you can usually use the Raspberry Pi 4B (4 core CPU, 8G memory) as the starting point for the hardware of a node. For details, see [Hardware Requirements](https://rancher.com/docs/k3s/latest/en/installation /installation-requirements/#hardware).
 
 ### K3s server node
 
@@ -44,8 +44,6 @@ K1041f7c4fabcdefghijklmnopqrste2ec338b7300674f::server:3d0ab12800000000000000006
 
 The IP address of the worker node is: `192.168.1.36`
 
-执行以下命令，将其中 `K3S_URL` 的值改成 server 节点的 IP 或域名，默认端口 `6443`。将 `K3S_TOKEN` 的值替换成从 server 节点获取的  `node-token`。
-
 Execute the following command and change the value of `K3S_URL` to the IP or domain name of the server node, the default port is `6443`. Replace the value of `K3S_TOKEN` with the `node-token` obtained from the server node.
 
 ```shell
@@ -63,7 +61,7 @@ k3s-n1   Ready    <none>                 28h   v1.21.4+k3s1
 
 ## Install CSI Driver
 
-It is consistent with the method of [Install JuiceFS CSI Driver on Kubernetes](how_to_use_on_kubernetes.md), you can install it through Helm or Kubectl.
+It is consistent with the method of [Use JuiceFS on Kubernetes](how_to_use_on_kubernetes.md), you can install it through Helm or kubectl.
 
 Here we use kubectl, execute the following command to install the CSI Driver:
 
@@ -103,8 +101,6 @@ parameters:
   csi.storage.k8s.io/provisioner-secret-name: juicefs-sc-secret
   csi.storage.k8s.io/provisioner-secret-namespace: kube-system
 ```
-
-配置文件中 `stringData` 部分用来设置 JuiceFS 文件系统相关的信息，系统会根据你指定的信息创建文件系统。当需要在存储类中使用已经预先创建好的文件系统时，则只需要填写 `name` 和 `metaurl` 两项即可，其他项可以删除或将值留空。
 
 The `stringData` part of the configuration file is used to set the information related to the JuiceFS file system. It will create the file system based on the information you specify. When you need to use the pre-created file system in the storage class, you only need to fill in the `name` and `metaurl`, and the other items can be deleted or the value can be left blank.
 
@@ -267,6 +263,6 @@ tmpfs          tmpfs         2.0G     0  2.0G   0% /proc/scsi
 tmpfs          tmpfs         2.0G     0  2.0G   0% /sys/firmware
 ```
 
-As you can see, the file system named `jfs` has been mounted to the /config directory of the container, and the used space is 174M.
+As you can see, the file system named `jfs` has been mounted to the `/config` directory of the container, and the used space is 174M.
 
 This indicates that the Pods in the cluster have been successfully configured and used JuiceFS to persist data.
