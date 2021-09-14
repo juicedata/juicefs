@@ -11,7 +11,7 @@ K3s has very low **minimum requirements** for hardware:
 - **Memory**：512MB+（recommend 1GB+）
 - **CPU**：1 core
 
-When deploying a production cluster, you can usually use the Raspberry Pi 4B (4 core CPU, 8G memory) as the starting point for the hardware of a node. For details, see [Hardware Requirements](https://rancher.com/docs/k3s/latest/en/installation /installation-requirements/#hardware).
+When deploying a production cluster, you can usually use the Raspberry Pi 4B (4 CPU cores, 8G memory) as the starting point for the hardware of a node. For details, see [Hardware Requirements](https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#hardware).
 
 ### K3s server node
 
