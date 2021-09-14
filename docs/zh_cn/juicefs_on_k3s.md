@@ -1,4 +1,4 @@
-# K3s 使用 JuiceFS 持久化数据
+# K3s 使用 JuiceFS
 
 [K3s](https://k3s.io/) 是一个经过功能优化的 Kubernetes 发行版，它与 Kubernetes 完全兼容，即几乎所有在 Kubernetes 的操作都可以在 K3s 上执行。K3s 将整个容器编排系统打包进了一个容量不足 100MB 的二进制程序，减少了部署 Kubernetes 生产集群的环境依赖，大大降低了安装难度。相比之下，K3s 对操作系统的性能要求更低，树莓派等 ARM 设备都可以用来组建集群。
 
