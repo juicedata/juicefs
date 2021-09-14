@@ -30,7 +30,7 @@ JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，�
   - 分布式 K-V 存储：已支持 TiKV，计划支持 Apple FoundationDB；
   - 自研引擎：用于公有云上的 JuiceFS 全托管服务；
 - 数据：支持超过 30 种公有云上的[对象存储](../how_to_setup_object_storage.md)，也可以和 MinIO，Ceph-Rados，Ceph-RGW 等对接；
-- 客户端：支持 Unix 用户态挂载，Windows 挂载，和完整兼容 HDFS 语义的 Java SDK，[Python SDK](https://github.com/megvii-research/juicefs-python)。
+- 客户端：支持 Unix 用户态挂载，Windows 挂载，完整兼容 HDFS 语义的 Java SDK，[Python SDK](https://github.com/megvii-research/juicefs-python) 以及内置的 S3 网关。
 
 #### 功能特性
 
@@ -46,7 +46,7 @@ JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，�
 | Hadoop 数据本地性       | ✕          | ✓             |
 | S3 兼容                 | ✕          | ✓             |
 | 数据压缩<sup> [2]</sup> | ✓          | ✓             |
-| 数据加密                | ✕          | ✓             |
+| 数据加密<sup> [3]</sup> | ✕          | ✓             |
 | 快照                    | ✓          | ✕             |
 | 配额                    | 目录级配额 | Volume 级配额 |
 
@@ -58,3 +58,6 @@ JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，�
 
 严格来讲，CephFS 本身并未提供数据压缩功能，其实际依赖的是 Rados 层 BlueStore 的压缩。而 JuiceFS 则可以在 Block 上传到对象存储之前就进行一次数据压缩，以减少对象存储中的容量使用。换言之，如果用 JuiceFS 对接 Rados，是能做到在 Block 进 Rados 前后各进行一次压缩。另外，就像在**文件分块**中提到的，出于对覆盖写的性能保障，CephFS 一般不会开启 BlueStore 的压缩功能。
 
+##### 注3：数据加密
+
+Ceph **Messenger v2** 已可以支持网络传输层的数据加密，但在存储层依然没有加密。
