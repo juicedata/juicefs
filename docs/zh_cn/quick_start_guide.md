@@ -93,7 +93,7 @@ $ juicefs format \
 ```shell
 2021/04/29 23:01:18.352256 juicefs[34223] <INFO>: Meta address: redis://127.0.0.1:6379/1
 2021/04/29 23:01:18.354252 juicefs[34223] <INFO>: Ping redis: 132.185µs
-2021/04/29 23:01:18.354758 juicefs[34223] <INFO>: Data uses minio://127.0.0.1:9000/pics/
+2021/04/29 23:01:18.354758 juicefs[34223] <INFO>: Data use minio://127.0.0.1:9000/pics/pics/
 2021/04/29 23:01:18.361674 juicefs[34223] <INFO>: Volume is formatted as {Name:pics UUID:9c0fab76-efd0-43fd-a81e-ae0916e2fc90 Storage:minio Bucket:http://127.0.0.1:9000/pics AccessKey:minioadmin SecretKey:removed BlockSize:4096 Compression:none Partitions:0 EncryptKey:}
 ```
 
@@ -118,7 +118,7 @@ $ sudo juicefs mount -d redis://127.0.0.1:6379/1 /mnt/jfs
 ```shell
 2021/04/29 23:22:25.838419 juicefs[37999] <INFO>: Meta address: redis://127.0.0.1:6379/1
 2021/04/29 23:22:25.839184 juicefs[37999] <INFO>: Ping redis: 67.625µs
-2021/04/29 23:22:25.839399 juicefs[37999] <INFO>: Data use 127.0.0.1:9000/pics/
+2021/04/29 23:22:25.839399 juicefs[37999] <INFO>: Data use minio://127.0.0.1:9000/pics/pics/
 2021/04/29 23:22:25.839554 juicefs[37999] <INFO>: Cache: /var/jfsCache/9c0fab76-efd0-43fd-a81e-ae0916e2fc90 capacity: 1024 MB
 2021/04/29 23:22:26.340509 juicefs[37999] <INFO>: OK, pics is ready at /mnt/jfs
 ```
