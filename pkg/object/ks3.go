@@ -244,12 +244,19 @@ func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	region := hostParts[1][3:]
 	region = strings.TrimLeft(region, "-")
 	if strings.HasSuffix(uri.Host, "ksyun.com") {
-		if strings.HasSuffix(region, "-internal") {
-			region = region[:len(region)-len("-internal")]
-		}
+		region = strings.TrimSuffix(region, "-internal")
 		region = ks3Regions[region]
 	}
 
+	var err error
+	accessKey, err = url.PathUnescape(accessKey)
+	if err != nil {
+		return nil, fmt.Errorf("unescape access key: %s", err)
+	}
+	secretKey, err = url.PathUnescape(secretKey)
+	if err != nil {
+		return nil, fmt.Errorf("unescape secret key: %s", err)
+	}
 	awsConfig := &aws.Config{
 		Region:           region,
 		Endpoint:         strings.SplitN(uri.Host, ".", 2)[1],
