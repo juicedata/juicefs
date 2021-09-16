@@ -37,9 +37,10 @@ type fileSystem struct {
 	conf *vfs.Config
 }
 
-func newFileSystem() *fileSystem {
+func newFileSystem(conf *vfs.Config) *fileSystem {
 	return &fileSystem{
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
+		conf:          conf,
 	}
 }
 
@@ -419,7 +420,7 @@ func Serve(conf *vfs.Config, options string, xattrs bool) error {
 		logger.Warnf("setpriority: %s", err)
 	}
 
-	imp := newFileSystem()
+	imp := newFileSystem(conf)
 
 	var opt fuse.MountOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name

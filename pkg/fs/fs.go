@@ -621,15 +621,17 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 				if now.Before(e.expire) {
 					ac := fs.attrs[e.inode]
 					fs.cacheM.Unlock()
-					if ac == nil {
+					*inode = e.inode
+					if ac == nil || now.After(ac.expire) {
 						err = fs.m.GetAttr(ctx, e.inode, attr)
 						if err == 0 && fs.conf.AttrTimeout > 0 {
 							fs.cacheM.Lock()
 							fs.attrs[e.inode] = &attrCache{*attr, now.Add(fs.conf.AttrTimeout)}
 							fs.cacheM.Unlock()
 						}
+					} else {
+						*attr = ac.attr
 					}
-					*inode = e.inode
 					return err
 				}
 				delete(es, name)
@@ -644,7 +646,9 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 	err = fs.m.Lookup(ctx, parent, name, inode, attr)
 	if err == 0 && (fs.conf.DirEntryTimeout > 0 && attr.Typ == meta.TypeDirectory || fs.conf.EntryTimeout > 0 && attr.Typ != meta.TypeDirectory) {
 		fs.cacheM.Lock()
-		fs.attrs[*inode] = &attrCache{*attr, now.Add(fs.conf.AttrTimeout)}
+		if fs.conf.AttrTimeout > 0 {
+			fs.attrs[*inode] = &attrCache{*attr, now.Add(fs.conf.AttrTimeout)}
+		}
 		es, ok := fs.entries[parent]
 		if !ok {
 			es = make(map[string]*entryCache)
