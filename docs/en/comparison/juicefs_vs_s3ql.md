@@ -11,12 +11,13 @@ Similar to JuiceFS, [S3QL](https://github.com/s3ql/s3ql) is also an open source 
 ## Different points
 
 - S3QL only supports SQLite. But JuiceFS supports more databases, such as Redis, TiKV, MySQL, PostgreSQL, and SQLite.
-- S3QL has no distributed capability and does not support multi-host shared mounting. JuiceFS is a typical distributed file system. When using a network-based database, it supports multi-host distributed mount read and write.
+- S3QL has no distributed capability and **does not** support multi-host shared mounting. JuiceFS is a typical distributed file system. When using a network-based database, it supports multi-host distributed mount read and write.
+- S3QL commits a data block to S3 when it has not been accessed for more than a few seconds. After a file closed or even fsynced, it is only guranteed to stay in system memory, which may result in data loss if node fails. JuiceFS ensures high data durability, uploading all blocks synchronously when a file is closed.
 - S3QL provides data deduplication. Only one copy of the same data is stored, which can reduce the storage usage, but it will also increase the performance overhead of the system. JuiceFS pays more attention to performance, and it is too expensive to perform deduplication on large-scale data, so this function is temporarily not provided.
 - S3QL provides remote synchronous backup of metadata. SQLite databases with metadata will be backed up asynchronously to object storage. JuiceFS mainly uses network databases such as Redis and MySQL, and does not directly provide SQLite database synchronization backup function, but JuiceFS supports metadata import and export, as well as various storage backend synchronization functions, users can easily backup metadata to objects Storage, also supports migration between different databases.
 
 |                           | **S3QL**              | **JuiceFS**                   |
-| ------------------------- | :-------------------: | :---------------------------: |
+| :------------------------ | :-------------------- | :---------------------------- |
 | Metadata engine           | SQLite                | Redis, MySQL, SQLite, TiKV    |
 | Storage engine            | Object Storage, Local | Object Storage, WebDAV, Local |
 | Operating system          | Unix-like             | Linux, macOS, Windows         |
