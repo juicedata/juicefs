@@ -1640,16 +1640,16 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				return err
 			}
 		}
-		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&spn, &node{Inode: parentSrc}); err != nil {
-			return err
+		if parentDst != parentSrc {
+			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&spn, &node{Inode: parentSrc}); err != nil {
+				return err
+			}
 		}
 		if _, err := s.Cols("ctime").Update(&sn, &node{Inode: sn.Inode}); err != nil {
 			return err
 		}
-		if parentDst != parentSrc {
-			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&dpn, &node{Inode: parentDst}); err != nil {
-				return err
-			}
+		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&dpn, &node{Inode: parentDst}); err != nil {
+			return err
 		}
 		return err
 	})

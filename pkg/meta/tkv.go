@@ -1668,12 +1668,12 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				}
 			}
 		}
-		tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
+		if parentDst != parentSrc {
+			tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
+		}
 		tx.set(m.inodeKey(ino), m.marshal(&iattr))
 		tx.set(m.entryKey(parentDst, nameDst), buf)
-		if parentDst != parentSrc {
-			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
-		}
+		tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		return nil
 	})
 	if err == nil && !exchange {
