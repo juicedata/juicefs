@@ -1,128 +1,178 @@
-# Use JuiceFS Hadoop Java SDK
+## Hadoop Ecosystem uses JuiceFS storage
 
-* [Hadoop Compatibility](#hadoop-compatibility)
-* [Compiling](#compiling)
-* [Deploy JuiceFS Hadoop Java SDK](#deploy-juicefs-hadoop-java-sdk)
-  + [Hadoop Distribution](#hadoop-distribution)
-  + [Community Components](#community-components)
-* [Configurations](#configurations)
-  + [Core Configurations](#core-configurations)
-  + [Cache Configurations](#cache-configurations)
-  + [I/O Configurations](#io-configurations)
-  + [Other Configurations](#other-configurations)
-  + [Configurations Example](#configurations-example)
-  + [Configuration in Hadoop](#configuration-in-hadoop)
-    - [CDH6](#cdh6)
-    - [HDP](#hdp)
-  + [Configuration in Flink](#configuration-in-flink)
-* [Restart Services](#restart-services)
-* [Verification](#verification)
-  + [Hadoop](#hadoop)
-  + [Hive](#hive)
-* [Metrics](#metrics)
-* [Benchmark](#benchmark)
-  + [Local Benchmark](#local-benchmark)
-  + [Distributed Benchmark](#distributed-benchmark)
-* [FAQ](#faq)
+## Table of content
 
-JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK to support variety of components in Hadoop ecosystem.
+- [Requirements](#requirements)
+  * [1. Hadoop and related components](#1-hadoop-and-related-components)
+  * [2. User permissions](#2-user-permissions)
+  * [3. Filesystems](#3-filesystems)
+  * [4. Memory](#4-memory)
+- [Client compilation](#client-compilation)
+  * [Linux and macOS](#linux-and-macos)
+  * [Windows](#windows)
+- [Deploy the client](#deploy-the-client)
+  * [Big data Platforms](#big-data-platforms)
+  * [Community Components](#community-components)
+  * [Community Components](#community-components-1)
+    + [Core Configurations](#core-configurations)
+    + [Cache Configurations](#cache-configurations)
+    + [I/O Configurations](#io-configurations)
+    + [Other Configurations](#other-configurations)
+    + [Multiple file systems configuration](#multiple-file-systems-configuration)
+    + [Configuration Example](#configuration-example)
+- [Configuration in Hadoop](#configuration-in-hadoop)
+  * [CDH6](#cdh6)
+  * [HDP](#hdp)
+  * [Flink](#flink)
+  * [Restart Services](#restart-services)
+- [Environmental Verification](#environmental-verification)
+  * [Hadoop](#hadoop)
+  * [Hive](#hive)
+- [Monitoring metrics collection](#monitoring-metrics-collection)
+- [Benchmark](#benchmark)
+  * [1. Local Benchmark](#1-local-benchmark)
+    + [Metadata](#metadata)
+    + [I/O Performance](#io-performance)
+  * [2. Distributed Benchmark](#2-distributed-benchmark)
+    + [Metadata](#metadata-1)
+    + [I/O Performance](#io-performance-1)
+- [FAQ](#faq)
 
-> **NOTICE**:
->
-> JuiceFS use local mapping of user and UID. So, you should [sync all the needed users and their UIDs](sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error. You can also specify a global user list and user group file, please refer to the [relevant configurations](#other-configurations).
->
-> JuiceFS Hadoop Java SDK need extra 4 * ``juicefs.memory-size`` off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
+----
 
-## Hadoop Compatibility
+JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
+
+## Requirements
+
+### 1. Hadoop and related components
 
 JuiceFS Hadoop Java SDK is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
 
-In order to make JuiceFS works with other components, it usually takes 2 steps:
+### 2. User permissions
 
-1. Put JAR file into the classpath of each Hadoop ecosystem component.
-2. Put JuiceFS configurations into the configuration file of each Hadoop ecosystem component (usually `core-site.xml`).
+JuiceFS use local mapping of `user` and `UID`. So, you should [sync all the needed users and their UIDs](sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error. You can also specify a global user list and user group file, please refer to the [relevant configurations](#other-configurations).
 
-## Compiling
+### 3. Filesystems
 
-You need first installing Go 1.13+, JDK 8+ and Maven, then run following commands:
+You should first create at least one JuiceFS file system to provide storage for components related to the Hadoop ecosystem through the JuiceFS Java SDK. When deploying the Java SDK, specify the metadata engine address of the created file system in the configuration file.
+
+To create a file system, please refer to [JuiceFS Quick Start Guide](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md).
+
+> **Note**: Use JuiceFS storage in a distributed system. W hen creating a file system, please plan the object storage and database to be used reasonably to ensure that they can be accessed by each node in the cluster.
+
+### 4. Memory
+
+JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-配置) off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
+
+## Client compilation
+
+Compilation depends on the following tools:
+
+- [Go](https://golang.org/) 1.15+
+- JDK 8+
+- [Maven](https://maven.apache.org/) 3.3+
+- git
+- make
+- GCC 5.4+
 
 > **Note**: If Ceph RADOS is used to store data, you need to install librados-dev and build `libjfs.so` with `-tag ceph`.
 
-> **Tip**: For users in China, it's recommended to set a local Maven mirror to speed-up compilation, e.g. [Aliyun Maven Mirror](https://maven.aliyun.com).
+### Linux and macOS
 
-### Linux or macOS
+Clone the repository:
 
-> **Note**: The built SDK contains native code, it could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux. For better compatability, please use older version glibc if possible.
+```shell
+$ git clone https://github.com/juicedata/juicefs.git
+```
 
-  ```shell
-  $ cd sdk/java
-  $ make
-  ```
+Enter the directory and compile:
+
+```shell
+$ cd juicefs/sdk/java
+$ make
+```
+
+After the compilation, you can find the compiled `JAR` file in the `sdk/java/target` directory, including two versions:
+
+- Contains third-party dependent packages: `juicefs-hadoop-X.Y.Z.jar`
+- Does not include third-party dependent packages: `original-juicefs-hadoop-X.Y.Z.jar`
+
+It is recommended to use a version that includes third-party dependencies.
 
 ### Windows
 
-Righ now, you can cross compile the SDK in Linux or macOS, please install [mingw-w64](https://www.mingw-w64.org/) first.
+The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org/), which needs to be installed first.
 
-  ```shell
-  $ cd sdk/java
-  $ make win
-  ```
+The steps are the same as compiling on Linux or macOS. For example, on the Ubuntu system, install the `mingw-w64` package first to solve the dependency problem:
 
+```shell
+$ sudo apt install mingw-w64
+```
 
-## Deploy JuiceFS Hadoop Java SDK
+Clone and enter the JuiceFS source code directory, execute the following code to compile:
 
-After compiling you could find the JAR file in `sdk/java/target` directory, e.g. `juicefs-hadoop-0.10.0.jar`. Beware that file with `original-` prefix, it doesn't contain third-party dependencies. It's recommended to use the JAR file with third-party dependencies.
+```shell
+$ cd juicefs/sdk/java
+$ make win
+```
 
-> **Note**: The SDK could only be deployed to same operating system as it be compiled. For example, if you compile SDK in Linux then you must deploy it to Linux.
+> **Note**: No matter which system environment the client is compiled for, the compiled JAR file has the same name and can only be deployed in the matching system environment. For example, when compiled in Linux, it can only be used in the Linux environment. In addition, since the compiled package depends on glibc, it is recommended to compile with a lower version system to ensure better compatibility.
 
-Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Hadoop ecosystem component. It's recommended create a symbolic link to the JAR file. The following tables describe where the SDK be placed.
+## Deploy the client
 
-### Hadoop Distribution
+To enable each component of the Hadoop ecosystem to correctly identify JuiceFS, the following configurations are required:
 
-| Name              | Installing Paths                                                                                                                                                                                                                                                                                                           |
-| ----              | ----------------                                                                                                                                                                                                                                                                                                           |
-| CDH               | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br>`/opt/cloudera/parcels/CDH/spark/jars`<br>`/var/lib/impala`                                                                                                                                                                                                                  |
-| HDP               | `/usr/hdp/current/hadoop-client/lib`<br>`/usr/hdp/current/hive-client/auxlib`<br>`/usr/hdp/current/spark2-client/jars`                                                                                                                                                                                                     |
-| Amazon EMR        | `/usr/lib/hadoop/lib`<br>`/usr/lib/spark/jars`<br>`/usr/lib/hive/auxlib`                                                                                                                                                                                                                                                   |
+1. Place the compiled JAR file and `$JAVA_HOME/lib/tools.jar` into the `classpath` of the component. The installation paths of common big data platforms and components are shown in the table below.
+2. Put JuiceFS configurations into the configuration file of each Hadoop ecosystem component (usually `core-site.xml`), see [Client Configuration Parameters](#Client Configuration Parameters) for details.
+
+It is recommended to place the JAR file in a fixed location, and the other locations are called it through symbolic links.
+
+### Big data Platforms
+
+| Name              | Installing Paths                                             |
+| ----------------- | ------------------------------------------------------------ |
+| CDH               | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br>`/opt/cloudera/parcels/CDH/spark/jars`<br>`/var/lib/impala` |
+| HDP               | `/usr/hdp/current/hadoop-client/lib`<br>`/usr/hdp/current/hive-client/auxlib`<br>`/usr/hdp/current/spark2-client/jars` |
+| Amazon EMR        | `/usr/lib/hadoop/lib`<br>`/usr/lib/spark/jars`<br>`/usr/lib/hive/auxlib` |
 | Alibaba Cloud EMR | `/opt/apps/ecm/service/hadoop/*/package/hadoop*/share/hadoop/common/lib`<br>`/opt/apps/ecm/service/spark/*/package/spark*/jars`<br>`/opt/apps/ecm/service/presto/*/package/presto*/plugin/hive-hadoop2`<br>`/opt/apps/ecm/service/hive/*/package/apache-hive*/lib`<br>`/opt/apps/ecm/service/impala/*/package/impala*/lib` |
-| Tencent Cloud EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br>`/usr/local/service/presto/plugin/hive-hadoop2`<br>`/usr/local/service/spark/jars`<br>`/usr/local/service/hive/auxlib`                                                                                                                                              |
-| UCloud UHadoop    | `/home/hadoop/share/hadoop/common/lib`<br>`/home/hadoop/hive/auxlib`<br>`/home/hadoop/spark/jars`<br>`/home/hadoop/presto/plugin/hive-hadoop2`                                                                                                                                                                             |
-| Baidu Cloud EMR   | `/opt/bmr/hadoop/share/hadoop/common/lib`<br>`/opt/bmr/hive/auxlib`<br>`/opt/bmr/spark2/jars`                                                                                                                                                                                                                              |
+| Tencent Cloud EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br>`/usr/local/service/presto/plugin/hive-hadoop2`<br>`/usr/local/service/spark/jars`<br>`/usr/local/service/hive/auxlib` |
+| UCloud UHadoop    | `/home/hadoop/share/hadoop/common/lib`<br>`/home/hadoop/hive/auxlib`<br>`/home/hadoop/spark/jars`<br>`/home/hadoop/presto/plugin/hive-hadoop2` |
+| Baidu Cloud EMR   | `/opt/bmr/hadoop/share/hadoop/common/lib`<br>`/opt/bmr/hive/auxlib`<br>`/opt/bmr/spark2/jars` |
 
 ### Community Components
 
 | Name   | Installing Paths                     |
-| ----   | ----------------                     |
+| ------ | ------------------------------------ |
 | Spark  | `${SPARK_HOME}/jars`                 |
 | Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
 | Flink  | `${FLINK_HOME}/lib`                  |
 
-## Configurations
+### Community Components
 
-### Core Configurations
+Please refer to the following table to set the relevant parameters of the JuiceFS file system and write it into the configuration file, which is generally `core-site.xml`.
 
-| Configuration                    | Default Value                | Description                                                                                                                                               |
-| -------------                    | -------------                | -----------                                                                                                                                               |
-| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | The FileSystem implementation for `jfs://` URIs. If you wanna use different schema (e.g. `cfs://`), you could rename this configuration to `fs.cfs.impl`. |
-| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         |                                                                                                                                                           |
-| `juicefs.meta`                   |                              | Redis URL. Its format is `redis://<user>:<password>@<host>:<port>/<db>`.                                                                                  |
-| `juicefs.accesskey`              |                              | Access key of object storage. See [this document](how_to_setup_object_storage.md) to learn how to get access key for different object storage.            |
-| `juicefs.secretkey`              |                              | Secret key of object storage. See [this document](how_to_setup_object_storage.md) to learn how to get secret key for different object storage.            |
+#### Core Configurations
 
-### Cache Configurations
+| Configuration                    | Default Value                | Description                                                  |
+| -------------------------------- | ---------------------------- | ------------------------------------------------------------ |
+| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | Specify the storage implementation to be used. By default, `jfs://` is used. If you want to use `cfs://` as the scheme, just modify it to `fs.cfs.impl`. When using `cfs://`, it is still access the data in JuiceFS. |
+| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         |                                                              |
+| `juicefs.meta`                   |                              | Specify the metadata engine address of the pre-created JuiceFS file system. You can configure multiple file systems for the client at the same time through the format of `juicefs.{vol_name}.meta`. |
 
-| Configuration                | Default Value | Description                                                                                                                                                                                                                                                                                           |
-| -------------                | ------------- | -----------                                                                                                                                                                                                                                                                                           |
-| `juicefs.cache-dir`          |               | Directory paths of local cache. Use colon to separate multiple paths. Also support wildcard in path. **It's recommended create these directories manually and set `0777` permission so that different applications could share the cache data.**                                                      |
-| `juicefs.cache-size`         | 0             | Maximum size of local cache in MiB. It's the total size when set multiple cache directories.                                                                                                                                                                                                          |
-| `juicefs.cache-full-block`   | `true`        | Whether cache every read blocks, `false` means only cache random/small read blocks.                                                                                                                                                                                                                   |
-| `juicefs.free-space`         | 0.1           | Min free space ratio of cache directory                                                                                                                                                                                                                                                               |
+#### Cache Configurations
+
+| Configuration                | Default Value | Description                                                  |
+| ---------------------------- | ------------- | ------------------------------------------------------------ |
+| `juicefs.cache-dir`          |               | Directory paths of local cache. Use colon to separate multiple paths. Also support wildcard in path. **It's recommended create these directories manually and set `0777` permission so that different applications could share the cache data.** |
+| `juicefs.cache-size`         | 0             | Maximum size of local cache in MiB. It's the total size when set multiple cache directories. |
+| `juicefs.cache-full-block`   | `true`        | Whether cache every read blocks, `false` means only cache random/small read blocks. |
+| `juicefs.free-space`         | 0.1           | Min free space ratio of cache directory                      |
 | `juicefs.discover-nodes-url` |               | The URL to discover cluster nodes, refresh every 10 minutes.<br /><br />YARN: `yarn`<br />Spark Standalone: `http://spark-master:web-ui-port/json/`<br />Spark ThriftServer: `http://thrift-server:4040/api/v1/applications/`<br />Presto: `http://coordinator:discovery-uri-port/v1/service/presto/` |
 
-### I/O Configurations
+#### I/O Configurations
 
 | Configuration            | Default Value | Description                                     |
-| -------------            | ------------- | -----------                                     |
+| ------------------------ | ------------- | ----------------------------------------------- |
 | `juicefs.max-uploads`    | 20            | The max number of connections to upload         |
 | `juicefs.get-timeout`    | 5             | The max number of seconds to download an object |
 | `juicefs.put-timeout`    | 60            | The max number of seconds to upload an object   |
@@ -131,34 +181,40 @@ Then put the JAR file and `$JAVA_HOME/lib/tools.jar` to the classpath of each Ha
 | `juicefs.upload-limit`   | 0             | Bandwidth limit for upload in Mbps              |
 | `juicefs.download-limit` | 0             | Bandwidth limit for download in Mbps            |
 
-### Other Configurations
+  #### Other Configurations
 
-| Configuration             | Default Value | Description                                                                                                                                                                 |
-| -------------             | ------------- | -----------                                                                                                                                                                 |
-| `juicefs.debug`           | `false`       | Whether enable debug log                                                                                                                                                    |
-| `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files.           |
-| `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                              |
-| `juicefs.users`           | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line.                                              |
+| Configuration             | Default Value | Description                                                  |
+| ------------------------- | ------------- | ------------------------------------------------------------ |
+| `juicefs.debug`           | `false`       | Whether enable debug log                                     |
+| `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files. |
+| `juicefs.superuser`       | `hdfs`        | The super user                                               |
+| `juicefs.users`           | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line. |
 | `juicefs.groups`          | `null`        | The path of group name, GID and group members list file, e.g. `jfs://name/etc/groups`. The file format is `<group-name>:<GID>:<username1>,<username2>`, one group per line. |
-| `juicefs.umask`           | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`.                                                             |
-| `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                     |
-| `juicefs.push-interval`   | 10            | Prometheus push interval in seconds                                                                                                                                         |
-| `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
-| `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
-| `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
+| `juicefs.umask`           | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`. |
+| `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`. |
+| `juicefs.push-interval`   | 10            | Prometheus push interval in seconds                          |
+| `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`. |
+| `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script |
+| `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected. |
 
-When you use multiple JuiceFS file systems, all these configurations could be set to specific file system alone. You need put file system name in the middle of configuration, for example (replace `{JFS_NAME}` with appropriate value):
+#### Multiple file systems configuration
+
+When multiple JuiceFS file systems need to be used at the same time, all the above configuration items can be specified for a specific file system. You only need to put the file system name in the middle of the configuration item, such as `jfs1` and `jfs2` in the following example:
 
 ```xml
 <property>
-  <name>juicefs.{JFS_NAME}.meta</name>
-  <value>redis://host:port/1</value>
+  <name>juicefs.jfs1.meta</name>
+  <value>redis://jfs1.host:port/1</value>
+</property>
+<property>
+  <name>juicefs.jfs2.meta</name>
+  <value>redis://jfs2.host:port/1</value>
 </property>
 ```
 
-### Configurations Example
+#### Configuration Example
 
-> **Note**: Replace `{HOST}`, `{PORT}` and `{DB}` in `juicefs.meta` with appropriate values.
+The following is a commonly used configuration example. Please replace the `{HOST}`, `{PORT}` and `{DB}` variables in the `juicefs.meta` configuration with actual values.
 
 ```xml
 <property>
@@ -187,38 +243,38 @@ When you use multiple JuiceFS file systems, all these configurations could be se
 </property>
 ```
 
-### Configuration in Hadoop
+## Configuration in Hadoop
 
-Add configurations to `core-site.xml`.
+Please refer to the aforementioned configuration tables and add configuration parameters to the Hadoop configuration file `core-site.xml`.
 
-#### CDH6
+### CDH6
 
-Besides `core-site`, you also need to configure `mapreduce.application.classpath` of the YARN component, add:
+If you are using CDH 6, in addition to modifying `core-site`, you also need to modify `mapreduce.application.classpath` through the YARN service interface, adding:
 
 ```shell
 $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 ```
 
-#### HDP
+### HDP
 
-Besides `core-site`, you also need to configure `mapreduce.application.classpath` of the MapReduce2 component, add (variables do not need to be replaced):
+In addition to modifying `core-site`, you also need to modify the configuration `mapreduce.application.classpath` through the MapReduce2 service interface and add it at the end (variables do not need to be replaced):
 
 ```shell
 /usr/hdp/${hdp.version}/hadoop/lib/juicefs-hadoop.jar
 ```
 
-### Configuration in Flink
+### Flink
 
-Add configurations to `conf/flink-conf.yaml`. You could only setup Flink client without modify configurations in Hadoop.
+Add configuration parameters to `conf/flink-conf.yaml`. If you only use JuiceFS in Flink, you don't need to configure JuiceFS in the Hadoop environment, you only need to configure the Flink client.
 
-## Restart Services
+### Restart Services
 
 When the following components need to access JuiceFS, they should be restarted.
 
 > **Note**: Before restart, you need to confirm JuiceFS related configuration has been written to the configuration file of each component, usually you can find them in `core-site.xml` on the machine where the service of the component was deployed.
 
 | Components | Services                   |
-| ---------- | --------                   |
+| ---------- | -------------------------- |
 | Hive       | HiveServer<br />Metastore  |
 | Spark      | ThriftServer               |
 | Presto     | Coordinator<br />Worker    |
@@ -229,7 +285,9 @@ HDFS, Hue, ZooKeeper and other services don't need to be restarted.
 
 When `Class io.juicefs.JuiceFileSystem not found` or `No FilesSystem for scheme: jfs` exceptions was occurred after restart, reference [FAQ](#faq).
 
-## Verification
+## Environmental Verification
+
+After the deployment of the JuiceFS Java SDK, the following methods can be used to verify the success of the deployment.
 
 ### Hadoop
 
@@ -249,7 +307,7 @@ CREATE TABLE IF NOT EXISTS person
 ) LOCATION 'jfs://{JFS_NAME}/tmp/person';
 ```
 
-## Metrics
+## Monitoring metrics collection
 
 JuiceFS Hadoop Java SDK supports reporting metrics to [Prometheus Pushgateway](https://github.com/prometheus/pushgateway), then you can use [Grafana](https://grafana.com) and [dashboard template](grafana_template.json) to visualize these metrics.
 
@@ -262,8 +320,10 @@ Enable metrics reporting through following configurations:
 </property>
 ```
 
-> **Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly. It is recommended to use the following command to clean up once every hour. The running Hadoop Java SDK will continue to update after the metrics are cleared, which basically does not affect the use.
->
+**Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly. 
+
+It is recommended to use the following command to clean up once every hour. The running Hadoop Java SDK will continue to update after the metrics are cleared, which basically does not affect the use.
+
 > ```bash
 > $ curl -X DELETE http://host:9091/metrics/job/juicefs
 > ```
@@ -272,57 +332,58 @@ For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p
 
 ## Benchmark
 
-JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
+Here are a series of methods to use the built-in stress testing tool of the JuiceFS client to test the performance of the client environment that has been successfully deployed.
 
-### Local Benchmark
-#### Meta
 
-- create
+### 1. Local Benchmark
+#### Metadata
+
+- **create**
 
   ```shell
   hadoop jar juicefs-hadoop.jar nnbench create -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
-  It creates 10000 empty files without write data
+  此命令会 create 10000 个空文件
 
-- open
+- **open**
 
   ```shell
   hadoop jar juicefs-hadoop.jar nnbench open -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
-  It opens 10000 files without read data
+  此命令会 open 10000 个文件，并不读取数据
 
-- rename
+- **rename**
 
   ```shell
   hadoop jar juicefs-hadoop.jar nnbench rename -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
-- delete
+- **delete**
 
   ```shell
   hadoop jar juicefs-hadoop.jar nnbench delete -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
-- for reference
+- **for reference**
 
 | Operation | TPS  | Delay (ms) |
-| --------- | ---  | ---------- |
-| create | 644  | 1.55       |
-| open   | 3467 | 0.29       |
-| rename | 483  | 2.07       |
-| delete | 506  | 1.97       |
+| --------- | ---- | ---------- |
+| create    | 644  | 1.55       |
+| open      | 3467 | 0.29       |
+| rename    | 483  | 2.07       |
+| delete    | 506  | 1.97       |
 
 #### I/O Performance
 
-- sequential write
+- **sequential write**
 
   ```shell
   hadoop jar juicefs-hadoop.jar dfsio -write -size 20000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO -local
   ```
 
-- sequential read
+- **sequential read**
 
   ```shell
   hadoop jar juicefs-hadoop.jar dfsio -read -size 20000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO -local
@@ -330,24 +391,27 @@ JuiceFS provides some benchmark tools for you when JuiceFS has been deployed
 
   When run the cmd for the second time, the result may be much better than the first run. It's because the data was cached in memory, just clean the local disk cache.
 
-- for reference
+- **for reference**
 
 | Operation | Throughput (MB/s) |
 | --------- | ----------------- |
-| write  | 647          |
-| read   | 111          |
+| write     | 647               |
+| read      | 111               |
 
-### Distributed Benchmark
+If the network bandwidth of the machine is relatively low, it can generally reach the network bandwidth bottleneck.
 
-Distributed benchmark use MapReduce program to test meta and IO throughput performance
+### 2. Distributed Benchmark
 
-Enough resources should be provided to make sure all Map task can be started at the same time
+The following command will start the MapReduce distributed task to test the metadata and IO performance. During the test, it is necessary to ensure that the cluster has sufficient resources to start the required map tasks.
 
-We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
+Computing resources used in this test:
 
-#### Meta
+- **Server**: 4 cores and 32 GB memory, burst bandwidth 5Gbit/s x 3
+- **Database**: Alibaba Cloud Redis 5.0 Community 4G Master-Slave Edition
 
-- create
+#### Metadata
+
+- **create**
 
   ```shell
   hadoop jar juicefs-hadoop.jar nnbench create -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
@@ -355,7 +419,7 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
   10 map task, each has 10 threads, each thread create 1000 empty file. 100000 files in total
 
-- open
+- **open**
 
   ```shell
   hadoop jar juicefs-hadoop.jar nnbench open -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
@@ -363,7 +427,7 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
   10 map task, each has 10 threads, each thread open 1000 file. 100000 files in total
 
-- rename
+- **rename**
 
   ```shell
   hadoop jar juicefs-hadoop.jar nnbench rename -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
@@ -371,8 +435,7 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
   10 map task, each has 10 threads, each thread rename 1000 file. 100000 files in total
 
-
-- delete
+- **delete**
 
   ```shell
   hadoop jar juicefs-hadoop.jar nnbench delete -maps 10 -threads 10 -files 1000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench
@@ -380,21 +443,21 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
   10 map task, each has 10 threads, each thread delete 1000 file. 100000 files in total
 
-- for reference
+- **for reference**
 
-    - 10 threads
+  - 10 threads
 
-  | Operation | TPS  | Delay (ms) |
-  | --------- | ---  | ---------- |
+  | 操作   | IOPS | 时延（ms） |
+  | ------ | ---- | ----       |
   | create | 4178 | 2.2        |
   | open   | 9407 | 0.8        |
   | rename | 3197 | 2.9       |
   | delete | 3060 | 3.0        |
 
-    - 100 threads
+  - 100 threads
 
-  | Operation | TPS   | Delay (ms) |
-  | --------- | ---   | ---------- |
+  | 操作   | IOPS  | 时延（ms） |
+  | ------ | ----  | ----       |
   | create | 11773  | 7.9       |
   | open   | 34083 | 2.4        |
   | rename | 8995  | 10.8       |
@@ -402,7 +465,7 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
 #### I/O Performance
 
-- sequential write
+- **sequential write**
 
   ```shell
   hadoop jar juicefs-hadoop.jar dfsio -write -maps 10 -size 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO
@@ -410,7 +473,7 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
 
   10 map task, each task write 10000MB random data sequentially
 
-- sequential read
+- **sequential read**
 
   ```shell
   hadoop jar juicefs-hadoop.jar dfsio -read -maps 10 -size 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/DFSIO
@@ -419,17 +482,17 @@ We use 3 4c32g ECS (5Gbit/s) and Aliyun Redis 5.0 4G redis for the benchmark
   10 map task, each task read 10000MB random data sequentially
 
 
-- for reference
+- **for reference**
 
-| Operation | Total Throughput (MB/s) |
-| --------- | ----------------------- |
-| write     | 1835                    |
-| read      | 1234                    |
+| Operation | Average throughput (MB/s) | Total Throughput (MB/s) |
+| --------- | ------------------------- | ----------------------- |
+| write     | 198                       | 1835                    |
+| read      | 124                       | 1234                    |
 
 
 ## FAQ
 
-### `Class io.juicefs.JuiceFileSystem not found` exception
+### 1. `Class io.juicefs.JuiceFileSystem not found` exception
 
 It means JAR file was not loaded, you can verify it by `lsof -p {pid} | grep juicefs`.
 
@@ -437,6 +500,6 @@ You should check whether the JAR file was located properly, or other users have 
 
 Some Hadoop distribution also need to modify `mapred-site.xml` and put the JAR file location path to the end of the parameter `mapreduce.application.classpath`.
 
-### `No FilesSystem for scheme: jfs` exception
+### 2. `No FilesSystem for scheme: jfs` exception
 
 It means JuiceFS Hadoop Java SDK was not configured properly, you need to check whether there is JuiceFS related configuration in the `core-site.xml` of the component configuration.
