@@ -1803,12 +1803,12 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					}
 				}
 			}
-			pipe.Set(ctx, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
+			if parentDst != parentSrc {
+				pipe.Set(ctx, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
+			}
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(&iattr), 0)
 			pipe.HSet(ctx, r.entryKey(parentDst), nameDst, buf)
-			if parentDst != parentSrc {
-				pipe.Set(ctx, r.inodeKey(parentDst), r.marshal(&dattr), 0)
-			}
+			pipe.Set(ctx, r.inodeKey(parentDst), r.marshal(&dattr), 0)
 			return nil
 		})
 		return err
