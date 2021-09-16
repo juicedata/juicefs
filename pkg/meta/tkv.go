@@ -519,6 +519,9 @@ func (m *kvMeta) NewSession() error {
 }
 
 func (m *kvMeta) CloseSession() error {
+	if m.conf.ReadOnly {
+		return nil
+	}
 	m.Lock()
 	m.umounting = true
 	m.Unlock()

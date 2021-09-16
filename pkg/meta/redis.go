@@ -317,6 +317,9 @@ func (r *redisMeta) NewSession() error {
 }
 
 func (r *redisMeta) CloseSession() error {
+	if r.conf.ReadOnly {
+		return nil
+	}
 	r.Lock()
 	r.umounting = true
 	r.Unlock()
