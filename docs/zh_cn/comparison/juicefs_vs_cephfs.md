@@ -42,11 +42,11 @@ JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，�
 | Kubernetes CSI Driver   | ✓                 | ✓             |
 | Hadoop 兼容             | ✓                 | ✓             |
 | 数据压缩<sup> [2]</sup> | ✓                 | ✓             |
+| 数据加密<sup> [3]</sup> | ✓                 | ✓             |
 | 快照                    | ✓                 | ✕             |
-| 多级缓存                | ✕                 | ✓             |
+| 客户端数据缓存          | ✕                 | ✓             |
 | Hadoop 数据本地性       | ✕                 | ✓             |
 | S3 兼容                 | ✕                 | ✓             |
-| 数据加密<sup> [3]</sup> | ✕                 | ✓             |
 | 配额                    | 目录级配额        | Volume 级配额 |
 | 开发语言                | C++               | Go            |
 | 开源协议                | LGPLv2.1 & LGPLv3 | AGPLv3        |
@@ -61,4 +61,4 @@ JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，�
 
 #### 注 3：数据加密
 
-Ceph **Messenger v2** 已支持网络传输层的数据加密，但在存储层依然没有加密。
+Ceph **Messenger v2** 支持网络传输层的数据加密，存储层则与压缩类似，依赖于 OSD 创建时提供的加密功能。JuiceFS 是在上传对象前和下载后执行加解密，在对象存储侧完全透明。
