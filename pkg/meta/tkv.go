@@ -885,8 +885,26 @@ func (m *kvMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 }
 
 func (m *kvMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	if inode == nil || attr == nil {
+		return syscall.EINVAL // bad request
+	}
 	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
+	if name == ".." {
+		if parent == m.root {
+			name = "."
+		} else {
+			if st := m.GetAttr(ctx, parent, attr); st != 0 {
+				return st
+			}
+			*inode = attr.Parent
+			return m.GetAttr(ctx, *inode, attr)
+		}
+	}
+	if name == "." {
+		*inode = parent
+		return m.GetAttr(ctx, *inode, attr)
+	}
 	buf, err := m.get(m.entryKey(parent, name))
 	if err != nil {
 		return errno(err)
@@ -894,32 +912,15 @@ func (m *kvMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 	if buf == nil {
 		if m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
-				if inode != nil {
-					*inode = e.Inode
-				}
-				if attr != nil {
-					return m.GetAttr(ctx, *inode, attr)
-				}
-				return 0
+				*inode = e.Inode
+				return m.GetAttr(ctx, *inode, attr)
 			}
 		}
 		return syscall.ENOENT
 	}
 	_, foundIno := m.parseEntry(buf)
-	if inode != nil {
-		*inode = foundIno
-	}
-	if attr != nil {
-		a, err := m.get(m.inodeKey(foundIno))
-		if err != nil {
-			return errno(err)
-		}
-		if a == nil {
-			return syscall.ENOENT
-		}
-		m.parseAttr(a, attr)
-	}
-	return 0
+	*inode = foundIno
+	return m.GetAttr(ctx, *inode, attr)
 }
 
 func (r *kvMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
