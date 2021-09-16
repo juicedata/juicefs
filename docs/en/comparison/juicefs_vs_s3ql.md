@@ -35,7 +35,7 @@ Similar to JuiceFS, [S3QL](https://github.com/s3ql/s3ql) is also an open source 
 | Data deduplication        | ✓                     | ✕                             |
 | Immutable trees           | ✓                     | ✕                             |
 | Snapshots                 | ✓                     | ✕                             |
-| Strong consistency        | ✕                     | ✓                             |
+| High reliability          | ✕                     | ✓                             |
 | Share mount               | ✕                     | ✓                             |
 | Hadoop SDK                | ✕                     | ✓                             |
 | Kubernetes CSI Driver     | ✕                     | ✓                             |
