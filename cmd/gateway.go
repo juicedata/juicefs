@@ -58,14 +58,6 @@ var mctx meta.Context
 
 func gatewayFlags() *cli.Command {
 	flags := append(clientFlags(),
-		&cli.StringFlag{
-			Name:  "access-log",
-			Usage: "path for JuiceFS access log",
-		},
-		&cli.BoolFlag{
-			Name:  "no-usage-report",
-			Usage: "do not send usage report",
-		},
 		&cli.Float64Flag{
 			Name:  "attr-cache",
 			Value: 1.0,
@@ -80,6 +72,14 @@ func gatewayFlags() *cli.Command {
 			Name:  "dir-entry-cache",
 			Value: 1.0,
 			Usage: "dir entry cache timeout in seconds",
+		},
+		&cli.StringFlag{
+			Name:  "access-log",
+			Usage: "path for JuiceFS access log",
+		},
+		&cli.BoolFlag{
+			Name:  "no-usage-report",
+			Usage: "do not send usage report",
 		},
 		&cli.BoolFlag{
 			Name:  "no-banner",
