@@ -1,8 +1,8 @@
 # LTP 兼容性测试
 
-[LTP](https://github.com/linux-test-project/ltp) (Linux Test Project) 是一个由 IBM，Cisco 等多家公司联合开发维护的项目，旨在为开源社区提供一个验证 Linux 可靠性和稳定性的测试集。LTP 中包含了各种工具来检验 Linux 内核和相关特性；本文仅执行部分与文件系统相关的测试例。
+[LTP](https://github.com/linux-test-project/ltp)（Linux Test Project）是一个由 IBM，Cisco 等多家公司联合开发维护的项目，旨在为开源社区提供一个验证 Linux 可靠性和稳定性的测试集。LTP 中包含了各种工具来检验 Linux 内核和相关特性；本文仅执行部分与文件系统相关的测试例。
 
-### 测试环境
+## 测试环境
 
 - Host：Amazon c5d.xlarge (4C 8G)
 - OS: Ubuntu 20.04.1(kernel: 5.4.0-1029-aws)
@@ -10,7 +10,7 @@
 - Data: Amazon S3
 - JuiceFS: 0.17-dev (2021-09-16 292f2b65)
 
-### 测试步骤
+## 测试步骤
 
 1. 在 GitHub 下载 LTP [源码包](https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2)
 2. 解压后编译安装：
@@ -29,13 +29,13 @@ $ make install
 $ cd /opt/ltp
 ```
 
-测试例配置文件在 `runtest` 目录下；为方便测试，删去了 `fs` 和 `syscalls` 中部分压力测试和与文件系统不想关的条目（参见[附录](#附录)，修改后保存到文件 `fs-jfs` 和 `syscalls-jfs`），然后执行命令：
+测试配置文件在 `runtest` 目录下；为方便测试，删去了 `fs` 和 `syscalls` 中部分压力测试和与文件系统不想关的条目（参见[附录](#附录)，修改后保存到文件 `fs-jfs` 和 `syscalls-jfs`），然后执行命令：
 
 ```bash
 $ ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
 ```
 
-### 测试结果
+## 测试结果
 
 ```bash
 Testcase                                           Result     Exit Value
@@ -66,7 +66,7 @@ Machine Architecture: x86_64
 - lseek11：需要 lseek 处理 SEEK_DATA 和 SEEK_HOLE 标记位，目前 JuiceFS 用的是内核通用实现，尚不支持这两个 flags
 - open14，openat03：需要 open 处理 O_TMPFILE 标记位，由于 FUSE 不支持，JuiceFS 也无法实现
 
-### 附录
+## 附录
 
 在 `fs` 和 `syscalls` 文件中删去的测试例：
 
@@ -251,4 +251,3 @@ perf_event_open02 perf_event_open02
 statx07 statx07
 io_uring02 io_uring02
 ```
-
