@@ -83,11 +83,24 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Lookup(ctx, 1, "d", &parent, attr); st != 0 {
 		t.Fatalf("lookup d: %s", st)
 	}
+	if st := m.Lookup(ctx, parent, ".", &inode, attr); st != 0 || inode != parent {
+		t.Fatalf("lookup .: %s", st)
+	}
+	if st := m.Lookup(ctx, parent, "..", &inode, attr); st != 0 || inode != 1 {
+		t.Fatalf("lookup ..: %s", st)
+	}
 	if st := m.Access(ctx, parent, 4, attr); st != 0 {
 		t.Fatalf("access d: %s", st)
 	}
 	if st := m.Create(ctx, parent, "f", 0650, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
+	}
+	var tino Ino
+	if st := m.Lookup(ctx, inode, ".", &tino, attr); st != syscall.ENOTDIR {
+		t.Fatalf("lookup /d/f/.: %s", st)
+	}
+	if st := m.Lookup(ctx, inode, "..", &tino, attr); st != syscall.ENOTDIR {
+		t.Fatalf("lookup /d/f/..: %s", st)
 	}
 	defer m.Unlink(ctx, parent, "f")
 	if st := m.Rmdir(ctx, parent, "f"); st != syscall.ENOTDIR {
