@@ -1,11 +1,11 @@
-## Hadoop Ecosystem uses JuiceFS storage
+# Use JuiceFS on Hadoop Ecosystem
 
-## Table of content
+## Table of Content
 
 - [Requirements](#requirements)
   * [1. Hadoop and related components](#1-hadoop-and-related-components)
   * [2. User permissions](#2-user-permissions)
-  * [3. Filesystems](#3-filesystems)
+  * [3. File system](#3-file-system)
   * [4. Memory](#4-memory)
 - [Client compilation](#client-compilation)
   * [Linux and macOS](#linux-and-macos)
@@ -13,13 +13,13 @@
 - [Deploy the client](#deploy-the-client)
   * [Big data Platforms](#big-data-platforms)
   * [Community Components](#community-components)
-  * [Community Components](#community-components-1)
+  * [Client Configurations](#client-configurations)
     + [Core Configurations](#core-configurations)
     + [Cache Configurations](#cache-configurations)
     + [I/O Configurations](#io-configurations)
     + [Other Configurations](#other-configurations)
     + [Multiple file systems configuration](#multiple-file-systems-configuration)
-    + [Configuration Example](#configuration-example)
+    + [Configuration Example](#configurationexample)
 - [Configuration in Hadoop](#configuration-in-hadoop)
   * [CDH6](#cdh6)
   * [HDP](#hdp)
@@ -52,17 +52,17 @@ JuiceFS Hadoop Java SDK is compatible with Hadoop 2.x and Hadoop 3.x. As well as
 
 JuiceFS use local mapping of `user` and `UID`. So, you should [sync all the needed users and their UIDs](sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error. You can also specify a global user list and user group file, please refer to the [relevant configurations](#other-configurations).
 
-### 3. Filesystems
+### 3. File system
 
 You should first create at least one JuiceFS file system to provide storage for components related to the Hadoop ecosystem through the JuiceFS Java SDK. When deploying the Java SDK, specify the metadata engine address of the created file system in the configuration file.
 
-To create a file system, please refer to [JuiceFS Quick Start Guide](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md).
+To create a file system, please refer to [JuiceFS Quick Start Guide](quick_start_guide.md).
 
-> **Note**: Use JuiceFS storage in a distributed system. W hen creating a file system, please plan the object storage and database to be used reasonably to ensure that they can be accessed by each node in the cluster.
+> **Note**: If you want to use JuiceFS in a distributed environment, when creating a file system, please plan the object storage and database to be used reasonably to ensure that they can be accessed by each node in the cluster.
 
 ### 4. Memory
 
-JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-配置) off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
+JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
 
 ## Client compilation
 
@@ -123,11 +123,11 @@ $ make win
 To enable each component of the Hadoop ecosystem to correctly identify JuiceFS, the following configurations are required:
 
 1. Place the compiled JAR file and `$JAVA_HOME/lib/tools.jar` into the `classpath` of the component. The installation paths of common big data platforms and components are shown in the table below.
-2. Put JuiceFS configurations into the configuration file of each Hadoop ecosystem component (usually `core-site.xml`), see [Client Configuration Parameters](#Client Configuration Parameters) for details.
+2. Put JuiceFS configurations into the configuration file of each Hadoop ecosystem component (usually `core-site.xml`), see [Client Configurations](#client-configurations) for details.
 
 It is recommended to place the JAR file in a fixed location, and the other locations are called it through symbolic links.
 
-### Big data Platforms
+### Big Data Platforms
 
 | Name              | Installing Paths                                             |
 | ----------------- | ------------------------------------------------------------ |
@@ -147,7 +147,7 @@ It is recommended to place the JAR file in a fixed location, and the other locat
 | Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
 | Flink  | `${FLINK_HOME}/lib`                  |
 
-### Community Components
+### Client Configurations
 
 Please refer to the following table to set the relevant parameters of the JuiceFS file system and write it into the configuration file, which is generally `core-site.xml`.
 
@@ -184,7 +184,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.upload-limit`   | 0             | Bandwidth limit for upload in Mbps              |
 | `juicefs.download-limit` | 0             | Bandwidth limit for download in Mbps            |
 
-  #### Other Configurations
+#### Other Configurations
 
 | Configuration             | Default Value | Description                                                  |
 | ------------------------- | ------------- | ------------------------------------------------------------ |
@@ -323,7 +323,7 @@ Enable metrics reporting through following configurations:
 </property>
 ```
 
-**Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly. 
+**Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly.
 
 It is recommended to use the following command to clean up once every hour. The running Hadoop Java SDK will continue to update after the metrics are cleared, which basically does not affect the use.
 
@@ -347,7 +347,7 @@ Here are a series of methods to use the built-in stress testing tool of the Juic
   hadoop jar juicefs-hadoop.jar nnbench create -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
-  此命令会 create 10000 个空文件
+  This command will create 10000 empty files
 
 - **open**
 
@@ -355,7 +355,7 @@ Here are a series of methods to use the built-in stress testing tool of the Juic
   hadoop jar juicefs-hadoop.jar nnbench open -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
-  此命令会 open 10000 个文件，并不读取数据
+  This command will open 10000 files without reading data
 
 - **rename**
 
@@ -369,14 +369,14 @@ Here are a series of methods to use the built-in stress testing tool of the Juic
   hadoop jar juicefs-hadoop.jar nnbench delete -files 10000 -baseDir jfs://{JFS_NAME}/tmp/benchmarks/NNBench -local
   ```
 
-- **for reference**
+- **For reference**
 
-| Operation | TPS  | Delay (ms) |
-| --------- | ---- | ---------- |
-| create    | 644  | 1.55       |
-| open      | 3467 | 0.29       |
-| rename    | 483  | 2.07       |
-| delete    | 506  | 1.97       |
+| Operation | TPS  | Latency (ms) |
+| --------- | ---- | ------------ |
+| create    | 644  | 1.55         |
+| open      | 3467 | 0.29         |
+| rename    | 483  | 2.07         |
+| delete    | 506  | 1.97         |
 
 #### I/O Performance
 
@@ -394,7 +394,7 @@ Here are a series of methods to use the built-in stress testing tool of the Juic
 
   When run the cmd for the second time, the result may be much better than the first run. It's because the data was cached in memory, just clean the local disk cache.
 
-- **for reference**
+- **For reference**
 
 | Operation | Throughput (MB/s) |
 | --------- | ----------------- |
@@ -446,25 +446,25 @@ Computing resources used in this test:
 
   10 map task, each has 10 threads, each thread delete 1000 file. 100000 files in total
 
-- **for reference**
+- **For reference**
 
   - 10 threads
 
-  | 操作   | IOPS | 时延（ms） |
-  | ------ | ---- | ----       |
-  | create | 4178 | 2.2        |
-  | open   | 9407 | 0.8        |
-  | rename | 3197 | 2.9       |
-  | delete | 3060 | 3.0        |
+  | Operation | IOPS | Latency (ms) |
+  | --------- | ---- | ------------ |
+  | create    | 4178 | 2.2          |
+  | open      | 9407 | 0.8          |
+  | rename    | 3197 | 2.9          |
+  | delete    | 3060 | 3.0          |
 
   - 100 threads
 
-  | 操作   | IOPS  | 时延（ms） |
-  | ------ | ----  | ----       |
-  | create | 11773  | 7.9       |
-  | open   | 34083 | 2.4        |
-  | rename | 8995  | 10.8       |
-  | delete | 7191  | 13.6       |
+  | Operation | IOPS  | Latency (ms) |
+  | --------- | ----  | ------------ |
+  | create    | 11773 | 7.9          |
+  | open      | 34083 | 2.4          |
+  | rename    | 8995  | 10.8         |
+  | delete    | 7191  | 13.6         |
 
 #### I/O Performance
 
@@ -485,7 +485,7 @@ Computing resources used in this test:
   10 map task, each task read 10000MB random data sequentially
 
 
-- **for reference**
+- **For reference**
 
 | Operation | Average throughput (MB/s) | Total Throughput (MB/s) |
 | --------- | ------------------------- | ----------------------- |
