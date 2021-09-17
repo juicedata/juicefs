@@ -167,6 +167,9 @@ $ make win
 | `juicefs.cache-size`         | 0      | 设置本地缓存目录的容量，单位 MiB，默认为0，不开启缓存。如果配置了多个缓存目录，该值代表所有缓存目录容量的总和。 |
 | `juicefs.cache-full-block`   | `true` | 是否缓存所有读取的数据块，`false` 表示只缓存随机读的数据块。 |
 | `juicefs.free-space`         | 0.1    | 本地缓存目录的最小可用空间比例，默认保留 10% 剩余空间。      |
+| `juicefs.attr-cache`         | 0      | 目录和文件属性缓存的过期时间（单位：秒）                   |
+| `juicefs.entry-cache`        | 0      | 文件项缓存的过期时间（单位：秒）                          |
+| `juicefs.dir-entry-cache`    | 0      | 目录项缓存的过期时间（单位：秒）                          |
 | `juicefs.discover-nodes-url` |        | 指定发现集群节点列表的方式，每 10 分钟刷新一次。<br /><br />YARN：`yarn`<br />Spark Standalone：`http://spark-master:web-ui-port/json/`<br />Spark ThriftServer：`http://thrift-server:4040/api/v1/applications/`<br />Presto：`http://coordinator:discovery-uri-port/v1/service/presto/` |
 
 #### I/O 配置
