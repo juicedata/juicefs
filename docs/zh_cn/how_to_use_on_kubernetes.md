@@ -2,6 +2,20 @@
 
 JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见的用法：
 
+## 目录
+1. [JuiceFS CSI Driver](#juicefs-csi-driver)
+  - [版本要求](#版本要求)
+  - [安装](#安装)
+    - [通过 Helm 安装](#通过-Helm-安装)
+    - [通过 kubectl 安装](#通过-kubectl-安装)
+  - [使用 JuiceFS 为 Pod 提供存储](#使用-JuiceFS-为-Pod-提供存储)
+  - [创建更多 JuiceFS 存储类](#创建更多-JuiceFS-存储类)
+  - [监控](#监控)
+    - [配置 Prometheus 服务](#配置-Prometheus-服务)
+    - [配置 Grafana 仪表盘](#配置-Grafana-仪表盘)
+2. [在容器中挂载 JuiceFS](#在容器中挂载-JuiceFS)
+
+
 ## 1. JuiceFS CSI Driver
 
 [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver) 遵循 [CSI](https://github.com/container-storage-interface/spec/blob/master/spec.md) 规范，实现了容器编排系统与 JuiceFS 文件系统之间的接口，支持动态配置 JuiceFS 卷提供给 Pod 使用。
@@ -100,6 +114,8 @@ NAME         PROVISIONER       RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEX
 juicefs-sc   csi.juicefs.com   Retain          Immediate           false                  69m
 ```
 
+🏡 [返回 目录](#目录)
+
 #### 2. 通过 kubectl 安装
 
 由于 Kubernetes 在版本变更过程中会废弃部分旧的 API，因此需要根据你使用 Kubernetes 版本选择适用的部署文件：
@@ -189,6 +205,8 @@ parameters:
 $ kubectl apply -f ./juicefs-sc.yaml
 ```
 
+🏡 [返回 目录](#目录)
+
 ### 使用 JuiceFS 为 Pod 提供存储
 
 JuiceFS CSI Driver 同时支持静态和动态 PV，你既可以将提前创建的 PV 手动分配给 Pods，也可以在部署 Pods 时通过 PVC 动态的创建卷。
@@ -277,6 +295,8 @@ pvc-b670c8a1-2962-497c-afa2-33bc8b8bb05d   10Pi       RWX            Retain     
 
 如果想了解更多关于 JuiceFS CSI Driver 的信息，请参考[项目主页](https://github.com/juicedata/juicefs-csi-driver)。
 
+🏡 [返回 目录](#目录)
+
 ### 创建更多 JuiceFS 存储类
 
 你可以根据实际需要重复前面的步骤，通过 JuiceFS CSI Driver 创建任意数量的存储类。但要注意修改存储类的名称以及 JuiceFS 文件系统的配置信息，避免与已创建的存储类冲突。例如，使用 Helm 时可以创建一个名为 `jfs2.yaml` 的配置文件：
@@ -313,6 +333,7 @@ juicefs-sc2          csi.juicefs.com            Retain          Immediate       
 standard (default)   k8s.io/minikube-hostpath   Delete          Immediate           false                  128m
 ```
 
+🏡 [返回 目录](#目录)
 
 ### 监控
 
@@ -363,6 +384,8 @@ scrape_configs:
 
 JuiceFS 为 [Grafana](https://grafana.com) 提供了一个[仪表盘模板](../en/grafana_template.json)，可以导入到 Grafana 中用于展示 Prometheus 收集的监控指标。
 
+🏡 [返回 目录](#目录)
+
 ## 2. 在容器中挂载 JuiceFS
 
 某些情况下，你可能需要在容器中直接挂载 JuiceFS 存储，这需要在容器中使用 JuiceFS 客户端，你可以参考以下 Dockerfile 样本将 JuiceFS 客户端集成到应用镜像：
@@ -411,3 +434,4 @@ spec:
 
 > ⚠️ **风险提示**：容器启用 `privileged: true` 特权模式以后，就具备了访问宿主机所有设备的权限，即拥有了对宿主机内核的完全控制权限。使用不当会带来严重的安全隐患，请您在使用此方式之前进行充分的安全评估。
 
+🏡 [返回 目录](#目录)
