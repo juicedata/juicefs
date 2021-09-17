@@ -5,7 +5,7 @@
 - [Requirements](#requirements)
   * [1. Hadoop and related components](#1-hadoop-and-related-components)
   * [2. User permissions](#2-user-permissions)
-  * [3. Filesystems](#3-file-system)
+  * [3. File system](#3-file-system)
   * [4. Memory](#4-memory)
 - [Client compilation](#client-compilation)
   * [Linux and macOS](#linux-and-macos)
@@ -123,7 +123,7 @@ $ make win
 To enable each component of the Hadoop ecosystem to correctly identify JuiceFS, the following configurations are required:
 
 1. Place the compiled JAR file and `$JAVA_HOME/lib/tools.jar` into the `classpath` of the component. The installation paths of common big data platforms and components are shown in the table below.
-2. Put JuiceFS configurations into the configuration file of each Hadoop ecosystem component (usually `core-site.xml`), see [Client Configuration Parameters](#Client Configuration Parameters) for details.
+2. Put JuiceFS configurations into the configuration file of each Hadoop ecosystem component (usually `core-site.xml`), see [Client Configurations](#client-configurations) for details.
 
 It is recommended to place the JAR file in a fixed location, and the other locations are called it through symbolic links.
 
