@@ -349,8 +349,17 @@ func (m *kvMeta) marshal(attr *Attr) []byte {
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
 	var value []byte
-	err := m.txn(func(tx kvTxn) error {
+	err := m.client.txn(func(tx kvTxn) error {
 		value = tx.get(key)
+		return nil
+	})
+	return value, err
+}
+
+func (m *kvMeta) getCounter(key []byte) (int64, error) {
+	var value int64
+	err := m.client.txn(func(tx kvTxn) error {
+		value = tx.incrBy(key, 0)
 		return nil
 	})
 	return value, err
@@ -358,7 +367,7 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 
 func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 	var keys [][]byte
-	err := m.txn(func(tx kvTxn) error {
+	err := m.client.txn(func(tx kvTxn) error {
 		keys = tx.scanKeys(prefix)
 		return nil
 	})
@@ -367,7 +376,7 @@ func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 
 func (m *kvMeta) scanValues(prefix []byte, filter func(k, v []byte) bool) (map[string][]byte, error) {
 	var values map[string][]byte
-	err := m.txn(func(tx kvTxn) error {
+	err := m.client.txn(func(tx kvTxn) error {
 		values = tx.scanValues(prefix, filter)
 		return nil
 	})
@@ -510,6 +519,9 @@ func (m *kvMeta) NewSession() error {
 }
 
 func (m *kvMeta) CloseSession() error {
+	if m.conf.ReadOnly {
+		return nil
+	}
 	m.Lock()
 	m.umounting = true
 	m.Unlock()
@@ -734,11 +746,11 @@ func (m *kvMeta) flushStats() {
 
 func (m *kvMeta) refreshUsage() {
 	for {
-		used, err := m.incrCounter(m.counterKey(usedSpace), 0)
+		used, err := m.getCounter(m.counterKey(usedSpace))
 		if err == nil {
 			atomic.StoreInt64(&m.usedSpace, used)
 		}
-		inodes, err := m.incrCounter(m.counterKey(totalInodes), 0)
+		inodes, err := m.getCounter(m.counterKey(totalInodes))
 		if err == nil {
 			atomic.StoreInt64(&m.usedInodes, inodes)
 		}
@@ -828,7 +840,7 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 func (m *kvMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	defer timeit(time.Now())
 	var used, inodes int64
-	err := m.txn(func(tx kvTxn) error {
+	err := m.client.txn(func(tx kvTxn) error {
 		used = tx.incrBy(m.counterKey(usedSpace), 0)
 		inodes = tx.incrBy(m.counterKey(totalInodes), 0)
 		return nil
@@ -1777,7 +1789,7 @@ func (m *kvMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 				keys[i] = m.inodeKey(e.Inode)
 			}
 			var rs [][]byte
-			err := m.txn(func(tx kvTxn) error {
+			err := m.client.txn(func(tx kvTxn) error {
 				rs = tx.gets(keys...)
 				return nil
 			})
@@ -2269,7 +2281,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.of.InvalidateChunk(inode, indx)
 		m.cleanupZeroRef(chunkid, size)
 		for _, s := range ss {
-			refs, err := m.incrCounter(m.sliceKey(s.chunkid, s.size), 0)
+			refs, err := m.getCounter(m.sliceKey(s.chunkid, s.size))
 			if err == nil && refs < 0 {
 				m.deleteSlice(s.chunkid, s.size)
 			}

@@ -388,6 +388,9 @@ func (m *dbMeta) NewSession() error {
 }
 
 func (m *dbMeta) CloseSession() error {
+	if m.conf.ReadOnly {
+		return nil
+	}
 	m.Lock()
 	m.umounting = true
 	m.Unlock()
