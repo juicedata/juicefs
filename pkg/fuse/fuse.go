@@ -34,26 +34,24 @@ var logger = utils.GetLogger("juicefs")
 
 type fileSystem struct {
 	fuse.RawFileSystem
-	cacheMode       int
-	attrTimeout     time.Duration
-	direntryTimeout time.Duration
-	entryTimeout    time.Duration
+	conf *vfs.Config
 }
 
-func newFileSystem() *fileSystem {
+func newFileSystem(conf *vfs.Config) *fileSystem {
 	return &fileSystem{
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
+		conf:          conf,
 	}
 }
 
 func (fs *fileSystem) replyEntry(out *fuse.EntryOut, e *meta.Entry) fuse.Status {
 	out.NodeId = uint64(e.Inode)
 	out.Generation = 1
-	out.SetAttrTimeout(fs.attrTimeout)
+	out.SetAttrTimeout(fs.conf.AttrTimeout)
 	if e.Attr.Typ == meta.TypeDirectory {
-		out.SetEntryTimeout(fs.direntryTimeout)
+		out.SetEntryTimeout(fs.conf.DirEntryTimeout)
 	} else {
-		out.SetEntryTimeout(fs.entryTimeout)
+		out.SetEntryTimeout(fs.conf.EntryTimeout)
 	}
 	if vfs.IsSpecialNode(e.Inode) {
 		out.SetAttrTimeout(time.Hour)
@@ -84,7 +82,7 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 		return fuse.Status(err)
 	}
 	attrToStat(entry.Inode, entry.Attr, &out.Attr)
-	out.AttrValid = uint64(fs.attrTimeout.Seconds())
+	out.AttrValid = uint64(fs.conf.AttrTimeout.Seconds())
 	if vfs.IsSpecialNode(Ino(in.NodeId)) {
 		out.AttrValid = 3600
 	}
@@ -102,7 +100,7 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	out.AttrValid = uint64(fs.attrTimeout.Seconds())
+	out.AttrValid = uint64(fs.conf.AttrTimeout.Seconds())
 	if vfs.IsSpecialNode(entry.Inode) {
 		out.AttrValid = 3600
 	}
@@ -417,15 +415,12 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 }
 
 // Serve starts a server to serve requests from FUSE.
-func Serve(conf *vfs.Config, options string, attrCacheTo, entryCacheTo, dirEntryCacheTo float64, xattrs bool) error {
+func Serve(conf *vfs.Config, options string, xattrs bool) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
 		logger.Warnf("setpriority: %s", err)
 	}
 
-	imp := newFileSystem()
-	imp.attrTimeout = time.Millisecond * time.Duration(attrCacheTo*1000)
-	imp.entryTimeout = time.Millisecond * time.Duration(entryCacheTo*1000)
-	imp.direntryTimeout = time.Millisecond * time.Duration(dirEntryCacheTo*1000)
+	imp := newFileSystem(conf)
 
 	var opt fuse.MountOptions
 	opt.FsName = "JuiceFS:" + conf.Format.Name
@@ -456,7 +451,6 @@ func Serve(conf *vfs.Config, options string, attrCacheTo, entryCacheTo, dirEntry
 		opt.Options = append(opt.Options, "fssubtype=juicefs")
 		opt.Options = append(opt.Options, "volname="+conf.Format.Name)
 		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
-		imp.cacheMode = 2
 	}
 	fssrv, err := fuse.NewServer(imp, conf.Mountpoint, &opt)
 	if err != nil {

@@ -39,13 +39,16 @@ const (
 )
 
 type Config struct {
-	Meta        *meta.Config
-	Format      *meta.Format
-	Chunk       *chunk.Config
-	Version     string
-	Mountpoint  string
-	FastResolve bool   `json:",omitempty"`
-	AccessLog   string `json:",omitempty"`
+	Meta            *meta.Config
+	Format          *meta.Format
+	Chunk           *chunk.Config
+	Version         string
+	Mountpoint      string
+	AttrTimeout     time.Duration
+	DirEntryTimeout time.Duration
+	EntryTimeout    time.Duration
+	FastResolve     bool   `json:",omitempty"`
+	AccessLog       string `json:",omitempty"`
 }
 
 var (
