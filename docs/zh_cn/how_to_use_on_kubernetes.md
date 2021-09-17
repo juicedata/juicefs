@@ -1,6 +1,6 @@
 # Kubernetes 使用 JuiceFS
 
-JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见的用法：
+JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见的用法。
 
 ## 目录
 - [JuiceFS CSI Driver](#juicefs-csi-driver)

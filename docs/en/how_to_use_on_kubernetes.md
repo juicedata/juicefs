@@ -2,11 +2,19 @@
 
 JuiceFS provides the [CSI Driver](https://github.com/juicedata/juicefs-csi-driver) for Kubernetes.
 
+## Table of Content
+- [Prerequisites](#Prerequisites)
+- [Installation](#Installation)
+  - [Install with Helm](#Install-with-Helm)
+  - [Install with kubectl](#Install-with-kubectl)
+- [Use JuiceFS](#Use-JuiceFS)
+- [Monitoring](#Monitoring)
+  - [Configure Prometheus server](#Configure-Prometheus-server)
+  - [Configure Grafana dashboard](#Configure-Grafana-dashboard)
 
 ## Prerequisites
 
 - Kubernetes 1.14+
-
 
 ## Installation
 
@@ -85,6 +93,8 @@ NAME         PROVISIONER       RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEX
 juicefs-sc   csi.juicefs.com   Retain          Immediate           false                  69m
 ```
 
+🏡 [Back to Top](#Table-of-Content)
+
 ### Install with kubectl
 
 1. Deploy the driver:
@@ -131,6 +141,7 @@ reclaimPolicy: Retain
 volumeBindingMode: Immediate
 ```
 
+🏡 [Back to Top](#Table-of-Content)
 
 ## Use JuiceFS
 
@@ -183,6 +194,7 @@ If the status of pod is not `Running` (e.g. `ContainerCreating`), there may have
 
 For more details about JuiceFS CSI Driver please refer to [project homepage](https://github.com/juicedata/juicefs-csi-driver).
 
+🏡 [Back to Top](#Table-of-Content)
 
 ## Monitoring
 
@@ -232,3 +244,5 @@ scrape_configs:
 ### Configure Grafana dashboard
 
 JuiceFS provides a [dashboard template](./grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
+
+🏡 [Back to Top](#Table-of-Content)
