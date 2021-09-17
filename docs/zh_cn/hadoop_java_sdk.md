@@ -40,7 +40,7 @@
 
 ----
 
-JuiceFS 提供与 HDFS 接口高度兼容的 Java 客户端，Hadoop 生态中的各种应用都可以在不改变代码的情况下，平滑地使用 JuiceFS 存储数据。
+JuiceFS 提供与 HDFS 接口[高度兼容](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html)的 Java 客户端，Hadoop 生态中的各种应用都可以在不改变代码的情况下，平滑地使用 JuiceFS 存储数据。
 
 ## 环境要求
 
@@ -58,7 +58,7 @@ JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下�
 
 创建文件系统可以参考 [JuiceFS 快速上手指南](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md)。
 
-> **注意**：在分布式环境中使用 JuiceFS 存储，创建文件系统时，请合理规划要使用的对象存储和数据库，确保它们可以被每个集群节点正常访问。
+> **注意**：如果要在分布式环境中使用 JuiceFS，创建文件系统时，请合理规划要使用的对象存储和数据库，确保它们可以被每个集群节点正常访问。
 
 ### 4. 内存资源
 

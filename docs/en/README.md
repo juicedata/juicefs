@@ -25,10 +25,10 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
 
 - **Introduction**
   - [What is JuiceFS](introduction.md)
-  - [JuiceFS Technical Architecture](architecture.md)
+  - [JuiceFS technical architecture](architecture.md)
   - [How JuiceFS store files](how_juicefs_store_files.md)
-  - [How to Setup Object Storage](how_to_setup_object_storage.md)
-  - [Metadata Engines for JuiceFS](databases_for_metadata.md)
+  - [How to setup object storage](how_to_setup_object_storage.md)
+  - [Metadata engines for JuiceFS](databases_for_metadata.md)
 - [Quick Start Guide](quick_start_guide.md)
 - **Basic Usage**
   - [Use JuiceFS on Linux](juicefs_on_linux.md)
@@ -37,7 +37,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [Use JuiceFS on Docker](juicefs_on_docker.md)
   - [Use JuiceFS on Kubernetes](how_to_use_on_kubernetes.md)
   - [Use JuiceFS on K3s](juicefs_on_k3s.md)
-  - [Use JuiceFS on Hadoop](hadoop_java_sdk.md)
+  - [Use JuiceFS on Hadoop ecosystem](hadoop_java_sdk.md)
   - [JuiceFS enable S3 Gateway](s3_gateway.md)
   - [JuiceFS client compilation and upgrade](client_compile_and_upgrade.md)
 - [Command Reference](command_reference.md)
@@ -46,8 +46,8 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [JuiceFS benchmark](benchmark.md)
   - [JuiceFS metadata engines benchmark](metadata_engines_benchmark.md)
   - [JuiceFS metadata backup and recovery](metadata_dump_load.md)
-  - [Data Encryption](encrypt.md)
-  - [POSIX Compatibility](posix_compatibility.md)
+  - [Data encryption](encrypt.md)
+  - [POSIX compatibility](posix_compatibility.md)
   - [JuiceFS cache management](cache_management.md)
   - [JuiceFS operations profiling](operations_profiling.md)
   - [JuiceFS performance statistics watcher](stats_watcher.md)
