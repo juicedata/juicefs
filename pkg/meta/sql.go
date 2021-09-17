@@ -692,8 +692,36 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 }
 
 func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	if inode == nil || attr == nil {
+		return syscall.EINVAL
+	}
 	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
+	if name == ".." {
+		if parent == m.root {
+			name = "."
+		} else {
+			if st := m.GetAttr(ctx, parent, attr); st != 0 {
+				return st
+			}
+			if attr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			*inode = attr.Parent
+			return m.GetAttr(ctx, *inode, attr)
+		}
+	}
+	if name == "." {
+		st := m.GetAttr(ctx, parent, attr)
+		if st != 0 {
+			return st
+		}
+		if attr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		*inode = parent
+		return 0
+	}
 	dbSession := m.engine.Table(&edge{})
 	if attr != nil {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
@@ -707,23 +735,14 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		if m.conf.CaseInsensi {
 			// TODO: in SQL
 			if e := m.resolveCase(ctx, parent, name); e != nil {
-				if inode != nil {
-					*inode = e.Inode
-				}
-				if attr != nil {
-					return m.GetAttr(ctx, *inode, attr)
-				}
-				return 0
+				*inode = e.Inode
+				return m.GetAttr(ctx, *inode, attr)
 			}
 		}
 		return syscall.ENOENT
 	}
-	if inode != nil {
-		*inode = nn.Inode
-	}
-	if attr != nil {
-		m.parseAttr(&nn.node, attr)
-	}
+	*inode = nn.Inode
+	m.parseAttr(&nn.node, attr)
 	return 0
 }
 

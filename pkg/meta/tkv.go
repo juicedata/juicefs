@@ -897,13 +897,23 @@ func (m *kvMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 			if st := m.GetAttr(ctx, parent, attr); st != 0 {
 				return st
 			}
+			if attr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
 			*inode = attr.Parent
 			return m.GetAttr(ctx, *inode, attr)
 		}
 	}
 	if name == "." {
+		st := m.GetAttr(ctx, parent, attr)
+		if st != 0 {
+			return st
+		}
+		if attr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
 		*inode = parent
-		return m.GetAttr(ctx, *inode, attr)
+		return 0
 	}
 	buf, err := m.get(m.entryKey(parent, name))
 	if err != nil {
