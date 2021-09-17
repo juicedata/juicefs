@@ -7,7 +7,7 @@ There are  three ways to use JuiceFS on Docker:
 2. [Docker Volume Plugin](#2-Docker-Volume-Plugin)
 3. [Mount JuiceFS in a Container](#3-Mount-JuiceFS-in-a-Container)
 
-## Volume Mapping
+## 1. Volume Mapping
 
 This method is to map the directories in the JuiceFS mount point to the Docker container. For example, the JuiceFS storage is mounted in the `/mnt/jfs` directory. When creating a container, you can map JuiceFS storage to the Docker container as follows:
 
