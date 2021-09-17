@@ -3,7 +3,7 @@
 JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见的用法：
 
 ## 目录
-1. [JuiceFS CSI Driver](#juicefs-csi-driver)
+- [JuiceFS CSI Driver](#juicefs-csi-driver)
   - [版本要求](#版本要求)
   - [安装](#安装)
     - [通过 Helm 安装](#通过-Helm-安装)
@@ -13,10 +13,10 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见
   - [监控](#监控)
     - [配置 Prometheus 服务](#配置-Prometheus-服务)
     - [配置 Grafana 仪表盘](#配置-Grafana-仪表盘)
-2. [在容器中挂载 JuiceFS](#在容器中挂载-JuiceFS)
+- [在容器中挂载 JuiceFS](#在容器中挂载-JuiceFS)
 
 
-## 1. JuiceFS CSI Driver
+## JuiceFS CSI Driver
 
 [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver) 遵循 [CSI](https://github.com/container-storage-interface/spec/blob/master/spec.md) 规范，实现了容器编排系统与 JuiceFS 文件系统之间的接口，支持动态配置 JuiceFS 卷提供给 Pod 使用。
 
@@ -29,7 +29,7 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见
 
 JuiceFS CSI Driver 有以下两种安装的方式。
 
-#### 1. 通过 Helm 安装
+#### 通过 Helm 安装
 
 Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把它看作是 Homebrew formula，Apt dpkg，或 Yum RPM 在 Kubernetes 中的等价物。
 
@@ -116,7 +116,7 @@ juicefs-sc   csi.juicefs.com   Retain          Immediate           false        
 
 🏡 [返回 目录](#目录)
 
-#### 2. 通过 kubectl 安装
+#### 通过 kubectl 安装
 
 由于 Kubernetes 在版本变更过程中会废弃部分旧的 API，因此需要根据你使用 Kubernetes 版本选择适用的部署文件：
 
@@ -386,7 +386,7 @@ JuiceFS 为 [Grafana](https://grafana.com) 提供了一个[仪表盘模板](../e
 
 🏡 [返回 目录](#目录)
 
-## 2. 在容器中挂载 JuiceFS
+## 在容器中挂载 JuiceFS
 
 某些情况下，你可能需要在容器中直接挂载 JuiceFS 存储，这需要在容器中使用 JuiceFS 客户端，你可以参考以下 Dockerfile 样本将 JuiceFS 客户端集成到应用镜像：
 
