@@ -654,11 +654,39 @@ func (r *redisMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 }
 
 func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	if inode == nil || attr == nil {
+		return syscall.EINVAL
+	}
 	defer timeit(time.Now())
 	var foundIno Ino
 	var encodedAttr []byte
 	var err error
 	parent = r.checkRoot(parent)
+	if name == ".." {
+		if parent == r.root {
+			name = "."
+		} else {
+			if st := r.GetAttr(ctx, parent, attr); st != 0 {
+				return st
+			}
+			if attr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			*inode = attr.Parent
+			return r.GetAttr(ctx, *inode, attr)
+		}
+	}
+	if name == "." {
+		st := r.GetAttr(ctx, parent, attr)
+		if st != 0 {
+			return st
+		}
+		if attr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		*inode = parent
+		return 0
+	}
 	entryKey := r.entryKey(parent)
 	if len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
 		var res interface{}
@@ -714,17 +742,13 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		if err != nil {
 			return errno(err)
 		}
-		if attr != nil {
-			encodedAttr, err = r.rdb.Get(ctx, r.inodeKey(foundIno)).Bytes()
-		}
+		encodedAttr, err = r.rdb.Get(ctx, r.inodeKey(foundIno)).Bytes()
 	}
 
-	if err == nil && attr != nil {
+	if err == nil {
 		r.parseAttr(encodedAttr, attr)
 	}
-	if inode != nil {
-		*inode = foundIno
-	}
+	*inode = foundIno
 	return errno(err)
 }
 
