@@ -690,6 +690,9 @@ func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 		}
 	} else {
 		*iavail = 10 << 20
+		for *iused*10 > (*iused+*iavail)*8 {
+			*iavail *= 2
+		}
 	}
 	return 0
 }
