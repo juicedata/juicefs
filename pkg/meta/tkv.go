@@ -880,6 +880,9 @@ func (m *kvMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint
 		}
 	} else {
 		*iavail = 10 << 20
+		for *iused*10 > (*iused+*iavail)*8 {
+			*iavail = *iavail*2 + *iused
+		}
 	}
 	return 0
 }
