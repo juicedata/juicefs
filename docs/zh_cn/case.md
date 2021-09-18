@@ -18,6 +18,10 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [使用 JuiceFS 在云上优化 Kylin 4.0 的存储性能](https://juicefs.com/blog/cn/posts/optimize-kylin-on-juicefs/)
 - [ClickHouse 存算分离架构探索](https://juicefs.com/blog/cn/posts/clickhouse-disaggregated-storage-and-compute-practice/)
 
+## AI
+
+- [如何借助 JuiceFS 为 AI 模型训练提速 7 倍](https://juicefs.com/blog/cn/posts/how-to-use-juicefs-to-speed-up-ai-model-training-by-7-times/)
+
 ## 数据共享
 
 - [基于 JuiceFS 搭建 Milvus 分布式集群](https://juicefs.com/blog/cn/posts/build-milvus-distributed-cluster-based-on-juicefs)
