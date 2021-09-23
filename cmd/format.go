@@ -210,6 +210,11 @@ func format(c *cli.Context) error {
 		}
 	}
 
+	if !c.Bool("force") && format.Compression == "none" { // default
+		if old, err := m.Load(); err == nil && old.Compression == "lz4" { // lz4 is the previous default algr
+			format.Compression = old.Compression // keep the existing default compress algr
+		}
+	}
 	err = m.Init(format, c.Bool("force"))
 	if err != nil {
 		logger.Fatalf("format: %s", err)
