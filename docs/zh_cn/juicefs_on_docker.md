@@ -2,6 +2,11 @@
 
 目前有三种在 Docker 上使用 JuiceFS 存储的方法：
 
+## 目录
+1. [卷映射](#1-卷映射)
+2. [Docker Volume Plugin](#2-Docker-Volume-Plugin)
+3. [在 Docker 容器中挂载 JuiceFS](#3-在-Docker-容器中挂载-JuiceFS)
+
 ## 1. 卷映射
 
 这种方法是将 JuiceFS 挂载点中的目录映射给 Docker 容器。比如， JuiceFS 文件系统挂载在 `/mnt/jfs` 目录，在创建容器时可以这样将 JuiceFS 存储映射到 Docker 容器：
@@ -50,6 +55,8 @@ FUSE 的 `user_allow_other` 启用后，你需要重新挂载 JuiceFS 文件系�
 $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
+🏡 [返回 目录](#目录)
+
 ## 2. Docker Volume Plugin
 
 JuiceFS 也支持使用 [volume plugin](https://docs.docker.com/engine/extend/) 方式访问。
@@ -67,6 +74,8 @@ $ docker run -it -v jfsvolume:/opt busybox ls /opt
 ```
 
 将上面 `{{VOLUME_NAME}}`、`{{META_URL}}`、`{{ACCESS_KEY}}`、`{{SECRET_KEY}}` 替换成你自己的文件系统配置。想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
+
+🏡 [返回 目录](#目录)
 
 ## 3. 在 Docker 容器中挂载 JuiceFS
 
@@ -100,3 +109,5 @@ $ sudo docker run -d --name nginx \
   --privileged=true \
   nginx-with-jfs
 ```
+
+🏡 [返回 目录](#目录)
