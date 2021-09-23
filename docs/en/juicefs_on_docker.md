@@ -2,6 +2,11 @@
 
 There are  three ways to use JuiceFS on Docker:
 
+## Table of Content
+1. [Volume Mapping](#1-Volume-Mapping)
+2. [Docker Volume Plugin](#2-Docker-Volume-Plugin)
+3. [Mount JuiceFS in a Container](#3-Mount-JuiceFS-in-a-Container)
+
 ## 1. Volume Mapping
 
 This method is to map the directories in the JuiceFS mount point to the Docker container. For example, the JuiceFS storage is mounted in the `/mnt/jfs` directory. When creating a container, you can map JuiceFS storage to the Docker container as follows:
@@ -50,6 +55,8 @@ After the `allow_other` of FUSE is enabled, you need to re-mount the JuiceFS fil
 $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
+🏡 [Back to Top](#Table-of-Content)
+
 ## 2. Docker Volume Plugin
 
 We can also use [volume plugin](https://docs.docker.com/engine/extend/) to access JuiceFS.
@@ -67,6 +74,8 @@ $ docker run -it -v jfsvolume:/opt busybox ls /opt
 ```
 
 Replace above `{{VOLUME_NAME}}`, `{{META_URL}}`, `{{ACCESS_KEY}}`, `{{SECRET_KEY}}` to your own volume setting. For more details about JuiceFS volume plugin, refer [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) repository.
+
+🏡 [Back to Top](#Table-of-Content)
 
 ## 3. Mount JuiceFS in a Container
 
@@ -101,3 +110,4 @@ $ sudo docker run -d --name nginx \
   nginx-with-jfs
 ```
 
+🏡 [Back to Top](#Table-of-Content)
