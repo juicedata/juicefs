@@ -492,6 +492,116 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 | write  | 198              | 1835           |
 | read   | 124              | 1234           |
 
+### TPC-DS
+
+测试数据集 100GB 规模，测试 parquet 和 orc 两种文件格式。
+
+本次测试仅测试前 10 个查询。
+
+使用 spark Thrift JDBC/ODBC server 开启 spark 常驻进程，然后通过 beeline 连接提交任务。
+
+#### 测试硬件
+|        | 机器型号            | CPU  | Memory | Disk                               | 数量 |
+| ------ | ------------------- | ---- | ------ | ---------------------------------- | ---- |
+| master | 阿里云ecs.r6.xlarge | 4    | 32GiB  | 系统：100GiB                       | 1    |
+| core   | 阿里云ecs.r6.xlarge | 4    | 32GiB  | 系统：100GiB<br />数据：500GiB X 2 | 3    |
+
+#### 软件配置
+
+- Thrift JDBC/ODBC server
+  ```shell
+  ${SPARK_HOME}/sbin/start-thriftserver.sh \
+  --master yarn \
+  --driver-memory 8g \
+  --executor-memory 10g \
+  --executor-cores 3 \
+  --num-executors 3 \
+  --conf spark.locality.wait=100 \
+  --conf spark.sql.crossJoin.enabled=true \
+  --hiveconf hive.server2.thrift.port=10001
+  ```
+
+- JuiceFS 缓存配置
+
+  core 节点 2 块数据盘挂载在 /data01 和 /data02 目录下
+  ```xml
+  <property>
+    <name>juicefs.cache-size</name>
+    <value>200000</value>
+  </property>
+  <property>
+    <name>juicefs.cache-dir</name>
+    <value>/data*/jfscache</value>
+  </property>
+  <property>
+    <name>juicefs.cache-full-block</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>juicefs.discover-nodes-url</name>
+    <value>yarn</value>
+  </property>
+  <property>
+    <name>juicefs.attr-cache</name>
+    <value>3</value>
+  </property>
+  <property>
+    <name>juicefs.entry-cache</name>
+    <value>3</value>
+  </property>
+  <property>
+    <name>juicefs.dir-entry-cache</name>
+    <value>3</value>
+  </property>
+  ```
+### 测试
+
+任务提交命令行
+```shell
+${SPARK_HOME}/bin/beeline -u jdbc:hive2://localhost:10001/${DATABASE} \
+-n hadoop \
+-f query{i}.sql
+```
+
+### 结果
+
+JuiceFS 可以使用本地磁盘作为缓存加速，以下数据是跑 4 次后的结果。
+
+- orc
+
+| queries | redis | tikv       | hdfs |
+| ------- | ----- | ---------- | ------ |
+| q1      |   20  | 20|    20    |
+| q2      |   28  | 33|    26    |
+| q3      |   24  | 27|    28    |
+| q4      |   300 | 309 |  290      |
+| q5      |   116 | 117 |   91     |
+| q6      |   37  | 42|    41    |
+| q7      |   24  | 28|    23    |
+| q8      |   13  | 15|    16    |
+| q9      |   87  | 112|    89    |
+| q10     |   23  | 24|    22    |
+
+![orc](../images/spark_ql_orc.png)
+
+- parquet
+
+| queries | redis | tikv       | hdfs |
+| ------- | ----- | ---------- | ------ |
+| q1      |    33  | 35|     39   |
+| q2      |    28  | 32|     31   |
+| q3      |    23  | 25|     24   |
+| q4      |    273 | 284 |   266     |
+| q5      |    96  | 107|     94   |
+| q6      |    36  | 35|     42   |
+| q7      |    28  | 30|     24   |
+| q8      |    11  | 12|     14   |
+| q9      |    85  | 97|     77   |
+| q10     |    24  | 28|     38   |
+
+![parquet](../images/spark_sql_parquet.png)
+
+
 
 ## FAQ
 
