@@ -18,7 +18,7 @@ package version
 import "fmt"
 
 var (
-	version      = "0.17-dev"
+	version      = "1.0-dev"
 	revision     = "$Format:%h$"
 	revisionDate = "$Format:%as$"
 )
