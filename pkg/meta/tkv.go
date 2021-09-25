@@ -2462,7 +2462,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 				ss := readSliceBuf(v)
 				slices := make([]*DumpedSlice, 0, len(ss))
 				for _, s := range ss {
-					slices = append(slices, &DumpedSlice{s.pos, s.chunkid, s.size, s.off, s.len})
+					slices = append(slices, &DumpedSlice{Pos: s.pos, Chunkid: s.chunkid, Off: s.size, Len: s.off, Size: s.len})
 				}
 				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 			}
