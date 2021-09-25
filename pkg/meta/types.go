@@ -67,8 +67,8 @@ type DumpedAttr struct {
 }
 
 type DumpedSlice struct {
-	Pos     uint32 `json:"pos"`
 	Chunkid uint64 `json:"chunkid"`
+	Pos     uint32 `json:"pos"`
 	Size    uint32 `json:"size"`
 	Off     uint32 `json:"off"`
 	Len     uint32 `json:"len"`

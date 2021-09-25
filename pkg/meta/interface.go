@@ -79,6 +79,7 @@ type Attr struct {
 	Mode      uint16 // permission mode
 	Uid       uint32 // owner id
 	Gid       uint32 // group id of owner
+	Rdev      uint32 // device number
 	Atime     int64  // last access time
 	Mtime     int64  // last modified time
 	Ctime     int64  // last change time for meta
@@ -87,7 +88,6 @@ type Attr struct {
 	Ctimensec uint32 // nanosecond part of ctime
 	Nlink     uint32 // number of links (sub-directories or hardlinks)
 	Length    uint64 // length of regular file
-	Rdev      uint32 // device number
 
 	Parent    Ino  // inode of parent, only for Directory
 	Full      bool // the attributes are completed or not
