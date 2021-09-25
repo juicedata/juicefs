@@ -90,16 +90,16 @@ func (r *frange) include(a *frange) bool { return r.off <= a.off && a.end() <= r
 // protected by file
 type sliceReader struct {
 	file       *fileReader
-	indx       uint32
 	block      *frange
 	state      sstate
 	page       *chunk.Page
+	indx       uint32
 	currentPos uint32
 	lastAccess time.Time
-	refs       uint16
 	cond       *utils.Cond
 	next       *sliceReader
 	prev       **sliceReader
+	refs       uint16
 }
 
 func (s *sliceReader) delay(delay time.Duration) {
