@@ -2547,15 +2547,6 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 		var err error
 		var n int64
 		switch flags {
-		case XattrCreateOrReplace:
-			n, err = s.Insert(&x)
-			if err != nil || n == 0 {
-				if m.engine.DriverName() == "postgres" {
-					// cleanup failed session
-					_ = s.Rollback()
-				}
-				_, err = s.Update(&x, &xattr{inode, name, nil})
-			}
 		case XattrCreate:
 			n, err = s.Insert(&x)
 			if err != nil || n == 0 {
@@ -2567,7 +2558,14 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 				err = ENOATTR
 			}
 		default:
-			return syscall.EINVAL
+			n, err = s.Insert(&x)
+			if err != nil || n == 0 {
+				if m.engine.DriverName() == "postgres" {
+					// cleanup failed session
+					_ = s.Rollback()
+				}
+				_, err = s.Update(&x, &xattr{inode, name, nil})
+			}
 		}
 		return err
 	}))

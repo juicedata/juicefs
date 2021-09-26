@@ -2394,7 +2394,6 @@ func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 	key := m.xattrKey(inode, name)
 	err := m.txn(func(tx kvTxn) error {
 		switch flags {
-		case XattrCreateOrReplace:
 		case XattrCreate:
 			v := tx.get(key)
 			if v != nil {
@@ -2405,8 +2404,6 @@ func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 			if v == nil {
 				return ENOATTR
 			}
-		default:
-			return syscall.EINVAL
 		}
 		tx.set(key, value)
 		return nil
