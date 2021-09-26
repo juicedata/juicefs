@@ -253,11 +253,10 @@ func bench(ctx *cli.Context) error {
 	if ctx.Uint("block-size") == 0 || ctx.Uint("threads") == 0 {
 		return os.ErrInvalid
 	}
-	tmpdir := "/jfs"
-	if ctx.NArg() > 0 {
-		tmpdir = ctx.Args().First()
+	if ctx.NArg() < 1 {
+		logger.Fatalln("PATH must be provided")
 	}
-	tmpdir = filepath.Join(tmpdir, fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
+	tmpdir := filepath.Join(ctx.Args().First(), fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
 	bm := newBenchmark(tmpdir, int(ctx.Uint("block-size")), int(ctx.Uint("big-file-size")),
 		int(ctx.Uint("small-file-size")), int(ctx.Uint("small-file-count")), int(ctx.Uint("threads")))
 	if bm.big == nil && bm.small == nil {
