@@ -2,7 +2,7 @@
 
 ## Introduction
 
-JuiceFS has a special virtual file named `.accesslog` to track every operation occurred within its client. This file may generate thousands of log entries per second when under pressure, making it hard to find out what is actually going on at a certain time. Thus, we made a simple tool called `juicefs profile` to show an overview of recently completed operations. The basic idea is to aggregate all logs in the past interval and display statistics periodically, like:
+JuiceFS has a special virtual file named [`.accesslog`](fault_diagnosis_and_analysis.md#access-log) to track every operation occurred within its client. This file may generate thousands of log entries per second when under pressure, making it hard to find out what is actually going on at a certain time. Thus, we made a simple tool called [`juicefs profile`](command_reference.md#juicefs-profile) to show an overview of recently completed operations. The basic idea is to aggregate all logs in the past interval and display statistics periodically, like:
 
 ![juicefs-profiling](../images/juicefs-profiling.gif)
 
