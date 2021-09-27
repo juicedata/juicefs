@@ -29,7 +29,7 @@ $ cat /var/log/syslog | grep 'juicefs' | grep '<FATAL>'
 
 ## 访问日志
 
-JuiceFS 的根目录中有一个名为`.accesslog` 的虚拟文件，它记录了文件系统上的所有操作及其花费的时间，例如：
+JuiceFS 的根目录中有一个名为 `.accesslog` 的虚拟文件，它记录了文件系统上的所有操作及其花费的时间，例如：
 
 ```
 $ cat /jfs/.accesslog
