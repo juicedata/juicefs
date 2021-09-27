@@ -503,7 +503,7 @@ juicefs fsck [command options] META-URL
 
 #### Description
 
-Analyze access log.
+Analyze [access log](fault_diagnosis_and_analysis.md#access-log).
 
 #### Synopsis
 

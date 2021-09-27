@@ -503,7 +503,7 @@ juicefs fsck [command options] META-URL
 
 #### 描述
 
-分析访问日志。
+分析[访问日志](fault_diagnosis_and_analysis.md#access-log)。
 
 #### 使用
 
