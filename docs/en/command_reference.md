@@ -34,7 +34,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.16-dev (2021-08-09 2f17d86)
+   0.17.0 (2021-09-24 e115dc4)
 
 COMMANDS:
    format   format a volume
@@ -48,7 +48,7 @@ COMMANDS:
    gc       collect any leaked objects
    fsck     Check consistency of file system
    profile  analyze access log
-   stats    show runtime stats
+   stats    show runtime statistics
    status   show status of JuiceFS
    warmup   build cache for target directories/files
    dump     dump metadata into a JSON file
@@ -331,6 +331,15 @@ open file cache timeout in seconds (0 means disable this feature) (default: 0)
 `--subdir value`\
 mount a sub-directory as root (default: "")
 
+`--attr-cache value`\
+attributes cache timeout in seconds (default: 1)
+
+`--entry-cache value`\
+file entry cache timeout in seconds (default: 0)
+
+`--dir-entry-cache value`\
+dir entry cache timeout in seconds (default: 1)
+
 `--access-log value`\
 path for JuiceFS access log
 
@@ -529,7 +538,7 @@ flush interval in seconds; set it to 0 when replaying a log file to get an immed
 
 #### Description
 
-show runtime stats.
+Show runtime statistics
 
 #### Synopsis
 
@@ -555,7 +564,7 @@ disable colors (default: false)
 
 #### Description
 
-show status of JuiceFS
+Show status of JuiceFS
 
 #### Synopsis
 
@@ -572,7 +581,7 @@ show detailed information (sustained inodes, locks) of the specified session (si
 
 #### Description
 
-build cache for target directories/files
+Build cache for target directories/files
 
 #### Synopsis
 
@@ -595,7 +604,7 @@ run in background (default: false)
 
 #### Description
 
-dump metadata into a JSON file
+Dump metadata into a JSON file
 
 #### Synopsis
 
@@ -614,7 +623,7 @@ only dump a sub-directory.
 
 #### Description
 
-load metadata from a previously dumped JSON file
+Load metadata from a previously dumped JSON file
 
 #### Synopsis
 
