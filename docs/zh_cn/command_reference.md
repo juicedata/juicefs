@@ -34,7 +34,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.16-dev (2021-08-09 2f17d86)
+   0.17.0 (2021-09-24 e115dc4)
 
 COMMANDS:
    format   format a volume
@@ -48,7 +48,7 @@ COMMANDS:
    gc       collect any leaked objects
    fsck     Check consistency of file system
    profile  analyze access log
-   stats    show runtime stats
+   stats    show runtime statistics
    status   show status of JuiceFS
    warmup   build cache for target directories/files
    dump     dump metadata into a JSON file
@@ -330,6 +330,15 @@ juicefs gateway [command options] META-URL ADDRESS
 
 `--subdir value`\
 将某个子目录挂载为根 (默认: "")
+
+`--attr-cache value`\
+属性缓存过期时间；单位为秒 (默认: 1)
+
+`--entry-cache value`\
+文件项缓存过期时间；单位为秒 (默认: 0)
+
+`--dir-entry-cache value`\
+目录项缓存过期时间；单位为秒 (默认: 1)
 
 `--access-log value`\
 访问日志的路径
