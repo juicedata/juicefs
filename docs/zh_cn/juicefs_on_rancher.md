@@ -4,8 +4,6 @@
 
 Rancher 提供了基于浏览器的管理界面，即便是 Kubernetes 经验并不丰富的用户，也能相对轻松的上手开始管理和使用。它默认预置了基于 Helm 的应用市场，可以在图形化界面下非常轻松的安装各种 Kubernetes 应用。
 
-通过阅读 Kubernetes 和 K3s 相关的文档可以了解到，JuiceFS 提供了 Helm 和 kubectl 两种在命令行下安装 JuiceFS CSI Drvier 的方式。而在 Rancher 平台，得益于图形化的应用市场，JuiceFS CSI Driver 的安装过程被大大的简化。
-
 本文将介绍如何在 Linux 系统上部署 Rancher，并在上面创建 Kubernetes 集群，然后通过其内置的应用市场，一键部署 JuiceFS CSI Driver，为集群上的各种应用提供数据持久化。
 
 ## 安装 Rancher
