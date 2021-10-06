@@ -43,17 +43,17 @@ type emptyContext struct {
 	context.Context
 }
 
-func (ctx emptyContext) Gid() uint32    { return 0 }
-func (ctx emptyContext) Gids() []uint32 { return []uint32{0} }
-func (ctx emptyContext) Uid() uint32    { return 0 }
-func (ctx emptyContext) Pid() uint32    { return 1 }
-func (ctx emptyContext) Cancel()        {}
-func (ctx emptyContext) Canceled() bool { return false }
-func (ctx emptyContext) WithValue(k, v interface{}) {
+func (ctx *emptyContext) Gid() uint32    { return 0 }
+func (ctx *emptyContext) Gids() []uint32 { return []uint32{0} }
+func (ctx *emptyContext) Uid() uint32    { return 0 }
+func (ctx *emptyContext) Pid() uint32    { return 1 }
+func (ctx *emptyContext) Cancel()        {}
+func (ctx *emptyContext) Canceled() bool { return false }
+func (ctx *emptyContext) WithValue(k, v interface{}) {
 	ctx.Context = context.WithValue(ctx.Context, k, v)
 }
 
-var Background Context = emptyContext{context.Background()}
+var Background Context = &emptyContext{context.Background()}
 
 type myContext struct {
 	context.Context
