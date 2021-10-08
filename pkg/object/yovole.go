@@ -107,8 +107,7 @@ func (u *yovole) List(prefix, marker string, limit int64) ([]Object, error) {
 		return nil, fmt.Errorf("invalid content length: %d", resp.ContentLength)
 	}
 	data := make([]byte, resp.ContentLength)
-	if n, err := io.ReadFull(resp.Body, data); err != nil {
-		println(string(data[:n]))
+	if _, err := io.ReadFull(resp.Body, data); err != nil {
 		return nil, err
 	}
 	var out ListResult
