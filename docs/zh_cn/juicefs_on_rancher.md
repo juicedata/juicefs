@@ -89,11 +89,11 @@ storageClasses:
 ...
 ```
 
+> **提示**：如果你有多个 JuiceFS 文件系统，分别需要关联到 Kubernetes 集群不同的 storageClass，可以在 `storageClasses` 数组后面再加 storageClass 配置项，注意修改存储类的名称，避免冲突。
+
 点击“安装”，等待应用安装完成。
 
 ![](../images/rancher-chart-installed.jpg)
-
-> **提示**：如果你有多个 JuiceFS 文件系统需要关联到 Kubernetes 集群，可以重复上面步骤安装 juicefs-csi-driver，注意修改存储类的名称，避免冲突。
 
 ## 使用 JuiceFS 持久化数据
 
