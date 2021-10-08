@@ -156,7 +156,7 @@ $ make win
 | 配置项                           | 默认值                       | 描述                                                         |
 | -------------------------------- | ---------------------------- | ------------------------------------------------------------ |
 | `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | 指定要使用的存储实现，默认使用 `jfs://` 。如想要使用 `cfs://` 作为 scheme，则修改为 `fs.cfs.impl` 即可。在使用 `cfs://` 时，仍是访问 JuiceFS 中的数据。 |
-| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         |                                                              |
+| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | 指定要使用的存储实现，默认使用 jfs:// 。如想要使用 cfs:// 作为 scheme，则修改为 `fs.AbstractFileSystem.cfs.impl` 即可。在使用 cfs:// 时，仍是访问 JuiceFS 中的数据。                                                             |
 | `juicefs.meta`                   |                              | 指定预先创建好的 JuiceFS 文件系统的元数据引擎地址。可以通过 `juicefs.{vol_name}.meta` 格式为客户端同时配置多个文件系统。 |
 
 #### 缓存配置
