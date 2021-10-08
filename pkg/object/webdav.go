@@ -142,7 +142,6 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 		// If the root is not ends with `/`, we'll list the directory root resides.
 		walkRoot = path.Dir(prefix)
 	}
-	println("listall", prefix, walkRoot)
 	infos, err := w.c.Readdir(walkRoot, true)
 	if err != nil {
 		return nil, err
