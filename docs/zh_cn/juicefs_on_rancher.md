@@ -30,7 +30,7 @@ $ sudo docker run --privileged -d --restart=unless-stopped -p 80:80 -p 443:443 r
 
 Rancher 安装成功以后，可以看到它已经在当前容器中部署了一个 K3s 集群，Rancher 相关资源都运行在这个内部的 K3s 集群中，无需理会这个集群。
 
-接下来开始创建 Kubernetes 集群，在欢迎页面的 Cluster 部分点击 `Create` 创建集群。Rancher 支持在各大主流云计算平台创建 Kubernetes 集群，这里我们要在 Rancher 的宿主机上直接选择集群，因此选择 `Custom`。然后根据向导填写集群名称，选择 Kubernetes 版本即可。
+接下来开始创建 Kubernetes 集群，在欢迎页面的 Cluster 部分点击 `Create` 创建集群。Rancher 支持在各大主流云计算平台创建 Kubernetes 集群，这里我们要在 Rancher 的宿主机上直接创建集群，因此选择 `Custom`。然后根据向导填写集群名称，选择 Kubernetes 版本即可。
 
 ![](../images/rancher-cluster-create.jpg)
 
