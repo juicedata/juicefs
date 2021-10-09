@@ -10,7 +10,7 @@ Rancher 提供了基于浏览器的管理界面，即便是 Kubernetes 经验并
 
 几乎所有主流的现代 Linux 发行版都可以安装 Rancher，它既可以直接安装在操作系统上，也可以安装在 Docker、Kubernetes、K3s 或 RKE 上，不论在哪种环境上安装都是“Product-Ready”的。
 
-这里我们选择将 Rancher 安装在 Docker 上，配上需要满足以下要求：
+这里我们选择将 Rancher 安装在 Docker 上，配置上需要满足以下要求：
 
 - **操作系统**：x86-64 架构的 Linux 系统
 - **内存**：4GB 以上
@@ -44,7 +44,7 @@ Rancher 安装成功以后，可以看到它已经在当前容器中部署了一
 
 ## 一键安装 JuiceFS CSI Driver
 
-在集群列表中点击进入创建的 Kubernetes 集群，左侧导航菜单点击展开`应用市场` -> `Chart 仓库`，点击 `创建` 按钮添加 JuiceFS CSI 仓库，填写：
+在集群列表中点击进入创建的 Kubernetes 集群，左侧导航菜单点击展开 `应用市场` → `Chart 仓库`，点击 `创建` 按钮添加 JuiceFS CSI 仓库，填写：
 
 - **仓库名称**：juicefs
 - **Index URL**：https://juicedata.github.io/juicefs-csi-driver/
@@ -55,7 +55,7 @@ Rancher 安装成功以后，可以看到它已经在当前容器中部署了一
 
 ![](../images/rancher-repos.jpg)
 
-紧接着通过左侧菜单点击打开`应用市场` -> `Charts`，搜索栏中输入 `juicefs`，然后点击打开检索出的 `juicefs-csi-driver`。
+紧接着通过左侧菜单点击打开 `应用市场` → `Charts`，搜索栏中输入 `juicefs`，然后点击打开检索出的 `juicefs-csi-driver`。
 
 ![](../images/rancher-chart-search.jpg)
 
@@ -71,7 +71,7 @@ JuiceFS CSI Driver 默认为 `kube-system`，这一步无需设置。
 
 ### 第二步：调整配置参数
 
-这个页面提供了 YAML 编辑器，你可以根据需要调整 JuiceFS 相关的信息，通常只需要修改 `storageClasses` 部分，其中 `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [JuiceFS 快速上手指南](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md)了解相关内容。如果你使用的是已经预先创建的文件系统，那么只需填写 `metaurl` 和 `name` 两项即可，例如：
+这个页面提供了 YAML 编辑器，你可以根据需要调整 JuiceFS 相关的信息，通常只需要修改 `storageClasses` 部分，其中 `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅[「JuiceFS 快速上手指南」](quick_start_guide.md)了解相关内容。如果你使用的是已经预先创建的文件系统，那么只需填写 `metaurl` 和 `name` 两项即可，例如：
 
 ```yaml
 ...
@@ -81,7 +81,7 @@ storageClasses:
       bucket: ''
       metaurl: 'redis://:mypasswd@efgh123.redis.rds.aliyuncs.com/1'
       name: myjfs
-      secretKey: '' 
+      secretKey: ''
       storage: ''
     enabled: true
     name: juicefs-sc
