@@ -153,11 +153,11 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 
 #### Core Configurations
 
-| Configuration                    | Default Value                | Description                                                  |
-| -------------------------------- | ---------------------------- | ------------------------------------------------------------ |
-| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | Specify the storage implementation to be used. By default, `jfs://` is used. If you want to use `cfs://` as the scheme, just modify it to `fs.cfs.impl`. When using `cfs://`, it is still access the data in JuiceFS. |
-| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | Specify the storage implementation to be used. By default, `jfs://` is used. If you want to use `cfs://` as the scheme, just modify it to `fs.AbstractFileSystem.cfs.impl`. When using `cfs://`, it is still access the data in JuiceFS.                                                              |
-| `juicefs.meta`                   |                              | Specify the metadata engine address of the pre-created JuiceFS file system. You can configure multiple file systems for the client at the same time through the format of `juicefs.{vol_name}.meta`. |
+| Configuration                    | Default Value                | Description                                                                                                                                                                                                                                                                                  |
+| -------------------------------- | ---------------------------- | ------------------------------------------------------------                                                                                                                                                                                                                                 |
+| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.cfs.impl`. No matter what sheme you use, it is always access the data in JuiceFS.                                             |
+| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.AbstractFileSystem.cfs.impl`. No matter what sheme you use, it is always access the data in JuiceFS.                          |
+| `juicefs.meta`                   |                              | Specify the metadata engine address of the pre-created JuiceFS file system. You can configure multiple file systems for the client at the same time through the format of `juicefs.{vol_name}.meta`. Refer to ["Multiple file systems configuration"](#multiple-file-systems-configuration). |
 
 #### Cache Configurations
 
