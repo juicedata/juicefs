@@ -24,6 +24,7 @@
   * [CDH6](#cdh6)
   * [HDP](#hdp)
   * [Flink](#flink)
+  * [Hudi](#hudi)
   * [重启服务](#%E9%87%8D%E5%90%AF%E6%9C%8D%E5%8A%A1)
 - [环境验证](#%E7%8E%AF%E5%A2%83%E9%AA%8C%E8%AF%81)
   * [Hadoop](#hadoop)
@@ -270,6 +271,12 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 ### Flink
 
 将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
+
+### Hudi
+
+> **注意**：目前最新版 Hudi（v0.9.0）还不支持 JuiceFS，你需要自行编译最新 master 分支。
+
+请参考[「Hudi 官方文档」](https://hudi.apache.org/docs/next/jfs_hoodie)了解如何配置 JuiceFS。
 
 ### 重启服务
 

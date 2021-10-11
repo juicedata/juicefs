@@ -24,6 +24,7 @@
   * [CDH6](#cdh6)
   * [HDP](#hdp)
   * [Flink](#flink)
+  * [Hudi](#hudi)
   * [Restart Services](#restart-services)
 - [Environmental Verification](#environmental-verification)
   * [Hadoop](#hadoop)
@@ -269,6 +270,12 @@ In addition to modifying `core-site`, you also need to modify the configuration 
 ### Flink
 
 Add configuration parameters to `conf/flink-conf.yaml`. If you only use JuiceFS in Flink, you don't need to configure JuiceFS in the Hadoop environment, you only need to configure the Flink client.
+
+### Hudi
+
+> **Note**: The latest version of Hudi (v0.9.0) does not yet support JuiceFS, you need to compile the latest master branch yourself.
+
+Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/next/jfs_hoodie) to learn how to configure JuiceFS.
 
 ### Restart Services
 
