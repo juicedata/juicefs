@@ -24,6 +24,7 @@
   * [CDH6](#cdh6)
   * [HDP](#hdp)
   * [Flink](#flink)
+  * [Hudi](#hudi)
   * [Restart Services](#restart-services)
 - [Environmental Verification](#environmental-verification)
   * [Hadoop](#hadoop)
@@ -153,11 +154,11 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 
 #### Core Configurations
 
-| Configuration                    | Default Value                | Description                                                  |
-| -------------------------------- | ---------------------------- | ------------------------------------------------------------ |
-| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | Specify the storage implementation to be used. By default, `jfs://` is used. If you want to use `cfs://` as the scheme, just modify it to `fs.cfs.impl`. When using `cfs://`, it is still access the data in JuiceFS. |
-| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | Specify the storage implementation to be used. By default, `jfs://` is used. If you want to use `cfs://` as the scheme, just modify it to `fs.AbstractFileSystem.cfs.impl`. When using `cfs://`, it is still access the data in JuiceFS.                                                              |
-| `juicefs.meta`                   |                              | Specify the metadata engine address of the pre-created JuiceFS file system. You can configure multiple file systems for the client at the same time through the format of `juicefs.{vol_name}.meta`. |
+| Configuration                    | Default Value                | Description                                                                                                                                                                                                                                                                                  |
+| -------------------------------- | ---------------------------- | ------------------------------------------------------------                                                                                                                                                                                                                                 |
+| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.cfs.impl`. No matter what sheme you use, it is always access the data in JuiceFS.                                             |
+| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.AbstractFileSystem.cfs.impl`. No matter what sheme you use, it is always access the data in JuiceFS.                          |
+| `juicefs.meta`                   |                              | Specify the metadata engine address of the pre-created JuiceFS file system. You can configure multiple file systems for the client at the same time through the format of `juicefs.{vol_name}.meta`. Refer to ["Multiple file systems configuration"](#multiple-file-systems-configuration). |
 
 #### Cache Configurations
 
@@ -269,6 +270,12 @@ In addition to modifying `core-site`, you also need to modify the configuration 
 ### Flink
 
 Add configuration parameters to `conf/flink-conf.yaml`. If you only use JuiceFS in Flink, you don't need to configure JuiceFS in the Hadoop environment, you only need to configure the Flink client.
+
+### Hudi
+
+> **Note**: The latest version of Hudi (v0.9.0) does not yet support JuiceFS, you need to compile the latest master branch yourself.
+
+Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/next/jfs_hoodie) to learn how to configure JuiceFS.
 
 ### Restart Services
 

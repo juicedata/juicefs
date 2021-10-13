@@ -24,6 +24,7 @@
   * [CDH6](#cdh6)
   * [HDP](#hdp)
   * [Flink](#flink)
+  * [Hudi](#hudi)
   * [重启服务](#%E9%87%8D%E5%90%AF%E6%9C%8D%E5%8A%A1)
 - [环境验证](#%E7%8E%AF%E5%A2%83%E9%AA%8C%E8%AF%81)
   * [Hadoop](#hadoop)
@@ -154,11 +155,11 @@ $ make win
 
 #### 核心配置
 
-| 配置项                           | 默认值                       | 描述                                                         |
-| -------------------------------- | ---------------------------- | ------------------------------------------------------------ |
-| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | 指定要使用的存储实现，默认使用 `jfs://` 。如想要使用 `cfs://` 作为 scheme，则修改为 `fs.cfs.impl` 即可。在使用 `cfs://` 时，仍是访问 JuiceFS 中的数据。 |
-| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | 指定要使用的存储实现，默认使用 jfs:// 。如想要使用 cfs:// 作为 scheme，则修改为 `fs.AbstractFileSystem.cfs.impl` 即可。在使用 cfs:// 时，仍是访问 JuiceFS 中的数据。                                                             |
-| `juicefs.meta`                   |                              | 指定预先创建好的 JuiceFS 文件系统的元数据引擎地址。可以通过 `juicefs.{vol_name}.meta` 格式为客户端同时配置多个文件系统。 |
+| 配置项                           | 默认值                       | 描述                                                                                                                                                                                                 |
+| -------------------------------- | ---------------------------- | ------------------------------------------------------------                                                                                                                                         |
+| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | 指定要使用的存储实现，默认使用 `jfs://` 作为 scheme。如想要使用其它 scheme（例如 `cfs://`），则修改为 `fs.cfs.impl` 即可。无论使用的 scheme 是什么，访问的都是 JuiceFS 中的数据。                    |
+| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | 指定要使用的存储实现，默认使用 `jfs://` 作为 scheme。如想要使用其它 scheme（例如 `cfs://`），则修改为 `fs.AbstractFileSystem.cfs.impl` 即可。无论使用的 scheme 是什么，访问的都是 JuiceFS 中的数据。 |
+| `juicefs.meta`                   |                              | 指定预先创建好的 JuiceFS 文件系统的元数据引擎地址。可以通过 `juicefs.{vol_name}.meta` 格式为客户端同时配置多个文件系统。具体请参考[「多文件系统配置」](#多文件系统配置)。                            |
 
 #### 缓存配置
 
@@ -270,6 +271,12 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 ### Flink
 
 将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
+
+### Hudi
+
+> **注意**：目前最新版 Hudi（v0.9.0）还不支持 JuiceFS，你需要自行编译最新 master 分支。
+
+请参考[「Hudi 官方文档」](https://hudi.apache.org/docs/next/jfs_hoodie)了解如何配置 JuiceFS。
 
 ### 重启服务
 
