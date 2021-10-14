@@ -1459,7 +1459,10 @@ public class JuiceFileSystemImpl extends FileSystem {
       throw error(r, f);
     }
     statistics.incrementReadOps(j);
-    return Arrays.copyOf(results, j);
+
+    FileStatus[] sorted = Arrays.copyOf(results, j);
+    Arrays.sort(sorted, (p1, p2) -> p1.getPath().compareTo(p2.getPath()));
+    return sorted;
   }
 
   @Override
