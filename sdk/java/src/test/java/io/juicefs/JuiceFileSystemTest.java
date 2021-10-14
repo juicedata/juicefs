@@ -28,8 +28,11 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.PrivilegedExceptionAction;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import static org.junit.Assert.assertArrayEquals;
 
 public class JuiceFileSystemTest extends TestCase {
   FsShell shell;
@@ -443,5 +446,26 @@ public class JuiceFileSystemTest extends TestCase {
     // src should be deleted after concat
     assertFalse(fs.exists(src1));
     assertFalse(fs.exists(src2));
+  }
+
+  public void testList() throws Exception {
+    Path p = new Path("/listsort");
+    String[] org = new String[]{
+            "/listsort/p4",
+            "/listsort/p2",
+            "/listsort/p1",
+            "/listsort/p3"
+    };
+    fs.mkdirs(p);
+    for (String path : org) {
+      fs.mkdirs(new Path(path));
+    }
+    FileStatus[] fss = fs.listStatus(p);
+    String[] res = new String[fss.length];
+    for (int i = 0; i < fss.length; i++) {
+      res[i] = fss[i].getPath().toUri().getPath();
+    }
+    Arrays.sort(org);
+    assertArrayEquals(org, res);
   }
 }
