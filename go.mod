@@ -40,6 +40,7 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go v6.0.14+incompatible
+	github.com/nats-io/nats-server/v2 v2.6.2 // indirect
 	github.com/ncw/swift v1.0.53
 	github.com/pengsrc/go-shared v0.2.0 // indirect
 	github.com/pingcap/log v0.0.0-20210317133921-96f4fcab92a4
@@ -61,7 +62,7 @@ require (
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/yunify/qingstor-sdk-go v2.2.15+incompatible
-	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392
+	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
 	golang.org/x/sys v0.0.0-20210823070655-63515b42dcdf
