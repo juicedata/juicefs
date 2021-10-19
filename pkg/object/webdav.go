@@ -87,7 +87,7 @@ func (w *webdav) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (w *webdav) mkdirs(p string) error {
 	err := w.c.Mkdir(p)
-	if err != nil && w.isNotExist(p) {
+	if err != nil && w.isNotExist(path.Dir(p)) {
 		if w.mkdirs(path.Dir(p)) == nil {
 			err = w.c.Mkdir(p)
 		}
