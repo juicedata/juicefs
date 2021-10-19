@@ -69,6 +69,26 @@ func installHandler(mp string) {
 	}()
 }
 
+func exposeMetrics(m meta.Meta, addr string) {
+	meta.InitMetrics()
+	vfs.InitMetrics()
+	go metric.UpdateMetrics(m)
+	http.Handle("/metrics", promhttp.HandlerFor(
+		prometheus.DefaultGatherer,
+		promhttp.HandlerOpts{
+			// Opt into OpenMetrics to support exemplars.
+			EnableOpenMetrics: true,
+		},
+	))
+	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
+	go func() {
+		err := http.ListenAndServe(addr, nil)
+		if err != nil {
+			logger.Errorf("listen and serve for metrics: %s", err)
+		}
+	}()
+}
+
 func mount(c *cli.Context) error {
 	setLoggerLevel(c)
 	if c.Args().Len() < 1 {
@@ -213,25 +233,7 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("new session: %s", err)
 	}
 	installHandler(mp)
-
-	meta.InitMetrics()
-	vfs.InitMetrics()
-	go metric.UpdateMetrics(m)
-	http.Handle("/metrics", promhttp.HandlerFor(
-		prometheus.DefaultGatherer,
-		promhttp.HandlerOpts{
-			// Opt into OpenMetrics to support exemplars.
-			EnableOpenMetrics: true,
-		},
-	))
-	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
-	go func() {
-		err = http.ListenAndServe(c.String("metrics"), nil)
-		if err != nil {
-			logger.Errorf("listen and serve for metrics: %s", err)
-		}
-	}()
-
+	exposeMetrics(m, c.String("metrics"))
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
