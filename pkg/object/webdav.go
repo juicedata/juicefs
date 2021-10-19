@@ -87,7 +87,7 @@ func (w *webdav) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (w *webdav) mkdirs(p string) error {
 	err := w.c.Mkdir(p)
-	if err != nil && w.isNotExist(err) {
+	if err != nil && w.isNotExist(path.Dir(p)) {
 		if w.mkdirs(path.Dir(p)) == nil {
 			err = w.c.Mkdir(p)
 		}
@@ -95,8 +95,11 @@ func (w *webdav) mkdirs(p string) error {
 	return err
 }
 
-func (w *webdav) isNotExist(err error) bool {
-	return strings.Contains(err.Error(), "Not Found")
+func (w *webdav) isNotExist(key string) bool {
+	if _, err := w.c.Stat(key); err != nil {
+		return strings.Contains(strings.ToLower(err.Error()), "not found")
+	}
+	return false
 }
 
 func (w *webdav) Put(key string, in io.Reader) error {
@@ -107,13 +110,13 @@ func (w *webdav) Put(key string, in io.Reader) error {
 		return err
 	}
 	wbuf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
+	defer bufPool.Put(wbuf)
 	_, err = io.CopyBuffer(out, in, *wbuf)
 	if err != nil {
 		return err
 	}
 	err = out.Close()
-	if err != nil && w.isNotExist(err) {
+	if err != nil && w.isNotExist(path.Dir(key)) {
 		if w.mkdirs(path.Dir(key)) == nil {
 			return w.Put(key, bytes.NewReader(buf.Bytes()))
 		}
@@ -123,7 +126,7 @@ func (w *webdav) Put(key string, in io.Reader) error {
 
 func (w *webdav) Delete(key string) error {
 	err := w.c.RemoveAll(key)
-	if err != nil && w.isNotExist(err) {
+	if err != nil && w.isNotExist(key) {
 		err = nil
 	}
 	return err
