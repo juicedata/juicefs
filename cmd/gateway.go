@@ -77,6 +77,11 @@ func gatewayFlags() *cli.Command {
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
 		},
+		&cli.StringFlag{
+			Name:  "metrics",
+			Value: "127.0.0.1:9567",
+			Usage: "address to export metrics",
+		},
 		&cli.BoolFlag{
 			Name:  "no-usage-report",
 			Usage: "do not send usage report",
@@ -228,6 +233,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Chunk:           &chunkConf,
 	}
 
+	exposeMetrics(m, c.String("metrics"))
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, "gateway "+version.Version())
 	}
