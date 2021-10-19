@@ -97,7 +97,7 @@ func (w *webdav) mkdirs(p string) error {
 
 func (w *webdav) isNotExist(key string) bool {
 	if _, err := w.c.Stat(key); err != nil {
-		return strings.Contains(err.Error(), "Not Found")
+		return strings.Contains(strings.ToLower(err.Error()), "not found")
 	}
 	return false
 }
@@ -116,7 +116,7 @@ func (w *webdav) Put(key string, in io.Reader) error {
 		return err
 	}
 	err = out.Close()
-	if err != nil && w.isNotExist(key) {
+	if err != nil && w.isNotExist(path.Dir(key)) {
 		if w.mkdirs(path.Dir(key)) == nil {
 			return w.Put(key, bytes.NewReader(buf.Bytes()))
 		}
