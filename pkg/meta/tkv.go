@@ -994,9 +994,7 @@ func (m *kvMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		return syscall.ENOENT
 	}
 	m.parseAttr(a, attr)
-	if m.conf.OpenCache > 0 {
-		m.of.Update(inode, attr)
-	}
+	m.of.Update(inode, attr)
 	return 0
 }
 

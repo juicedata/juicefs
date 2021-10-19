@@ -860,9 +860,7 @@ func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	a, err := r.rdb.Get(c, r.inodeKey(inode)).Bytes()
 	if err == nil {
 		r.parseAttr(a, attr)
-		if r.conf.OpenCache > 0 {
-			r.of.Update(inode, attr)
-		}
+		r.of.Update(inode, attr)
 	}
 	if err != nil && inode == 1 {
 		err = nil
