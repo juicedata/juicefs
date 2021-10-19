@@ -1001,7 +1001,7 @@ func (m *kvMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	return errno(m.txn(func(tx kvTxn) error {
 		var cur Attr
 		a := tx.get(m.inodeKey(inode))
@@ -1425,7 +1425,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 		}
-		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 		pattr.Mtime = now.Unix()
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
@@ -1718,7 +1718,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 func (m *kvMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	return errno(m.txn(func(tx kvTxn) error {
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
 		if rs[0] == nil || rs[1] == nil {
