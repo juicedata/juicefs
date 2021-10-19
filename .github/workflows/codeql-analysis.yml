@@ -63,7 +63,7 @@ jobs:
     #    and modify them (or add more) to build your code if your project
     #    uses a compiled language
     - name: build-go
-      run: go build
+      run: make juicefs
     - name: build-java
       run: mvn clean install -Dmaven.test.skip=true
       working-directory: sdk/java/
