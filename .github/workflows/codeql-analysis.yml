@@ -64,7 +64,7 @@ jobs:
     #    uses a compiled language
     - name: build
       run: mvn clean install -Dmaven.test.skip=true
-      working-directory: sdk
+      working-directory: sdk/java/
     #- run: |
     #   make bootstrap
     #   make release
