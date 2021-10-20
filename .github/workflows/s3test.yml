@@ -19,7 +19,6 @@ jobs:
 
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
-        run: docker version
 
       - name: Checkout
         uses: actions/checkout@v2
