@@ -2215,7 +2215,7 @@ func (m *dbMeta) cleanupDeletedFiles() {
 		rows.Close()
 		for _, f := range fs {
 			logger.Debugf("cleanup chunks of inode %d with %d bytes", f.Inode, f.Length)
-			m.deleteFile(d.Inode, d.Length)
+			m.deleteFile(f.Inode, f.Length)
 		}
 	}
 }
