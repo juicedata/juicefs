@@ -1,0 +1,74 @@
+name: "s3test compatibility"
+
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: [ main ]
+
+jobs:
+  s3tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+        run: docker version
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Run redis
+        run:  sudo docker run -d --name redis \
+          -v redis-data:/data \
+          -p 6379:6379 \
+          --restart unless-stopped \
+          redis redis-server --appendonly yes
+
+      - name: Prepare Object Storage
+        run: sudo docker run -d --name minio \
+          -p 9000:9000 \
+          -p 9900:9900 \
+          -v $PWD/minio-data:/data \
+          --restart unless-stopped \
+          minio/minio server /data --console-address ":9900"
+
+      - name: Juicefs format
+        run: juicefs format \
+          --storage minio \
+          --bucket http://127.0.0.1:9000/pics \
+          --access-key minioadmin \
+          --secret-key minioadmin \
+          redis://127.0.0.1:6379/1 \
+          pics
+
+      - name: Juicefs Mount
+        run: sudo juicefs mount -d redis://127.0.0.1:6379/1 /tmp
+
+      - name: Start Juicefs Gateway
+        run: |
+          export MINIO_ROOT_USER=minadmin
+          export MINIO_ROOT_PASSWORD=minadmin
+          juicefs gateway redis://localhost:6379 localhost:8000
+
+      - name: Prepare S3Test
+        run: |
+          git clone https://github.com/ceph/s3-tests.git
+          sudo apt-get install python-virtualenv
+          cd s3-tests
+          ./bootstrap
+          cp s3tests.conf.SAMPLE config.yml
+          sed -i '0,/^access_key.*/s/^access_key.*/access_key = minadmin/' config.yml
+          sed -i '0,/^secret_key.*/s/^secret_key.*/secret_key = minadmin/' config.yml
+          S3TEST_CONF=./config.yml ./virtualenv/bin/nosetests -v --collect-only
