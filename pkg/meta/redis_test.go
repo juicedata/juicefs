@@ -223,6 +223,43 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f", 1, "d", RenameExchange, &inode, attr); st != 0 {
 		t.Fatalf("rename f <-> d: %s", st)
 	}
+	// Test rename with parent change
+	var parent2 Ino
+	if st := m.Mkdir(ctx, 1, "d4", 0777, 0, 0, &parent2, attr); st != 0 {
+		t.Fatalf("create dir d4: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent2, "d5", 0777, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("create dir d4/d5: %s", st)
+	}
+	if st := m.Rename(ctx, parent2, "d5", 1, "d5", RenameNoReplace, &inode, attr); st != 0 {
+		t.Fatalf("rename d4/d5 <-> d5: %s", st)
+	} else if attr.Parent != 1 {
+		t.Fatalf("after rename d4/d5 <-> d5 parent %d expect 1", attr.Parent)
+	}
+	if st := m.Mknod(ctx, parent2, "f6", TypeFile, 0650, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create dir d4/f6: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "d5", parent2, "f6", RenameExchange, &inode, attr); st != 0 {
+		t.Fatalf("rename d5 <-> d4/d6: %s", st)
+	} else if attr.Parent != parent2 {
+		t.Fatalf("after exchange d5 <-> d4/f6 parent %d expect %d", attr.Parent, parent2)
+	} else if attr.Typ != TypeDirectory {
+		t.Fatalf("after exchange d5 <-> d4/f6 type %d expect %d", attr.Typ, TypeDirectory)
+	}
+	if st := m.Lookup(ctx, 1, "d5", &inode, attr); st != 0 || attr.Parent != 1 {
+		t.Fatalf("lookup d5 after exchange: %s; parent %d expect 1", st, attr.Parent)
+	} else if attr.Typ != TypeFile {
+		t.Fatalf("after exchange d5 <-> d4/f6 type %d expect %d", attr.Typ, TypeFile)
+	}
+	if st := m.Rmdir(ctx, parent2, "f6"); st != 0 {
+		t.Fatalf("rmdir d4/f6 : %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "d4"); st != 0 {
+		t.Fatalf("rmdir d4 first : %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "d5"); st != 0 {
+		t.Fatalf("rmdir d6 : %s", st)
+	}
 	if st := m.Lookup(ctx, 1, "f", &inode, attr); st != 0 || inode != parent {
 		t.Fatalf("lookup f: %s; inode %d expect %d", st, inode, parent)
 	}
