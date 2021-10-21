@@ -30,12 +30,12 @@ jobs:
 
       - name: Run redis
         run: |
-        sudo docker run -d --name redis -v redis-data:/data  \
-        -p 6379:6379  redis redis-server --appendonly yes
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
 
       - name: Prepare Object Storage
           run: |
-          sudo docker run -d --name minio \
+            sudo docker run -d --name minio \
             -p 9000:9000 \
             -p 9900:9900 \
             -v $PWD/minio-data:/data \
