@@ -29,14 +29,15 @@ jobs:
         run: make juicefs
 
       - name: Run redis
-        run:  sudo docker run -d -p 6379:6379 redis redis-server
+        run:  sudo docker run -d --name redis -v redis-data:/data -p 6379:6379  redis redis-server --appendonly yes
+
 
 
       - name: Start Juicefs Gateway
         run: |
           export MINIO_ROOT_USER=minadmin
           export MINIO_ROOT_PASSWORD=minadmin
-          ./juicefs gateway redis://localhost:6379 localhost:8000
+          nohup ./juicefs gateway redis://localhost:6379 localhost:8000
 
       - name: S3Test
         run: |
