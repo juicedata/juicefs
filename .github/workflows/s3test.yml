@@ -34,13 +34,13 @@ jobs:
           -p 6379:6379  redis redis-server --appendonly yes
 
       - name: Prepare Object Storage
-          run: |
-            sudo docker run -d --name minio \
-            -p 9000:9000 \
-            -p 9900:9900 \
-            -v $PWD/minio-data:/data \
-            --restart unless-stopped \
-            minio/minio server /data --console-address ":9900"
+        run: |
+          sudo docker run -d --name minio \
+          -p 9000:9000 \
+          -p 9900:9900 \
+          -v $PWD/minio-data:/data \
+          --restart unless-stopped \
+          minio/minio server /data --console-address ":9900"
 
       - name: Juicefs format
         run: |
