@@ -1548,6 +1548,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				return syscall.ENOENT // corrupt entry
 			}
 			if exchange {
+				dn.Parent = parentSrc
 				dn.Ctime = now
 				if de.Type == TypeDirectory && parentSrc != parentDst {
 					dpn.Nlink--
@@ -1606,7 +1607,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			if _, err := s.Cols("inode", "type").Update(&se, &edge{Parent: parentDst, Name: de.Name}); err != nil {
 				return err
 			}
-			if _, err := s.Cols("ctime").Update(dn, &node{Inode: dino}); err != nil {
+			if _, err := s.Cols("ctime", "parent").Update(dn, &node{Inode: dino}); err != nil {
 				return err
 			}
 		} else {
@@ -1668,7 +1669,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				return err
 			}
 		}
-		if _, err := s.Cols("ctime").Update(&sn, &node{Inode: sn.Inode}); err != nil {
+		if _, err := s.Cols("ctime", "parent").Update(&sn, &node{Inode: sn.Inode}); err != nil {
 			return err
 		}
 		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&dpn, &node{Inode: parentDst}); err != nil {

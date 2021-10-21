@@ -1606,6 +1606,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			m.parseAttr(a, &tattr)
 			if exchange {
 				tattr.Ctime = now.Unix()
+				tattr.Parent = parentSrc
 				tattr.Ctimensec = uint32(now.Nanosecond())
 				if dtyp == TypeDirectory && parentSrc != parentDst {
 					dattr.Nlink--
