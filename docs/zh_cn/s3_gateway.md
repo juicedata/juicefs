@@ -1,41 +1,60 @@
-# S3 网关
+# 启用 JuiceFS 的 S3 网关
 
-JuiceFS S3 网关是一个提供 S3 兼容接口的服务。这意味着您可以通过现有工具与 JuiceFS 进行交互，例如 AWS CLI、s3cmd、MinIO 客户端 (`mc`)。JuiceFS S3 网关基于 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)。
+JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它为 JuiceFS 中的文件提供跟 S3 兼容的 Resutful API，在不方便挂载的情况下能够用 s3cmd、AWS CLI、Minio Client (mc) 等工具管理 JuiceFS 上存储的文件。另外，S3 网关还提供了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
+
+因为 JuiceFS 会将文件分块存储到底层的对象存储中，不能直接使用底层对象存储的接口和界面来直接访问文件，S3 网关提供了类似底层对象存储的访问能力，架构图如下：
+
+![](../images/juicefs-s3-gateway-arch.png)
 
 ## 先决条件
 
-在运行网关之前，您需要先参考 [快速上手指南](quick_start_guide.md) 创建一个文件系统。
+S3 网关是建立在 JuiceFS 文佳系统之上的功能，如果你还没有 JuiceFS 文件系统，请先参考 [快速上手指南](quick_start_guide.md) 创建一个。
 
-JuiceFS S3 网关是 v0.11.0 中引入的功能，请确保您拥有最新版本的 JuiceFS。
+JuiceFS S3 网关是 v0.11 中引入的功能，请确保您拥有最新版本的 JuiceFS。
 
 ## 快速开始
 
-使用 `juicefs gateway` 命令运行网关，该命令的 [大多数选项](command_reference.md#juicefs-gateway) 与 `juicefs mount` 相同，除了以下选项：
+使用 JuiceFS 的 `gateway` 子命令即可在当前主机启用 S3 网关。在开启功能之前，需要先设置 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD` 两个环境变量，即访问 S3 API 时认证身份用的 Access Key 和 Secret Key。可以简单的把它们视为 S3 网关的用户名和密码。例如：
 
-```
---access-log value  JuiceFS 访问日志的路径
---no-banner         禁用 MinIO 启动信息（默认：false）
-```
-
-`--access-log` 选项控制 JuiceFS 的 [访问日志](fault_diagnosis_and_analysis.md#访问日志) 的存储位置。默认情况下，不会存储访问日志。`--no-banner` 选项控制是否禁用 MinIO 的日志。
-
-MinIO S3 网关需要在启动前配置两个环境变量：`MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD`。您可以将它们设置为任何值，但必须满足长度要求。`MINIO_ROOT_USER` 长度至少应为 3 个字符，而 `MINIO_ROOT_PASSWORD` 长度至少应为 8 个字符。
-
-以下命令展示了如何运行网关，Redis 地址是 `localhost:6379`，网关监听在 `localhost:9000`。
-
-```bash
+```shell
 $ export MINIO_ROOT_USER=admin
 $ export MINIO_ROOT_PASSWORD=12345678
 $ juicefs gateway redis://localhost:6379 localhost:9000
 ```
 
-如果网关运行成功，您可以在浏览器中访问 [http://localhost:9000](http://localhost:9000)：
+以上三条命令中，前两条命令用于设置环境变量。注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符。（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）
 
-![MinIO browser](../images/minio-browser.png)
+最后一条命令用于启用 S3 网关，`gateway` 子命令至少需要提供两个参数，第一个是存储元数据的数据库 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](command_reference.md#juicefs-gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
-## 使用 AWS CLI
+```shell
+$ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
+```
 
-从 [https://aws.amazon.com/cli](https://aws.amazon.com/cli) 安装 AWS CLI，然后进行配置：
+在这个例子中，我们假设 JuiceFS 文件系统使用的是本地的 Redis 数据库。当 S3 网关启用时，在**当前主机**上可以使用 `http://localhost:9000` 这个地址访问到 S3 网关的管理界面。
+
+![](../images/s3-gateway-file-manager.jpg)
+
+如果你希望通过局域网或互联网上的其他主机访问 S3 网关，则需要调整监听地址，例如：
+
+```shell
+$ juicefs gateway redis://localhost:6379 0.0.0.0:9000
+```
+
+这样一来，S3 网关将会默认接受所有网络请求。不同的位置的 S3 客户端可以使用不同的地址访问 S3 网关，例如：
+
+- S3 网关所在主机中的第三方客户端可以使用 `http://127.0.0.1:9000` 或 `http://localhost:9000` 进行访问；
+- 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
+- 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
+
+## 访问 S3 网关
+
+各类支持 S3 API 的客户端、桌面程序、Web 程序等都可以访问 JuiceFS S3 网关。使用时请注意 S3 网关监听的地址和端口。
+
+> **提示**：以下示例均为使用第三方客户端访问本地主机上运行的 S3 网关。在具体场景下，请根据实际情况调整访问 S3 网关的地址。
+
+### 使用 AWS CLI
+
+从 [https://aws.amazon.com/cli](https://aws.amazon.com/cli) 下载并安装 AWS CLI，然后进行配置：
 
 ```bash
 $ aws configure
@@ -45,9 +64,9 @@ Default region name [None]:
 Default output format [None]:
 ```
 
-`Access Key ID` 与 `MINIO_ROOT_USER` 相同，`Secret Access Key` 与 `MINIO_ROOT_PASSWORD` 相同。区域名称和输出格式可以为空。
+程序会通过交互式的方式引导你完成新配置的添加，其中 `Access Key ID` 与 `MINIO_ROOT_USER` 相同，`Secret Access Key` 与 `MINIO_ROOT_PASSWORD` 相同，区域名称和输出格式请留空。
 
-之后，您可以使用 `aws s3` 命令访问网关，例如：
+之后，即可使用 `aws s3` 命令访问 JuiceFS 存储，例如：
 
 ```bash
 # List buckets
@@ -57,20 +76,28 @@ $ aws --endpoint-url http://localhost:9000 s3 ls
 $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 ```
 
-## 使用 MinIO 客户端
+### 使用 MinIO 客户端
 
-从 [https://docs.min.io/docs/minio-client-complete-guide.html](https://docs.min.io/docs/minio-client-complete-guide.html) 安装 MinIO 客户端，然后添加一个名为 `juicefs` 的新主机：
+首先参照 [MinIO 下载页面](https://min.io/download)安装 mc，然后添加一个新的 alias：
 
 ```bash
 $ mc alias set juicefs http://localhost:9000 admin 12345678 --api S3v4
 ```
 
-之后，您可以使用 `mc` 命令访问网关，例如：
+依照 mc 的命令格式，以上命令创建了一个别名为 `juicefs` 的配置。特别注意，命令中必须指定 api 版本，即 `--api "s3v4"`。
 
-```bash
-# List buckets
-$ mc ls juicefs
+然后，你可以通过 mc 客户端自由的在本地磁盘与 JuiceFS 存储以及其他云存储之间进行文件和文件夹的复制、移动、增删等管理操作。
 
-# List objects in bucket
-$ mc ls juicefs/<bucket>
+```shell
+$ mc ls juicefs/jfs
+[2021-10-20 11:59:00 CST] 130KiB avatar-2191932_1920.png
+[2021-10-20 11:59:00 CST] 4.9KiB box-1297327.svg
+[2021-10-20 11:59:00 CST]  21KiB cloud-4273197.svg
+[2021-10-20 11:59:05 CST]  17KiB hero.svg
+[2021-10-20 11:59:06 CST] 1.7MiB hugo-rocha-qFpnvZ_j9HU-unsplash.jpg
+[2021-10-20 11:59:06 CST]  16KiB man-1352025.svg
+[2021-10-20 11:59:06 CST] 1.3MiB man-1459246.ai
+[2021-10-20 11:59:08 CST]  19KiB sign-up-accent-left.07ab168.svg
+[2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
 ```
+
