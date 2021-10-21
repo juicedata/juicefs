@@ -58,8 +58,8 @@ jobs:
 
       - name: Start Juicefs Gateway
         run: |
-          export MINIO_ROOT_USER=minadmin
-          export MINIO_ROOT_PASSWORD=minadmin
+          export MINIO_ROOT_USER=minioadmin
+          export MINIO_ROOT_PASSWORD=minioadmin
           nohup ./juicefs gateway redis://localhost:6379/ localhost:8000
 
       - name: S3Test
@@ -69,6 +69,6 @@ jobs:
           cd s3-tests
           ./bootstrap
           cp s3tests.conf.SAMPLE config.yml
-          sed -i '0,/^access_key.*/s/^access_key.*/access_key = minadmin/' config.yml
-          sed -i '0,/^secret_key.*/s/^secret_key.*/secret_key = minadmin/' config.yml
+          sed -i '0,/^access_key.*/s/^access_key.*/access_key = minioadmin/' config.yml
+          sed -i '0,/^secret_key.*/s/^secret_key.*/secret_key = minioadmin/' config.yml
           S3TEST_CONF=./config.yml ./virtualenv/bin/nosetests -v --collect-only
