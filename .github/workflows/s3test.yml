@@ -54,7 +54,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp
 
       - name: Start Juicefs Gateway
         run: |
