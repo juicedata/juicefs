@@ -69,7 +69,7 @@ jobs:
         run: |
           git clone https://github.com/ceph/s3-tests.git
           sudo apt-get update
-          sudo apt-get install python-virtualenv
+          sudo apt-get install python3-virtualenv
           cd s3-tests
           ./bootstrap
           cp s3tests.conf.SAMPLE config.yml
