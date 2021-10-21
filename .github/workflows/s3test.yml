@@ -36,7 +36,7 @@ jobs:
         run: |
           export MINIO_ROOT_USER=minadmin
           export MINIO_ROOT_PASSWORD=minadmin
-          juicefs gateway redis://localhost:6379 localhost:8000
+          ./juicefs gateway redis://localhost:6379 localhost:8000
 
       - name: S3Test
         run: |
