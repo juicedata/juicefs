@@ -58,9 +58,9 @@ jobs:
 
       - name: Start Juicefs Gateway
         run: |
-          export MINIO_ROOT_USER=minioadmin
-          export MINIO_ROOT_PASSWORD=minioadmin
-          sudo nohup ./juicefs gateway redis://localhost:6379/1 localhost:8000
+          sudo MINIO_ROOT_USER=minioadmin \
+          MINIO_ROOT_PASSWORD=minioadmin \
+          ./juicefs gateway redis://localhost:6379/1 localhost:8000 &
 
       - name: S3Test
         run: |
