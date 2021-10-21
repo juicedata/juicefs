@@ -1,8 +1,8 @@
-# JuiceFS 启用 S3 网关
+# 启用 JuiceFS 的 S3 网关
 
-JuiceFS 从 v0.11.0 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它将 JuiceFS 存储通过 S3 API 暴露出来，从而实现用 s3cmd、AWS CLI、Minio Client (mc)、rclone 等工具管理 JuiceFS 上存储的文件。另外，JuiceFS S3 网关还引入了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
+JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它为 JuiceFS 中的文件提供跟 S3 兼容的 Resutful API，在不方便挂载的情况下能够用 s3cmd、AWS CLI、Minio Client (mc) 等工具管理 JuiceFS 上存储的文件。另外，S3 网关还提供了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
 
-架构图如下，JuiceFS 是由存储元数据的数据库和存储数据块的对象存储共同驱动的，而 S3 网关则是在已经创建好的 JuiceFS 存储的基础上，进一步地通过 S3 API 向用户提供基于 HTTP 的存储访问能力。
+因为 JuiceFS 会将文件分块存储到底层的对象存储中，不能直接使用底层对象存储的接口和界面来直接访问文件，S3 网关提供了类似底层对象存储的访问能力，架构图如下：
 
 ![](../images/juicefs-s3-gateway-arch.png)
 
@@ -10,7 +10,7 @@ JuiceFS 从 v0.11.0 开始引入了 S3 网关，这是一个通过 [MinIO S3 网
 
 S3 网关是建立在 JuiceFS 文佳系统之上的功能，如果你还没有 JuiceFS 文件系统，请先参考 [快速上手指南](quick_start_guide.md) 创建一个。
 
-JuiceFS S3 网关是 v0.11.0 中引入的功能，请确保您拥有最新版本的 JuiceFS。
+JuiceFS S3 网关是 v0.11 中引入的功能，请确保您拥有最新版本的 JuiceFS。
 
 ## 快速开始
 
