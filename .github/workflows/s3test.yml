@@ -29,9 +29,28 @@ jobs:
         run: make juicefs
 
       - name: Run redis
-        run:  sudo docker run -d --name redis -v redis-data:/data -p 6379:6379  redis redis-server --appendonly yes
+        run: |
+        sudo docker run -d --name redis -v redis-data:/data  \
+        -p 6379:6379  redis redis-server --appendonly yes
 
+      - name: Prepare Object Storage
+          run: |
+          sudo docker run -d --name minio \
+            -p 9000:9000 \
+            -p 9900:9900 \
+            -v $PWD/minio-data:/data \
+            --restart unless-stopped \
+            minio/minio server /data --console-address ":9900"
 
+      - name: Juicefs format
+        run: |
+          ./juicefs format \
+          --storage minio \
+          --bucket http://127.0.0.1:9000/pics \
+          --access-key minioadmin \
+          --secret-key minioadmin \
+          redis://127.0.0.1:6379/1 \
+          pics
 
       - name: Start Juicefs Gateway
         run: |
