@@ -16,12 +16,21 @@
 package metric
 
 import (
+	"fmt"
+	"net"
+	"os"
+	"strconv"
 	"time"
+
+	consulapi "github.com/hashicorp/consul/api"
+	"github.com/hashicorp/go-hclog"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+var logger = utils.GetLogger("juicefs")
 
 var (
 	start = time.Now()
@@ -72,4 +81,73 @@ func UpdateMetrics(m meta.Meta) {
 		}
 		time.Sleep(time.Second * 10)
 	}
+}
+
+func RegisterToConsul(consulAddr, metricsUrl, mountPoint string, isS3Gateway bool) {
+	_, portStr, err := net.SplitHostPort(metricsUrl)
+	if err != nil {
+		logger.Fatalf("Metrics url format err:%s", err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		logger.Fatalf("Metrics port set err:%s", err)
+	}
+	config := consulapi.DefaultConfigWithLogger(hclog.New(&hclog.LoggerOptions{ //nolint:typecheck
+		Name:   "consul-api",
+		Output: logger.Out,
+	}))
+	config.Address = consulAddr
+	client, err := consulapi.NewClient(config)
+	if err != nil {
+		logger.Fatalf("Creat consul client failed:%s", err)
+	}
+	localIp, err := utils.GetLocalIp(consulAddr)
+	if err != nil {
+		logger.Fatalf("Get local Ip failed:%s", err)
+	}
+	localMeta, err := newMetadata(mountPoint, localIp, isS3Gateway)
+	if err != nil {
+		logger.Fatalf("New metadata failed:%s", err)
+	}
+
+	check := &consulapi.AgentServiceCheck{
+		HTTP:                           fmt.Sprintf("http://%s:%d/metrics", localIp, port),
+		Timeout:                        "5s",
+		Interval:                       "5s",
+		DeregisterCriticalServiceAfter: "30s",
+	}
+
+	registration := consulapi.AgentServiceRegistration{
+		ID:      fmt.Sprintf("juicefs-%s", localIp),
+		Name:    "juicefs",
+		Tags:    []string{"juicedata"},
+		Port:    port,
+		Address: localIp,
+		Meta:    localMeta,
+		Check:   check,
+	}
+	if err = client.Agent().ServiceRegister(&registration); err != nil {
+		logger.Fatalf("Service register failed:%s", err)
+	}
+	logger.Info("Juicefs register to consul success")
+}
+
+func newMetadata(mountPoint, localIp string, isS3Gateway bool) (map[string]string, error) {
+	localMeta := make(map[string]string)
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+
+	localMeta["hostName"] = hostname
+	localMeta["ip"] = localIp
+
+	if mountPoint != "" {
+		localMeta["mountPoint"] = mountPoint
+	}
+
+	if isS3Gateway {
+		localMeta["type"] = "s3gateway"
+	}
+	return localMeta, nil
 }

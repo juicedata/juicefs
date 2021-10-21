@@ -17,6 +17,7 @@ package utils
 
 import (
 	"io"
+	"net"
 	"os"
 	"strings"
 
@@ -112,4 +113,17 @@ func NewSpinner() mpb.BarFiller {
 		spinnerStyle[i] = "\033[1;32m" + s + "\033[0m"
 	}
 	return mpb.NewBarFiller(mpb.SpinnerStyle(spinnerStyle...))
+}
+
+// GetLocalIp get local ip by socket
+func GetLocalIp(address string) (string, error) {
+	conn, err := net.Dial("udp", address)
+	if err != nil {
+		return "", err
+	}
+	ip, _, err := net.SplitHostPort(conn.LocalAddr().String())
+	if err != nil {
+		return "", err
+	}
+	return ip, nil
 }

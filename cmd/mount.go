@@ -234,6 +234,11 @@ func mount(c *cli.Context) error {
 	}
 	installHandler(mp)
 	exposeMetrics(m, c.String("metrics"))
+
+	if c.IsSet("consul") {
+		metric.RegisterToConsul(c.String("consul"), c.String("metrics"), mp, false)
+	}
+
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
@@ -351,6 +356,11 @@ func mountFlags() *cli.Command {
 				Name:  "metrics",
 				Value: "127.0.0.1:9567",
 				Usage: "address to export metrics",
+			},
+			&cli.StringFlag{
+				Name:  "consul",
+				Value: "127.0.0.1:8500",
+				Usage: "address to register consul",
 			},
 			&cli.BoolFlag{
 				Name:  "no-usage-report",
