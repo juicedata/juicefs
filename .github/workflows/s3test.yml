@@ -17,6 +17,9 @@ jobs:
         with:
           go-version: '1.16.x'
 
+      - name: Set up Python
+        uses: actions/setup-python@v2
+
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
@@ -28,7 +31,7 @@ jobs:
       - name: Build linux target
         run: make juicefs
 
-      - name: Run redis
+      - name: Run Redis
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
           -p 6379:6379  redis redis-server --appendonly yes
@@ -42,7 +45,7 @@ jobs:
           --restart unless-stopped \
           minio/minio server /data --console-address ":9900"
 
-      - name: Juicefs format
+      - name: Juicefs Format
         run: |
           ./juicefs format \
           --storage minio \
