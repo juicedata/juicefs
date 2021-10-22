@@ -49,7 +49,7 @@ func installHandler(mp string) {
 	go func() {
 		for {
 			<-signalChan
-			go doUmount(mp, true)
+			go func() { _ = doUmount(mp, true) }()
 			go func() {
 				time.Sleep(time.Second * 3)
 				os.Exit(1)
