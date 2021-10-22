@@ -87,7 +87,7 @@ func gatewayFlags() *cli.Command {
 		&cli.StringFlag{
 			Name:  "consul",
 			Value: "127.0.0.1:8500",
-			Usage: "address to register consul",
+			Usage: "consul address to register",
 		},
 		&cli.BoolFlag{
 			Name:  "no-usage-report",
