@@ -42,13 +42,7 @@ func umountFlags() *cli.Command {
 	}
 }
 
-func umount(ctx *cli.Context) error {
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("MOUNTPOINT is needed")
-	}
-	mp := ctx.Args().Get(0)
-	force := ctx.Bool("force")
-
+func doUmount(mp string, force bool) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
@@ -86,4 +80,13 @@ func umount(ctx *cli.Context) error {
 		log.Print(string(out))
 	}
 	return err
+}
+
+func umount(ctx *cli.Context) error {
+	if ctx.Args().Len() < 1 {
+		return fmt.Errorf("MOUNTPOINT is needed")
+	}
+	mp := ctx.Args().Get(0)
+	force := ctx.Bool("force")
+	return doUmount(mp, force)
 }
