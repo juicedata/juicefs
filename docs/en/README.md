@@ -39,7 +39,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [Use JuiceFS on K3s](juicefs_on_k3s.md)
   - [One-click deployment of JuiceFS on Rancher](juicefs_on_rancher.md)
   - [Use JuiceFS on Hadoop ecosystem](hadoop_java_sdk.md)
-  - [JuiceFS enable S3 Gateway](s3_gateway.md)
+  - [Enable the S3 gateway for JuiceFS](s3_gateway.md)
   - [JuiceFS client compilation and upgrade](client_compile_and_upgrade.md)
 - [Command Reference](command_reference.md)
 - **Advanced Topics**

@@ -12,7 +12,7 @@ The S3 gateway is a feature built on top of the JuiceFS file system. If you do n
 
 JuiceFS S3 gateway is a feature introduced in v0.11, please make sure you have the latest version of JuiceFS.
 
-## Quick Start
+## Quickstart
 
 The S3 gateway can be enabled on the current host using the `gateway` subcommand of JuiceFS. Before enabling the feature, you need to set `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` environment variables, which are the Access Key and Secret Key used to authenticate when accessing the S3 API, and can be simply considered as the username and password of the S3 gateway. For example.
 
