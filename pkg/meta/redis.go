@@ -166,7 +166,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, 2),
+		deleting:     make(chan int, conf.MaxDeletes),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -2539,6 +2539,9 @@ func (r *redisMeta) toDelete(inode Ino, length uint64) string {
 }
 
 func (r *redisMeta) deleteSlice(ctx Context, chunkid uint64, size uint32) {
+	if r.conf.MaxDeletes == 0 {
+		return
+	}
 	r.deleting <- 1
 	defer func() { <-r.deleting }()
 	err := r.newMsg(DeleteChunk, chunkid, size)
