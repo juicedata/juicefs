@@ -177,6 +177,9 @@ juicefs mount [command options] META-URL MOUNTPOINT
 `--metrics value`\
 address to export metrics (default: "127.0.0.1:9567")
 
+`--consul value`\
+consul address to register (default: "127.0.0.1:8500")
+
 `--no-usage-report`\
 do not send usage report (default: false)
 
