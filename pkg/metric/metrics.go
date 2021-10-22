@@ -83,8 +83,8 @@ func UpdateMetrics(m meta.Meta) {
 	}
 }
 
-func RegisterToConsul(consulAddr, metricsUrl, mountPoint string, isS3Gateway bool) {
-	_, portStr, err := net.SplitHostPort(metricsUrl)
+func RegisterToConsul(consulAddr, metricsAddr, mountPoint string) {
+	_, portStr, err := net.SplitHostPort(metricsAddr)
 	if err != nil {
 		logger.Fatalf("Metrics url format err:%s", err)
 	}
@@ -105,10 +105,14 @@ func RegisterToConsul(consulAddr, metricsUrl, mountPoint string, isS3Gateway boo
 	if err != nil {
 		logger.Fatalf("Get local Ip failed:%s", err)
 	}
-	localMeta, err := newMetadata(mountPoint, localIp, isS3Gateway)
+
+	localMeta := make(map[string]string)
+	hostname, err := os.Hostname()
 	if err != nil {
-		logger.Fatalf("New metadata failed:%s", err)
+		logger.Fatalf("Get hostname failed:%s", err)
 	}
+	localMeta["hostName"] = hostname
+	localMeta["mountPoint"] = mountPoint
 
 	check := &consulapi.AgentServiceCheck{
 		HTTP:                           fmt.Sprintf("http://%s:%d/metrics", localIp, port),
@@ -118,9 +122,8 @@ func RegisterToConsul(consulAddr, metricsUrl, mountPoint string, isS3Gateway boo
 	}
 
 	registration := consulapi.AgentServiceRegistration{
-		ID:      fmt.Sprintf("juicefs-%s", localIp),
+		ID:      fmt.Sprintf("%s-%s", localIp, mountPoint),
 		Name:    "juicefs",
-		Tags:    []string{"juicedata"},
 		Port:    port,
 		Address: localIp,
 		Meta:    localMeta,
@@ -130,24 +133,4 @@ func RegisterToConsul(consulAddr, metricsUrl, mountPoint string, isS3Gateway boo
 		logger.Fatalf("Service register failed:%s", err)
 	}
 	logger.Info("Juicefs register to consul success")
-}
-
-func newMetadata(mountPoint, localIp string, isS3Gateway bool) (map[string]string, error) {
-	localMeta := make(map[string]string)
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, err
-	}
-
-	localMeta["hostName"] = hostname
-	localMeta["ip"] = localIp
-
-	if mountPoint != "" {
-		localMeta["mountPoint"] = mountPoint
-	}
-
-	if isS3Gateway {
-		localMeta["type"] = "s3gateway"
-	}
-	return localMeta, nil
 }

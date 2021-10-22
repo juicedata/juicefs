@@ -240,10 +240,10 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Chunk:           &chunkConf,
 	}
 
-	exposeMetrics(m, c.String("metrics"))
+	metricsAddr := exposeMetrics(m, c)
 
 	if c.IsSet("consul") {
-		metric.RegisterToConsul(c.String("consul"), c.String("metrics"), "", true)
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, "s3gateway")
 	}
 
 	if !c.Bool("no-usage-report") {

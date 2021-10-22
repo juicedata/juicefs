@@ -16,6 +16,7 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -69,7 +71,14 @@ func installHandler(mp string) {
 	}()
 }
 
-func exposeMetrics(m meta.Meta, addr string) {
+func exposeMetrics(m meta.Meta, c *cli.Context) string {
+	var ip, port string
+	//default set
+	ip, port, err := net.SplitHostPort(c.String("metrics"))
+	if err != nil {
+		logger.Fatalf("metrics format error: %v", err)
+	}
+
 	meta.InitMetrics()
 	vfs.InitMetrics()
 	go metric.UpdateMetrics(m)
@@ -81,12 +90,34 @@ func exposeMetrics(m meta.Meta, addr string) {
 		},
 	))
 	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
-	go func() {
-		err := http.ListenAndServe(addr, nil)
+
+	//if set consul, ip will auto set
+	if c.IsSet("consul") {
+		ip, err = utils.GetLocalIp(c.String("consul"))
 		if err != nil {
-			logger.Errorf("listen and serve for metrics: %s", err)
+			logger.Fatalf("Get local ip failed: %v", err)
+		}
+	}
+
+	// if not set metrics addr,the port will be auto set
+	if !c.IsSet("metrics") {
+		for i := 32768; i < 61000; i++ {
+			if !utils.PortIsUsed(ip, i) {
+				port = strconv.Itoa(i)
+				break
+			}
+		}
+	}
+
+	metricsAddr := net.JoinHostPort(ip, port)
+	go func() {
+		err := http.ListenAndServe(metricsAddr, nil)
+		if err != nil {
+			logger.Fatalf("Listen and serve for metrics: %s", err)
 		}
 	}()
+	logger.Infof("Prometheus metrics listening on %s", metricsAddr)
+	return metricsAddr
 }
 
 func mount(c *cli.Context) error {
@@ -233,10 +264,10 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("new session: %s", err)
 	}
 	installHandler(mp)
-	exposeMetrics(m, c.String("metrics"))
+	metricsAddr := exposeMetrics(m, c)
 
 	if c.IsSet("consul") {
-		metric.RegisterToConsul(c.String("consul"), c.String("metrics"), mp, false)
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
 
 	if !c.Bool("no-usage-report") {
