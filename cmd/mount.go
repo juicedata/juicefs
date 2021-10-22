@@ -19,7 +19,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -50,17 +49,7 @@ func installHandler(mp string) {
 	go func() {
 		for {
 			<-signalChan
-			go func() {
-				if runtime.GOOS == "linux" {
-					if _, err := exec.LookPath("fusermount"); err == nil {
-						_ = exec.Command("fusermount", "-uz", mp).Run()
-					} else {
-						_ = exec.Command("umount", "-l", mp).Run()
-					}
-				} else if runtime.GOOS == "darwin" {
-					_ = exec.Command("diskutil", "umount", "force", mp).Run()
-				}
-			}()
+			go doUmount(mp, true)
 			go func() {
 				time.Sleep(time.Second * 3)
 				os.Exit(1)
@@ -99,9 +88,22 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("MOUNTPOINT is required")
 	}
 	mp := c.Args().Get(1)
-	if !strings.Contains(mp, ":") && !utils.Exists(mp) {
+	fi, err := os.Stat(mp)
+	if !strings.Contains(mp, ":") && err != nil {
 		if err := os.MkdirAll(mp, 0777); err != nil {
-			logger.Fatalf("create %s: %s", mp, err)
+			if os.IsExist(err) {
+				// a broken mount point, umount it
+				if err = doUmount(mp, true); err != nil {
+					logger.Fatalf("umount %s: %s", mp, err)
+				}
+			} else {
+				logger.Fatalf("create %s: %s", mp, err)
+			}
+		}
+	} else if err == nil && fi.Size() == 0 {
+		// a broken mount point, umount it
+		if err = doUmount(mp, true); err != nil {
+			logger.Fatalf("umount %s: %s", mp, err)
 		}
 	}
 	var readOnly = c.Bool("read-only")
