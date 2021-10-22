@@ -1,6 +1,6 @@
 # Enable the S3 gateway for JuiceFS
 
-JuiceFS has introduced S3 gateway since v0.11, a feature implemented through the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It provides an S3-compatible RESTful API for files on JuiceFS, enabling the management of files stored on JuiceFS with tools such as s3cmd, AWS CLI, Minio Client (mc), etc. in cases where mounting is not convenient. In addition, S3 gateway also provides a web-based file manager that allows users to use a browser to manage the files on JuiceFS.
+JuiceFS has introduced S3 gateway since v0.11, a feature implemented through the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It provides an S3-compatible RESTful API for files on JuiceFS, enabling the management of files stored on JuiceFS with tools such as s3cmd, AWS CLI, MinIO Client (mc), etc. in cases where mounting is not convenient. In addition, S3 gateway also provides a web-based file manager that allows users to use a browser to manage the files on JuiceFS.
 
 Because JuiceFS stores files in chunks, the files cannot be accessed directly using the interface of the underlying object storage. The S3 gateway provides similar access to the underlying object storage, with the following architecture diagram.
 
@@ -22,7 +22,7 @@ $ export MINIO_ROOT_PASSWORD=12345678
 $ juicefs gateway redis://localhost:6379 localhost:9000
 ```
 
-Among the above three commands, the first two commands are used to set environment variables. Note that the length of `MINIO_ROOT_USER` is at least 3 characters, and the length of `MINIO_ROOT_PASSWORD` is at least 8 characters. (Windows users should set the environment variable with the `set` command instead, e.g., `set MINIO_ROOT_USER=admin`)
+Among the above three commands, the first two commands are used to set environment variables. Note that the length of `MINIO_ROOT_USER` is at least 3 characters, and the length of `MINIO_ROOT_PASSWORD` is at least 8 characters (Windows users should set the environment variable with the `set` command instead, e.g., `set MINIO_ROOT_USER=admin`).
 
 The last command is used to enable the S3 gateway. The `gateway` subcommand requires at least two parameters, the first is the URL of the database where the metadata is stored, and the second is the address and port on which the S3 gateway is listening. You can add [other options](command_reference.md#juicefs-gateway) to the `gateway` subcommand to optimize the S3 gateway as needed, for example, to set the default local cache to 20 GiB.
 
@@ -46,11 +46,11 @@ In this way, the S3 gateway will accept all network requests by default. S3 clie
 - A third-party client on the same LAN as the host where the S3 gateway is located can access it using `http://192.168.1.8:9000` (assuming the intranet IP address of the S3 gateway-enabled host is 192.168.1.8).
 - The S3 gateway can be accessed via the Internet using `http://110.220.110.220:9000` (assuming that the public IP address of the S3 gateway-enabled host is 110.220.110.220).
 
-## Accessing S3 gateways
+## Accessing S3 gateway
 
 The JuiceFS S3 gateway can be accessed by various clients, desktop applications, web applications, etc. that support the S3 API. Please note the address and port that the S3 gateway listens on when using it.
 
-> The following examples are for using a third-party client to access the S3 gateway running on the local host. In specific scenarios, please adjust the address to access the S3 gateway according to the actual situation.
+> **Tip**: The following examples are for using a third-party client to access the S3 gateway running on the local host. In specific scenarios, please adjust the address to access the S3 gateway according to the actual situation.
 
 ### Using the AWS CLI
 
@@ -76,13 +76,13 @@ $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 
 ### Using the MinIO client
 
-First install `mc` by referring to the [MinIO download page](https://min.io/download), then add a new alias: 
+First install `mc` by referring to the [MinIO download page](https://min.io/download), then add a new alias:
 
 ```bash
 $ mc alias set juicefs http://localhost:9000 admin 12345678 --api S3v4
 ```
 
-Following the mc command format, the above command creates a configuration with the alias `juicefs`. In particular, note that the api version must be specified in the command, `-api "s3v4"`.
+Following the mc command format, the above command creates a configuration with the alias `juicefs`. In particular, note that the API version must be specified in the command, `-api "s3v4"`.
 
 Then, you can freely manage the copying, moving, adding and deleting of files and folders between your local disk and JuiceFS storage as well as other cloud storage via the mc client.
 
@@ -99,3 +99,8 @@ $ mc ls juicefs/jfs
 [2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
 ```
 
+## Monitoring metrics collection
+
+> **Note**: This feature needs to run JuiceFS client version 0.17.1 and above.
+
+JuiceFS S3 gateway provides a Prometheus API for collecting monitoring metrics, the default address is `http://localhost:9567/metrics`. More information please check the ["JuiceFS Metrics"](p8s_metrics.md) document.
