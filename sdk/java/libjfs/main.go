@@ -228,6 +228,7 @@ type javaConf struct {
 	UploadLimit     int     `json:"uploadLimit"`
 	DownloadLimit   int     `json:"downloadLimit"`
 	MaxUploads      int     `json:"maxUploads"`
+	MaxDeletes      int     `json:"maxDeletes"`
 	GetTimeout      int     `json:"getTimeout"`
 	PutTimeout      int     `json:"putTimeout"`
 	FastResolve     bool    `json:"fastResolve"`
@@ -318,10 +319,11 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 
 		addr := jConf.MetaURL
 		m := meta.NewClient(addr, &meta.Config{
-			Retries:   10,
-			Strict:    true,
-			ReadOnly:  jConf.ReadOnly,
-			OpenCache: time.Duration(jConf.OpenCache * 1e9),
+			Retries:    10,
+			Strict:     true,
+			ReadOnly:   jConf.ReadOnly,
+			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
+			MaxDeletes: jConf.MaxDeletes,
 		})
 		format, err := m.Load()
 		if err != nil {

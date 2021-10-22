@@ -26,6 +26,7 @@ type Config struct {
 	OpenCache   time.Duration
 	MountPoint  string
 	Subdir      string
+	MaxDeletes  int
 }
 
 type Format struct {

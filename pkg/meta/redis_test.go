@@ -32,7 +32,7 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
-	var conf Config
+	var conf = Config{MaxDeletes: 1}
 	_, err := newRedisMeta("http", "127.0.0.1:6379/7", &conf)
 	if err == nil {
 		t.Fatal("meta created with invalid url")
@@ -680,7 +680,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 }
 
 func TestCompaction(t *testing.T) {
-	var conf Config
+	var conf = Config{MaxDeletes: 1}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/8", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
@@ -785,7 +785,7 @@ func testCompaction(t *testing.T, m Meta) {
 }
 
 func TestConcurrentWrite(t *testing.T) {
-	var conf Config
+	var conf = Config{MaxDeletes: 1}
 	m, err := newRedisMeta("redis", "127.0.0.1/9", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
@@ -836,7 +836,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 }
 
 func TestTruncateAndDelete(t *testing.T) {
-	var conf Config
+	var conf = Config{MaxDeletes: 1}
 	m, err := newRedisMeta("redis", "127.0.0.1/10", &conf)
 	if err != nil {
 		t.Skipf("redis is not available: %s", err)
