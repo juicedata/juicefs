@@ -32,7 +32,7 @@ jobs:
           docker version
           "C:\Program Files\Docker\Docker\Docker Desktop.exe"
           docker version
-          "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
+          "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchDaemon
 
       - name: Start Redis
         run: |
