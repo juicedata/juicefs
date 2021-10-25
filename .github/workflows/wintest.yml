@@ -35,6 +35,7 @@ jobs:
 
       - name: Build Juicefs
         run: |
+          go env
           go build -ldflags="-s -w" -o juicefs.exe ./cmd
 
 
