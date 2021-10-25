@@ -151,7 +151,7 @@ mystor
 
 **参数说明：**
 
-- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_setup_object_storage.md)。
+- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../how_to_setup_object_storage.md)。
 - `--bucket`：指定存储桶访问地址。
 - `--access-key` 和 `--secret-key`：指定访问对象存储 API 的秘钥。
 - DigitalOcean 托管的 Redis 集群需要使用 TLS/SSL 加密访问，因此需要使用 `rediss://` 协议头，链接最后添加的 `/1` 代表使用 Redis 的 1 号数据库。
@@ -258,7 +258,7 @@ $ juicefs status rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-d
 $ sudo juicefs umount ~/mnt
 ```
 
-> **注意**：[强制卸载使用中的文件系统](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md#%E4%B8%83%E5%8D%B8%E8%BD%BD%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F)可能导致数据损坏或丢失，请务必谨慎操作。
+> **注意**：[强制卸载使用中的文件系统](../quick_start_guide.md#%E4%B8%83%E5%8D%B8%E8%BD%BD%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F)可能导致数据损坏或丢失，请务必谨慎操作。
 
 ### 6. 开机自动挂载
 
@@ -276,7 +276,7 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=20480     0  0
 ```
 
-挂载选项中 `cache-size=20480` 代表分配 20GiB 本地磁盘空间作为 JuiceFS 的本地缓存，请根据实际的硬件配置决定分配的缓存大小。你可以根据需要调整上述配置中的 [FUSE 挂载选项](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/fuse_mount_options.md)。
+挂载选项中 `cache-size=20480` 代表分配 20GiB 本地磁盘空间作为 JuiceFS 的本地缓存，请根据实际的硬件配置决定分配的缓存大小。你可以根据需要调整上述配置中的 [FUSE 挂载选项](../fuse_mount_options.md)。
 
 ### 7. 多主机共享挂载
 

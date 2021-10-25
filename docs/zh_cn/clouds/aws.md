@@ -20,7 +20,7 @@ JuiceFS 客户端默认会占用 1GB 的磁盘作为缓存，在处理大量文�
 
 Amazon S3 是公有云对象存储服务的事实标准，其他主流云平台所提供的对象存储服务通常都兼容 S3 API，这使得面向 S3 开发的程序可以自由切换其他平台的对象存储服务。
 
-JuiceFS 完全支持 Amazon S3 以及所有兼容 S3 API 对象存储服务，你可以查看文档了解 [JuiceFS 支持的所有存储类型](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/how_to_setup_object_storage.md)。
+JuiceFS 完全支持 Amazon S3 以及所有兼容 S3 API 对象存储服务，你可以查看文档了解 [JuiceFS 支持的所有存储类型](../how_to_setup_object_storage.md)。
 
 Amazon S3 提供一系列适合不同使用案例的存储类，主要有：
 
@@ -120,7 +120,7 @@ COPYRIGHT:
 
 > **提示**：如果执行 `juicefs` 命令，终端返回 `command not found`，可能是因为 `/usr/local/bin` 目录不在系统的 `PATH` 可执行路径中。你可以通过 `echo $PATH` 命令查看系统已设置的可执行路径，并将客户端重新安装到正确的位置。也可以将 `/usr/local/bin` 添加到 `PATH` 中。
 
-JuiceFS 具有良好的跨平台兼容性，同时支持在 Linux、Windows 和 macOS 上使用，如果你需要了解其他系统上的安装方法，请查阅[官方文档](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/README.md)。
+JuiceFS 具有良好的跨平台兼容性，同时支持在 Linux、Windows 和 macOS 上使用，如果你需要了解其他系统上的安装方法，请查阅[官方文档](../README.md)。
 
 ### 3. 创建文件系统
 
@@ -138,7 +138,7 @@ $ juicefs format \
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，这里我们使用 S3。如需使用其他对象存储，请参考[《JuiceFS 支持的对象存储和设置指南》](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/how_to_setup_object_storage.md)。
+- `--storage`：指定对象存储类型，这里我们使用 S3。如需使用其他对象存储，请参考[《JuiceFS 支持的对象存储和设置指南》](../how_to_setup_object_storage.md)。
 - `--bucket`：对象存储的 Bucket 域名。
 - `--access-key` 和 `--secret-key`：访问 S3 API 的秘钥对。
 
@@ -175,7 +175,7 @@ $ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:
 
 > **注意**：挂载文件系统时，只需填写数据库地址，不需要文件系统名称。默认的缓存路径为 `/var/jfsCache`，请确保当前用户有足够的读写权限。
 
-你可以通过调整[挂载参数](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/command_reference.md#juicefs-mount)，对 JuiceFS 进行优化，比如可以通过 `--cache-size` 将缓存修改为 20GB：
+你可以通过调整[挂载参数](../command_reference.md#juicefs-mount)，对 JuiceFS 进行优化，比如可以通过 `--cache-size` 将缓存修改为 20GB：
 
 ```shell
 $ sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs
@@ -211,7 +211,7 @@ JuiceFS:mystor   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
 $ sudo juicefs umount /mnt/jfs
 ```
 
-> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。更多内容请参考[官方文档](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md#7-卸载文件系统)。
+> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。更多内容请参考[官方文档](../quick_start_guide.md#7-卸载文件系统)。
 
 ### 6. 开机自动挂载
 
@@ -231,6 +231,6 @@ redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1    /mnt/jfs      
 
 挂载选项中 `cache-size=20480` 代表分配 20GB 本地磁盘空间作为 JuiceFS 的缓存使用，请根据你实际的 EBS 磁盘容量去决定分配的缓存大小。
 
-你可以根据需要调整上述配置中的 FUSE 挂载选项，更多内容请[查阅文档](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/fuse_mount_options.md)。
+你可以根据需要调整上述配置中的 FUSE 挂载选项，更多内容请[查阅文档](../fuse_mount_options.md)。
 
 > **注意**：请将上述配置文件中的 Redis 地址、挂载点以及挂载选项，替换成你实际的信息。

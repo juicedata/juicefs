@@ -104,7 +104,7 @@ $ sudo install juice/juicefs /usr/local/bin
 执行命令，看到返回 `juicefs` 的命令帮助信息，代表客户端安装成功。
 
 ```shell
-$ juicefs 
+$ juicefs
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
 
@@ -144,7 +144,7 @@ COPYRIGHT:
    AGPLv3
 ```
 
-JuiceFS 具有良好的跨平台兼容性，同时支持在 Linux、Windows 和 macOS 上使用。本文着重介绍 JuiceFS 在 Linux 系统上的安装和使用，如果你需要了解其他系统上的安装方法，请[查阅文档](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/README.md)。
+JuiceFS 具有良好的跨平台兼容性，同时支持在 Linux、Windows 和 macOS 上使用。本文着重介绍 JuiceFS 在 Linux 系统上的安装和使用，如果你需要了解其他系统上的安装方法，请[查阅文档](../README.md)。
 
 ## 创建 JuiceFS 存储
 
@@ -166,7 +166,7 @@ $ juicefs format \
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，[点此查看](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/how_to_setup_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
+- `--storage`：指定对象存储类型，[点此查看](../how_to_setup_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 域名。当使用阿里云 OSS 时，只需填写 bucket 名称即可，无需填写完整的域名，JuiceFS 会自动识别并补全地址。
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://help.aliyun.com/document_detail/38738.html)获取方式。
 
@@ -272,7 +272,7 @@ $ juicefs status redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs
 $ sudo juicefs umount /mnt/jfs
 ```
 
-> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。更多内容请参考[官方文档](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md#%E4%B8%83%E5%8D%B8%E8%BD%BD%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F)。
+> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。更多内容请参考[官方文档](../quick_start_guide.md#%E4%B8%83%E5%8D%B8%E8%BD%BD%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F)。
 
 ## 开机自动挂载
 
@@ -292,6 +292,6 @@ redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1    /m
 
 挂载选项中 `cache-size=20480` 代表分配 20GB 本地磁盘空间作为 JuiceFS 的缓存使用，请根据你实际的 ECS 硬盘容量去决定分配的缓存大小。一般来说，为 JuiceFS 分配更大的缓存空间，可以获得更好的性能表现。
 
-你可以根据需要调整上述配置中的 FUSE 挂载选项，更多内容请[查阅文档](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/fuse_mount_options.md)。
+你可以根据需要调整上述配置中的 FUSE 挂载选项，更多内容请[查阅文档](../fuse_mount_options.md)。
 
 > **注意**：请将上述配置文件中的 Redis 地址、挂载点以及挂载选项，替换成你实际的信息。
