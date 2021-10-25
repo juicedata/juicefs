@@ -22,9 +22,14 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
+
+      - name: Install Docker Desktop
+        run: |
+          choco install docker-desktop -y
+          
       - name: Swtich to Linux Containers
         run: |
-          "C:\Program Files\Docker\Docker\DockerCli.exe" 
+          "C:\Program Files\Docker\Docker\DockerCli.exe"
           "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
 
       - name: Start Redis
