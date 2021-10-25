@@ -23,16 +23,16 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install Docker Desktop
+      - name: Install Docker 
         run: |
-          choco install docker-desktop -y
-
-      - name: Test Containers
-        run: |
+          Uninstall-Package -Name docker -ProviderName DockerMSFTProvider
+          Get-VM WinContainerHost | Set-VMProcessor -ExposeVirtualizationExtensions $true
+          Install-Module DockerProvider
+          Install-Package Docker -ProviderName DockerProvider -RequiredVersion preview
+          [Environment]::SetEnvironmentVariable("LCOW_SUPPORTED", "1", "Machine")
+          Restart-Service docker
           docker version
-          "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-          docker version
-          "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchDaemon
+          docker pull ubuntu
 
       - name: Start Redis
         run: |
