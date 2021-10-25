@@ -53,7 +53,7 @@ func resetDB(m *dbMeta) {
 func TestSQLiteClient(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{})
+	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -61,7 +61,7 @@ func TestSQLiteClient(t *testing.T) {
 }
 
 func TestMySQLClient(t *testing.T) {
-	m, err := newSQLMeta("mysql", "root:@/dev", &Config{})
+	m, err := newSQLMeta("mysql", "root:@/dev", &Config{MaxDeletes: 1})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -80,7 +80,7 @@ func TestMySQLClient(t *testing.T) {
 }
 
 func TestPostgresQLClient(t *testing.T) {
-	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{})
+	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{MaxDeletes: 1})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -121,7 +121,7 @@ func TestLocksSQLite(t *testing.T) {
 func TestConcurrentWriteSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{})
+	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -131,7 +131,7 @@ func TestConcurrentWriteSQLite(t *testing.T) {
 func TestCompactionSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{})
+	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -141,7 +141,7 @@ func TestCompactionSQLite(t *testing.T) {
 func TestTruncateAndDeleteSQLite(t *testing.T) {
 	tmp := tempFile(t)
 	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{})
+	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}

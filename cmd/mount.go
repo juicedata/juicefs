@@ -120,6 +120,7 @@ func mount(c *cli.Context) error {
 		OpenCache:   time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint:  mp,
 		Subdir:      c.String("subdir"),
+		MaxDeletes:  c.Int("max-deletes"),
 	}
 	m := meta.NewClient(addr, metaConf)
 	format, err := m.Load()
@@ -276,6 +277,11 @@ func clientFlags() []cli.Flag {
 			Name:  "max-uploads",
 			Value: 20,
 			Usage: "number of connections to upload",
+		},
+		&cli.IntFlag{
+			Name:  "max-deletes",
+			Value: 2,
+			Usage: "number of threads to delete objects",
 		},
 		&cli.IntFlag{
 			Name:  "buffer-size",
