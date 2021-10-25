@@ -34,7 +34,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.17.0 (2021-09-24 e115dc4)
+   1.0-dev (2021-10-22 0adbc74)
 
 COMMANDS:
    format   format a volume
@@ -342,6 +342,9 @@ juicefs gateway [command options] META-URL ADDRESS
 
 `--access-log value`\
 访问日志的路径
+
+`--metrics value`\
+监控数据导出地址 (默认: "127.0.0.1:9567")
 
 `--no-usage-report`\
 不发送使用量信息 (默认: false)

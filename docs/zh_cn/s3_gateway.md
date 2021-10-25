@@ -1,6 +1,6 @@
 # 启用 JuiceFS 的 S3 网关
 
-JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它为 JuiceFS 中的文件提供跟 S3 兼容的 RESTful API，在不方便挂载的情况下能够用 s3cmd、AWS CLI、Minio Client (mc) 等工具管理 JuiceFS 上存储的文件。另外，S3 网关还提供了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
+JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它为 JuiceFS 中的文件提供跟 S3 兼容的 RESTful API，在不方便挂载的情况下能够用 s3cmd、AWS CLI、MinIO Client（mc）等工具管理 JuiceFS 上存储的文件。另外，S3 网关还提供了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
 
 因为 JuiceFS 会将文件分块存储到底层的对象存储中，不能直接使用底层对象存储的接口和界面来直接访问文件，S3 网关提供了类似底层对象存储的访问能力，架构图如下：
 
@@ -8,7 +8,7 @@ JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网�
 
 ## 先决条件
 
-S3 网关是建立在 JuiceFS 文佳系统之上的功能，如果你还没有 JuiceFS 文件系统，请先参考 [快速上手指南](quick_start_guide.md) 创建一个。
+S3 网关是建立在 JuiceFS 文件系统之上的功能，如果你还没有 JuiceFS 文件系统，请先参考 [快速上手指南](quick_start_guide.md) 创建一个。
 
 JuiceFS S3 网关是 v0.11 中引入的功能，请确保您拥有最新版本的 JuiceFS。
 
@@ -22,7 +22,7 @@ $ export MINIO_ROOT_PASSWORD=12345678
 $ juicefs gateway redis://localhost:6379 localhost:9000
 ```
 
-以上三条命令中，前两条命令用于设置环境变量。注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符。（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）
+以上三条命令中，前两条命令用于设置环境变量。注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）。
 
 最后一条命令用于启用 S3 网关，`gateway` 子命令至少需要提供两个参数，第一个是存储元数据的数据库 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](command_reference.md#juicefs-gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
@@ -84,7 +84,7 @@ $ aws --endpoint-url http://localhost:9000 s3 ls s3://<bucket>
 $ mc alias set juicefs http://localhost:9000 admin 12345678 --api S3v4
 ```
 
-依照 mc 的命令格式，以上命令创建了一个别名为 `juicefs` 的配置。特别注意，命令中必须指定 api 版本，即 `--api "s3v4"`。
+依照 mc 的命令格式，以上命令创建了一个别名为 `juicefs` 的配置。特别注意，命令中必须指定 API 版本，即 `--api "s3v4"`。
 
 然后，你可以通过 mc 客户端自由的在本地磁盘与 JuiceFS 存储以及其他云存储之间进行文件和文件夹的复制、移动、增删等管理操作。
 
@@ -101,3 +101,8 @@ $ mc ls juicefs/jfs
 [2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
 ```
 
+## 监控指标收集
+
+> **注意**：该特性需要运行 0.17.1 及以上版本 JuiceFS 客户端
+
+JuiceFS S3 网关提供一个 Prometheus API 用于收集监控指标，默认地址是 `http://localhost:9567/metrics`。更多信息请查看[「JuiceFS 监控指标」](p8s_metrics.md)文档。
