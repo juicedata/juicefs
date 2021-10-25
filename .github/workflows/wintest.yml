@@ -18,4 +18,15 @@ jobs:
         with:
           go-version: '1.16.x'
 
+      - name: Set up Include Headers
+        run: |
+          mkdir "C:\Program Files (x86)\WinFsp\inc\fuse"
+          copy hack\winfsp_headers\ "C:\Program Files (x86)\WinFsp\inc\fuse"
+          set CPATH="C:\Program Files (x86)\WinFsp\inc\fuse"
+
+      - name: Build Juicefs
+          run: |
+            go build -ldflags="-s -w" -o juicefs.exe ./cmd
+
+            
 
