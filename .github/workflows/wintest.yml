@@ -25,8 +25,8 @@ jobs:
           set CPATH="C:\Program Files (x86)\WinFsp\inc\fuse"
 
       - name: Build Juicefs
-          run: |
-            go build -ldflags="-s -w" -o juicefs.exe ./cmd
+        run: |
+          go build -ldflags="-s -w" -o juicefs.exe ./cmd
 
-            
+
 
