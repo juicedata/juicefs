@@ -29,8 +29,10 @@ jobs:
 
       - name: Test Containers
         run: |
+          docker version
           "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-          "C:\Program Files\Docker\Docker\DockerCli.exe"
+          docker version
+          "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
 
       - name: Start Redis
         run: |
