@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 1
       - name: Swtich to Linux Containers
         run: |
-          "C:\Program Files\Docker\Docker\DockerCli.exe" --help
+          "C:\Program Files\Docker\Docker\DockerCli.exe" 
           "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
 
       - name: Start Redis
