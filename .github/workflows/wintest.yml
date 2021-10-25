@@ -18,11 +18,6 @@ jobs:
         with:
           go-version: '1.16.x'
 
-      - name: Set up Choco
-        run: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-          choco
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -43,5 +38,9 @@ jobs:
           go env
           go build -ldflags="-s -w" -o juicefs.exe ./cmd
 
-
+      - name: Install redis
+        run: |
+          choco install redis-64 -y
+          choco upgrade redis-64
+          redis-server
 
