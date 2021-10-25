@@ -22,13 +22,13 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-          
+
       - name: Set up Include Headers
         run: |
-          mkdir "C:\Program Files (x86)\WinFsp\inc\fuse"
-          dir
-          copy .\hack\winfsp_headers\ "C:\Program Files (x86)\WinFsp\inc\fuse"
-          set CPATH="C:\Program Files (x86)\WinFsp\inc\fuse"
+          mkdir "C:\WinFsp\inc\fuse"
+          copy .\hack\winfsp_headers\ "C:\WinFsp\inc\fuse"
+          set CGO_CFLAGS=-I/C/WinFsp/inc/fuse
+
 
       - name: Build Juicefs
         run: |
