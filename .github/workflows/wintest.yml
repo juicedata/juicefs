@@ -26,7 +26,7 @@ jobs:
       - name: Set up Include Headers
         run: |
           mkdir "C:\WinFsp\inc\fuse"
-          copy .\hack\winfsp_headers\ "C:\WinFsp\inc\fuse"
+          copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
           dir "C:\WinFsp\inc\fuse"
           set CGO_CFLAGS=-I/C/WinFsp/inc/fuse
           go env
