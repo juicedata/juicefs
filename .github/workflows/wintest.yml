@@ -23,11 +23,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Test Docker and Choco
-        run: |
-          docker --version
-          choco
-
 
       - name: Start Redis
         run: |
@@ -37,7 +32,7 @@ jobs:
         run: |
           docker run -d --name minio -p 9000:9000  -p 9900:9900 minio/minio server /data 
 
-      - name: Install winfsp
+      - name: Install WinFsp
         run: |
           choco install winfsp -y
 
