@@ -23,6 +23,24 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Test Docker and Choco
+        run: |
+          docker --version
+          choco
+
+
+      - name: Start Redis
+        run: |
+          docker run -d --name redis -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Start Minio
+        run: |
+          docker run -d --name minio -p 9000:9000  -p 9900:9900 minio/minio server /data 
+
+      - name: Install winfsp
+        run: |
+          choco install winfsp -y
+
       - name: Set up Include Headers
         run: |
           mkdir "C:\WinFsp\inc\fuse"
@@ -38,9 +56,16 @@ jobs:
           go env
           go build -ldflags="-s -w" -o juicefs.exe ./cmd
 
-      - name: Install redis
+      - name: Juicefs Format
         run: |
-          choco install redis-64 -y
-          choco upgrade redis-64
-          redis-server
+          ./juicefs.exe format \
+              --storage minio \
+              --bucket http://127.0.0.1:9000/pics \
+              --access-key minioadmin \
+              --secret-key minioadmin \
+              redis://127.0.0.1:6379/1 \
+              pics
 
+      - name: Juicefs Mount
+        run: |
+          ./juicefs.exe mount redis://127.0.0.1:6379/1 Z:
