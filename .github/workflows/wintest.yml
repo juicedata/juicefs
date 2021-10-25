@@ -26,11 +26,10 @@ jobs:
       - name: Install Docker Desktop
         run: |
           choco install docker-desktop -y
-          
+
       - name: Swtich to Linux Containers
         run: |
-          "C:\Program Files\Docker\Docker\DockerCli.exe"
-          "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
+          "C:\Program Files\Docker\Docker\DockerCli.exe" -h
 
       - name: Start Redis
         run: |
