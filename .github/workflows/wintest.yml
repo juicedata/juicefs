@@ -81,4 +81,13 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          ./juicefs.exe mount redis://127.0.0.1:6379/1 Z:
+          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o juicefs-service.exe
+          echo  "<service>"   >> juicefs-service.xml
+          echo  "<id>jfs</id>"  >> juicefs-service.xml
+          echo  "<name>jfs</name>"  >> juicefs-service.xml
+          echo  "<description>jfs</description>"  >> juicefs-service.xml
+          echo  "<executable>$PWD\juicefs.exe</executable>"  >> juicefs-service.xml
+          echo  "<arguments>mount redis://127.0.0.1:6379/1 Z:</arguments>"  >> juicefs-service.xml
+          echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
+          echo  "</service>"  >> juicefs-service.xml
+          net start jfs
