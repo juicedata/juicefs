@@ -17,12 +17,14 @@ package chunk
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
 func TestNewCacheStore(t *testing.T) {
-	s := newCacheStore("/tmp/diskCache", 1<<30, 1, &defaultConf, nil)
+	dir := t.TempDir()
+	s := newCacheStore(filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
@@ -35,21 +37,23 @@ func TestExpand(t *testing.T) {
 		t.FailNow()
 	}
 
-	_ = os.Mkdir("/tmp/aaa1", 0755)
-	_ = os.Mkdir("/tmp/aaa2", 0755)
-	_ = os.Mkdir("/tmp/aaa3", 0755)
-	_ = os.Mkdir("/tmp/aaa3/jfscache", 0755)
-	_ = os.Mkdir("/tmp/aaa3/jfscache/jfs", 0755)
+	dir := t.TempDir()
+	_ = os.Mkdir(filepath.Join(dir, "aaa1"), 0755)
+	_ = os.Mkdir(filepath.Join(dir, "aaa2"), 0755)
+	_ = os.Mkdir(filepath.Join(dir, "aaa3"), 0755)
+	_ = os.Mkdir(filepath.Join(dir, "aaa3", "jfscache"), 0755)
+	_ = os.Mkdir(filepath.Join(dir, "aaa3", "jfscache", "jfs"), 0755)
 
-	rs = expandDir("/tmp/aaa*/jfscache/jfs")
-	if len(rs) != 3 || rs[0] != "/tmp/aaa1/jfscache/jfs" {
+	rs = expandDir(filepath.Join(dir, "aaa*", "jfscache", "jfs"))
+	if len(rs) != 3 || rs[0] != filepath.Join(dir, "aaa1", "jfscache", "jfs") {
 		t.Errorf("expand: %v", rs)
 		t.FailNow()
 	}
 }
 
 func BenchmarkLoadCached(b *testing.B) {
-	s := newCacheStore("/tmp/diskCache", 1<<30, 1, &defaultConf, nil)
+	dir := b.TempDir()
+	s := newCacheStore(filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
 	p := NewPage(make([]byte, 1024))
 	key := "/chunks/1_1024"
 	s.cache(key, p, false)
@@ -65,7 +69,8 @@ func BenchmarkLoadCached(b *testing.B) {
 }
 
 func BenchmarkLoadUncached(b *testing.B) {
-	s := newCacheStore("/tmp/diskCache", 1<<30, 1, &defaultConf, nil)
+	dir := b.TempDir()
+	s := newCacheStore(filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
 	key := "/chunks/222_1024"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
