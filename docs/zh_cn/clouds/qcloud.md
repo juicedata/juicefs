@@ -185,8 +185,8 @@ $ juicefs format \
 2021/07/30 11:44:31.904157 juicefs[44060] <INFO>: Meta address: redis://@192.168.5.5:6379/1
 2021/07/30 11:44:31.907083 juicefs[44060] <WARNING>: AOF is not enabled, you may lose data if Redis is not shutdown properly.
 2021/07/30 11:44:31.907634 juicefs[44060] <INFO>: Ping redis: 474.98µs
-2021/07/30 11:44:31.907850 juicefs[44060] <INFO>: Data uses cos://juice-1250000025/mystor/
-2021/07/30 11:44:32.149692 juicefs[44060] <INFO>: Volume is formatted as {Name:mystor UUID:dbf05314-57af-4a2c-8ac1-19329d73170c Storage:cos Bucket:https://juice-1250000025.cos.ap-shanghai.myqcloud.com AccessKey:AKIDGLxxxxxxxxxxxxxxxxxxZ8QRBdpkOkp SecretKey:removed BlockSize:4096 Compression:none Shards:0 Partitions:0 Capacity:0 Inodes:0 EncryptKey:}
+2021/07/30 11:44:31.907850 juicefs[44060] <INFO>: Data uses cos://juice-0000000000/mystor/
+2021/07/30 11:44:32.149692 juicefs[44060] <INFO>: Volume is formatted as {Name:mystor UUID:dbf05314-57af-4a2c-8ac1-19329d73170c Storage:cos Bucket:https://juice-0000000000.cos.ap-shanghai.myqcloud.com AccessKey:AKIDGLxxxxxxxxxxxxxxxxxxZ8QRBdpkOkp SecretKey:removed BlockSize:4096 Compression:none Shards:0 Partitions:0 Capacity:0 Inodes:0 EncryptKey:}
 ```
 
 ## 挂载 JuiceFS 存储
@@ -207,7 +207,7 @@ $ sudo juicefs mount -d redis://:<your-redis-password>@192.168.5.5:6379/1 /mnt/j
 2021/07/30 11:49:56.842211 juicefs[44175] <INFO>: Meta address: redis://@192.168.5.5:6379/1
 2021/07/30 11:49:56.845100 juicefs[44175] <WARNING>: AOF is not enabled, you may lose data if Redis is not shutdown properly.
 2021/07/30 11:49:56.845562 juicefs[44175] <INFO>: Ping redis: 383.157µs
-2021/07/30 11:49:56.846164 juicefs[44175] <INFO>: Data use cos://juice-1250000025/mystor/
+2021/07/30 11:49:56.846164 juicefs[44175] <INFO>: Data use cos://juice-0000000000/mystor/
 2021/07/30 11:49:56.846731 juicefs[44175] <INFO>: Disk cache (/var/jfsCache/dbf05314-57af-4a2c-8ac1-19329d73170c/): capacity (1024 MB), free ratio (10%), max pending pages (15)
 2021/07/30 11:49:57.354763 juicefs[44175] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
@@ -239,7 +239,7 @@ $ juicefs status redis://:<your-redis-password>@192.168.5.5:6379/1
     "Name": "mystor",
     "UUID": "dbf05314-57af-4a2c-8ac1-19329d73170c",
     "Storage": "cos",
-    "Bucket": "https://juice-1250000025.cos.ap-shanghai.myqcloud.com",
+    "Bucket": "https://juice-0000000000.cos.ap-shanghai.myqcloud.com",
     "AccessKey": "AKIDGLxxxxxxxxxxxxxxxxx8QRBdpkOkp",
     "BlockSize": 4096,
     "Compression": "none",
