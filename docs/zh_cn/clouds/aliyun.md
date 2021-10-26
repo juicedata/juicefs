@@ -272,7 +272,7 @@ $ juicefs status redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs
 $ sudo juicefs umount /mnt/jfs
 ```
 
-> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。更多内容请参考[官方文档](../quick_start_guide.md#7-卸载文件系统)。
+> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。
 
 ## 开机自动挂载
 

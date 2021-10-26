@@ -211,7 +211,7 @@ JuiceFS:mystor   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
 $ sudo juicefs umount /mnt/jfs
 ```
 
-> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。更多内容请参考[官方文档](../quick_start_guide.md#7-卸载文件系统)。
+> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。
 
 ### 6. 开机自动挂载
 

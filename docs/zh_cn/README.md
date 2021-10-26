@@ -42,7 +42,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 - 云平台
   - [在阿里云安装和使用 JuiceFS 存储](clouds/aliyun.md)
   - [在腾讯云安装和使用 JuiceFS 存储](clouds/qcloud.md)
-  - [在亚马逊 AWS 安装和使用 JuiceFS 存储](clouds/aws.md)
+  - [在 AWS 安装和使用 JuiceFS 存储](clouds/aws.md)
   - [在 DigitalOcean 安装和使用 JuiceFS 存储](clouds/digitalocean.md)
 - [命令参考](command_reference.md)
 - 进阶主题

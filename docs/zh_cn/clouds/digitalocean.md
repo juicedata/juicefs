@@ -258,7 +258,7 @@ $ juicefs status rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-d
 $ sudo juicefs umount ~/mnt
 ```
 
-> **注意**：[强制卸载使用中的文件系统](../quick_start_guide.md#7-卸载文件系统)可能导致数据损坏或丢失，请务必谨慎操作。
+> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。
 
 ### 6. 开机自动挂载
 

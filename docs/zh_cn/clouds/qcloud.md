@@ -174,7 +174,7 @@ $ juicefs format \
 
 - `--storage`：指定对象存储类型，[点此查看](../how_to_setup_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 访问域名，可以在 COS 的管理控制台找到。
-  ![cos-bucket-url](/Users/herald/repo/press/01.基础/腾讯云上使用JuiceFS/images/cos-bucket-url.png)
+  ![cos-bucket-url](../../images/cos-bucket-url.png)
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://cloud.tencent.com/document/product/598/37140)获取方式。
 
 > Redis 6.0 身份认证需要用户名和密码两个参数，地址格式为 `redis://username:password@redis-server-url:6379/1`。目前腾讯云数据库 Redis 版只提供 Reids 4.0 和 5.0 两个版本，认证身份只需要密码，在设置 Redis 服务器地址时只需留空用户名即可，例如：`redis://:password@redis-server-url:6379/1`
@@ -277,7 +277,7 @@ $ juicefs status redis://:<your-redis-password>@192.168.5.5:6379/1
 $ sudo juicefs umount /mnt/jfs
 ```
 
-> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。更多内容请参考[官方文档](../quick_start_guide.md#7-卸载文件系统)。
+> **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。
 
 ## 开机自动挂载
 
