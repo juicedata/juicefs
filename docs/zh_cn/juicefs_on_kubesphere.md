@@ -49,7 +49,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 进入配置修改页面，修改以下两个地方：
 - namespace：改成对应的项目名
 - storageClass.backend：
-  `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [「JuiceFS 快速上手指南」](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md) 了解相关内容。例如：
+  `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [「JuiceFS 快速上手指南」](quick_start_guide.md) 了解相关内容。例如：
 
 ![](../images/kubesphere_update_csi.png)
 
