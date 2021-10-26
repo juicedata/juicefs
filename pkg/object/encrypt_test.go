@@ -20,8 +20,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/pem"
 	"io/ioutil"
-	"os/exec"
+	"path/filepath"
 	"testing"
 )
 
@@ -55,16 +56,47 @@ func TestRSA(t *testing.T) {
 		t.Fail()
 	}
 
-	_ = exec.Command("openssl", "genrsa", "-out", "/tmp/private.pem", "2048").Run()
-	if _, err = ParseRsaPrivateKeyFromPath("/tmp/private.pem", ""); err != nil {
+	dir := t.TempDir()
+
+	if err := genrsa(filepath.Join(dir, "private.pem"), ""); err != nil {
 		t.Error(err)
 		t.Fail()
 	}
-	_ = exec.Command("openssl", "genrsa", "-out", "/tmp/private.pem", "-aes256", "-passout", "pass:abcd", "2048").Run()
-	if _, err = ParseRsaPrivateKeyFromPath("/tmp/private.pem", "abcd"); err != nil {
+	if _, err = ParseRsaPrivateKeyFromPath(filepath.Join(dir, "private.pem"), ""); err != nil {
 		t.Error(err)
 		t.Fail()
 	}
+
+	if err := genrsa(filepath.Join(dir, "private.pem"), "abcd"); err != nil {
+		t.Error(err)
+		t.Fail()
+	}
+	if _, err = ParseRsaPrivateKeyFromPath(filepath.Join(dir, "private.pem"), "abcd"); err != nil {
+		t.Error(err)
+		t.Fail()
+	}
+}
+
+func genrsa(path string, password string) error {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+	block := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	}
+	if password != "" {
+		// nolint:staticcheck
+		block, err = x509.EncryptPEMBlock(rand.Reader, block.Type, block.Bytes, []byte(password), x509.PEMCipherAES256)
+		if err != nil {
+			return err
+		}
+	}
+	if err := ioutil.WriteFile(path, pem.EncodeToMemory(block), 0755); err != nil {
+		return err
+	}
+	return nil
 }
 
 func BenchmarkRSA4096Encrypt(b *testing.B) {
