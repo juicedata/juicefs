@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install Scoop
+      - name: Install Scoop Redis and MinIO
         run: |
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
           iwr -useb get.scoop.sh | iex
@@ -32,14 +32,8 @@ jobs:
           scoop install curl
           scoop install redis
           scoop install minio
-
-      - name: Install Redis Service
-        run: |
           redis-server --service-install --loglevel verbose
           redis-server --service-start
-
-      - name: Install MinIO Service
-        run: |
           curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
           mkdir "C:\tmp"
           echo  "<service>"   >> minio-service.xml
