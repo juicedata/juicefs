@@ -30,13 +30,29 @@ jobs:
           echo $env:USERNAME
           scoop
 
-      - name: Start Redis
+      - name: Install Redis
         run: |
-          docker run -d --name redis -p 6379:6379  redis redis-server --appendonly yes
+          scoop install redis
+          redis-server --service-install --loglevel verbose
+          redis-server --service-start
 
-      - name: Start Minio
+      - name: Install MinIO
         run: |
-          docker run -d --name minio -p 9000:9000  -p 9900:9900 minio/minio server /data 
+          scoop install minio
+          scoop install curl
+          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
+          mkdir "C:\tmp"
+          echo  "<service>"   >> minio-service.xml
+          echo  "<id>MinIO</id>"  >> minio-service.xml
+          echo  "<name>MinIO</name>"  >> minio-service.xml
+          echo  "<description>MinIO</description>"  >> minio-service.xml
+          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\minio.exe</executable>"  >> minio-service.xml
+          echo  "<arguments>server C:\tmp</arguments>"  >> minio-service.xml
+          echo  "<logmode>rotate</logmode>"  >> minio-service.xml
+          echo  "</service>"  >> minio-service.xml
+          .\minio-service.exe install
+          net start MinIO
+
 
       - name: Install WinFsp
         run: |
