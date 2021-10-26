@@ -59,7 +59,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 ### 部署应用
 
-按照上述方法安装好的 JuiceFS CSI Driver 已经创建好一个 `StorageClass`，名为上述 `backend` 的 `name`，比如上述创建的 `StorageClass` 为 `juicefs-sc`，可以直接使用。
+按照上述方法安装好的 JuiceFS CSI Driver 已经创建好一个 `StorageClass`，名为上述 `storageClass` 的 `name`，比如上述创建的 `StorageClass` 为 `juicefs-sc`，可以直接使用。
 
 然后需要创建一个 PVC，指定使用 `juicefs-sc` 这个 `StorageClass`。在「项目」中，选择「存储管理」，再选择「存储卷」，点击「创建」按钮创建 PVC，其中「存储类型」选择 `juicefs-sc`，如下：
 
