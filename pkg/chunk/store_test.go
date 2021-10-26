@@ -65,12 +65,13 @@ func testStore(t *testing.T, store ChunkStore) {
 }
 
 func TestDiskStore(t *testing.T) {
-	testStore(t, NewDiskStore("/tmp/diskStore"))
+	dir := t.TempDir()
+	testStore(t, NewDiskStore(filepath.Join(dir, "diskStore")))
 }
 
 var defaultConf = Config{
 	BlockSize:  1024,
-	CacheDir:   "/tmp/diskCache",
+	CacheDir:   filepath.Join(os.TempDir(), "diskCache"),
 	CacheSize:  10,
 	MaxUpload:  1,
 	PutTimeout: time.Second,
@@ -96,7 +97,8 @@ func TestUncompressedStore(t *testing.T) {
 func TestAsyncStore(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "")
 	conf := defaultConf
-	conf.CacheDir = "/tmp/testdirAsync"
+	dir := t.TempDir()
+	conf.CacheDir = filepath.Join(dir, "testdirAsync")
 	p := filepath.Join(conf.CacheDir, stagingDir, "chunks/0/0/123_0_4")
 	os.MkdirAll(filepath.Dir(p), 0744)
 	f, _ := os.Create(p)
