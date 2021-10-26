@@ -543,9 +543,12 @@ func hasMeta(path string) bool {
 	return strings.ContainsAny(path, magicChars)
 }
 
+var osPathSeparator = string([]byte{os.PathSeparator})
+
 func expandDir(pattern string) []string {
-	for strings.HasSuffix(pattern, "/") {
-		pattern = pattern[:len(pattern)-1]
+	pattern = strings.TrimRight(pattern, "/")
+	if runtime.GOOS == "windows" {
+		pattern = strings.TrimRight(pattern, osPathSeparator)
 	}
 	if pattern == "" {
 		return []string{"/"}
