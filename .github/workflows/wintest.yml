@@ -90,4 +90,5 @@ jobs:
           echo  "<arguments>mount redis://127.0.0.1:6379/1 Z:</arguments>"  >> juicefs-service.xml
           echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
           echo  "</service>"  >> juicefs-service.xml
+          .\juicefs-service.exe install
           net start jfs
