@@ -30,16 +30,16 @@ jobs:
           echo $env:USERNAME
           scoop
           scoop install curl
-
-      - name: Install Redis
-        run: |
           scoop install redis
+          scoop install minio
+
+      - name: Install Redis Service
+        run: |
           redis-server --service-install --loglevel verbose
           redis-server --service-start
 
-      - name: Install MinIO
+      - name: Install MinIO Service
         run: |
-          scoop install minio
           curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
           mkdir "C:\tmp"
           echo  "<service>"   >> minio-service.xml
