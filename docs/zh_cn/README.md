@@ -39,6 +39,11 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
   - [Hadoop 生态使用 JuiceFS 存储](hadoop_java_sdk.md)
   - [启用 JuiceFS 的 S3 网关](s3_gateway.md)
   - [JuiceFS 客户端编译和升级](client_compile_and_upgrade.md)
+- 云平台
+  - [在阿里云安装和使用 JuiceFS 存储](clouds/aliyun.md)
+  - [在腾讯云安装和使用 JuiceFS 存储](clouds/qcloud.md)
+  - [在 AWS 安装和使用 JuiceFS 存储](clouds/aws.md)
+  - [在 DigitalOcean 安装和使用 JuiceFS 存储](clouds/digitalocean.md)
 - [命令参考](command_reference.md)
 - 进阶主题
   - [Redis 最佳实践](redis_best_practices.md)
