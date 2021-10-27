@@ -105,14 +105,10 @@ jobs:
         run: |
           choco install python2 -y
 
-      - name: Clone Winfstest
+      - name: Build and Run Winfstest
         run: |
           git clone https://github.com/dimov-cz/winfstest.git
           cd winfstest
-
-
-      - name: Build and Run Winfstest
-        run: |
           msbuild.exe winfstest.sln
           cd TestSuite
           .\run-winfstest
@@ -123,7 +119,7 @@ jobs:
           go test -v -cover ./pkg/... ./cmd/...
 
 
-      - name: Clone Winfstest in Jfs Directory
+      - name: Build and Run Winfstest in Jfs Directory
         run: |
           Z:
           mkdir "Z:\tmptmp"
@@ -131,10 +127,6 @@ jobs:
           cd tmptmp
           git clone https://github.com/dimov-cz/winfstest.git
           cd winfstest
-
-
-      - name: Build and Run Winfstest in Jfs Directory
-        run: |
           msbuild.exe winfstest.sln
           cd TestSuite
           .\run-winfstest
