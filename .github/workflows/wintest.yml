@@ -103,6 +103,9 @@ jobs:
           git clone https://github.com/dimov-cz/winfstest.git
           cd winfstest
 
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v1.0.3
+
 
       - name: Build and Run Winfstest
         run: |
