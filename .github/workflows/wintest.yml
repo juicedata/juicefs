@@ -11,7 +11,8 @@ on:
 
 jobs:
   wintest:
-    runs-on: windows-latest
+    runs-on: windows-2022
+    Actions_Allow_Unsecure_Commands: true # Allows AddPAth and SetEnv commands
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -24,11 +25,11 @@ jobs:
           fetch-depth: 1
 
 
-      - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v1.0.3
-
       #- name: Setup MSBuild.exe
-      #  uses: warrenbuckley/Setup-MSBuild@v1
+      #  uses: microsoft/setup-msbuild@v1.0.3
+
+      - name: Setup MSBuild.exe
+        uses: warrenbuckley/Setup-MSBuild@v1
 
       - name: Install WinFsp
         run: |
