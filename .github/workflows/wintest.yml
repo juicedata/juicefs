@@ -29,6 +29,11 @@ jobs:
       - name: Setup MSBuild.exe
         uses: microsoft/setup-msbuild@v1.0.3
 
+      - name: Change Winsdk Version
+        uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
+        with:
+          sdk-version: 19041
+
       #- name: Setup MSBuild.exe
       #  uses: warrenbuckley/Setup-MSBuild@v1
 
