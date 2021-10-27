@@ -94,12 +94,16 @@ jobs:
           .\juicefs-service.exe install
           net start jfs
 
+      - name: Install Python2
+        run: |
+          choco install python2 -y
+
       - name: Clone Winfstest
-          run: |
-            mkdir tmp
-            cd tmp
-            git clone git@github.com:sanwan/winfstest.git
-            cd winfstest
+        run: |
+          mkdir tmp
+          cd tmp
+          git clone git@github.com:sanwan/winfstest.git
+          cd winfstest
 
 
       - name: Build and Run Winfstest
@@ -114,11 +118,7 @@ jobs:
           go test -v -cover ./pkg/... ./cmd/...
 
 
-      - name: Install Python2
-        run: |
-          choco install python2 -y
-
-      - name: Clone Winfstest
+      - name: Clone Winfstest in Jfs Directory
         run: |
           Z:
           mkdir "Z:\tmptmp"
@@ -128,7 +128,7 @@ jobs:
           cd winfstest
 
 
-      - name: Build and Run Winfstest
+      - name: Build and Run Winfstest in Jfs Directory
         run: |
           msbuild.exe winfstest.sln
           cd TestSuite
