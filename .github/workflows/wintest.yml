@@ -92,3 +92,7 @@ jobs:
           echo  "</service>"  >> juicefs-service.xml
           .\juicefs-service.exe install
           net start jfs
+
+      - name: Unit Test
+        run: |
+          go test -v -cover ./pkg/... ./cmd/...
