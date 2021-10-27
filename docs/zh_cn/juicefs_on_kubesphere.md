@@ -49,7 +49,29 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 进入配置修改页面，修改以下两个地方：
 - namespace：改成对应的项目名
 - storageClass.backend：
-  `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [「JuiceFS 快速上手指南」](quick_start_guide.md) 了解相关内容。例如：
+  `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [「JuiceFS 快速上手指南」](quick_start_guide.md) 了解相关内容。
+
+您也可以通过 KubeSphere 的应用商店快速创建数据库（如 Redis）和对象存储（如 MinIO）。
+比如在 KubeSphere 平台搭建 Redis：在当前所在项目中选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」，选择「Redis」，然后快速部署即可。Redis 的访问 URL 可以通过部署好的应用的服务名，如下：
+
+![](../images/kubesphere_redis.png)
+
+在 KubeSphere 平台搭建 MinIO 也是类似的流程，不过在部署 MinIO 之前可以修改 MinIO 的 accessKey 和 secretKey，并且需要记住配置的值。如下图：
+
+![](../images/kubesphere_create_minio.png)
+
+> 注：如果部署 MinIO 出现权限问题，可以将配置中的 `securityContext.enables` 设置为 false。
+
+MinIO 的访问 URL 可以通过部署好的应用的服务名，如下：
+
+![](../images/kubesphere_minio.png)
+
+Redis 和 MinIO 都搭建好之后，就可以填写 JuiceFS CSI Driver 的 `backend` 值了。其中：
+
+1. `metaurl` 为刚才创建的 Redis 的数据库地址，Redis 的访问地址可用 Redis 应用对应的服务名，如 `redis://redis-rzxoz6:6379/1`
+2. `storage` 为对象存储的类型，如 `minio`
+3. `bucket` 为刚才创建的 MinIO 的可用 bucket（JuiceFS 会自动创建，不需要手动创建），MinIO 的访问地址可用 MinIO 应用对应的服务名，如 `http://minio-qkp9my:9000/minio/test`
+4. `accessKey` 和 `secretKey` 用刚才创建的 MinIO 的 accessKey 和 secretKey
 
 ![](../images/kubesphere_update_csi.png)
 
