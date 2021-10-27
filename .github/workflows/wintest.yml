@@ -100,9 +100,7 @@ jobs:
 
       - name: Clone Winfstest
         run: |
-          mkdir tmp
-          cd tmp
-          git clone git@github.com:sanwan/winfstest.git
+          git clone https://github.com/dimov-cz/winfstest.git
           cd winfstest
 
 
@@ -124,7 +122,7 @@ jobs:
           mkdir "Z:\tmptmp"
           dir
           cd tmptmp
-          git clone git@github.com:sanwan/winfstest.git
+          git clone https://github.com/dimov-cz/winfstest.git
           cd winfstest
 
 
