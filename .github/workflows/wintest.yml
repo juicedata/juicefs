@@ -23,10 +23,12 @@ jobs:
         with:
           fetch-depth: 1
 
-          
-      - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v1.0.1
 
+      #- name: Setup MSBuild.exe
+      #  uses: microsoft/setup-msbuild@v1.0.1
+
+      - name: Setup MSBuild.exe
+        uses: warrenbuckley/Setup-MSBuild@v1
 
       - name: Install WinFsp
         run: |
