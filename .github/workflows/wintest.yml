@@ -23,6 +23,11 @@ jobs:
         with:
           fetch-depth: 1
 
+          
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v1.0.1
+
+
       - name: Install WinFsp
         run: |
           choco install winfsp -y
@@ -102,9 +107,6 @@ jobs:
         run: |
           git clone https://github.com/dimov-cz/winfstest.git
           cd winfstest
-
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.0.3
 
 
       - name: Build and Run Winfstest
