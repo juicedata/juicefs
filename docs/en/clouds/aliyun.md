@@ -1,4 +1,4 @@
-# Installing and Using JuiceFS Storage on Alibaba Cloud
+# Installing and Using JuiceFS on Alibaba Cloud
 
 As shown in the figure below, JuiceFS is driven by both the database and the object storage. The files stored in JuiceFS are split into fixed-size data blocks and stored in the object store according to certain rules, while the metadata corresponding to the data is stored in the database.
 
@@ -14,7 +14,7 @@ From the previous architecture description, you can know that JuiceFS needs to b
 
 When you create cloud computing resources, try to choose in the same region, so that resources can access each other through intranet and avoid using public network to incur additional traffic costs.
 
-### I. ECS
+### 1. ECS
 JuiceFS has no special requirements for server hardware, generally speaking, entry-level cloud servers can also use JuiceFS stably, usually you just need to choose the one that can meet your own business.
 
 In particular, you do not need to buy a new server or reinstall the system to use JuiceFS, JuiceFS is not business invasive and will not cause any interference with your existing systems and programs, you can install and use JuiceFS on your running server.
@@ -33,16 +33,17 @@ In terms of operating system, JuiceFS can be installed on all operating systems 
 | **OS**                     | Ubuntu Server 20.04 64-bit |
 | **Location**               | Shanghai                   |
 
-### II. Cloud Database
+### 2. Cloud Database
 
 JuiceFS will store all the metadata corresponding to the data in a separate database, which is currently support Redis, MySQL, PostgreSQL and SQLite.
+
 Depending on the database type, the performance and reliability of metadata are different.  For example, Redis runs entirely on memory, which provides the ultimate performance, but is difficult to operate and maintain, and has relatively low reliability. SQLite is a single-file relational database with low performance and is not suitable for large-scale data storage, but it is configuration-free and suitable for a small amount of data storage on a single machine.
 
 If you just want to evaluate the functionality of JuiceFS, you can build the database manually on ECS. When you want to use JucieFS in a production environment, the cloud database service is usually a better choice if you don't have a professional database operation and maintenance team.
 
 Of course, you can also use cloud database services provided on other platforms if you wish.But in this case, you have to expose the database port to the public network, which also has some security risks.
 
-If you must access the database through the public network, you can enhance the security of your data by strictly limiting the IP addresses that are allowed to access the database through the whitelist feature provided by the cloud database console. 
+If you must access the database through the public network, you can enhance the security of your data by strictly limiting the IP addresses that are allowed to access the database through the whitelist feature provided by the cloud database console.
 
 On the other hand, if you cannot successfully connect to the cloud database through the public network, then you can check the whitelist of the database.
 
@@ -53,17 +54,17 @@ On the other hand, if you cannot successfully connect to the cloud database thro
 | **Reliability** |                           Low                           |                            Medium                            |                             Low                              |
 |  **Scenario**   | Massive data, distributed high-frequency read and write | Massive data, distributed low and medium frequency read and write | Low frequency read and write in single machine for small amount of data |
 
-> **Note**: If you use [JuiceFS Hosted Service](https://juicefs.com/docs/zh/hosted_service.html), you do not need to prepare a database.
+> **Note**: If you use [JuiceFS Hosted Service](https://juicefs.com/docs/en/hosted_service.html), you do not need to prepare a database.
 
-**This article uses the Cloud Data Redis version, and the following is pseudo address compiled for demonstration purposes only:**
+**This article uses the [ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis), and the following is pseudo address compiled for demonstration purposes only:**
 
-| Redis Version               | 5.0 Community Edition                |
-| --------------------------- | ------------------------------------ |
-| **Instance Specifications** | 256M Master-Slave Edition            |
-| **Connection Address**      | herald-sh-abc.redis.rds.aliyuncs.com |
-| **Available Zones**         | Shanghai                             |
+| Redis Version               | 5.0 Community Edition                  |
+| --------------------------- | -------------------------------------- |
+| **Instance Specification**  | 256M Standard master-replica instances |
+| **Connection Address**      | herald-sh-abc.redis.rds.aliyuncs.com   |
+| **Available Zone**          | Shanghai                               |
 
-### III. Object Storage OSS
+### 3. Object Storage OSS
 
 JuiceFS will store all the data in object storage, which supports almost all object storage services. However, to get the best performance, when using Alibaba Cloud ECS, with OSS object storage is usually the optimal choice. However, please note that choosing ECS and OSS Bucket in the same region so that they can be accessed through intranet not only has low latency, but also does not require additional traffic costs.
 
@@ -73,13 +74,13 @@ Alibaba Cloud OSS has different storage levels, and since JuiceFS needs to inter
 
 ### API access secret key
 
-AliCloud OSS needs to be accessed through API, you need to prepare the access secret key, including `Access Key ID` and `Access Key Secret`, [click here](https://help.aliyun.com/document_detail/38738.html) to get the way.
+Alibaba Cloud OSS needs to be accessed through API, you need to prepare the access secret key, including `Access Key ID` and `Access Key Secret`, [click here](https://www.alibabacloud.com/help/doc-detail/125558.htm) to get the way.
 
-> **Security Advisory**: Explicit use of the API access secret key may lead to key compromise, it is recommended to assign [RAM Role](https://help.aliyun.com/document_detail/93746.htm) to the cloud server. Once an ECS has been granted access to the OSS, the API access key is not required to access the OSS.
+> **Security Advisory**: Explicit use of the API access secret key may lead to key compromise, it is recommended to assign [RAM Role](https://www.alibabacloud.com/help/doc-detail/110376.htm) to the cloud server. Once an ECS has been granted access to the OSS, the API access key is not required to access the OSS.
 
 ## Installation
 
-I'm currently using Ubuntu Server 20.04 64-bit, so you can download the latest version of the client by running the following commands. You can also choose another version by visiting the [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) page.
+We currently using Ubuntu Server 20.04 64-bit, so you can download the latest version of the client by running the following commands. You can also choose another version by visiting the [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) page.
 
 ```shell
 $ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
@@ -146,7 +147,7 @@ COPYRIGHT:
 
 JuiceFS has good cross-platform compatibility and is supported on Linux, Windows and macOS. This article focuses on the installation and use of JuiceFS on Linux, if you need to know how to install it on other systems, please [check the documentation](../README.md).
 
-## Creating JuiceFS Storage
+## Creating JuiceFS
 
 Once the JuiceFS client is installed, you can now create the JuiceFS storage using the Redis database and OSS object storage that you prepared earlier.
 
@@ -168,11 +169,11 @@ $ juicefs format \
 
 - `--storage`: Specify the type of object storage, [click here to view](../how_to_setup_object_storage.md) object storage services supported by JuiceFS.
 - `--bucket`: Bucket domain name of the object storage. When using OSS, just fill in the bucket name, no need to fill in the full domain name, JuiceFS will automatically identify and fill in the full address.
-- `--access-key` and `--secret-key`: the secret key pair to access the object storage API, [click here](https://help.aliyun.com/document_detail/38738.html) to get the way.
+- `--access-key` and `--secret-key`: the secret key pair to access the object storage API, [click here](https://www.alibabacloud.com/help/doc-detail/125558.htm) to get the way.
 
 > Redis 6.0 authentication requires username and password parameters in the format of `redis://username:password@redis-server-url:6379/1`. Currently, Alibaba Cloud Redis only provides Reids 4.0 and 5.0 versions, which require only a password for authentication, and just leave the username empty when setting the Redis server address, for example: `redis://:password@redis-server-url:6379/1`.
 
-When using the RAM role to bind to the ECS, the JucieFS storage can be created by specifying `-storage` and `-bucket` without providing the API access key. The command can be rewritten as follows
+When using the RAM role to bind to the ECS, the JucieFS storage can be created by specifying `--storage` and `--bucket` without providing the API access key. The command can be rewritten as follows:
 
 ```shell
 $ juicefs format \
@@ -192,7 +193,7 @@ Output like the following means the file system was created successfully.
 2021/07/13 16:37:14.593450 juicefs[22290] <INFO>: Volume is formatted as {Name:mystor UUID:4ad0bb86-6ef5-4861-9ce2-a16ac5dea81b Storage:oss Bucket:https://mytest340 AccessKey:LTAI4G4v6ioGzQXy56m3XDkG SecretKey:removed BlockSize:4096 Compression:none Shards:0 Partitions:0 Capacity:0 Inodes:0 EncryptKey:}
 ```
 
-## Mount JuiceFS storage
+## Mount JuiceFS
 
 When the file system is created, the information related to the object storage is stored in the database, so there is no need to enter information such as the bucket domain and secret key when mounting.
 
@@ -202,7 +203,7 @@ Use the `mount` subcommand to mount the file system to the `/mnt/jfs` directory.
 $ sudo juicefs mount -d redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1 /mnt/jfs
 ```
 
-> **Note**: When mounting the file system, only the Redis database address is required, not the file system name. If you mount the filesystem as root, the default cache path is `/var/jfsCache`, if you mount it as a normal user on home directory, the default cache path is `~/.juicefs/cache`.
+> **Note**: When mounting the file system, only the Redis database address is required, not the file system name. The default cache path is `/var/jfsCache`, please make sure the current user has enough read/write permissions.
 
 Output similar to the following means that the file system was mounted successfully.
 
@@ -215,7 +216,7 @@ Output similar to the following means that the file system was mounted successfu
 .2021/07/13 16:40:38.410742 juicefs[22307] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
 
-Using the `df` command, you can see how the filesystem is mounted.
+Using the `df` command, you can see how the file system is mounted.
 
 ```shell
 $ df -Th
@@ -225,7 +226,7 @@ JuiceFS:mystor   fuse.juicefs  1.0P     64K  1.0P    1%   /mnt/jfs
 
 After the file system is successfully mounted, you can now store data in the `/mnt/jfs` directory as if you were using a local hard drive.
 
-> **Multi-Host Sharing**: JuiceFS storage supports being mounted by multiple cloud servers at the same time. You can install the JuiceFS client on other could server and then use `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs. com:6379/1` database address to mount the filesystem on each host.
+> **Multi-Host Sharing**: JuiceFS storage supports being mounted by multiple cloud servers at the same time. You can install the JuiceFS client on other could server and then use `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs. com:6379/1` database address to mount the file system on each host.
 
 ## File System Status
 
@@ -264,7 +265,7 @@ $ juicefs status redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs
 }
 ```
 
-## Unmount JuiceFS Storage
+## Unmount JuiceFS
 
 The file system can be unmounted using the `umount` command provided by the JuiceFS client, e.g.
 
@@ -274,7 +275,7 @@ $ sudo juicefs umount /mnt/jfs
 
 > **Note**: Forced unmount of the file system in use may result in data corruption or loss, so please be sure to proceed with caution.
 
-## Automount on Boot
+## Auto-mount on Boot
 
 If you don't want to manually remount JuiceFS storage on reboot, you can set up automatic mounting of the file system.
 

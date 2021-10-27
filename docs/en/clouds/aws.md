@@ -1,12 +1,14 @@
-# Installing and Using JuiceFS Storage on Amazon AWS
+# Installing and Using JuiceFS on AWS
 
-Amazon AWS is the world's leading cloud computing platform, offering almost all types of cloud computing services. Thanks to the rich product line of AWS, users can choose JuiceFS components in a very flexible way.
+AWS is the world's leading cloud computing platform, offering almost all types of cloud computing services. Thanks to the rich product line of AWS, users can choose JuiceFS components in a very flexible way.
 
-As you can see from the previous architecture, JuiceFS consists of the following three components: 
+## Preparation
 
-1. a **JuiceFS client** installed on the server
-2. the **object storage** used to store data
-3. a **database** for storing metadata
+As you can see from the previous architecture, JuiceFS consists of the following three components:
+
+1. A **JuiceFS client** installed on the server
+2. The **object storage** used to store data
+3. A **database** for storing metadata
 
 ### 1. Servers
 
@@ -20,7 +22,7 @@ JuiceFS clients will occupy 1GB of disk as cache by default. When dealing with a
 
 Amazon S3 is the de facto standard for public cloud object storage services, and the object storage services provided by other major cloud platforms are usually compatible with the S3 API, which allows programs developed for S3 to freely switch between object storage services of other platforms.
 
-JuiceFS fully supports Amazon S3 and all S3-like object storage services, and you can see the documentation for [all storage types supported by JuiceFS](../how_to_setup_object_storage.md).
+JuiceFS fully supports Amazon S3 and all S3-like object storage services, and you can see the documentation for [all object storage services supported by JuiceFS](../how_to_setup_object_storage.md).
 
 Amazon S3 offers a range of storage classes suitable for different use cases, the main ones being
 
@@ -30,7 +32,7 @@ Amazon S3 offers a range of storage classes suitable for different use cases, th
 
 The standard type of S3 should usually be used for JuiceFS, because other types than the standard type are less expensive but incur additional costs when retrieving data.
 
-In addition, access to the object storage service requires user authentication via `access key` and `secret key`, which you can refer to the document [Controlling Access to Storage Buckets with User Policies](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/) userguide/walkthrough1.html) to create it. When accessing S3 through EC2 cloud server, you can also assign [IAM role](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) to EC2 to enable key-free invocation of S3 API on EC2.
+In addition, access to the object storage service requires user authentication via `Access Key` and `Secret Key`, which you can refer to the document [Controlling Access to Storage Buckets with User Policies](https://docs.aws.amazon.com/AmazonS3/latest/userguide/walkthrough1.html) to create it. When accessing S3 through EC2 cloud server, you can also assign [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) to EC2 to enable key-free invocation of S3 API on EC2.
 
 ### 3. Database
 
@@ -43,7 +45,6 @@ In addition, you can also build your own database on EC2 cloud server for JuiceF
 ### 4. Cautions
 
 - JuiceFS is not business invasive and will not affect the normal operation of existing systems.
-
 - When selecting cloud services, it is recommended to select all cloud services in the same **region**, which is equivalent to all services being on the same intranet, with the lowest latency and fastest inter-access. And, according to AWS billing rules, it is free to transfer data between basic cloud services in the same region. In other words, when you select cloud services in different regions, for example, EC2 is selected in `ap-east-1`, ElastiCache is selected in `ap-southeast-1`, and S3 is selected in `us-east-2`, the inter-access between each cloud service in this case will incur traffic charges.
 - JuiceFS does not require the use of object storage and databases from the same cloud platform; you can flexibly mix and match cloud services from different platforms as needed. For example, you can use EC2 to run JuiceFS client with AliCloud's Redis database and Backbalze B2 object storage. Of course, JuiceFS storage composed of cloud services on the same platform and in the same region will perform even better.
 
@@ -119,7 +120,7 @@ COPYRIGHT:
    AGPLv3
 ```
 
-> **Hint**: If you execute the `juicefs` command and the terminal returns `command not found`, it may be because the `/usr/local/bin` directory is not in the system's `PATH` executable path. You can use the `echo $PATH` command to check the system's set executable path and reinstall the client to the correct location. You can also add `/usr/local/bin` to the `PATH`.
+> **Tip**: If you execute the `juicefs` command and the terminal returns `command not found`, it may be because the `/usr/local/bin` directory is not in the system's `PATH` executable path. You can use the `echo $PATH` command to check the system's set executable path and reinstall the client to the correct location. You can also add `/usr/local/bin` to the `PATH`.
 
 JuiceFS has good cross-platform compatibility and is supported on both Linux, Windows and macOS. If you need to know how to install it on other systems, please check the [official documentation](../README.md).
 
@@ -139,11 +140,11 @@ $ juicefs format \
 
 **Option Description:**
 
-- `--storage`: Specify the type of object storage, here we use S3. 
+- `--storage`: Specify the type of object storage, here we use S3.
 - `--bucket`: Bucket domain for object storage.
 - `--access-key` and `--secret-key`: The secret key pair to access the S3 API.
 
-> For Redis 6.0 and above, authentication requires both username and password, and the address format is redis://username:password@redis-server-url:6379/1. For Reids 4.0 and 5.0, authentication requires only the password, and the username needs to be left blank when setting the Redis server address. For example: redis://:password@redis-server-url:6379/1
+> For Redis 6.0 and above, authentication requires both username and password, and the address format is `redis://username:password@redis-server-url:6379/1`. For Reids 4.0 and 5.0, authentication requires only the password, and the username needs to be left blank when setting the Redis server address. For example: `redis://:password@redis-server-url:6379/1`.
 
 When using the IAM role to bind to EC2, you only need to specify `--storage` and `--bucket` options, and do not need to provide the API access key. It is also possible to assign ElastiCache access to the IAM role, and then instead of providing Redis authentication information, you can simply enter the Redis URL, which can be rewritten as
 
@@ -176,7 +177,7 @@ $ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:
 
 > **Note**: When mounting the file system, only the database address is required, not the file system name. The default cache path is `/var/jfsCache`, please make sure the current user has enough read/write permissions.
 
-You can optimize JuiceFS by adjusting the [mount parameter](../command_reference.md#juicefs-mount), for example by `-- cache-size` to change the cache to 20GB.
+You can optimize JuiceFS by adjusting the [mount options](../command_reference.md#juicefs-mount), for example by `--cache-size` to change the cache to 20GB.
 
 ```shell
 $ sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs
@@ -192,7 +193,7 @@ Seeing output like the following means the file system was mounted successfully.
 2021/10/14 08:47:50.132003 juicefs[10601] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
 
-Using the `df` command, you can see how the filesystem is mounted.
+Using the `df` command, you can see how the file system is mounted.
 
 ```shell
 $ df -Th
@@ -202,9 +203,9 @@ JuiceFS:mystor   fuse.juicefs      1.0P    64K  1.0P    1%    /mnt/jfs
 
 Once mounted, it can be used like a local disk, and the data stored in the `/mnt/jfs` directory is coordinated by the JuiceFS client and eventually stored in the S3 object store.
 
-> **Multi-Host Sharing**: JuiceFS supports being mounted by multiple hosts at the same time, you can install the JuiceFS client on any cloud server on any other platform using `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1` The database address can be shared by mounting the filesystem, but you need to make sure that the host on which the filesystem is mounted has proper access to the database and the S3 used with it.
+> **Multi-Host Sharing**: JuiceFS supports being mounted by multiple hosts at the same time, you can install the JuiceFS client on any cloud server on any platform using `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1` the database address can be shared by mounting the file system, but you need to make sure that the host on which the file system is mounted has proper access to the database and the S3 used with it.
 
-### 5. Uninstall JuiceFS Storage
+### 5. Unmount JuiceFS
 
 The file system can be unmounted using the `umount` command provided by the JuiceFS client, e.g.
 

@@ -1,10 +1,12 @@
-# Installing and Using JuiceFS Storage in Tencent Cloud
+# Installing and Using JuiceFS on Tencent Cloud
 
 JuiceFS needs to be used with database and object storage together. Here we directly use Tencent Cloud's CVM cloud server, combined with cloud database and COS object storage.
 
+## Preparation
+
 When creating cloud computing resources, try to choose the same region, so that resources can access each other through intranet and avoid extra traffic costs by using public network.
 
-### I. CVM
+### 1. CVM
 
 JuiceFS has no special requirements for server hardware, and the minimum specification of CVM can use JuiceFS stably, usually you just need to choose the configuration that can meet your business.
 
@@ -24,7 +26,7 @@ JuiceFS can be installed on all operating systems provided by Tencent Cloud CVM.
 | **OS**                | Ubuntu Server 20.04 64位 |
 | **Location**          | Shanghai 5               |
 
-### II. Database
+### 2. Database
 
 JuiceFS will store all the metadata corresponding to the data in a separate database, and the supported databases are Redis, MySQL, PostgreSQL, TiKV and SQLite.
 
@@ -43,19 +45,19 @@ If you must access the database through the public network, you can enhance the 
 | **Reliability** |                           Low                           |                            Medium                            |                             Low                              |
 |  **Scenario**   | Massive data, distributed high-frequency read and write | Massive data, distributed low and medium frequency read and write | Low frequency read and write in single machine for small amount of data |
 
-> **Note**: If you use [JuiceFS Hosted Service](https://juicefs.com/docs/zh/hosted_service.html), you do not need to prepare a database.
+> **Note**: If you use [JuiceFS Hosted Service](https://juicefs.com/docs/en/hosted_service.html), you do not need to prepare a database.
 
-**This article uses the cloud database TencentDB Redis, which is accessed through a VPC private network interacting with the CVM:**
+**This article uses the TencentDB for Redis, which is accessed through a VPC private network interacting with the CVM:**
 
-| Redis version               | 5.0 community edition    |
-| --------------------------- | ------------------------ |
-| **Instance Specifications** | 1GB Master-Slave Edition |
-| **Connection Address**      | 192.168.5.5:6379         |
-| **Available Zones**         | Shanghai 5               |
+| Redis version               | 5.0 community edition                      |
+| --------------------------- | ------------------------------------------ |
+| **Instance Specification**  | 1GB Memory Edition (standard architecture) |
+| **Connection Address**      | 192.168.5.5:6379                           |
+| **Available Zone**          | Shanghai 5                                 |
 
 Note that the database connection address depends on the VPC network settings you create, and that creating a Redis instance automatically gets the address in the network segment you define.
 
-### III. Object Storage COS
+### 3. Object Storage COS
 
 JuiceFS stores all data in object storage, and it supports almost all object storage services. However, for the best performance, when using Tencent Cloud CVM, pairing it with Tencent Cloud COS Object Storage is usually the optimal choice. However, please note that selecting CVM and COS Bucket in the same region so that they can be accessed through Tencent Cloud's intranet not only has low latency, but also does not require additional traffic costs.
 
@@ -67,9 +69,9 @@ Tencent Cloud COS has different storage levels, and since JuiceFS needs to inter
 
 ### API Access Secret Key
 
-Tencent Cloud COS needs to be accessed through API, you need to prepare the access secret key, including `Access Key ID` and `Access Key Secret`, [Click here to view](https://cloud.tencent.com/document/product/598/37140) to get the way.
+Tencent Cloud COS needs to be accessed through API, you need to prepare the access secret key, including `Access Key ID` and `Access Key Secret`, [click here to view](https://intl.cloud.tencent.com/document/product/598/32675) to get the way.
 
-> **Security Advisory**: Explicit use of the API access secret key may lead to key compromise and it is recommended to assign [CAM Service Role](https://cloud.tencent.com/document/product/598/19420) to the cloud server. Once a CVM has been granted COS operation privileges, it can access the COS without using the API access key.
+> **Security Advisory**: Explicit use of the API access secret key may lead to key compromise and it is recommended to assign [CAM Service Role](https://intl.cloud.tencent.com/document/product/598/19420) to the cloud server. Once a CVM has been granted COS operation privileges, it can access the COS without using the API access key.
 
 ## Installation
 
@@ -140,7 +142,7 @@ COPYRIGHT:
 
 JuiceFS has good cross-platform compatibility and is supported on Linux, Windows and macOS. This article focuses on the installation and use of JuiceFS on Linux, if you need to know how to install it on other systems, please [check the documentation](../README.md).
 
-## Creating JuiceFS Storage
+## Creating JuiceFS
 
 Once the JuiceFS client is installed, you can now create the JuiceFS storage using the Redis database and COS you prepared earlier.
 
@@ -162,7 +164,7 @@ $ juicefs format \
 
 - `--storage`: Specify the type of object storage.
 - `---bucket`: Bucket access domain of the object store, which can be found in the COS management console.
-- `--access-key` and `--secret-key`: the secret key pair for accessing the Object Storage API, [click here to view](https://cloud.tencent.com/document/product/598/37140) to get it.
+- `--access-key` and `--secret-key`: the secret key pair for accessing the Object Storage API, [click here to view](https://intl.cloud.tencent.com/document/product/598/32675) to get it.
 
 > Redis 6.0 authentication requires two parameters, username and password, and the address format is `redis://username:password@redis-server-url:6379/1`. Currently, the Redis version of Tencent Cloud Database only provides Reids 4.0 and 5.0, which only requires a password for authentication. When setting the Redis server address, you only need to leave the username empty, for example: `redis://:password@redis-server-url:6379/1`
 
@@ -176,7 +178,7 @@ Output like the following means the file system was created successfully.
 2021/07/30 11:44:32.149692 juicefs[44060] <INFO>: Volume is formatted as {Name:mystor UUID:dbf05314-57af-4a2c-8ac1-19329d73170c Storage:cos Bucket:https://juice-0000000000.cos.ap-shanghai.myqcloud.com AccessKey:AKIDGLxxxxxxxxxxxxxxxxxxZ8QRBdpkOkp SecretKey:removed BlockSize:4096 Compression:none Shards:0 Partitions:0 Capacity:0 Inodes:0 EncryptKey:}
 ```
 
-## Mount JuiceFS storage
+## Mount JuiceFS
 
 When the file system is created, the information related to the object storage is stored in the database, so there is no need to enter information such as the bucket domain and secret key when mounting.
 
@@ -186,7 +188,7 @@ Use the `mount` subcommand to mount the file system to the `/mnt/jfs` directory.
 $ sudo juicefs mount -d redis://:<your-redis-password>@192.168.5.5:6379/1 /mnt/jfs
 ```
 
-> **Note**: When mounting the file system, only the Redis database address is required, not the file system name. If you mount the filesystem as root, the default cache path is `/var/jfsCache`, if you mount it as a normal user on home directory, the default cache path is `~/.juicefs/cache`.
+> **Note**: When mounting the file system, only the Redis database address is required, not the file system name. The default cache path is `/var/jfsCache`, please make sure the current user has enough read/write permissions.
 
 Output similar to the following means that the file system was mounted successfully.
 
@@ -199,7 +201,7 @@ Output similar to the following means that the file system was mounted successfu
 2021/07/30 11:49:57.354763 juicefs[44175] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
 
-Using the `df` command, you can see how the filesystem is mounted.
+Using the `df` command, you can see how the file system is mounted.
 
 ```shell
 $ df -Th
@@ -209,7 +211,7 @@ JuiceFS:mystor   fuse.juicefs  1.0P     64K  1.0P    1%   /mnt/jfs
 
 After the file system is successfully mounted, you can now store data in the `/mnt/jfs` directory as if you were using a local hard drive.
 
-> **Multi-Host Sharing**: JuiceFS storage supports being mounted by multiple cloud servers at the same time. You can install the JuiceFS client on other could server and then use `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs. com:6379/1` database address to mount the filesystem on each host.
+> **Multi-Host Sharing**: JuiceFS storage supports being mounted by multiple cloud servers at the same time. You can install the JuiceFS client on other could server and then use `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs. com:6379/1` database address to mount the file system on each host.
 
 ## File System Status
 
@@ -256,7 +258,7 @@ $ juicefs status redis://:<your-redis-password>@192.168.5.5:6379/1
 }
 ```
 
-## Unmount JuiceFS Storage
+## Unmount JuiceFS
 
 The file system can be unmounted using the `umount` command provided by the JuiceFS client, e.g.
 
@@ -266,7 +268,7 @@ $ sudo juicefs umount /mnt/jfs
 
 > **Note**: Forced unmount of the file system in use may result in data corruption or loss, so please be sure to proceed with caution.
 
-## Automount on Boot
+## Auto-mount on Boot
 
 If you don't want to manually remount JuiceFS storage on reboot, you can set up automatic mounting of the file system.
 

@@ -2,6 +2,8 @@
 
 亚马逊 AWS 是全球领先的云计算平台，提供几乎所有类型的云计算服务。得益于 AWS 丰富的产品线，用户可以非常灵活的搭配选择 JuiceFS 组成部分。
 
+## 准备
+
 通过阅读文档可以了解到 JuiceFS 由以下三个部分组成：
 
 1. 运行在服务器上 **JuiceFS 客户端**
@@ -201,7 +203,7 @@ JuiceFS:mystor   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
 
 挂载之后就可以像本地硬盘那样使用了，存入 `/mnt/jfs` 目录的数据会由 JuiceFS 客户端协调管理，最终存储在 S3 对象存储。
 
-> **多主机共享**：JuiceFS 支持被多主机同时挂载使用，你可以在其他任何平台的任何云服务器上安装 JuiceFS 客户端，使用 `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1` 数据库地址挂载文件系统即可共享读写，但需要确保挂载文件系统的主机能够正常访问到该数据库和搭配使用的 S3。
+> **多主机共享**：JuiceFS 支持被多主机同时挂载使用，你可以在任何平台的任何云服务器上安装 JuiceFS 客户端，使用 `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1` 数据库地址挂载文件系统即可共享读写，但需要确保挂载文件系统的主机能够正常访问到该数据库和搭配使用的 S3。
 
 ### 5. 卸载 JuiceFS 存储
 
