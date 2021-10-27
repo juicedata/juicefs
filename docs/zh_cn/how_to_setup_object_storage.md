@@ -263,7 +263,7 @@ $ juicefs format \
 
 ## 阿里云 OSS <span id='aliyun-oss'></span>
 
-使用阿里云 OSS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://help.aliyun.com/document_detail/38738.html) 了解如何创建 `Access key` 和 `Secret key`。如果你已经创建了  [RAM role](https://help.aliyun.com/document_detail/93689.html) 并指派给了云服务器实例，则在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。
+使用阿里云 OSS 创建 JuiceFS 文件系统时，请先参照 [这篇文档](https://help.aliyun.com/document_detail/38738.html) 了解如何创建 `Access key` 和 `Secret key`。如果你已经创建了 [RAM 角色](https://help.aliyun.com/document_detail/93689.html) 并指派给了云服务器实例，则在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。
 
 阿里云也支持使用 [Security Token Service (STS)](https://help.aliyun.com/document_detail/100624.html) 作为 OSS 的临时访问身份验证。如果你要使用 STS，请设置  `ALICLOUD_ACCESS_KEY_ID`、`ALICLOUD_ACCESS_KEY_SECRET` 和 `SECURITY_TOKEN ` 环境变量，不要设置 `--access-key` and `--secret-key` 选项。例如：
 
