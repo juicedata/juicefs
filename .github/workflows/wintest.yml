@@ -23,6 +23,10 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Unit Test
+        run: |
+          go test -v -cover ./pkg/... ./cmd/...
+
       - name: Install Scoop Redis and MinIO
         run: |
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
@@ -93,6 +97,3 @@ jobs:
           .\juicefs-service.exe install
           net start jfs
 
-      - name: Unit Test
-        run: |
-          go test -v -cover ./pkg/... ./cmd/...
