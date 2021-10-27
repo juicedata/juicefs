@@ -11,7 +11,7 @@ on:
 
 jobs:
   wintest:
-    runs-on: windows-2022
+    runs-on: windows-latest
     env:
       Actions_Allow_Unsecure_Commands: true
     steps:
