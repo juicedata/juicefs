@@ -37,9 +37,6 @@ jobs:
           go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
           go env
 
-      - name: Unit Test
-        run: |
-          go test -v -cover ./pkg/... ./cmd/...
 
       - name: Install Scoop Redis and MinIO
         run: |
@@ -74,7 +71,10 @@ jobs:
           net start MinIO
 
 
-
+      - name: Unit Test
+        run: |
+          go test -v -cover ./pkg/... ./cmd/...
+          
 
       - name: Build Juicefs
         run: |
