@@ -32,7 +32,7 @@ jobs:
       - name: Change Winsdk Version
         uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
         with:
-          sdk-version: 19041
+          sdk-version: 10586
 
       #- name: Setup MSBuild.exe
       #  uses: warrenbuckley/Setup-MSBuild@v1
