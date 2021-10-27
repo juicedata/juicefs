@@ -23,6 +23,20 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Install WinFsp
+        run: |
+          choco install winfsp -y
+
+      - name: Set up Include Headers
+        run: |
+          mkdir "C:\WinFsp\inc\fuse"
+          copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
+          dir "C:\WinFsp\inc\fuse"
+          set CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+          go env
+          go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+          go env
+
       - name: Unit Test
         run: |
           go test -v -cover ./pkg/... ./cmd/...
@@ -60,19 +74,7 @@ jobs:
           net start MinIO
 
 
-      - name: Install WinFsp
-        run: |
-          choco install winfsp -y
 
-      - name: Set up Include Headers
-        run: |
-          mkdir "C:\WinFsp\inc\fuse"
-          copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
-          dir "C:\WinFsp\inc\fuse"
-          set CGO_CFLAGS=-IC:/WinFsp/inc/fuse
-          go env
-          go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
-          go env
 
       - name: Build Juicefs
         run: |
