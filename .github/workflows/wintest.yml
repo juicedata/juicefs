@@ -71,11 +71,6 @@ jobs:
           net start MinIO
 
 
-      #- name: Unit Test
-      #  run: |
-      #    go test -v -cover ./pkg/... ./cmd/...
-
-
       - name: Build Juicefs
         run: |
           go env
@@ -99,6 +94,11 @@ jobs:
           .\juicefs-service.exe install
           net start jfs
 
+      - name: Unit Test
+        run: |
+          go test -v -cover ./pkg/... ./cmd/...
+
+
       - name: Install Python2
         run: |
           choco install python2 -y
@@ -113,7 +113,7 @@ jobs:
           cd winfstest
 
 
-      - name: Build and Test Win
+      - name: Build and Run Winfstest
         run: |
           msbuild.exe winfstest.sln
           cd TestSuite
