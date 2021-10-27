@@ -11,7 +11,7 @@ on:
 
 jobs:
   wintest:
-    runs-on: windows-2022
+    runs-on: windows-latest
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -24,11 +24,11 @@ jobs:
           fetch-depth: 1
 
 
-      #- name: Setup MSBuild.exe
-      #  uses: microsoft/setup-msbuild@v1.0.1
-
       - name: Setup MSBuild.exe
-        uses: warrenbuckley/Setup-MSBuild@v1
+        uses: microsoft/setup-msbuild@v1.0.3
+
+      #- name: Setup MSBuild.exe
+      #  uses: warrenbuckley/Setup-MSBuild@v1
 
       - name: Install WinFsp
         run: |
