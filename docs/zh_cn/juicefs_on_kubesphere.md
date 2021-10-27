@@ -87,7 +87,10 @@ Redis 和 MinIO 都搭建好之后，就可以填写 JuiceFS CSI Driver 的 `bac
 
 ![](../images/kubesphere_pvc.png)
 
-PVC 创建好之后，再在「项目」的「应用负载」中，选择「工作负载」，点击「创建」按钮部署工作负载，其中「存储卷来源」选择「已有存储卷」，再选择上一步创建的 PVC，如下：
+PVC 创建好之后，再在「项目」的「应用负载」中，选择「工作负载」，点击「创建」按钮部署工作负载，其中「基本信息」页填写自己喜欢的名字；「容器镜像」页可以填写镜像 `centos` ；
+启动命令 `sh,-c,while true; do echo $(date -u) >> /data/out.txt; sleep 5; done` ；「存储卷来源」选择「已有存储卷」，再选择上一步创建的 PVC，容器内路径填写 `/data` 如下：
+
+![](../images/kubesphere_deployment.png)
 
 ![](../images/kubesphere_workload.png)
 
