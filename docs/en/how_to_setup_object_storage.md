@@ -262,7 +262,7 @@ Please find the access and secret keys for object storage [in the customer porta
 
 ## Alibaba Cloud Object Storage Service <span id='aliyun-oss'></span>
 
-Please follow [this document](https://help.aliyun.com/document_detail/38738.html) to learn how to get access key and secret key. And if you already created [RAM role](https://help.aliyun.com/document_detail/93689.html) and assign it to VM instance, you could omit `--access-key` and `--secret-key` options. Alibaba Cloud also supports use [Security Token Service (STS)](https://help.aliyun.com/document_detail/100624.html) to authorize temporary access to OSS. If you wanna use STS, you should omit `--access-key` and `--secret-key` options and set `ALICLOUD_ACCESS_KEY_ID`, `ALICLOUD_ACCESS_KEY_SECRET`, `SECURITY_TOKEN` environment variables instead, for example:
+Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. And if you already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assign it to VM instance, you could omit `--access-key` and `--secret-key` options. Alibaba Cloud also supports use [Security Token Service (STS)](https://www.alibabacloud.com/help/doc-detail/100624.htm) to authorize temporary access to OSS. If you wanna use STS, you should omit `--access-key` and `--secret-key` options and set `ALICLOUD_ACCESS_KEY_ID`, `ALICLOUD_ACCESS_KEY_SECRET`, `SECURITY_TOKEN` environment variables instead, for example:
 
 ```bash
 # Use Security Token Service (STS)
@@ -276,7 +276,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-OSS provides [multiple endpoints](https://help.aliyun.com/document_detail/31834.html) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint. When you running within Alibaba Cloud, you could omit `<endpoint>` in `--bucket` option. JuiceFS will choose appropriate endpoint automatically. For example:
+OSS provides [multiple endpoints](https://www.alibabacloud.com/help/doc-detail/31834.htm) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint. When you running within Alibaba Cloud, you could omit `<endpoint>` in `--bucket` option. JuiceFS will choose appropriate endpoint automatically. For example:
 
 ```bash
 # Running within Alibaba Cloud
@@ -289,9 +289,9 @@ $ ./juicefs format \
 
 ## Tencent Cloud Object Storage <span id='qcloud-cos'></span>
 
-The naming rule of bucket in Tencent Cloud is `<bucket>-<APPID>`, so you must append `APPID` to the bucket name. Please follow [this document](https://cloud.tencent.com/document/product/436/13312) to learn how to get `APPID`.
+The naming rule of bucket in Tencent Cloud is `<bucket>-<APPID>`, so you must append `APPID` to the bucket name. Please follow [this document](https://intl.cloud.tencent.com/document/product/436/13312) to learn how to get `APPID`.
 
-The full format of `--bucket` option is `https://<bucket>-<APPID>.cos.<region>.myqcloud.com`, replace `<region>` with specific region code, e.g. the region code of Shanghai is `ap-shanghai`. You could find all available regions at [here](https://cloud.tencent.com/document/product/436/6224). For example:
+The full format of `--bucket` option is `https://<bucket>-<APPID>.cos.<region>.myqcloud.com`, replace `<region>` with specific region code, e.g. the region code of Shanghai is `ap-shanghai`. You could find all available regions at [here](https://intl.cloud.tencent.com/document/product/436/6224). For example:
 
 ```bash
 $ ./juicefs format \

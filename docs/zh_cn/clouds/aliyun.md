@@ -55,11 +55,11 @@ JuiceFS 会将数据对应的元数据全部存储在独立的数据库中，目
 
 > **注意**：如果使用 JuiceFS 的[托管服务](https://juicefs.com/docs/zh/hosted_service.html)，则无需单独准备数据库。
 
-**本文使用了云数据 Redis 版，以下连接地址只是为了演示目的编制的伪地址：**
+**本文使用了[云数据 Redis 版](https://www.aliyun.com/product/kvstore)，以下连接地址只是为了演示目的编制的伪地址：**
 
 | Redis 版本   | 5.0 社区版                           |
 | ------------ | ------------------------------------ |
-| **实例规格** | 256M 主从版                          |
+| **实例规格** | 256M 标准版-单副本                   |
 | **连接地址** | herald-sh-abc.redis.rds.aliyuncs.com |
 | **可用区**   | 上海                                 |
 
@@ -75,11 +75,11 @@ JuiceFS 会将所有的数据都存储到对象存储中，它支持几乎所有
 
 阿里云 OSS 需要通过 API 进行访问，你需要准备访问秘钥，包括  `Access Key ID` 和 `Access Key Secret` ，[点此查看](https://help.aliyun.com/document_detail/38738.html)获取方式。
 
-> **安全建议**：显式使用 API 访问秘钥可能导致密钥泄露，推荐为云服务器分配 [RAM 服务角色](https://help.aliyun.com/document_detail/93746.htm)。当一台 ECS 被授予 OSS 操作权限以后，无需使用 API 访问秘钥即可访问 OSS。
+> **安全建议**：显式使用 API 访问秘钥可能导致密钥泄露，推荐为云服务器分配 [RAM 服务角色](https://help.aliyun.com/document_detail/93689.htm)。当一台 ECS 被授予 OSS 操作权限以后，无需使用 API 访问秘钥即可访问 OSS。
 
 ## 安装
 
-我当前使用的是 Ubuntu Server 20.04 64 位系统，依次执行以下命令可以下载最新版本客户端。你也可以访问 [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) 页面选择其他版本。
+我们当前使用的是 Ubuntu Server 20.04 64 位系统，依次执行以下命令可以下载最新版本客户端。你也可以访问 [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) 页面选择其他版本。
 
 ```shell
 $ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
@@ -202,7 +202,7 @@ $ juicefs format \
 $ sudo juicefs mount -d redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1 /mnt/jfs
 ```
 
-> **注意**：挂载文件系统时，只需填写 Redis 数据库地址，不需要文件系统名称。如果使用 root 身份挂载文件系统，默认的缓存路径为 `/var/jfsCache`，如果使用普通用户身份在家目录上挂载，则默认的缓存路径在 `~/.juicefs/cache`。
+> **注意**：挂载文件系统时，只需填写 Redis 数据库地址，不需要文件系统名称。默认的缓存路径为 `/var/jfsCache`，请确保当前用户有足够的读写权限。
 
 看到类似下面的输出，代表文件系统挂载成功。
 
