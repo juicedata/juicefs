@@ -106,9 +106,9 @@ jobs:
       - name: Clone Winfstest
         run: |
           Z:
-          mkdir "Z:\tmp"
+          mkdir "Z:\tmptmp"
           dir
-          cd tmp
+          cd tmptmp
           git clone git@github.com:sanwan/winfstest.git
           cd winfstest
 
