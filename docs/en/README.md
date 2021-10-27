@@ -41,6 +41,11 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [Use JuiceFS on Hadoop ecosystem](hadoop_java_sdk.md)
   - [Enable the S3 gateway for JuiceFS](s3_gateway.md)
   - [JuiceFS client compilation and upgrade](client_compile_and_upgrade.md)
+- **Cloud Platforms**
+  - [Use JuiceFS on AWS](clouds/aws.md)
+  - [Use JuiceFS on DigitalOcean](clouds/digitalocean.md)
+  - [Use JuiceFS on Alibaba Cloud](clouds/aliyun.md)
+  - [Use JuiceFS on Tencent Cloud](clouds/qcloud.md)
 - [Command Reference](command_reference.md)
 - **Advanced Topics**
   - [Redis best practices](redis_best_practices.md)
