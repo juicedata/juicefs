@@ -12,7 +12,8 @@ on:
 jobs:
   wintest:
     runs-on: windows-2022
-    Actions_Allow_Unsecure_Commands: true # Allows AddPAth and SetEnv commands
+    env:
+      Actions_Allow_Unsecure_Commands: true
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
