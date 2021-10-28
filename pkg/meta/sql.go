@@ -2298,7 +2298,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 				return err
 			}
 		}
-		n, err := ses.Delete(chunk{Inode: c.Inode, Indx: c.Indx})
+		n, err := ses.Where("inode = ? AND indx = ?", inode, indx).Delete(&c)
 		if err == nil && n == 0 {
 			err = fmt.Errorf("chunk %d:%d changed, try restarting transaction", inode, indx)
 		}
