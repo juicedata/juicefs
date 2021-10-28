@@ -120,16 +120,12 @@ jobs:
           cd TestSuite
           .\run-winfstest
 
-
-      - name: Unit Test
-        run: |
-          go test -v -cover ./pkg/... ./cmd/...
-
-
       - name: Build and Run Winfstest in Jfs Directory
         run: |
           Z:
           mkdir "Z:\tmptmp"
+          dir
+          echo "hello"
           dir
           cd tmptmp
           git clone https://github.com/sanwan/winfstest.git
@@ -137,3 +133,9 @@ jobs:
           msbuild.exe winfstest.sln
           cd TestSuite
           .\run-winfstest
+
+
+      - name: Unit Test
+        run: |
+          go test -v -cover ./pkg/... ./cmd/...
+
