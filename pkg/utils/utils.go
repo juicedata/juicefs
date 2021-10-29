@@ -19,9 +19,7 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/vbauerster/mpb/v7"
@@ -128,15 +126,4 @@ func GetLocalIp(address string) (string, error) {
 		return "", err
 	}
 	return ip, nil
-}
-
-// PortIsUsed Determine whether the local port is occupied
-func PortIsUsed(ip string, port int) bool {
-	addr := net.JoinHostPort(ip, strconv.Itoa(port))
-	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
-	if err != nil {
-		return false
-	}
-	defer conn.Close()
-	return true
 }

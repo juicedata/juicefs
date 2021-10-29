@@ -122,7 +122,7 @@ func RegisterToConsul(consulAddr, metricsAddr, mountPoint string) {
 	}
 
 	registration := consulapi.AgentServiceRegistration{
-		ID:      fmt.Sprintf("%s-%s", localIp, mountPoint),
+		ID:      fmt.Sprintf("%s:%s", localIp, mountPoint),
 		Name:    "juicefs",
 		Port:    port,
 		Address: localIp,
