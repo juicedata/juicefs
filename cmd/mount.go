@@ -16,7 +16,6 @@
 package main
 
 import (
-	"log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -80,38 +79,40 @@ func exposeMetrics(m meta.Meta, c *cli.Context) string {
 	))
 	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
 
-	// if not set metrics addr,the port will be auto set
+	// If not set metrics addr,the port will be auto set
 	if !c.IsSet("metrics") {
-		//if only set consul, ip will auto set
+		// If only set consul, ip will auto set
 		if c.IsSet("consul") {
 			ip, err = utils.GetLocalIp(c.String("consul"))
 			if err != nil {
-				logger.Fatalf("Get local ip failed: %v", err)
+				logger.Errorf("Get local ip failed: %v", err)
+				return ""
 			}
 		}
 	}
 
 	ln, err := net.Listen("tcp", net.JoinHostPort(ip, port))
 	if err != nil {
-		//Don't try other ports on metrics set but listen failed
+		// Don't try other ports on metrics set but listen failed
 		if c.IsSet("metrics") {
-			log.Fatalf("listen on %s:%s failed: %v", ip, port, err)
+			logger.Errorf("listen on %s:%s failed: %v", ip, port, err)
+			return ""
 		}
-		//listen port on 0  will auto listen on a free port
+		// Listen port on 0 will auto listen on a free port
 		ln, err = net.Listen("tcp", net.JoinHostPort(ip, "0"))
 		if err != nil {
-			logger.Fatalf("Listen failed: %v", err)
+			logger.Errorf("Listen failed: %v", err)
+			return ""
 		}
-		_, ip, _ = net.SplitHostPort(ln.Addr().String())
 	}
 
 	go func() {
 		if err := http.Serve(ln, nil); err != nil {
-			logger.Fatalf("Serve for metrics: %s", err)
+			logger.Errorf("Serve for metrics: %s", err)
 		}
 	}()
 
-	metricsAddr := net.JoinHostPort(ip, port)
+	metricsAddr := ln.Addr().String()
 	logger.Infof("Prometheus metrics listening on %s", metricsAddr)
 	return metricsAddr
 }
