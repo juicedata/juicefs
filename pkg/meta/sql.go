@@ -190,7 +190,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, 2),
+		deleting:     make(chan int, conf.MaxDeletes),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -2261,6 +2261,9 @@ func (m *dbMeta) cleanupSlices() {
 }
 
 func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
+	if m.conf.MaxDeletes == 0 {
+		return
+	}
 	m.deleting <- 1
 	defer func() { <-m.deleting }()
 	err := m.newMsg(DeleteChunk, chunkid, size)
@@ -2295,7 +2298,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 				return err
 			}
 		}
-		n, err := ses.Delete(chunk{Inode: c.Inode, Indx: c.Indx})
+		n, err := ses.Where("inode = ? AND indx = ?", inode, indx).Delete(&c)
 		if err == nil && n == 0 {
 			err = fmt.Errorf("chunk %d:%d changed, try restarting transaction", inode, indx)
 		}

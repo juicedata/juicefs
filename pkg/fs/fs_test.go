@@ -27,7 +27,7 @@ import (
 
 // nolint:errcheck
 func TestFileSystem(t *testing.T) {
-	m := meta.NewClient("redis://127.0.0.1:6379/10", &meta.Config{})
+	m := meta.NewClient("redis://127.0.0.1:6379/10", &meta.Config{MaxDeletes: 1})
 	format := meta.Format{
 		Name:      "test",
 		BlockSize: 4096,

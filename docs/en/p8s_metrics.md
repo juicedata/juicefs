@@ -1,8 +1,25 @@
 # JuiceFS Metrics
 
-JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system. The default API address is `http://localhost:9567/metrics`, you could custom the address through `--metrics` option when execute [`juicefs mount`](command_reference.md#juicefs-mount) command.
+JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system. The default API address is `http://localhost:9567/metrics`, you could custom the address through `--metrics` option when execute [`juicefs mount`](command_reference.md#juicefs-mount) or [`juicefs gateway`](command_reference.md#juicefs-gateway) command.
 
-JuiceFS also provides a [dashboard template](./grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
+JuiceFS also provides a [dashboard template](./grafana_template.json) for [Grafana](https://grafana.com), which can be
+imported to show the collected metrics in Prometheus.
+
+## Use consul as registration center
+
+JuiceFS support use consul as registration center for metrics api. you could custom the address through `--consul`
+option when execute [`juicefs mount`](command_reference.md#juicefs-mount)
+or [`juicefs gateway`](command_reference.md#juicefs-gateway) command.
+
+When the consul address is configured, the `--metrics` option does not need to be configured. JuiceFS will automatically
+configure metrics url according to its own network and port conditions. If `--metrics` is set at the same time, it will
+first try to listen on the configured metrics url.
+
+For each instance registered to consul, its serviceName is `juicefs`, and the format of serviceId is `ip-mountpoint`,
+for example: `127.0.0.1:/tmp/jfs`.
+
+The meta of each instance contains two aspects: hostname and mountpoint. When mountpoint is `s3gateway`, which means
+that the instance is an S3gateway.
 
 Below are descriptions of each metrics.
 
