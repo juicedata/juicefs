@@ -16,12 +16,21 @@
 package metric
 
 import (
+	"fmt"
+	"net"
+	"os"
+	"strconv"
 	"time"
+
+	consulapi "github.com/hashicorp/consul/api"
+	"github.com/hashicorp/go-hclog"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+var logger = utils.GetLogger("juicefs")
 
 var (
 	start = time.Now()
@@ -71,5 +80,71 @@ func UpdateMetrics(m meta.Meta) {
 			usedInodes.Set(float64(iused))
 		}
 		time.Sleep(time.Second * 10)
+	}
+}
+
+func RegisterToConsul(consulAddr, metricsAddr, mountPoint string) {
+	if metricsAddr == "" {
+		logger.Errorf("Metrics server start err,so can't register to consul")
+		return
+	}
+	localIp, portStr, err := net.SplitHostPort(metricsAddr)
+	if err != nil {
+		logger.Errorf("Metrics url format err:%s", err)
+		return
+	}
+
+	// Don't register 0.0.0.0 to consul
+	if localIp == "0.0.0.0" || localIp == "::" {
+		localIp, err = utils.GetLocalIp(consulAddr)
+		if err != nil {
+			logger.Errorf("Get local ip failed: %v", err)
+			return
+		}
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		logger.Errorf("Metrics port set err:%s", err)
+		return
+	}
+	config := consulapi.DefaultConfigWithLogger(hclog.New(&hclog.LoggerOptions{ //nolint:typecheck
+		Name:   "consul-api",
+		Output: logger.Out,
+	}))
+	config.Address = consulAddr
+	client, err := consulapi.NewClient(config)
+	if err != nil {
+		logger.Errorf("Creat consul client failed:%s", err)
+		return
+	}
+
+	localMeta := make(map[string]string)
+	hostname, err := os.Hostname()
+	if err != nil {
+		logger.Errorf("Get hostname failed:%s", err)
+		return
+	}
+	localMeta["hostName"] = hostname
+	localMeta["mountPoint"] = mountPoint
+
+	check := &consulapi.AgentServiceCheck{
+		HTTP:                           fmt.Sprintf("http://%s:%d/metrics", localIp, port),
+		Timeout:                        "5s",
+		Interval:                       "5s",
+		DeregisterCriticalServiceAfter: "30s",
+	}
+
+	registration := consulapi.AgentServiceRegistration{
+		ID:      fmt.Sprintf("%s:%s", localIp, mountPoint),
+		Name:    "juicefs",
+		Port:    port,
+		Address: localIp,
+		Meta:    localMeta,
+		Check:   check,
+	}
+	if err = client.Agent().ServiceRegister(&registration); err != nil {
+		logger.Errorf("Service register failed:%s", err)
+	} else {
+		logger.Info("Juicefs register to consul success")
 	}
 }
