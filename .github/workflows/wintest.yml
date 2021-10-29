@@ -61,6 +61,7 @@ jobs:
           scoop install curl
           scoop install redis
           scoop install minio
+          scoop install runasti
           curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o redis-service.exe
           echo  "<service>"   >> redis-service.xml
           echo  "<id>redisredis</id>"  >> redis-service.xml
@@ -105,9 +106,6 @@ jobs:
           echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
           echo  "</service>"  >> juicefs-service.xml
           .\juicefs-service.exe install
-          Set-ExecutionPolicy RemoteSigned -scope CurrentUser
-          iwr -useb get.scoop.sh | iex
-          scoop install runasti
           runasti.exe
           net start jfs
 
