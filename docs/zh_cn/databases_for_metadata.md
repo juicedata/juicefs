@@ -50,7 +50,7 @@ redis://<IP or Domain name>:6379
 
 如果该 Redis 服务器不在本地运行，则可以使用 URL 指定地址，例如，`redis://username:password@host:6379/1`，还可以通过环境变量 `REDIS_PASSWORD` 设置密码，避免在命令行选项中显式设置。
 
-> **注意**：在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了两个参数，即用户名和密码。如果您使用 Redis < 6.0.0，则只需在 URL 中省略 `username` 参数，例如 `redis://:password@host:6379/1`（请注意 `password` 前面的冒号依然需要保留）。
+> **注意**：在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了两个参数，即用户名和密码。如果您使用 6.0.0 以前版本的 Redis，则只需在 URL 中省略 `username` 参数，例如 `redis://:password@host:6379/1`（请注意 `password` 前面的冒号依然需要保留）。
 
 例如，以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 Redis 中的 `1` 号数据库存储元数据：
 
