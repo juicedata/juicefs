@@ -87,7 +87,6 @@ jobs:
 
       - name: Build Juicefs
         run: |
-          go env
           go build -ldflags="-s -w" -o juicefs.exe ./cmd
 
       - name: Juicefs Format
@@ -106,14 +105,16 @@ jobs:
           echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
           echo  "</service>"  >> juicefs-service.xml
           .\juicefs-service.exe install
+          scoop install runasti
+          runasti.exe
           net start jfs
 
-      - name: Unit Test
-        run: |
-          rm pkg/meta/redis_test.go
-          rm pkg/meta/sql_test.go
-          rm pkg/meta/tkv_test.go
-          go test -v -cover ./pkg/... ./cmd/...
+      #- name: Unit Test
+      #  run: |
+      #    rm pkg/meta/redis_test.go
+      #    rm pkg/meta/sql_test.go
+      #    rm pkg/meta/tkv_test.go
+      #    go test -v -cover ./pkg/... ./cmd/...
 
 
       - name: Install Python2
@@ -128,19 +129,16 @@ jobs:
           cd TestSuite
           .\run-winfstest
 
-      #- name: Build and Run Winfstest in Jfs Directory
-      #  run: |
-      #    Z:
-      #    mkdir "Z:\tmptmp"
-      #    dir
-      #    echo "hello"
-      #    dir
-      #    cd tmptmp
-      #    git clone https://github.com/sanwan/winfstest.git
-      #    cd winfstest
-      #    msbuild.exe winfstest.sln
-      #    cd TestSuite
-      #    .\run-winfstest
+      - name: Build and Run Winfstest in Jfs Directory
+        run: |
+          Z:
+          mkdir "Z:\tmptmp"
+          cd tmptmp
+          git clone https://github.com/sanwan/winfstest.git
+          cd winfstest
+          msbuild.exe winfstest.sln
+          cd TestSuite
+          .\run-winfstest
 
 
 
