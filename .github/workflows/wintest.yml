@@ -106,7 +106,7 @@ jobs:
           echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
           echo  "</service>"  >> juicefs-service.xml
           .\juicefs-service.exe install
-          runasti.exe
+          C:\Users\$env:USERNAME\scoop\shims\runasti.exe
           net start jfs
 
       #- name: Unit Test
