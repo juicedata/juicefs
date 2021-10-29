@@ -177,6 +177,9 @@ juicefs mount [command options] META-URL MOUNTPOINT
 `--metrics value`\
 监控数据导出地址 (默认: "127.0.0.1:9567")
 
+`--consul value`\
+consul注册中心地址(默认: "127.0.0.1:8500")
+
 `--no-usage-report`\
 不发送使用量信息 (默认: false)
 
