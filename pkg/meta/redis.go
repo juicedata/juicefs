@@ -610,7 +610,7 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 	return 0
 }
 
-func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary) syscall.Errno {
+func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
 	var attr Attr
 	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
 		return st
@@ -625,8 +625,13 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary) syscall.Errno 
 				continue
 			}
 			if e.Attr.Typ == TypeDirectory {
-				if st := GetSummary(r, ctx, e.Inode, summary); st != 0 {
-					return st
+				if recursive {
+					if st := GetSummary(r, ctx, e.Inode, summary, recursive); st != 0 {
+						return st
+					}
+				} else {
+					summary.Dirs++
+					summary.Size += 4096
 				}
 			} else {
 				summary.Files++

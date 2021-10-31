@@ -155,9 +155,10 @@ func handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
 	case meta.Info:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
+		recursive := r.Get8()
 
 		wb := utils.NewBuffer(4)
-		r := meta.GetSummary(m, ctx, inode, &summary)
+		r := meta.GetSummary(m, ctx, inode, &summary, recursive != 0)
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
