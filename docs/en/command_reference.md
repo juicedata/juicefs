@@ -34,7 +34,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   0.17.0 (2021-09-24 e115dc4)
+   1.0-dev (2021-10-22 0adbc74)
 
 COMMANDS:
    format   format a volume
@@ -176,6 +176,9 @@ juicefs mount [command options] META-URL MOUNTPOINT
 
 `--metrics value`\
 address to export metrics (default: "127.0.0.1:9567")
+
+`--consul value`\
+consul address to register (default: "127.0.0.1:8500")
 
 `--no-usage-report`\
 do not send usage report (default: false)
@@ -342,6 +345,9 @@ dir entry cache timeout in seconds (default: 1)
 
 `--access-log value`\
 path for JuiceFS access log
+
+`--metrics value`\
+address to export metrics (default: "127.0.0.1:9567")
 
 `--no-usage-report`\
 do not send usage report (default: false)

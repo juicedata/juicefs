@@ -16,10 +16,10 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -50,17 +50,7 @@ func installHandler(mp string) {
 	go func() {
 		for {
 			<-signalChan
-			go func() {
-				if runtime.GOOS == "linux" {
-					if _, err := exec.LookPath("fusermount"); err == nil {
-						_ = exec.Command("fusermount", "-uz", mp).Run()
-					} else {
-						_ = exec.Command("umount", "-l", mp).Run()
-					}
-				} else if runtime.GOOS == "darwin" {
-					_ = exec.Command("diskutil", "umount", "force", mp).Run()
-				}
-			}()
+			go func() { _ = doUmount(mp, true) }()
 			go func() {
 				time.Sleep(time.Second * 3)
 				os.Exit(1)
@@ -69,7 +59,14 @@ func installHandler(mp string) {
 	}()
 }
 
-func exposeMetrics(m meta.Meta, addr string) {
+func exposeMetrics(m meta.Meta, c *cli.Context) string {
+	var ip, port string
+	//default set
+	ip, port, err := net.SplitHostPort(c.String("metrics"))
+	if err != nil {
+		logger.Fatalf("metrics format error: %v", err)
+	}
+
 	meta.InitMetrics()
 	vfs.InitMetrics()
 	go metric.UpdateMetrics(m)
@@ -81,12 +78,43 @@ func exposeMetrics(m meta.Meta, addr string) {
 		},
 	))
 	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
-	go func() {
-		err := http.ListenAndServe(addr, nil)
+
+	// If not set metrics addr,the port will be auto set
+	if !c.IsSet("metrics") {
+		// If only set consul, ip will auto set
+		if c.IsSet("consul") {
+			ip, err = utils.GetLocalIp(c.String("consul"))
+			if err != nil {
+				logger.Errorf("Get local ip failed: %v", err)
+				return ""
+			}
+		}
+	}
+
+	ln, err := net.Listen("tcp", net.JoinHostPort(ip, port))
+	if err != nil {
+		// Don't try other ports on metrics set but listen failed
+		if c.IsSet("metrics") {
+			logger.Errorf("listen on %s:%s failed: %v", ip, port, err)
+			return ""
+		}
+		// Listen port on 0 will auto listen on a free port
+		ln, err = net.Listen("tcp", net.JoinHostPort(ip, "0"))
 		if err != nil {
-			logger.Errorf("listen and serve for metrics: %s", err)
+			logger.Errorf("Listen failed: %v", err)
+			return ""
+		}
+	}
+
+	go func() {
+		if err := http.Serve(ln, nil); err != nil {
+			logger.Errorf("Serve for metrics: %s", err)
 		}
 	}()
+
+	metricsAddr := ln.Addr().String()
+	logger.Infof("Prometheus metrics listening on %s", metricsAddr)
+	return metricsAddr
 }
 
 func mount(c *cli.Context) error {
@@ -99,9 +127,22 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("MOUNTPOINT is required")
 	}
 	mp := c.Args().Get(1)
-	if !strings.Contains(mp, ":") && !utils.Exists(mp) {
+	fi, err := os.Stat(mp)
+	if !strings.Contains(mp, ":") && err != nil {
 		if err := os.MkdirAll(mp, 0777); err != nil {
-			logger.Fatalf("create %s: %s", mp, err)
+			if os.IsExist(err) {
+				// a broken mount point, umount it
+				if err = doUmount(mp, true); err != nil {
+					logger.Fatalf("umount %s: %s", mp, err)
+				}
+			} else {
+				logger.Fatalf("create %s: %s", mp, err)
+			}
+		}
+	} else if err == nil && fi.Size() == 0 {
+		// a broken mount point, umount it
+		if err = doUmount(mp, true); err != nil {
+			logger.Fatalf("umount %s: %s", mp, err)
 		}
 	}
 	var readOnly = c.Bool("read-only")
@@ -118,6 +159,7 @@ func mount(c *cli.Context) error {
 		OpenCache:   time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint:  mp,
 		Subdir:      c.String("subdir"),
+		MaxDeletes:  c.Int("max-deletes"),
 	}
 	m := meta.NewClient(addr, metaConf)
 	format, err := m.Load()
@@ -233,7 +275,12 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("new session: %s", err)
 	}
 	installHandler(mp)
-	exposeMetrics(m, c.String("metrics"))
+	metricsAddr := exposeMetrics(m, c)
+
+	if c.IsSet("consul") {
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
+	}
+
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
@@ -274,6 +321,11 @@ func clientFlags() []cli.Flag {
 			Name:  "max-uploads",
 			Value: 20,
 			Usage: "number of connections to upload",
+		},
+		&cli.IntFlag{
+			Name:  "max-deletes",
+			Value: 2,
+			Usage: "number of threads to delete objects",
 		},
 		&cli.IntFlag{
 			Name:  "buffer-size",
@@ -351,6 +403,11 @@ func mountFlags() *cli.Command {
 				Name:  "metrics",
 				Value: "127.0.0.1:9567",
 				Usage: "address to export metrics",
+			},
+			&cli.StringFlag{
+				Name:  "consul",
+				Value: "127.0.0.1:8500",
+				Usage: "consul address to register",
 			},
 			&cli.BoolFlag{
 				Name:  "no-usage-report",

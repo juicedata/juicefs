@@ -22,6 +22,8 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/juicedata/juicefs/pkg/metric"
+
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -81,6 +83,11 @@ func gatewayFlags() *cli.Command {
 			Name:  "metrics",
 			Value: "127.0.0.1:9567",
 			Usage: "address to export metrics",
+		},
+		&cli.StringFlag{
+			Name:  "consul",
+			Value: "127.0.0.1:8500",
+			Usage: "consul address to register",
 		},
 		&cli.BoolFlag{
 			Name:  "no-usage-report",
@@ -162,10 +169,11 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	c := g.ctx
 	addr := c.Args().Get(0)
 	m := meta.NewClient(addr, &meta.Config{
-		Retries:   10,
-		Strict:    true,
-		ReadOnly:  c.Bool("read-only"),
-		OpenCache: time.Duration(c.Float64("open-cache") * 1e9),
+		Retries:    10,
+		Strict:     true,
+		ReadOnly:   c.Bool("read-only"),
+		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
+		MaxDeletes: c.Int("max-deletes"),
 	})
 	format, err := m.Load()
 	if err != nil {
@@ -233,7 +241,12 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Chunk:           &chunkConf,
 	}
 
-	exposeMetrics(m, c.String("metrics"))
+	metricsAddr := exposeMetrics(m, c)
+
+	if c.IsSet("consul") {
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, "s3gateway")
+	}
+
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, "gateway "+version.Version())
 	}

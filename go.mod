@@ -28,6 +28,8 @@ require (
 	github.com/google/readahead v0.0.0-20161222183148-eaceba169032 // indirect
 	github.com/google/uuid v1.1.2
 	github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8
+	github.com/hashicorp/consul/api v1.11.0
+	github.com/hashicorp/go-hclog v0.14.1
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.1+incompatible
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/jcmturner/gokrb5/v8 v8.4.2
@@ -56,6 +58,7 @@ require (
 	github.com/shirou/gopsutil v3.21.3+incompatible // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
+	github.com/tidwall/gjson v1.9.3 // indirect
 	github.com/tikv/client-go/v2 v2.0.0-alpha.0.20210709052506-aadf3cf62721
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
 	github.com/upyun/go-sdk/v3 v3.0.2
