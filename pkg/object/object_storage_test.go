@@ -248,11 +248,10 @@ func TestUFile(t *testing.T) {
 }
 
 func TestGS(t *testing.T) {
-	if os.Getenv("GOOGLE_CLOUD_PROJECT") == "" {
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		t.SkipNow()
 	}
-	os.Setenv("GOOGLE_CLOUD_PROJECT", "davies-test")
-	gs, _ := newGS("https://test.us-west1.googleapi.com", "", "")
+	gs, _ := newGS("gs://zhijian-test/", "", "")
 	testStorage(t, gs)
 }
 
