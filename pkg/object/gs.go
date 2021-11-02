@@ -21,21 +21,22 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"strings"
-	"time"
+
+	"github.com/pkg/errors"
+
+	"google.golang.org/api/iterator"
 
 	"cloud.google.com/go/compute/metadata"
+	"cloud.google.com/go/storage"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/option"
-	"google.golang.org/api/storage/v1"
 )
 
 type gs struct {
 	DefaultObjectStorage
-	service   *storage.Service
+	client    *storage.Client
 	bucket    string
 	region    string
 	pageToken string
@@ -62,7 +63,7 @@ func (g *gs) Create() error {
 		}
 	}
 	if projectID == "" {
-		log.Fatalf("GOOGLE_CLOUD_PROJECT environment variable must be set")
+		return errors.New("GOOGLE_CLOUD_PROJECT environment variable must be set")
 	}
 	// Guess region when region is not provided
 	if g.region == "" {
@@ -71,15 +72,15 @@ func (g *gs) Create() error {
 			g.region = zone[:len(zone)-2]
 		}
 		if g.region == "" {
-			log.Fatalf("Could not guess region to create bucket")
+			return errors.New("Could not guess region to create bucket")
 		}
 	}
 
-	_, err := g.service.Buckets.Insert(projectID, &storage.Bucket{
-		Id:           g.bucket,
+	err := g.client.Bucket(g.bucket).Create(ctx, projectID, &storage.BucketAttrs{
+		Name:         g.bucket,
 		StorageClass: "regional",
 		Location:     g.region,
-	}).Do()
+	})
 	if err != nil && strings.Contains(err.Error(), "You already own this bucket") {
 		return nil
 	}
@@ -87,74 +88,68 @@ func (g *gs) Create() error {
 }
 
 func (g *gs) Head(key string) (Object, error) {
-	req := g.service.Objects.Get(g.bucket, key)
-	o, err := req.Do()
+	attrs, err := g.client.Bucket(g.bucket).Object(key).Attrs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	mtime, _ := time.Parse(time.RFC3339, o.Updated)
 	return &obj{
 		key,
-		int64(o.Size),
-		mtime,
+		attrs.Size,
+		attrs.Updated,
 		strings.HasSuffix(key, "/"),
 	}, nil
 }
 
 func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	req := g.service.Objects.Get(g.bucket, key)
-	header := req.Header()
-	if off > 0 || limit > 0 {
-		if limit > 0 {
-			header.Add("Range", fmt.Sprintf("bytes=%d-%d", off, off+limit-1))
-		} else {
-			header.Add("Range", fmt.Sprintf("bytes=%d-", off))
-		}
-	}
-	resp, err := req.Download()
+	reader, err := g.client.Bucket(g.bucket).Object(key).NewRangeReader(ctx, off, limit)
 	if err != nil {
 		return nil, err
 	}
-	return resp.Body, nil
+	return reader, nil
 }
 
 func (g *gs) Put(key string, data io.Reader) error {
-	obj := &storage.Object{Name: key}
-	_, err := g.service.Objects.Insert(g.bucket, obj).Media(data).Do()
-	return err
+	writer := g.client.Bucket(g.bucket).Object(key).NewWriter(ctx)
+	_, err := io.Copy(writer, data)
+	if err != nil {
+		return err
+	}
+	return writer.Close()
 }
 
 func (g *gs) Copy(dst, src string) error {
-	_, err := g.service.Objects.Copy(g.bucket, src, g.bucket, dst, nil).Do()
+	srcObj := g.client.Bucket(g.bucket).Object(src)
+	dstObj := g.client.Bucket(g.bucket).Object(dst)
+	_, err := dstObj.CopierFrom(srcObj).Run(ctx)
 	return err
 }
 
 func (g *gs) Delete(key string) error {
-	return g.service.Objects.Delete(g.bucket, key).Do()
+	if err := g.client.Bucket(g.bucket).Object(key).Delete(ctx); err != storage.ErrObjectNotExist {
+		return err
+	}
+	return nil
 }
 
 func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
-	call := g.service.Objects.List(g.bucket).Prefix(prefix).MaxResults(limit)
-	if marker != "" {
-		if g.pageToken == "" {
-			// last page
-			return nil, nil
-		}
-		call.PageToken(g.pageToken)
+	if marker != "" && g.pageToken == "" {
+		// last page
+		return nil, nil
 	}
-	objects, err := call.Do()
+	objectIterator := g.client.Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix})
+	pager := iterator.NewPager(objectIterator, int(limit), g.pageToken)
+	var entries []*storage.ObjectAttrs
+	nextPageToken, err := pager.NextPage(&entries)
 	if err != nil {
-		g.pageToken = ""
 		return nil, err
 	}
-	g.pageToken = objects.NextPageToken
-	n := len(objects.Items)
+	g.pageToken = nextPageToken
+	n := len(entries)
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
-		item := objects.Items[i]
-		mtime, _ := time.Parse(time.RFC3339, item.Updated)
-		objs[i] = &obj{item.Name, int64(item.Size), mtime, strings.HasSuffix(item.Name, "/")}
+		item := entries[i]
+		objs[i] = &obj{item.Name, item.Size, item.Updated, strings.HasSuffix(item.Name, "/")}
 	}
 	return objs, nil
 }
@@ -162,7 +157,7 @@ func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
 func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, errors.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
@@ -170,15 +165,12 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if len(hostParts) > 1 {
 		region = hostParts[1]
 	}
-	client, err := google.DefaultClient(ctx)
+
+	client, err := storage.NewClient(ctx)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		return nil, err
 	}
-	service, err := storage.NewService(ctx, option.WithHTTPClient(client))
-	if err != nil {
-		log.Fatalf("Failed to create service: %v", err)
-	}
-	return &gs{service: service, bucket: bucket, region: region}, nil
+	return &gs{client: client, bucket: bucket, region: region}, nil
 }
 
 func init() {
