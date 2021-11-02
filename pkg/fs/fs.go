@@ -1117,6 +1117,6 @@ func (f *File) Summary(ctx meta.Context, depth uint8, maxentries uint32) (s *met
 		f.fs.log(l, "Summary (%s): %s (%d,%d,%d,%d)", f.path, errstr(err), s.Length, s.Size, s.Files, s.Dirs)
 	}()
 	s = &meta.Summary{}
-	err = meta.GetSummary(f.fs.m, ctx, f.inode, s)
+	err = meta.GetSummary(f.fs.m, ctx, f.inode, s, true)
 	return
 }
