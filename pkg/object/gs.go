@@ -31,7 +31,6 @@ import (
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/option"
 )
 
 type gs struct {
@@ -163,12 +162,7 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		region = hostParts[1]
 	}
 
-	var opts []option.ClientOption
-	if filePath, exist := os.LookupEnv("GOOGLE_APPLICATION_CREDENTIALS"); exist {
-		opts = append(opts, option.WithCredentialsFile(filePath))
-	}
-
-	client, err := storage.NewClient(context.Background(), opts...)
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		logger.Fatalf("Failed to create client: %v", err)
 	}
