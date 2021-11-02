@@ -21,10 +21,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"google.golang.org/api/iterator"
 
@@ -62,7 +63,7 @@ func (g *gs) Create() error {
 		}
 	}
 	if projectID == "" {
-		log.Fatalf("GOOGLE_CLOUD_PROJECT environment variable must be set")
+		return errors.New("GOOGLE_CLOUD_PROJECT environment variable must be set")
 	}
 	// Guess region when region is not provided
 	if g.region == "" {
@@ -71,7 +72,7 @@ func (g *gs) Create() error {
 			g.region = zone[:len(zone)-2]
 		}
 		if g.region == "" {
-			log.Fatalf("Could not guess region to create bucket")
+			return errors.New("Could not guess region to create bucket")
 		}
 	}
 
@@ -111,10 +112,8 @@ func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
 func (g *gs) Put(key string, data io.Reader) error {
 	writer := g.client.Bucket(g.bucket).Object(key).NewWriter(ctx)
 	defer writer.Close()
-	if _, err := io.Copy(writer, data); err != nil {
-		return err
-	}
-	return nil
+	_, err := io.Copy(writer, data)
+	return err
 }
 
 func (g *gs) Copy(dst, src string) error {
@@ -125,7 +124,10 @@ func (g *gs) Copy(dst, src string) error {
 }
 
 func (g *gs) Delete(key string) error {
-	return g.client.Bucket(g.bucket).Object(key).Delete(ctx)
+	if err := g.client.Bucket(g.bucket).Object(key).Delete(ctx); err != storage.ErrObjectNotExist {
+		return err
+	}
+	return nil
 }
 
 func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
@@ -153,7 +155,7 @@ func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
 func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
+		return nil, errors.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]
@@ -164,7 +166,7 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		logger.Fatalf("Failed to create client: %v", err)
+		return nil, err
 	}
 	return &gs{client: client, bucket: bucket, region: region}, nil
 }
