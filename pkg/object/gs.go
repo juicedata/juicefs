@@ -111,9 +111,11 @@ func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (g *gs) Put(key string, data io.Reader) error {
 	writer := g.client.Bucket(g.bucket).Object(key).NewWriter(ctx)
-	defer writer.Close()
 	_, err := io.Copy(writer, data)
-	return err
+	if err != nil {
+		return err
+	}
+	return writer.Close()
 }
 
 func (g *gs) Copy(dst, src string) error {
