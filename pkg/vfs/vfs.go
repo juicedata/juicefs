@@ -721,7 +721,7 @@ func CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut Ino, fhO
 		err = syscall.EINVAL
 		return
 	}
-	if nodeIn == nodeOut && (offIn+size > offOut || offOut+size > offIn) {
+	if nodeIn == nodeOut && (offIn <= offOut && offOut < offIn+size || offOut <= offIn && offIn < offOut+size) {
 		err = syscall.EINVAL // overlap
 		return
 	}
