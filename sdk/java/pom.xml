@@ -175,5 +175,17 @@
 			<version>1.10.0</version>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.kitesdk</groupId>
+			<artifactId>kite-data-core</artifactId>
+			<version>1.1.0</version>
+			<scope>provided</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
 	</dependencies>
 </project>
