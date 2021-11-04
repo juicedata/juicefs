@@ -57,10 +57,10 @@ type cacheStore struct {
 	pending   chan pendingFile
 	pages     map[string]*Page
 
-	pauseWB  int32 // atomic bool
 	used     int64
 	keys     map[string]cacheItem
 	scanned  bool
+	pauseWB  bool
 	uploader func(key, path string)
 }
 
@@ -115,9 +115,9 @@ func (cache *cacheStore) checkFreeSpace() {
 
 			br, fr = cache.curFreeRatio()
 			if br < cache.freeRatio/2 || fr < cache.freeRatio/2 {
-				atomic.StoreInt32(&cache.pauseWB, 1)
-			} else {
-				atomic.StoreInt32(&cache.pauseWB, 0)
+				cache.pauseWB = true
+			} else if cache.pauseWB {
+				cache.pauseWB = false
 			}
 			if br < cache.freeRatio || fr < cache.freeRatio {
 				cache.uploadStaging()
@@ -315,7 +315,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 
 func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
 	stagingPath := cache.stagePath(key)
-	if atomic.LoadInt32(&cache.pauseWB) != 0 {
+	if cache.pauseWB {
 		return stagingPath, errors.New("Space not enough on device")
 	}
 	err := cache.flushPage(stagingPath, data, false)
