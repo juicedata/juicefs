@@ -107,6 +107,7 @@ func (cache *cacheStore) stats() (int64, int64) {
 func (cache *cacheStore) checkFreeSpace() {
 	for {
 		br, fr := cache.curFreeRatio()
+		cache.full = br < cache.freeRatio/2 || fr < cache.freeRatio/2
 		if br < cache.freeRatio || fr < cache.freeRatio {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
@@ -114,7 +115,6 @@ func (cache *cacheStore) checkFreeSpace() {
 			cache.Unlock()
 
 			br, fr = cache.curFreeRatio()
-			cache.full = br < cache.freeRatio/2 || fr < cache.freeRatio/2
 			if br < cache.freeRatio || fr < cache.freeRatio {
 				cache.uploadStaging()
 			}
