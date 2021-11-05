@@ -36,6 +36,10 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
+	"github.com/pkg/errors"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -2971,87 +2975,147 @@ func (r *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis: %s", time.Since(start))
 }
 
-func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
-	ctx := Background
+func (m *redisMeta) dumpEntry(inode Ino) *DumpedEntry {
 	e := &DumpedEntry{}
-	st := m.txn(ctx, func(tx *redis.Tx) error {
-		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
-		if err != nil {
-			return err
-		}
-		attr := &Attr{}
-		m.parseAttr(a, attr)
-		e.Attr = dumpAttr(attr)
-		e.Attr.Inode = inode
+	a := []byte(snap.stringMap[m.inodeKey(inode)])
+	attr := &Attr{}
+	m.parseAttr(a, attr)
+	e.Attr = dumpAttr(attr)
+	e.Attr.Inode = inode
 
-		keys, err := tx.HGetAll(ctx, m.xattrKey(inode)).Result()
-		if err != nil {
-			return err
+	keys := snap.hashMap[m.xattrKey(inode)]
+	if len(keys) > 0 {
+		xattrs := make([]*DumpedXattr, 0, len(keys))
+		for k, v := range keys {
+			xattrs = append(xattrs, &DumpedXattr{k, v})
 		}
-		if len(keys) > 0 {
-			xattrs := make([]*DumpedXattr, 0, len(keys))
-			for k, v := range keys {
-				xattrs = append(xattrs, &DumpedXattr{k, v})
-			}
-			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
-			e.Xattrs = xattrs
-		}
-
-		if attr.Typ == TypeFile {
-			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
-				vals, err := tx.LRange(ctx, m.chunkKey(inode, indx), 0, 1000000).Result()
-				if err != nil {
-					return err
-				}
-				ss := readSlices(vals)
-				slices := make([]*DumpedSlice, 0, len(ss))
-				for _, s := range ss {
-					slices = append(slices, &DumpedSlice{Pos: s.pos, Size: s.len, Off: s.size, Len: s.off, Chunkid: s.chunkid})
-				}
-				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
-			}
-		} else if attr.Typ == TypeSymlink {
-			if e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result(); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}, m.inodeKey(inode))
-	if st == 0 {
-		return e, nil
-	} else {
-		return nil, fmt.Errorf("dump entry error: %d", st)
+		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
+		e.Xattrs = xattrs
 	}
+
+	if attr.Typ == TypeFile {
+		for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
+			vals := snap.listMap[m.chunkKey(inode, indx)]
+			ss := readSlices(vals)
+			slices := make([]*DumpedSlice, 0, len(ss))
+			for _, s := range ss {
+				slices = append(slices, &DumpedSlice{Pos: s.pos, Size: s.len, Off: s.size, Len: s.off, Chunkid: s.chunkid})
+			}
+			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
+		}
+	} else if attr.Typ == TypeSymlink {
+		e.Symlink = snap.stringMap[m.symKey(inode)]
+	}
+	return e
 }
 
-func (m *redisMeta) dumpDir(inode Ino, showProgress func(totalIncr, currentIncr int64)) (map[string]*DumpedEntry, error) {
-	ctx := Background
-	keys, err := m.rdb.HGetAll(ctx, m.entryKey(inode)).Result()
-	if err != nil {
-		return nil, err
-	}
+func (m *redisMeta) dumpDir(inode Ino, showProgress func(totalIncr, currentIncr int64)) map[string]*DumpedEntry {
+	keys := snap.hashMap[m.entryKey(inode)]
 	if showProgress != nil {
 		showProgress(int64(len(keys)), 0)
 	}
 	entries := make(map[string]*DumpedEntry)
 	for k, v := range keys {
 		typ, inode := m.parseEntry([]byte(v))
-		entry, err := m.dumpEntry(inode)
-		if err != nil {
-			return nil, err
-		}
+		entry := m.dumpEntry(inode)
 		if typ == TypeDirectory {
-			if entry.Entries, err = m.dumpDir(inode, showProgress); err != nil {
-				return nil, err
-			}
+			entry.Entries = m.dumpDir(inode, showProgress)
 		}
 		entries[k] = entry
 		if showProgress != nil {
 			showProgress(0, 1)
 		}
 	}
-	return entries, nil
+	return entries
+}
+
+var snap *snapStruct
+
+type snapStruct struct {
+	stringMap map[string]string            //i* s*
+	listMap   map[string][]string          //c*
+	hashMap   map[string]map[string]string //d* x*
+}
+
+func (m *redisMeta) makeSnap() error {
+	snap = &snapStruct{
+		stringMap: make(map[string]string),
+		listMap:   make(map[string][]string),
+		hashMap:   make(map[string]map[string]string),
+	}
+
+	ctx := context.Background()
+	listType := func(keys []string) error {
+		for _, key := range keys {
+			result, err := m.rdb.LRange(ctx, key, 0, -1).Result()
+			if err != nil {
+				return err
+			}
+			snap.listMap[key] = result
+		}
+		return nil
+	}
+
+	stringType := func(keys []string) error {
+		values, err := m.rdb.MGet(ctx, keys...).Result()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < len(keys); i++ {
+			if s, ok := values[i].(string); ok {
+				snap.stringMap[keys[i]] = s
+			}
+		}
+		return nil
+	}
+
+	hashType := func(keys []string) error {
+		for _, key := range keys {
+			result, err := m.rdb.HGetAll(ctx, key).Result()
+			if err != nil {
+				return err
+			}
+			snap.hashMap[key] = result
+		}
+		return nil
+	}
+
+	typeMap := map[string]func(keys []string) error{
+		"c*": listType,
+		"i*": stringType,
+		"s*": stringType,
+		"d*": hashType,
+		"x*": hashType,
+	}
+
+	scanner := func(match string, handlerKey func(keys []string) error) error {
+		var cursor uint64
+		for {
+			keys, c, err := m.rdb.Scan(ctx, cursor, match, 10000).Result()
+			if err != nil {
+				return err
+			}
+
+			if len(keys) > 0 {
+				if err = handlerKey(keys); err != nil {
+					return err
+				}
+			}
+
+			if c == 0 {
+				break
+			}
+			cursor = c
+		}
+		return nil
+	}
+
+	for match, typ := range typeMap {
+		if err := scanner(match, typ); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *redisMeta) DumpMeta(w io.Writer) error {
@@ -3070,22 +3134,19 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		length, _ := strconv.ParseUint(parts[1], 10, 64)
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
-
-	tree, err := m.dumpEntry(m.root)
-	if err != nil {
-		return err
+	if err := m.makeSnap(); err != nil {
+		return errors.Errorf("Generate redis snapshot error: %v", err)
 	}
+	tree := m.dumpEntry(m.root)
 
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
-	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
+	tree.Entries = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
-	}); err != nil {
-		return err
-	}
+	})
 	if bar.Current() != total {
 		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
 	}
@@ -3112,10 +3173,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 	sessions := make([]*DumpedSustained, 0, len(keys))
 	for _, k := range keys {
 		sid, _ := strconv.ParseUint(k, 10, 64)
-		ss, err := m.rdb.SMembers(ctx, m.sustained(int64(sid))).Result()
-		if err != nil {
-			return err
-		}
+		ss := snap.listMap[m.sustained(int64(sid))]
 		if len(ss) > 0 {
 			inodes := make([]Ino, 0, len(ss))
 			for _, s := range ss {
@@ -3286,11 +3344,25 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 
 	counters := &DumpedCounters{}
 	refs := make(map[string]int)
+
+	maxNum := 10000
+	pool := make(chan struct{}, maxNum)
+	var g errgroup.Group
 	for _, entry := range entries {
-		if err = m.loadEntry(entry, counters, refs); err != nil {
-			return err
-		}
+		tmpE := entry
+		g.Go(func() error {
+			pool <- struct{}{}
+			defer func() {
+				<-pool
+			}()
+			return m.loadEntry(tmpE, counters, refs)
+		})
 	}
+	err = g.Wait()
+	if err != nil {
+		return err
+	}
+
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 
