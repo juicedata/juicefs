@@ -117,7 +117,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	var rdb *redis.Client
 	if strings.Contains(opt.Addr, ",") {
 		var fopt redis.FailoverOptions
-		ps := strings.Split(opt.Addr, ",")
+		ps := strings.Split(addr, ",")
 		fopt.MasterName = ps[0]
 		fopt.SentinelAddrs = ps[1:]
 		_, port, _ := net.SplitHostPort(fopt.SentinelAddrs[len(fopt.SentinelAddrs)-1])
@@ -125,8 +125,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			port = "26379"
 		}
 		for i, addr := range fopt.SentinelAddrs {
-			h, p, _ := net.SplitHostPort(addr)
-			if p == "" {
+			h, p, e := net.SplitHostPort(addr)
+			if e != nil {
+				fopt.SentinelAddrs[i] = net.JoinHostPort(addr, port)
+			} else if p == "" {
 				fopt.SentinelAddrs[i] = net.JoinHostPort(h, port)
 			}
 		}
