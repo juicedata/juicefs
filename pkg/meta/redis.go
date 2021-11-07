@@ -117,7 +117,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	var rdb *redis.Client
 	if strings.Contains(opt.Addr, ",") {
 		var fopt redis.FailoverOptions
-		ps := strings.Split(addr, ",")
+		ps := strings.Split(opt.Addr, ",")
 		fopt.MasterName = ps[0]
 		fopt.SentinelAddrs = ps[1:]
 		_, port, _ := net.SplitHostPort(fopt.SentinelAddrs[len(fopt.SentinelAddrs)-1])
