@@ -125,8 +125,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			port = "26379"
 		}
 		for i, addr := range fopt.SentinelAddrs {
-			h, p, _ := net.SplitHostPort(addr)
-			if p == "" {
+			h, p, e := net.SplitHostPort(addr)
+			if e != nil {
+				fopt.SentinelAddrs[i] = net.JoinHostPort(addr, port)
+			} else if p == "" {
 				fopt.SentinelAddrs[i] = net.JoinHostPort(h, port)
 			}
 		}
