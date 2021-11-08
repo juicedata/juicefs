@@ -3008,7 +3008,11 @@ func (m *redisMeta) dumpEntry(inode Ino) *DumpedEntry {
 			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 		}
 	} else if attr.Typ == TypeSymlink {
-		e.Symlink = m.snap.stringMap[m.symKey(inode)]
+		if m.snap.stringMap[m.symKey(inode)] == "" {
+			logger.Warnf("The symlink of inode %d is not found", inode)
+		} else {
+			e.Symlink = m.snap.stringMap[m.symKey(inode)]
+		}
 	}
 	return e
 }
@@ -3369,7 +3373,8 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 
 	maxNum := 100
 	pool := make(chan struct{}, maxNum)
-	errCh := make(chan error)
+	errCh := make(chan error, 100)
+	done := make(chan struct{}, 1)
 	var wg sync.WaitGroup
 	for _, entry := range entries {
 		select {
@@ -3389,7 +3394,17 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 			}
 		}(entry)
 	}
-	wg.Wait()
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case err = <-errCh:
+		return err
+	case <-done:
+	}
 
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
