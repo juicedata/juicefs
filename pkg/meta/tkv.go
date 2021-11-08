@@ -2332,21 +2332,22 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (r *kvMeta) ListSlices(ctx Context, slices map[string][]Slice, delete bool, showProgress func()) syscall.Errno {
+func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	result, err := r.scanValues(r.fmtKey("A"), func(k, v []byte) bool {
+	result, err := m.scanValues(m.fmtKey("A"), func(k, v []byte) bool {
 		return len(k) == klen && k[1+8] == 'C'
 	})
 	if err != nil {
 		logger.Warnf("scan chunks: %s", err)
 		return errno(err)
 	}
-	for _, value := range result {
+	for key, value := range result {
+		inode := m.decodeInode([]byte(key)[1:9])
 		ss := readSliceBuf(value)
 		for _, s := range ss {
 			if s.chunkid > 0 {
-				slices["TEMP"] = append(slices["TEMP"], Slice{Chunkid: s.chunkid, Size: s.size})
+				slices[inode] = append(slices[inode], Slice{Chunkid: s.chunkid, Size: s.size})
 				if showProgress != nil {
 					showProgress()
 				}
@@ -2365,7 +2366,7 @@ func (m *kvMeta) GetPath(ctx Context, inode Ino) (string, syscall.Errno) {
 			return "", st
 		}
 
-		vals, err := m.scanValues(m.entryKey(inode, ""), func(k, v []byte) bool {
+		vals, err := m.scanValues(m.entryKey(attr.Parent, ""), func(k, v []byte) bool {
 			_, ino := m.parseEntry(v)
 			return ino == inode
 		})

@@ -150,7 +150,7 @@ func gc(ctx *cli.Context) error {
 
 	progress, bar := utils.NewProgressCounter("listed slices counter: ")
 	var c = meta.NewContext(0, 0, []uint32{0})
-	slices := make(map[string][]meta.Slice)
+	slices := make(map[meta.Ino][]meta.Slice)
 	r := m.ListSlices(c, slices, ctx.Bool("delete"), bar.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)

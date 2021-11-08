@@ -307,7 +307,7 @@ type Meta interface {
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context) syscall.Errno
 	// ListSlices returns all slices used by all files.
-	ListSlices(ctx Context, slices map[string][]Slice, delete bool, showProgress func()) syscall.Errno
+	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	GetPath(ctx Context, inode Ino) (string, syscall.Errno)
 
 	// OnMsg add a callback for the given message type.

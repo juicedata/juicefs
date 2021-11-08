@@ -17,7 +17,7 @@ package main
 
 import (
 	"fmt"
-	"strconv"
+	"sort"
 	"strings"
 	"time"
 
@@ -101,7 +101,7 @@ func fsck(ctx *cli.Context) error {
 	logger.Infof("Listing all slices ...")
 	progress, bar := utils.NewProgressCounter("listed slices counter: ")
 	var c = meta.NewContext(0, 0, []uint32{0})
-	slices := make(map[string][]meta.Slice)
+	slices := make(map[meta.Ino][]meta.Slice)
 	r := m.ListSlices(c, slices, false, bar.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
@@ -133,8 +133,8 @@ func fsck(ctx *cli.Context) error {
 	)
 
 	var totalBytes uint64
-	brokens := make(map[int]string)
-	for k, ss := range slices {
+	brokens := make(map[meta.Ino]string)
+	for inode, ss := range slices {
 		for _, s := range ss {
 			bar.Increment()
 			totalBytes += uint64(s.Size)
@@ -147,9 +147,8 @@ func fsck(ctx *cli.Context) error {
 				key := fmt.Sprintf("%d_%d_%d", s.Chunkid, i, sz)
 				if _, ok := blocks[key]; !ok {
 					if _, err := blob.Head(key); err != nil {
-						inode, _ := strconv.Atoi(strings.Split(k, "_")[0])
 						if _, ok := brokens[inode]; !ok {
-							if p, st := m.GetPath(meta.Background, meta.Ino(inode)); st == 0 {
+							if p, st := m.GetPath(meta.Background, inode); st == 0 {
 								brokens[inode] = p
 							} else {
 								logger.Warnf("getpath of inode %d: %s", inode, st)
@@ -174,6 +173,7 @@ func fsck(ctx *cli.Context) error {
 		for i, p := range brokens {
 			fileList = append(fileList, fmt.Sprintf("%10d %s", i, p))
 		}
+		sort.Strings(fileList)
 		msg += strings.Join(fileList, "\n")
 		logger.Fatal(msg)
 	}
