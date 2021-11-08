@@ -779,7 +779,7 @@ func testCompaction(t *testing.T, m Meta) {
 	if st := m.CompactAll(ctx); st != 0 {
 		logger.Fatalf("compactall: %s", st)
 	}
-	slices := make(map[string][]Slice)
+	slices := make(map[Ino][]Slice)
 	if st := m.ListSlices(ctx, slices, false, nil); st != 0 {
 		logger.Fatalf("list all slices: %s", st)
 	}
@@ -896,8 +896,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		),
 		mpb.BarFillerClearOnComplete(),
 	)
-	// var ss []Slice
-	slices := make(map[string][]Slice)
+	slices := make(map[Ino][]Slice)
 	m.ListSlices(ctx, slices, false, func() {
 		bar.SetTotal(total+2048, false)
 		bar.Increment()
@@ -915,7 +914,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 
 	time.Sleep(time.Millisecond * 100)
-	slices = make(map[string][]Slice)
+	slices = make(map[Ino][]Slice)
 	m.ListSlices(ctx, slices, false, nil)
 	totalSlices = 0
 	for _, ss := range slices {
