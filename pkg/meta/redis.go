@@ -3050,14 +3050,27 @@ func (m *redisMeta) makeSnap() error {
 	}
 
 	ctx := context.Background()
-	listType := func(p redis.Pipeliner, keys []string) error {
+	listType := func(keys []string) error {
+		p := m.rdb.Pipeline()
 		for _, key := range keys {
 			p.LRange(ctx, key, 0, -1)
 		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			return err
+		}
+		for _, cmd := range cmds {
+			if sliceCmd, ok := cmd.(*redis.StringSliceCmd); ok {
+				if key, ok := cmd.Args()[1].(string); ok {
+					m.snap.listMap[key] = sliceCmd.Val()
+				}
+			}
+		}
+
 		return nil
 	}
 
-	stringType := func(p redis.Pipeliner, keys []string) error {
+	stringType := func(keys []string) error {
 		values, err := m.rdb.MGet(ctx, keys...).Result()
 		if err != nil {
 			return err
@@ -3070,14 +3083,26 @@ func (m *redisMeta) makeSnap() error {
 		return nil
 	}
 
-	hashType := func(p redis.Pipeliner, keys []string) error {
+	hashType := func(keys []string) error {
+		p := m.rdb.Pipeline()
 		for _, key := range keys {
 			p.HGetAll(ctx, key)
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			return err
+		}
+		for _, cmd := range cmds {
+			if stringMapCmd, ok := cmd.(*redis.StringStringMapCmd); ok {
+				if key, ok := cmd.Args()[1].(string); ok {
+					m.snap.hashMap[key] = stringMapCmd.Val()
+				}
+			}
 		}
 		return nil
 	}
 
-	typeMap := map[string]func(p redis.Pipeliner, keys []string) error{
+	typeMap := map[string]func(keys []string) error{
 		"c*": listType,
 		"i*": stringType,
 		"s*": stringType,
@@ -3085,45 +3110,22 @@ func (m *redisMeta) makeSnap() error {
 		"x*": hashType,
 	}
 
-	scanner := func(match string, handlerKey func(p redis.Pipeliner, keys []string) error) error {
+	scanner := func(match string, handlerKey func(keys []string) error) error {
 		var cursor uint64
-		p := m.rdb.Pipeline()
-
 		for {
 			keys, c, err := m.rdb.Scan(ctx, cursor, match, 10000).Result()
 			if err != nil {
 				return err
 			}
-
 			if len(keys) > 0 {
-
-				if err = handlerKey(p, keys); err != nil {
+				if err = handlerKey(keys); err != nil {
 					return err
 				}
-
 			}
-
 			if c == 0 {
 				break
 			}
 			cursor = c
-		}
-		cmds, err := p.Exec(ctx)
-		if err != nil {
-			return err
-		}
-		for _, cmd := range cmds {
-			switch c := cmd.(type) {
-			case *redis.StringStringMapCmd:
-				if key, ok := c.Args()[1].(string); ok {
-					m.snap.hashMap[key] = c.Val()
-				}
-			case *redis.StringSliceCmd:
-				if key, ok := c.Args()[1].(string); ok {
-					m.snap.listMap[key] = c.Val()
-				}
-			default:
-			}
 		}
 		return nil
 	}
@@ -3365,23 +3367,15 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	counters := &DumpedCounters{}
 	refs := make(map[string]int)
 
-	cancelCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	maxNum := 100
 	pool := make(chan struct{}, maxNum)
-	errCh := make(chan error, 1)
-	done := make(chan struct{}, 1)
-	var quit bool
+	errCh := make(chan error)
 	var wg sync.WaitGroup
 	for _, entry := range entries {
 		select {
-		case <-cancelCtx.Done():
-			quit = true
+		case err = <-errCh:
+			return err
 		default:
-		}
-		if quit {
-			break
 		}
 		pool <- struct{}{}
 		wg.Add(1)
@@ -3392,21 +3386,10 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 			}()
 			if err = m.loadEntry(entry, counters, refs); err != nil {
 				errCh <- err
-				cancel()
 			}
 		}(entry)
 	}
-
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case err = <-errCh:
-		return err
-	case <-done:
-	}
+	wg.Wait()
 
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
