@@ -93,9 +93,8 @@ func (tx *fdbTxn) exist(prefix []byte) bool {
 	return key != nil && bytes.HasPrefix(key, prefix)
 }
 
-func (tx *fdbTxn) append(key []byte, value []byte) []byte {
+func (tx *fdbTxn) append(key []byte, value []byte) {
 	tx.t.AppendIfFits(fdb.Key(key), value)
-	return tx.t.Get(fdb.Key(key)).MustGet()
 }
 
 func (tx *fdbTxn) set(key, value []byte) {

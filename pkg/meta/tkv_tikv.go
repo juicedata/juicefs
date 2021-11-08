@@ -132,10 +132,9 @@ func (tx *tikvTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *tikvTxn) append(key []byte, value []byte) []byte {
+func (tx *tikvTxn) append(key []byte, value []byte) {
 	new := append(tx.get(key), value...)
 	tx.set(key, new)
-	return new
 }
 
 func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {

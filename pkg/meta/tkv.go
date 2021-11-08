@@ -40,7 +40,7 @@ type kvTxn interface {
 	scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
-	append(key []byte, value []byte) []byte
+	append(key []byte, value []byte)
 	incrBy(key []byte, value int64) int64
 	dels(keys ...[]byte)
 }
@@ -1972,7 +1972,6 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
-	var needCompact bool
 	err := m.txn(func(tx kvTxn) error {
 		var attr Attr
 		a := tx.get(m.inodeKey(inode))
@@ -1998,19 +1997,15 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Ctimensec = uint32(now.Nanosecond())
 		tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
-		// needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
 	})
 	go func() {
 		val, _ := m.get(m.chunkKey(inode, indx))
-		if (len(val)/sliceBytes)%20 == 19 {
+		if (len(val)/sliceBytes)%100 == 99 {
 			m.compactChunk(inode, indx, false)
 		}
 	}()
 	if err == nil {
-		if needCompact {
-			go m.compactChunk(inode, indx, false)
-		}
 		m.updateStats(newSpace, 0)
 	}
 	return errno(err)
