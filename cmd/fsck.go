@@ -132,11 +132,9 @@ func fsck(ctx *cli.Context) error {
 		mpb.BarFillerClearOnComplete(),
 	)
 
-	var path string
-	var broken []string
 	var totalBytes uint64
+	brokens := make(map[int]string)
 	for k, ss := range slices {
-		path = ""
 		for _, s := range ss {
 			bar.Increment()
 			totalBytes += uint64(s.Size)
@@ -150,18 +148,19 @@ func fsck(ctx *cli.Context) error {
 				if _, ok := blocks[key]; !ok {
 					if _, err := blob.Head(key); err != nil {
 						inode, _ := strconv.Atoi(strings.Split(k, "_")[0])
-						if path == "" {
-							path, _ = meta.GetPath(m, meta.Background, meta.Ino(inode))
+						if _, ok := brokens[inode]; !ok {
+							if p, st := m.GetPath(meta.Background, meta.Ino(inode)); st == 0 {
+								brokens[inode] = p
+							} else {
+								logger.Warnf("getpath of inode %d: %s", inode, st)
+							}
 						}
-						logger.Errorf("can't find block %s for file %s: %s", key, path, err)
+						logger.Errorf("can't find block %s for file %s: %s", key, brokens[inode], err)
 						lost.Increment()
 						lostBytes.IncrBy(sz)
 					}
 				}
 			}
-		}
-		if path != "" {
-			broken = append(broken, path)
 		}
 	}
 	bar.SetTotal(0, true) // should be complete
@@ -170,8 +169,12 @@ func fsck(ctx *cli.Context) error {
 	progress.Wait()
 	logger.Infof("Used by %d slices (%d bytes)", totalSlices, totalBytes)
 	if lost.Current() > 0 {
-		msg := fmt.Sprintf("%d objects are lost (%d bytes), %d broken files:\n", lost.Current(), lostBytes.Current(), len(broken))
-		msg += strings.Join(broken, "\n")
+		msg := fmt.Sprintf("%d objects are lost (%d bytes), %d broken files:\n", lost.Current(), lostBytes.Current(), len(brokens))
+		var fileList []string
+		for i, p := range brokens {
+			fileList = append(fileList, fmt.Sprintf("%10d %s", i, p))
+		}
+		msg += strings.Join(fileList, "\n")
 		logger.Fatal(msg)
 	}
 

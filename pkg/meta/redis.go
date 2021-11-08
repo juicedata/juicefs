@@ -649,37 +649,6 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 	return 0
 }
 
-func GetPath(r Meta, ctx Context, inode Ino) (string, syscall.Errno) {
-	if inode == 1 {
-		return "", 0
-	}
-	var attr = &Attr{}
-	if st := r.GetAttr(ctx, inode, attr); st != 0 {
-		logger.Warnf("failed to get attribute of inode %d", inode)
-		return "", st
-	}
-	parent := attr.Parent
-	var entries []*Entry
-	if st := r.Readdir(ctx, parent, 0, &entries); st != 0 {
-		return "", st
-	}
-	var name string
-	for _, e := range entries {
-		if e.Inode == inode {
-			name = string(e.Name)
-			break
-		}
-	}
-	if name == "" {
-		return "", syscall.ENOENT
-	}
-	path, st := GetPath(r, ctx, parent)
-	if st != 0 {
-		return "", st
-	}
-	return path + "/" + name, 0
-}
-
 func (r *redisMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	var entries []*Entry
 	_ = r.Readdir(ctx, parent, 0, &entries)
@@ -2914,6 +2883,49 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[string][]Slice, delete bo
 		cursor = c
 	}
 	return 0
+}
+
+func (r *redisMeta) GetPath(ctx Context, inode Ino) (string, syscall.Errno) {
+	var names []string
+	var attr Attr
+	for inode != 1 {
+		if st := r.GetAttr(ctx, inode, &attr); st != 0 {
+			logger.Debugf("getattr inode %d: %s", inode, st)
+			return "", st
+		}
+
+		var name string
+		var keys []string
+		var cursor uint64
+		var err error
+		for {
+			keys, cursor, err = r.rdb.HScan(ctx, r.entryKey(attr.Parent), cursor, "*", 10000).Result()
+			if err != nil {
+				return "", errno(err)
+			}
+			for i := 0; i < len(keys); i += 2 {
+				_, ino := r.parseEntry([]byte(keys[i+1]))
+				if ino == inode {
+					name = keys[i]
+					break
+				}
+			}
+			if name != "" || cursor == 0 {
+				break
+			}
+		}
+		if name == "" {
+			return "", syscall.ENOENT
+		}
+		names = append(names, name)
+		inode = attr.Parent
+	}
+	names = append(names, "") // add root
+
+	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
+		names[i], names[j] = names[j], names[i]
+	}
+	return strings.Join(names, "/"), 0
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {

@@ -2501,6 +2501,33 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[string][]Slice, delete bool,
 	return 0
 }
 
+func (m *dbMeta) GetPath(ctx Context, inode Ino) (string, syscall.Errno) {
+	var names []string
+	var attr Attr
+	for inode != 1 {
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			logger.Debugf("getattr inode %d: %s", inode, st)
+			return "", st
+		}
+
+		var edges []edge
+		if err := m.engine.Find(&edges, &edge{Parent: attr.Parent, Inode: inode}); err != nil {
+			return "", errno(err)
+		}
+		if len(edges) == 0 {
+			return "", syscall.ENOENT
+		}
+		names = append(names, edges[0].Name)
+		inode = attr.Parent
+	}
+	names = append(names, "") // add root
+
+	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
+		names[i], names[j] = names[j], names[i]
+	}
+	return strings.Join(names, "/"), 0
+}
+
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)

@@ -2356,6 +2356,39 @@ func (r *kvMeta) ListSlices(ctx Context, slices map[string][]Slice, delete bool,
 	return 0
 }
 
+func (m *kvMeta) GetPath(ctx Context, inode Ino) (string, syscall.Errno) {
+	var names []string
+	var attr Attr
+	for inode != 1 {
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			logger.Debugf("getattr inode %d: %s", inode, st)
+			return "", st
+		}
+
+		vals, err := m.scanValues(m.entryKey(inode, ""), func(k, v []byte) bool {
+			_, ino := m.parseEntry(v)
+			return ino == inode
+		})
+		if err != nil {
+			return "", errno(err)
+		}
+		if len(vals) == 0 {
+			return "", syscall.ENOENT
+		}
+		for key := range vals {
+			names = append(names, key[len(m.entryKey(inode, "")):])
+			break
+		}
+		inode = attr.Parent
+	}
+	names = append(names, "") // add root
+
+	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
+		names[i], names[j] = names[j], names[i]
+	}
+	return strings.Join(names, "/"), 0
+}
+
 func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
