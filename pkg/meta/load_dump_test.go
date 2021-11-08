@@ -127,7 +127,11 @@ func TestLoadDump(t *testing.T) {
 		}
 	})
 
-	cmd := exec.Command("diff", "redis.dump", "sqlite3.dump")
+	cmd := exec.Command("diff", "redis.dump", sampleFile)
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("diff: %s", out)
+	}
+	cmd = exec.Command("diff", "redis.dump", "sqlite3.dump")
 	if out, err := cmd.Output(); err != nil {
 		t.Fatalf("diff: %s", out)
 	}
