@@ -649,6 +649,37 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 	return 0
 }
 
+func GetPath(r Meta, ctx Context, inode Ino) (string, syscall.Errno) {
+	if inode == 1 {
+		return "", 0
+	}
+	var attr = &Attr{}
+	if st := r.GetAttr(ctx, inode, attr); st != 0 {
+		logger.Warnf("failed to get attribute of inode %d", inode)
+		return "", st
+	}
+	parent := attr.Parent
+	var entries []*Entry
+	if st := r.Readdir(ctx, parent, 0, &entries); st != 0 {
+		return "", st
+	}
+	var name string
+	for _, e := range entries {
+		if e.Inode == inode {
+			name = string(e.Name)
+			break
+		}
+	}
+	if name == "" {
+		return "", syscall.ENOENT
+	}
+	path, st := GetPath(r, ctx, parent)
+	if st != 0 {
+		return "", st
+	}
+	return path + "/" + name, 0
+}
+
 func (r *redisMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	var entries []*Entry
 	_ = r.Readdir(ctx, parent, 0, &entries)
@@ -2843,11 +2874,11 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 	}
 }
 
-func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno {
+func (r *redisMeta) ListSlices(ctx Context, slices map[string][]Slice, delete bool, showProgress func()) syscall.Errno {
 	r.cleanupLeakedInodes(delete)
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
-	*slices = nil
+
 	var cursor uint64
 	p := r.rdb.Pipeline()
 	for {
@@ -2865,11 +2896,12 @@ func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showPr
 			return errno(err)
 		}
 		for _, cmd := range cmds {
+			key := cmd.(*redis.StringSliceCmd).Args()[1].(string)[1:] // no prefix 'c'
 			vals := cmd.(*redis.StringSliceCmd).Val()
 			ss := readSlices(vals)
 			for _, s := range ss {
 				if s.chunkid > 0 {
-					*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+					slices[key] = append(slices[key], Slice{Chunkid: s.chunkid, Size: s.size})
 					if showProgress != nil {
 						showProgress()
 					}

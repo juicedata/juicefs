@@ -150,8 +150,8 @@ func gc(ctx *cli.Context) error {
 
 	progress, bar := utils.NewProgressCounter("listed slices counter: ")
 	var c = meta.NewContext(0, 0, []uint32{0})
-	var slices []meta.Slice
-	r := m.ListSlices(c, &slices, ctx.Bool("delete"), bar.Increment)
+	slices := make(map[string][]meta.Slice)
+	r := m.ListSlices(c, slices, ctx.Bool("delete"), bar.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
@@ -161,10 +161,12 @@ func gc(ctx *cli.Context) error {
 	keys := make(map[uint64]uint32)
 	var total int64
 	var totalBytes uint64
-	for _, s := range slices {
-		keys[s.Chunkid] = s.Size
-		total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1 // s.Size should be > 0
-		totalBytes += uint64(s.Size)
+	for _, ss := range slices {
+		for _, s := range ss {
+			keys[s.Chunkid] = s.Size
+			total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1 // s.Size should be > 0
+			totalBytes += uint64(s.Size)
+		}
 	}
 	logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
 

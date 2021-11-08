@@ -779,8 +779,8 @@ func testCompaction(t *testing.T, m Meta) {
 	if st := m.CompactAll(ctx); st != 0 {
 		logger.Fatalf("compactall: %s", st)
 	}
-	var slices []Slice
-	if st := m.ListSlices(ctx, &slices, false, nil); st != 0 {
+	slices := make(map[string][]Slice)
+	if st := m.ListSlices(ctx, slices, false, nil); st != 0 {
 		logger.Fatalf("list all slices: %s", st)
 	}
 
@@ -896,13 +896,18 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		),
 		mpb.BarFillerClearOnComplete(),
 	)
-	var ss []Slice
-	m.ListSlices(ctx, &ss, false, func() {
+	// var ss []Slice
+	slices := make(map[string][]Slice)
+	m.ListSlices(ctx, slices, false, func() {
 		bar.SetTotal(total+2048, false)
 		bar.Increment()
 	})
-	if len(ss) != 1 {
-		t.Fatalf("number of chunks: %d != 1, %+v", len(ss), ss)
+	var totalSlices int
+	for _, ss := range slices {
+		totalSlices += len(ss)
+	}
+	if totalSlices != 1 {
+		t.Fatalf("number of chunks: %d != 1, %+v", totalSlices, slices)
 	}
 	m.Close(ctx, inode)
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
@@ -910,10 +915,15 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 
 	time.Sleep(time.Millisecond * 100)
-	m.ListSlices(ctx, &ss, false, nil)
+	slices = make(map[string][]Slice)
+	m.ListSlices(ctx, slices, false, nil)
+	totalSlices = 0
+	for _, ss := range slices {
+		totalSlices += len(ss)
+	}
 	// the last chunk could be found and deleted
-	if len(ss) > 1 {
-		t.Fatalf("number of chunks: %d > 1, %+v", len(ss), ss)
+	if totalSlices > 1 {
+		t.Fatalf("number of chunks: %d > 1, %+v", totalSlices, slices)
 	}
 }
 
