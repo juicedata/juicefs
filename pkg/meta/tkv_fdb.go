@@ -1,5 +1,3 @@
-// +build fdb
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -95,8 +93,9 @@ func (tx *fdbTxn) exist(prefix []byte) bool {
 	return key != nil && bytes.HasPrefix(key, prefix)
 }
 
-func (tx *fdbTxn) append(key []byte, value []byte) {
+func (tx *fdbTxn) append(key []byte, value []byte) []byte {
 	tx.t.AppendIfFits(fdb.Key(key), value)
+	return tx.t.Get(fdb.Key(key)).MustGet()
 }
 
 func (tx *fdbTxn) set(key, value []byte) {
@@ -159,7 +158,7 @@ func (c *fdbClient) txn(f func(kvTxn) error) error {
 	return tx.Commit().Get()
 }
 
-func newTkvClient(driver, clusterFile string) (tkvClient, error) {
+func newFdbClient(driver, clusterFile string) (tkvClient, error) {
 	if driver != "fdb" {
 		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "fdb")
 	}

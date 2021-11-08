@@ -121,9 +121,10 @@ func (tx *memTxn) set(key, value []byte) {
 	tx.buffer[string(key)] = value
 }
 
-func (tx *memTxn) append(key []byte, value []byte) {
+func (tx *memTxn) append(key []byte, value []byte) []byte {
 	new := append(tx.get(key), value...)
 	tx.set(key, new)
+	return new
 }
 
 func (tx *memTxn) incrBy(key []byte, value int64) int64 {

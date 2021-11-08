@@ -40,7 +40,7 @@ type kvTxn interface {
 	scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
-	append(key []byte, value []byte)
+	append(key []byte, value []byte) []byte
 	incrBy(key []byte, value int64) int64
 	dels(keys ...[]byte)
 }
