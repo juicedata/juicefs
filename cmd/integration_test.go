@@ -325,8 +325,8 @@ func setUp(metaUrl string,bucket string,mp string,flagMap map[string]string) int
 
 
 func TestMain(m *testing.M) {
-	metaUrl := "sqlite3://abc"
-	volume := "vol1"
+	metaUrl := "sqlite3://tmpsql"
+	volume := "pics"
 	mp := "/tmp/jfs"
 	var flagMap map[string]string = map[string]string{"enable-xattr":"true"}
 	result := setUp(metaUrl,volume,mp,flagMap)
