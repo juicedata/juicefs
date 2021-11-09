@@ -2475,7 +2475,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno {
+func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
 	var c chunk
 	rows, err := m.engine.Rows(&c)
 	if err != nil {
@@ -2483,7 +2483,6 @@ func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgr
 	}
 	defer rows.Close()
 
-	*slices = nil
 	for rows.Next() {
 		err = rows.Scan(&c)
 		if err != nil {
@@ -2492,7 +2491,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgr
 		ss := readSliceBuf(c.Slices)
 		for _, s := range ss {
 			if s.chunkid > 0 {
-				*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+				slices[c.Inode] = append(slices[c.Inode], Slice{Chunkid: s.chunkid, Size: s.size})
 				if showProgress != nil {
 					showProgress()
 				}
