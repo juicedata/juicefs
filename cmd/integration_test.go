@@ -114,8 +114,14 @@ func mountSimpleMethod(args []string,flagMap map[string]string) error {
 	//get mount flags
 	cliCmd := mountFlags()
 	fsPtr,err := flagSet("flags",cliCmd.Flags)
+	if err != nil {
+		logger.Fatalf("flagset error:%s",err)
+	}
 	for key,value := range flagMap{
-		fsPtr.Set(key,value)
+		setErr := fsPtr.Set(key,value)
+		if setErr != nil {
+			logger.Fatalf("set flagmap error:%s",setErr)
+		}
 	}
 	c := cli.NewContext(nil,fsPtr,nil)
 
@@ -269,9 +275,6 @@ func mountSimpleMethod(args []string,flagMap map[string]string) error {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
 
-	//if !c.Bool("no-usage-report") {
-	//	go usage.ReportUsage(m, version.Version())
-	//}
 	mount_main(conf, m, store, c)
 	return m.CloseSession()
 }
@@ -299,7 +302,7 @@ func checkMountpointInTenSeconds(mp string,ch chan int) {
 	//1 is failure
 	ch <- 1
 	os.Stdout.WriteString("\n")
-	log.Printf("fail to mount after 10 seconds, please mount in foreground")
+	logger.Printf("fail to mount after 10 seconds, please mount in foreground")
 }
 
 
@@ -332,7 +335,10 @@ func TestMain(m *testing.M) {
 		return
 	}
 	code := m.Run()
-	doUmount(mp,true)
+	umountErr := doUmount(mp,true)
+	if umountErr != nil {
+		logger.Fatalf("umount err: %s",umountErr)
+	}
 	os.Exit(code)
 }
 
