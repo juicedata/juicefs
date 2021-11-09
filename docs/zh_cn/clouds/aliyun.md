@@ -6,7 +6,7 @@
 
 这样的设计可以有效缩减对象存储在请求数量上的费用，同时也能让我们显著感受到 JuiceFS 带来的性能提升。
 
-![](../../images/juicefs-aliyun.png)
+![](../images/juicefs-aliyun.png)
 
 ## 准备
 

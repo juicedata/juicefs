@@ -6,7 +6,7 @@ The metadata is stored completely independently, and the retrieval and processin
 
 This design can effectively reduce the cost of the object storage in terms of the number of requests, but also allows us to significantly experience the performance improvement brought by JuiceFS.
 
-![](../../images/juicefs-arch-new.png)
+![](../images/juicefs-arch-new.png)
 
 ## Preparation
 

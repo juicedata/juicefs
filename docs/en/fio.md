@@ -65,4 +65,4 @@ s3fs <BUCKET>:/s3fs /s3fs -o host=https://s3.<REGION>.amazonaws.com,endpoint=<RE
 
 ## Testing Result
 
-![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)
+![Sequential Read Write Benchmark](images/sequential-read-write-benchmark.svg)
