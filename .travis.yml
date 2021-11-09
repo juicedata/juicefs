@@ -27,7 +27,7 @@ before_script:
   - make
   - sudo make -C fstests setup
 script:
-  - sudo make test
+  - make test
   - sudo DURATION=10 make -C fstests all
   - make -C fstests flock
   - make -C sdk/java/libjfs
