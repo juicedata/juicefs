@@ -99,15 +99,15 @@ func flagSet(name string, flags []cli.Flag) (*flag.FlagSet, error) {
 	return set, nil
 }
 
-func mountSimpleMethod(args []string,flagMap map[string]string) error {
+func mountSimpleMethod(args []string,flagMap map[string]string) {
 
 	if len(args) < 1 {
-		logger.Fatalf("Meta URL and mountpoint are required")
+		logger.Fatalf("Meta URL and mountpoint are required\n")
 	}
 
 	addr := args[0]
 	if len(args) < 2 {
-		logger.Fatalf("MOUNTPOINT is required")
+		logger.Fatalf("MOUNTPOINT is required\n")
 	}
 	mp := args[1]
 
@@ -115,12 +115,12 @@ func mountSimpleMethod(args []string,flagMap map[string]string) error {
 	cliCmd := mountFlags()
 	fsPtr,err := flagSet("flags",cliCmd.Flags)
 	if err != nil {
-		logger.Fatalf("flagset error:%s",err)
+		logger.Fatalf("flagset error:%s\n",err)
 	}
 	for key,value := range flagMap{
 		setErr := fsPtr.Set(key,value)
 		if setErr != nil {
-			logger.Fatalf("set flagmap error:%s",setErr)
+			logger.Fatalf("set flagmap error:%s\n",setErr)
 		}
 	}
 	c := cli.NewContext(nil,fsPtr,nil)
@@ -276,13 +276,12 @@ func mountSimpleMethod(args []string,flagMap map[string]string) error {
 	}
 
 	mount_main(conf, m, store, c)
-	return m.CloseSession()
+	closeErr := m.CloseSession()
+	if closeErr != nil {
+		logger.Fatalf("close session err: %s\n", closeErr)
+	}
 }
 
-
-func jfsFormat(args []string) {
-	execCmd(args)
-}
 
 func checkMountpointInTenSeconds(mp string,ch chan int) {
 	for i := 0; i < 20; i++ {
@@ -312,7 +311,7 @@ func setUp(metaUrl string,bucket string,mp string,flagMap map[string]string) int
 	ch := make(chan int)
 	formatStr := "juicefs format" + " " + metaUrl + " " + bucket
 	formatArgs := strings.Split(formatStr," ")
-	jfsFormat(formatArgs)
+	execCmd(formatArgs)
 
 	mountStr := metaUrl + " " + mp
 	mountArgs := strings.Split(mountStr," ")
@@ -332,12 +331,13 @@ func TestMain(m *testing.M) {
 	var flagMap map[string]string = map[string]string{"enable-xattr":"true"}
 	result := setUp(metaUrl,volume,mp,flagMap)
 	if result != 0 {
+		logger.Fatalln("mount is not completed in ten seconds")
 		return
 	}
 	code := m.Run()
 	umountErr := doUmount(mp,true)
 	if umountErr != nil {
-		logger.Fatalf("umount err: %s",umountErr)
+		logger.Fatalf("umount err: %s\n",umountErr)
 	}
 	os.Exit(code)
 }
