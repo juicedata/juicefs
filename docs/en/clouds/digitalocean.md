@@ -38,7 +38,7 @@ Don't worry about the choice of database, the JuiceFS client provides a metadata
 
 For this article, we use DigitalOcean's Redis 6 database hosting service, choose `Singapore`, and select the same VPC private network as the existing Droplet. It takes about 5 minutes to create the Redis, and we follow the setup wizard to initialize the database.
 
-![](../../images/digitalocean-redis-guide.png)
+![](../images/digitalocean-redis-guide.png)
 
 By default, the Redis allows all inbound connections. For security reasons, you should select the Droplet that have access to the Redis in the security setting section of the setup wizard in the `Add trusted sources`, that is, only allow the selected host to access the Redis.
 
@@ -48,7 +48,7 @@ In the setting of the eviction policy, it is recommended to select `noeviction`,
 
 The access address of the Redis can be found in the `Connection Details` of the console. If all computing resources are in DigitalOcean, it is recommended to use the VPC private network for connection first, which can maximize security.
 
-![](../../images/digitalocean-redis-url.png)
+![](../images/digitalocean-redis-url.png)
 
 ## Installation and Use
 

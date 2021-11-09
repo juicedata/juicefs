@@ -36,7 +36,7 @@ key S. The data is encrypted using AES-GCM with the symmetric key S, S is
 encrypted using the global RSA key M, and the RSA key is encrypted with the
 passphrase specified by the user.
 
-![Encryption At-rest](../images/encryption.png)
+![Encryption At-rest](images/encryption.png)
 
 The detailed procedure for data encryption is as following:
 

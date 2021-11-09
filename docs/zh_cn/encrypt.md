@@ -23,7 +23,7 @@ JuiceFS 在客户端加密中采用了行业标准的加密方式（AES-GCM 和 
 
 必须为每个加密的文件系统创建一个全局 RSA 密钥 `M`。在对象存储中保存的每个对象都将有自己的随机对称密钥 `S`。数据用对称密钥 `S` 进行 AES-GCM 加密，`S` 用全局 RSA 密钥 `M` 进行加密，RSA 密钥使用用户指定的口令进行加密。
 
-![Encryption At-rest](../images/encryption.png)
+![Encryption At-rest](images/encryption.png)
 
 数据加密的详细过程如下：
 

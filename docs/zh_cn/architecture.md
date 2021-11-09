@@ -6,7 +6,7 @@ JuiceFS 文件系统由三个部分组成：
 2. **数据存储**：存储数据本身，支持本地磁盘、对象存储；
 3. **元数据引擎**：存储数据对应的元数据，支持 Redis、MySQL、SQLite 等多种引擎；
 
-![JuiceFS Architecture](../images/juicefs-arch-new.png)
+![JuiceFS Architecture](images/juicefs-arch-new.png)
 
 作为文件系统，JuiceFS 会分别处理数据及其对应的元数据，数据会被存储在对象存储中，元数据会被存储在元数据服务引擎中。
 

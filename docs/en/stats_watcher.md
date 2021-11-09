@@ -2,7 +2,7 @@
 
 JuiceFS pre-defined a lot of monitoring items to show internal performance statistics when the system is running. These items are [exposed](./p8s_metrics.md) by Prometheus API. However, when diagnosing performace issues, users may want a real-time monitorig tool to know what is actually going on within a certain time. Thus, the `stats` command is developed to display selected items every second, similar to the Linux tool `dstat`. The output is like:
 
-![stats_watcher](../images/juicefs_stats_watcher.png)
+![stats_watcher](images/juicefs_stats_watcher.png)
 
 By default, this command will monitor the JuiceFS process corresponding to the specified mount point, showing the following items:
 

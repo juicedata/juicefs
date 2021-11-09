@@ -57,7 +57,7 @@ S3QL is developed in Python and requires python-devel 3.7 and above to be instal
 
 S3QL will install 12 binary programs in the system, and each program provides an independent function, as shown in the figure below.
 
-![](../../images/s3ql-bin.jpg)
+![](../images/s3ql-bin.jpg)
 
 #### JuiceFS
 

@@ -2,7 +2,7 @@
 
 [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/juicedata/juicefs/blob/main/LICENSE) [![Go Report](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=flat)](https://goreportcard.com/badge/github.com/juicedata/juicefs) [![Join Slack](https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack)](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA)
 
-![JuiceFS LOGO](../images/juicefs-logo.png)
+![JuiceFS LOGO](images/juicefs-logo.png)
 
 JuiceFS is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS  to store data, the data itself will be persisted in object storage (e.g. Amazon S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene. 
 
@@ -29,7 +29,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
 
 Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio), here is the result:
 
-[![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
+[![Sequential Read Write Benchmark](images/sequential-read-write-benchmark.svg)](images/sequential-read-write-benchmark.svg)
 
 It shows JuiceFS can provide 10X more throughput than the other two, read [more details](fio.md).
 
@@ -37,7 +37,7 @@ It shows JuiceFS can provide 10X more throughput than the other two, read [more 
 
 Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior), here is the result:
 
-[![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
+[![Metadata Benchmark](images/metadata-benchmark.svg)](images/metadata-benchmark.svg)
 
 It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](../en/mdtest.md).
 

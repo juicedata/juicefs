@@ -57,7 +57,7 @@ S3QL 采用 Python 开发，在安装时需要依赖 python-devel 3.7 及以上�
 
 S3QL 会在系统中安装 12 个二进制程序，每个程序都提供一个独立的功能，如下图。
 
-![](../../images/s3ql-bin.jpg)
+![](../images/s3ql-bin.jpg)
 
 #### JuiceFS
 

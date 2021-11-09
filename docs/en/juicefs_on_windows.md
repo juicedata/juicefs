@@ -12,7 +12,7 @@ You can download the latest pre-compiled binary program from [here](https://gith
 
 For ease of use, you can create a folder named `juicefs` in the root directory of `C:\`, and extract the `juicefs.exe` into this folder. Then add the path `C:\juicefs` to the environment variables of the system. After restarting the system to make the settings take effect, you can directly use the system's built-in `Command Prompt` or `PowerShell` to execute the `juicefs` command.
 
-![Windows ENV path](../images/windows-path-en.png)
+![Windows ENV path](images/windows-path-en.png)
 
 ## 3. Mount JuiceFS file system
 
@@ -32,7 +32,7 @@ Execute the following command to mount the `music` file system to `Z` drive:
 > juicefs.exe mount redis://192.168.1.8:6379/1 Z:
 ```
 
-![](../images/juicefs-on-windows-new.png)
+![](images/juicefs-on-windows-new.png)
 
 As shown in the figure above, JuiceFS client will mount the file system as a network drive as the specified system drive letter. You can change to another drive letter according to actual needs, but be careful not to use the drive letter that is already occupied.
 
@@ -55,11 +55,11 @@ ws.Run "C:\juicefs\juicefs.exe mount redis://192.168.1.8:6379/1 Z:",0
 
 Use the keyboard combination <kbd>Windows + R</kbd> to call up the running window
 
-![Windows run](../images/windows-run-startup.png)
+![Windows run](images/windows-run-startup.png)
 
 Enter `shell:startup` to open the Windows startup folder, and drag the edited vbs script into the folder.
 
-![Windows starup folder](../images/windows-mount-startup.png)
+![Windows starup folder](images/windows-mount-startup.png)
 
 ### 3. Cancel the boot mount
 
