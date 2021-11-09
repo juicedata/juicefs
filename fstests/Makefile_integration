@@ -10,7 +10,7 @@ xattrs:
 fsracer: secfs.test/tools/bin/fsracer
 	secfs.test/tools/bin/fsracer $(DURATION) /tmp/jfs >fsracer.log
 
-fsx: healthcheck secfs.test/tools/bin/fsx
+fsx: secfs.test/tools/bin/fsx
 	secfs.test/tools/bin/fsx -d $(DURATION) -p 10000 -F 100000 /tmp/jfs/fsx.out
 
 secfs.test/tools/bin/fsx: secfs.test
