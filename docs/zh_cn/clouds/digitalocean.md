@@ -40,7 +40,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 本文我们使用 DigitalOcean 的 Redis 6 数据库托管服务，区域选择 `新加坡`，选择与已存在的 Droplet 相同的 VPC 私有网络。创建 Redis 大概需要 5 分钟左右的时间， 我们跟随设置向导对数据库进行初始化设置。
 
-![](../../images/digitalocean-redis-guide.png)
+![](../images/digitalocean-redis-guide.png)
 
 默认情况下 Redis 允许所有入站连接，出于安全考虑，应该在设置向导的安全设置环节，在 `Add trusted sources` 中选中有权访问 Redis 的 Droplet，即仅允许选中的主机访问 Redis。
 
@@ -50,7 +50,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 Redis 的访问地址可以从控制台的 `Connection Details` 中找到，如果所有计算资源都在 DigitalOcea，则建议优先使用 VPC 私有网络进行连接，这样能最大程度的提升安全性。
 
-![](../../images/digitalocean-redis-url.png)
+![](../images/digitalocean-redis-url.png)
 
 ## 安装和使用
 

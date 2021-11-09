@@ -235,7 +235,7 @@ $ sudo kubectl apply -f ingress.yaml
 
 部署完成以后，使用相同局域网的主机访问任何一个集群节点，即可看到 Nginx 的欢迎页面。
 
-![](../images/k3s-nginx-welcome.png)
+![](images/k3s-nginx-welcome.png)
 
 接下来查看一下容器是否成功挂载了 JuiceFS，执行命令查看 pod 状态：
 

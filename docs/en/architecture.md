@@ -6,7 +6,7 @@ JuiceFS file system consists of three parts:
 2. **Data Storage**: Store the data itself, support local disk and object storage.
 3. **Metadata Engine**: Metadata corresponding to the stored data, supporting multiple engines such as Redis, MySQL, and SQLite;
 
-![](../images/juicefs-arch-new.png?lastModify=1620808685)
+![](images/juicefs-arch-new.png?lastModify=1620808685)
 
 As a file system, JuiceFS will process data and its corresponding metadata separately, the data will be stored in the object storage, and the metadata will be stored in the metadata engine.
 

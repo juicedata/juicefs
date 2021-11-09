@@ -4,13 +4,13 @@
 
 JuiceFS 对大文件会做多级拆分（参见 [JuiceFS 如何存储文件](../how_juicefs_store_files.md)），以提高读写效率。在处理写请求时，JuiceFS 先将数据写入 Client 的内存缓冲区，并在其中按 Chunk/Slice 的形式进行管理。Chunk 是根据文件内 offset 按 64 MiB 大小拆分的连续逻辑单元，不同 Chunk 之间完全隔离。每个 Chunk 内会根据应用写请求的实际情况进一步拆分成 Slices；当新的写请求与已有的 Slice 连续或有重叠时，会直接在该 Slice 上进行更新，否则就创建新的 Slice。Slice 是启动数据持久化的逻辑单元，其在 flush 时会先将数据按照默认 4 MiB 大小拆分成一个或多个连续的 Blocks，并上传到对象存储，每个 Block 对应一个 Object；然后再更新一次元数据，写入新的 Slice 信息。显然，在应用顺序写情况下，只需要**一个**不停增长的 Slice，最后仅 flush 一次即可；此时能最大化发挥出对象存储的写入性能。以一次简单的 [JuiceFS 基准测试](../performance_evaluation_guide.md)为例，其第一阶段是使用 1 MiB IO 顺序写 1 GiB 文件，数据在各个组件中的形式如下图所示：
 
-![write](../../images/internals-write.png)
+![write](../images/internals-write.png)
 
 > **注意**：图中的压缩和加密默认未开启。欲启用相关功能需要在 format 文件系统的时候添加 `--compress value` 或 `--encrypt-rsa-key value` 选项。
 
 这里再放一张测试过程中用 `stats` 命令记录的指标图，可以更直观地看到相关信息：
 
-![stats](../../images/internals-stats.png)
+![stats](../images/internals-stats.png)
 
 上图中第 1 阶段：
 
@@ -39,7 +39,7 @@ JuiceFS 对大文件会做多级拆分（参见 [JuiceFS 如何存储文件](../
 
 JuiceFS 在处理读请求时，一般会按照 4 MiB Block 对齐的方式去对象存储读取，实现一定的预读功能。同时，读取到的数据会写入本地 Cache 目录，以备后用（如指标图中的第 2 阶段，blockcache 有很高的写入带宽）。显然，在顺序读时，这些提前获取的数据都会被后续的请求访问到，Cache 命中率非常高，因此也能充分发挥出对象存储的读取性能。此时数据在各个组件中的流动如下图所示：
 
-![read](../../images/internals-read.png)
+![read](../images/internals-read.png)
 
 > **注意**：读取的对象到达 JuiceFS Client 后会先解密再解压缩，与写入时相反。当然，如果未启用相关功能则对应流程会直接跳过。
 

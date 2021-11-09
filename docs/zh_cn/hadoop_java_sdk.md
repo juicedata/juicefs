@@ -595,7 +595,7 @@ JuiceFS 可以使用本地磁盘作为缓存加速，以下数据是跑 4 次后
 | q9      | 87    | 112        | 89     |
 | q10     | 23    | 24         | 22     |
 
-![orc](../images/spark_ql_orc.png)
+![orc](images/spark_ql_orc.png)
 
 ##### Parquet
 
@@ -612,7 +612,7 @@ JuiceFS 可以使用本地磁盘作为缓存加速，以下数据是跑 4 次后
 | q9      | 85    | 97         | 77     |
 | q10     | 24    | 28         | 38     |
 
-![parquet](../images/spark_sql_parquet.png)
+![parquet](images/spark_sql_parquet.png)
 
 
 ## FAQ
