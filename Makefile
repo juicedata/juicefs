@@ -58,4 +58,5 @@ release:
 		juicedata/golang-cross:latest release --rm-dist
 
 test:
-	sudo go test -v -cover ./pkg/... ./cmd/...
+	sudo GO_EXE_PATH=$(which go) \
+       $GO_EXE_PATH test -v -cover ./pkg/... ./cmd/...
