@@ -148,10 +148,11 @@ func fsck(ctx *cli.Context) error {
 				if _, ok := blocks[key]; !ok {
 					if _, err := blob.Head(key); err != nil {
 						if _, ok := brokens[inode]; !ok {
-							if p, st := m.GetPath(meta.Background, inode); st == 0 {
+							if p, st := meta.GetPath(m, meta.Background, inode); st == 0 {
 								brokens[inode] = p
 							} else {
 								logger.Warnf("getpath of inode %d: %s", inode, st)
+								brokens[inode] = st.Error()
 							}
 						}
 						logger.Errorf("can't find block %s for file %s: %s", key, brokens[inode], err)
@@ -169,9 +170,10 @@ func fsck(ctx *cli.Context) error {
 	logger.Infof("Used by %d slices (%d bytes)", totalSlices, totalBytes)
 	if lost.Current() > 0 {
 		msg := fmt.Sprintf("%d objects are lost (%d bytes), %d broken files:\n", lost.Current(), lostBytes.Current(), len(brokens))
+		msg += fmt.Sprintf("%13s: PATH\n", "INODE")
 		var fileList []string
 		for i, p := range brokens {
-			fileList = append(fileList, fmt.Sprintf("%10d %s", i, p))
+			fileList = append(fileList, fmt.Sprintf("%13d: %s", i, p))
 		}
 		sort.Strings(fileList)
 		msg += strings.Join(fileList, "\n")
