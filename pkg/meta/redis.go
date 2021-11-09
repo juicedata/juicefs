@@ -2849,11 +2849,11 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 	}
 }
 
-func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno {
+func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
 	r.cleanupLeakedInodes(delete)
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
-	*slices = nil
+
 	var cursor uint64
 	p := r.rdb.Pipeline()
 	for {
@@ -2871,11 +2871,13 @@ func (r *redisMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showPr
 			return errno(err)
 		}
 		for _, cmd := range cmds {
+			key := cmd.(*redis.StringSliceCmd).Args()[1].(string)
+			inode, _ := strconv.Atoi(strings.Split(key[1:], "_")[0])
 			vals := cmd.(*redis.StringSliceCmd).Val()
 			ss := readSlices(vals)
 			for _, s := range ss {
 				if s.chunkid > 0 {
-					*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+					slices[Ino(inode)] = append(slices[Ino(inode)], Slice{Chunkid: s.chunkid, Size: s.size})
 					if showProgress != nil {
 						showProgress()
 					}

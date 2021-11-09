@@ -17,6 +17,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -100,16 +101,20 @@ func fsck(ctx *cli.Context) error {
 	logger.Infof("Listing all slices ...")
 	progress, bar := utils.NewProgressCounter("listed slices counter: ")
 	var c = meta.NewContext(0, 0, []uint32{0})
-	var slices []meta.Slice
-	r := m.ListSlices(c, &slices, false, bar.Increment)
+	slices := make(map[meta.Ino][]meta.Slice)
+	r := m.ListSlices(c, slices, false, bar.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
 	bar.SetTotal(0, true)
 	progress.Wait()
 
+	var totalSlices int
+	for _, ss := range slices {
+		totalSlices += len(ss)
+	}
 	progress, bar = utils.NewDynProgressBar("scanning slices: ", false)
-	bar.SetTotal(int64(len(slices)), false)
+	bar.SetTotal(int64(totalSlices), false)
 	lost := progress.Add(0,
 		utils.NewSpinner(),
 		mpb.PrependDecorators(
@@ -127,24 +132,33 @@ func fsck(ctx *cli.Context) error {
 		mpb.BarFillerClearOnComplete(),
 	)
 
-	keys := make(map[uint64]uint32)
 	var totalBytes uint64
-	for _, s := range slices {
-		bar.Increment()
-		keys[s.Chunkid] = s.Size
-		totalBytes += uint64(s.Size)
-		n := (s.Size - 1) / uint32(chunkConf.BlockSize)
-		for i := uint32(0); i <= n; i++ {
-			sz := chunkConf.BlockSize
-			if i == n {
-				sz = int(s.Size) - int(i)*chunkConf.BlockSize
-			}
-			key := fmt.Sprintf("%d_%d_%d", s.Chunkid, i, sz)
-			if _, ok := blocks[key]; !ok {
-				if _, err := blob.Head(key); err != nil {
-					logger.Errorf("can't find block %s: %s", key, err)
-					lost.Increment()
-					lostBytes.IncrBy(sz)
+	brokens := make(map[meta.Ino]string)
+	for inode, ss := range slices {
+		for _, s := range ss {
+			bar.Increment()
+			totalBytes += uint64(s.Size)
+			n := (s.Size - 1) / uint32(chunkConf.BlockSize)
+			for i := uint32(0); i <= n; i++ {
+				sz := chunkConf.BlockSize
+				if i == n {
+					sz = int(s.Size) - int(i)*chunkConf.BlockSize
+				}
+				key := fmt.Sprintf("%d_%d_%d", s.Chunkid, i, sz)
+				if _, ok := blocks[key]; !ok {
+					if _, err := blob.Head(key); err != nil {
+						if _, ok := brokens[inode]; !ok {
+							if p, st := meta.GetPath(m, meta.Background, inode); st == 0 {
+								brokens[inode] = p
+							} else {
+								logger.Warnf("getpath of inode %d: %s", inode, st)
+								brokens[inode] = st.Error()
+							}
+						}
+						logger.Errorf("can't find block %s for file %s: %s", key, brokens[inode], err)
+						lost.Increment()
+						lostBytes.IncrBy(sz)
+					}
 				}
 			}
 		}
@@ -153,9 +167,17 @@ func fsck(ctx *cli.Context) error {
 	lost.SetTotal(0, true)
 	lostBytes.SetTotal(0, true)
 	progress.Wait()
-	logger.Infof("Used by %d slices (%d bytes)", len(keys), totalBytes)
+	logger.Infof("Used by %d slices (%d bytes)", totalSlices, totalBytes)
 	if lost.Current() > 0 {
-		logger.Fatalf("%d object is lost (%d bytes)", lost.Current(), lostBytes.Current())
+		msg := fmt.Sprintf("%d objects are lost (%d bytes), %d broken files:\n", lost.Current(), lostBytes.Current(), len(brokens))
+		msg += fmt.Sprintf("%13s: PATH\n", "INODE")
+		var fileList []string
+		for i, p := range brokens {
+			fileList = append(fileList, fmt.Sprintf("%13d: %s", i, p))
+		}
+		sort.Strings(fileList)
+		msg += strings.Join(fileList, "\n")
+		logger.Fatal(msg)
 	}
 
 	return nil
