@@ -313,10 +313,6 @@ func setUp(metaUrl string,bucket string,mp string,flagMap map[string]string) int
 
 	mountStr := metaUrl + " " + mp
 	mountArgs := strings.Split(mountStr," ")
-	if len(mountArgs) < 2 {
-		log.Println("MOUNTPOINT is required")
-		return 1
-	}
 	go checkMountpointInTenSeconds(mountArgs[1],ch)
 	go mountSimpleMethod(mountArgs,flagMap)
 
