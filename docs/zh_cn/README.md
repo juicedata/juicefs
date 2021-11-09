@@ -59,10 +59,13 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
   - [JuiceFS 性能统计监控](stats_watcher.md)
   - [JuiceFS 故障诊断和分析](fault_diagnosis_and_analysis.md)
   - [JuiceFS 监控指标](p8s_metrics.md)
+  - [JuiceFS 性能评估指南](performance_evaluation_guide.md)
   - [FUSE 挂载选项](fuse_mount_options.md)
   - [JuiceFS 多主机间同步账户](sync_accounts_between_multiple_hosts.md)
   - [同类技术对比](comparison_with_others.md)
   - [用量统计](usage-tracking.md)
+- 开发者
+  - [读写请求处理流程介绍](internals/io_processing.md)
 - [应用场景&案例](case.md)
 - [常见问题](faq.md)
 - [发行注记](release_notes.md)

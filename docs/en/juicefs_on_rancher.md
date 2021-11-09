@@ -55,7 +55,7 @@ And then, you can see the new repository in the list.
 
 ![](../images/rancher-repos.jpg)
 
-Then click to open the `Apps & Marketplace` -> `Charts` from the left menu, type `juicefs` in the search bar, and then click to open `juicefs-csi-driver`.
+Then click to open the `Apps & Marketplace` → `Charts` from the left menu, type `juicefs` in the search bar, and then click to open `juicefs-csi-driver`.
 
 ![](../images/rancher-chart-search.jpg)
 
@@ -81,7 +81,7 @@ storageClasses:
       bucket: ''
       metaurl: 'redis://:mypasswd@efgh123.redis.rds.aliyuncs.com/1'
       name: myjfs
-      secretKey: '' 
+      secretKey: ''
       storage: ''
     enabled: true
     name: juicefs-sc
