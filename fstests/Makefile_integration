@@ -8,7 +8,7 @@ xattrs:
 	getfattr -n user.k /tmp/jfs/test_xattrs | grep -q user.k=
 
 fsracer: secfs.test/tools/bin/fsracer
-	secfs.test/tools/bin/fsracer $(DURATION) /tmp/jfs >fsracer-integration.log
+	secfs.test/tools/bin/fsracer $(DURATION) /tmp/jfs
 
 fsx: secfs.test/tools/bin/fsx
 	secfs.test/tools/bin/fsx -d $(DURATION) -p 10000 -F 100000 /tmp/jfs/fsx.out

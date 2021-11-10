@@ -9,7 +9,8 @@ xattrs:
 	make healthcheck
 
 fsracer: healthcheck secfs.test/tools/bin/fsracer
-	secfs.test/tools/bin/fsracer $(DURATION) /jfs 
+	ls -l /jfs
+	secfs.test/tools/bin/fsracer $(DURATION) /jfs
 	make healthcheck
 
 fsx: healthcheck secfs.test/tools/bin/fsx
