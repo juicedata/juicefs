@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: fsracer fsx xattrs
+all: fsx xattrs
 
 xattrs:
 	touch /jfs/test_xattrs
@@ -31,6 +31,8 @@ secfs.test/tools/bin/fsracer: secfs.test
 secfs.test:
 	git clone https://github.com/billziss-gh/secfs.test.git
 	make -C secfs.test >secfs.test-build.log 2>&1
+	pwd
+	ls -l
 
 flock:
 	git clone https://github.com/gofrs/flock.git
