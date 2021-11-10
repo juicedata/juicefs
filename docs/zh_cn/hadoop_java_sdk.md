@@ -320,7 +320,7 @@ CREATE TABLE IF NOT EXISTS person
 
 ## 监控指标收集
 
-JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus.io) 格式上报到 [Pushgateway](https://github.com/prometheus/pushgateway)，然后可以通过 [Grafana](https://grafana.com) 以及我们[预定义的模板](../en/grafana_template.json)来展示收集的运行指标。
+JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus.io) 格式上报到 [Pushgateway](https://github.com/prometheus/pushgateway)，然后可以通过 [Grafana](https://grafana.com) 以及我们[预定义的模板](https://s.juicefs.com/static/jfs/grafana-template-juicefs-v1.json)来展示收集的运行指标。
 
 请用如下参数启用指标收集：
 

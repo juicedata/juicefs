@@ -2,7 +2,7 @@
 
 JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system. The default API address is `http://localhost:9567/metrics`, you could custom the address through `--metrics` option when execute [`juicefs mount`](command_reference.md#juicefs-mount) or [`juicefs gateway`](command_reference.md#juicefs-gateway) command.
 
-JuiceFS also provides a [dashboard template](./grafana_template.json) for [Grafana](https://grafana.com), which can be
+JuiceFS also provides a [dashboard template](https://s.juicefs.com/static/jfs/grafana-template-juicefs-v1.json) for [Grafana](https://grafana.com), which can be
 imported to show the collected metrics in Prometheus.
 
 ## Use consul as registration center
