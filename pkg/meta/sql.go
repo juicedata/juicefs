@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -380,6 +381,7 @@ func (m *dbMeta) NewSession() error {
 	m.sid = v
 	logger.Debugf("session is %d", m.sid)
 
+	go m.autoBackup()
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
@@ -2927,4 +2929,63 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	s := m.engine.NewSession()
 	defer s.Close()
 	return mustInsert(s, beans...)
+}
+
+func (m *dbMeta) autoBackup() {
+	if m.conf.AutoBackup == 0 {
+		return
+	}
+	interval := int64(m.conf.AutoBackup / time.Second)
+	var lc, ls int64
+	for {
+		c := counter{Name: "backupLastComplete"}
+		if _, err := m.engine.Get(&c); err == nil {
+			lc = c.Value
+		}
+		c = counter{Name: "backupLastStart"}
+		if _, err := m.engine.Get(&c); err == nil {
+			ls = c.Value
+		}
+		now := time.Now().Unix()
+		if now-ls >= interval || ls > lc && now-ls >= interval/10 {
+			if err := m.backup(); err == nil {
+				logger.Info("backup metadata succeed")
+			} else {
+				logger.Warnf("backup metadata failed: %s", err)
+			}
+		}
+		time.Sleep(m.conf.AutoBackup / 60)
+	}
+}
+
+func (m *dbMeta) backup() error {
+	logger.Infof("backup metadata started")
+	now := time.Now()
+	if _, err := m.engine.Cols("value").Update(&counter{Value: now.Unix()}, &counter{Name: "backupLastStart"}); err != nil {
+		return fmt.Errorf("set timestamp of backupLastStart: %s", err)
+	}
+
+	key := now.Format("2006.01.02_15:04:05")
+	fpath := "/tmp/juicefs.meta_backup." + key
+	fp, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("create temp file %s: %s", fpath, err)
+	}
+	defer fp.Close()
+	if err = m.DumpMeta(fp); err != nil {
+		return fmt.Errorf("dump meta: %s", err)
+	}
+	if _, err = fp.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("seek to the start: %s", err)
+	}
+	if err = m.newMsg(PutObject, "meta_backup/"+key, fp); err != nil {
+		return fmt.Errorf("put object %s: %s", key, err)
+	}
+	if _, err := m.engine.Cols("value").Update(&counter{Value: time.Now().Unix()}, &counter{Name: "backupLastComplete"}); err != nil {
+		return fmt.Errorf("set timestamp of backupLastComplete: %s", err)
+	}
+	if err = os.Remove(fpath); err != nil {
+		return fmt.Errorf("remove temp file %s: %s", fpath, err)
+	}
+	return nil
 }

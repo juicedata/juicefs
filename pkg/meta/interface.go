@@ -38,6 +38,8 @@ const (
 	Info = 1003
 	// FillCache is a message to build cache for target directories/files
 	FillCache = 1004
+	// PutObject
+	PutObject = 1005
 )
 
 const (

@@ -16,6 +16,7 @@
 package main
 
 import (
+	"io"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -157,6 +158,7 @@ func mount(c *cli.Context) error {
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
 		ReadOnly:    readOnly,
 		OpenCache:   time.Duration(c.Float64("open-cache") * 1e9),
+		AutoBackup:  c.Duration("auto-backup"),
 		MountPoint:  mp,
 		Subdir:      c.String("subdir"),
 		MaxDeletes:  c.Int("max-deletes"),
@@ -222,6 +224,12 @@ func mount(c *cli.Context) error {
 		slices := args[0].([]meta.Slice)
 		chunkid := args[1].(uint64)
 		return vfs.Compact(chunkConf, store, slices, chunkid)
+	}))
+	m.OnMsg(meta.PutObject, meta.MsgCallback(func(args ...interface{}) error {
+		key := args[0].(string)
+		in := args[1].(io.Reader)
+		// TODO: compress
+		return blob.Put(key, in)
 	}))
 	conf := &vfs.Config{
 		Meta:       metaConf,
@@ -374,6 +382,11 @@ func clientFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
+		},
+		&cli.DurationFlag{
+			Name:  "auto-backup",
+			Value: time.Hour,
+			Usage: "interval to automatically backup metadata in the object storage",
 		},
 
 		&cli.BoolFlag{

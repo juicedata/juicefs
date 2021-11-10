@@ -24,6 +24,7 @@ type Config struct {
 	CaseInsensi bool
 	ReadOnly    bool
 	OpenCache   time.Duration
+	AutoBackup  time.Duration
 	MountPoint  string
 	Subdir      string
 	MaxDeletes  int
