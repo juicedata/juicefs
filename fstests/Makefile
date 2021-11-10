@@ -1,15 +1,13 @@
 DURATION ?= 10
 
-all: fsx xattrs
+all: fsracer fsx xattrs
 
 xattrs:
 	touch /jfs/test_xattrs
 	setfattr -n user.k -v value /jfs/test_xattrs
 	getfattr -n user.k /jfs/test_xattrs | grep -q user.k=
-	make healthcheck
 
 fsracer: healthcheck secfs.test/tools/bin/fsracer
-	ls -l /jfs
 	secfs.test/tools/bin/fsracer $(DURATION) /jfs
 	make healthcheck
 

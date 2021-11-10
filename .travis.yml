@@ -1,5 +1,5 @@
 os: linux
-dist: focal
+dist: xenial
 language: go
 services:
   - mysql
@@ -28,14 +28,7 @@ before_script:
   - sudo make -C fstests setup
 script:
   - make test
-  - sudo service mysql stop
-  - sudo service postgresql stop
-  - sudo rm -rf ./fstests/secfs.test/
-  - sudo ls -l ./fstests/
   - sudo DURATION=10 make -C fstests all
-  - sudo rm -rf ./fstests/secfs.test/
-  - sudo DURATION=10 make -C fstests fsracer
-  - sudo DURATION=10 make -C fstests fsracer
   - make -C fstests flock
   - make -C sdk/java/libjfs
   - cd sdk/java
