@@ -33,6 +33,7 @@ script:
   - sudo rm -rf ./fstests/secfs.test/
   - sudo ls -l ./fstests/
   - sudo DURATION=10 make -C fstests all
+  - sudo DURATION=10 make -C fstests fsracer
   - make -C fstests flock
   - make -C sdk/java/libjfs
   - cd sdk/java
