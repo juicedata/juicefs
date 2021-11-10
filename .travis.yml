@@ -30,6 +30,8 @@ script:
   - make test
   - sudo service mysql stop
   - sudo service postgresql stop
+  - sudo rm -rf ./fstests/secfs.test/
+  - sudo DURATION=10 make -C fstests all
   - make -C fstests flock
   - make -C sdk/java/libjfs
   - cd sdk/java
