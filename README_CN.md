@@ -1,4 +1,4 @@
-<p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="docs/images/juicefs-logo.png" width="50%" /></a></p>
+<p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="docs/zh_cn/images/juicefs-logo.png" width="50%" /></a></p>
 <p align="center">
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
@@ -38,15 +38,15 @@ JuiceFS 由三个部分组成：
 2. **数据存储**：存储数据本身，支持本地磁盘、对象存储；
 3. **元数据引擎**：存储数据对应的元数据，支持 Redis、MySQL、SQLite 等多种引擎；
 
-![JuiceFS Architecture](docs/images/juicefs-arch-new.png)
+![JuiceFS Architecture](docs/zh_cn/images/juicefs-arch-new.png)
 
 JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高性能的键值数据存储，非常适合存储元数据。与此同时，所有数据将通过 JuiceFS 客户端存储到对象存储中。[了解详情](docs/zh_cn/architecture.md)
 
-![JuiceFS Storage Format](docs/images/juicefs-storage-format-new.png)
+![JuiceFS Storage Format](docs/zh_cn/images/juicefs-storage-format-new.png)
 
 任何存入 JuiceFS 的文件都会被拆分成固定大小的 **"Chunk"**，默认的容量上限是 64 MiB。每个 Chunk 由一个或多个 **"Slice"** 组成，Slice 的长度不固定，取决于文件写入的方式。每个 Slice 又会被进一步拆分成固定大小的 **"Block"**，默认为 4 MiB。最后，这些 Block 会被存储到对象存储。与此同时，JuiceFS 会将每个文件以及它的 Chunks、Slices、Blocks 等元数据信息存储在元数据引擎中。[了解详情](docs/zh_cn/how_juicefs_store_files.md)
 
-![How JuiceFS stores your files](docs/images/how-juicefs-stores-files-new.png)
+![How JuiceFS stores your files](docs/zh_cn/images/how-juicefs-stores-files-new.png)
 
 使用 JuiceFS，文件最终会被拆分成 Chunks、Slices 和 Blocks 存储在对象存储。因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 高性能运作的秘诀！
 
@@ -116,13 +116,13 @@ Result: PASS
 
 JuiceFS 提供一个性能测试的子命令来帮助你了解它在你的环境中的性能表现：
 
-![JuiceFS Bench](docs/images/juicefs-bench.png)
+![JuiceFS Bench](docs/zh_cn/images/juicefs-bench.png)
 
 ### 顺序读写性能
 
 使用 [fio](https://github.com/axboe/fio) 测试了 JuiceFS、[EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的顺序读写性能，结果如下：
 
-![Sequential Read Write Benchmark](docs/images/sequential-read-write-benchmark.svg)
+![Sequential Read Write Benchmark](docs/zh_cn/images/sequential-read-write-benchmark.svg)
 
 上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](docs/zh_cn/fio.md)。
 
@@ -130,7 +130,7 @@ JuiceFS 提供一个性能测试的子命令来帮助你了解它在你的环境
 
 使用 [mdtest](https://github.com/hpc/ior) 测试了 JuiceFS、[EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的元数据性能，结果如下：
 
-![Metadata Benchmark](docs/images/metadata-benchmark.svg)
+![Metadata Benchmark](docs/zh_cn/images/metadata-benchmark.svg)
 
 上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](docs/zh_cn/mdtest.md)。
 
