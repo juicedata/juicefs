@@ -9,7 +9,6 @@ xattrs:
 	make healthcheck
 
 fsracer: healthcheck secfs.test/tools/bin/fsracer
-	ls -l /jfs
 	secfs.test/tools/bin/fsracer $(DURATION) /jfs >fsracer.log
 	make healthcheck
 
@@ -33,8 +32,6 @@ secfs.test/tools/bin/fsracer: secfs.test
 secfs.test:
 	git clone https://github.com/billziss-gh/secfs.test.git
 	make -C secfs.test >secfs.test-build.log 2>&1
-	pwd
-	ls -l
 
 flock:
 	git clone https://github.com/gofrs/flock.git
