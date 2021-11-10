@@ -28,6 +28,8 @@ before_script:
   - sudo make -C fstests setup
 script:
   - make test
+  - sudo service mysql stop
+  - sudo service postgres stop
   - sudo rm -rf ./fstests/secfs.test/
   - sudo DURATION=10 make -C fstests all
   - make -C fstests flock
