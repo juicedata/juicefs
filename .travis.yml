@@ -29,9 +29,7 @@ before_script:
 script:
   - make test
   - sudo service mysql stop
-  - sudo service postgres stop
-  - sudo rm -rf ./fstests/secfs.test/
-  - sudo DURATION=10 make -C fstests all
+  - sudo service postgresql stop
   - make -C fstests flock
   - make -C sdk/java/libjfs
   - cd sdk/java
