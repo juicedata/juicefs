@@ -1,3 +1,5 @@
+// +build !nofdb
+
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -18,13 +20,13 @@ package meta
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 )
 
 func init() {
 	Register("fdb", newKVMeta)
+	drivers["fdb"] = newFdbClient
 }
 
 type fdbTxn struct {
@@ -93,8 +95,11 @@ func (tx *fdbTxn) exist(prefix []byte) bool {
 	return key != nil && bytes.HasPrefix(key, prefix)
 }
 
-func (tx *fdbTxn) append(key []byte, value []byte) {
-	tx.t.AppendIfFits(fdb.Key(key), value)
+func (tx *fdbTxn) append(key []byte, value []byte) []byte {
+	// tx.t.AppendIfFits(fdb.Key(key), value)
+	new := append(tx.get(key), value...)
+	tx.set(key, new)
+	return new
 }
 
 func (tx *fdbTxn) set(key, value []byte) {
@@ -157,11 +162,11 @@ func (c *fdbClient) txn(f func(kvTxn) error) error {
 	return tx.Commit().Get()
 }
 
-func newFdbClient(driver, clusterFile string) (tkvClient, error) {
-	if driver != "fdb" {
-		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "fdb")
-	}
+func newFdbClient(clusterFile string) (tkvClient, error) {
 	fdb.MustAPIVersion(630)
 	db, err := fdb.OpenDatabase(clusterFile)
-	return &fdbClient{db}, err
+	if err != nil {
+		return nil, err
+	}
+	return withPrefix(&fdbClient{db}, []byte{0xFD}), nil
 }

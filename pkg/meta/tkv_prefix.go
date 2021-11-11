@@ -78,8 +78,8 @@ func (tx *prefixTxn) set(key, value []byte) {
 	tx.kvTxn.set(tx.realKey(key), value)
 }
 
-func (tx *prefixTxn) append(key []byte, value []byte) {
-	tx.kvTxn.append(tx.realKey(key), value)
+func (tx *prefixTxn) append(key []byte, value []byte) []byte {
+	return tx.kvTxn.append(tx.realKey(key), value)
 }
 
 func (tx *prefixTxn) incrBy(key []byte, value int64) int64 {
