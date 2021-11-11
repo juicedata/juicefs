@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -3038,35 +3039,6 @@ func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	}
 }
 
-func (m *redisMeta) dumpDir(inode Ino, showProgress func(totalIncr, currentIncr int64)) (map[string]*DumpedEntry, error) {
-	ctx := Background
-	keys, err := m.rdb.HGetAll(ctx, m.entryKey(inode)).Result()
-	if err != nil {
-		return nil, err
-	}
-	if showProgress != nil {
-		showProgress(int64(len(keys)), 0)
-	}
-	entries := make(map[string]*DumpedEntry)
-	for k, v := range keys {
-		typ, inode := m.parseEntry([]byte(v))
-		entry, err := m.dumpEntry(inode)
-		if err != nil {
-			return nil, err
-		}
-		if typ == TypeDirectory {
-			if entry.Entries, err = m.dumpDir(inode, showProgress); err != nil {
-				return nil, err
-			}
-		}
-		entries[k] = entry
-		if showProgress != nil {
-			showProgress(0, 1)
-		}
-	}
-	return entries, nil
-}
-
 func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	e := &DumpedEntry{}
 	a := []byte(m.snap.stringMap[m.inodeKey(inode)])
@@ -3109,27 +3081,63 @@ func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	return e
 }
 
-func (m *redisMeta) dumpDirFast(inode Ino, showProgress func(totalIncr, currentIncr int64)) map[string]*DumpedEntry {
-	keys := m.snap.hashMap[m.entryKey(inode)]
-	if showProgress != nil {
-		showProgress(int64(len(keys)), 0)
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, useSnap bool, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+	bwWrite := func(s string) {
+		if _, err := bw.WriteString(s); err != nil {
+			logger.Fatalf("Dump dir write err %s", err)
+		}
 	}
-	entries := make(map[string]*DumpedEntry)
-	for k, v := range keys {
-		typ, inode := m.parseEntry([]byte(v))
-		entry := m.dumpEntryFast(inode)
-		if entry == nil {
-			continue
+	var err error
+	var dirs map[string]string
+	if useSnap {
+		dirs = m.snap.hashMap[m.entryKey(inode)]
+	} else {
+		dirs, err = m.rdb.HGetAll(context.Background(), m.entryKey(inode)).Result()
+		if err != nil {
+			return err
 		}
+	}
+
+	if showProgress != nil {
+		showProgress(int64(len(dirs)), 0)
+	}
+	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
+		return err
+	}
+	var sortedName []string
+	for name := range dirs {
+		sortedName = append(sortedName, name)
+	}
+	sort.Slice(sortedName, func(i, j int) bool { return sortedName[i] < sortedName[j] })
+	for idx, name := range sortedName {
+		typ, inode := m.parseEntry([]byte(dirs[name]))
+		var entry *DumpedEntry
+		if useSnap {
+			entry = m.dumpEntryFast(inode)
+		} else {
+			entry, err = m.dumpEntry(inode)
+			if err != nil {
+				return err
+			}
+		}
+		entry.Name = name
 		if typ == TypeDirectory {
-			entry.Entries = m.dumpDirFast(inode, showProgress)
+			err = m.dumpDir(inode, entry, useSnap, bw, depth+2, showProgress)
+		} else {
+			err = entry.writeJSON(bw, depth+2)
 		}
-		entries[k] = entry
+		if err != nil {
+			return err
+		}
+		if idx != len(sortedName)-1 {
+			bwWrite(",")
+		}
 		if showProgress != nil {
 			showProgress(0, 1)
 		}
 	}
-	return entries
+	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
+	return nil
 }
 
 type snapStruct struct {
@@ -3263,8 +3271,9 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		}
 	}
 	if tree == nil {
-		logger.Fatalf("The entry of the root inode was not found")
+		return errors.New("The entry of the root inode was not found")
 	}
+	tree.Name = "FSTree"
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
@@ -3273,19 +3282,6 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
 	}
-	if m.root == 1 {
-		tree.Entries = m.dumpDirFast(m.root, showProgress)
-	} else {
-		if tree.Entries, err = m.dumpDir(m.root, showProgress); err != nil {
-			return err
-		}
-	}
-
-	if bar.Current() != total {
-		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
-	}
-	bar.SetTotal(0, true) // FIXME: current != total
-	progress.Wait()
 
 	format, err := m.Load()
 	if err != nil {
@@ -3339,7 +3335,28 @@ func (m *redisMeta) DumpMeta(w io.Writer) error {
 		dels,
 		tree,
 	}
-	return dm.writeJSON(w)
+	bw, err := dm.writeJsonWithOutTree(w)
+	if err != nil {
+		return err
+	}
+	if m.root == 1 {
+		err = m.dumpDir(m.root, tree, true, bw, 1, showProgress)
+	} else {
+		err = m.dumpDir(m.root, tree, false, bw, 1, showProgress)
+	}
+	if err != nil {
+		return err
+	}
+	if _, err = bw.WriteString("\n}\n"); err != nil {
+		return err
+	}
+
+	if bar.Current() != total {
+		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
+	}
+	bar.SetTotal(0, true) // FIXME: current != total
+	progress.Wait()
+	return bw.Flush()
 }
 
 func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
