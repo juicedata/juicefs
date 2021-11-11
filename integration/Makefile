@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: fsx xattrs
+all: fsx xattrs fsracer
 
 xattrs:
 	touch /tmp/jfs/test_xattrs
