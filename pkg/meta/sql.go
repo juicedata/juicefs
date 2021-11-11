@@ -2939,13 +2939,18 @@ func (m *dbMeta) autoBackup() {
 		var backup bool
 		err := m.txn(func(s *xorm.Session) error {
 			c := counter{Name: lastBackup}
-			_, err := s.Get(&c)
+			ok, err := s.Get(&c)
 			if err != nil {
 				return err
 			}
 			now := time.Now().Unix()
 			if now-c.Value > int64(m.conf.AutoBackup/time.Second) {
-				_, err = s.Cols("value").Update(&counter{Value: now}, &counter{Name: lastBackup})
+				c.Value = now
+				if ok {
+					_, err = s.Cols("value").Update(&c, &counter{Name: lastBackup})
+				} else {
+					_, err = s.Insert(&c)
+				}
 				backup = err == nil
 			}
 			return err
