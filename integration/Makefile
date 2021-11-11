@@ -1,9 +1,6 @@
 DURATION ?= 10
 
-all: test
-
-test:
-	ls -l
+all: fsx xattrs
 
 xattrs:
 	touch /tmp/jfs/test_xattrs

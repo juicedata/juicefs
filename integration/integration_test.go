@@ -402,7 +402,10 @@ func setUp(metaUrl string,bucket string,mp string,flagMap map[string]string) int
 	ch := make(chan int)
 	formatStr := metaUrl + " " + bucket
 	formatArgs := strings.Split(formatStr," ")
-	formatSimpleMethod(formatArgs)
+	formatErr := formatSimpleMethod(formatArgs)
+	if formatErr != nil {
+		log.Fatalf("format err %s\n",formatErr)
+	}
 
 	mountStr := metaUrl + " " + mp
 	mountArgs := strings.Split(mountStr," ")
