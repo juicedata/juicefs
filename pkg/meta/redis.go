@@ -3084,7 +3084,7 @@ func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, useSnap bool, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
-			logger.Fatalf("Dump dir write err %s", err)
+			panic(err)
 		}
 	}
 	var err error
@@ -3242,7 +3242,16 @@ func (m *redisMeta) makeSnap() error {
 	return nil
 }
 
-func (m *redisMeta) DumpMeta(w io.Writer) error {
+func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(error); ok {
+				err = e
+			} else {
+				err = errors.Errorf("DumpMeta error: %v", p)
+			}
+		}
+	}()
 	ctx := Background
 	zs, err := m.rdb.ZRangeWithScores(ctx, delfiles, 0, -1).Result()
 	if err != nil {
