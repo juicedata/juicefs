@@ -173,6 +173,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Strict:     true,
 		ReadOnly:   c.Bool("read-only"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
+		AutoBackup: c.Duration("auto-backup"),
 		MaxDeletes: c.Int("max-deletes"),
 	})
 	format, err := m.Load()
@@ -222,6 +223,16 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		slices := args[0].([]meta.Slice)
 		chunkid := args[1].(uint64)
 		return vfs.Compact(chunkConf, store, slices, chunkid)
+	}))
+	m.OnMsg(meta.Backup, meta.MsgCallback(func(args ...interface{}) error {
+		key, in, err := meta.DoBackup(m)
+		if in != nil {
+			defer in.Close()
+		}
+		if err != nil {
+			return err
+		}
+		return blob.Put(key, in)
 	}))
 	err = m.NewSession()
 	if err != nil {

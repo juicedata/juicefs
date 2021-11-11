@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"compress/gzip"
 	"io"
 	"os"
 	"strings"
@@ -38,8 +39,8 @@ const (
 	Info = 1003
 	// FillCache is a message to build cache for target directories/files
 	FillCache = 1004
-	// PutObject
-	PutObject = 1005
+	// Backup is a message to upload metadata to the object storage
+	Backup = 1005
 )
 
 const (
@@ -412,4 +413,32 @@ func GetPath(m Meta, ctx Context, inode Ino) (string, syscall.Errno) {
 		names[i], names[j] = names[j], names[i]
 	}
 	return "/" + strings.Join(names, "/"), 0
+}
+
+func DoBackup(m Meta) (key string, in io.ReadCloser, err error) {
+	logger.Infof("metadata backup: started")
+	defer func() {
+		if err == nil {
+			logger.Info("metadata backup succeed")
+		} else {
+			logger.Warnf("metadata backup failed: %s", err)
+		}
+	}()
+
+	name := "dump-" + time.Now().Format("2006-01-02-150405") + ".json.gz"
+	fpath := "/tmp/juicefs-meta-" + name
+	fp, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0444)
+	if err != nil {
+		return
+	}
+	defer os.Remove(fpath)
+	key, in = "meta/"+name, fp
+	zw := gzip.NewWriter(fp)
+	err = m.DumpMeta(zw)
+	zw.Close()
+	if err != nil {
+		return
+	}
+	_, err = fp.Seek(0, io.SeekStart)
+	return
 }

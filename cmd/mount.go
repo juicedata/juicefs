@@ -16,7 +16,6 @@
 package main
 
 import (
-	"io"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -225,10 +224,14 @@ func mount(c *cli.Context) error {
 		chunkid := args[1].(uint64)
 		return vfs.Compact(chunkConf, store, slices, chunkid)
 	}))
-	m.OnMsg(meta.PutObject, meta.MsgCallback(func(args ...interface{}) error {
-		key := args[0].(string)
-		in := args[1].(io.Reader)
-		// TODO: compress
+	m.OnMsg(meta.Backup, meta.MsgCallback(func(args ...interface{}) error {
+		key, in, err := meta.DoBackup(m)
+		if in != nil {
+			defer in.Close()
+		}
+		if err != nil {
+			return err
+		}
 		return blob.Put(key, in)
 	}))
 	conf := &vfs.Config{
@@ -386,7 +389,7 @@ func clientFlags() []cli.Flag {
 		&cli.DurationFlag{
 			Name:  "auto-backup",
 			Value: time.Hour,
-			Usage: "interval to automatically backup metadata in the object storage",
+			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
 		},
 
 		&cli.BoolFlag{

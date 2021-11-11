@@ -216,6 +216,7 @@ type javaConf struct {
 	MetaURL         string  `json:"meta"`
 	ReadOnly        bool    `json:"readOnly"`
 	OpenCache       float64 `json:"openCache"`
+	AutoBackup      int64   `json:"autoBackup"`
 	CacheDir        string  `json:"cacheDir"`
 	CacheSize       int64   `json:"cacheSize"`
 	FreeSpace       string  `json:"freeSpace"`
@@ -323,6 +324,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			Strict:     true,
 			ReadOnly:   jConf.ReadOnly,
 			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
+			AutoBackup: time.Duration(jConf.AutoBackup * 1e9),
 			MaxDeletes: jConf.MaxDeletes,
 		})
 		format, err := m.Load()
@@ -407,6 +409,16 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			slices := args[0].([]meta.Slice)
 			chunkid := args[1].(uint64)
 			return vfs.Compact(chunkConf, store, slices, chunkid)
+		}))
+		m.OnMsg(meta.Backup, meta.MsgCallback(func(args ...interface{}) error {
+			key, in, err := meta.DoBackup(m)
+			if in != nil {
+				defer in.Close()
+			}
+			if err != nil {
+				return err
+			}
+			return blob.Put(key, in)
 		}))
 		err = m.NewSession()
 		if err != nil {

@@ -73,6 +73,7 @@ const delfiles = "delfiles"
 const allSessions = "sessions"
 const sessionInfos = "sessionInfos"
 const sliceRefs = "sliceRef"
+const lastBackup = "lastBackup"
 
 type redisMeta struct {
 	sync.Mutex
@@ -3564,54 +3565,28 @@ func (r *redisMeta) autoBackup() {
 	if r.conf.AutoBackup == 0 {
 		return
 	}
-	interval := int(r.conf.AutoBackup / time.Second)
-	var lc, ls int
+	ctx := Background
 	for {
-		if str, err := r.rdb.Get(Background, "backupLastComplete").Result(); err == nil {
-			lc, _ = strconv.Atoi(str)
-		}
-		if str, err := r.rdb.Get(Background, "backupLastStart").Result(); err == nil {
-			ls, _ = strconv.Atoi(str)
-		}
-		now := int(time.Now().Unix())
-		if now-ls >= interval || ls > lc && now-ls >= interval/10 {
-			if err := r.backup(); err == nil {
-				logger.Info("backup metadata succeed")
-			} else {
-				logger.Warnf("backup metadata failed: %s", err)
-			}
-		}
 		time.Sleep(r.conf.AutoBackup / 60)
+		var backup bool
+		st := r.txn(ctx, func(tx *redis.Tx) error {
+			last, err := tx.Get(ctx, lastBackup).Int64()
+			if err != nil && err != redis.Nil {
+				return err
+			}
+			now := time.Now().Unix()
+			if now-last >= int64(r.conf.AutoBackup/time.Second) {
+				err = tx.Set(ctx, lastBackup, now, 0).Err()
+				backup = err == nil
+			}
+			return err
+		}, lastBackup)
+		if st != 0 {
+			logger.Warnf("failed to check timestamp of last backup: %s", st)
+			continue
+		}
+		if backup {
+			_ = r.newMsg(Backup)
+		}
 	}
-}
-
-func (r *redisMeta) backup() error {
-	logger.Infof("backup metadata started")
-	now := time.Now()
-	if err := r.rdb.Set(Background, "backupLastStart", now.Unix(), 0).Err(); err != nil {
-		return fmt.Errorf("set timestamp of backupLastStart: %s", err)
-	}
-	key := now.Format("2006.01.02_15:04:05")
-	fpath := "/tmp/juicefs.meta_backup." + key
-	fp, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("create temp file %s: %s", fpath, err)
-	}
-	defer fp.Close()
-	if err = r.DumpMeta(fp); err != nil {
-		return fmt.Errorf("dump meta: %s", err)
-	}
-	if _, err = fp.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("seek to the start: %s", err)
-	}
-	if err = r.newMsg(PutObject, "meta_backup/"+key, fp); err != nil {
-		return fmt.Errorf("put object %s: %s", key, err)
-	}
-	if err = r.rdb.Set(Background, "backupLastComplete", time.Now().Unix(), 0).Err(); err != nil {
-		return fmt.Errorf("set timestamp of backupLastComplete: %s", err)
-	}
-	if err = os.Remove(fpath); err != nil {
-		return fmt.Errorf("remove temp file %s: %s", fpath, err)
-	}
-	return nil
 }

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -2726,49 +2725,24 @@ func (m *kvMeta) autoBackup() {
 	if m.conf.AutoBackup == 0 {
 		return
 	}
-	interval := int64(m.conf.AutoBackup / time.Second)
 	for {
-		lc, _ := m.getCounter(m.counterKey("backupLastComplete"))
-		ls, _ := m.getCounter(m.counterKey("backupLastStart"))
-		now := time.Now().Unix()
-		if now-ls >= interval || ls > lc && now-ls >= interval/10 {
-			if err := m.backup(); err == nil {
-				logger.Info("backup metadata succeed")
-			} else {
-				logger.Warnf("backup metadata failed: %s", err)
-			}
-		}
 		time.Sleep(m.conf.AutoBackup / 60)
+		var backup bool
+		err := m.txn(func(tx kvTxn) error {
+			last := m.parseInt64(tx.get(m.counterKey(lastBackup)))
+			now := time.Now().Unix()
+			if now-last > int64(m.conf.AutoBackup/time.Second) {
+				tx.set(m.counterKey(lastBackup), m.packInt64(now))
+				backup = true
+			}
+			return nil
+		})
+		if err != nil {
+			logger.Warnf("failed to check timestamp of last backup: %s", err)
+			continue
+		}
+		if backup {
+			_ = m.newMsg(Backup)
+		}
 	}
-}
-
-func (m *kvMeta) backup() error {
-	logger.Infof("backup metadata started")
-	now := time.Now()
-	if err := m.setValue(m.counterKey("backupLastStart"), m.packInt64(now.Unix())); err != nil {
-		return fmt.Errorf("set timestamp of backupLastStart: %s", err)
-	}
-	key := now.Format("2006.01.02_15:04:05")
-	fpath := "/tmp/juicefs.meta_backup." + key
-	fp, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("create temp file %s: %s", fpath, err)
-	}
-	defer fp.Close()
-	if err = m.DumpMeta(fp); err != nil {
-		return fmt.Errorf("dump meta: %s", err)
-	}
-	if _, err = fp.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("seek to the start: %s", err)
-	}
-	if err = m.newMsg(PutObject, "meta_backup/"+key, fp); err != nil {
-		return fmt.Errorf("put object %s: %s", key, err)
-	}
-	if err = m.setValue(m.counterKey("backupLastComplete"), m.packInt64(time.Now().Unix())); err != nil {
-		return fmt.Errorf("set timestamp of backupLastComplete: %s", err)
-	}
-	if err = os.Remove(fpath); err != nil {
-		return fmt.Errorf("remove temp file %s: %s", fpath, err)
-	}
-	return nil
 }
