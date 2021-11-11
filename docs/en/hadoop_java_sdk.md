@@ -69,7 +69,7 @@ JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configuration
 
 Compilation depends on the following tools:
 
-- [Go](https://golang.org/) 1.15+
+- [Go](https://golang.org/) 1.16+
 - JDK 8+
 - [Maven](https://maven.apache.org/) 3.3+
 - git

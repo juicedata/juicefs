@@ -5,7 +5,7 @@ services:
   - mysql
   - postgresql
 go:
-  - "1.15"
+  - "1.16"
 branches:
   only:
     - main
