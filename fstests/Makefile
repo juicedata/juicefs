@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: fsx xattrs
+all: fsracer fsx xattrs
 
 xattrs:
 	touch /jfs/test_xattrs
@@ -8,7 +8,7 @@ xattrs:
 	getfattr -n user.k /jfs/test_xattrs | grep -q user.k=
 
 fsracer: healthcheck secfs.test/tools/bin/fsracer
-	secfs.test/tools/bin/fsracer $(DURATION) /jfs > fsracer.log
+	secfs.test/tools/bin/fsracer $(DURATION) /jfs >fsracer.log
 	make healthcheck
 
 fsx: healthcheck secfs.test/tools/bin/fsx
