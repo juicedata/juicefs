@@ -1,6 +1,9 @@
 DURATION ?= 10
 
-all: fsx xattrs
+all: test
+
+test:
+	ls -l
 
 xattrs:
 	touch /tmp/jfs/test_xattrs
@@ -8,7 +11,7 @@ xattrs:
 	getfattr -n user.k /tmp/jfs/test_xattrs | grep -q user.k=
 
 fsracer: secfs.test/tools/bin/fsracer
-	secfs.test/tools/bin/fsracer $(DURATION) /tmp/jfs
+	secfs.test/tools/bin/fsracer $(DURATION) /tmp/jfs > fsracer.log
 
 fsx: secfs.test/tools/bin/fsx
 	secfs.test/tools/bin/fsx -d $(DURATION) -p 10000 -F 100000 /tmp/jfs/fsx.out

@@ -8,7 +8,7 @@ xattrs:
 	getfattr -n user.k /jfs/test_xattrs | grep -q user.k=
 
 fsracer: healthcheck secfs.test/tools/bin/fsracer
-	secfs.test/tools/bin/fsracer $(DURATION) /jfs
+	secfs.test/tools/bin/fsracer $(DURATION) /jfs > fsracer.log
 	make healthcheck
 
 fsx: healthcheck secfs.test/tools/bin/fsx
