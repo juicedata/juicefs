@@ -75,13 +75,18 @@ type kvMeta struct {
 	freeChunks freeID
 }
 
-func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
-	p := strings.Index(addr, "/")
-	var prefix string
-	if p > 0 {
-		prefix = addr[p+1:]
-		addr = addr[:p]
+var drivers = make(map[string]func(string) (tkvClient, error))
+
+func newTkvClient(driver, addr string) (tkvClient, error) {
+	fn, ok := drivers[driver]
+	if !ok {
+		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "tikv")
+
 	}
+	return fn(addr)
+}
+
+func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	client, err := newTkvClient(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect driver %s addr %s: %s", driver, addr, err)
@@ -102,9 +107,6 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
-	}
-	if driver != "memkv" {
-		m.client = withPrefix(m.client, append([]byte(prefix), 0xFD))
 	}
 
 	m.root = 1

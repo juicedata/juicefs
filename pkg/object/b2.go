@@ -1,3 +1,5 @@
+// +build !nob2
+
 /*
  * JuiceFS, Copyright (C) 2018 Juicedata, Inc.
  *
