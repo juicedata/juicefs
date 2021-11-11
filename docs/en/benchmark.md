@@ -20,7 +20,7 @@ Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs
 
 [![Metadata Benchmark](images/metadata-benchmark.svg)](images/metadata-benchmark.svg)
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](../en/mdtest.md).
+It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](mdtest.md).
 
 ## Analyze performance
 
