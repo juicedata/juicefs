@@ -52,6 +52,11 @@ type msgCallbacks struct {
 	callbacks map[uint32]MsgCallback
 }
 
+type freeID struct {
+	next  uint64
+	maxid uint64
+}
+
 var logger = utils.GetLogger("juicefs")
 
 func errno(err error) syscall.Errno {

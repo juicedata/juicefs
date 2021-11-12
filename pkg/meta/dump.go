@@ -29,11 +29,6 @@ const (
 	jsonWriteSize = 64 << 10
 )
 
-type freeID struct {
-	next  uint64
-	maxid uint64
-}
-
 type DumpedCounters struct {
 	UsedSpace         int64 `json:"usedSpace"`
 	UsedInodes        int64 `json:"usedInodes"`

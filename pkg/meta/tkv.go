@@ -80,8 +80,7 @@ var drivers = make(map[string]func(string) (tkvClient, error))
 func newTkvClient(driver, addr string) (tkvClient, error) {
 	fn, ok := drivers[driver]
 	if !ok {
-		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "tikv")
-
+		return nil, fmt.Errorf("unsupported driver %s", driver)
 	}
 	return fn(addr)
 }
@@ -89,7 +88,7 @@ func newTkvClient(driver, addr string) (tkvClient, error) {
 func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	client, err := newTkvClient(driver, addr)
 	if err != nil {
-		return nil, fmt.Errorf("unable to connect driver %s addr %s: %s", driver, addr, err)
+		return nil, fmt.Errorf("connect to addr %s: %s", addr, err)
 	}
 	// TODO: ping server and check latency > Millisecond
 	// logger.Warnf("The latency to database is too high: %s", time.Since(start))
