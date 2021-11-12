@@ -28,11 +28,12 @@ import (
 
 func init() {
 	Register("memkv", newKVMeta)
+	drivers["memkv"] = newMockClient
 }
 
 const settingPath = "/tmp/juicefs.memkv.setting.json"
 
-func newMockClient() (tkvClient, error) {
+func newMockClient(addr string) (tkvClient, error) {
 	client := &memKV{items: btree.New(2), temp: &kvItem{}}
 	if d, err := ioutil.ReadFile(settingPath); err == nil {
 		var buffer map[string][]byte

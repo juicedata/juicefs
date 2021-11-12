@@ -1,3 +1,5 @@
+// +build !nosqlite !nomysql !nopg
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
