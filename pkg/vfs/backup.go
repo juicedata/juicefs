@@ -39,29 +39,28 @@ func Backup(blob object.ObjectStorage, interval time.Duration) {
 		}
 		var last time.Time
 		var err error
-		if len(value) == 17 { // len("2006-01-02-150405")
-			last, err = time.Parse("2006-01-02-150405", string(value))
+		if len(value) > 0 {
+			last, err = time.Parse(time.RFC3339, string(value))
 		}
 		if err != nil {
 			logger.Warnf("parse time value %s: %s", value, err)
 			continue
 		}
-		if now := time.Now().UTC(); now.Sub(last) >= interval {
+		if now := time.Now(); now.Sub(last) >= interval {
 			var iused, dummy uint64
 			_ = m.StatFS(ctx, &dummy, &dummy, &iused, &dummy)
-			if iused/(5<<20) > uint64(interval/time.Hour) {
+			if iused/5e6 > uint64(interval/time.Hour) {
 				logger.Infof("backup metadata skipped because of too many inodes: %d %s", iused, interval)
 				continue
 			}
-			val := now.Format("2006-01-02-150405")
-			if st := m.SetXattr(ctx, 1, key, []byte(val), meta.XattrCreateOrReplace); st != 0 {
+			if st := m.SetXattr(ctx, 1, key, []byte(now.Format(time.RFC3339)), meta.XattrCreateOrReplace); st != 0 {
 				logger.Warnf("setxattr inode 1 key %s: %s", key, st)
 				continue
 			}
 			go cleanupBackups(blob)
-			logger.Infof("backup metadata started")
-			if err = backup(blob, val); err == nil {
-				logger.Info("backup metadata succeed")
+			logger.Debugf("backup metadata started")
+			if err = backup(blob, now.UTC().Format("2006-01-02-150405")); err == nil {
+				logger.Infof("backup metadata succeed, used %s", time.Since(now))
 			} else {
 				logger.Warnf("backup metadata failed: %s", err)
 			}
