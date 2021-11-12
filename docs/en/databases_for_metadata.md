@@ -14,13 +14,13 @@ Through active interaction with community users, we found that many application 
 
 JuiceFS supported Metadata Engines:
 
-* [Redis](#Redis)
-* [PostgreSQL](#PostgreSQL)
-* [MySQL](#MySQL)
-* [MariaDB](#MariaDB)
-* [SQLite](#SQLite)
-* [TiKV](#TiKV)
-* [FoundationDB](#FoundationDB)
+* [Redis](#redis)
+* [PostgreSQL](#postgresql)
+* [MySQL](#mysql)
+* [MariaDB](#mariadb)
+* [SQLite](#sqlite)
+* [TiKV](#tikv)
+* [FoundationDB](#foundationdb)
 
 ## Redis
 

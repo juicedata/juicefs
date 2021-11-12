@@ -14,13 +14,13 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 
 JuiceFS 已经支持的元数据存储引擎：
 
-* [Redis](#Redis)
-* [PostgreSQL](#PostgreSQL)
-* [MySQL](#MySQL)
-* [MariaDB](#MariaDB)
-* [SQLite](#SQLite)
-* [TiKV](#TiKV)
-* [FoundationDB](#FoundationDB)
+* [Redis](#redis)
+* [PostgreSQL](#postgresql)
+* [MySQL](#mysql)
+* [MariaDB](#mariadb)
+* [SQLite](#sqlite)
+* [TiKV](#tikv)
+* [FoundationDB](#foundationdb)
 
 ## Redis
 
