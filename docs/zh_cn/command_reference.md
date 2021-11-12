@@ -124,40 +124,40 @@ juicefs format [command options] META-URL NAME
 
 #### 选项
 
-`--block-size value`\
+`--block-size value`<br />
 块大小；单位为 KiB (默认: 4096)
 
-`--capacity value`\
+`--capacity value`<br />
 容量配额；单位为 GiB (默认: 不限制)
 
-`--inodes value`\
+`--inodes value`<br />
 文件数配额 (默认: 不限制)
 
-`--compress value`\
+`--compress value`<br />
 压缩算法 (lz4, zstd, none) (默认: "none")
 
-`--shards value`\
+`--shards value`<br />
 将数据块根据名字哈希存入 N 个桶中 (默认: 0)
 
-`--storage value`\
+`--storage value`<br />
 对象存储类型 (例如 s3, gcs, oss, cos) (默认: "file")
 
-`--bucket value`\
+`--bucket value`<br />
 存储数据的桶路径 (默认: `"$HOME/.juicefs/local"` 或 `"/var/jfs"`)
 
-`--access-key value`\
+`--access-key value`<br />
 对象存储的 Access key (env `ACCESS_KEY`)
 
-`--secret-key value`\
+`--secret-key value`<br />
 对象存储的 Secret key (env `SECRET_KEY`)
 
-`--encrypt-rsa-key value`\
+`--encrypt-rsa-key value`<br />
 RSA 私钥的路径 (PEM)
 
-`--force`\
+`--force`<br />
 强制覆盖当前的格式化配置 (默认: false)
 
-`--no-update`\
+`--no-update`<br />
 不要修改已有的格式化配置 (默认: false)
 
 ### juicefs mount
@@ -174,85 +174,85 @@ juicefs mount [command options] META-URL MOUNTPOINT
 
 #### 选项
 
-`--metrics value`\
+`--metrics value`<br />
 监控数据导出地址 (默认: "127.0.0.1:9567")
 
-`--consul value`\
+`--consul value`<br />
 consul注册中心地址(默认: "127.0.0.1:8500")
 
-`--no-usage-report`\
+`--no-usage-report`<br />
 不发送使用量信息 (默认: false)
 
-`-d, --background`\
+`-d, --background`<br />
 后台运行 (默认: false)
 
-`--no-syslog`\
+`--no-syslog`<br />
 禁用系统日志 (默认: false)
 
-`--log value`\
+`--log value`<br />
 后台运行时日志文件的位置 (默认: `$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)
 
-`-o value`\
+`-o value`<br />
 其他 FUSE 选项 (参见[此文档](fuse_mount_options.md)来了解更多信息)
 
-`--attr-cache value`\
+`--attr-cache value`<br />
 属性缓存过期时间；单位为秒 (默认: 1)
 
-`--entry-cache value`\
+`--entry-cache value`<br />
 文件项缓存过期时间；单位为秒 (默认: 1)
 
-`--dir-entry-cache value`\
+`--dir-entry-cache value`<br />
 目录项缓存过期时间；单位为秒 (默认: 1)
 
-`--enable-xattr`\
+`--enable-xattr`<br />
 启用扩展属性 (xattr) 功能 (默认: false)
 
-`--get-timeout value`\
+`--get-timeout value`<br />
 下载一个对象的超时时间；单位为秒 (默认: 60)
 
-`--put-timeout value`\
+`--put-timeout value`<br />
 上传一个对象的超时时间；单位为秒 (默认: 60)
 
-`--io-retries value`\
+`--io-retries value`<br />
 网络异常时的重试次数 (默认: 30)
 
-`--max-uploads value`\
+`--max-uploads value`<br />
 上传对象的连接数 (默认: 20)
 
-`--buffer-size value`\
+`--buffer-size value`<br />
 读写缓存的总大小；单位为 MiB (默认: 300)
 
-`--upload-limit value`\
+`--upload-limit value`<br />
 上传带宽限制，单位为 Mbps (默认: 0)
 
-`--download-limit value`\
+`--download-limit value`<br />
 下载带宽限制，单位为 Mbps (默认: 0)
 
-`--prefetch value`\
+`--prefetch value`<br />
 并发预读 N 个块 (默认: 1)
 
-`--writeback`\
+`--writeback`<br />
 后台异步上传对象 (默认: false)
 
-`--cache-dir value`\
+`--cache-dir value`<br />
 本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)
 
-`--cache-size value`\
+`--cache-size value`<br />
 缓存对象的总大小；单位为 MiB (默认: 1024)
 
-`--free-space-ratio value`\
+`--free-space-ratio value`<br />
 最小剩余空间比例 (默认: 0.1)
 
-`--cache-partial-only`\
+`--cache-partial-only`<br />
 仅缓存随机小块读 (默认: false)
 
-`--read-only`\
+`--read-only`<br />
 只读模式 (默认: false)
 
-`--open-cache value`\
+`--open-cache value`<br />
 打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
 
-`--subdir value`\
+`--subdir value`<br />
 将某个子目录挂载为根 (默认: "")
 
 ### juicefs umount
@@ -269,7 +269,7 @@ juicefs umount [command options] MOUNTPOINT
 
 #### 选项
 
-`-f, --force`\
+`-f, --force`<br />
 强制卸载一个忙碌的文件系统 (默认: false)
 
 ### juicefs gateway
@@ -286,73 +286,73 @@ juicefs gateway [command options] META-URL ADDRESS
 
 #### 选项
 
-`--get-timeout value`\
+`--get-timeout value`<br />
 下载一个对象的超时时间；单位为秒 (默认: 60)
 
-`--put-timeout value`\
+`--put-timeout value`<br />
 上传一个对象的超时时间；单位为秒 (默认: 60)
 
-`--io-retries value`\
+`--io-retries value`<br />
 网络异常时的重试次数 (默认: 30)
 
-`--max-uploads value`\
+`--max-uploads value`<br />
 上传对象的连接数 (默认: 20)
 
-`--buffer-size value`\
+`--buffer-size value`<br />
 读写缓存的总大小；单位为 MiB (默认: 300)
 
-`--upload-limit value`\
+`--upload-limit value`<br />
 上传带宽限制，单位为 Mbps (默认: 0)
 
-`--download-limit value`\
+`--download-limit value`<br />
 下载带宽限制，单位为 Mbps (默认: 0)
 
-`--prefetch value`\
+`--prefetch value`<br />
 并发预读 N 个块 (默认: 1)
 
-`--writeback`\
+`--writeback`<br />
 后台异步上传对象 (默认: false)
 
-`--cache-dir value`\
+`--cache-dir value`<br />
 本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
 
-`--cache-size value`\
+`--cache-size value`<br />
 缓存对象的总大小；单位为 MiB (默认: 1024)
 
-`--free-space-ratio value`\
+`--free-space-ratio value`<br />
 最小剩余空间比例 (默认: 0.1)
 
-`--cache-partial-only`\
+`--cache-partial-only`<br />
 仅缓存随机小块读 (默认: false)
 
-`--read-only`\
+`--read-only`<br />
 只读模式 (默认: false)
 
-`--open-cache value`\
+`--open-cache value`<br />
 打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
 
-`--subdir value`\
+`--subdir value`<br />
 将某个子目录挂载为根 (默认: "")
 
-`--attr-cache value`\
+`--attr-cache value`<br />
 属性缓存过期时间；单位为秒 (默认: 1)
 
-`--entry-cache value`\
+`--entry-cache value`<br />
 文件项缓存过期时间；单位为秒 (默认: 0)
 
-`--dir-entry-cache value`\
+`--dir-entry-cache value`<br />
 目录项缓存过期时间；单位为秒 (默认: 1)
 
-`--access-log value`\
+`--access-log value`<br />
 访问日志的路径
 
-`--metrics value`\
+`--metrics value`<br />
 监控数据导出地址 (默认: "127.0.0.1:9567")
 
-`--no-usage-report`\
+`--no-usage-report`<br />
 不发送使用量信息 (默认: false)
 
-`--no-banner`\
+`--no-banner`<br />
 禁用 MinIO 的启动信息 (默认: false)
 
 ### juicefs sync
@@ -369,55 +369,55 @@ juicefs sync [command options] SRC DST
 
 #### 选项
 
-`--start KEY, -s KEY`\
+`--start KEY, -s KEY`<br />
 同步的第一个对象名
 
-`--end KEY, -e KEY`\
+`--end KEY, -e KEY`<br />
 同步的最后一个对象名
 
-`--threads value, -p value`\
+`--threads value, -p value`<br />
 并发线程数 (默认: 10)
 
-`--http-port PORT`\
+`--http-port PORT`<br />
 监听的 HTTP 端口 (默认: 6070)
 
-`--update, -u`\
+`--update, -u`<br />
 当源文件更新时修改已存在的文件 (默认: false)
 
-`--force-update, -f`\
+`--force-update, -f`<br />
 强制修改已存在的文件 (默认: false)
 
-`--perms`\
+`--perms`<br />
 保留权限设置 (默认: false)
 
-`--dirs`\
+`--dirs`<br />
 同步目录 (默认: false)
 
-`--dry`\
+`--dry`<br />
 不拷贝文件 (默认: false)
 
-`--delete-src, --deleteSrc`\
+`--delete-src, --deleteSrc`<br />
 同步后删除源存储的对象 (默认: false)
 
-`--delete-dst, --deleteDst`\
+`--delete-dst, --deleteDst`<br />
 删除目标存储下的不相关对象 (默认: false)
 
-`--exclude PATTERN`\
+`--exclude PATTERN`<br />
 跳过包含 PATTERN (POSIX正则表达式) 的对象名
 
-`--include PATTERN`\
+`--include PATTERN`<br />
 仅同步包含 PATTERN (POSIX正则表达式) 的对象名
 
-`--manager value`\
+`--manager value`<br />
 管理者地址
 
-`--worker value`\
+`--worker value`<br />
 工作节点列表 (使用逗号分隔)
 
-`--bwlimit value`\
+`--bwlimit value`<br />
 限制最大带宽；单位为 Mbps (0 表示不限制) (默认: 0)
 
-`--no-https`\
+`--no-https`<br />
 不要使用 HTTPS (默认: false)
 
 ### juicefs rmr
@@ -446,7 +446,7 @@ juicefs info [command options] PATH or INODE
 
 #### 选项
 
-`--inode, -i`\
+`--inode, -i`<br />
 使用 inode 号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认: false)
 
 
@@ -464,19 +464,19 @@ juicefs bench [command options] PATH
 
 #### 选项
 
-`--block-size value`\
+`--block-size value`<br />
 块大小；单位为 MiB (默认: 1)
 
-`--big-file-size value`\
+`--big-file-size value`<br />
 大文件大小；单位为 MiB (默认: 1024)
 
-`--small-file-size value`\
+`--small-file-size value`<br />
 小文件大小；单位为 MiB (默认: 0.1)
 
-`--small-file-count value`\
+`--small-file-count value`<br />
 小文件数量 (默认: 100)
 
-`--threads value, -p value`\
+`--threads value, -p value`<br />
 并发线程数 (默认: 1)
 
 ### juicefs gc
@@ -493,13 +493,13 @@ juicefs gc [command options] META-URL
 
 #### 选项
 
-`--delete`\
+`--delete`<br />
 删除泄漏的对象 (默认: false)
 
-`--compact`\
+`--compact`<br />
 整理所有文件的碎片 (默认: false).
 
-`--threads value`\
+`--threads value`<br />
 用于删除泄漏对象的线程数 (默认: 10)
 
 ### juicefs fsck
@@ -528,16 +528,16 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 
 #### 选项
 
-`--uid value, -u value`\
+`--uid value, -u value`<br />
 仅跟踪指定 UIDs (用逗号分隔)
 
-`--gid value, -g value`\
+`--gid value, -g value`<br />
 仅跟踪指定 GIDs (用逗号分隔)
 
-`--pid value, -p value`\
+`--pid value, -p value`<br />
 仅跟踪指定 PIDs (用逗号分隔)
 
-`--interval value`\
+`--interval value`<br />
 显示间隔；在回放模式中将其设置为 0 可以立即得到整体的统计结果；单位为秒 (默认: 2)
 
 ### juicefs stats
@@ -554,19 +554,19 @@ juicefs stats [command options] MOUNTPOINT
 
 #### 选项
 
-`--schema value`\
+`--schema value`<br />
 
 控制输出内容的标题字符串 (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go) (默认: "ufmco")
 
-`--interval value`\
+`--interval value`<br />
 
 更新间隔；单位为秒 (默认: 1)
 
-`--verbosity value`\
+`--verbosity value`<br />
 
 详细级别；通常 0 或 1 已足够 (默认: 0)
 
-`--nocolor`\
+`--nocolor`<br />
 
 禁用颜色显示 (默认: false)
 
@@ -584,7 +584,7 @@ juicefs status [command options] META-URL
 
 #### 选项
 
-`--session value, -s value`\
+`--session value, -s value`<br />
 展示指定会话 (sid) 的具体信息 (默认: 0)
 
 ### juicefs warmup
@@ -601,13 +601,13 @@ juicefs warmup [command options] [PATH ...]
 
 #### 选项
 
-`--file value, -f value`\
+`--file value, -f value`<br />
 指定一个包含一组路径的文件
 
-`--threads value, -p value`\
+`--threads value, -p value`<br />
 并发的工作线程数 (默认: 50)
 
-`--background, -b`\
+`--background, -b`<br />
 后台运行 (默认: false)
 
 ### juicefs dump
@@ -626,7 +626,7 @@ juicefs dump [command options] META-URL [FILE]
 
 #### 选项
 
-`--subdir value`\
+`--subdir value`<br />
 只导出一个子目录。
 
 ### juicefs load
