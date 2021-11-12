@@ -1,3 +1,5 @@
+// +build !nosqlite !nomysql !nopg
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -30,11 +32,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/juicedata/juicefs/pkg/utils"
-	_ "github.com/lib/pq"
-	"github.com/mattn/go-sqlite3"
-	_ "github.com/mattn/go-sqlite3"
 	"xorm.io/xorm"
 	"xorm.io/xorm/names"
 )
@@ -129,10 +127,6 @@ type delfile struct {
 	Expire int64  `xorm:"notnull"`
 }
 
-type freeID struct {
-	next  uint64
-	maxid uint64
-}
 type dbMeta struct {
 	sync.Mutex
 	conf   *Config
@@ -156,12 +150,6 @@ type dbMeta struct {
 	freeMu     sync.Mutex
 	freeInodes freeID
 	freeChunks freeID
-}
-
-func init() {
-	Register("mysql", newSQLMeta)
-	Register("sqlite3", newSQLMeta)
-	Register("postgres", newSQLMeta)
 }
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
@@ -549,6 +537,8 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return err
 }
 
+var errBusy error
+
 func (m *dbMeta) shouldRetry(err error) bool {
 	if err == nil {
 		return false
@@ -560,7 +550,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 	msg := err.Error()
 	switch m.engine.DriverName() {
 	case "sqlite3":
-		return errors.Is(err, sqlite3.ErrBusy) || strings.Contains(msg, "database is locked")
+		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
 	case "mysql":
 		// MySQL, MariaDB or TiDB
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later")
