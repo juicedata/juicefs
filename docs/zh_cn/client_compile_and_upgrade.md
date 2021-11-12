@@ -14,7 +14,7 @@ $ git clone https://github.com/juicedata/juicefs.git
 
 JuiceFS 客户端使用 Go 语言开发，因此在编译之前，你提前在本地安装好依赖的工具：
 
-- [Go](https://golang.org) 1.15+
+- [Go](https://golang.org) 1.16+
 - GCC 5.4+
 
 > **提示**：对于中国地区用户，为了加快获取 Go 模块的速度，建议通过 `GOPROXY` 环境变量设置国内的镜像服务器。例如：[Goproxy China](https://github.com/goproxy/goproxy.cn)。
