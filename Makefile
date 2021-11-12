@@ -29,6 +29,9 @@ juicefs.lite: Makefile cmd/*.go pkg/*/*.go
 juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 	go build -tags ceph -ldflags="$(LDFLAGS)"  -o juicefs.ceph ./cmd
 
+juicefs.fdb: Makefile cmd/*.go pkg/*/*.go
+	go build -tags fdb -ldflags="$(LDFLAGS)"  -o juicefs.fdb ./cmd
+
 /usr/local/include/winfsp:
 	sudo mkdir -p /usr/local/include/winfsp
 	sudo cp hack/winfsp_headers/* /usr/local/include/winfsp
