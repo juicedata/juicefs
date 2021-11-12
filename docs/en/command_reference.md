@@ -2,9 +2,9 @@
 
 There are many commands to help you manage your file system. This page provides a detailed reference for these commands.
 
-* [Overview](#Overview)
-* [Auto Completion](#Auto-Completion)
-* [Commands](#Commands)
+* [Overview](#overview)
+* [Auto Completion](#auto-completion)
+* [Commands](#commands)
    * [juicefs format](#juicefs-format)
    * [juicefs mount](#juicefs-mount)
    * [juicefs umount](#juicefs-umount)
