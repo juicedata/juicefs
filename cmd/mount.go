@@ -276,14 +276,16 @@ func mount(c *cli.Context) error {
 	}
 	installHandler(mp)
 	metricsAddr := exposeMetrics(m, c)
-
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
-
+	if d := c.Duration("backup-meta"); d > 0 {
+		go vfs.Backup(blob, d)
+	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
+
 	mount_main(conf, m, store, c)
 	return m.CloseSession()
 }
@@ -374,6 +376,11 @@ func clientFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
+		},
+		&cli.DurationFlag{
+			Name:  "backup-meta",
+			Value: time.Hour,
+			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
 		},
 
 		&cli.BoolFlag{
