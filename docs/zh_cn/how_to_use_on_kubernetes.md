@@ -6,14 +6,14 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见
 - [JuiceFS CSI Driver](#juicefs-csi-driver)
   - [版本要求](#版本要求)
   - [安装](#安装)
-    - [通过 Helm 安装](#通过-Helm-安装)
+    - [通过 Helm 安装](#通过-helm-安装)
     - [通过 kubectl 安装](#通过-kubectl-安装)
-  - [使用 JuiceFS 为 Pod 提供存储](#使用-JuiceFS-为-Pod-提供存储)
-  - [创建更多 JuiceFS 存储类](#创建更多-JuiceFS-存储类)
+  - [使用 JuiceFS 为 Pod 提供存储](#使用-juicefs-为-pod-提供存储)
+  - [创建更多 JuiceFS 存储类](#创建更多-juicefs-存储类)
   - [监控](#监控)
-    - [配置 Prometheus 服务](#配置-Prometheus-服务)
-    - [配置 Grafana 仪表盘](#配置-Grafana-仪表盘)
-- [在容器中挂载 JuiceFS](#在容器中挂载-JuiceFS)
+    - [配置 Prometheus 服务](#配置-prometheus-服务)
+    - [配置 Grafana 仪表盘](#配置-grafana-仪表盘)
+- [在容器中挂载 JuiceFS](#在容器中挂载-juicefs)
 
 
 ## JuiceFS CSI Driver

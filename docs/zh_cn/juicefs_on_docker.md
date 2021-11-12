@@ -4,8 +4,8 @@
 
 ## 目录
 1. [卷映射](#1-卷映射)
-2. [Docker Volume Plugin](#2-Docker-Volume-Plugin)
-3. [在 Docker 容器中挂载 JuiceFS](#3-在-Docker-容器中挂载-JuiceFS)
+2. [Docker Volume Plugin](#2-docker-volume-plugin)
+3. [在 Docker 容器中挂载 JuiceFS](#3-在-docker-容器中挂载-juicefs)
 
 ## 1. 卷映射
 
