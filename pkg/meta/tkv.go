@@ -1997,15 +1997,15 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
-		needCompact = (len(val)/sliceBytes)%100 == 99
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
+		needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
+		m.updateStats(newSpace, 0)
 	}
 	return errno(err)
 }
