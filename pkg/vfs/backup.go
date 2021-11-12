@@ -31,7 +31,7 @@ func Backup(blob object.ObjectStorage, interval time.Duration) {
 	ctx := meta.Background
 	key := "lastBackup"
 	for {
-		time.Sleep(interval / 20)
+		time.Sleep(interval / 10)
 		var value []byte
 		if st := m.GetXattr(ctx, 1, key, &value); st != 0 && st != meta.ENOATTR {
 			logger.Warnf("getxattr inode 1 key %s: %s", key, st)
@@ -47,6 +47,12 @@ func Backup(blob object.ObjectStorage, interval time.Duration) {
 			continue
 		}
 		if now := time.Now().UTC(); now.Sub(last) >= interval {
+			var iused, dummy uint64
+			_ = m.StatFS(ctx, &dummy, &dummy, &iused, &dummy)
+			if iused/(5<<20) > uint64(interval/time.Hour) {
+				logger.Infof("backup metadata skipped because of too many inodes: %d %s", iused, interval)
+				continue
+			}
 			val := now.Format("2006-01-02-150405")
 			if st := m.SetXattr(ctx, 1, key, []byte(val), meta.XattrCreateOrReplace); st != 0 {
 				logger.Warnf("setxattr inode 1 key %s: %s", key, st)
