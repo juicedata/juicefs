@@ -33,7 +33,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
@@ -101,12 +100,12 @@ func mountSimpleMethod(url, mp string) {
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
 		MaxUpload: 20,
-		BufferSize: 300 << 20
+		BufferSize: 300 << 20,
 		CacheSize: 1024,
 		CacheDir:  "memory",
 	}
 
-	
+
 	blob, err := createSimpleStorage(format)
 	if err != nil {
 		log.Fatalf("object storage: %s", err)
