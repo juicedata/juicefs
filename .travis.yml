@@ -1,5 +1,5 @@
 os: linux
-dist: focal
+dist: xenial
 language: go
 services:
   - mysql
