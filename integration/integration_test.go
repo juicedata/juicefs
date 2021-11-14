@@ -85,6 +85,26 @@ func formatSimpleMethod(url, name string) {
 }
 
 func mountSimpleMethod(url, mp string) {
+
+	fi, err := os.Stat(mp)
+	if !strings.Contains(mp, ":") && err != nil {
+		if err := os.MkdirAll(mp, 0777); err != nil {
+			if os.IsExist(err) {
+				// a broken mount point, umount it
+				if err = doSimpleUmount(mp, true); err != nil {
+					log.Fatalf("umount %s: %s", mp, err)
+				}
+			} else {
+				log.Fatalf("create %s: %s", mp, err)
+			}
+		}
+	} else if err == nil && fi.Size() == 0 {
+		// a broken mount point, umount it
+		if err = doSimpleUmount(mp, true); err != nil {
+			log.Fatalf("umount %s: %s", mp, err)
+		}
+	}
+
 	metaConf := &meta.Config{
 		Retries:    10,
 		Strict:     true,
@@ -99,8 +119,6 @@ func mountSimpleMethod(url, mp string) {
 	chunkConf := chunk.Config{
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
-		MaxUpload: 20,
-		BufferSize: 300 << 20,
 		CacheSize: 1024,
 		CacheDir:  "memory",
 	}
