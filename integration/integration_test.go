@@ -133,6 +133,12 @@ func mountSimpleMethod(url, mp string) {
 	log.Printf("Data use %s", blob)
 	store := chunk.NewCachedStore(blob, chunkConf)
 
+	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
+		slices := args[0].([]meta.Slice)
+		chunkid := args[1].(uint64)
+		return vfs.Compact(chunkConf, store, slices, chunkid)
+	}))
+
 	conf := &vfs.Config{
 		Meta:       metaConf,
 		Format:     format,
