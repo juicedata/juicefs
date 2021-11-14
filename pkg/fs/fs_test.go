@@ -43,7 +43,8 @@ func TestFileSystem(t *testing.T) {
 	}
 	objStore, _ := object.CreateStorage("mem", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk)
-	fs, _ := NewFileSystem(&conf, m, store)
+	v := vfs.NewVFS(&conf, m, store)
+	fs, _ := NewFileSystem(v)
 	ctx := meta.Background
 	fs.Delete(ctx, "/hello")
 	f, err := fs.Create(ctx, "/hello", 0644)

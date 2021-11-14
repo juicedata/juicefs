@@ -251,7 +251,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		go usage.ReportUsage(m, "gateway "+version.Version())
 	}
 
-	jfs, err := fs.NewFileSystem(conf, m, store)
+	jfs, err := fs.NewFileSystem(vfs.NewVFS(conf, m, store))
 	if err != nil {
 		logger.Fatalf("Initialize failed: %s", err)
 	}

@@ -26,14 +26,7 @@ import (
 )
 
 var (
-	handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Name: "fuse_open_handlers",
-		Help: "number of open files and directories.",
-	}, func() float64 {
-		hanleLock.Lock()
-		defer hanleLock.Unlock()
-		return float64(len(handles))
-	})
+	handlersGause prometheus.GaugeFunc
 )
 
 type handle struct {
@@ -154,33 +147,27 @@ func (h *handle) Close() {
 	}
 }
 
-var (
-	handles   map[Ino][]*handle
-	hanleLock sync.Mutex
-	nextfh    uint64 = 1
-)
-
-func newHandle(inode Ino) *handle {
-	hanleLock.Lock()
-	defer hanleLock.Unlock()
-	fh := nextfh
+func (v *VFS) newHandle(inode Ino) *handle {
+	v.hanleM.Lock()
+	defer v.hanleM.Unlock()
+	fh := v.nextfh
 	h := &handle{inode: inode, fh: fh}
-	nextfh++
+	v.nextfh++
 	h.cond = utils.NewCond(h)
-	handles[inode] = append(handles[inode], h)
+	v.handles[inode] = append(v.handles[inode], h)
 	return h
 }
 
-func findAllHandles(inode Ino) []*handle {
-	hanleLock.Lock()
-	defer hanleLock.Unlock()
-	return handles[inode]
+func (v *VFS) findAllHandles(inode Ino) []*handle {
+	v.hanleM.Lock()
+	defer v.hanleM.Unlock()
+	return v.handles[inode]
 }
 
-func findHandle(inode Ino, fh uint64) *handle {
-	hanleLock.Lock()
-	defer hanleLock.Unlock()
-	for _, f := range handles[inode] {
+func (v *VFS) findHandle(inode Ino, fh uint64) *handle {
+	v.hanleM.Lock()
+	defer v.hanleM.Unlock()
+	for _, f := range v.handles[inode] {
 		if f.fh == fh {
 			return f
 		}
@@ -188,43 +175,43 @@ func findHandle(inode Ino, fh uint64) *handle {
 	return nil
 }
 
-func releaseHandle(inode Ino, fh uint64) {
-	hanleLock.Lock()
-	defer hanleLock.Unlock()
-	hs := handles[inode]
+func (v *VFS) releaseHandle(inode Ino, fh uint64) {
+	v.hanleM.Lock()
+	defer v.hanleM.Unlock()
+	hs := v.handles[inode]
 	for i, f := range hs {
 		if f.fh == fh {
 			if i+1 < len(hs) {
 				hs[i] = hs[len(hs)-1]
 			}
 			if len(hs) > 1 {
-				handles[inode] = hs[:len(hs)-1]
+				v.handles[inode] = hs[:len(hs)-1]
 			} else {
-				delete(handles, inode)
+				delete(v.handles, inode)
 			}
 			break
 		}
 	}
 }
 
-func newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
-	h := newHandle(inode)
+func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
+	h := v.newHandle(inode)
 	h.Lock()
 	defer h.Unlock()
 	switch flags & O_ACCMODE {
 	case syscall.O_RDONLY:
-		h.reader = reader.Open(inode, length)
+		h.reader = v.Reader.Open(inode, length)
 	case syscall.O_WRONLY: // FUSE writeback_cache mode need reader even for WRONLY
 		fallthrough
 	case syscall.O_RDWR:
-		h.reader = reader.Open(inode, length)
-		h.writer = writer.Open(inode, length)
+		h.reader = v.Reader.Open(inode, length)
+		h.writer = v.Writer.Open(inode, length)
 	}
 	return h.fh
 }
 
-func releaseFileHandle(ino Ino, fh uint64) {
-	h := findHandle(ino, fh)
+func (v *VFS) releaseFileHandle(ino Ino, fh uint64) {
+	h := v.findHandle(ino, fh)
 	if h != nil {
 		h.Lock()
 		// rwlock_wait_for_unlock:
@@ -234,6 +221,6 @@ func releaseFileHandle(ino Ino, fh uint64) {
 		h.writing = 1 // for remove
 		h.Unlock()
 		h.Close()
-		releaseHandle(ino, fh)
+		v.releaseHandle(ino, fh)
 	}
 }

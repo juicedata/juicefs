@@ -18,9 +18,7 @@ package main
 import (
 	"strings"
 
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/juicedata/juicefs/pkg/winfsp"
 	"github.com/urfave/cli/v2"
@@ -53,11 +51,12 @@ func makeDaemon(c *cli.Context, name, mp string) error {
 	return nil
 }
 
-func mount_main(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, c *cli.Context) {
-	jfs, err := fs.NewFileSystem(conf, m, store)
+func mount_main(v *vfs.VFS, c *cli.Context) {
+	jfs, err := fs.NewFileSystem(v)
 	if err != nil {
 		logger.Fatalf("Initialize failed: %s", err)
 	}
+	conf := v.Conf
 	winfsp.Serve(conf, jfs, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"),
 		strings.HasSuffix(conf.Mountpoint, ":"))
 }

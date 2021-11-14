@@ -428,7 +428,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		if !jConf.NoUsageReport {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())
 		}
-		jfs, err := fs.NewFileSystem(conf, m, store)
+		jfs, err := fs.NewFileSystem(vfs.NewVFS(conf, m, store))
 		if err != nil {
 			logger.Errorf("Initialize failed: %s", err)
 			return nil
