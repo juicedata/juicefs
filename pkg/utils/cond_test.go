@@ -58,20 +58,24 @@ func TestCond(t *testing.T) {
 	}
 
 	// test Broadcast to wake up all goroutines
-	var N = 100
+	var N = 1000
 	done2 := make(chan bool, N)
+	var wg sync.WaitGroup
 	for i := 0; i < N; i++ {
+		wg.Add(1)
 		go func() {
 			m.Lock()
+			wg.Done()
 			timeout := l.WaitWithTimeout(time.Second)
 			m.Unlock()
 			done2 <- timeout
 		}()
 	}
+	wg.Wait()
 	m.Lock()
 	l.Broadcast()
 	m.Unlock()
-	deadline := time.NewTimer(time.Millisecond * 100)
+	deadline := time.NewTimer(time.Millisecond * 500)
 	for i := 0; i < N; i++ {
 		select {
 		case timeout := <-done2:
