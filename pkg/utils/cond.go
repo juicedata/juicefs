@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// Cond is similar to sync.Cond, but you can wait without a timeout.
+// Cond is similar to sync.Cond, but you can wait with a timeout.
 type Cond struct {
 	L       sync.Locker
 	signal  chan bool
@@ -69,11 +69,12 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 	t := timerPool.Get().(*time.Timer)
 	t.Reset(d)
 	defer func() {
-		c.waiters--
 		t.Stop()
 		timerPool.Put(t)
+		c.L.Lock()
+		c.waiters--
+
 	}()
-	defer c.L.Lock()
 	select {
 	case <-c.signal:
 		return false
@@ -84,5 +85,5 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 
 // NewCond creates a Cond.
 func NewCond(lock sync.Locker) *Cond {
-	return &Cond{lock, make(chan bool, 1), 0}
+	return &Cond{lock, make(chan bool), 0}
 }
