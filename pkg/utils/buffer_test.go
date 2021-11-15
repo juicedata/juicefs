@@ -17,11 +17,12 @@ package utils
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 )
 
 func assertEqual(t *testing.T, a interface{}, b interface{}) {
-	if a == b {
+	if reflect.DeepEqual(a, b) {
 		return
 	}
 	message := fmt.Sprintf("%v != %v", a, b)
@@ -35,13 +36,21 @@ func TestBuffer(t *testing.T) {
 	b.Put32(3)
 	b.Put64(4)
 	b.Put([]byte("hello"))
+	assertEqual(t, b.Len(), 20)
 
 	r := ReadBuffer(b.Bytes())
 	assertEqual(t, r.Get8(), uint8(1))
 	assertEqual(t, r.Get16(), uint16(2))
 	assertEqual(t, r.Get32(), uint32(3))
 	assertEqual(t, r.Get64(), uint64(4))
+	assertEqual(t, r.HasMore(), true)
+	assertEqual(t, r.Left(), 5)
+	if len(r.Buffer()) != 5 {
+		t.Fatal("rest buffer should be 5 bytes")
+	}
 	assertEqual(t, string(r.Get(5)), "hello")
+	r.Seek(10)
+	assertEqual(t, r.Left(), 10)
 }
 
 func TestSetBytes(t *testing.T) {
