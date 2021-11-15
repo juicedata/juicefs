@@ -92,22 +92,30 @@ func backup(blob object.ObjectStorage, name string) error {
 
 func cleanupBackups(blob object.ObjectStorage) {
 	blob = object.WithPrefix(blob, "meta/")
-	objChan, err := osync.ListAll(blob, "", "")
+	ch, err := osync.ListAll(blob, "", "")
 	if err != nil {
 		logger.Warnf("listAll prefix meta/: %s", err)
 		return
 	}
 	var objs []string
-	for o := range objChan {
+	for o := range ch {
 		objs = append(objs, o.Key())
 	}
-	sort.Strings(objs)
 
-	// Cleanup policy:
-	// 1. keep all backups within 2 days
-	// 2. keep one backup each day within 2 weeks
-	// 3. keep one backup each week within 2 months
-	// 4. keep one backup each month for those before 2 months
+	toDel := findDeletes(objs)
+	for _, o := range toDel {
+		if err = blob.Delete(o); err != nil {
+			logger.Warnf("delete object %s: %s", o, err)
+		}
+	}
+}
+
+// Cleanup policy:
+// 1. keep all backups within 2 days
+// 2. keep one backup each day within 2 weeks
+// 3. keep one backup each week within 2 months
+// 4. keep one backup each month for those before 2 months
+func findDeletes(objs []string) []string {
 	var days = 2
 	edge := time.Now().UTC().AddDate(0, 0, -days)
 	next := func() {
@@ -123,14 +131,16 @@ func cleanupBackups(blob object.ObjectStorage) {
 		}
 	}
 
+	var toDel []string
+	sort.Strings(objs)
 	for i := len(objs) - 1; i >= 0; i-- {
 		if len(objs[i]) != 30 { // len("dump-2006-01-02-150405.json.gz")
-			logger.Warnf("bad object for metadata backup: %s", objs[i])
+			logger.Warnf("bad object for metadata backup %s: length %d", objs[i], len(objs[i]))
 			continue
 		}
 		ts, err := time.Parse("2006-01-02-150405", objs[i][5:22])
 		if err != nil {
-			logger.Warnf("bad object for metadata backup: %s", objs[i])
+			logger.Warnf("bad object for metadata backup %s: %s", objs[i], err)
 			continue
 		}
 
@@ -138,9 +148,8 @@ func cleanupBackups(blob object.ObjectStorage) {
 			for next(); ts.Before(edge); next() {
 			}
 		} else if days > 2 {
-			if err = blob.Delete(objs[i]); err != nil {
-				logger.Warnf("delete object %s: %s", objs[i], err)
-			}
+			toDel = append(toDel, objs[i])
 		}
 	}
+	return toDel
 }
