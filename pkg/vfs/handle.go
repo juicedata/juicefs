@@ -22,11 +22,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/prometheus/client_golang/prometheus"
-)
-
-var (
-	handlersGause prometheus.GaugeFunc
 )
 
 type handle struct {

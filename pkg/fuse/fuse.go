@@ -417,11 +417,12 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 }
 
 // Serve starts a server to serve requests from FUSE.
-func Serve(conf *vfs.Config, v *vfs.VFS, options string, xattrs bool) error {
+func Serve(v *vfs.VFS, options string, xattrs bool) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
 		logger.Warnf("setpriority: %s", err)
 	}
 
+	conf := v.Conf
 	imp := newFileSystem(conf, v)
 
 	var opt fuse.MountOptions

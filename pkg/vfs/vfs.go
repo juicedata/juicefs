@@ -63,8 +63,6 @@ var (
 		Help:    "size of write distributions.",
 		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
 	})
-	usedBufferSize prometheus.GaugeFunc
-	storeCacheSize prometheus.GaugeFunc
 )
 
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
@@ -914,29 +912,15 @@ type VFS struct {
 	handles map[Ino][]*handle
 	hanleM  sync.Mutex
 	nextfh  uint64
+
+	handlersGause  prometheus.GaugeFunc
+	usedBufferSize prometheus.GaugeFunc
+	storeCacheSize prometheus.GaugeFunc
 }
 
 func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 	reader := NewDataReader(conf, m, store)
 	writer := NewDataWriter(conf, m, store, reader)
-	usedBufferSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Name: "used_buffer_size_bytes",
-		Help: "size of currently used buffer.",
-	}, func() float64 {
-		if dw, ok := writer.(*dataWriter); ok {
-			return float64(dw.usedBufferSize())
-		}
-		return 0.0
-	})
-	storeCacheSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Name: "store_cache_size_bytes",
-		Help: "size of store cache.",
-	}, func() float64 {
-		if dw, ok := writer.(*dataWriter); ok {
-			return float64(dw.store.UsedMemory())
-		}
-		return 0.0
-	})
 
 	v := &VFS{
 		Conf:    conf,
@@ -947,7 +931,8 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 		handles: make(map[Ino][]*handle),
 		nextfh:  1,
 	}
-	handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+
+	v.handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "fuse_open_handlers",
 		Help: "number of open files and directories.",
 	}, func() float64 {
@@ -955,15 +940,33 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 		defer v.hanleM.Unlock()
 		return float64(len(v.handles))
 	})
+	v.usedBufferSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "used_buffer_size_bytes",
+		Help: "size of currently used buffer.",
+	}, func() float64 {
+		if dw, ok := writer.(*dataWriter); ok {
+			return float64(dw.usedBufferSize())
+		}
+		return 0.0
+	})
+	v.storeCacheSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "store_cache_size_bytes",
+		Help: "size of store cache.",
+	}, func() float64 {
+		if dw, ok := writer.(*dataWriter); ok {
+			return float64(dw.store.UsedMemory())
+		}
+		return 0.0
+	})
+	_ = prometheus.Register(v.handlersGause)
+	_ = prometheus.Register(v.usedBufferSize)
+	_ = prometheus.Register(v.storeCacheSize)
 	return v
 }
 
 func InitMetrics() {
 	prometheus.MustRegister(readSizeHistogram)
 	prometheus.MustRegister(writtenSizeHistogram)
-	prometheus.MustRegister(usedBufferSize)
-	prometheus.MustRegister(storeCacheSize)
-	prometheus.MustRegister(handlersGause)
 	prometheus.MustRegister(opsDurationsHistogram)
 	prometheus.MustRegister(compactSizeHistogram)
 }

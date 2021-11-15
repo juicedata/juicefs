@@ -1,5 +1,3 @@
-// +build windows
-
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -22,6 +20,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -561,10 +560,16 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	return
 }
 
-func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int, caseInsensi bool) error {
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int) error {
 	var jfs juice
+	conf := v.Conf
 	jfs.conf = conf
-	jfs.fs = fs_
+	jfs.vfs = v
+	var err error
+	jfs.fs, err = fs.NewFileSystem(conf, v.M, v.Store)
+	if err != nil {
+		logger.Fatalf("Initialize FileSystem failed: %s", err)
+	}
 	jfs.asRoot = asRoot
 	jfs.delayClose = delayClose
 	host := fuse.NewFileSystemHost(&jfs)
@@ -580,7 +585,7 @@ func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo flo
 	if fuseOpt != "" {
 		options += "," + fuseOpt
 	}
-	host.SetCapCaseInsensitive(caseInsensi)
+	host.SetCapCaseInsensitive(strings.HasSuffix(conf.Mountpoint, ":"))
 	host.SetCapReaddirPlus(true)
 	logger.Debugf("mount point: %s, options: %s", conf.Mountpoint, options)
 	_ = host.Mount(conf.Mountpoint, []string{"-o", options})

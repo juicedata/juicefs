@@ -16,9 +16,6 @@
 package main
 
 import (
-	"strings"
-
-	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/juicedata/juicefs/pkg/winfsp"
 	"github.com/urfave/cli/v2"
@@ -52,13 +49,7 @@ func makeDaemon(c *cli.Context, name, mp string) error {
 }
 
 func mount_main(v *vfs.VFS, c *cli.Context) {
-	jfs, err := fs.NewFileSystem(v)
-	if err != nil {
-		logger.Fatalf("Initialize failed: %s", err)
-	}
-	conf := v.Conf
-	winfsp.Serve(conf, jfs, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"),
-		strings.HasSuffix(conf.Mountpoint, ":"))
+	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
 }
 
 func checkMountpoint(name, mp string) {

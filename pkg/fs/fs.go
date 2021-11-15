@@ -30,6 +30,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
@@ -152,13 +153,13 @@ type File struct {
 	entries  []*meta.Entry
 }
 
-func NewFileSystem(v *vfs.VFS) (*FileSystem, error) {
-	conf := v.Conf
+func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSystem, error) {
+	reader := vfs.NewDataReader(conf, m, d)
 	fs := &FileSystem{
-		m:       v.M,
+		m:       m,
 		conf:    conf,
-		reader:  v.Reader,
-		writer:  v.Writer,
+		reader:  reader,
+		writer:  vfs.NewDataWriter(conf, m, d, reader),
 		entries: make(map[meta.Ino]map[string]*entryCache),
 		attrs:   make(map[meta.Ino]*attrCache),
 	}
