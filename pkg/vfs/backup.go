@@ -24,6 +24,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
+	osync "github.com/juicedata/juicefs/pkg/sync"
 )
 
 // Backup metadata periodically in the object storage
@@ -90,7 +91,8 @@ func backup(blob object.ObjectStorage, name string) error {
 }
 
 func cleanupBackups(blob object.ObjectStorage) {
-	objChan, err := blob.ListAll("meta/", "")
+	blob = object.WithPrefix(blob, "meta/")
+	objChan, err := osync.ListAll(blob, "", "")
 	if err != nil {
 		logger.Warnf("listAll prefix meta/: %s", err)
 		return
@@ -122,11 +124,11 @@ func cleanupBackups(blob object.ObjectStorage) {
 	}
 
 	for i := len(objs) - 1; i >= 0; i-- {
-		if len(objs[i]) != 35 { // len("meta/dump-2006-01-02-150405.json.gz")
+		if len(objs[i]) != 30 { // len("dump-2006-01-02-150405.json.gz")
 			logger.Warnf("bad object for metadata backup: %s", objs[i])
 			continue
 		}
-		ts, err := time.Parse("2006-01-02-150405", objs[i][10:27])
+		ts, err := time.Parse("2006-01-02-150405", objs[i][5:22])
 		if err != nil {
 			logger.Warnf("bad object for metadata backup: %s", objs[i])
 			continue
