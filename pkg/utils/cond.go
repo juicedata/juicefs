@@ -37,14 +37,10 @@ func (c *Cond) Signal() {
 
 // Broadcast wake up all the waiters.
 func (c *Cond) Broadcast() {
-	for {
-		c.L.Lock()
-		n := c.waiters
+	for c.waiters > 0 {
 		c.L.Unlock()
-		if n == 0 {
-			return
-		}
-		c.signal <- true
+		c.Signal()
+		c.L.Lock()
 	}
 }
 
