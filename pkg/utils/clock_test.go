@@ -1,5 +1,3 @@
-// +build !windows
-
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -17,25 +15,19 @@
 
 package utils
 
-import "syscall"
+import (
+	"testing"
+	"time"
+)
 
-type Rusage struct {
-	syscall.Rusage
-}
-
-// GetUtime returns the user time in seconds.
-func (ru *Rusage) GetUtime() float64 {
-	return float64(ru.Utime.Sec) + float64(ru.Utime.Usec)/1e6
-}
-
-// GetStime returns the system time in seconds.
-func (ru *Rusage) GetStime() float64 {
-	return float64(ru.Stime.Sec) + float64(ru.Stime.Usec)/1e6
-}
-
-// GetRusage returns CPU usage of current process.
-func GetRusage() *Rusage {
-	var ru syscall.Rusage
-	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
-	return &Rusage{ru}
+func TestClock(t *testing.T) {
+	now := Now()
+	if time.Since(now).Microseconds() > 1000 {
+		t.Fatal("time is not accurate")
+	}
+	c1 := Clock()
+	c2 := Clock()
+	if c2-c1 > time.Microsecond || c2-c1 == 0 {
+		t.Fatalf("clock is not accurate: %s", c2-c1)
+	}
 }
