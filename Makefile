@@ -58,5 +58,5 @@ release:
 		juicedata/golang-cross:latest release --rm-dist
 
 test:
-	go test -v -cover -race -covermode=atomic ./pkg/... ./cmd/...  -coverprofile=cov1.out
-	sudo `which go` test -v -cover -race -covermode=atomic ./integration/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
+	go test -v -cover ./pkg/... ./cmd/...  -coverprofile=cov1.out
+    sudo `which go` test ./integration/... -cover -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
