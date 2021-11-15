@@ -19,7 +19,7 @@ import "testing"
 
 func TestMemUsage(t *testing.T) {
 	virt, rss := MemoryUsage()
-	if virt < (1<<20) || rss < (1<<20) {
+	if virt < (1<<20) || rss < (1<<20) || rss > (100<<20) {
 		t.Fatalf("invalid memory usage: virt %d, rss %d", virt, rss)
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
+ * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
  * This program is free software: you can use, redistribute, and/or modify
  * it under the terms of the GNU Affero General Public License, version 3
@@ -27,7 +27,7 @@ func TestClock(t *testing.T) {
 	}
 	c1 := Clock()
 	c2 := Clock()
-	if c2-c1 > time.Microsecond {
+	if c2-c1 > time.Microsecond || c2-c1 == 0 {
 		t.Fatalf("clock is not accurate: %s", c2-c1)
 	}
 }

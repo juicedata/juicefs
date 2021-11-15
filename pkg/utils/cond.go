@@ -44,10 +44,7 @@ func (c *Cond) Broadcast() {
 		if n == 0 {
 			return
 		}
-		select {
-		case c.signal <- true:
-		default:
-		}
+		c.signal <- true
 	}
 }
 
@@ -55,8 +52,8 @@ func (c *Cond) Broadcast() {
 func (c *Cond) Wait() {
 	c.waiters++
 	c.L.Unlock()
-	defer c.L.Lock()
 	<-c.signal
+	c.L.Lock()
 	c.waiters--
 }
 
