@@ -28,6 +28,7 @@ type Cond struct {
 }
 
 // Signal wakes up a waiter.
+// It's allowed but not required for the caller to hold L.
 func (c *Cond) Signal() {
 	select {
 	case c.signal <- true:
@@ -36,6 +37,7 @@ func (c *Cond) Signal() {
 }
 
 // Broadcast wake up all the waiters.
+// It's required for the caller to hold L.
 func (c *Cond) Broadcast() {
 	for c.waiters > 0 {
 		c.L.Unlock()
