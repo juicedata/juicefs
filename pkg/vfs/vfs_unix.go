@@ -41,7 +41,7 @@ type Statfs struct {
 
 func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err int) {
 	var totalspace, availspace, iused, iavail uint64
-	_ = v.M.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
+	_ = v.Meta.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
 	var bsize uint64 = 0x10000
 	blocks := totalspace / bsize
 	bavail := blocks - (totalspace-availspace+bsize-1)/bsize
@@ -94,7 +94,7 @@ func (v *VFS) Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
 		return
 	}
 
-	err = v.M.Access(ctx, ino, uint8(mmask), nil)
+	err = v.Meta.Access(ctx, ino, uint8(mmask), nil)
 	return
 }
 
@@ -151,7 +151,7 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 	var attr = &Attr{}
 	if (set & (meta.SetAttrMode | meta.SetAttrUID | meta.SetAttrGID | meta.SetAttrAtime | meta.SetAttrMtime | meta.SetAttrSize)) == 0 {
 		// change other flags or change nothing
-		err = v.M.SetAttr(ctx, ino, 0, 0, attr)
+		err = v.Meta.SetAttr(ctx, ino, 0, 0, attr)
 		if err != 0 {
 			return
 		}
@@ -174,7 +174,7 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 			attr.Mtime = mtime
 			attr.Mtimensec = mtimensec
 		}
-		err = v.M.SetAttr(ctx, ino, uint16(set), 0, attr)
+		err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 		if err != 0 {
 			return
 		}
@@ -215,7 +215,7 @@ func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *u
 		err = syscall.EBADF
 		return
 	}
-	err = v.M.Getlk(ctx, ino, owner, typ, start, len, pid)
+	err = v.Meta.Getlk(ctx, ino, owner, typ, start, len, pid)
 	return
 }
 
@@ -238,7 +238,7 @@ func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end ui
 	h.addOp(ctx)
 	defer h.removeOp(ctx)
 
-	err = v.M.Setlk(ctx, ino, owner, block, typ, start, end, pid)
+	err = v.Meta.Setlk(ctx, ino, owner, block, typ, start, end, pid)
 	if err == 0 {
 		h.Lock()
 		if typ != syscall.F_UNLCK {
@@ -276,7 +276,7 @@ func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, b
 	}
 	h.addOp(ctx)
 	defer h.removeOp(ctx)
-	err = v.M.Flock(ctx, ino, owner, typ, block)
+	err = v.Meta.Flock(ctx, ino, owner, typ, block)
 	if err == 0 {
 		h.Lock()
 		if typ == syscall.F_UNLCK {

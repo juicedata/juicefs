@@ -75,7 +75,7 @@ func (v *VFS) fillCache(paths []string, concurrent int) {
 func (v *VFS) resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
 	p = strings.Trim(p, "/")
 	ctx := meta.Background
-	err := v.M.Resolve(ctx, 1, p, inode, attr)
+	err := v.Meta.Resolve(ctx, 1, p, inode, attr)
 	if err != syscall.ENOTSUP {
 		return err
 	}
@@ -94,16 +94,16 @@ func (v *VFS) resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
 			break
 		}
 		if i > 0 {
-			if err = v.M.Access(ctx, parent, MODE_MASK_R|MODE_MASK_X, attr); err != 0 {
+			if err = v.Meta.Access(ctx, parent, MODE_MASK_R|MODE_MASK_X, attr); err != 0 {
 				return err
 			}
 		}
-		if err = v.M.Lookup(ctx, parent, name, inode, attr); err != 0 {
+		if err = v.Meta.Lookup(ctx, parent, name, inode, attr); err != 0 {
 			return err
 		}
 		if attr.Typ == meta.TypeSymlink {
 			var buf []byte
-			if err = v.M.ReadLink(ctx, *inode, &buf); err != 0 {
+			if err = v.Meta.ReadLink(ctx, *inode, &buf); err != 0 {
 				return err
 			}
 			target := string(buf)
@@ -119,7 +119,7 @@ func (v *VFS) resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
 	}
 	if parent == 1 {
 		*inode = parent
-		if err = v.M.GetAttr(ctx, *inode, attr); err != 0 {
+		if err = v.Meta.GetAttr(ctx, *inode, attr); err != 0 {
 			return err
 		}
 	}
@@ -135,7 +135,7 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 		inode = pending[l]
 		pending = pending[:l]
 		var entries []*meta.Entry
-		r := v.M.Readdir(meta.Background, inode, 1, &entries)
+		r := v.Meta.Readdir(meta.Background, inode, 1, &entries)
 		if r == 0 {
 			for _, f := range entries {
 				name := string(f.Name)
@@ -151,7 +151,7 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 		} else {
 			// assume it's a file
 			var attr Attr
-			if v.M.GetAttr(meta.Background, inode, &attr) == 0 {
+			if v.Meta.GetAttr(meta.Background, inode, &attr) == 0 {
 				if attr.Typ != meta.TypeSymlink {
 					todo <- _file{inode, attr.Length}
 				}
@@ -163,7 +163,7 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 func (v *VFS) fillInode(inode Ino, size uint64) error {
 	var slices []meta.Slice
 	for indx := uint64(0); indx*meta.ChunkSize < size; indx++ {
-		if st := v.M.Read(meta.Background, inode, uint32(indx), &slices); st != 0 {
+		if st := v.Meta.Read(meta.Background, inode, uint32(indx), &slices); st != 0 {
 			return fmt.Errorf("Failed to get slices of inode %d index %d: %d", inode, indx, st)
 		}
 		for _, s := range slices {

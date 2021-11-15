@@ -150,7 +150,7 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 	case meta.Rmr:
 		inode := Ino(r.Get64())
 		name := string(r.Get(int(r.Get8())))
-		r := meta.Remove(v.M, ctx, inode, name)
+		r := meta.Remove(v.Meta, ctx, inode, name)
 		return []byte{uint8(r)}
 	case meta.Info:
 		var summary meta.Summary
@@ -161,7 +161,7 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 		}
 
 		wb := utils.NewBuffer(4)
-		r := meta.GetSummary(v.M, ctx, inode, &summary, recursive != 0)
+		r := meta.GetSummary(v.Meta, ctx, inode, &summary, recursive != 0)
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
@@ -178,7 +178,7 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 			fmt.Fprintf(w, " chunks:\n")
 			for indx := uint64(0); indx*meta.ChunkSize < summary.Length; indx++ {
 				var cs []meta.Slice
-				_ = v.M.Read(ctx, inode, uint32(indx), &cs)
+				_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
 				for _, c := range cs {
 					fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Chunkid, c.Size, c.Off, c.Len)
 				}

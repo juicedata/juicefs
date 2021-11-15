@@ -1,3 +1,5 @@
+// +build windows
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -566,7 +568,7 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	jfs.conf = conf
 	jfs.vfs = v
 	var err error
-	jfs.fs, err = fs.NewFileSystem(conf, v.M, v.Store)
+	jfs.fs, err = fs.NewFileSystem(conf, v.Meta, v.Store)
 	if err != nil {
 		logger.Fatalf("Initialize FileSystem failed: %s", err)
 	}

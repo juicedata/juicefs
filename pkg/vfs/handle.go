@@ -195,12 +195,12 @@ func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
 	defer h.Unlock()
 	switch flags & O_ACCMODE {
 	case syscall.O_RDONLY:
-		h.reader = v.Reader.Open(inode, length)
+		h.reader = v.reader.Open(inode, length)
 	case syscall.O_WRONLY: // FUSE writeback_cache mode need reader even for WRONLY
 		fallthrough
 	case syscall.O_RDWR:
-		h.reader = v.Reader.Open(inode, length)
-		h.writer = v.Writer.Open(inode, length)
+		h.reader = v.reader.Open(inode, length)
+		h.writer = v.writer.Open(inode, length)
 	}
 	return h.fh
 }

@@ -86,7 +86,7 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.M.Lookup(ctx, parent, name, &inode, attr)
+	err = v.Meta.Lookup(ctx, parent, name, &inode, attr)
 	if err != 0 {
 		return
 	}
@@ -103,7 +103,7 @@ func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, er
 	}
 	defer func() { logit(ctx, "getattr (%d): %s%s", ino, strerr(err), (*Entry)(entry)) }()
 	var attr = &Attr{}
-	err = v.M.GetAttr(ctx, ino, attr)
+	err = v.Meta.GetAttr(ctx, ino, attr)
 	if err != 0 {
 		return
 	}
@@ -153,7 +153,7 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 	var inode Ino
 	var attr = &Attr{}
-	err = v.M.Mknod(ctx, parent, name, _type, mode&07777, cumask, uint32(rdev), &inode, attr)
+	err = v.Meta.Mknod(ctx, parent, name, _type, mode&07777, cumask, uint32(rdev), &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
@@ -171,7 +171,7 @@ func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.M.Unlink(ctx, parent, name)
+	err = v.Meta.Unlink(ctx, parent, name)
 	return
 }
 
@@ -191,7 +191,7 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 	var inode Ino
 	var attr = &Attr{}
-	err = v.M.Mkdir(ctx, parent, name, mode, cumask, 0, &inode, attr)
+	err = v.Meta.Mkdir(ctx, parent, name, mode, cumask, 0, &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
@@ -209,7 +209,7 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.M.Rmdir(ctx, parent, name)
+	err = v.Meta.Rmdir(ctx, parent, name)
 	return
 }
 
@@ -229,7 +229,7 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 
 	var inode Ino
 	var attr = &Attr{}
-	err = v.M.Symlink(ctx, parent, name, path, &inode, attr)
+	err = v.Meta.Symlink(ctx, parent, name, path, &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
@@ -238,7 +238,7 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 
 func (v *VFS) Readlink(ctx Context, ino Ino) (path []byte, err syscall.Errno) {
 	defer func() { logit(ctx, "readlink (%d): %s (%s)", ino, strerr(err), string(path)) }()
-	err = v.M.ReadLink(ctx, ino, &path)
+	err = v.Meta.ReadLink(ctx, ino, &path)
 	return
 }
 
@@ -259,7 +259,7 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 		return
 	}
 
-	err = v.M.Rename(ctx, parent, name, newparent, newname, flags, nil, nil)
+	err = v.Meta.Rename(ctx, parent, name, newparent, newname, flags, nil, nil)
 	return
 }
 
@@ -281,7 +281,7 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 	}
 
 	var attr = &Attr{}
-	err = v.M.Link(ctx, ino, newparent, newname, attr)
+	err = v.Meta.Link(ctx, ino, newparent, newname, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
@@ -301,11 +301,11 @@ func (v *VFS) Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
 
 func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 	if attr.Full && attr.Typ == meta.TypeFile {
-		length := v.Writer.GetLength(inode)
+		length := v.writer.GetLength(inode)
 		if length > attr.Length {
 			attr.Length = length
 		}
-		v.Reader.Truncate(inode, attr.Length)
+		v.reader.Truncate(inode, attr.Length)
 	}
 }
 
@@ -321,9 +321,9 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 
 	if h.children == nil || off == 0 {
 		var inodes []*meta.Entry
-		err = v.M.Readdir(ctx, ino, 1, &inodes)
+		err = v.Meta.Readdir(ctx, ino, 1, &inodes)
 		if err == syscall.EACCES {
-			err = v.M.Readdir(ctx, ino, 0, &inodes)
+			err = v.Meta.Readdir(ctx, ino, 0, &inodes)
 		}
 		if err != 0 {
 			return
@@ -371,7 +371,7 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 
 	var inode Ino
 	var attr = &Attr{}
-	err = v.M.Create(ctx, parent, name, mode&07777, cumask, flags, &inode, attr)
+	err = v.Meta.Create(ctx, parent, name, mode&07777, cumask, flags, &inode, attr)
 	if runtime.GOOS == "darwin" && err == syscall.ENOENT {
 		err = syscall.EACCES
 	}
@@ -414,7 +414,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			logit(ctx, "open (%d): %s", ino, strerr(err))
 		}
 	}()
-	err = v.M.Open(ctx, ino, flags, attr)
+	err = v.Meta.Open(ctx, ino, flags, attr)
 	if err != 0 {
 		return
 	}
@@ -447,13 +447,13 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 		}
 		defer h.Wunlock()
 	}
-	v.Writer.Flush(ctx, ino)
-	err = v.M.Truncate(ctx, ino, 0, uint64(size), attr)
+	v.writer.Flush(ctx, ino)
+	err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr)
 	if err != 0 {
 		return
 	}
-	v.Writer.Truncate(ino, uint64(size))
-	v.Reader.Truncate(ino, uint64(size))
+	v.writer.Truncate(ino, uint64(size))
+	v.reader.Truncate(ino, uint64(size))
 	return 0
 }
 
@@ -490,10 +490,10 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) (err syscall.Errno) {
 				f.writer.Flush(ctx)
 			}
 			if locks&1 != 0 {
-				_ = v.M.Flock(ctx, ino, owner, F_UNLCK, false)
+				_ = v.Meta.Flock(ctx, ino, owner, F_UNLCK, false)
 			}
 		}
-		_ = v.M.Close(ctx, ino)
+		_ = v.Meta.Close(ctx, ino)
 		go v.releaseFileHandle(ino, fh) // after writes it waits for data sync, so do it after everything
 	}
 	return
@@ -555,7 +555,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	}
 	defer h.Runlock()
 
-	v.Writer.Flush(ctx, ino)
+	v.writer.Flush(ctx, ino)
 	n, err = h.reader.Read(ctx, off, buf)
 	for err == syscall.EAGAIN {
 		n, err = h.reader.Read(ctx, off, buf)
@@ -621,7 +621,7 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		return
 	}
 	writtenSizeHistogram.Observe(float64(len(buf)))
-	v.Reader.Truncate(ino, v.Writer.GetLength(ino))
+	v.reader.Truncate(ino, v.writer.GetLength(ino))
 	return
 }
 
@@ -655,7 +655,7 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh 
 	defer h.Wunlock()
 	defer h.removeOp(ctx)
 
-	err = v.M.Fallocate(ctx, ino, mode, uint64(off), uint64(length))
+	err = v.Meta.Fallocate(ctx, ino, mode, uint64(off), uint64(length))
 	return
 }
 
@@ -715,13 +715,13 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	defer ho.Wunlock()
 	defer ho.removeOp(ctx)
 
-	err = v.Writer.Flush(ctx, nodeOut)
+	err = v.writer.Flush(ctx, nodeOut)
 	if err != 0 {
 		return
 	}
-	err = v.M.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied)
+	err = v.Meta.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied)
 	if err == 0 {
-		v.Reader.Invalidate(nodeOut, offOut, uint64(size))
+		v.reader.Invalidate(nodeOut, offOut, uint64(size))
 	}
 	return
 }
@@ -774,7 +774,7 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 	locks := h.locks
 	h.Unlock()
 	if locks&2 != 0 {
-		_ = v.M.Setlk(ctx, ino, lockOwner, false, F_UNLCK, 0, 0x7FFFFFFFFFFFFFFF, 0)
+		_ = v.Meta.Setlk(ctx, ino, lockOwner, false, F_UNLCK, 0, 0x7FFFFFFFFFFFFFFF, 0)
 	}
 	return
 }
@@ -828,7 +828,7 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 		err = syscall.ENOTSUP
 		return
 	}
-	err = v.M.SetXattr(ctx, ino, name, value, flags)
+	err = v.Meta.SetXattr(ctx, ino, name, value, flags)
 	return
 }
 
@@ -855,7 +855,7 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 		err = syscall.ENOTSUP
 		return
 	}
-	err = v.M.GetXattr(ctx, ino, name, &value)
+	err = v.Meta.GetXattr(ctx, ino, name, &value)
 	if size > 0 && len(value) > int(size) {
 		err = syscall.ERANGE
 	}
@@ -868,7 +868,7 @@ func (v *VFS) ListXattr(ctx Context, ino Ino, size int) (data []byte, err syscal
 		err = syscall.EPERM
 		return
 	}
-	err = v.M.ListXattr(ctx, ino, &data)
+	err = v.Meta.ListXattr(ctx, ino, &data)
 	if size > 0 && len(data) > size {
 		err = syscall.ERANGE
 	}
@@ -896,7 +896,7 @@ func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno)
 		err = syscall.EINVAL
 		return
 	}
-	err = v.M.RemoveXattr(ctx, ino, name)
+	err = v.Meta.RemoveXattr(ctx, ino, name)
 	return
 }
 
@@ -904,10 +904,10 @@ var logger = utils.GetLogger("juicefs")
 
 type VFS struct {
 	Conf   *Config
-	M      meta.Meta
+	Meta   meta.Meta
 	Store  chunk.ChunkStore
-	Reader DataReader
-	Writer DataWriter
+	reader DataReader
+	writer DataWriter
 
 	handles map[Ino][]*handle
 	hanleM  sync.Mutex
@@ -924,10 +924,10 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 
 	v := &VFS{
 		Conf:    conf,
-		M:       m,
+		Meta:    m,
 		Store:   store,
-		Reader:  reader,
-		Writer:  NewDataWriter(conf, m, store, reader),
+		reader:  reader,
+		writer:  NewDataWriter(conf, m, store, reader),
 		handles: make(map[Ino][]*handle),
 		nextfh:  1,
 	}
