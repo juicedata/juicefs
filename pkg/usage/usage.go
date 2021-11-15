@@ -28,7 +28,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
-const reportUrl = "https://juicefs.com/report-usage"
+var reportUrl = "https://juicefs.com/report-usage"
 
 var logger = utils.GetLogger("juicefs")
 
@@ -60,13 +60,10 @@ func sendUsage(u usage) error {
 		return fmt.Errorf("got %s", resp.Status)
 	}
 	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
-// ReportUsage will send anonymous usage data to juicefs.io to help the team
+// ReportUsage will send anonymous usage data to juicefs.com to help the team
 // understand how the community is using it. You can use `--no-usage-report`
 // to disable this.
 func ReportUsage(m meta.Meta, version string) {
