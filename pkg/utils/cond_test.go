@@ -25,22 +25,30 @@ func TestCond(t *testing.T) {
 	// test Wait and Signal
 	var m sync.Mutex
 	l := NewCond(&m)
+	done := make(chan bool)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		m.Lock()
+		wg.Done()
 		l.Wait()
 		m.Unlock()
 
 		l.Signal()
-		time.Sleep(time.Millisecond * 10) // in case of race
+		done <- true
 	}()
+	wg.Wait()
 	m.Lock()
 	l.Signal()
 	l.Wait()
 	m.Unlock()
-	time.Sleep(time.Millisecond * 100)
+	select {
+	case <-done:
+	case <-time.NewTimer(time.Second).C:
+		t.Fatalf("the other goroutine did not return after 1 second")
+	}
 
 	// test WaitWithTimeout
-	done := make(chan bool)
 	var timeout bool
 	go func() {
 		m.Lock()
@@ -60,18 +68,18 @@ func TestCond(t *testing.T) {
 	// test Broadcast to wake up all goroutines
 	var N = 1000
 	done2 := make(chan bool, N)
-	var wg sync.WaitGroup
+	var wg2 sync.WaitGroup
 	for i := 0; i < N; i++ {
-		wg.Add(1)
+		wg2.Add(1)
 		go func() {
 			m.Lock()
-			wg.Done()
+			wg2.Done()
 			timeout := l.WaitWithTimeout(time.Second)
 			m.Unlock()
 			done2 <- timeout
 		}()
 	}
-	wg.Wait()
+	wg2.Wait()
 	m.Lock()
 	l.Broadcast()
 	m.Unlock()
@@ -83,7 +91,7 @@ func TestCond(t *testing.T) {
 				t.Fatalf("cond should not timeout")
 			}
 		case <-deadline.C:
-			t.Fatalf("not all goroutines wakeup in 100 ms")
+			t.Fatalf("not all goroutines wakeup in 500 ms")
 		}
 	}
 }
