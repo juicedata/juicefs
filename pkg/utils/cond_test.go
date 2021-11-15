@@ -33,8 +33,8 @@ func TestCond(t *testing.T) {
 		l.Signal()
 		time.Sleep(time.Millisecond * 10) // in case of race
 	}()
-	l.Signal()
 	m.Lock()
+	l.Signal()
 	l.Wait()
 	m.Unlock()
 	time.Sleep(time.Millisecond * 100)
@@ -68,7 +68,9 @@ func TestCond(t *testing.T) {
 			done2 <- timeout
 		}()
 	}
+	m.Lock()
 	l.Broadcast()
+	m.Unlock()
 	deadline := time.NewTimer(time.Millisecond * 100)
 	for i := 0; i < N; i++ {
 		select {
