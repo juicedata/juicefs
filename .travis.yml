@@ -30,7 +30,7 @@ script:
   - make test
   - cat cov1.out >> coverage.txt
   - cat cov2.out >> coverage.txt
-  - rm cov1.out cov2.txt
+  - rm cov1.out cov2.out
   - sudo DURATION=10 make -C fstests all
   - make -C fstests flock
   - make -C sdk/java/libjfs
