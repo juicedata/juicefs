@@ -69,4 +69,5 @@ func TestUsageReport(t *testing.T) {
 	case <-deadline.C:
 		t.Fatalf("no report after 3 seconds")
 	}
+	time.Sleep(time.Millisecond * 100) // wait for the client to finish
 }

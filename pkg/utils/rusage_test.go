@@ -22,9 +22,6 @@ import (
 
 func TestRUsage(t *testing.T) {
 	u := GetRusage()
-	if u.GetUtime() < 0.0001 {
-		t.Fatalf("invalid utime: %f", u.GetUtime())
-	}
 	var s string
 	for i := 0; i < 1000; i++ {
 		s += time.Now().String()
