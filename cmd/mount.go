@@ -230,7 +230,6 @@ func mount(c *cli.Context) error {
 		Mountpoint: mp,
 		Chunk:      &chunkConf,
 	}
-	vfs.Init(conf, m, store)
 
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		if runtime.GOOS != "windows" {
@@ -275,8 +274,8 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("new session: %s", err)
 	}
 	installHandler(mp)
+	v := vfs.NewVFS(conf, m, store)
 	metricsAddr := exposeMetrics(m, c)
-
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
@@ -284,7 +283,7 @@ func mount(c *cli.Context) error {
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
-	mount_main(conf, m, store, c)
+	mount_main(v, c)
 	return m.CloseSession()
 }
 
