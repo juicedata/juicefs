@@ -117,14 +117,13 @@ func mountSimpleMethod(url, mp string) {
 	}
 
 	chunkConf := chunk.Config{
-		BlockSize: format.BlockSize * 1024,
-		Compress:  format.Compression,
-		MaxUpload: 20,
+		BlockSize:  format.BlockSize * 1024,
+		Compress:   format.Compression,
+		MaxUpload:  20,
 		BufferSize: 300 << 20,
-		CacheSize: 1024,
-		CacheDir:  "memory",
+		CacheSize:  1024,
+		CacheDir:   "memory",
 	}
-
 
 	blob, err := createSimpleStorage(format)
 	if err != nil {
@@ -146,7 +145,6 @@ func mountSimpleMethod(url, mp string) {
 		Mountpoint: mp,
 		Chunk:      &chunkConf,
 	}
-	vfs.Init(conf, m, store)
 
 	go checkMountpointInTenSeconds(mp, nil)
 
@@ -158,7 +156,8 @@ func mountSimpleMethod(url, mp string) {
 	conf.AttrTimeout = time.Second
 	conf.EntryTimeout = time.Second
 	conf.DirEntryTimeout = time.Second
-	serverErr := fuse.Serve(conf, "", true)
+	v := vfs.NewVFS(conf, m, store)
+	serverErr := fuse.Serve(v, "", true)
 	if serverErr != nil {
 		log.Fatalf("fuse server err: %s\n", serverErr)
 	}

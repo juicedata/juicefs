@@ -39,9 +39,9 @@ type Statfs struct {
 	Favail uint64
 }
 
-func StatFS(ctx Context, ino Ino) (st *Statfs, err int) {
+func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err int) {
 	var totalspace, availspace, iused, iavail uint64
-	_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
+	_ = v.Meta.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
 	var bsize uint64 = 0x10000
 	blocks := totalspace / bsize
 	bavail := blocks - (totalspace-availspace+bsize-1)/bsize
@@ -76,7 +76,7 @@ func accessTest(attr *Attr, mmode uint16, uid uint32, gid uint32) syscall.Errno 
 	return 0
 }
 
-func Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
+func (v *VFS) Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
 	defer func() { logit(ctx, "access (%d,0x%X): %s", ino, mask, strerr(err)) }()
 	var mmask uint16
 	if mask&unix.R_OK != 0 {
@@ -94,7 +94,7 @@ func Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
 		return
 	}
 
-	err = m.Access(ctx, ino, uint8(mmask), nil)
+	err = v.Meta.Access(ctx, ino, uint8(mmask), nil)
 	return
 }
 
@@ -137,7 +137,7 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 	return sb.String()
 }
 
-func SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
+func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
 	str := setattrStr(set, mode, uid, gid, atime, mtime, size)
 	defer func() {
 		logit(ctx, "setattr (%d,0x%X,[%s]): %s%s", ino, set, str, strerr(err), (*Entry)(entry))
@@ -151,7 +151,7 @@ func SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32,
 	var attr = &Attr{}
 	if (set & (meta.SetAttrMode | meta.SetAttrUID | meta.SetAttrGID | meta.SetAttrAtime | meta.SetAttrMtime | meta.SetAttrSize)) == 0 {
 		// change other flags or change nothing
-		err = m.SetAttr(ctx, ino, 0, 0, attr)
+		err = v.Meta.SetAttr(ctx, ino, 0, 0, attr)
 		if err != 0 {
 			return
 		}
@@ -174,15 +174,15 @@ func SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32,
 			attr.Mtime = mtime
 			attr.Mtimensec = mtimensec
 		}
-		err = m.SetAttr(ctx, ino, uint16(set), 0, attr)
+		err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 		if err != 0 {
 			return
 		}
 	}
 	if set&meta.SetAttrSize != 0 {
-		err = Truncate(ctx, ino, int64(size), opened, attr)
+		err = v.Truncate(ctx, ino, int64(size), opened, attr)
 	}
-	UpdateLength(ino, attr)
+	v.UpdateLength(ino, attr)
 	entry = &meta.Entry{Inode: ino, Attr: attr}
 	return
 }
@@ -202,7 +202,7 @@ func (l lockType) String() string {
 	}
 }
 
-func Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *uint64, typ *uint32, pid *uint32) (err syscall.Errno) {
+func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *uint64, typ *uint32, pid *uint32) (err syscall.Errno) {
 	logit(ctx, "getlk (%d,%016X): %s (%d,%d,%s,%d)", ino, owner, strerr(err), *start, *len, lockType(*typ), *pid)
 	if lockType(*typ).String() == "X" {
 		return syscall.EINVAL
@@ -211,15 +211,15 @@ func Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *uint64, ty
 		err = syscall.EPERM
 		return
 	}
-	if findHandle(ino, fh) == nil {
+	if v.findHandle(ino, fh) == nil {
 		err = syscall.EBADF
 		return
 	}
-	err = m.Getlk(ctx, ino, owner, typ, start, len, pid)
+	err = v.Meta.Getlk(ctx, ino, owner, typ, start, len, pid)
 	return
 }
 
-func Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ uint32, pid uint32, block bool) (err syscall.Errno) {
+func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ uint32, pid uint32, block bool) (err syscall.Errno) {
 	defer func() {
 		logit(ctx, "setlk (%d,%016X,%d,%d,%s,%t,%d): %s", ino, owner, start, end, lockType(typ), block, pid, strerr(err))
 	}()
@@ -230,7 +230,7 @@ func Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ
 		err = syscall.EPERM
 		return
 	}
-	h := findHandle(ino, fh)
+	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
 		return
@@ -238,7 +238,7 @@ func Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ
 	h.addOp(ctx)
 	defer h.removeOp(ctx)
 
-	err = m.Setlk(ctx, ino, owner, block, typ, start, end, pid)
+	err = v.Meta.Setlk(ctx, ino, owner, block, typ, start, end, pid)
 	if err == 0 {
 		h.Lock()
 		if typ != syscall.F_UNLCK {
@@ -249,7 +249,7 @@ func Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ
 	return
 }
 
-func Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, block bool) (err syscall.Errno) {
+func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, block bool) (err syscall.Errno) {
 	var name string
 	var reqid uint32
 	defer func() { logit(ctx, "flock (%d,%d,%016X,%s,%t): %s", reqid, ino, owner, name, block, strerr(err)) }()
@@ -269,14 +269,14 @@ func Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, block bool
 		err = syscall.EPERM
 		return
 	}
-	h := findHandle(ino, fh)
+	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
 		return
 	}
 	h.addOp(ctx)
 	defer h.removeOp(ctx)
-	err = m.Flock(ctx, ino, owner, typ, block)
+	err = v.Meta.Flock(ctx, ino, owner, typ, block)
 	if err == 0 {
 		h.Lock()
 		if typ == syscall.F_UNLCK {

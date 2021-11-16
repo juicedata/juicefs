@@ -28,9 +28,7 @@ import (
 	"time"
 
 	"github.com/juicedata/godaemon"
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
@@ -167,16 +165,17 @@ func disableUpdatedb() {
 	}
 }
 
-func mount_main(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, c *cli.Context) {
+func mount_main(v *vfs.VFS, c *cli.Context) {
 	if os.Getuid() == 0 && os.Getpid() != 1 {
 		disableUpdatedb()
 	}
 
+	conf := v.Conf
 	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Mountpoint)
-	err := fuse.Serve(conf, c.String("o"), c.Bool("enable-xattr"))
+	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}
