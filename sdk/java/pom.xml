@@ -72,8 +72,15 @@
 				<version>0.8.7</version>
 				<executions>
 					<execution>
+						<id>default-instrument</id>
 						<goals>
-							<goal>prepare-agent</goal>
+							<goal>instrument</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>default-restore-instrumented-classes</id>
+						<goals>
+							<goal>restore-instrumented-classes</goal>
 						</goals>
 					</execution>
 					<execution>
