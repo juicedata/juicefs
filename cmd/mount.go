@@ -280,7 +280,7 @@ func mount(c *cli.Context) error {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
 	if d := c.Duration("backup-meta"); d > 0 {
-		go vfs.Backup(blob, d)
+		go vfs.Backup(m, blob, d)
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())

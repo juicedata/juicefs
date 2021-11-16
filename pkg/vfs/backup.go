@@ -28,7 +28,7 @@ import (
 )
 
 // Backup metadata periodically in the object storage
-func Backup(blob object.ObjectStorage, interval time.Duration) {
+func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 	ctx := meta.Background
 	key := "lastBackup"
 	for {
@@ -60,7 +60,7 @@ func Backup(blob object.ObjectStorage, interval time.Duration) {
 			}
 			go cleanupBackups(blob, now)
 			logger.Debugf("backup metadata started")
-			if err = backup(blob, now); err == nil {
+			if err = backup(m, blob, now); err == nil {
 				logger.Infof("backup metadata succeed, used %s", time.Since(now))
 			} else {
 				logger.Warnf("backup metadata failed: %s", err)
@@ -69,7 +69,7 @@ func Backup(blob object.ObjectStorage, interval time.Duration) {
 	}
 }
 
-func backup(blob object.ObjectStorage, now time.Time) error {
+func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
 	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
 	fpath := "/tmp/juicefs-meta-" + name
 	fp, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0444)

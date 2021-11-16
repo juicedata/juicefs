@@ -427,7 +427,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			FastResolve:     jConf.FastResolve,
 		}
 		if d := jConf.BackupMeta; d > 0 {
-			go vfs.Backup(blob, time.Duration(d*1e9))
+			go vfs.Backup(m, blob, time.Duration(d*1e9))
 		}
 		if !jConf.NoUsageReport {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())

@@ -246,7 +246,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, "s3gateway")
 	}
 	if d := c.Duration("backup-meta"); d > 0 {
-		go vfs.Backup(blob, d)
+		go vfs.Backup(m, blob, d)
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, "gateway "+version.Version())
