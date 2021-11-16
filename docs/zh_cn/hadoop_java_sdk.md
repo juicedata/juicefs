@@ -1,47 +1,5 @@
 # Hadoop 生态使用 JuiceFS 存储
 
-## 目录
-
-- [环境要求](#%E7%8E%AF%E5%A2%83%E8%A6%81%E6%B1%82)
-  * [1. Hadoop 及相关组件](#1-hadoop-%E5%8F%8A%E7%9B%B8%E5%85%B3%E7%BB%84%E4%BB%B6)
-  * [2. 用户权限](#2-%E7%94%A8%E6%88%B7%E6%9D%83%E9%99%90)
-  * [3. 文件系统](#3-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F)
-  * [4. 内存资源](#4-%E5%86%85%E5%AD%98%E8%B5%84%E6%BA%90)
-- [客户端编译](#%E5%AE%A2%E6%88%B7%E7%AB%AF%E7%BC%96%E8%AF%91)
-  * [Linux 和 macOS](#linux-%E5%92%8C-macos)
-  * [Windows](#windows)
-- [部署客户端](#%E9%83%A8%E7%BD%B2%E5%AE%A2%E6%88%B7%E7%AB%AF)
-  * [大数据平台](#%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%B9%B3%E5%8F%B0)
-  * [社区开源组件](#%E7%A4%BE%E5%8C%BA%E5%BC%80%E6%BA%90%E7%BB%84%E4%BB%B6)
-  * [客户端配置参数](#%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0)
-    + [核心配置](#%E6%A0%B8%E5%BF%83%E9%85%8D%E7%BD%AE)
-    + [缓存配置](#%E7%BC%93%E5%AD%98%E9%85%8D%E7%BD%AE)
-    + [I/O 配置](#io-%E9%85%8D%E7%BD%AE)
-    + [其他配置](#%E5%85%B6%E4%BB%96%E9%85%8D%E7%BD%AE)
-    + [多文件系统配置](#%E5%A4%9A%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E9%85%8D%E7%BD%AE)
-    + [配置示例](#%E9%85%8D%E7%BD%AE%E7%A4%BA%E4%BE%8B)
-- [Hadoop 环境配置](#hadoop-%E7%8E%AF%E5%A2%83%E9%85%8D%E7%BD%AE)
-  * [CDH6](#cdh6)
-  * [HDP](#hdp)
-  * [Flink](#flink)
-  * [Hudi](#hudi)
-  * [重启服务](#%E9%87%8D%E5%90%AF%E6%9C%8D%E5%8A%A1)
-- [环境验证](#%E7%8E%AF%E5%A2%83%E9%AA%8C%E8%AF%81)
-  * [Hadoop](#hadoop)
-  * [Hive](#hive)
-- [监控指标收集](#%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87%E6%94%B6%E9%9B%86)
-- [基准测试](#%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95)
-  * [1. 本地测试](#1-%E6%9C%AC%E5%9C%B0%E6%B5%8B%E8%AF%95)
-    + [元数据性能](#%E5%85%83%E6%95%B0%E6%8D%AE%E6%80%A7%E8%83%BD)
-    + [I/O 性能](#io-%E6%80%A7%E8%83%BD)
-  * [2. 分布式测试](#2-%E5%88%86%E5%B8%83%E5%BC%8F%E6%B5%8B%E8%AF%95)
-    + [元数据性能](#%E5%85%83%E6%95%B0%E6%8D%AE%E6%80%A7%E8%83%BD-1)
-    + [I/O 性能](#io-%E6%80%A7%E8%83%BD-1)
-  * [3. TPC-DS](#3-tpc-ds)
-- [FAQ](#faq)
-
-----
-
 JuiceFS 提供与 HDFS 接口[高度兼容](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html)的 Java 客户端，Hadoop 生态中的各种应用都可以在不改变代码的情况下，平滑地使用 JuiceFS 存储数据。
 
 ## 环境要求

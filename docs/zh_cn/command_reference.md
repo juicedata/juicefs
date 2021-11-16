@@ -2,25 +2,6 @@
 
 有许多命令可帮助您管理文件系统，该页面提供了有关这些命令的详细参考。
 
-* [概览](#概览)
-* [自动补全](#自动补全)
-* [命令列表](#命令列表)
-   * [juicefs format](#juicefs-format)
-   * [juicefs mount](#juicefs-mount)
-   * [juicefs umount](#juicefs-umount)
-   * [juicefs gateway](#juicefs-gateway)
-   * [juicefs sync](#juicefs-sync)
-   * [juicefs rmr](#juicefs-rmr)
-   * [juicefs info](#juicefs-info)
-   * [juicefs bench](#juicefs-bench)
-   * [juicefs gc](#juicefs-gc)
-   * [juicefs fsck](#juicefs-fsck)
-   * [juicefs profile](#juicefs-profile)
-   * [juicefs status](#juicefs-status)
-   * [juicefs warmup](#juicefs-warmup)
-   * [juicefs dump](#juicefs-dump)
-   * [juicefs load](#juicefs-load)
-
 ## 概览
 
 在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。

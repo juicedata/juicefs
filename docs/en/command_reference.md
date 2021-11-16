@@ -2,25 +2,6 @@
 
 There are many commands to help you manage your file system. This page provides a detailed reference for these commands.
 
-* [Overview](#overview)
-* [Auto Completion](#auto-completion)
-* [Commands](#commands)
-   * [juicefs format](#juicefs-format)
-   * [juicefs mount](#juicefs-mount)
-   * [juicefs umount](#juicefs-umount)
-   * [juicefs gateway](#juicefs-gateway)
-   * [juicefs sync](#juicefs-sync)
-   * [juicefs rmr](#juicefs-rmr)
-   * [juicefs info](#juicefs-info)
-   * [juicefs bench](#juicefs-bench)
-   * [juicefs gc](#juicefs-gc)
-   * [juicefs fsck](#juicefs-fsck)
-   * [juicefs profile](#juicefs-profile)
-   * [juicefs status](#juicefs-status)
-   * [juicefs warmup](#juicefs-warmup)
-   * [juicefs dump](#juicefs-dump)
-   * [juicefs load](#juicefs-load)
-
 ## Overview
 
 If you run `juicefs` by itself, it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information of it.

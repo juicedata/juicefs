@@ -1,46 +1,5 @@
 # Use JuiceFS on Hadoop Ecosystem
 
-## Table of Content
-
-- [Requirements](#requirements)
-  * [1. Hadoop and related components](#1-hadoop-and-related-components)
-  * [2. User permissions](#2-user-permissions)
-  * [3. File system](#3-file-system)
-  * [4. Memory](#4-memory)
-- [Client compilation](#client-compilation)
-  * [Linux and macOS](#linux-and-macos)
-  * [Windows](#windows)
-- [Deploy the client](#deploy-the-client)
-  * [Big data Platforms](#big-data-platforms)
-  * [Community Components](#community-components)
-  * [Client Configurations](#client-configurations)
-    + [Core Configurations](#core-configurations)
-    + [Cache Configurations](#cache-configurations)
-    + [I/O Configurations](#io-configurations)
-    + [Other Configurations](#other-configurations)
-    + [Multiple file systems configuration](#multiple-file-systems-configuration)
-    + [Configuration Example](#configurationexample)
-- [Configuration in Hadoop](#configuration-in-hadoop)
-  * [CDH6](#cdh6)
-  * [HDP](#hdp)
-  * [Flink](#flink)
-  * [Hudi](#hudi)
-  * [Restart Services](#restart-services)
-- [Environmental Verification](#environmental-verification)
-  * [Hadoop](#hadoop)
-  * [Hive](#hive)
-- [Monitoring metrics collection](#monitoring-metrics-collection)
-- [Benchmark](#benchmark)
-  * [1. Local Benchmark](#1-local-benchmark)
-    + [Metadata](#metadata)
-    + [I/O Performance](#io-performance)
-  * [2. Distributed Benchmark](#2-distributed-benchmark)
-    + [Metadata](#metadata-1)
-    + [I/O Performance](#io-performance-1)
-- [FAQ](#faq)
-
-----
-
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
 
 ## Requirements
