@@ -53,7 +53,7 @@ func TestAccessLog(t *testing.T) {
 		t.Fatalf("invalid time %s: %s", logs, err)
 	}
 	if time.Since(ts) > time.Millisecond*10 {
-		t.Fatalf("stale time: %s", ts)
+		t.Fatalf("stale time: %s now: %s", ts, time.Now())
 	}
 	if logs[26:len(logs)-4] != " [uid:1,gid:2,pid:10] test <0.0000" {
 		t.Fatalf("unexpected log: %q", logs[26:])
