@@ -216,6 +216,7 @@ type javaConf struct {
 	MetaURL         string  `json:"meta"`
 	ReadOnly        bool    `json:"readOnly"`
 	OpenCache       float64 `json:"openCache"`
+	BackupMeta      int64   `json:"backupMeta"`
 	CacheDir        string  `json:"cacheDir"`
 	CacheSize       int64   `json:"cacheSize"`
 	FreeSpace       string  `json:"freeSpace"`
@@ -424,6 +425,9 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			DirEntryTimeout: time.Millisecond * time.Duration(jConf.DirEntryTimeout*1000),
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
+		}
+		if d := jConf.BackupMeta; d > 0 {
+			go vfs.Backup(m, blob, time.Duration(d*1e9))
 		}
 		if !jConf.NoUsageReport {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())
