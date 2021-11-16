@@ -16,57 +16,49 @@
 package vfs
 
 import (
-	"sort"
 	"testing"
 	"time"
 )
 
 func TestFindDeletes(t *testing.T) {
 	format := func(ts time.Time) string {
-		return "dump-" + ts.Format("2006-01-02-150405") + ".json.gz"
+		return "dump-" + ts.UTC().Format("2006-01-02-150405") + ".json.gz"
 	}
 
-	now := time.Now().UTC()
-	objMap := make(map[string]bool)
-	for i := 0; i < 200; i++ { // one backup for every half day
-		objMap[format(now.Add(time.Duration(-i*12)*time.Hour))] = true
-	}
-	objs := make([]string, 0, 200)
-	for key := range objMap {
-		objs = append(objs, key)
-	}
-	toDel := findDeletes(objs)
-	for _, key := range toDel {
-		delete(objMap, key)
-	}
-	left := make([]string, 0, 25)
-	for key := range objMap {
-		left = append(left, key)
+	now := time.Now()
+	objs := make([]string, 0, 25)
+	for cursor, i := now.AddDate(0, 0, -100), 0; i <= 200; i++ { // one backup for every half day
+		objs = append(objs, format(cursor))
+		toDel := findDeletes(objs, cursor)
+		for _, d := range toDel {
+			for j, k := range objs {
+				if k == d {
+					objs = append(objs[:j], objs[j+1:]...)
+					break
+				}
+			}
+		}
+		cursor = cursor.Add(time.Duration(12) * time.Hour)
 	}
 
 	expect := make([]string, 0, 25)
-	for i := 0; i < 4; i++ {
+	expect = append(expect, format(now.AddDate(0, 0, -100)))
+	for days := 65; days > 14; days -= 7 {
+		expect = append(expect, format(now.AddDate(0, 0, -days)))
+	}
+	for days := 13; days > 2; days-- {
+		expect = append(expect, format(now.AddDate(0, 0, -days)))
+	}
+	for i := 4; i >= 0; i-- {
 		expect = append(expect, format(now.Add(time.Duration(-i*12)*time.Hour)))
 	}
-	var days int
-	for days = 2; days < 14; days++ {
-		expect = append(expect, format(now.AddDate(0, 0, -days)))
-	}
-	for ; days < 60; days += 7 {
-		expect = append(expect, format(now.AddDate(0, 0, -days)))
-	}
-	for ; days < 100; days += 30 {
-		expect = append(expect, format(now.AddDate(0, 0, -days)))
-	}
 
-	if len(left) != len(expect) {
-		t.Fatalf("length of left %d != length of expect %d", len(left), len(expect))
+	if len(objs) != len(expect) {
+		t.Fatalf("length of objs %d != length of expect %d", len(objs), len(expect))
 	}
-	sort.Strings(left)
-	sort.Strings(expect)
-	for i, s := range left {
-		if s != expect[i] {
-			t.Fatalf("left %s != expect %s", s, expect[i])
+	for i, o := range objs {
+		if o != expect[i] {
+			t.Fatalf("obj %s != expect %s", o, expect[i])
 		}
 	}
 }

@@ -58,9 +58,9 @@ func Backup(blob object.ObjectStorage, interval time.Duration) {
 				logger.Warnf("setxattr inode 1 key %s: %s", key, st)
 				continue
 			}
-			go cleanupBackups(blob)
+			go cleanupBackups(blob, now)
 			logger.Debugf("backup metadata started")
-			if err = backup(blob, now.UTC().Format("2006-01-02-150405")); err == nil {
+			if err = backup(blob, now); err == nil {
 				logger.Infof("backup metadata succeed, used %s", time.Since(now))
 			} else {
 				logger.Warnf("backup metadata failed: %s", err)
@@ -69,8 +69,8 @@ func Backup(blob object.ObjectStorage, interval time.Duration) {
 	}
 }
 
-func backup(blob object.ObjectStorage, name string) error {
-	name = "dump-" + name + ".json.gz"
+func backup(blob object.ObjectStorage, now time.Time) error {
+	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
 	fpath := "/tmp/juicefs-meta-" + name
 	fp, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0444)
 	if err != nil {
@@ -90,7 +90,7 @@ func backup(blob object.ObjectStorage, name string) error {
 	return blob.Put("meta/"+name, fp)
 }
 
-func cleanupBackups(blob object.ObjectStorage) {
+func cleanupBackups(blob object.ObjectStorage, now time.Time) {
 	blob = object.WithPrefix(blob, "meta/")
 	ch, err := osync.ListAll(blob, "", "")
 	if err != nil {
@@ -102,7 +102,7 @@ func cleanupBackups(blob object.ObjectStorage) {
 		objs = append(objs, o.Key())
 	}
 
-	toDel := findDeletes(objs)
+	toDel := findDeletes(objs, now)
 	for _, o := range toDel {
 		if err = blob.Delete(o); err != nil {
 			logger.Warnf("delete object %s: %s", o, err)
@@ -115,9 +115,9 @@ func cleanupBackups(blob object.ObjectStorage) {
 // 2. keep one backup each day within 2 weeks
 // 3. keep one backup each week within 2 months
 // 4. keep one backup each month for those before 2 months
-func findDeletes(objs []string) []string {
+func findDeletes(objs []string, now time.Time) []string {
 	var days = 2
-	edge := time.Now().UTC().AddDate(0, 0, -days)
+	edge := now.UTC().AddDate(0, 0, -days)
 	next := func() {
 		if days < 14 {
 			days++
@@ -131,7 +131,7 @@ func findDeletes(objs []string) []string {
 		}
 	}
 
-	var toDel []string
+	var toDel, within []string
 	sort.Strings(objs)
 	for i := len(objs) - 1; i >= 0; i-- {
 		if len(objs[i]) != 30 { // len("dump-2006-01-02-150405.json.gz")
@@ -145,11 +145,19 @@ func findDeletes(objs []string) []string {
 		}
 
 		if ts.Before(edge) {
+			if l := len(within); l > 0 { // keep the earliest one
+				toDel = append(toDel, within[:l-1]...)
+				within = within[:0]
+			}
 			for next(); ts.Before(edge); next() {
 			}
+			within = append(within, objs[i])
 		} else if days > 2 {
-			toDel = append(toDel, objs[i])
+			within = append(within, objs[i])
 		}
+	}
+	if l := len(within); l > 0 {
+		toDel = append(toDel, within[:l-1]...)
 	}
 	return toDel
 }
