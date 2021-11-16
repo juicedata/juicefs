@@ -51,6 +51,7 @@ after_success:
   - ls -l sdk/java/target
   - ls -l sdk/java/target/surefire-reports
   - ls -l sdk/java/target/generated-sources
+  - ls -l sdk/java/target/site
   - cd sdk/java
   - bash <(curl -s https://codecov.io/bash)
 notifications:
