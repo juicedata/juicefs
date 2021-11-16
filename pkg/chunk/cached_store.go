@@ -908,9 +908,10 @@ func (store *cachedStore) Remove(chunkid uint64, length int) error {
 func (store *cachedStore) FillCache(chunkid uint64, length uint32) error {
 	r := chunkForRead(chunkid, int(length), store)
 	keys := r.keys()
+	var err error
 	for _, k := range keys {
-		f, err := store.bcache.load(k)
-		if err == nil { // already cached
+		f, e := store.bcache.load(k)
+		if e == nil { // already cached
 			f.Close()
 			continue
 		}
@@ -921,11 +922,12 @@ func (store *cachedStore) FillCache(chunkid uint64, length uint32) error {
 		}
 		p := NewOffPage(size)
 		defer p.Release()
-		if err = store.load(k, p, true, true); err != nil {
-			logger.Warnf("Failed to load key: %s %s", k, err)
+		if e := store.load(k, p, true, true); e != nil {
+			logger.Warnf("Failed to load key: %s %s", k, e)
+			err = e
 		}
 	}
-	return nil // currently errors are skipped
+	return err
 }
 
 func (store *cachedStore) UsedMemory() int64 {
