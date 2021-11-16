@@ -1,3 +1,5 @@
+// +build !noredis
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -17,7 +19,6 @@ package meta
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -28,7 +29,6 @@ import (
 	"net"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,15 +66,6 @@ import (
 	  Scan: 2.8+
 */
 
-var logger = utils.GetLogger("juicefs")
-
-const usedSpace = "usedSpace"
-const totalInodes = "totalInodes"
-const delfiles = "delfiles"
-const allSessions = "sessions"
-const sessionInfos = "sessionInfos"
-const sliceRefs = "sliceRef"
-
 type redisMeta struct {
 	sync.Mutex
 	conf    *Config
@@ -101,11 +92,6 @@ type redisMeta struct {
 }
 
 var _ Meta = &redisMeta{}
-
-type msgCallbacks struct {
-	sync.Mutex
-	callbacks map[uint32]MsgCallback
-}
 
 func init() {
 	Register("redis", newRedisMeta)
@@ -180,28 +166,6 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	m.root = 1
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
-}
-
-func lookupSubdir(m Meta, subdir string) (Ino, error) {
-	var root Ino = 1
-	for subdir != "" {
-		ps := strings.SplitN(subdir, "/", 2)
-		if ps[0] != "" {
-			var attr Attr
-			r := m.Lookup(Background, root, ps[0], &root, &attr)
-			if r != 0 {
-				return 0, fmt.Errorf("lookup subdir %s: %s", ps[0], r)
-			}
-			if attr.Typ != TypeDirectory {
-				return 0, fmt.Errorf("%s is not a redirectory", ps[0])
-			}
-		}
-		if len(ps) == 1 {
-			break
-		}
-		subdir = ps[1]
-	}
-	return root, nil
 }
 
 func (r *redisMeta) checkRoot(inode Ino) Ino {
@@ -566,13 +530,6 @@ func (r *redisMeta) marshal(attr *Attr) []byte {
 	return w.Bytes()
 }
 
-func align4K(length uint64) int64 {
-	if length == 0 {
-		return 1 << 12
-	}
-	return int64((((length - 1) >> 12) + 1) << 12)
-}
-
 func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	defer timeit(time.Now())
 	if r.fmt.Capacity > 0 {
@@ -613,45 +570,6 @@ func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *u
 		for *iused*10 > (*iused+*iavail)*8 {
 			*iavail *= 2
 		}
-	}
-	return 0
-}
-
-func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
-	var attr Attr
-	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
-		return st
-	}
-	if attr.Typ == TypeDirectory {
-		var entries []*Entry
-		if st := r.Readdir(ctx, inode, 1, &entries); st != 0 {
-			return st
-		}
-		for _, e := range entries {
-			if e.Inode == inode || len(e.Name) == 2 && bytes.Equal(e.Name, []byte("..")) {
-				continue
-			}
-			if e.Attr.Typ == TypeDirectory {
-				if recursive {
-					if st := GetSummary(r, ctx, e.Inode, summary, recursive); st != 0 {
-						return st
-					}
-				} else {
-					summary.Dirs++
-					summary.Size += 4096
-				}
-			} else {
-				summary.Files++
-				summary.Length += e.Attr.Length
-				summary.Size += uint64(align4K(e.Attr.Length))
-			}
-		}
-		summary.Dirs++
-		summary.Size += 4096
-	} else {
-		summary.Files++
-		summary.Length += attr.Length
-		summary.Size += uint64(align4K(attr.Length))
 	}
 	return 0
 }
@@ -820,20 +738,6 @@ func (r *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 	return 0
 }
 
-func accessMode(attr *Attr, uid uint32, gid uint32) uint8 {
-	if uid == 0 {
-		return 0x7
-	}
-	mode := attr.Mode
-	if uid == attr.Uid {
-		return uint8(mode>>6) & 7
-	}
-	if gid == attr.Gid {
-		return uint8(mode>>3) & 7
-	}
-	return uint8(mode & 7)
-}
-
 func (r *redisMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
 	if ctx.Uid() == 0 {
 		return 0
@@ -882,23 +786,6 @@ func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		attr.Length = 4 << 10
 	}
 	return errno(err)
-}
-
-func errno(err error) syscall.Errno {
-	if err == nil {
-		return 0
-	}
-	if eno, ok := err.(syscall.Errno); ok {
-		return eno
-	}
-	if err == redis.Nil {
-		return syscall.ENOENT
-	}
-	if strings.HasPrefix(err.Error(), "OOM") {
-		return syscall.ENOSPC
-	}
-	logger.Errorf("error: %s\n%s", err, debug.Stack())
-	return syscall.EIO
 }
 
 type timeoutError interface {
@@ -1068,16 +955,6 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		return err
 	}, r.inodeKey(inode))
 }
-
-const (
-	// fallocate
-	fallocKeepSize  = 0x01
-	fallocPunchHole = 0x02
-	// RESERVED: fallocNoHideStale   = 0x04
-	fallocCollapesRange = 0x08
-	fallocZeroRange     = 0x10
-	fallocInsertRange   = 0x20
-)
 
 func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
 	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
@@ -1581,74 +1458,6 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		})
 		return err
 	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
-}
-
-func emptyDir(r Meta, ctx Context, inode Ino, concurrent chan int) syscall.Errno {
-	if st := r.Access(ctx, inode, 3, nil); st != 0 {
-		return st
-	}
-	var entries []*Entry
-	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
-		return st
-	}
-	var wg sync.WaitGroup
-	var status syscall.Errno
-	for _, e := range entries {
-		if e.Inode == inode || len(e.Name) == 2 && string(e.Name) == ".." {
-			continue
-		}
-		if e.Attr.Typ == TypeDirectory {
-			select {
-			case concurrent <- 1:
-				wg.Add(1)
-				go func(child Ino, name string) {
-					defer wg.Done()
-					e := emptyEntry(r, ctx, inode, name, child, concurrent)
-					if e != 0 {
-						status = e
-					}
-					<-concurrent
-				}(e.Inode, string(e.Name))
-			default:
-				if st := emptyEntry(r, ctx, inode, string(e.Name), e.Inode, concurrent); st != 0 {
-					return st
-				}
-			}
-		} else {
-			if st := r.Unlink(ctx, inode, string(e.Name)); st != 0 {
-				return st
-			}
-		}
-	}
-	wg.Wait()
-	return status
-}
-
-func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, concurrent chan int) syscall.Errno {
-	st := emptyDir(r, ctx, inode, concurrent)
-	if st == 0 {
-		st = r.Rmdir(ctx, parent, name)
-		if st == syscall.ENOTEMPTY {
-			st = emptyEntry(r, ctx, parent, name, inode, concurrent)
-		}
-	}
-	return st
-}
-
-func Remove(r Meta, ctx Context, parent Ino, name string) syscall.Errno {
-	if st := r.Access(ctx, parent, 3, nil); st != 0 {
-		return st
-	}
-	var inode Ino
-	var attr Attr
-	if st := r.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
-		return st
-	}
-	if attr.Typ != TypeDirectory {
-		return r.Unlink(ctx, parent, name)
-	}
-	concurrent := make(chan int, 50)
-	return emptyEntry(r, ctx, parent, name, inode, concurrent)
 }
 
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -3366,55 +3175,6 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 	bar.SetTotal(0, true) // FIXME: current != total
 	progress.Wait()
 	return bw.Flush()
-}
-
-func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
-	typ := typeFromString(e.Attr.Type)
-	inode := e.Attr.Inode
-	if showProgress != nil {
-		if typ == TypeDirectory {
-			showProgress(int64(len(e.Entries)), 1)
-		} else {
-			showProgress(0, 1)
-		}
-	}
-
-	if exist, ok := entries[inode]; ok {
-		attr := e.Attr
-		eattr := exist.Attr
-		if typ != TypeFile || typeFromString(eattr.Type) != TypeFile {
-			return fmt.Errorf("inode conflict: %d", inode)
-		}
-		eattr.Nlink++
-		if eattr.Ctime*1e9+int64(eattr.Ctimensec) < attr.Ctime*1e9+int64(attr.Ctimensec) {
-			attr.Nlink = eattr.Nlink
-			entries[inode] = e
-		}
-		return nil
-	}
-	entries[inode] = e
-
-	if typ == TypeFile {
-		e.Attr.Nlink = 1 // reset
-	} else if typ == TypeDirectory {
-		if inode == 1 { // root inode
-			e.Parent = 1
-		}
-		e.Attr.Nlink = 2
-		for name, child := range e.Entries {
-			child.Name = name
-			child.Parent = inode
-			if typeFromString(child.Attr.Type) == TypeDirectory {
-				e.Attr.Nlink++
-			}
-			if err := collectEntry(child, entries, showProgress); err != nil {
-				return err
-			}
-		}
-	} else if e.Attr.Nlink != 1 { // nlink should be 1 for other types
-		return fmt.Errorf("invalid nlink %d for inode %d type %s", e.Attr.Nlink, inode, e.Attr.Type)
-	}
-	return nil
 }
 
 func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int) error {

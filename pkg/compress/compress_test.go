@@ -22,22 +22,27 @@ import (
 )
 
 func testCompress(t *testing.T, c Compressor) {
-	src := []byte("hello")
+	src := []byte(c.Name())
+	_, err := c.Compress(make([]byte, 1), src)
+	if err == nil {
+		t.Fatal("expect short buffer error, but got nil ")
+	}
 	dst := make([]byte, c.CompressBound(len(src)))
 	n, err := c.Compress(dst, src)
 	if err != nil {
-		t.Error(err)
-		t.FailNow()
+		t.Fatalf("compress: %s", err)
+	}
+	_, err = c.Decompress(make([]byte, 1), dst[:n])
+	if err == nil {
+		t.Fatalf("expect short buffer error, but got nil")
 	}
 	src2 := make([]byte, len(src))
 	n, err = c.Decompress(src2, dst[:n])
 	if err != nil {
-		t.Error(err)
-		t.FailNow()
+		t.Fatalf("decompress: %s", err)
 	}
 	if string(src2[:n]) != string(src) {
-		t.Error("not matched", string(src2))
-		t.FailNow()
+		t.Fatalf("expect %s but got %s", string(src), string(src2))
 	}
 }
 
@@ -47,6 +52,10 @@ func TestUncompressed(t *testing.T) {
 
 func TestZstd(t *testing.T) {
 	testCompress(t, NewCompressor("zstd"))
+}
+
+func TestLZ4(t *testing.T) {
+	testCompress(t, NewCompressor("lz4"))
 }
 
 func benchmarkDecompress(b *testing.B, comp Compressor) {

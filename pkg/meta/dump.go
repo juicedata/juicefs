@@ -284,3 +284,52 @@ func loadAttr(d *DumpedAttr) *Attr {
 		Full:      true,
 	} // Length and Parent not set
 }
+
+func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
+	typ := typeFromString(e.Attr.Type)
+	inode := e.Attr.Inode
+	if showProgress != nil {
+		if typ == TypeDirectory {
+			showProgress(int64(len(e.Entries)), 1)
+		} else {
+			showProgress(0, 1)
+		}
+	}
+
+	if exist, ok := entries[inode]; ok {
+		attr := e.Attr
+		eattr := exist.Attr
+		if typ != TypeFile || typeFromString(eattr.Type) != TypeFile {
+			return fmt.Errorf("inode conflict: %d", inode)
+		}
+		eattr.Nlink++
+		if eattr.Ctime*1e9+int64(eattr.Ctimensec) < attr.Ctime*1e9+int64(attr.Ctimensec) {
+			attr.Nlink = eattr.Nlink
+			entries[inode] = e
+		}
+		return nil
+	}
+	entries[inode] = e
+
+	if typ == TypeFile {
+		e.Attr.Nlink = 1 // reset
+	} else if typ == TypeDirectory {
+		if inode == 1 { // root inode
+			e.Parent = 1
+		}
+		e.Attr.Nlink = 2
+		for name, child := range e.Entries {
+			child.Name = name
+			child.Parent = inode
+			if typeFromString(child.Attr.Type) == TypeDirectory {
+				e.Attr.Nlink++
+			}
+			if err := collectEntry(child, entries, showProgress); err != nil {
+				return err
+			}
+		}
+	} else if e.Attr.Nlink != 1 { // nlink should be 1 for other types
+		return fmt.Errorf("invalid nlink %d for inode %d type %s", e.Attr.Nlink, inode, e.Attr.Type)
+	}
+	return nil
+}

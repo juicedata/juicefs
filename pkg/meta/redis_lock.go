@@ -1,3 +1,5 @@
+// +build !noredis
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -16,14 +18,12 @@
 package meta
 
 import (
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
@@ -77,84 +77,6 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 		}
 	}
 	return err
-}
-
-type plockRecord struct {
-	ltype uint32
-	pid   uint32
-	start uint64
-	end   uint64
-}
-
-func loadLocks(d []byte) []plockRecord {
-	var ls []plockRecord
-	rb := utils.FromBuffer(d)
-	for rb.HasMore() {
-		ls = append(ls, plockRecord{rb.Get32(), rb.Get32(), rb.Get64(), rb.Get64()})
-	}
-	return ls
-}
-
-func dumpLocks(ls []plockRecord) []byte {
-	wb := utils.NewBuffer(uint32(len(ls)) * 24)
-	for _, l := range ls {
-		wb.Put32(l.ltype)
-		wb.Put32(l.pid)
-		wb.Put64(l.start)
-		wb.Put64(l.end)
-	}
-	return wb.Bytes()
-}
-
-func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
-	// ls is ordered by l.start without overlap
-	size := len(ls)
-	for i := 0; i < size && nl.start <= nl.end; i++ {
-		l := ls[i]
-		if nl.start < l.start && nl.end >= l.start {
-			// split nl
-			ls = append(ls, nl)
-			ls[len(ls)-1].end = l.start - 1
-			nl.start = l.start
-		}
-		if nl.start > l.start && nl.start <= l.end {
-			// split l
-			l.end = nl.start - 1
-			ls = append(ls, l)
-			ls[i].start = nl.start
-			l = ls[i]
-		}
-		if nl.start == l.start {
-			ls[i].ltype = nl.ltype // update l
-			ls[i].pid = nl.pid
-			if l.end > nl.end {
-				// split l
-				ls[i].end = nl.end
-				l.start = nl.end + 1
-				ls = append(ls, l)
-			}
-			nl.start = ls[i].end + 1
-		}
-	}
-	if nl.start <= nl.end {
-		ls = append(ls, nl)
-	}
-	sort.Slice(ls, func(i, j int) bool { return ls[i].start < ls[j].start })
-	for i := 0; i < len(ls); {
-		if ls[i].ltype == F_UNLCK || ls[i].start > ls[i].end {
-			// remove empty one
-			copy(ls[i:], ls[i+1:])
-			ls = ls[:len(ls)-1]
-		} else {
-			if i+1 < len(ls) && ls[i].ltype == ls[i+1].ltype && ls[i].pid == ls[i+1].pid && ls[i].end+1 == ls[i+1].start {
-				// combine continuous range
-				ls[i].end = ls[i+1].end
-				ls[i+1].start = ls[i+1].end + 1
-			}
-			i++
-		}
-	}
-	return ls
 }
 
 func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {

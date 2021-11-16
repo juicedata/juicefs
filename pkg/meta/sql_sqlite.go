@@ -1,4 +1,4 @@
-// +build !windows
+// +build !nosqlite
 
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
@@ -15,27 +15,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package utils
+package meta
 
-import "syscall"
+import (
+	"github.com/mattn/go-sqlite3"
+)
 
-type Rusage struct {
-	syscall.Rusage
-}
-
-// GetUtime returns the user time in seconds.
-func (ru *Rusage) GetUtime() float64 {
-	return float64(ru.Utime.Sec) + float64(ru.Utime.Usec)/1e6
-}
-
-// GetStime returns the system time in seconds.
-func (ru *Rusage) GetStime() float64 {
-	return float64(ru.Stime.Sec) + float64(ru.Stime.Usec)/1e6
-}
-
-// GetRusage returns CPU usage of current process.
-func GetRusage() *Rusage {
-	var ru syscall.Rusage
-	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
-	return &Rusage{ru}
+func init() {
+	errBusy = sqlite3.ErrBusy
+	Register("sqlite3", newSQLMeta)
 }
