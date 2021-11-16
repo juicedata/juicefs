@@ -9,6 +9,7 @@
 	<packaging>jar</packaging>
 	<properties>
 		<hadoop.version>3.0.0</hadoop.version>
+		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path}</argLine>
 	</properties>
 	<build>
 		<plugins>
@@ -16,7 +17,7 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>2.19.1</version>
 				<configuration>
-					<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path}</argLine>
+					<argLine>@{argLine}</argLine>
 					<trimStackTrace>false</trimStackTrace>
 				</configuration>
 			</plugin>
@@ -64,6 +65,25 @@
 						</manifest>
 					</archive>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.7</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 		<resources>
