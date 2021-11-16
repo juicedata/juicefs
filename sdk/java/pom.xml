@@ -17,7 +17,7 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>2.19.1</version>
 				<configuration>
-					<argLine>${argLine}</argLine>
+					<argLine>@{argLine}</argLine>
 					<trimStackTrace>false</trimStackTrace>
 				</configuration>
 			</plugin>
