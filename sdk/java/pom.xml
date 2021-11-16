@@ -11,6 +11,7 @@
 		<hadoop.version>3.0.0</hadoop.version>
 	</properties>
 	<build>
+		<sourceDirectory>sdk/java/src</sourceDirectory>
 		<plugins>
 			<plugin>
 				<artifactId>maven-surefire-plugin</artifactId>
