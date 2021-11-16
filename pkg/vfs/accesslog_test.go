@@ -34,13 +34,18 @@ func TestAccessLog(t *testing.T) {
 		t.Fatalf("invalid fd")
 	}
 
+	now := time.Now()
 	// partial read
 	buf := make([]byte, 1024)
 	n = readAccessLog(1, buf[:10])
 	if n != 10 {
 		t.Fatalf("partial read: %d", n)
 	}
-	// read whole line
+	if time.Since(now) > time.Millisecond*10 {
+		t.Fatalf("should not block")
+	}
+
+	// read whole line, block for 1 second
 	n = readAccessLog(1, buf[10:])
 	if n != 54 {
 		t.Fatalf("partial read: %d", n)
@@ -52,7 +57,7 @@ func TestAccessLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invalid time %s: %s", logs, err)
 	}
-	if time.Since(ts) > time.Millisecond*10 {
+	if now.Sub(ts.Local()) > time.Millisecond*10 {
 		t.Fatalf("stale time: %s now: %s", ts, time.Now())
 	}
 	if logs[26:len(logs)-4] != " [uid:1,gid:2,pid:10] test <0.0000" {
