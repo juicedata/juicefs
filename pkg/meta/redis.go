@@ -88,7 +88,7 @@ type redisMeta struct {
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
 
-	snap *snapStruct
+	snap *redisSnap
 }
 
 var _ Meta = &redisMeta{}
@@ -2890,7 +2890,7 @@ func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	return e
 }
 
-func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, useSnap bool, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2898,7 +2898,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, useSnap bool, bw *bufi
 	}
 	var err error
 	var dirs map[string]string
-	if useSnap {
+	if m.root == 1 {
 		dirs = m.snap.hashMap[m.entryKey(inode)]
 	} else {
 		dirs, err = m.rdb.HGetAll(context.Background(), m.entryKey(inode)).Result()
@@ -2921,7 +2921,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, useSnap bool, bw *bufi
 	for idx, name := range sortedName {
 		typ, inode := m.parseEntry([]byte(dirs[name]))
 		var entry *DumpedEntry
-		if useSnap {
+		if m.root == 1 {
 			entry = m.dumpEntryFast(inode)
 		} else {
 			entry, err = m.dumpEntry(inode)
@@ -2931,7 +2931,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, useSnap bool, bw *bufi
 		}
 		entry.Name = name
 		if typ == TypeDirectory {
-			err = m.dumpDir(inode, entry, useSnap, bw, depth+2, showProgress)
+			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
 		} else {
 			err = entry.writeJSON(bw, depth+2)
 		}
@@ -2949,14 +2949,14 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, useSnap bool, bw *bufi
 	return nil
 }
 
-type snapStruct struct {
+type redisSnap struct {
 	stringMap map[string]string            //i* s*
 	listMap   map[string][]string          //c*
 	hashMap   map[string]map[string]string //d* x*
 }
 
 func (m *redisMeta) makeSnap() error {
-	m.snap = &snapStruct{
+	m.snap = &redisSnap{
 		stringMap: make(map[string]string),
 		listMap:   make(map[string][]string),
 		hashMap:   make(map[string]map[string]string),
@@ -3157,12 +3157,8 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 	if err != nil {
 		return err
 	}
-	if m.root == 1 {
-		err = m.dumpDir(m.root, tree, true, bw, 1, showProgress)
-	} else {
-		err = m.dumpDir(m.root, tree, false, bw, 1, showProgress)
-	}
-	if err != nil {
+
+	if err = m.dumpDir(m.root, tree, bw, 1, showProgress); err != nil {
 		return err
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {
