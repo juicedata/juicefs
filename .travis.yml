@@ -51,6 +51,8 @@ after_success:
   - ls -l sdk/java/target
   - ls -l sdk/java/target/surefire-reports
   - ls -l sdk/java/target/generated-sources
+  - cd sdk/java
+  - bash <(curl -s https://codecov.io/bash)
 notifications:
   slack:
     secure: VD92Vium23tdNvXyb1cQTI/4/JGXecXY3t2YHjpzfrIWc8RzGxYN28275g6a8gL+AEURDcsLPUxr243tHSqAyQmHhM4JHrX+eXTshqOKcikSzU6kYQTZE6B1vigp1bgn68ExdM9jFMnue4MmsN/tsGsZ5t8eM0lFERdActZaDoR1c5DJ1WMjAUKzUhihGV+10QHI8nZwh+G3zM9SmSfh6obFk3QN0zKCMJEyC8z9UPS3MQspwt23MySYIVHU0beu0PkcZHnXbXNNG3P27e349f8uChhJSwnLVS5G0zFVrxO3rWVTlEAU1ksUeGFPP883v3XwDrFxIT1WOujH7uKwEV/QT3d+8+mmL8yFr1gnU4Gl3hApRzepsvr/IIQjaGtC7HHIqv4gvP/FJB9r5VDH4al4pSbAtMfWYwspmfiPI5mADpmUqW0Anwt9gnTQ5NxPVVo5txyG9LSwseYQ/P2Tx3h8w/kPvW0sPqX/qIxxwnZLVzRbdOGfUlNfmwEmBqWPGkJIEsYto8BEpw932p6ytijElTj+3ISo8hn2L1Lm+vCbsWRWTVyjNL5lqfBCNdsh7JHBUgcBdm1lQ2kKogWtAPtY5DxqLMto9vyVCIoM+gCE1VWZHTjazaFbhLsIg7j2qvwZs97VGQ3Wr/FfqVh3/3mUJNj6X0CWRBpWJRQwVDA=
