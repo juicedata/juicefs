@@ -200,6 +200,9 @@ number of retries after network failure (default: 30)
 `--max-uploads value`<br />
 number of connections to upload (default: 20)
 
+`--max-deletes value`<br />
+number of threads to delete objects (default: 2)
+
 `--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
 
@@ -278,6 +281,9 @@ number of retries after network failure (default: 30)
 
 `--max-uploads value`<br />
 number of connections to upload (default: 20)
+
+`--max-deletes value`<br />
+number of threads to delete objects (default: 2)
 
 `--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
@@ -430,6 +436,8 @@ juicefs info [command options] PATH or INODE
 `--inode, -i`<br />
 use inode instead of path (current dir should be inside JuiceFS) (default: false)
 
+`--recursive, -r`<br />
+get summary of directories recursively (NOTE: it may take a long time for huge trees) (default: false)
 
 ### juicefs bench
 

@@ -137,6 +137,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | Configuration            | Default Value | Description                                     |
 | ------------------------ | ------------- | ----------------------------------------------- |
 | `juicefs.max-uploads`    | 20            | The max number of connections to upload         |
+| `juicefs.max-deletes`    | 2             | The max number of connections to delete         |
 | `juicefs.get-timeout`    | 5             | The max number of seconds to download an object |
 | `juicefs.put-timeout`    | 60            | The max number of seconds to upload an object   |
 | `juicefs.memory-size`    | 300           | Total read/write buffering in MiB               |
