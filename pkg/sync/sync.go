@@ -160,6 +160,10 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 				logger.Errorf("Fail to list after %s: %s", marker, err.Error())
 				break
 			}
+			if len(objs) > 0 && objs[0].Key() == marker {
+				// workaround from a object store that is not compatible to S3.
+				objs = objs[1:]
+			}
 		}
 		close(out)
 	}()
