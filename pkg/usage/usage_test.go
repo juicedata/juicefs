@@ -29,6 +29,13 @@ import (
 
 // nolint:errcheck
 func TestUsageReport(t *testing.T) {
+	// invalid addr
+	reportUrl = "http://127.0.0.1/report-usage"
+	m := meta.NewClient("memkv://", &meta.Config{})
+	go ReportUsage(m, "unittest")
+	// wait for it to report to unavailable address, it should not panic.
+	time.Sleep(time.Millisecond * 100)
+
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +55,6 @@ func TestUsageReport(t *testing.T) {
 
 	addr := l.Addr().String()
 	reportUrl = fmt.Sprintf("http://%s/report-usage", addr)
-	m := meta.NewClient("memkv://", &meta.Config{})
 	go ReportUsage(m, "unittest")
 
 	deadline := time.NewTimer(time.Second * 3)
