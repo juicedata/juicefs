@@ -22,18 +22,16 @@ import (
 
 func TestRUsage(t *testing.T) {
 	u := GetRusage()
-	if u.GetUtime() < 0.001 {
-		t.Fatalf("invalid utime: %f", u.GetUtime())
-	}
 	var s string
 	for i := 0; i < 1000; i++ {
 		s += time.Now().String()
 	}
+	// don't optimize the loop
 	if len(s) < 10 {
-		t.Fatalf("invalid time: %s", s)
+		panic("unreachable")
 	}
 	u2 := GetRusage()
-	if u2.GetStime()-u.GetStime() < 0.001 {
-		t.Fatalf("invalid stime: %f", u2.GetStime()-u.GetStime())
+	if u2.GetUtime()-u.GetUtime() < 0.0001 {
+		t.Fatalf("invalid utime: %f", u2.GetStime()-u.GetStime())
 	}
 }
