@@ -105,6 +105,22 @@ func gateway(c *cli.Context) error {
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Meta URL and listen address are required")
 	}
+
+	ak := os.Getenv("MINIO_ROOT_USER")
+	if ak == "" {
+		ak = os.Getenv("MINIO_ACCESS_KEY")
+	}
+	if len(ak) < 3 {
+		logger.Fatalf("MINIO_ROOT_USER should be specified as an environment variable with at least 3 characters")
+	}
+	sk := os.Getenv("MINIO_ROOT_PASSWORD")
+	if sk == "" {
+		sk = os.Getenv("MINIO_SECRET_KEY")
+	}
+	if len(sk) < 8 {
+		logger.Fatalf("MINIO_ROOT_PASSWORD should be specified as an environment variable with at least 8 characters")
+	}
+
 	address := c.Args().Get(1)
 	gw = &GateWay{c}
 
