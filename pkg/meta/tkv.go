@@ -16,6 +16,7 @@
 package meta
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
@@ -30,6 +31,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
+
+	"github.com/google/btree"
+
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
@@ -37,6 +42,7 @@ type kvTxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
 	scanRange(begin, end []byte) map[string][]byte
+	scan(prefix []byte, handler func(key, value []byte))
 	scanKeys(prefix []byte) [][]byte
 	scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
@@ -2479,35 +2485,83 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	})
 }
 
-func (m *kvMeta) dumpDir(inode Ino, showProgress func(totalIncr, currentIncr int64)) (map[string]*DumpedEntry, error) {
+func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+	bwWrite := func(s string) {
+		if _, err := bw.WriteString(s); err != nil {
+			panic(err)
+		}
+	}
 	vals, err := m.scanValues(m.entryKey(inode, ""), nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if showProgress != nil {
 		showProgress(int64(len(vals)), 0)
 	}
-	entries := make(map[string]*DumpedEntry)
-	for k, v := range vals {
-		typ, inode := m.parseEntry([]byte(v))
-		entry, err := m.dumpEntry(inode)
+	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
+		return err
+	}
+	var sortedName []string
+	for k := range vals {
+		sortedName = append(sortedName, k)
+	}
+	sort.Slice(sortedName, func(i, j int) bool { return sortedName[i][10:] < sortedName[j][10:] })
+
+	for idx, name := range sortedName {
+		typ, inode := m.parseEntry(vals[name])
+		var entry *DumpedEntry
+		entry, err = m.dumpEntry(inode)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		entry.Name = name[10:]
 		if typ == TypeDirectory {
-			if entry.Entries, err = m.dumpDir(inode, showProgress); err != nil {
-				return nil, err
-			}
+			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
+		} else {
+			err = entry.writeJSON(bw, depth+2)
 		}
-		entries[k[10:]] = entry // "A" + inode + "D"
+		if err != nil {
+			return err
+		}
+		if idx != len(vals)-1 {
+			bwWrite(",")
+		}
 		if showProgress != nil {
 			showProgress(0, 1)
 		}
 	}
-	return entries, nil
+	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
+	return nil
 }
 
-func (m *kvMeta) DumpMeta(w io.Writer) error {
+func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(error); ok {
+				err = e
+			} else {
+				err = errors.Errorf("DumpMeta error: %v", p)
+			}
+		}
+	}()
+
+	if m.root == 1 {
+		switch m.client.(type) {
+		case *memKV:
+		default:
+			client := &memKV{items: btree.New(2), temp: &kvItem{}}
+			if err = m.txn(func(tx kvTxn) error {
+				tx.scan(nil, func(key, value []byte) {
+					client.set(string(key), value)
+				})
+				return nil
+			}); err != nil {
+				return err
+			}
+			m.client = client
+		}
+	}
+
 	vals, err := m.scanValues(m.fmtKey("D"), nil)
 	if err != nil {
 		return err
@@ -2526,23 +2580,10 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-
-	var total int64 = 1 //root
-	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
-	bar.Increment()
-	if tree.Entries, err = m.dumpDir(m.root, func(totalIncr, currentIncr int64) {
-		total += totalIncr
-		bar.SetTotal(total, false)
-		bar.IncrInt64(currentIncr)
-	}); err != nil {
-		return err
+	if tree == nil {
+		return errors.New("The entry of the root inode was not found")
 	}
-	if bar.Current() != total {
-		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
-	}
-	bar.SetTotal(0, true)
-	progress.Wait()
-
+	tree.Name = "FSTree"
 	format, err := m.Load()
 	if err != nil {
 		return err
@@ -2599,7 +2640,32 @@ func (m *kvMeta) DumpMeta(w io.Writer) error {
 		dels,
 		tree,
 	}
-	return dm.writeJSON(w)
+	bw, err := dm.writeJsonWithOutTree(w)
+	if err != nil {
+		return err
+	}
+
+	var total int64 = 1 //root
+	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
+	bar.Increment()
+	showProgress := func(totalIncr, currentIncr int64) {
+		total += totalIncr
+		bar.SetTotal(total, false)
+		bar.IncrInt64(currentIncr)
+	}
+	if err = m.dumpDir(m.root, tree, bw, 1, showProgress); err != nil {
+		return err
+	}
+	if _, err = bw.WriteString("\n}\n"); err != nil {
+		return err
+	}
+	if bar.Current() != total {
+		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
+	}
+	bar.SetTotal(0, true)
+	progress.Wait()
+
+	return bw.Flush()
 }
 
 func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int64) error {
@@ -2617,7 +2683,9 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 				slices := make([]byte, 0, sliceBytes*len(c.Slices))
 				for _, s := range c.Slices {
 					slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
+					m.Lock()
 					refs[string(m.sliceKey(s.Chunkid, s.Size))]++
+					m.Unlock()
 					if cs.NextChunk <= int64(s.Chunkid) {
 						cs.NextChunk = int64(s.Chunkid) + 1
 					}
@@ -2695,11 +2763,42 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		NextSession: 1,
 	}
 	refs := make(map[string]int64)
+
+	maxNum := 100
+	pool := make(chan struct{}, maxNum)
+	errCh := make(chan error, 100)
+	done := make(chan struct{}, 1)
+	var wg sync.WaitGroup
 	for _, entry := range entries {
-		if err = m.loadEntry(entry, counters, refs); err != nil {
+		select {
+		case err = <-errCh:
 			return err
+		default:
 		}
+		pool <- struct{}{}
+		wg.Add(1)
+		go func(entry *DumpedEntry) {
+			defer func() {
+				wg.Done()
+				<-pool
+			}()
+			if err = m.loadEntry(entry, counters, refs); err != nil {
+				errCh <- err
+			}
+		}(entry)
 	}
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case err = <-errCh:
+		return err
+	case <-done:
+	}
+
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 

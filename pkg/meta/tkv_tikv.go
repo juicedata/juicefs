@@ -97,6 +97,20 @@ func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 	return tx.scanRange0(begin, end, nil)
 }
 
+func (tx *tikvTxn) scan(prefix []byte, handler func(key, value []byte)) {
+	it, err := tx.Iter(prefix, nil) //nolint:typecheck
+	if err != nil {
+		panic(err)
+	}
+	defer it.Close()
+	for it.Valid() {
+		handler(it.Key(), it.Value())
+		if err = it.Next(); err != nil {
+			panic(err)
+		}
+	}
+}
+
 func (tx *tikvTxn) nextKey(key []byte) []byte {
 	if len(key) == 0 {
 		return nil

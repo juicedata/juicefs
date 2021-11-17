@@ -145,6 +145,24 @@ func TestLoadDump(t *testing.T) {
 		}
 	})
 
+	t.Run("Metadata Engine: TKV --SubDir d1 ", func(t *testing.T) {
+		os.Remove(settingPath)
+		m := testLoad(t, "memkv://test/jfs", sampleFile)
+		fp, err := os.OpenFile("tkv_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			t.Fatalf("open file: %s", "tkv_subdir.dump")
+		}
+		defer fp.Close()
+		switch r := m.(type) {
+		case *kvMeta:
+			r.root = 3
+		}
+
+		if err = m.DumpMeta(fp); err != nil {
+			t.Fatalf("dump meta: %s", err)
+		}
+	})
+
 	cmd := exec.Command("diff", "redis.dump", sampleFile)
 	if out, err := cmd.Output(); err != nil {
 		t.Fatalf("diff: %s", out)
