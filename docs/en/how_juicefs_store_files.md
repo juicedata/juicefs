@@ -1,6 +1,6 @@
-# How JuiceFS stores files
+# How JuiceFS Stores Files
 
-The `file system` acts as a medium for interaction between the user and the hard drive, which allows files to be stored on the hard drive properly. As you know, Windows commonly used file systems are FAT32, NTFS, Linux commonly used file systems are Ext4, XFS, BTRFS, etc., each file system has its own unique way of organizing and managing files, which determines the file system Features such as storage capacity and performance.
+The file system acts as a medium for interaction between the user and the hard drive, which allows files to be stored on the hard drive properly. As you know, Windows commonly used file systems are FAT32, NTFS, Linux commonly used file systems are Ext4, XFS, Btrfs, etc., each file system has its own unique way of organizing and managing files, which determines the file system Features such as storage capacity and performance.
 
 As a file system, JuiceFS is no exception. Its strong consistency and high performance are inseparable from its unique file management mode.
 
@@ -19,4 +19,3 @@ Using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and
 Now, you can refer to [Quick Start Guide](quick_start_guide.md) to start using JuiceFS immediately!
 
 You can also learn more about [JuiceFS Technical Architecture](architecture.md)
-
