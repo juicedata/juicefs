@@ -2564,7 +2564,8 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 
 	if m.root == 1 {
 		switch m.client.(type) {
-		case *prefixClient, *tikvClient:
+		case *memKV:
+		default:
 			client := &memKV{items: btree.New(2), temp: &kvItem{}}
 			keys, err := m.scanKeys(nil)
 			if err != nil {
@@ -2583,8 +2584,6 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 				return err
 			}
 			m.client = client
-		default:
-
 		}
 	}
 
