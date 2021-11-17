@@ -95,6 +95,18 @@ func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	return ret
 }
 
+func (tx *memTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
+	tx.store.Lock()
+	defer tx.store.Unlock()
+	begin := string(prefix)
+	tx.store.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
+		it := i.(*kvItem)
+		tx.observed[it.key] = it.ver
+		handler([]byte(it.key), it.value)
+		return true
+	})
+}
+
 func (tx *memTxn) nextKey(key []byte) []byte {
 	if len(key) == 0 {
 		return nil

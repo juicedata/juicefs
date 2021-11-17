@@ -41,6 +41,7 @@ type kvTxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
 	scanRange(begin, end []byte) map[string][]byte
+	scan(prefix []byte, handler func(key, value []byte))
 	scanKeys(prefix []byte) [][]byte
 	scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
@@ -2532,25 +2533,6 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	return nil
 }
 
-func (m *kvMeta) batchGetAll(keys [][]byte, apply func(values [][]byte), batchSize int) error {
-	return m.client.txn(func(txn kvTxn) error {
-		var pre, end int
-		var values [][]byte
-		for i := 0; i < len(keys)/batchSize; i++ {
-			end = pre + batchSize
-			v := txn.gets(keys[pre:end]...)
-			values = append(values, v...)
-			pre = end
-		}
-		if len(keys)%batchSize != 0 {
-			v := txn.gets(keys[end:]...)
-			values = append(values, v...)
-		}
-		apply(values)
-		return nil
-	})
-}
-
 func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
@@ -2567,20 +2549,12 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		case *memKV:
 		default:
 			client := &memKV{items: btree.New(2), temp: &kvItem{}}
-			keys, err := m.scanKeys(nil)
-			if err != nil {
-				return err
-			}
-
-			var keysTmp = make([][]byte, len(keys[:]))
-			copy(keysTmp, keys)
-
-			batchSize := 10000
-			if err = m.batchGetAll(keys, func(values [][]byte) {
-				for i, k := range keysTmp {
-					client.set(string(k), values[i])
-				}
-			}, batchSize); err != nil {
+			if err = m.txn(func(tx kvTxn) error {
+				tx.scan(nil, func(key, value []byte) {
+					client.set(string(key), value)
+				})
+				return nil
+			}); err != nil {
 				return err
 			}
 			m.client = client
