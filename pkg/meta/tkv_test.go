@@ -20,6 +20,26 @@ import (
 	"testing"
 )
 
+func TestMemKVClient(t *testing.T) {
+	m, err := newKVMeta("memkv", "test/jfs", &Config{MaxDeletes: 1})
+	// newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{MaxDeletes: 1})
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+
+	testTruncateAndDelete(t, m)
+	testMetaClient(t, m)
+	testRemove(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m)
+	testCopyFileRange(t, m)
+	testCloseSession(t, m)
+	m.(*kvMeta).conf.CaseInsensi = true
+	testCaseIncensi(t, m)
+}
+
 func TestMemKV(t *testing.T) {
 	c, _ := newTkvClient("memkv", "")
 	c = withPrefix(c, []byte("jfs"))
@@ -45,23 +65,4 @@ func TestMemKV(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("counter should be 0, but got %d", count)
 	}
-}
-
-func TestTKVClient(t *testing.T) {
-	m, err := newKVMeta("memkv", "test/jfs", &Config{MaxDeletes: 1})
-	// m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-
-	testTruncateAndDelete(t, m)
-	testMetaClient(t, m)
-	testStickyBit(t, m)
-	testLocks(t, m)
-	testConcurrentWrite(t, m)
-	testCompaction(t, m)
-	testCopyFileRange(t, m)
-	testCloseSession(t, m)
-	m.(*kvMeta).conf.CaseInsensi = true
-	testCaseIncensi(t, m)
 }
