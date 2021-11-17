@@ -149,13 +149,7 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 				}
 			}
 		} else {
-			// assume it's a file
-			var attr Attr
-			if v.Meta.GetAttr(meta.Background, inode, &attr) == 0 {
-				if attr.Typ != meta.TypeSymlink {
-					todo <- _file{inode, attr.Length}
-				}
-			}
+			logger.Warnf("readdir %d: %s", inode, r)
 		}
 	}
 }

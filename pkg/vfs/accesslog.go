@@ -109,7 +109,6 @@ func readAccessLog(fh uint64, buf []byte) int {
 			n += l
 			if l < len(line) {
 				r.last = line[l:]
-				return n
 			}
 		case <-t.C:
 			if n == 0 {
