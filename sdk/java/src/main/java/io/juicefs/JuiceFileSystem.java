@@ -60,10 +60,6 @@ public class JuiceFileSystem extends FilterFileSystem {
     distcpPatched = true;
   }
 
-  private static FileSystem createInstance() {
-    return new JuiceFileSystemImpl();
-  }
-
   @Override
   public void initialize(URI uri, Configuration conf) throws IOException {
     super.initialize(uri, conf);
@@ -94,7 +90,7 @@ public class JuiceFileSystem extends FilterFileSystem {
   }
 
   public JuiceFileSystem() {
-    super(createInstance());
+    super(new JuiceFileSystemImpl());
   }
 
   @Override
