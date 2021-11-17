@@ -310,6 +310,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     for (String key : bkeys) {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
+    obj.put("bucket", getConf(conf, "bucket", ""));
     obj.put("readOnly", Boolean.valueOf(getConf(conf, "read-only", "false")));
     obj.put("cacheDir", getConf(conf, "cache-dir", "memory"));
     obj.put("cacheSize", Integer.valueOf(getConf(conf, "cache-size", "100")));
@@ -503,11 +504,11 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
-    String name = "libjfs.3.so";
+    String name = "libjfs.4.so";
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
     if (os.toLowerCase().contains("windows")) {
-      name = "libjfs2.dll";
+      name = "libjfs3.dll";
       dir = new File(System.getProperty("java.io.tmpdir"));
     }
     File libFile = new File(dir, name);
