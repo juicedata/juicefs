@@ -2,25 +2,6 @@
 
 有许多命令可帮助您管理文件系统，该页面提供了有关这些命令的详细参考。
 
-* [概览](#概览)
-* [自动补全](#自动补全)
-* [命令列表](#命令列表)
-   * [juicefs format](#juicefs-format)
-   * [juicefs mount](#juicefs-mount)
-   * [juicefs umount](#juicefs-umount)
-   * [juicefs gateway](#juicefs-gateway)
-   * [juicefs sync](#juicefs-sync)
-   * [juicefs rmr](#juicefs-rmr)
-   * [juicefs info](#juicefs-info)
-   * [juicefs bench](#juicefs-bench)
-   * [juicefs gc](#juicefs-gc)
-   * [juicefs fsck](#juicefs-fsck)
-   * [juicefs profile](#juicefs-profile)
-   * [juicefs status](#juicefs-status)
-   * [juicefs warmup](#juicefs-warmup)
-   * [juicefs dump](#juicefs-dump)
-   * [juicefs load](#juicefs-load)
-
 ## 概览
 
 在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
@@ -219,6 +200,9 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 `--max-uploads value`<br />
 上传对象的连接数 (默认: 20)
 
+`--max-deletes value`<br />
+删除对象的连接数 (默认: 2)
+
 `--buffer-size value`<br />
 读写缓存的总大小；单位为 MiB (默认: 300)
 
@@ -297,6 +281,9 @@ juicefs gateway [command options] META-URL ADDRESS
 
 `--max-uploads value`<br />
 上传对象的连接数 (默认: 20)
+
+`--max-deletes value`<br />
+删除对象的连接数 (默认: 2)
 
 `--buffer-size value`<br />
 读写缓存的总大小；单位为 MiB (默认: 300)
@@ -449,6 +436,8 @@ juicefs info [command options] PATH or INODE
 `--inode, -i`<br />
 使用 inode 号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认: false)
 
+`--recursive, -r`<br />
+递归获取所有子目录的概要信息（注意：当指定一个目录结构很复杂的路径时可能会耗时很长） (默认: false)
 
 ### juicefs bench
 

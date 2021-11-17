@@ -1,3 +1,7 @@
+---
+sidebar_label: 在 AWS 上使用 JuiceFS
+---
+
 # 在亚马逊 AWS 安装和使用 JuiceFS 存储
 
 亚马逊 AWS 是全球领先的云计算平台，提供几乎所有类型的云计算服务。得益于 AWS 丰富的产品线，用户可以非常灵活的搭配选择 JuiceFS 组成部分。

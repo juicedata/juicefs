@@ -5,21 +5,15 @@ JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system.
 JuiceFS also provides a [dashboard template](./grafana_template.json) for [Grafana](https://grafana.com), which can be
 imported to show the collected metrics in Prometheus.
 
-## Use consul as registration center
+## Use Consul as registration center
 
-JuiceFS support use consul as registration center for metrics api. you could custom the address through `--consul`
-option when execute [`juicefs mount`](command_reference.md#juicefs-mount)
-or [`juicefs gateway`](command_reference.md#juicefs-gateway) command.
+JuiceFS support use Consul as registration center for metrics API. You could custom the address through `--consul` option when execute [`juicefs mount`](command_reference.md#juicefs-mount) or [`juicefs gateway`](command_reference.md#juicefs-gateway) command.
 
-When the consul address is configured, the `--metrics` option does not need to be configured. JuiceFS will automatically
-configure metrics url according to its own network and port conditions. If `--metrics` is set at the same time, it will
-first try to listen on the configured metrics url.
+When the Consul address is configured, the `--metrics` option does not need to be configured. JuiceFS will automatically configure metrics URL according to its own network and port conditions. If `--metrics` is set at the same time, it will first try to listen on the configured metrics URL.
 
-For each instance registered to consul, its serviceName is `juicefs`, and the format of serviceId is `ip-mountpoint`,
-for example: `127.0.0.1:/tmp/jfs`.
+For each instance registered to Consul, its `serviceName` is `juicefs`, and the format of `serviceId` is `<IP>:<mount-point>`, for example: `127.0.0.1:/tmp/jfs`.
 
-The meta of each instance contains two aspects: hostname and mountpoint. When mountpoint is `s3gateway`, which means
-that the instance is an S3gateway.
+The meta of each instance contains two aspects: `hostname` and `mountpoint`. When `mountpoint` is `s3gateway`, which means that the instance is an S3 gateway.
 
 Below are descriptions of each metrics.
 
