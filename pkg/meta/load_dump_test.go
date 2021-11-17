@@ -113,6 +113,24 @@ func TestLoadDump(t *testing.T) {
 			t.Fatalf("dump meta: %s", err)
 		}
 	})
+
+	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
+		os.Remove("test10.db")
+		m := testLoad(t, "sqlite3://test10.db", sampleFile)
+		fp, err := os.OpenFile("sqlite3_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			t.Fatalf("open file: %s", "sqlite3_subdir.dump")
+		}
+		defer fp.Close()
+		switch r := m.(type) {
+		case *dbMeta:
+			r.root = 3
+		}
+		if err = m.DumpMeta(fp); err != nil {
+			t.Fatalf("dump meta: %s", err)
+		}
+	})
+
 	t.Run("Metadata Engine: TKV", func(t *testing.T) {
 		os.Remove(settingPath)
 		m := testLoad(t, "memkv://test/jfs", sampleFile)
