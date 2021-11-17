@@ -957,7 +957,7 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 		err = r.rdb.Watch(ctx, txf, keys...)
 		if shouldRetry(err, retryOnFailture) {
 			txRestart.Add(1)
-			time.Sleep(time.Microsecond * 100 * time.Duration(rand.Int()%(i+1)))
+			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		}
 		return errno(err)
