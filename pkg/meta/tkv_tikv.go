@@ -21,6 +21,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
 )
@@ -187,21 +189,21 @@ func (c *tikvClient) name() string {
 	return "tikv"
 }
 
-func (c *tikvClient) txn(f func(kvTxn) error) error {
+func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 	tx, err := c.client.Begin()
 	if err != nil {
 		return err
 	}
-	defer func(e *error) {
+	defer func() {
 		if r := recover(); r != nil {
 			fe, ok := r.(error)
 			if ok {
-				*e = fe
+				err = fe
 			} else {
-				panic(r)
+				err = errors.Errorf("tikv client txn func error: %v", r)
 			}
 		}
-	}(&err)
+	}()
 	if err = f(&tikvTxn{tx}); err != nil {
 		return err
 	}
