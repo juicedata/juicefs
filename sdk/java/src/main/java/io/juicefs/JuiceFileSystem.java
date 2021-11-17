@@ -21,9 +21,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.xeustechnologies.jcl.JarClassLoader;
-import org.xeustechnologies.jcl.JclObjectFactory;
-import org.xeustechnologies.jcl.JclUtils;
 
 import java.io.IOException;
 import java.net.URI;
@@ -38,7 +35,6 @@ import java.util.concurrent.TimeUnit;
 @InterfaceStability.Stable
 public class JuiceFileSystem extends FilterFileSystem {
   private static final Logger LOG = LoggerFactory.getLogger(JuiceFileSystem.class);
-  private static JarClassLoader jcl;
 
   private static boolean fileChecksumEnabled = false;
   private static boolean distcpPatched = false;
@@ -46,10 +42,6 @@ public class JuiceFileSystem extends FilterFileSystem {
   private ScheduledExecutorService emptier;
 
   static {
-    jcl = new JarClassLoader();
-    String path = JuiceFileSystem.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-    jcl.add(path); // Load jar file
-
     PatchUtil.patchBefore("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableFsDataOutputStream",
             "waitUntilLeaseIsRevoked",
             new String[]{"org.apache.hadoop.fs.FileSystem", "org.apache.hadoop.fs.Path"},
@@ -69,10 +61,7 @@ public class JuiceFileSystem extends FilterFileSystem {
   }
 
   private static FileSystem createInstance() {
-    // Create default factory
-    JclObjectFactory factory = JclObjectFactory.getInstance();
-    Object obj = factory.create(jcl, "io.juicefs.JuiceFileSystemImpl");
-    return (FileSystem) JclUtils.deepClone(obj);
+    return new JuiceFileSystemImpl();
   }
 
   @Override
