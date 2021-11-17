@@ -211,27 +211,6 @@ type DumpedMeta struct {
 	FSTree    *DumpedEntry `json:",omitempty"`
 }
 
-func (dm *DumpedMeta) writeJSON(w io.Writer) error {
-	tree := dm.FSTree
-	dm.FSTree = nil
-	data, err := json.MarshalIndent(dm, "", jsonIndent)
-	if err != nil {
-		return err
-	}
-	bw := bufio.NewWriterSize(w, jsonWriteSize)
-	if _, err = bw.Write(append(data[:len(data)-2], ',')); err != nil { // delete \n}
-		return err
-	}
-	tree.Name = "FSTree"
-	if err = tree.writeJSON(bw, 1); err != nil {
-		return err
-	}
-	if _, err = bw.WriteString("\n}\n"); err != nil {
-		return err
-	}
-	return bw.Flush()
-}
-
 func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	dm.FSTree = nil
 	data, err := json.MarshalIndent(dm, "", jsonIndent)
