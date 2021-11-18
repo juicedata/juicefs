@@ -4,7 +4,9 @@ on:
   push:
     tags:
       - v*
-
+    paths:
+      - '!docs/**'
+      - '!**.md'
 jobs:
   releaser:
     runs-on: ubuntu-latest
