@@ -246,7 +246,11 @@ func readDirSorted(dirname string) ([]os.DirEntry, error) {
 			entries[i] = &mEntry{e, e.Name() + dirSuffix, nil}
 		} else if !e.Type().IsRegular() {
 			// follow symlink
-			fi, _ := os.Stat(filepath.Join(dirname, e.Name()))
+			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
+			if err != nil {
+				logger.Warnf("skip broken symlink %s: %s", filepath.Join(dirname, e.Name()), err)
+				continue
+			}
 			name := e.Name()
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
