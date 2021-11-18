@@ -90,7 +90,7 @@ func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
 	blocks := totalspace / bsize
 	bavail := availspace / bsize
 	stat.Namemax = 255
-	stat.Frsize = bsize
+	stat.Frsize = 4096
 	stat.Bsize = bsize
 	stat.Blocks = blocks
 	stat.Bfree = bavail
