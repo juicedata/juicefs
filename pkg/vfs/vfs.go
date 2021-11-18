@@ -587,6 +587,7 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		size := int(rb.Get32())
 		if rb.Left() < int(size) {
 			logger.Debugf("message not complete: %d %d > %d", cmd, size, rb.Left())
+			err = syscall.EINVAL
 			return
 		}
 		h.data = append(h.data, h.pending...)
@@ -702,18 +703,20 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 		return
 	}
 
-	if !hi.Rlock(ctx) {
-		err = syscall.EINTR
-		return
-	}
-	defer hi.Runlock()
-	defer hi.removeOp(ctx)
 	if !ho.Wlock(ctx) {
 		err = syscall.EINTR
 		return
 	}
 	defer ho.Wunlock()
 	defer ho.removeOp(ctx)
+	if nodeIn != nodeOut {
+		if !hi.Rlock(ctx) {
+			err = syscall.EINTR
+			return
+		}
+		defer hi.Runlock()
+		defer hi.removeOp(ctx)
+	}
 
 	err = v.writer.Flush(ctx, nodeOut)
 	if err != 0 {

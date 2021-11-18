@@ -16,52 +16,11 @@
 package vfs
 
 import (
-	"log"
 	"os"
 	"testing"
 
-	"github.com/google/uuid"
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/object"
 )
-
-func createTestVFS() *VFS {
-	mp := "/jfs"
-	metaConf := &meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MountPoint: mp,
-	}
-	m := meta.NewClient("memkv://", metaConf)
-	format := meta.Format{
-		Name:      "test",
-		UUID:      uuid.New().String(),
-		Storage:   "mem",
-		BlockSize: 4096,
-	}
-	err := m.Init(format, true)
-	if err != nil {
-		log.Fatalf("setting: %s", err)
-	}
-	conf := &Config{
-		Meta:       metaConf,
-		Version:    "Juicefs",
-		Mountpoint: mp,
-		Chunk: &chunk.Config{
-			BlockSize:  format.BlockSize * 1024,
-			Compress:   format.Compression,
-			MaxUpload:  2,
-			BufferSize: 30 << 20,
-			CacheSize:  10,
-			CacheDir:   "memory",
-		},
-	}
-
-	blob, _ := object.CreateStorage("mem", "", "", "")
-	store := chunk.NewCachedStore(blob, *conf.Chunk)
-	return NewVFS(conf, m, store)
-}
 
 func TestFill(t *testing.T) {
 	v := createTestVFS()
