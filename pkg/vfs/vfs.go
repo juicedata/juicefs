@@ -70,9 +70,6 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 	var inode Ino
 	var attr = &Attr{}
 	if parent == rootID {
-		if nleng == 2 && name[0] == '.' && name[1] == '.' {
-			name = name[:1]
-		}
 		n := getInternalNodeByName(name)
 		if n != nil {
 			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
@@ -87,11 +84,10 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 		return
 	}
 	err = v.Meta.Lookup(ctx, parent, name, &inode, attr)
-	if err != 0 {
-		return
+	if err == 0 {
+		v.UpdateLength(inode, attr)
+		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
-	v.UpdateLength(inode, attr)
-	entry = &meta.Entry{Inode: inode, Attr: attr}
 	return
 }
 
@@ -104,11 +100,10 @@ func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, er
 	defer func() { logit(ctx, "getattr (%d): %s%s", ino, strerr(err), (*Entry)(entry)) }()
 	var attr = &Attr{}
 	err = v.Meta.GetAttr(ctx, ino, attr)
-	if err != 0 {
-		return
+	if err == 0 {
+		v.UpdateLength(ino, attr)
+		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
-	v.UpdateLength(ino, attr)
-	entry = &meta.Entry{Inode: ino, Attr: attr}
 	return
 }
 
@@ -133,12 +128,12 @@ func get_filetype(mode uint16) uint8 {
 }
 
 func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask uint16, rdev uint32) (entry *meta.Entry, err syscall.Errno) {
-	nleng := uint8(len(name))
+	nleng := len(name)
 	defer func() {
 		logit(ctx, "mknod (%d,%s,%s:0%04o,0x%08X): %s%s", parent, name, smode(mode), mode, rdev, strerr(err), (*Entry)(entry))
 	}()
 	if parent == rootID && IsSpecialName(name) {
-		err = syscall.EACCES
+		err = syscall.EEXIST
 		return
 	}
 	if nleng > maxName {
@@ -162,9 +157,9 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "unlink (%d,%s): %s", parent, name, strerr(err)) }()
-	nleng := uint8(len(name))
+	nleng := len(name)
 	if parent == rootID && IsSpecialName(name) {
-		err = syscall.EACCES
+		err = syscall.EPERM
 		return
 	}
 	if nleng > maxName {
@@ -179,7 +174,7 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	defer func() {
 		logit(ctx, "mkdir (%d,%s,%s:0%04o): %s%s", parent, name, smode(mode), mode, strerr(err), (*Entry)(entry))
 	}()
-	nleng := uint8(len(name))
+	nleng := len(name)
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
@@ -199,12 +194,8 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 }
 
 func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
-	nleng := uint8(len(name))
+	nleng := len(name)
 	defer func() { logit(ctx, "rmdir (%d,%s): %s", parent, name, strerr(err)) }()
-	if parent == rootID && IsSpecialName(name) {
-		err = syscall.EACCES
-		return
-	}
 	if nleng > maxName {
 		err = syscall.ENAMETOOLONG
 		return
@@ -214,7 +205,7 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 }
 
 func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
-	nleng := uint8(len(name))
+	nleng := len(name)
 	defer func() {
 		logit(ctx, "symlink (%d,%s,%s): %s%s", parent, name, path, strerr(err), (*Entry)(entry))
 	}()
@@ -247,11 +238,11 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 		logit(ctx, "rename (%d,%s,%d,%s,%d): %s", parent, name, newparent, newname, flags, strerr(err))
 	}()
 	if parent == rootID && IsSpecialName(name) {
-		err = syscall.EACCES
+		err = syscall.EPERM
 		return
 	}
 	if newparent == rootID && IsSpecialName(newname) {
-		err = syscall.EACCES
+		err = syscall.EPERM
 		return
 	}
 	if len(name) > maxName || len(newname) > maxName {
@@ -268,11 +259,11 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 		logit(ctx, "link (%d,%d,%s): %s%s", ino, newparent, newname, strerr(err), (*Entry)(entry))
 	}()
 	if IsSpecialNode(ino) {
-		err = syscall.EACCES
+		err = syscall.EPERM
 		return
 	}
 	if newparent == rootID && IsSpecialName(newname) {
-		err = syscall.EACCES
+		err = syscall.EPERM
 		return
 	}
 	if len(newname) > maxName {
@@ -291,10 +282,6 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 
 func (v *VFS) Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
 	defer func() { logit(ctx, "opendir (%d): %s [fh:%d]", ino, strerr(err), fh) }()
-	if IsSpecialNode(ino) {
-		err = syscall.ENOTDIR
-		return
-	}
 	fh = v.newHandle(ino).fh
 	return
 }
@@ -375,13 +362,11 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 	if runtime.GOOS == "darwin" && err == syscall.ENOENT {
 		err = syscall.EACCES
 	}
-	if err != 0 {
-		return
+	if err == 0 {
+		v.UpdateLength(inode, attr)
+		fh = v.newFileHandle(inode, attr.Length, flags)
+		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
-
-	v.UpdateLength(inode, attr)
-	fh = v.newFileHandle(inode, attr.Length, flags)
-	entry = &meta.Entry{Inode: inode, Attr: attr}
 	return
 }
 
@@ -415,13 +400,11 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		}
 	}()
 	err = v.Meta.Open(ctx, ino, flags, attr)
-	if err != 0 {
-		return
+	if err == 0 {
+		v.UpdateLength(ino, attr)
+		fh = v.newFileHandle(ino, attr.Length, flags)
+		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
-
-	v.UpdateLength(ino, attr)
-	fh = v.newFileHandle(ino, attr.Length, flags)
-	entry = &meta.Entry{Inode: ino, Attr: attr}
 	return
 }
 
@@ -449,11 +432,10 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 	}
 	v.writer.Flush(ctx, ino)
 	err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr)
-	if err != 0 {
-		return
+	if err == 0 {
+		v.writer.Truncate(ino, uint64(size))
+		v.reader.Truncate(ino, uint64(size))
 	}
-	v.writer.Truncate(ino, uint64(size))
-	v.reader.Truncate(ino, uint64(size))
 	return 0
 }
 
@@ -618,11 +600,10 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	}
 	h.removeOp(ctx)
 
-	if err != 0 {
-		return
+	if err == 0 {
+		writtenSizeHistogram.Observe(float64(len(buf)))
+		v.reader.Truncate(ino, v.writer.GetLength(ino))
 	}
-	writtenSizeHistogram.Observe(float64(len(buf)))
-	v.reader.Truncate(ino, v.writer.GetLength(ino))
 	return
 }
 
@@ -633,7 +614,7 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh 
 		return
 	}
 	if IsSpecialNode(ino) {
-		err = syscall.EACCES
+		err = syscall.EPERM
 		return
 	}
 	h := v.findHandle(ino, fh)
@@ -669,7 +650,7 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 		return
 	}
 	if IsSpecialNode(nodeOut) {
-		err = syscall.EACCES
+		err = syscall.EPERM
 		return
 	}
 	hi := v.findHandle(nodeIn, fhIn)
@@ -687,7 +668,7 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 		return
 	}
 	if ho.writer == nil {
-		err = syscall.EBADF
+		err = syscall.EACCES
 		return
 	}
 	if offIn >= maxFileSize || offIn+size >= maxFileSize || offOut >= maxFileSize || offOut+size >= maxFileSize {
@@ -868,7 +849,7 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 func (v *VFS) ListXattr(ctx Context, ino Ino, size int) (data []byte, err syscall.Errno) {
 	defer func() { logit(ctx, "listxattr (%d,%d): %s (%d)", ino, size, strerr(err), len(data)) }()
 	if IsSpecialNode(ino) {
-		err = syscall.EPERM
+		err = meta.ENOATTR
 		return
 	}
 	err = v.Meta.ListXattr(ctx, ino, &data)
