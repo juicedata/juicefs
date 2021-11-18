@@ -7,8 +7,8 @@
 在创建 JuiceFS 文件系统时，设置数据存储一般涉及以下几个选项：
 
 - `--storage` 指定文件系统要使用的存储服务，例如：`--storage s3`
-- `--bucket` 按特定格式指定对象存储的 bucket 地址，例如：`--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`
-- `--access-key` 和 `--secret-key` 用来指定访问对象存储的身份认证密钥，需要在相应云平台上创建。
+- `--bucket` 按特定格式指定对象存储的 bucket 地址，例如：`--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`。当对象存储在不同的网络环境需要使用不同的地址时，可以在挂载时通过 `--bucket`参数为当前挂载点指定跟格式化时不一样的地址。
+- `--access-key` 和 `--secret-key` 用来指定访问对象存储的身份认证密钥，需要在相应云平台上创建。如果使用的机器上已经通过环境变量或者其他方式获得了访问对象存储的权限，它们可以不提供。
 
 例如，以下命令使用 Amazon S3 对象存储创建文件系统：
 
