@@ -2,8 +2,6 @@ name: verify
 
 on:
   push:
-    branches:
-      - main
     paths-ignore:
       - 'docs/**'
   pull_request:
