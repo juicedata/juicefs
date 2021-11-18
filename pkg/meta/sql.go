@@ -2599,7 +2599,8 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("inode %d not found", inode)
+			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+			return nil
 		}
 		attr := &Attr{}
 		m.parseAttr(n, attr)
@@ -2622,8 +2623,12 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		if attr.Typ == TypeFile {
 			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 				c := &chunk{Inode: inode, Indx: indx}
-				if _, err = m.engine.Get(c); err != nil {
+				if ok, err = m.engine.Get(c); err != nil {
 					return err
+				}
+				if !ok {
+					logger.Warnf("no found chunk target for inode %d indx %d", inode, indx)
+					return nil
 				}
 				ss := readSliceBuf(c.Slices)
 				slices := make([]*DumpedSlice, 0, len(ss))
@@ -2639,7 +2644,8 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 				return err
 			}
 			if !ok {
-				return fmt.Errorf("no link target for inode %d", inode)
+				logger.Warnf("no link target for inode %d", inode)
+				return nil
 			}
 			e.Symlink = l.Target
 		}
@@ -2647,11 +2653,12 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		return nil
 	})
 }
-func (m *dbMeta) dumpEntryFast(inode Ino) (*DumpedEntry, error) {
+func (m *dbMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
 	if !ok {
-		return nil, fmt.Errorf("inode %d not found", inode)
+		logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+		return nil
 	}
 	attr := &Attr{}
 	m.parseAttr(n, attr)
@@ -2672,7 +2679,8 @@ func (m *dbMeta) dumpEntryFast(inode Ino) (*DumpedEntry, error) {
 		for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 			c, ok := m.snap.chunk[fmt.Sprintf("%d-%d", inode, indx)]
 			if !ok {
-				return nil, fmt.Errorf("no found chunk target for inode %d indx %d", inode, indx)
+				logger.Warnf("no found chunk target for inode %d indx %d", inode, indx)
+				return nil
 			}
 			ss := readSliceBuf(c.Slices)
 			slices := make([]*DumpedSlice, 0, len(ss))
@@ -2684,11 +2692,12 @@ func (m *dbMeta) dumpEntryFast(inode Ino) (*DumpedEntry, error) {
 	} else if attr.Typ == TypeSymlink {
 		l, ok := m.snap.symlink[inode]
 		if !ok {
-			return nil, fmt.Errorf("no link target for inode %d", inode)
+			logger.Warnf("no link target for inode %d", inode)
+			return nil
 		}
 		e.Symlink = l.Target
 	}
-	return e, nil
+	return e
 }
 
 func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
@@ -2722,13 +2731,18 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	for idx, e := range edges {
 		var entry *DumpedEntry
 		if m.root == 1 {
-			entry, err = m.dumpEntryFast(e.Inode)
+			entry = m.dumpEntryFast(e.Inode)
 		} else {
 			entry, err = m.dumpEntry(e.Inode)
+			if err != nil {
+				return err
+			}
 		}
-		if err != nil {
-			return err
+
+		if entry == nil {
+			continue
 		}
+
 		entry.Name = e.Name
 		if e.Type == TypeDirectory {
 			err = m.dumpDir(e.Inode, entry, bw, depth+2, showProgress)
@@ -2825,12 +2839,15 @@ func (m *dbMeta) DumpMeta(w io.Writer) (err error) {
 		if err = m.makeSnap(); err != nil {
 			return fmt.Errorf("Fetch all metadata from DB: %s", err)
 		}
-		tree, err = m.dumpEntryFast(m.root)
+		tree = m.dumpEntryFast(m.root)
 	} else {
 		tree, err = m.dumpEntry(m.root)
+		if err != nil {
+			return err
+		}
 	}
-	if err != nil {
-		return err
+	if tree == nil {
+		return errors.New("The entry of the root inode was not found")
 	}
 
 	tree.Name = "FSTree"

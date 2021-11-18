@@ -2929,6 +2929,10 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 				return err
 			}
 		}
+		if entry == nil {
+			continue
+		}
+
 		entry.Name = name
 		if typ == TypeDirectory {
 			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
