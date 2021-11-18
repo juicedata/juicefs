@@ -479,7 +479,6 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 		_ = v.Meta.Close(ctx, ino)
 		go v.releaseFileHandle(ino, fh) // after writes it waits for data sync, so do it after everything
 	}
-	return
 }
 
 func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err syscall.Errno) {
