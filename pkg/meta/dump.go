@@ -171,6 +171,12 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 		return err
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
+	if len(de.Xattrs) > 0 {
+		if data, err = json.Marshal(de.Xattrs); err != nil {
+			return err
+		}
+		write(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
+	}
 	write(fmt.Sprintf(",\n%s\"entries\": {", fieldPrefix))
 	return nil
 }
