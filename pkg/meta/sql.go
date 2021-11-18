@@ -540,11 +540,23 @@ func (m *dbMeta) nextInode() (Ino, error) {
 }
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
-	inserted, err := s.Insert(beans...)
-	if err == nil && int(inserted) < len(beans) {
-		err = fmt.Errorf("%d records not inserted: %+v", len(beans)-int(inserted), beans)
+	var start, end int
+	batchSize := 200
+	for i := 0; i < len(beans)/batchSize; i++ {
+		end = start + batchSize
+		inserted, err := s.Insert(beans[start:end]...)
+		if err == nil && int(inserted) < end-start {
+			return fmt.Errorf("%d records not inserted: %+v", end-start-int(inserted), beans[start:end])
+		}
+		start = end
 	}
-	return err
+	if len(beans)%batchSize != 0 {
+		inserted, err := s.Insert(beans[end:]...)
+		if err == nil && int(inserted) < len(beans)-end {
+			return fmt.Errorf("%d records not inserted: %+v", len(beans)-end-int(inserted), beans[end:])
+		}
+	}
+	return nil
 }
 
 var errBusy error
@@ -2712,7 +2724,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	if m.root == 1 {
 		edges, ok = m.snap.edges[inode]
 		if !ok {
-			return fmt.Errorf("no edge target for inode %d", inode)
+			logger.Warnf("no edge target for inode %d", inode)
 		}
 	} else {
 		if err := m.engine.Find(&edges, &edge{Parent: inode}); err != nil {
@@ -2772,11 +2784,23 @@ func (m *dbMeta) makeSnap() error {
 		chunk:   make(map[string]*chunk),
 	}
 
-	bufferSize := 10000
+	var total int64
+	for _, s := range []interface{}{new(node), new(symlink), new(edge), new(xattr), new(chunk)} {
+		count, err := m.engine.Count(s)
+		if err != nil {
+			return err
+		}
+		total += count
+	}
 
+	progress, bar := utils.NewDynProgressBar("Make snap progress: ", false)
+	bar.SetTotal(total, false)
+
+	bufferSize := 10000
 	if err := m.engine.BufferSize(bufferSize).Iterate(new(node), func(idx int, bean interface{}) error {
 		n := bean.(*node)
 		m.snap.node[n.Inode] = n
+		bar.Increment()
 		return nil
 	}); err != nil {
 		return err
@@ -2785,6 +2809,7 @@ func (m *dbMeta) makeSnap() error {
 	if err := m.engine.BufferSize(bufferSize).Iterate(new(symlink), func(idx int, bean interface{}) error {
 		s := bean.(*symlink)
 		m.snap.symlink[s.Inode] = s
+		bar.Increment()
 		return nil
 	}); err != nil {
 		return err
@@ -2792,6 +2817,7 @@ func (m *dbMeta) makeSnap() error {
 	if err := m.engine.BufferSize(bufferSize).Iterate(new(edge), func(idx int, bean interface{}) error {
 		e := bean.(*edge)
 		m.snap.edges[e.Parent] = append(m.snap.edges[e.Parent], e)
+		bar.Increment()
 		return nil
 	}); err != nil {
 		return err
@@ -2800,6 +2826,7 @@ func (m *dbMeta) makeSnap() error {
 	if err := m.engine.BufferSize(bufferSize).Iterate(new(xattr), func(idx int, bean interface{}) error {
 		x := bean.(*xattr)
 		m.snap.xattr[x.Inode] = append(m.snap.xattr[x.Inode], x)
+		bar.Increment()
 		return nil
 	}); err != nil {
 		return err
@@ -2808,10 +2835,13 @@ func (m *dbMeta) makeSnap() error {
 	if err := m.engine.BufferSize(bufferSize).Iterate(new(chunk), func(idx int, bean interface{}) error {
 		c := bean.(*chunk)
 		m.snap.chunk[fmt.Sprintf("%d-%d", c.Inode, c.Indx)] = c
+		bar.Increment()
 		return nil
 	}); err != nil {
 		return err
 	}
+	bar.SetTotal(0, true)
+	progress.Wait()
 	return nil
 }
 
@@ -3066,6 +3096,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 	refs := make(map[uint64]*chunkRef)
 
+	lProgress, lBar := utils.NewDynProgressBar("LoadEntry progress: ", false)
+	lBar.SetTotal(int64(len(entries)), false)
 	maxNum := 100
 	pool := make(chan struct{}, maxNum)
 	errCh := make(chan error, 100)
@@ -3081,6 +3113,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		wg.Add(1)
 		go func(entry *DumpedEntry) {
 			defer func() {
+				lBar.Increment()
 				wg.Done()
 				<-pool
 			}()
@@ -3100,6 +3133,9 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	case <-done:
 	}
+
+	lBar.SetTotal(0, true)
+	lProgress.Wait()
 
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)

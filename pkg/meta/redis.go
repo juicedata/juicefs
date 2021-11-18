@@ -3275,6 +3275,8 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	counters := &DumpedCounters{}
 	refs := make(map[string]int)
 
+	lProgress, lBar := utils.NewDynProgressBar("LoadEntry progress: ", false)
+	lBar.SetTotal(int64(len(entries)), false)
 	maxNum := 100
 	pool := make(chan struct{}, maxNum)
 	errCh := make(chan error, 100)
@@ -3291,6 +3293,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		go func(entry *DumpedEntry) {
 			defer func() {
 				wg.Done()
+				lBar.Increment()
 				<-pool
 			}()
 			if err = m.loadEntry(entry, counters, refs); err != nil {
@@ -3309,7 +3312,8 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		return err
 	case <-done:
 	}
-
+	lBar.SetTotal(0, true)
+	lProgress.Wait()
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 
