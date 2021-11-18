@@ -10,12 +10,9 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - '**.yml'
-      - '**.go'
-      - 'Makefile'
-      - '!docs/**'
-      - '!**.md'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 jobs:
   lint:
     runs-on: ubuntu-latest
