@@ -3,17 +3,20 @@ name: verify
 on:
   push:
     branches:
-    - main
+      - main
     paths:
-    - '**.go'
+      - '**.go'
+      - '!docs/**'
+      - '!**.md'
   pull_request:
     branches:
-    - main
+      - main
     paths:
-    - '**.yml'
-    - '**.go'
-    - 'Makefile'
-
+      - '**.yml'
+      - '**.go'
+      - 'Makefile'
+      - '!docs/**'
+      - '!**.md'
 jobs:
   lint:
     runs-on: ubuntu-latest
