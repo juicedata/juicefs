@@ -213,6 +213,9 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
+	if c.IsSet("bucket") {
+		format.Bucket = c.String("bucket")
+	}
 	blob, err := createStorage(format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
