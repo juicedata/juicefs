@@ -136,7 +136,7 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 	}
 	r := sb.String()
 	if len(r) > 1 {
-		r = r[:len(r)-1] // drop last ;
+		r = r[:len(r)-1] // drop last ,
 	}
 	return r
 }

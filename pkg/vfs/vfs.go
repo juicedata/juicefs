@@ -66,7 +66,6 @@ var (
 )
 
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
-	nleng := len(name)
 	var inode Ino
 	var attr = &Attr{}
 	if parent == rootID {
@@ -79,7 +78,7 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 	defer func() {
 		logit(ctx, "lookup (%d,%s): %s%s", parent, name, strerr(err), (*Entry)(entry))
 	}()
-	if nleng > maxName {
+	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
 	}
@@ -128,7 +127,6 @@ func get_filetype(mode uint16) uint8 {
 }
 
 func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask uint16, rdev uint32) (entry *meta.Entry, err syscall.Errno) {
-	nleng := len(name)
 	defer func() {
 		logit(ctx, "mknod (%d,%s,%s:0%04o,0x%08X): %s%s", parent, name, smode(mode), mode, rdev, strerr(err), (*Entry)(entry))
 	}()
@@ -136,7 +134,7 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 		err = syscall.EEXIST
 		return
 	}
-	if nleng > maxName {
+	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
 	}
@@ -157,12 +155,11 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "unlink (%d,%s): %s", parent, name, strerr(err)) }()
-	nleng := len(name)
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EPERM
 		return
 	}
-	if nleng > maxName {
+	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
 	}
@@ -174,12 +171,11 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	defer func() {
 		logit(ctx, "mkdir (%d,%s,%s:0%04o): %s%s", parent, name, smode(mode), mode, strerr(err), (*Entry)(entry))
 	}()
-	nleng := len(name)
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
 	}
-	if nleng > maxName {
+	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
 	}
@@ -194,9 +190,8 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 }
 
 func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
-	nleng := len(name)
 	defer func() { logit(ctx, "rmdir (%d,%s): %s", parent, name, strerr(err)) }()
-	if nleng > maxName {
+	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
 	}
@@ -205,7 +200,6 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 }
 
 func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
-	nleng := len(name)
 	defer func() {
 		logit(ctx, "symlink (%d,%s,%s): %s%s", parent, name, path, strerr(err), (*Entry)(entry))
 	}()
@@ -213,7 +207,7 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 		err = syscall.EEXIST
 		return
 	}
-	if nleng > maxName || (len(path)+1) > maxSymlink {
+	if len(name) > maxName || len(path) >= maxSymlink {
 		err = syscall.ENAMETOOLONG
 		return
 	}
