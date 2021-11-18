@@ -4,10 +4,15 @@ name: "s3test compatibility"
 on:
   push:
     branches: [ main ]
+    paths:
+      - '!docs/**'
+      - '!**.md'
   pull_request:
     #The branches below must be a subset of the branches above
     branches: [ main ]
-
+    paths:
+      - '!docs/**'
+      - '!**.md'
 jobs:
   s3tests:
     runs-on: ubuntu-latest
