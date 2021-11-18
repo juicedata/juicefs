@@ -29,7 +29,7 @@ func TestFill(t *testing.T) {
 	fe, fh, _ := v.Create(ctx, entry.Inode, "file", 0644, 0, uint32(os.O_WRONLY))
 	_ = v.Write(ctx, fe.Inode, []byte("hello"), 0, fh)
 	_ = v.Flush(ctx, fe.Inode, fh, 0)
-	_ = v.Release(ctx, fe.Inode, fh)
+	v.Release(ctx, fe.Inode, fh)
 	_, _ = v.Symlink(ctx, "test/file", 1, "sym")
 	_, _ = v.Symlink(ctx, "/tmp/testfile", 1, "sym2")
 	_, _ = v.Symlink(ctx, "testfile", 1, "sym3")

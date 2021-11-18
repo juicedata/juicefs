@@ -443,7 +443,7 @@ func (v *VFS) ReleaseHandler(ino Ino, fh uint64) {
 	v.releaseFileHandle(ino, fh)
 }
 
-func (v *VFS) Release(ctx Context, ino Ino, fh uint64) (err syscall.Errno) {
+func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 	if IsSpecialNode(ino) {
 		if ino == logInode {
 			closeAccessLog(fh)
@@ -451,6 +451,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) (err syscall.Errno) {
 		v.releaseHandle(ino, fh)
 		return
 	}
+	var err syscall.Errno
 	defer func() { logit(ctx, "release (%d): %s", ino, strerr(err)) }()
 	if fh > 0 {
 		f := v.findHandle(ino, fh)

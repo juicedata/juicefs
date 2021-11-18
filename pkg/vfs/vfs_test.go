@@ -135,8 +135,8 @@ func TestVFSBasic(t *testing.T) {
 		t.Fatalf("open f3: %s", e)
 	} else if e := v.Flush(ctx, fe.Inode, fh, 0); e != 0 {
 		t.Fatalf("close f3: %s", e)
-	} else if e := v.Release(ctx, fe.Inode, fh); e != 0 {
-		t.Fatalf("release f3: %s", e)
+	} else {
+		v.Release(ctx, fe.Inode, fh)
 	}
 
 	// symlink
@@ -294,7 +294,7 @@ func TestVFSIO(t *testing.T) {
 		t.Fatalf("copyfilerange too big file: %s %d", e, n)
 	}
 
-	_ = v.Release(ctx, fe.Inode, fh)
+	v.Release(ctx, fe.Inode, fh)
 }
 
 func TestVFSXattrs(t *testing.T) {
@@ -516,9 +516,7 @@ func TestVFSLocks(t *testing.T) {
 	if e = v.Flush(ctx, fe.Inode, fh, 0); e != 0 {
 		t.Fatalf("flush: %s", e)
 	}
-	if e = v.Release(ctx, fe.Inode, fh); e != 0 {
-		t.Fatalf("release : %s", e)
-	}
+	v.Release(ctx, fe.Inode, fh)
 	// invalid fd
 	if e = v.Flock(ctx, fe.Inode, 10, 123, syscall.F_WRLCK, true); e != syscall.EBADF {
 		t.Fatalf("flock wr: %s", e)
@@ -646,7 +644,7 @@ func TestInternalFile(t *testing.T) {
 		t.Fatalf("invalid access log: %q", string(buf[:n]))
 	}
 	_ = v.Flush(ctx, fe.Inode, fh, 0)
-	_ = v.Release(ctx, fe.Inode, fh)
+	v.Release(ctx, fe.Inode, fh)
 
 	// control messages
 	fe, e = v.Lookup(ctx, 1, ".control")
