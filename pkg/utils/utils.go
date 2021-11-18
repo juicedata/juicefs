@@ -63,6 +63,9 @@ func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
 		),
 		mpb.AppendDecorators(
 			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
+			decor.OnComplete(
+				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 6}), "",
+			),
 		),
 	)
 	return progress, bar
