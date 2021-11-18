@@ -2,7 +2,7 @@
 
 [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/juicedata/juicefs/blob/main/LICENSE) [![Go Report](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=flat)](https://goreportcard.com/badge/github.com/juicedata/juicefs) [![Join Slack](https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack)](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA)
 
-![JuiceFS LOGO](../images/juicefs-logo.png)
+![JuiceFS LOGO](images/juicefs-logo.png)
 
 JuiceFS is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS  to store data, the data itself will be persisted in object storage (e.g. Amazon S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene.
 
@@ -41,6 +41,11 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
   - [Use JuiceFS on Hadoop ecosystem](hadoop_java_sdk.md)
   - [Enable the S3 gateway for JuiceFS](s3_gateway.md)
   - [JuiceFS client compilation and upgrade](client_compile_and_upgrade.md)
+- **Cloud Platforms**
+  - [Use JuiceFS on AWS](clouds/aws.md)
+  - [Use JuiceFS on DigitalOcean](clouds/digitalocean.md)
+  - [Use JuiceFS on Alibaba Cloud](clouds/aliyun.md)
+  - [Use JuiceFS on Tencent Cloud](clouds/qcloud.md)
 - [Command Reference](command_reference.md)
 - **Advanced Topics**
   - [Redis best practices](redis_best_practices.md)

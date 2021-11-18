@@ -40,7 +40,7 @@ s3fs <BUCKET>:/s3fs /s3fs -o host=https://s3.<REGION>.amazonaws.com,endpoint=<RE
 
 ## 测试结果
 
-![Metadata Benchmark](../images/metadata-benchmark.svg)
+![Metadata Benchmark](images/metadata-benchmark.svg)
 
 ### S3FS
 ```

@@ -2,25 +2,6 @@
 
 There are many commands to help you manage your file system. This page provides a detailed reference for these commands.
 
-* [Overview](#Overview)
-* [Auto Completion](#Auto-Completion)
-* [Commands](#Commands)
-   * [juicefs format](#juicefs-format)
-   * [juicefs mount](#juicefs-mount)
-   * [juicefs umount](#juicefs-umount)
-   * [juicefs gateway](#juicefs-gateway)
-   * [juicefs sync](#juicefs-sync)
-   * [juicefs rmr](#juicefs-rmr)
-   * [juicefs info](#juicefs-info)
-   * [juicefs bench](#juicefs-bench)
-   * [juicefs gc](#juicefs-gc)
-   * [juicefs fsck](#juicefs-fsck)
-   * [juicefs profile](#juicefs-profile)
-   * [juicefs status](#juicefs-status)
-   * [juicefs warmup](#juicefs-warmup)
-   * [juicefs dump](#juicefs-dump)
-   * [juicefs load](#juicefs-load)
-
 ## Overview
 
 If you run `juicefs` by itself, it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information of it.
@@ -124,40 +105,40 @@ juicefs format [command options] META-URL NAME
 
 #### Options
 
-`--block-size value`\
+`--block-size value`<br />
 size of block in KiB (default: 4096)
 
-`--compress value`\
+`--compress value`<br />
 compression algorithm (lz4, zstd, none) (default: "none")
 
-`--capacity value`\
+`--capacity value`<br />
 the limit for space in GiB (default: unlimited)
 
-`--inodes value`\
+`--inodes value`<br />
 the limit for number of inodes (default: unlimited)
 
-`--shards value`\
+`--shards value`<br />
 store the blocks into N buckets by hash of key (default: 0)
 
-`--storage value`\
+`--storage value`<br />
 Object storage type (e.g. s3, gcs, oss, cos) (default: "file")
 
-`--bucket value`\
+`--bucket value`<br />
 A bucket URL to store data (default: `"$HOME/.juicefs/local"` or `"/var/jfs"`)
 
-`--access-key value`\
+`--access-key value`<br />
 Access key for object storage (env `ACCESS_KEY`)
 
-`--secret-key value`\
+`--secret-key value`<br />
 Secret key for object storage (env `SECRET_KEY`)
 
-`--encrypt-rsa-key value`\
+`--encrypt-rsa-key value`<br />
 A path to RSA private key (PEM)
 
-`--force`\
+`--force`<br />
 overwrite existing format (default: false)
 
-`--no-update`\
+`--no-update`<br />
 don't update existing volume (default: false)
 
 ### juicefs mount
@@ -174,82 +155,91 @@ juicefs mount [command options] META-URL MOUNTPOINT
 
 #### Options
 
-`--metrics value`\
+`--metrics value`<br />
 address to export metrics (default: "127.0.0.1:9567")
 
-`--no-usage-report`\
+`--consul value`<br />
+consul address to register (default: "127.0.0.1:8500")
+
+`--no-usage-report`<br />
 do not send usage report (default: false)
 
-`-d, --background`\
+`-d, --background`<br />
 run in background (default: false)
 
-`--no-syslog`\
+`--no-syslog`<br />
 disable syslog (default: false)
 
-`--log value`\
+`--log value`<br />
 path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)
 
-`-o value`\
+`-o value`<br />
 other FUSE options (see [this document](fuse_mount_options.md) for more information)
 
-`--attr-cache value`\
+`--attr-cache value`<br />
 attributes cache timeout in seconds (default: 1)
 
-`--entry-cache value`\
+`--entry-cache value`<br />
 file entry cache timeout in seconds (default: 1)
 
-`--dir-entry-cache value`\
+`--dir-entry-cache value`<br />
 dir entry cache timeout in seconds (default: 1)
 
-`--enable-xattr`\
+`--enable-xattr`<br />
 enable extended attributes (xattr) (default: false)
 
-`--get-timeout value`\
+`--bucket`<br />
+customized endpoint to access object store
+
+`--get-timeout value`<br />
 the max number of seconds to download an object (default: 60)
 
-`--put-timeout value`\
+`--put-timeout value`<br />
 the max number of seconds to upload an object (default: 60)
 
-`--io-retries value`\
+`--io-retries value`<br />
 number of retries after network failure (default: 30)
 
-`--max-uploads value`\
+`--max-uploads value`<br />
 number of connections to upload (default: 20)
 
-`--buffer-size value`\
+`--max-deletes value`<br />
+number of threads to delete objects (default: 2)
+
+`--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
 
-`--upload-limit value`\
+`--upload-limit value`<br />
 bandwidth limit for upload in Mbps (default: 0)
 
-`--download-limit value`\
+`--download-limit value`<br />
 bandwidth limit for download in Mbps (default: 0)
 
-`--prefetch value`\
+`--prefetch value`<br />
 prefetch N blocks in parallel (default: 1)
 
-`--writeback`\
+`--writeback`<br />
 upload objects in background (default: false)
 
-`--cache-dir value`\
+`--cache-dir value`<br />
 directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`)
 
-`--cache-size value`\
+`--cache-size value`<br />
 size of cached objects in MiB (default: 1024)
 
-`--free-space-ratio value`\
+`--free-space-ratio value`<br />
 min free space (ratio) (default: 0.1)
 
-`--cache-partial-only`\
+`--cache-partial-only`<br />
 cache only random/small read (default: false)
 
-`--read-only`\
+`--read-only`<br />
 allow lookup/read operations only (default: false)
 
-`--open-cache value`\
+`--open-cache value`<br />
 open file cache timeout in seconds (0 means disable this feature) (default: 0)
 
-`--subdir value`\
+`--subdir value`<br />
 mount a sub-directory as root (default: "")
 
 ### juicefs umount
@@ -266,7 +256,7 @@ juicefs umount [command options] MOUNTPOINT
 
 #### Options
 
-`-f, --force`\
+`-f, --force`<br />
 unmount a busy mount point by force (default: false)
 
 ### juicefs gateway
@@ -283,73 +273,76 @@ juicefs gateway [command options] META-URL ADDRESS
 
 #### Options
 
-`--get-timeout value`\
+`--get-timeout value`<br />
 the max number of seconds to download an object (default: 60)
 
-`--put-timeout value`\
+`--put-timeout value`<br />
 the max number of seconds to upload an object (default: 60)
 
-`--io-retries value`\
+`--io-retries value`<br />
 number of retries after network failure (default: 30)
 
-`--max-uploads value`\
+`--max-uploads value`<br />
 number of connections to upload (default: 20)
 
-`--buffer-size value`\
+`--max-deletes value`<br />
+number of threads to delete objects (default: 2)
+
+`--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
 
-`--upload-limit value`\
+`--upload-limit value`<br />
 bandwidth limit for upload in Mbps (default: 0)
 
-`--download-limit value`\
+`--download-limit value`<br />
 bandwidth limit for download in Mbps (default: 0)
 
-`--prefetch value`\
+`--prefetch value`<br />
 prefetch N blocks in parallel (default: 1)
 
-`--writeback`\
+`--writeback`<br />
 upload objects in background (default: false)
 
-`--cache-dir value`\
+`--cache-dir value`<br />
 directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
 
-`--cache-size value`\
+`--cache-size value`<br />
 size of cached objects in MiB (default: 1024)
 
-`--free-space-ratio value`\
+`--free-space-ratio value`<br />
 min free space (ratio) (default: 0.1)
 
-`--cache-partial-only`\
+`--cache-partial-only`<br />
 cache only random/small read (default: false)
 
-`--read-only`\
+`--read-only`<br />
 allow lookup/read operations only (default: false)
 
-`--open-cache value`\
+`--open-cache value`<br />
 open file cache timeout in seconds (0 means disable this feature) (default: 0)
 
-`--subdir value`\
+`--subdir value`<br />
 mount a sub-directory as root (default: "")
 
-`--attr-cache value`\
+`--attr-cache value`<br />
 attributes cache timeout in seconds (default: 1)
 
-`--entry-cache value`\
+`--entry-cache value`<br />
 file entry cache timeout in seconds (default: 0)
 
-`--dir-entry-cache value`\
+`--dir-entry-cache value`<br />
 dir entry cache timeout in seconds (default: 1)
 
-`--access-log value`\
+`--access-log value`<br />
 path for JuiceFS access log
 
-`--metrics value`\
+`--metrics value`<br />
 address to export metrics (default: "127.0.0.1:9567")
 
-`--no-usage-report`\
+`--no-usage-report`<br />
 do not send usage report (default: false)
 
-`--no-banner`\
+`--no-banner`<br />
 disable MinIO startup information (default: false)
 
 ### juicefs sync
@@ -366,55 +359,55 @@ juicefs sync [command options] SRC DST
 
 #### Options
 
-`--start KEY, -s KEY`\
+`--start KEY, -s KEY`<br />
 the first KEY to sync
 
-`--end KEY, -e KEY`\
+`--end KEY, -e KEY`<br />
 the last KEY to sync
 
-`--threads value, -p value`\
+`--threads value, -p value`<br />
 number of concurrent threads (default: 10)
 
-`--http-port PORT`\
+`--http-port PORT`<br />
 HTTP PORT to listen to (default: 6070)
 
-`--update, -u`\
+`--update, -u`<br />
 update existing file if the source is newer (default: false)
 
-`--force-update, -f`\
+`--force-update, -f`<br />
 always update existing file (default: false)
 
-`--perms`\
+`--perms`<br />
 preserve permissions (default: false)
 
-`--dirs`\
+`--dirs`<br />
 Sync directories or holders (default: false)
 
-`--dry`\
+`--dry`<br />
 don't copy file (default: false)
 
-`--delete-src, --deleteSrc`\
+`--delete-src, --deleteSrc`<br />
 delete objects from source after synced (default: false)
 
-`--delete-dst, --deleteDst`\
+`--delete-dst, --deleteDst`<br />
 delete extraneous objects from destination (default: false)
 
-`--exclude PATTERN`\
+`--exclude PATTERN`<br />
 exclude keys containing PATTERN (POSIX regular expressions)
 
-`--include PATTERN`\
+`--include PATTERN`<br />
 only include keys containing PATTERN (POSIX regular expressions)
 
-`--manager value`\
+`--manager value`<br />
 manager address
 
-`--worker value`\
+`--worker value`<br />
 hosts (seperated by comma) to launch worker
 
-`--bwlimit value`\
+`--bwlimit value`<br />
 limit bandwidth in Mbps (0 means unlimited) (default: 0)
 
-`--no-https`\
+`--no-https`<br />
 do not use HTTPS (default: false)
 
 ### juicefs rmr
@@ -443,9 +436,11 @@ juicefs info [command options] PATH or INODE
 
 #### Options
 
-`--inode, -i`\
+`--inode, -i`<br />
 use inode instead of path (current dir should be inside JuiceFS) (default: false)
 
+`--recursive, -r`<br />
+get summary of directories recursively (NOTE: it may take a long time for huge trees) (default: false)
 
 ### juicefs bench
 
@@ -461,19 +456,19 @@ juicefs bench [command options] PATH
 
 #### Options
 
-`--block-size value`\
+`--block-size value`<br />
 block size in MiB (default: 1)
 
-`--big-file-size value`\
+`--big-file-size value`<br />
 size of big file in MiB (default: 1024)
 
-`--small-file-size value`\
+`--small-file-size value`<br />
 size of small file in MiB (default: 0.1)
 
-`--small-file-count value`\
+`--small-file-count value`<br />
 number of small files (default: 100)
 
-`--threads value, -p value`\
+`--threads value, -p value`<br />
 number of concurrent threads (default: 1)
 
 ### juicefs gc
@@ -490,13 +485,13 @@ juicefs gc [command options] META-URL
 
 #### Options
 
-`--delete`\
+`--delete`<br />
 deleted leaked objects (default: false)
 
-`--compact`\
+`--compact`<br />
 compact all chunks with more than 1 slices (default: false).
 
-`--threads value`\
+`--threads value`<br />
 number threads to delete leaked objects (default: 10)
 
 ### juicefs fsck
@@ -525,16 +520,16 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 
 #### Options
 
-`--uid value, -u value`\
+`--uid value, -u value`<br />
 track only specified UIDs(separated by comma ,)
 
-`--gid value, -g value`\
+`--gid value, -g value`<br />
 track only specified GIDs(separated by comma ,)
 
-`--pid value, -p value`\
+`--pid value, -p value`<br />
 track only specified PIDs(separated by comma ,)
 
-`--interval value`\
+`--interval value`<br />
 flush interval in seconds; set it to 0 when replaying a log file to get an immediate result (default: 2)
 
 ### juicefs stats
@@ -551,16 +546,16 @@ juicefs stats [command options] MOUNTPOINT
 
 #### Options
 
-`--schema value`\
+`--schema value`<br />
 schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go) (default: "ufmco")
 
-`--interval value`\
+`--interval value`<br />
 interval in seconds between each update (default: 1)
 
-`--verbosity value`\
+`--verbosity value`<br />
 verbosity level, 0 or 1 is enough for most cases (default: 0)
 
-`--nocolor`\
+`--nocolor`<br />
 disable colors (default: false)
 
 ### juicefs status
@@ -577,7 +572,7 @@ juicefs status [command options] META-URL
 
 #### Options
 
-`--session value, -s value`\
+`--session value, -s value`<br />
 show detailed information (sustained inodes, locks) of the specified session (sid) (default: 0)
 
 ### juicefs warmup
@@ -594,13 +589,13 @@ juicefs warmup [command options] [PATH ...]
 
 #### Options
 
-`--file value, -f value`\
+`--file value, -f value`<br />
 file containing a list of paths
 
-`--threads value, -p value`\
+`--threads value, -p value`<br />
 number of concurrent workers (default: 50)
 
-`--background, -b`\
+`--background, -b`<br />
 run in background (default: false)
 
 ### juicefs dump
@@ -619,7 +614,7 @@ When the FILE is not provided, STDOUT will be used instead.
 
 #### Options
 
-`--subdir value`\
+`--subdir value`<br />
 only dump a sub-directory.
 
 ### juicefs load

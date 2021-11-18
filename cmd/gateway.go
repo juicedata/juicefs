@@ -22,6 +22,8 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/juicedata/juicefs/pkg/metric"
+
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -82,6 +84,11 @@ func gatewayFlags() *cli.Command {
 			Value: "127.0.0.1:9567",
 			Usage: "address to export metrics",
 		},
+		&cli.StringFlag{
+			Name:  "consul",
+			Value: "127.0.0.1:8500",
+			Usage: "consul address to register",
+		},
 		&cli.BoolFlag{
 			Name:  "no-usage-report",
 			Usage: "do not send usage report",
@@ -105,6 +112,22 @@ func gateway(c *cli.Context) error {
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Meta URL and listen address are required")
 	}
+
+	ak := os.Getenv("MINIO_ROOT_USER")
+	if ak == "" {
+		ak = os.Getenv("MINIO_ACCESS_KEY")
+	}
+	if len(ak) < 3 {
+		logger.Fatalf("MINIO_ROOT_USER should be specified as an environment variable with at least 3 characters")
+	}
+	sk := os.Getenv("MINIO_ROOT_PASSWORD")
+	if sk == "" {
+		sk = os.Getenv("MINIO_SECRET_KEY")
+	}
+	if len(sk) < 8 {
+		logger.Fatalf("MINIO_ROOT_PASSWORD should be specified as an environment variable with at least 8 characters")
+	}
+
 	address := c.Args().Get(1)
 	gw = &GateWay{c}
 
@@ -198,6 +221,9 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
+	if c.IsSet("bucket") {
+		format.Bucket = c.String("bucket")
+	}
 	blob, err := createStorage(format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -234,7 +260,13 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Chunk:           &chunkConf,
 	}
 
-	exposeMetrics(m, c.String("metrics"))
+	metricsAddr := exposeMetrics(m, c)
+	if c.IsSet("consul") {
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, "s3gateway")
+	}
+	if d := c.Duration("backup-meta"); d > 0 {
+		go vfs.Backup(m, blob, d)
+	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, "gateway "+version.Version())
 	}

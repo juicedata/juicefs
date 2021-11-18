@@ -145,19 +145,23 @@ func collectMetrics() []byte {
 	return w.Bytes()
 }
 
-func handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
+func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
 	switch cmd {
 	case meta.Rmr:
 		inode := Ino(r.Get64())
 		name := string(r.Get(int(r.Get8())))
-		r := meta.Remove(m, ctx, inode, name)
+		r := meta.Remove(v.Meta, ctx, inode, name)
 		return []byte{uint8(r)}
 	case meta.Info:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
+		var recursive uint8 = 1
+		if r.HasMore() {
+			recursive = r.Get8()
+		}
 
 		wb := utils.NewBuffer(4)
-		r := meta.GetSummary(m, ctx, inode, &summary)
+		r := meta.GetSummary(v.Meta, ctx, inode, &summary, recursive != 0)
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
@@ -174,7 +178,7 @@ func handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
 			fmt.Fprintf(w, " chunks:\n")
 			for indx := uint64(0); indx*meta.ChunkSize < summary.Length; indx++ {
 				var cs []meta.Slice
-				_ = m.Read(ctx, inode, uint32(indx), &cs)
+				_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
 				for _, c := range cs {
 					fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Chunkid, c.Size, c.Off, c.Len)
 				}
@@ -187,9 +191,9 @@ func handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
 		concurrent := r.Get16()
 		background := r.Get8()
 		if background == 0 {
-			fillCache(paths, int(concurrent))
+			v.fillCache(paths, int(concurrent))
 		} else {
-			go fillCache(paths, int(concurrent))
+			go v.fillCache(paths, int(concurrent))
 		}
 		return []byte{uint8(0)}
 	default:

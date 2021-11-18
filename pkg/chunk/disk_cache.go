@@ -60,6 +60,7 @@ type cacheStore struct {
 	used     int64
 	keys     map[string]cacheItem
 	scanned  bool
+	full     bool
 	uploader func(key, path string)
 }
 
@@ -106,13 +107,14 @@ func (cache *cacheStore) stats() (int64, int64) {
 func (cache *cacheStore) checkFreeSpace() {
 	for {
 		br, fr := cache.curFreeRatio()
+		cache.full = br < cache.freeRatio/2 || fr < cache.freeRatio/2
 		if br < cache.freeRatio || fr < cache.freeRatio {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
 			cache.cleanup()
 			cache.Unlock()
 
-			br, fr := cache.curFreeRatio()
+			br, fr = cache.curFreeRatio()
 			if br < cache.freeRatio || fr < cache.freeRatio {
 				cache.uploadStaging()
 			}
@@ -309,6 +311,9 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 
 func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
 	stagingPath := cache.stagePath(key)
+	if cache.full {
+		return stagingPath, errors.New("Space not enough on device")
+	}
 	err := cache.flushPage(stagingPath, data, false)
 	if err == nil && cache.capacity > 0 && keepCache {
 		path := cache.cachePath(key)

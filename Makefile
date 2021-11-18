@@ -23,7 +23,7 @@ juicefs: Makefile cmd/*.go pkg/*/*.go
 	go build -ldflags="$(LDFLAGS)"  -o juicefs ./cmd
 
 juicefs.lite: Makefile cmd/*.go pkg/*/*.go
-	go build -tags nogateway,nocos,nobos,nohdfs,noibmcos,nobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs \
+	go build -tags nogateway,nocos,nobos,nohdfs,noibmcos,noobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs,noufile,nob2,nosqlite,nomysql,nopg,notikv \
 		-ldflags="$(LDFLAGS)" -o juicefs.lite ./cmd
 
 juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
@@ -58,4 +58,5 @@ release:
 		juicedata/golang-cross:latest release --rm-dist
 
 test:
-	go test -v -cover ./pkg/... ./cmd/...
+	go test -v -cover ./pkg/... ./cmd/...  -coverprofile=cov1.out
+	sudo `which go` test ./integration/... -cover -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...

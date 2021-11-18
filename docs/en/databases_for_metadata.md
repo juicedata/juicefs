@@ -14,13 +14,13 @@ Through active interaction with community users, we found that many application 
 
 JuiceFS supported Metadata Engines:
 
-* [Redis](#Redis)
-* [PostgreSQL](#PostgreSQL)
-* [MySQL](#MySQL)
-* [MariaDB](#MariaDB)
-* [SQLite](#SQLite)
-* [TiKV](#TiKV)
-* [FoundationDB](#FoundationDB)
+* [Redis](#redis)
+* [PostgreSQL](#postgresql)
+* [MySQL](#mysql)
+* [MariaDB](#mariadb)
+* [SQLite](#sqlite)
+* [TiKV](#tikv)
+* [FoundationDB](#foundationdb)
 
 ## Redis
 
@@ -38,8 +38,6 @@ $ sudo docker run -d --name redis \
 
 > **Note**: The above command persists Redis data in Docker's `redis-data` data volume. You can modify the storage location of data persistence as needed.
 
-> **Note**: After Redis 6.0.0, [AUTH](https://redis.io/commands/auth) command was extended with two arguments, i.e. username and password. If you use Redis < 6.0.0, just omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.
-
 > **Security Tips**: The Redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database instance through the Internet, please refer to [Redis Security](https:// recommendations in redis.io/topics/security).
 
 ### Create a file system
@@ -51,6 +49,8 @@ redis://<IP or Domain name>:6379
 ```
 
 If there Redis server is not running locally, the address could be specified using URL, for example, `redis://username:password@host:6379/1`, the password can also be specified by environment variable `REDIS_PASSWORD` to hide it from command line options.
+
+> **Note**: After Redis 6.0.0, [AUTH](https://redis.io/commands/auth) command was extended with two arguments, i.e. username and password. If you use Redis < 6.0.0, just omit the `username` parameter in the URL, e.g. `redis://:password@host:6379/1` (please note that the colon in front of `password` still needs to be kept).
 
 For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 

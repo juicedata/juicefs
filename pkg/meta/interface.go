@@ -307,7 +307,7 @@ type Meta interface {
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context) syscall.Errno
 	// ListSlices returns all slices used by all files.
-	ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno
+	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
@@ -376,4 +376,38 @@ func newSessionInfo() *SessionInfo {
 
 func timeit(start time.Time) {
 	opDist.Observe(time.Since(start).Seconds())
+}
+
+// Get full path of an inode; a random one is picked if it has multiple hard links
+func GetPath(m Meta, ctx Context, inode Ino) (string, syscall.Errno) {
+	var names []string
+	var attr Attr
+	for inode != 1 {
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			logger.Debugf("getattr inode %d: %s", inode, st)
+			return "", st
+		}
+
+		var entries []*Entry
+		if st := m.Readdir(ctx, attr.Parent, 0, &entries); st != 0 {
+			return "", st
+		}
+		var name string
+		for _, e := range entries {
+			if e.Inode == inode {
+				name = string(e.Name)
+				break
+			}
+		}
+		if name == "" {
+			return "", syscall.ENOENT
+		}
+		names = append(names, name)
+		inode = attr.Parent
+	}
+
+	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
+		names[i], names[j] = names[j], names[i]
+	}
+	return "/" + strings.Join(names, "/"), 0
 }

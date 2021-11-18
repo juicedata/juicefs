@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -47,6 +48,7 @@ type juice struct {
 	fuse.FileSystemBase
 	sync.Mutex
 	conf     *vfs.Config
+	vfs      *vfs.VFS
 	fs       *fs.FileSystem
 	host     *fuse.FileSystemHost
 	handlers map[uint64]meta.Ino
@@ -114,7 +116,7 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 		e = errorconv(err)
 		return
 	}
-	_, errno := vfs.Mknod(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(dev))
+	_, errno := j.vfs.Mknod(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(dev))
 	e = -int(errno)
 	return
 }
@@ -156,7 +158,7 @@ func (j *juice) Symlink(target string, newpath string) (e int) {
 		e = errorconv(err)
 		return
 	}
-	_, errno := vfs.Symlink(ctx, target, parent.Inode(), path.Base(newpath))
+	_, errno := j.vfs.Symlink(ctx, target, parent.Inode(), path.Base(newpath))
 	e = -int(errno)
 	return
 }
@@ -169,7 +171,7 @@ func (j *juice) Readlink(path string) (e int, target string) {
 		e = errorconv(err)
 		return
 	}
-	t, errno := vfs.Readlink(ctx, fi.Inode())
+	t, errno := j.vfs.Readlink(ctx, fi.Inode())
 	e = -int(errno)
 	target = string(t)
 	return
@@ -243,7 +245,7 @@ func (j *juice) Create(p string, flags int, mode uint32) (e int, fh uint64) {
 		e = errorconv(err)
 		return
 	}
-	entry, fh, errno := vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(flags))
+	entry, fh, errno := j.vfs.Create(ctx, parent.Inode(), path.Base(p), uint16(mode), 0, uint32(flags))
 	if errno == 0 {
 		j.Lock()
 		j.handlers[fh] = entry.Inode
@@ -273,7 +275,7 @@ func (j *juice) OpenEx(path string, fi *fuse.FileInfo_t) (e int) {
 		e = -fuse.ENOENT
 		return
 	}
-	entry, fh, errno := vfs.Open(ctx, f.Inode(), uint32(fi.Flags))
+	entry, fh, errno := j.vfs.Open(ctx, f.Inode(), uint32(fi.Flags))
 	if errno == 0 {
 		fi.Fh = fh
 		if vfs.IsSpecialNode(f.Inode()) {
@@ -371,7 +373,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 		}
 		ino = fi.Inode()
 	}
-	entry, errrno := vfs.GetAttr(ctx, ino, 0)
+	entry, errrno := j.vfs.GetAttr(ctx, ino, 0)
 	if errrno != 0 {
 		e = -int(errrno)
 		return
@@ -389,7 +391,7 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(vfs.Truncate(ctx, ino, size, 1, nil))
+	e = -int(j.vfs.Truncate(ctx, ino, size, 1, nil))
 	return
 }
 
@@ -406,7 +408,7 @@ func (j *juice) Read(path string, buf []byte, off int64, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	n, err := vfs.Read(ctx, ino, buf, uint64(off), fh)
+	n, err := j.vfs.Read(ctx, ino, buf, uint64(off), fh)
 	if err != 0 {
 		e = -int(err)
 		return
@@ -427,7 +429,7 @@ func (j *juice) Write(path string, buff []byte, off int64, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	errno := vfs.Write(ctx, ino, buff, uint64(off), fh)
+	errno := j.vfs.Write(ctx, ino, buff, uint64(off), fh)
 	if errno != 0 {
 		e = -int(errno)
 	} else {
@@ -445,7 +447,7 @@ func (j *juice) Flush(path string, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(vfs.Flush(ctx, ino, fh, 0))
+	e = -int(j.vfs.Flush(ctx, ino, fh, 0))
 	return
 }
 
@@ -466,7 +468,7 @@ func (j *juice) Release(path string, fh uint64) int {
 			delete(j.badfd, orig)
 		}
 		j.Unlock()
-		vfs.Release(j.newContext(), ino, fh)
+		j.vfs.Release(j.newContext(), ino, fh)
 	}()
 	return 0
 }
@@ -479,7 +481,7 @@ func (j *juice) Fsync(path string, datasync bool, fh uint64) (e int) {
 	if ino == 0 {
 		e = -fuse.EBADF
 	} else {
-		e = -int(vfs.Fsync(ctx, ino, 1, fh))
+		e = -int(j.vfs.Fsync(ctx, ino, 1, fh))
 	}
 	return
 }
@@ -493,7 +495,7 @@ func (j *juice) Opendir(path string) (e int, fh uint64) {
 		e = -fuse.ENOENT
 		return
 	}
-	fh, errno := vfs.Opendir(ctx, f.Inode())
+	fh, errno := j.vfs.Opendir(ctx, f.Inode())
 	if errno == 0 {
 		j.Lock()
 		j.handlers[fh] = f.Inode()
@@ -514,7 +516,7 @@ func (j *juice) Readdir(path string,
 		return
 	}
 	ctx := j.newContext()
-	entries, err := vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
+	entries, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
 	if err != 0 {
 		e = -int(err)
 		return
@@ -532,7 +534,7 @@ func (j *juice) Readdir(path string,
 	for _, e := range entries {
 		name := string(e.Name)
 		if full {
-			vfs.UpdateLength(e.Inode, e.Attr)
+			j.vfs.UpdateLength(e.Inode, e.Attr)
 			attrToStat(e.Inode, e.Attr, &st)
 			ok = fill(name, &st, 0)
 		} else {
@@ -556,14 +558,20 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	j.Lock()
 	delete(j.handlers, fh)
 	j.Unlock()
-	e = -int(vfs.Releasedir(j.newContext(), ino, fh))
+	e = -int(j.vfs.Releasedir(j.newContext(), ino, fh))
 	return
 }
 
-func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int, caseInsensi bool) error {
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int) error {
 	var jfs juice
+	conf := v.Conf
 	jfs.conf = conf
-	jfs.fs = fs_
+	jfs.vfs = v
+	var err error
+	jfs.fs, err = fs.NewFileSystem(conf, v.Meta, v.Store)
+	if err != nil {
+		logger.Fatalf("Initialize FileSystem failed: %s", err)
+	}
 	jfs.asRoot = asRoot
 	jfs.delayClose = delayClose
 	host := fuse.NewFileSystemHost(&jfs)
@@ -579,7 +587,7 @@ func Serve(conf *vfs.Config, fs_ *fs.FileSystem, fuseOpt string, fileCacheTo flo
 	if fuseOpt != "" {
 		options += "," + fuseOpt
 	}
-	host.SetCapCaseInsensitive(caseInsensi)
+	host.SetCapCaseInsensitive(strings.HasSuffix(conf.Mountpoint, ":"))
 	host.SetCapReaddirPlus(true)
 	logger.Debugf("mount point: %s, options: %s", conf.Mountpoint, options)
 	_ = host.Mount(conf.Mountpoint, []string{"-o", options})

@@ -1,3 +1,7 @@
+---
+sidebar_label: 在腾讯云上使用 JuiceFS
+---
+
 # 在腾讯云安装和使用 JuiceFS 存储
 
 如下图所示，JuiceFS 存储由数据库和对象存储共同驱动。存入 JuiceFS 的文件会按照一定的规则被拆分成固定大小的数据块存储在对象存储中，数据对应的元数据则会存储在数据库中。
@@ -6,7 +10,7 @@
 
 这样的设计可以有效缩减对象存储在请求数量上的费用，同时也能让我们显著感受到 JuiceFS 带来的性能提升。
 
-![](../../images/juicefs-qcloud.png)
+![](../images/juicefs-qcloud.png)
 
 ## 准备
 
@@ -57,15 +61,15 @@ JuiceFS 会将数据对应的元数据全部存储在独立的数据库中，目
 
 **本文使用了云数据库 TencentDB Redis，通过 VPC 私有网络与 CVM 云服务器交互访问：**
 
-| Redis 版本   | 5.0 社区版       |
-| ------------ | ---------------- |
-| **实例规格** | 1GB （1主1副）   |
-| **连接地址** | 192.168.5.5:6379 |
-| **可用区**   | 上海五区         |
+| Redis 版本   | 5.0 社区版             |
+| ------------ | ----------------       |
+| **实例规格** | 1GB 内存版（标准架构） |
+| **连接地址** | 192.168.5.5:6379       |
+| **可用区**   | 上海五区               |
 
 注意，数据库的连接地址取决于你创建的 VPC 网络设置，创建 Redis 实例时会自动在你定义的网段中获取地址。
 
-![](../../images/qcloud-redis-network.png)
+![](../images/qcloud-redis-network.png)
 
 ### 三、对象存储 COS
 
@@ -174,7 +178,7 @@ $ juicefs format \
 
 - `--storage`：指定对象存储类型，[点此查看](../how_to_setup_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 访问域名，可以在 COS 的管理控制台找到。
-  ![cos-bucket-url](../../images/cos-bucket-url.png)
+  ![cos-bucket-url](../images/cos-bucket-url.png)
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://cloud.tencent.com/document/product/598/37140)获取方式。
 
 > Redis 6.0 身份认证需要用户名和密码两个参数，地址格式为 `redis://username:password@redis-server-url:6379/1`。目前腾讯云数据库 Redis 版只提供 Reids 4.0 和 5.0 两个版本，认证身份只需要密码，在设置 Redis 服务器地址时只需留空用户名即可，例如：`redis://:password@redis-server-url:6379/1`
@@ -199,7 +203,7 @@ $ juicefs format \
 $ sudo juicefs mount -d redis://:<your-redis-password>@192.168.5.5:6379/1 /mnt/jfs
 ```
 
-> **注意**：挂载文件系统时，只需填写 Redis 数据库地址，不需要文件系统名称。如果使用 root 身份挂载文件系统，默认的缓存路径为 `/var/jfsCache`，如果使用普通用户身份在家目录上挂载，则默认的缓存路径在 `~/.juicefs/cache`。
+> **注意**：挂载文件系统时，只需填写 Redis 数据库地址，不需要文件系统名称。默认的缓存路径为 `/var/jfsCache`，请确保当前用户有足够的读写权限。
 
 看到类似下面的输出，代表文件系统挂载成功。
 

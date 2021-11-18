@@ -235,7 +235,7 @@ $ sudo kubectl apply -f ingress.yaml
 
 After the deployment is complete, use the host on the same LAN to access any cluster node, and you can see the Nginx welcome page.
 
-![](../images/k3s-nginx-welcome.png)
+![](images/k3s-nginx-welcome.png)
 
 Next, check whether the container has successfully mounted JuiceFS, and execute the command to check the pod status:
 

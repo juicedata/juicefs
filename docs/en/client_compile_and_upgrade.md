@@ -16,7 +16,7 @@ $ git clone https://github.com/juicedata/juicefs.git
 
 The JuiceFS client is developed in Go language, so before compiling, you must install the dependent tools locally in advance:
 
-- [Go](https://golang.org) 1.15+
+- [Go](https://golang.org) 1.16+
 - GCC 5.4+
 
 > **Tip**: For users in China, in order to download the Go modules faster, it is recommended to set the mirror server through the `GOPROXY` environment variable. For example: [Goproxy China](https://github.com/goproxy/goproxy.cn).

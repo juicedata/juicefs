@@ -214,8 +214,10 @@ func freeHandle(fd int) {
 
 type javaConf struct {
 	MetaURL         string  `json:"meta"`
+	Bucket          string  `json:"bucket"`
 	ReadOnly        bool    `json:"readOnly"`
 	OpenCache       float64 `json:"openCache"`
+	BackupMeta      int64   `json:"backupMeta"`
 	CacheDir        string  `json:"cacheDir"`
 	CacheSize       int64   `json:"cacheSize"`
 	FreeSpace       string  `json:"freeSpace"`
@@ -361,6 +363,9 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			go metric.UpdateMetrics(m)
 		}
 
+		if jConf.Bucket != "" {
+			format.Bucket = jConf.Bucket
+		}
 		blob, err := createStorage(format)
 		if err != nil {
 			logger.Fatalf("object storage: %s", err)
@@ -424,6 +429,9 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			DirEntryTimeout: time.Millisecond * time.Duration(jConf.DirEntryTimeout*1000),
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
+		}
+		if d := jConf.BackupMeta; d > 0 {
+			go vfs.Backup(m, blob, time.Duration(d*1e9))
 		}
 		if !jConf.NoUsageReport {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())

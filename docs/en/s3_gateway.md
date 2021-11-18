@@ -4,7 +4,7 @@ JuiceFS has introduced S3 gateway since v0.11, a feature implemented through the
 
 Because JuiceFS stores files in chunks, the files cannot be accessed directly using the interface of the underlying object storage. The S3 gateway provides similar access to the underlying object storage, with the following architecture diagram.
 
-![](../images/juicefs-s3-gateway-arch.png)
+![](images/juicefs-s3-gateway-arch.png)
 
 ## Prerequisites
 
@@ -32,7 +32,7 @@ $ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
 
 In this example, we assume that the JuiceFS file system is using a local Redis database. When the S3 gateway is enabled, the administrative interface of the S3 gateway can be accessed on the **current host** using the address `http://localhost:9000`.
 
-![](../images/s3-gateway-file-manager.jpg)
+![](images/s3-gateway-file-manager.jpg)
 
 If you want to access the S3 gateway through other hosts on the LAN or the Internet, you need to adjust the listening address, e.g.
 

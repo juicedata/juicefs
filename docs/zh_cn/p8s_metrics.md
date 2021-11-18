@@ -4,6 +4,16 @@ JuiceFS 为每个文件系统提供一个 [Prometheus](https://prometheus.io) AP
 
 JuiceFS 同时提供一个 [Grafana](https://grafana.com) 的 [dashboard 模板](../en/grafana_template.json)，将模板导入以后就可以展示这些收集上来的监控指标。
 
+## 使用 Consul 注册中心
+
+JuiceFS 支持使用 Consul 作为 metrics API 的注册中心。您可以在执行 [`juicefs mount`](command_reference.md#juicefs-mount) 或 [`juicefs gateway`](command_reference.md#juicefs-gateway) 命令时通过 `--consul` 选项自定义这个地址。
+
+当配置了 Consul 地址的时候，`--metrics` 选项不需要配置，JuiceFS 将会根据自身网络与端口情况自动配置 metrics URL。如果同时设置了`--metrics`，则优先尝试监听配置的 metrics URL。
+
+注册到 Consul 上的每个实例，其 `serviceName` 都为 `juicefs`，`serviceId` 的格式为 `<IP>:<mount-point>`，例如：`127.0.0.1:/tmp/jfs`。
+
+每个 instance 的 meta 都包含了 `hostname` 与 `mountpoint` 两个维度，其中 `mountpoint` 为 `s3gateway` 代表该实例为 S3 网关。
+
 以下是对各项指标含义的说明。
 
 ## 全局标签

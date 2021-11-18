@@ -14,17 +14,17 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 
 JuiceFS 已经支持的元数据存储引擎：
 
-* [Redis](#Redis)
-* [PostgreSQL](#PostgreSQL)
-* [MySQL](#MySQL)
-* [MariaDB](#MariaDB)
-* [SQLite](#SQLite)
-* [TiKV](#TiKV)
-* [FoundationDB](#FoundationDB)
+* [Redis](#redis)
+* [PostgreSQL](#postgresql)
+* [MySQL](#mysql)
+* [MariaDB](#mariadb)
+* [SQLite](#sqlite)
+* [TiKV](#tikv)
+* [FoundationDB](#foundationdb)
 
 ## Redis
 
-> [Redis](https://redis.io/) 是一款开源的（BSD许可）基于内存的键值存储系统，常被用作数据库、缓存和消息代理。
+> [Redis](https://redis.io/) 是一款开源的（BSD 许可）基于内存的键值存储系统，常被用作数据库、缓存和消息代理。
 
 你可以很容易的在云计算平台购买到各种配置的云 Redis 数据库，但如果你只是想要快速评估 JuiceFS，可以使用 Docker 快速的在本地电脑上运行一个 Redis 数据库实例：
 
@@ -38,8 +38,6 @@ $ sudo docker run -d --name redis \
 
 > **注意**：以上命令将 Redis 的数据持久化在 Docker 的 redis-data 数据卷当中，你可以按需修改数据持久化的存储位置。
 
-> **注意**：在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了两个参数，即用户名和密码。 如果您使用 Redis < 6.0.0，则只需在 URL 中省略 username 参数，例如 `redis://:password@host:6379/1`。
-
 > **安全提示**：以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
 
 ### 创建文件系统
@@ -51,6 +49,8 @@ redis://<IP or Domain name>:6379
 ```
 
 如果该 Redis 服务器不在本地运行，则可以使用 URL 指定地址，例如，`redis://username:password@host:6379/1`，还可以通过环境变量 `REDIS_PASSWORD` 设置密码，避免在命令行选项中显式设置。
+
+> **注意**：在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了两个参数，即用户名和密码。如果您使用 6.0.0 以前版本的 Redis，则只需在 URL 中省略 `username` 参数，例如 `redis://:password@host:6379/1`（请注意 `password` 前面的冒号依然需要保留）。
 
 例如，以下命令将创建一个名为 `pics` 的 JuiceFS 文件系统，使用 Redis 中的 `1` 号数据库存储元数据：
 

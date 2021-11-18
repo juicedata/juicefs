@@ -1,18 +1,18 @@
 # JuiceFS Architecture
 
-JuiceFS file system consists of three parts: 
+JuiceFS file system consists of three parts:
 
 1. **JuiceFS Client**: Coordinate the implementation of object storage and metadata storage engines, as well as file system interfaces such as POSIX, Hadoop, Kubernetes, and S3 gateway.
 2. **Data Storage**: Store the data itself, support local disk and object storage.
-3. **Metadata Engine**: Metadata corresponding to the stored data, supporting multiple engines such as Redis, MySQL, and SQLite;
+3. **Metadata Engine**: Metadata corresponding to the stored data, supporting multiple engines such as Redis, MySQL, and TiKV;
 
-![](../images/juicefs-arch-new.png?lastModify=1620808685)
+![](images/juicefs-arch-new.png)
 
 As a file system, JuiceFS will process data and its corresponding metadata separately, the data will be stored in the object storage, and the metadata will be stored in the metadata engine.
 
 In terms of **data storage**, JuiceFS supports almost all public cloud object storage services, as well as privatized object storage such as OpenStack Swift, Ceph, and MinIO.
 
-In terms of **metadata storage**, JuiceFS adopts a multi-engine design, and currently supports [Redis](https://redis.io/), MySQL/MariaDB, SQLite as metadata service engines, and will continue to implement more metadata engine. Welcome to [Submit Issue](https://github.com/juicedata/juicefs/issues) to feedback your needs!
+In terms of **metadata storage**, JuiceFS adopts a multi-engine design, and currently supports [Redis](https://redis.io/), MySQL/MariaDB, TiKV as metadata service engines, and will continue to implement more metadata engine. Welcome to [Submit Issue](https://github.com/juicedata/juicefs/issues) to feedback your needs!
 
 In terms of the implementation of **file system interface**:
 
@@ -26,4 +26,3 @@ In terms of the implementation of **file system interface**:
 Now, you can refer to [Quick Start Guide](quick_start_guide.md) to start using JuiceFS immediately!
 
 You can also learn more about [How JuiceFS stores files](how_juicefs_store_files.md)
-

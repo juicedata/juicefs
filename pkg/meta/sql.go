@@ -1,3 +1,5 @@
+// +build !nosqlite !nomysql !nopg
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -30,11 +32,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/juicedata/juicefs/pkg/utils"
-	_ "github.com/lib/pq"
-	"github.com/mattn/go-sqlite3"
-	_ "github.com/mattn/go-sqlite3"
 	"xorm.io/xorm"
 	"xorm.io/xorm/names"
 )
@@ -129,10 +127,6 @@ type delfile struct {
 	Expire int64  `xorm:"notnull"`
 }
 
-type freeID struct {
-	next  uint64
-	maxid uint64
-}
 type dbMeta struct {
 	sync.Mutex
 	conf   *Config
@@ -156,12 +150,6 @@ type dbMeta struct {
 	freeMu     sync.Mutex
 	freeInodes freeID
 	freeChunks freeID
-}
-
-func init() {
-	Register("mysql", newSQLMeta)
-	Register("sqlite3", newSQLMeta)
-	Register("postgres", newSQLMeta)
 }
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
@@ -549,6 +537,8 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	return err
 }
 
+var errBusy error
+
 func (m *dbMeta) shouldRetry(err error) bool {
 	if err == nil {
 		return false
@@ -560,7 +550,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 	msg := err.Error()
 	switch m.engine.DriverName() {
 	case "sqlite3":
-		return errors.Is(err, sqlite3.ErrBusy) || strings.Contains(msg, "database is locked")
+		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
 	case "mysql":
 		// MySQL, MariaDB or TiDB
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later")
@@ -2298,7 +2288,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 				return err
 			}
 		}
-		n, err := ses.Delete(chunk{Inode: c.Inode, Indx: c.Indx})
+		n, err := ses.Where("inode = ? AND indx = ?", inode, indx).Delete(&c)
 		if err == nil && n == 0 {
 			err = fmt.Errorf("chunk %d:%d changed, try restarting transaction", inode, indx)
 		}
@@ -2475,7 +2465,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	return 0
 }
 
-func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgress func()) syscall.Errno {
+func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
 	var c chunk
 	rows, err := m.engine.Rows(&c)
 	if err != nil {
@@ -2483,7 +2473,6 @@ func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgr
 	}
 	defer rows.Close()
 
-	*slices = nil
 	for rows.Next() {
 		err = rows.Scan(&c)
 		if err != nil {
@@ -2492,7 +2481,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices *[]Slice, delete bool, showProgr
 		ss := readSliceBuf(c.Slices)
 		for _, s := range ss {
 			if s.chunkid > 0 {
-				*slices = append(*slices, Slice{Chunkid: s.chunkid, Size: s.size})
+				slices[c.Inode] = append(slices[c.Inode], Slice{Chunkid: s.chunkid, Size: s.size})
 				if showProgress != nil {
 					showProgress()
 				}
@@ -2629,7 +2618,7 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 				ss := readSliceBuf(c.Slices)
 				slices := make([]*DumpedSlice, 0, len(ss))
 				for _, s := range ss {
-					slices = append(slices, &DumpedSlice{Pos: s.pos, Chunkid: s.chunkid, Off: s.size, Len: s.off, Size: s.len})
+					slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 				}
 				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 			}

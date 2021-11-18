@@ -1,0 +1,146 @@
+name: "test jfs on windows"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: [ main ]
+
+
+
+jobs:
+  wintest:
+    runs-on: windows-latest
+    env:
+      Actions_Allow_Unsecure_Commands: true
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v1.0.3
+
+      - name: Change Winsdk Version
+        uses: GuillaumeFalourd/setup-windows10-sdk-action@v1
+        with:
+          sdk-version: 18362
+
+      #- name: Setup MSBuild.exe
+      #  uses: warrenbuckley/Setup-MSBuild@v1
+
+      - name: Install WinFsp
+        run: |
+          choco install winfsp -y
+
+      - name: Set up Include Headers
+        run: |
+          mkdir "C:\WinFsp\inc\fuse"
+          copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
+          dir "C:\WinFsp\inc\fuse"
+          set CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+          go env
+          go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+          go env
+
+
+      - name: Install Scoop Redis and MinIO
+        run: |
+          Set-ExecutionPolicy RemoteSigned -scope CurrentUser
+          iwr -useb get.scoop.sh | iex
+          echo $env:USERNAME
+          scoop
+          scoop install curl
+          scoop install redis
+          scoop install minio
+          scoop install runasti
+          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o redis-service.exe
+          echo  "<service>"   >> redis-service.xml
+          echo  "<id>redisredis</id>"  >> redis-service.xml
+          echo  "<name>redisredis</name>"  >> redis-service.xml
+          echo  "<description>redisredis</description>"  >> redis-service.xml
+          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\redis-server.exe</executable>"  >> redis-service.xml
+          echo  "<logmode>rotate</logmode>"  >> redis-service.xml
+          echo  "</service>"  >> redis-service.xml
+          .\redis-service.exe install
+          net start redisredis
+          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
+          mkdir "C:\tmp"
+          echo  "<service>"   >> minio-service.xml
+          echo  "<id>MinIO</id>"  >> minio-service.xml
+          echo  "<name>MinIO</name>"  >> minio-service.xml
+          echo  "<description>MinIO</description>"  >> minio-service.xml
+          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\minio.exe</executable>"  >> minio-service.xml
+          echo  "<arguments>server C:\tmp</arguments>"  >> minio-service.xml
+          echo  "<logmode>rotate</logmode>"  >> minio-service.xml
+          echo  "</service>"  >> minio-service.xml
+          .\minio-service.exe install
+          net start MinIO
+
+
+      - name: Build Juicefs
+        run: |
+          go build -ldflags="-s -w" -o juicefs.exe ./cmd
+
+      - name: Juicefs Format
+        run: |
+          ./juicefs.exe format --storage minio --bucket http://127.0.0.1:9000/pics --access-key minioadmin --secret-key minioadmin redis://127.0.0.1:6379/1 pics
+
+      - name: Juicefs Mount
+        run: |
+          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o juicefs-service.exe
+          echo  "<service>"   >> juicefs-service.xml
+          echo  "<id>jfs</id>"  >> juicefs-service.xml
+          echo  "<name>jfs</name>"  >> juicefs-service.xml
+          echo  "<description>jfs</description>"  >> juicefs-service.xml
+          echo  "<executable>$PWD\juicefs.exe</executable>"  >> juicefs-service.xml
+          echo  "<arguments>mount redis://127.0.0.1:6379/1 Z:</arguments>"  >> juicefs-service.xml
+          echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
+          echo  "</service>"  >> juicefs-service.xml
+          .\juicefs-service.exe install
+          net start jfs
+
+      #there is go-fuse compile error with unit test
+      #- name: Unit Test
+      #  run: |
+      #    rm pkg/meta/redis_test.go
+      #    rm pkg/meta/sql_test.go
+      #    rm pkg/meta/tkv_test.go
+      #    go test -v -cover ./pkg/... ./cmd/...
+
+
+      - name: Install Python2
+        run: |
+          choco install python2 -y
+
+      - name: Build and Run Winfstest
+        run: |
+          git clone https://github.com/sanwan/winfstest.git
+          cd winfstest
+          msbuild.exe winfstest.sln
+          cd TestSuite
+          .\run-winfstest
+
+      #cannot write file because of some permission question with winfsp
+      #- name: Build and Run Winfstest in Jfs Directory
+      #  run: |
+      #    Z:
+      #    mkdir "Z:\tmptmp"
+      #    cd tmptmp
+      #    git clone https://github.com/sanwan/winfstest.git
+      #    cd winfstest
+      #    msbuild.exe winfstest.sln
+      #    cd TestSuite
+      #    .\run-winfstest
+
+
+
+

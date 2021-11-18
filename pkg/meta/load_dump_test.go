@@ -86,6 +86,21 @@ func TestLoadDump(t *testing.T) {
 			t.Fatalf("dump meta: %s", err)
 		}
 	})
+	t.Run("Metadata Engine: Redis; --SubDir d1 ", func(t *testing.T) {
+		m := testLoad(t, "redis://127.0.0.1/10", sampleFile)
+		fp, err := os.OpenFile("redis_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			t.Fatalf("open file: %s", "redis_subdir.dump")
+		}
+		defer fp.Close()
+		switch r := m.(type) {
+		case *redisMeta:
+			r.root = 3
+		}
+		if err = m.DumpMeta(fp); err != nil {
+			t.Fatalf("dump meta: %s", err)
+		}
+	})
 	t.Run("Metadata Engine: SQLite", func(t *testing.T) {
 		os.Remove("test10.db")
 		m := testLoad(t, "sqlite3://test10.db", sampleFile)
@@ -112,7 +127,29 @@ func TestLoadDump(t *testing.T) {
 		}
 	})
 
-	cmd := exec.Command("diff", "redis.dump", "sqlite3.dump")
+	t.Run("Metadata Engine: TKV --SubDir d1 ", func(t *testing.T) {
+		os.Remove(settingPath)
+		m := testLoad(t, "memkv://test/jfs", sampleFile)
+		fp, err := os.OpenFile("tkv_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			t.Fatalf("open file: %s", "tkv_subdir.dump")
+		}
+		defer fp.Close()
+		switch r := m.(type) {
+		case *kvMeta:
+			r.root = 3
+		}
+
+		if err = m.DumpMeta(fp); err != nil {
+			t.Fatalf("dump meta: %s", err)
+		}
+	})
+
+	cmd := exec.Command("diff", "redis.dump", sampleFile)
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("diff: %s", out)
+	}
+	cmd = exec.Command("diff", "redis.dump", "sqlite3.dump")
 	if out, err := cmd.Output(); err != nil {
 		t.Fatalf("diff: %s", out)
 	}

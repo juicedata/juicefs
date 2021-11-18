@@ -1,3 +1,7 @@
+---
+sidebar_label: 在 DigitalOcean 上使用 JuiceFS
+---
+
 # 在 DigitalOcean 安装和使用 JuiceFS 存储
 
 JuiceFS 是面向云设计的，使用云平台开箱即用的存储和数据库服务，最快几分钟就能完成配置投入使用，本文以 DigitalOcean 平台为例，介绍如何在云计算平台上快速简单的安装和使用 JuiceFS。
@@ -24,7 +28,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 当然，你也可以使用其他平台的对象存储服务，或是在 Droplet 上使用 Ceph 或 MinIO 手动搭建。总之，你可以自由选择要使用的对象存储，只要确保 JuiceFS 客户端能够访问到对象存储的 API 就可以。
 
-这里，我创建了一个名为 `juicefs` 的 Spaces 存储桶，区域为新加坡`sgp1`，它的访问地址为：
+这里，我们创建了一个名为 `juicefs` 的 Spaces 存储桶，区域为新加坡 `sgp1`，它的访问地址为：
 
 - https://juicefs.sgp1.digitaloceanspaces.com
 
@@ -38,25 +42,25 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 在数据库的选择方面请不要有顾虑，JuiceFS 客户端提供了元数据迁移功能，你可以将元数据从一种数据库中轻松的导出并迁移到其他的数据库中。
 
-本文我们使用 DigitalOcean 的 Redis 6 数据库托管服务，区域选择 `新加坡`，选择与已存在的 Droplet 相同的 VPC 私有网络。创建 Redis 集群大概需要 5 分钟左右的时间， 我们跟随设置向导对数据库集群进行初始化设置。
+本文我们使用 DigitalOcean 的 Redis 6 数据库托管服务，区域选择 `新加坡`，选择与已存在的 Droplet 相同的 VPC 私有网络。创建 Redis 大概需要 5 分钟左右的时间， 我们跟随设置向导对数据库进行初始化设置。
 
-![](../../images/digitalocean-redis-guide.png)
+![](../images/digitalocean-redis-guide.png)
 
-默认情况下 Redis 集群允许所有入站连接，出于安全考虑，应该在设置向导的安全设置环节，在 `Add trusted sources` 中选中有权访问 Redis 集群的 Droplet，即仅允许选中的主机访问 Redis 集群。
+默认情况下 Redis 允许所有入站连接，出于安全考虑，应该在设置向导的安全设置环节，在 `Add trusted sources` 中选中有权访问 Redis 的 Droplet，即仅允许选中的主机访问 Redis。
 
 在数据回收策略的设置环节，建议选择 `noeviction`，即当内存耗尽时，仅报告错误，不回收任何数据。
 
-> 注意：为了确保元数据的安全和完整，回收策略请不要选择 `allkeys-lru` 和 `allkey-random`。
+> **注意**：为了确保元数据的安全和完整，回收策略请不要选择 `allkeys-lru` 和 `allkey-random`。
 
-Redis 集群的访问地址可以从控制台的 `Connection Details` 中找到，如果所有计算资源都在 DigitalOcea，则建议优先使用 VPC 私有网络进行连接，这样能最大程度的提升安全性。
+Redis 的访问地址可以从控制台的 `Connection Details` 中找到，如果所有计算资源都在 DigitalOcea，则建议优先使用 VPC 私有网络进行连接，这样能最大程度的提升安全性。
 
-![](../../images/digitalocean-redis-url.png)
+![](../images/digitalocean-redis-url.png)
 
 ## 安装和使用
 
 ### 1. 安装 JuiceFS 客户端
 
-我当前使用的是 Ubuntu Server 20.04，依次执行以下命令即可安装最新版本客户端。
+我们当前使用的是 Ubuntu Server 20.04，依次执行以下命令即可安装最新版本客户端。
 
 检测当前系统信息并设置临时的环境变量：
 
@@ -134,19 +138,19 @@ COPYRIGHT:
 创建文件系统使用 `format` 子命令，格式为：
 
 ```shell
-juicefs format [command options] META-URL NAME
+$ juicefs format [command options] META-URL NAME
 ```
 
 以下命令创建了一个名为 `mystor` 的文件系统：
 
 ```shell
-juicefs format \
---storage space \
---bucket https://juicefs.sgp1.digitaloceanspaces.com \
---access-key <your-access-key-id> \
---secret-key <your-access-key-secret> \
-rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 \
-mystor
+$ juicefs format \
+    --storage space \
+    --bucket https://juicefs.sgp1.digitaloceanspaces.com \
+    --access-key <your-access-key-id> \
+    --secret-key <your-access-key-secret> \
+    rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 \
+    mystor
 ```
 
 **参数说明：**
@@ -154,7 +158,7 @@ mystor
 - `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../how_to_setup_object_storage.md)。
 - `--bucket`：指定存储桶访问地址。
 - `--access-key` 和 `--secret-key`：指定访问对象存储 API 的秘钥。
-- DigitalOcean 托管的 Redis 集群需要使用 TLS/SSL 加密访问，因此需要使用 `rediss://` 协议头，链接最后添加的 `/1` 代表使用 Redis 的 1 号数据库。
+- DigitalOcean 托管的 Redis 需要使用 TLS/SSL 加密访问，因此需要使用 `rediss://` 协议头，链接最后添加的 `/1` 代表使用 Redis 的 1 号数据库。
 
 看到类似下面的输出，代表文件系统创建成功。
 
@@ -172,10 +176,10 @@ mystor
 
 ```shell
 $ sudo juicefs mount -d \
-rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 mnt
+    rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 mnt
 ```
 
-使用 sudo 执行挂载操作的目的是为了让 juicefs 能够有权限在 `/var/` 下创建缓存目录。值得注意的是，在挂载文件系统时，只需要指定`数据库地址`和`挂载点`，并不需要指定文件系统的名称。
+使用 sudo 执行挂载操作的目的是为了让 JuiceFS 能够有权限在 `/var/` 下创建缓存目录。值得注意的是，在挂载文件系统时，只需要指定`数据库地址`和`挂载点`，并不需要指定文件系统的名称。
 
 看到类似下面的输出，代表文件系统挂载成功。
 
@@ -200,7 +204,7 @@ JuiceFS:mystor fuse.juicefs  1.0P   64K  1.0P   1% /home/herald/mnt
 
 ```shell
 $ sudo juicefs mount -d --cache-size 20000 \
-rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 mnt
+    rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 mnt
 ```
 
 文件系统挂载成功以后，就可以像使用本地硬盘那样，在 `~/mnt` 目录中存储数据了。
@@ -284,6 +288,6 @@ JuiceFS 文件系统支持被多台云服务器同时挂载，而且对云服务
 
 不单如此，JuiceFS 的共享挂载功能还能提供数据的强一致性保证，在多台服务器挂载了同一个文件系统时，文件系统上确认的写入会在所有主机上实时可见。
 
-使用共享挂载功能，务必要确保组成文件系统的数据库和对象存储服务，能够被每一台要挂载它的主机正常访问。在本文的演示环境中，Spaces 对象存储是对整个互联网开放访问的，只要使用正确的秘钥就能够通过 API 进行读写。但对于平台托管的 Redis 数据库集群，你需要合理的配置访问策略，确保平台外的主机有访问权限。
+使用共享挂载功能，务必要确保组成文件系统的数据库和对象存储服务，能够被每一台要挂载它的主机正常访问。在本文的演示环境中，Spaces 对象存储是对整个互联网开放访问的，只要使用正确的秘钥就能够通过 API 进行读写。但对于平台托管的 Redis 数据库，你需要合理的配置访问策略，确保平台外的主机有访问权限。
 
 在使用多主机共享挂载功能时，首先在任何一台主机上创建文件系统，然后在其他主机上安装 JuiceFS 客户端，使用同一个数据库地址通过 `mount` 命令挂载即可。特别注意，文件系统只需创建一次，不应该也不需要在其他主机上重复执行文件系统创建操作。

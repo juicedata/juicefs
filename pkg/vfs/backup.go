@@ -1,0 +1,163 @@
+/*
+ * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
+ *
+ * This program is free software: you can use, redistribute, and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3
+ * or later ("AGPL"), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package vfs
+
+import (
+	"compress/gzip"
+	"io"
+	"os"
+	"sort"
+	"time"
+
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
+	osync "github.com/juicedata/juicefs/pkg/sync"
+)
+
+// Backup metadata periodically in the object storage
+func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
+	ctx := meta.Background
+	key := "lastBackup"
+	for {
+		time.Sleep(interval / 10)
+		var value []byte
+		if st := m.GetXattr(ctx, 1, key, &value); st != 0 && st != meta.ENOATTR {
+			logger.Warnf("getxattr inode 1 key %s: %s", key, st)
+			continue
+		}
+		var last time.Time
+		var err error
+		if len(value) > 0 {
+			last, err = time.Parse(time.RFC3339, string(value))
+		}
+		if err != nil {
+			logger.Warnf("parse time value %s: %s", value, err)
+			continue
+		}
+		if now := time.Now(); now.Sub(last) >= interval {
+			var iused, dummy uint64
+			_ = m.StatFS(ctx, &dummy, &dummy, &iused, &dummy)
+			if iused/5e6 > uint64(interval/time.Hour) {
+				logger.Infof("backup metadata skipped because of too many inodes: %d %s", iused, interval)
+				continue
+			}
+			if st := m.SetXattr(ctx, 1, key, []byte(now.Format(time.RFC3339)), meta.XattrCreateOrReplace); st != 0 {
+				logger.Warnf("setxattr inode 1 key %s: %s", key, st)
+				continue
+			}
+			go cleanupBackups(blob, now)
+			logger.Debugf("backup metadata started")
+			if err = backup(m, blob, now); err == nil {
+				logger.Infof("backup metadata succeed, used %s", time.Since(now))
+			} else {
+				logger.Warnf("backup metadata failed: %s", err)
+			}
+		}
+	}
+}
+
+func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
+	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
+	fpath := "/tmp/juicefs-meta-" + name
+	fp, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0444)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(fpath)
+	defer fp.Close()
+	zw := gzip.NewWriter(fp)
+	err = m.DumpMeta(zw)
+	zw.Close()
+	if err != nil {
+		return err
+	}
+	if _, err = fp.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return blob.Put("meta/"+name, fp)
+}
+
+func cleanupBackups(blob object.ObjectStorage, now time.Time) {
+	blob = object.WithPrefix(blob, "meta/")
+	ch, err := osync.ListAll(blob, "", "")
+	if err != nil {
+		logger.Warnf("listAll prefix meta/: %s", err)
+		return
+	}
+	var objs []string
+	for o := range ch {
+		objs = append(objs, o.Key())
+	}
+
+	toDel := findDeletes(objs, now)
+	for _, o := range toDel {
+		if err = blob.Delete(o); err != nil {
+			logger.Warnf("delete object %s: %s", o, err)
+		}
+	}
+}
+
+// Cleanup policy:
+// 1. keep all backups within 2 days
+// 2. keep one backup each day within 2 weeks
+// 3. keep one backup each week within 2 months
+// 4. keep one backup each month for those before 2 months
+func findDeletes(objs []string, now time.Time) []string {
+	var days = 2
+	edge := now.UTC().AddDate(0, 0, -days)
+	next := func() {
+		if days < 14 {
+			days++
+			edge = edge.AddDate(0, 0, -1)
+		} else if days < 60 {
+			days += 7
+			edge = edge.AddDate(0, 0, -7)
+		} else {
+			days += 30
+			edge = edge.AddDate(0, 0, -30)
+		}
+	}
+
+	var toDel, within []string
+	sort.Strings(objs)
+	for i := len(objs) - 1; i >= 0; i-- {
+		if len(objs[i]) != 30 { // len("dump-2006-01-02-150405.json.gz")
+			logger.Warnf("bad object for metadata backup %s: length %d", objs[i], len(objs[i]))
+			continue
+		}
+		ts, err := time.Parse("2006-01-02-150405", objs[i][5:22])
+		if err != nil {
+			logger.Warnf("bad object for metadata backup %s: %s", objs[i], err)
+			continue
+		}
+
+		if ts.Before(edge) {
+			if l := len(within); l > 0 { // keep the earliest one
+				toDel = append(toDel, within[:l-1]...)
+				within = within[:0]
+			}
+			for next(); ts.Before(edge); next() {
+			}
+			within = append(within, objs[i])
+		} else if days > 2 {
+			within = append(within, objs[i])
+		}
+	}
+	if l := len(within); l > 0 {
+		toDel = append(toDel, within[:l-1]...)
+	}
+	return toDel
+}

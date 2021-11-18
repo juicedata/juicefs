@@ -16,7 +16,6 @@ package utils
 
 import (
 	"fmt"
-	glog "log"
 	"os"
 	"strings"
 	"sync"
@@ -91,17 +90,6 @@ func GetLogger(name string) *logHandle {
 	logger := newLogger(name)
 	loggers[name] = logger
 	return logger
-}
-
-// GetStdLogger returns standard golang logger
-func GetStdLogger(l *logHandle, lvl logrus.Level) *glog.Logger {
-	mu.Lock()
-	defer mu.Unlock()
-
-	w := l.Writer()
-	l.Formatter.(*logHandle).lvl = &lvl
-	l.Level = lvl
-	return glog.New(w, "", 0)
 }
 
 // SetLogLevel sets Level to all the loggers in the map

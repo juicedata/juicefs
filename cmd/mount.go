@@ -16,6 +16,7 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -58,7 +59,14 @@ func installHandler(mp string) {
 	}()
 }
 
-func exposeMetrics(m meta.Meta, addr string) {
+func exposeMetrics(m meta.Meta, c *cli.Context) string {
+	var ip, port string
+	//default set
+	ip, port, err := net.SplitHostPort(c.String("metrics"))
+	if err != nil {
+		logger.Fatalf("metrics format error: %v", err)
+	}
+
 	meta.InitMetrics()
 	vfs.InitMetrics()
 	go metric.UpdateMetrics(m)
@@ -70,12 +78,43 @@ func exposeMetrics(m meta.Meta, addr string) {
 		},
 	))
 	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
-	go func() {
-		err := http.ListenAndServe(addr, nil)
+
+	// If not set metrics addr,the port will be auto set
+	if !c.IsSet("metrics") {
+		// If only set consul, ip will auto set
+		if c.IsSet("consul") {
+			ip, err = utils.GetLocalIp(c.String("consul"))
+			if err != nil {
+				logger.Errorf("Get local ip failed: %v", err)
+				return ""
+			}
+		}
+	}
+
+	ln, err := net.Listen("tcp", net.JoinHostPort(ip, port))
+	if err != nil {
+		// Don't try other ports on metrics set but listen failed
+		if c.IsSet("metrics") {
+			logger.Errorf("listen on %s:%s failed: %v", ip, port, err)
+			return ""
+		}
+		// Listen port on 0 will auto listen on a free port
+		ln, err = net.Listen("tcp", net.JoinHostPort(ip, "0"))
 		if err != nil {
-			logger.Errorf("listen and serve for metrics: %s", err)
+			logger.Errorf("Listen failed: %v", err)
+			return ""
+		}
+	}
+
+	go func() {
+		if err := http.Serve(ln, nil); err != nil {
+			logger.Errorf("Serve for metrics: %s", err)
 		}
 	}()
+
+	metricsAddr := ln.Addr().String()
+	logger.Infof("Prometheus metrics listening on %s", metricsAddr)
+	return metricsAddr
 }
 
 func mount(c *cli.Context) error {
@@ -167,6 +206,9 @@ func mount(c *cli.Context) error {
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
+	if c.IsSet("bucket") {
+		format.Bucket = c.String("bucket")
+	}
 	blob, err := createStorage(format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -191,7 +233,6 @@ func mount(c *cli.Context) error {
 		Mountpoint: mp,
 		Chunk:      &chunkConf,
 	}
-	vfs.Init(conf, m, store)
 
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		if runtime.GOOS != "windows" {
@@ -236,11 +277,18 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("new session: %s", err)
 	}
 	installHandler(mp)
-	exposeMetrics(m, c.String("metrics"))
+	v := vfs.NewVFS(conf, m, store)
+	metricsAddr := exposeMetrics(m, c)
+	if c.IsSet("consul") {
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
+	}
+	if d := c.Duration("backup-meta"); d > 0 {
+		go vfs.Backup(m, blob, d)
+	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
-	mount_main(conf, m, store, c)
+	mount_main(v, c)
 	return m.CloseSession()
 }
 
@@ -258,6 +306,10 @@ func clientFlags() []cli.Flag {
 		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	}
 	return []cli.Flag{
+		&cli.StringFlag{
+			Name:  "bucket",
+			Usage: "customized endpoint to access object store",
+		},
 		&cli.IntFlag{
 			Name:  "get-timeout",
 			Value: 60,
@@ -331,6 +383,11 @@ func clientFlags() []cli.Flag {
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
 		},
+		&cli.DurationFlag{
+			Name:  "backup-meta",
+			Value: time.Hour,
+			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
+		},
 
 		&cli.BoolFlag{
 			Name:  "read-only",
@@ -359,6 +416,11 @@ func mountFlags() *cli.Command {
 				Name:  "metrics",
 				Value: "127.0.0.1:9567",
 				Usage: "address to export metrics",
+			},
+			&cli.StringFlag{
+				Name:  "consul",
+				Value: "127.0.0.1:8500",
+				Usage: "consul address to register",
 			},
 			&cli.BoolFlag{
 				Name:  "no-usage-report",

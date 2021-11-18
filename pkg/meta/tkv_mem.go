@@ -28,11 +28,12 @@ import (
 
 func init() {
 	Register("memkv", newKVMeta)
+	drivers["memkv"] = newMockClient
 }
 
 const settingPath = "/tmp/juicefs.memkv.setting.json"
 
-func newMockClient() (tkvClient, error) {
+func newMockClient(addr string) (tkvClient, error) {
 	client := &memKV{items: btree.New(2), temp: &kvItem{}}
 	if d, err := ioutil.ReadFile(settingPath); err == nil {
 		var buffer map[string][]byte
@@ -92,6 +93,18 @@ func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 		return false
 	})
 	return ret
+}
+
+func (tx *memTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
+	tx.store.Lock()
+	defer tx.store.Unlock()
+	begin := string(prefix)
+	tx.store.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
+		it := i.(*kvItem)
+		tx.observed[it.key] = it.ver
+		handler([]byte(it.key), it.value)
+		return true
+	})
 }
 
 func (tx *memTxn) nextKey(key []byte) []byte {

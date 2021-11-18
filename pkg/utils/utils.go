@@ -16,7 +16,7 @@
 package utils
 
 import (
-	"io"
+	"net"
 	"os"
 	"strings"
 
@@ -36,26 +36,7 @@ func Min(a, b int) int {
 // Exists checks if the file/folder in given path exists
 func Exists(path string) bool {
 	_, err := os.Stat(path)
-	return err == nil
-}
-
-// CopyFile copies file in src path to dst path
-func CopyFile(dst, src string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-	return out.Close()
+	return err == nil || !os.IsNotExist(err)
 }
 
 // SplitDir splits a path with default path list separator or comma.
@@ -112,4 +93,17 @@ func NewSpinner() mpb.BarFiller {
 		spinnerStyle[i] = "\033[1;32m" + s + "\033[0m"
 	}
 	return mpb.NewBarFiller(mpb.SpinnerStyle(spinnerStyle...))
+}
+
+// GetLocalIp get the local ip used to access remote address.
+func GetLocalIp(address string) (string, error) {
+	conn, err := net.Dial("udp", address)
+	if err != nil {
+		return "", err
+	}
+	ip, _, err := net.SplitHostPort(conn.LocalAddr().String())
+	if err != nil {
+		return "", err
+	}
+	return ip, nil
 }

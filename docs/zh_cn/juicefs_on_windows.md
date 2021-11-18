@@ -12,7 +12,7 @@ JuiceFS 支持在 Windows 环境中创建和挂载文件系统。但你需要先
 
 为了便于使用，可以在 `C：\` 盘根目录创建一个名为 `juicefs` 的文件夹，把 `juicefs.exe` 解压到该文件夹中。然后将 `C:\juicefs` 文件夹路径添加到系统的环境变量，重启系统让设置生效以后，可直接使用使用系统自带的 `命令提示符` 或 `PowerShell` 等程序执行 `juicefs` 命令。
 
-![Windows ENV path](../images/windows-path.png)
+![Windows ENV path](images/windows-path.png)
 
 ## 3. 挂载 JuiceFS 文件系统
 
@@ -32,7 +32,7 @@ $ juicefs format --storage minio --bucket http://192.168.1.8:9000/music --access
 > juicefs.exe mount redis://192.168.1.8:6379/1 Z:
 ```
 
-![](../images/juicefs-on-windows-new.png)
+![](images/juicefs-on-windows-new.png)
 
 如上图，JuiceFS 客户端会把文件系统以网络驱动器的形式挂载为指定的系统盘符，你可以根据实际需要改用其他的盘符，但注意不要使用已经被占用的盘符。
 
@@ -55,11 +55,11 @@ ws.Run "C:\juicefs\juicefs.exe mount redis://192.168.1.8:6379/1 Z:",0
 
 使用键盘组合键 <kbd>Windows + R</kbd> 唤出运行窗口
 
-![Windows run](../images/windows-run-startup.png)
+![Windows run](images/windows-run-startup.png)
 
 输入 `shell:startup` 打开 Windows 启动文件夹，把编辑好的 vbs 脚本拖入该文件夹即可。
 
-![Windows starup folder](../images/windows-mount-startup.png)
+![Windows starup folder](images/windows-mount-startup.png)
 
 ### 3. 取消开机启动
 

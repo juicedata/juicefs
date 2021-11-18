@@ -40,6 +40,11 @@ func infoFlags() *cli.Command {
 				Aliases: []string{"i"},
 				Usage:   "use inode instead of path (current dir should be inside JuiceFS)",
 			},
+			&cli.BoolFlag{
+				Name:    "recursive",
+				Aliases: []string{"r"},
+				Usage:   "get summary of directories recursively (NOTE: it may take a long time for huge trees)",
+			},
 		},
 	}
 }
@@ -52,6 +57,10 @@ func info(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		logger.Infof("DIR or FILE is needed")
 		return nil
+	}
+	var recursive uint8
+	if ctx.Bool("recursive") {
+		recursive = 1
 	}
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
@@ -79,10 +88,11 @@ func info(ctx *cli.Context) error {
 			continue
 		}
 
-		wb := utils.NewBuffer(8 + 8)
+		wb := utils.NewBuffer(8 + 9)
 		wb.Put32(meta.Info)
-		wb.Put32(8)
+		wb.Put32(9)
 		wb.Put64(inode)
+		wb.Put8(recursive)
 		_, err = f.Write(wb.Bytes())
 		if err != nil {
 			logger.Fatalf("write message: %s", err)

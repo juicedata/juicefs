@@ -1,3 +1,5 @@
+// +build !notikv
+
 /*
  * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
  *
@@ -17,8 +19,9 @@ package meta
 
 import (
 	"context"
-	"fmt"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
@@ -26,18 +29,23 @@ import (
 
 func init() {
 	Register("tikv", newKVMeta)
+	drivers["tikv"] = newTikvClient
+
 }
 
-func newTkvClient(driver, addr string) (tkvClient, error) {
-	if driver == "memkv" {
-		return newMockClient()
-	}
-	if driver != "tikv" {
-		return nil, fmt.Errorf("invalid driver %s != expected %s", driver, "tikv")
+func newTikvClient(addr string) (tkvClient, error) {
+	p := strings.Index(addr, "/")
+	var prefix string
+	if p > 0 {
+		prefix = addr[p+1:]
+		addr = addr[:p]
 	}
 	pds := strings.Split(addr, ",")
 	client, err := tikv.NewTxnClient(pds)
-	return &tikvClient{client}, err
+	if err != nil {
+		return nil, err
+	}
+	return withPrefix(&tikvClient{client}, append([]byte(prefix), 0xFD)), nil
 }
 
 type tikvTxn struct {
@@ -89,6 +97,20 @@ func (tx *tikvTxn) scanRange0(begin, end []byte, filter func(k, v []byte) bool) 
 
 func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 	return tx.scanRange0(begin, end, nil)
+}
+
+func (tx *tikvTxn) scan(prefix []byte, handler func(key, value []byte)) {
+	it, err := tx.Iter(prefix, nil) //nolint:typecheck
+	if err != nil {
+		panic(err)
+	}
+	defer it.Close()
+	for it.Valid() {
+		handler(it.Key(), it.Value())
+		if err = it.Next(); err != nil {
+			panic(err)
+		}
+	}
 }
 
 func (tx *tikvTxn) nextKey(key []byte) []byte {
@@ -181,21 +203,21 @@ func (c *tikvClient) name() string {
 	return "tikv"
 }
 
-func (c *tikvClient) txn(f func(kvTxn) error) error {
+func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 	tx, err := c.client.Begin()
 	if err != nil {
 		return err
 	}
-	defer func(e *error) {
+	defer func() {
 		if r := recover(); r != nil {
 			fe, ok := r.(error)
 			if ok {
-				*e = fe
+				err = fe
 			} else {
-				panic(r)
+				err = errors.Errorf("tikv client txn func error: %v", r)
 			}
 		}
-	}(&err)
+	}()
 	if err = f(&tikvTxn{tx}); err != nil {
 		return err
 	}

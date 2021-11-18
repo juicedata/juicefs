@@ -3,14 +3,14 @@
 JuiceFS provides the [CSI Driver](https://github.com/juicedata/juicefs-csi-driver) for Kubernetes.
 
 ## Table of Content
-- [Prerequisites](#Prerequisites)
-- [Installation](#Installation)
-  - [Install with Helm](#Install-with-Helm)
-  - [Install with kubectl](#Install-with-kubectl)
-- [Use JuiceFS](#Use-JuiceFS)
-- [Monitoring](#Monitoring)
-  - [Configure Prometheus server](#Configure-Prometheus-server)
-  - [Configure Grafana dashboard](#Configure-Grafana-dashboard)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+  - [Install with Helm](#install-with-helm)
+  - [Install with kubectl](#install-with-kubectl)
+- [Use JuiceFS](#use-juiceFS)
+- [Monitoring](#monitoring)
+  - [Configure Prometheus server](#configure-prometheus-server)
+  - [Configure Grafana dashboard](#configure-grafana-dashboard)
 
 ## Prerequisites
 

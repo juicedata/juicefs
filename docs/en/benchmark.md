@@ -4,13 +4,13 @@
 
 JuiceFS provides a subcommand to run a few basic benchmarks to understand how it works in your environment:
 
-![JuiceFS Bench](../images/juicefs-bench.png)
+![JuiceFS Bench](images/juicefs-bench.png)
 
 ## Throughput
 
 Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio), here is the result:
 
-[![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
+[![Sequential Read Write Benchmark](images/sequential-read-write-benchmark.svg)](images/sequential-read-write-benchmark.svg)
 
 It shows JuiceFS can provide 10X more throughput than the other two, read [more details](fio.md).
 
@@ -18,9 +18,9 @@ It shows JuiceFS can provide 10X more throughput than the other two, read [more 
 
 Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior), here is the result:
 
-[![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
+[![Metadata Benchmark](images/metadata-benchmark.svg)](images/metadata-benchmark.svg)
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](../en/mdtest.md).
+It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](mdtest.md).
 
 ## Analyze performance
 

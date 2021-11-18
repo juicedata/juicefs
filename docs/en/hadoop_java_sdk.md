@@ -1,46 +1,5 @@
 # Use JuiceFS on Hadoop Ecosystem
 
-## Table of Content
-
-- [Requirements](#requirements)
-  * [1. Hadoop and related components](#1-hadoop-and-related-components)
-  * [2. User permissions](#2-user-permissions)
-  * [3. File system](#3-file-system)
-  * [4. Memory](#4-memory)
-- [Client compilation](#client-compilation)
-  * [Linux and macOS](#linux-and-macos)
-  * [Windows](#windows)
-- [Deploy the client](#deploy-the-client)
-  * [Big data Platforms](#big-data-platforms)
-  * [Community Components](#community-components)
-  * [Client Configurations](#client-configurations)
-    + [Core Configurations](#core-configurations)
-    + [Cache Configurations](#cache-configurations)
-    + [I/O Configurations](#io-configurations)
-    + [Other Configurations](#other-configurations)
-    + [Multiple file systems configuration](#multiple-file-systems-configuration)
-    + [Configuration Example](#configurationexample)
-- [Configuration in Hadoop](#configuration-in-hadoop)
-  * [CDH6](#cdh6)
-  * [HDP](#hdp)
-  * [Flink](#flink)
-  * [Hudi](#hudi)
-  * [Restart Services](#restart-services)
-- [Environmental Verification](#environmental-verification)
-  * [Hadoop](#hadoop)
-  * [Hive](#hive)
-- [Monitoring metrics collection](#monitoring-metrics-collection)
-- [Benchmark](#benchmark)
-  * [1. Local Benchmark](#1-local-benchmark)
-    + [Metadata](#metadata)
-    + [I/O Performance](#io-performance)
-  * [2. Distributed Benchmark](#2-distributed-benchmark)
-    + [Metadata](#metadata-1)
-    + [I/O Performance](#io-performance-1)
-- [FAQ](#faq)
-
-----
-
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
 
 ## Requirements
@@ -69,7 +28,7 @@ JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configuration
 
 Compilation depends on the following tools:
 
-- [Go](https://golang.org/) 1.15+
+- [Go](https://golang.org/) 1.16+
 - JDK 8+
 - [Maven](https://maven.apache.org/) 3.3+
 - git
@@ -132,13 +91,13 @@ It is recommended to place the JAR file in a fixed location, and the other locat
 
 | Name              | Installing Paths                                             |
 | ----------------- | ------------------------------------------------------------ |
-| CDH               | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br>`/opt/cloudera/parcels/CDH/spark/jars`<br>`/var/lib/impala` |
-| HDP               | `/usr/hdp/current/hadoop-client/lib`<br>`/usr/hdp/current/hive-client/auxlib`<br>`/usr/hdp/current/spark2-client/jars` |
-| Amazon EMR        | `/usr/lib/hadoop/lib`<br>`/usr/lib/spark/jars`<br>`/usr/lib/hive/auxlib` |
-| Alibaba Cloud EMR | `/opt/apps/ecm/service/hadoop/*/package/hadoop*/share/hadoop/common/lib`<br>`/opt/apps/ecm/service/spark/*/package/spark*/jars`<br>`/opt/apps/ecm/service/presto/*/package/presto*/plugin/hive-hadoop2`<br>`/opt/apps/ecm/service/hive/*/package/apache-hive*/lib`<br>`/opt/apps/ecm/service/impala/*/package/impala*/lib` |
-| Tencent Cloud EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br>`/usr/local/service/presto/plugin/hive-hadoop2`<br>`/usr/local/service/spark/jars`<br>`/usr/local/service/hive/auxlib` |
-| UCloud UHadoop    | `/home/hadoop/share/hadoop/common/lib`<br>`/home/hadoop/hive/auxlib`<br>`/home/hadoop/spark/jars`<br>`/home/hadoop/presto/plugin/hive-hadoop2` |
-| Baidu Cloud EMR   | `/opt/bmr/hadoop/share/hadoop/common/lib`<br>`/opt/bmr/hive/auxlib`<br>`/opt/bmr/spark2/jars` |
+| CDH               | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br></br>`/opt/cloudera/parcels/CDH/spark/jars`<br></br>`/var/lib/impala` |
+| HDP               | `/usr/hdp/current/hadoop-client/lib`<br></br>`/usr/hdp/current/hive-client/auxlib`<br></br>`/usr/hdp/current/spark2-client/jars` |
+| Amazon EMR        | `/usr/lib/hadoop/lib`<br></br>`/usr/lib/spark/jars`<br></br>`/usr/lib/hive/auxlib` |
+| Alibaba Cloud EMR | `/opt/apps/ecm/service/hadoop/*/package/hadoop*/share/hadoop/common/lib`<br></br>`/opt/apps/ecm/service/spark/*/package/spark*/jars`<br></br>`/opt/apps/ecm/service/presto/*/package/presto*/plugin/hive-hadoop2`<br></br>`/opt/apps/ecm/service/hive/*/package/apache-hive*/lib`<br></br>`/opt/apps/ecm/service/impala/*/package/impala*/lib` |
+| Tencent Cloud EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br></br>`/usr/local/service/presto/plugin/hive-hadoop2`<br></br>`/usr/local/service/spark/jars`<br></br>`/usr/local/service/hive/auxlib` |
+| UCloud UHadoop    | `/home/hadoop/share/hadoop/common/lib`<br></br>`/home/hadoop/hive/auxlib`<br></br>`/home/hadoop/spark/jars`<br></br>`/home/hadoop/presto/plugin/hive-hadoop2` |
+| Baidu Cloud EMR   | `/opt/bmr/hadoop/share/hadoop/common/lib`<br></br>`/opt/bmr/hive/auxlib`<br></br>`/opt/bmr/spark2/jars` |
 
 ### Community Components
 
@@ -178,6 +137,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | Configuration            | Default Value | Description                                     |
 | ------------------------ | ------------- | ----------------------------------------------- |
 | `juicefs.max-uploads`    | 20            | The max number of connections to upload         |
+| `juicefs.max-deletes`    | 2             | The max number of connections to delete         |
 | `juicefs.get-timeout`    | 5             | The max number of seconds to download an object |
 | `juicefs.put-timeout`    | 60            | The max number of seconds to upload an object   |
 | `juicefs.memory-size`    | 300           | Total read/write buffering in MiB               |
@@ -189,6 +149,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 
 | Configuration             | Default Value | Description                                                  |
 | ------------------------- | ------------- | ------------------------------------------------------------ |
+| `juicefs.bucket`          |               | Specify a different endpoint for object storage              |
 | `juicefs.debug`           | `false`       | Whether enable debug log                                     |
 | `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files. |
 | `juicefs.superuser`       | `hdfs`        | The super user                                               |

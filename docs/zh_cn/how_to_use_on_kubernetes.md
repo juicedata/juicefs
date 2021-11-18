@@ -6,14 +6,14 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见
 - [JuiceFS CSI Driver](#juicefs-csi-driver)
   - [版本要求](#版本要求)
   - [安装](#安装)
-    - [通过 Helm 安装](#通过-Helm-安装)
+    - [通过 Helm 安装](#通过-helm-安装)
     - [通过 kubectl 安装](#通过-kubectl-安装)
-  - [使用 JuiceFS 为 Pod 提供存储](#使用-JuiceFS-为-Pod-提供存储)
-  - [创建更多 JuiceFS 存储类](#创建更多-JuiceFS-存储类)
+  - [使用 JuiceFS 为 Pod 提供存储](#使用-juicefs-为-pod-提供存储)
+  - [创建更多 JuiceFS 存储类](#创建更多-juicefs-存储类)
   - [监控](#监控)
-    - [配置 Prometheus 服务](#配置-Prometheus-服务)
-    - [配置 Grafana 仪表盘](#配置-Grafana-仪表盘)
-- [在容器中挂载 JuiceFS](#在容器中挂载-JuiceFS)
+    - [配置 Prometheus 服务](#配置-prometheus-服务)
+    - [配置 Grafana 仪表盘](#配置-grafana-仪表盘)
+- [在容器中挂载 JuiceFS](#在容器中挂载-juicefs)
 
 
 ## JuiceFS CSI Driver
@@ -291,7 +291,7 @@ pvc-b670c8a1-2962-497c-afa2-33bc8b8bb05d   10Pi       RWX            Retain     
 
 通过外部主机挂载同一个 JuiceFS 存储，可以看到当前正在使用的 PV 以及曾经创建的 PV。
 
-![](../images/pv-on-juicefs.png)
+![](images/pv-on-juicefs.png)
 
 如果想了解更多关于 JuiceFS CSI Driver 的信息，请参考[项目主页](https://github.com/juicedata/juicefs-csi-driver)。
 
