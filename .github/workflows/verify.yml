@@ -4,13 +4,11 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'docs/**'
+    paths:
+      - '!docs/**'
   pull_request:
-    branches:
-      - main
-    paths-ignore:
-      - 'docs/**'
+    paths:
+      - '!docs/**'
 jobs:
   lint:
     runs-on: ubuntu-latest
