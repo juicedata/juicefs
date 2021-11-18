@@ -335,7 +335,7 @@ func TestVFSXattrs(t *testing.T) {
 	if e := v.RemoveXattr(ctx, fe.Inode, "test"); e != 0 {
 		t.Fatalf("removexattr test: %s", e)
 	}
-	if _, e := v.GetXattr(ctx, fe.Inode, "test", 0); e != syscall.ENOATTR {
+	if _, e := v.GetXattr(ctx, fe.Inode, "test", 0); e != meta.ENOATTR {
 		t.Fatalf("getxattr not existed: %s", e)
 	}
 	if v, e := v.ListXattr(ctx, fe.Inode, 100); e != 0 || string(v) != "" {
