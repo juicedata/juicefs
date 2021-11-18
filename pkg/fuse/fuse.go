@@ -412,7 +412,7 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 	out.Bfree = st.Bavail
 	out.Files = st.Files
 	out.Ffree = st.Favail
-	out.Frsize = st.Bsize
+	out.Frsize = 4096
 	return 0
 }
 
