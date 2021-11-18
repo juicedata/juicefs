@@ -188,6 +188,9 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 `--enable-xattr`<br />
 启用扩展属性 (xattr) 功能 (默认: false)
 
+`--bucket`<br />
+为当前挂载点指定访问访对象存储的 endpoint (默认: 无)
+
 `--get-timeout value`<br />
 下载一个对象的超时时间；单位为秒 (默认: 60)
 

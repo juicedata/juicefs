@@ -149,6 +149,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 
 | Configuration             | Default Value | Description                                                  |
 | ------------------------- | ------------- | ------------------------------------------------------------ |
+| `juicefs.bucket`          |               | Specify a different endpoint for object storage              |
 | `juicefs.debug`           | `false`       | Whether enable debug log                                     |
 | `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files. |
 | `juicefs.superuser`       | `hdfs`        | The super user                                               |
