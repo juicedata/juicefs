@@ -19,6 +19,8 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 ## 安装 JuiceFS CSI Driver
 
+如果 KubeSphere 的版本为 v3.2.0 及以上，可以直接在应用商店中安装 CSI Driver，跳过「配置应用模板/应用仓库」步骤，直接进入「安装」步骤；如果 KubeSphere 版本低于 v3.2.0，按照以下步骤配置应用模板/应用仓库。
+
 ### 配置应用模板/应用仓库
 
 安装 JuiceFS CSI Driver 首先需要创建应用模板，这里有两种方法。
@@ -42,11 +44,15 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 ### 安装
 
-在「企业空间」中选择您所需部署的「项目」（KubeSphere 中的项目即为 K8s 中的 namespace），选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」或「来自应用模板」，取决于上一步中配置的方法。比如选择「来自应用模板」：
+在「企业空间」中选择您所需部署的「项目」（KubeSphere 中的项目即为 K8s 中的 namespace），选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」，然后选择「juicefs」：
+
+![](../images/kubesphere_shop_juicefs.jpg)
+
+若 KubeSphere 版本低于 v3.2.0，根据上一步配置好的应用模板，选择部署应用「来自应用模板」：
 
 ![](images/kubesphere_install_csi.png)
 
-进入配置修改页面，修改以下两个地方：
+进入配置修改页面后一致，修改以下两个地方：
 - namespace：改成对应的项目名
 - storageClass.backend：
   `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [「JuiceFS 快速上手指南」](quick_start_guide.md) 了解相关内容。
