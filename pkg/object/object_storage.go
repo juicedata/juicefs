@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -131,6 +132,9 @@ func Register(name string, register Creator) {
 func CreateStorage(name, endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	f, ok := storages[name]
 	if ok {
+		if !strings.Contains(endpoint, "/") {
+			endpoint = fmt.Sprintf("%s://%s", name, endpoint)
+		}
 		logger.Debugf("Creating %s storage at endpoint %s", name, endpoint)
 		return f(endpoint, accessKey, secretKey)
 	}
