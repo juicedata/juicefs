@@ -106,6 +106,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f", 0650, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
+	_ = m.Close(ctx, inode)
 	var tino Ino
 	if st := m.Lookup(ctx, inode, ".", &tino, attr); st != syscall.ENOTDIR {
 		t.Fatalf("lookup /d/f/.: %s", st)
@@ -224,6 +225,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
+	_ = m.Close(ctx, inode)
 	defer m.Unlink(ctx, 1, "f")
 	if st := m.Rename(ctx, 1, "f2", 1, "f", RenameNoReplace, &inode, attr); st != syscall.EEXIST {
 		t.Fatalf("rename f2 -> f: %s", st)
@@ -314,6 +316,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Open(ctx, inode, 2, attr); st != 0 {
 		t.Fatalf("open f: %s", st)
 	}
+	_ = m.Close(ctx, inode)
 	if st := m.NewChunk(ctx, inode, 0, 0, &chunkid); st != 0 {
 		t.Fatalf("write chunk: %s", st)
 	}
@@ -418,6 +421,16 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "f3"); st != 0 {
+		t.Fatalf("unlink f3: %s", st)
+	}
+	time.Sleep(time.Millisecond * 100) // wait for delete
+	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
+		t.Fatalf("read chunk: %s", st)
+	}
+	if len(chunks) != 0 {
+		t.Fatalf("chunks: %v", chunks)
 	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)

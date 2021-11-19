@@ -24,7 +24,7 @@ import (
 )
 
 func tempFile(t *testing.T) string {
-	fp, err := ioutil.TempFile("", "test-*.db")
+	fp, err := ioutil.TempFile("/tmp", "jfstest-*.db")
 	if err != nil {
 		t.Fatalf("create temp file: %s", err)
 	}
@@ -36,7 +36,11 @@ func tempFile(t *testing.T) string {
 
 func TestSQLiteClient(t *testing.T) {
 	tmp := tempFile(t)
-	defer os.Remove(tmp)
+	defer func() {
+		if !t.Failed() {
+			_ = os.Remove(tmp)
+		}
+	}()
 	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
