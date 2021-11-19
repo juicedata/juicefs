@@ -102,7 +102,7 @@ func cleanupBackups(blob object.ObjectStorage, now time.Time) {
 		objs = append(objs, o.Key())
 	}
 
-	toDel := findDeletes(objs, now)
+	toDel := rotate(objs, now)
 	for _, o := range toDel {
 		if err = blob.Delete(o); err != nil {
 			logger.Warnf("delete object %s: %s", o, err)
@@ -115,7 +115,7 @@ func cleanupBackups(blob object.ObjectStorage, now time.Time) {
 // 2. keep one backup each day within 2 weeks
 // 3. keep one backup each week within 2 months
 // 4. keep one backup each month for those before 2 months
-func findDeletes(objs []string, now time.Time) []string {
+func rotate(objs []string, now time.Time) []string {
 	var days = 2
 	edge := now.UTC().AddDate(0, 0, -days)
 	next := func() {
