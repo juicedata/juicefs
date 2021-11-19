@@ -5,13 +5,13 @@ name: "s3test compatibility"
 on:
   push:
     branches: [ main ]
-    paths:
-      - '!docs/**'
+    paths-ignore:
+      - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches: [ main ]
-    paths:
-      - '!docs/**'
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
   s3tests:
