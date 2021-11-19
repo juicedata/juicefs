@@ -68,7 +68,7 @@ $ juicefs format --storage s3 \
 | [HDFS](#hdfs)                               | `hdfs`     |
 | [Redis](#redis)                             | `redis`    |
 | [TiKV](#tikv)                               | `tikv`     |
-| [本地磁盘](#local)                          | `file`     |
+| [本地磁盘](#本地磁盘)                       | `file`     |
 
 ## Amazon S3
 
@@ -653,7 +653,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## 本地磁盘 {#local}
+## 本地磁盘
 
 在创建 JuiceFS 存储时，如果没有指定任何存储类型，会默认使用本地磁盘存储数据，root 用户默认存储路径为 `/var/jfs`，普通用户默认存储路径为 `~/.juicefs/local`。
 
