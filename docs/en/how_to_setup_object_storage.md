@@ -37,37 +37,37 @@ The following table lists the object storage services supported by JuiceFS. Clic
 
 | Name                                                      | Value      |
 | --------------------------------------------------------- | ---------- |
-| [Amazon S3](#amazon-s3)                                      | `s3`       |
-| [Google Cloud Storage](#google-cloud-storage)                        | `gs`       |
-| [Azure Blob Storage](#azure-blob-storage)                         | `wasb`     |
-| [Backblaze B2](#backblaze-b2)               | `b2`       |
-| [IBM Cloud Object Storage](#ibm-cloud-object-storage)                      | `ibmcos`   |
-| [Scaleway Object Storage](#scaleway-object-storage)                      | `scw`      |
-| [DigitalOcean Spaces](#digitalocean-spaces)          | `space`    |
-| [Wasabi](#wasabi)                    | `wasabi`   |
+| [Amazon S3](#amazon-s3)                                   | `s3`       |
+| [Google Cloud Storage](#google-cloud-storage)             | `gs`       |
+| [Azure Blob Storage](#azure-blob-storage)                 | `wasb`     |
+| [Backblaze B2](#backblaze-b2)                             | `b2`       |
+| [IBM Cloud Object Storage](#ibm-cloud-object-storage)     | `ibmcos`   |
+| [Scaleway Object Storage](#scaleway-object-storage)       | `scw`      |
+| [DigitalOcean Spaces](#digitalocean-spaces)               | `space`    |
+| [Wasabi](#wasabi)                                         | `wasabi`   |
 | [Storj DCS](#storj-dcs)                                   | `s3`       |
-| [Vultr Object Storage](#vultr-object-storage)                            | `s3`       |
-| [Aliyun OSS](#aliyun-oss)       | `oss`      |
-| [Tencent COS](#tencent-cos)               | `cos`      |
-| [Huawei Cloud OBS](#huawei-cloud-obs)        | `obs`      |
-| [Baidu Object Storage](#baidu-object-storage)                        | `bos`      |
-| [Kingsoft KS3](#kingsoft-ks3)  | `ks3`      |
-| [NetEase Object Storage](#netease-object-storage)                        | `nos`      |
-| [QingStor](#qingstor)                      | `qingstor` |
-| [Qiniu Object Storage](#qiniu-object-storage)                      | `qiniu`    |
-| [Sina Cloud Storage](#sina-cloud-storage)                           | `scs`      |
-| [CTYun OOS](#ctyun-oos)               | `oos`      |
-| [ECloud Object Storage](#ecloud-object-storage) | `eos`      |
+| [Vultr Object Storage](#vultr-object-storage)             | `s3`       |
+| [Aliyun OSS](#aliyun-oss)                                 | `oss`      |
+| [Tencent COS](#tencent-cos)                               | `cos`      |
+| [Huawei Cloud OBS](#huawei-cloud-obs)                     | `obs`      |
+| [Baidu Object Storage](#baidu-object-storage)             | `bos`      |
+| [Kingsoft KS3](#kingsoft-ks3)                             | `ks3`      |
+| [NetEase Object Storage](#netease-object-storage)         | `nos`      |
+| [QingStor](#qingstor)                                     | `qingstor` |
+| [Qiniu Object Storage](#qiniu-object-storage)             | `qiniu`    |
+| [Sina Cloud Storage](#sina-cloud-storage)                 | `scs`      |
+| [CTYun OOS](#ctyun-oos)                                   | `oos`      |
+| [ECloud Object Storage](#ecloud-object-storage)           | `eos`      |
 | [UCloud US3](#ucloud-us3)                                 | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                 | `ceph`     |
-| [Ceph RGW](#ceph-rgw)                    | `s3`       |
+| [Ceph RGW](#ceph-rgw)                                     | `s3`       |
 | [Swift](#swift)                                           | `swift`    |
 | [MinIO](#minio)                                           | `minio`    |
 | [WebDAV](#webdav)                                         | `webdav`   |
 | [HDFS](#hdfs)                                             | `hdfs`     |
 | [Redis](#redis)                                           | `redis`    |
 | [TiKV](#tikv)                                             | `tikv`     |
-| [Local disk](#local-disk)                                      | `file`     |
+| [Local disk](#local-disk)                                 | `file`     |
 
 ## Amazon S3
 

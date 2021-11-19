@@ -35,40 +35,40 @@ $ juicefs format --storage s3 \
 
 > 如果你想要的对象存储不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
 
-| Name                                   | Value      |
-| -------------------------------------- | ---------- |
-| [Amazon S3](#amazon-s3)                   | `s3`       |
-| [Google 云存储](#google-云存储)            | `gs`       |
+| Name                                        | Value      |
+| --------------------------------------      | ---------- |
+| [Amazon S3](#amazon-s3)                     | `s3`       |
+| [Google 云存储](#google-云存储)             | `gs`       |
 | [Azure Blob 存储](#azure-blob-存储)         | `wasb`     |
-| [Backblaze B2](#backblaze-b2)          | `b2`       |
-| [IBM 云对象存储](#ibm-云对象存储)             | `ibmcos`   |
-| [Scaleway](#scaleway)                  | `scw`      |
-| [DigitalOcean Spaces](#digitalocean-spaces)       | `space`    |
-| [Wasabi](#wasabi)                      | `wasabi`   |
-| [Storj DCS](#storj-dcs)                | `s3`       |
-| [Vultr 对象存储](#vultr-对象存储)               | `s3`       |
-| [阿里云 OSS](#阿里云-oss)              | `oss`      |
-| [腾讯云 COS](#腾讯云-cos)              | `cos`      |
-| [华为云 OBS](#华为云-obs)              | `obs`      |
-| [百度云 BOS](#百度云-bos)               | `bos`      |
-| [金山云 KS3](#金山云-ks3)            | `ks3`      |
-| [美团云 MMS](#美团云-mms)             | `mss`      |
-| [网易云 NOS](#网易云-nos)                 | `nos`      |
+| [Backblaze B2](#backblaze-b2)               | `b2`       |
+| [IBM 云对象存储](#ibm-云对象存储)           | `ibmcos`   |
+| [Scaleway](#scaleway)                       | `scw`      |
+| [DigitalOcean Spaces](#digitalocean-spaces) | `space`    |
+| [Wasabi](#wasabi)                           | `wasabi`   |
+| [Storj DCS](#storj-dcs)                     | `s3`       |
+| [Vultr 对象存储](#vultr-对象存储)           | `s3`       |
+| [阿里云 OSS](#阿里云-oss)                   | `oss`      |
+| [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
+| [华为云 OBS](#华为云-obs)                   | `obs`      |
+| [百度云 BOS](#百度云-bos)                   | `bos`      |
+| [金山云 KS3](#金山云-ks3)                   | `ks3`      |
+| [美团云 MMS](#美团云-mms)                   | `mss`      |
+| [网易云 NOS](#网易云-nos)                   | `nos`      |
 | [青云 QingStor](#青云-qingstor)             | `qingstor` |
-| [七牛云 Kodo](#七牛云-kodo)                   | `qiniu`    |
-| [新浪云 SCS](#新浪云-scs)                | `scs`      |
-| [天翼云 OOS](#天翼云-oos)                  | `oos`      |
-| [移动云 EOS](#移动云-eos)              | `eos`      |
-| [优刻得 US3](#优刻得-us3)              | `ufile`    |
-| [Ceph RADOS](#ceph-rados)              | `ceph`     |
-| [Ceph RGW](#ceph-rgw) | `s3`       |
-| [Swift](#swift)                        | `swift`    |
-| [MinIO](#minio)                        | `minio`    |
-| [WebDAV](#webdav)                      | `webdav`   |
-| [HDFS](#hdfs)                          | `hdfs`     |
-| [Redis](#redis)                        | `redis`    |
-| [TiKV](#tikv)                          | `tikv`     |
-| [本地磁盘](#local)                     | `file`     |
+| [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
+| [新浪云 SCS](#新浪云-scs)                   | `scs`      |
+| [天翼云 OOS](#天翼云-oos)                   | `oos`      |
+| [移动云 EOS](#移动云-eos)                   | `eos`      |
+| [优刻得 US3](#优刻得-us3)                   | `ufile`    |
+| [Ceph RADOS](#ceph-rados)                   | `ceph`     |
+| [Ceph RGW](#ceph-rgw)                       | `s3`       |
+| [Swift](#swift)                             | `swift`    |
+| [MinIO](#minio)                             | `minio`    |
+| [WebDAV](#webdav)                           | `webdav`   |
+| [HDFS](#hdfs)                               | `hdfs`     |
+| [Redis](#redis)                             | `redis`    |
+| [TiKV](#tikv)                               | `tikv`     |
+| [本地磁盘](#local)                          | `file`     |
 
 ## Amazon S3
 
