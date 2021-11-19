@@ -46,7 +46,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 在「企业空间」中选择您所需部署的「项目」（KubeSphere 中的项目即为 K8s 中的 namespace），选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」，然后选择「juicefs」：
 
-![](../images/kubesphere_shop_juicefs.jpg)
+![](images/kubesphere_shop_juicefs.jpg)
 
 若 KubeSphere 版本低于 v3.2.0，根据上一步配置好的应用模板，选择部署应用「来自应用模板」：
 
