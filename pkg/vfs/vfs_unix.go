@@ -153,13 +153,6 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 	}
 	err = syscall.EINVAL
 	var attr = &Attr{}
-	if (set & (meta.SetAttrMode | meta.SetAttrUID | meta.SetAttrGID | meta.SetAttrAtime | meta.SetAttrMtime | meta.SetAttrSize)) == 0 {
-		// change other flags or change nothing, return the current attributes
-		err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
-		if err != 0 {
-			return
-		}
-	}
 	if set&meta.SetAttrSize != 0 {
 		err = v.Truncate(ctx, ino, int64(size), opened, attr)
 		if err != 0 {

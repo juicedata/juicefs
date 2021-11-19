@@ -563,7 +563,6 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		size := int(rb.Get32())
 		if rb.Left() < int(size) {
 			logger.Debugf("message not complete: %d %d > %d", cmd, size, rb.Left())
-			err = syscall.EINVAL
 			return
 		}
 		h.data = append(h.data, h.pending...)

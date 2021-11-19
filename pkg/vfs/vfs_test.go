@@ -703,8 +703,11 @@ func TestInternalFile(t *testing.T) {
 	w.Put([]byte("/"))
 	w.Put16(2)
 	w.Put8(0)
-	if e := v.Write(ctx, fe.Inode, w.Bytes(), 0, fh); e != 0 {
-		t.Fatalf("write info: %s", e)
+	if e := v.Write(ctx, fe.Inode, w.Bytes()[:10], 0, fh); e != 0 {
+		t.Fatalf("write fill 1: %s", e)
+	}
+	if e := v.Write(ctx, fe.Inode, w.Bytes()[10:], 0, fh); e != 0 {
+		t.Fatalf("write fill 2: %s", e)
 	}
 	off += uint64(len(buf))
 	resp = make([]byte, 1024*10)
@@ -712,13 +715,5 @@ func TestInternalFile(t *testing.T) {
 		t.Fatalf("read result: %s", e)
 	} else if resp[0] != 0 {
 		t.Fatalf("fill result: %s", string(buf[:n]))
-	}
-	// invalid msg
-	buf = make([]byte, 4+4+2)
-	w = utils.FromBuffer(buf)
-	w.Put32(meta.Rmr)
-	w.Put32(4)
-	if e := v.Write(ctx, fe.Inode, w.Bytes(), 0, fh); e != syscall.EINVAL {
-		t.Fatalf("write info: %s", e)
 	}
 }
