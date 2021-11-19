@@ -2,11 +2,18 @@ name: verify
 
 on:
   push:
-    paths-ignore:
-    - '**.md'
+    branches:
+    - main
+    paths:
+    - '**.go'
   pull_request:
-    paths-ignore:
-    - '**.md'
+    branches:
+    - main
+    paths:
+    - '**.yml'
+    - '**.go'
+    - 'Makefile'
+
 jobs:
   lint:
     runs-on: ubuntu-latest
