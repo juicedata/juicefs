@@ -3,10 +3,10 @@ name: verify
 on:
   push:
     paths-ignore:
-    - 'docs/**'
+    - 'docs/**.md'
   pull_request:
     paths-ignore:
-    - 'docs/**'
+    - 'docs/**.md'
 jobs:
   lint:
     runs-on: ubuntu-latest
