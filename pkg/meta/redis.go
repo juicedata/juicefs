@@ -2965,8 +2965,10 @@ func (m *redisMeta) makeSnap() error {
 		listMap:   make(map[string][]string),
 		hashMap:   make(map[string]map[string]string),
 	}
-
 	ctx := context.Background()
+	progress, bar := utils.NewDynProgressBar("Make snap progress: ", false)
+	bar.SetTotal(m.rdb.DBSize(ctx).Val(), false)
+
 	listType := func(keys []string) error {
 		p := m.rdb.Pipeline()
 		for _, key := range keys {
@@ -2982,6 +2984,7 @@ func (m *redisMeta) makeSnap() error {
 					m.snap.listMap[key] = sliceCmd.Val()
 				}
 			}
+			bar.Increment()
 		}
 
 		return nil
@@ -2996,6 +2999,7 @@ func (m *redisMeta) makeSnap() error {
 			if s, ok := values[i].(string); ok {
 				m.snap.stringMap[keys[i]] = s
 			}
+			bar.Increment()
 		}
 		return nil
 	}
@@ -3015,6 +3019,7 @@ func (m *redisMeta) makeSnap() error {
 					m.snap.hashMap[key] = stringMapCmd.Val()
 				}
 			}
+			bar.Increment()
 		}
 		return nil
 	}
@@ -3052,6 +3057,8 @@ func (m *redisMeta) makeSnap() error {
 			return err
 		}
 	}
+	bar.SetTotal(0, true)
+	progress.Wait()
 	return nil
 }
 

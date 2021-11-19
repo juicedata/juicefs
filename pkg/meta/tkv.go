@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -2551,9 +2552,22 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		default:
 			client := &memKV{items: btree.New(2), temp: &kvItem{}}
 			if err = m.txn(func(tx kvTxn) error {
+				used := parseCounter(tx.get(m.counterKey(usedSpace)))
+				inodeTotal := parseCounter(tx.get(m.counterKey(totalInodes)))
+				guessKeyTotal := int64(math.Ceil((math.Ceil(float64(used/inodeTotal/(64*1024*1024))) + float64(3)) * float64(inodeTotal)))
+				progress, bar := utils.NewDynProgressBar("Make snap progress: ", false)
+				bar.SetTotal(guessKeyTotal, false)
+				threshold := 0.1
 				tx.scan(nil, func(key, value []byte) {
 					client.set(string(key), value)
+					if bar.Current() > int64(math.Ceil(float64(guessKeyTotal)*(1-threshold))) {
+						guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
+						bar.SetTotal(guessKeyTotal, false)
+					}
+					bar.Increment()
 				})
+				bar.SetTotal(0, true)
+				progress.Wait()
 				return nil
 			}); err != nil {
 				return err
