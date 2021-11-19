@@ -1,5 +1,6 @@
 export GO111MODULE=on
 
+
 all: juicefs
 
 REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
