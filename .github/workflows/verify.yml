@@ -4,11 +4,9 @@ on:
   push:
     paths:
       - '!docs/**'
-      - '!**.md'
   pull_request:
     paths:
       - '!docs/**'
-      - '!**.md'
 jobs:
   lint:
     runs-on: ubuntu-latest
