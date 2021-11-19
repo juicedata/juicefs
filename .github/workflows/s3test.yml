@@ -1,7 +1,6 @@
 name: "s3test compatibility"
 
 
-
 on:
   push:
     branches: [ main ]
