@@ -2,11 +2,11 @@ name: verify
 
 on:
   push:
-    paths-ignore:
-    - '**.md'
+    paths:
+    - '!**.md'
   pull_request:
-    paths-ignore:
-    - '**.md'
+    paths:
+    - '!**.md'
 jobs:
   lint:
     runs-on: ubuntu-latest
