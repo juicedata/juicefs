@@ -25,7 +25,7 @@ install: true
 jobs:
   include:
     - stage: "build and test"
-      if: CI = true
+      if: TRAVIS = true
       before_script:
         - export GO111MODULE=on
         - sudo mysql -e "create database dev;"
