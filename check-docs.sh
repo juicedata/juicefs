@@ -4,28 +4,20 @@ set -e
 
 CHANGED_FILES=`git diff --name-only main...${TRAVIS_COMMIT}`
 echo $CHANGED_FILES
-SKIP_FLAG=True
 DOCS_DIR="docs/.*"
 
+echo "before CI"
+echo $CI
+
 for CHANGED_FILE in $CHANGED_FILES; do
+  echo "change files"
+  echo $CHANGED_FILE
   if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
-    SKIP_FLAG=False
+    CI=false
     break
   fi
 done
 
-if [[ $SKIP_FLAG == True ]]; then
-  echo "Only doc files modified, exiting."
-  travis_terminate 0
-  exit 1
-fi
-
-travis_terminate() {
-  set +e
-  pkill -9 -P $$ &> /dev/null || true
-  exit $1
-}
-
-echo "test travis_terminate"
-travis_terminate 0
-exit 1
+echo "after CI"
+CI=false
+echo ${CI}
