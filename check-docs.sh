@@ -19,5 +19,4 @@ for CHANGED_FILE in $CHANGED_FILES; do
 done
 
 echo "after CI"
-CI=false
 echo ${CI}
