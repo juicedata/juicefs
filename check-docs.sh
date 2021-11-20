@@ -20,6 +20,12 @@ if [[ $SKIP_FLAG == True ]]; then
   exit 1
 fi
 
+travis_terminate() {
+  set +e
+  pkill -9 -P $$ &> /dev/null || true
+  exit $1
+}
+
 echo "test travis_terminate"
 travis_terminate 0
 exit 1
