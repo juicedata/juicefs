@@ -19,6 +19,8 @@ addons:
       - attr
       - lsof
       - gcc-mingw-w64 # for windows
+before_install:
+  - bash ./check-docs.sh
 install: true
 before_script:
   - export GO111MODULE=on
