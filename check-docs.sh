@@ -8,7 +8,7 @@ SKIP_FLAG=True
 DOCS_DIR="docs/.*"
 
 for CHANGED_FILE in $CHANGED_FILES; do
-  if ![[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
+  if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
     SKIP_FLAG=False
     break
   fi
