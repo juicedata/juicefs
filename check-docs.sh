@@ -19,3 +19,7 @@ if [[ $SKIP_FLAG == True ]]; then
   travis_terminate 0
   exit 1
 fi
+
+echo "test travis_terminate"
+travis_terminate 0
+exit 1
