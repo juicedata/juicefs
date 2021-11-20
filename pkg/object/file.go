@@ -233,7 +233,11 @@ func readDirSorted(dirname string) ([]os.FileInfo, error) {
 	for i, fi := range fis {
 		if !fi.IsDir() && !fi.Mode().IsRegular() {
 			// follow symlink
-			f, _ := os.Stat(filepath.Join(dirname, fi.Name()))
+			f, err := os.Stat(filepath.Join(dirname, fi.Name()))
+			if err != nil {
+				logger.Warnf("skip broken symlink %s", filepath.Join(dirname, fi.Name()))
+				continue
+			}
 			fi = &mInfo{fi.Name(), f}
 			fis[i] = fi
 		}
