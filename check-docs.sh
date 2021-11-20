@@ -5,14 +5,10 @@ set -e
 CHANGED_FILES=`git diff --name-only main...${TRAVIS_COMMIT}`
 echo $CHANGED_FILES
 SKIP_FLAG=True
-DOC_MD=".md"
-PIC_JPG=".jpg"
-PIC_png=".png"
-PIC_SVG=".svg"
+DOCS_DIR="docs/.*"
 
 for CHANGED_FILE in $CHANGED_FILES; do
-  if ![[ $CHANGED_FILE =~ $DOC_DIR ]] && ![[ $CHANGED_FILE =~ $PIC_JPG ]]  &&  \
-    ![[ $CHANGED_FILE =~ $PIC_PNG ]] && ![[ $CHANGED_FILE =~ $PIC_SVG ]] ; then
+  if ![[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
     SKIP_FLAG=False
     break
   fi
