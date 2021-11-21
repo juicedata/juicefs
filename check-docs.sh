@@ -22,6 +22,6 @@ if [[ $SKIP_FLAG == True ]]; then
   TRAVIS=false
 fi
 
-TRAVIS=true
+
 echo "after CI"
 echo ${TRAVIS}
