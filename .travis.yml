@@ -19,9 +19,6 @@ addons:
       - attr
       - lsof
       - gcc-mingw-w64 # for windows
-env:
-  global:
-    - CONTINUE_RUN=true
 before_install:
   - bash ./check-docs.sh
 install: true
@@ -29,7 +26,8 @@ jobs:
   include:
     - stage: "prepare"
       script:
-        - echo $CONTINUE_RUN
+        - echo "TRAVIS"
+        - echo $TRAVIS
         - export GO111MODULE=on
         - sudo mysql -e "create database dev;"
         - psql -c 'create database test;' -U postgres
