@@ -31,6 +31,7 @@ jobs:
         - psql -c 'create database test;' -U postgres
         - make
         - sudo make -C fstests setup
+    if: env(TRAVIS) = true
     - stage: "build and test"
       script:
         - make test
@@ -48,4 +49,4 @@ jobs:
         - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
         - sudo ./juicefs gc localhost
         - sudo ./juicefs fsck localhost
-
+      if: env(TRAVIS) = true
