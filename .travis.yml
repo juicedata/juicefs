@@ -21,6 +21,11 @@ addons:
       - gcc-mingw-w64 # for windows
 before_install:
   - bash ./check-docs.sh
+  - echo "before TRAVIS"
+  - echo $TRAVIS
+  - source /tmp/config
+  - echo "after TRAVIS"
+  - echo $TRAVIS
 install: true
 jobs:
   include:
