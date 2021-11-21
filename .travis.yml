@@ -21,17 +21,14 @@ addons:
       - gcc-mingw-w64 # for windows
 before_install:
   - bash ./check-docs.sh
-  - echo "before TRAVIS"
-  - echo $TRAVIS
-  - source /tmp/config
-  - echo "after TRAVIS"
+  - echo "before_install TRAVIS"
   - echo $TRAVIS
 install: true
 jobs:
   include:
     - stage: "prepare"
       script:
-        - echo "TRAVIS"
+        - echo "jobs TRAVIS"
         - echo $TRAVIS
         - export GO111MODULE=on
         - sudo mysql -e "create database dev;"

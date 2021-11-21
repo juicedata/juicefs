@@ -7,7 +7,7 @@ echo $CHANGED_FILES
 DOCS_DIR="docs/.*"
 SKIP_FLAG=True
 echo "before CI"
-echo "TRAVIS=true" > /tmp/config
+echo $TRAVIS
 
 for CHANGED_FILE in $CHANGED_FILES; do
   echo "change files"
@@ -19,8 +19,9 @@ for CHANGED_FILE in $CHANGED_FILES; do
 done
 
 if [[ $SKIP_FLAG == True ]]; then
-  echo "TRAVIS=false" > /tmp/config
+  TRAVIS=false
 fi
 
-echo "TRAVIS=false" > /tmp/config
+TRAVIS=false
 echo "after CI"
+echo $TRAVIS
