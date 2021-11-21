@@ -20,7 +20,7 @@ addons:
       - lsof
       - gcc-mingw-w64 # for windows
 before_install:
-  - bash ./check-docs.sh
+  - source ./check-docs.sh
   - echo "before_install TRAVIS"
   - echo $TRAVIS
 install: true
