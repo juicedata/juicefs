@@ -7,7 +7,7 @@ echo $CHANGED_FILES
 DOCS_DIR="docs/.*"
 SKIP_FLAG=True
 echo "before CI"
-echo $TRAVIS
+echo $CONTINUE_RUN
 
 for CHANGED_FILE in $CHANGED_FILES; do
   echo "change files"
@@ -19,9 +19,9 @@ for CHANGED_FILE in $CHANGED_FILES; do
 done
 
 if [[ $SKIP_FLAG == True ]]; then
-  TRAVIS=false
+  CONTINUE_RUN=false
 fi
 
-TRAVIS = true
+CONTINUE_RUN = true
 echo "after CI"
-echo ${TRAVIS}
+echo ${CONTINUE_RUN}
