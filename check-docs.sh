@@ -8,6 +8,8 @@ DOCS_DIR="docs/.*"
 SKIP_FLAG=True
 echo "before CI"
 echo $TRAVIS
+echo "env list"
+env
 
 for CHANGED_FILE in $CHANGED_FILES; do
   echo "change files"
