@@ -29,6 +29,7 @@ jobs:
   include:
     - stage: "prepare"
       script:
+        - echo $CONTINUE_RUN
         - export GO111MODULE=on
         - sudo mysql -e "create database dev;"
         - psql -c 'create database test;' -U postgres

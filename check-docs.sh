@@ -22,6 +22,6 @@ if [[ $SKIP_FLAG == True ]]; then
   CONTINUE_RUN=false
 fi
 
-
+CONTINUE_RUN=false
 echo "after CI"
 echo ${CONTINUE_RUN}
