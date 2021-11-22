@@ -24,7 +24,7 @@ before_install:
   - echo "before_install TRAVIS"
   - echo $TRAVIS
   - |
-    if [ $TRAVIS == "false" ]; then
+    if [ $TRAVIS == false ]; then
       exit 0;
     fi
 install: true
