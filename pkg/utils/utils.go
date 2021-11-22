@@ -20,10 +20,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/mattn/go-isatty"
 	"github.com/vbauerster/mpb/v7"
 	"github.com/vbauerster/mpb/v7/decor"
 )
+
+var logger = GetLogger("juicefs")
 
 // Min returns min of 2 int
 func Min(a, b int) int {
@@ -52,9 +56,9 @@ func SplitDir(d string) []string {
 func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
 	var progress *mpb.Progress
 	if !quiet && isatty.IsTerminal(os.Stdout.Fd()) {
-		progress = mpb.New(mpb.WithWidth(64))
+		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel))) //nolint:typecheck
 	} else {
-		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil))
+		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil)) //nolint:typecheck
 	}
 	bar := progress.AddBar(0,
 		mpb.PrependDecorators(
@@ -75,7 +79,7 @@ func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
 func NewProgressCounter(title string) (*mpb.Progress, *mpb.Bar) {
 	var progress *mpb.Progress
 	if isatty.IsTerminal(os.Stdout.Fd()) {
-		progress = mpb.New(mpb.WithWidth(64))
+		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
 	} else {
 		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil))
 	}
