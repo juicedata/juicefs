@@ -14,13 +14,6 @@ git diff --name-only HEAD~1
 echo "TRAVIS_COMMIT_RANGE"
 git diff --name-only $TRAVIS_COMMIT_RANGE
 
-#if TRAVIS_COMMIT_RANGE is empty
-if [ x"${TRAVIS_COMMIT_RANGE}" == x ] ; then
-  CHANGED_FILES=`git diff --name-only HEAD~1`
-fi
-
-changeFlag CHANGED_FILES
-
 function changeFlag() {
   for CHANGED_FILE in $1; do
     if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
@@ -29,6 +22,14 @@ function changeFlag() {
     fi
   done
 }
+
+
+#if TRAVIS_COMMIT_RANGE is empty
+if [ x"${TRAVIS_COMMIT_RANGE}" == x ] ; then
+  CHANGED_FILES=`git diff --name-only HEAD~1`
+fi
+
+changeFlag CHANGED_FILES
 
 
 echo "skip flag"
