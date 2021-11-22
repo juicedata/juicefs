@@ -27,6 +27,7 @@ install: true
 jobs:
   include:
     - stage: "prepare"
+      if: env(TRAVIS) = true
       script:
         - echo "jobs TRAVIS"
         - echo $TRAVIS
