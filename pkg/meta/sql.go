@@ -1922,6 +1922,10 @@ func (m *dbMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
+	if attr != nil {
+		// reset attr.Full to avoid mismatch between inode and attr
+		attr.Full = false
+	}
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}
@@ -1932,7 +1936,7 @@ func (m *dbMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.
 	if err == 0 {
 		m.of.Open(inode, attr)
 	}
-	return 0
+	return err
 }
 
 func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {
