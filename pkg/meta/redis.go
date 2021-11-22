@@ -33,7 +33,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -139,14 +138,25 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m.checkServerConfig()
 	m.root, err = lookupSubdir(m, conf.Subdir)
-	return m, err
-}
-
-func (r *redisMeta) checkRoot(inode Ino) Ino {
-	if inode == 1 {
-		return r.root
+	m.baseMeta.incrCounter = func(name string, v int64) (int64, error) {
+		return m.rdb.IncrBy(Background, name, v).Result()
 	}
-	return inode
+	m.baseMeta.cleanStaleSession = m.cleanStaleSession
+	m.baseMeta.getattr = m.GetAttr
+	m.baseMeta.deleteInode = func(inode Ino) {
+		if err := m.deleteInode(inode, false); err == nil {
+			m.rdb.SRem(Background, m.sustained(m.sid), strconv.Itoa(int(inode)))
+		}
+	}
+	m.baseMeta.readlink = m.readlink
+	m.baseMeta.deleteSliceDB = func(chunkid uint64, size uint32) error {
+		return m.rdb.HDel(Background, sliceRefs, m.sliceKey(chunkid, size)).Err()
+	}
+	m.baseMeta.deleteFile = func(inode Ino, length uint64) {
+		m.deleteFile(inode, length, "")
+	}
+	m.baseMeta.mknod = m.mknod
+	return m, err
 }
 
 func (r *redisMeta) Name() string {
@@ -261,34 +271,6 @@ func (r *redisMeta) NewSession() error {
 	return nil
 }
 
-func (r *redisMeta) CloseSession() error {
-	if r.conf.ReadOnly {
-		return nil
-	}
-	r.Lock()
-	r.umounting = true
-	r.Unlock()
-	r.cleanStaleSession(r.sid, true)
-	return nil
-}
-
-func (r *redisMeta) refreshUsage() {
-	for {
-		used, _ := r.rdb.IncrBy(Background, usedSpace, 0).Result()
-		atomic.StoreInt64(&r.usedSpace, int64(used))
-		inodes, _ := r.rdb.IncrBy(Background, totalInodes, 0).Result()
-		atomic.StoreInt64(&r.usedInodes, int64(inodes))
-		time.Sleep(time.Second * 10)
-	}
-}
-
-func (r *redisMeta) checkQuota(size, inodes int64) bool {
-	if size > 0 && r.fmt.Capacity > 0 && atomic.LoadInt64(&r.usedSpace)+int64(size) > int64(r.fmt.Capacity) {
-		return true
-	}
-	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadInt64(&r.usedInodes)+int64(inodes) > int64(r.fmt.Inodes)
-}
-
 func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 	ctx := Background
 	info, err := r.rdb.HGet(ctx, sessionInfos, sid).Bytes()
@@ -373,22 +355,6 @@ func (r *redisMeta) ListSessions() ([]*Session, error) {
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
-}
-
-func (r *redisMeta) OnMsg(mtype uint32, cb MsgCallback) {
-	r.msgCallbacks.Lock()
-	defer r.msgCallbacks.Unlock()
-	r.msgCallbacks.callbacks[mtype] = cb
-}
-
-func (r *redisMeta) newMsg(mid uint32, args ...interface{}) error {
-	r.msgCallbacks.Lock()
-	cb, ok := r.msgCallbacks.callbacks[mid]
-	r.msgCallbacks.Unlock()
-	if ok {
-		return cb(args...)
-	}
-	return fmt.Errorf("message %d is not supported", mid)
 }
 
 func (r *redisMeta) sustained(sid uint64) string {
@@ -1091,18 +1057,8 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 	}, r.inodeKey(inode))
 }
 
-func (r *redisMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
-	if target, ok := r.symlinks.Load(inode); ok {
-		*path = target.([]byte)
-		return 0
-	}
-	defer timeit(time.Now())
-	target, err := r.rdb.Get(ctx, r.symKey(inode)).Bytes()
-	if err == nil {
-		*path = target
-		r.symlinks.Store(inode, target)
-	}
-	return errno(err)
+func (m *redisMeta) readlink(inode Ino) ([]byte, error) {
+	return m.rdb.Get(Background, m.symKey(inode)).Bytes()
 }
 
 func (r *redisMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
@@ -1341,13 +1297,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		return err
 	}, r.entryKey(parent), r.inodeKey(parent), r.inodeKey(inode))
 	if eno == 0 && _type == TypeFile && attr.Nlink == 0 {
-		if opened {
-			r.Lock()
-			r.removedFiles[inode] = true
-			r.Unlock()
-		} else {
-			go r.deleteFile(inode, attr.Length, "")
-		}
+		r.deletedFile(opened, inode, attr.Length)
 	}
 	return eno
 }
@@ -1637,13 +1587,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		return err
 	}, keys...)
 	if eno == 0 && !exchange && dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
-		if opened {
-			r.Lock()
-			r.removedFiles[dino] = true
-			r.Unlock()
-		} else {
-			go r.deleteFile(dino, tattr.Length, "")
-		}
+		r.deletedFile(opened, dino, tattr.Length)
 	}
 	return eno
 }
@@ -1903,44 +1847,6 @@ func (r *redisMeta) deleteInode(inode Ino, sync bool) error {
 	return err
 }
 
-func (r *redisMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	if r.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
-		return syscall.EROFS
-	}
-	if attr != nil {
-		// reset attr.Full to avoid mismatch between inode and attr
-		attr.Full = false
-	}
-	if r.conf.OpenCache > 0 && r.of.OpenCheck(inode, attr) {
-		return 0
-	}
-	var err syscall.Errno
-	if attr != nil && !attr.Full {
-		err = r.GetAttr(ctx, inode, attr)
-	}
-	if err == 0 {
-		// TODO: tracking update in Redis
-		r.of.Open(inode, attr)
-	}
-	return err
-}
-
-func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
-	if r.of.Close(inode) {
-		r.Lock()
-		defer r.Unlock()
-		if r.removedFiles[inode] {
-			delete(r.removedFiles, inode)
-			go func() {
-				if err := r.deleteInode(inode, false); err == nil {
-					r.rdb.SRem(ctx, r.sustained(r.sid), strconv.Itoa(int(inode)))
-				}
-			}()
-		}
-	}
-	return 0
-}
-
 func (r *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
 	f := r.of.find(inode)
 	if f != nil {
@@ -1971,11 +1877,6 @@ func (r *redisMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32,
 		*chunkid = cid
 	}
 	return errno(err)
-}
-
-func (r *redisMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
-	r.of.InvalidateChunk(inode, indx)
-	return 0
 }
 
 func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
@@ -2209,7 +2110,7 @@ func (r *redisMeta) cleanupSlices() {
 							chunkid, _ := strconv.Atoi(ps[0][1:])
 							size, _ := strconv.Atoi(ps[1])
 							if chunkid > 0 && size > 0 {
-								r.deleteSlice(ctx, uint64(chunkid), uint32(size))
+								r.deleteSlice(uint64(chunkid), uint32(size))
 							}
 						}
 					} else if v == "0" {
@@ -2332,18 +2233,8 @@ func (r *redisMeta) toDelete(inode Ino, length uint64) string {
 	return inode.String() + ":" + strconv.Itoa(int(length))
 }
 
-func (r *redisMeta) deleteSlice(ctx Context, chunkid uint64, size uint32) {
-	if r.conf.MaxDeletes == 0 {
-		return
-	}
-	r.deleting <- 1
-	defer func() { <-r.deleting }()
-	err := r.newMsg(DeleteChunk, chunkid, size)
-	if err != nil {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
-	} else {
-		_ = r.rdb.HDel(ctx, sliceRefs, r.sliceKey(chunkid, size))
-	}
+func (r *redisMeta) deleteSliceDB(ctx Context, chunkid uint64, size uint32) error {
+	return r.rdb.HDel(ctx, sliceRefs, r.sliceKey(chunkid, size)).Err()
 }
 
 func (r *redisMeta) deleteChunk(inode Ino, indx uint32) error {
@@ -2377,7 +2268,7 @@ func (r *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		for i, s := range slices {
 			if rs[i].Val() < 0 {
-				r.deleteSlice(ctx, s.chunkid, s.size)
+				r.deleteSlice(s.chunkid, s.size)
 			}
 		}
 		if len(slices) < 100 {
@@ -2511,13 +2402,13 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if errno == syscall.EINVAL {
 		r.rdb.HIncrBy(ctx, sliceRefs, r.sliceKey(chunkid, size), -1)
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
-		r.deleteSlice(ctx, chunkid, size)
+		r.deleteSlice(chunkid, size)
 	} else if errno == 0 {
 		r.of.InvalidateChunk(inode, indx)
 		r.cleanupZeroRef(r.sliceKey(chunkid, size))
 		for i, s := range ss {
 			if rs[i].Err() == nil && rs[i].Val() < 0 {
-				r.deleteSlice(ctx, s.chunkid, s.size)
+				r.deleteSlice(s.chunkid, s.size)
 			}
 		}
 		if r.rdb.LLen(ctx, r.chunkKey(inode, indx)).Val() > 5 {

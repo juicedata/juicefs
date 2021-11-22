@@ -84,15 +84,24 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 		baseMeta: newBaseMeta(conf),
 		client:   client,
 	}
+	m.baseMeta.incrCounter = func(name string, v int64) (int64, error) {
+		return m.incrCounter(m.counterKey(name), v)
+	}
+	m.baseMeta.cleanStaleSession = m.cleanStaleSession
+	m.baseMeta.getattr = m.GetAttr
+	m.baseMeta.deleteInode = func(inode Ino) {
+		if err := m.deleteInode(inode, false); err == nil {
+			_ = m.deleteKeys(m.sustainedKey(m.sid, inode))
+		}
+	}
+	m.baseMeta.readlink = m.readlink
+	m.baseMeta.deleteSliceDB = func(chunkid uint64, size uint32) error {
+		return m.deleteKeys(m.sliceKey(chunkid, size))
+	}
+	m.baseMeta.deleteFile = m.deleteFile
+	m.baseMeta.mknod = m.mknod
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
-}
-
-func (m *kvMeta) checkRoot(inode Ino) Ino {
-	if inode == 1 {
-		return m.root
-	}
-	return inode
 }
 
 func (m *kvMeta) Name() string {
@@ -359,38 +368,6 @@ func (m *kvMeta) scanValues(prefix []byte, filter func(k, v []byte) bool) (map[s
 	return values, err
 }
 
-func (m *kvMeta) nextInode() (Ino, error) {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-	if m.freeInodes.next >= m.freeInodes.maxid {
-		v, err := m.incrCounter(m.counterKey("nextInode"), 100)
-		if err != nil {
-			return 0, err
-		}
-		m.freeInodes.next = uint64(v) - 100
-		m.freeInodes.maxid = uint64(v)
-	}
-	n := m.freeInodes.next
-	m.freeInodes.next++
-	return Ino(n), nil
-}
-
-func (m *kvMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-	if m.freeChunks.next >= m.freeChunks.maxid {
-		v, err := m.incrCounter(m.counterKey("nextChunk"), 1000)
-		if err != nil {
-			return errno(err)
-		}
-		m.freeChunks.next = uint64(v) - 1000
-		m.freeChunks.maxid = uint64(v)
-	}
-	*chunkid = m.freeChunks.next
-	m.freeChunks.next++
-	return 0
-}
-
 func (m *kvMeta) Init(format Format, force bool) error {
 	body, err := m.get(m.fmtKey("setting"))
 	if err != nil {
@@ -491,17 +468,6 @@ func (m *kvMeta) NewSession() error {
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
 	go m.flushStats()
-	return nil
-}
-
-func (m *kvMeta) CloseSession() error {
-	if m.conf.ReadOnly {
-		return nil
-	}
-	m.Lock()
-	m.umounting = true
-	m.Unlock()
-	m.cleanStaleSession(m.sid, true)
 	return nil
 }
 
@@ -694,67 +660,6 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
-}
-
-func (m *kvMeta) updateStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.newSpace, space)
-	atomic.AddInt64(&m.newInodes, inodes)
-}
-
-func (m *kvMeta) flushStats() {
-	for {
-		newSpace := atomic.SwapInt64(&m.newSpace, 0)
-		newInodes := atomic.SwapInt64(&m.newInodes, 0)
-		if newSpace != 0 || newInodes != 0 {
-			err := m.txn(func(tx kvTxn) error {
-				tx.incrBy(m.counterKey(usedSpace), newSpace)
-				tx.incrBy(m.counterKey(totalInodes), newInodes)
-				return nil
-			})
-			if err != nil {
-				logger.Warnf("update stats: %s", err)
-				m.updateStats(newSpace, newInodes)
-			}
-		}
-		time.Sleep(time.Second)
-	}
-}
-
-func (m *kvMeta) refreshUsage() {
-	for {
-		used, err := m.getCounter(m.counterKey(usedSpace))
-		if err == nil {
-			atomic.StoreInt64(&m.usedSpace, used)
-		}
-		inodes, err := m.getCounter(m.counterKey(totalInodes))
-		if err == nil {
-			atomic.StoreInt64(&m.usedInodes, inodes)
-		}
-		time.Sleep(time.Second * 10)
-	}
-}
-
-func (m *kvMeta) checkQuota(size, inodes int64) bool {
-	if size > 0 && m.fmt.Capacity > 0 && atomic.LoadInt64(&m.usedSpace)+atomic.LoadInt64(&m.newSpace)+size > int64(m.fmt.Capacity) {
-		return true
-	}
-	return inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes)
-}
-
-func (m *kvMeta) OnMsg(mtype uint32, cb MsgCallback) {
-	m.msgCallbacks.Lock()
-	defer m.msgCallbacks.Unlock()
-	m.msgCallbacks.callbacks[mtype] = cb
-}
-
-func (m *kvMeta) newMsg(mid uint32, args ...interface{}) error {
-	m.msgCallbacks.Lock()
-	cb, ok := m.msgCallbacks.callbacks[mid]
-	m.msgCallbacks.Unlock()
-	if ok {
-		return cb(args...)
-	}
-	return fmt.Errorf("message %d is not supported", mid)
 }
 
 func (m *kvMeta) shouldRetry(err error) bool {
@@ -1196,32 +1101,8 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	return errno(err)
 }
 
-func (m *kvMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
-	if target, ok := m.symlinks.Load(inode); ok {
-		*path = target.([]byte)
-		return 0
-	}
-	defer timeit(time.Now())
-	target, err := m.get(m.symKey(inode))
-	if err != nil {
-		return errno(err)
-	}
-	if target == nil {
-		return syscall.ENOENT
-	}
-	*path = target
-	m.symlinks.Store(inode, target)
-	return 0
-}
-
-func (m *kvMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
-}
-
-func (m *kvMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
+func (m *kvMeta) readlink(inode Ino) ([]byte, error) {
+	return m.get(m.symKey(inode))
 }
 
 func (m *kvMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
@@ -1329,26 +1210,6 @@ func (m *kvMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 	return errno(err)
 }
 
-func (m *kvMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
-}
-
-func (m *kvMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	if attr == nil {
-		attr = &Attr{}
-	}
-	err := m.mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
-	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
-		err = 0
-	}
-	if err == 0 && inode != nil {
-		m.of.Open(*inode, attr)
-	}
-	return err
-}
-
 func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
@@ -1432,13 +1293,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	})
 	if err == nil {
 		if _type == TypeFile && attr.Nlink == 0 {
-			if opened {
-				m.Lock()
-				m.removedFiles[inode] = true
-				m.Unlock()
-			} else {
-				go m.deleteFile(inode, attr.Length)
-			}
+			m.deletedFile(opened, inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1676,13 +1531,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	})
 	if err == nil && !exchange {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
-			if opened {
-				m.Lock()
-				m.removedFiles[dino] = true
-				m.Unlock()
-			} else {
-				go m.deleteFile(dino, tattr.Length)
-			}
+			m.deletedFile(opened, dino, tattr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1850,43 +1699,6 @@ func (m *kvMeta) deleteInode(inode Ino, sync bool) error {
 	return err
 }
 
-func (m *kvMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
-		return syscall.EROFS
-	}
-	if attr != nil {
-		// reset attr.Full to avoid mismatch between inode and attr
-		attr.Full = false
-	}
-	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
-		return 0
-	}
-	var err syscall.Errno
-	if attr != nil && !attr.Full {
-		err = m.GetAttr(ctx, inode, attr)
-	}
-	if err == 0 {
-		m.of.Open(inode, attr)
-	}
-	return err
-}
-
-func (m *kvMeta) Close(ctx Context, inode Ino) syscall.Errno {
-	if m.of.Close(inode) {
-		m.Lock()
-		defer m.Unlock()
-		if m.removedFiles[inode] {
-			delete(m.removedFiles, inode)
-			go func() {
-				if err := m.deleteInode(inode, false); err == nil {
-					_ = m.deleteKeys(m.sustainedKey(m.sid, inode))
-				}
-			}()
-		}
-	}
-	return 0
-}
-
 func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
 	f := m.of.find(inode)
 	if f != nil {
@@ -1911,11 +1723,6 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	if !m.conf.ReadOnly && (len(val)/sliceBytes >= 5 || len(*chunks) >= 5) {
 		go m.compactChunk(inode, indx, false)
 	}
-	return 0
-}
-
-func (m *kvMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
-	m.of.InvalidateChunk(inode, indx)
 	return 0
 }
 
@@ -2159,21 +1966,8 @@ func (r *kvMeta) cleanupZeroRef(chunkid uint64, size uint32) {
 	})
 }
 
-func (m *kvMeta) deleteSlice(chunkid uint64, size uint32) {
-	if m.conf.MaxDeletes == 0 {
-		return
-	}
-	m.deleting <- 1
-	defer func() { <-m.deleting }()
-	err := m.newMsg(DeleteChunk, chunkid, size)
-	if err != nil {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
-	} else {
-		err := m.deleteKeys(m.sliceKey(chunkid, size))
-		if err != nil {
-			logger.Errorf("delete slice %d: %s", chunkid, err)
-		}
-	}
+func (m *kvMeta) deleteSliceDB(chunkid uint64, size uint32) error {
+	return m.deleteKeys(m.sliceKey(chunkid, size))
 }
 
 func (m *kvMeta) deleteFile(inode Ino, length uint64) {

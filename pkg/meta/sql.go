@@ -163,14 +163,27 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		engine:   engine,
 	}
 	m.root, err = lookupSubdir(m, conf.Subdir)
-	return m, err
-}
-
-func (m *dbMeta) checkRoot(inode Ino) Ino {
-	if inode == 1 {
-		return m.root
+	m.baseMeta.incrCounter = m.incrCounter
+	m.baseMeta.cleanStaleSession = m.cleanStaleSession
+	m.baseMeta.getattr = m.GetAttr
+	m.baseMeta.deleteInode = func(inode Ino) {
+		if err := m.deleteInode(inode, false); err == nil {
+			_ = m.txn(func(ses *xorm.Session) error {
+				_, err := ses.Delete(&sustained{m.sid, inode})
+				return err
+			})
+		}
 	}
-	return inode
+	m.baseMeta.readlink = m.readlink
+	m.baseMeta.deleteSliceDB = func(chunkid uint64, size uint32) error {
+		return m.txn(func(ses *xorm.Session) error {
+			_, err = ses.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
+			return err
+		})
+	}
+	m.baseMeta.deleteFile = m.deleteFile
+	m.baseMeta.mknod = m.mknod
+	return m, err
 }
 
 func (m *dbMeta) Name() string {
@@ -322,14 +335,14 @@ func (m *dbMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("json: %s", err)
 	}
-	var v uint64
+	var v int64
 	for {
 		v, err = m.incrCounter("nextSession", 1)
 		if err != nil {
 			return fmt.Errorf("create session: %s", err)
 		}
 		err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session{v, time.Now().Unix(), data})
+			return mustInsert(s, &session{uint64(v), time.Now().Unix(), data})
 		})
 		if err == nil {
 			break
@@ -342,7 +355,7 @@ func (m *dbMeta) NewSession() error {
 			return fmt.Errorf("insert new session: %s", err)
 		}
 	}
-	m.sid = v
+	m.sid = uint64(v)
 	logger.Debugf("session is %d", m.sid)
 
 	go m.refreshSession()
@@ -350,40 +363,6 @@ func (m *dbMeta) NewSession() error {
 	go m.cleanupSlices()
 	go m.flushStats()
 	return nil
-}
-
-func (m *dbMeta) CloseSession() error {
-	if m.conf.ReadOnly {
-		return nil
-	}
-	m.Lock()
-	m.umounting = true
-	m.Unlock()
-	m.cleanStaleSession(m.sid, true)
-	return nil
-}
-
-func (m *dbMeta) refreshUsage() {
-	for {
-		var c = counter{Name: "usedSpace"}
-		_, err := m.engine.Get(&c)
-		if err == nil {
-			atomic.StoreInt64(&m.usedSpace, c.Value)
-		}
-		c = counter{Name: "totalInodes"}
-		_, err = m.engine.Get(&c)
-		if err == nil {
-			atomic.StoreInt64(&m.usedInodes, c.Value)
-		}
-		time.Sleep(time.Second * 10)
-	}
-}
-
-func (r *dbMeta) checkQuota(size, inodes int64) bool {
-	if size > 0 && r.fmt.Capacity > 0 && atomic.LoadInt64(&r.usedSpace)+atomic.LoadInt64(&r.newSpace)+size > int64(r.fmt.Capacity) {
-		return true
-	}
-	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadInt64(&r.usedInodes)+atomic.LoadInt64(&r.newInodes)+inodes > int64(r.fmt.Inodes)
 }
 
 func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
@@ -459,23 +438,7 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 	return sessions, nil
 }
 
-func (m *dbMeta) OnMsg(mtype uint32, cb MsgCallback) {
-	m.msgCallbacks.Lock()
-	defer m.msgCallbacks.Unlock()
-	m.msgCallbacks.callbacks[mtype] = cb
-}
-
-func (m *dbMeta) newMsg(mid uint32, args ...interface{}) error {
-	m.msgCallbacks.Lock()
-	cb, ok := m.msgCallbacks.callbacks[mid]
-	m.msgCallbacks.Unlock()
-	if ok {
-		return cb(args...)
-	}
-	return fmt.Errorf("message %d is not supported", mid)
-}
-
-func (m *dbMeta) incrCounter(name string, batch int64) (uint64, error) {
+func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
 	var v int64
 	err := m.txn(func(s *xorm.Session) error {
 		var c = counter{Name: name}
@@ -487,23 +450,7 @@ func (m *dbMeta) incrCounter(name string, batch int64) (uint64, error) {
 		_, err = s.Cols("value").Update(&counter{Value: v}, &counter{Name: name})
 		return err
 	})
-	return uint64(v), err
-}
-
-func (m *dbMeta) nextInode() (Ino, error) {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-	if m.freeInodes.next >= m.freeInodes.maxid {
-		v, err := m.incrCounter("nextInode", 100)
-		if err != nil {
-			return 0, err
-		}
-		m.freeInodes.next = v - 100
-		m.freeInodes.maxid = v
-	}
-	n := m.freeInodes.next
-	m.freeInodes.next++
-	return Ino(n), nil
+	return v, err
 }
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
@@ -593,11 +540,6 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Rdev = n.Rdev
 	attr.Parent = n.Parent
 	attr.Full = true
-}
-
-func (m *dbMeta) updateStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.newSpace, space)
-	atomic.AddInt64(&m.newInodes, inodes)
 }
 
 func (m *dbMeta) flushStats() {
@@ -1045,23 +987,16 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	return errno(err)
 }
 
-func (m *dbMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
-	if target, ok := m.symlinks.Load(inode); ok {
-		*path = target.([]byte)
-		return 0
-	}
-	defer timeit(time.Now())
+func (m *dbMeta) readlink(inode Ino) ([]byte, error) {
 	var l = symlink{Inode: inode}
 	ok, err := m.engine.Get(&l)
 	if err != nil {
-		return errno(err)
+		return nil, err
 	}
 	if !ok {
-		return syscall.ENOENT
+		return nil, syscall.ENOENT
 	}
-	*path = []byte(l.Target)
-	m.symlinks.Store(inode, []byte(l.Target))
-	return 0
+	return []byte(l.Target), nil
 }
 
 func (m *dbMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
@@ -1330,13 +1265,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	})
 	if err == nil {
 		if n.Type == TypeFile && n.Nlink == 0 {
-			if opened {
-				m.Lock()
-				m.removedFiles[Ino(n.Inode)] = true
-				m.Unlock()
-			} else {
-				go m.deleteFile(n.Inode, n.Length)
-			}
+			m.deletedFile(opened, n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1655,13 +1584,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	})
 	if err == nil && !exchange {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
-			if opened {
-				m.Lock()
-				m.removedFiles[dino] = true
-				m.Unlock()
-			} else {
-				go m.deleteFile(dino, dn.Length)
-			}
+			m.deletedFile(opened, dino, dn.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1894,46 +1817,6 @@ func (m *dbMeta) deleteInode(inode Ino, sync bool) error {
 	return err
 }
 
-func (m *dbMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
-		return syscall.EROFS
-	}
-	if attr != nil {
-		// reset attr.Full to avoid mismatch between inode and attr
-		attr.Full = false
-	}
-	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
-		return 0
-	}
-	var err syscall.Errno
-	if attr != nil && !attr.Full {
-		err = m.GetAttr(ctx, inode, attr)
-	}
-	if err == 0 {
-		m.of.Open(inode, attr)
-	}
-	return err
-}
-
-func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {
-	if m.of.Close(inode) {
-		m.Lock()
-		defer m.Unlock()
-		if m.removedFiles[inode] {
-			delete(m.removedFiles, inode)
-			go func() {
-				if err := m.deleteInode(inode, false); err == nil {
-					_ = m.txn(func(ses *xorm.Session) error {
-						_, err := ses.Delete(&sustained{m.sid, inode})
-						return err
-					})
-				}
-			}()
-		}
-	}
-	return 0
-}
-
 func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
 	f := m.of.find(inode)
 	if f != nil {
@@ -1959,27 +1842,6 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5) {
 		go m.compactChunk(inode, indx, false)
 	}
-	return 0
-}
-
-func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-	if m.freeChunks.next >= m.freeChunks.maxid {
-		v, err := m.incrCounter("nextChunk", 1000)
-		if err != nil {
-			return errno(err)
-		}
-		m.freeChunks.next = v - 1000
-		m.freeChunks.maxid = v
-	}
-	*chunkid = m.freeChunks.next
-	m.freeChunks.next++
-	return 0
-}
-
-func (m *dbMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
-	m.of.InvalidateChunk(inode, indx)
 	return 0
 }
 
@@ -2240,24 +2102,11 @@ func (m *dbMeta) cleanupSlices() {
 	}
 }
 
-func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
-	if m.conf.MaxDeletes == 0 {
-		return
-	}
-	m.deleting <- 1
-	defer func() { <-m.deleting }()
-	err := m.newMsg(DeleteChunk, chunkid, size)
-	if err != nil {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
-	} else {
-		err = m.txn(func(ses *xorm.Session) error {
-			_, err = ses.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
-			return err
-		})
-		if err != nil {
-			logger.Errorf("delete slice %d: %s", chunkid, err)
-		}
-	}
+func (m *dbMeta) deleteSliceDB(chunkid uint64, size uint32) error {
+	return m.txn(func(ses *xorm.Session) error {
+		_, err := ses.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
+		return err
+	})
 }
 
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
