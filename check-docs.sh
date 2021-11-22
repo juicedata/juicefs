@@ -34,6 +34,7 @@ changeFlag CHANGED_FILES
 
 echo "skip flag"
 echo $SKIP_FLAG
+SKIP_FLAG = true
 if [[ $SKIP_FLAG == true ]]; then
   TRAVIS=false
 fi
