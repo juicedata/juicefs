@@ -35,5 +35,5 @@ jobs:
       if: branch = master
 
     - stage: "test"
-        script:
-          - echo "test TRAVIS"
+      script:
+        - echo "test TRAVIS"
