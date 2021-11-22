@@ -21,8 +21,6 @@ addons:
       - gcc-mingw-w64 # for windows
 before_install:
   - source ./check-docs.sh
-  - echo "TRAVIS env"
-  - echo $TRAVIS
   - |
     if [ $TRAVIS == false ]; then
       exit 0;
