@@ -352,6 +352,10 @@ func testMetaClient(t *testing.T, m Meta) {
 
 	// data
 	var chunkid uint64
+	// try to open a file that does not exist
+	if st := m.Open(ctx, 99999, syscall.O_RDWR, &Attr{}); st != syscall.ENOENT {
+		t.Fatalf("open not exist inode got %d, expected %d", st, syscall.ENOENT)
+	}
 	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != 0 {
 		t.Fatalf("open f: %s", st)
 	}

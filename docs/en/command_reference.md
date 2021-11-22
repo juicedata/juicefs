@@ -188,7 +188,7 @@ dir entry cache timeout in seconds (default: 1)
 `--enable-xattr`<br />
 enable extended attributes (xattr) (default: false)
 
-`--bucket`<br />
+`--bucket value`<br />
 customized endpoint to access object store
 
 `--get-timeout value`<br />
@@ -272,6 +272,9 @@ juicefs gateway [command options] META-URL ADDRESS
 ```
 
 #### Options
+
+`--bucket value`<br />
+customized endpoint to access object store
 
 `--get-timeout value`<br />
 the max number of seconds to download an object (default: 60)
