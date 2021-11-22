@@ -25,8 +25,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func TestRedisClient(t *testing.T) {
@@ -849,13 +847,8 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if st := m.Truncate(ctx, inode, 0, (300<<20)+10, attr); st != 0 {
 		t.Fatalf("truncate file %s", st)
 	}
-	var total int64
-	_, bar := utils.NewProgressCounter("listed slices counter:")
 	slices := make(map[Ino][]Slice)
-	m.ListSlices(ctx, slices, false, func() {
-		bar.SetTotal(total+2048, false)
-		bar.Increment()
-	})
+	m.ListSlices(ctx, slices, false, nil)
 	var totalSlices int
 	for _, ss := range slices {
 		totalSlices += len(ss)
