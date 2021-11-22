@@ -32,10 +32,4 @@ jobs:
         - echo "TRAVIS"
         - echo "TRAVIS"
         - echo $TRAVIS
-      if: 1 = 1
-      env: TRAVIS=true
-
-    - stage: "test"
-      script:
-        - echo "TRAVIS value"
-        - echo $TRAVIS
+      if: branch = master
