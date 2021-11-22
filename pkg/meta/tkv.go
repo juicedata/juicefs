@@ -28,7 +28,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -718,56 +717,6 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 	})
 }
 
-func (m *kvMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	defer timeit(time.Now())
-	var used, inodes int64
-	err := m.client.txn(func(tx kvTxn) error {
-		used = tx.incrBy(m.counterKey(usedSpace), 0)
-		inodes = tx.incrBy(m.counterKey(totalInodes), 0)
-		return nil
-	})
-	if err != nil {
-		logger.Warnf("get used space and inodes: %s", err)
-		used = atomic.LoadInt64(&m.usedSpace)
-		inodes = atomic.LoadInt64(&m.usedInodes)
-	}
-	used += atomic.LoadInt64(&m.newSpace)
-	inodes += atomic.LoadInt64(&m.newInodes)
-	if used < 0 {
-		used = 0
-	}
-	used = ((used >> 16) + 1) << 16 // aligned to 64K
-	if m.fmt.Capacity > 0 {
-		*totalspace = m.fmt.Capacity
-		if *totalspace < uint64(used) {
-			*totalspace = uint64(used)
-		}
-	} else {
-		*totalspace = 1 << 50
-		for *totalspace*8 < uint64(used)*10 {
-			*totalspace *= 2
-		}
-	}
-	*availspace = *totalspace - uint64(used)
-	if inodes < 0 {
-		inodes = 0
-	}
-	*iused = uint64(inodes)
-	if m.fmt.Inodes > 0 {
-		if *iused > m.fmt.Inodes {
-			*iavail = 0
-		} else {
-			*iavail = m.fmt.Inodes - *iused
-		}
-	} else {
-		*iavail = 10 << 20
-		for *iused*10 > (*iused+*iavail)*8 {
-			*iavail *= 2
-		}
-	}
-	return 0
-}
-
 func (m *kvMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	var entries []*Entry
 	_ = m.Readdir(ctx, parent, 0, &entries)
@@ -1293,7 +1242,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	})
 	if err == nil {
 		if _type == TypeFile && attr.Nlink == 0 {
-			m.deletedFile(opened, inode, attr.Length)
+			m.fileDeleted(opened, inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1531,7 +1480,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	})
 	if err == nil && !exchange {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
-			m.deletedFile(opened, dino, tattr.Length)
+			m.fileDeleted(opened, dino, tattr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}

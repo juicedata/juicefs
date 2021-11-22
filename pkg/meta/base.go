@@ -21,6 +21,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type baseMeta struct {
@@ -28,9 +30,9 @@ type baseMeta struct {
 	conf *Config
 	fmt  Format
 
+	root         Ino
 	sid          uint64
 	of           *openfiles
-	root         Ino
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	deleting     chan int
@@ -98,38 +100,6 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (m *baseMeta) nextInode() (Ino, error) {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-	if m.freeInodes.next >= m.freeInodes.maxid {
-		v, err := m.incrCounter("nextInode", 100)
-		if err != nil {
-			return 0, err
-		}
-		m.freeInodes.next = uint64(v) - 100
-		m.freeInodes.maxid = uint64(v)
-	}
-	n := m.freeInodes.next
-	m.freeInodes.next++
-	return Ino(n), nil
-}
-
-func (m *baseMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-	if m.freeChunks.next >= m.freeChunks.maxid {
-		v, err := m.incrCounter("nextChunk", 1000)
-		if err != nil {
-			return errno(err)
-		}
-		m.freeChunks.next = uint64(v) - 1000
-		m.freeChunks.maxid = uint64(v)
-	}
-	*chunkid = m.freeChunks.next
-	m.freeChunks.next++
-	return 0
-}
-
 func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
@@ -139,40 +109,6 @@ func (m *baseMeta) CloseSession() error {
 	m.Unlock()
 	m.cleanStaleSession(m.sid, true)
 	return nil
-}
-
-func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
-	m.of.InvalidateChunk(inode, indx)
-	return 0
-}
-
-func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
-		return syscall.EROFS
-	}
-	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
-		return 0
-	}
-	var err syscall.Errno
-	if attr != nil && !attr.Full {
-		err = m.getattr(ctx, inode, attr)
-	}
-	if err == 0 {
-		m.of.Open(inode, attr)
-	}
-	return err
-}
-
-func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
-	if m.of.Close(inode) {
-		m.Lock()
-		defer m.Unlock()
-		if m.removedFiles[inode] {
-			delete(m.removedFiles, inode)
-			go m.deleteInode(inode)
-		}
-	}
-	return 0
 }
 
 func (m *baseMeta) refreshUsage() {
@@ -202,23 +138,92 @@ func (m *baseMeta) updateStats(space int64, inodes int64) {
 func (m *baseMeta) flushStats() {
 	for {
 		newSpace := atomic.SwapInt64(&m.newSpace, 0)
-		if _, err := m.incrCounter(usedSpace, newSpace); err != nil {
-			logger.Warnf("update space stats: %s", err)
-			m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			if _, err := m.incrCounter(usedSpace, newSpace); err != nil {
+				logger.Warnf("update space stats: %s", err)
+				m.updateStats(newSpace, 0)
+			}
 		}
-
 		newInodes := atomic.SwapInt64(&m.newInodes, 0)
-		if _, err := m.incrCounter(totalInodes, newInodes); err != nil {
-			logger.Warnf("update inodes stats: %s", err)
-			m.updateStats(0, newInodes)
+		if newInodes != 0 {
+			if _, err := m.incrCounter(totalInodes, newInodes); err != nil {
+				logger.Warnf("update inodes stats: %s", err)
+				m.updateStats(0, newInodes)
+			}
 		}
 		time.Sleep(time.Second)
 	}
 }
 
-func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
+	var used, inodes int64
+	var err error
+	err = utils.WithTimeout(func() error {
+		used, err = m.incrCounter(usedSpace, 0)
+		return err
+	}, time.Millisecond*150)
+	if err != nil {
+		used = atomic.LoadInt64(&m.usedSpace)
+	}
+	err = utils.WithTimeout(func() error {
+		inodes, err = m.incrCounter(totalInodes, 0)
+		return err
+	}, time.Millisecond*150)
+	if err != nil {
+		inodes = atomic.LoadInt64(&m.usedInodes)
+	}
+	used += atomic.LoadInt64(&m.newSpace)
+	inodes += atomic.LoadInt64(&m.newInodes)
+	if used < 0 {
+		used = 0
+	}
+	used = ((used >> 16) + 1) << 16 // aligned to 64K
+	if m.fmt.Capacity > 0 {
+		*totalspace = m.fmt.Capacity
+		if *totalspace < uint64(used) {
+			*totalspace = uint64(used)
+		}
+	} else {
+		*totalspace = 1 << 50
+		for *totalspace*8 < uint64(used)*10 {
+			*totalspace *= 2
+		}
+	}
+	*availspace = *totalspace - uint64(used)
+	if inodes < 0 {
+		inodes = 0
+	}
+	*iused = uint64(inodes)
+	if m.fmt.Inodes > 0 {
+		if *iused > m.fmt.Inodes {
+			*iavail = 0
+		} else {
+			*iavail = m.fmt.Inodes - *iused
+		}
+	} else {
+		*iavail = 10 << 20
+		for *iused*10 > (*iused+*iavail)*8 {
+			*iavail *= 2
+		}
+	}
+	return 0
+}
+
+func (m *baseMeta) nextInode() (Ino, error) {
+	m.freeMu.Lock()
+	defer m.freeMu.Unlock()
+	if m.freeInodes.next >= m.freeInodes.maxid {
+		v, err := m.incrCounter("nextInode", 100)
+		if err != nil {
+			return 0, err
+		}
+		m.freeInodes.next = uint64(v) - 100
+		m.freeInodes.maxid = uint64(v)
+	}
+	n := m.freeInodes.next
+	m.freeInodes.next++
+	return Ino(n), nil
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -246,6 +251,11 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 	return m.mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 }
 
+func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+	defer timeit(time.Now())
+	return m.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
+}
+
 func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
 	if target, ok := m.symlinks.Load(inode); ok {
 		*path = target.([]byte)
@@ -264,7 +274,57 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 	return 0
 }
 
-func (m *baseMeta) deletedFile(opened bool, inode Ino, length uint64) {
+func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
+	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
+		return syscall.EROFS
+	}
+	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
+		return 0
+	}
+	var err syscall.Errno
+	if attr != nil && !attr.Full {
+		err = m.getattr(ctx, inode, attr)
+	}
+	if err == 0 {
+		m.of.Open(inode, attr)
+	}
+	return err
+}
+
+func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
+	m.of.InvalidateChunk(inode, indx)
+	return 0
+}
+
+func (m *baseMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
+	m.freeMu.Lock()
+	defer m.freeMu.Unlock()
+	if m.freeChunks.next >= m.freeChunks.maxid {
+		v, err := m.incrCounter("nextChunk", 1000)
+		if err != nil {
+			return errno(err)
+		}
+		m.freeChunks.next = uint64(v) - 1000
+		m.freeChunks.maxid = uint64(v)
+	}
+	*chunkid = m.freeChunks.next
+	m.freeChunks.next++
+	return 0
+}
+
+func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
+	if m.of.Close(inode) {
+		m.Lock()
+		defer m.Unlock()
+		if m.removedFiles[inode] {
+			delete(m.removedFiles, inode)
+			go m.deleteInode(inode)
+		}
+	}
+	return 0
+}
+
+func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 	if opened {
 		m.Lock()
 		m.removedFiles[inode] = true

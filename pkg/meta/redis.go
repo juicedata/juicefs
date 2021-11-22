@@ -470,50 +470,6 @@ func (r *redisMeta) marshal(attr *Attr) []byte {
 	return w.Bytes()
 }
 
-func (r *redisMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	defer timeit(time.Now())
-	if r.fmt.Capacity > 0 {
-		*totalspace = r.fmt.Capacity
-	} else {
-		*totalspace = 1 << 50
-	}
-	c, cancel := context.WithTimeout(ctx, time.Millisecond*300)
-	defer cancel()
-	used, _ := r.rdb.IncrBy(c, usedSpace, 0).Result()
-	if used < 0 {
-		used = 0
-	}
-	used = ((used >> 16) + 1) << 16 // aligned to 64K
-	if r.fmt.Capacity > 0 {
-		if used > int64(*totalspace) {
-			*totalspace = uint64(used)
-		}
-	} else {
-		for used*10 > int64(*totalspace)*8 {
-			*totalspace *= 2
-		}
-	}
-	*availspace = *totalspace - uint64(used)
-	inodes, _ := r.rdb.IncrBy(c, totalInodes, 0).Result()
-	if inodes < 0 {
-		inodes = 0
-	}
-	*iused = uint64(inodes)
-	if r.fmt.Inodes > 0 {
-		if *iused > r.fmt.Inodes {
-			*iavail = 0
-		} else {
-			*iavail = r.fmt.Inodes - *iused
-		}
-	} else {
-		*iavail = 10 << 20
-		for *iused*10 > (*iused+*iavail)*8 {
-			*iavail *= 2
-		}
-	}
-	return 0
-}
-
 func (r *redisMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	var entries []*Entry
 	_ = r.Readdir(ctx, parent, 0, &entries)
@@ -1297,7 +1253,7 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		return err
 	}, r.entryKey(parent), r.inodeKey(parent), r.inodeKey(inode))
 	if eno == 0 && _type == TypeFile && attr.Nlink == 0 {
-		r.deletedFile(opened, inode, attr.Length)
+		r.fileDeleted(opened, inode, attr.Length)
 	}
 	return eno
 }
@@ -1587,7 +1543,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		return err
 	}, keys...)
 	if eno == 0 && !exchange && dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
-		r.deletedFile(opened, dino, tattr.Length)
+		r.fileDeleted(opened, dino, tattr.Length)
 	}
 	return eno
 }

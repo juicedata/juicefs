@@ -564,60 +564,6 @@ func (m *dbMeta) flushStats() {
 	}
 }
 
-func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	defer timeit(time.Now())
-	usedSpace := atomic.LoadInt64(&m.newSpace)
-	inodes := atomic.LoadInt64(&m.newInodes)
-	var c = counter{Name: "usedSpace"}
-	_, err := m.engine.Get(&c)
-	if err != nil {
-		logger.Warnf("get used space: %s", err)
-	} else {
-		usedSpace += c.Value
-	}
-	if usedSpace < 0 {
-		usedSpace = 0
-	}
-	usedSpace = ((usedSpace >> 16) + 1) << 16 // aligned to 64K
-	if m.fmt.Capacity > 0 {
-		*totalspace = m.fmt.Capacity
-		if *totalspace < uint64(usedSpace) {
-			*totalspace = uint64(usedSpace)
-		}
-	} else {
-		*totalspace = 1 << 50
-		for *totalspace*8 < uint64(usedSpace)*10 {
-			*totalspace *= 2
-		}
-	}
-
-	*availspace = *totalspace - uint64(usedSpace)
-	c = counter{Name: "totalInodes"}
-	_, err = m.engine.Get(&c)
-	if err != nil {
-		logger.Warnf("get total inodes: %s", err)
-	} else {
-		inodes += c.Value
-	}
-	if inodes < 0 {
-		inodes = 0
-	}
-	*iused = uint64(inodes)
-	if m.fmt.Inodes > 0 {
-		if *iused > m.fmt.Inodes {
-			*iavail = 0
-		} else {
-			*iavail = m.fmt.Inodes - *iused
-		}
-	} else {
-		*iavail = 10 << 20
-		for *iused*10 > (*iused+*iavail)*8 {
-			*iavail *= 2
-		}
-	}
-	return 0
-}
-
 func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	if inode == nil || attr == nil {
 		return syscall.EINVAL
@@ -1265,7 +1211,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	})
 	if err == nil {
 		if n.Type == TypeFile && n.Nlink == 0 {
-			m.deletedFile(opened, n.Inode, n.Length)
+			m.fileDeleted(opened, n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1584,7 +1530,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	})
 	if err == nil && !exchange {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
-			m.deletedFile(opened, dino, dn.Length)
+			m.fileDeleted(opened, dino, dn.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}

@@ -16,6 +16,7 @@
 package utils
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -84,5 +85,21 @@ func TestLocalIp(t *testing.T) {
 	}
 	if ip != "127.0.0.1" {
 		t.Fatalf("local ip should be 127.0.0.1, bug got %s", ip)
+	}
+}
+
+func TestTimeout(t *testing.T) {
+	err := WithTimeout(func() error {
+		return nil
+	}, time.Millisecond*10)
+	if err != nil {
+		t.Fatalf("fast function should return nil")
+	}
+	err = WithTimeout(func() error {
+		time.Sleep(time.Millisecond * 100)
+		return nil
+	}, time.Millisecond*10)
+	if err == nil || !strings.HasPrefix(err.Error(), "timeout after") {
+		t.Fatalf("slow function should be timeout: %s", err)
 	}
 }
