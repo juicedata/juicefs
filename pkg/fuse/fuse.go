@@ -261,7 +261,7 @@ func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) 
 func (fs *fileSystem) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	_ = fs.v.Release(ctx, Ino(in.NodeId), in.Fh)
+	fs.v.Release(ctx, Ino(in.NodeId), in.Fh)
 }
 
 func (fs *fileSystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (written uint32, code fuse.Status) {
@@ -412,7 +412,7 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 	out.Bfree = st.Bavail
 	out.Files = st.Files
 	out.Ffree = st.Favail
-	out.Frsize = st.Bsize
+	out.Frsize = 4096
 	return 0
 }
 

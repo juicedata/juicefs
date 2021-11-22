@@ -171,33 +171,11 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 		return err
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
-	if len(de.Symlink) > 0 {
-		write(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, de.Symlink))
-	}
 	if len(de.Xattrs) > 0 {
 		if data, err = json.Marshal(de.Xattrs); err != nil {
 			return err
 		}
 		write(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
-	}
-	if len(de.Chunks) == 1 {
-		if data, err = json.Marshal(de.Chunks); err != nil {
-			return err
-		}
-		write(fmt.Sprintf(",\n%s\"chunks\": %s", fieldPrefix, data))
-	} else if len(de.Chunks) > 1 {
-		chunkPrefix := fieldPrefix + jsonIndent
-		write(fmt.Sprintf(",\n%s\"chunks\": [", fieldPrefix))
-		for i, c := range de.Chunks {
-			if data, err = json.Marshal(c); err != nil {
-				return err
-			}
-			write(fmt.Sprintf("\n%s%s", chunkPrefix, data))
-			if i != len(de.Chunks)-1 {
-				write(",")
-			}
-		}
-		write(fmt.Sprintf("\n%s]", fieldPrefix))
 	}
 	write(fmt.Sprintf(",\n%s\"entries\": {", fieldPrefix))
 	return nil
@@ -209,27 +187,6 @@ type DumpedMeta struct {
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile
 	FSTree    *DumpedEntry `json:",omitempty"`
-}
-
-func (dm *DumpedMeta) writeJSON(w io.Writer) error {
-	tree := dm.FSTree
-	dm.FSTree = nil
-	data, err := json.MarshalIndent(dm, "", jsonIndent)
-	if err != nil {
-		return err
-	}
-	bw := bufio.NewWriterSize(w, jsonWriteSize)
-	if _, err = bw.Write(append(data[:len(data)-2], ',')); err != nil { // delete \n}
-		return err
-	}
-	tree.Name = "FSTree"
-	if err = tree.writeJSON(bw, 1); err != nil {
-		return err
-	}
-	if _, err = bw.WriteString("\n}\n"); err != nil {
-		return err
-	}
-	return bw.Flush()
 }
 
 func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {

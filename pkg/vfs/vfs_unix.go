@@ -39,7 +39,7 @@ type Statfs struct {
 	Favail uint64
 }
 
-func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err int) {
+func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err syscall.Errno) {
 	var totalspace, availspace, iused, iavail uint64
 	_ = v.Meta.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
 	var bsize uint64 = 0x10000
@@ -101,40 +101,44 @@ func (v *VFS) Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
 func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64) string {
 	var sb strings.Builder
 	if set&meta.SetAttrMode != 0 {
-		sb.WriteString(fmt.Sprintf("mode=%s:0%04o;", smode(uint16(mode)), mode&07777))
+		sb.WriteString(fmt.Sprintf("mode=%s:0%04o,", smode(uint16(mode)), mode&07777))
 	}
 	if set&meta.SetAttrUID != 0 {
-		sb.WriteString(fmt.Sprintf("uid=%d;", uid))
+		sb.WriteString(fmt.Sprintf("uid=%d,", uid))
 	}
 	if set&meta.SetAttrGID != 0 {
-		sb.WriteString(fmt.Sprintf("gid=%d;", gid))
+		sb.WriteString(fmt.Sprintf("gid=%d,", gid))
 	}
 
 	var atimeStr string
-	if (set&meta.SetAttrAtime) != 0 && atime < 0 {
+	if set&meta.SetAttrAtimeNow != 0 || (set&meta.SetAttrAtime) != 0 && atime < 0 {
 		atimeStr = "NOW"
 	} else if set&meta.SetAttrAtime != 0 {
 		atimeStr = strconv.FormatInt(atime, 10)
 	}
 	if atimeStr != "" {
-		sb.WriteString("atime=" + atimeStr + ";")
+		sb.WriteString("atime=" + atimeStr + ",")
 	}
 
 	var mtimeStr string
-	if (set&meta.SetAttrMtime) != 0 && mtime < 0 {
+	if set&meta.SetAttrMtimeNow != 0 || (set&meta.SetAttrMtime) != 0 && mtime < 0 {
 		mtimeStr = "NOW"
 	} else if set&meta.SetAttrMtime != 0 {
 		mtimeStr = strconv.FormatInt(mtime, 10)
 	}
 	if mtimeStr != "" {
-		sb.WriteString("mtime=" + mtimeStr + ";")
+		sb.WriteString("mtime=" + mtimeStr + ",")
 	}
 
-	if (set & meta.SetAttrSize) != 0 {
+	if set&meta.SetAttrSize != 0 {
 		sizeStr := strconv.FormatUint(size, 10)
-		sb.WriteString("size=" + sizeStr + ";")
+		sb.WriteString("size=" + sizeStr + ",")
 	}
-	return sb.String()
+	r := sb.String()
+	if len(r) > 1 {
+		r = r[:len(r)-1] // drop last ,
+	}
+	return r
 }
 
 func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
@@ -149,41 +153,34 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 	}
 	err = syscall.EINVAL
 	var attr = &Attr{}
-	if (set & (meta.SetAttrMode | meta.SetAttrUID | meta.SetAttrGID | meta.SetAttrAtime | meta.SetAttrMtime | meta.SetAttrSize)) == 0 {
-		// change other flags or change nothing
-		err = v.Meta.SetAttr(ctx, ino, 0, 0, attr)
-		if err != 0 {
-			return
-		}
-	}
-	if (set & (meta.SetAttrMode | meta.SetAttrUID | meta.SetAttrGID | meta.SetAttrAtime | meta.SetAttrMtime | meta.SetAttrAtimeNow | meta.SetAttrMtimeNow)) != 0 {
-		if (set & meta.SetAttrMode) != 0 {
-			attr.Mode = uint16(mode & 07777)
-		}
-		if (set & meta.SetAttrUID) != 0 {
-			attr.Uid = uid
-		}
-		if (set & meta.SetAttrGID) != 0 {
-			attr.Gid = gid
-		}
-		if set&meta.SetAttrAtime != 0 {
-			attr.Atime = atime
-			attr.Atimensec = atimensec
-		}
-		if (set & meta.SetAttrMtime) != 0 {
-			attr.Mtime = mtime
-			attr.Mtimensec = mtimensec
-		}
-		err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
-		if err != 0 {
-			return
-		}
-	}
 	if set&meta.SetAttrSize != 0 {
 		err = v.Truncate(ctx, ino, int64(size), opened, attr)
+		if err != 0 {
+			return
+		}
 	}
-	v.UpdateLength(ino, attr)
-	entry = &meta.Entry{Inode: ino, Attr: attr}
+	if set&meta.SetAttrMode != 0 {
+		attr.Mode = uint16(mode & 07777)
+	}
+	if set&meta.SetAttrUID != 0 {
+		attr.Uid = uid
+	}
+	if set&meta.SetAttrGID != 0 {
+		attr.Gid = gid
+	}
+	if set&meta.SetAttrAtime != 0 {
+		attr.Atime = atime
+		attr.Atimensec = atimensec
+	}
+	if set&meta.SetAttrMtime != 0 {
+		attr.Mtime = mtime
+		attr.Mtimensec = mtimensec
+	}
+	err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
+	if err == 0 {
+		v.UpdateLength(ino, attr)
+		entry = &meta.Entry{Inode: ino, Attr: attr}
+	}
 	return
 }
 

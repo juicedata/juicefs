@@ -99,7 +99,7 @@ func (m *memStore) Put(key string, in io.Reader) error {
 	}
 	_, ok := m.objects[key]
 	if ok {
-		return errors.New("can't overwrite")
+		logger.Debugf("overwrite %s", key)
 	}
 	data, err := ioutil.ReadAll(in)
 	if err != nil {

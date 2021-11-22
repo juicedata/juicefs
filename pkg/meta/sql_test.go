@@ -24,7 +24,7 @@ import (
 )
 
 func tempFile(t *testing.T) string {
-	fp, err := ioutil.TempFile("", "test-*.db")
+	fp, err := ioutil.TempFile("/tmp", "jfstest-*.db")
 	if err != nil {
 		t.Fatalf("create temp file: %s", err)
 	}
@@ -32,6 +32,31 @@ func tempFile(t *testing.T) string {
 		log.Fatalf("close temp file: %s", err)
 	}
 	return fp.Name()
+}
+
+func TestSQLiteClient(t *testing.T) {
+	tmp := tempFile(t)
+	defer func() {
+		if !t.Failed() {
+			_ = os.Remove(tmp)
+		}
+	}()
+	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+
+	testTruncateAndDelete(t, m)
+	testMetaClient(t, m)
+	testRemove(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m)
+	testCopyFileRange(t, m)
+	testCloseSession(t, m)
+	m.(*dbMeta).conf.CaseInsensi = true
+	testCaseIncensi(t, m)
 }
 
 func resetDB(m *dbMeta) {
@@ -50,16 +75,6 @@ func resetDB(m *dbMeta) {
 	m.engine.DropTables(&plock{})
 }
 
-func TestSQLiteClient(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	testMetaClient(t, m)
-}
-
 func TestMySQLClient(t *testing.T) {
 	m, err := newSQLMeta("mysql", "root:@/dev", &Config{MaxDeletes: 1})
 	if err != nil {
@@ -69,6 +84,7 @@ func TestMySQLClient(t *testing.T) {
 
 	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
 	testConcurrentWrite(t, m)
@@ -79,7 +95,7 @@ func TestMySQLClient(t *testing.T) {
 	testCaseIncensi(t, m)
 }
 
-func TestPostgresQLClient(t *testing.T) {
+func TestPostgreSQLClient(t *testing.T) {
 	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{MaxDeletes: 1})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
@@ -88,6 +104,7 @@ func TestPostgresQLClient(t *testing.T) {
 
 	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
 	testConcurrentWrite(t, m)
@@ -95,85 +112,5 @@ func TestPostgresQLClient(t *testing.T) {
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
 	m.(*dbMeta).conf.CaseInsensi = true
-	testCaseIncensi(t, m)
-}
-
-func TestStickyBitSQLite(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	testStickyBit(t, m)
-}
-
-func TestLocksSQLite(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	testLocks(t, m)
-}
-
-func TestConcurrentWriteSQLite(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	testConcurrentWrite(t, m)
-}
-
-func TestCompactionSQLite(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	testCompaction(t, m)
-}
-
-func TestTruncateAndDeleteSQLite(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	testTruncateAndDelete(t, m)
-}
-
-func TestCopyFileRangeSQLite(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	testCopyFileRange(t, m)
-}
-
-func TestCloseSessionSQLite(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
-	testCloseSession(t, m)
-}
-
-func TestCaseIncensiSQLite(t *testing.T) {
-	tmp := tempFile(t)
-	defer os.Remove(tmp)
-	m, err := newSQLMeta("sqlite3", tmp, &Config{CaseInsensi: true})
-	if err != nil {
-		t.Fatalf("create meta: %s", err)
-	}
 	testCaseIncensi(t, m)
 }

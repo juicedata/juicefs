@@ -2,14 +2,13 @@
 
 By reading [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS Store Files](how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database.
 
-## Storage setting options
+## Storage options
 
 When creating a JuiceFS file system, setting up data storage generally involves the following options:
 
-- `--storage` Specify the storage service to be used by the file system, e.g. `--storage s3`
-- `--bucket` Specify the bucket endpoint of the object storage in a specific format, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`.
-Since JuiceFS v1.0，some object storage (azure, bos, cos, obs, oss, s3)，can use like `--bucket {BUCKET_NAME}`, ``endpoint`` is not needed. To support this, ``access key`` and ``secret key`` may require some extra privilege。
-- `--access-key` and `--secret-key` is the authentication key used when accessing the object storage service. You need to create it on the corresponding cloud platform.
+- `--storage` specifies the storage service to be used by the file system, e.g. `--storage s3`.
+- `--bucket` specifies the bucket endpoint of the object storage in a specific format, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`. For the specific format of the `--bucket` option for each object storage, please refer to [the following document](#supported-object-storage). Some object storage services (such as S3, OSS, etc.) also support the omission of endpoint, such as `--bucket myjuicefs`. If the object storage uses different endpoint in different environment, it could be specified by `--bucket` option when mount file system.
+- `--access-key` and `--secret-key` is the authentication key used when accessing the object storage service. You need to create it on the corresponding cloud platform. When the object storage can be accessed based on other authentication methods, these can be left empty.
 
 For example, the following command uses Amazon S3 object storage to create a file system:
 
@@ -38,41 +37,39 @@ The following table lists the object storage services supported by JuiceFS. Clic
 
 | Name                                                      | Value      |
 | --------------------------------------------------------- | ---------- |
-| [Amazon S3](#aws-s3)                                      | `s3`       |
-| [Google Cloud Storage](#google-gs)                        | `gs`       |
-| [Azure Blob Storage](#azure-wasb)                         | `wasb`     |
-| [Backblaze B2 Cloud Storage](#backblaze-b2)               | `b2`       |
-| [IBM Cloud Object Storage](#ibm-cos)                      | `ibmcos`   |
-| [Scaleway Object Storage](#scaleway)                      | `scw`      |
-| [DigitalOcean Spaces Object Storage](#do-spaces)          | `space`    |
-| [Wasabi Cloud Object Storage](#wasabi)                    | `wasabi`   |
+| [Amazon S3](#amazon-s3)                                   | `s3`       |
+| [Google Cloud Storage](#google-cloud-storage)             | `gs`       |
+| [Azure Blob Storage](#azure-blob-storage)                 | `wasb`     |
+| [Backblaze B2](#backblaze-b2)                             | `b2`       |
+| [IBM Cloud Object Storage](#ibm-cloud-object-storage)     | `ibmcos`   |
+| [Scaleway Object Storage](#scaleway-object-storage)       | `scw`      |
+| [DigitalOcean Spaces](#digitalocean-spaces)               | `space`    |
+| [Wasabi](#wasabi)                                         | `wasabi`   |
 | [Storj DCS](#storj-dcs)                                   | `s3`       |
-| [Vultr Object Storage](#vultr)                            | `s3`       |
-| [Alibaba Cloud Object Storage Service](#aliyun-oss)       | `oss`      |
-| [Tencent Cloud Object Storage](#qcloud-cos)               | `cos`      |
-| [Huawei Cloud Object Storage Service](#huawei-obs)        | `obs`      |
-| [Baidu Object Storage](#baidu-bos)                        | `bos`      |
-| [Kingsoft Cloud Standard Storage Service](#kingsoft-ks3)  | `ks3`      |
-| [Meituan Storage Service](#meituan-mss)                   | `mss`      |
-| [NetEase Object Storage](#163-nos)                        | `nos`      |
-| [QingStor Object Storage](#QingStor)                      | `qingstor` |
-| [Qiniu Cloud Object Storage](#qiniu)                      | `qiniu`    |
-| [Sina Cloud Storage](#sina-scs)                           | `scs`      |
-| [CTYun Object-Oriented Storage](#ctyun-oos)               | `oos`      |
-| [ECloud (China Mobile Cloud) Object Storage](#ecloud-eos) | `eos`      |
-| [SpeedyCloud Object Storage](#speedycloud)                | `speedy`   |
+| [Vultr Object Storage](#vultr-object-storage)             | `s3`       |
+| [Aliyun OSS](#aliyun-oss)                                 | `oss`      |
+| [Tencent COS](#tencent-cos)                               | `cos`      |
+| [Huawei Cloud OBS](#huawei-cloud-obs)                     | `obs`      |
+| [Baidu Object Storage](#baidu-object-storage)             | `bos`      |
+| [Kingsoft KS3](#kingsoft-ks3)                             | `ks3`      |
+| [NetEase Object Storage](#netease-object-storage)         | `nos`      |
+| [QingStor](#qingstor)                                     | `qingstor` |
+| [Qiniu Object Storage](#qiniu-object-storage)             | `qiniu`    |
+| [Sina Cloud Storage](#sina-cloud-storage)                 | `scs`      |
+| [CTYun OOS](#ctyun-oos)                                   | `oos`      |
+| [ECloud Object Storage](#ecloud-object-storage)           | `eos`      |
 | [UCloud US3](#ucloud-us3)                                 | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                 | `ceph`     |
-| [Ceph Object Gateway (RGW)](#ceph-rgw)                    | `s3`       |
+| [Ceph RGW](#ceph-rgw)                                     | `s3`       |
 | [Swift](#swift)                                           | `swift`    |
 | [MinIO](#minio)                                           | `minio`    |
 | [WebDAV](#webdav)                                         | `webdav`   |
 | [HDFS](#hdfs)                                             | `hdfs`     |
 | [Redis](#redis)                                           | `redis`    |
 | [TiKV](#tikv)                                             | `tikv`     |
-| [Local disk](#local)                                      | `file`     |
+| [Local disk](#local-disk)                                 | `file`     |
 
-## S3 {#aws-s3}
+## Amazon S3
 
 S3 supports [two style endpoint URI](https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html): virtual hosted-style and path-style. The difference between them is:
 
@@ -125,7 +122,7 @@ $ ./juicefs format \
 
 
 
-## Google Cloud Storage {#google-gs}
+## Google Cloud Storage
 
 Because Google Cloud doesn't have access key and secret key, the `--access-key` and `--secret-key` options can be omitted. Please follow Google Cloud document to know how [authentication](https://cloud.google.com/docs/authentication) and [authorization](https://cloud.google.com/iam/docs/overview) work. Typically, when you running within Google Cloud, you already have permission to access the storage.
 
@@ -139,7 +136,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Azure Blob Storage {#azure-wasb}
+## Azure Blob Storage
 
 Besides provide authorization information through `--access-key` and `--secret-key` options, you could also create a [connection string](https://docs.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string) and set `AZURE_STORAGE_CONNECTION_STRING` environment variable. For example:
 
@@ -155,7 +152,7 @@ $ ./juicefs format \
 
 > **Note**: For Azure China user, the value of `EndpointSuffix` is `core.chinacloudapi.cn`.
 
-## Backblaze B2 Cloud Storage {#backblaze-b2}
+## Backblaze B2
 
 You need first creating [application key](https://www.backblaze.com/b2/docs/application_keys.html). The "Application Key ID" and "Application Key" are the equivalent of access key and secret key respectively.
 
@@ -171,7 +168,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## IBM Cloud Object Storage {#ibm-cos}
+## IBM Cloud Object Storage
 
 You need first creating [API key](https://cloud.ibm.com/docs/account?topic=account-manapikey) and retrieving [instance ID](https://cloud.ibm.com/docs/key-protect?topic=key-protect-retrieve-instance-ID). The "API key" and "instance ID" are the equivalent of access key and secret key respectively.
 
@@ -187,7 +184,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Scaleway Object Storage {#scaleway}
+## Scaleway Object Storage
 
 Please follow [this document](https://www.scaleway.com/en/docs/generate-api-keys) to learn how to get access key and secret key.
 
@@ -201,7 +198,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## DigitalOcean Spaces Object Storage {#do-spaces}
+## DigitalOcean Spaces
 
 Please follow [this document](https://www.digitalocean.com/community/tutorials/how-to-create-a-digitalocean-space-and-api-key) to learn how to get access key and secret key.
 
@@ -215,7 +212,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Wasabi Cloud Object Storage {#wasabi}
+## Wasabi
 
 Please follow [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360019677192-Creating-a-Root-Access-Key-and-Secret-Key) to learn how to get access key and secret key.
 
@@ -231,7 +228,7 @@ $ ./juicefs format \
 
 ***Note: For Tokyo (ap-northeast-1) region user, see [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) to learn how to get appropriate endpoint URI.***
 
-## Storj DCS {#storj-dcs}
+## Storj DCS
 
 Storj DCS is an S3-compatible storage, just use `s3` for `--storage` option. The setting format of the `--bucket` option is `https://gateway.<region>.storjshare.io/<bucket>`, please replace `<region>` with the storage region you actually use. There are currently three avaliable regions: `us1`, `ap1` and `eu1`. For example:
 
@@ -246,7 +243,7 @@ $ juicefs format \
 
 Please refer to [this document](https://docs.storj.io/api-reference/s3-compatible-gateway) to learn how to create access key and secret key.
 
-## Vultr Object Storage {#vultr}
+## Vultr Object Storage
 
 Vultr Object Storage is an S3-compatible storage, use `s3` for `--storage` option. The `--bucket` option is `https://<bucket>.<region>.vultrobjects.com/`. Currently there is one region available: `ewr1`. For example:
 
@@ -261,7 +258,7 @@ $ juicefs format \
 
 Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage/).
 
-## Alibaba Cloud Object Storage Service {#aliyun-oss}
+## Aliyun OSS
 
 Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. And if you already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assign it to VM instance, you could omit `--access-key` and `--secret-key` options. Alibaba Cloud also supports use [Security Token Service (STS)](https://www.alibabacloud.com/help/doc-detail/100624.htm) to authorize temporary access to OSS. If you wanna use STS, you should omit `--access-key` and `--secret-key` options and set `ALICLOUD_ACCESS_KEY_ID`, `ALICLOUD_ACCESS_KEY_SECRET`, `SECURITY_TOKEN` environment variables instead, for example:
 
@@ -288,7 +285,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Tencent Cloud Object Storage {#qcloud-cos}
+## Tencent COS
 
 The naming rule of bucket in Tencent Cloud is `<bucket>-<APPID>`, so you must append `APPID` to the bucket name. Please follow [this document](https://intl.cloud.tencent.com/document/product/436/13312) to learn how to get `APPID`.
 
@@ -313,7 +310,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Huawei Cloud Object Storage Service {#huawei-obs}
+## Huawei Cloud OBS
 
 Please follow [this document](https://support.huaweicloud.com/usermanual-ca/zh-cn_topic_0046606340.html) to learn how to get access key and secret key.
 
@@ -338,7 +335,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Baidu Object Storage {#baidu-bos}
+## Baidu Object Storage
 
 Please follow [this document](https://cloud.baidu.com/doc/Reference/s/9jwvz2egb) to learn how to get access key and secret key.
 
@@ -363,7 +360,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Kingsoft Cloud Standard Storage Service {#kingsoft-ks3}
+## Kingsoft Cloud KS3
 
 Please follow [this document](https://docs.ksyun.com/documents/1386) to learn how to get access key and secret key.
 
@@ -377,7 +374,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Meituan Storage Service {#meituan-mss}
+## Mtyun Storage Service
 
 Please follow [this document](https://www.mtyun.com/doc/api/mss/mss/fang-wen-kong-zhi) to learn how to get access key and secret key.
 
@@ -391,7 +388,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## NetEase Object Storage {#163-nos}
+## NetEase Object Storage
 
 Please follow [this document](https://www.163yun.com/help/documents/55485278220111872) to learn how to get access key and secret key.
 
@@ -405,7 +402,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## QingStor Object Storage {#QingStor}
+## QingStor
 
 Please follow [this document](https://docs.qingcloud.com/qingstor/api/common/signature.html#%E8%8E%B7%E5%8F%96-access-key) to learn how to get access key and secret key.
 
@@ -419,7 +416,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Qiniu Cloud Object Storage {#qiniu}
+## Qiniu
 
 Please follow [this document](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) to learn how to get access key and secret key.
 
@@ -433,7 +430,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Sina Cloud Storage {#sina-scs}
+## Sina Cloud Storage
 
 Please follow [this document](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) to learn how to get access key and secret key.
 
@@ -447,7 +444,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## CTYun Object-Oriented Storage {#ctyun-oos}
+## CTYun OOS
 
 Please follow [this document](https://www.ctyun.cn/help2/10000101/10473683) to learn how to get access key and secret key.
 
@@ -461,7 +458,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## ECloud (China Mobile Cloud) Object Storage {#ecloud-eos}
+## ECloud Object Storage
 
 Please follow [this document](https://ecloud.10086.cn/op-help-center/doc/article/24501) to learn how to get access key and secret key.
 
@@ -475,11 +472,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## SpeedyCloud Object Storage {#speedycloud}
-
-Writing ...
-
-## UCloud US3 {#ucloud-us3}
+## UCloud US3
 
 Please follow [this document](https://docs.ucloud.cn/uai-censor/access/key) to learn how to get access key and secret key.
 
@@ -493,7 +486,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Ceph RADOS {#ceph-rados}
+## Ceph RADOS
 
 The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messaging layer protocol that enables clients to interact with a Ceph Monitor and a Ceph OSD Daemon. The `librados` API enables you to interact with the two types of daemons:
 
@@ -539,7 +532,7 @@ $ ./juicefs.ceph format \
     localhost test
 ```
 
-## Ceph Object Gateway (RGW) {#ceph-rgw}
+## Ceph RGW
 
 [Ceph Object Gateway](https://ceph.io/ceph-storage/object-storage) is an object storage interface built on top of `librados` to provide applications with a RESTful gateway to Ceph Storage Clusters. Ceph Object Gateway supports S3-compatible interface, so we could set `--storage` to `s3` directly.
 
@@ -553,7 +546,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Swift {#swift}
+## Swift
 
 [OpenStack Swift](https://github.com/openstack/swift) is a distributed object storage system designed to scale from a single machine to thousands of servers. Swift is optimized for multi-tenancy and high concurrency. Swift is ideal for backups, web and mobile content, and any other unstructured data that can grow without bound.
 
@@ -569,7 +562,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## MinIO {#minio}
+## MinIO
 
 [MinIO](https://min.io) is an open source high performance object storage. It is API compatible with Amazon S3. You need set `--storage` option to `minio`. Currently, JuiceFS only supports path-style URI when use MinIO storage. For example (`<endpoint>` may looks like `1.2.3.4:9000`):
 
@@ -581,7 +574,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## WebDAV {#webdav}
+## WebDAV
 
 [WebDAV](https://en.wikipedia.org/wiki/WebDAV) is an extension of the Hypertext Transfer Protocol (HTTP)
 that facilitates collaborative editing and management of documents stored on the WWW server among users.
@@ -598,7 +591,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## HDFS {#hdfs}
+## HDFS
 
 [HDFS](https://hadoop.apache.org) is the file system for Hadoop, which can be used as the object store for JuiceFS. When HDFS is used, `--access-key` can be used to specify the `username`, and `hdfs` is usually the default superuser. For example:
 
@@ -646,7 +639,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-## Local disk {#local}
+## Local disk
 
 When creating JuiceFS storage, if no storage type is specified, the local disk will be used to store data by default. The default storage path for root user is `/var/jfs`, and `~/.juicefs/local` is for ordinary users.
 

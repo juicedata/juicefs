@@ -33,16 +33,27 @@ import (
 
 func TestRedisClient(t *testing.T) {
 	var conf = Config{MaxDeletes: 1}
-	_, err := newRedisMeta("http", "127.0.0.1:6379/7", &conf)
+	_, err := newRedisMeta("http", "127.0.0.1:6379/10", &conf)
 	if err == nil {
 		t.Fatal("meta created with invalid url")
 	}
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/7", &conf)
+	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", &conf)
 	if err != nil {
-		t.Skipf("redis is not available: %s", err)
+		t.Fatalf("create meta: %s", err)
 	}
-	m.(*redisMeta).rdb.FlushDB(context.TODO())
+	m.(*redisMeta).rdb.FlushDB(context.Background())
+
+	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testRemove(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m)
+	testCopyFileRange(t, m)
+	testCloseSession(t, m)
+	m.(*redisMeta).conf.CaseInsensi = true
+	testCaseIncensi(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -95,6 +106,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f", 0650, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
+	_ = m.Close(ctx, inode)
 	var tino Ino
 	if st := m.Lookup(ctx, inode, ".", &tino, attr); st != syscall.ENOTDIR {
 		t.Fatalf("lookup /d/f/.: %s", st)
@@ -213,6 +225,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
+	_ = m.Close(ctx, inode)
 	defer m.Unlink(ctx, 1, "f")
 	if st := m.Rename(ctx, 1, "f2", 1, "f", RenameNoReplace, &inode, attr); st != syscall.EEXIST {
 		t.Fatalf("rename f2 -> f: %s", st)
@@ -303,6 +316,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Open(ctx, inode, 2, attr); st != 0 {
 		t.Fatalf("open f: %s", st)
 	}
+	_ = m.Close(ctx, inode)
 	if st := m.NewChunk(ctx, inode, 0, 0, &chunkid); st != 0 {
 		t.Fatalf("write chunk: %s", st)
 	}
@@ -408,19 +422,19 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
 	}
+	if st := m.Unlink(ctx, 1, "f3"); st != 0 {
+		t.Fatalf("unlink f3: %s", st)
+	}
+	time.Sleep(time.Millisecond * 100) // wait for delete
+	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
+		t.Fatalf("read chunk: %s", st)
+	}
+	if len(chunks) != 0 {
+		t.Fatalf("chunks: %v", chunks)
+	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
 	}
-}
-
-func TestStickyBitRedis(t *testing.T) {
-	var conf Config
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/5", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	m.(*redisMeta).rdb.FlushDB(context.Background())
-	testStickyBit(t, m)
 }
 
 func testStickyBit(t *testing.T, m Meta) {
@@ -488,15 +502,6 @@ func testStickyBit(t *testing.T, m Meta) {
 	if e := m.Rmdir(ctxA, sticky, "d3"); e != 0 {
 		t.Fatalf("rmdir d3: %s", e)
 	}
-}
-
-func TestLocksRedis(t *testing.T) {
-	var conf Config
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/5", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	testLocks(t, m)
 }
 
 func testLocks(t *testing.T, m Meta) {
@@ -603,15 +608,6 @@ func testLocks(t *testing.T, m Meta) {
 	}
 }
 
-func TestRemove(t *testing.T) {
-	var conf Config
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/5", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	testRemove(t, m)
-}
-
 func testRemove(t *testing.T, m Meta) {
 	_ = m.Init(Format{Name: "test"}, true)
 	ctx := Background
@@ -632,18 +628,15 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/f: %s", st)
 	}
+	if p, st := GetPath(m, ctx, parent); st != 0 || p != "/d" {
+		t.Fatalf("get path /d: %s, %s", st, p)
+	}
+	if p, st := GetPath(m, ctx, inode); st != 0 || p != "/d/f" {
+		t.Fatalf("get path /d/f: %s, %s", st, p)
+	}
 	if st := Remove(m, ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
-}
-
-func TestCaseIncensi(t *testing.T) {
-	var conf = Config{CaseInsensi: true}
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/6", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	testCaseIncensi(t, m)
 }
 
 func testCaseIncensi(t *testing.T, m Meta) {
@@ -685,15 +678,6 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	if st := m.Rmdir(ctx, 1, "foo"); st != 0 {
 		t.Fatalf("rmdir foo should be OK")
 	}
-}
-
-func TestCompaction(t *testing.T) {
-	var conf = Config{MaxDeletes: 1}
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/8", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	testCompaction(t, m)
 }
 
 type compactor interface {
@@ -792,15 +776,6 @@ func testCompaction(t *testing.T, m Meta) {
 	}
 }
 
-func TestConcurrentWrite(t *testing.T) {
-	var conf = Config{MaxDeletes: 1}
-	m, err := newRedisMeta("redis", "127.0.0.1/9", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	testConcurrentWrite(t, m)
-}
-
 func testConcurrentWrite(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
@@ -841,16 +816,6 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	if errno != 0 {
 		t.Fatal()
 	}
-}
-
-func TestTruncateAndDelete(t *testing.T) {
-	var conf = Config{MaxDeletes: 1}
-	m, err := newRedisMeta("redis", "127.0.0.1/10", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	m.(*redisMeta).rdb.FlushDB(context.Background())
-	testTruncateAndDelete(t, m)
 }
 
 func testTruncateAndDelete(t *testing.T, m Meta) {
@@ -926,16 +891,6 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 }
 
-func TestCopyFileRange(t *testing.T) {
-	var conf Config
-	m, err := newRedisMeta("redis", "127.0.0.1/10", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	m.(*redisMeta).rdb.FlushDB(context.Background())
-	testCopyFileRange(t, m)
-}
-
 func testCopyFileRange(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
@@ -987,16 +942,6 @@ func testCopyFileRange(t *testing.T, m Meta) {
 			}
 		}
 	}
-}
-
-func TestCloseSessionRedis(t *testing.T) {
-	var conf Config
-	m, err := newRedisMeta("redis", "127.0.0.1/10", &conf)
-	if err != nil {
-		t.Skipf("redis is not available: %s", err)
-	}
-	m.(*redisMeta).rdb.FlushDB(context.Background())
-	testCloseSession(t, m)
 }
 
 func testCloseSession(t *testing.T, m Meta) {
