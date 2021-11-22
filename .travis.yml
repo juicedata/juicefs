@@ -36,5 +36,6 @@ jobs:
       env: TRAVIS=true
 
     - stage: "test"
+      script:
         - echo "TRAVIS value"
         - echo $TRAVIS
