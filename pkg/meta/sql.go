@@ -1944,7 +1944,7 @@ func (m *dbMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.
 	if err == 0 {
 		m.of.Open(inode, attr)
 	}
-	return 0
+	return err
 }
 
 func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {

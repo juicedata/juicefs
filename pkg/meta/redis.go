@@ -1945,7 +1945,7 @@ func (r *redisMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) sysca
 		// TODO: tracking update in Redis
 		r.of.Open(inode, attr)
 	}
-	return 0
+	return err
 }
 
 func (r *redisMeta) Close(ctx Context, inode Ino) syscall.Errno {
