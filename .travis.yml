@@ -50,4 +50,4 @@ jobs:
         - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
         - sudo ./juicefs gc localhost
         - sudo ./juicefs fsck localhost
-      if: env(TRAVIS)
+      if: 1 = 1
