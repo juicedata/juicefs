@@ -23,7 +23,7 @@ before_install:
   - source ./check-docs.sh
   - echo "before_install TRAVIS"
   - echo $TRAVIS
-install: skip
+install: true
 jobs:
   include:
     - stage: "prepare"
@@ -33,7 +33,6 @@ jobs:
         - echo "TRAVIS"
         - echo $TRAVIS
         - echo "prepare TRAVIS"
-      if: env(TRAVIS) = true
 
     - stage: "test"
       script:
