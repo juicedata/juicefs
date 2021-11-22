@@ -494,11 +494,11 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 		if eno != 0 {
 			return
 		}
-		if len(fis) == 2 {
+		if len(fis) == 0 {
 			return true, nil, false
 		}
 		root := n.path(bucket, prefixDir) == "/"
-		for _, fi := range fis[2:] {
+		for _, fi := range fis {
 			if root && len(fi.Name()) == len(metaBucket) && string(fi.Name()) == metaBucket {
 				continue
 			}
