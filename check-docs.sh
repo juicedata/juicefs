@@ -21,7 +21,7 @@ fi
 
 changeFlag CHANGED_FILES
 
-changeFlag() {
+function changeFlag() {
   for CHANGED_FILE in $CHANGED_FILES; do
     if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
       SKIP_FLAG=false
