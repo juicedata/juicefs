@@ -129,30 +129,9 @@ type delfile struct {
 }
 
 type dbMeta struct {
-	sync.Mutex
-	conf   *Config
-	fmt    Format
+	baseMeta
 	engine *xorm.Engine
-
-	sid          uint64
-	of           *openfiles
-	root         Ino
-	removedFiles map[Ino]bool
-	compacting   map[uint64]bool
-	deleting     chan int
-	symlinks     *sync.Map
-	msgCallbacks *msgCallbacks
-	newSpace     int64
-	newInodes    int64
-	usedSpace    int64
-	usedInodes   int64
-	umounting    bool
-
-	freeMu     sync.Mutex
-	freeInodes freeID
-	freeChunks freeID
-
-	snap *dbSnap
+	snap   *dbSnap
 }
 type dbSnap struct {
 	node    map[Ino]*node
@@ -179,22 +158,10 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
-	if conf.Retries == 0 {
-		conf.Retries = 30
-	}
 	m := &dbMeta{
-		conf:         conf,
-		engine:       engine,
-		of:           newOpenFiles(conf.OpenCache),
-		removedFiles: make(map[Ino]bool),
-		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, conf.MaxDeletes),
-		symlinks:     &sync.Map{},
-		msgCallbacks: &msgCallbacks{
-			callbacks: make(map[uint32]MsgCallback),
-		},
+		baseMeta: newBaseMeta(conf),
+		engine:   engine,
 	}
-	m.root = 1
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
 }

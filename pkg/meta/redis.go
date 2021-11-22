@@ -67,28 +67,12 @@ import (
 */
 
 type redisMeta struct {
-	sync.Mutex
-	conf    *Config
-	fmt     Format
-	rdb     *redis.Client
-	txlocks [1024]sync.Mutex // Pessimistic locks to reduce conflict on Redis
-
-	root         Ino
-	sid          int64
-	usedSpace    uint64
-	usedInodes   uint64
-	of           *openfiles
-	removedFiles map[Ino]bool
-	compacting   map[uint64]bool
-	deleting     chan int
-	symlinks     *sync.Map
-	msgCallbacks *msgCallbacks
-	umounting    bool
-
-	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
-	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
-
-	snap *redisSnap
+	baseMeta
+	rdb        *redis.Client
+	txlocks    [1024]sync.Mutex // Pessimistic locks to reduce conflict on Redis
+	shaLookup  string           // The SHA returned by Redis for the loaded `scriptLookup`
+	shaResolve string           // The SHA returned by Redis for the loaded `scriptResolve`
+	snap       *redisSnap
 }
 
 var _ Meta = &redisMeta{}
@@ -150,20 +134,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 
 	m := &redisMeta{
-		conf:         conf,
-		rdb:          rdb,
-		of:           newOpenFiles(conf.OpenCache),
-		removedFiles: make(map[Ino]bool),
-		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, conf.MaxDeletes),
-		symlinks:     &sync.Map{},
-		msgCallbacks: &msgCallbacks{
-			callbacks: make(map[uint32]MsgCallback),
-		},
+		baseMeta: newBaseMeta(conf),
+		rdb:      rdb,
 	}
-
 	m.checkServerConfig()
-	m.root = 1
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
 }
@@ -255,11 +229,11 @@ func (r *redisMeta) NewSession() error {
 	if r.conf.ReadOnly {
 		return nil
 	}
-	var err error
-	r.sid, err = r.rdb.Incr(Background, "nextsession").Result()
+	sid, err := r.rdb.Incr(Background, "nextsession").Result()
 	if err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
+	r.sid = uint64(sid)
 	logger.Debugf("session is %d", r.sid)
 	r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
 	info := newSessionInfo()
@@ -301,18 +275,18 @@ func (r *redisMeta) CloseSession() error {
 func (r *redisMeta) refreshUsage() {
 	for {
 		used, _ := r.rdb.IncrBy(Background, usedSpace, 0).Result()
-		atomic.StoreUint64(&r.usedSpace, uint64(used))
+		atomic.StoreInt64(&r.usedSpace, int64(used))
 		inodes, _ := r.rdb.IncrBy(Background, totalInodes, 0).Result()
-		atomic.StoreUint64(&r.usedInodes, uint64(inodes))
+		atomic.StoreInt64(&r.usedInodes, int64(inodes))
 		time.Sleep(time.Second * 10)
 	}
 }
 
 func (r *redisMeta) checkQuota(size, inodes int64) bool {
-	if size > 0 && r.fmt.Capacity > 0 && atomic.LoadUint64(&r.usedSpace)+uint64(size) > r.fmt.Capacity {
+	if size > 0 && r.fmt.Capacity > 0 && atomic.LoadInt64(&r.usedSpace)+int64(size) > int64(r.fmt.Capacity) {
 		return true
 	}
-	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadUint64(&r.usedInodes)+uint64(inodes) > r.fmt.Inodes
+	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadInt64(&r.usedInodes)+int64(inodes) > int64(r.fmt.Inodes)
 }
 
 func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
@@ -329,7 +303,7 @@ func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 	}
 	s.Sid, _ = strconv.ParseUint(sid, 10, 64)
 	if detail {
-		inodes, err := r.rdb.SMembers(ctx, r.sustained(int64(s.Sid))).Result()
+		inodes, err := r.rdb.SMembers(ctx, r.sustained(s.Sid)).Result()
 		if err != nil {
 			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
 		}
@@ -339,7 +313,7 @@ func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 			s.Sustained = append(s.Sustained, Ino(inode))
 		}
 
-		locks, err := r.rdb.SMembers(ctx, r.lockedKey(int64(s.Sid))).Result()
+		locks, err := r.rdb.SMembers(ctx, r.lockedKey(s.Sid)).Result()
 		if err != nil {
 			return nil, fmt.Errorf("SMembers %s: %s", sid, err)
 		}
@@ -417,12 +391,12 @@ func (r *redisMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (r *redisMeta) sustained(sid int64) string {
-	return "session" + strconv.FormatInt(sid, 10)
+func (r *redisMeta) sustained(sid uint64) string {
+	return "session" + strconv.FormatInt(int64(sid), 10)
 }
 
-func (r *redisMeta) lockedKey(sid int64) string {
-	return "locked" + strconv.FormatInt(sid, 10)
+func (r *redisMeta) lockedKey(sid uint64) string {
+	return "locked" + strconv.FormatInt(int64(sid), 10)
 }
 
 func (r *redisMeta) symKey(inode Ino) string {
@@ -1831,7 +1805,7 @@ func (r *redisMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entr
 	return 0
 }
 
-func (r *redisMeta) cleanStaleSession(sid int64, sync bool) {
+func (r *redisMeta) cleanStaleSession(sid uint64, sync bool) {
 	// release locks
 	var ctx = Background
 	key := r.lockedKey(sid)
@@ -1840,7 +1814,7 @@ func (r *redisMeta) cleanStaleSession(sid int64, sync bool) {
 		logger.Warnf("SMembers %s: %s", key, err)
 		return
 	}
-	ssid := strconv.FormatInt(sid, 10)
+	ssid := strconv.FormatInt(int64(sid), 10)
 	for _, k := range inodes {
 		owners, _ := r.rdb.HKeys(ctx, k).Result()
 		for _, o := range owners {
@@ -1880,7 +1854,7 @@ func (r *redisMeta) cleanStaleSessions() {
 	staleSessions, _ := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
 	for _, ssid := range staleSessions {
 		sid, _ := strconv.Atoi(ssid)
-		r.cleanStaleSession(int64(sid), false)
+		r.cleanStaleSession(uint64(sid), false)
 	}
 }
 
@@ -3137,9 +3111,9 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 		sid, _ := strconv.ParseUint(k, 10, 64)
 		var ss []string
 		if m.root == 1 {
-			ss = m.snap.listMap[m.sustained(int64(sid))]
+			ss = m.snap.listMap[m.sustained(sid)]
 		} else {
-			ss, err = m.rdb.SMembers(ctx, m.sustained(int64(sid))).Result()
+			ss, err = m.rdb.SMembers(ctx, m.sustained(sid)).Result()
 			if err != nil {
 				return err
 			}

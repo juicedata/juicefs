@@ -59,28 +59,8 @@ type tkvClient interface {
 }
 
 type kvMeta struct {
-	sync.Mutex
-	conf   *Config
-	fmt    Format
+	baseMeta
 	client tkvClient
-
-	sid          uint64
-	of           *openfiles
-	root         Ino
-	removedFiles map[Ino]bool
-	compacting   map[uint64]bool
-	deleting     chan int
-	symlinks     *sync.Map
-	msgCallbacks *msgCallbacks
-	newSpace     int64
-	newInodes    int64
-	usedSpace    int64
-	usedInodes   int64
-	umounting    bool
-
-	freeMu     sync.Mutex
-	freeInodes freeID
-	freeChunks freeID
 }
 
 var drivers = make(map[string]func(string) (tkvClient, error))
@@ -100,23 +80,10 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	// TODO: ping server and check latency > Millisecond
 	// logger.Warnf("The latency to database is too high: %s", time.Since(start))
-	if conf.Retries == 0 {
-		conf.Retries = 30
-	}
 	m := &kvMeta{
-		conf:         conf,
-		client:       client,
-		of:           newOpenFiles(conf.OpenCache),
-		removedFiles: make(map[Ino]bool),
-		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, conf.MaxDeletes),
-		symlinks:     &sync.Map{},
-		msgCallbacks: &msgCallbacks{
-			callbacks: make(map[uint32]MsgCallback),
-		},
+		baseMeta: newBaseMeta(conf),
+		client:   client,
 	}
-
-	m.root = 1
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
 }
