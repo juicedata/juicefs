@@ -2,9 +2,7 @@
 
 set -e
 
-echo "travis branch"
-echo $TRAVIS_BRANCH
-CHANGED_FILES=`git diff --name-only main...${TRAVIS_BRANCH}`
+CHANGED_FILES=`git diff --name-only $TRAVIS_COMMIT_RANGE`
 echo $CHANGED_FILES
 DOCS_DIR="docs/"
 SKIP_FLAG=true
@@ -16,13 +14,22 @@ git diff --name-only HEAD~1
 echo "TRAVIS_COMMIT_RANGE"
 git diff --name-only $TRAVIS_COMMIT_RANGE
 
+#if TRAVIS_COMMIT_RANGE is empty
+if [ x"${TRAVIS_COMMIT_RANGE}" == x ] ; then
+  CHANGED_FILES=`git diff --name-only HEAD~1`
+fi
 
-for CHANGED_FILE in $CHANGED_FILES; do
-  if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
-    SKIP_FLAG=false
-    break
-  fi
-done
+changeFlag CHANGED_FILES
+
+changeFlag() {
+  for CHANGED_FILE in $CHANGED_FILES; do
+    if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
+      SKIP_FLAG=false
+      break
+    fi
+  done
+}
+
 
 echo "skip flag"
 echo $SKIP_FLAG
