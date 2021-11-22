@@ -989,22 +989,19 @@ func (m *kvMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	defer timeit(time.Now())
 	a, err := m.get(m.inodeKey(inode))
-	if err != nil && inode == 1 {
+	if err == nil && a != nil {
+		m.parseAttr(a, attr)
+		m.of.Update(inode, attr)
+	} else if inode == 1 {
 		err = nil
 		attr.Typ = TypeDirectory
 		attr.Mode = 0777
 		attr.Nlink = 2
 		attr.Length = 4 << 10
+	} else if err == nil {
+		err = syscall.ENOENT
 	}
-	if err != nil {
-		return errno(err)
-	}
-	if a == nil {
-		return syscall.ENOENT
-	}
-	m.parseAttr(a, attr)
-	m.of.Update(inode, attr)
-	return 0
+	return errno(err)
 }
 
 func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {

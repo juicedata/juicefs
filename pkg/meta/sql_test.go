@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"testing"
+	"time"
 )
 
 func tempFile(t *testing.T) string {
@@ -42,12 +43,12 @@ func TestSQLiteClient(t *testing.T) {
 		}
 	}()
 	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
-	if err != nil {
+	if err != nil || m.Name() != "sqlite3" {
 		t.Fatalf("create meta: %s", err)
 	}
 
-	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testTruncateAndDelete(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -57,6 +58,9 @@ func TestSQLiteClient(t *testing.T) {
 	testCloseSession(t, m)
 	m.(*dbMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
+	m.(*dbMeta).conf.OpenCache = time.Second
+	m.(*dbMeta).of.expire = time.Second
+	testOpenCache(t, m)
 }
 
 func resetDB(m *dbMeta) {
@@ -77,13 +81,13 @@ func resetDB(m *dbMeta) {
 
 func TestMySQLClient(t *testing.T) {
 	m, err := newSQLMeta("mysql", "root:@/dev", &Config{MaxDeletes: 1})
-	if err != nil {
+	if err != nil || m.Name() != "mysql" {
 		t.Fatalf("create meta: %s", err)
 	}
 	resetDB(m.(*dbMeta))
 
-	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testTruncateAndDelete(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -93,17 +97,20 @@ func TestMySQLClient(t *testing.T) {
 	testCloseSession(t, m)
 	m.(*dbMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
+	m.(*dbMeta).conf.OpenCache = time.Second
+	m.(*dbMeta).of.expire = time.Second
+	testOpenCache(t, m)
 }
 
 func TestPostgreSQLClient(t *testing.T) {
 	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{MaxDeletes: 1})
-	if err != nil {
+	if err != nil || m.Name() != "postgres" {
 		t.Fatalf("create meta: %s", err)
 	}
 	resetDB(m.(*dbMeta))
 
-	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testTruncateAndDelete(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -113,4 +120,7 @@ func TestPostgreSQLClient(t *testing.T) {
 	testCloseSession(t, m)
 	m.(*dbMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
+	m.(*dbMeta).conf.OpenCache = time.Second
+	m.(*dbMeta).of.expire = time.Second
+	testOpenCache(t, m)
 }
