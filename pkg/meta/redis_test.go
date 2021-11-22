@@ -38,13 +38,13 @@ func TestRedisClient(t *testing.T) {
 		t.Fatal("meta created with invalid url")
 	}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", &conf)
-	if err != nil {
+	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
 	}
 	m.(*redisMeta).rdb.FlushDB(context.Background())
 
-	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testTruncateAndDelete(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -54,14 +54,26 @@ func TestRedisClient(t *testing.T) {
 	testCloseSession(t, m)
 	m.(*redisMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
+	m.(*redisMeta).conf.OpenCache = time.Second
+	m.(*redisMeta).of.expire = time.Second
+	testOpenCache(t, m)
+	m.(*redisMeta).conf.ReadOnly = true
+	testReadOnly(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
-	_ = m.Init(Format{Name: "test"}, true)
-	err := m.Init(Format{Name: "test"}, false) // changes nothing
-	if err != nil {
+	ctx := Background
+	var attr = &Attr{}
+	if st := m.GetAttr(ctx, 1, attr); st != 0 || attr.Mode != 0777 { // getattr of root always succeed
+		t.Fatalf("getattr root: %s", st)
+	}
+
+	if err := m.Init(Format{Name: "test"}, true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
+	}
+	if err := m.Init(Format{Name: "test2"}, false); err == nil { // not allowed
+		t.Fatalf("change name without --force is not allowed")
 	}
 	format, err := m.Load()
 	if err != nil {
@@ -70,14 +82,32 @@ func testMetaClient(t *testing.T, m Meta) {
 	if format.Name != "test" {
 		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
 	}
-	m.NewSession()
+	if err = m.NewSession(); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	ses, err := m.ListSessions()
+	if err != nil || len(ses) != 1 {
+		t.Fatalf("list sessions %+v: %s", ses, err)
+	}
 	switch r := m.(type) {
 	case *redisMeta:
+		if r.sid != int64(ses[0].Sid) {
+			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
+		}
+		go r.cleanStaleSessions()
+	case *dbMeta:
+		if r.sid != ses[0].Sid {
+			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
+		}
+		go r.cleanStaleSessions()
+	case *kvMeta:
+		if r.sid != ses[0].Sid {
+			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
+		}
 		go r.cleanStaleSessions()
 	}
-	ctx := Background
+
 	var parent, inode, dummyInode Ino
-	var attr = &Attr{}
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
 		t.Fatalf("mkdir d: %s", st)
 	}
@@ -93,6 +123,12 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	if st := m.Lookup(ctx, 1, "d", &parent, attr); st != 0 {
 		t.Fatalf("lookup d: %s", st)
+	}
+	if st := m.Lookup(ctx, 1, "d", &parent, nil); st != syscall.EINVAL {
+		t.Fatalf("lookup d: %s", st)
+	}
+	if st := m.Lookup(ctx, 1, "..", &inode, attr); st != 0 || inode != 1 {
+		t.Fatalf("lookup ..: %s", st)
 	}
 	if st := m.Lookup(ctx, parent, ".", &inode, attr); st != 0 || inode != parent {
 		t.Fatalf("lookup .: %s", st)
@@ -236,6 +272,12 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f", 1, "d", RenameExchange, &inode, attr); st != 0 {
 		t.Fatalf("rename f <-> d: %s", st)
 	}
+	if st := m.Rename(ctx, 1, "d", 1, "f", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename d -> f: %s", st)
+	}
+	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
 	// Test rename with parent change
 	var parent2 Ino
 	if st := m.Mkdir(ctx, 1, "d4", 0777, 0, 0, &parent2, attr); st != 0 {
@@ -273,11 +315,8 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "d5"); st != 0 {
 		t.Fatalf("rmdir d6 : %s", st)
 	}
-	if st := m.Lookup(ctx, 1, "f", &inode, attr); st != 0 || inode != parent {
-		t.Fatalf("lookup f: %s; inode %d expect %d", st, inode, parent)
-	}
-	if st := m.Rename(ctx, 1, "d", 1, "f", RenameExchange, &inode, attr); st != 0 {
-		t.Fatalf("rename d <-> f: %s", st)
+	if st := m.Lookup(ctx, 1, "f", &inode, attr); st != 0 {
+		t.Fatalf("lookup f: %s", st)
 	}
 	if st := m.Link(ctx, inode, 1, "f3", attr); st != 0 {
 		t.Fatalf("link f3 -> f: %s", st)
@@ -314,10 +353,10 @@ func testMetaClient(t *testing.T, m Meta) {
 	// data
 	var chunkid uint64
 	// try to open a file that does not exist
-	if st := m.Open(ctx, 99999, 2, &Attr{}); st != syscall.ENOENT {
+	if st := m.Open(ctx, 99999, syscall.O_RDWR, &Attr{}); st != syscall.ENOENT {
 		t.Fatalf("open not exist inode got %d, expected %d", st, syscall.ENOENT)
 	}
-	if st := m.Open(ctx, inode, 2, attr); st != 0 {
+	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != 0 {
 		t.Fatalf("open f: %s", st)
 	}
 	_ = m.Close(ctx, inode)
@@ -399,6 +438,18 @@ func testMetaClient(t *testing.T, m Meta) {
 	var totalspace, availspace, iused, iavail uint64
 	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<50 || iavail != 10<<20 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+	if err = m.Init(Format{Name: "test", Capacity: 1 << 20, Inodes: 100}, false); err != nil {
+		t.Fatalf("set quota failed: %s", err)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20 || iavail != 97 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 	var summary Summary
 	if st := GetSummary(m, ctx, parent, &summary, false); st != 0 {
@@ -638,6 +689,17 @@ func testRemove(t *testing.T, m Meta) {
 	if p, st := GetPath(m, ctx, inode); st != 0 || p != "/d/f" {
 		t.Fatalf("get path /d/f: %s, %s", st, p)
 	}
+	for i := 0; i < 4096; i++ {
+		if st := m.Create(ctx, 1, "f"+strconv.Itoa(i), 0644, 0, 0, &inode, attr); st != 0 {
+			t.Fatalf("create f%s: %s", strconv.Itoa(i), st)
+		}
+	}
+	var entries []*Entry
+	if st := m.Readdir(ctx, 1, 1, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	} else if len(entries) != 4099 {
+		t.Fatalf("entries: %d", len(entries))
+	}
 	if st := Remove(m, ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
@@ -663,6 +725,9 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	}
 	if st := m.Create(ctx, 1, "Foo", 0755, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create Foo should be OK")
+	}
+	if st := m.Resolve(ctx, 1, "/Foo", &inode, attr); st != syscall.ENOTSUP {
+		t.Fatalf("resolve with case insensitive should be ENOTSUP")
 	}
 	if st := m.Lookup(ctx, 1, "Bar", &inode, attr); st != 0 {
 		t.Fatalf("lookup Bar should be OK")
@@ -966,7 +1031,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Setlk(ctx, inode, 1, false, syscall.F_WRLCK, 0x10000, 0x20000, 1); st != 0 {
 		t.Fatalf("plock wlock: %s", st)
 	}
-	if st := m.Open(ctx, inode, 2, attr); st != 0 {
+	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != 0 {
 		t.Fatalf("open f: %s", st)
 	}
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
@@ -1012,5 +1077,57 @@ func testCloseSession(t *testing.T, m Meta) {
 	}
 	if len(s.Flocks) != 0 || len(s.Plocks) != 0 || len(s.Sustained) != 0 {
 		t.Fatalf("incorrect session: flock %d plock %d sustained %d", len(s.Flocks), len(s.Plocks), len(s.Sustained))
+	}
+}
+
+func testOpenCache(t *testing.T, m Meta) {
+	ctx := Background
+	var inode Ino
+	var attr = &Attr{}
+	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	defer m.Unlink(ctx, 1, "f")
+	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != 0 {
+		t.Fatalf("open f: %s", st)
+	}
+	defer m.Close(ctx, inode)
+
+	var attr2 = &Attr{}
+	if st := m.GetAttr(ctx, inode, attr2); st != 0 {
+		t.Fatalf("getattr f: %s", st)
+	}
+	if *attr != *attr2 {
+		t.Fatalf("attrs not the same: attr %+v; attr2 %+v", *attr, *attr2)
+	}
+	attr2.Uid = 1
+	if st := m.SetAttr(ctx, inode, SetAttrUID, 0, attr2); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 {
+		t.Fatalf("getattr f: %s", st)
+	}
+	if attr.Uid != 1 {
+		t.Fatalf("attr uid should be 1: %+v", *attr)
+	}
+}
+
+func testReadOnly(t *testing.T, m Meta) {
+	ctx := Background
+	if err := m.NewSession(); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	var inode Ino
+	var attr = &Attr{}
+	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &inode, attr); st != syscall.EROFS {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != syscall.EROFS {
+		t.Fatalf("create f: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != syscall.EROFS {
+		t.Fatalf("open f: %s", st)
 	}
 }
