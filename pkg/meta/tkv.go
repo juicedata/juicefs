@@ -719,18 +719,6 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 	})
 }
 
-func (m *kvMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
-	var entries []*Entry
-	_ = m.Readdir(ctx, parent, 0, &entries)
-	for _, e := range entries {
-		n := string(e.Name)
-		if strings.EqualFold(name, n) {
-			return e
-		}
-	}
-	return nil
-}
-
 func (m *kvMeta) lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	buf, err := m.get(m.entryKey(parent, name))
 	if err != nil {
@@ -1844,10 +1832,6 @@ func (r *kvMeta) cleanupZeroRef(chunkid uint64, size uint32) {
 		tx.dels(r.fmtKey(chunkid, size))
 		return nil
 	})
-}
-
-func (m *kvMeta) deleteSliceDB(chunkid uint64, size uint32) error {
-	return m.deleteKeys(m.sliceKey(chunkid, size))
 }
 
 func (m *kvMeta) deleteFile(inode Ino, length uint64) {

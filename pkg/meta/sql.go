@@ -873,19 +873,6 @@ func (m *dbMeta) readlink(inode Ino) ([]byte, error) {
 	return []byte(l.Target), nil
 }
 
-func (m *dbMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
-	// TODO in SQL
-	var entries []*Entry
-	_ = m.Readdir(ctx, parent, 0, &entries)
-	for _, e := range entries {
-		n := string(e.Name)
-		if strings.EqualFold(name, n) {
-			return e
-		}
-	}
-	return nil
-}
-
 func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
 	if m.checkQuota(4<<10, 1) {
 		return syscall.ENOSPC
@@ -1944,13 +1931,6 @@ func (m *dbMeta) cleanupSlices() {
 			}
 		}
 	}
-}
-
-func (m *dbMeta) deleteSliceDB(chunkid uint64, size uint32) error {
-	return m.txn(func(ses *xorm.Session) error {
-		_, err := ses.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
-		return err
-	})
 }
 
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {

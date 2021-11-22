@@ -471,18 +471,6 @@ func (r *redisMeta) marshal(attr *Attr) []byte {
 	return w.Bytes()
 }
 
-func (r *redisMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
-	var entries []*Entry
-	_ = r.Readdir(ctx, parent, 0, &entries)
-	for _, e := range entries {
-		n := string(e.Name)
-		if strings.EqualFold(name, n) {
-			return e
-		}
-	}
-	return nil
-}
-
 func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	if inode == nil || attr == nil {
 		return syscall.EINVAL
@@ -2117,10 +2105,6 @@ func (r *redisMeta) cleanupOldSliceRefs() {
 
 func (r *redisMeta) toDelete(inode Ino, length uint64) string {
 	return inode.String() + ":" + strconv.Itoa(int(length))
-}
-
-func (r *redisMeta) deleteSliceDB(ctx Context, chunkid uint64, size uint32) error {
-	return r.rdb.HDel(ctx, sliceRefs, r.sliceKey(chunkid, size)).Err()
 }
 
 func (r *redisMeta) deleteChunk(inode Ino, indx uint32) error {
