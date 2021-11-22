@@ -33,3 +33,7 @@ jobs:
         - echo "TRAVIS"
         - echo $TRAVIS
       if: branch = master
+
+    - stage: "test"
+        script:
+          - echo "test TRAVIS"
