@@ -23,7 +23,8 @@ before_install:
   - source ./check-docs.sh
   - echo "before_install TRAVIS"
   - echo $TRAVIS
-  - if [ $TRAVIS == false ]; then
+  - |
+    if [ $TRAVIS == false ]; then
       exit 0;
     fi
 install: true
