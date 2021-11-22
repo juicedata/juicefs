@@ -10,6 +10,7 @@ require (
 	github.com/DataDog/zstd v1.4.5
 	github.com/IBM/ibm-cos-sdk-go v1.6.0
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
+	github.com/agiledragon/gomonkey/v2 v2.2.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
 	github.com/aws/aws-sdk-go v1.35.20
 	github.com/baidubce/bce-sdk-go v0.9.47
@@ -57,6 +58,7 @@ require (
 	github.com/satori/uuid v1.2.0 // indirect
 	github.com/shirou/gopsutil v3.21.3+incompatible // indirect
 	github.com/sirupsen/logrus v1.7.0
+	github.com/smartystreets/goconvey v1.6.4
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
 	github.com/tidwall/gjson v1.9.3 // indirect
 	github.com/tikv/client-go/v2 v2.0.0-alpha.0.20210709052506-aadf3cf62721
