@@ -33,6 +33,7 @@ jobs:
         - echo "TRAVIS"
         - echo $TRAVIS
         - echo "prepare TRAVIS"
+      if: env(TRAVIS) = true
 
     - stage: "test"
       script:
