@@ -785,7 +785,7 @@ func jfs_summary(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 		return errno(err)
 	}
 	defer f.Close(ctx)
-	summary, err := f.Summary(ctx, 0, 1)
+	summary, err := f.Summary(ctx)
 	if err != 0 {
 		return errno(err)
 	}

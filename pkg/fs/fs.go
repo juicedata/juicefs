@@ -38,7 +38,8 @@ import (
 
 var logger = utils.GetLogger("juicefs")
 
-const rotateAccessLog = 300 << 20 // 300 MiB
+var checkAccessFile = time.Minute
+var rotateAccessLog int64 = 300 << 20 // 300 MiB
 
 type Ino = meta.Ino
 type Attr = meta.Attr
@@ -94,7 +95,6 @@ func (fs *FileStat) Mode() os.FileMode {
 		mode |= os.ModeSymlink
 	case meta.TypeFile:
 	default:
-		mode = 0
 	}
 	return mode
 }
@@ -268,7 +268,7 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 			logger.Errorf("write access log: %s", err)
 			break
 		}
-		if lastcheck.Add(time.Minute).After(time.Now()) {
+		if lastcheck.Add(checkAccessFile).After(time.Now()) {
 			continue
 		}
 		lastcheck = time.Now()
@@ -731,6 +731,7 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 				return
 			}
 			inode = fi.Inode()
+			attr = fi.attr
 		}
 		parent = inode
 	}
@@ -1061,7 +1062,8 @@ func (f *File) Readdir(ctx meta.Context, count int) (fi []os.FileInfo, err sysca
 		if err != 0 {
 			return
 		}
-		for _, n := range inodes {
+		// skip . and ..
+		for _, n := range inodes[2:] {
 			i := AttrToFileInfo(n.Inode, n.Attr)
 			i.name = string(n.Name)
 			fi = append(fi, i)
@@ -1110,7 +1112,7 @@ func (f *File) ReaddirPlus(ctx meta.Context, offset int) (entries []*meta.Entry,
 	return
 }
 
-func (f *File) Summary(ctx meta.Context, depth uint8, maxentries uint32) (s *meta.Summary, err syscall.Errno) {
+func (f *File) Summary(ctx meta.Context) (s *meta.Summary, err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Summary").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() {
