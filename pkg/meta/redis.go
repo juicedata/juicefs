@@ -777,8 +777,7 @@ func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if err == nil {
 		r.parseAttr(a, attr)
 		r.of.Update(inode, attr)
-	}
-	if err != nil && inode == 1 {
+	} else if inode == 1 {
 		err = nil
 		attr.Typ = TypeDirectory
 		attr.Mode = 0777

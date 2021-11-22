@@ -18,17 +18,18 @@ package meta
 
 import (
 	"testing"
+	"time"
 )
 
 func TestMemKVClient(t *testing.T) {
 	m, err := newKVMeta("memkv", "test/jfs", &Config{MaxDeletes: 1})
 	// newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{MaxDeletes: 1})
-	if err != nil {
+	if err != nil || m.Name() != "memkv" {
 		t.Fatalf("create meta: %s", err)
 	}
 
-	testTruncateAndDelete(t, m)
 	testMetaClient(t, m)
+	testTruncateAndDelete(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -38,6 +39,11 @@ func TestMemKVClient(t *testing.T) {
 	testCloseSession(t, m)
 	m.(*kvMeta).conf.CaseInsensi = true
 	testCaseIncensi(t, m)
+	m.(*kvMeta).conf.OpenCache = time.Second
+	m.(*kvMeta).of.expire = time.Second
+	testOpenCache(t, m)
+	m.(*kvMeta).conf.ReadOnly = true
+	testReadOnly(t, m)
 }
 
 func TestMemKV(t *testing.T) {

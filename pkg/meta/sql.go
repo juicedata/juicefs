@@ -799,22 +799,19 @@ func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	var n = node{Inode: inode}
 	ok, err := m.engine.Get(&n)
-	if err != nil && inode == 1 {
+	if err == nil && ok {
+		m.parseAttr(&n, attr)
+		m.of.Update(inode, attr)
+	} else if inode == 1 {
 		err = nil
-		n.Type = TypeDirectory
-		n.Mode = 0777
-		n.Nlink = 2
-		n.Length = 4 << 10
+		attr.Typ = TypeDirectory
+		attr.Mode = 0777
+		attr.Nlink = 2
+		attr.Length = 4 << 10
+	} else if err == nil {
+		err = syscall.ENOENT
 	}
-	if err != nil {
-		return errno(err)
-	}
-	if !ok {
-		return syscall.ENOENT
-	}
-	m.parseAttr(&n, attr)
-	m.of.Update(inode, attr)
-	return 0
+	return errno(err)
 }
 
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {

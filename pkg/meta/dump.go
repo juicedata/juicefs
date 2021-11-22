@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 )
 
@@ -135,24 +134,6 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 			}
 		}
 		write(fmt.Sprintf("\n%s]", fieldPrefix))
-	}
-	if len(de.Entries) > 0 {
-		entries := make([]*DumpedEntry, 0, len(de.Entries))
-		for k, v := range de.Entries {
-			v.Name = k
-			entries = append(entries, v)
-		}
-		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-		write(fmt.Sprintf(",\n%s\"entries\": {", fieldPrefix))
-		for i, e := range entries {
-			if err = e.writeJSON(bw, depth+2); err != nil {
-				return err
-			}
-			if i != len(entries)-1 {
-				write(",")
-			}
-		}
-		write(fmt.Sprintf("\n%s}", fieldPrefix))
 	}
 	write(fmt.Sprintf("\n%s}", prefix))
 	return nil

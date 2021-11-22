@@ -101,6 +101,7 @@ func TestLoadDump(t *testing.T) {
 			t.Fatalf("dump meta: %s", err)
 		}
 	})
+
 	t.Run("Metadata Engine: SQLite", func(t *testing.T) {
 		os.Remove("test10.db")
 		m := testLoad(t, "sqlite3://test10.db", sampleFile)
@@ -113,7 +114,6 @@ func TestLoadDump(t *testing.T) {
 			t.Fatalf("dump meta: %s", err)
 		}
 	})
-
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
 		os.Remove("test10.db")
 		m := testLoad(t, "sqlite3://test10.db", sampleFile)
@@ -144,10 +144,9 @@ func TestLoadDump(t *testing.T) {
 			t.Fatalf("dump meta: %s", err)
 		}
 	})
-
 	t.Run("Metadata Engine: TKV --SubDir d1 ", func(t *testing.T) {
 		os.Remove(settingPath)
-		m := testLoad(t, "memkv://test/jfs", sampleFile)
+		m := testLoad(t, "memkv://user:passwd@test/jfs", sampleFile)
 		fp, err := os.OpenFile("tkv_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			t.Fatalf("open file: %s", "tkv_subdir.dump")
@@ -157,7 +156,6 @@ func TestLoadDump(t *testing.T) {
 		case *kvMeta:
 			r.root = 3
 		}
-
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
@@ -172,6 +170,14 @@ func TestLoadDump(t *testing.T) {
 		t.Fatalf("diff: %s", out)
 	}
 	cmd = exec.Command("diff", "redis.dump", "tkv.dump")
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("diff: %s", out)
+	}
+	cmd = exec.Command("diff", "redis_subdir.dump", "sqlite3_subdir.dump")
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("diff: %s", out)
+	}
+	cmd = exec.Command("diff", "redis_subdir.dump", "tkv_subdir.dump")
 	if out, err := cmd.Output(); err != nil {
 		t.Fatalf("diff: %s", out)
 	}
