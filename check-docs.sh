@@ -29,6 +29,6 @@ fi
 
 
 
-TRAVIS=true
+TRAVIS=false
 echo "after CI"
 echo $TRAVIS
