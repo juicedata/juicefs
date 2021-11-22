@@ -320,6 +320,9 @@ func (u *ufile) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func newUFile(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	return &ufile{RestfulStorage{DefaultObjectStorage{}, endpoint, accessKey, secretKey, "UCloud", ufileSigner}}, nil
 }
 

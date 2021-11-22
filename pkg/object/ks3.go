@@ -237,6 +237,9 @@ var ks3Regions = map[string]string{
 }
 
 func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	uri, _ := url.ParseRequestURI(endpoint)
 	ssl := strings.ToLower(uri.Scheme) == "https"
 	hostParts := strings.Split(uri.Host, ".")

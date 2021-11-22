@@ -155,6 +155,9 @@ func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
 }
 
 func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("gs://%s", endpoint)
+	}
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, errors.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)

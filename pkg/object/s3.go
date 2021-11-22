@@ -326,7 +326,7 @@ func parseRegion(endpoint string) string {
 }
 
 func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
-	if !strings.Contains(endpoint, "/") {
+	if !strings.Contains(endpoint, "://") {
 		if len(strings.Split(endpoint, ".")) > 1 && !strings.HasSuffix(endpoint, ".amazonaws.com") {
 			endpoint = fmt.Sprintf("http://%s", endpoint)
 		} else {

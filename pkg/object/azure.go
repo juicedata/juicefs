@@ -148,7 +148,7 @@ func autoWasbEndpoint(containerName, accountName, accountKey string, useHTTPS bo
 }
 
 func newWabs(endpoint, accountName, accountKey string) (ObjectStorage, error) {
-	if !strings.Contains(endpoint, "/") {
+	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
 	uri, err := url.ParseRequestURI(endpoint)

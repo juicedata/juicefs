@@ -149,6 +149,9 @@ func (c *mss) List(prefix, marker string, limit int64) ([]Object, error) {
 }
 
 func newMSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	qs := &mss{RestfulStorage{
 		endpoint:  endpoint,
 		accessKey: accessKey,

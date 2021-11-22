@@ -38,6 +38,9 @@ func (s *eos) String() string {
 }
 
 func newEos(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid endpoint %s: %s", endpoint, err)
