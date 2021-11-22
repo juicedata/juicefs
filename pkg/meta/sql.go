@@ -165,7 +165,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	m.baseMeta.incrCounter = m.incrCounter
 	m.baseMeta.cleanStaleSession = m.cleanStaleSession
-	m.baseMeta.getattr = m.GetAttr
+	m.baseMeta.getattr = m.getAttr
 	m.baseMeta.deleteInode = func(inode Ino) {
 		if err := m.deleteInode(inode, false); err == nil {
 			_ = m.txn(func(ses *xorm.Session) error {
@@ -183,6 +183,8 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m.baseMeta.deleteFile = m.deleteFile
 	m.baseMeta.mknod = m.mknod
+	m.baseMeta.lookup = m.lookup
+	m.baseMeta.readdir = m.Readdir
 	return m, err
 }
 
@@ -564,37 +566,7 @@ func (m *dbMeta) flushStats() {
 	}
 }
 
-func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	if inode == nil || attr == nil {
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	if name == ".." {
-		if parent == m.root {
-			name = "."
-		} else {
-			if st := m.GetAttr(ctx, parent, attr); st != 0 {
-				return st
-			}
-			if attr.Typ != TypeDirectory {
-				return syscall.ENOTDIR
-			}
-			*inode = attr.Parent
-			return m.GetAttr(ctx, *inode, attr)
-		}
-	}
-	if name == "." {
-		st := m.GetAttr(ctx, parent, attr)
-		if st != 0 {
-			return st
-		}
-		if attr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		*inode = parent
-		return 0
-	}
+func (m *dbMeta) lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	dbSession := m.engine.Table(&edge{})
 	if attr != nil {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
@@ -605,13 +577,6 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		return errno(err)
 	}
 	if !exist {
-		if m.conf.CaseInsensi {
-			// TODO: in SQL
-			if e := m.resolveCase(ctx, parent, name); e != nil {
-				*inode = e.Inode
-				return m.GetAttr(ctx, *inode, attr)
-			}
-		}
 		return syscall.ENOENT
 	}
 	*inode = nn.Inode
@@ -619,52 +584,15 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 	return 0
 }
 
-func (r *dbMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
-	return syscall.ENOTSUP
-}
-
-func (m *dbMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
-	if ctx.Uid() == 0 {
-		return 0
-	}
-
-	if attr == nil || !attr.Full {
-		if attr == nil {
-			attr = &Attr{}
-		}
-		err := m.GetAttr(ctx, inode, attr)
-		if err != 0 {
-			return err
-		}
-	}
-
-	mode := accessMode(attr, ctx.Uid(), ctx.Gid())
-	if mode&mmask != mmask {
-		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
-		return syscall.EACCES
-	}
-	return 0
-}
-
-func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	inode = m.checkRoot(inode)
-	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
-		return 0
-	}
-	defer timeit(time.Now())
+func (m *dbMeta) getAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	var n = node{Inode: inode}
 	ok, err := m.engine.Get(&n)
-	if err == nil && ok {
-		m.parseAttr(&n, attr)
-		m.of.Update(inode, attr)
-	} else if inode == 1 {
-		err = nil
-		attr.Typ = TypeDirectory
-		attr.Mode = 0777
-		attr.Nlink = 2
-		attr.Length = 4 << 10
-	} else if err == nil {
-		err = syscall.ENOENT
+	if err == nil {
+		if ok {
+			m.parseAttr(&n, attr)
+		} else {
+			err = syscall.ENOENT
+		}
 	}
 	return errno(err)
 }
@@ -945,16 +873,6 @@ func (m *dbMeta) readlink(inode Ino) ([]byte, error) {
 	return []byte(l.Target), nil
 }
 
-func (m *dbMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
-}
-
-func (m *dbMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
-}
-
 func (m *dbMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	// TODO in SQL
 	var entries []*Entry
@@ -1078,26 +996,6 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		m.updateStats(align4K(0), 1)
 	}
 	return errno(err)
-}
-
-func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
-}
-
-func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	if attr == nil {
-		attr = &Attr{}
-	}
-	err := m.mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
-	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
-		err = 0
-	}
-	if err == 0 && inode != nil {
-		m.of.Open(*inode, attr)
-	}
-	return err
 }
 
 func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {

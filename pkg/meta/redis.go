@@ -142,7 +142,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		return m.rdb.IncrBy(Background, name, v).Result()
 	}
 	m.baseMeta.cleanStaleSession = m.cleanStaleSession
-	m.baseMeta.getattr = m.GetAttr
+	m.baseMeta.getattr = m.getAttr
 	m.baseMeta.deleteInode = func(inode Ino) {
 		if err := m.deleteInode(inode, false); err == nil {
 			m.rdb.SRem(Background, m.sustained(m.sid), strconv.Itoa(int(inode)))
@@ -156,6 +156,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		m.deleteFile(inode, length, "")
 	}
 	m.baseMeta.mknod = m.mknod
+	m.baseMeta.readdir = m.Readdir
 	return m, err
 }
 
@@ -634,51 +635,10 @@ func (r *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 	return 0
 }
 
-func (r *redisMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
-	if ctx.Uid() == 0 {
-		return 0
-	}
-
-	if attr == nil || !attr.Full {
-		if attr == nil {
-			attr = &Attr{}
-		}
-		err := r.GetAttr(ctx, inode, attr)
-		if err != 0 {
-			return err
-		}
-	}
-
-	mode := accessMode(attr, ctx.Uid(), ctx.Gid())
-	if mode&mmask != mmask {
-		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
-		return syscall.EACCES
-	}
-	return 0
-}
-
-func (r *redisMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	var c context.Context = ctx
-	inode = r.checkRoot(inode)
-	if inode == 1 {
-		var cancel func()
-		c, cancel = context.WithTimeout(ctx, time.Millisecond*300)
-		defer cancel()
-	}
-	if r.conf.OpenCache > 0 && r.of.Check(inode, attr) {
-		return 0
-	}
-	defer timeit(time.Now())
-	a, err := r.rdb.Get(c, r.inodeKey(inode)).Bytes()
+func (r *redisMeta) getAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	a, err := r.rdb.Get(ctx, r.inodeKey(inode)).Bytes()
 	if err == nil {
 		r.parseAttr(a, attr)
-		r.of.Update(inode, attr)
-	} else if inode == 1 {
-		err = nil
-		attr.Typ = TypeDirectory
-		attr.Mode = 0777
-		attr.Nlink = 2
-		attr.Length = 4 << 10
 	}
 	return errno(err)
 }
@@ -1017,16 +977,6 @@ func (m *redisMeta) readlink(inode Ino) ([]byte, error) {
 	return m.rdb.Get(Background, m.symKey(inode)).Bytes()
 }
 
-func (r *redisMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return r.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
-}
-
-func (r *redisMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return r.mknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
-}
-
 func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
 	parent = r.checkRoot(parent)
 	if r.checkQuota(4<<10, 1) {
@@ -1136,26 +1086,6 @@ func (r *redisMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mod
 		})
 		return err
 	}, r.inodeKey(parent), r.entryKey(parent))
-}
-
-func (r *redisMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return r.mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
-}
-
-func (r *redisMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	if attr == nil {
-		attr = &Attr{}
-	}
-	err := r.mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
-	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
-		err = 0
-	}
-	if err == 0 && inode != nil {
-		r.of.Open(*inode, attr)
-	}
-	return err
 }
 
 func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {

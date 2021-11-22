@@ -17,6 +17,7 @@ package meta
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -57,6 +58,8 @@ type baseMeta struct {
 	deleteSliceDB     func(chunkid uint64, size uint32) error
 	deleteFile        func(inode Ino, length uint64)
 	mknod             func(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
+	readdir           func(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno
+	lookup            func(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 }
 
 func newBaseMeta(conf *Config) baseMeta {
@@ -210,6 +213,124 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 	return 0
 }
 
+func (m *baseMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
+	var entries []*Entry
+	_ = m.readdir(ctx, parent, 0, &entries)
+	for _, e := range entries {
+		n := string(e.Name)
+		if strings.EqualFold(name, n) {
+			return e
+		}
+	}
+	return nil
+}
+
+func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	if inode == nil || attr == nil {
+		return syscall.EINVAL // bad request
+	}
+	defer timeit(time.Now())
+	parent = m.checkRoot(parent)
+	if name == ".." {
+		if parent == m.root {
+			name = "."
+		} else {
+			if st := m.GetAttr(ctx, parent, attr); st != 0 {
+				return st
+			}
+			if attr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			*inode = attr.Parent
+			return m.GetAttr(ctx, *inode, attr)
+		}
+	}
+	if name == "." {
+		st := m.GetAttr(ctx, parent, attr)
+		if st != 0 {
+			return st
+		}
+		if attr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		*inode = parent
+		return 0
+	}
+	attr.Full = false
+	err := m.lookup(ctx, parent, name, inode, attr)
+	if err == syscall.ENOENT {
+		if m.conf.CaseInsensi {
+			if e := m.resolveCase(ctx, parent, name); e != nil {
+				*inode = e.Inode
+				return m.GetAttr(ctx, *inode, attr)
+			}
+		}
+		return syscall.ENOENT
+	}
+	if err != 0 {
+		return err
+	}
+	if attr.Full {
+		return 0
+	}
+	return m.GetAttr(ctx, *inode, attr)
+}
+
+func (r *baseMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
+func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
+	if ctx.Uid() == 0 {
+		return 0
+	}
+	if attr == nil || !attr.Full {
+		if attr == nil {
+			attr = &Attr{}
+		}
+		err := m.GetAttr(ctx, inode, attr)
+		if err != 0 {
+			return err
+		}
+	}
+	mode := accessMode(attr, ctx.Uid(), ctx.Gid())
+	if mode&mmask != mmask {
+		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
+		return syscall.EACCES
+	}
+	return 0
+}
+
+func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	inode = m.checkRoot(inode)
+	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
+		return 0
+	}
+	defer timeit(time.Now())
+	var err syscall.Errno
+	if inode == 1 {
+		e := utils.WithTimeout(func() error {
+			err = m.getattr(ctx, inode, attr)
+			return nil
+		}, time.Millisecond*300)
+		if e != nil {
+			err = syscall.EIO
+		}
+	} else {
+		err = m.getattr(ctx, inode, attr)
+	}
+	if err == 0 {
+		m.of.Update(inode, attr)
+	} else if err != 0 && inode == 1 {
+		err = 0
+		attr.Typ = TypeDirectory
+		attr.Mode = 0777
+		attr.Nlink = 2
+		attr.Length = 4 << 10
+	}
+	return err
+}
+
 func (m *baseMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
@@ -283,7 +404,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 	}
 	var err syscall.Errno
 	if attr != nil && !attr.Full {
-		err = m.getattr(ctx, inode, attr)
+		err = m.GetAttr(ctx, inode, attr)
 	}
 	if err == 0 {
 		m.of.Open(inode, attr)

@@ -87,7 +87,7 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 		return m.incrCounter(m.counterKey(name), v)
 	}
 	m.baseMeta.cleanStaleSession = m.cleanStaleSession
-	m.baseMeta.getattr = m.GetAttr
+	m.baseMeta.getattr = m.getAttr
 	m.baseMeta.deleteInode = func(inode Ino) {
 		if err := m.deleteInode(inode, false); err == nil {
 			_ = m.deleteKeys(m.sustainedKey(m.sid, inode))
@@ -99,6 +99,8 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m.baseMeta.deleteFile = m.deleteFile
 	m.baseMeta.mknod = m.mknod
+	m.baseMeta.readdir = m.Readdir
+	m.baseMeta.lookup = m.lookup
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
 }
@@ -729,98 +731,27 @@ func (m *kvMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	return nil
 }
 
-func (m *kvMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	if inode == nil || attr == nil {
-		return syscall.EINVAL // bad request
-	}
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	if name == ".." {
-		if parent == m.root {
-			name = "."
-		} else {
-			if st := m.GetAttr(ctx, parent, attr); st != 0 {
-				return st
-			}
-			if attr.Typ != TypeDirectory {
-				return syscall.ENOTDIR
-			}
-			*inode = attr.Parent
-			return m.GetAttr(ctx, *inode, attr)
-		}
-	}
-	if name == "." {
-		st := m.GetAttr(ctx, parent, attr)
-		if st != 0 {
-			return st
-		}
-		if attr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		*inode = parent
-		return 0
-	}
+func (m *kvMeta) lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	buf, err := m.get(m.entryKey(parent, name))
 	if err != nil {
 		return errno(err)
 	}
 	if buf == nil {
-		if m.conf.CaseInsensi {
-			if e := m.resolveCase(ctx, parent, name); e != nil {
-				*inode = e.Inode
-				return m.GetAttr(ctx, *inode, attr)
-			}
-		}
 		return syscall.ENOENT
 	}
 	_, foundIno := m.parseEntry(buf)
 	*inode = foundIno
-	return m.GetAttr(ctx, *inode, attr)
-}
-
-func (r *kvMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
-	return syscall.ENOTSUP
-}
-
-func (m *kvMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
-	if ctx.Uid() == 0 {
-		return 0
-	}
-	if attr == nil || !attr.Full {
-		if attr == nil {
-			attr = &Attr{}
-		}
-		err := m.GetAttr(ctx, inode, attr)
-		if err != 0 {
-			return err
-		}
-	}
-	mode := accessMode(attr, ctx.Uid(), ctx.Gid())
-	if mode&mmask != mmask {
-		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
-		return syscall.EACCES
-	}
 	return 0
 }
 
-func (m *kvMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	inode = m.checkRoot(inode)
-	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
-		return 0
-	}
-	defer timeit(time.Now())
+func (m *kvMeta) getAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	a, err := m.get(m.inodeKey(inode))
-	if err == nil && a != nil {
-		m.parseAttr(a, attr)
-		m.of.Update(inode, attr)
-	} else if inode == 1 {
-		err = nil
-		attr.Typ = TypeDirectory
-		attr.Mode = 0777
-		attr.Nlink = 2
-		attr.Length = 4 << 10
-	} else if err == nil {
-		err = syscall.ENOENT
+	if err == nil {
+		if a != nil {
+			m.parseAttr(a, attr)
+		} else {
+			err = syscall.ENOENT
+		}
 	}
 	return errno(err)
 }
