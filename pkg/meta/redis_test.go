@@ -57,6 +57,8 @@ func TestRedisClient(t *testing.T) {
 	m.(*redisMeta).conf.OpenCache = time.Second
 	m.(*redisMeta).of.expire = time.Second
 	testOpenCache(t, m)
+	m.(*redisMeta).conf.ReadOnly = true
+	testReadOnly(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -350,7 +352,7 @@ func testMetaClient(t *testing.T, m Meta) {
 
 	// data
 	var chunkid uint64
-	if st := m.Open(ctx, inode, 2, attr); st != 0 {
+	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != 0 {
 		t.Fatalf("open f: %s", st)
 	}
 	_ = m.Close(ctx, inode)
@@ -1025,7 +1027,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Setlk(ctx, inode, 1, false, syscall.F_WRLCK, 0x10000, 0x20000, 1); st != 0 {
 		t.Fatalf("plock wlock: %s", st)
 	}
-	if st := m.Open(ctx, inode, 2, attr); st != 0 {
+	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != 0 {
 		t.Fatalf("open f: %s", st)
 	}
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
@@ -1082,7 +1084,7 @@ func testOpenCache(t *testing.T, m Meta) {
 		t.Fatalf("create f: %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
-	if st := m.Open(ctx, inode, 2, attr); st != 0 {
+	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != 0 {
 		t.Fatalf("open f: %s", st)
 	}
 	defer m.Close(ctx, inode)
@@ -1103,5 +1105,25 @@ func testOpenCache(t *testing.T, m Meta) {
 	}
 	if attr.Uid != 1 {
 		t.Fatalf("attr uid should be 1: %+v", *attr)
+	}
+}
+
+func testReadOnly(t *testing.T, m Meta) {
+	ctx := Background
+	if err := m.NewSession(); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+
+	var inode Ino
+	var attr = &Attr{}
+	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &inode, attr); st != syscall.EROFS {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != syscall.EROFS {
+		t.Fatalf("create f: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != syscall.EROFS {
+		t.Fatalf("open f: %s", st)
 	}
 }

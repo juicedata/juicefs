@@ -61,6 +61,8 @@ func TestSQLiteClient(t *testing.T) {
 	m.(*dbMeta).conf.OpenCache = time.Second
 	m.(*dbMeta).of.expire = time.Second
 	testOpenCache(t, m)
+	m.(*dbMeta).conf.ReadOnly = true
+	testReadOnly(t, m)
 }
 
 func resetDB(m *dbMeta) {
@@ -100,6 +102,8 @@ func TestMySQLClient(t *testing.T) {
 	m.(*dbMeta).conf.OpenCache = time.Second
 	m.(*dbMeta).of.expire = time.Second
 	testOpenCache(t, m)
+	m.(*dbMeta).conf.ReadOnly = true
+	testReadOnly(t, m)
 }
 
 func TestPostgreSQLClient(t *testing.T) {
@@ -123,4 +127,6 @@ func TestPostgreSQLClient(t *testing.T) {
 	m.(*dbMeta).conf.OpenCache = time.Second
 	m.(*dbMeta).of.expire = time.Second
 	testOpenCache(t, m)
+	m.(*dbMeta).conf.ReadOnly = true
+	testReadOnly(t, m)
 }

@@ -42,6 +42,8 @@ func TestMemKVClient(t *testing.T) {
 	m.(*kvMeta).conf.OpenCache = time.Second
 	m.(*kvMeta).of.expire = time.Second
 	testOpenCache(t, m)
+	m.(*kvMeta).conf.ReadOnly = true
+	testReadOnly(t, m)
 }
 
 func TestMemKV(t *testing.T) {
