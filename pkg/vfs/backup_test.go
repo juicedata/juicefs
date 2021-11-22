@@ -18,9 +18,12 @@ package vfs
 import (
 	"testing"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/object"
+	osync "github.com/juicedata/juicefs/pkg/sync"
 )
 
-func TestFindDeletes(t *testing.T) {
+func TestRotate(t *testing.T) {
 	format := func(ts time.Time) string {
 		return "dump-" + ts.UTC().Format("2006-01-02-150405") + ".json.gz"
 	}
@@ -29,7 +32,7 @@ func TestFindDeletes(t *testing.T) {
 	objs := make([]string, 0, 25)
 	for cursor, i := now.AddDate(0, 0, -100), 0; i <= 200; i++ { // one backup for every half day
 		objs = append(objs, format(cursor))
-		toDel := findDeletes(objs, cursor)
+		toDel := rotate(objs, cursor)
 		for _, d := range toDel {
 			for j, k := range objs {
 				if k == d {
@@ -60,5 +63,21 @@ func TestFindDeletes(t *testing.T) {
 		if o != expect[i] {
 			t.Fatalf("obj %s != expect %s", o, expect[i])
 		}
+	}
+}
+
+func TestBackup(t *testing.T) {
+	v, blob := createTestVFS()
+	go Backup(v.Meta, blob, time.Millisecond*100)
+	time.Sleep(time.Millisecond * 100)
+
+	blob = object.WithPrefix(blob, "meta/")
+	kc, _ := osync.ListAll(blob, "", "")
+	var keys []string
+	for obj := range kc {
+		keys = append(keys, obj.Key())
+	}
+	if len(keys) < 1 {
+		t.Fatalf("there should be at least 1 backup file")
 	}
 }

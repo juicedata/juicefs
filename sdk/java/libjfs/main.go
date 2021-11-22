@@ -214,6 +214,7 @@ func freeHandle(fd int) {
 
 type javaConf struct {
 	MetaURL         string  `json:"meta"`
+	Bucket          string  `json:"bucket"`
 	ReadOnly        bool    `json:"readOnly"`
 	OpenCache       float64 `json:"openCache"`
 	BackupMeta      int64   `json:"backupMeta"`
@@ -362,6 +363,9 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			go metric.UpdateMetrics(m)
 		}
 
+		if jConf.Bucket != "" {
+			format.Bucket = jConf.Bucket
+		}
 		blob, err := createStorage(format)
 		if err != nil {
 			logger.Fatalf("object storage: %s", err)

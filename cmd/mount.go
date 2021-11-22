@@ -206,6 +206,9 @@ func mount(c *cli.Context) error {
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
+	if c.IsSet("bucket") {
+		format.Bucket = c.String("bucket")
+	}
 	blob, err := createStorage(format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
@@ -303,6 +306,10 @@ func clientFlags() []cli.Flag {
 		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	}
 	return []cli.Flag{
+		&cli.StringFlag{
+			Name:  "bucket",
+			Usage: "customized endpoint to access object store",
+		},
 		&cli.IntFlag{
 			Name:  "get-timeout",
 			Value: 60,

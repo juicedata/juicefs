@@ -41,12 +41,10 @@ func TestIterator(t *testing.T) {
 	ch, _ := ListAll(m, "a", "b")
 	keys := collectAll(ch)
 	if len(keys) != 3 {
-		t.Errorf("length should be 3, but got %d", len(keys))
-		t.FailNow()
+		t.Fatalf("length should be 3, but got %d", len(keys))
 	}
 	if !reflect.DeepEqual(keys, []string{"a", "aa", "b"}) {
-		t.Errorf("result wrong: %s", keys)
-		t.FailNow()
+		t.Fatalf("result wrong: %s", keys)
 	}
 
 	// Single object
@@ -55,8 +53,7 @@ func TestIterator(t *testing.T) {
 	ch, _ = ListAll(s, "", "")
 	keys = collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{"a"}) {
-		t.Errorf("result wrong: %s", keys)
-		t.FailNow()
+		t.Fatalf("result wrong: %s", keys)
 	}
 }
 
@@ -67,8 +64,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 	s, _ := object.CreateStorage("mem", "", "", "")
 	err := s.Put("abc", bytes.NewReader([]byte("abc")))
 	if err != nil {
-		t.Errorf("Put error: %q", err)
-		t.FailNow()
+		t.Fatalf("Put error: %q", err)
 	}
 
 	// Simulate command line prefix in SRC or DST
@@ -76,8 +72,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 	ch, _ := ListAll(s, "", "")
 	keys := collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{""}) {
-		t.Errorf("result wrong: %s", keys)
-		t.FailNow()
+		t.Fatalf("result wrong: %s", keys)
 	}
 }
 
@@ -110,11 +105,10 @@ func TestSync(t *testing.T) {
 
 	// Copy "a" from mem://a to mem://b
 	if err := Sync(a, b, config); err != nil {
-		t.FailNow()
+		t.Fatalf("sync: %s", err)
 	}
 	if copied != 1 {
-		t.Errorf("should copy 1 keys, but got %d", copied)
-		t.FailNow()
+		t.Fatalf("should copy 1 keys, but got %d", copied)
 	}
 
 	// Now a: {"a", "ab", "abc"}, b: {"a", "ba"}
@@ -124,8 +118,7 @@ func TestSync(t *testing.T) {
 	}
 	// 1 copy occured, `copied` incresed 1
 	if copied != 2 {
-		t.Errorf("should copy 2 keys, but got %d", copied)
-		t.FailNow()
+		t.Fatalf("should copy 2 keys, but got %d", copied)
 	}
 
 	// Now a: {"a", "ab", "abc", "ba"}, b: {"a", "ba"}
@@ -140,24 +133,17 @@ func TestSync(t *testing.T) {
 	}
 
 	if err := Sync(a, b, config); err != nil {
-		t.FailNow()
+		t.Fatalf("sync: %s", err)
 	}
 	// No copy occured, `copied` isn't change
 	if copied != 2 {
-		t.Errorf("should copy 2 keys, but got %d", copied)
-		t.FailNow()
+		t.Fatalf("should copy 2 keys, but got %d", copied)
 	}
 
 	// Test --force-update option
 	config.ForceUpdate = true
 	// Forcibly copy {"a", "ba"} from mem://a to mem://b.
-	// As mem:// doesn't allow overwrite, this call should fail and
-	// variable `failed` should be 2
-	if err := Sync(a, b, config); err == nil {
-		t.FailNow()
-	}
-	if failed != 2 {
-		t.Errorf("should fail to copy 2 keys, but got %d", failed)
-		t.FailNow()
+	if err := Sync(a, b, config); err != nil {
+		t.Fatalf("sync: %s", err)
 	}
 }
