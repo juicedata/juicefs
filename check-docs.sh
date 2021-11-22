@@ -22,7 +22,7 @@ fi
 changeFlag CHANGED_FILES
 
 function changeFlag() {
-  for CHANGED_FILE in $CHANGED_FILES; do
+  for CHANGED_FILE in $1; do
     if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
       SKIP_FLAG=false
       break
