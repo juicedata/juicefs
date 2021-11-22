@@ -2,10 +2,13 @@
 
 set -e
 
-CHANGED_FILES=`git diff --name-only main...${TRAVIS_COMMIT}`
+echo "travis branch"
+echo "TRAVIS_BRANCH"
+CHANGED_FILES=`git diff --name-only main...${TRAVIS_BRANCH}`
 echo $CHANGED_FILES
 DOCS_DIR="docs/.*"
 SKIP_FLAG=true
+
 
 
 for CHANGED_FILE in $CHANGED_FILES; do
