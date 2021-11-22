@@ -34,3 +34,9 @@ jobs:
         - echo $TRAVIS
         - echo "prepare TRAVIS"
       if: env(TRAVIS) = true
+
+    - stage: "skip"
+      before_install: skip
+      install: skip
+      script:
+        - echo "skip test"
