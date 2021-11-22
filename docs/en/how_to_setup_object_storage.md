@@ -7,7 +7,8 @@ By reading [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS St
 When creating a JuiceFS file system, setting up data storage generally involves the following options:
 
 - `--storage` Specify the storage service to be used by the file system, e.g. `--storage s3`
-- `--bucket` Specify the bucket endpoint of the object storage in a specific format, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`
+- `--bucket` Specify the bucket endpoint of the object storage in a specific format, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`.
+Since JuiceFS v1.0，some object storage (azure, bos, cos, obs, oss, s3)，can use like `--bucket {BUCKET_NAME}`, ``endpoint`` is not needed. To support this, ``access key`` and ``secret key`` may require some extra privilege。
 - `--access-key` and `--secret-key` is the authentication key used when accessing the object storage service. You need to create it on the corresponding cloud platform.
 
 For example, the following command uses Amazon S3 object storage to create a file system:
