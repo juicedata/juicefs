@@ -72,6 +72,8 @@ github.com/Xeoncross/go-aesctr-with-hmac v0.0.0-20200623134604-12b17a7ff502/go.m
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpHMqeKTCYkitsPqHNxTmd4SNR5r94FGM8=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d/go.mod h1:asat636LX7Bqt5lYEZ27JNDcqxfjdBQuJ/MM4CN/Lzo=
 github.com/afex/hystrix-go v0.0.0-20180502004556-fa1af6a1f4f5/go.mod h1:SkGFH1ia65gfNATL8TAiHDNxPzPdmEL5uirI2Uyuz6c=
+github.com/agiledragon/gomonkey/v2 v2.2.0 h1:QJWqpdEhGV/JJy70sZ/LDnhbSlMrqHAWHcNOjz1kyuI=
+github.com/agiledragon/gomonkey/v2 v2.2.0/go.mod h1:ap1AmDzcVOAz1YpeJ3TCzIgstoaWLA6jbbgxfB4w2iY=
 github.com/alecthomas/participle v0.2.1 h1:4AVLj1viSGa4LG5HDXKXrm5xRx19SB/rS/skPQB1Grw=
 github.com/alecthomas/participle v0.2.1/go.mod h1:SW6HZGeZgSIpcUWX3fXpfZhuaWHnmoD5KCVaqSaNTkk=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
