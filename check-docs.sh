@@ -2,6 +2,8 @@
 
 set -e
 
+echo "TRAVIS_COMMIT"
+echo $TRAVIS_COMMIT
 CHANGED_FILES=`git diff --name-only main...${TRAVIS_COMMIT}`
 echo $CHANGED_FILES
 DOCS_DIR="docs/.*"
@@ -23,6 +25,7 @@ done
 if [[ $SKIP_FLAG == True ]]; then
   TRAVIS=false
 fi
+
 
 
 TRAVIS=false
