@@ -43,10 +43,11 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 	}
 	m := meta.NewClient("memkv://", metaConf)
 	format := meta.Format{
-		Name:      "test",
-		UUID:      uuid.New().String(),
-		Storage:   "mem",
-		BlockSize: 4096,
+		Name:        "test",
+		UUID:        uuid.New().String(),
+		Storage:     "mem",
+		BlockSize:   4096,
+		Compression: "lz4",
 	}
 	err := m.Init(format, true)
 	if err != nil {
@@ -292,6 +293,46 @@ func TestVFSIO(t *testing.T) {
 	}
 	if n, e := v.CopyFileRange(ctx, fe.Inode, fh, 0, fe.Inode, fh2, 1<<20, 1<<10, 0); e != syscall.EACCES {
 		t.Fatalf("copyfilerange too big file: %s %d", e, n)
+	}
+
+	// sequntial write/read
+	for i := uint64(0); i < 1001; i++ {
+		if e := v.Write(ctx, fe.Inode, make([]byte, 128<<10), i*(128<<10), fh); e != 0 {
+			t.Fatalf("write big file: %s", e)
+		}
+	}
+	buf = make([]byte, 128<<10)
+	for i := uint64(0); i < 1000; i++ {
+		if n, e := v.Read(ctx, fe.Inode, buf, i*(128<<10), fh); e != 0 || n != (128<<10) {
+			t.Fatalf("read big file: %s", e)
+		} else {
+			for j := 0; j < 128<<10; j++ {
+				if buf[j] != 0 {
+					t.Fatalf("read big file: %d %d", j, buf[j])
+				}
+			}
+		}
+	}
+	// many small write
+	buf = make([]byte, 5<<10)
+	for j := range buf {
+		buf[j] = 1
+	}
+	for i := int64(32 - 1); i >= 0; i-- {
+		if e := v.Write(ctx, fe.Inode, buf, uint64(i)*(4<<10), fh); e != 0 {
+			t.Fatalf("write big file: %s", e)
+		}
+	}
+	time.Sleep(time.Millisecond * 1500) // wait for it to be flushed
+	buf = make([]byte, 128<<10)
+	if n, e := v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 || n != (128<<10) {
+		t.Fatalf("read big file: %s", e)
+	} else {
+		for j := range buf {
+			if buf[j] != 1 {
+				t.Fatalf("read big file: %d %d", j, buf[j])
+			}
+		}
 	}
 
 	v.Release(ctx, fe.Inode, fh)
