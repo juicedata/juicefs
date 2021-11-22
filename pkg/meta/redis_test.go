@@ -26,9 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func TestRedisClient(t *testing.T) {
@@ -852,15 +850,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		t.Fatalf("truncate file %s", st)
 	}
 	var total int64
-	process := mpb.New(mpb.WithWidth(32), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
-	bar := process.AddSpinner(total,
-		mpb.PrependDecorators(
-			// display our name with one space on the right
-			decor.Name("listed slices counter:", decor.WC{W: len("listed slices counter:") + 1, C: decor.DidentRight}),
-			decor.CurrentNoUnit("%d"),
-		),
-		mpb.BarFillerClearOnComplete(),
-	)
+	_, bar := utils.NewProgressCounter("listed slices counter:")
 	slices := make(map[Ino][]Slice)
 	m.ListSlices(ctx, slices, false, func() {
 		bar.SetTotal(total+2048, false)
