@@ -3,7 +3,7 @@
 set -e
 
 echo "travis branch"
-echo "TRAVIS_BRANCH"
+echo $TRAVIS_BRANCH
 CHANGED_FILES=`git diff --name-only main...${TRAVIS_BRANCH}`
 echo $CHANGED_FILES
 DOCS_DIR="docs/.*"
