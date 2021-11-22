@@ -1934,6 +1934,10 @@ func (r *redisMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) sysca
 	if r.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
+	if attr != nil {
+		// reset attr.Full to avoid mismatch between inode and attr
+		attr.Full = false
+	}
 	if r.conf.OpenCache > 0 && r.of.OpenCheck(inode, attr) {
 		return 0
 	}
