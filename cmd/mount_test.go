@@ -47,15 +47,8 @@ func Test_exposeMetrics(t *testing.T) {
 					return ""
 				}
 			})
-			isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, arg string) bool {
-				switch arg {
-				case "metrics":
-					return true
-				case "consul":
-					return false
-				default:
-					return false
-				}
+			isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, _ string) bool {
+				return false
 			})
 			defer stringPatches.Reset()
 			defer isSetPatches.Reset()
