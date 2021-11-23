@@ -13,18 +13,30 @@
     "Inodes": 0
   },
   "Counters": {
-    "usedSpace": 104873984,
-    "usedInodes": 5,
-    "nextInodes": 7,
+    "usedSpace": 104882176,
+    "usedInodes": 7,
+    "nextInodes": 27,
     "nextChunk": 7,
     "nextSession": 1,
     "nextCleanupSlices": 0
   },
   "Sustained": [],
-  "DelFiles": [],
+  "DelFiles": [
+    {
+      "inode": 23,
+      "length": 0,
+      "expire": 1637664458
+    }
+  ],
   "FSTree": {
-    "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1623746645,"ctime":1623746645,"atimensec":0,"mtimensec":0,"ctimensec":0,"nlink":3,"length":0},
+    "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1637664458,"ctime":1637664458,"atimensec":0,"mtimensec":0,"ctimensec":0,"nlink":4,"length":0},
+    "xattrs": [{"name":"lastBackup","value":"2021-11-23T18:29:54+08:00"}],
     "entries": {
+      "d": {
+        "attr": {"inode":25,"type":"directory","mode":493,"uid":1,"gid":0,"atime":1637664458,"mtime":1637664458,"ctime":1637664458,"atimensec":862381000,"mtimensec":862381000,"ctimensec":862381000,"nlink":2,"length":0},
+        "entries": {
+        }
+      },
       "d1": {
         "attr": {"inode":3,"type":"directory","mode":493,"uid":501,"gid":20,"atime":1623746591,"mtime":1623746610,"ctime":1623746610,"atimensec":959224000,"mtimensec":959224000,"ctimensec":959224000,"nlink":2,"length":0},
         "xattrs": [{"name":"dk","value":"dv"}],
@@ -54,6 +66,10 @@
       "s1": {
         "attr": {"inode":5,"type":"symlink","mode":420,"uid":501,"gid":20,"atime":1623746645,"mtime":1623746645,"ctime":1623746645,"atimensec":984144000,"mtimensec":984144000,"ctimensec":984144000,"nlink":1,"length":0},
         "symlink": "d1/f11"
+      },
+      "sd": {
+        "attr": {"inode":26,"type":"symlink","mode":420,"uid":1,"gid":0,"atime":1637664458,"mtime":1637664458,"ctime":1637664458,"atimensec":873647000,"mtimensec":873647000,"ctimensec":873647000,"nlink":1,"length":0},
+        "symlink": "d"
       }
     }
   }

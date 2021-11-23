@@ -42,7 +42,7 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
-	} else if len(entries) != 6 {
+	} else if len(entries) != 8 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	attr := &Attr{}
