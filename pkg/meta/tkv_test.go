@@ -46,6 +46,30 @@ func TestMemKVClient(t *testing.T) {
 	testReadOnly(t, m)
 }
 
+func TestTiKVClient(t *testing.T) {
+	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{MaxDeletes: 1})
+	if err != nil || m.Name() != "tikv" {
+		t.Fatalf("create meta: %s", err)
+	}
+
+	testMetaClient(t, m)
+	testTruncateAndDelete(t, m)
+	testRemove(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m)
+	testCopyFileRange(t, m)
+	testCloseSession(t, m)
+	m.(*kvMeta).conf.CaseInsensi = true
+	testCaseIncensi(t, m)
+	m.(*kvMeta).conf.OpenCache = time.Second
+	m.(*kvMeta).of.expire = time.Second
+	testOpenCache(t, m)
+	m.(*kvMeta).conf.ReadOnly = true
+	testReadOnly(t, m)
+}
+
 func TestMemKV(t *testing.T) {
 	c, _ := newTkvClient("memkv", "")
 	c = withPrefix(c, []byte("jfs"))
