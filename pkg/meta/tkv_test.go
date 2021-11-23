@@ -48,7 +48,7 @@ func TestMemKVClient(t *testing.T) {
 
 func TestTiKVClient(t *testing.T) {
 	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{MaxDeletes: 1})
-	if err != nil {
+	if err != nil || m.Name() != "tikv" {
 		t.Fatalf("create meta: %s", err)
 	}
 
