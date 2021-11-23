@@ -52,10 +52,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libtap-harness-archive-perl
+          cd /tmp/jfs/
           git clone https://github.com/pjd/pjdfstest.git
           cd pjdfstest
           autoreconf -ifs
           ./configure
-          pwd
-          cd /tmp/jfs/
-          sudo prove -rv /home/runner/work/juicefs/juicefs/pjdfstest/tests/
+          make pjdfstest
+          sudo prove -rv tests/
