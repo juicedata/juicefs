@@ -259,9 +259,11 @@ func (r *redisMeta) NewSession() error {
 }
 
 func (r *redisMeta) incrCounter(name string, v int64) (int64, error) {
-	switch name {
-	case "nextInode", "nextChunk", "nextSession":
-		name = strings.ToLower(name)
+	if name == "nextInode" || name == "nextChunk" {
+		// for nextinode, nextchunk
+		// the current one is already used
+		v, err := r.rdb.IncrBy(Background, strings.ToLower(name), v).Result()
+		return v + 1, err
 	}
 	return r.rdb.IncrBy(Background, name, v).Result()
 }
