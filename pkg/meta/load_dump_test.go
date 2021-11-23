@@ -87,16 +87,13 @@ func TestLoadDump(t *testing.T) {
 		}
 	})
 	t.Run("Metadata Engine: Redis; --SubDir d1 ", func(t *testing.T) {
-		m := testLoad(t, "redis://127.0.0.1/10", sampleFile)
+		testLoad(t, "redis://127.0.0.1/10", sampleFile)
 		fp, err := os.OpenFile("redis_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			t.Fatalf("open file: %s", "redis_subdir.dump")
 		}
 		defer fp.Close()
-		switch r := m.(type) {
-		case *redisMeta:
-			r.root = 3
-		}
+		m := NewClient("redis://127.0.0.1/10", &Config{Retries: 10, Strict: true, Subdir: "d1"})
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
@@ -116,16 +113,13 @@ func TestLoadDump(t *testing.T) {
 	})
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
 		os.Remove("test10.db")
-		m := testLoad(t, "sqlite3://test10.db", sampleFile)
+		testLoad(t, "sqlite3://test10.db", sampleFile)
 		fp, err := os.OpenFile("sqlite3_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			t.Fatalf("open file: %s", "sqlite3_subdir.dump")
 		}
 		defer fp.Close()
-		switch r := m.(type) {
-		case *dbMeta:
-			r.root = 3
-		}
+		m := NewClient("sqlite3://test10.db", &Config{Retries: 10, Strict: true, Subdir: "d1"})
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
@@ -134,7 +128,6 @@ func TestLoadDump(t *testing.T) {
 	t.Run("Metadata Engine: TKV", func(t *testing.T) {
 		os.Remove(settingPath)
 		m := testLoad(t, "memkv://test/jfs", sampleFile)
-		// m := testLoad(t, "tikv://127.0.0.1:2379/jfs", sampleFile)
 		fp, err := os.OpenFile("tkv.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			t.Fatalf("open file: %s", "tkv.dump")
