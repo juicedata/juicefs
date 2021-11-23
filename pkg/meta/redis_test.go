@@ -91,7 +91,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	switch r := m.(type) {
 	case *redisMeta:
-		if r.sid != uint64(ses[0].Sid) {
+		if r.sid != ses[0].Sid {
 			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
 		}
 		go r.cleanStaleSessions()

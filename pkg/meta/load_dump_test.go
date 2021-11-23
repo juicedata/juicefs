@@ -85,7 +85,7 @@ func TestLoadDump(t *testing.T) {
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
-		cmd := exec.Command("diff", "redis.dump", sampleFile)
+		cmd := exec.Command("diff", sampleFile, "redis.dump")
 		if out, err := cmd.Output(); err != nil {
 			t.Fatalf("diff: %s", out)
 		}
@@ -117,7 +117,7 @@ func TestLoadDump(t *testing.T) {
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
-		cmd := exec.Command("diff", "redis.dump", "sqlite3.dump")
+		cmd := exec.Command("diff", sampleFile, "sqlite3.dump")
 		if out, err := cmd.Output(); err != nil {
 			t.Fatalf("diff: %s", out)
 		}
@@ -155,7 +155,7 @@ func TestLoadDump(t *testing.T) {
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
-		cmd := exec.Command("diff", "redis.dump", "tkv.dump")
+		cmd := exec.Command("diff", sampleFile, "tkv.dump")
 		if out, err := cmd.Output(); err != nil {
 			t.Fatalf("diff: %s", out)
 		}
