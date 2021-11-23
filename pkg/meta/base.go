@@ -186,7 +186,6 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 	if err != nil {
 		inodes = atomic.LoadInt64(&m.usedInodes)
 	}
-	println("used", used, inodes, atomic.LoadInt64(&m.newSpace), atomic.LoadInt64(&m.newInodes))
 	used += atomic.LoadInt64(&m.newSpace)
 	inodes += atomic.LoadInt64(&m.newInodes)
 	if used < 0 {
@@ -353,7 +352,7 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	}
 	n := m.freeInodes.next
 	m.freeInodes.next++
-	if n == 1 {
+	for n <= 1 {
 		n = m.freeInodes.next
 		m.freeInodes.next++
 	}

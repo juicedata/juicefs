@@ -17,11 +17,13 @@
 package meta
 
 import (
+	"os"
 	"testing"
 	"time"
 )
 
 func TestMemKVClient(t *testing.T) {
+	_ = os.Remove(settingPath)
 	m, err := newKVMeta("memkv", "test/jfs", &Config{MaxDeletes: 1})
 	// newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{MaxDeletes: 1})
 	if err != nil || m.Name() != "memkv" {
