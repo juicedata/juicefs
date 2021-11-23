@@ -29,6 +29,7 @@ before_script:
   - psql -c 'create database test;' -U postgres
   - make
   - sudo make -C fstests setup
+  - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source .bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
 script:
   - make test
   - cat cov1.out >> coverage.txt
