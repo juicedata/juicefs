@@ -51,11 +51,11 @@ jobs:
       - name: Pjdfstest
         run: |
           sudo apt-get update
-          sudo apt-get -y install autoconf
           sudo apt-get install -y libtap-harness-archive-perl
-          cd /tmp/jfs/
           git clone https://github.com/pjd/pjdfstest.git
           cd pjdfstest
           autoreconf -ifs
           ./configure
-          sudo prove -rv tests/
+          pwd
+          cd /tmp/jfs/
+          sudo prove -rv /home/runner/work/juicefs/juicefs/pjdfstest/tests/
