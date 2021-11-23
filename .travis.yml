@@ -22,7 +22,7 @@ addons:
 before_install:
   - source ./check-changed.sh
   - if [ $SKIP_TEST == true ]; then exit 0; fi
-  - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source ~/.bash_rc && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+  - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
 
 install: true
 before_script:
