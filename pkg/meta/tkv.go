@@ -570,7 +570,11 @@ func (m *kvMeta) cleanStaleSession(sid uint64, sync bool) {
 					v := tx.get([]byte(k))
 					ls := unmarshalFlock(v)
 					delete(ls, o)
-					tx.set([]byte(k), marshalFlock(ls))
+					if len(ls) > 0 {
+						tx.set([]byte(k), marshalFlock(ls))
+					} else {
+						tx.dels([]byte(k))
+					}
 					return nil
 				})
 				if err != nil {
@@ -593,7 +597,11 @@ func (m *kvMeta) cleanStaleSession(sid uint64, sync bool) {
 					v := tx.get([]byte(k))
 					ls := unmarshalPlock(v)
 					delete(ls, o)
-					tx.set([]byte(k), marshalPlock(ls))
+					if len(ls) > 0 {
+						tx.set([]byte(k), marshalPlock(ls))
+					} else {
+						tx.dels([]byte(k))
+					}
 					return nil
 				})
 				if err != nil {
