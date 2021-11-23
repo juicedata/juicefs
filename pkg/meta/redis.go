@@ -2959,7 +2959,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 type redisSnap struct {
 	stringMap map[string]string            //i* s*
 	listMap   map[string][]string          //c*
-	hashMap   map[string]map[string]string //d* x*
+	hashMap   map[string]map[string]string //d*(included delfiles) x*
 }
 
 func (m *redisMeta) makeSnap() error {
@@ -3010,6 +3010,9 @@ func (m *redisMeta) makeSnap() error {
 	hashType := func(keys []string) error {
 		p := m.rdb.Pipeline()
 		for _, key := range keys {
+			if key == delfiles {
+				continue
+			}
 			p.HGetAll(ctx, key)
 		}
 		cmds, err := p.Exec(ctx)
