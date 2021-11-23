@@ -124,6 +124,9 @@ func (u *up) List(prefix, marker string, limit int64) ([]Object, error) {
 }
 
 func newUpyun(endpoint, user, passwd string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)

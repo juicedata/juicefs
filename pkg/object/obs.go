@@ -266,6 +266,9 @@ func autoOBSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 }
 
 func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid endpoint %s: %q", endpoint, err)

@@ -2,12 +2,12 @@
 
 By reading [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS Store Files](how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database.
 
-## Storage setting options
+## Storage options
 
 When creating a JuiceFS file system, setting up data storage generally involves the following options:
 
-- `--storage` Specify the storage service to be used by the file system, e.g. `--storage s3`
-- `--bucket` Specify the bucket endpoint of the object storage in a specific format, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`. If the object storage uses different endpoint in different environment, it could be specified by `--bucket` of mount command.
+- `--storage` specifies the storage service to be used by the file system, e.g. `--storage s3`.
+- `--bucket` specifies the bucket endpoint of the object storage in a specific format, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`. For the specific format of the `--bucket` option for each object storage, please refer to [the following document](#supported-object-storage). Some object storage services (such as S3, OSS, etc.) also support the omission of endpoint, such as `--bucket myjuicefs`. If the object storage uses different endpoint in different environment, it could be specified by `--bucket` option when mount file system.
 - `--access-key` and `--secret-key` is the authentication key used when accessing the object storage service. You need to create it on the corresponding cloud platform. When the object storage can be accessed based on other authentication methods, these can be left empty.
 
 For example, the following command uses Amazon S3 object storage to create a file system:
