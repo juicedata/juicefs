@@ -170,7 +170,7 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 
 func newWebDAV(endpoint, user, passwd string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
-		endpoint = fmt.Sprintf("https://%s", endpoint)
+		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
