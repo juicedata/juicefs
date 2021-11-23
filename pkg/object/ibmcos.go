@@ -223,6 +223,9 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func newIBMCOS(endpoint, apiKey, serviceInstanceID string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	uri, _ := url.ParseRequestURI(endpoint)
 	hostParts := strings.Split(uri.Host, ".")
 	bucket := hostParts[0]

@@ -56,6 +56,9 @@ func (s *oos) List(prefix, marker string, limit int64) ([]Object, error) {
 }
 
 func newOOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)

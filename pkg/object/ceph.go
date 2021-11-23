@@ -199,6 +199,9 @@ func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
 }
 
 func newCeph(endpoint, cluster, user string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("ceph://%s", endpoint)
+	}
 	uri, err := url.ParseRequestURI(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)

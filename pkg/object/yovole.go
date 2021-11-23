@@ -123,6 +123,9 @@ func (u *yovole) List(prefix, marker string, limit int64) ([]Object, error) {
 }
 
 func newYovole(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("https://%s", endpoint)
+	}
 	return &yovole{RestfulStorage{DefaultObjectStorage{}, endpoint, accessKey, secretKey, "YCS1", yovoleSigner}}, nil
 }
 
