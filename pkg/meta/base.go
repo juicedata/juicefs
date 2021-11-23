@@ -26,6 +26,26 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
+const (
+	inodeBatch   = 100
+	chunkIDBatch = 1000
+)
+
+type engine interface {
+	incrCounter(name string, value int64) (int64, error)
+
+	doCleanStaleSession(sid uint64)
+	doDeleteSustainedInode(sid uint64, inode Ino) error
+	doDeleteFileData(inode Ino, length uint64)
+	doDeleteSlice(chunkid uint64, size uint32) error
+
+	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
+	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
+	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
+	doReadlink(ctx Context, inode Ino) ([]byte, error)
+	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno
+}
+
 type baseMeta struct {
 	sync.Mutex
 	conf *Config
@@ -49,17 +69,7 @@ type baseMeta struct {
 	freeInodes freeID
 	freeChunks freeID
 
-	// virtual methods
-	incrCounter       func(name string, v int64) (int64, error)
-	cleanStaleSession func(sid uint64, force bool)
-	getattr           func(ctx Context, inode Ino, attr *Attr) syscall.Errno
-	deleteInode       func(inode Ino)
-	readlink          func(inode Ino) ([]byte, error)
-	deleteSliceDB     func(chunkid uint64, size uint32) error
-	deleteFile        func(inode Ino, length uint64)
-	mknod             func(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
-	readdir           func(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno
-	lookup            func(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
+	en engine
 }
 
 func newBaseMeta(conf *Config) baseMeta {
@@ -110,16 +120,16 @@ func (m *baseMeta) CloseSession() error {
 	m.Lock()
 	m.umounting = true
 	m.Unlock()
-	m.cleanStaleSession(m.sid, true)
+	m.en.doCleanStaleSession(m.sid)
 	return nil
 }
 
 func (m *baseMeta) refreshUsage() {
 	for {
-		if v, err := m.incrCounter(usedSpace, 0); err == nil {
+		if v, err := m.en.incrCounter(usedSpace, 0); err == nil {
 			atomic.StoreInt64(&m.usedSpace, v)
 		}
-		if v, err := m.incrCounter(totalInodes, 0); err == nil {
+		if v, err := m.en.incrCounter(totalInodes, 0); err == nil {
 			atomic.StoreInt64(&m.usedInodes, v)
 		}
 		time.Sleep(time.Second * 10)
@@ -142,14 +152,14 @@ func (m *baseMeta) flushStats() {
 	for {
 		newSpace := atomic.SwapInt64(&m.newSpace, 0)
 		if newSpace != 0 {
-			if _, err := m.incrCounter(usedSpace, newSpace); err != nil {
+			if _, err := m.en.incrCounter(usedSpace, newSpace); err != nil {
 				logger.Warnf("update space stats: %s", err)
 				m.updateStats(newSpace, 0)
 			}
 		}
 		newInodes := atomic.SwapInt64(&m.newInodes, 0)
 		if newInodes != 0 {
-			if _, err := m.incrCounter(totalInodes, newInodes); err != nil {
+			if _, err := m.en.incrCounter(totalInodes, newInodes); err != nil {
 				logger.Warnf("update inodes stats: %s", err)
 				m.updateStats(0, newInodes)
 			}
@@ -163,19 +173,20 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 	var used, inodes int64
 	var err error
 	err = utils.WithTimeout(func() error {
-		used, err = m.incrCounter(usedSpace, 0)
+		used, err = m.en.incrCounter(usedSpace, 0)
 		return err
 	}, time.Millisecond*150)
 	if err != nil {
 		used = atomic.LoadInt64(&m.usedSpace)
 	}
 	err = utils.WithTimeout(func() error {
-		inodes, err = m.incrCounter(totalInodes, 0)
+		inodes, err = m.en.incrCounter(totalInodes, 0)
 		return err
 	}, time.Millisecond*150)
 	if err != nil {
 		inodes = atomic.LoadInt64(&m.usedInodes)
 	}
+	println("used", used, inodes, atomic.LoadInt64(&m.newSpace), atomic.LoadInt64(&m.newInodes))
 	used += atomic.LoadInt64(&m.newSpace)
 	inodes += atomic.LoadInt64(&m.newInodes)
 	if used < 0 {
@@ -215,7 +226,7 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 
 func (m *baseMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	var entries []*Entry
-	_ = m.readdir(ctx, parent, 0, &entries)
+	_ = m.en.doReaddir(ctx, parent, 0, &entries)
 	for _, e := range entries {
 		n := string(e.Name)
 		if strings.EqualFold(name, n) {
@@ -257,7 +268,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		return 0
 	}
 	attr.Full = false
-	err := m.lookup(ctx, parent, name, inode, attr)
+	err := m.en.doLookup(ctx, parent, name, inode, attr)
 	if err == syscall.ENOENT {
 		if m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -310,23 +321,21 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	var err syscall.Errno
 	if inode == 1 {
 		e := utils.WithTimeout(func() error {
-			err = m.getattr(ctx, inode, attr)
+			err = m.en.doGetAttr(ctx, inode, attr)
 			return nil
 		}, time.Millisecond*300)
-		if e != nil {
-			err = syscall.EIO
+		if e != nil || err != 0 {
+			err = 0
+			attr.Typ = TypeDirectory
+			attr.Mode = 0777
+			attr.Nlink = 2
+			attr.Length = 4 << 10
 		}
 	} else {
-		err = m.getattr(ctx, inode, attr)
+		err = m.en.doGetAttr(ctx, inode, attr)
 	}
 	if err == 0 {
 		m.of.Update(inode, attr)
-	} else if err != 0 && inode == 1 {
-		err = 0
-		attr.Typ = TypeDirectory
-		attr.Mode = 0777
-		attr.Nlink = 2
-		attr.Length = 4 << 10
 	}
 	return err
 }
@@ -335,21 +344,25 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeInodes.next >= m.freeInodes.maxid {
-		v, err := m.incrCounter("nextInode", 100)
+		v, err := m.en.incrCounter("nextInode", inodeBatch)
 		if err != nil {
 			return 0, err
 		}
-		m.freeInodes.next = uint64(v) - 100
+		m.freeInodes.next = uint64(v) - inodeBatch
 		m.freeInodes.maxid = uint64(v)
 	}
 	n := m.freeInodes.next
 	m.freeInodes.next++
+	if n == 1 {
+		n = m.freeInodes.next
+		m.freeInodes.next++
+	}
 	return Ino(n), nil
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
+	return m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
 }
 
 func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -357,7 +370,7 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 	if attr == nil {
 		attr = &Attr{}
 	}
-	err := m.mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
+	err := m.en.doMknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
 	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		err = 0
 	}
@@ -369,12 +382,12 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
+	return m.en.doMknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
+	return m.en.doMknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
 }
 
 func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
@@ -383,7 +396,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		return 0
 	}
 	defer timeit(time.Now())
-	target, err := m.readlink(inode)
+	target, err := m.en.doReadlink(ctx, inode)
 	if err != nil {
 		return errno(err)
 	}
@@ -398,6 +411,9 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
+	}
+	if attr != nil {
+		attr.Full = false
 	}
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
@@ -417,15 +433,15 @@ func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 	return 0
 }
 
-func (m *baseMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
+func (m *baseMeta) NewChunk(ctx Context, chunkid *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeChunks.next >= m.freeChunks.maxid {
-		v, err := m.incrCounter("nextChunk", 1000)
+		v, err := m.en.incrCounter("nextChunk", chunkIDBatch)
 		if err != nil {
 			return errno(err)
 		}
-		m.freeChunks.next = uint64(v) - 1000
+		m.freeChunks.next = uint64(v) - chunkIDBatch
 		m.freeChunks.maxid = uint64(v)
 	}
 	*chunkid = m.freeChunks.next
@@ -439,7 +455,9 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		defer m.Unlock()
 		if m.removedFiles[inode] {
 			delete(m.removedFiles, inode)
-			go m.deleteInode(inode)
+			go func() {
+				_ = m.en.doDeleteSustainedInode(m.sid, inode)
+			}()
 		}
 	}
 	return 0
@@ -451,7 +469,7 @@ func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 		m.removedFiles[inode] = true
 		m.Unlock()
 	} else {
-		go m.deleteFile(inode, length)
+		go m.en.doDeleteFileData(inode, length)
 	}
 }
 
@@ -465,9 +483,34 @@ func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
 	if err != nil {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	} else {
-		err := m.deleteSliceDB(chunkid, size)
+		err := m.en.doDeleteSlice(chunkid, size)
 		if err != nil {
 			logger.Errorf("delete slice %d: %s", chunkid, err)
 		}
 	}
+}
+
+func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+	inode = m.checkRoot(inode)
+	var attr Attr
+	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
+		return err
+	}
+	defer timeit(time.Now())
+	if inode == m.root {
+		attr.Parent = m.root
+	}
+	*entries = []*Entry{
+		{
+			Inode: inode,
+			Name:  []byte("."),
+			Attr:  &Attr{Typ: TypeDirectory},
+		},
+	}
+	*entries = append(*entries, &Entry{
+		Inode: attr.Parent,
+		Name:  []byte(".."),
+		Attr:  &Attr{Typ: TypeDirectory},
+	})
+	return m.en.doReaddir(ctx, inode, plus, entries)
 }

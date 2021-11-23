@@ -360,7 +360,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("open f: %s", st)
 	}
 	_ = m.Close(ctx, inode)
-	if st := m.NewChunk(ctx, inode, 0, 0, &chunkid); st != 0 {
+	if st := m.NewChunk(ctx, &chunkid); st != 0 {
 		t.Fatalf("write chunk: %s", st)
 	}
 	var s = Slice{Chunkid: chunkid, Size: 100, Len: 100}
@@ -780,11 +780,11 @@ func testCompaction(t *testing.T, m Meta) {
 
 	// random write
 	var chunkid uint64
-	m.NewChunk(ctx, inode, 0, 0, &chunkid)
+	m.NewChunk(ctx, &chunkid)
 	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Chunkid: chunkid, Size: 64 << 20, Len: 64 << 20})
-	m.NewChunk(ctx, inode, 0, 0, &chunkid)
+	m.NewChunk(ctx, &chunkid)
 	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Chunkid: chunkid, Size: 8, Len: 8})
-	m.NewChunk(ctx, inode, 0, 0, &chunkid)
+	m.NewChunk(ctx, &chunkid)
 	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Chunkid: chunkid, Size: 8, Len: 8})
 	var cs1 []Slice
 	_ = m.Read(ctx, inode, 1, &cs1)
@@ -804,7 +804,7 @@ func testCompaction(t *testing.T, m Meta) {
 	var size uint32 = 100000
 	for i := 0; i < 200; i++ {
 		var chunkid uint64
-		m.NewChunk(ctx, inode, 0, 0, &chunkid)
+		m.NewChunk(ctx, &chunkid)
 		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: chunkid, Size: size, Len: size}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
@@ -871,7 +871,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 			defer g.Done()
 			for j := 0; j < 100; j++ {
 				var chunkid uint64
-				m.NewChunk(ctx, inode, indx, 0, &chunkid)
+				m.NewChunk(ctx, &chunkid)
 				var slice = Slice{Chunkid: chunkid, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
@@ -905,7 +905,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 	defer m.Unlink(ctx, 1, "f")
 	var cid uint64
-	if st := m.NewChunk(ctx, inode, 0, 100, &cid); st != 0 {
+	if st := m.NewChunk(ctx, &cid); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
 	if st := m.Write(ctx, inode, 0, 100, Slice{cid, 100, 0, 100}); st != 0 {
