@@ -12,7 +12,7 @@ on:
       - 'docs/**'
 
 jobs:
-  ltp:
+  install_ltp:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -53,6 +53,20 @@ jobs:
           make
           sudo make install
           cd /opt/ltp
+
+  ltp_fs:
+    runs-on: ubuntu-latest
+    needs: [install_ltp]
+    steps:
+      - name: ltp_fs
+        run: |
           sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
           sudo ./runltp -d /tmp/jfs -f fs
+
+  ltp_syscalls:
+    runs-on: ubuntu-latest
+    needs: [ install_ltp ]
+    steps:
+      - name: ltp_syscalls
+        run: |
           sudo ./runltp -d /tmp/jfs -f syscalls
