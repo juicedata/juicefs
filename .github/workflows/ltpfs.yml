@@ -55,4 +55,8 @@ jobs:
           cd /opt/ltp
           sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
           sudo sed -i 's/^gf[0-9]\{2\}.*//g' runtest/fs
+          sudo sed -i 's/^rwtest[0-9]\{2\}.*//g' runtest/fs
+          sudo sed -i 's/^iogen01.*//g' runtest/fs
+          sudo sed -i 's/^quota_remount_test01.*//g' runtest/fs
+          sudo sed -i 's/^isofs.*//g' runtest/fs
           sudo ./runltp -d /tmp/jfs -f fs

@@ -29,7 +29,11 @@ jobs:
           fetch-depth: 1
 
       - name: Build linux target
-        run: make juicefs
+        run: |
+          make juicefs
+          cp .github/workflows/rm_syscalls_list /tmp/
+          cp .github/workflows/rm_syscalls_list.sh /tmp/
+
 
       - name: Run Redis
         run: |
@@ -53,4 +57,5 @@ jobs:
           make
           sudo make install
           cd /opt/ltp
+          /tmp/rm_syscalls_list.sh /tmp/rm_syscalls_list runtest/syscalls
           sudo ./runltp -d /tmp/jfs -f syscalls
