@@ -399,7 +399,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 	if err != nil {
 		return errno(err)
 	}
-	if target == nil {
+	if len(target) == 0 {
 		return syscall.ENOENT
 	}
 	*path = target
@@ -411,13 +411,11 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
-	if attr != nil {
-		attr.Full = false
-	}
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}
 	var err syscall.Errno
+	// attr may be valid, see fs.Open()
 	if attr != nil && !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}

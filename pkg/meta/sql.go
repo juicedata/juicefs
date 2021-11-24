@@ -850,14 +850,8 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 func (m *dbMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
 	var l = symlink{Inode: inode}
-	ok, err := m.db.Get(&l)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, syscall.ENOENT
-	}
-	return []byte(l.Target), nil
+	_, err := m.db.Get(&l)
+	return []byte(l.Target), err
 }
 
 func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
