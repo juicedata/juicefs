@@ -12,7 +12,7 @@ on:
       - 'docs/**'
 
 jobs:
-  install_ltp:
+  ltp:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -44,7 +44,7 @@ jobs:
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs &
 
-      - name: Ltp
+      - name: Install LTP
         run: |
           git clone https://github.com/linux-test-project/ltp.git
           cd ltp
@@ -54,19 +54,10 @@ jobs:
           sudo make install
           cd /opt/ltp
 
-  ltp_fs:
-    runs-on: ubuntu-latest
-    needs: [install_ltp]
-    steps:
-      - name: ltp_fs
+      - name: LTP_FSX_IO
         run: |
           sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
-          sudo ./runltp -d /tmp/jfs -f fs
 
-  ltp_syscalls:
-    runs-on: ubuntu-latest
-    needs: [ install_ltp ]
-    steps:
-      - name: ltp_syscalls
+      - name: LTP_FS
         run: |
-          sudo ./runltp -d /tmp/jfs -f syscalls
+          sudo ./runltp -d /tmp/jfs -f fs
