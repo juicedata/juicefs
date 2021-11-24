@@ -10,18 +10,10 @@ fi
 echo $CHANGED_FILES
 DOCS_DIR="docs/"
 SKIP_TEST=true
-
 CHANGED_FILES="docs/zh/cache_management.md"
-echo $CHANGED_FILES
-for CHANGED_FILE in CHANGED_FILES; do
-  echo "CHANGED_FILE"
-  echo $CHANGED_FILE
+for CHANGED_FILE in $CHANGED_FILES; do
   if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
     SKIP_TEST=false
     break
   fi
 done
-
-
-echo "SKIP_TEST"
-echo $SKIP_TEST
