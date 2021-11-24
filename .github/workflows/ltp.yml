@@ -1,0 +1,58 @@
+name: "ltp"
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+
+jobs:
+  ltp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs &
+
+      - name: Ltp
+        run: |
+          git clone https://github.com/linux-test-project/ltp.git
+          cd ltp
+          make autotools
+          ./configure
+          make
+          sudo make install
+          cd /opt/ltp
+          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
+          sudo ./runltp -d /tmp/jfs -f fs
+          sudo ./runltp -d /tmp/jfs -f syscalls
