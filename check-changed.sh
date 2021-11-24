@@ -17,3 +17,5 @@ for CHANGED_FILE in CHANGED_FILES; do
     break
   fi
 done
+
+SKIP_TEST=true
