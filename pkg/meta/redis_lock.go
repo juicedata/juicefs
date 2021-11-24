@@ -101,7 +101,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 				*start = l.start
 				*end = l.end
 				sid, _ := strconv.Atoi(strings.Split(k, "_")[0])
-				if int64(sid) == r.sid {
+				if uint64(sid) == r.sid {
 					*pid = l.pid
 				} else {
 					*pid = 0

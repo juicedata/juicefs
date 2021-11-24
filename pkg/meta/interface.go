@@ -281,7 +281,7 @@ type Meta interface {
 	// Read returns the list of slices on the given chunk.
 	Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno
 	// NewChunk returns a new id for new data.
-	NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno
+	NewChunk(ctx Context, chunkid *uint64) syscall.Errno
 	// Write put a slice of data on top of the given chunk.
 	Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno
 	// InvalidateChunkCache invalidate chunk cache

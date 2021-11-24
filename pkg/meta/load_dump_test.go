@@ -85,6 +85,10 @@ func TestLoadDump(t *testing.T) {
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
+		cmd := exec.Command("diff", sampleFile, "redis.dump")
+		if out, err := cmd.Output(); err != nil {
+			t.Fatalf("diff: %s", out)
+		}
 	})
 	t.Run("Metadata Engine: Redis; --SubDir d1 ", func(t *testing.T) {
 		testLoad(t, "redis://127.0.0.1/10", sampleFile)
@@ -110,6 +114,10 @@ func TestLoadDump(t *testing.T) {
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
+		cmd := exec.Command("diff", sampleFile, "sqlite3.dump")
+		if out, err := cmd.Output(); err != nil {
+			t.Fatalf("diff: %s", out)
+		}
 	})
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
 		os.Remove("test10.db")
@@ -123,6 +131,10 @@ func TestLoadDump(t *testing.T) {
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
+		cmd := exec.Command("diff", "redis_subdir.dump", "sqlite3_subdir.dump")
+		if out, err := cmd.Output(); err != nil {
+			t.Fatalf("diff: %s", out)
+		}
 	})
 
 	t.Run("Metadata Engine: TKV", func(t *testing.T) {
@@ -135,6 +147,10 @@ func TestLoadDump(t *testing.T) {
 		defer fp.Close()
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
+		}
+		cmd := exec.Command("diff", sampleFile, "tkv.dump")
+		if out, err := cmd.Output(); err != nil {
+			t.Fatalf("diff: %s", out)
 		}
 	})
 	t.Run("Metadata Engine: TKV --SubDir d1 ", func(t *testing.T) {
@@ -152,26 +168,9 @@ func TestLoadDump(t *testing.T) {
 		if err = m.DumpMeta(fp); err != nil {
 			t.Fatalf("dump meta: %s", err)
 		}
+		cmd := exec.Command("diff", "redis_subdir.dump", "tkv_subdir.dump")
+		if out, err := cmd.Output(); err != nil {
+			t.Fatalf("diff: %s", out)
+		}
 	})
-
-	cmd := exec.Command("diff", "redis.dump", sampleFile)
-	if out, err := cmd.Output(); err != nil {
-		t.Fatalf("diff: %s", out)
-	}
-	cmd = exec.Command("diff", "redis.dump", "sqlite3.dump")
-	if out, err := cmd.Output(); err != nil {
-		t.Fatalf("diff: %s", out)
-	}
-	cmd = exec.Command("diff", "redis.dump", "tkv.dump")
-	if out, err := cmd.Output(); err != nil {
-		t.Fatalf("diff: %s", out)
-	}
-	cmd = exec.Command("diff", "redis_subdir.dump", "sqlite3_subdir.dump")
-	if out, err := cmd.Output(); err != nil {
-		t.Fatalf("diff: %s", out)
-	}
-	cmd = exec.Command("diff", "redis_subdir.dump", "tkv_subdir.dump")
-	if out, err := cmd.Output(); err != nil {
-		t.Fatalf("diff: %s", out)
-	}
 }

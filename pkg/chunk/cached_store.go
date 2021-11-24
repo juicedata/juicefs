@@ -227,7 +227,7 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			tmp.Acquire()
 		}
 		tmp.Acquire()
-		err := withTimeout(func() error {
+		err := utils.WithTimeout(func() error {
 			defer tmp.Release()
 			return c.store.load(key, tmp, c.store.shouldCache(blockSize), false)
 		}, c.store.conf.GetTimeout)
@@ -375,26 +375,9 @@ func (c *wChunk) WriteAt(p []byte, off int64) (n int, err error) {
 	return n, nil
 }
 
-func withTimeout(f func() error, timeout time.Duration) error {
-	var done = make(chan int, 1)
-	var t = time.NewTimer(timeout)
-	var err error
-	go func() {
-		err = f()
-		done <- 1
-	}()
-	select {
-	case <-done:
-		t.Stop()
-	case <-t.C:
-		err = fmt.Errorf("timeout after %s", timeout)
-	}
-	return err
-}
-
 func (c *wChunk) put(key string, p *Page) error {
 	p.Acquire()
-	return withTimeout(func() error {
+	return utils.WithTimeout(func() error {
 		defer p.Release()
 		st := time.Now()
 		err := c.store.storage.Put(key, bytes.NewReader(p.Data))
