@@ -11,6 +11,7 @@ echo $CHANGED_FILES
 DOCS_DIR="docs/"
 SKIP_TEST=true
 
+CHANGED_FILES="docs/zh/cache_management.md"
 for CHANGED_FILE in CHANGED_FILES; do
   if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
     SKIP_TEST=false
@@ -18,4 +19,6 @@ for CHANGED_FILE in CHANGED_FILES; do
   fi
 done
 
-SKIP_TEST=true
+
+echo "SKIP_TEST"
+echo $SKIP_TEST
