@@ -16,9 +16,11 @@
 package utils
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/vbauerster/mpb/v7"
@@ -109,4 +111,21 @@ func GetLocalIp(address string) (string, error) {
 		return "", err
 	}
 	return ip, nil
+}
+
+func WithTimeout(f func() error, timeout time.Duration) error {
+	var done = make(chan int, 1)
+	var t = time.NewTimer(timeout)
+	var err error
+	go func() {
+		err = f()
+		done <- 1
+	}()
+	select {
+	case <-done:
+		t.Stop()
+	case <-t.C:
+		err = fmt.Errorf("timeout after %s", timeout)
+	}
+	return err
 }

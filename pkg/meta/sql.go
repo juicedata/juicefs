@@ -129,29 +129,8 @@ type delfile struct {
 }
 
 type dbMeta struct {
-	sync.Mutex
-	conf   *Config
-	fmt    Format
-	engine *xorm.Engine
-
-	sid          uint64
-	of           *openfiles
-	root         Ino
-	removedFiles map[Ino]bool
-	compacting   map[uint64]bool
-	deleting     chan int
-	symlinks     *sync.Map
-	msgCallbacks *msgCallbacks
-	newSpace     int64
-	newInodes    int64
-	usedSpace    int64
-	usedInodes   int64
-	umounting    bool
-
-	freeMu     sync.Mutex
-	freeInodes freeID
-	freeChunks freeID
-
+	baseMeta
+	db   *xorm.Engine
 	snap *dbSnap
 }
 type dbSnap struct {
@@ -179,48 +158,38 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
-	if conf.Retries == 0 {
-		conf.Retries = 30
-	}
 	m := &dbMeta{
-		conf:         conf,
-		engine:       engine,
-		of:           newOpenFiles(conf.OpenCache),
-		removedFiles: make(map[Ino]bool),
-		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, conf.MaxDeletes),
-		symlinks:     &sync.Map{},
-		msgCallbacks: &msgCallbacks{
-			callbacks: make(map[uint32]MsgCallback),
-		},
+		baseMeta: newBaseMeta(conf),
+		db:       engine,
 	}
-	m.root = 1
+	m.en = m
 	m.root, err = lookupSubdir(m, conf.Subdir)
+
 	return m, err
 }
 
-func (m *dbMeta) checkRoot(inode Ino) Ino {
-	if inode == 1 {
-		return m.root
-	}
-	return inode
+func (m *dbMeta) Name() string {
+	return m.db.DriverName()
 }
 
-func (m *dbMeta) Name() string {
-	return m.engine.DriverName()
+func (m *dbMeta) doDeleteSlice(chunkid uint64, size uint32) error {
+	return m.txn(func(ses *xorm.Session) error {
+		_, err := ses.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
+		return err
+	})
 }
 
 func (m *dbMeta) updateCollate() {
-	if r, err := m.engine.Query("show create table jfs_edge"); err != nil {
+	if r, err := m.db.Query("show create table jfs_edge"); err != nil {
 		logger.Fatalf("show table jfs_edge: %s", err.Error())
 	} else {
 		createTable := string(r[0]["Create Table"])
 		// the default collate is case-insensitive
 		if !strings.Contains(createTable, "SET utf8mb4 COLLATE utf8mb4_bin") {
-			_, err := m.engine.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
+			_, err := m.db.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
 			if err != nil && strings.Contains(err.Error(), "Error 1071: Specified key was too long; max key length is 767 bytes") {
 				// MySQL 5.6 supports key length up to 767 bytes, so reduce the length of name to 190 chars
-				_, err = m.engine.Exec("alter table jfs_edge modify name varchar (190) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
+				_, err = m.db.Exec("alter table jfs_edge modify name varchar (190) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
 			}
 			if err != nil {
 				logger.Fatalf("update collate: %s", err)
@@ -230,27 +199,27 @@ func (m *dbMeta) updateCollate() {
 }
 
 func (m *dbMeta) Init(format Format, force bool) error {
-	if err := m.engine.Sync2(new(setting), new(counter)); err != nil {
+	if err := m.db.Sync2(new(setting), new(counter)); err != nil {
 		logger.Fatalf("create table setting, counter: %s", err)
 	}
-	if err := m.engine.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
+	if err := m.db.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
 		logger.Fatalf("create table node, edge, symlink, xattr: %s", err)
 	}
-	if err := m.engine.Sync2(new(chunk), new(chunkRef)); err != nil {
+	if err := m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
 		logger.Fatalf("create table chunk, chunk_ref: %s", err)
 	}
-	if err := m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
+	if err := m.db.Sync2(new(session), new(sustained), new(delfile)); err != nil {
 		logger.Fatalf("create table session, sustaind, delfile: %s", err)
 	}
-	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
+	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("create table flock, plock: %s", err)
 	}
-	if m.engine.DriverName() == "mysql" {
+	if m.db.DriverName() == "mysql" {
 		m.updateCollate()
 	}
 
 	var s = setting{Name: "format"}
-	ok, err := m.engine.Get(&s)
+	ok, err := m.db.Get(&s)
 	if err != nil {
 		return err
 	}
@@ -318,7 +287,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 
 func (m *dbMeta) Load() (*Format, error) {
 	var s = setting{Name: "format"}
-	ok, err := m.engine.Get(&s)
+	ok, err := m.db.Get(&s)
 	if err == nil && !ok {
 		err = fmt.Errorf("database is not formatted")
 	}
@@ -338,14 +307,14 @@ func (m *dbMeta) NewSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
-	if err := m.engine.Sync2(new(session)); err != nil { // old client has no info field
+	if err := m.db.Sync2(new(session)); err != nil { // old client has no info field
 		return err
 	}
-	if m.engine.DriverName() == "mysql" {
+	if m.db.DriverName() == "mysql" {
 		m.updateCollate()
 	}
 	// update the owner from uint64 to int64
-	if err := m.engine.Sync2(new(flock), new(plock)); err != nil {
+	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("update table flock, plock: %s", err)
 	}
 
@@ -355,14 +324,14 @@ func (m *dbMeta) NewSession() error {
 	if err != nil {
 		return fmt.Errorf("json: %s", err)
 	}
-	var v uint64
+	var v int64
 	for {
 		v, err = m.incrCounter("nextSession", 1)
 		if err != nil {
 			return fmt.Errorf("create session: %s", err)
 		}
 		err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session{v, time.Now().Unix(), data})
+			return mustInsert(s, &session{uint64(v), time.Now().Unix(), data})
 		})
 		if err == nil {
 			break
@@ -375,7 +344,7 @@ func (m *dbMeta) NewSession() error {
 			return fmt.Errorf("insert new session: %s", err)
 		}
 	}
-	m.sid = v
+	m.sid = uint64(v)
 	logger.Debugf("session is %d", m.sid)
 
 	go m.refreshSession()
@@ -383,40 +352,6 @@ func (m *dbMeta) NewSession() error {
 	go m.cleanupSlices()
 	go m.flushStats()
 	return nil
-}
-
-func (m *dbMeta) CloseSession() error {
-	if m.conf.ReadOnly {
-		return nil
-	}
-	m.Lock()
-	m.umounting = true
-	m.Unlock()
-	m.cleanStaleSession(m.sid, true)
-	return nil
-}
-
-func (m *dbMeta) refreshUsage() {
-	for {
-		var c = counter{Name: "usedSpace"}
-		_, err := m.engine.Get(&c)
-		if err == nil {
-			atomic.StoreInt64(&m.usedSpace, c.Value)
-		}
-		c = counter{Name: "totalInodes"}
-		_, err = m.engine.Get(&c)
-		if err == nil {
-			atomic.StoreInt64(&m.usedInodes, c.Value)
-		}
-		time.Sleep(time.Second * 10)
-	}
-}
-
-func (r *dbMeta) checkQuota(size, inodes int64) bool {
-	if size > 0 && r.fmt.Capacity > 0 && atomic.LoadInt64(&r.usedSpace)+atomic.LoadInt64(&r.newSpace)+size > int64(r.fmt.Capacity) {
-		return true
-	}
-	return inodes > 0 && r.fmt.Inodes > 0 && atomic.LoadInt64(&r.usedInodes)+atomic.LoadInt64(&r.newInodes)+inodes > int64(r.fmt.Inodes)
 }
 
 func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
@@ -435,7 +370,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 			frows []flock
 			prows []plock
 		)
-		if err := m.engine.Find(&srows, &sustained{Sid: s.Sid}); err != nil {
+		if err := m.db.Find(&srows, &sustained{Sid: s.Sid}); err != nil {
 			return nil, fmt.Errorf("find sustained %d: %s", s.Sid, err)
 		}
 		s.Sustained = make([]Ino, 0, len(srows))
@@ -443,7 +378,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 			s.Sustained = append(s.Sustained, srow.Inode)
 		}
 
-		if err := m.engine.Find(&frows, &flock{Sid: s.Sid}); err != nil {
+		if err := m.db.Find(&frows, &flock{Sid: s.Sid}); err != nil {
 			return nil, fmt.Errorf("find flock %d: %s", s.Sid, err)
 		}
 		s.Flocks = make([]Flock, 0, len(frows))
@@ -451,7 +386,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 			s.Flocks = append(s.Flocks, Flock{frow.Inode, uint64(frow.Owner), string(frow.Ltype)})
 		}
 
-		if err := m.engine.Find(&prows, &plock{Sid: s.Sid}); err != nil {
+		if err := m.db.Find(&prows, &plock{Sid: s.Sid}); err != nil {
 			return nil, fmt.Errorf("find plock %d: %s", s.Sid, err)
 		}
 		s.Plocks = make([]Plock, 0, len(prows))
@@ -464,7 +399,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 
 func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
 	row := session{Sid: sid}
-	ok, err := m.engine.Get(&row)
+	ok, err := m.db.Get(&row)
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +411,7 @@ func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
 
 func (m *dbMeta) ListSessions() ([]*Session, error) {
 	var rows []session
-	err := m.engine.Find(&rows)
+	err := m.db.Find(&rows)
 	if err != nil {
 		return nil, err
 	}
@@ -492,23 +427,7 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 	return sessions, nil
 }
 
-func (m *dbMeta) OnMsg(mtype uint32, cb MsgCallback) {
-	m.msgCallbacks.Lock()
-	defer m.msgCallbacks.Unlock()
-	m.msgCallbacks.callbacks[mtype] = cb
-}
-
-func (m *dbMeta) newMsg(mid uint32, args ...interface{}) error {
-	m.msgCallbacks.Lock()
-	cb, ok := m.msgCallbacks.callbacks[mid]
-	m.msgCallbacks.Unlock()
-	if ok {
-		return cb(args...)
-	}
-	return fmt.Errorf("message %d is not supported", mid)
-}
-
-func (m *dbMeta) incrCounter(name string, batch int64) (uint64, error) {
+func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
 	var v int64
 	err := m.txn(func(s *xorm.Session) error {
 		var c = counter{Name: name}
@@ -517,26 +436,12 @@ func (m *dbMeta) incrCounter(name string, batch int64) (uint64, error) {
 			return err
 		}
 		v = c.Value + batch
-		_, err = s.Cols("value").Update(&counter{Value: v}, &counter{Name: name})
+		if batch > 0 {
+			_, err = s.Cols("value").Update(&counter{Value: v}, &counter{Name: name})
+		}
 		return err
 	})
-	return uint64(v), err
-}
-
-func (m *dbMeta) nextInode() (Ino, error) {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-	if m.freeInodes.next >= m.freeInodes.maxid {
-		v, err := m.incrCounter("nextInode", 100)
-		if err != nil {
-			return 0, err
-		}
-		m.freeInodes.next = v - 100
-		m.freeInodes.maxid = v
-	}
-	n := m.freeInodes.next
-	m.freeInodes.next++
-	return Ino(n), nil
+	return v, err
 }
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
@@ -570,7 +475,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 	}
 	// TODO: add other retryable errors here
 	msg := err.Error()
-	switch m.engine.DriverName() {
+	switch m.db.DriverName() {
 	case "sqlite3":
 		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
 	case "mysql":
@@ -591,7 +496,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	var err error
 	for i := 0; i < 50; i++ {
-		_, err = m.engine.Transaction(func(s *xorm.Session) (interface{}, error) {
+		_, err = m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
 			s.ForUpdate()
 			return nil, f(s)
 		})
@@ -628,14 +533,9 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Full = true
 }
 
-func (m *dbMeta) updateStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.newSpace, space)
-	atomic.AddInt64(&m.newInodes, inodes)
-}
-
 func (m *dbMeta) flushStats() {
 	var inttype = "BIGINT"
-	if m.engine.DriverName() == "mysql" {
+	if m.db.DriverName() == "mysql" {
 		inttype = "SIGNED"
 	}
 	for {
@@ -655,92 +555,8 @@ func (m *dbMeta) flushStats() {
 	}
 }
 
-func (m *dbMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	defer timeit(time.Now())
-	usedSpace := atomic.LoadInt64(&m.newSpace)
-	inodes := atomic.LoadInt64(&m.newInodes)
-	var c = counter{Name: "usedSpace"}
-	_, err := m.engine.Get(&c)
-	if err != nil {
-		logger.Warnf("get used space: %s", err)
-	} else {
-		usedSpace += c.Value
-	}
-	if usedSpace < 0 {
-		usedSpace = 0
-	}
-	usedSpace = ((usedSpace >> 16) + 1) << 16 // aligned to 64K
-	if m.fmt.Capacity > 0 {
-		*totalspace = m.fmt.Capacity
-		if *totalspace < uint64(usedSpace) {
-			*totalspace = uint64(usedSpace)
-		}
-	} else {
-		*totalspace = 1 << 50
-		for *totalspace*8 < uint64(usedSpace)*10 {
-			*totalspace *= 2
-		}
-	}
-
-	*availspace = *totalspace - uint64(usedSpace)
-	c = counter{Name: "totalInodes"}
-	_, err = m.engine.Get(&c)
-	if err != nil {
-		logger.Warnf("get total inodes: %s", err)
-	} else {
-		inodes += c.Value
-	}
-	if inodes < 0 {
-		inodes = 0
-	}
-	*iused = uint64(inodes)
-	if m.fmt.Inodes > 0 {
-		if *iused > m.fmt.Inodes {
-			*iavail = 0
-		} else {
-			*iavail = m.fmt.Inodes - *iused
-		}
-	} else {
-		*iavail = 10 << 20
-		for *iused*10 > (*iused+*iavail)*8 {
-			*iavail *= 2
-		}
-	}
-	return 0
-}
-
-func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	if inode == nil || attr == nil {
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	if name == ".." {
-		if parent == m.root {
-			name = "."
-		} else {
-			if st := m.GetAttr(ctx, parent, attr); st != 0 {
-				return st
-			}
-			if attr.Typ != TypeDirectory {
-				return syscall.ENOTDIR
-			}
-			*inode = attr.Parent
-			return m.GetAttr(ctx, *inode, attr)
-		}
-	}
-	if name == "." {
-		st := m.GetAttr(ctx, parent, attr)
-		if st != 0 {
-			return st
-		}
-		if attr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		*inode = parent
-		return 0
-	}
-	dbSession := m.engine.Table(&edge{})
+func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+	dbSession := m.db.Table(&edge{})
 	if attr != nil {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
 	}
@@ -750,13 +566,6 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		return errno(err)
 	}
 	if !exist {
-		if m.conf.CaseInsensi {
-			// TODO: in SQL
-			if e := m.resolveCase(ctx, parent, name); e != nil {
-				*inode = e.Inode
-				return m.GetAttr(ctx, *inode, attr)
-			}
-		}
 		return syscall.ENOENT
 	}
 	*inode = nn.Inode
@@ -764,50 +573,11 @@ func (m *dbMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 	return 0
 }
 
-func (r *dbMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
-	return syscall.ENOTSUP
-}
-
-func (m *dbMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
-	if ctx.Uid() == 0 {
-		return 0
-	}
-
-	if attr == nil || !attr.Full {
-		if attr == nil {
-			attr = &Attr{}
-		}
-		err := m.GetAttr(ctx, inode, attr)
-		if err != 0 {
-			return err
-		}
-	}
-
-	mode := accessMode(attr, ctx.Uid(), ctx.Gid())
-	if mode&mmask != mmask {
-		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
-		return syscall.EACCES
-	}
-	return 0
-}
-
-func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	inode = m.checkRoot(inode)
-	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
-		return 0
-	}
-	defer timeit(time.Now())
+func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	var n = node{Inode: inode}
-	ok, err := m.engine.Get(&n)
-	if err == nil && ok {
+	ok, err := m.db.Get(&n)
+	if ok {
 		m.parseAttr(&n, attr)
-		m.of.Update(inode, attr)
-	} else if inode == 1 {
-		err = nil
-		attr.Typ = TypeDirectory
-		attr.Mode = 0777
-		attr.Nlink = 2
-		attr.Length = 4 << 10
 	} else if err == nil {
 		err = syscall.ENOENT
 	}
@@ -895,7 +665,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {
 	var r sql.Result
 	var err error
-	driver := m.engine.DriverName()
+	driver := m.db.DriverName()
 	if driver == "sqlite3" || driver == "postgres" {
 		r, err = s.Exec("update jfs_chunk set slices=slices || ? where inode=? AND indx=?", buf, inode, indx)
 	} else {
@@ -1078,49 +848,13 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	return errno(err)
 }
 
-func (m *dbMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
-	if target, ok := m.symlinks.Load(inode); ok {
-		*path = target.([]byte)
-		return 0
-	}
-	defer timeit(time.Now())
+func (m *dbMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
 	var l = symlink{Inode: inode}
-	ok, err := m.engine.Get(&l)
-	if err != nil {
-		return errno(err)
-	}
-	if !ok {
-		return syscall.ENOENT
-	}
-	*path = []byte(l.Target)
-	m.symlinks.Store(inode, []byte(l.Target))
-	return 0
+	_, err := m.db.Get(&l)
+	return []byte(l.Target), err
 }
 
-func (m *dbMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
-}
-
-func (m *dbMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
-}
-
-func (m *dbMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
-	// TODO in SQL
-	var entries []*Entry
-	_ = m.Readdir(ctx, parent, 0, &entries)
-	for _, e := range entries {
-		n := string(e.Name)
-		if strings.EqualFold(name, n) {
-			return e
-		}
-	}
-	return nil
-}
-
-func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
 	if m.checkQuota(4<<10, 1) {
 		return syscall.ENOSPC
 	}
@@ -1230,26 +964,6 @@ func (m *dbMeta) mknod(ctx Context, parent Ino, name string, _type uint8, mode, 
 		m.updateStats(align4K(0), 1)
 	}
 	return errno(err)
-}
-
-func (m *dbMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	return m.mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
-}
-
-func (m *dbMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	if attr == nil {
-		attr = &Attr{}
-	}
-	err := m.mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
-	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
-		err = 0
-	}
-	if err == 0 && inode != nil {
-		m.of.Open(*inode, attr)
-	}
-	return err
 }
 
 func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
@@ -1363,13 +1077,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	})
 	if err == nil {
 		if n.Type == TypeFile && n.Nlink == 0 {
-			if opened {
-				m.Lock()
-				m.removedFiles[Ino(n.Inode)] = true
-				m.Unlock()
-			} else {
-				go m.deleteFile(n.Inode, n.Length)
-			}
+			m.fileDeleted(opened, n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1688,13 +1396,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	})
 	if err == nil && !exchange {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
-			if opened {
-				m.Lock()
-				m.removedFiles[dino] = true
-				m.Unlock()
-			} else {
-				go m.deleteFile(dino, dn.Length)
-			}
+			m.fileDeleted(opened, dino, dn.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1760,23 +1462,8 @@ func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) s
 	}))
 }
 
-func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
-	inode = m.checkRoot(inode)
-	var attr Attr
-	eno := m.GetAttr(ctx, inode, &attr)
-	if eno != 0 {
-		return eno
-	}
-	if inode == m.root {
-		attr.Parent = m.root
-	}
-	var pattr Attr
-	eno = m.GetAttr(ctx, attr.Parent, &pattr)
-	if eno != 0 {
-		return eno
-	}
-	defer timeit(time.Now())
-	dbSession := m.engine.Table(&edge{})
+func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+	dbSession := m.db.Table(&edge{})
 	if plus != 0 {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
 	}
@@ -1784,18 +1471,6 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	if err := dbSession.Find(&nodes, &edge{Parent: inode}); err != nil {
 		return errno(err)
 	}
-
-	*entries = make([]*Entry, 0, 2+len(nodes))
-	*entries = append(*entries, &Entry{
-		Inode: inode,
-		Name:  []byte("."),
-		Attr:  &attr,
-	})
-	*entries = append(*entries, &Entry{
-		Inode: attr.Parent,
-		Name:  []byte(".."),
-		Attr:  &pattr,
-	})
 	for _, n := range nodes {
 		entry := &Entry{
 			Inode: n.Inode,
@@ -1812,13 +1487,13 @@ func (m *dbMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) 
 	return 0
 }
 
-func (m *dbMeta) cleanStaleSession(sid uint64, sync bool) {
+func (m *dbMeta) doCleanStaleSession(sid uint64) {
 	// release locks
-	_, _ = m.engine.Delete(flock{Sid: sid})
-	_, _ = m.engine.Delete(plock{Sid: sid})
+	_, _ = m.db.Delete(flock{Sid: sid})
+	_, _ = m.db.Delete(plock{Sid: sid})
 
 	var s = sustained{Sid: sid}
-	rows, err := m.engine.Rows(&s)
+	rows, err := m.db.Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale session %d: %s", sid, err)
 		return
@@ -1834,14 +1509,9 @@ func (m *dbMeta) cleanStaleSession(sid uint64, sync bool) {
 
 	done := true
 	for _, inode := range inodes {
-		if err := m.deleteInode(inode, sync); err != nil {
+		if err := m.doDeleteSustainedInode(sid, inode); err != nil {
 			logger.Errorf("Failed to delete inode %d: %s", inode, err)
 			done = false
-		} else {
-			_ = m.txn(func(ses *xorm.Session) error {
-				_, err = ses.Delete(&sustained{Sid: sid, Inode: inode})
-				return err
-			})
 		}
 	}
 	if done {
@@ -1855,7 +1525,7 @@ func (m *dbMeta) cleanStaleSession(sid uint64, sync bool) {
 
 func (m *dbMeta) cleanStaleSessions() {
 	var s session
-	rows, err := m.engine.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Rows(&s)
+	rows, err := m.db.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Rows(&s)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -1868,7 +1538,7 @@ func (m *dbMeta) cleanStaleSessions() {
 	}
 	rows.Close()
 	for _, sid := range ids {
-		m.cleanStaleSession(sid, false)
+		m.doCleanStaleSession(sid)
 	}
 }
 
@@ -1898,7 +1568,7 @@ func (m *dbMeta) refreshSession() {
 	}
 }
 
-func (m *dbMeta) deleteInode(inode Ino, sync bool) error {
+func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var n = node{Inode: inode}
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
@@ -1912,59 +1582,19 @@ func (m *dbMeta) deleteInode(inode Ino, sync bool) error {
 		if err = mustInsert(s, &delfile{inode, n.Length, time.Now().Unix()}); err != nil {
 			return err
 		}
+		_, err = s.Delete(&sustained{sid, inode})
+		if err != nil {
+			return err
+		}
 		newSpace = -align4K(n.Length)
 		_, err = s.Delete(&node{Inode: inode})
 		return err
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		if sync {
-			m.deleteFile(inode, n.Length)
-		} else {
-			go m.deleteFile(inode, n.Length)
-		}
+		go m.doDeleteFileData(inode, n.Length)
 	}
 	return err
-}
-
-func (m *dbMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
-		return syscall.EROFS
-	}
-	if attr != nil {
-		// reset attr.Full to avoid mismatch between inode and attr
-		attr.Full = false
-	}
-	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
-		return 0
-	}
-	var err syscall.Errno
-	if attr != nil && !attr.Full {
-		err = m.GetAttr(ctx, inode, attr)
-	}
-	if err == 0 {
-		m.of.Open(inode, attr)
-	}
-	return err
-}
-
-func (m *dbMeta) Close(ctx Context, inode Ino) syscall.Errno {
-	if m.of.Close(inode) {
-		m.Lock()
-		defer m.Unlock()
-		if m.removedFiles[inode] {
-			delete(m.removedFiles, inode)
-			go func() {
-				if err := m.deleteInode(inode, false); err == nil {
-					_ = m.txn(func(ses *xorm.Session) error {
-						_, err := ses.Delete(&sustained{m.sid, inode})
-						return err
-					})
-				}
-			}()
-		}
-	}
-	return 0
 }
 
 func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
@@ -1979,7 +1609,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	}
 	defer timeit(time.Now())
 	var c chunk
-	_, err := m.engine.Where("inode=? and indx=?", inode, indx).Get(&c)
+	_, err := m.db.Where("inode=? and indx=?", inode, indx).Get(&c)
 	if err != nil {
 		return errno(err)
 	}
@@ -1992,27 +1622,6 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	if !m.conf.ReadOnly && (len(c.Slices)/sliceBytes >= 5 || len(*chunks) >= 5) {
 		go m.compactChunk(inode, indx, false)
 	}
-	return 0
-}
-
-func (m *dbMeta) NewChunk(ctx Context, inode Ino, indx uint32, offset uint32, chunkid *uint64) syscall.Errno {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-	if m.freeChunks.next >= m.freeChunks.maxid {
-		v, err := m.incrCounter("nextChunk", 1000)
-		if err != nil {
-			return errno(err)
-		}
-		m.freeChunks.next = v - 1000
-		m.freeChunks.maxid = v
-	}
-	*chunkid = m.freeChunks.next
-	m.freeChunks.next++
-	return 0
-}
-
-func (m *dbMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
-	m.of.InvalidateChunk(inode, indx)
 	return 0
 }
 
@@ -2216,7 +1825,7 @@ func (m *dbMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
 		var d delfile
-		rows, err := m.engine.Where("expire < ?", time.Now().Add(-time.Hour).Unix()).Rows(&d)
+		rows, err := m.db.Where("expire < ?", time.Now().Add(-time.Hour).Unix()).Rows(&d)
 		if err != nil {
 			continue
 		}
@@ -2229,7 +1838,7 @@ func (m *dbMeta) cleanupDeletedFiles() {
 		rows.Close()
 		for _, f := range fs {
 			logger.Debugf("cleanup chunks of inode %d with %d bytes", f.Inode, f.Length)
-			m.deleteFile(f.Inode, f.Length)
+			m.doDeleteFileData(f.Inode, f.Length)
 		}
 	}
 }
@@ -2240,7 +1849,7 @@ func (m *dbMeta) cleanupSlices() {
 
 		// once per hour
 		var c = counter{Name: "nextCleanupSlices"}
-		_, err := m.engine.Get(&c)
+		_, err := m.db.Get(&c)
 		if err != nil {
 			continue
 		}
@@ -2254,7 +1863,7 @@ func (m *dbMeta) cleanupSlices() {
 		})
 
 		var ck chunkRef
-		rows, err := m.engine.Where("refs <= 0").Rows(&ck)
+		rows, err := m.db.Where("refs <= 0").Rows(&ck)
 		if err != nil {
 			continue
 		}
@@ -2269,26 +1878,6 @@ func (m *dbMeta) cleanupSlices() {
 			if ck.Refs <= 0 {
 				m.deleteSlice(ck.Chunkid, ck.Size)
 			}
-		}
-	}
-}
-
-func (m *dbMeta) deleteSlice(chunkid uint64, size uint32) {
-	if m.conf.MaxDeletes == 0 {
-		return
-	}
-	m.deleting <- 1
-	defer func() { <-m.deleting }()
-	err := m.newMsg(DeleteChunk, chunkid, size)
-	if err != nil {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
-	} else {
-		err = m.txn(func(ses *xorm.Session) error {
-			_, err = ses.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
-			return err
-		})
-		if err != nil {
-			logger.Errorf("delete slice %d: %s", chunkid, err)
 		}
 	}
 }
@@ -2323,7 +1912,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 	}
 	for _, s := range ss {
 		var ref = chunkRef{Chunkid: s.chunkid}
-		ok, err := m.engine.Get(&ref)
+		ok, err := m.db.Get(&ref)
 		if err == nil && ok && ref.Refs <= 0 {
 			m.deleteSlice(s.chunkid, s.size)
 		}
@@ -2331,9 +1920,9 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 	return nil
 }
 
-func (m *dbMeta) deleteFile(inode Ino, length uint64) {
+func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	var c = chunk{Inode: inode}
-	rows, err := m.engine.Rows(&c)
+	rows, err := m.db.Rows(&c)
 	if err != nil {
 		return
 	}
@@ -2351,7 +1940,7 @@ func (m *dbMeta) deleteFile(inode Ino, length uint64) {
 			return
 		}
 	}
-	_, _ = m.engine.Delete(delfile{Inode: inode})
+	_, _ = m.db.Delete(delfile{Inode: inode})
 }
 
 func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
@@ -2373,7 +1962,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	var c chunk
-	_, err := m.engine.Where("inode=? and indx=?", inode, indx).Get(&c)
+	_, err := m.db.Where("inode=? and indx=?", inode, indx).Get(&c)
 	if err != nil {
 		return
 	}
@@ -2387,7 +1976,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	var chunkid uint64
-	st := m.NewChunk(Background, 0, 0, 0, &chunkid)
+	st := m.NewChunk(Background, &chunkid)
 	if st != 0 {
 		return
 	}
@@ -2428,7 +2017,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// there could be false-negative that the compaction is successful, double-check
 	if err != nil {
 		var c = chunkRef{Chunkid: chunkid}
-		ok, e := m.engine.Get(&c)
+		ok, e := m.db.Get(&c)
 		if e == nil {
 			if ok {
 				err = nil
@@ -2446,7 +2035,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.of.InvalidateChunk(inode, indx)
 		for _, s := range ss {
 			var ref = chunkRef{Chunkid: s.chunkid}
-			ok, err := m.engine.Get(&ref)
+			ok, err := m.db.Get(&ref)
 			if err == nil && ok && ref.Refs <= 0 {
 				m.deleteSlice(s.chunkid, s.size)
 			}
@@ -2469,7 +2058,7 @@ func dup(b []byte) []byte {
 
 func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	var c chunk
-	rows, err := m.engine.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Rows(&c)
+	rows, err := m.db.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Rows(&c)
 	if err != nil {
 		return errno(err)
 	}
@@ -2491,7 +2080,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
 	var c chunk
-	rows, err := m.engine.Rows(&c)
+	rows, err := m.db.Rows(&c)
 	if err != nil {
 		return errno(err)
 	}
@@ -2519,7 +2108,7 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	var x = xattr{Inode: inode, Name: name}
-	ok, err := m.engine.Get(&x)
+	ok, err := m.db.Get(&x)
 	if err != nil {
 		return errno(err)
 	}
@@ -2534,7 +2123,7 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	var x = xattr{Inode: inode}
-	rows, err := m.engine.Where("inode = ?", inode).Rows(&x)
+	rows, err := m.db.Where("inode = ?", inode).Rows(&x)
 	if err != nil {
 		return errno(err)
 	}
@@ -2575,7 +2164,7 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 		default:
 			n, err = s.Insert(&x)
 			if err != nil || n == 0 {
-				if m.engine.DriverName() == "postgres" {
+				if m.db.DriverName() == "postgres" {
 					// cleanup failed session
 					_ = s.Rollback()
 				}
@@ -2608,7 +2197,7 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
 	return e, m.txn(func(s *xorm.Session) error {
 		n := &node{Inode: inode}
-		ok, err := m.engine.Get(n)
+		ok, err := m.db.Get(n)
 		if err != nil {
 			return err
 		}
@@ -2622,7 +2211,7 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		e.Attr.Inode = inode
 
 		var rows []xattr
-		if err = m.engine.Find(&rows, &xattr{Inode: inode}); err != nil {
+		if err = m.db.Find(&rows, &xattr{Inode: inode}); err != nil {
 			return err
 		}
 		if len(rows) > 0 {
@@ -2637,7 +2226,7 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		if attr.Typ == TypeFile {
 			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 				c := &chunk{Inode: inode, Indx: indx}
-				if ok, err = m.engine.Get(c); err != nil {
+				if ok, err = m.db.Get(c); err != nil {
 					return err
 				}
 				if !ok {
@@ -2653,7 +2242,7 @@ func (m *dbMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 			}
 		} else if attr.Typ == TypeSymlink {
 			l := &symlink{Inode: inode}
-			ok, err = m.engine.Get(l)
+			ok, err = m.db.Get(l)
 			if err != nil {
 				return err
 			}
@@ -2729,7 +2318,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			logger.Warnf("no edge target for inode %d", inode)
 		}
 	} else {
-		if err := m.engine.Find(&edges, &edge{Parent: inode}); err != nil {
+		if err := m.db.Find(&edges, &edge{Parent: inode}); err != nil {
 			return err
 		}
 	}
@@ -2788,7 +2377,7 @@ func (m *dbMeta) makeSnap() error {
 
 	var total int64
 	for _, s := range []interface{}{new(node), new(symlink), new(edge), new(xattr), new(chunk)} {
-		count, err := m.engine.Count(s)
+		count, err := m.db.Count(s)
 		if err != nil {
 			return err
 		}
@@ -2799,7 +2388,7 @@ func (m *dbMeta) makeSnap() error {
 	bar.SetTotal(total, false)
 
 	bufferSize := 10000
-	if err := m.engine.BufferSize(bufferSize).Iterate(new(node), func(idx int, bean interface{}) error {
+	if err := m.db.BufferSize(bufferSize).Iterate(new(node), func(idx int, bean interface{}) error {
 		n := bean.(*node)
 		m.snap.node[n.Inode] = n
 		bar.Increment()
@@ -2808,7 +2397,7 @@ func (m *dbMeta) makeSnap() error {
 		return err
 	}
 
-	if err := m.engine.BufferSize(bufferSize).Iterate(new(symlink), func(idx int, bean interface{}) error {
+	if err := m.db.BufferSize(bufferSize).Iterate(new(symlink), func(idx int, bean interface{}) error {
 		s := bean.(*symlink)
 		m.snap.symlink[s.Inode] = s
 		bar.Increment()
@@ -2816,7 +2405,7 @@ func (m *dbMeta) makeSnap() error {
 	}); err != nil {
 		return err
 	}
-	if err := m.engine.BufferSize(bufferSize).Iterate(new(edge), func(idx int, bean interface{}) error {
+	if err := m.db.BufferSize(bufferSize).Iterate(new(edge), func(idx int, bean interface{}) error {
 		e := bean.(*edge)
 		m.snap.edges[e.Parent] = append(m.snap.edges[e.Parent], e)
 		bar.Increment()
@@ -2825,7 +2414,7 @@ func (m *dbMeta) makeSnap() error {
 		return err
 	}
 
-	if err := m.engine.BufferSize(bufferSize).Iterate(new(xattr), func(idx int, bean interface{}) error {
+	if err := m.db.BufferSize(bufferSize).Iterate(new(xattr), func(idx int, bean interface{}) error {
 		x := bean.(*xattr)
 		m.snap.xattr[x.Inode] = append(m.snap.xattr[x.Inode], x)
 		bar.Increment()
@@ -2834,7 +2423,7 @@ func (m *dbMeta) makeSnap() error {
 		return err
 	}
 
-	if err := m.engine.BufferSize(bufferSize).Iterate(new(chunk), func(idx int, bean interface{}) error {
+	if err := m.db.BufferSize(bufferSize).Iterate(new(chunk), func(idx int, bean interface{}) error {
 		c := bean.(*chunk)
 		m.snap.chunk[fmt.Sprintf("%d-%d", c.Inode, c.Indx)] = c
 		bar.Increment()
@@ -2858,7 +2447,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) (err error) {
 		}
 	}()
 	var drows []delfile
-	if err := m.engine.Find(&drows); err != nil {
+	if err := m.db.Find(&drows); err != nil {
 		return err
 	}
 	dels := make([]*DumpedDelFile, 0, len(drows))
@@ -2888,7 +2477,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) (err error) {
 		return err
 	}
 	var crows []counter
-	if err = m.engine.Find(&crows); err != nil {
+	if err = m.db.Find(&crows); err != nil {
 		return err
 	}
 	counters := &DumpedCounters{}
@@ -2908,7 +2497,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) (err error) {
 	}
 
 	var srows []sustained
-	if err = m.engine.Find(&srows); err != nil {
+	if err = m.db.Find(&srows); err != nil {
 		return err
 	}
 	ss := make(map[uint64][]Ino)
@@ -3035,32 +2624,32 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 		beans = append(beans, xattrs)
 	}
 	beans = append(beans, n)
-	s := m.engine.NewSession()
+	s := m.db.NewSession()
 	defer s.Close()
 	return mustInsert(s, beans...)
 }
 
 func (m *dbMeta) LoadMeta(r io.Reader) error {
-	tables, err := m.engine.DBMetas()
+	tables, err := m.db.DBMetas()
 	if err != nil {
 		return err
 	}
 	if len(tables) > 0 {
 		return fmt.Errorf("Database %s is not empty", m.Name())
 	}
-	if err = m.engine.Sync2(new(setting), new(counter)); err != nil {
+	if err = m.db.Sync2(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
 	}
-	if err = m.engine.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
+	if err = m.db.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
 		return fmt.Errorf("create table node, edge, symlink, xattr: %s", err)
 	}
-	if err = m.engine.Sync2(new(chunk), new(chunkRef)); err != nil {
+	if err = m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
 		return fmt.Errorf("create table chunk, chunk_ref: %s", err)
 	}
-	if err = m.engine.Sync2(new(session), new(sustained), new(delfile)); err != nil {
+	if err = m.db.Sync2(new(session), new(sustained), new(delfile)); err != nil {
 		return fmt.Errorf("create table session, sustaind, delfile: %s", err)
 	}
-	if err = m.engine.Sync2(new(flock), new(plock)); err != nil {
+	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
 
@@ -3166,7 +2755,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		}
 		beans = append(beans, cks)
 	}
-	s := m.engine.NewSession()
+	s := m.db.NewSession()
 	defer s.Close()
 	return mustInsert(s, beans...)
 }

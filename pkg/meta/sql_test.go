@@ -66,19 +66,19 @@ func TestSQLiteClient(t *testing.T) {
 }
 
 func resetDB(m *dbMeta) {
-	m.engine.DropTables(&setting{})
-	m.engine.DropTables(&counter{})
-	m.engine.DropTables(&node{})
-	m.engine.DropTables(&edge{})
-	m.engine.DropTables(&symlink{})
-	m.engine.DropTables(&chunk{})
-	m.engine.DropTables(&chunkRef{})
-	m.engine.DropTables(&session{})
-	m.engine.DropTables(&sustained{})
-	m.engine.DropTables(&xattr{})
-	m.engine.DropTables(&delfile{})
-	m.engine.DropTables(&flock{})
-	m.engine.DropTables(&plock{})
+	m.db.DropTables(&setting{})
+	m.db.DropTables(&counter{})
+	m.db.DropTables(&node{})
+	m.db.DropTables(&edge{})
+	m.db.DropTables(&symlink{})
+	m.db.DropTables(&chunk{})
+	m.db.DropTables(&chunkRef{})
+	m.db.DropTables(&session{})
+	m.db.DropTables(&sustained{})
+	m.db.DropTables(&xattr{})
+	m.db.DropTables(&delfile{})
+	m.db.DropTables(&flock{})
+	m.db.DropTables(&plock{})
 }
 
 func TestMySQLClient(t *testing.T) {
