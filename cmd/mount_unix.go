@@ -47,7 +47,7 @@ func checkMountpoint(name, mp string) {
 		os.Stdout.Sync()
 	}
 	os.Stdout.WriteString("\n")
-	logger.Fatalf("fail to mount after 10 seconds, please mount in foreground")
+	logger.Fatalf("fail to mount after 10 seconds, please check the log or re-mount in foreground")
 }
 
 func makeDaemon(c *cli.Context, name, mp string) error {
