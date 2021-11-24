@@ -11,7 +11,7 @@ echo $CHANGED_FILES
 DOCS_DIR="docs/"
 SKIP_TEST=true
 
-for CHANGED_FILE in CHANGED_FILES; do
+for CHANGED_FILE in $CHANGED_FILES; do
   if ! [[ $CHANGED_FILE =~ $DOCS_DIR ]] ; then
     SKIP_TEST=false
     break
