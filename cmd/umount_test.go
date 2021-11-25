@@ -18,7 +18,7 @@ package main
 import (
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func UmountTmp(mountpoint string) error {
@@ -39,15 +39,12 @@ func TestUmount(t *testing.T) {
 		t.Fatalf("umount failed: %v", err)
 	}
 
-	t.Log("---------------")
-	println(prometheus.DefaultRegisterer)
-
-	if err = MountTmp(metaUrl, mountpoint); err != nil {
-		t.Fatalf("mount failed: %v", err)
-	}
-
-	err = UmountTmp(mountpoint)
+	inode, err := utils.GetFileInode(mountpoint)
 	if err != nil {
+		t.Fatalf("get file inode failed: %v", err)
+	}
+	if inode == 1 {
 		t.Fatalf("umount failed: %v", err)
 	}
+
 }

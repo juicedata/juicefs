@@ -17,7 +17,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -32,19 +31,32 @@ func TestInfo(t *testing.T) {
 		Convey("TestInfo", func() {
 
 			var res string
-			patches := gomonkey.ApplyFuncVar(&writerInfo, func(content string, w io.Writer) error {
-				res = content
-				return nil
-			})
+			tmpFile, err := os.CreateTemp("/tmp", "")
+			if err != nil {
+				t.Fatalf("creat tmp file failed: %v", err)
+			}
+			defer os.Remove(tmpFile.Name())
+			if err != nil {
+				t.Fatalf("create temporary file: %v", err)
+			}
+			// mock os.Stdout
+			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
 			defer patches.Reset()
 
 			metaUrl := "redis://127.0.0.1:6379/10"
 			mountpoint := "/tmp/testDir"
+			defer ResetRedis(metaUrl)
 			if err := MountTmp(metaUrl, mountpoint); err != nil {
 				t.Fatalf("mount failed: %v", err)
 			}
+			defer func(mountpoint string) {
+				err := UmountTmp(mountpoint)
+				if err != nil {
+					t.Fatalf("umount failed: %v", err)
+				}
+			}(mountpoint)
 
-			err := os.MkdirAll(fmt.Sprintf("%s/dir1", mountpoint), 0777)
+			err = os.MkdirAll(fmt.Sprintf("%s/dir1", mountpoint), 0777)
 			if err != nil {
 				t.Fatalf("mount failed: %v", err)
 			}
@@ -61,14 +73,12 @@ func TestInfo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("info failed: %v", err)
 			}
-			t.Log(res)
-
-			var answer = `/tmp/testDir/dir1: inode: 2 files:	10 dirs:	1 length:	40 size:	45056`
-			defer ResetRedis(metaUrl)
-			err = UmountTmp(mountpoint)
+			content, err := ioutil.ReadFile(tmpFile.Name())
 			if err != nil {
-				t.Fatalf("umount failed: %v", err)
+				t.Fatalf("readFile failed: %v", err)
 			}
+			res = string(content)
+			var answer = `/tmp/testDir/dir1: inode: 2 files:	10 dirs:	1 length:	40 size:	45056`
 			replacer := strings.NewReplacer("\n", "", " ", "")
 			res = replacer.Replace(res)
 			answer = replacer.Replace(answer)

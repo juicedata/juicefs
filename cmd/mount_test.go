@@ -106,18 +106,20 @@ func ResetRedis(metaUrl string) {
 func TestMount(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
+	defer ResetRedis(metaUrl)
 	if err := MountTmp(metaUrl, mountpoint); err != nil {
 		t.Fatalf("mount failed: %v", err)
 	}
+	defer func(mountpoint string) {
+		err := UmountTmp(mountpoint)
+		if err != nil {
+			t.Fatalf("umount failed: %v", err)
+		}
+	}(mountpoint)
 
 	err := ioutil.WriteFile(fmt.Sprintf("%s/f1.txt", mountpoint), []byte("test"), 0644)
 	if err != nil {
 		t.Fatalf("Test mount failed: %v", err)
 	}
 
-	defer ResetRedis(metaUrl)
-	err = UmountTmp(mountpoint)
-	if err != nil {
-		t.Fatalf("Umount failed: %v", err)
-	}
 }

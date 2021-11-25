@@ -25,11 +25,17 @@ import (
 func TestRmr(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
+	defer ResetRedis(metaUrl)
 	if err := MountTmp(metaUrl, mountpoint); err != nil {
 		t.Fatalf("mount failed: %v", err)
 	}
+	defer func(mountpoint string) {
+		err := UmountTmp(mountpoint)
+		if err != nil {
+			t.Fatalf("umount failed: %v", err)
+		}
+	}(mountpoint)
 
-	defer ResetRedis(metaUrl)
 	paths := []string{"/dir1", "/dir2", "/dir3/dir2"}
 	for _, path := range paths {
 		if err := os.MkdirAll(fmt.Sprintf("%s%s/dir2/dir3/dir4/dir5", mountpoint, path), 0777); err != nil {
@@ -54,9 +60,5 @@ func TestRmr(t *testing.T) {
 		if len(dir) != 0 {
 			t.Fatalf("test rmr error: %v", err)
 		}
-	}
-	err := UmountTmp(mountpoint)
-	if err != nil {
-		t.Fatalf("umount failed: %v", err)
 	}
 }

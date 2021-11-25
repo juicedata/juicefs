@@ -24,12 +24,16 @@ import (
 func TestGc(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
+	defer ResetRedis(metaUrl)
 	if err := MountTmp(metaUrl, mountpoint); err != nil {
 		t.Fatalf("mount failed: %v", err)
 	}
-
-	defer ResetRedis(metaUrl)
-
+	defer func(mountpoint string) {
+		err := UmountTmp(mountpoint)
+		if err != nil {
+			t.Fatalf("umount failed: %v", err)
+		}
+	}(mountpoint)
 	for i := 0; i < 10; i++ {
 		filename := fmt.Sprintf("%s/f%d.txt", mountpoint, i)
 		err := ioutil.WriteFile(filename, []byte("test"), 0644)
@@ -44,8 +48,4 @@ func TestGc(t *testing.T) {
 		t.Fatalf("fsck failed: %v", err)
 	}
 
-	err = UmountTmp(mountpoint)
-	if err != nil {
-		t.Fatalf("umount failed: %v", err)
-	}
 }
