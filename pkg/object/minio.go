@@ -73,12 +73,10 @@ func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("no bucket name provided in %s: %s", endpoint, err)
 	}
 	bucket := uri.Path[1:]
-	for strings.HasSuffix(bucket, "/") {
-		bucket = bucket[:len(bucket)-1]
-	}
 	if strings.Contains(bucket, "/") && strings.HasPrefix(bucket, "minio/") {
 		bucket = bucket[len("minio/"):]
 	}
+	bucket = strings.Split(bucket, "/")[0]
 	return &minio{s3client{bucket, s3.New(ses), ses}}, nil
 }
 
