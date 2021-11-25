@@ -4,6 +4,9 @@ language: go
 services:
   - mysql
   - postgresql
+  - docker
+env:
+  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword
 go:
   - "1.16"
 branches:
@@ -28,6 +31,8 @@ before_script:
   - sudo mysql -e "create database dev;"
   - psql -c 'create database test;' -U postgres
   - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+  - docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio server /data --console-address ":9001"
+  - wget https://dl.min.io/client/mc/release/linux-amd64/mc && chmod +x mc && ./mc config host add local http://127.0.0.1:9000 testUser testUserPassword && ./mc mb local/testbucket
   - make
   - sudo make -C fstests setup
 script:
