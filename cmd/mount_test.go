@@ -71,7 +71,7 @@ func Test_exposeMetrics(t *testing.T) {
 }
 
 func MountTmp(metaUrl, mountpoint string) {
-	formatArgs := []string{"", "format", metaUrl, "test"}
+	formatArgs := []string{"", "format", "--storage", "file", "--bucket", "/tmp/testMountDir", metaUrl, "test"}
 	Main(formatArgs)
 
 	mountArgs := []string{"", "mount", metaUrl, mountpoint}
