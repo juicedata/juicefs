@@ -405,7 +405,7 @@ func TestMinIO(t *testing.T) {
 	if os.Getenv("MINIO_TEST_BUCKET") == "" {
 		t.SkipNow()
 	}
-	b, _ := newMinio(fmt.Sprintf("http://%s", os.Getenv("MINIO_TEST_BUCKET")), "", "")
+	b, _ := newMinio(fmt.Sprintf("http://%s/some/path", os.Getenv("MINIO_TEST_BUCKET")), "", "")
 	testStorage(t, b)
 }
 
