@@ -31,7 +31,7 @@ before_script:
   - sudo mysql -e "create database dev;"
   - psql -c 'create database test;' -U postgres
   - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
-  - docker run \
+  - docker run -d \
     -p 9000:9000 \
     -p 9001:9001 \
     -e "MINIO_ROOT_USER=testUser" \
