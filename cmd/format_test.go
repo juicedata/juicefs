@@ -69,7 +69,10 @@ func TestFormat(t *testing.T) {
 	defer rdb.FlushDB(ctx)
 	name := "test"
 	formatArgs := []string{"", "format", "--storage", "file", "--bucket", "/tmp/testMountDir", metaUrl, name}
-	Main(formatArgs)
+	err = Main(formatArgs)
+	if err != nil {
+		t.Fatalf("format error: %v", err)
+	}
 	body, err := rdb.Get(ctx, "setting").Bytes()
 	if err == redis.Nil {
 		t.Fatalf("database is not formatted")

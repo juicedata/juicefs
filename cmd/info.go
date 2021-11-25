@@ -17,6 +17,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -47,6 +48,14 @@ func infoFlags() *cli.Command {
 			},
 		},
 	}
+}
+
+var writerInfo = func(content string, w io.Writer) error {
+	_, err := w.Write([]byte(content))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func info(ctx *cli.Context) error {
@@ -113,8 +122,11 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("read info: %s", err)
 		}
-		fmt.Println(path, ":")
-		fmt.Println(string(data[:n]))
+		content := fmt.Sprintf("%s:\n%s", path, string(data[:n]))
+		err = writerInfo(content, os.Stdout)
+		if err != nil {
+			logger.Fatalf("writer  info: %s", err)
+		}
 		_ = f.Close()
 	}
 

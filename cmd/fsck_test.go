@@ -24,7 +24,10 @@ import (
 func TestFsck(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
-	MountTmp(metaUrl, mountpoint)
+	if err := MountTmp(metaUrl, mountpoint); err != nil {
+		t.Fatalf("mount failed: %v", err)
+	}
+	defer ResetRedis(metaUrl)
 
 	for i := 0; i < 10; i++ {
 		filename := fmt.Sprintf("%s/f%d.txt", mountpoint, i)
@@ -35,6 +38,12 @@ func TestFsck(t *testing.T) {
 	}
 
 	fsckArgs := []string{"", "fsck", metaUrl}
-	Main(fsckArgs)
-	defer CleanRedis(metaUrl)
+	err := Main(fsckArgs)
+	if err != nil {
+		t.Fatalf("fsck failed: %v", err)
+	}
+	err = UmountTmp(mountpoint)
+	if err != nil {
+		t.Fatalf("umount failed: %v", err)
+	}
 }

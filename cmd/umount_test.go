@@ -16,28 +16,38 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
 	"testing"
-	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-func TestProfile(t *testing.T) {
+func UmountTmp(mountpoint string) error {
+	umountArgs := []string{"", "umount", mountpoint}
+	return Main(umountArgs)
+}
+
+func TestUmount(t *testing.T) {
+
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
-	MountTmp(metaUrl, mountpoint)
-	defer CleanRedis(metaUrl)
-	profileArgs := []string{"", "profile", mountpoint}
-	go Main(profileArgs)
-
-	for i := 0; i < 3; i++ {
-		filename := fmt.Sprintf("%s/f%d.txt", mountpoint, i)
-		err := ioutil.WriteFile(filename, []byte("test"), 0644)
-		if err != nil {
-			t.Fatalf("Test mount failed : %v", err)
-		}
-		time.Sleep(1 * time.Second)
+	if err := MountTmp(metaUrl, mountpoint); err != nil {
+		t.Fatalf("mount failed: %v", err)
 	}
 
-	t.Log("Test profile success")
+	err := UmountTmp(mountpoint)
+	if err != nil {
+		t.Fatalf("umount failed: %v", err)
+	}
+
+	t.Log("---------------")
+	println(prometheus.DefaultRegisterer)
+
+	if err = MountTmp(metaUrl, mountpoint); err != nil {
+		t.Fatalf("mount failed: %v", err)
+	}
+
+	err = UmountTmp(mountpoint)
+	if err != nil {
+		t.Fatalf("umount failed: %v", err)
+	}
 }

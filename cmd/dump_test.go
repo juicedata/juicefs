@@ -25,16 +25,19 @@ import (
 
 func TestDumpAndLoad(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
+	opt, err := redis.ParseURL(metaUrl)
+	if err != nil {
+		t.Fatalf("ParseURL: %v", err)
+	}
+	rdb := redis.NewClient(opt)
+	rdb.FlushDB(context.Background())
+
 	t.Run("Test Load", func(t *testing.T) {
 		loadArgs := []string{"", "load", metaUrl, "./../pkg/meta/metadata.sample"}
-		opt, err := redis.ParseURL(metaUrl)
+		err = Main(loadArgs)
 		if err != nil {
-			t.Fatalf("ParseURL: %v", err)
+			t.Fatalf("load failed: %v", err)
 		}
-		rdb := redis.NewClient(opt)
-		rdb.FlushDB(context.Background())
-
-		Main(loadArgs)
 		if rdb.DBSize(context.Background()).Val() == 0 {
 			t.Fatalf("load error: %v", err)
 		}
@@ -42,12 +45,14 @@ func TestDumpAndLoad(t *testing.T) {
 	})
 	t.Run("Test dump", func(t *testing.T) {
 		dumpArgs := []string{"", "dump", metaUrl, "/tmp/dump_test.json"}
-
-		Main(dumpArgs)
-		_, err := os.Stat("/tmp/dump_test.json")
+		err := Main(dumpArgs)
+		if err != nil {
+			t.Fatalf("dump error: %v", err)
+		}
+		_, err = os.Stat("/tmp/dump_test.json")
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
 		}
 	})
-
+	rdb.FlushDB(context.Background())
 }

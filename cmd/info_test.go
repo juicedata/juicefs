@@ -17,29 +17,62 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/agiledragon/gomonkey/v2"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestInfo(t *testing.T) {
-	metaUrl := "redis://127.0.0.1:6379/10"
-	mountpoint := "/tmp/testDir"
-	MountTmp(metaUrl, mountpoint)
+	Convey("TestInfo", t, func() {
+		Convey("TestInfo", func() {
 
-	err := os.Mkdir(fmt.Sprintf("%s/dir1", mountpoint), 0777)
-	if err != nil {
-		t.Fatalf("mount failed: %v", err)
-	}
-	for i := 0; i < 10; i++ {
-		filename := fmt.Sprintf("%s/dir1/f%d.txt", mountpoint, i)
-		err := ioutil.WriteFile(filename, []byte("test"), 0644)
-		if err != nil {
-			t.Fatalf("mount failed: %v", err)
-		}
-	}
+			var res string
+			patches := gomonkey.ApplyFuncVar(&writerInfo, func(content string, w io.Writer) error {
+				res = content
+				return nil
+			})
+			defer patches.Reset()
 
-	infoArgs := []string{"", "info", metaUrl, fmt.Sprintf("%s/dir1", mountpoint)}
-	Main(infoArgs)
-	defer CleanRedis(metaUrl)
+			metaUrl := "redis://127.0.0.1:6379/10"
+			mountpoint := "/tmp/testDir"
+			if err := MountTmp(metaUrl, mountpoint); err != nil {
+				t.Fatalf("mount failed: %v", err)
+			}
+
+			err := os.MkdirAll(fmt.Sprintf("%s/dir1", mountpoint), 0777)
+			if err != nil {
+				t.Fatalf("mount failed: %v", err)
+			}
+			for i := 0; i < 10; i++ {
+				filename := fmt.Sprintf("%s/dir1/f%d.txt", mountpoint, i)
+				err := ioutil.WriteFile(filename, []byte("test"), 0644)
+				if err != nil {
+					t.Fatalf("mount failed: %v", err)
+				}
+			}
+
+			infoArgs := []string{"", "info", fmt.Sprintf("%s/dir1", mountpoint)}
+			err = Main(infoArgs)
+			if err != nil {
+				t.Fatalf("info failed: %v", err)
+			}
+			t.Log(res)
+
+			var answer = `/tmp/testDir/dir1: inode: 2 files:	10 dirs:	1 length:	40 size:	45056`
+			defer ResetRedis(metaUrl)
+			err = UmountTmp(mountpoint)
+			if err != nil {
+				t.Fatalf("umount failed: %v", err)
+			}
+			replacer := strings.NewReplacer("\n", "", " ", "")
+			res = replacer.Replace(res)
+			answer = replacer.Replace(answer)
+			So(res, ShouldEqual, answer)
+		})
+	})
 }
