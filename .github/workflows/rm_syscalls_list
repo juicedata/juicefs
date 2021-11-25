@@ -137,11 +137,8 @@ timerfd04 timerfd04
 perf_event_open02 perf_event_open02
 statx07 statx07
 io_uring02 io_uring02
+finit_module02 finit_module02
+creat09 creat09
+mkdir02 mkdir02
+ioctl_ns07 ioctl_ns07
 ioctl01_02   test_ioctl
-delete_module01 delete_module01
-mkdir03 mkdir03
-inotify_init1_02 inotify_init1_02
-flistxattr01 flistxattr01
-delete_module02 delete_module02
-mkdir04 mkdir04
-inotify_init1_01 inotify_init1_01
