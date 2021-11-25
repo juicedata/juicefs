@@ -30,6 +30,7 @@ jobs:
 
       - name: Build linux target
         run: |
+          hostnamectl
           make juicefs
           cp .github/workflows/rm_syscalls_list /tmp/
           cp .github/workflows/rm_syscalls_list.sh /tmp/
