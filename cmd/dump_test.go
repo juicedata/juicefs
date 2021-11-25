@@ -54,5 +54,17 @@ func TestDumpAndLoad(t *testing.T) {
 			t.Fatalf("dump error: %v", err)
 		}
 	})
+
+	t.Run("Test dump with subdir", func(t *testing.T) {
+		dumpArgs := []string{"", "dump", metaUrl, "/tmp/dump_subdir_test.json", "--subdir", "d1"}
+		err := Main(dumpArgs)
+		if err != nil {
+			t.Fatalf("dump error: %v", err)
+		}
+		_, err = os.Stat("/tmp/dump_subdir_test.json")
+		if err != nil {
+			t.Fatalf("dump error: %v", err)
+		}
+	})
 	rdb.FlushDB(context.Background())
 }
