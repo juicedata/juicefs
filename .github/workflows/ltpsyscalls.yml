@@ -57,5 +57,7 @@ jobs:
           make
           sudo make install
           cd /opt/ltp
-          /tmp/rm_syscalls_list.sh /tmp/rm_syscalls_list runtest/syscalls
+          sudo chmod +x /tmp/rm_syscalls_list.sh
+          sudo chmod 777 runtest/syscalls
+          sudo /tmp/rm_syscalls_list.sh /tmp/rm_syscalls_list runtest/syscalls
           sudo ./runltp -d /tmp/jfs -f syscalls
