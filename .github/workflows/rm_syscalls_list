@@ -141,3 +141,7 @@ ioctl01_02   test_ioctl
 delete_module01 delete_module01
 mkdir03 mkdir03
 inotify_init1_02 inotify_init1_02
+flistxattr01 flistxattr01
+delete_module02 delete_module02
+mkdir04 mkdir04
+inotify_init1_01 inotify_init1_01
