@@ -134,8 +134,8 @@ func (w *statsWatcher) buildSchema(schema string, verbosity uint) {
 			}
 		case 'g':
 			s.name = "go"
-			s.items = append(s.items, &item{"alloc", "go_memstats_alloc_bytes", metricGauge})
-			s.items = append(s.items, &item{"sys", "go_memstats_sys_bytes", metricGauge})
+			s.items = append(s.items, &item{"alloc", "juicefs_go_memstats_alloc_bytes", metricGauge})
+			s.items = append(s.items, &item{"sys", "juicefs_go_memstats_sys_bytes", metricGauge})
 		default:
 			fmt.Printf("Warning: no item defined for %c\n", r)
 			continue
