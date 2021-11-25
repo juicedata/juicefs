@@ -16,11 +16,16 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/go-redis/redis/v8"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 
@@ -63,4 +68,30 @@ func Test_exposeMetrics(t *testing.T) {
 			So(string(all), ShouldNotBeBlank)
 		})
 	})
+}
+
+func MountTmp(metaUrl, mountpoint string) {
+	formatArgs := []string{"", "format", metaUrl, "test"}
+	Main(formatArgs)
+
+	mountArgs := []string{"", "mount", metaUrl, mountpoint}
+	go Main(mountArgs)
+	time.Sleep(2 * time.Second)
+}
+func CleanRedis(metaUrl string) {
+	opt, _ := redis.ParseURL(metaUrl)
+	rdb := redis.NewClient(opt)
+	rdb.FlushDB(context.Background())
+}
+
+func TestMount(t *testing.T) {
+	metaUrl := "redis://127.0.0.1:6379/10"
+	mountpoint := "/tmp/testDir"
+	MountTmp(metaUrl, mountpoint)
+	err := ioutil.WriteFile(fmt.Sprintf("%s/f1.txt", mountpoint), []byte("test"), 0644)
+	if err != nil {
+		t.Fatalf("Test mount failed: %v", err)
+	}
+
+	defer CleanRedis(metaUrl)
 }

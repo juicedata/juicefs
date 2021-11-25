@@ -56,7 +56,7 @@ func globalFlags() []cli.Flag {
 	}
 }
 
-func main() {
+func Main(args []string) {
 	cli.VersionFlag = &cli.BoolFlag{
 		Name: "version", Aliases: []string{"V"},
 		Usage: "print only the version",
@@ -97,10 +97,14 @@ func main() {
 		}
 	}
 
-	err := app.Run(reorderOptions(app, os.Args))
+	err := app.Run(reorderOptions(app, args))
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func main() {
+	Main(os.Args)
 }
 
 func handleSysMountArgs() ([]string, error) {
