@@ -117,6 +117,18 @@ func exposeMetrics(m meta.Meta, c *cli.Context) string {
 	return metricsAddr
 }
 
+func wrapRegister(mp, name string) {
+	reg := prometheus.DefaultRegisterer
+	reg.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	reg.Unregister(prometheus.NewGoCollector())
+	metricLabels := prometheus.Labels{"mp": mp, "vol_name": name}
+	reg = prometheus.WrapRegistererWith(metricLabels, reg)
+	reg = prometheus.WrapRegistererWithPrefix("juicefs_", reg)
+	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	reg.MustRegister(prometheus.NewGoCollector())
+	prometheus.DefaultRegisterer = reg
+}
+
 func mount(c *cli.Context) error {
 	setLoggerLevel(c)
 	if c.Args().Len() < 1 {
@@ -167,13 +179,8 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("load setting: %s", err)
 	}
 
-	metricLabels := prometheus.Labels{
-		"vol_name": format.Name,
-		"mp":       mp,
-	}
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
-	prometheus.DefaultRegisterer = prometheus.WrapRegistererWith(metricLabels,
-		prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.DefaultRegisterer))
+	wrapRegister(mp, format.Name)
 
 	if !c.Bool("writeback") && c.IsSet("upload-delay") {
 		logger.Warnf("delayed upload only work in writeback mode")
