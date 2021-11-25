@@ -62,6 +62,7 @@ move_pages10 move_pages10
 move_pages11 move_pages11
 move_pages12 move_pages12
 msgctl05 msgctl05
+msgstress03 msgstress03
 msgstress04 msgstress04
 openat201 openat201
 openat202 openat202
