@@ -12,7 +12,7 @@ on:
       - 'docs/**'
 
 jobs:
-  ltpsyscalls01:
+  ltpsyscalls02:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -62,7 +62,7 @@ jobs:
           sudo chmod +x /tmp/rm_syscalls_list.sh
           sudo chmod 777 runtest/syscalls
           sudo /tmp/rm_syscalls_list.sh /tmp/rm_syscalls_list runtest/syscalls
-          sudo touch runtest/syscalls01
-          sudo chmod 777 runtest/syscalls01
-          sudo head -910 runtest/syscalls > runtest/syscalls01
-          sudo ./runltp -d /tmp/jfs -f syscalls01
+          sudo touch runtest/syscalls02
+          sudo chmod 777 runtest/syscalls02
+          sudo head -830 runtest/syscalls > runtest/syscalls02
+          sudo ./runltp -d /tmp/jfs -f syscalls02
