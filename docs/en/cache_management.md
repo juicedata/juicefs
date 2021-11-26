@@ -34,7 +34,7 @@ When a JuiceFS client `open()` a file, its file attributes are automatically cac
 
 When a file is read by `read()`, the chunk and slice information of the file is automatically cached in client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately.
 
-> **Hint**: You can check ["How JuiceFS stores files"](how_juicefs_store_files.md) to know what chunk and slice are.
+> **Hint**: You can check ["How JuiceFS Stores Files"](how_juicefs_store_files.md) to know what chunk and slice are.
 
 By default, for any file whose metadata has been cached in memory and not accessed by any process for more than 1 hour, all its metadata cache will be automatically deleted.
 
@@ -56,9 +56,9 @@ JuiceFS clients currently do not have kernel write caching enabled by default, s
 
 The JuiceFS client automatically prefetch data into the cache based on the read pattern, thus improving sequential read performance. By default, 1 block is prefetch locally concurrently with the read data. The local cache can be set on any local file system based on HDD, SSD or memory.
 
-> **Hint**: You can check ["How JuiceFS stores files"](how_juicefs_store_files.md) to learn what a block is.
+> **Hint**: You can check ["How JuiceFS Stores Files"](how_juicefs_store_files.md) to learn what a block is.
 
-The local cache can be adjusted at [mount filesystem](command_reference.md#juicefs-mount) with the following options.
+The local cache can be adjusted at [mount file system](command_reference.md#juicefs-mount) with the following options.
 
 ```
 --cache-dir value         directory paths of local cache, use colon to separate multiple paths (default: "$HOME/.juicefs/cache" or "/var/jfsCache")
@@ -67,9 +67,9 @@ The local cache can be adjusted at [mount filesystem](command_reference.md#juice
 --cache-partial-only      cache only random/small read (default: false)
 ```
 
-Specifically,  there are two ways if you want to store the local cache of JuiceFS in memory, one is to set `--cache-dir` to `memory` and the other is to set it to `/dev/shm/<cache-dir>`. The difference between these two approaches is that the former deletes the cache data after remounting the JuiceFS file system, while the latter retains it, and there is not much difference in performance between the two.
+Specifically, there are two ways if you want to store the local cache of JuiceFS in memory, one is to set `--cache-dir` to `memory` and the other is to set it to `/dev/shm/<cache-dir>`. The difference between these two approaches is that the former deletes the cache data after remounting the JuiceFS file system, while the latter retains it, and there is not much difference in performance between the two.
 
-The JuiceFS client writes data downloaded from the object store (including new uploads less than 1 block in size) to the cache directory as fast as possible, without compression or encryption. **Because JuiceFS generates unique names for all block objects written to the object store, and all block objects are not modified, there is no need to worry about invalidating the cached data when the file content is updated. ** 
+The JuiceFS client writes data downloaded from the object store (including new uploads less than 1 block in size) to the cache directory as fast as possible, without compression or encryption. **Because JuiceFS generates unique names for all block objects written to the object store, and all block objects are not modified, there is no need to worry about invalidating the cached data when the file content is updated.**
 
 The cache is automatically purged when it reaches the maximum space used (i.e., the cache size is greater than or equal to `--cache-size`) or when the disk is going to be full (i.e., the disk free space ratio is less than `--free-space-ratio`), and the current rule is to prioritize purging infrequently accessed files based on access time.
 
@@ -87,11 +87,11 @@ The asynchronous upload feature is disabled by default and can be enabled with t
 --writeback  upload objects in background (default: false)
 ```
 
-When writing a large number of small files in a short period of time, it is recommended to mount the filesystem with the `--writeback` parameter to improve write performance, and consider re-mounting without the option after the write is complete to make subsequent writes more reliable. It is also recommended to enable `--writeback` for scenarios that require a lot of random writes, such as incremental backups of MySQL.
+When writing a large number of small files in a short period of time, it is recommended to mount the file system with the `--writeback` parameter to improve write performance, and consider re-mounting without the option after the write is complete to make subsequent writes more reliable. It is also recommended to enable `--writeback` for scenarios that require a lot of random writes, such as incremental backups of MySQL.
 
-> **Warning**: When asynchronous upload is enabled, i.e. `--writeback` is specified when mounting the filesystem, do not delete the contents in `<cache-dir>/<UUID>/rawstaging` directory, as this will result in data loss.
+> **Warning**: When asynchronous upload is enabled, i.e. `--writeback` is specified when mounting the file system, do not delete the contents in `<cache-dir>/<UUID>/rawstaging` directory, as this will result in data loss.
 
-When the cache disk is too full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache function is automatically turned off).
+When the cache disk is too full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache feature is turned off).
 
 When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing, and should be used with caution for scenarios requiring high data reliability.
 
