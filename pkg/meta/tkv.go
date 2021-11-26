@@ -275,51 +275,6 @@ func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
 	return b.Get8(), Ino(b.Get64())
 }
 
-func (m *kvMeta) parseAttr(buf []byte, attr *Attr) {
-	if attr == nil {
-		return
-	}
-	rb := utils.FromBuffer(buf)
-	attr.Flags = rb.Get8()
-	attr.Mode = rb.Get16()
-	attr.Typ = uint8(attr.Mode >> 12)
-	attr.Mode &= 0xfff
-	attr.Uid = rb.Get32()
-	attr.Gid = rb.Get32()
-	attr.Atime = int64(rb.Get64())
-	attr.Atimensec = rb.Get32()
-	attr.Mtime = int64(rb.Get64())
-	attr.Mtimensec = rb.Get32()
-	attr.Ctime = int64(rb.Get64())
-	attr.Ctimensec = rb.Get32()
-	attr.Nlink = rb.Get32()
-	attr.Length = rb.Get64()
-	attr.Rdev = rb.Get32()
-	attr.Parent = Ino(rb.Get64())
-	attr.Full = true
-	logger.Tracef("attr: %v -> %v", buf, attr)
-}
-
-func (m *kvMeta) marshal(attr *Attr) []byte {
-	w := utils.NewBuffer(36 + 24 + 4 + 8)
-	w.Put8(attr.Flags)
-	w.Put16((uint16(attr.Typ) << 12) | (attr.Mode & 0xfff))
-	w.Put32(attr.Uid)
-	w.Put32(attr.Gid)
-	w.Put64(uint64(attr.Atime))
-	w.Put32(attr.Atimensec)
-	w.Put64(uint64(attr.Mtime))
-	w.Put32(attr.Mtimensec)
-	w.Put64(uint64(attr.Ctime))
-	w.Put32(attr.Ctimensec)
-	w.Put32(attr.Nlink)
-	w.Put64(attr.Length)
-	w.Put32(attr.Rdev)
-	w.Put64(uint64(attr.Parent))
-	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
-	return w.Bytes()
-}
-
 func (m *kvMeta) get(key []byte) ([]byte, error) {
 	var value []byte
 	err := m.client.txn(func(tx kvTxn) error {
