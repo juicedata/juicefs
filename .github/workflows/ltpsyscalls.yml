@@ -51,9 +51,8 @@ jobs:
 
       - name: LTP Syscalls
         run: |
-          wget https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2
-          tar -jxvf ltp-full-20210524.tar.bz2
-          cd ltp-full-20210524/
+          git clone https://github.com/linux-test-project/ltp.git
+          cd ltp
           make autotools
           ./configure
           make
@@ -62,10 +61,7 @@ jobs:
           sudo chmod +x /tmp/rm_syscalls_list.sh
           sudo chmod 777 runtest/syscalls
           sudo /tmp/rm_syscalls_list.sh /tmp/rm_syscalls_list runtest/syscalls
-          sudo touch runtest/syscalls01
-          sudo chmod 777 runtest/syscalls01
-          sudo head -n 910 runtest/syscalls > runtest/syscalls01
-          sudo ./runltp -d /tmp/jfs -f syscalls01 -C result.log.failed -T result.log.tconf -l result.log
+          sudo ./runltp -d /tmp/jfs -f syscalls -C result.log.failed -T result.log.tconf -l result.log
 
       - name: CAT MORE LOG
         if: always()

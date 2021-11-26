@@ -137,8 +137,3 @@ timerfd04 timerfd04
 perf_event_open02 perf_event_open02
 statx07 statx07
 io_uring02 io_uring02
-fallocate05 fallocate05
-ioctl01_02   test_ioctl
-ioctl_ns07 ioctl_ns07
-kill10 kill10
-ioctl_loop05 ioctl_loop05

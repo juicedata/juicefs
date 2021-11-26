@@ -2,8 +2,14 @@ name: "ltp"
 
 on:
   push:
-    tags:
-      - v*
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
   ltpfs:
@@ -53,4 +59,15 @@ jobs:
           sudo sed -i 's/^iogen01.*//g' runtest/fs
           sudo sed -i 's/^quota_remount_test01.*//g' runtest/fs
           sudo sed -i 's/^isofs.*//g' runtest/fs
-          sudo ./runltp -d /tmp/jfs -f fs
+          sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
+
+      - name: CAT MORE LOG
+        if: always()
+        run: |
+          sudo ls -l /opt/ltp/results
+          sudo ls -l /opt/ltp/output
+          sudo cat /opt/ltp/results/result.log
+          echo "--------------------"
+          sudo cat /opt/ltp/output/result.log.failed
+          echo "--------------------"
+          sudo cat /opt/ltp/output/result.log.tconf
