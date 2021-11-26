@@ -64,5 +64,5 @@ jobs:
           sudo /tmp/rm_syscalls_list.sh /tmp/rm_syscalls_list runtest/syscalls
           sudo touch runtest/syscalls02
           sudo chmod 777 runtest/syscalls02
-          sudo head -830 runtest/syscalls > runtest/syscalls02
+          sudo tail -n 830 runtest/syscalls > runtest/syscalls02
           sudo ./runltp -d /tmp/jfs -f syscalls02
