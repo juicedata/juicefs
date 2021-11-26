@@ -142,3 +142,6 @@ creat09 creat09
 mkdir02 mkdir02
 ioctl_ns07 ioctl_ns07
 ioctl01_02   test_ioctl
+kill11 kill11
+setxattr03 setxattr03
+ioctl_loop05 ioctl_loop05
