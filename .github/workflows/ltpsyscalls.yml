@@ -64,14 +64,16 @@ jobs:
           sudo /tmp/rm_syscalls_list.sh /tmp/rm_syscalls_list runtest/syscalls
           sudo touch runtest/syscalls01
           sudo chmod 777 runtest/syscalls01
-          sudo head -n 910 runtest/syscalls > runtest/syscalls01
-          sudo ./runltp -d /tmp/jfs -f syscalls01
+          sudo head -n 200 runtest/syscalls > runtest/syscalls01
+          sudo ./runltp -d /tmp/jfs -f syscalls01 -C result.log.failed -T result.log.tconf -l result.log
 
       - name: CAT MORE LOG
         if: always()
         run: |
-          cat /opt/ltp/results/LTP_RUN_ON-2021.*log
+          sudo ls -l /opt/ltp/results
+          sudo ls -l /opt/ltp/output
+          sudo cat /opt/ltp/results/result.log
           echo "--------------------"
-          cat /opt/ltp/output/LTP_RUN_ON-2021.*failed
+          sudo cat /opt/ltp/output/result.log.failed
           echo "--------------------"
-          cat /opt/ltp/output/LTP_RUN_ON-2021.*tconf
+          sudo cat /opt/ltp/output/result.log.tconf
