@@ -66,3 +66,12 @@ jobs:
           sudo chmod 777 runtest/syscalls02
           sudo tail -n 830 runtest/syscalls > runtest/syscalls02
           sudo ./runltp -d /tmp/jfs -f syscalls02
+
+      - name: CAT MORE LOG
+        if: always()
+        run: |
+          cat /opt/ltp/results/LTP_RUN_ON-2021.*log
+          echo "--------------------"
+          cat /opt/ltp/output/LTP_RUN_ON-2021.*failed
+          echo "--------------------"
+          cat /opt/ltp/output/LTP_RUN_ON-2021.*tconf
