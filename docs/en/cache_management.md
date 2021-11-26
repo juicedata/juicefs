@@ -6,9 +6,9 @@ JuiceFS provides various caching mechanisms including metadata caching, data rea
 
 ## Data Consistency
 
-JuiceFS provides a "close-to-open" consistency guarantee, which means that when two or more clients read and write the same file at the same time, the changes made by client A may not be immediately visible to client B. However, once the file is written to and closed by client A, it is guaranteed to be accessible to any client that reopens it later, regardless of whether it is on the same node. However, once the file is written to and closed by client A, it can be re-opened by any client afterwards to ensure that the latest written data is accessible, regardless of whether it is on the same node.
+JuiceFS provides a "close-to-open" consistency guarantee, which means that when two or more clients read and write the same file at the same time, the changes made by client A may not be immediately visible to client B. However, once the file is closed by client A, any client re-opened it afterwards is guaranteed to see the latest data, no matter it is on the same node with A or not.
 
-"close-to-open" is the minimum consistency guarantee provided by JuiceFS, and in some cases it may not be necessary to reopen the file to access the latest written data. For example, multiple applications using the same JuiceFS client to access the same file (where file changes are immediately visible), or to view the latest data on different nodes with the `tail -f` command.
+"Close-to-open" is the minimum consistency guarantee provided by JuiceFS, and in some cases it may not be necessary to reopen the file to access the latest written data. For example, multiple applications using the same JuiceFS client to access the same file (where file changes are immediately visible), or to view the latest data on different nodes with the `tail -f` command.
 
 ## Metadata Cache
 
@@ -24,7 +24,7 @@ Three kinds of metadata can be cached in kernel: **attributes (attribute)**, **f
 --dir-entry-cache value  dir entry cache timeout in seconds (default: 1)
 ```
 
-JuiceFS caches attributes, file entries, and directory entries in kernel for 1 second by default to improve lookup and getattr performance. When clients on multiple nodes are using the same file system at the same time, the metadata cached in kernel can only be expired by time. That is, in an extreme case, it may happen that node A modifies the metadata of a file (e.g., `chown`) and accesses it through node B without immediately seeing the update. Of course, when the cache expires, all nodes will eventually be able to see the changes made by A.
+JuiceFS caches attributes, file entries, and directory entries in kernel for 1 second by default to improve lookup and getattr performance. When clients on multiple nodes are using the same file system, the metadata cached in kernel will only be expired by time. That is, in an extreme case, it may happen that node A modifies the metadata of a file (e.g., `chown`) and accesses it through node B without immediately seeing the update. Of course, when the cache expires, all nodes will eventually be able to see the changes made by A.
 
 ### Metadata Cache in Client
 
@@ -46,7 +46,7 @@ Data cache is also provided in JuiceFS to improve performance, including page ca
 
 > **Note**: This feature requires JuiceFS >= 0.15.0.
 
-For files that have already been read, the kernel automatically caches their contents and then opens the file again, so that if the file has not been updated (i.e., mtime has not been updated), it can be read directly from the kernel cache for the best performance.
+For files that have already been read, the kernel automatically caches their contents. Then if the file is opened again, and it's not changed (i.e., mtime has not been updated), it can be read directly from the kernel cache for the best performance.
 
 Thanks to the kernel cache, repeated reads of the same file in JuiceFS can be very fast, with latencies as low as microseconds and throughputs up to several GiBs per second.
 
@@ -67,7 +67,7 @@ The local cache can be adjusted at [mount filesystem](command_reference.md#juice
 --cache-partial-only      cache only random/small read (default: false)
 ```
 
-Specifically, if you want to store the local cache of JuiceFS in memory there are two ways to do this, one is to set `--cache-dir` to `memory` and the other is to set it to `/dev/shm/<cache-dir>`. The difference between these two approaches is that the former deletes the cache data after remounting the JuiceFS file system, while the latter retains it, and there is not much difference in performance between the two.
+Specifically,  there are two ways if you want to store the local cache of JuiceFS in memory, one is to set `--cache-dir` to `memory` and the other is to set it to `/dev/shm/<cache-dir>`. The difference between these two approaches is that the former deletes the cache data after remounting the JuiceFS file system, while the latter retains it, and there is not much difference in performance between the two.
 
 The JuiceFS client writes data downloaded from the object store (including new uploads less than 1 block in size) to the cache directory as fast as possible, without compression or encryption. **Because JuiceFS generates unique names for all block objects written to the object store, and all block objects are not modified, there is no need to worry about invalidating the cached data when the file content is updated. ** 
 
@@ -87,11 +87,11 @@ The asynchronous upload feature is disabled by default and can be enabled with t
 --writeback  upload objects in background (default: false)
 ```
 
-When writing a large number of small files in a short period of time, it is recommended to mount the filesystem with the `--writeback` parameter to improve write performance, and consider unmounting the option after the write is complete to make subsequent writes more reliable. It is also recommended to enable `--writeback` for scenarios that require a lot of random writes, such as incremental backups of MySQL.
+When writing a large number of small files in a short period of time, it is recommended to mount the filesystem with the `--writeback` parameter to improve write performance, and consider re-mounting without the option after the write is complete to make subsequent writes more reliable. It is also recommended to enable `--writeback` for scenarios that require a lot of random writes, such as incremental backups of MySQL.
 
 > **Warning**: When asynchronous upload is enabled, i.e. `--writeback` is specified when mounting the filesystem, do not delete the contents in `<cache-dir>/<UUID>/rawstaging` directory, as this will result in data loss.
 
-When the cache disk will be written full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache function is automatically turned off).
+When the cache disk is too full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache function is automatically turned off).
 
 When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing, and should be used with caution for scenarios requiring high data reliability.
 
