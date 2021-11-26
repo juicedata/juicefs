@@ -137,3 +137,12 @@ timerfd04 timerfd04
 perf_event_open02 perf_event_open02
 statx07 statx07
 io_uring02 io_uring02
+creat09 creat09
+fcntl17 fcntl17
+fcntl17_64 fcntl17_64
+finit_module02 finit_module02
+ioctl_loop05 ioctl_loop05
+ioctl_ns07 ioctl_ns07
+kill11 kill11
+mkdir02 mkdir02
+setxattr03 setxattr03
