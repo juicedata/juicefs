@@ -51,8 +51,9 @@ jobs:
 
       - name: LTP Syscalls
         run: |
-          git clone https://github.com/linux-test-project/ltp.git
-          cd ltp
+          wget https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2
+          tar -jxvf ltp-full-20210524.tar.bz2
+          cd ltp-full-20210524/
           make autotools
           ./configure
           make
