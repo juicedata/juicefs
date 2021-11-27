@@ -1,0 +1,77 @@
+name: "ltp"
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+
+jobs:
+  ltpsyscallshead:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: |
+          make juicefs
+          cp .github/workflows/bash/rm_syscalls /tmp/
+          cp .github/workflows/bash/rm_list.sh /tmp/
+
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount --enable-xattr -d redis://127.0.0.1:6379/1 /tmp/jfs &
+
+      - name: LTP Syscalls
+        run: |
+          git clone https://github.com/linux-test-project/ltp.git
+          cd ltp
+          make autotools
+          ./configure
+          make
+          sudo make install
+          cd /opt/ltp
+          sudo chmod +x /tmp/rm_list.sh
+          sudo chmod 777 runtest/syscalls
+          sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
+          sudo head -n 900 runtest/syscalls > runtest/syscallshalf
+          sudo chmod 777 runtest/syscallshalf
+          sudo ./runltp -d /tmp/jfs -f syscallshalf -C result.log.failed -T result.log.tconf -l result.log
+
+      - name: CAT MORE LOG
+        if: always()
+        run: |
+          cat /opt/ltp/runtest/syscallshalf | wc -l
+          sudo ls -l /opt/ltp/results
+          sudo ls -l /opt/ltp/output
+          sudo cat /opt/ltp/results/result.log
+          echo "--------------------"
+          sudo cat /opt/ltp/output/result.log.failed
+          echo "--------------------"
+          sudo cat /opt/ltp/output/result.log.tconf

@@ -12,7 +12,7 @@ on:
       - 'docs/**'
 
 jobs:
-  ltpfs:
+  ltpfstail:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -59,13 +59,14 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/fs
           sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
-          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
-          sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
+          sudo head -n 50 runtest/syscalls > runtest/fshalf
+          sudo chmod 777 runtest/fshalf
+          sudo ./runltp -d /tmp/jfs -f fshalf -C result.log.failed -T result.log.tconf -l result.log
 
       - name: CAT MORE LOG
         if: always()
         run: |
-          cat /opt/ltp/runtest/fs | wc -l
+          cat /opt/ltp/runtest/fshalf | wc -l
           sudo ls -l /opt/ltp/results
           sudo ls -l /opt/ltp/output
           sudo cat /opt/ltp/results/result.log
