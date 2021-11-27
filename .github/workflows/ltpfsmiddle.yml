@@ -12,7 +12,7 @@ on:
       - 'docs/**'
 
 jobs:
-  ltpfshead:
+  ltpfsmiddle:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -59,7 +59,7 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/fs
           sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
-          sudo head -n 55 runtest/fs > runtest/fshead
-          sudo chmod 777 runtest/fshead
-          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
-          sudo ./runltp -d /tmp/jfs -f fshead -C result.log.failed -T result.log.tconf -l result.log
+          sudo head -n 65 runtest/fs > runtest/fstmp
+          sudo tail -n 10 runtest/fstmp > runtest/fsmiddle
+          sudo chmod 777 runtest/fsmiddle
+          sudo ./runltp -d /tmp/jfs -f fsmiddle -C result.log.failed -T result.log.tconf -l result.log

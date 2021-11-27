@@ -60,7 +60,7 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/syscalls
           sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
-          sudo head -n 1200 runtest/syscalls > runtest/syscallstmp
-          sudo tail -n 600  runtest/syscallstmp > runtest/syscallsmiddle
+          sudo head -n 1250 runtest/syscalls > runtest/syscallstmp
+          sudo tail -n 650  runtest/syscallstmp > runtest/syscallsmiddle
           sudo chmod 777 runtest/syscallsmiddle
           sudo ./runltp -d /tmp/jfs -f syscallsmiddle -C result.log.failed -T result.log.tconf -l result.log
