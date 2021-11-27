@@ -58,14 +58,13 @@ jobs:
           cd /opt/ltp
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/fs
+          sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
           sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
           sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
 
       - name: CAT MORE LOG
         if: always()
         run: |
-          cat /opt/ltp/runtest/fs| wc -l
-          sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
           cat /opt/ltp/runtest/fs | wc -l
           sudo ls -l /opt/ltp/results
           sudo ls -l /opt/ltp/output
