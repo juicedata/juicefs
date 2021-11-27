@@ -59,18 +59,6 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/fs
           sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
-          sudo head -n 50 runtest/syscalls > runtest/fshalf
+          sudo tail -n 50 runtest/fs > runtest/fshalf
           sudo chmod 777 runtest/fshalf
           sudo ./runltp -d /tmp/jfs -f fshalf -C result.log.failed -T result.log.tconf -l result.log
-
-      - name: CAT MORE LOG
-        if: always()
-        run: |
-          cat /opt/ltp/runtest/fshalf | wc -l
-          sudo ls -l /opt/ltp/results
-          sudo ls -l /opt/ltp/output
-          sudo cat /opt/ltp/results/result.log
-          echo "--------------------"
-          sudo cat /opt/ltp/output/result.log.failed
-          echo "--------------------"
-          sudo cat /opt/ltp/output/result.log.tconf

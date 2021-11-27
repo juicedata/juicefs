@@ -64,15 +64,3 @@ jobs:
           sudo tail -n 600  runtest/syscallstmp > runtest/syscallsmiddle
           sudo chmod 777 runtest/syscallsmiddle
           sudo ./runltp -d /tmp/jfs -f syscallsmiddle -C result.log.failed -T result.log.tconf -l result.log
-
-      - name: CAT MORE LOG
-        if: always()
-        run: |
-          cat /opt/ltp/runtest/syscallsmiddle | wc -l
-          sudo ls -l /opt/ltp/results
-          sudo ls -l /opt/ltp/output
-          sudo cat /opt/ltp/results/result.log
-          echo "--------------------"
-          sudo cat /opt/ltp/output/result.log.failed
-          echo "--------------------"
-          sudo cat /opt/ltp/output/result.log.tconf

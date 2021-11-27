@@ -63,15 +63,3 @@ jobs:
           sudo tail -n 600 runtest/syscalls > runtest/syscallstail
           sudo chmod 777 runtest/syscallstail
           sudo ./runltp -d /tmp/jfs -f syscallstail -C result.log.failed -T result.log.tconf -l result.log
-
-      - name: CAT MORE LOG
-        if: always()
-        run: |
-          cat /opt/ltp/runtest/syscallstail | wc -l
-          sudo ls -l /opt/ltp/results
-          sudo ls -l /opt/ltp/output
-          sudo cat /opt/ltp/results/result.log
-          echo "--------------------"
-          sudo cat /opt/ltp/output/result.log.failed
-          echo "--------------------"
-          sudo cat /opt/ltp/output/result.log.tconf
