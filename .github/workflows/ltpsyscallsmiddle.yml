@@ -12,7 +12,7 @@ on:
       - 'docs/**'
 
 jobs:
-  ltpsyscallstail:
+  ltpsyscallsmiddle:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -60,14 +60,15 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/syscalls
           sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
-          sudo tail -n 600 runtest/syscalls > runtest/syscallstail
-          sudo chmod 777 runtest/syscallstail
-          sudo ./runltp -d /tmp/jfs -f syscallstail -C result.log.failed -T result.log.tconf -l result.log
+          sudo head -n 1200 runtest/syscalls > runtest/syscallstmp
+          sudo tail -n 600  runtest/syscallstmp > runtest/syscallsmiddle
+          sudo chmod 777 runtest/syscallsmiddle
+          sudo ./runltp -d /tmp/jfs -f syscallsmiddle -C result.log.failed -T result.log.tconf -l result.log
 
       - name: CAT MORE LOG
         if: always()
         run: |
-          cat /opt/ltp/runtest/syscallstail | wc -l
+          cat /opt/ltp/runtest/syscallsmiddle | wc -l
           sudo ls -l /opt/ltp/results
           sudo ls -l /opt/ltp/output
           sudo cat /opt/ltp/results/result.log

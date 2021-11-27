@@ -60,14 +60,14 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/syscalls
           sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
-          sudo head -n 900 runtest/syscalls > runtest/syscallshalf
-          sudo chmod 777 runtest/syscallshalf
-          sudo ./runltp -d /tmp/jfs -f syscallshalf -C result.log.failed -T result.log.tconf -l result.log
+          sudo head -n 600 runtest/syscalls > runtest/syscallshead
+          sudo chmod 777 runtest/syscallshead
+          sudo ./runltp -d /tmp/jfs -f syscallshead -C result.log.failed -T result.log.tconf -l result.log
 
       - name: CAT MORE LOG
         if: always()
         run: |
-          cat /opt/ltp/runtest/syscallshalf | wc -l
+          cat /opt/ltp/runtest/syscallshead | wc -l
           sudo ls -l /opt/ltp/results
           sudo ls -l /opt/ltp/output
           sudo cat /opt/ltp/results/result.log
