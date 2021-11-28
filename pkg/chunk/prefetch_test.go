@@ -1,10 +1,9 @@
 package chunk
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"go.uber.org/atomic"
 )
 
 func TestPrefetcher(t *testing.T) {
@@ -32,17 +31,17 @@ func TestPrefetcher(t *testing.T) {
 		}
 	})
 	t.Run("should ignore duplicate keys", func(t *testing.T) {
-		var counter atomic.Int32
+		var counter int32
 		f := newPrefetcher(4, func(k string) {
 			// Introduce a little latency to mimic a slower fetch operation
 			// so that our few duplicate keys can reach the prefetcher in the time period
 			time.Sleep(time.Millisecond)
-			counter.Inc()
+			atomic.AddInt32(&counter, 1)
 		})
 		for i := 0; i < 5; i++ {
 			f.fetch("a")
 		}
-		if counter.Load() > 1 {
+		if atomic.LoadInt32(&counter) > 1 {
 			t.Errorf("Duplicate keys fetched")
 		}
 	})
