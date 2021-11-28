@@ -1166,6 +1166,10 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
+func (m *dbMeta) Trash(ctx Context, parent Ino, name string) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
 func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	switch flags {
 	case 0, RenameNoReplace, RenameExchange:

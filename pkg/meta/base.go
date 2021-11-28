@@ -408,18 +408,29 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 }
 
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
+	wantWrite := flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0
+	if wantWrite && m.conf.ReadOnly {
 		return syscall.EROFS
 	}
+	if attr == nil {
+		attr = &Attr{}
+	}
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
+		if wantWrite && isSubTrash(attr.Parent) {
+			m.of.Close(inode)
+			return syscall.EPERM
+		}
 		return 0
 	}
 	var err syscall.Errno
 	// attr may be valid, see fs.Open()
-	if attr != nil && !attr.Full {
+	if !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}
 	if err == 0 {
+		if wantWrite && isSubTrash(attr.Parent) {
+			return syscall.EPERM
+		}
 		m.of.Open(inode, attr)
 	}
 	return err
@@ -489,23 +500,30 @@ func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
 
 func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
 	inode = m.checkRoot(inode)
-	var attr Attr
-	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
-		return err
-	}
-	defer timeit(time.Now())
-	if inode == m.root {
-		attr.Parent = m.root
-	}
-	*entries = []*Entry{
-		{
-			Inode: inode,
-			Name:  []byte("."),
-			Attr:  &Attr{Typ: TypeDirectory},
-		},
+	var parent Ino
+	if len(*entries) == 1 {
+		parent = m.root
+	} else {
+		var attr Attr
+		if err := m.GetAttr(ctx, inode, &attr); err != 0 {
+			return err
+		}
+		defer timeit(time.Now())
+		if inode == m.root {
+			parent = m.root
+		} else {
+			parent = attr.Parent
+		}
+		*entries = []*Entry{
+			{
+				Inode: inode,
+				Name:  []byte("."),
+				Attr:  &Attr{Typ: TypeDirectory},
+			},
+		}
 	}
 	*entries = append(*entries, &Entry{
-		Inode: attr.Parent,
+		Inode: parent,
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})

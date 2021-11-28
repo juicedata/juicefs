@@ -151,6 +151,10 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 		entry = &meta.Entry{Inode: ino, Attr: n.attr}
 		return
 	}
+	if v.hasSpecialParent(ctx, ino) {
+		err = syscall.EPERM
+		return
+	}
 	err = syscall.EINVAL
 	var attr = &Attr{}
 	if set&meta.SetAttrSize != 0 {
@@ -204,7 +208,7 @@ func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *u
 	if lockType(*typ).String() == "X" {
 		return syscall.EINVAL
 	}
-	if IsSpecialNode(ino) {
+	if IsSpecialNode(ino) || v.hasSpecialParent(ctx, ino) {
 		err = syscall.EPERM
 		return
 	}
@@ -223,7 +227,7 @@ func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end ui
 	if lockType(typ).String() == "X" {
 		return syscall.EINVAL
 	}
-	if IsSpecialNode(ino) {
+	if IsSpecialNode(ino) || v.hasSpecialParent(ctx, ino) {
 		err = syscall.EPERM
 		return
 	}
@@ -262,7 +266,7 @@ func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, b
 		return
 	}
 
-	if IsSpecialNode(ino) {
+	if IsSpecialNode(ino) || v.hasSpecialParent(ctx, ino) {
 		err = syscall.EPERM
 		return
 	}

@@ -255,6 +255,7 @@ func (r *redisMeta) NewSession() error {
 	go r.refreshSession()
 	go r.cleanupDeletedFiles()
 	go r.cleanupSlices()
+	go r.cleanupTrash()
 	return nil
 }
 
@@ -464,7 +465,7 @@ func (r *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	var encodedAttr []byte
 	var err error
 	entryKey := r.entryKey(parent)
-	if len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
+	if false && len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
 		var res interface{}
 		res, err = r.rdb.EvalSha(ctx, r.shaLookup, []string{entryKey, name}).Result()
 		if err != nil {
@@ -678,7 +679,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			return err
 		}
 		r.parseAttr(a, &t)
-		if t.Typ != TypeFile {
+		if t.Typ != TypeFile || isSubTrash(t.Parent) {
 			return syscall.EPERM
 		}
 		if length == t.Length {
@@ -1213,6 +1214,49 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		})
 		return err
 	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
+}
+
+func (r *redisMeta) Trash(ctx Context, parent Ino, name string) syscall.Errno {
+	if r.fmt.TrashDays <= 0 {
+		return r.Unlink(ctx, parent, name)
+	}
+	var subInode Ino
+	subName := time.Now().UTC().Format("2006-01-02-15")
+	st := r.txn(ctx, func(tx *redis.Tx) error {
+		buf, err := tx.HGet(ctx, r.entryKey(TrashInode), subName).Bytes()
+		if err == nil {
+			_, subInode = r.parseEntry(buf)
+			return nil
+		} else if err != redis.Nil {
+			return err
+		}
+		next, err := tx.Incr(ctx, "nextTrash").Uint64()
+		if err != nil {
+			return err
+		}
+		subInode = TrashInode + Ino(next)
+		subAttr := &Attr{
+			Typ:    TypeDirectory,
+			Mode:   0555,
+			Nlink:  2,
+			Length: 4 << 10,
+			Parent: TrashInode,
+			Full:   true,
+		}
+		tx.HSet(ctx, r.entryKey(TrashInode), subName, r.packEntry(TypeDirectory, subInode))
+		tx.Set(ctx, r.inodeKey(subInode), r.marshal(subAttr), 0)
+		return nil
+	}, r.entryKey(TrashInode))
+	if st != 0 {
+		logger.Warnf("failed to create trash subdir: %s", st)
+		return st
+	}
+	var inode Ino
+	if st = r.doLookup(ctx, parent, name, &inode, nil); st != 0 {
+		logger.Warnf("failed to lookup parent %d name %s: %s", parent, name, st)
+		return st
+	}
+	return r.Rename(ctx, parent, name, subInode, fmt.Sprintf("%d-%d-%s", parent, inode, name), 0, nil, nil)
 }
 
 func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -1918,6 +1962,104 @@ func (r *redisMeta) cleanupSlices() {
 			if cursor == 0 {
 				break
 			}
+		}
+	}
+}
+
+func (r *redisMeta) cleanupTrash() {
+	ctx := Background
+	key := "lastCleanup"
+	for {
+		time.Sleep(time.Hour)
+		var value []byte
+		if st := r.GetXattr(ctx, TrashInode, key, &value); st != 0 && st != ENOATTR {
+			logger.Warnf("getxattr inode %d key %s: %s", TrashInode, key, st)
+			continue
+		}
+
+		var last time.Time
+		var err error
+		if len(value) > 0 {
+			last, err = time.Parse(time.RFC3339, string(value))
+		}
+		if err != nil {
+			logger.Warnf("parse time value %s: %s", value, err)
+			continue
+		}
+		if now := time.Now(); now.Sub(last) >= time.Hour {
+			if st := r.SetXattr(ctx, TrashInode, key, []byte(now.Format(time.RFC3339)), XattrCreateOrReplace); st != 0 {
+				logger.Warnf("setxattr inode %d key %s: %s", TrashInode, key, st)
+				continue
+			}
+			go r.doCleanupTrash()
+		}
+	}
+}
+
+func (r *redisMeta) doCleanupTrash() {
+	logger.Debugf("cleanup trash: started")
+	ctx := Background
+	now := time.Now()
+	var entries []*Entry
+	if st := r.doReaddir(ctx, TrashInode, 0, &entries); st != 0 {
+		logger.Warnf("readdir trash %d: %s", TrashInode, st)
+		return
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
+	maxDeletes := int(1e6)
+	var count int
+	defer func() {
+		msg := fmt.Sprintf("cleanup trash: deleted %d files", count)
+		if count == maxDeletes {
+			msg += "(reach maximum deletes)"
+		}
+		logger.Infof("%s in %v", msg, time.Since(now))
+	}()
+
+	edge := now.Add(-time.Duration(24*r.fmt.TrashDays+1) * time.Hour)
+	for _, e := range entries {
+		ts, err := time.Parse("2006-01-02-15", string(e.Name))
+		if err != nil {
+			logger.Warnf("bad entry as a subTrash: %s", e.Name)
+			continue
+		}
+		if ts.Before(edge) {
+			var subEntries []*Entry
+			if st := r.doReaddir(ctx, e.Inode, 0, &subEntries); st != 0 {
+				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
+				continue
+			}
+			rmdir := true
+			for _, se := range subEntries {
+				if st := r.Unlink(ctx, e.Inode, string(se.Name)); st == 0 {
+					count++
+				} else {
+					logger.Warnf("unlink trash file %s/%s: %s", e.Name, se.Name, st)
+					rmdir = false
+					continue
+				}
+				if count >= maxDeletes {
+					return
+				}
+			}
+			if rmdir {
+				if st := r.txn(ctx, func(tx *redis.Tx) error {
+					cnt, err := tx.HLen(ctx, r.entryKey(e.Inode)).Result()
+					if err != nil {
+						return err
+					}
+					if cnt > 0 {
+						return syscall.ENOTEMPTY
+					}
+					tx.HDel(ctx, r.entryKey(TrashInode), string(e.Name))
+					tx.Del(ctx, r.inodeKey(e.Inode))
+					return nil
+				}, r.entryKey(TrashInode)); st != 0 {
+					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
+				}
+			}
+		} else {
+			break
 		}
 	}
 }

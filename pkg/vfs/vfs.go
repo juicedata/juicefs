@@ -133,6 +133,9 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
+	} else if IsSpecialNode(parent) {
+		err = syscall.EPERM
+		return
 	}
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
@@ -163,7 +166,11 @@ func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Unlink(ctx, parent, name)
+	if IsSpecialNode(parent) {
+		err = v.Meta.Unlink(ctx, parent, name)
+	} else {
+		err = v.Meta.Trash(ctx, parent, name)
+	}
 	return
 }
 
@@ -173,6 +180,9 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	}()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
+		return
+	} else if IsSpecialNode(parent) {
+		err = syscall.EPERM
 		return
 	}
 	if len(name) > maxName {
@@ -191,6 +201,10 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "rmdir (%d,%s): %s", parent, name, strerr(err)) }()
+	if IsSpecialNode(parent) {
+		err = syscall.EPERM
+		return
+	}
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
@@ -205,6 +219,9 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 	}()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
+		return
+	} else if IsSpecialNode(parent) {
+		err = syscall.EPERM
 		return
 	}
 	if len(name) > maxName || len(path) >= maxSymlink {
@@ -235,7 +252,7 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 		err = syscall.EPERM
 		return
 	}
-	if newparent == rootID && IsSpecialName(newname) {
+	if newparent == rootID && IsSpecialName(newname) || IsSpecialNode(newparent) {
 		err = syscall.EPERM
 		return
 	}
@@ -256,7 +273,7 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 		err = syscall.EPERM
 		return
 	}
-	if newparent == rootID && IsSpecialName(newname) {
+	if newparent == rootID && IsSpecialName(newname) || IsSpecialNode(newparent) {
 		err = syscall.EPERM
 		return
 	}
@@ -302,6 +319,14 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 
 	if h.children == nil || off == 0 {
 		var inodes []*meta.Entry
+		if ino == trashInode {
+			node := getInternalNode(ino)
+			inodes = append(inodes, &meta.Entry{
+				Inode: node.inode,
+				Name:  []byte("."),
+				Attr:  node.attr,
+			})
+		}
 		err = v.Meta.Readdir(ctx, ino, 1, &inodes)
 		if err == syscall.EACCES {
 			err = v.Meta.Readdir(ctx, ino, 0, &inodes)
@@ -343,6 +368,9 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 	}()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
+		return
+	} else if IsSpecialNode(parent) {
+		err = syscall.EPERM
 		return
 	}
 	if len(name) > maxName {
@@ -777,7 +805,7 @@ const (
 
 func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer func() { logit(ctx, "setxattr (%d,%s,%d,%d): %s", ino, name, len(value), flags, strerr(err)) }()
-	if IsSpecialNode(ino) {
+	if IsSpecialNode(ino) || v.hasSpecialParent(ctx, ino) {
 		err = syscall.EPERM
 		return
 	}
@@ -854,7 +882,7 @@ func (v *VFS) ListXattr(ctx Context, ino Ino, size int) (data []byte, err syscal
 
 func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "removexattr (%d,%s): %s", ino, name, strerr(err)) }()
-	if IsSpecialNode(ino) {
+	if IsSpecialNode(ino) || v.hasSpecialParent(ctx, ino) {
 		err = syscall.EPERM
 		return
 	}
