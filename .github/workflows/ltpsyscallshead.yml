@@ -1,0 +1,59 @@
+name: "ltp"
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  ltpsyscallshead:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: |
+          make juicefs
+          cp .github/workflows/bash/rm_syscalls /tmp/
+          cp .github/workflows/bash/rm_list.sh /tmp/
+
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount --enable-xattr -d redis://127.0.0.1:6379/1 /tmp/jfs &
+
+      - name: LTP Syscalls
+        run: |
+          git clone https://github.com/linux-test-project/ltp.git
+          cd ltp
+          make autotools
+          ./configure
+          make
+          sudo make install
+          cd /opt/ltp
+          sudo chmod +x /tmp/rm_list.sh
+          sudo chmod 777 runtest/syscalls
+          sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
+          sudo head -n 600 runtest/syscalls > runtest/syscallshead
+          sudo chmod 777 runtest/syscallshead
+          sudo ./runltp -d /tmp/jfs -f syscallshead -C result.log.failed -T result.log.tconf -l result.log
