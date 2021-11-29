@@ -406,13 +406,16 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 		return fuse.Status(err)
 	}
 	out.NameLen = 255
-	out.Bsize = st.Bsize
-	out.Blocks = st.Blocks
-	out.Bavail = st.Bavail
-	out.Bfree = st.Bavail
+	out.Frsize = 4096
+	out.Bsize = 4096
+	out.Blocks = st.Total / uint64(out.Bsize)
+	if out.Blocks < 1 {
+		out.Blocks = 1
+	}
+	out.Bavail = st.Avail / uint64(out.Bsize)
+	out.Bfree = out.Bavail
 	out.Files = st.Files
 	out.Ffree = st.Favail
-	out.Frsize = 4096
 	return 0
 }
 

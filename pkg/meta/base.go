@@ -191,7 +191,6 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 	if used < 0 {
 		used = 0
 	}
-	used = ((used >> 16) + 1) << 16 // aligned to 64K
 	if m.fmt.Capacity > 0 {
 		*totalspace = m.fmt.Capacity
 		if *totalspace < uint64(used) {

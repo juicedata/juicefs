@@ -79,8 +79,8 @@ func TestVFSBasic(t *testing.T) {
 
 	if st, e := v.StatFS(ctx, 1); e != 0 {
 		t.Fatalf("statfs 1: %s", e)
-	} else if st.Blocks-st.Bavail != 1 {
-		t.Fatalf("used: %d", st.Blocks-st.Bavail)
+	} else if st.Total-st.Avail != 0 {
+		t.Fatalf("used: %d", st.Total-st.Avail)
 	}
 
 	// dirs
