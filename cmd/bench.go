@@ -289,8 +289,12 @@ func bench(ctx *cli.Context) error {
 		}
 	}
 	dropCaches := func() {
-		if err := exec.Command(purgeArgs[0], purgeArgs[1:]...).Run(); err != nil {
-			logger.Warnf("Failed to clean kernel caches: %s", err)
+		if os.Getenv("SKIP_DROP_CACHES") != "true" {
+			if err := exec.Command(purgeArgs[0], purgeArgs[1:]...).Run(); err != nil {
+				logger.Warnf("Failed to clean kernel caches: %s", err)
+			}
+		} else {
+			logger.Warnf("Clear cache operation has been skipped")
 		}
 	}
 	if os.Getuid() != 0 {

@@ -78,6 +78,7 @@ func ResetPrometheus() {
 }
 
 func MountTmp(metaUrl, mountpoint string) error {
+	ResetRedis(metaUrl)
 	formatArgs := []string{"", "format", "--storage", "file", "--bucket", "/tmp/testMountDir", metaUrl, "test"}
 	err := Main(formatArgs)
 	if err != nil {
