@@ -169,7 +169,7 @@ func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	if IsSpecialNode(parent) {
 		err = v.Meta.Unlink(ctx, parent, name)
 	} else {
-		err = v.Meta.Trash(ctx, parent, name)
+		err = v.Meta.Trash(ctx, parent, name, false)
 	}
 	return
 }
@@ -209,7 +209,11 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Rmdir(ctx, parent, name)
+	if IsSpecialNode(parent) {
+		err = v.Meta.Rmdir(ctx, parent, name)
+	} else {
+		err = v.Meta.Trash(ctx, parent, name, true)
+	}
 	return
 }
 
@@ -805,7 +809,7 @@ const (
 
 func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer func() { logit(ctx, "setxattr (%d,%s,%d,%d): %s", ino, name, len(value), flags, strerr(err)) }()
-	if IsSpecialNode(ino) || v.hasSpecialParent(ctx, ino) {
+	if IsSpecialNode(ino) {
 		err = syscall.EPERM
 		return
 	}
@@ -882,7 +886,7 @@ func (v *VFS) ListXattr(ctx Context, ino Ino, size int) (data []byte, err syscal
 
 func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "removexattr (%d,%s): %s", ino, name, strerr(err)) }()
-	if IsSpecialNode(ino) || v.hasSpecialParent(ctx, ino) {
+	if IsSpecialNode(ino) {
 		err = syscall.EPERM
 		return
 	}

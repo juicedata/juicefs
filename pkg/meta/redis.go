@@ -1216,9 +1216,13 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
 }
 
-func (r *redisMeta) Trash(ctx Context, parent Ino, name string) syscall.Errno {
+func (r *redisMeta) Trash(ctx Context, parent Ino, name string, isDir bool) syscall.Errno {
 	if r.fmt.TrashDays <= 0 {
-		return r.Unlink(ctx, parent, name)
+		if isDir {
+			return r.Rmdir(ctx, parent, name)
+		} else {
+			return r.Unlink(ctx, parent, name)
+		}
 	}
 	var subInode Ino
 	subName := time.Now().UTC().Format("2006-01-02-15")

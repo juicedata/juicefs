@@ -1166,7 +1166,7 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
-func (m *dbMeta) Trash(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *dbMeta) Trash(ctx Context, parent Ino, name string, isDir bool) syscall.Errno {
 	return syscall.ENOTSUP
 }
 

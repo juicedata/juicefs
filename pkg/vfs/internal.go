@@ -152,14 +152,6 @@ func collectMetrics() []byte {
 	return w.Bytes()
 }
 
-func (v *VFS) hasSpecialParent(ctx Context, ino Ino) bool {
-	var attr Attr
-	if err := v.Meta.GetAttr(ctx, ino, &attr); err == 0 {
-		return IsSpecialNode(attr.Parent)
-	}
-	return false
-}
-
 func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
 	switch cmd {
 	case meta.Rmr:

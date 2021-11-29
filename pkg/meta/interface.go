@@ -270,7 +270,7 @@ type Meta interface {
 	Unlink(ctx Context, parent Ino, name string) syscall.Errno
 	// Rmdir removes an empty sub-directory.
 	Rmdir(ctx Context, parent Ino, name string) syscall.Errno
-	Trash(ctx Context, parent Ino, name string) syscall.Errno
+	Trash(ctx Context, parent Ino, name string, isDir bool) syscall.Errno
 	// Rename move an entry from a source directory to another with given name.
 	// The targeted entry will be overwrited if it's a file or empty directory.
 	// For Hadoop, the target should not be overwritten.
