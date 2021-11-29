@@ -500,30 +500,31 @@ func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
 
 func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
 	inode = m.checkRoot(inode)
-	var parent Ino
-	if len(*entries) == 1 {
-		parent = m.root
-	} else {
-		var attr Attr
-		if err := m.GetAttr(ctx, inode, &attr); err != 0 {
-			return err
-		}
-		defer timeit(time.Now())
-		if inode == m.root {
-			parent = m.root
-		} else {
-			parent = attr.Parent
-		}
-		*entries = []*Entry{
-			{
-				Inode: inode,
-				Name:  []byte("."),
-				Attr:  &Attr{Typ: TypeDirectory},
-			},
-		}
+	var attr Attr
+	if inode == TrashInode {
+		now := time.Now().Unix()
+		attr.Typ = TypeDirectory
+		attr.Nlink = 2
+		attr.Atime = now
+		attr.Mtime = now
+		attr.Ctime = now
+		attr.Full = true
+	} else if err := m.GetAttr(ctx, inode, &attr); err != 0 {
+		return err
+	}
+	defer timeit(time.Now())
+	if inode == m.root || inode == TrashInode {
+		attr.Parent = m.root
+	}
+	*entries = []*Entry{
+		{
+			Inode: inode,
+			Name:  []byte("."),
+			Attr:  &attr,
+		},
 	}
 	*entries = append(*entries, &Entry{
-		Inode: parent,
+		Inode: attr.Parent,
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})

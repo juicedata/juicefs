@@ -171,6 +171,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
+			old.TrashDays = format.TrashDays
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""

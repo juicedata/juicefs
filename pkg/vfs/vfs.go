@@ -201,10 +201,6 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "rmdir (%d,%s): %s", parent, name, strerr(err)) }()
-	if IsSpecialNode(parent) {
-		err = syscall.EPERM
-		return
-	}
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
@@ -323,14 +319,6 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 
 	if h.children == nil || off == 0 {
 		var inodes []*meta.Entry
-		if ino == trashInode {
-			node := getInternalNode(ino)
-			inodes = append(inodes, &meta.Entry{
-				Inode: node.inode,
-				Name:  []byte("."),
-				Attr:  node.attr,
-			})
-		}
 		err = v.Meta.Readdir(ctx, ino, 1, &inodes)
 		if err == syscall.EACCES {
 			err = v.Meta.Readdir(ctx, ino, 0, &inodes)
