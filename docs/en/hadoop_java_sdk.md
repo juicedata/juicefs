@@ -291,10 +291,10 @@ Enable metrics reporting through following configurations:
 </property>
 ```
 
-**Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly.
-
-It is recommended to use the following command to clean up once every hour. The running Hadoop Java SDK will continue to update after the metrics are cleared, which basically does not affect the use.
-
+> **Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly.
+>
+> It is recommended to use the following command to clean up once every hour. The running Hadoop Java SDK will continue to update after the metrics are cleared, which basically does not affect the use.
+>
 > ```bash
 > $ curl -X DELETE http://host:9091/metrics/job/juicefs
 > ```
