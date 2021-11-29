@@ -26,6 +26,8 @@ Below are descriptions of each metrics.
 
 > **Tip**: When Prometheus scrapes a target, it attaches `instance` label automatically to the scraped time series which serve to identify the scraped target, its format is `<host>:<port>`. Refer to [official document](https://prometheus.io/docs/concepts/jobs_instances) for more information.
 
+> **Tip**: If the monitoring metrics are reported through [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) (for example, [JuiceFS Hadoop Java SDK](hadoop_java_sdk.md#monitoring-metrics-collection)), the value of the `mp` label is `sdk-<PID>`, and the value of the `instance` label is the host name.
+
 ## File system
 
 ### Metrics

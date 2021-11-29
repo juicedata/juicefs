@@ -291,12 +291,12 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 </property>
 ```
 
-**注意**：每一个使用 JuiceFS Hadoop Java SDK 的进程会有唯一的指标，而 Pushgateway 会一直记住所有收集到的指标，导致指标数持续积累占用过多内存，也会使得 Prometheus 抓取指标时变慢，建议定期清理 Pushgateway 上 `job` 为 `juicefs` 的指标。
-
-每个小时使用下面的命令清理一次，运行中的 Hadoop Java SDK 会在指标清空后继续更新，基本不影响使用。
-
+> **注意**：每一个使用 JuiceFS Hadoop Java SDK 的进程会有唯一的指标，而 Pushgateway 会一直记住所有收集到的指标，导致指标数持续积累占用过多内存，也会使得 Prometheus 抓取指标时变慢，建议定期清理 Pushgateway 上 `job` 为 `juicefs` 的指标。
+>
+> 每个小时使用下面的命令清理一次，运行中的 Hadoop Java SDK 会在指标清空后继续更新，基本不影响使用。
+>
 > ```bash
->$ curl -X DELETE http://host:9091/metrics/job/juicefs
+> $ curl -X DELETE http://host:9091/metrics/job/juicefs
 > ```
 
 关于所有监控指标的描述，请查看 [JuiceFS 监控指标](p8s_metrics.md)。
