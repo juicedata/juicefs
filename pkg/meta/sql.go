@@ -240,6 +240,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
+			old.TrashDays = format.TrashDays
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""
@@ -254,25 +255,32 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	}
 
 	m.fmt = format
+	now := time.Now()
+	n := &node{
+		Type:   TypeDirectory,
+		Atime:  now.UnixNano() / 1000,
+		Mtime:  now.UnixNano() / 1000,
+		Ctime:  now.UnixNano() / 1000,
+		Nlink:  2,
+		Length: 4 << 10,
+		Parent: 1,
+	}
 	return m.txn(func(s *xorm.Session) error {
+		if format.TrashDays > 0 {
+			n.Inode = TrashInode
+			n.Mode = 0555
+			_, err := s.InsertOne(n)
+			if err != nil && !strings.Contains(err.Error(), "UNIQUE") {
+				return err
+			}
+		}
 		if ok {
 			_, err = s.Update(&setting{"format", string(data)}, &setting{Name: "format"})
 			return err
 		}
-
 		var set = &setting{"format", string(data)}
-		now := time.Now()
-		var root = &node{
-			Inode:  1,
-			Type:   TypeDirectory,
-			Mode:   0777,
-			Atime:  now.UnixNano() / 1000,
-			Mtime:  now.UnixNano() / 1000,
-			Ctime:  now.UnixNano() / 1000,
-			Nlink:  2,
-			Length: 4 << 10,
-			Parent: 1,
-		}
+		n.Inode = 1
+		n.Mode = 0777
 		var cs = []counter{
 			{"nextInode", 2}, // 1 is root
 			{"nextChunk", 1},
@@ -281,7 +289,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			{"totalInodes", 0},
 			{"nextCleanupSlices", 0},
 		}
-		return mustInsert(s, set, root, &cs)
+		return mustInsert(s, set, n, &cs)
 	})
 }
 
@@ -350,6 +358,7 @@ func (m *dbMeta) NewSession() error {
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
+	go m.cleanupTrash()
 	go m.flushStats()
 	return nil
 }
@@ -859,7 +868,15 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		return syscall.ENOSPC
 	}
 	parent = m.checkRoot(parent)
-	ino, err := m.nextInode()
+	var ino Ino
+	var err error
+	if parent == TrashInode {
+		var next int64
+		next, err = m.incrCounter("nextSession", 1)
+		ino = TrashInode + Ino(next)
+	} else {
+		ino, err = m.nextInode()
+	}
 	if err != nil {
 		return errno(err)
 	}
@@ -913,14 +930,14 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		if foundIno != 0 {
-			if _type == TypeFile && attr != nil {
+			if _type == TypeFile || _type == TypeDirectory {
 				foundNode := node{Inode: foundIno}
 				ok, err = s.Get(&foundNode)
 				if err != nil {
 					return err
 				} else if ok {
 					m.parseAttr(&foundNode, attr)
-				} else {
+				} else if attr != nil {
 					*attr = Attr{Typ: foundType, Parent: parent} // corrupt entry
 				}
 				if inode != nil {
@@ -966,9 +983,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	return errno(err)
 }
 
-func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
+func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var newSpace, newInode int64
 	var n node
 	var opened bool
@@ -1084,15 +1099,7 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
-func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
-	if name == "." {
-		return syscall.EINVAL
-	}
-	if name == ".." {
-		return syscall.ENOTEMPTY
-	}
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
+func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
@@ -1166,22 +1173,8 @@ func (m *dbMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
-func (m *dbMeta) Trash(ctx Context, parent Ino, name string, isDir bool) syscall.Errno {
-	return syscall.ENOTSUP
-}
-
-func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	switch flags {
-	case 0, RenameNoReplace, RenameExchange:
-	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
-		return syscall.ENOTSUP
-	default:
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
+func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	exchange := flags == RenameExchange
-	parentSrc = m.checkRoot(parentSrc)
-	parentDst = m.checkRoot(parentDst)
 	var opened bool
 	var dino Ino
 	var dn node
@@ -1407,10 +1400,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	return errno(err)
 }
 
-func (m *dbMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)

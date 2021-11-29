@@ -70,6 +70,11 @@ const (
 )
 
 const TrashInode = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
+const trashName = ".trash"
+
+func isTrash(ino Ino) bool {
+	return ino >= TrashInode
+}
 
 // MsgCallback is a callback for messages from meta service.
 type MsgCallback func(...interface{}) error
@@ -94,10 +99,6 @@ type Attr struct {
 	Parent    Ino  // inode of parent, only for Directory
 	Full      bool // the attributes are completed or not
 	KeepCache bool // whether to keep the cached page or not
-}
-
-func isSubTrash(ino Ino) bool {
-	return ino > TrashInode
 }
 
 func typeToStatType(_type uint8) uint32 {
@@ -270,7 +271,6 @@ type Meta interface {
 	Unlink(ctx Context, parent Ino, name string) syscall.Errno
 	// Rmdir removes an empty sub-directory.
 	Rmdir(ctx Context, parent Ino, name string) syscall.Errno
-	Trash(ctx Context, parent Ino, name string, isDir bool) syscall.Errno
 	// Rename move an entry from a source directory to another with given name.
 	// The targeted entry will be overwrited if it's a file or empty directory.
 	// For Hadoop, the target should not be overwritten.

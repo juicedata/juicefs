@@ -17,6 +17,7 @@ package meta
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -42,8 +43,14 @@ type engine interface {
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
+	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
+	doUnlink(ctx Context, parent Ino, name string) syscall.Errno
+	doRmdir(ctx Context, parent Ino, name string) syscall.Errno
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno
+	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
+	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
+	SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 }
 
 type baseMeta struct {
@@ -256,14 +263,20 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		}
 	}
 	if name == "." {
-		st := m.GetAttr(ctx, parent, attr)
-		if st != 0 {
+		if st := m.GetAttr(ctx, parent, attr); st != 0 {
 			return st
 		}
 		if attr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
 		*inode = parent
+		return 0
+	}
+	if parent == m.root && name == trashName {
+		if st := m.GetAttr(ctx, TrashInode, attr); st != 0 {
+			return st
+		}
+		*inode = TrashInode
 		return 0
 	}
 	attr.Full = false
@@ -360,11 +373,23 @@ func (m *baseMeta) nextInode() (Ino, error) {
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if isTrash(parent) {
+		return syscall.EPERM
+	}
+	if parent == 1 && name == trashName {
+		return syscall.EEXIST
+	}
 	defer timeit(time.Now())
 	return m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
 }
 
 func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if isTrash(parent) {
+		return syscall.EPERM
+	}
+	if parent == 1 && name == trashName {
+		return syscall.EEXIST
+	}
 	defer timeit(time.Now())
 	if attr == nil {
 		attr = &Attr{}
@@ -380,13 +405,38 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 }
 
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
+	if isTrash(parent) {
+		return syscall.EPERM
+	}
+	if parent == 1 && name == trashName {
+		return syscall.EEXIST
+	}
 	defer timeit(time.Now())
 	return m.en.doMknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if isTrash(parent) {
+		return syscall.EPERM
+	}
+	if parent == 1 && name == trashName {
+		return syscall.EEXIST
+	}
 	defer timeit(time.Now())
 	return m.en.doMknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
+}
+
+func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	if isTrash(parent) {
+		return syscall.EPERM
+	}
+	if parent == 1 && name == trashName {
+		return syscall.EPERM
+	}
+	defer timeit(time.Now())
+	parent = m.checkRoot(parent)
+	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	return m.en.doLink(ctx, inode, parent, name, attr)
 }
 
 func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
@@ -407,30 +457,87 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 	return 0
 }
 
+func (m *baseMeta) toTrash(ctx Context, parent Ino, name string) syscall.Errno {
+	var subTrash, inode Ino
+	subName := time.Now().UTC().Format("2006-01-02-15")
+	st := m.en.doLookup(ctx, TrashInode, subName, &subTrash, nil)
+	if st == syscall.ENOENT {
+		st = m.en.doMknod(ctx, TrashInode, subName, TypeDirectory, 0555, 0, 0, "", &subTrash, nil)
+	}
+	if st != 0 && st != syscall.EEXIST {
+		return st
+	}
+	if st = m.en.doLookup(ctx, parent, name, &inode, nil); st != 0 {
+		return st
+	}
+	return m.en.doRename(ctx, parent, name, subTrash, fmt.Sprintf("%d-%d-%s", parent, inode, name), 0, nil, nil)
+}
+
+func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
+	if parent == 1 && name == trashName {
+		return syscall.EPERM
+	}
+	defer timeit(time.Now())
+	parent = m.checkRoot(parent)
+	if m.fmt.TrashDays <= 0 || isTrash(parent) {
+		return m.en.doUnlink(ctx, parent, name)
+	} else {
+		return m.toTrash(ctx, parent, name)
+	}
+}
+
+func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
+	if name == "." {
+		return syscall.EINVAL
+	}
+	if name == ".." {
+		return syscall.ENOTEMPTY
+	}
+	if parent == 1 && name == trashName {
+		return syscall.EPERM
+	}
+	defer timeit(time.Now())
+	parent = m.checkRoot(parent)
+	if m.fmt.TrashDays <= 0 || isTrash(parent) {
+		return m.en.doRmdir(ctx, parent, name)
+	} else {
+		return m.toTrash(ctx, parent, name)
+	}
+}
+
+func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	if isTrash(parentDst) {
+		return syscall.EPERM
+	}
+	if parentSrc == 1 && nameSrc == trashName || parentDst == 1 && nameDst == trashName {
+		return syscall.EPERM
+	}
+	switch flags {
+	case 0, RenameNoReplace, RenameExchange:
+	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
+		return syscall.ENOTSUP
+	default:
+		return syscall.EINVAL
+	}
+	defer timeit(time.Now())
+	parentSrc = m.checkRoot(parentSrc)
+	parentDst = m.checkRoot(parentDst)
+	return m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, attr)
+}
+
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	wantWrite := flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0
-	if wantWrite && m.conf.ReadOnly {
+	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
-	if attr == nil {
-		attr = &Attr{}
-	}
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
-		if wantWrite && isSubTrash(attr.Parent) {
-			m.of.Close(inode)
-			return syscall.EPERM
-		}
 		return 0
 	}
 	var err syscall.Errno
 	// attr may be valid, see fs.Open()
-	if !attr.Full {
+	if attr != nil && !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}
 	if err == 0 {
-		if wantWrite && isSubTrash(attr.Parent) {
-			return syscall.EPERM
-		}
 		m.of.Open(inode, attr)
 	}
 	return err
@@ -471,6 +578,36 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	return 0
 }
 
+func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+	inode = m.checkRoot(inode)
+	var attr Attr
+	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
+		return err
+	}
+	defer timeit(time.Now())
+	*entries = []*Entry{
+		{
+			Inode: inode,
+			Name:  []byte("."),
+			Attr:  &Attr{Typ: TypeDirectory},
+		},
+	}
+	if inode == m.root {
+		attr.Parent = m.root
+		*entries = append(*entries, &Entry{
+			Inode: TrashInode,
+			Name:  []byte(trashName),
+			Attr:  &Attr{Typ: TypeDirectory},
+		})
+	}
+	*entries = append(*entries, &Entry{
+		Inode: attr.Parent,
+		Name:  []byte(".."),
+		Attr:  &Attr{Typ: TypeDirectory},
+	})
+	return m.en.doReaddir(ctx, inode, plus, entries)
+}
+
 func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 	if opened {
 		m.Lock()
@@ -498,35 +635,89 @@ func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
 	}
 }
 
-func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
-	inode = m.checkRoot(inode)
-	var attr Attr
-	if inode == TrashInode {
-		now := time.Now().Unix()
-		attr.Typ = TypeDirectory
-		attr.Nlink = 2
-		attr.Atime = now
-		attr.Mtime = now
-		attr.Ctime = now
-		attr.Full = true
-	} else if err := m.GetAttr(ctx, inode, &attr); err != 0 {
-		return err
+func (m *baseMeta) cleanupTrash() {
+	ctx := Background
+	key := "lastCleanup"
+	for {
+		time.Sleep(time.Hour)
+		var value []byte
+		if st := m.en.GetXattr(ctx, TrashInode, key, &value); st != 0 && st != ENOATTR {
+			logger.Warnf("getxattr inode %d key %s: %s", TrashInode, key, st)
+			continue
+		}
+
+		var last time.Time
+		var err error
+		if len(value) > 0 {
+			last, err = time.Parse(time.RFC3339, string(value))
+		}
+		if err != nil {
+			logger.Warnf("parse time value %s: %s", value, err)
+			continue
+		}
+		if now := time.Now(); now.Sub(last) >= time.Hour {
+			if st := m.en.SetXattr(ctx, TrashInode, key, []byte(now.Format(time.RFC3339)), XattrCreateOrReplace); st != 0 {
+				logger.Warnf("setxattr inode %d key %s: %s", TrashInode, key, st)
+				continue
+			}
+			go m.doCleanupTrash()
+		}
 	}
-	defer timeit(time.Now())
-	if inode == m.root || inode == TrashInode {
-		attr.Parent = m.root
+}
+
+func (m *baseMeta) doCleanupTrash() {
+	logger.Debugf("cleanup trash: started")
+	ctx := Background
+	now := time.Now()
+	var entries []*Entry
+	if st := m.en.doReaddir(ctx, TrashInode, 0, &entries); st != 0 {
+		logger.Warnf("readdir trash %d: %s", TrashInode, st)
+		return
 	}
-	*entries = []*Entry{
-		{
-			Inode: inode,
-			Name:  []byte("."),
-			Attr:  &attr,
-		},
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
+	maxDeletes := int(1e6)
+	var count int
+	defer func() {
+		msg := fmt.Sprintf("cleanup trash: deleted %d files", count)
+		if count == maxDeletes {
+			msg += "(reach maximum deletes)"
+		}
+		logger.Infof("%s in %v", msg, time.Since(now))
+	}()
+
+	edge := now.Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
+	for _, e := range entries {
+		ts, err := time.Parse("2006-01-02-15", string(e.Name))
+		if err != nil {
+			logger.Warnf("bad entry as a subTrash: %s", e.Name)
+			continue
+		}
+		if ts.Before(edge) {
+			var subEntries []*Entry
+			if st := m.en.doReaddir(ctx, e.Inode, 0, &subEntries); st != 0 {
+				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
+				continue
+			}
+			rmdir := true
+			for _, se := range subEntries {
+				if st := m.en.doUnlink(ctx, e.Inode, string(se.Name)); st == 0 {
+					count++
+				} else {
+					logger.Warnf("unlink trash file %s/%s: %s", e.Name, se.Name, st)
+					rmdir = false
+					continue
+				}
+				if count >= maxDeletes {
+					return
+				}
+			}
+			if rmdir {
+				if st := m.en.doRmdir(ctx, TrashInode, string(e.Name)); st != 0 {
+					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
+				}
+			}
+		} else {
+			break
+		}
 	}
-	*entries = append(*entries, &Entry{
-		Inode: attr.Parent,
-		Name:  []byte(".."),
-		Attr:  &Attr{Typ: TypeDirectory},
-	})
-	return m.en.doReaddir(ctx, inode, plus, entries)
 }

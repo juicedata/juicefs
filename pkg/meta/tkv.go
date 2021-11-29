@@ -378,6 +378,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
+			old.TrashDays = format.TrashDays
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""
@@ -392,21 +393,28 @@ func (m *kvMeta) Init(format Format, force bool) error {
 	}
 
 	m.fmt = format
+	ts := time.Now().Unix()
+	attr := &Attr{
+		Typ:    TypeDirectory,
+		Atime:  ts,
+		Mtime:  ts,
+		Ctime:  ts,
+		Nlink:  2,
+		Length: 4 << 10,
+		Parent: 1,
+	}
 	return m.txn(func(tx kvTxn) error {
+		if format.TrashDays > 0 {
+			buf := tx.get(m.inodeKey(TrashInode))
+			if buf == nil {
+				attr.Mode = 0555
+				tx.set(m.inodeKey(TrashInode), m.marshal(attr))
+			}
+		}
 		tx.set(m.fmtKey("setting"), data)
 		if body == nil || m.client.name() == "memkv" {
-			// root inode
-			var attr Attr
-			attr.Typ = TypeDirectory
 			attr.Mode = 0777
-			ts := time.Now().Unix()
-			attr.Atime = ts
-			attr.Mtime = ts
-			attr.Ctime = ts
-			attr.Nlink = 2
-			attr.Length = 4 << 10
-			attr.Parent = 1
-			tx.set(m.inodeKey(1), m.marshal(&attr))
+			tx.set(m.inodeKey(1), m.marshal(attr))
 			tx.incrBy(m.counterKey("nextInode"), 2)
 			tx.incrBy(m.counterKey("nextChunk"), 1)
 			tx.incrBy(m.counterKey("nextSession"), 1)
@@ -455,6 +463,7 @@ func (m *kvMeta) NewSession() error {
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
+	go m.cleanupTrash()
 	go m.flushStats()
 	return nil
 }
@@ -969,7 +978,15 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		return syscall.ENOSPC
 	}
 	parent = m.checkRoot(parent)
-	ino, err := m.nextInode()
+	var ino Ino
+	var err error
+	if parent == TrashInode {
+		var next int64
+		next, err = m.incrCounter("nextSession", 1)
+		ino = TrashInode + Ino(next)
+	} else {
+		ino, err = m.nextInode()
+	}
 	if err != nil {
 		return errno(err)
 	}
@@ -1020,7 +1037,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		if foundIno != 0 {
-			if _type == TypeFile {
+			if _type == TypeFile || _type == TypeDirectory {
 				a = tx.get(m.inodeKey(foundIno))
 				if a != nil {
 					m.parseAttr(a, attr)
@@ -1069,9 +1086,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	return errno(err)
 }
 
-func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
+func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var _type uint8
 	var inode Ino
 	var attr Attr
@@ -1159,15 +1174,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
-func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
-	if name == "." {
-		return syscall.EINVAL
-	}
-	if name == ".." {
-		return syscall.ENOTEMPTY
-	}
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
+func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	err := m.txn(func(tx kvTxn) error {
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
@@ -1221,22 +1228,8 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
-func (m *kvMeta) Trash(ctx Context, parent Ino, name string, isDir bool) syscall.Errno {
-	return syscall.ENOTSUP
-}
-
-func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	switch flags {
-	case 0, RenameNoReplace, RenameExchange:
-	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
-		return syscall.ENOTSUP
-	default:
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
+func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	exchange := flags == RenameExchange
-	parentSrc = m.checkRoot(parentSrc)
-	parentDst = m.checkRoot(parentDst)
 	var opened bool
 	var dino Ino
 	var dtyp uint8
@@ -1401,10 +1394,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	return errno(err)
 }
 
-func (m *kvMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(tx kvTxn) error {
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
 		if rs[0] == nil || rs[1] == nil {

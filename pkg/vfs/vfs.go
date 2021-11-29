@@ -133,9 +133,6 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
-	} else if IsSpecialNode(parent) {
-		err = syscall.EPERM
-		return
 	}
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
@@ -166,11 +163,7 @@ func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	if IsSpecialNode(parent) {
-		err = v.Meta.Unlink(ctx, parent, name)
-	} else {
-		err = v.Meta.Trash(ctx, parent, name, false)
-	}
+	err = v.Meta.Unlink(ctx, parent, name)
 	return
 }
 
@@ -180,9 +173,6 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	}()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
-		return
-	} else if IsSpecialNode(parent) {
-		err = syscall.EPERM
 		return
 	}
 	if len(name) > maxName {
@@ -205,11 +195,7 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	if IsSpecialNode(parent) {
-		err = v.Meta.Rmdir(ctx, parent, name)
-	} else {
-		err = v.Meta.Trash(ctx, parent, name, true)
-	}
+	err = v.Meta.Rmdir(ctx, parent, name)
 	return
 }
 
@@ -219,9 +205,6 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 	}()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
-		return
-	} else if IsSpecialNode(parent) {
-		err = syscall.EPERM
 		return
 	}
 	if len(name) > maxName || len(path) >= maxSymlink {
@@ -252,7 +235,7 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 		err = syscall.EPERM
 		return
 	}
-	if newparent == rootID && IsSpecialName(newname) || IsSpecialNode(newparent) {
+	if newparent == rootID && IsSpecialName(newname) {
 		err = syscall.EPERM
 		return
 	}
@@ -273,7 +256,7 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 		err = syscall.EPERM
 		return
 	}
-	if newparent == rootID && IsSpecialName(newname) || IsSpecialNode(newparent) {
+	if newparent == rootID && IsSpecialName(newname) {
 		err = syscall.EPERM
 		return
 	}
@@ -360,9 +343,6 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 	}()
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
-		return
-	} else if IsSpecialNode(parent) {
-		err = syscall.EPERM
 		return
 	}
 	if len(name) > maxName {
