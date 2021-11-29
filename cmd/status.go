@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -37,7 +38,7 @@ func printJson(v interface{}) {
 }
 
 func status(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
+	utils.SetLogger(ctx)
 	if ctx.Args().Len() < 1 {
 		return fmt.Errorf("META-URL is needed")
 	}

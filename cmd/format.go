@@ -28,11 +28,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/common"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
-	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -50,32 +53,6 @@ func fixObjectSize(s int) int {
 		s = max
 	}
 	return s
-}
-
-func createStorage(format *meta.Format) (object.ObjectStorage, error) {
-	object.UserAgent = "JuiceFS-" + version.Version()
-	var blob object.ObjectStorage
-	var err error
-	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.Shards)
-	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
-	}
-	if err != nil {
-		return nil, err
-	}
-	blob = object.WithPrefix(blob, format.Name+"/")
-
-	if format.EncryptKey != "" {
-		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-		privKey, err := object.ParseRsaPrivateKeyFromPem(format.EncryptKey, passphrase)
-		if err != nil {
-			return nil, fmt.Errorf("load private key: %s", err)
-		}
-		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
-		blob = object.NewEncrypted(blob, encryptor)
-	}
-	return blob, nil
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
@@ -139,7 +116,7 @@ func test(store object.ObjectStorage) error {
 }
 
 func format(c *cli.Context) error {
-	setLoggerLevel(c)
+	utils.SetLogger(c)
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Meta URL and name are required")
 	}
@@ -199,7 +176,7 @@ func format(c *cli.Context) error {
 		format.EncryptKey = string(pem)
 	}
 
-	blob, err := createStorage(&format)
+	blob, err := common.CreateStorage(&format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

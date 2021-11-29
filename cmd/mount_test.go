@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/common"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/go-redis/redis/v8"
@@ -60,7 +62,7 @@ func Test_exposeMetrics(t *testing.T) {
 			defer stringPatches.Reset()
 			defer isSetPatches.Reset()
 			ResetPrometheus()
-			metricsAddr := exposeMetrics(client, appCtx)
+			metricsAddr := common.ExposeMetrics(client, appCtx)
 
 			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
 			resp, err := http.Get(u.String())

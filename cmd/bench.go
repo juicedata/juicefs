@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 	"github.com/vbauerster/mpb/v7"
@@ -247,7 +249,7 @@ func (bm *benchmark) printResult(result [][3]string) {
 }
 
 func bench(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
+	utils.SetLogger(ctx)
 
 	/* --- Pre-check --- */
 	if ctx.Uint("block-size") == 0 || ctx.Uint("threads") == 0 {

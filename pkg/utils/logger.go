@@ -16,27 +16,30 @@ package utils
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/google/gops/agent"
 	plog "github.com/pingcap/log"
 	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
 )
 
 var mu sync.Mutex
-var loggers = make(map[string]*logHandle)
+var loggers = make(map[string]*LogHandle)
 
 var syslogHook logrus.Hook
 
-type logHandle struct {
+type LogHandle struct {
 	logrus.Logger
 
 	name string
 	lvl  *logrus.Level
 }
 
-func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
+func (l *LogHandle) Format(e *logrus.Entry) ([]byte, error) {
 	// Mon Jan 2 15:04:05 -0700 MST 2006
 	timestamp := ""
 	lvl := e.Level
@@ -63,12 +66,12 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 }
 
 // for aws.Logger
-func (l *logHandle) Log(args ...interface{}) {
+func (l *LogHandle) Log(args ...interface{}) {
 	l.Debugln(args...)
 }
 
-func newLogger(name string) *logHandle {
-	l := &logHandle{name: name}
+func newLogger(name string) *LogHandle {
+	l := &LogHandle{name: name}
 	l.Out = os.Stderr
 	l.Formatter = l
 	l.Level = logrus.InfoLevel
@@ -80,7 +83,7 @@ func newLogger(name string) *logHandle {
 }
 
 // GetLogger returns a logger mapped to `name`
-func GetLogger(name string) *logHandle {
+func GetLogger(name string) *LogHandle {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -92,7 +95,35 @@ func GetLogger(name string) *logHandle {
 	return logger
 }
 
-// SetLogLevel sets Level to all the loggers in the map
+func SetLogger(c *cli.Context) {
+	if c.Bool("trace") {
+		SetLogLevel(logrus.TraceLevel)
+	} else if c.Bool("verbose") {
+		SetLogLevel(logrus.DebugLevel)
+	} else if c.Bool("quiet") {
+		SetLogLevel(logrus.WarnLevel)
+	} else {
+		SetLogLevel(logrus.InfoLevel)
+	}
+	setupAgent(c)
+}
+
+func setupAgent(c *cli.Context) {
+	if !c.Bool("no-agent") {
+		go func() {
+			for port := 6060; port < 6100; port++ {
+				_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+			}
+		}()
+		go func() {
+			for port := 6070; port < 6100; port++ {
+				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+			}
+		}()
+	}
+}
+
+// setLogLevel sets Level to all the loggers in the map
 func SetLogLevel(lvl logrus.Level) {
 	for _, logger := range loggers {
 		logger.Level = lvl

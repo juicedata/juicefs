@@ -282,7 +282,7 @@ func (p *profiler) flusher() {
 }
 
 func profile(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
+	utils.SetLogger(ctx)
 	if ctx.Args().Len() < 1 {
 		logger.Fatalln("Mount point or log file must be provided!")
 	}
