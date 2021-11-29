@@ -27,7 +27,7 @@ $ juicefs format --storage s3 \
 
 一般而言，对象存储服务通过 `access key` 和 `secret key` 验证用户身份，创建文件系统时，除了使用 `--access-key` 和 `--secret-key` 两个选项显式设置以外，还可以通过 `ACCESS_KEY` 和 `SECRET_KEY` 这两个环境变量进行设置。
 
-公有云通常允许用户创建 IAM (Identity and Access Management) 角色，例如： [AWS IAM 角色](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) 或  [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有访问对象存储的权限，则无需设置 `--access-key` 和 `--secret-key` 这两个选项。
+公有云通常允许用户创建 IAM (Identity and Access Management) 角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有访问对象存储的权限，则无需设置 `--access-key` 和 `--secret-key` 这两个选项。
 
 ## 支持的存储服务
 
