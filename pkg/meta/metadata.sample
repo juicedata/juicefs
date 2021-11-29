@@ -10,7 +10,8 @@
     "Shards": 0,
     "Partitions": 0,
     "Capacity": 0,
-    "Inodes": 0
+    "Inodes": 0,
+    "TrashDays": 0
   },
   "Counters": {
     "usedSpace": 104882176,
