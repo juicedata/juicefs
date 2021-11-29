@@ -16,8 +16,6 @@
 package main
 
 import (
-	"net"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -28,8 +26,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/common"
+
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -59,64 +58,6 @@ func installHandler(mp string) {
 	}()
 }
 
-func exposeMetrics(m meta.Meta, c *cli.Context) string {
-	var ip, port string
-	//default set
-	ip, port, err := net.SplitHostPort(c.String("metrics"))
-	if err != nil {
-		logger.Fatalf("metrics format error: %v", err)
-	}
-
-	meta.InitMetrics()
-	vfs.InitMetrics()
-	go metric.UpdateMetrics(m)
-	http.Handle("/metrics", promhttp.HandlerFor(
-		prometheus.DefaultGatherer,
-		promhttp.HandlerOpts{
-			// Opt into OpenMetrics to support exemplars.
-			EnableOpenMetrics: true,
-		},
-	))
-	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
-
-	// If not set metrics addr,the port will be auto set
-	if !c.IsSet("metrics") {
-		// If only set consul, ip will auto set
-		if c.IsSet("consul") {
-			ip, err = utils.GetLocalIp(c.String("consul"))
-			if err != nil {
-				logger.Errorf("Get local ip failed: %v", err)
-				return ""
-			}
-		}
-	}
-
-	ln, err := net.Listen("tcp", net.JoinHostPort(ip, port))
-	if err != nil {
-		// Don't try other ports on metrics set but listen failed
-		if c.IsSet("metrics") {
-			logger.Errorf("listen on %s:%s failed: %v", ip, port, err)
-			return ""
-		}
-		// Listen port on 0 will auto listen on a free port
-		ln, err = net.Listen("tcp", net.JoinHostPort(ip, "0"))
-		if err != nil {
-			logger.Errorf("Listen failed: %v", err)
-			return ""
-		}
-	}
-
-	go func() {
-		if err := http.Serve(ln, nil); err != nil {
-			logger.Errorf("Serve for metrics: %s", err)
-		}
-	}()
-
-	metricsAddr := ln.Addr().String()
-	logger.Infof("Prometheus metrics listening on %s", metricsAddr)
-	return metricsAddr
-}
-
 func wrapRegister(mp, name string) {
 	reg := prometheus.DefaultRegisterer
 	reg.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
@@ -130,7 +71,7 @@ func wrapRegister(mp, name string) {
 }
 
 func mount(c *cli.Context) error {
-	setLoggerLevel(c)
+	utils.SetLogger(c)
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Meta URL and mountpoint are required")
 	}
@@ -216,7 +157,7 @@ func mount(c *cli.Context) error {
 	if c.IsSet("bucket") {
 		format.Bucket = c.String("bucket")
 	}
-	blob, err := createStorage(format)
+	blob, err := common.CreateStorage(format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
@@ -285,7 +226,8 @@ func mount(c *cli.Context) error {
 	}
 	installHandler(mp)
 	v := vfs.NewVFS(conf, m, store)
-	metricsAddr := exposeMetrics(m, c)
+
+	metricsAddr := common.ExposeMetrics(m, c)
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}

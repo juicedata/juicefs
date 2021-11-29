@@ -20,57 +20,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/go-redis/redis/v8"
-
-	"github.com/juicedata/juicefs/pkg/meta"
-
-	"github.com/agiledragon/gomonkey/v2"
-
-	. "github.com/smartystreets/goconvey/convey"
-	"github.com/urfave/cli/v2"
 )
-
-func Test_exposeMetrics(t *testing.T) {
-	Convey("Test_exposeMetrics", t, func() {
-		Convey("Test_exposeMetrics", func() {
-			addr := "redis://127.0.0.1:6379/10"
-			var conf = meta.Config{MaxDeletes: 1}
-			client := meta.NewClient(addr, &conf)
-			var appCtx *cli.Context
-			stringPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "String", func(_ *cli.Context, arg string) string {
-				switch arg {
-				case "metrics":
-					return "127.0.0.1:9567"
-				case "consul":
-					return "127.0.0.1:8500"
-				default:
-					return ""
-				}
-			})
-			isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, _ string) bool {
-				return false
-			})
-			defer stringPatches.Reset()
-			defer isSetPatches.Reset()
-			ResetPrometheus()
-			metricsAddr := exposeMetrics(client, appCtx)
-
-			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
-			resp, err := http.Get(u.String())
-			So(err, ShouldBeNil)
-			all, err := ioutil.ReadAll(resp.Body)
-			So(err, ShouldBeNil)
-			So(string(all), ShouldNotBeBlank)
-		})
-	})
-}
 
 func ResetPrometheus() {
 	http.DefaultServeMux = http.NewServeMux()

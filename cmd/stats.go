@@ -328,7 +328,7 @@ func readStats(path string) map[string]float64 {
 }
 
 func stats(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
+	utils.SetLogger(ctx)
 	if ctx.Args().Len() < 1 {
 		logger.Fatalln("mount point must be provided")
 	}

@@ -27,6 +27,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
 	"github.com/urfave/cli/v2"
@@ -156,7 +158,7 @@ const USAGE = `juicefs [options] sync [options] SRC DST
 SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`
 
 func doSync(c *cli.Context) error {
-	setLoggerLevel(c)
+	utils.SetLogger(c)
 
 	if c.Args().Len() != 2 {
 		logger.Errorf(USAGE)

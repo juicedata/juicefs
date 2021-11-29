@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/common"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
@@ -76,7 +77,7 @@ func (c *objCounter) done() {
 }
 
 func gc(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
+	utils.SetLogger(ctx)
 	if ctx.Args().Len() < 1 {
 		return fmt.Errorf("META-URL is needed")
 	}
@@ -103,7 +104,7 @@ func gc(ctx *cli.Context) error {
 		CacheSize:  300,
 	}
 
-	blob, err := createStorage(format)
+	blob, err := common.CreateStorage(format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
