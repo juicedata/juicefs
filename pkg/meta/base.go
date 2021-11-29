@@ -675,14 +675,9 @@ func (m *baseMeta) doCleanupTrash() {
 		return
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
-	maxDeletes := int(1e6)
 	var count int
 	defer func() {
-		msg := fmt.Sprintf("cleanup trash: deleted %d files", count)
-		if count == maxDeletes {
-			msg += "(reach maximum deletes)"
-		}
-		logger.Infof("%s in %v", msg, time.Since(now))
+		logger.Infof("cleanup trash: deleted %d files in %v", count, time.Since(now))
 	}()
 
 	edge := now.Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
@@ -707,7 +702,7 @@ func (m *baseMeta) doCleanupTrash() {
 					rmdir = false
 					continue
 				}
-				if count >= maxDeletes {
+				if count%10000 == 0 && time.Since(now) > 50*time.Minute {
 					return
 				}
 			}
