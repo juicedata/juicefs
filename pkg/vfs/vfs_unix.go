@@ -32,9 +32,8 @@ const O_ACCMODE = syscall.O_ACCMODE
 const F_UNLCK = syscall.F_UNLCK
 
 type Statfs struct {
-	Bsize  uint32
-	Blocks uint64
-	Bavail uint64
+	Total  uint64
+	Avail  uint64
 	Files  uint64
 	Favail uint64
 }
@@ -42,14 +41,9 @@ type Statfs struct {
 func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err syscall.Errno) {
 	var totalspace, availspace, iused, iavail uint64
 	_ = v.Meta.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
-	var bsize uint64 = 0x10000
-	blocks := totalspace / bsize
-	bavail := blocks - (totalspace-availspace+bsize-1)/bsize
-
 	st = new(Statfs)
-	st.Bsize = uint32(bsize)
-	st.Blocks = blocks
-	st.Bavail = bavail
+	st.Total = totalspace
+	st.Avail = availspace
 	st.Files = iused + iavail
 	st.Favail = iavail
 	logit(ctx, "statfs (%d): OK (%d,%d,%d,%d)", ino, totalspace-availspace, availspace, iused, iavail)
