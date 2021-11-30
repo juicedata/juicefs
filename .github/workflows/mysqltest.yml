@@ -54,6 +54,7 @@ jobs:
           sudo ls -l /var/lib/mysql/
           sudo chmod 777 /var/lib/mysql/
           sudo cp -a -r /var/lib/mysql/* /tmp/jfs/mysql/
+          sudo chmod 777 /tmp/jfs/mysql/
           sudo chown -R mysql:mysql /tmp/jfs/mysql/
           sudo chmod 777 /etc/apparmor.d/tunables/alias
           sudo echo "alias /var/lib/mysql/ -> /tmp/jfs/mysql/," >>/etc/apparmor.d/tunables/alias
@@ -61,6 +62,7 @@ jobs:
           sudo service apparmor restart
           echo "start mysql"
           sudo service mysql start
+          sudo mysql -e "select @@datadir;"
           echo "set authentication_string"
           sudo mysql -e "use mysql;update user set authentication_string='' where user='root'"
           echo "echo authentication_string"
