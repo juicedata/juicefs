@@ -47,7 +47,7 @@ jobs:
       - name: Change Data Dir
         run: |
           sudo service mysql stop
-          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql\\nskip-grant-tables?" /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo mkdir /tmp/jfs/mysql
           sudo ls -l /var/lib/
@@ -61,7 +61,6 @@ jobs:
           sudo service apparmor restart
           echo "start mysql"
           sudo service mysql start
-          sudo mysql -e "use mysql;set password for root@localhost = password('123')"
           echo "set authentication_string"
           sudo mysql -e "use mysql;update user set authentication_string='' where user='root'"
           echo "echo authentication_string"
