@@ -47,7 +47,7 @@ jobs:
       - name: Change Data Dir
         run: |
           sudo service mysql stop
-          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql\\nskip-grant-tables?" /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo mkdir /tmp/jfs/mysql
           sudo ls -l /var/lib/
@@ -63,16 +63,8 @@ jobs:
           echo "start mysql"
           sudo service mysql start
           sudo service mysql status
-          echo "select datadir"
-          sudo mysql -e "select @@datadir"
-          echo "set authentication_string"
-          sudo mysql -e "use mysql;update user set authentication_string='' where user='root'"
-          echo "echo authentication_string"
-          sudo mysql -e "use mysql;select authentication_string from user where user='root'"
-          echo "change password"
-          sudo mysql -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '123';"
           echo "datadir is"
-          sudo mysql -u root -p123  -e "select @@datadir;"
+          sudo mysql -uroot -proot  -e "select @@datadir;"
 
       - name: Install Sysbench
         run: |
