@@ -213,6 +213,7 @@ func benchReaddir(b *testing.B, m Meta, n int) {
 	var entries []*Entry
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		entries = entries[:0]
 		if err := m.Readdir(ctx, parent, 1, &entries); err != 0 {
 			b.Fatalf("readdir: %s", err)
 		}

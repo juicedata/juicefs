@@ -272,7 +272,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		*inode = parent
 		return 0
 	}
-	if parent == m.root && name == trashName {
+	if parent == m.root && name == TrashName {
 		if st := m.GetAttr(ctx, TrashInode, attr); st != 0 {
 			return st
 		}
@@ -376,7 +376,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
-	if parent == 1 && name == trashName {
+	if parent == 1 && name == TrashName {
 		return syscall.EEXIST
 	}
 	defer timeit(time.Now())
@@ -387,7 +387,7 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
-	if parent == 1 && name == trashName {
+	if parent == 1 && name == TrashName {
 		return syscall.EEXIST
 	}
 	defer timeit(time.Now())
@@ -408,7 +408,7 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
-	if parent == 1 && name == trashName {
+	if parent == 1 && name == TrashName {
 		return syscall.EEXIST
 	}
 	defer timeit(time.Now())
@@ -419,7 +419,7 @@ func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
-	if parent == 1 && name == trashName {
+	if parent == 1 && name == TrashName {
 		return syscall.EEXIST
 	}
 	defer timeit(time.Now())
@@ -430,7 +430,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
-	if parent == 1 && name == trashName {
+	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
 	defer timeit(time.Now())
@@ -474,7 +474,7 @@ func (m *baseMeta) toTrash(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	if parent == 1 && name == trashName {
+	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
 	defer timeit(time.Now())
@@ -493,7 +493,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == 1 && name == trashName {
+	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
 	defer timeit(time.Now())
@@ -509,7 +509,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if isTrash(parentDst) {
 		return syscall.EPERM
 	}
-	if parentSrc == 1 && nameSrc == trashName || parentDst == 1 && nameDst == trashName {
+	if parentSrc == 1 && nameSrc == TrashName || parentDst == 1 && nameDst == TrashName {
 		return syscall.EPERM
 	}
 	switch flags {
@@ -585,22 +585,14 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		return err
 	}
 	defer timeit(time.Now())
-	*entries = []*Entry{
-		{
-			Inode: inode,
-			Name:  []byte("."),
-			Attr:  &Attr{Typ: TypeDirectory},
-		},
-	}
 	if inode == m.root {
 		attr.Parent = m.root
-		*entries = append(*entries, &Entry{
-			Inode: TrashInode,
-			Name:  []byte(trashName),
-			Attr:  &Attr{Typ: TypeDirectory},
-		})
 	}
 	*entries = append(*entries, &Entry{
+		Inode: inode,
+		Name:  []byte("."),
+		Attr:  &Attr{Typ: TypeDirectory},
+	}, &Entry{
 		Inode: attr.Parent,
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
