@@ -1308,13 +1308,9 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
-		if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
-			return err
-		}
 		if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
 			return err
 		}
-
 		if n.Nlink > 0 {
 			if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
 				return err
@@ -1348,6 +1344,9 @@ func (m *dbMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 					return err
 				}
 				newSpace, newInode = -align4K(0), -1
+			}
+			if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
+				return err
 			}
 		}
 		return err
