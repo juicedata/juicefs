@@ -53,6 +53,8 @@ jobs:
           sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo mkdir /tmp/jfs/mysql
+          sudo ls -l /var/lib/
+          sudo ls -l /var/lib/mysql/
           sudo cp -a -r /var/lib/mysql/* /tmp/jfs/mysql/
           sudo chown -R mysql:mysql /tmp/jfs/mysql/
           sudo echo "alias /var/lib/mysql/ -> /tmp/jfs/mysql/," >>/etc/apparmor.d/tunables/alias
@@ -82,9 +84,9 @@ jobs:
           sudo df -h /
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=3500 --table-size=10000 prepare
           sudo df -h /
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=3500 --time=60 --table-size=10000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=3500 --time=60 --table-size=10000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=3500 --time=60 --table-size=10000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=3500 --time=20 --table-size=10000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=3500 --time=20 --table-size=10000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=3500 --time=2`10 --table-size=10000 run
           sudo sysbench --config-file=config.cfg oltp_point_select --tables=3500 --table-size=10000 cleanup
           sudo df -h /
 
