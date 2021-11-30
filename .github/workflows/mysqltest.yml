@@ -57,8 +57,11 @@ jobs:
           sudo chown -R mysql:mysql /tmp/jfs/mysql/
           sudo chmod 777 /etc/apparmor.d/tunables/alias
           sudo echo "alias /var/lib/mysql/ -> /tmp/jfs/mysql/," >>/etc/apparmor.d/tunables/alias
+          echo "start apparmor"
           sudo service apparmor restart
+          echo "start mysql"
           sudo service mysql start
+          echo "set passwd"
           sudo mysql -e "use mysql;update user set authentication_string='' where user='root';"
           sudo mysql -e "use mysql;select authentication_string from user where user='root';"
           sudo mysql -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '123';"
