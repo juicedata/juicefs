@@ -90,7 +90,7 @@ jobs:
           sudo df -h /
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=20 --table-size=1000000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=20 --table-size=1000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=2`10 --table-size=1000000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=20 --table-size=1000000 run
           sudo sysbench --config-file=config.cfg oltp_point_select --tables=4 --table-size=1000000 cleanup
           sudo df -h /
 
