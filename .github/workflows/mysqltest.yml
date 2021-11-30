@@ -84,6 +84,7 @@ jobs:
 
       - name: Small Size Table Test
         run: |
+          cat /proc/cpuinfo | grep 'core id'
           sudo df -h /
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=32 --table-size=1000000 prepare
           sudo df -h /
