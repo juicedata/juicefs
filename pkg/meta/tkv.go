@@ -1080,7 +1080,6 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
 		tx.dels(m.entryKey(parent, name))
-		tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
 		tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		if attr.Nlink > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
@@ -1102,6 +1101,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 				tx.dels(m.inodeKey(inode))
 				newSpace, newInode = -align4K(0), -1
 			}
+			tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
 		}
 		return nil
 	})
