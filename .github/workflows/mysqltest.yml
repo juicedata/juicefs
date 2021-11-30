@@ -72,11 +72,11 @@ jobs:
         run: |
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
           sudo apt -y install sysbench
-          sudo mysql -e "create database test;"
+          sudo mysql -uroot -proot -e "create database test;"
           echo "mysql-host=127.0.0.1" >>/tmp/config.cfg
           echo "mysql-port=3306" >>/tmp/config.cfg
           echo "mysql-user=root" >>/tmp/config.cfg
-          echo "mysql-password=123" >>/tmp/config.cfg
+          echo "mysql-password=root" >>/tmp/config.cfg
           echo "mysql-db=test" >>/tmp/config.cfg
           echo "threads=4" >>/tmp/config.cfg
           echo "report-interval=10" >>/tmp/config.cfg
