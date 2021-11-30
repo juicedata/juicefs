@@ -89,11 +89,11 @@ func Main(args []string) error {
 	}
 
 	// Called via mount or fstab.
-	if strings.HasSuffix(os.Args[0], "/mount.juicefs") {
+	if strings.HasSuffix(args[0], "/mount.juicefs") {
 		if newArgs, err := handleSysMountArgs(); err != nil {
 			log.Fatal(err)
 		} else {
-			os.Args = newArgs
+			args = newArgs
 		}
 	}
 
