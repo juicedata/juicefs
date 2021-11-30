@@ -92,7 +92,7 @@ func TestFileSystem(t *testing.T) {
 	store := chunk.NewCachedStore(objStore, *conf.Chunk)
 	fs, _ := NewFileSystem(&conf, m, store)
 	ctx := meta.NewContext(1, 1, []uint32{2})
-	if total, avail := fs.StatFS(ctx); total != 1<<30 || avail != (1<<30)-(64<<10) {
+	if total, avail := fs.StatFS(ctx); total != 1<<30 || avail != (1<<30) {
 		t.Fatalf("statfs: %d %d", total, avail)
 	}
 	if e := fs.Access(ctx, "/", 7); e != 0 {

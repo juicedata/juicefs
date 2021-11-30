@@ -56,7 +56,6 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 	if errs[0] != 0 {
 		logger.Fatalf("Warm up failed: %d", errs[0])
 	}
-	// logger.Infof("%d paths are warmed up", count)
 }
 
 func warmup(ctx *cli.Context) error {

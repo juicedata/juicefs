@@ -56,7 +56,7 @@ func globalFlags() []cli.Flag {
 	}
 }
 
-func main() {
+func Main(args []string) error {
 	cli.VersionFlag = &cli.BoolFlag{
 		Name: "version", Aliases: []string{"V"},
 		Usage: "print only the version",
@@ -89,15 +89,20 @@ func main() {
 	}
 
 	// Called via mount or fstab.
-	if strings.HasSuffix(os.Args[0], "/mount.juicefs") {
+	if strings.HasSuffix(args[0], "/mount.juicefs") {
 		if newArgs, err := handleSysMountArgs(); err != nil {
 			log.Fatal(err)
 		} else {
-			os.Args = newArgs
+			args = newArgs
 		}
 	}
 
-	err := app.Run(reorderOptions(app, os.Args))
+	return app.Run(reorderOptions(app, args))
+
+}
+
+func main() {
+	err := Main(os.Args)
 	if err != nil {
 		log.Fatal(err)
 	}

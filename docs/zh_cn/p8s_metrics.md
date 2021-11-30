@@ -25,6 +25,8 @@ JuiceFS 支持使用 Consul 作为 metrics API 的注册中心。您可以在执
 
 > **提示**：Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识别不同的抓取目标，格式为 `<host>:<port>`。详见[官方文档](https://prometheus.io/docs/concepts/jobs_instances)。
 
+> **提示**：如果是通过 [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 的方式上报监控指标（例如 [JuiceFS Hadoop Java SDK](hadoop_java_sdk.md#监控指标收集)），`mp` 标签的值为 `sdk-<PID>`，`instance` 标签的值为主机名。
+
 ## 文件系统
 
 ### 指标
