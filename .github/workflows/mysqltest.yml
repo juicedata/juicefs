@@ -50,7 +50,7 @@ jobs:
       - name: Change Data Dir
         run: |
           sudo service mysql stop
-          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf          cat /etc/
+          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo mkdir /tmp/jfs/mysql
           sudo cp -a -r /var/lib/mysql/* /tmp/jfs/mysql/
