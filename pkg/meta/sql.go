@@ -984,6 +984,10 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 }
 
 func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
 	var newSpace, newInode int64
 	var n node
 	var opened bool
@@ -1030,13 +1034,16 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 				return syscall.EACCES
 			}
-			n.Nlink--
 			n.Ctime = now
-			if n.Type == TypeFile && n.Nlink == 0 {
-				opened = m.of.IsOpen(e.Inode)
+			if trash == 0 {
+				n.Nlink--
+				if n.Type == TypeFile && n.Nlink == 0 {
+					opened = m.of.IsOpen(e.Inode)
+				}
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
+			trash = 0
 		}
 		defer func() { m.of.InvalidateChunk(e.Inode, 0xFFFFFFFE) }()
 
@@ -1052,6 +1059,11 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if n.Nlink > 0 {
 			if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
 				return err
+			}
+			if trash > 0 {
+				if err = mustInsert(s, &edge{trash, fmt.Sprintf("%d-%d-%s", parent, e.Inode, e.Name), e.Inode, e.Type}); err != nil {
+					return err
+				}
 			}
 		} else {
 			switch e.Type {
@@ -1089,7 +1101,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 		return err
 	})
-	if err == nil {
+	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
 			m.fileDeleted(opened, n.Inode, n.Length)
 		}
@@ -1099,6 +1111,10 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.Get(&pn)
@@ -1140,6 +1156,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 				return syscall.EACCES
 			} else if !ok {
 				logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
+				trash = 0
 			}
 		}
 		exist, err := s.Exist(&edge{Parent: e.Inode})
@@ -1157,22 +1174,32 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
-		if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
-			return err
-		}
-		if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
-			return err
+		if trash > 0 {
+			if err = mustInsert(s, &edge{trash, fmt.Sprintf("%d-%d-%s", parent, e.Inode, e.Name), e.Inode, e.Type}); err != nil {
+				return err
+			}
+		} else {
+			if _, err := s.Delete(&node{Inode: e.Inode}); err != nil {
+				return err
+			}
+			if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
+				return err
+			}
 		}
 		_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
 		return err
 	})
-	if err == nil {
+	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
 	}
 	return errno(err)
 }
 
 func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parentDst, &trash); st != 0 {
+		return st
+	}
 	exchange := flags == RenameExchange
 	var opened bool
 	var dino Ino
@@ -1257,8 +1284,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if err != nil {
 				return err
 			}
-			if !ok {
-				return syscall.ENOENT // corrupt entry
+			if !ok { // corrupt entry
+				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, de.Name)
+				trash = 0
 			}
 			if exchange {
 				dn.Parent = parentSrc
@@ -1277,11 +1305,13 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return syscall.ENOTEMPTY
 					}
 				} else {
-					dn.Nlink--
-					if dn.Nlink > 0 {
-						dn.Ctime = now
-					} else if de.Type == TypeFile {
-						opened = m.of.IsOpen(dn.Inode)
+					dn.Ctime = now
+					if trash == 0 {
+						dn.Nlink--
+						if de.Type == TypeFile && dn.Nlink == 0 {
+							opened = m.of.IsOpen(dn.Inode)
+						}
+						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
 					}
 				}
 			}
@@ -1330,11 +1360,17 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				return fmt.Errorf("delete src failed")
 			}
 			if dino > 0 {
+				if trash > 0 {
+					name := fmt.Sprintf("%d-%d-%s", parentDst, dino, de.Name)
+					if err = mustInsert(s, &edge{trash, name, dino, de.Type}); err != nil {
+						return err
+					}
+				}
 				if de.Type != TypeDirectory && dn.Nlink > 0 {
 					if _, err := s.Update(dn, &node{Inode: dino}); err != nil {
 						return err
 					}
-				} else {
+				} else if trash == 0 {
 					if de.Type == TypeFile {
 						if opened {
 							if _, err := s.Cols("nlink", "ctime").Update(&dn, &node{Inode: dino}); err != nil {
@@ -1390,7 +1426,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		return err
 	})
-	if err == nil && !exchange {
+	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
 			m.fileDeleted(opened, dino, dn.Length)
 		}

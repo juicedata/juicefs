@@ -1020,7 +1020,16 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 	if _type == TypeDirectory {
 		return syscall.EPERM
 	}
-	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	keys := []string{r.entryKey(parent), r.inodeKey(parent), r.inodeKey(inode)}
+	var trash Ino
+	if st := r.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
+	if trash > 0 {
+		keys = append(keys, r.entryKey(trash))
+	} else {
+		defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	}
 	var opened bool
 	var attr Attr
 	eno := r.txn(ctx, func(tx *redis.Tx) error {
@@ -1042,17 +1051,20 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		opened = false
 		if rs[1] != nil {
 			r.parseAttr([]byte(rs[1].(string)), &attr)
-			attr.Ctime = now.Unix()
-			attr.Ctimensec = uint32(now.Nanosecond())
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
-			attr.Nlink--
-			if _type == TypeFile && attr.Nlink == 0 {
-				opened = r.of.IsOpen(inode)
+			attr.Ctime = now.Unix()
+			attr.Ctimensec = uint32(now.Nanosecond())
+			if trash == 0 {
+				attr.Nlink--
+				if _type == TypeFile && attr.Nlink == 0 {
+					opened = r.of.IsOpen(inode)
+				}
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
+			trash = 0
 		}
 
 		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
@@ -1069,6 +1081,9 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
 			if attr.Nlink > 0 {
 				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
+				if trash > 0 {
+					pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
+				}
 			} else {
 				switch _type {
 				case TypeFile:
@@ -1095,7 +1110,7 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		})
 
 		return err
-	}, r.entryKey(parent), r.inodeKey(parent), r.inodeKey(inode))
+	}, keys...)
 	if eno == 0 && _type == TypeFile && attr.Nlink == 0 {
 		r.fileDeleted(opened, inode, attr.Length)
 	}
@@ -1119,6 +1134,14 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 		return syscall.ENOTDIR
 	}
 
+	keys := []string{r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode)}
+	var trash Ino
+	if st := r.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
+	if trash > 0 {
+		keys = append(keys, r.entryKey(trash))
+	}
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil {
@@ -1159,20 +1182,25 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
+			trash = 0
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, r.entryKey(parent), name)
 			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
-			pipe.Del(ctx, r.inodeKey(inode))
-			pipe.Del(ctx, r.xattrKey(inode))
-			// pipe.Del(ctx, r.entryKey(inode))
-			pipe.IncrBy(ctx, usedSpace, -align4K(0))
-			pipe.Decr(ctx, totalInodes)
+			if trash > 0 {
+				// NOTE: ctime, parent of inode is not modified; nlink of trash ???
+				pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
+			} else {
+				pipe.Del(ctx, r.inodeKey(inode))
+				pipe.Del(ctx, r.xattrKey(inode))
+				pipe.IncrBy(ctx, usedSpace, -align4K(0))
+				pipe.Decr(ctx, totalInodes)
+			}
 			return nil
 		})
 		return err
-	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
+	}, keys...)
 }
 
 func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -1207,12 +1235,17 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		return errno(err)
 	}
 	keys := []string{r.entryKey(parentSrc), r.inodeKey(parentSrc), r.inodeKey(ino), r.entryKey(parentDst), r.inodeKey(parentDst)}
-
 	var opened bool
-	var dino Ino
+	var trash, dino Ino
 	var dtyp uint8
 	var tattr Attr
 	if err == nil {
+		if st := r.checkTrash(parentDst, &trash); st != 0 {
+			return st
+		}
+		if trash > 0 {
+			keys = append(keys, r.entryKey(trash))
+		}
 		dtyp, dino = r.parseEntry(buf)
 		keys = append(keys, r.inodeKey(dino))
 		if dtyp == TypeDirectory {
@@ -1251,7 +1284,10 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				return syscall.EAGAIN
 			}
 			a, err := tx.Get(ctx, r.inodeKey(dino)).Bytes()
-			if err != nil {
+			if err == redis.Nil {
+				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
+				trash = 0
+			} else if err != nil {
 				return err
 			}
 			r.parseAttr(a, &tattr)
@@ -1273,12 +1309,14 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						return syscall.ENOTEMPTY
 					}
 				} else {
-					tattr.Nlink--
-					if tattr.Nlink > 0 {
-						tattr.Ctime = now.Unix()
-						tattr.Ctimensec = uint32(now.Nanosecond())
-					} else if dtyp == TypeFile {
-						opened = r.of.IsOpen(dino)
+					tattr.Ctime = now.Unix()
+					tattr.Ctimensec = uint32(now.Nanosecond())
+					if trash == 0 {
+						tattr.Nlink--
+						if dtyp == TypeFile && tattr.Nlink == 0 {
+							opened = r.of.IsOpen(dino)
+						}
+						defer func() { r.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
 					}
 				}
 			}
@@ -1331,9 +1369,12 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			} else {
 				pipe.HDel(ctx, r.entryKey(parentSrc), nameSrc)
 				if dino > 0 {
+					if trash > 0 {
+						pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parentDst, dino, nameDst), dbuf)
+					}
 					if dtyp != TypeDirectory && tattr.Nlink > 0 {
 						pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
-					} else {
+					} else if trash == 0 {
 						if dtyp == TypeFile {
 							if opened {
 								pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)

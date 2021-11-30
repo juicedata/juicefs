@@ -59,6 +59,7 @@ type baseMeta struct {
 	fmt  Format
 
 	root         Ino
+	subTrash     internalNode
 	sid          uint64
 	of           *openfiles
 	removedFiles map[Ino]bool
@@ -503,33 +504,13 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 	return 0
 }
 
-func (m *baseMeta) toTrash(ctx Context, parent Ino, name string) syscall.Errno {
-	var subTrash, inode Ino
-	subName := time.Now().UTC().Format("2006-01-02-15")
-	st := m.en.doLookup(ctx, TrashInode, subName, &subTrash, nil)
-	if st == syscall.ENOENT {
-		st = m.en.doMknod(ctx, TrashInode, subName, TypeDirectory, 0555, 0, 0, "", &subTrash, nil)
-	}
-	if st != 0 && st != syscall.EEXIST {
-		return st
-	}
-	if st = m.en.doLookup(ctx, parent, name, &inode, nil); st != 0 {
-		return st
-	}
-	return m.en.doRename(ctx, parent, name, subTrash, fmt.Sprintf("%d-%d-%s", parent, inode, name), 0, nil, nil)
-}
-
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
 	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
-	if m.fmt.TrashDays <= 0 || isTrash(parent) {
-		return m.en.doUnlink(ctx, parent, name)
-	} else {
-		return m.toTrash(ctx, parent, name)
-	}
+	return m.en.doUnlink(ctx, parent, name)
 }
 
 func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -544,11 +525,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
-	if m.fmt.TrashDays <= 0 || isTrash(parent) {
-		return m.en.doRmdir(ctx, parent, name)
-	} else {
-		return m.toTrash(ctx, parent, name)
-	}
+	return m.en.doRmdir(ctx, parent, name)
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -671,6 +648,39 @@ func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
 			logger.Errorf("delete slice %d: %s", chunkid, err)
 		}
 	}
+}
+
+func (m *baseMeta) toTrash(parent Ino) bool {
+	return m.fmt.TrashDays > 0 && !isTrash(parent)
+}
+
+func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
+	if !m.toTrash(parent) {
+		return 0
+	}
+	name := time.Now().UTC().Format("2006-01-02-15")
+	m.Lock()
+	defer m.Unlock()
+	if name == m.subTrash.name {
+		*trash = m.subTrash.inode
+		return 0
+	}
+	m.Unlock()
+
+	// var subInode Ino
+	st := m.en.doLookup(Background, TrashInode, name, trash, nil)
+	if st == syscall.ENOENT {
+		st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, 0, "", trash, nil)
+	}
+
+	m.Lock()
+	if st != 0 && st != syscall.EEXIST {
+		logger.Warnf("create subTrash %s: %s", name, st)
+		return st
+	}
+	m.subTrash.inode = *trash
+	m.subTrash.name = name
+	return 0
 }
 
 func (m *baseMeta) cleanupTrash() {

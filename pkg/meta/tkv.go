@@ -1042,6 +1042,10 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 }
 
 func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
 	var _type uint8
 	var inode Ino
 	var attr Attr
@@ -1081,12 +1085,15 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
-			attr.Nlink--
-			if _type == TypeFile && attr.Nlink == 0 {
-				opened = m.of.IsOpen(inode)
+			if trash == 0 {
+				attr.Nlink--
+				if _type == TypeFile && attr.Nlink == 0 {
+					opened = m.of.IsOpen(inode)
+				}
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
+			trash = 0
 		}
 		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 		pattr.Mtime = now.Unix()
@@ -1098,6 +1105,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		if attr.Nlink > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
+			if trash > 0 {
+				tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parent, inode, name)), buf)
+			}
 		} else {
 			switch _type {
 			case TypeFile:
@@ -1120,7 +1130,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 		return nil
 	})
-	if err == nil {
+	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
 			m.fileDeleted(opened, inode, attr.Length)
 		}
@@ -1130,6 +1140,10 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
 	err := m.txn(func(tx kvTxn) error {
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
@@ -1164,6 +1178,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
+			trash = 0
 		}
 
 		now := time.Now()
@@ -1172,18 +1187,27 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
-		tx.dels(m.entryKey(parent, name), m.inodeKey(inode))
-		tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
 		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		tx.dels(m.entryKey(parent, name))
+		if trash > 0 {
+			tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parent, inode, name)), buf)
+		} else {
+			tx.dels(m.inodeKey(inode))
+			tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
+		}
 		return nil
 	})
-	if err == nil {
+	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
 	}
 	return errno(err)
 }
 
 func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parentDst, &trash); st != 0 {
+		return st
+	}
 	exchange := flags == RenameExchange
 	var opened bool
 	var dino Ino
@@ -1239,8 +1263,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			dtyp, dino = m.parseEntry(dbuf)
 			a := tx.get(m.inodeKey(dino))
-			if a == nil {
-				return syscall.ENOENT // corrupt entry
+			if a == nil { // corrupt entry
+				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
+				trash = 0
 			}
 			m.parseAttr(a, &tattr)
 			if exchange {
@@ -1257,12 +1282,14 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return syscall.ENOTEMPTY
 					}
 				} else {
-					tattr.Nlink--
-					if tattr.Nlink > 0 {
-						tattr.Ctime = now.Unix()
-						tattr.Ctimensec = uint32(now.Nanosecond())
-					} else if dtyp == TypeFile {
-						opened = m.of.IsOpen(dino)
+					tattr.Ctime = now.Unix()
+					tattr.Ctimensec = uint32(now.Nanosecond())
+					if trash == 0 {
+						tattr.Nlink--
+						if dtyp == TypeFile && tattr.Nlink == 0 {
+							opened = m.of.IsOpen(dino)
+						}
+						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
 					}
 				}
 			}
@@ -1307,9 +1334,12 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		} else {
 			tx.dels(m.entryKey(parentSrc, nameSrc))
 			if dino > 0 {
+				if trash > 0 {
+					tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parentDst, dino, nameDst)), dbuf)
+				}
 				if dtyp != TypeDirectory && tattr.Nlink > 0 {
 					tx.set(m.inodeKey(dino), m.marshal(&tattr))
-				} else {
+				} else if trash == 0 {
 					if dtyp == TypeFile {
 						if opened {
 							tx.set(m.inodeKey(dino), m.marshal(&tattr))
@@ -1340,7 +1370,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		return nil
 	})
-	if err == nil && !exchange {
+	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, dino, tattr.Length)
 		}
