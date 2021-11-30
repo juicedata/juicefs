@@ -62,7 +62,9 @@ jobs:
           sudo service apparmor restart
           echo "start mysql"
           sudo service mysql start
-          sudo mysql -e "select @@datadir;"
+          sudo service mysql status
+          echo "select datadir"
+          sudo mysql -e "select @@datadir"
           echo "set authentication_string"
           sudo mysql -e "use mysql;update user set authentication_string='' where user='root'"
           echo "echo authentication_string"
