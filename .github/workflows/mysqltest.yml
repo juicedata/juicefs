@@ -85,11 +85,11 @@ jobs:
       - name: Small Size Table Test
         run: |
           sudo df -h /
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=3500 --table-size=10000 prepare
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=32 --table-size=1000000 prepare
           sudo df -h /
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=3500 --time=20 --table-size=10000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=3500 --time=20 --table-size=10000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=3500 --time=2`10 --table-size=10000 run
-          sudo sysbench --config-file=config.cfg oltp_point_select --tables=3500 --table-size=10000 cleanup
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=32 --time=20 --table-size=1000000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=32 --time=20 --table-size=1000000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=32 --time=2`10 --table-size=1000000 run
+          sudo sysbench --config-file=config.cfg oltp_point_select --tables=32 --table-size=1000000 cleanup
           sudo df -h /
 
