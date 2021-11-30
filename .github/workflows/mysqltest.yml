@@ -1,9 +1,6 @@
 name: "mysqltest"
 
 on:
-  push:
-    paths-ignore:
-      - 'docs/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
@@ -58,6 +55,7 @@ jobs:
           sudo chmod 777 /var/lib/mysql/
           sudo cp -a -r /var/lib/mysql/* /tmp/jfs/mysql/
           sudo chown -R mysql:mysql /tmp/jfs/mysql/
+          sudo chmod 777 /etc/apparmor.d/tunables/alias
           sudo echo "alias /var/lib/mysql/ -> /tmp/jfs/mysql/," >>/etc/apparmor.d/tunables/alias
           sudo service apparmor restart
           sudo service mysql start
