@@ -49,7 +49,7 @@ jobs:
           sudo echo "my.cnf is"
           sudo cat /etc/mysql/my.cnf
           sudo service mysql stop
-          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo sed -i "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo mkdir /tmp/jfs/mysql
           sudo ls -l /var/lib/
@@ -91,6 +91,6 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=20 --table-size=1000000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=20 --table-size=1000000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=20 --table-size=1000000 run
-          sudo sysbench --config-file=config.cfg oltp_point_select --tables=4 --table-size=1000000 cleanup
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=1000000 cleanup
           sudo df -h /
 
