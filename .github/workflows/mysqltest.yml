@@ -55,6 +55,7 @@ jobs:
           sudo mkdir /tmp/jfs/mysql
           sudo ls -l /var/lib/
           sudo ls -l /var/lib/mysql/
+          sudo chmod 777 /var/lib/mysql/
           sudo cp -a -r /var/lib/mysql/* /tmp/jfs/mysql/
           sudo chown -R mysql:mysql /tmp/jfs/mysql/
           sudo echo "alias /var/lib/mysql/ -> /tmp/jfs/mysql/," >>/etc/apparmor.d/tunables/alias
