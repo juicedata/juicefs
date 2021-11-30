@@ -1,0 +1,89 @@
+name: "mysqltest"
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+
+jobs:
+  mysqltest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs &
+
+      - name: Install Mysql
+        run: |
+          sudo apt-get update
+          sudo apt-get install mysql-server
+
+      - name: Change Data Dir
+        run: |
+          sudo service mysql stop
+          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf          cat /etc/
+          sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo mkdir /tmp/jfs/mysql
+          sudo cp -a -r /var/lib/mysql/* /tmp/jfs/mysql/
+          sudo chown -R mysql:mysql /tmp/jfs/mysql/
+          sudo echo "alias /var/lib/mysql/ -> /tmp/jfs/mysql/," >>/etc/apparmor.d/tunables/alias
+          sudo service apparmor restart
+          sudo service mysql start
+          sudo mysql -e "use mysql;update user set authentication_string='' where user='root';"
+          sudo mysql -e "use mysql;select authentication_string from user where user='root';"
+          sudo mysql -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '123';"
+          sudo mysql -u root -p123  -e "select @@datadir"
+
+      - name: Install Sysbench
+        run: |
+          curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
+          sudo apt -y install sysbench
+          sudo mysql -e "create database test;"
+          echo "mysql-host=127.0.0.1" >>/tmp/config.cfg
+          echo "mysql-port=3306" >>/tmp/config.cfg
+          echo "mysql-user=root" >>/tmp/config.cfg
+          echo "mysql-password=123" >>/tmp/config.cfg
+          echo "mysql-db=test" >>/tmp/config.cfg
+          echo "threads=4" >>/tmp/config.cfg
+          echo "report-interval=10" >>/tmp/config.cfg
+          echo "db-driver=mysql" >>/tmp/config.cfg
+
+      - name: Small Table Test
+          sudo df -h /
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=3500 --table-size=10000 prepare
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=3500 --table-size=10000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=3500 --table-size=10000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=3500 --table-size=10000 run
+          sudo sysbench --config-file=config.cfg oltp_point_select --tables=16 --table-size=10000 cleanup
+          sudo df -h /
