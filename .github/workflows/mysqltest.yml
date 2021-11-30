@@ -49,7 +49,7 @@ jobs:
           sudo echo "my.cnf is"
           sudo cat /etc/mysql/my.cnf
           sudo service mysql stop
-          sudo sed -i "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo sed  "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo mkdir /tmp/jfs/mysql
           sudo ls -l /var/lib/
@@ -78,7 +78,7 @@ jobs:
           echo "mysql-user=root" >>/tmp/config.cfg
           echo "mysql-password=root" >>/tmp/config.cfg
           echo "mysql-db=test" >>/tmp/config.cfg
-          echo "threads=4" >>/tmp/config.cfg
+          echo "threads=16" >>/tmp/config.cfg
           echo "report-interval=10" >>/tmp/config.cfg
           echo "db-driver=mysql" >>/tmp/config.cfg
 
