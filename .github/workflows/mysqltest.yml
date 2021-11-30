@@ -46,7 +46,6 @@ jobs:
 
       - name: Change Data Dir
         run: |
-          sudo mysql -uroot -proot  -e "select @@datadir;"
           sudo echo "my.cnf is"
           sudo cat /etc/mysql/my.cnf
           sudo service mysql stop
