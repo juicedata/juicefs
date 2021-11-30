@@ -61,7 +61,7 @@ jobs:
           sudo mysql -e "use mysql;update user set authentication_string='' where user='root';"
           sudo mysql -e "use mysql;select authentication_string from user where user='root';"
           sudo mysql -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '123';"
-          sudo mysql -u root -p123  -e "select @@datadir"
+          sudo mysql -u root -p123  -e "select @@datadir;"
 
       - name: Install Sysbench
         run: |
@@ -81,9 +81,10 @@ jobs:
         run: |
           sudo df -h /
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=3500 --table-size=10000 prepare
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=3500 --table-size=10000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=3500 --table-size=10000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=3500 --table-size=10000 run
-          sudo sysbench --config-file=config.cfg oltp_point_select --tables=16 --table-size=10000 cleanup
+          sudo df -h /
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=3500 --time=60 --table-size=10000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=3500 --time=60 --table-size=10000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=3500 --time=60 --table-size=10000 run
+          sudo sysbench --config-file=config.cfg oltp_point_select --tables=3500 --table-size=10000 cleanup
           sudo df -h /
 
