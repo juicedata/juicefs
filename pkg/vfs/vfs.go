@@ -302,13 +302,6 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 
 	if h.children == nil || off == 0 {
 		var inodes []*meta.Entry
-		if ino == rootID {
-			inodes = append(inodes, &meta.Entry{
-				Inode: meta.TrashInode,
-				Name:  []byte(meta.TrashName),
-				Attr:  &Attr{Typ: meta.TypeDirectory},
-			})
-		}
 		err = v.Meta.Readdir(ctx, ino, 1, &inodes)
 		if err == syscall.EACCES {
 			err = v.Meta.Readdir(ctx, ino, 0, &inodes)

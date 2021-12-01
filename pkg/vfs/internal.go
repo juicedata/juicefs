@@ -36,6 +36,7 @@ const (
 	controlInode    = minInternalNode + 2
 	statsInode      = minInternalNode + 3
 	configInode     = minInternalNode + 4
+	trashInode      = meta.TrashInode
 )
 
 type internalNode struct {
@@ -49,6 +50,7 @@ var internalNodes = []*internalNode{
 	{controlInode, ".control", &Attr{Mode: 0666}},
 	{statsInode, ".stats", &Attr{Mode: 0444}},
 	{configInode, ".config", &Attr{Mode: 0400}},
+	{trashInode, meta.TrashName, &Attr{Mode: 0555}},
 }
 
 func init() {
@@ -56,13 +58,18 @@ func init() {
 	gid := uint32(os.Getgid())
 	now := time.Now().Unix()
 	for _, v := range internalNodes {
-		v.attr.Typ = meta.TypeFile
-		v.attr.Uid = uid
-		v.attr.Gid = gid
+		if v.inode == trashInode {
+			v.attr.Typ = meta.TypeDirectory
+			v.attr.Nlink = 2
+		} else {
+			v.attr.Typ = meta.TypeFile
+			v.attr.Nlink = 1
+			v.attr.Uid = uid
+			v.attr.Gid = gid
+		}
 		v.attr.Atime = now
 		v.attr.Mtime = now
 		v.attr.Ctime = now
-		v.attr.Nlink = 1
 		v.attr.Full = true
 	}
 }

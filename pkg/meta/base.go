@@ -611,11 +611,14 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	if inode == m.root {
 		attr.Parent = m.root
 	}
+	*entries = []*Entry{
+		{
+			Inode: inode,
+			Name:  []byte("."),
+			Attr:  &Attr{Typ: TypeDirectory},
+		},
+	}
 	*entries = append(*entries, &Entry{
-		Inode: inode,
-		Name:  []byte("."),
-		Attr:  &Attr{Typ: TypeDirectory},
-	}, &Entry{
 		Inode: attr.Parent,
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
@@ -667,7 +670,6 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 	}
 	m.Unlock()
 
-	// var subInode Ino
 	st := m.en.doLookup(Background, TrashInode, name, trash, nil)
 	if st == syscall.ENOENT {
 		st = m.en.doMknod(Background, TrashInode, name, TypeDirectory, 0555, 0, 0, "", trash, nil)
