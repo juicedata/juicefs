@@ -665,7 +665,10 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 			err = fmt.Errorf("recovered from %s", e)
 		}
 	}()
-
+	// we don't know the actual size for compressed block
+	if store.downLimit != nil && store.compressor.CompressBound(0) == 0 {
+		store.downLimit.Wait(int64(len(page.Data)))
+	}
 	err = errors.New("Not downloaded")
 	var in io.ReadCloser
 	tried := 0
@@ -701,7 +704,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	if used > SlowRequest {
 		logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
 	}
-	if store.downLimit != nil {
+	if store.downLimit != nil && compressed {
 		store.downLimit.Wait(int64(n))
 	}
 	if compressed && err == io.ErrUnexpectedEOF {
