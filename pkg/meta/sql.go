@@ -1040,6 +1040,8 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				if n.Type == TypeFile && n.Nlink == 0 {
 					opened = m.of.IsOpen(e.Inode)
 				}
+			} else if n.Nlink == 1 {
+				n.Parent = trash
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
@@ -1146,19 +1148,6 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if e.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid {
-			var n = node{Inode: e.Inode}
-			ok, err = s.Get(&n)
-			if err != nil {
-				return err
-			}
-			if ok && ctx.Uid() != n.Uid {
-				return syscall.EACCES
-			} else if !ok {
-				logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
-				trash = 0
-			}
-		}
 		exist, err := s.Exist(&edge{Parent: e.Inode})
 		if err != nil {
 			return err
@@ -1166,15 +1155,36 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if exist {
 			return syscall.ENOTEMPTY
 		}
+		var n = node{Inode: e.Inode}
+		ok, err = s.Get(&n)
+		if err != nil {
+			return err
+		}
 
 		now := time.Now().UnixNano() / 1e3
+		if ok {
+			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+				return syscall.EACCES
+			}
+			if trash > 0 {
+				n.Ctime = now
+				n.Parent = trash
+			}
+		} else {
+			logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
+			trash = 0
+		}
 		pn.Nlink--
 		pn.Mtime = now
 		pn.Ctime = now
+
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
 		if trash > 0 {
+			if _, err = s.Cols("nlink", "ctime").Update(&n, &node{Inode: n.Inode}); err != nil {
+				return err
+			}
 			if err = mustInsert(s, &edge{trash, fmt.Sprintf("%d-%d-%s", parent, e.Inode, e.Name), e.Inode, e.Type}); err != nil {
 				return err
 			}
@@ -1288,9 +1298,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, de.Name)
 				trash = 0
 			}
+			dn.Ctime = now
 			if exchange {
 				dn.Parent = parentSrc
-				dn.Ctime = now
 				if de.Type == TypeDirectory && parentSrc != parentDst {
 					dpn.Nlink--
 					spn.Nlink++
@@ -1304,14 +1314,18 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if exist {
 						return syscall.ENOTEMPTY
 					}
+					if trash > 0 {
+						dn.Parent = trash
+					}
 				} else {
-					dn.Ctime = now
 					if trash == 0 {
 						dn.Nlink--
 						if de.Type == TypeFile && dn.Nlink == 0 {
 							opened = m.of.IsOpen(dn.Inode)
 						}
 						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
+					} else if dn.Nlink == 1 {
+						dn.Parent = trash
 					}
 				}
 			}
@@ -1361,16 +1375,18 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			if dino > 0 {
 				if trash > 0 {
+					if _, err := s.Cols("ctime", "parent").Update(dn, &node{Inode: dino}); err != nil {
+						return err
+					}
 					name := fmt.Sprintf("%d-%d-%s", parentDst, dino, de.Name)
 					if err = mustInsert(s, &edge{trash, name, dino, de.Type}); err != nil {
 						return err
 					}
-				}
-				if de.Type != TypeDirectory && dn.Nlink > 0 {
-					if _, err := s.Update(dn, &node{Inode: dino}); err != nil {
+				} else if de.Type != TypeDirectory && dn.Nlink > 0 {
+					if _, err := s.Cols("ctime", "nlink").Update(dn, &node{Inode: dino}); err != nil {
 						return err
 					}
-				} else if trash == 0 {
+				} else {
 					if de.Type == TypeFile {
 						if opened {
 							if _, err := s.Cols("nlink", "ctime").Update(&dn, &node{Inode: dino}); err != nil {

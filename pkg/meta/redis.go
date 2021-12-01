@@ -1061,6 +1061,8 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				if _type == TypeFile && attr.Nlink == 0 {
 					opened = r.of.IsOpen(inode)
 				}
+			} else if attr.Nlink == 1 { // don't change parent if it has hard links
+				attr.Parent = trash
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
@@ -1180,6 +1182,11 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
+			if trash > 0 {
+				attr.Ctime = now.Unix()
+				attr.Ctimensec = uint32(now.Nanosecond())
+				attr.Parent = trash
+			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 			trash = 0
@@ -1189,7 +1196,7 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			pipe.HDel(ctx, r.entryKey(parent), name)
 			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
 			if trash > 0 {
-				// NOTE: ctime, parent of inode are not modified
+				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 				pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
 			} else {
 				pipe.Del(ctx, r.inodeKey(inode))
@@ -1291,10 +1298,10 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				return err
 			}
 			r.parseAttr(a, &tattr)
+			tattr.Ctime = now.Unix()
+			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
-				tattr.Ctime = now.Unix()
 				tattr.Parent = parentSrc
-				tattr.Ctimensec = uint32(now.Nanosecond())
 				if dtyp == TypeDirectory && parentSrc != parentDst {
 					dattr.Nlink--
 					sattr.Nlink++
@@ -1308,15 +1315,18 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					if cnt != 0 {
 						return syscall.ENOTEMPTY
 					}
+					if trash > 0 {
+						tattr.Parent = trash
+					}
 				} else {
-					tattr.Ctime = now.Unix()
-					tattr.Ctimensec = uint32(now.Nanosecond())
 					if trash == 0 {
 						tattr.Nlink--
 						if dtyp == TypeFile && tattr.Nlink == 0 {
 							opened = r.of.IsOpen(dino)
 						}
 						defer func() { r.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
+					} else if tattr.Nlink == 1 {
+						tattr.Parent = trash
 					}
 				}
 			}
@@ -1370,11 +1380,11 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				pipe.HDel(ctx, r.entryKey(parentSrc), nameSrc)
 				if dino > 0 {
 					if trash > 0 {
-						pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parentDst, dino, nameDst), dbuf)
-					}
-					if dtyp != TypeDirectory && tattr.Nlink > 0 {
 						pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
-					} else if trash == 0 {
+						pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parentDst, dino, nameDst), dbuf)
+					} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
+						pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
+					} else {
 						if dtyp == TypeFile {
 							if opened {
 								pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
