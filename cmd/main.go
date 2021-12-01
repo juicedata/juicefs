@@ -90,7 +90,7 @@ func Main(args []string) error {
 
 	// Called via mount or fstab.
 	if strings.HasSuffix(args[0], "/mount.juicefs") {
-		if newArgs, err := handleSysMountArgs(); err != nil {
+		if newArgs, err := handleSysMountArgs(args); err != nil {
 			log.Fatal(err)
 		} else {
 			args = newArgs
@@ -108,14 +108,14 @@ func main() {
 	}
 }
 
-func handleSysMountArgs() ([]string, error) {
+func handleSysMountArgs(args []string) ([]string, error) {
 	optionToCmdFlag := map[string]string{
 		"attrcacheto":     "attr-cache",
 		"entrycacheto":    "entry-cache",
 		"direntrycacheto": "dir-entry-cache",
 	}
 	newArgs := []string{"juicefs", "mount", "-d"}
-	mountOptions := os.Args[3:]
+	mountOptions := args[3:]
 	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
@@ -168,7 +168,7 @@ func handleSysMountArgs() ([]string, error) {
 	if len(fuseOptions) > 0 {
 		newArgs = append(newArgs, "-o", strings.Join(fuseOptions, ","))
 	}
-	newArgs = append(newArgs, os.Args[1], os.Args[2])
+	newArgs = append(newArgs, args[1], args[2])
 	logger.Debug("Parsed mount args: ", strings.Join(newArgs, " "))
 	return newArgs, nil
 }
