@@ -28,6 +28,12 @@ import (
 	"testing"
 	"time"
 
+	jfsgateway "github.com/juicedata/juicefs/pkg/gateway"
+	"github.com/juicedata/juicefs/pkg/version"
+	mcli "github.com/minio/cli"
+	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/pkg/auth"
+
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fuse"
@@ -249,6 +255,14 @@ func TestMain(m *testing.M) {
 		log.Fatalln("mount is not completed in ten seconds")
 		return
 	}
+
+	go func() {
+		err := setUpGateway()
+		if err != nil {
+			log.Fatalf("set up gateway failed: %v", err)
+		}
+	}()
+
 	code := m.Run()
 	umountErr := doSimpleUmount(mp, true)
 	if umountErr != nil {
@@ -266,4 +280,108 @@ func TestIntegration(t *testing.T) {
 	} else {
 		t.Logf("std out:\n%s\n", string(out))
 	}
+}
+
+var gw *GateWay
+var metaUrl = "redis://localhost:6379/11"
+
+func setUpGateway() error {
+	formatSimpleMethod(metaUrl, "gateway-test")
+	address := "0.0.0.0:8000"
+	gw = &GateWay{}
+	args := []string{"gateway", "--address", address, "--anonymous"}
+	app := &mcli.App{
+		Action: gateway2,
+		Flags: []mcli.Flag{
+			mcli.StringFlag{
+				Name:  "address",
+				Value: ":9000",
+				Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
+			},
+			mcli.BoolFlag{
+				Name:  "anonymous",
+				Usage: "hide sensitive information from logging",
+			},
+			mcli.BoolFlag{
+				Name:  "json",
+				Usage: "output server logs and startup information in json format",
+			},
+			mcli.BoolFlag{
+				Name:  "quiet",
+				Usage: "disable MinIO startup information",
+			},
+		},
+	}
+	return app.Run(args)
+}
+
+func gateway2(ctx *mcli.Context) error {
+	minio.StartGateway(ctx, gw)
+	return nil
+}
+
+type GateWay struct{}
+
+func (g *GateWay) Name() string {
+	return "JuiceFS"
+}
+
+func (g *GateWay) Production() bool {
+	return true
+}
+
+func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+
+	m := meta.NewClient(metaUrl, &meta.Config{
+		Retries: 10,
+		Strict:  true,
+	})
+
+	format, err := m.Load()
+	if err != nil {
+		log.Fatalf("load setting: %s", err)
+	}
+
+	chunkConf := chunk.Config{
+		BlockSize:  format.BlockSize * 1024,
+		Compress:   format.Compression,
+		MaxUpload:  20,
+		BufferSize: 300 << 20,
+		CacheSize:  1024,
+		CacheDir:   "memory",
+	}
+
+	blob, err := createSimpleStorage(format)
+	if err != nil {
+		log.Fatalf("object storage: %s", err)
+	}
+
+	store := chunk.NewCachedStore(blob, chunkConf)
+	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+		chunkid := args[0].(uint64)
+		length := args[1].(uint32)
+		return store.Remove(chunkid, int(length))
+	})
+	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+		slices := args[0].([]meta.Slice)
+		chunkid := args[1].(uint64)
+		return vfs.Compact(chunkConf, store, slices, chunkid)
+	})
+	err = m.NewSession()
+	if err != nil {
+		log.Fatalf("new session: %s", err)
+	}
+
+	conf := &vfs.Config{
+		Meta: &meta.Config{
+			Retries: 10,
+		},
+		Format:          format,
+		Version:         version.Version(),
+		AttrTimeout:     time.Second,
+		EntryTimeout:    time.Second,
+		DirEntryTimeout: time.Second,
+		Chunk:           &chunkConf,
+	}
+	return jfsgateway.NewJFSGateway(conf, m, store)
 }
