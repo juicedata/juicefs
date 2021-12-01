@@ -1413,7 +1413,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				return err
 			}
 		}
-		if parentDst != parentSrc {
+		if parentDst != parentSrc && !isTrash(parentSrc) {
 			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&spn, &node{Inode: parentSrc}); err != nil {
 				return err
 			}

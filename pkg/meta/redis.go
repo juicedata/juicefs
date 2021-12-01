@@ -1189,7 +1189,7 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			pipe.HDel(ctx, r.entryKey(parent), name)
 			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
 			if trash > 0 {
-				// NOTE: ctime, parent of inode is not modified; nlink of trash ???
+				// NOTE: ctime, parent of inode are not modified
 				pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
 			} else {
 				pipe.Del(ctx, r.inodeKey(inode))
@@ -1399,7 +1399,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					}
 				}
 			}
-			if parentDst != parentSrc {
+			if parentDst != parentSrc && !isTrash(parentSrc) {
 				pipe.Set(ctx, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
 			}
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(&iattr), 0)

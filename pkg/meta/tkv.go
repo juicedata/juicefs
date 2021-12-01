@@ -1362,7 +1362,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			}
 		}
-		if parentDst != parentSrc {
+		if parentDst != parentSrc && !isTrash(parentSrc) {
 			tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
 		}
 		tx.set(m.inodeKey(ino), m.marshal(&iattr))
