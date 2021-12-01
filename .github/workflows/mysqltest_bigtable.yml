@@ -7,7 +7,7 @@ on:
 
 
 jobs:
-  mysqltest:
+  mysqltestbigtable:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -39,33 +39,22 @@ jobs:
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs &
 
-      - name: Install Mysql
-        run: |
-          sudo apt-get update
-          sudo apt-get install mysql-server
 
       - name: Change Data Dir
         run: |
-          sudo echo "my.cnf is"
-          sudo cat /etc/mysql/my.cnf
           sudo service mysql stop
           sudo sed  -i "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
           sudo mkdir /tmp/jfs/mysql
-          sudo ls -l /var/lib/
-          sudo ls -l /var/lib/mysql/
           sudo chmod 777 /var/lib/mysql/
           sudo cp -a -r /var/lib/mysql/* /tmp/jfs/mysql/
           sudo chmod 777 /tmp/jfs/mysql/
           sudo chown -R mysql:mysql /tmp/jfs/mysql/
           sudo chmod 777 /etc/apparmor.d/tunables/alias
           sudo echo "alias /var/lib/mysql/ -> /tmp/jfs/mysql/," >>/etc/apparmor.d/tunables/alias
-          echo "start apparmor"
           sudo service apparmor restart
-          echo "start mysql"
           sudo service mysql start
           sudo service mysql status
-          echo "datadir is"
           sudo mysql -uroot -proot  -e "select @@datadir;"
 
       - name: Install Sysbench
@@ -78,19 +67,15 @@ jobs:
           echo "mysql-user=root" >>/tmp/config.cfg
           echo "mysql-password=root" >>/tmp/config.cfg
           echo "mysql-db=test" >>/tmp/config.cfg
-          echo "threads=32" >>/tmp/config.cfg
+          echo "threads=4" >>/tmp/config.cfg
           echo "report-interval=10" >>/tmp/config.cfg
           echo "db-driver=mysql" >>/tmp/config.cfg
 
-      - name: Small Size Table Test
+      - name: Big Size Table Test
         run: |
-          cat /proc/cpuinfo | grep 'core id'
-          sudo df -h /
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=32 --table-size=100000 prepare
-          sudo df -h /
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=32 --time=20 --table-size=100000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=32 --time=20 --table-size=100000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=32 --time=20 --table-size=100000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=32 --table-size=100000 cleanup
-          sudo df -h /
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 prepare
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=5000000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=5000000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=5000000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 cleanup
 
