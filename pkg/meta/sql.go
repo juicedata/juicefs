@@ -1357,7 +1357,7 @@ func (m *dbMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 						}
 					} else {
 						if de.Type == TypeDirectory {
-							dn.Nlink--
+							dpn.Nlink--
 						} else if de.Type == TypeSymlink {
 							if _, err := s.Delete(&symlink{Inode: dino}); err != nil {
 								return err
