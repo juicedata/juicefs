@@ -30,6 +30,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juju/ratelimit"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -197,6 +198,9 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	cacheMissBytes.Add(float64(len(p)))
 
 	if c.store.seekable && boff > 0 && len(p) <= blockSize/4 {
+		if c.store.downLimit != nil {
+			c.store.downLimit.Wait(int64(len(p)))
+		}
 		// partial read
 		st := time.Now()
 		in, err := c.store.storage.Get(key, int64(boff), int64(len(p)))
@@ -376,6 +380,9 @@ func (c *wChunk) WriteAt(p []byte, off int64) (n int, err error) {
 }
 
 func (c *wChunk) put(key string, p *Page) error {
+	if c.store.upLimit != nil {
+		c.store.upLimit.Wait(int64(len(p.Data)))
+	}
 	p.Acquire()
 	return utils.WithTimeout(func() error {
 		defer p.Release()
@@ -622,6 +629,8 @@ type Config struct {
 	AutoCreate     bool
 	Compress       string
 	MaxUpload      int
+	UploadLimit    int64 // bytes per second
+	DownloadLimit  int64 // bytes per second
 	Writeback      bool
 	UploadDelay    time.Duration
 	Partitions     int
@@ -645,6 +654,8 @@ type cachedStore struct {
 	pendingMutex  sync.Mutex
 	compressor    compress.Compressor
 	seekable      bool
+	upLimit       *ratelimit.Bucket
+	downLimit     *ratelimit.Bucket
 }
 
 func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
@@ -690,6 +701,9 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	if used > SlowRequest {
 		logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
 	}
+	if store.downLimit != nil {
+		store.downLimit.Wait(int64(n))
+	}
 	if compressed && err == io.ErrUnexpectedEOF {
 		err = nil
 	}
@@ -732,6 +746,13 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		seekable:      compressor.CompressBound(0) == 0,
 		pendingKeys:   make(map[string]time.Time),
 		group:         &Controller{},
+	}
+	if config.UploadLimit > 0 {
+		// there are overheads coming from HTTP/TCP/IP
+		store.upLimit = ratelimit.NewBucketWithRate(float64(config.UploadLimit)*0.85, config.UploadLimit)
+	}
+	if config.DownloadLimit > 0 {
+		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
 	store.bcache = newCacheManager(&config, store.uploadStagingFile)
 	if config.CacheSize == 0 {
@@ -836,6 +857,9 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		compressed := buf.Data[:n]
 		try := 0
 		for {
+			if store.upLimit != nil {
+				store.upLimit.Wait(int64(len(compressed)))
+			}
 			st := time.Now()
 			err := store.storage.Put(key, bytes.NewReader(compressed))
 			used := time.Since(st)
