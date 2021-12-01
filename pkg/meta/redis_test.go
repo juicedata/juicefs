@@ -136,6 +136,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Lookup(ctx, parent, "..", &inode, attr); st != 0 || inode != 1 {
 		t.Fatalf("lookup ..: %s", st)
 	}
+	if attr.Nlink != 3 {
+		t.Fatalf("nlink expect 3, but got %d", attr.Nlink)
+	}
 	if st := m.Access(ctx, parent, 4, attr); st != 0 {
 		t.Fatalf("access d: %s", st)
 	}
@@ -274,6 +277,12 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	if st := m.Rename(ctx, 1, "d", 1, "f", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename d -> f: %s", st)
+	}
+	if st := m.GetAttr(ctx, 1, attr); st != 0 {
+		t.Fatalf("getattr f: %s", st)
+	}
+	if attr.Nlink != 2 {
+		t.Fatalf("nlink expect 2, but got %d", attr.Nlink)
 	}
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
 		t.Fatalf("mkdir d: %s", st)
