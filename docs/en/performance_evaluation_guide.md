@@ -1,3 +1,0 @@
-# JuiceFS Performance Evaluation Guide
-
-Working in progress...

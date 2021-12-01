@@ -1,3 +1,8 @@
+---
+sidebar_label: Use Scenarios & Limits
+sidebar_position: 2
+slug: /case
+---
 # JuiceFS Scenarios & Cases
 
 JuiceFS is widely applicable to various data storage and sharing scenarios. JuiceFS application cases from all over the world are summarized here. All community users are welcome to maintain this case list.

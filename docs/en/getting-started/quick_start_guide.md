@@ -1,3 +1,9 @@
+---
+sidebar_label: Quick Start Guide
+sidebar_position: 2
+slug: /quick_start_guide
+---
+
 # JuiceFS Quick Start Guide
 
 To create a JuiceFS file system, you need the following 3 preparations:
@@ -207,8 +213,3 @@ You can also use the `fusermount` command to unmount the file system:
 ```shell
 $ sudo fusermount -u /mnt/jfs
 ```
-
-## Go further
-
-- [JuiceFS on macOS](juicefs_on_macos.md)
-- [JuiceFS on Windows](juicefs_on_windows.md)
