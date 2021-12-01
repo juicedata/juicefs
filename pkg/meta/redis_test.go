@@ -334,7 +334,6 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Link(ctx, inode, 1, "F3", attr); st != 0 { // CaseInsensi = false
 		t.Fatalf("link F3 -> f: %s", st)
 	}
-	_ = m.Unlink(ctx, 1, "F3")
 	if st := m.Link(ctx, parent, 1, "d2", attr); st != syscall.EPERM {
 		t.Fatalf("link d2 -> d: %s", st)
 	}
@@ -424,6 +423,12 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	if st := m.ListXattr(ctx, inode, &value); st != 0 || string(value) != "a\000" {
 		t.Fatalf("listxattr: %s %v", st, value)
+	}
+	if st := m.Unlink(ctx, 1, "F3"); st != 0 {
+		t.Fatalf("unlink F3: %s", st)
+	}
+	if st := m.GetXattr(ctx, inode, "a", &value); st != 0 || string(value) != "v2" {
+		t.Fatalf("getxattr: %s %v", st, value)
 	}
 	if st := m.RemoveXattr(ctx, inode, "a"); st != 0 {
 		t.Fatalf("setxattr: %s", st)
