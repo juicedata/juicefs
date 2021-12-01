@@ -665,8 +665,10 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 			err = fmt.Errorf("recovered from %s", e)
 		}
 	}()
+	needed := store.compressor.CompressBound(len(page.Data))
+	compressed := needed > len(page.Data)
 	// we don't know the actual size for compressed block
-	if store.downLimit != nil && store.compressor.CompressBound(0) == 0 {
+	if store.downLimit != nil && !compressed {
 		store.downLimit.Wait(int64(len(page.Data)))
 	}
 	err = errors.New("Not downloaded")
@@ -686,8 +688,6 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	}
 	var n int
 	var buf []byte
-	needed := store.compressor.CompressBound(len(page.Data))
-	compressed := needed > len(page.Data)
 	if err == nil {
 		if compressed {
 			c := NewOffPage(needed)
