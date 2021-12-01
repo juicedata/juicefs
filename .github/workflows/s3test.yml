@@ -44,11 +44,11 @@ jobs:
         run: |
           sudo ./juicefs format redis://127.0.0.1:6379/1 pics
 
-      - name: Start Juicefs Gateway
-        run: |
-          sudo MINIO_ROOT_USER=minioadmin \
-          MINIO_ROOT_PASSWORD=minioadmin \
-          ./juicefs gateway redis://localhost:6379/1 localhost:8000 &
+      #      - name: Start Juicefs Gateway
+      #        run: |
+      #          sudo MINIO_ROOT_USER=minioadmin \
+      #          MINIO_ROOT_PASSWORD=minioadmin \
+      #          ./juicefs gateway redis://localhost:6379/1 localhost:8000 &
 
       - name: S3Test
         run: |
