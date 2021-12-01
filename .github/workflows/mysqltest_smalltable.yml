@@ -73,9 +73,9 @@ jobs:
 
       - name: Small Size Table Test
         run: |
+          sudo mysql -uroot -proot  -e "use mysql;set global max_prepared_stmt_count = 100000;"
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 prepare
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=64 --time=300 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=64 --time=300 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
-
