@@ -2186,7 +2186,14 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		}
 	}
 
-	vals, err = m.scanValues(m.fmtKey("SS"), nil)
+	if m.root == 1 {
+		err = m.snap.txn(func(tx kvTxn) error {
+			vals = tx.scanValues(m.fmtKey("SS"), nil)
+			return nil
+		})
+	} else {
+		vals, err = m.scanValues(m.fmtKey("SS"), nil)
+	}
 	if err != nil {
 		return err
 	}
