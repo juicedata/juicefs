@@ -1,0 +1,71 @@
+name: "elastictest"
+
+on:
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+
+
+jobs:
+  elastictest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs &
+
+      - name: Install Elasticsearch
+        run: |
+          wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
+          sudo apt-get install apt-transport-https
+          echo "deb https://artifacts.elastic.co/packages/6.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-6.x.list
+          sudo apt-get update && sudo apt-get install elasticsearch
+          sudo service elasticsearch status
+
+      - name: Change Datadir
+        run: |
+          sudo service elasticsearch stop
+          sudo cat /etc/elasticsearch/elasticsearch.yml
+          sudo sed  -i "s?^path\.data.*?path\.data: /tmp/jfs/?" /etc/elasticsearch/elasticsearch.yml
+          sudo cat /etc/elasticsearch/elasticsearch.yml
+          sudo service elasticsearch start
+          sudo ls -l /tmp/jfs/
+
+      - name: Stress Test
+        uses: actions/setup-python@v2
+        with:
+        python-version: '2.7'
+        run: |
+          git clone git@github.com:logzio/elasticsearch-stress-test.git
+          cd elasticsearch-stress-test
+          pip install elasticsearch
+          df -lh
+          python elasticsearch-stress-test.py --es_address 127.0.0.1 --indices 10 --documents 10 --clients 1 --seconds 30 --number-of-shards 1 --number-of-replicas 0 --bulk-size 5000 --max-fields-per-document 10 --max-size-per-field 50 --no-cleanup false --stats-frequency 15
+          df -lh
