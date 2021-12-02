@@ -1,3 +1,8 @@
+---
+sidebar_label: 性能评估指南
+sidebar_position: 2
+slug: /performance_evaluation_guide
+---
 # JuiceFS 性能评估指南
 
 在进行性能测试之前，最好写下该使用场景的大致描述，包括：
@@ -34,7 +39,7 @@ $ juicefs bench /mnt/jfs -p 4
 
 测试结果会将各项性能指标显示为绿色，黄色或红色。若您的结果中有红色指标，请先检查相关配置，需要帮助可以在 [GitHub Discussions](https://github.com/juicedata/juicefs/discussions) 详细描述你的问题。
 
-![bench](images/bench-guide-bench.png)
+![bench](../images/bench-guide-bench.png)
 
 JuiceFS `bench` 基准性能测试的具体流程如下（它的实现逻辑非常简单，有兴趣了解细节的可以直接看[源码](https://github.com/juicedata/juicefs/blob/main/cmd/bench.go))：
 
@@ -75,7 +80,7 @@ $ juicefs stats /mnt/jfs --verbosity 1
 
 结果如下，可以将其与上述基准测试流程对照来看，更易理解：
 
-![stats](images/bench-guide-stats.png)
+![stats](../images/bench-guide-stats.png)
 
 其中各项指标具体含义如下：
 
@@ -114,7 +119,7 @@ $ juicefs profile access.log --interval 0
 
 其中 `--interval` 参数设置访问日志的采样间隔，设为 0 时用于快速重放一个指定的日志文件，生成统计信息，如下图所示：
 
-![profile](images/bench-guide-profile.png)
+![profile](../images/bench-guide-profile.png)
 
 从之前基准测试流程描述可知，本次测试过程一共创建了 (1 + 100) * 4 = 404 个文件，每个文件都经历了「创建 → 写入 → 关闭 → 打开 → 读取 → 关闭 → 删除」的过程，因此一共有：
 

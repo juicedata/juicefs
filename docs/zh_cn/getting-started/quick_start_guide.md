@@ -1,4 +1,9 @@
-# JuiceFS 快速上手
+---
+sidebar_label: 快速上手指南
+sidebar_position: 2
+slug: /quick_start_guide
+---
+# JuiceFS 快速上手指南
 
 创建 JuiceFS 文件系统，需要以下 3 个方面的准备：
 

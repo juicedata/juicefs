@@ -1,3 +1,8 @@
+---
+sidebar_label: mdtest 基准测试
+sidebar_position: 6
+slug: /mdtest
+---
 # mdtest 基准测试
 
 ## 测试方法
@@ -40,7 +45,7 @@ s3fs <BUCKET>:/s3fs /s3fs -o host=https://s3.<REGION>.amazonaws.com,endpoint=<RE
 
 ## 测试结果
 
-![Metadata Benchmark](images/metadata-benchmark.svg)
+![Metadata Benchmark](../images/metadata-benchmark.svg)
 
 ### S3FS
 ```

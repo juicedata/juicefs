@@ -1,3 +1,8 @@
+---
+sidebar_label: fio 基准测试
+sidebar_position: 6
+slug: /fio
+---
 # fio 基准测试
 
 ## 测试方法
@@ -65,4 +70,4 @@ s3fs <BUCKET>:/s3fs /s3fs -o host=https://s3.<REGION>.amazonaws.com,endpoint=<RE
 
 ## 测试结果
 
-![Sequential Read Write Benchmark](images/sequential-read-write-benchmark.svg)
+![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)

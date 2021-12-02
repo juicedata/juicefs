@@ -1,3 +1,8 @@
+---
+sidebar_label: 元数据引擎性能测试
+sidebar_position: 7
+slug: /metadata_engines_benchmark
+---
 # 元数据引擎性能对比测试
 
 首先展示结论：
