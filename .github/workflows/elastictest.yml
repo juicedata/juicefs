@@ -72,6 +72,7 @@ jobs:
           python-version: '2.7'
       - run: |
           echo "start stress"
+          sudo apt-get install -y net-tools
           sudo netstat -anp | grep java
           curl 127.0.0.1:9200
           git clone https://github.com/logzio/elasticsearch-stress-test.git
