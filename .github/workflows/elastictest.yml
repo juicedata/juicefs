@@ -56,6 +56,7 @@ jobs:
 
       - name: Change Datadir
         run: |
+          sudo chmod 777 /tmp/jfs/
           sudo service elasticsearch stop
           sudo cat /etc/elasticsearch/elasticsearch.yml
           sudo sed  -i "s?^path\.data.*?path\.data: /tmp/jfs/?" /etc/elasticsearch/elasticsearch.yml
@@ -89,9 +90,9 @@ jobs:
         with:
           python-version: '3.8'
       - run: |
-          pip install tornado
-          pip install nest_asyncio
+          pip3 install tornado
+          pip3 install nest_asyncio
           git clone https://github.com/oliver006/elasticsearch-test-data.git
           cd elasticsearch-test-data
-          python es_test_data.py --es_url=http://localhost:9200
-          sudo ls -lh /tmp/jfs/
+          python3 es_test_data.py --es_url=http://localhost:9200
+          sudo ls -l /tmp/jfs/
