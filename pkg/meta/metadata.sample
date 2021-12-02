@@ -1,6 +1,6 @@
 {
   "Setting": {
-    "Name": "backup-test",
+    "Name": "load-dump-test",
     "UUID": "faa27c8f-edab-4791-a4e0-1620b732b343",
     "Storage": "file",
     "Bucket": "/Users/juicefs/.juicefs/local/",
