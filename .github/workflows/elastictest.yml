@@ -62,6 +62,8 @@ jobs:
           sudo cat /etc/elasticsearch/elasticsearch.yml
           sudo service elasticsearch start
           sudo ls -l /tmp/jfs/
+          sudo service elasticsearch status
+
 
 
       - name: Stress Test
@@ -69,7 +71,7 @@ jobs:
         with:
           python-version: '2.7'
       - run: |
-          sudo service elasticsearch status
+          echo "start stress"
           sudo netstat -anp | grep java
           curl 127.0.0.1:9200
           git clone https://github.com/logzio/elasticsearch-stress-test.git
