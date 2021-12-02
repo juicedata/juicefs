@@ -41,7 +41,7 @@ func dump(ctx *cli.Context) error {
 		defer fp.Close()
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
-	if err := m.DumpMeta(fp); err != nil {
+	if err := m.DumpMeta(fp, 0); err != nil {
 		return err
 	}
 	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))

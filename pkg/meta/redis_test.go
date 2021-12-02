@@ -136,6 +136,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Lookup(ctx, parent, "..", &inode, attr); st != 0 || inode != 1 {
 		t.Fatalf("lookup ..: %s", st)
 	}
+	if attr.Nlink != 3 {
+		t.Fatalf("nlink expect 3, but got %d", attr.Nlink)
+	}
 	if st := m.Access(ctx, parent, 4, attr); st != 0 {
 		t.Fatalf("access d: %s", st)
 	}
@@ -275,6 +278,12 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "d", 1, "f", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename d -> f: %s", st)
 	}
+	if st := m.GetAttr(ctx, 1, attr); st != 0 {
+		t.Fatalf("getattr f: %s", st)
+	}
+	if attr.Nlink != 2 {
+		t.Fatalf("nlink expect 2, but got %d", attr.Nlink)
+	}
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {
 		t.Fatalf("mkdir d: %s", st)
 	}
@@ -325,7 +334,6 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Link(ctx, inode, 1, "F3", attr); st != 0 { // CaseInsensi = false
 		t.Fatalf("link F3 -> f: %s", st)
 	}
-	_ = m.Unlink(ctx, 1, "F3")
 	if st := m.Link(ctx, parent, 1, "d2", attr); st != syscall.EPERM {
 		t.Fatalf("link d2 -> d: %s", st)
 	}
@@ -415,6 +423,12 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	if st := m.ListXattr(ctx, inode, &value); st != 0 || string(value) != "a\000" {
 		t.Fatalf("listxattr: %s %v", st, value)
+	}
+	if st := m.Unlink(ctx, 1, "F3"); st != 0 {
+		t.Fatalf("unlink F3: %s", st)
+	}
+	if st := m.GetXattr(ctx, inode, "a", &value); st != 0 || string(value) != "v2" {
+		t.Fatalf("getxattr: %s %v", st, value)
 	}
 	if st := m.RemoveXattr(ctx, inode, "a"); st != 0 {
 		t.Fatalf("setxattr: %s", st)

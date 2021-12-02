@@ -324,7 +324,8 @@ type Meta interface {
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 
-	DumpMeta(w io.Writer) error
+	// Dump the tree under root; 0 means using root of the current metadata engine
+	DumpMeta(w io.Writer, root Ino) error
 	LoadMeta(r io.Reader) error
 }
 

@@ -29,7 +29,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	jfsgateway "github.com/juicedata/juicefs/pkg/gateway"
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
@@ -181,12 +180,14 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
 
-		GetTimeout: time.Second * time.Duration(c.Int("get-timeout")),
-		PutTimeout: time.Second * time.Duration(c.Int("put-timeout")),
-		MaxUpload:  c.Int("max-uploads"),
-		Writeback:  c.Bool("writeback"),
-		Prefetch:   c.Int("prefetch"),
-		BufferSize: c.Int("buffer-size") << 20,
+		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
+		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
+		MaxUpload:     c.Int("max-uploads"),
+		Writeback:     c.Bool("writeback"),
+		Prefetch:      c.Int("prefetch"),
+		BufferSize:    c.Int("buffer-size") << 20,
+		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
+		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
 
 		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
@@ -210,7 +211,6 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	blob = object.NewLimited(blob, c.Int64("upload-limit")*1e6/8, c.Int64("download-limit")*1e6/8)
 
 	store := chunk.NewCachedStore(blob, chunkConf)
 	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {

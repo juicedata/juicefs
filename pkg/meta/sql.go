@@ -1406,7 +1406,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						}
 					} else {
 						if de.Type == TypeDirectory {
-							dn.Nlink--
+							dpn.Nlink--
 						} else if de.Type == TypeSymlink {
 							if _, err := s.Delete(&symlink{Inode: dino}); err != nil {
 								return err
@@ -2357,7 +2357,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	var edges []*edge
 	var err error
 	var ok bool
-	if m.root == 1 {
+	if m.snap != nil {
 		edges, ok = m.snap.edges[inode]
 		if !ok {
 			logger.Warnf("no edge target for inode %d", inode)
@@ -2378,7 +2378,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 
 	for idx, e := range edges {
 		var entry *DumpedEntry
-		if m.root == 1 {
+		if m.snap != nil {
 			entry = m.dumpEntryFast(e.Inode)
 		} else {
 			entry, err = m.dumpEntry(e.Inode)
@@ -2481,7 +2481,7 @@ func (m *dbMeta) makeSnap() error {
 	return nil
 }
 
-func (m *dbMeta) DumpMeta(w io.Writer) (err error) {
+func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -2501,13 +2501,16 @@ func (m *dbMeta) DumpMeta(w io.Writer) (err error) {
 	}
 
 	var tree *DumpedEntry
-	if m.root == 1 {
+	if root == 0 {
+		root = m.root
+	}
+	if root == 1 {
 		if err = m.makeSnap(); err != nil {
 			return fmt.Errorf("Fetch all metadata from DB: %s", err)
 		}
-		tree = m.dumpEntryFast(m.root)
+		tree = m.dumpEntryFast(root)
 	} else {
-		tree, err = m.dumpEntry(m.root)
+		tree, err = m.dumpEntry(root)
 		if err != nil {
 			return err
 		}
@@ -2571,7 +2574,7 @@ func (m *dbMeta) DumpMeta(w io.Writer) (err error) {
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
 
-	if err = m.dumpDir(m.root, tree, bw, 1, func(totalIncr, currentIncr int64) {
+	if err = m.dumpDir(root, tree, bw, 1, func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)

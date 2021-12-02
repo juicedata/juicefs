@@ -60,6 +60,7 @@ type tkvClient interface {
 type kvMeta struct {
 	baseMeta
 	client tkvClient
+	snap   *memKV
 }
 
 var drivers = make(map[string]func(string) (tkvClient, error))
@@ -2023,7 +2024,7 @@ func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 
 func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
-	return e, m.txn(func(tx kvTxn) error {
+	f := func(tx kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return fmt.Errorf("inode %d not found", inode)
@@ -2066,7 +2067,12 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		}
 
 		return nil
-	})
+	}
+	if m.snap != nil {
+		return e, m.snap.txn(f)
+	} else {
+		return e, m.txn(f)
+	}
 }
 
 func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
@@ -2075,7 +2081,16 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			panic(err)
 		}
 	}
-	vals, err := m.scanValues(m.entryKey(inode, ""), nil)
+	var vals map[string][]byte
+	var err error
+	if m.snap != nil {
+		err = m.snap.txn(func(tx kvTxn) error {
+			vals = tx.scanValues(m.entryKey(inode, ""), nil)
+			return nil
+		})
+	} else {
+		vals, err = m.scanValues(m.entryKey(inode, ""), nil)
+	}
 	if err != nil {
 		return err
 	}
@@ -2118,7 +2133,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	return nil
 }
 
-func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
+func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -2128,37 +2143,6 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 			}
 		}
 	}()
-
-	if m.root == 1 {
-		switch m.client.(type) {
-		case *memKV:
-		default:
-			client := &memKV{items: btree.New(2), temp: &kvItem{}}
-			if err = m.txn(func(tx kvTxn) error {
-				used := parseCounter(tx.get(m.counterKey(usedSpace)))
-				inodeTotal := parseCounter(tx.get(m.counterKey(totalInodes)))
-				guessKeyTotal := int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
-				progress, bar := utils.NewDynProgressBar("Make snap progress: ", false)
-				bar.SetTotal(guessKeyTotal, false)
-				threshold := 0.1
-				tx.scan(nil, func(key, value []byte) {
-					client.set(string(key), value)
-					if bar.Current() > int64(math.Ceil(float64(guessKeyTotal)*(1-threshold))) {
-						guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
-						bar.SetTotal(guessKeyTotal, false)
-					}
-					bar.Increment()
-				})
-				bar.SetTotal(0, true)
-				progress.Wait()
-				return nil
-			}); err != nil {
-				return err
-			}
-			m.client = client
-		}
-	}
-
 	vals, err := m.scanValues(m.fmtKey("D"), nil)
 	if err != nil {
 		return err
@@ -2172,9 +2156,40 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		inode := m.decodeInode(b.Get(8))
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
-
-	tree, err := m.dumpEntry(m.root)
-	if err != nil {
+	var tree *DumpedEntry
+	if root == 0 {
+		root = m.root
+	}
+	if root == 1 { // make snap
+		switch c := m.client.(type) {
+		case *memKV:
+			m.snap = c
+		default:
+			m.snap = &memKV{items: btree.New(2), temp: &kvItem{}}
+			if err = m.txn(func(tx kvTxn) error {
+				used := parseCounter(tx.get(m.counterKey(usedSpace)))
+				inodeTotal := parseCounter(tx.get(m.counterKey(totalInodes)))
+				guessKeyTotal := int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
+				progress, bar := utils.NewDynProgressBar("Make snap progress: ", false)
+				bar.SetTotal(guessKeyTotal, false)
+				threshold := 0.1
+				tx.scan(nil, func(key, value []byte) {
+					m.snap.set(string(key), value)
+					if bar.Current() > int64(math.Ceil(float64(guessKeyTotal)*(1-threshold))) {
+						guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
+						bar.SetTotal(guessKeyTotal, false)
+					}
+					bar.Increment()
+				})
+				bar.SetTotal(0, true)
+				progress.Wait()
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	if tree, err = m.dumpEntry(root); err != nil {
 		return err
 	}
 	if tree == nil {
@@ -2205,7 +2220,14 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		}
 	}
 
-	vals, err = m.scanValues(m.fmtKey("SS"), nil)
+	if root == 1 {
+		err = m.snap.txn(func(tx kvTxn) error {
+			vals = tx.scanValues(m.fmtKey("SS"), nil)
+			return nil
+		})
+	} else {
+		vals, err = m.scanValues(m.fmtKey("SS"), nil)
+	}
 	if err != nil {
 		return err
 	}
@@ -2250,7 +2272,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
 	}
-	if err = m.dumpDir(m.root, tree, bw, 1, showProgress); err != nil {
+	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {
