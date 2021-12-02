@@ -2302,7 +2302,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	return e
 }
 
-func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, useSnap bool, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2311,7 +2311,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	var edges []*edge
 	var err error
 	var ok bool
-	if useSnap {
+	if m.snap != nil {
 		edges, ok = m.snap.edges[inode]
 		if !ok {
 			logger.Warnf("no edge target for inode %d", inode)
@@ -2332,7 +2332,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 
 	for idx, e := range edges {
 		var entry *DumpedEntry
-		if useSnap {
+		if m.snap != nil {
 			entry = m.dumpEntryFast(e.Inode)
 		} else {
 			entry, err = m.dumpEntry(e.Inode)
@@ -2347,7 +2347,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 
 		entry.Name = e.Name
 		if e.Type == TypeDirectory {
-			err = m.dumpDir(e.Inode, entry, bw, depth+2, useSnap, showProgress)
+			err = m.dumpDir(e.Inode, entry, bw, depth+2, showProgress)
 		} else {
 			err = entry.writeJSON(bw, depth+2)
 		}
@@ -2528,7 +2528,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
 
-	if err = m.dumpDir(root, tree, bw, 1, root == 1, func(totalIncr, currentIncr int64) {
+	if err = m.dumpDir(root, tree, bw, 1, func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)

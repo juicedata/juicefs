@@ -2508,7 +2508,7 @@ func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	return e
 }
 
-func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, useSnap bool, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2516,7 +2516,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	}
 	var err error
 	var dirs map[string]string
-	if useSnap {
+	if m.snap != nil {
 		dirs = m.snap.hashMap[m.entryKey(inode)]
 	} else {
 		dirs, err = m.rdb.HGetAll(context.Background(), m.entryKey(inode)).Result()
@@ -2539,7 +2539,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	for idx, name := range sortedName {
 		typ, inode := m.parseEntry([]byte(dirs[name]))
 		var entry *DumpedEntry
-		if useSnap {
+		if m.snap != nil {
 			entry = m.dumpEntryFast(inode)
 		} else {
 			entry, err = m.dumpEntry(inode)
@@ -2553,7 +2553,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 
 		entry.Name = name
 		if typ == TypeDirectory {
-			err = m.dumpDir(inode, entry, bw, depth+2, useSnap, showProgress)
+			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
 		} else {
 			err = entry.writeJSON(bw, depth+2)
 		}
@@ -2793,7 +2793,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 
-	if err = m.dumpDir(root, tree, bw, 1, root == 1, showProgress); err != nil {
+	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {
