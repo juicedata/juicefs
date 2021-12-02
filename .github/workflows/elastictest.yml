@@ -74,5 +74,5 @@ jobs:
           cd elasticsearch-stress-test
           pip install elasticsearch
           df -lh
-          python elasticsearch-stress-test.py --es_address 127.0.0.1 --indices 10 --documents 10 --clients 1 --seconds 30 --number-of-shards 1 --number-of-replicas 0 --bulk-size 5000 --max-fields-per-document 10 --max-size-per-field 50 --no-cleanup false --stats-frequency 15
+          python elasticsearch-stress-test.py --es_address 127.0.0.1 --indices 10 --documents 10 --clients 1 --seconds 30 --number-of-shards 1 --number-of-replicas 0 --bulk-size 5000 --max-fields-per-document 10 --max-size-per-field 50 --stats-frequency 15
           df -lh
