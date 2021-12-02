@@ -56,14 +56,18 @@ jobs:
 
       - name: Change Datadir
         run: |
+          sudo mkdir -p /data/es/
+          sudo chmod 777 /data/es/
           sudo chmod 777 /tmp/jfs/
+          echo "hello" >> /tmp/jfs/hello
           sudo service elasticsearch stop
           sudo cat /etc/elasticsearch/elasticsearch.yml
-          sudo sed  -i "s?^path\.data.*?path\.data: /tmp/jfs/?" /etc/elasticsearch/elasticsearch.yml
+          sudo sed  -i "s?^path\.data.*?path\.data: /data/es/?" /etc/elasticsearch/elasticsearch.yml
           sudo cat /etc/elasticsearch/elasticsearch.yml
           sudo service elasticsearch restart
           sudo ls -l /tmp/jfs/
           sudo ls -l /var/lib/elasticsearch/
+          sudo ls -l /data/es/
           sudo service elasticsearch status
           curl -X GET "localhost:9200/"
 
@@ -100,3 +104,4 @@ jobs:
           python3 es_test_data.py --es_url=http://localhost:9200
           sudo ls -l /tmp/jfs/
           sudo ls -lh /var/lib/elasticsearch/
+          sudo ls -l /data/es/
