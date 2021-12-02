@@ -61,7 +61,7 @@ jobs:
       - name: Stress Test
         uses: actions/setup-python@v2
         with:
-        python-version: '2.7'
+          python-version: '2.7'
         run: |
           git clone git@github.com:logzio/elasticsearch-stress-test.git
           cd elasticsearch-stress-test
