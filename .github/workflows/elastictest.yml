@@ -61,8 +61,9 @@ jobs:
           sudo cat /etc/elasticsearch/elasticsearch.yml
           sudo sed  -i "s?^path\.data.*?path\.data: /tmp/jfs/?" /etc/elasticsearch/elasticsearch.yml
           sudo cat /etc/elasticsearch/elasticsearch.yml
-          sudo service elasticsearch start
+          sudo service elasticsearch restart
           sudo ls -l /tmp/jfs/
+          sudo ls -l /var/lib/elasticsearch/
           sudo service elasticsearch status
           curl -X GET "localhost:9200/"
 
@@ -73,6 +74,8 @@ jobs:
           python-version: '2.7'
       - run: |
           echo "start stress"
+          sudo cat /etc/elasticsearch/elasticsearch.yml
+          sudo service elasticsearch restart
           sudo apt-get install -y net-tools
           sudo netstat -anp | grep java
           curl -X GET "localhost:9200/"
