@@ -70,7 +70,7 @@ jobs:
         with:
           python-version: '2.7'
       - run: |
-          sudo git clone git@github.com:logzio/elasticsearch-stress-test.git
+          git clone https://github.com/logzio/elasticsearch-stress-test.git
           cd elasticsearch-stress-test
           pip install elasticsearch
           df -lh
