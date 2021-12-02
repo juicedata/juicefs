@@ -1,4 +1,9 @@
-# JuiceFS 应用场景 & 案例
+---
+sidebar_label: 应用场景 & 限制
+sidebar_position: 2
+slug: /case
+---
+# JuiceFS 应用场景 & 限制
 
 JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世界各地的 JuiceFS 应用案例，欢迎所有社区用户共同来维护这份案例列表。
 
