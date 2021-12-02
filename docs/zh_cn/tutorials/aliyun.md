@@ -1,5 +1,7 @@
 ---
-sidebar_label: 在阿里云上使用 JuiceFS
+sidebar_label: 在阿里云使用 JuiceFS
+sidebar_position: 4
+slug: /clouds/aliyun
 ---
 
 # 在阿里云安装和使用 JuiceFS 存储

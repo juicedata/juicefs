@@ -1,4 +1,9 @@
-# K3s 使用 JuiceFS
+---
+sidebar_label: 在 K3s 上使用 JuiceFS
+sidebar_position: 1
+slug: /juicefs_on_k3s
+---
+# 在 K3s 上使用 JuiceFS
 
 [K3s](https://k3s.io/) 是一个经过功能优化的 Kubernetes 发行版，它与 Kubernetes 完全兼容，即几乎所有在 Kubernetes 的操作都可以在 K3s 上执行。K3s 将整个容器编排系统打包进了一个容量不足 100MB 的二进制程序，减少了部署 Kubernetes 生产集群的环境依赖，大大降低了安装难度。相比之下，K3s 对操作系统的性能要求更低，树莓派等 ARM 设备都可以用来组建集群。
 
@@ -235,7 +240,7 @@ $ sudo kubectl apply -f ingress.yaml
 
 部署完成以后，使用相同局域网的主机访问任何一个集群节点，即可看到 Nginx 的欢迎页面。
 
-![](images/k3s-nginx-welcome.png)
+![](../images/k3s-nginx-welcome.png)
 
 接下来查看一下容器是否成功挂载了 JuiceFS，执行命令查看 pod 状态：
 

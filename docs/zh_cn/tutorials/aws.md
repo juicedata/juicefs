@@ -1,5 +1,7 @@
 ---
 sidebar_label: 在 AWS 上使用 JuiceFS
+sidebar_position: 6
+slug: /clouds/aws
 ---
 
 # 在亚马逊 AWS 安装和使用 JuiceFS 存储

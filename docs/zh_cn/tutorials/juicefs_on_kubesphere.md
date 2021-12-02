@@ -1,4 +1,9 @@
-# KubeSphere 平台一键部署 JuiceFS
+---
+sidebar_label: 在 KubeSphere 上使用 JuiceFS
+sidebar_position: 3
+slug: /juicefs_on_kubesphere
+---
+# 在 KubeSphere 上使用 JuiceFS
 
 [KubeSphere](https://kubesphere.com.cn/) 是在 Kubernetes 之上构建的以应用为中心的多租户容器平台，提供全栈的 IT 自动化运维的能力，简化企业的 DevOps 工作流。
 
@@ -32,7 +37,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 - 仓库名称：juicefs-csi-driver
 - Index URL：https://juicedata.github.io/juicefs-csi-driver/
 
-![](images/kubesphere_app_shop.png)
+![](../images/kubesphere_app_shop.png)
 
 #### 方法二：应用模板
 
@@ -40,17 +45,17 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 在「企业空间」中点击进入「应用管理」，选择「应用模板」，点击「创建」，上传 chart 压缩包：
 
-![](images/kubesphere_app_template.png)
+![](../images/kubesphere_app_template.png)
 
 ### 安装
 
 在「企业空间」中选择您所需部署的「项目」（KubeSphere 中的项目即为 K8s 中的 namespace），选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」，然后选择「juicefs」：
 
-![](images/kubesphere_shop_juicefs.jpg)
+![](../images/kubesphere_shop_juicefs.jpg)
 
 若 KubeSphere 版本低于 v3.2.0，根据上一步配置好的应用模板，选择部署应用「来自应用模板」：
 
-![](images/kubesphere_install_csi.png)
+![](../images/kubesphere_install_csi.png)
 
 进入配置修改页面后一致，修改以下两个地方：
 - namespace：改成对应的项目名
@@ -60,17 +65,17 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 您也可以通过 KubeSphere 的应用商店快速创建数据库（如 Redis）和对象存储（如 MinIO）。
 比如在 KubeSphere 平台搭建 Redis：在当前所在项目中选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」，选择「Redis」，然后快速部署即可。Redis 的访问 URL 可以通过部署好的应用的服务名，如下：
 
-![](images/kubesphere_redis.png)
+![](../images/kubesphere_redis.png)
 
 在 KubeSphere 平台搭建 MinIO 也是类似的流程，不过在部署 MinIO 之前可以修改 MinIO 的 accessKey 和 secretKey，并且需要记住配置的值。如下图：
 
-![](images/kubesphere_create_minio.png)
+![](../images/kubesphere_create_minio.png)
 
 > 注：如果部署 MinIO 出现权限问题，可以将配置中的 `securityContext.enables` 设置为 false。
 
 MinIO 的访问 URL 可以通过部署好的应用的服务名，如下：
 
-![](images/kubesphere_minio.png)
+![](../images/kubesphere_minio.png)
 
 Redis 和 MinIO 都搭建好之后，就可以填写 JuiceFS CSI Driver 的 `backend` 值了。其中：
 
@@ -79,7 +84,7 @@ Redis 和 MinIO 都搭建好之后，就可以填写 JuiceFS CSI Driver 的 `bac
 3. `bucket` 为刚才创建的 MinIO 的可用 bucket（JuiceFS 会自动创建，不需要手动创建），MinIO 的访问地址可用 MinIO 应用对应的服务名，如 `http://minio-qkp9my:9000/minio/test`
 4. `accessKey` 和 `secretKey` 用刚才创建的 MinIO 的 accessKey 和 secretKey
 
-![](images/kubesphere_update_csi.png)
+![](../images/kubesphere_update_csi.png)
 
 配置修改完毕后，点击安装即可。
 
@@ -91,18 +96,18 @@ Redis 和 MinIO 都搭建好之后，就可以填写 JuiceFS CSI Driver 的 `bac
 
 然后需要创建一个 PVC，指定使用 `juicefs-sc` 这个 `StorageClass`。在「项目」中，选择「存储管理」，再选择「存储卷」，点击「创建」按钮创建 PVC，其中「存储类型」选择 `juicefs-sc`，如下：
 
-![](images/kubesphere_pvc.png)
+![](../images/kubesphere_pvc.png)
 
 PVC 创建好之后，再在「项目」的「应用负载」中，选择「工作负载」，点击「创建」按钮部署工作负载，其中「基本信息」页填写自己喜欢的名字；「容器镜像」页可以填写镜像 `centos` ；
 启动命令 `sh,-c,while true; do echo $(date -u) >> /data/out.txt; sleep 5; done` ；「存储卷来源」选择「已有存储卷」，再选择上一步创建的 PVC，容器内路径填写 `/data` 如下：
 
-![](images/kubesphere_deployment.png)
+![](../images/kubesphere_deployment.png)
 
-![](images/kubesphere_workload.png)
+![](../images/kubesphere_workload.png)
 
 部署完成后可以看到运行中的容器组：
 
-![](images/kubesphere_pod.png)
+![](../images/kubesphere_pod.png)
 
 ### 新建 StorageClass
 
@@ -110,15 +115,15 @@ PVC 创建好之后，再在「项目」的「应用负载」中，选择「工�
 
 准备好元数据服务和对象存储服务后，新建一个 `Secret`。在「平台管理」页面选择「配置中心」，选择「密钥」，点击「创建」按钮新建：
 
-![](images/kubesphere_create_secret.png)
+![](../images/kubesphere_create_secret.png)
 
 「密钥设置」中填入准备好的元数据服务和对象存储信息，如下：
 
-![](images/kubesphere_update_secret.png)
+![](../images/kubesphere_update_secret.png)
 
 `Secret` 新建好之后，创建 `StorageClass`，在「平台管理」页面选择「存储管理」，选择「存储类型」，点击「创建」按钮新建，其中「存储系统」选择「自定义」：
 
-![](images/kubesphere_sc_create.png)
+![](../images/kubesphere_sc_create.png)
 
 设置页面信息如下，其中「存储系统」填写 `csi.juicefs.com`，另外再设置 4 个参数：
 
@@ -127,6 +132,6 @@ PVC 创建好之后，再在「项目」的「应用负载」中，选择「工�
 - `csi.storage.k8s.io/node-publish-secret-name`: 刚刚创建好的 secret name
 - `csi.storage.k8s.io/node-publish-secret-namespace`: secret 对应的项目名
 
-![](images/kubesphere_sc_update.png)
+![](../images/kubesphere_sc_update.png)
 
 点击「创建」按钮之后，`StorageClass` 就创建好了。

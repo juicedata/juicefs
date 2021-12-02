@@ -1,7 +1,8 @@
 ---
-sidebar_label: 在 DigitalOcean 上使用 JuiceFS
+sidebar_label: 在 DigitalOcean 使用 JuiceFS
+sidebar_position: 7
+slug: /clouds/digitalocean
 ---
-
 # 在 DigitalOcean 安装和使用 JuiceFS 存储
 
 JuiceFS 是面向云设计的，使用云平台开箱即用的存储和数据库服务，最快几分钟就能完成配置投入使用，本文以 DigitalOcean 平台为例，介绍如何在云计算平台上快速简单的安装和使用 JuiceFS。

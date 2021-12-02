@@ -1,5 +1,7 @@
 ---
-sidebar_label: 在腾讯云上使用 JuiceFS
+sidebar_label: 在腾讯云使用 JuiceFS
+sidebar_position: 5
+slug: /clouds/qcloud
 ---
 
 # 在腾讯云安装和使用 JuiceFS 存储
