@@ -2805,6 +2805,8 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 	bar.SetTotal(0, true) // FIXME: current != total
 	progress.Wait()
+	m.snap = nil
+
 	return bw.Flush()
 }
 
