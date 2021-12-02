@@ -2508,7 +2508,7 @@ func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	return e
 }
 
-func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, useSnap bool, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2516,7 +2516,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	}
 	var err error
 	var dirs map[string]string
-	if m.root == 1 {
+	if useSnap {
 		dirs = m.snap.hashMap[m.entryKey(inode)]
 	} else {
 		dirs, err = m.rdb.HGetAll(context.Background(), m.entryKey(inode)).Result()
@@ -2539,7 +2539,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	for idx, name := range sortedName {
 		typ, inode := m.parseEntry([]byte(dirs[name]))
 		var entry *DumpedEntry
-		if m.root == 1 {
+		if useSnap {
 			entry = m.dumpEntryFast(inode)
 		} else {
 			entry, err = m.dumpEntry(inode)
@@ -2553,7 +2553,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 
 		entry.Name = name
 		if typ == TypeDirectory {
-			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
+			err = m.dumpDir(inode, entry, bw, depth+2, useSnap, showProgress)
 		} else {
 			err = entry.writeJSON(bw, depth+2)
 		}
@@ -2683,7 +2683,7 @@ func (m *redisMeta) makeSnap() error {
 	return nil
 }
 
-func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
+func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -2709,13 +2709,16 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
 	var tree *DumpedEntry
-	if m.root == 1 {
+	if root == 0 {
+		root = m.root
+	}
+	if root == 1 {
 		if err := m.makeSnap(); err != nil {
 			return errors.Errorf("Fetch all metadata from Redis: %s", err)
 		}
-		tree = m.dumpEntryFast(m.root)
+		tree = m.dumpEntryFast(root)
 	} else {
-		tree, err = m.dumpEntry(m.root)
+		tree, err = m.dumpEntry(root)
 		if err != nil {
 			return err
 		}
@@ -2754,7 +2757,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 	for _, k := range keys {
 		sid, _ := strconv.ParseUint(k, 10, 64)
 		var ss []string
-		if m.root == 1 {
+		if root == 1 {
 			ss = m.snap.listMap[m.sustained(sid)]
 		} else {
 			ss, err = m.rdb.SMembers(ctx, m.sustained(sid)).Result()
@@ -2790,7 +2793,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 		return err
 	}
 
-	if err = m.dumpDir(m.root, tree, bw, 1, showProgress); err != nil {
+	if err = m.dumpDir(root, tree, bw, 1, root == 1, showProgress); err != nil {
 		return err
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {

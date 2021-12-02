@@ -2039,7 +2039,7 @@ func (m *kvMeta) dumpEntry(inode Ino, useSnap bool) (*DumpedEntry, error) {
 	}
 }
 
-func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, useSnap bool, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2047,7 +2047,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	}
 	var vals map[string][]byte
 	var err error
-	if m.root == 1 {
+	if useSnap {
 		err = m.snap.txn(func(tx kvTxn) error {
 			vals = tx.scanValues(m.entryKey(inode, ""), nil)
 			return nil
@@ -2073,13 +2073,13 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	for idx, name := range sortedName {
 		typ, inode := m.parseEntry(vals[name])
 		var entry *DumpedEntry
-		entry, err = m.dumpEntry(inode, m.root == 1)
+		entry, err = m.dumpEntry(inode, useSnap)
 		if err != nil {
 			return err
 		}
 		entry.Name = name[10:]
 		if typ == TypeDirectory {
-			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
+			err = m.dumpDir(inode, entry, bw, depth+2, useSnap, showProgress)
 		} else {
 			err = entry.writeJSON(bw, depth+2)
 		}
@@ -2097,7 +2097,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	return nil
 }
 
-func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
+func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -2120,9 +2120,11 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		inode := m.decodeInode(b.Get(8))
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
-
 	var tree *DumpedEntry
-	if m.root == 1 {
+	if root == 0 {
+		root = m.root
+	}
+	if root == 1 {
 		// make snap
 		switch c := m.client.(type) {
 		case *memKV:
@@ -2151,9 +2153,9 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 				return err
 			}
 		}
-		tree, err = m.dumpEntry(m.root, true)
+		tree, err = m.dumpEntry(root, true)
 	} else {
-		tree, err = m.dumpEntry(m.root, false)
+		tree, err = m.dumpEntry(root, false)
 	}
 	if err != nil {
 		return err
@@ -2186,7 +2188,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		}
 	}
 
-	if m.root == 1 {
+	if root == 1 {
 		err = m.snap.txn(func(tx kvTxn) error {
 			vals = tx.scanValues(m.fmtKey("SS"), nil)
 			return nil
@@ -2238,7 +2240,7 @@ func (m *kvMeta) DumpMeta(w io.Writer) (err error) {
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
 	}
-	if err = m.dumpDir(m.root, tree, bw, 1, showProgress); err != nil {
+	if err = m.dumpDir(root, tree, bw, 1, root == 1, showProgress); err != nil {
 		return err
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {

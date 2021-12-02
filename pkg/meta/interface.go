@@ -312,7 +312,7 @@ type Meta interface {
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 
-	DumpMeta(w io.Writer) error
+	DumpMeta(w io.Writer, root Ino) error
 	LoadMeta(r io.Reader) error
 }
 
