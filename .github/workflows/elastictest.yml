@@ -44,7 +44,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs &
 
       - name: Install Elasticsearch
         run: |
@@ -58,14 +58,14 @@ jobs:
         run: |
           sudo mkdir -p /data/es/
           sudo chmod 777 /data/es/
-          sudo chmod 777 /tmp/jfs/
+          sudo chmod 777 /data/jfs/
           echo "hello" >> /tmp/jfs/hello
           sudo service elasticsearch stop
           sudo cat /etc/elasticsearch/elasticsearch.yml
-          sudo sed  -i "s?^path\.data.*?path\.data: /data/es/?" /etc/elasticsearch/elasticsearch.yml
+          sudo sed  -i "s?^path\.data.*?path\.data: /data/jfs/?" /etc/elasticsearch/elasticsearch.yml
           sudo cat /etc/elasticsearch/elasticsearch.yml
           sudo service elasticsearch restart
-          sudo ls -l /tmp/jfs/
+          sudo ls -l /data/jfs/
           sudo ls -l /var/lib/elasticsearch/
           sudo ls -l /data/es/
           sudo service elasticsearch status
@@ -86,11 +86,11 @@ jobs:
           git clone https://github.com/logzio/elasticsearch-stress-test.git
           cd elasticsearch-stress-test
           pip install elasticsearch
-          sudo ls -lh /tmp/jfs/
+          sudo ls -l /data/jfs/
           python elasticsearch-stress-test.py --es_address 127.0.0.1 --indices 10 --documents 10 --clients 1  \
           --seconds 30 --number-of-shards 1 --no-cleanup --number-of-replicas 0 --bulk-size 5000  \
           --max-fields-per-document 10 --max-size-per-field 50 --stats-frequency 15
-          sudo ls -lh /tmp/jfs/
+          sudo ls -l /data/jfs/
 
       - name: Insert Data
         uses: actions/setup-python@v2
@@ -102,6 +102,6 @@ jobs:
           git clone https://github.com/oliver006/elasticsearch-test-data.git
           cd elasticsearch-test-data
           python3 es_test_data.py --es_url=http://localhost:9200
-          sudo ls -l /tmp/jfs/
+          sudo ls -l /data/jfs/
           sudo ls -lh /var/lib/elasticsearch/
           sudo ls -l /data/es/
