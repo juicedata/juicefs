@@ -2753,7 +2753,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		length, _ := strconv.ParseUint(parts[1], 10, 64)
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
-	var tree *DumpedEntry
+	var tree, trash *DumpedEntry
 	if root == 0 {
 		root = m.root
 	}
@@ -2762,9 +2762,9 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			return errors.Errorf("Fetch all metadata from Redis: %s", err)
 		}
 		tree = m.dumpEntryFast(root)
+		trash = m.dumpEntryFast(TrashInode)
 	} else {
-		tree, err = m.dumpEntry(root)
-		if err != nil {
+		if tree, err = m.dumpEntry(root); err != nil {
 			return err
 		}
 	}
@@ -2775,6 +2775,11 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
+	if trash != nil {
+		trash.Name = "Trash"
+		total++
+		bar.Increment()
+	}
 	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
@@ -2786,7 +2791,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 
-	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession"}...).Result()
+	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextTrash"}...).Result()
 	cs := make([]int64, len(rs))
 	for i, r := range rs {
 		if r != nil {
@@ -2821,17 +2826,17 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := &DumpedMeta{
-		format,
-		&DumpedCounters{
+		Setting: format,
+		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
 			NextInode:   cs[2] + 1, // Redis counter is 1 smaller than sql/tkv
 			NextChunk:   cs[3] + 1,
 			NextSession: cs[4] + 1,
+			NextTrash:   cs[5] + 1,
 		},
-		sessions,
-		dels,
-		tree,
+		Sustained: sessions,
+		DelFiles:  dels,
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
@@ -2840,6 +2845,14 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
+	}
+	if trash != nil {
+		if _, err = bw.WriteString(","); err != nil {
+			return err
+		}
+		if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
+			return err
+		}
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
@@ -2891,12 +2904,18 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		attr.Length = uint64(len(e.Symlink))
 		p.Set(ctx, m.symKey(inode), e.Symlink, 0)
 	}
-	if inode > 1 {
+	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(attr.Length)
 		cs.UsedInodes += 1
 	}
-	if cs.NextInode < int64(inode) {
-		cs.NextInode = int64(inode)
+	if inode < TrashInode {
+		if cs.NextInode < int64(inode) {
+			cs.NextInode = int64(inode)
+		}
+	} else {
+		if cs.NextTrash < int64(inode)-TrashInode {
+			cs.NextTrash = int64(inode) - TrashInode
+		}
 	}
 
 	if len(e.Xattrs) > 0 {
@@ -2933,15 +2952,23 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
-	dm.FSTree.Attr.Inode = 1
-	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
-	}); err != nil {
+	}
+	dm.FSTree.Attr.Inode = 1
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries, showProgress); err != nil {
 		return err
 	}
+	if dm.Trash != nil {
+		total++
+		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
+			return err
+		}
+	}
+
 	if bar.Current() != total {
 		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
 	}
@@ -3001,6 +3028,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	cs["nextinode"] = counters.NextInode
 	cs["nextchunk"] = counters.NextChunk
 	cs["nextsession"] = counters.NextSession
+	cs["nextTrash"] = counters.NextTrash
 	p.MSet(ctx, cs)
 	if len(dm.DelFiles) > 0 {
 		zs := make([]*redis.Z, 0, len(dm.DelFiles))

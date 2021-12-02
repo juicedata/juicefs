@@ -938,7 +938,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	var err error
 	if parent == TrashInode {
 		var next int64
-		next, err = m.incrCounter("nextSession", 1)
+		next, err = m.incrCounter("nextTrash", 1)
 		ino = TrashInode + Ino(next)
 	} else {
 		ino, err = m.nextInode()
@@ -2156,7 +2156,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		inode := m.decodeInode(b.Get(8))
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
-	var tree *DumpedEntry
+	var tree, trash *DumpedEntry
 	if root == 0 {
 		root = m.root
 	}
@@ -2188,6 +2188,9 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 				return err
 			}
 		}
+		if trash, err = m.dumpEntry(TrashInode); err != nil {
+			trash = nil
+		}
 	}
 	if tree, err = m.dumpEntry(root); err != nil {
 		return err
@@ -2207,7 +2210,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			m.counterKey(totalInodes),
 			m.counterKey("nextInode"),
 			m.counterKey("nextChunk"),
-			m.counterKey("nextSession"))
+			m.counterKey("nextSession"),
+			m.counterKey("nextTrash"))
 		return nil
 	})
 	if err != nil {
@@ -2247,17 +2251,17 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		format,
-		&DumpedCounters{
+		Setting: format,
+		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
 			NextInode:   cs[2],
 			NextChunk:   cs[3],
 			NextSession: cs[4],
+			NextTrash:   cs[5],
 		},
-		sessions,
-		dels,
-		tree,
+		Sustained: sessions,
+		DelFiles:  dels,
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
@@ -2267,6 +2271,11 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	var total int64 = 1 //root
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
+	if trash != nil {
+		trash.Name = "Trash"
+		total++
+		bar.Increment()
+	}
 	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
@@ -2274,6 +2283,14 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
+	}
+	if trash != nil {
+		if _, err = bw.WriteString(","); err != nil {
+			return err
+		}
+		if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
+			return err
+		}
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
@@ -2320,12 +2337,18 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 			attr.Length = uint64(len(e.Symlink))
 			tx.set(m.symKey(inode), []byte(e.Symlink))
 		}
-		if inode > 1 {
+		if inode > 1 && inode != TrashInode {
 			cs.UsedSpace += align4K(attr.Length)
 			cs.UsedInodes += 1
 		}
-		if cs.NextInode <= int64(inode) {
-			cs.NextInode = int64(inode) + 1
+		if inode < TrashInode {
+			if cs.NextInode <= int64(inode) {
+				cs.NextInode = int64(inode) + 1
+			}
+		} else {
+			if cs.NextTrash <= int64(inode)-TrashInode {
+				cs.NextTrash = int64(inode) - TrashInode + 1
+			}
 		}
 
 		for _, x := range e.Xattrs {
@@ -2361,14 +2384,21 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
-	dm.FSTree.Attr.Inode = 1
-	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
-	}); err != nil {
+	}
+	dm.FSTree.Attr.Inode = 1
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries, showProgress); err != nil {
 		return err
+	}
+	if dm.Trash != nil {
+		total++
+		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
+			return err
+		}
 	}
 	if bar.Current() != total {
 		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
@@ -2380,6 +2410,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		NextInode:   2,
 		NextChunk:   1,
 		NextSession: 1,
+		NextTrash:   1,
 	}
 	refs := make(map[string]int64)
 
@@ -2432,6 +2463,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		tx.set(m.counterKey("nextInode"), packCounter(counters.NextInode))
 		tx.set(m.counterKey("nextChunk"), packCounter(counters.NextChunk))
 		tx.set(m.counterKey("nextSession"), packCounter(counters.NextSession))
+		tx.set(m.counterKey("nextTrash"), packCounter(counters.NextTrash))
 		for _, d := range dm.DelFiles {
 			tx.set(m.delfileKey(d.Inode, d.Length), m.packInt64(d.Expire))
 		}

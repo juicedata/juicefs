@@ -872,7 +872,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	var err error
 	if parent == TrashInode {
 		var next int64
-		next, err = m.incrCounter("nextSession", 1)
+		next, err = m.incrCounter("nextTrash", 1)
 		ino = TrashInode + Ino(next)
 	} else {
 		ino, err = m.nextInode()
@@ -2500,7 +2500,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
 	}
 
-	var tree *DumpedEntry
+	var tree, trash *DumpedEntry
 	if root == 0 {
 		root = m.root
 	}
@@ -2509,21 +2509,21 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			return fmt.Errorf("Fetch all metadata from DB: %s", err)
 		}
 		tree = m.dumpEntryFast(root)
+		trash = m.dumpEntryFast(TrashInode)
 	} else {
-		tree, err = m.dumpEntry(root)
-		if err != nil {
+		if tree, err = m.dumpEntry(root); err != nil {
 			return err
 		}
 	}
 	if tree == nil {
 		return errors.New("The entry of the root inode was not found")
 	}
-
 	tree.Name = "FSTree"
 	format, err := m.Load()
 	if err != nil {
 		return err
 	}
+
 	var crows []counter
 	if err = m.db.Find(&crows); err != nil {
 		return err
@@ -2541,6 +2541,8 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			counters.NextChunk = row.Value
 		case "nextSession":
 			counters.NextSession = row.Value
+		case "nextTrash":
+			counters.NextTrash = row.Value
 		}
 	}
 
@@ -2558,11 +2560,10 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		format,
-		counters,
-		sessions,
-		dels,
-		tree,
+		Setting:   format,
+		Counters:  counters,
+		Sustained: sessions,
+		DelFiles:  dels,
 	}
 
 	bw, err := dm.writeJsonWithOutTree(w)
@@ -2573,15 +2574,27 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
-
-	if err = m.dumpDir(root, tree, bw, 1, func(totalIncr, currentIncr int64) {
+	if trash != nil {
+		trash.Name = "Trash"
+		total++
+		bar.Increment()
+	}
+	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
-	}); err != nil {
+	}
+	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
 	}
-
+	if trash != nil {
+		if _, err = bw.WriteString(","); err != nil {
+			return err
+		}
+		if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
+			return err
+		}
+	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
 	}
@@ -2656,12 +2669,18 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 		n.Length = uint64(len(e.Symlink))
 		beans = append(beans, &symlink{inode, e.Symlink})
 	}
-	if inode > 1 {
+	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(n.Length)
 		cs.UsedInodes += 1
 	}
-	if cs.NextInode <= int64(inode) {
-		cs.NextInode = int64(inode) + 1
+	if inode < TrashInode {
+		if cs.NextInode <= int64(inode) {
+			cs.NextInode = int64(inode) + 1
+		}
+	} else {
+		if cs.NextTrash <= int64(inode)-TrashInode {
+			cs.NextTrash = int64(inode) - TrashInode + 1
+		}
 	}
 
 	if len(e.Xattrs) > 0 {
@@ -2713,14 +2732,21 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
-	dm.FSTree.Attr.Inode = 1
-	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
-	}); err != nil {
+	}
+	dm.FSTree.Attr.Inode = 1
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries, showProgress); err != nil {
 		return err
+	}
+	if dm.Trash != nil {
+		total++
+		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
+			return err
+		}
 	}
 	if bar.Current() != total {
 		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
@@ -2732,6 +2758,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		NextInode:   2,
 		NextChunk:   1,
 		NextSession: 1,
+		NextTrash:   1,
 	}
 	refs := make(map[uint64]*chunkRef)
 
@@ -2781,12 +2808,13 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 
 	beans := make([]interface{}, 0, 4) // setting, counter, delfile, chunkRef
 	beans = append(beans, &setting{"format", string(format)})
-	cs := make([]*counter, 0, 6)
+	cs := make([]*counter, 0, 7)
 	cs = append(cs, &counter{"usedSpace", counters.UsedSpace})
 	cs = append(cs, &counter{"totalInodes", counters.UsedInodes})
 	cs = append(cs, &counter{"nextInode", counters.NextInode})
 	cs = append(cs, &counter{"nextChunk", counters.NextChunk})
 	cs = append(cs, &counter{"nextSession", counters.NextSession})
+	cs = append(cs, &counter{"nextTrash", counters.NextTrash})
 	cs = append(cs, &counter{"nextCleanupSlices", 0})
 	beans = append(beans, cs)
 	if len(dm.DelFiles) > 0 {

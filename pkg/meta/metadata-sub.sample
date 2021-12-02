@@ -10,14 +10,16 @@
     "Shards": 0,
     "Partitions": 0,
     "Capacity": 0,
-    "Inodes": 0
+    "Inodes": 0,
+    "TrashDays": 1
   },
   "Counters": {
-    "usedSpace": 104882176,
-    "usedInodes": 7,
-    "nextInodes": 27,
-    "nextChunk": 7,
+    "usedSpace": 115380224,
+    "usedInodes": 11,
+    "nextInodes": 30,
+    "nextChunk": 9,
     "nextSession": 1,
+    "nextTrash": 2,
     "nextCleanupSlices": 0
   },
   "Sustained": [],
