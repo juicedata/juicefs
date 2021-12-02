@@ -1,4 +1,9 @@
-# Docker 使用 JuiceFS
+---
+sidebar_label: Docker 使用 JuiceFS
+sidebar_position: 1
+slug: /juicefs_on_docker
+---
+# 在 Docker 使用 JuiceFS
 
 目前有三种在 Docker 上使用 JuiceFS 存储的方法：
 

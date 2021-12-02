@@ -1,4 +1,9 @@
-# Kubernetes 使用 JuiceFS
+---
+sidebar_label: Kubernetes 使用 JuiceFS
+sidebar_position: 2
+slug: /how_to_use_on_kubernetes
+---
+# Kubernetes 使用 JuiceFS 持久化数据
 
 JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见的用法。
 
@@ -272,7 +277,7 @@ pvc-b670c8a1-2962-497c-afa2-33bc8b8bb05d   10Pi       RWX            Retain     
 
 通过外部主机挂载同一个 JuiceFS 存储，可以看到当前正在使用的 PV 以及曾经创建的 PV。
 
-![](images/pv-on-juicefs.png)
+![](../images/pv-on-juicefs.png)
 
 如果想了解更多关于 JuiceFS CSI Driver 的信息，请参考[项目主页](https://github.com/juicedata/juicefs-csi-driver)。
 

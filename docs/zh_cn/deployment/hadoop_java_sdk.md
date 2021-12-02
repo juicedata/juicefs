@@ -1,4 +1,9 @@
-# Hadoop 生态使用 JuiceFS 存储
+---
+sidebar_label: Hadoop 使用 JuiceFS
+sidebar_position: 3
+slug: /hadoop_java_sdk
+---
+# 在 Hadoop 生态使用 JuiceFS 存储
 
 JuiceFS 提供与 HDFS 接口[高度兼容](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html)的 Java 客户端，Hadoop 生态中的各种应用都可以在不改变代码的情况下，平滑地使用 JuiceFS 存储数据。
 
@@ -555,7 +560,7 @@ JuiceFS 可以使用本地磁盘作为缓存加速，以下数据是跑 4 次后
 | q9      | 87    | 112        | 89     |
 | q10     | 23    | 24         | 22     |
 
-![orc](images/spark_ql_orc.png)
+![orc](../images/spark_ql_orc.png)
 
 ##### Parquet
 
@@ -572,7 +577,7 @@ JuiceFS 可以使用本地磁盘作为缓存加速，以下数据是跑 4 次后
 | q9      | 85    | 97         | 77     |
 | q10     | 24    | 28         | 38     |
 
-![parquet](images/spark_sql_parquet.png)
+![parquet](../images/spark_sql_parquet.png)
 
 
 ## FAQ

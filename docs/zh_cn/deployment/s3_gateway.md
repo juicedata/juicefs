@@ -1,10 +1,14 @@
+---
+sidebar_label: 配置 JuiceFS S3 网关
+slug: /s3_gateway
+---
 # 启用 JuiceFS 的 S3 网关
 
 JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它为 JuiceFS 中的文件提供跟 S3 兼容的 RESTful API，在不方便挂载的情况下能够用 s3cmd、AWS CLI、MinIO Client（mc）等工具管理 JuiceFS 上存储的文件。另外，S3 网关还提供了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
 
 因为 JuiceFS 会将文件分块存储到底层的对象存储中，不能直接使用底层对象存储的接口和界面来直接访问文件，S3 网关提供了类似底层对象存储的访问能力，架构图如下：
 
-![](images/juicefs-s3-gateway-arch.png)
+![](../images/juicefs-s3-gateway-arch.png)
 
 ## 先决条件
 
@@ -32,7 +36,7 @@ $ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
 
 在这个例子中，我们假设 JuiceFS 文件系统使用的是本地的 Redis 数据库。当 S3 网关启用时，在**当前主机**上可以使用 `http://localhost:9000` 这个地址访问到 S3 网关的管理界面。
 
-![](images/s3-gateway-file-manager.jpg)
+![](../images/s3-gateway-file-manager.jpg)
 
 如果你希望通过局域网或互联网上的其他主机访问 S3 网关，则需要调整监听地址，例如：
 
