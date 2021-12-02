@@ -1,0 +1,48 @@
+{
+  "Setting": {
+    "Name": "load-dump-test",
+    "UUID": "faa27c8f-edab-4791-a4e0-1620b732b343",
+    "Storage": "file",
+    "Bucket": "/Users/juicefs/.juicefs/local/",
+    "AccessKey": "",
+    "BlockSize": 4096,
+    "Compression": "none",
+    "Shards": 0,
+    "Partitions": 0,
+    "Capacity": 0,
+    "Inodes": 0
+  },
+  "Counters": {
+    "usedSpace": 104882176,
+    "usedInodes": 7,
+    "nextInodes": 27,
+    "nextChunk": 7,
+    "nextSession": 1,
+    "nextCleanupSlices": 0
+  },
+  "Sustained": [],
+  "DelFiles": [
+    {
+      "inode": 23,
+      "length": 0,
+      "expire": 1637664458
+    }
+  ],
+  "FSTree": {
+    "attr": {"inode":3,"type":"directory","mode":493,"uid":501,"gid":20,"atime":1623746591,"mtime":1623746610,"ctime":1623746610,"atimensec":959224000,"mtimensec":959224000,"ctimensec":959224000,"nlink":2,"length":0},
+    "xattrs": [{"name":"dk","value":"dv"}],
+    "entries": {
+      "big": {
+        "attr": {"inode":6,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1637150857,"mtime":1637150858,"ctime":1637150878,"atimensec":961503000,"mtimensec":961503000,"ctimensec":961503000,"nlink":1,"length":104857600},
+        "chunks": [
+          {"index":0,"slices":[{"chunkid":5,"pos":0,"size":67108864,"off":0,"len":67108864}]},
+          {"index":1,"slices":[{"chunkid":6,"pos":0,"size":37748736,"off":0,"len":37748736}]}
+        ]
+      },
+      "f11": {
+        "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590000,"mtimensec":591590000,"ctimensec":591590000,"nlink":2,"length":12},
+        "chunks": [{"index":0,"slices":[{"chunkid":2,"pos":0,"size":12,"off":0,"len":12}]}]
+      }
+    }
+  }
+}

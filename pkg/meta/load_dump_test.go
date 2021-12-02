@@ -22,6 +22,7 @@ import (
 )
 
 const sampleFile = "metadata.sample"
+const subSampleFile = "metadata-sub.sample"
 
 func testLoad(t *testing.T, uri, fname string) Meta {
 	m := NewClient(uri, &Config{Retries: 10, Strict: true})
@@ -74,103 +75,61 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	return m
 }
 
+func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
+	fp, err := os.OpenFile(result, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		t.Fatalf("open file %s: %s", result, err)
+	}
+	defer fp.Close()
+	if err = m.DumpMeta(fp, root); err != nil {
+		t.Fatalf("dump meta: %s", err)
+	}
+	cmd := exec.Command("diff", expect, result)
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("diff %s %s: %s", expect, result, out)
+	}
+}
+
 func TestLoadDump(t *testing.T) {
 	t.Run("Metadata Engine: Redis", func(t *testing.T) {
 		m := testLoad(t, "redis://127.0.0.1/10", sampleFile)
-		fp, err := os.OpenFile("redis.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			t.Fatalf("open file: %s", "redis.dump")
-		}
-		defer fp.Close()
-		if err = m.DumpMeta(fp); err != nil {
-			t.Fatalf("dump meta: %s", err)
-		}
-		cmd := exec.Command("diff", sampleFile, "redis.dump")
-		if out, err := cmd.Output(); err != nil {
-			t.Fatalf("diff: %s", out)
-		}
+		testDump(t, m, 0, sampleFile, "redis.dump")
 	})
 	t.Run("Metadata Engine: Redis; --SubDir d1 ", func(t *testing.T) {
-		testLoad(t, "redis://127.0.0.1/10", sampleFile)
-		fp, err := os.OpenFile("redis_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			t.Fatalf("open file: %s", "redis_subdir.dump")
-		}
-		defer fp.Close()
+		_ = testLoad(t, "redis://127.0.0.1/10", sampleFile)
 		m := NewClient("redis://127.0.0.1/10", &Config{Retries: 10, Strict: true, Subdir: "d1"})
-		if err = m.DumpMeta(fp); err != nil {
-			t.Fatalf("dump meta: %s", err)
-		}
+		testDump(t, m, 0, subSampleFile, "redis_subdir.dump")
+		testDump(t, m, 1, sampleFile, "redis.dump")
 	})
 
 	t.Run("Metadata Engine: SQLite", func(t *testing.T) {
 		os.Remove("test10.db")
 		m := testLoad(t, "sqlite3://test10.db", sampleFile)
-		fp, err := os.OpenFile("sqlite3.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			t.Fatalf("open file: %s", "sqlite3.dump")
-		}
-		defer fp.Close()
-		if err = m.DumpMeta(fp); err != nil {
-			t.Fatalf("dump meta: %s", err)
-		}
-		cmd := exec.Command("diff", sampleFile, "sqlite3.dump")
-		if out, err := cmd.Output(); err != nil {
-			t.Fatalf("diff: %s", out)
-		}
+		testDump(t, m, 0, sampleFile, "sqlite3.dump")
 	})
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
 		os.Remove("test10.db")
-		testLoad(t, "sqlite3://test10.db", sampleFile)
-		fp, err := os.OpenFile("sqlite3_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			t.Fatalf("open file: %s", "sqlite3_subdir.dump")
-		}
-		defer fp.Close()
+		_ = testLoad(t, "sqlite3://test10.db", sampleFile)
 		m := NewClient("sqlite3://test10.db", &Config{Retries: 10, Strict: true, Subdir: "d1"})
-		if err = m.DumpMeta(fp); err != nil {
-			t.Fatalf("dump meta: %s", err)
-		}
-		cmd := exec.Command("diff", "redis_subdir.dump", "sqlite3_subdir.dump")
-		if out, err := cmd.Output(); err != nil {
-			t.Fatalf("diff: %s", out)
-		}
+		testDump(t, m, 0, subSampleFile, "sqlite3_subdir.dump")
+		testDump(t, m, 1, sampleFile, "sqlite3.dump")
 	})
 
 	t.Run("Metadata Engine: TKV", func(t *testing.T) {
 		os.Remove(settingPath)
 		m := testLoad(t, "memkv://test/jfs", sampleFile)
-		fp, err := os.OpenFile("tkv.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			t.Fatalf("open file: %s", "tkv.dump")
-		}
-		defer fp.Close()
-		if err = m.DumpMeta(fp); err != nil {
-			t.Fatalf("dump meta: %s", err)
-		}
-		cmd := exec.Command("diff", sampleFile, "tkv.dump")
-		if out, err := cmd.Output(); err != nil {
-			t.Fatalf("diff: %s", out)
-		}
+		testDump(t, m, 0, sampleFile, "tkv.dump")
 	})
 	t.Run("Metadata Engine: TKV --SubDir d1 ", func(t *testing.T) {
 		os.Remove(settingPath)
 		m := testLoad(t, "memkv://user:passwd@test/jfs", sampleFile)
-		fp, err := os.OpenFile("tkv_subdir.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			t.Fatalf("open file: %s", "tkv_subdir.dump")
+		if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
+			var err error
+			if kvm.root, err = lookupSubdir(kvm, "d1"); err != nil {
+				t.Fatalf("lookup subdir d1: %s", err)
+			}
 		}
-		defer fp.Close()
-		switch r := m.(type) {
-		case *kvMeta:
-			r.root = 3
-		}
-		if err = m.DumpMeta(fp); err != nil {
-			t.Fatalf("dump meta: %s", err)
-		}
-		cmd := exec.Command("diff", "redis_subdir.dump", "tkv_subdir.dump")
-		if out, err := cmd.Output(); err != nil {
-			t.Fatalf("diff: %s", out)
-		}
+		testDump(t, m, 0, subSampleFile, "tkv_subdir.dump")
+		testDump(t, m, 1, sampleFile, "tkv.dump")
 	})
 }
