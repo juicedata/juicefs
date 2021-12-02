@@ -50,7 +50,7 @@ jobs:
         run: |
           wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
           sudo apt-get install apt-transport-https
-          echo "deb https://artifacts.elastic.co/packages/6.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-6.x.list
+          sudo sh -c 'echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" > /etc/apt/sources.list.d/elastic-7.x.list'
           sudo apt-get update
           sudo apt-get install -y elasticsearch
 
@@ -63,7 +63,7 @@ jobs:
           sudo service elasticsearch start
           sudo ls -l /tmp/jfs/
           sudo service elasticsearch status
-
+          curl -X GET "localhost:9200/"
 
 
       - name: Stress Test
@@ -74,7 +74,7 @@ jobs:
           echo "start stress"
           sudo apt-get install -y net-tools
           sudo netstat -anp | grep java
-          curl 127.0.0.1:9200
+          curl -X GET "localhost:9200/"
           git clone https://github.com/logzio/elasticsearch-stress-test.git
           cd elasticsearch-stress-test
           pip install elasticsearch
