@@ -90,6 +90,7 @@ jobs:
           python-version: '3.8'
       - run: |
           pip install tornado
+          pip install nest_asyncio
           git clone https://github.com/oliver006/elasticsearch-test-data.git
           cd elasticsearch-test-data
           python es_test_data.py --es_url=http://localhost:9200
