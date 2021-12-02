@@ -2544,6 +2544,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 	bar.SetTotal(0, true)
 	progress.Wait()
+	m.snap = nil
 
 	return bw.Flush()
 }
