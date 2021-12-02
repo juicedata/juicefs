@@ -2,8 +2,16 @@ name: "ltp"
 
 on:
   push:
-    tags:
-      - v*
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
   ltpfs:
