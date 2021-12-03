@@ -87,7 +87,7 @@ jobs:
           pip install elasticsearch
           sudo ls -l /data/jfs/
           python elasticsearch-stress-test.py --es_address 127.0.0.1 --indices 10 --documents 10 --clients 1  \
-          --seconds 30 --number-of-shards 1 --no-cleanup --number-of-replicas 0 --bulk-size 5000  \
+          --seconds 600 --number-of-shards 1 --no-cleanup --number-of-replicas 0 --bulk-size 5000  \
           --max-fields-per-document 10 --max-size-per-field 50 --stats-frequency 15
           sudo ls -l /data/jfs/
 
