@@ -15,7 +15,7 @@ JuiceFS Hadoop Java SDK 同时兼容 Hadoop 2.x、Hadoop 3.x，以及 Hadoop 生
 
 ### 2. 用户权限
 
-JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下使用时，为了避免权限问题，请参考[文档](sync_accounts_between_multiple_hosts.md)将需要使用的 `用户` 和 `UID` 同步到所有 Hadoop 节点。也可以通过定义一个全局的用户和用户组文件给集群共享读取，[查看详情](#其他配置)。
+JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下使用时，为了避免权限问题，请参考[文档](../administration/sync_accounts_between_multiple_hosts.md)将需要使用的 `用户` 和 `UID` 同步到所有 Hadoop 节点。也可以通过定义一个全局的用户和用户组文件给集群共享读取，[查看详情](#其他配置)。
 
 ### 3. 文件系统
 
@@ -304,7 +304,7 @@ JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus
 > $ curl -X DELETE http://host:9091/metrics/job/juicefs
 > ```
 
-关于所有监控指标的描述，请查看 [JuiceFS 监控指标](p8s_metrics.md)。
+关于所有监控指标的描述，请查看 [JuiceFS 监控指标](../reference/p8s_metrics.md)。
 
 ## 基准测试
 

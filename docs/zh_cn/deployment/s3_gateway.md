@@ -28,7 +28,7 @@ $ juicefs gateway redis://localhost:6379 localhost:9000
 
 以上三条命令中，前两条命令用于设置环境变量。注意，`MINIO_ROOT_USER` 的长度至少 3 个字符， `MINIO_ROOT_PASSWORD` 的长度至少 8 个字符（Windows 用户请改用 `set` 命令设置环境变量，例如：`set MINIO_ROOT_USER=admin`）。
 
-最后一条命令用于启用 S3 网关，`gateway` 子命令至少需要提供两个参数，第一个是存储元数据的数据库 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](command_reference.md#juicefs-gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
+最后一条命令用于启用 S3 网关，`gateway` 子命令至少需要提供两个参数，第一个是存储元数据的数据库 URL，第二个是 S3 网关监听的地址和端口。你可以根据需要在 `gateway` 子命令中添加[其他选项](../reference/command_reference.md#juicefs-gateway)优化 S3 网关，比如，可以将默认的本地缓存设置为 20 GiB。
 
 ```shell
 $ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
@@ -109,4 +109,4 @@ $ mc ls juicefs/jfs
 
 > **注意**：该特性需要运行 0.17.1 及以上版本 JuiceFS 客户端
 
-JuiceFS S3 网关提供一个 Prometheus API 用于收集监控指标，默认地址是 `http://localhost:9567/metrics`。更多信息请查看[「JuiceFS 监控指标」](p8s_metrics.md)文档。
+JuiceFS S3 网关提供一个 Prometheus API 用于收集监控指标，默认地址是 `http://localhost:9567/metrics`。更多信息请查看[「JuiceFS 监控指标」](../reference/p8s_metrics.md)文档。

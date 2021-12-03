@@ -319,7 +319,7 @@ standard (default)   k8s.io/minikube-hostpath   Delete          Immediate       
 
 ### Monitoring
 
-JuiceFS CSI Driver can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p8s_metrics.md).
+JuiceFS CSI Driver can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](../reference/p8s_metrics.md).
 
 #### Configure Prometheus server
 
@@ -364,7 +364,7 @@ scrape_configs:
 
 #### Configure Grafana dashboard
 
-JuiceFS provides a [dashboard template](./grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
+JuiceFS provides a [dashboard template](grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
 
 ## Mount JuiceFS in the container
 

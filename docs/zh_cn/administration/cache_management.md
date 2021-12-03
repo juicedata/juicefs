@@ -21,7 +21,7 @@ JuiceFS 支持在内核和客户端内存（即 JuiceFS 进程）中缓存元数
 
 ### 内核元数据缓存
 
-内核中可以缓存三种元数据：**属性（attribute)**、**文件项（entry）**和**目录项（direntry）**，可以通过以下[挂载参数](command_reference.md#juicefs-mount)控制缓存时间：
+内核中可以缓存三种元数据：**属性（attribute)**、**文件项（entry）**和**目录项（direntry）**，可以通过以下[挂载参数](../reference/command_reference.md#juicefs-mount)控制缓存时间：
 
 ```
 --attr-cache value       属性缓存时长，单位秒 (默认值: 1)
@@ -35,7 +35,7 @@ JuiceFS 默认会在内核中缓存属性、文件项和目录项，缓存时长
 
 > **注意**：此特性需要使用 0.15.0 及以上版本的 JuiceFS。
 
-JuiceFS 客户端在 `open()` 操作即打开一个文件时，其文件属性（attribute）会被自动缓存在客户端内存中。如果在挂载文件系统时设置了 [`--open-cache`](command_reference.md#juicefs-mount) 选项且值大于 0，只要缓存尚未超时失效，随后执行的 `getattr()` 和 `open()` 操作会从内存缓存中立即返回结果。
+JuiceFS 客户端在 `open()` 操作即打开一个文件时，其文件属性（attribute）会被自动缓存在客户端内存中。如果在挂载文件系统时设置了 [`--open-cache`](../reference/command_reference.md#juicefs-mount) 选项且值大于 0，只要缓存尚未超时失效，随后执行的 `getattr()` 和 `open()` 操作会从内存缓存中立即返回结果。
 
 执行 `read()` 操作即读取一个文件时，文件的 chunk 和 slice 信息会被自动缓存在客户端内存。在缓存有效期内，再次读取 chunk 会从内存缓存中立即返回 slice 信息。
 
@@ -55,7 +55,7 @@ JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的
 
 得益于内核缓存，重复读取 JuiceFS 中相同文件的速度会非常快，延时可低至微秒，吞吐量可以到每秒数 GiB。
 
-JuiceFS 客户端目前还未默认启用内核的写入缓存功能，从 [Linux 内核 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e) 开始，FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，这意味着可以非常快速地完成 `write()` 系统调用。你可以在[挂载文件系统](command_reference.md#juicefs-mount)时设置 [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) 选项开启 writeback-cache 模式。当需要频繁写入非常小的数据（如 100 字节左右）时，建议启用此挂载选项。
+JuiceFS 客户端目前还未默认启用内核的写入缓存功能，从 [Linux 内核 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e) 开始，FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)，这意味着可以非常快速地完成 `write()` 系统调用。你可以在[挂载文件系统](../reference/command_reference.md#juicefs-mount)时设置 [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) 选项开启 writeback-cache 模式。当需要频繁写入非常小的数据（如 100 字节左右）时，建议启用此挂载选项。
 
 ### 客户端读缓存
 
@@ -63,7 +63,7 @@ JuiceFS 客户端会根据读取模式自动预读数据放入缓存，从而提
 
 > **提示**：您可以查阅[「JuiceFS 如何存储文件」](how_juicefs_store_files.md)了解 block 是什么。
 
-本地缓存可以在[挂载文件系统](command_reference.md#juicefs-mount)时通过以下选项调整：
+本地缓存可以在[挂载文件系统](../reference/command_reference.md#juicefs-mount)时通过以下选项调整：
 
 ```
 --prefetch value          并发预读 N 个块 (默认: 1)

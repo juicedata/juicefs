@@ -15,7 +15,7 @@ JuiceFS Hadoop Java SDK is compatible with Hadoop 2.x and Hadoop 3.x. As well as
 
 ### 2. User permissions
 
-JuiceFS use local mapping of `user` and `UID`. So, you should [sync all the needed users and their UIDs](sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error. You can also specify a global user list and user group file, please refer to the [relevant configurations](#other-configurations).
+JuiceFS use local mapping of `user` and `UID`. So, you should [sync all the needed users and their UIDs](../administration/sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error. You can also specify a global user list and user group file, please refer to the [relevant configurations](#other-configurations).
 
 ### 3. File system
 
@@ -304,7 +304,7 @@ Enable metrics reporting through following configurations:
 > $ curl -X DELETE http://host:9091/metrics/job/juicefs
 > ```
 
-For a description of all monitoring metrics, please refer to [JuiceFS Metrics](p8s_metrics.md).
+For a description of all monitoring metrics, please refer to [JuiceFS Metrics](../reference/p8s_metrics.md).
 
 ## Benchmark
 

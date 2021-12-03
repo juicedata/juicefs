@@ -319,7 +319,7 @@ standard (default)   k8s.io/minikube-hostpath   Delete          Immediate       
 
 ### 监控
 
-JuiceFS CSI Driver 可以在 `9567` 端口导出 [Prometheus](https://prometheus.io) 指标。关于所有监控指标的详细描述，请参考 [JuiceFS 监控指标](p8s_metrics.md)。
+JuiceFS CSI Driver 可以在 `9567` 端口导出 [Prometheus](https://prometheus.io) 指标。关于所有监控指标的详细描述，请参考 [JuiceFS 监控指标](../reference/p8s_metrics.md)。
 
 #### 配置 Prometheus 服务
 

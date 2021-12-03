@@ -7,7 +7,7 @@ slug: /fault_diagnosis_and_analysis
 
 ## Error Log
 
-When JuiceFS run in background (through [`-d` option](command_reference.md#juicefs-mount) when mount volume), logs will output to syslog and `/var/log/juicefs.log` (v0.15+, refer to [`--log` option](command_reference.md#juicefs-mount)). Depending on your operating system, you can get the logs through different commands:
+When JuiceFS run in background (through [`-d` option](../reference/command_reference.md#juicefs-mount) when mount volume), logs will output to syslog and `/var/log/juicefs.log` (v0.15+, refer to [`--log` option](../reference/command_reference.md#juicefs-mount)). Depending on your operating system, you can get the logs through different commands:
 
 ```bash
 # macOS

@@ -21,7 +21,7 @@ JuiceFS supports caching metadata in kernel and client memory (i.e. JuiceFS proc
 
 ### Metadata Cache in Kernel
 
-Three kinds of metadata can be cached in kernel: **attributes (attribute)**, **file entries (entry)** and **directory entries (direntry)**. The cache timeout can be controlled by the following [mount parameter](command_reference.md#juicefs-mount):
+Three kinds of metadata can be cached in kernel: **attributes (attribute)**, **file entries (entry)** and **directory entries (direntry)**. The cache timeout can be controlled by the following [mount parameter](../reference/command_reference.md#juicefs-mount):
 
 ```
 --attr-cache value       attributes cache timeout in seconds (default: 1)
@@ -35,7 +35,7 @@ JuiceFS caches attributes, file entries, and directory entries in kernel for 1 s
 
 > **Note**: This feature requires JuiceFS >= 0.15.0.
 
-When a JuiceFS client `open()` a file, its file attributes are automatically cached in client memory. If the [`--open-cache`](command_reference.md#juicefs-mount) option is set to a value greater than 0 when mounting the file system, subsequent `getattr()` and `open()` operations will return the result from the in-memory cache immediately, as long as the cache has not timed out.
+When a JuiceFS client `open()` a file, its file attributes are automatically cached in client memory. If the [`--open-cache`](../reference/command_reference.md#juicefs-mount) option is set to a value greater than 0 when mounting the file system, subsequent `getattr()` and `open()` operations will return the result from the in-memory cache immediately, as long as the cache has not timed out.
 
 When a file is read by `read()`, the chunk and slice information of the file is automatically cached in client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately.
 
@@ -55,7 +55,7 @@ For files that have already been read, the kernel automatically caches their con
 
 Thanks to the kernel cache, repeated reads of the same file in JuiceFS can be very fast, with latencies as low as microseconds and throughputs up to several GiBs per second.
 
-JuiceFS clients currently do not have kernel write caching enabled by default, starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means that the `write()` system call can be done very quickly. You can set the [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) option at [mount file system](command_reference.md#juicefs-mount) to enable writeback-cache mode. It is recommended to enable this mount option when very small data (e.g. around 100 bytes) needs to be written frequently.
+JuiceFS clients currently do not have kernel write caching enabled by default, starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means that the `write()` system call can be done very quickly. You can set the [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) option at [mount file system](../reference/command_reference.md#juicefs-mount) to enable writeback-cache mode. It is recommended to enable this mount option when very small data (e.g. around 100 bytes) needs to be written frequently.
 
 ### Read Cache in Client
 
@@ -63,7 +63,7 @@ The JuiceFS client automatically prefetch data into the cache based on the read 
 
 > **Hint**: You can check ["How JuiceFS Stores Files"](how_juicefs_store_files.md) to learn what a block is.
 
-The local cache can be adjusted at [mount file system](command_reference.md#juicefs-mount) with the following options.
+The local cache can be adjusted at [mount file system](../reference/command_reference.md#juicefs-mount) with the following options.
 
 ```
 --cache-dir value         directory paths of local cache, use colon to separate multiple paths (default: "$HOME/.juicefs/cache" or "/var/jfsCache")

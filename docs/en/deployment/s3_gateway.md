@@ -29,7 +29,7 @@ $ juicefs gateway redis://localhost:6379 localhost:9000
 
 Among the above three commands, the first two commands are used to set environment variables. Note that the length of `MINIO_ROOT_USER` is at least 3 characters, and the length of `MINIO_ROOT_PASSWORD` is at least 8 characters (Windows users should set the environment variable with the `set` command instead, e.g., `set MINIO_ROOT_USER=admin`).
 
-The last command is used to enable the S3 gateway. The `gateway` subcommand requires at least two parameters, the first is the URL of the database where the metadata is stored, and the second is the address and port on which the S3 gateway is listening. You can add [other options](command_reference.md#juicefs-gateway) to the `gateway` subcommand to optimize the S3 gateway as needed, for example, to set the default local cache to 20 GiB.
+The last command is used to enable the S3 gateway. The `gateway` subcommand requires at least two parameters, the first is the URL of the database where the metadata is stored, and the second is the address and port on which the S3 gateway is listening. You can add [other options](../reference/command_reference.md#juicefs-gateway) to the `gateway` subcommand to optimize the S3 gateway as needed, for example, to set the default local cache to 20 GiB.
 
 ```shell
 $ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
@@ -108,4 +108,4 @@ $ mc ls juicefs/jfs
 
 > **Note**: This feature needs to run JuiceFS client version 0.17.1 and above.
 
-JuiceFS S3 gateway provides a Prometheus API for collecting monitoring metrics, the default address is `http://localhost:9567/metrics`. More information please check the ["JuiceFS Metrics"](p8s_metrics.md) document.
+JuiceFS S3 gateway provides a Prometheus API for collecting monitoring metrics, the default address is `http://localhost:9567/metrics`. More information please check the ["JuiceFS Metrics"](../reference/p8s_metrics.md) document.
