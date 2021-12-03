@@ -19,13 +19,13 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
 ## Highlighted Features
 
 1. **Fully POSIX-compatible**: Use like a local file system, seamlessly docking with existing applications, no business intrusion.
-2. **Fully Hadoop-compatible**: JuiceFS [Hadoop Java SDK](hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
+2. **Fully Hadoop-compatible**: JuiceFS [Hadoop Java SDK](../deployment/hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
 3. **S3-compatible**:  JuiceFS [S3 Gateway](s3_gateway.md) provides S3-compatible interface.
-4. **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
+4. **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](../deployment/how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
 5. **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
 6. **Strong Consistency**: The confirmed modification will be immediately visible on all servers mounted with the same file system .
-7. **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. [Test results](benchmark.md)
-8. **Data Encryption**: Supports data encryption in transit and at rest, read [the guide](encrypt.md) for more information.
+7. **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. [Test results](../benchmark/benchmark.md)
+8. **Data Encryption**: Supports data encryption in transit and at rest, read [the guide](../security/encrypt.md) for more information.
 9. **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
 10. **Data Compression**: JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data.
 
@@ -37,7 +37,7 @@ Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon
 
 [![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
 
-It shows JuiceFS can provide 10X more throughput than the other two, read [more details](fio.md).
+It shows JuiceFS can provide 10X more throughput than the other two, read [more details](../benchmark/fio.md).
 
 ### Metadata IOPS
 
@@ -45,11 +45,11 @@ Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs
 
 [![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](mdtest.md).
+It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](../benchmark/mdtest.md).
 
 ## Quick start
 
-Now, you can refer to [Quick Start Guide](quick_start_guide.md) to start using JuiceFS immediately! 😊
+Now, you can refer to [Quick Start Guide](../getting-started/quick_start_guide.md) to start using JuiceFS immediately! 😊
 
-If you want to understand the working principle of JuiceFS, you can check [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS Store Files](how_juicefs_store_files.md).
+If you want to understand the working principle of JuiceFS, you can check [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md).
 
