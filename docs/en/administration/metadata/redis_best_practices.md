@@ -28,7 +28,7 @@ used_memory_dataset: 13439673592
 used_memory_dataset_perc: 70.12%
 ```
 
-Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above), but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier, the metadata of each file occupies about 300 bytes and is calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../reference/command_reference.md#juicefs-gc) command to clean up possible redundant data.
+Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above), but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier, the metadata of each file occupies about 300 bytes and is calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.md#juicefs-gc) command to clean up possible redundant data.
 
 ---
 

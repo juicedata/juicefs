@@ -39,7 +39,7 @@ When a JuiceFS client `open()` a file, its file attributes are automatically cac
 
 When a file is read by `read()`, the chunk and slice information of the file is automatically cached in client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately.
 
-> **Hint**: You can check ["How JuiceFS Stores Files"](how_juicefs_store_files.md) to know what chunk and slice are.
+> **Hint**: You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to know what chunk and slice are.
 
 By default, for any file whose metadata has been cached in memory and not accessed by any process for more than 1 hour, all its metadata cache will be automatically deleted.
 
@@ -55,13 +55,13 @@ For files that have already been read, the kernel automatically caches their con
 
 Thanks to the kernel cache, repeated reads of the same file in JuiceFS can be very fast, with latencies as low as microseconds and throughputs up to several GiBs per second.
 
-JuiceFS clients currently do not have kernel write caching enabled by default, starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means that the `write()` system call can be done very quickly. You can set the [`-o writeback_cache`](fuse_mount_options.md#writeback_cache) option at [mount file system](../reference/command_reference.md#juicefs-mount) to enable writeback-cache mode. It is recommended to enable this mount option when very small data (e.g. around 100 bytes) needs to be written frequently.
+JuiceFS clients currently do not have kernel write caching enabled by default, starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means that the `write()` system call can be done very quickly. You can set the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option at [mount file system](../reference/command_reference.md#juicefs-mount) to enable writeback-cache mode. It is recommended to enable this mount option when very small data (e.g. around 100 bytes) needs to be written frequently.
 
 ### Read Cache in Client
 
 The JuiceFS client automatically prefetch data into the cache based on the read pattern, thus improving sequential read performance. By default, 1 block is prefetch locally concurrently with the read data. The local cache can be set on any local file system based on HDD, SSD or memory.
 
-> **Hint**: You can check ["How JuiceFS Stores Files"](how_juicefs_store_files.md) to learn what a block is.
+> **Hint**: You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to learn what a block is.
 
 The local cache can be adjusted at [mount file system](../reference/command_reference.md#juicefs-mount) with the following options.
 

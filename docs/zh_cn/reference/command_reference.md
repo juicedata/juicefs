@@ -179,7 +179,7 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 后台运行时日志文件的位置 (默认: `$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)
 
 `-o value`<br />
-其他 FUSE 选项 (参见[此文档](fuse_mount_options.md)来了解更多信息)
+其他 FUSE 选项 (参见[此文档](../reference/fuse_mount_options.md)来了解更多信息)
 
 `--attr-cache value`<br />
 属性缓存过期时间；单位为秒 (默认: 1)

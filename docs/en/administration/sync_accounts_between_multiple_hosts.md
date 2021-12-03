@@ -11,7 +11,7 @@ In order to make the permission experience intuitive to user (e.g. the files acc
 
 Here we provide a simple [Ansible](https://www.ansible.com/community) playbook to demonstrate how to ensure an account with same UID and GID on multiple hosts.
 
-> **Note**: Besides sync accounts between multiple hosts, you can also specify a global user list and user group file, please refer to [here](hadoop_java_sdk.md#other-configurations) for more information.
+> **Note**: Besides sync accounts between multiple hosts, you can also specify a global user list and user group file, please refer to [here](../deployment/hadoop_java_sdk.md#other-configurations) for more information.
 
 ## Install ansible
 

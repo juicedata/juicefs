@@ -11,7 +11,7 @@ JuiceFS 支持 POSIX 兼容的 ACL，以目录或文件的粒度管理权限。�
 
 在这里，我们提供了一个简单的 [Ansible](https://www.ansible.com/community) playbook 来演示如何确保一个帐户在多个主机上具有相同的 UID 和 GID。
 
-> **注意**：除了在多主机间同步账户以外，也可以指定一个全局的用户列表和所属用户组文件，具体请参见[这里](hadoop_java_sdk.md#其他配置)。
+> **注意**：除了在多主机间同步账户以外，也可以指定一个全局的用户列表和所属用户组文件，具体请参见[这里](../deployment/hadoop_java_sdk.md#其他配置)。
 
 ## 安装 Ansible
 

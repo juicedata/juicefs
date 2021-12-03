@@ -30,4 +30,4 @@ JuiceFS 文件系统由三个部分组成：
 
 现在，你可以参照 [快速上手指南](../getting-started/quick_start_guide.md) 立即开始使用 JuiceFS！
 
-你还可以进一步了解 [JuiceFS 如何存储文件](how_juicefs_store_files.md)
+你还可以进一步了解 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)
