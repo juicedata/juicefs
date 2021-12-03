@@ -1,3 +1,8 @@
+---
+sidebar_label: 元数据备份和恢复
+sidebar_position: 4
+slug: /metadata_dump_load
+---
 # JuiceFS 元数据备份和恢复
 
 > **注意**：此特性需要使用 0.15.0 及以上版本的 JuiceFS。

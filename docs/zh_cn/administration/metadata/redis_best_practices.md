@@ -1,3 +1,8 @@
+---
+sidebar_label: Redis 最佳实践
+sidebar_position: 1
+slug: /redis_best_practices
+---
 # Redis 最佳实践
 
 这是一份关于 Redis 的最佳实践指南。Redis 是 JuiceFS 架构中的关键组件，它负责存储所有元数据并响应客户端对元数据的操作。Redis 出现任何问题（服务不可用或数据丢失），都会对用户体验造成影响。
