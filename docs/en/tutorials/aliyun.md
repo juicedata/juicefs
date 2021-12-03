@@ -150,7 +150,7 @@ COPYRIGHT:
    AGPLv3
 ```
 
-JuiceFS has good cross-platform compatibility and is supported on Linux, Windows and macOS. This article focuses on the installation and use of JuiceFS on Linux, if you need to know how to install it on other systems, please [check the documentation](../README.md).
+JuiceFS has good cross-platform compatibility and is supported on Linux, Windows and macOS. This article focuses on the installation and use of JuiceFS on Linux, if you need to know how to install it on other systems, please [check the documentation](../getting-started/installation.md).
 
 ## Creating JuiceFS
 
@@ -172,7 +172,7 @@ $ juicefs format \
 
 **Option description:**
 
-- `--storage`: Specify the type of object storage, [click here to view](../how_to_setup_object_storage.md) object storage services supported by JuiceFS.
+- `--storage`: Specify the type of object storage, [click here to view](../reference/how_to_setup_object_storage.md) object storage services supported by JuiceFS.
 - `--bucket`: Bucket domain name of the object storage. When using OSS, just fill in the bucket name, no need to fill in the full domain name, JuiceFS will automatically identify and fill in the full address.
 - `--access-key` and `--secret-key`: the secret key pair to access the object storage API, [click here](https://www.alibabacloud.com/help/doc-detail/125558.htm) to get the way.
 
@@ -298,6 +298,6 @@ redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1    /m
 
 The mount option `cache-size=20480` means to allocate 20GB local disk space for JuiceFS cache, please decide the allocated cache size according to your actual ECS hard disk capacity. In general, allocating more cache space for JuiceFS will result in better performance.
 
-You can adjust the FUSE mount options in the above configuration as needed, for more information please [check the documentation](../fuse_mount_options.md).
+You can adjust the FUSE mount options in the above configuration as needed, for more information please [check the documentation](../reference/fuse_mount_options.md).
 
 > **Note**: Please replace the Redis address, mount point, and mount options in the above configuration file with your actual information.

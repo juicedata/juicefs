@@ -7,7 +7,7 @@ slug: /metadata_dump_load
 
 > **注意**：此特性需要使用 0.15.0 及以上版本的 JuiceFS。
 
-JuiceFS 支持[多种元数据引擎](databases_for_metadata.md)。各个引擎内部管理格式各有不同，但都可以通过 JuiceFS 提供的 `dump` 命令将所有元数据写入到一个统一格式的 [JSON](https://www.json.org/json-en.html) 文件（[示例](../../pkg/meta/metadata.sample)）中；同时，JuiceFS 也提供了从此文件中 `load` 元数据的命令。通过这两个命令，可以实现元数据备份/恢复和跨引擎迁移的功能。命令的详细信息请参考[这里](command_reference.md#juicefs-dump)。
+JuiceFS 支持[多种元数据引擎](../reference/how_to_setup_metadata_engine.md)。各个引擎内部管理格式各有不同，但都可以通过 JuiceFS 提供的 `dump` 命令将所有元数据写入到一个统一格式的 [JSON](https://www.json.org/json-en.html) 文件（[示例](../../pkg/meta/metadata.sample)）中；同时，JuiceFS 也提供了从此文件中 `load` 元数据的命令。通过这两个命令，可以实现元数据备份/恢复和跨引擎迁移的功能。命令的详细信息请参考[这里](command_reference.md#juicefs-dump)。
 
 ## 元数据备份
 

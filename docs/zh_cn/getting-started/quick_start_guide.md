@@ -31,7 +31,7 @@ $ sudo docker run -d --name redis \
 
 > **安全提示**：以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
 
-有关 Redis 数据库相关的更多内容，[点此查看](databases_for_metadata.md#Redis)。
+有关 Redis 数据库相关的更多内容，[点此查看](../reference/how_to_setup_metadata_engine.md#Redis)。
 
 ## 2. 准备对象存储
 

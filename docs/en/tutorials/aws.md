@@ -27,7 +27,7 @@ JuiceFS clients will occupy 1GB of disk as cache by default. When dealing with a
 
 Amazon S3 is the de facto standard for public cloud object storage services, and the object storage services provided by other major cloud platforms are usually compatible with the S3 API, which allows programs developed for S3 to freely switch between object storage services of other platforms.
 
-JuiceFS fully supports Amazon S3 and all S3-like object storage services, and you can see the documentation for [all object storage services supported by JuiceFS](../how_to_setup_object_storage.md).
+JuiceFS fully supports Amazon S3 and all S3-like object storage services, and you can see the documentation for [all object storage services supported by JuiceFS](../reference/how_to_setup_object_storage.md).
 
 Amazon S3 offers a range of storage classes suitable for different use cases, the main ones being
 
@@ -127,7 +127,7 @@ COPYRIGHT:
 
 > **Tip**: If you execute the `juicefs` command and the terminal returns `command not found`, it may be because the `/usr/local/bin` directory is not in the system's `PATH` executable path. You can use the `echo $PATH` command to check the system's set executable path and reinstall the client to the correct location. You can also add `/usr/local/bin` to the `PATH`.
 
-JuiceFS has good cross-platform compatibility and is supported on both Linux, Windows and macOS. If you need to know how to install it on other systems, please check the [official documentation](../README.md).
+JuiceFS has good cross-platform compatibility and is supported on both Linux, Windows and macOS. If you need to know how to install it on other systems, please check the [official documentation](../getting-started/installation.md).
 
 ### 3. Create File System
 
@@ -182,7 +182,7 @@ $ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:
 
 > **Note**: When mounting the file system, only the database address is required, not the file system name. The default cache path is `/var/jfsCache`, please make sure the current user has enough read/write permissions.
 
-You can optimize JuiceFS by adjusting the [mount options](../command_reference.md#juicefs-mount), for example by `--cache-size` to change the cache to 20GB.
+You can optimize JuiceFS by adjusting the [mount options](../reference/command_reference.md#juicefs-mount), for example by `--cache-size` to change the cache to 20GB.
 
 ```shell
 $ sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs
@@ -238,6 +238,6 @@ redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1    /mnt/jfs      
 
 The mount option `cache-size=20480` means to allocate 20GB local disk space for JuiceFS cache, please decide the allocated cache size based on your actual EBS disk capacity.
 
-You can adjust the FUSE mount options in the above configuration as needed, for more details please [check the documentation](../fuse_mount_options.md).
+You can adjust the FUSE mount options in the above configuration as needed, for more details please [check the documentation](../reference/fuse_mount_options.md).
 
 > **Note**: Please replace the Redis address, mount point, and mount options in the above configuration file with your actual information.

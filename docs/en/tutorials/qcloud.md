@@ -145,7 +145,7 @@ COPYRIGHT:
    AGPLv3
 ```
 
-JuiceFS has good cross-platform compatibility and is supported on Linux, Windows and macOS. This article focuses on the installation and use of JuiceFS on Linux, if you need to know how to install it on other systems, please [check the documentation](../README.md).
+JuiceFS has good cross-platform compatibility and is supported on Linux, Windows and macOS. This article focuses on the installation and use of JuiceFS on Linux, if you need to know how to install it on other systems, please [check the documentation](../getting-started/installation.md).
 
 ## Creating JuiceFS
 
@@ -291,6 +291,6 @@ redis://:<your-redis-password>@192.168.5.5:6379/1    /mnt/jfs       juicefs     
 
 The mount option `cache-size=20480` means to allocate 20GB local disk space for JuiceFS cache use. Generally speaking, allocating more cache space for JuiceFS will result in better performance.
 
-You can adjust the FUSE mount options in the above configuration as needed, for more information please [check the documentation](../fuse_mount_options.md).
+You can adjust the FUSE mount options in the above configuration as needed, for more information please [check the documentation](../reference/fuse_mount_options.md).
 
 > **Note**: Please replace the Redis address, mount point, and mount options in the above configuration file with your actual information.

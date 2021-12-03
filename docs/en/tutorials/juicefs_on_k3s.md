@@ -66,7 +66,7 @@ k3s-n1   Ready    <none>                 28h   v1.21.4+k3s1
 
 ## Install CSI Driver
 
-It is consistent with the method of [Use JuiceFS on Kubernetes](how_to_use_on_kubernetes.md), you can install it through Helm or kubectl.
+It is consistent with the method of [Use JuiceFS on Kubernetes](../deployment/how_to_use_on_kubernetes.md), you can install it through Helm or kubectl.
 
 Here we use kubectl, execute the following command to install the CSI Driver:
 

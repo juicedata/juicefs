@@ -154,7 +154,7 @@ $ juicefs format \
 
 **Parameter Description:**
 
-- `--storage`: Specify the data storage engine, here is `space`, click here to view all [supported storage](../how_to_setup_object_storage.md).
+- `--storage`: Specify the data storage engine, here is `space`, click here to view all [supported storage](../reference/how_to_setup_object_storage.md).
 - `--bucket`: Specify the bucket access address.
 - `--access-key` and `--secret-key`: Specify the secret key for accessing the object storage API.
 - The Redis managed by DigitalOcean needs to be accessed with TLS/SSL encryption, so it needs to use the `rediss://` protocol header. The `/1` added at the end of the link represents the use of Redis's No. 1 database.
@@ -279,7 +279,7 @@ Edit the `/etc/fstab` configuration file and add a new record:
 rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=20480     0  0
 ```
 
-In the mount option, `cache-size=20480` means to allocate 20GiB of local disk space as the local cache of JuiceFS. Please decide the allocated cache size according to the actual hardware. You can adjust the [FUSE mount options](../fuse_mount_options.md) in the above configuration according to your needs.
+In the mount option, `cache-size=20480` means to allocate 20GiB of local disk space as the local cache of JuiceFS. Please decide the allocated cache size according to the actual hardware. You can adjust the [FUSE mount options](../reference/fuse_mount_options.md) in the above configuration according to your needs.
 
 ### 7. Multi-host shared
 

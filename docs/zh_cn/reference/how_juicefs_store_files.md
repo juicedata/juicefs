@@ -21,6 +21,6 @@ JuiceFS 作为一个文件系统也不例外，它的强一致性、高性能等
 
 ## 你可能还需要
 
-现在，你可以参照 [快速上手指南](quick_start_guide.md) 立即开始使用 JuiceFS！
+现在，你可以参照 [快速上手指南](../getting-started/quick_start_guide.md) 立即开始使用 JuiceFS！
 
 你还可以进一步了解 [JuiceFS 的技术架构](architecture.md)

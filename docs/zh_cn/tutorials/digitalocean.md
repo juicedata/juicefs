@@ -156,7 +156,7 @@ $ juicefs format \
 
 **参数说明：**
 
-- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../how_to_setup_object_storage.md)。
+- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../reference/how_to_setup_object_storage.md)。
 - `--bucket`：指定存储桶访问地址。
 - `--access-key` 和 `--secret-key`：指定访问对象存储 API 的秘钥。
 - DigitalOcean 托管的 Redis 需要使用 TLS/SSL 加密访问，因此需要使用 `rediss://` 协议头，链接最后添加的 `/1` 代表使用 Redis 的 1 号数据库。
@@ -281,7 +281,7 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=20480     0  0
 ```
 
-挂载选项中 `cache-size=20480` 代表分配 20GiB 本地磁盘空间作为 JuiceFS 的本地缓存，请根据实际的硬件配置决定分配的缓存大小。你可以根据需要调整上述配置中的 [FUSE 挂载选项](../fuse_mount_options.md)。
+挂载选项中 `cache-size=20480` 代表分配 20GiB 本地磁盘空间作为 JuiceFS 的本地缓存，请根据实际的硬件配置决定分配的缓存大小。你可以根据需要调整上述配置中的 [FUSE 挂载选项](../reference/fuse_mount_options.md)。
 
 ### 7. 多主机共享挂载
 

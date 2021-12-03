@@ -69,4 +69,4 @@ JuiceFS 支持传输中加密（encryption in transit）以及静态加密（enc
 
 Alluxio 的架构可以分为 3 个组件：master、worker 和客户端。一个典型的集群由一个主节点（master）、多个备用主节点（standby master）、一个作业主节点（job master）、多个备用作业主节点（standby job master）、多个 worker 和 job worker 组成。您需要自己运维这些节点。
 
-JuiceFS 使用 Redis 或者[其它系统](databases_for_metadata.md)作为元数据引擎。您可以轻松使用由公有云提供商托管的服务作为 JuiceFS 的元数据引擎，没有任何运维负担。
+JuiceFS 使用 Redis 或者[其它系统](../reference/how_to_setup_metadata_engine.md)作为元数据引擎。您可以轻松使用由公有云提供商托管的服务作为 JuiceFS 的元数据引擎，没有任何运维负担。
