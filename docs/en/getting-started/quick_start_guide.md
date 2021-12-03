@@ -30,11 +30,11 @@ After the container is successfully created, you can use `redis://127.0.0.1:6379
 
 > **Security Tips**: The Redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database via the Internet, it is strongly recommended to refer to [Redis official documentation](https: //redis.io/topics/security) Enable protected mode.
 
-For more information about Redis database, [click here to view](databases_for_metadata.md#Redis).
+For more information about Redis database, [click here to view](../reference/how_to_setup_metadata_engine.md#redis).
 
 ## 2. Object Storage
 
-Like Redis databases, almost all public cloud computing platforms provide object storage services. Because JuiceFS supports object storage services on almost all platforms, you can choose freely according to your personal preferences. You can check our [Object Storage Support List and Setting Guide](how_to_setup_object_storage.md), which lists all the object storage services currently supported by JuiceFS and how to use them.
+Like Redis databases, almost all public cloud computing platforms provide object storage services. Because JuiceFS supports object storage services on almost all platforms, you can choose freely according to your personal preferences. You can check our [Object Storage Support List and Setting Guide](../reference/how_to_setup_object_storage.md), which lists all the object storage services currently supported by JuiceFS and how to use them.
 
 Of course, if you just want to quickly evaluate JuiceFS, you can use Docker to quickly run a MinIO object storage instance on your local computer:
 
@@ -76,7 +76,7 @@ $ tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
-> **Note**: You can also build the JuiceFS client manually from the source code. [Learn more](client_compile_and_upgrade.md)
+> **Note**: You can also build the JuiceFS client manually from the source code. 
 
 ## 4. Create JuiceFS file system
 
@@ -105,7 +105,7 @@ After executing the command, you will see output similar to the following, indic
 
 > **Note**: You can create as many JuiceFS file systems as you need. But it should be noted that only one file system can be created in each Redis database. For example, when you want to create another file system named `memory`, you have to use another database in Redis, such as No.2, which is `redis://127.0.0.1:6379/2`.
 
-> **Note**: If you don't specify `--storage` option, the JuiceFS client will use the local disk as data storage. When using local storage, JuiceFS can only be used on a local stand-alone machine and cannot be mounted by other clients in the network. [Click here](how_to_setup_object_storage.md#local) for details.
+> **Note**: If you don't specify `--storage` option, the JuiceFS client will use the local disk as data storage. When using local storage, JuiceFS can only be used on a local stand-alone machine and cannot be mounted by other clients in the network. [Click here](../reference/how_to_setup_object_storage.md#local-disk) for details.
 
 ## 5. Mount JuiceFS file system
 
@@ -155,7 +155,7 @@ Edit the `/etc/fstab` configuration file, start a new line, and add a record acc
 
 - Please replace `<META-URL>` with the actual Redis database address in the format of `redis://<user>:<password>@<host>:<port>/<db>`, for example: `redis ://localhost:6379/1`.
 - Please replace `<MOUNTPOINT>` with the actual mount point of the file system, for example: `/jfs`.
-- If necessary, please replace `[,<MOUNT-OPTIONS>]` with the actual [mount option](command_reference.md#juicefs-mount) to be set, and multiple options are separated by commas.
+- If necessary, please replace `[,<MOUNT-OPTIONS>]` with the actual [mount option](../reference/command_reference.md#juicefs-mount) to be set, and multiple options are separated by commas.
 
 For example:
 
