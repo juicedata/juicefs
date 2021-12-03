@@ -19,10 +19,14 @@ package meta
 const scriptLookup = `
 local buf = redis.call('HGET', KEYS[1], KEYS[2])
 if not buf then
-       return false
+    error("ENOENT")
 end
 local ino = struct.unpack(">I8", string.sub(buf, 2))
-return {ino, redis.call('GET', "i" .. tostring(ino))}
+-- double float has 52 significant bits
+if ino > 4503599627370495 then
+    error("ENOTSUP")
+end
+return {ino, redis.call('GET', "i" .. string.format("%.f", ino))}
 `
 
 const scriptResolve = `
@@ -35,7 +39,7 @@ local function unpack_attr(buf)
 end
 
 local function get_attr(ino)
-    local encoded_attr = redis.call('GET', "i" .. tostring(ino))
+    local encoded_attr = redis.call('GET', "i" .. string.format("%.f", ino))
     if not encoded_attr then
         error("ENOENT")
     end
@@ -43,7 +47,7 @@ local function get_attr(ino)
 end
 
 local function lookup(parent, name)
-    local buf = redis.call('HGET', "d" .. tostring(parent), name)
+    local buf = redis.call('HGET', "d" .. string.format("%.f", parent), name)
     if not buf then
         error("ENOENT")
     end
@@ -68,9 +72,10 @@ local function can_access(ino, uid, gid)
 end
 
 local function resolve(parent, path, uid, gid)
+    local _maxIno = 4503599627370495
     local _type = 2
     for name in string.gmatch(path, "[^/]+") do
-        if _type == 3 then
+        if _type == 3 or parent > _maxIno then
             error("ENOTSUP")
         elseif _type ~= 2 then
             error("ENOTDIR")
@@ -79,7 +84,10 @@ local function resolve(parent, path, uid, gid)
         end
         _type, parent = lookup(parent, name)
     end
-    return {parent, redis.call('GET', "i" .. tostring(parent))}
+    if parent > _maxIno then
+        error("ENOTSUP")
+    end
+    return {parent, redis.call('GET', "i" .. string.format("%.f", parent))}
 end
 
 return resolve(tonumber(KEYS[1]), KEYS[2], tonumber(KEYS[3]), tonumber(KEYS[4]))
