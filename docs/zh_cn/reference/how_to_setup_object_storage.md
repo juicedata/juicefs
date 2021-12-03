@@ -1,4 +1,9 @@
-# JuiceFS 支持的对象存储和设置指南
+---
+sidebar_label: 如何设置对象存储
+sidebar_position: 3
+slug: /how_to_setup_object_storage
+---
+# JuiceFS 如何设置对象存储
 
 通过阅读 [JuiceFS 的技术架构](architecture.md) 和 [JuiceFS 如何存储文件](how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中。
 

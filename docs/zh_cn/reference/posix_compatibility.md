@@ -1,3 +1,8 @@
+---
+sidebar_label: POSIX 兼容性
+sidebar_position: 6
+slug: /posix_compatibility
+---
 # POSIX 兼容性
 
 JuiceFS 借助于 pjdfstest 和 LTP 来验证其对 POSIX 的兼容性。

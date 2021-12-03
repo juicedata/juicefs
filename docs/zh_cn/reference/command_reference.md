@@ -1,3 +1,8 @@
+---
+sidebar_label: 命令参考
+sidebar_position: 1
+slug: /command_reference
+---
 # JuiceFS 命令参考
 
 有许多命令可帮助您管理文件系统，该页面提供了有关这些命令的详细参考。

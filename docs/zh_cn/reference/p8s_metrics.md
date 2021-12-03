@@ -1,3 +1,8 @@
+---
+sidebar_label: JuiceFS 监控指标
+sidebar_position: 2
+slug: /p8s_metrics
+---
 # JuiceFS 监控指标
 
 JuiceFS 为每个文件系统提供一个 [Prometheus](https://prometheus.io) API。默认的 API 地址是 `http://localhost:9567/metrics`，你可以在执行 [`juicefs mount`](command_reference.md#juicefs-mount) 或 [`juicefs gateway`](command_reference.md#juicefs-gateway) 命令时通过 `--metrics` 选项自定义这个地址。
