@@ -432,15 +432,6 @@ func (r *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 				logger.Warnf("load script %s: %s", op, err2)
 				return syscall.ENOTSUP
 			}
-		} else if strings.Contains(msg, "Error running script") {
-			logger.Warnf("eval %s: %s", op, msg)
-			switch op {
-			case "lookup":
-				r.shaLookup = ""
-			case "resolve":
-				r.shaResolve = ""
-			}
-			return syscall.ENOTSUP
 		}
 
 		fields := strings.Fields(msg)
