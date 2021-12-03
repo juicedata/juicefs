@@ -518,7 +518,7 @@ juicefs fsck [command options] META-URL
 
 #### 描述
 
-分析[访问日志](fault_diagnosis_and_analysis.md#访问日志)。
+分析[访问日志](../administration/fault_diagnosis_and_analysis.md#访问日志)。
 
 #### 使用
 

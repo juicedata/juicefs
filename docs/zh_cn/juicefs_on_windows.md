@@ -66,8 +66,3 @@ ws.Run "C:\juicefs\juicefs.exe mount redis://192.168.1.8:6379/1 Z:",0
 如果需要取消开机启动，请参照[第 2 步](#2-设置开机启动) 设置开机启动)打开 Windows 启动文件夹，删除相应的 VBS 脚本即可。
 
 ## 5. 卸载文件系统
-
-## 你可能需要
-
-- [Linux 系统使用 JuiceFS](juicefs_on_linux.md)
-- [macOS 系统使用 JuiceFS](juicefs_on_macos.md)

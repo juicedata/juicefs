@@ -15,12 +15,12 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
 2. **HDFS 兼容**：完整兼容 [HDFS API](../deployment/hadoop_java_sdk.md)，提供更强的元数据性能；
-3. **S3 兼容**：提供 [S3 网关](s3_gateway.md) 实现 S3 协议兼容的访问接口；
+3. **S3 兼容**：提供 [S3 网关](../deployment/s3_gateway.md) 实现 S3 协议兼容的访问接口；
 4. **云原生**：通过 [Kubernetes CSI Driver](../deployment/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
 5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
-7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](benchmark.md)；
-8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](encrypt.md)；
+7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](../benchmark/benchmark.md)；
+8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](../security/encrypt.md)；
 9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
 10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
 
@@ -32,7 +32,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 
 [![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
 
-结果表明，JuiceFS 可以提供比另外两个工具大 10 倍的吞吐量，[了解更多](fio.md)。
+结果表明，JuiceFS 可以提供比另外两个工具大 10 倍的吞吐量，[了解更多](../benchmark/fio.md)。
 
 ### 元数据 IOPS
 
@@ -40,10 +40,10 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 
 [![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
 
-结果表明，JuiceFS 可以提供比另外两个工具更高的元数据 IOPS，[了解更多](mdtest.md)。
+结果表明，JuiceFS 可以提供比另外两个工具更高的元数据 IOPS，[了解更多](../benchmark/mdtest.md)。
 
 ## 开始使用
 
 现在，你可以参照 [快速上手指南](../getting-started/quick_start_guide.md) 立即开始使用 JuiceFS！
 
-如果你想了解 JuiceFS 工作原理，可以查看  [JuiceFS 的技术架构](architecture.md) 和 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)。
+如果你想了解 JuiceFS 工作原理，可以查看  [JuiceFS 的技术架构](../introduction/architecture.md) 和 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)。

@@ -66,8 +66,3 @@ Enter `shell:startup` to open the Windows startup folder, and drag the edited vb
 If you need to cancel the boot mount, please refer to [step 2](#2-set-boot-up) to open the Windows startup folder and delete the VBS script.
 
 ## 5. Unmount a JuiceFS
-
-## Go further
-
-- [JuiceFS on Linux](juicefs_on_linux.md)
-- [JuiceFS on macOS](juicefs_on_macos.md)

@@ -23,4 +23,4 @@ Using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and
 
 Now, you can refer to [Quick Start Guide](../getting-started/quick_start_guide.md) to start using JuiceFS immediately!
 
-You can also learn more about [JuiceFS Technical Architecture](architecture.md)
+You can also learn more about [JuiceFS Technical Architecture](../introduction/architecture.md)

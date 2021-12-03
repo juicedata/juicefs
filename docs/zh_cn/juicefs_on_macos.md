@@ -158,8 +158,3 @@ exit status 1
 ```shell
 $ juicefs umount --force ~/music
 ```
-
-## 你可能需要
-
-- [Linux 系统使用 JuiceFS](juicefs_on_linux.md)
-- [Windows 系统使用 JuiceFS](juicefs_on_windows.md)

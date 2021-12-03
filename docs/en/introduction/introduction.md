@@ -20,7 +20,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
 
 1. **Fully POSIX-compatible**: Use like a local file system, seamlessly docking with existing applications, no business intrusion.
 2. **Fully Hadoop-compatible**: JuiceFS [Hadoop Java SDK](../deployment/hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
-3. **S3-compatible**:  JuiceFS [S3 Gateway](s3_gateway.md) provides S3-compatible interface.
+3. **S3-compatible**:  JuiceFS [S3 Gateway](../deployment/s3_gateway.md) provides S3-compatible interface.
 4. **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](../deployment/how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
 5. **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
 6. **Strong Consistency**: The confirmed modification will be immediately visible on all servers mounted with the same file system .
@@ -51,5 +51,5 @@ It shows JuiceFS can provide significantly more metadata IOPS than the other two
 
 Now, you can refer to [Quick Start Guide](../getting-started/quick_start_guide.md) to start using JuiceFS immediately! 😊
 
-If you want to understand the working principle of JuiceFS, you can check [JuiceFS Technical Architecture](architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md).
+If you want to understand the working principle of JuiceFS, you can check [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md).
 

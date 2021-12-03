@@ -11,7 +11,7 @@ slug: /quick_start_guide
 2. 准备对象存储
 3. 下载安装 JuiceFS 客户端
 
-> 还不了解 JuiceFS？可以先查阅 [JuiceFS 是什么？](introduction.md)
+> 还不了解 JuiceFS？可以先查阅 [JuiceFS 是什么？](../introduction/introduction.md)
 
 ## 1. 准备 Redis 数据库
 
@@ -35,7 +35,7 @@ $ sudo docker run -d --name redis \
 
 ## 2. 准备对象存储
 
-和 Redis 数据库一样，几乎所有的公有云计算平台都提供对象存储服务。因为 JuiceFS 支持几乎所有主流平台的对象存储服务，因此你可以根据个人偏好自由选择。你可以查看我们的 [对象存储支持列表和设置指南](how_to_setup_object_storage.md)，其中列出了 JuiceFS 目前支持的所有对象存储服务，以及具体的使用方法。
+和 Redis 数据库一样，几乎所有的公有云计算平台都提供对象存储服务。因为 JuiceFS 支持几乎所有主流平台的对象存储服务，因此你可以根据个人偏好自由选择。你可以查看我们的 [对象存储支持列表和设置指南](../reference/how_to_setup_object_storage.md)，其中列出了 JuiceFS 目前支持的所有对象存储服务，以及具体的使用方法。
 
 当然，如果你只是想要快速评估 JuiceFS，使用 Docker 可以很轻松的在本地电脑运行一个 MinIO 对象存储实例：
 
@@ -75,7 +75,7 @@ $ tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
-> **提示**：你也可以从源代码手动编译 JuiceFS 客户端。[查看详情](client_compile_and_upgrade.md)
+> **提示**：你也可以从源代码手动编译 JuiceFS 客户端。
 
 ## 4. 创建 JuiceFS 文件系统
 
@@ -106,7 +106,7 @@ $ juicefs format \
 
 > **注意**：你可以根据需要，创建无限多个 JuiceFS 文件系统。但需要注意的是，每个 Redis 数据库中只能创建一个文件系统。比如要再创建一个名为 `memory` 的文件系统时，可以使用 Redis 中的 2 号数据库，即 `redis://127.0.0.1:6379/2` 。
 
-> **注意**：如果不指定 `--storage` 选项，JuiceFS 客户端会使用本地磁盘作为数据存储。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](how_to_setup_object_storage.md#local)查看详情。
+> **注意**：如果不指定 `--storage` 选项，JuiceFS 客户端会使用本地磁盘作为数据存储。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](../reference/how_to_setup_object_storage.md#本地磁盘)查看详情。
 
 ## 5. 挂载 JuiceFS 文件系统
 
@@ -214,8 +214,3 @@ $ sudo juicefs umount --force /mnt/jfs
 ```shell
 $ sudo fusermount -u /mnt/jfs
 ```
-
-## 你可能需要
-
-- [macOS 系统使用 JuiceFS](juicefs_on_macos.md)
-- [Windows 系统使用 JuiceFS](juicefs_on_windows.md)
