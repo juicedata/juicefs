@@ -412,6 +412,80 @@ func (r *redisMeta) parseEntry(buf []byte) (uint8, Ino) {
 	return buf[0], Ino(binary.BigEndian.Uint64(buf[1:]))
 }
 
+func (r *redisMeta) handleLuaResult(op string, res interface{}, err error, returnedIno *int64, returnedAttr *string) syscall.Errno {
+	if err != nil {
+		msg := err.Error()
+		if strings.Contains(msg, "NOSCRIPT") {
+			var err2 error
+			switch op {
+			case "lookup":
+				r.shaLookup, err2 = r.rdb.ScriptLoad(Background, scriptLookup).Result()
+			case "resolve":
+				r.shaResolve, err2 = r.rdb.ScriptLoad(Background, scriptResolve).Result()
+			default:
+				return syscall.ENOTSUP
+			}
+			if err2 == nil {
+				logger.Infof("loaded script succeed for %s", op)
+				return syscall.EAGAIN
+			} else {
+				logger.Warnf("load script %s: %s", op, err2)
+				return syscall.ENOTSUP
+			}
+		} else if strings.Contains(msg, "Error running script") {
+			logger.Warnf("eval %s: %s", op, msg)
+			switch op {
+			case "lookup":
+				r.shaLookup = ""
+			case "resolve":
+				r.shaResolve = ""
+			}
+			return syscall.ENOTSUP
+		}
+
+		fields := strings.Fields(msg)
+		lastError := fields[len(fields)-1]
+		switch lastError {
+		case "ENOENT":
+			return syscall.ENOENT
+		case "EACCESS":
+			return syscall.EACCES
+		case "ENOTDIR":
+			return syscall.ENOTDIR
+		case "ENOTSUP":
+			return syscall.ENOTSUP
+		default:
+			logger.Warnf("unexpected error for %s: %s", op, msg)
+			switch op {
+			case "lookup":
+				r.shaLookup = ""
+			case "resolve":
+				r.shaResolve = ""
+			}
+			return syscall.ENOTSUP
+		}
+	}
+	vals, ok := res.([]interface{})
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	*returnedIno, ok = vals[0].(int64)
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	if vals[1] == nil {
+		return syscall.ENOENT
+	}
+	*returnedAttr, ok = vals[1].(string)
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	return 0
+}
+
 func (r *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	var foundIno Ino
 	var encodedAttr []byte
@@ -419,43 +493,19 @@ func (r *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	entryKey := r.entryKey(parent)
 	if len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
 		var res interface{}
+		var returnedIno int64
+		var returnedAttr string
 		res, err = r.rdb.EvalSha(ctx, r.shaLookup, []string{entryKey, name}).Result()
-		if err != nil {
-			if strings.Contains(err.Error(), "NOSCRIPT") {
-				var err2 error
-				r.shaLookup, err2 = r.rdb.ScriptLoad(Background, scriptLookup).Result()
-				if err2 != nil {
-					logger.Warnf("load scriptLookup: %s", err2)
-				} else {
-					logger.Info("loaded script for lookup")
-				}
-				return r.Lookup(ctx, parent, name, inode, attr)
-			}
-			if strings.Contains(err.Error(), "Error running script") {
-				logger.Warnf("eval lookup: %s", err)
-				r.shaLookup = ""
-				return r.Lookup(ctx, parent, name, inode, attr)
-			}
-			return errno(err)
+		if st := r.handleLuaResult("lookup", res, err, &returnedIno, &returnedAttr); st == 0 {
+			foundIno = Ino(returnedIno)
+			encodedAttr = []byte(returnedAttr)
+		} else if st == syscall.EAGAIN {
+			return r.doLookup(ctx, parent, name, inode, attr)
+		} else if st != syscall.ENOTSUP {
+			return st
 		}
-		vals, ok := res.([]interface{})
-		if !ok {
-			return errno(fmt.Errorf("invalid script result: %v", res))
-		}
-		returnedIno, ok := vals[0].(int64)
-		if !ok {
-			return errno(fmt.Errorf("invalid script result: %v", res))
-		}
-		returnedAttr, ok := vals[1].(string)
-		if !ok {
-			return errno(fmt.Errorf("invalid script result: %v", res))
-		}
-		if returnedAttr == "" {
-			return syscall.ENOENT
-		}
-		foundIno = Ino(returnedIno)
-		encodedAttr = []byte(returnedAttr)
-	} else {
+	}
+	if foundIno == 0 {
 		var buf []byte
 		buf, err = r.rdb.HGet(ctx, entryKey, name).Bytes()
 		if err == nil {
@@ -491,47 +541,18 @@ func (r *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 		strconv.FormatUint(uint64(ctx.Uid()), 10),
 		strconv.FormatUint(uint64(ctx.Gid()), 10)}
 	res, err := r.rdb.EvalSha(ctx, r.shaResolve, args).Result()
-	if err != nil {
-		fields := strings.Fields(err.Error())
-		lastError := fields[len(fields)-1]
-		switch lastError {
-		case "ENOENT":
-			return syscall.ENOENT
-		case "EACCESS":
-			return syscall.EACCES
-		case "ENOTDIR":
-			return syscall.ENOTDIR
-		case "ENOTSUP":
-			return syscall.ENOTSUP
-		default:
-			logger.Warnf("resolve %d %s: %s", parent, path, err)
-			r.shaResolve = ""
-			return syscall.ENOTSUP
+	var returnedIno int64
+	var returnedAttr string
+	st := r.handleLuaResult("resolve", res, err, &returnedIno, &returnedAttr)
+	if st == 0 {
+		if inode != nil {
+			*inode = Ino(returnedIno)
 		}
+		r.parseAttr([]byte(returnedAttr), attr)
+	} else if st == syscall.EAGAIN {
+		return r.Resolve(ctx, parent, path, inode, attr)
 	}
-	vals, ok := res.([]interface{})
-	if !ok {
-		logger.Errorf("invalid script result: %v", res)
-		return syscall.ENOTSUP
-	}
-	returnedIno, ok := vals[0].(int64)
-	if !ok {
-		logger.Errorf("invalid script result: %v", res)
-		return syscall.ENOTSUP
-	}
-	returnedAttr, ok := vals[1].(string)
-	if !ok {
-		logger.Errorf("invalid script result: %v", res)
-		return syscall.ENOTSUP
-	}
-	if returnedAttr == "" {
-		return syscall.ENOENT
-	}
-	if inode != nil {
-		*inode = Ino(returnedIno)
-	}
-	r.parseAttr([]byte(returnedAttr), attr)
-	return 0
+	return st
 }
 
 func (r *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
