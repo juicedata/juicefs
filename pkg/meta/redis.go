@@ -491,7 +491,7 @@ func (r *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 	var encodedAttr []byte
 	var err error
 	entryKey := r.entryKey(parent)
-	if false && len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
+	if len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
 		var res interface{}
 		var returnedIno int64
 		var returnedAttr string
