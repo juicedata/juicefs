@@ -54,7 +54,6 @@ jobs:
       - run: |
           echo "install esrally"
           sudo pip install esrally
-          sudo ls -l ~/.rally/
           sudo chmod  777 /data/jfs/
           sudo ls -l /data/jfs/
           echo "JAVA_HOME"
