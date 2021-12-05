@@ -59,3 +59,4 @@ jobs:
           echo "JAVA_HOME"
           echo $JAVA_HOME
           esrally race --track=geonames --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'"
+          sudo ls -l /data/jfs/
