@@ -46,61 +46,15 @@ jobs:
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs &
 
-      - name: Install Elasticsearch
-        run: |
-          wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
-          sudo apt-get install apt-transport-https
-          sudo sh -c 'echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" > /etc/apt/sources.list.d/elastic-7.x.list'
-          sudo apt-get update
-          sudo apt-get install -y elasticsearch
 
-      - name: Change Datadir
-        run: |
-          sudo mkdir -p /data/es/
-          sudo chmod 777 /data/es/
-          sudo chmod 777 /data/jfs/
-          sudo service elasticsearch stop
-          sudo cat /etc/elasticsearch/elasticsearch.yml
-          sudo sed  -i "s?^path\.data.*?path\.data: /data/jfs/?" /etc/elasticsearch/elasticsearch.yml
-          sudo cat /etc/elasticsearch/elasticsearch.yml
-          sudo service elasticsearch restart
-          sudo ls -l /data/jfs/
-          sudo ls -l /var/lib/elasticsearch/
-          sudo ls -l /data/es/
-          sudo service elasticsearch status
-          curl -X GET "localhost:9200/"
-
-
-      - name: Stress Test
-        uses: actions/setup-python@v2
-        with:
-          python-version: '2.7'
-      - run: |
-          echo "start stress"
-          sudo cat /etc/elasticsearch/elasticsearch.yml
-          sudo service elasticsearch restart
-          sudo apt-get install -y net-tools
-          sudo netstat -anp | grep java
-          curl -X GET "localhost:9200/"
-          git clone https://github.com/logzio/elasticsearch-stress-test.git
-          cd elasticsearch-stress-test
-          pip install elasticsearch
-          sudo ls -l /data/jfs/
-          python elasticsearch-stress-test.py --es_address 127.0.0.1 --indices 10 --documents 10 --clients 1  \
-          --seconds 600 --number-of-shards 1 --no-cleanup --number-of-replicas 0 --bulk-size 5000  \
-          --max-fields-per-document 10 --max-size-per-field 50 --stats-frequency 15
-          sudo ls -l /data/jfs/
-
-      - name: Insert Data
+      - name: Esrally
         uses: actions/setup-python@v2
         with:
           python-version: '3.8'
       - run: |
-          pip3 install tornado
-          pip3 install nest_asyncio
-          git clone https://github.com/oliver006/elasticsearch-test-data.git
-          cd elasticsearch-test-data
-          python3 es_test_data.py --es_url=http://localhost:9200
+          sudo pip3 install esrally
+          sudo chmod  777 /data/jfs/
           sudo ls -l /data/jfs/
-          sudo ls -lh /var/lib/elasticsearch/
-          sudo ls -l /data/es/
+          echo "JAVA_HOME"
+          echo $JAVA_HOME
+          JAVA_HOME=$JAVA_HOME_11_X64 esrally race --track=geonames --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'"
