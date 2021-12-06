@@ -27,6 +27,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.List;
@@ -467,5 +468,42 @@ public class JuiceFileSystemTest extends TestCase {
     }
     Arrays.sort(org);
     assertArrayEquals(org, res);
+  }
+
+  private void writeFile(FileSystem fs, Path p, String content) throws IOException {
+    FSDataOutputStream ou = fs.create(p);
+    ou.write(content.getBytes());
+    ou.close();
+  }
+
+  public void testUsersAndGroups() throws Exception{
+    Path users1 = new Path("/tmp/users1");
+    Path groups1 = new Path("/tmp/groups1");
+    Path users2 = new Path("/tmp/users2");
+    Path groups2 = new Path("/tmp/groups2");
+    writeFile(fs, users1, "user1:2001\n");
+    writeFile(fs, groups1, "group1:3001:user1\n");
+    writeFile(fs, users2, "user2:2001\n");
+    writeFile(fs, groups2, "group2:3001:user2\n");
+    fs.close();
+
+    cfg = new Configuration();
+    cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
+    cfg.set("juicefs.users", users1.toUri().getPath());
+    cfg.set("juicefs.groups", groups1.toUri().getPath());
+    cfg.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
+
+    fs = FileSystem.get(cfg);
+    Path p = new Path("/test_user_group_file");
+    fs.create(p).close();
+    fs.setOwner(p, "user1", "group1");
+    fs.close();
+
+    cfg.set("juicefs.users", users2.toUri().getPath());
+    cfg.set("juicefs.groups", groups2.toUri().getPath());
+    fs = FileSystem.get(cfg);
+    FileStatus fileStatus = fs.getFileStatus(p);
+    assertEquals("user2", fileStatus.getOwner());
+    assertEquals("group2", fileStatus.getGroup());
   }
 }

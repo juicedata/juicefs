@@ -394,6 +394,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     URI uri = path.toUri();
     FileSystem fs;
     try {
+      URI defaultUri = getDefaultUri(getConf());
+      if (uri.getScheme() == null) {
+        uri = defaultUri;
+      } else {
+        if (uri.getAuthority() == null && (uri.getScheme().equals(defaultUri.getScheme()))) {
+          uri = defaultUri;
+        }
+      }
       if (getScheme().equals(uri.getScheme()) &&
               (name != null && name.equals(uri.getAuthority()))) {
         fs = this;
