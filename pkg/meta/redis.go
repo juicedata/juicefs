@@ -664,6 +664,7 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 	}
 	defer timeit(time.Now())
 	var foundIno Ino
+	var foundType uint8
 	var encodedAttr []byte
 	var err error
 	parent = r.checkRoot(parent)
@@ -722,25 +723,26 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 		if !ok {
 			return errno(fmt.Errorf("invalid script result: %v", res))
 		}
-		returnedAttr, ok := vals[1].(string)
-		if !ok {
-			return errno(fmt.Errorf("invalid script result: %v", res))
+		if vals[1] != nil {
+			returnedAttr, ok := vals[1].(string)
+			if !ok {
+				return errno(fmt.Errorf("invalid script result: %v", res))
+			}
+			foundIno = Ino(returnedIno)
+			encodedAttr = []byte(returnedAttr)
 		}
-		if returnedAttr == "" {
-			return syscall.ENOENT
-		}
-		foundIno = Ino(returnedIno)
-		encodedAttr = []byte(returnedAttr)
-	} else {
+	}
+	if foundIno == 0 || len(encodedAttr) == 0 {
 		var buf []byte
 		buf, err = r.rdb.HGet(ctx, entryKey, name).Bytes()
 		if err == nil {
-			_, foundIno = r.parseEntry(buf)
+			foundType, foundIno = r.parseEntry(buf)
 		}
 		if err == redis.Nil && r.conf.CaseInsensi {
 			e := r.resolveCase(ctx, parent, name)
 			if e != nil {
 				foundIno = e.Inode
+				foundType = e.Attr.Typ
 				err = nil
 			}
 		}
@@ -752,6 +754,10 @@ func (r *redisMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, att
 
 	if err == nil {
 		r.parseAttr(encodedAttr, attr)
+	} else if err == redis.Nil { // corrupt entry
+		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
+		*attr = Attr{Typ: foundType}
+		err = nil
 	}
 	*inode = foundIno
 	return errno(err)

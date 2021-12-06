@@ -913,6 +913,8 @@ func (m *kvMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 		return syscall.EINVAL // bad request
 	}
 	defer timeit(time.Now())
+	var foundIno Ino
+	var foundType uint8
 	parent = m.checkRoot(parent)
 	if name == ".." {
 		if parent == m.root {
@@ -946,15 +948,25 @@ func (m *kvMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *
 	if buf == nil {
 		if m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
-				*inode = e.Inode
-				return m.GetAttr(ctx, *inode, attr)
+				foundIno = e.Inode
+				foundType = e.Attr.Typ
+				name = string(e.Name)
 			}
 		}
+	} else {
+		foundType, foundIno = m.parseEntry(buf)
+	}
+	if foundIno == 0 {
 		return syscall.ENOENT
 	}
-	_, foundIno := m.parseEntry(buf)
 	*inode = foundIno
-	return m.GetAttr(ctx, *inode, attr)
+	st := m.GetAttr(ctx, *inode, attr)
+	if st == syscall.ENOENT {
+		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
+		*attr = Attr{Typ: foundType}
+		st = 0
+	}
+	return st
 }
 
 func (r *kvMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
