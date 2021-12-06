@@ -54,4 +54,4 @@ jobs:
       - run: |
           sudo pip install esrally
           sudo chmod  777 /data/jfs/
-          esrally race --track=geonames --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'"
+          esrally race --track=geopoint --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'"
