@@ -50,5 +50,5 @@ func attrToStat(inode Ino, attr *Attr, out *fuse.Attr) {
 	}
 	out.Size = size
 	out.Blocks = blocks
-	setBlksize(out, 0x10000)
+	setBlksize(out, 4096)
 }
