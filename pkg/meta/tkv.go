@@ -676,9 +676,16 @@ func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	if buf == nil {
 		return syscall.ENOENT
 	}
-	_, foundIno := m.parseEntry(buf)
+	foundType, foundIno := m.parseEntry(buf)
+	a, err := m.get(m.inodeKey(foundIno))
+	if a != nil {
+		m.parseAttr(a, attr)
+	} else if err == nil {
+		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
+		*attr = Attr{Typ: foundType}
+	}
 	*inode = foundIno
-	return 0
+	return errno(err)
 }
 
 func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
