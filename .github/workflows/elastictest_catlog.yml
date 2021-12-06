@@ -14,7 +14,7 @@ on:
 
 
 jobs:
-  elastictest:
+  elastictest_catlog:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -56,5 +56,6 @@ jobs:
           sudo pip3 install esrally
           sudo chmod  777 /data/jfs/
           sudo ls -l /data/jfs/
-          esrally race --track=geopoint --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'"
+          esrally race --track=geopoint --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv
           sudo ls -l /data/jfs/
+          cat /tmp/report.md

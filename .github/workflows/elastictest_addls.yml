@@ -14,7 +14,7 @@ on:
 
 
 jobs:
-  elastictest:
+  elastictest_addls:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -58,3 +58,4 @@ jobs:
           sudo ls -l /data/jfs/
           esrally race --track=geopoint --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'"
           sudo ls -l /data/jfs/
+          sudo ls -la ~/
