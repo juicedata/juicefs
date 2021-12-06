@@ -9,7 +9,7 @@
 	<packaging>jar</packaging>
 	<properties>
 		<hadoop.version>3.0.0</hadoop.version>
-		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path}</argLine>
+		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path} -Djdk.attach.allowAttachSelf=true</argLine>
 	</properties>
 	<build>
 		<plugins>
