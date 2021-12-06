@@ -52,21 +52,6 @@ jobs:
         with:
           python-version: '3.8'
       - run: |
-          echo "install esrally"
           sudo pip install esrally
           sudo chmod  777 /data/jfs/
-          sudo ls -l /data/jfs/
-          echo "JAVA_HOME"
-          echo $JAVA_HOME
-          esrally race --track=geonames --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'" &
-          echo "data jfs dir"
-          sleep 3m
-          sudo ls -l /data/jfs/
-          sleep 3m
-          sudo ls -l /data/jfs/
-          sleep 3m
-          sudo ls -l /data/jfs/
-          sleep 3m
-          sudo ls -l /data/jfs/
-          sleep 3m
-          sudo ls -l /data/jfs/
+          esrally race --track=geonames --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'"
