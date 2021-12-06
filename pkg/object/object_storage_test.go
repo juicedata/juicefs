@@ -476,10 +476,3 @@ func TestNameString(t *testing.T) {
 		t.Fatalf("name with two prefix does not match: %s", s.String())
 	}
 }
-
-func TestLimited(t *testing.T) {
-	s, _ := newMem("test", "", "")
-	testStorage(t, NewLimited(s, 1<<20, 0))
-	s, _ = newMem("test2", "", "")
-	testStorage(t, NewLimited(s, 0, 1<<20))
-}

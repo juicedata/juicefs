@@ -86,7 +86,7 @@ func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
 	// defer trace(path)(stat)
 	var totalspace, availspace, iused, iavail uint64
 	j.fs.Meta().StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
-	var bsize uint64 = 0x10000
+	var bsize uint64 = 4096
 	blocks := totalspace / bsize
 	bavail := availspace / bsize
 	stat.Namemax = 255
@@ -318,8 +318,8 @@ func attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
 		fallthrough
 	case meta.TypeFile:
 		size = attr.Length
-		blocks = (size + 0xffff) / 0x10000
-		stat.Blksize = 0x10000
+		blocks = (size + 0xffff) / 4096
+		stat.Blksize = 4096
 	case meta.TypeBlockDev:
 		fallthrough
 	case meta.TypeCharDev:

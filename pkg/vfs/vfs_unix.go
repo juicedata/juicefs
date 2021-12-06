@@ -42,7 +42,7 @@ type Statfs struct {
 func StatFS(ctx Context, ino Ino) (st *Statfs, err int) {
 	var totalspace, availspace, iused, iavail uint64
 	_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
-	var bsize uint64 = 0x10000
+	var bsize uint64 = 4096
 	blocks := totalspace / bsize
 	bavail := blocks - (totalspace-availspace+bsize-1)/bsize
 
