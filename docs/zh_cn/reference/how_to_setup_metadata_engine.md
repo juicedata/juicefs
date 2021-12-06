@@ -1,6 +1,6 @@
 ---
 sidebar_label: 如何设置元数据引擎
-sidebar_position: 4
+sidebar_position: 3
 slug: /databases_for_metadata
 ---
 # JuiceFS 如何设置元数据引擎

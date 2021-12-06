@@ -1,6 +1,6 @@
 ---
 sidebar_label: mdtest 基准测试
-sidebar_position: 6
+sidebar_position: 8
 slug: /mdtest
 ---
 # mdtest 基准测试

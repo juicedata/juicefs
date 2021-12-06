@@ -1,5 +1,5 @@
 ---
-sidebar_label: 应用集成
+sidebar_label: 项目集成
 sidebar_position: 2
 ---
-# 应用集成
+# 项目集成

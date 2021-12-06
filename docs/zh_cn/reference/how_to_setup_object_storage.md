@@ -1,6 +1,6 @@
 ---
 sidebar_label: 如何设置对象存储
-sidebar_position: 3
+sidebar_position: 4
 slug: /how_to_setup_object_storage
 ---
 # JuiceFS 如何设置对象存储

@@ -1,6 +1,6 @@
 ---
 sidebar_label: Benchmark with mdtest
-sidebar_position: 7
+sidebar_position: 8
 slug: /mdtest
 ---
 # Benchmark with mdtest

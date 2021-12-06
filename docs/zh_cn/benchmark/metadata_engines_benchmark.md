@@ -1,6 +1,6 @@
 ---
 sidebar_label: 元数据引擎性能测试
-sidebar_position: 7
+sidebar_position: 6
 slug: /metadata_engines_benchmark
 ---
 # 元数据引擎性能对比测试
