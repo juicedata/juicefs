@@ -52,8 +52,10 @@ jobs:
         with:
           python-version: '3.8'
       - run: |
+          echo "JAVA_HOME"
+          echo "$JAVA_HOME"
           sudo pip3 install esrally
           sudo apt-get install pbzip2
           sudo chmod  777 /data/jfs/
-          esrally race --track=geopoint  --distribution-version=7.0.0 --car-params="data_paths:'/data/jfs'" &
+          esrally race --track=geopoint  --distribution-version=6.7.0 --car-params="data_paths:'/data/jfs'" &
           for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done

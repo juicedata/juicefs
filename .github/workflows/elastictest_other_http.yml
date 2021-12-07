@@ -14,7 +14,7 @@ on:
 
 
 jobs:
-  elastictest:
+  elastictest_cleanlog:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -48,18 +48,14 @@ jobs:
 
 
       - name: Esrally
-      - uses: actions/setup-java@v2
+        uses: actions/setup-python@v2
         with:
-          distribution: 'temurin' # See 'Supported distributions' for available options
-          java-version: '17'
+          python-version: '3.8'
       - run: |
           echo "JAVA_HOME"
           echo "$JAVA_HOME"
-          echo "install esrally"
           sudo pip3 install esrally
           sudo apt-get install pbzip2
           sudo chmod  777 /data/jfs/
-          sudo ls -l /data/jfs/
-          esrally race --track=geopoint --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv &
+          esrally race --track=geopoint --client-options="timeout:120" --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'" &
           for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done
-          sudo ls -l /data/jfs/
