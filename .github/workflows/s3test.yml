@@ -3,12 +3,16 @@ name: "s3test compatibility"
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'release-**'
     paths-ignore:
       - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
-    branches: [ main ]
+    branches:
+      - main
+      - 'release-**'
     paths-ignore:
       - 'docs/**'
 

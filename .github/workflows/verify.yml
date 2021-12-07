@@ -3,16 +3,18 @@ name: verify
 on:
   push:
     branches:
-    - main
+      - main
+      - 'release-**'
     paths:
-    - '**.go'
+      - '**.go'
   pull_request:
     branches:
-    - main
+      - main
+      - 'release-**'
     paths:
-    - '**.yml'
-    - '**.go'
-    - 'Makefile'
+      - '**.yml'
+      - '**.go'
+      - 'Makefile'
 
 jobs:
   lint:
