@@ -60,3 +60,4 @@ jobs:
           sudo ls -l /data/jfs/
           sudo ls -la ~/
           sudo ls -la /tmp/
+          for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done

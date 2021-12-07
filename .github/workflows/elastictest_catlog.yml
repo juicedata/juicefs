@@ -56,3 +56,4 @@ jobs:
           sudo chmod  777 /data/jfs/
           esrally race --track=geopoint --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv
           cat /tmp/report.md
+          for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done

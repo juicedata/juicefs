@@ -58,3 +58,4 @@ jobs:
           sudo ls -l /data/jfs/
           esrally race --track=geopoint --distribution-version=6.5.3 --car-params="data_paths:'/data/jfs'"
           sudo ls -l /data/jfs/
+          for i in {1..19}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done
