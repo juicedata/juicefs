@@ -52,11 +52,8 @@ jobs:
         with:
           python-version: '3.8'
       - run: |
-          echo "export http_proxy=http://proxy.acme.org:8888/" >>~/.bash_profile
-          source ~/.bash_profile
-          echo $http_proxy
           sudo pip3 install esrally
           sudo apt-get install pbzip2
           sudo chmod  777 /data/jfs/
-          esrally race --track=geopoint  --car-params="data_paths:'/data/jfs'" &
+          esrally race --track=geopoint --distribution-version=7.4.2 --car-params="data_paths:'/data/jfs'" &
           for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done
