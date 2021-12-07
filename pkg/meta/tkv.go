@@ -334,6 +334,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
+			old.TrashDays = format.TrashDays
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""
@@ -348,21 +349,28 @@ func (m *kvMeta) Init(format Format, force bool) error {
 	}
 
 	m.fmt = format
+	ts := time.Now().Unix()
+	attr := &Attr{
+		Typ:    TypeDirectory,
+		Atime:  ts,
+		Mtime:  ts,
+		Ctime:  ts,
+		Nlink:  2,
+		Length: 4 << 10,
+		Parent: 1,
+	}
 	return m.txn(func(tx kvTxn) error {
+		if format.TrashDays > 0 {
+			buf := tx.get(m.inodeKey(TrashInode))
+			if buf == nil {
+				attr.Mode = 0555
+				tx.set(m.inodeKey(TrashInode), m.marshal(attr))
+			}
+		}
 		tx.set(m.fmtKey("setting"), data)
 		if body == nil || m.client.name() == "memkv" {
-			// root inode
-			var attr Attr
-			attr.Typ = TypeDirectory
 			attr.Mode = 0777
-			ts := time.Now().Unix()
-			attr.Atime = ts
-			attr.Mtime = ts
-			attr.Ctime = ts
-			attr.Nlink = 2
-			attr.Length = 4 << 10
-			attr.Parent = 1
-			tx.set(m.inodeKey(1), m.marshal(&attr))
+			tx.set(m.inodeKey(1), m.marshal(attr))
 			tx.incrBy(m.counterKey("nextInode"), 2)
 			tx.incrBy(m.counterKey("nextChunk"), 1)
 			tx.incrBy(m.counterKey("nextSession"), 1)
@@ -411,6 +419,7 @@ func (m *kvMeta) NewSession() error {
 	go m.refreshSession()
 	go m.cleanupDeletedFiles()
 	go m.cleanupSlices()
+	go m.cleanupTrash()
 	go m.flushStats()
 	return nil
 }
@@ -932,7 +941,15 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		return syscall.ENOSPC
 	}
 	parent = m.checkRoot(parent)
-	ino, err := m.nextInode()
+	var ino Ino
+	var err error
+	if parent == TrashInode {
+		var next int64
+		next, err = m.incrCounter("nextTrash", 1)
+		ino = TrashInode + Ino(next)
+	} else {
+		ino, err = m.nextInode()
+	}
 	if err != nil {
 		return errno(err)
 	}
@@ -983,7 +1000,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		if foundIno != 0 {
-			if _type == TypeFile {
+			if _type == TypeFile || _type == TypeDirectory {
 				a = tx.get(m.inodeKey(foundIno))
 				if a != nil {
 					m.parseAttr(a, attr)
@@ -1032,9 +1049,11 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	return errno(err)
 }
 
-func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
+func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
 	var _type uint8
 	var inode Ino
 	var attr Attr
@@ -1074,12 +1093,17 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
-			attr.Nlink--
-			if _type == TypeFile && attr.Nlink == 0 {
-				opened = m.of.IsOpen(inode)
+			if trash == 0 {
+				attr.Nlink--
+				if _type == TypeFile && attr.Nlink == 0 {
+					opened = m.of.IsOpen(inode)
+				}
+			} else if attr.Nlink == 1 {
+				attr.Parent = trash
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
+			trash = 0
 		}
 		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 		pattr.Mtime = now.Unix()
@@ -1091,6 +1115,9 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		if attr.Nlink > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
+			if trash > 0 {
+				tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parent, inode, name)), buf)
+			}
 		} else {
 			switch _type {
 			case TypeFile:
@@ -1113,7 +1140,7 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 		return nil
 	})
-	if err == nil {
+	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
 			m.fileDeleted(opened, inode, attr.Length)
 		}
@@ -1122,15 +1149,11 @@ func (m *kvMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
-func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
-	if name == "." {
-		return syscall.EINVAL
+func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parent, &trash); st != 0 {
+		return st
 	}
-	if name == ".." {
-		return syscall.ENOTEMPTY
-	}
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
 	err := m.txn(func(tx kvTxn) error {
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
@@ -1158,44 +1181,51 @@ func (m *kvMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if tx.exist(m.entryKey(inode, "")) {
 			return syscall.ENOTEMPTY
 		}
+
+		now := time.Now()
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
+			if trash > 0 {
+				attr.Ctime = now.Unix()
+				attr.Ctimensec = uint32(now.Nanosecond())
+				attr.Parent = trash
+			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
+			trash = 0
 		}
-
-		now := time.Now()
 		pattr.Nlink--
 		pattr.Mtime = now.Unix()
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
-		tx.dels(m.entryKey(parent, name), m.inodeKey(inode))
-		tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
+
 		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		tx.dels(m.entryKey(parent, name))
+		if trash > 0 {
+			tx.set(m.inodeKey(inode), m.marshal(&attr))
+			tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parent, inode, name)), buf)
+		} else {
+			tx.dels(m.inodeKey(inode))
+			tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
+		}
 		return nil
 	})
-	if err == nil {
+	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
 	}
 	return errno(err)
 }
 
-func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	switch flags {
-	case 0, RenameNoReplace, RenameExchange:
-	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
-		return syscall.ENOTSUP
-	default:
-		return syscall.EINVAL
+func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	var trash Ino
+	if st := m.checkTrash(parentDst, &trash); st != 0 {
+		return st
 	}
-	defer timeit(time.Now())
 	exchange := flags == RenameExchange
-	parentSrc = m.checkRoot(parentSrc)
-	parentDst = m.checkRoot(parentDst)
 	var opened bool
 	var dino Ino
 	var dtyp uint8
@@ -1250,14 +1280,15 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 			}
 			dtyp, dino = m.parseEntry(dbuf)
 			a := tx.get(m.inodeKey(dino))
-			if a == nil {
-				return syscall.ENOENT // corrupt entry
+			if a == nil { // corrupt entry
+				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
+				trash = 0
 			}
 			m.parseAttr(a, &tattr)
+			tattr.Ctime = now.Unix()
+			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
-				tattr.Ctime = now.Unix()
 				tattr.Parent = parentSrc
-				tattr.Ctimensec = uint32(now.Nanosecond())
 				if dtyp == TypeDirectory && parentSrc != parentDst {
 					dattr.Nlink--
 					sattr.Nlink++
@@ -1267,13 +1298,18 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 					if tx.exist(m.entryKey(dino, "")) {
 						return syscall.ENOTEMPTY
 					}
+					if trash > 0 {
+						tattr.Parent = trash
+					}
 				} else {
-					tattr.Nlink--
-					if tattr.Nlink > 0 {
-						tattr.Ctime = now.Unix()
-						tattr.Ctimensec = uint32(now.Nanosecond())
-					} else if dtyp == TypeFile {
-						opened = m.of.IsOpen(dino)
+					if trash == 0 {
+						tattr.Nlink--
+						if dtyp == TypeFile && tattr.Nlink == 0 {
+							opened = m.of.IsOpen(dino)
+						}
+						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
+					} else if tattr.Nlink == 1 {
+						tattr.Parent = trash
 					}
 				}
 			}
@@ -1318,7 +1354,10 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		} else {
 			tx.dels(m.entryKey(parentSrc, nameSrc))
 			if dino > 0 {
-				if dtyp != TypeDirectory && tattr.Nlink > 0 {
+				if trash > 0 {
+					tx.set(m.inodeKey(dino), m.marshal(&tattr))
+					tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parentDst, dino, nameDst)), dbuf)
+				} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
 					tx.set(m.inodeKey(dino), m.marshal(&tattr))
 				} else {
 					if dtyp == TypeFile {
@@ -1343,7 +1382,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 				}
 			}
 		}
-		if parentDst != parentSrc {
+		if parentDst != parentSrc && !isTrash(parentSrc) {
 			tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
 		}
 		tx.set(m.inodeKey(ino), m.marshal(&iattr))
@@ -1351,7 +1390,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 		tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		return nil
 	})
-	if err == nil && !exchange {
+	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, dino, tattr.Length)
 		}
@@ -1360,10 +1399,7 @@ func (m *kvMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst In
 	return errno(err)
 }
 
-func (m *kvMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(tx kvTxn) error {
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
 		if rs[0] == nil || rs[1] == nil {
@@ -2127,7 +2163,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		inode := m.decodeInode(b.Get(8))
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
-	var tree *DumpedEntry
+	var tree, trash *DumpedEntry
 	if root == 0 {
 		root = m.root
 	}
@@ -2159,6 +2195,9 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 				return err
 			}
 		}
+		if trash, err = m.dumpEntry(TrashInode); err != nil {
+			trash = nil
+		}
 	}
 	if tree, err = m.dumpEntry(root); err != nil {
 		return err
@@ -2178,7 +2217,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			m.counterKey(totalInodes),
 			m.counterKey("nextInode"),
 			m.counterKey("nextChunk"),
-			m.counterKey("nextSession"))
+			m.counterKey("nextSession"),
+			m.counterKey("nextTrash"))
 		return nil
 	})
 	if err != nil {
@@ -2218,17 +2258,17 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		format,
-		&DumpedCounters{
+		Setting: format,
+		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
 			NextInode:   cs[2],
 			NextChunk:   cs[3],
 			NextSession: cs[4],
+			NextTrash:   cs[5],
 		},
-		sessions,
-		dels,
-		tree,
+		Sustained: sessions,
+		DelFiles:  dels,
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
@@ -2238,6 +2278,11 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	var total int64 = 1 //root
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
+	if trash != nil {
+		trash.Name = "Trash"
+		total++
+		bar.Increment()
+	}
 	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
@@ -2245,6 +2290,14 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
+	}
+	if trash != nil {
+		if _, err = bw.WriteString(","); err != nil {
+			return err
+		}
+		if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
+			return err
+		}
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
@@ -2292,12 +2345,18 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 			attr.Length = uint64(len(e.Symlink))
 			tx.set(m.symKey(inode), []byte(e.Symlink))
 		}
-		if inode > 1 {
+		if inode > 1 && inode != TrashInode {
 			cs.UsedSpace += align4K(attr.Length)
 			cs.UsedInodes += 1
 		}
-		if cs.NextInode <= int64(inode) {
-			cs.NextInode = int64(inode) + 1
+		if inode < TrashInode {
+			if cs.NextInode <= int64(inode) {
+				cs.NextInode = int64(inode) + 1
+			}
+		} else {
+			if cs.NextTrash <= int64(inode)-TrashInode {
+				cs.NextTrash = int64(inode) - TrashInode + 1
+			}
 		}
 
 		for _, x := range e.Xattrs {
@@ -2333,14 +2392,21 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
-	dm.FSTree.Attr.Inode = 1
-	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
-	}); err != nil {
+	}
+	dm.FSTree.Attr.Inode = 1
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries, showProgress); err != nil {
 		return err
+	}
+	if dm.Trash != nil {
+		total++
+		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
+			return err
+		}
 	}
 	if bar.Current() != total {
 		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
@@ -2352,6 +2418,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		NextInode:   2,
 		NextChunk:   1,
 		NextSession: 1,
+		NextTrash:   1,
 	}
 	refs := make(map[string]int64)
 
@@ -2404,6 +2471,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		tx.set(m.counterKey("nextInode"), packCounter(counters.NextInode))
 		tx.set(m.counterKey("nextChunk"), packCounter(counters.NextChunk))
 		tx.set(m.counterKey("nextSession"), packCounter(counters.NextSession))
+		tx.set(m.counterKey("nextTrash"), packCounter(counters.NextTrash))
 		for _, d := range dm.DelFiles {
 			tx.set(m.delfileKey(d.Inode, d.Length), m.packInt64(d.Expire))
 		}

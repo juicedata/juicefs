@@ -49,6 +49,7 @@ func TestSQLiteClient(t *testing.T) {
 
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
+	testTrash(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -90,6 +91,7 @@ func TestMySQLClient(t *testing.T) {
 
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
+	testTrash(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -115,6 +117,7 @@ func TestPostgreSQLClient(t *testing.T) {
 
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
+	testTrash(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)

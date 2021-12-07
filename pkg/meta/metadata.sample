@@ -10,14 +10,16 @@
     "Shards": 0,
     "Partitions": 0,
     "Capacity": 0,
-    "Inodes": 0
+    "Inodes": 0,
+    "TrashDays": 1
   },
   "Counters": {
-    "usedSpace": 104882176,
-    "usedInodes": 7,
-    "nextInodes": 27,
-    "nextChunk": 7,
+    "usedSpace": 115380224,
+    "usedInodes": 11,
+    "nextInodes": 30,
+    "nextChunk": 9,
     "nextSession": 1,
+    "nextTrash": 2,
     "nextCleanupSlices": 0
   },
   "Sustained": [],
@@ -29,7 +31,7 @@
     }
   ],
   "FSTree": {
-    "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1637664458,"ctime":1637664458,"atimensec":0,"mtimensec":0,"ctimensec":0,"nlink":4,"length":0},
+    "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437879,"ctime":1638437879,"atimensec":0,"mtimensec":0,"ctimensec":0,"nlink":4,"length":0},
     "xattrs": [{"name":"lastBackup","value":"2021-11-23T18:29:54+08:00"}],
     "entries": {
       "d": {
@@ -70,6 +72,29 @@
       "sd": {
         "attr": {"inode":26,"type":"symlink","mode":420,"uid":1,"gid":0,"atime":1637664458,"mtime":1637664458,"ctime":1637664458,"atimensec":873647000,"mtimensec":873647000,"ctimensec":873647000,"nlink":1,"length":0},
         "symlink": "d"
+      }
+    }
+  },
+  "Trash": {
+    "attr": {"inode":9223372032828243968,"type":"directory","mode":365,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437877,"ctime":1638437877,"atimensec":0,"mtimensec":0,"ctimensec":0,"nlink":3,"length":0},
+    "entries": {
+      "2021-12-02-09": {
+        "attr": {"inode":9223372032828243969,"type":"directory","mode":365,"uid":0,"gid":0,"atime":1638437877,"mtime":1638437877,"ctime":1638437877,"atimensec":598277000,"mtimensec":598277000,"ctimensec":598277000,"nlink":3,"length":0},
+        "entries": {
+          "1-27-tf1": {
+            "attr": {"inode":27,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1638437852,"mtime":1638437852,"ctime":1638437877,"atimensec":28186000,"mtimensec":28186000,"ctimensec":28186000,"nlink":1,"length":11},
+            "chunks": [{"index":0,"slices":[{"chunkid":7,"pos":0,"size":11,"off":0,"len":11}]}]
+          },
+          "1-28-td1": {
+            "attr": {"inode":28,"type":"directory","mode":493,"uid":501,"gid":0,"atime":1638437856,"mtime":1638437879,"ctime":1638437879,"atimensec":59246000,"mtimensec":59246000,"ctimensec":59246000,"nlink":2,"length":0},
+            "entries": {
+            }
+          },
+          "28-29-tdf1": {
+            "attr": {"inode":29,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1638437873,"mtime":1638437873,"ctime":1638437879,"atimensec":449880000,"mtimensec":449880000,"ctimensec":449880000,"nlink":1,"length":10485760},
+            "chunks": [{"index":0,"slices":[{"chunkid":8,"pos":0,"size":10485760,"off":0,"len":10485760}]}]
+          }
+        }
       }
     }
   }
