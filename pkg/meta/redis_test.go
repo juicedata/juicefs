@@ -45,6 +45,7 @@ func TestRedisClient(t *testing.T) {
 
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
+	testTrash(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -507,7 +508,7 @@ func testMetaClient(t *testing.T, m Meta) {
 }
 
 func testStickyBit(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 	ctx := Background
 	var sticky, normal, inode Ino
 	var attr = &Attr{}
@@ -574,7 +575,7 @@ func testStickyBit(t *testing.T, m Meta) {
 }
 
 func testLocks(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -678,7 +679,7 @@ func testLocks(t *testing.T, m Meta) {
 }
 
 func testRemove(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
@@ -720,7 +721,7 @@ func testRemove(t *testing.T, m Meta) {
 }
 
 func testCaseIncensi(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -768,7 +769,7 @@ type compactor interface {
 }
 
 func testCompaction(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
@@ -866,7 +867,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 
 	ctx := Background
 	var inode Ino
@@ -905,7 +906,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 
 	ctx := Background
 	var inode Ino
@@ -978,7 +979,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 
 	ctx := Background
 	var iin, iout Ino
@@ -1028,7 +1029,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 }
 
 func testCloseSession(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, true)
+	_ = m.Init(Format{Name: "test"}, false)
 	if err := m.NewSession(); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
@@ -1091,6 +1092,83 @@ func testCloseSession(t *testing.T, m Meta) {
 	}
 	if len(s.Flocks) != 0 || len(s.Plocks) != 0 || len(s.Sustained) != 0 {
 		t.Fatalf("incorrect session: flock %d plock %d sustained %d", len(s.Flocks), len(s.Plocks), len(s.Sustained))
+	}
+}
+
+func testTrash(t *testing.T, m Meta) {
+	if err := m.Init(Format{Name: "test", TrashDays: 1}, false); err != nil {
+		t.Fatalf("init: %s", err)
+	}
+	ctx := Background
+	var inode, parent Ino
+	var attr = &Attr{}
+	if st := m.Create(ctx, 1, "f1", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f1: %s", st)
+	}
+	if st := m.Create(ctx, 1, "f2", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f2: %s", st)
+	}
+	if st := m.Mkdir(ctx, 1, "d", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	if st := m.Create(ctx, parent, "f", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create d/f: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != syscall.ENOTEMPTY {
+		t.Fatalf("rename f1 -> d: %s", st)
+	}
+	if st := m.Unlink(ctx, parent, "f"); st != 0 {
+		t.Fatalf("unlink d/f: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename f1 -> d: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f2", TrashInode, "td", 0, &inode, attr); st != syscall.EPERM {
+		t.Fatalf("rename f2 -> td: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f2", TrashInode+1, "td", 0, &inode, attr); st != syscall.EPERM {
+		t.Fatalf("rename f2 -> td: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f2", 1, "d", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename f2 -> d: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "d"); st != 0 {
+		t.Fatalf("unlink d: %s", st)
+	}
+	var entries []*Entry
+	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	entries = entries[:0]
+	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	}
+	if len(entries) != 6 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	ctx2 := NewContext(1000, 1, []uint32{1})
+	if st := m.Unlink(ctx2, TrashInode+1, "d"); st != syscall.EPERM {
+		t.Fatalf("unlink d: %s", st)
+	}
+	if st := m.Rmdir(ctx2, TrashInode+1, "d"); st != syscall.EPERM {
+		t.Fatalf("rmdir d: %s", st)
+	}
+	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
+		t.Fatalf("rename d -> f: %s", st)
+	}
+	switch bm := m.(type) {
+	case *redisMeta:
+		bm.doCleanupTrash(true)
+	case *dbMeta:
+		bm.doCleanupTrash(true)
+	case *kvMeta:
+		bm.doCleanupTrash(true)
+	}
+	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
+		t.Fatalf("getattr: %s", st)
 	}
 }
 

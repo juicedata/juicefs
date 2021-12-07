@@ -69,6 +69,18 @@ const (
 	SetAttrMtimeNow
 )
 
+const TrashInode = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
+const TrashName = ".trash"
+
+func isTrash(ino Ino) bool {
+	return ino >= TrashInode
+}
+
+type internalNode struct {
+	inode Ino
+	name  string
+}
+
 // MsgCallback is a callback for messages from meta service.
 type MsgCallback func(...interface{}) error
 

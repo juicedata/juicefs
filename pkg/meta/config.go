@@ -43,6 +43,7 @@ type Format struct {
 	Capacity    uint64
 	Inodes      uint64
 	EncryptKey  string `json:",omitempty"`
+	TrashDays   int
 }
 
 func (f *Format) RemoveSecret() {
