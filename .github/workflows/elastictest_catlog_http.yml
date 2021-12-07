@@ -48,10 +48,14 @@ jobs:
 
 
       - name: Esrally
-        run: |
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin' # See 'Supported distributions' for available options
+          java-version: '17'
+      - run: |
           sudo pip3 install esrally
           sudo apt-get install pbzip2
           sudo chmod  777 /data/jfs/
-          esrally race --track=geopoint --client-options="timeout:120" --distribution-version=6.7.0 --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv &
-          for i in {1..18}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done
+          esrally race --track=geopoint --client-options="timeout:120" --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv &
+          for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done
           cat /tmp/report.md

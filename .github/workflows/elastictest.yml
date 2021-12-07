@@ -63,3 +63,4 @@ jobs:
           esrally race --track=geopoint --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv &
           for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done
           sudo ls -l /data/jfs/
+          cat /tmp/report.md
