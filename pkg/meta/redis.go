@@ -476,7 +476,7 @@ func (r *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 		return syscall.ENOTSUP
 	}
 	if vals[1] == nil {
-		return syscall.ENOENT
+		return syscall.ENOTSUP
 	}
 	*returnedAttr, ok = vals[1].(string)
 	if !ok {
@@ -488,6 +488,7 @@ func (r *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 
 func (r *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	var foundIno Ino
+	var foundType uint8
 	var encodedAttr []byte
 	var err error
 	entryKey := r.entryKey(parent)
@@ -505,27 +506,22 @@ func (r *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, a
 			return st
 		}
 	}
-	if foundIno == 0 {
+	if foundIno == 0 || len(encodedAttr) == 0 {
 		var buf []byte
 		buf, err = r.rdb.HGet(ctx, entryKey, name).Bytes()
-		if err == nil {
-			_, foundIno = r.parseEntry(buf)
-		}
-		if err == redis.Nil && r.conf.CaseInsensi {
-			e := r.resolveCase(ctx, parent, name)
-			if e != nil {
-				foundIno = e.Inode
-				err = nil
-			}
-		}
 		if err != nil {
 			return errno(err)
 		}
+		foundType, foundIno = r.parseEntry(buf)
 		encodedAttr, err = r.rdb.Get(ctx, r.inodeKey(foundIno)).Bytes()
 	}
 
 	if err == nil {
 		r.parseAttr(encodedAttr, attr)
+	} else if err == redis.Nil { // corrupt entry
+		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
+		*attr = Attr{Typ: foundType}
+		err = nil
 	}
 	*inode = foundIno
 	return errno(err)

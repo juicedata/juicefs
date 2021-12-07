@@ -279,24 +279,18 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		*inode = TrashInode
 		return 0
 	}
-	attr.Full = false
-	err := m.en.doLookup(ctx, parent, name, inode, attr)
-	if err == syscall.ENOENT {
-		if m.conf.CaseInsensi {
-			if e := m.resolveCase(ctx, parent, name); e != nil {
-				*inode = e.Inode
-				return m.GetAttr(ctx, *inode, attr)
+	st := m.en.doLookup(ctx, parent, name, inode, attr)
+	if st == syscall.ENOENT && m.conf.CaseInsensi {
+		if e := m.resolveCase(ctx, parent, name); e != nil {
+			*inode = e.Inode
+			if st = m.GetAttr(ctx, *inode, attr); st == syscall.ENOENT {
+				logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, e.Name)
+				*attr = *e.Attr
+				st = 0
 			}
 		}
-		return syscall.ENOENT
 	}
-	if err != 0 {
-		return err
-	}
-	if attr.Full {
-		return 0
-	}
-	return m.GetAttr(ctx, *inode, attr)
+	return st
 }
 
 func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
