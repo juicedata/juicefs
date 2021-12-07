@@ -499,7 +499,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	if parent == 1 && name == TrashName {
+	if parent == 1 && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	defer timeit(time.Now())
@@ -514,7 +514,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == 1 && name == TrashName {
+	if parent == 1 && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	defer timeit(time.Now())
@@ -523,10 +523,10 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	if isTrash(parentDst) {
+	if parentSrc == 1 && nameSrc == TrashName || parentDst == 1 && nameDst == TrashName {
 		return syscall.EPERM
 	}
-	if parentSrc == 1 && nameSrc == TrashName || parentDst == 1 && nameDst == TrashName {
+	if isTrash(parentDst) || isTrash(parentSrc) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	switch flags {

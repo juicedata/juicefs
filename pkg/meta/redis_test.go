@@ -1123,6 +1123,12 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)
 	}
+	if st := m.Rename(ctx, 1, "f2", TrashInode, "td", 0, &inode, attr); st != syscall.EPERM {
+		t.Fatalf("rename f2 -> td: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f2", TrashInode+1, "td", 0, &inode, attr); st != syscall.EPERM {
+		t.Fatalf("rename f2 -> td: %s", st)
+	}
 	if st := m.Rename(ctx, 1, "f2", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> d: %s", st)
 	}
@@ -1143,6 +1149,16 @@ func testTrash(t *testing.T, m Meta) {
 	if len(entries) != 6 {
 		t.Fatalf("entries: %d", len(entries))
 	}
+	ctx2 := NewContext(1000, 1, []uint32{1})
+	if st := m.Unlink(ctx2, TrashInode+1, "d"); st != syscall.EPERM {
+		t.Fatalf("unlink d: %s", st)
+	}
+	if st := m.Rmdir(ctx2, TrashInode+1, "d"); st != syscall.EPERM {
+		t.Fatalf("rmdir d: %s", st)
+	}
+	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
+		t.Fatalf("rename d -> f: %s", st)
+	}
 	switch bm := m.(type) {
 	case *redisMeta:
 		bm.doCleanupTrash(true)
@@ -1151,7 +1167,7 @@ func testTrash(t *testing.T, m Meta) {
 	case *kvMeta:
 		bm.doCleanupTrash(true)
 	}
-	if st := m.GetAttr(ctx, TrashInode+1, attr); st != syscall.ENOENT {
+	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
 	}
 }
