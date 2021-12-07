@@ -20,10 +20,14 @@ import org.apache.commons.io.IOUtils;
 import org.apache.flink.runtime.fs.hdfs.HadoopRecoverableWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.MD5Hash;
+import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.UserGroupInformation;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -33,7 +37,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.*;
 
 public class JuiceFileSystemTest extends TestCase {
   FsShell shell;
@@ -173,6 +177,42 @@ public class JuiceFileSystemTest extends TestCase {
       fs2.create(new Path("/noperm/a/file"));
       throw new Exception("create should fail");
     } catch (IOException e) {
+    }
+  }
+
+  public void testCreateNonRecursive() throws Exception {
+    Path p = new Path("/NOT_EXIST_DIR");
+    p = new Path(p, "file");
+    try (FSDataOutputStream ou = fs.createNonRecursive(p, false, 1 << 20, (short) 1, 128 << 20, null);) {
+      fail("createNonRecursive in a not exit dir should fail");
+    } catch (IOException ignored) {
+    }
+  }
+
+  public void testTruncate() throws Exception {
+    Path p = new Path("/test_truncate");
+    fs.create(p).close();
+    fs.truncate(p, 1<<20);
+    assertEquals(1<<20, fs.getFileStatus(p).getLen());
+    fs.truncate(p, 1<<10);
+    assertEquals(1<<10, fs.getFileStatus(p).getLen());
+  }
+
+  public void testAccess() throws Exception {
+    Path p1 = new Path("/p1");
+    fs.setPermission(p1, new FsPermission((short) 0444));
+    fs.access(p1, FsAction.READ);
+    try {
+      fs.access(p1, FsAction.WRITE);
+      fail("The access call should have failed.");
+    } catch (AccessControlException e) {
+    }
+
+    Path badPath = new Path("/bad/bad");
+    try {
+      fs.access(badPath, FsAction.READ);
+      fail("The access call should have failed");
+    } catch (FileNotFoundException e) {
     }
   }
 
