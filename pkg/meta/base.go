@@ -672,11 +672,15 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 	m.Lock()
 	if st != 0 && st != syscall.EEXIST {
 		logger.Warnf("create subTrash %s: %s", name, st)
-		return st
+	} else if *trash <= TrashInode {
+		logger.Warnf("invalid trash inode: %d", *trash)
+		st = syscall.EBADF
+	} else {
+		m.subTrash.inode = *trash
+		m.subTrash.name = name
+		st = 0
 	}
-	m.subTrash.inode = *trash
-	m.subTrash.name = name
-	return 0
+	return st
 }
 
 func (m *baseMeta) cleanupTrash() {
@@ -704,24 +708,27 @@ func (m *baseMeta) cleanupTrash() {
 				logger.Warnf("setxattr inode %d key %s: %s", TrashInode, key, st)
 				continue
 			}
-			go m.doCleanupTrash()
+			go m.doCleanupTrash(false)
 		}
 	}
 }
 
-func (m *baseMeta) doCleanupTrash() {
+func (m *baseMeta) doCleanupTrash(force bool) {
 	logger.Debugf("cleanup trash: started")
 	ctx := Background
 	now := time.Now()
+	var st syscall.Errno
 	var entries []*Entry
-	if st := m.en.doReaddir(ctx, TrashInode, 0, &entries); st != 0 {
+	if st = m.en.doReaddir(ctx, TrashInode, 0, &entries); st != 0 {
 		logger.Warnf("readdir trash %d: %s", TrashInode, st)
 		return
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Inode < entries[j].Inode })
 	var count int
 	defer func() {
-		logger.Infof("cleanup trash: deleted %d files in %v", count, time.Since(now))
+		if count > 0 {
+			logger.Infof("cleanup trash: deleted %d files in %v", count, time.Since(now))
+		}
 	}()
 
 	edge := now.Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
@@ -731,18 +738,23 @@ func (m *baseMeta) doCleanupTrash() {
 			logger.Warnf("bad entry as a subTrash: %s", e.Name)
 			continue
 		}
-		if ts.Before(edge) {
+		if ts.Before(edge) || force {
 			var subEntries []*Entry
-			if st := m.en.doReaddir(ctx, e.Inode, 0, &subEntries); st != 0 {
+			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries); st != 0 {
 				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
 				continue
 			}
 			rmdir := true
 			for _, se := range subEntries {
-				if st := m.en.doUnlink(ctx, e.Inode, string(se.Name)); st == 0 {
+				if se.Attr.Typ == TypeDirectory {
+					st = m.en.doRmdir(ctx, e.Inode, string(se.Name))
+				} else {
+					st = m.en.doUnlink(ctx, e.Inode, string(se.Name))
+				}
+				if st == 0 {
 					count++
 				} else {
-					logger.Warnf("unlink trash file %s/%s: %s", e.Name, se.Name, st)
+					logger.Warnf("delete from trash %s/%s: %s", e.Name, se.Name, st)
 					rmdir = false
 					continue
 				}
@@ -751,7 +763,7 @@ func (m *baseMeta) doCleanupTrash() {
 				}
 			}
 			if rmdir {
-				if st := m.en.doRmdir(ctx, TrashInode, string(e.Name)); st != 0 {
+				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name)); st != 0 {
 					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
 				}
 			}

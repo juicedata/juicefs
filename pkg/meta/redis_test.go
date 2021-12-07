@@ -1143,6 +1143,17 @@ func testTrash(t *testing.T, m Meta) {
 	if len(entries) != 6 {
 		t.Fatalf("entries: %d", len(entries))
 	}
+	switch bm := m.(type) {
+	case *redisMeta:
+		bm.doCleanupTrash(true)
+	case *dbMeta:
+		bm.doCleanupTrash(true)
+	case *kvMeta:
+		bm.doCleanupTrash(true)
+	}
+	if st := m.GetAttr(ctx, TrashInode+1, attr); st != syscall.ENOENT {
+		t.Fatalf("getattr: %s", st)
+	}
 }
 
 func testOpenCache(t *testing.T, m Meta) {
