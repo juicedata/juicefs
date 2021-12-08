@@ -46,8 +46,6 @@ jobs:
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs &
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
 
       - name: Esrally
         uses: actions/setup-java@v2
