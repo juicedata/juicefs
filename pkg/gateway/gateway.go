@@ -47,20 +47,21 @@ const (
 var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
-func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore) (minio.ObjectLayer, error) {
+func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, multiBucket bool) (minio.ObjectLayer, error) {
 	jfs, err := fs.NewFileSystem(conf, m, store)
 	if err != nil {
 		return nil, fmt.Errorf("Initialize failed: %s", err)
 	}
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	return &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30)}, nil
+	return &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), multiBucket: multiBucket}, nil
 }
 
 type jfsObjects struct {
 	minio.GatewayUnsupported
-	conf     *vfs.Config
-	fs       *fs.FileSystem
-	listPool *minio.TreeWalkPool
+	conf        *vfs.Config
+	fs          *fs.FileSystem
+	listPool    *minio.TreeWalkPool
+	multiBucket bool
 }
 
 func (n *jfsObjects) IsCompressionSupported() bool {
@@ -142,7 +143,7 @@ func jfsToObjectErr(ctx context.Context, err error, params ...string) error {
 
 // isValidBucketName verifies whether a bucket name is valid.
 func (n *jfsObjects) isValidBucketName(bucket string) bool {
-	if n.conf.Format.Name != "" && bucket != n.conf.Format.Name {
+	if !n.multiBucket && bucket != n.conf.Format.Name {
 		return false
 	}
 	return s3utils.CheckValidBucketNameStrict(bucket) == nil
@@ -171,7 +172,7 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	if !n.isValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-	if n.conf.Format.Name != "" {
+	if !n.multiBucket {
 		return minio.BucketNotEmpty{Bucket: bucket}
 	}
 	eno := n.fs.Delete(mctx, n.path(bucket))
@@ -182,7 +183,7 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 	if !n.isValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-	if n.conf.Format.Name != "" {
+	if !n.multiBucket {
 		return nil
 	}
 	eno := n.fs.Mkdir(mctx, n.path(bucket), 0755)
@@ -212,7 +213,7 @@ func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
 }
 
 func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
-	if n.conf.Format.Name != "" {
+	if !n.multiBucket {
 		fi, eno := n.fs.Stat(mctx, "/")
 		if eno != 0 {
 			return nil, jfsToObjectErr(ctx, eno)
@@ -233,7 +234,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 		return nil, jfsToObjectErr(ctx, eno)
 	}
 
-	for _, entry := range entries[2:] {
+	for _, entry := range entries {
 		// Ignore all reserved bucket names and invalid bucket names.
 		if isReservedOrInvalidBucket(entry.Name(), false) || !n.isValidBucketName(entry.Name()) {
 			continue
@@ -254,7 +255,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 }
 
 func (n *jfsObjects) isLeafDir(bucket, leafPath string) bool {
-	return n.isObjectDir(context.Background(), bucket, leafPath)
+	return !n.isObjectDir(context.Background(), bucket, leafPath)
 }
 
 func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
@@ -301,30 +302,103 @@ func (n *jfsObjects) checkBucket(ctx context.Context, bucket string) error {
 	return nil
 }
 
+func fileInfoToObjectInfo(bucket string, entry string, fi os.FileInfo) minio.ObjectInfo {
+	return minio.ObjectInfo{
+		Bucket:  bucket,
+		Name:    entry,
+		ModTime: fi.ModTime(),
+		Size:    fi.Size(),
+		IsDir:   fi.IsDir(),
+		AccTime: fi.ModTime(),
+	}
+}
+
 // ListObjects lists all blobs in JFS bucket filtered by prefix.
 func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
-	if err := n.checkBucket(ctx, bucket); err != nil {
-		return loi, err
-	}
-	getObjectInfo := func(ctx context.Context, bucket, object string) (obj minio.ObjectInfo, err error) {
-		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
-		if eno == 0 {
-			obj = minio.ObjectInfo{
-				Bucket:  bucket,
-				Name:    object,
-				ModTime: fi.ModTime(),
-				Size:    fi.Size(),
-				IsDir:   fi.IsDir(),
-				AccTime: fi.ModTime(),
-			}
-		}
-		return obj, jfsToObjectErr(ctx, eno, bucket, object)
+
+	fileInfos := make(map[string]os.FileInfo)
+	targetPath := n.path(bucket, prefix)
+
+	var targetFileInfo os.FileInfo
+
+	if targetFileInfo, err = n.populateDirectoryListing(targetPath, fileInfos); err != nil {
+		return loi, jfsToObjectErr(ctx, err, bucket)
 	}
 
-	if maxKeys == 0 {
-		maxKeys = -1 // list as many objects as possible
+	// If the user is trying to list a single file, bypass the entire directory-walking code below
+	// and just return the single file's information.
+	if !targetFileInfo.IsDir() {
+		return minio.ListObjectsInfo{
+			IsTruncated: false,
+			NextMarker:  "",
+			Objects: []minio.ObjectInfo{
+				fileInfoToObjectInfo(bucket, prefix, targetFileInfo),
+			},
+			Prefixes: []string{},
+		}, nil
 	}
+
+	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
+		filePath := path.Clean(n.path(bucket, entry))
+		fi, ok := fileInfos[filePath]
+
+		// If the file info is not known, this may be a recursive listing and filePath is a
+		// child of a sub-directory. In this case, obtain that sub-directory's listing.
+		if !ok {
+			parentPath := path.Dir(filePath)
+
+			if _, err := n.populateDirectoryListing(parentPath, fileInfos); err != nil {
+				return minio.ObjectInfo{}, jfsToObjectErr(ctx, err, bucket)
+			}
+
+			fi, ok = fileInfos[filePath]
+
+			if !ok {
+				err = fmt.Errorf("could not get FileInfo for path '%s'", filePath)
+				return minio.ObjectInfo{}, jfsToObjectErr(ctx, err, bucket, entry)
+			}
+		}
+
+		objectInfo := fileInfoToObjectInfo(bucket, entry, fi)
+
+		delete(fileInfos, filePath)
+
+		return objectInfo, nil
+	}
+
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
+
+}
+
+// Lists a path's direct, first-level entries and populates them in the `fileInfos` cache which maps
+// a path entry to an `os.FileInfo`. It also saves the listed path's `os.FileInfo` in the cache.
+func (n *jfsObjects) populateDirectoryListing(filePath string, fileInfos map[string]os.FileInfo) (os.FileInfo, error) {
+	f, errno := n.fs.Open(mctx, filePath, 0)
+	if errno != 0 {
+		return nil, errno
+	}
+	key := path.Clean(filePath)
+
+	fi, errno := n.fs.Stat(mctx, filePath)
+	if errno != 0 {
+		return nil, errno
+	}
+	if !fi.IsDir() {
+		return fi, nil
+	}
+	fileInfos[key] = fi
+
+	infos, errno := f.Readdir(mctx, 0)
+	if errno != 0 {
+		return nil, errno
+	}
+
+	for _, fileInfo := range infos {
+		filePath := minio.PathJoin(filePath, fileInfo.Name())
+		fileInfos[filePath] = fileInfo
+	}
+
+	return fi, nil
 }
 
 // ListObjectsV2 lists all blobs in JFS bucket filtered by prefix

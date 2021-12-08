@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: xattrs fsx
+all: xattrs fsx s3test
 
 
 xattrs:
@@ -22,3 +22,6 @@ secfs.test:
 	git clone https://github.com/billziss-gh/secfs.test.git
 	make -C secfs.test >secfs.test-build-integration.log 2>&1
 
+s3test:
+	pip install awscli --upgrade
+	bash s3gateway_test.sh
