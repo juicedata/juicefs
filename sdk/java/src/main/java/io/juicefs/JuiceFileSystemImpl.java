@@ -1267,6 +1267,15 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
     statistics.incrementWriteOps(1);
+    String srcStr = makeQualified(src).toUri().getPath();
+    String dstStr = makeQualified(dst).toUri().getPath();
+    if (src.equals(dst)) {
+      FileStatus st = getFileStatus(src);
+      return st.isFile();
+    }
+    if (dstStr.startsWith(srcStr) && (dstStr.charAt(srcStr.length()) == Path.SEPARATOR_CHAR)) {
+      return false;
+    }
     int r = lib.jfs_rename(Thread.currentThread().getId(), handle, normalizePath(src), normalizePath(dst));
     if (r == EEXIST) {
       try {
@@ -1443,7 +1452,11 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
     statistics.incrementReadOps(1);
-    return getFileStatusInternal(f, true);
+    try {
+      return getFileStatusInternal(f, true);
+    } catch (ParentNotDirectoryException e) {
+      throw new FileNotFoundException(f.toString());
+    }
   }
 
   private FileStatus getFileStatusInternal(final Path f, boolean dereference) throws IOException {

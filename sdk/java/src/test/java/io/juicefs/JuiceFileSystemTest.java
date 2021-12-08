@@ -26,18 +26,16 @@ import org.apache.hadoop.io.MD5Hash;
 import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.UserGroupInformation;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
-import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
 
 public class JuiceFileSystemTest extends TestCase {
   FsShell shell;
@@ -192,10 +190,10 @@ public class JuiceFileSystemTest extends TestCase {
   public void testTruncate() throws Exception {
     Path p = new Path("/test_truncate");
     fs.create(p).close();
-    fs.truncate(p, 1<<20);
-    assertEquals(1<<20, fs.getFileStatus(p).getLen());
-    fs.truncate(p, 1<<10);
-    assertEquals(1<<10, fs.getFileStatus(p).getLen());
+    fs.truncate(p, 1 << 20);
+    assertEquals(1 << 20, fs.getFileStatus(p).getLen());
+    fs.truncate(p, 1 << 10);
+    assertEquals(1 << 10, fs.getFileStatus(p).getLen());
   }
 
   public void testAccess() throws Exception {
@@ -481,7 +479,7 @@ public class JuiceFileSystemTest extends TestCase {
     FSDataOutputStream sou2 = fs.create(src2);
     sou2.write("hello".getBytes());
     sou2.close();
-    fs.concat(trg, new Path[]{src1, src2} );
+    fs.concat(trg, new Path[]{src1, src2});
     FSDataInputStream in = fs.open(trg);
     assertEquals("hellohellohello", IOUtils.toString(in));
     in.close();
@@ -517,7 +515,7 @@ public class JuiceFileSystemTest extends TestCase {
     ou.close();
   }
 
-  public void testUsersAndGroups() throws Exception{
+  public void testUsersAndGroups() throws Exception {
     Path users1 = new Path("/tmp/users1");
     Path groups1 = new Path("/tmp/groups1");
     Path users2 = new Path("/tmp/users2");
