@@ -1122,7 +1122,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       }
       if (fd == EEXIST) {
         if (!overwrite || isDirectory(f)) {
-          throw new FileAlreadyExistsException("File already exists: " + f);
+          throw new FileAlreadyExistsException("Path already exists: " + f);
         }
         delete(f, false);
         continue;
