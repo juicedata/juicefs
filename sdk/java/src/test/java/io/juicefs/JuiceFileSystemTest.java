@@ -198,24 +198,23 @@ public class JuiceFileSystemTest extends TestCase {
 
   public void testAccess() throws Exception {
     Path p1 = new Path("/test_access");
-    fs.create(p1).close();
-    fs.setPermission(p1, new FsPermission((short) 0444));
-    fs.access(p1, FsAction.READ);
-    System.out.println("super user sssssssssssssssssssssssssssssssssssssssssssss " + fs.getConf().get("juicefs.superuser"));
-    System.out.println("ugiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii " + UserGroupInformation.getCurrentUser().getShortUserName() );
-    System.out.println("xxxxxxxxxxxxxx " + fs.getFileStatus(p1));
+    FileSystem newFs = createNewFs(cfg, "user1", new String[]{"group1"});
+    newFs.create(p1).close();
+    newFs.setPermission(p1, new FsPermission((short) 0444));
+    newFs.access(p1, FsAction.READ);
     try {
-      fs.access(p1, FsAction.WRITE);
+      newFs.access(p1, FsAction.WRITE);
       fail("The access call should have failed.");
     } catch (AccessControlException e) {
     }
 
     Path badPath = new Path("/bad/bad");
     try {
-      fs.access(badPath, FsAction.READ);
+      newFs.access(badPath, FsAction.READ);
       fail("The access call should have failed");
     } catch (FileNotFoundException e) {
     }
+    newFs.close();
   }
 
   public void testSetPermission() throws Exception {
@@ -518,7 +517,11 @@ public class JuiceFileSystemTest extends TestCase {
     ou.close();
   }
 
-  public FileSystem createNewFs(Configuration conf) throws IOException {
+  public FileSystem createNewFs(Configuration conf, String user, String[] group) throws IOException, InterruptedException {
+    if (user != null && group != null) {
+      UserGroupInformation root = UserGroupInformation.createUserForTesting(user, group);
+      return root.doAs((PrivilegedExceptionAction<FileSystem>) () -> FileSystem.newInstance(FileSystem.getDefaultUri(conf), conf));
+    }
     return FileSystem.newInstance(FileSystem.getDefaultUri(conf), conf);
   }
 
@@ -538,7 +541,7 @@ public class JuiceFileSystemTest extends TestCase {
     conf.set("juicefs.groups", groups1.toUri().getPath());
     conf.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
 
-    FileSystem newFs = createNewFs(conf);
+    FileSystem newFs = createNewFs(conf, null, null);
     Path p = new Path("/test_user_group_file");
     newFs.create(p).close();
     newFs.setOwner(p, "user1", "group1");
@@ -546,7 +549,7 @@ public class JuiceFileSystemTest extends TestCase {
 
     conf.set("juicefs.users", users2.toUri().getPath());
     conf.set("juicefs.groups", groups2.toUri().getPath());
-    newFs = createNewFs(conf);
+    newFs = createNewFs(conf, null, null);
     FileStatus fileStatus = newFs.getFileStatus(p);
     assertEquals("user2", fileStatus.getOwner());
     assertEquals("group2", fileStatus.getGroup());

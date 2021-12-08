@@ -1356,12 +1356,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     String user = buf.getString(28);
     String group = buf.getString(28 + user.length() + 1);
     assert (30 + user.length() + group.length() == size);
-    if (readlink && ((mode >> 27) & 1) == 1) {
-      return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group,
-              getLinkTarget(p), p);
-    } else {
-      return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group, p);
-    }
+    return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group, p);
   }
 
   @Override
@@ -1394,9 +1389,8 @@ public class JuiceFileSystemImpl extends FileSystem {
           System.arraycopy(results, 0, rs, 0, j);
           results = rs;
         }
-        // resolve symlink to target
         Path p = makeQualified(new Path(f, new String(name)));
-        FileStatus st = newFileStatus(p, buf.slice(offset + 1), size, true);
+        FileStatus st = newFileStatus(p, buf.slice(offset + 1), size, false);
         results[j] = st;
         offset += 1 + size;
         j++;

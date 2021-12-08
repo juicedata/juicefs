@@ -56,8 +56,4 @@ public class TestJuiceFileSystemContract extends FileSystemContractBaseTest {
       newFs.close();
     }
   }
-
-  @Override
-  public void testListStatusRootDir() throws Throwable {
-  }
 }
