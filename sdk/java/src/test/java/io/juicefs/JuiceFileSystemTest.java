@@ -515,34 +515,38 @@ public class JuiceFileSystemTest extends TestCase {
     ou.close();
   }
 
+  public FileSystem createNewFs(Configuration conf) throws IOException {
+    return FileSystem.newInstance(FileSystem.getDefaultUri(conf), conf);
+  }
+
   public void testUsersAndGroups() throws Exception {
     Path users1 = new Path("/tmp/users1");
     Path groups1 = new Path("/tmp/groups1");
     Path users2 = new Path("/tmp/users2");
     Path groups2 = new Path("/tmp/groups2");
+
     writeFile(fs, users1, "user1:2001\n");
     writeFile(fs, groups1, "group1:3001:user1\n");
     writeFile(fs, users2, "user2:2001\n");
     writeFile(fs, groups2, "group2:3001:user2\n");
-    fs.close();
 
-    cfg = new Configuration();
-    cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
-    cfg.set("juicefs.users", users1.toUri().getPath());
-    cfg.set("juicefs.groups", groups1.toUri().getPath());
-    cfg.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
+    Configuration conf = new Configuration(cfg);
+    conf.set("juicefs.users", users1.toUri().getPath());
+    conf.set("juicefs.groups", groups1.toUri().getPath());
+    conf.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
 
-    fs = FileSystem.get(cfg);
+    FileSystem newFs = createNewFs(conf);
     Path p = new Path("/test_user_group_file");
-    fs.create(p).close();
-    fs.setOwner(p, "user1", "group1");
-    fs.close();
+    newFs.create(p).close();
+    newFs.setOwner(p, "user1", "group1");
+    newFs.close();
 
-    cfg.set("juicefs.users", users2.toUri().getPath());
-    cfg.set("juicefs.groups", groups2.toUri().getPath());
-    fs = FileSystem.get(cfg);
-    FileStatus fileStatus = fs.getFileStatus(p);
+    conf.set("juicefs.users", users2.toUri().getPath());
+    conf.set("juicefs.groups", groups2.toUri().getPath());
+    newFs = createNewFs(conf);
+    FileStatus fileStatus = newFs.getFileStatus(p);
     assertEquals("user2", fileStatus.getOwner());
     assertEquals("group2", fileStatus.getGroup());
+    newFs.close();
   }
 }
