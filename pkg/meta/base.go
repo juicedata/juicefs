@@ -514,7 +514,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == 1 && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
+	if parent == 1 && name == TrashName || parent == TrashInode || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	defer timeit(time.Now())
