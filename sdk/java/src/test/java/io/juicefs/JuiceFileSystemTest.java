@@ -201,6 +201,8 @@ public class JuiceFileSystemTest extends TestCase {
     fs.create(p1).close();
     fs.setPermission(p1, new FsPermission((short) 0444));
     fs.access(p1, FsAction.READ);
+    System.out.println("super user sssssssssssssssssssssssssssssssssssssssssssss " + fs.getConf().get("juicefs.superuser"));
+    System.out.println("ugiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii " + UserGroupInformation.getCurrentUser().getShortUserName() );
     try {
       fs.access(p1, FsAction.WRITE);
       fail("The access call should have failed.");

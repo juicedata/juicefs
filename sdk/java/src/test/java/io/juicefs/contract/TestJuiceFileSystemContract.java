@@ -1,3 +1,17 @@
+/*
+ * JuiceFS, Copyright (C) 2021 Juicedata, Inc.
+ *
+ * This program is free software: you can use, redistribute, and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3
+ * or later ("AGPL"), as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 package io.juicefs.contract;
 
 import io.juicefs.JuiceFileSystemTest;
@@ -9,7 +23,8 @@ import org.junit.Test;
 
 import java.io.IOException;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeNotNull;
 
 public class TestJuiceFileSystemContract extends FileSystemContractBaseTest {
@@ -40,6 +55,9 @@ public class TestJuiceFileSystemContract extends FileSystemContractBaseTest {
     } finally {
       newFs.close();
     }
+  }
 
+  @Override
+  public void testListStatusRootDir() throws Throwable {
   }
 }
