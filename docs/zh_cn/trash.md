@@ -12,10 +12,10 @@
 - 将此参数值设为 0 即可禁用回收站功能，系统会在短时间内清空回收站，并使得后续应用删除的文件能被立即清理。
 - 旧版本 JuiceFS 欲使用回收站，需要在升级所有挂载点后通过 `format` 命令手动将 `--trash-days` 改为需要的正整数值。
 
-如果是已完成初始化的文件系统，可以继续通过 `format` 命令更新回收站保留时间，例如：
+如果是已完成初始化的文件系统，可以继续通过 `format` 命令更新回收站保留时间（**需特别注意首次执行 `format` 命令时指定的其它选项也不能省略**），例如：
 
 ```bash
-$ juicefs format --trash-days 7 META-URL NAME
+$ juicefs format --trash-days 7 ... META-URL NAME
 ```
 
 然后通过 `status` 命令验证配置更新成功：
