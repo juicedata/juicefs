@@ -440,13 +440,18 @@ func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
 	var v int64
 	err := m.txn(func(s *xorm.Session) error {
 		var c = counter{Name: name}
-		_, err := s.Get(&c)
+		ok, err := s.Get(&c)
 		if err != nil {
 			return err
 		}
 		v = c.Value + batch
 		if batch > 0 {
-			_, err = s.Cols("value").Update(&counter{Value: v}, &counter{Name: name})
+			c.Value = v
+			if ok {
+				_, err = s.Cols("value").Update(&c, &counter{Name: name})
+			} else {
+				err = mustInsert(s, &c)
+			}
 		}
 		return err
 	})
