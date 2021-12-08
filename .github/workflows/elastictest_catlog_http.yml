@@ -57,5 +57,5 @@ jobs:
           sudo apt-get install pbzip2
           sudo chmod  777 /data/jfs/
           esrally race --track=geopoint --client-options="timeout:120" --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv &
-          for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;curl -XGET 'http://localhost:39200';done
+          for i in {1..5}; do sleep 20m;echo "num $i";cat ~/.rally/logs/rally.log;curl -XGET 'http://localhost:39200';done
           cat /tmp/report.md
