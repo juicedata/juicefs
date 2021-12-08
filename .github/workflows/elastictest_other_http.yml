@@ -46,6 +46,8 @@ jobs:
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs &
 
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
 
       - name: Esrally
         uses: actions/setup-java@v2
@@ -56,7 +58,6 @@ jobs:
           sudo pip3 install esrally
           sudo apt-get install pbzip2
           sudo chmod  777 /data/jfs/
-          esrally race --track=geopoint --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv &
-          for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done
+          esrally race --track=geopoint --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv
           cat /proc/meminfo
           cat /tmp/report.md
