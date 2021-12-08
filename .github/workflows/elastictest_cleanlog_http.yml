@@ -58,5 +58,6 @@ jobs:
           sudo pip3 install esrally
           sudo apt-get install pbzip2
           sudo chmod  777 /data/jfs/
-          esrally race --track=geopoint --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md
+          esrally race --track=geopoint --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md &
+          for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;done
           cat /tmp/report.md
