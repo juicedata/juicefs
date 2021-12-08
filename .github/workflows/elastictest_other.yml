@@ -57,4 +57,5 @@ jobs:
           sudo apt-get install pbzip2
           sudo chmod  777 /data/jfs/
           esrally race --track=geopoint --car-params="data_paths:'/data/jfs'" --report-file=/tmp/report.md --report-format=csv
+          cat /proc/meminfo
           cat /tmp/report.md
