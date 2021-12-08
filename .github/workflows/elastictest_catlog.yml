@@ -47,7 +47,6 @@ jobs:
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs &
 
 
-
       - name: Esrally
         uses: actions/setup-java@v2
         with:
