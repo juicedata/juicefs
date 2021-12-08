@@ -199,7 +199,8 @@ public class JuiceFileSystemTest extends TestCase {
   }
 
   public void testAccess() throws Exception {
-    Path p1 = new Path("/p1");
+    Path p1 = new Path("/test_access");
+    fs.create(p1).close();
     fs.setPermission(p1, new FsPermission((short) 0444));
     fs.access(p1, FsAction.READ);
     try {
