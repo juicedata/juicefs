@@ -18,9 +18,3 @@ JuiceFS 作为一个文件系统也不例外，它的强一致性、高性能等
 使用 JuiceFS，文件最终会被拆分成 Chunks、Slices 和 Blocks 存储在对象存储。因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 文件系统高性能运作的秘诀！
 
 ![How JuiceFS stores your files](../images/how-juicefs-stores-files-new.png)
-
-## 你可能还需要
-
-现在，你可以参照 [快速上手指南](../getting-started/quick_start_guide.md) 立即开始使用 JuiceFS！
-
-你还可以进一步了解 [JuiceFS 的技术架构](../introduction/architecture.md)
