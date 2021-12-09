@@ -34,6 +34,7 @@ type DumpedCounters struct {
 	NextInode         int64 `json:"nextInodes"`
 	NextChunk         int64 `json:"nextChunk"`
 	NextSession       int64 `json:"nextSession"`
+	NextTrash         int64 `json:"nextTrash"`
 	NextCleanupSlices int64 `json:"nextCleanupSlices"` // deprecated, always 0
 }
 
@@ -168,10 +169,13 @@ type DumpedMeta struct {
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile
 	FSTree    *DumpedEntry `json:",omitempty"`
+	Trash     *DumpedEntry `json:",omitempty"`
 }
 
 func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
-	dm.FSTree = nil
+	if dm.FSTree != nil || dm.Trash != nil {
+		return nil, fmt.Errorf("invalid dumped meta")
+	}
 	data, err := json.MarshalIndent(dm, "", jsonIndent)
 	if err != nil {
 		return nil, err
@@ -252,7 +256,7 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress fun
 	if typ == TypeFile {
 		e.Attr.Nlink = 1 // reset
 	} else if typ == TypeDirectory {
-		if inode == 1 { // root inode
+		if inode == 1 || inode == TrashInode { // root or trash inode
 			e.Parent = 1
 		}
 		e.Attr.Nlink = 2

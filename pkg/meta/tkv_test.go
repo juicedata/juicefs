@@ -32,6 +32,7 @@ func TestMemKVClient(t *testing.T) {
 
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
+	testTrash(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -56,6 +57,7 @@ func TestTiKVClient(t *testing.T) {
 
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
+	testTrash(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)

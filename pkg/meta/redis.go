@@ -151,7 +151,8 @@ func (r *redisMeta) Name() string {
 }
 
 func (r *redisMeta) Init(format Format, force bool) error {
-	body, err := r.rdb.Get(Background, "setting").Bytes()
+	ctx := Background
+	body, err := r.rdb.Get(ctx, "setting").Bytes()
 	if err != nil && err != redis.Nil {
 		return err
 	}
@@ -171,6 +172,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
+			old.TrashDays = format.TrashDays
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""
@@ -183,8 +185,23 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	if err != nil {
 		logger.Fatalf("json: %s", err)
 	}
-	err = r.rdb.Set(Background, "setting", data, 0).Err()
-	if err != nil {
+	ts := time.Now().Unix()
+	attr := &Attr{
+		Typ:    TypeDirectory,
+		Atime:  ts,
+		Mtime:  ts,
+		Ctime:  ts,
+		Nlink:  2,
+		Length: 4 << 10,
+		Parent: 1,
+	}
+	if format.TrashDays > 0 {
+		attr.Mode = 0555
+		if err = r.rdb.SetNX(ctx, r.inodeKey(TrashInode), r.marshal(attr), 0).Err(); err != nil {
+			return err
+		}
+	}
+	if err = r.rdb.Set(ctx, "setting", data, 0).Err(); err != nil {
 		return err
 	}
 	r.fmt = format
@@ -193,17 +210,8 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	}
 
 	// root inode
-	var attr Attr
-	attr.Typ = TypeDirectory
 	attr.Mode = 0777
-	ts := time.Now().Unix()
-	attr.Atime = ts
-	attr.Mtime = ts
-	attr.Ctime = ts
-	attr.Nlink = 2
-	attr.Length = 4 << 10
-	attr.Parent = 1
-	return r.rdb.Set(Background, r.inodeKey(1), r.marshal(&attr), 0).Err()
+	return r.rdb.Set(ctx, r.inodeKey(1), r.marshal(attr), 0).Err()
 }
 
 func (r *redisMeta) Load() (*Format, error) {
@@ -255,6 +263,7 @@ func (r *redisMeta) NewSession() error {
 	go r.refreshSession()
 	go r.cleanupDeletedFiles()
 	go r.cleanupSlices()
+	go r.cleanupTrash()
 	return nil
 }
 
@@ -412,70 +421,107 @@ func (r *redisMeta) parseEntry(buf []byte) (uint8, Ino) {
 	return buf[0], Ino(binary.BigEndian.Uint64(buf[1:]))
 }
 
+func (r *redisMeta) handleLuaResult(op string, res interface{}, err error, returnedIno *int64, returnedAttr *string) syscall.Errno {
+	if err != nil {
+		msg := err.Error()
+		if strings.Contains(msg, "NOSCRIPT") {
+			var err2 error
+			switch op {
+			case "lookup":
+				r.shaLookup, err2 = r.rdb.ScriptLoad(Background, scriptLookup).Result()
+			case "resolve":
+				r.shaResolve, err2 = r.rdb.ScriptLoad(Background, scriptResolve).Result()
+			default:
+				return syscall.ENOTSUP
+			}
+			if err2 == nil {
+				logger.Infof("loaded script succeed for %s", op)
+				return syscall.EAGAIN
+			} else {
+				logger.Warnf("load script %s: %s", op, err2)
+				return syscall.ENOTSUP
+			}
+		}
+
+		fields := strings.Fields(msg)
+		lastError := fields[len(fields)-1]
+		switch lastError {
+		case "ENOENT":
+			return syscall.ENOENT
+		case "EACCESS":
+			return syscall.EACCES
+		case "ENOTDIR":
+			return syscall.ENOTDIR
+		case "ENOTSUP":
+			return syscall.ENOTSUP
+		default:
+			logger.Warnf("unexpected error for %s: %s", op, msg)
+			switch op {
+			case "lookup":
+				r.shaLookup = ""
+			case "resolve":
+				r.shaResolve = ""
+			}
+			return syscall.ENOTSUP
+		}
+	}
+	vals, ok := res.([]interface{})
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	*returnedIno, ok = vals[0].(int64)
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	if vals[1] == nil {
+		return syscall.ENOTSUP
+	}
+	*returnedAttr, ok = vals[1].(string)
+	if !ok {
+		logger.Errorf("invalid script result: %v", res)
+		return syscall.ENOTSUP
+	}
+	return 0
+}
+
 func (r *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	var foundIno Ino
+	var foundType uint8
 	var encodedAttr []byte
 	var err error
 	entryKey := r.entryKey(parent)
 	if len(r.shaLookup) > 0 && attr != nil && !r.conf.CaseInsensi {
 		var res interface{}
+		var returnedIno int64
+		var returnedAttr string
 		res, err = r.rdb.EvalSha(ctx, r.shaLookup, []string{entryKey, name}).Result()
-		if err != nil {
-			if strings.Contains(err.Error(), "NOSCRIPT") {
-				var err2 error
-				r.shaLookup, err2 = r.rdb.ScriptLoad(Background, scriptLookup).Result()
-				if err2 != nil {
-					logger.Warnf("load scriptLookup: %s", err2)
-				} else {
-					logger.Info("loaded script for lookup")
-				}
-				return r.Lookup(ctx, parent, name, inode, attr)
-			}
-			if strings.Contains(err.Error(), "Error running script") {
-				logger.Warnf("eval lookup: %s", err)
-				r.shaLookup = ""
-				return r.Lookup(ctx, parent, name, inode, attr)
-			}
-			return errno(err)
+		if st := r.handleLuaResult("lookup", res, err, &returnedIno, &returnedAttr); st == 0 {
+			foundIno = Ino(returnedIno)
+			encodedAttr = []byte(returnedAttr)
+		} else if st == syscall.EAGAIN {
+			return r.doLookup(ctx, parent, name, inode, attr)
+		} else if st != syscall.ENOTSUP {
+			return st
 		}
-		vals, ok := res.([]interface{})
-		if !ok {
-			return errno(fmt.Errorf("invalid script result: %v", res))
-		}
-		returnedIno, ok := vals[0].(int64)
-		if !ok {
-			return errno(fmt.Errorf("invalid script result: %v", res))
-		}
-		returnedAttr, ok := vals[1].(string)
-		if !ok {
-			return errno(fmt.Errorf("invalid script result: %v", res))
-		}
-		if returnedAttr == "" {
-			return syscall.ENOENT
-		}
-		foundIno = Ino(returnedIno)
-		encodedAttr = []byte(returnedAttr)
-	} else {
+	}
+	if foundIno == 0 || len(encodedAttr) == 0 {
 		var buf []byte
 		buf, err = r.rdb.HGet(ctx, entryKey, name).Bytes()
-		if err == nil {
-			_, foundIno = r.parseEntry(buf)
-		}
-		if err == redis.Nil && r.conf.CaseInsensi {
-			e := r.resolveCase(ctx, parent, name)
-			if e != nil {
-				foundIno = e.Inode
-				err = nil
-			}
-		}
 		if err != nil {
 			return errno(err)
 		}
+		foundType, foundIno = r.parseEntry(buf)
 		encodedAttr, err = r.rdb.Get(ctx, r.inodeKey(foundIno)).Bytes()
 	}
 
 	if err == nil {
 		r.parseAttr(encodedAttr, attr)
+	} else if err == redis.Nil { // corrupt entry
+		logger.Warnf("no attribute for inode %d (%d, %s)", foundIno, parent, name)
+		*attr = Attr{Typ: foundType}
+		err = nil
 	}
 	*inode = foundIno
 	return errno(err)
@@ -491,47 +537,18 @@ func (r *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 		strconv.FormatUint(uint64(ctx.Uid()), 10),
 		strconv.FormatUint(uint64(ctx.Gid()), 10)}
 	res, err := r.rdb.EvalSha(ctx, r.shaResolve, args).Result()
-	if err != nil {
-		fields := strings.Fields(err.Error())
-		lastError := fields[len(fields)-1]
-		switch lastError {
-		case "ENOENT":
-			return syscall.ENOENT
-		case "EACCESS":
-			return syscall.EACCES
-		case "ENOTDIR":
-			return syscall.ENOTDIR
-		case "ENOTSUP":
-			return syscall.ENOTSUP
-		default:
-			logger.Warnf("resolve %d %s: %s", parent, path, err)
-			r.shaResolve = ""
-			return syscall.ENOTSUP
+	var returnedIno int64
+	var returnedAttr string
+	st := r.handleLuaResult("resolve", res, err, &returnedIno, &returnedAttr)
+	if st == 0 {
+		if inode != nil {
+			*inode = Ino(returnedIno)
 		}
+		r.parseAttr([]byte(returnedAttr), attr)
+	} else if st == syscall.EAGAIN {
+		return r.Resolve(ctx, parent, path, inode, attr)
 	}
-	vals, ok := res.([]interface{})
-	if !ok {
-		logger.Errorf("invalid script result: %v", res)
-		return syscall.ENOTSUP
-	}
-	returnedIno, ok := vals[0].(int64)
-	if !ok {
-		logger.Errorf("invalid script result: %v", res)
-		return syscall.ENOTSUP
-	}
-	returnedAttr, ok := vals[1].(string)
-	if !ok {
-		logger.Errorf("invalid script result: %v", res)
-		return syscall.ENOTSUP
-	}
-	if returnedAttr == "" {
-		return syscall.ENOENT
-	}
-	if inode != nil {
-		*inode = Ino(returnedIno)
-	}
-	r.parseAttr([]byte(returnedAttr), attr)
-	return 0
+	return st
 }
 
 func (r *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
@@ -877,11 +894,19 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
 }
 
 func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	parent = r.checkRoot(parent)
 	if r.checkQuota(4<<10, 1) {
 		return syscall.ENOSPC
 	}
-	ino, err := r.nextInode()
+	parent = r.checkRoot(parent)
+	var ino Ino
+	var err error
+	if parent == TrashInode {
+		var next uint64
+		next, err = r.rdb.Incr(ctx, "nextTrash").Uint64()
+		ino = TrashInode + Ino(next)
+	} else {
+		ino, err = r.nextInode()
+	}
 	if err != nil {
 		return errno(err)
 	}
@@ -935,7 +960,7 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 		}
 		if foundIno != 0 {
-			if _type == TypeFile {
+			if _type == TypeFile || _type == TypeDirectory { // file for create, directory for subTrash
 				a, err = tx.Get(ctx, r.inodeKey(foundIno)).Bytes()
 				if err == nil {
 					r.parseAttr(a, attr)
@@ -987,9 +1012,7 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	}, r.inodeKey(parent), r.entryKey(parent))
 }
 
-func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	defer timeit(time.Now())
-	parent = r.checkRoot(parent)
+func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
 	if err == redis.Nil && r.conf.CaseInsensi {
 		if e := r.resolveCase(ctx, parent, name); e != nil {
@@ -1005,7 +1028,16 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	if _type == TypeDirectory {
 		return syscall.EPERM
 	}
-	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	keys := []string{r.entryKey(parent), r.inodeKey(parent), r.inodeKey(inode)}
+	var trash Ino
+	if st := r.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
+	if trash > 0 {
+		keys = append(keys, r.entryKey(trash))
+	} else {
+		defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	}
 	var opened bool
 	var attr Attr
 	eno := r.txn(ctx, func(tx *redis.Tx) error {
@@ -1027,17 +1059,22 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		opened = false
 		if rs[1] != nil {
 			r.parseAttr([]byte(rs[1].(string)), &attr)
-			attr.Ctime = now.Unix()
-			attr.Ctimensec = uint32(now.Nanosecond())
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
-			attr.Nlink--
-			if _type == TypeFile && attr.Nlink == 0 {
-				opened = r.of.IsOpen(inode)
+			attr.Ctime = now.Unix()
+			attr.Ctimensec = uint32(now.Nanosecond())
+			if trash == 0 {
+				attr.Nlink--
+				if _type == TypeFile && attr.Nlink == 0 {
+					opened = r.of.IsOpen(inode)
+				}
+			} else if attr.Nlink == 1 { // don't change parent if it has hard links
+				attr.Parent = trash
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
+			trash = 0
 		}
 
 		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
@@ -1054,6 +1091,9 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
 			if attr.Nlink > 0 {
 				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
+				if trash > 0 {
+					pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
+				}
 			} else {
 				switch _type {
 				case TypeFile:
@@ -1080,22 +1120,14 @@ func (r *redisMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		})
 
 		return err
-	}, r.entryKey(parent), r.inodeKey(parent), r.inodeKey(inode))
+	}, keys...)
 	if eno == 0 && _type == TypeFile && attr.Nlink == 0 {
 		r.fileDeleted(opened, inode, attr.Length)
 	}
 	return eno
 }
 
-func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
-	if name == "." {
-		return syscall.EINVAL
-	}
-	if name == ".." {
-		return syscall.ENOTEMPTY
-	}
-	defer timeit(time.Now())
-	parent = r.checkRoot(parent)
+func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
 	if err == redis.Nil && r.conf.CaseInsensi {
 		if e := r.resolveCase(ctx, parent, name); e != nil {
@@ -1112,6 +1144,14 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.ENOTDIR
 	}
 
+	keys := []string{r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode)}
+	var trash Ino
+	if st := r.checkTrash(parent, &trash); st != 0 {
+		return st
+	}
+	if trash > 0 {
+		keys = append(keys, r.entryKey(trash))
+	}
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil {
@@ -1150,36 +1190,36 @@ func (r *redisMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
+			if trash > 0 {
+				attr.Ctime = now.Unix()
+				attr.Ctimensec = uint32(now.Nanosecond())
+				attr.Parent = trash
+			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
+			trash = 0
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, r.entryKey(parent), name)
 			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
-			pipe.Del(ctx, r.inodeKey(inode))
-			pipe.Del(ctx, r.xattrKey(inode))
-			// pipe.Del(ctx, r.entryKey(inode))
-			pipe.IncrBy(ctx, usedSpace, -align4K(0))
-			pipe.Decr(ctx, totalInodes)
+			if trash > 0 {
+				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
+				pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
+			} else {
+				pipe.Del(ctx, r.inodeKey(inode))
+				pipe.Del(ctx, r.xattrKey(inode))
+				pipe.IncrBy(ctx, usedSpace, -align4K(0))
+				pipe.Decr(ctx, totalInodes)
+			}
 			return nil
 		})
 		return err
-	}, r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode))
+	}, keys...)
 }
 
-func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	switch flags {
-	case 0, RenameNoReplace, RenameExchange:
-	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
-		return syscall.ENOTSUP
-	default:
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
+func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	exchange := flags == RenameExchange
-	parentSrc = r.checkRoot(parentSrc)
-	parentDst = r.checkRoot(parentDst)
 	buf, err := r.rdb.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 	if err == redis.Nil && r.conf.CaseInsensi {
 		if e := r.resolveCase(ctx, parentSrc, nameSrc); e != nil {
@@ -1210,12 +1250,17 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 		return errno(err)
 	}
 	keys := []string{r.entryKey(parentSrc), r.inodeKey(parentSrc), r.inodeKey(ino), r.entryKey(parentDst), r.inodeKey(parentDst)}
-
 	var opened bool
-	var dino Ino
+	var trash, dino Ino
 	var dtyp uint8
 	var tattr Attr
 	if err == nil {
+		if st := r.checkTrash(parentDst, &trash); st != 0 {
+			return st
+		}
+		if trash > 0 {
+			keys = append(keys, r.entryKey(trash))
+		}
 		dtyp, dino = r.parseEntry(buf)
 		keys = append(keys, r.inodeKey(dino))
 		if dtyp == TypeDirectory {
@@ -1254,14 +1299,17 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 				return syscall.EAGAIN
 			}
 			a, err := tx.Get(ctx, r.inodeKey(dino)).Bytes()
-			if err != nil {
+			if err == redis.Nil {
+				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
+				trash = 0
+			} else if err != nil {
 				return err
 			}
 			r.parseAttr(a, &tattr)
+			tattr.Ctime = now.Unix()
+			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
-				tattr.Ctime = now.Unix()
 				tattr.Parent = parentSrc
-				tattr.Ctimensec = uint32(now.Nanosecond())
 				if dtyp == TypeDirectory && parentSrc != parentDst {
 					dattr.Nlink--
 					sattr.Nlink++
@@ -1275,13 +1323,18 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					if cnt != 0 {
 						return syscall.ENOTEMPTY
 					}
+					if trash > 0 {
+						tattr.Parent = trash
+					}
 				} else {
-					tattr.Nlink--
-					if tattr.Nlink > 0 {
-						tattr.Ctime = now.Unix()
-						tattr.Ctimensec = uint32(now.Nanosecond())
-					} else if dtyp == TypeFile {
-						opened = r.of.IsOpen(dino)
+					if trash == 0 {
+						tattr.Nlink--
+						if dtyp == TypeFile && tattr.Nlink == 0 {
+							opened = r.of.IsOpen(dino)
+						}
+						defer func() { r.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
+					} else if tattr.Nlink == 1 {
+						tattr.Parent = trash
 					}
 				}
 			}
@@ -1334,7 +1387,10 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 			} else {
 				pipe.HDel(ctx, r.entryKey(parentSrc), nameSrc)
 				if dino > 0 {
-					if dtyp != TypeDirectory && tattr.Nlink > 0 {
+					if trash > 0 {
+						pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
+						pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parentDst, dino, nameDst), dbuf)
+					} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
 						pipe.Set(ctx, r.inodeKey(dino), r.marshal(&tattr), 0)
 					} else {
 						if dtyp == TypeFile {
@@ -1361,7 +1417,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 					}
 				}
 			}
-			if parentDst != parentSrc {
+			if parentDst != parentSrc && !isTrash(parentSrc) {
 				pipe.Set(ctx, r.inodeKey(parentSrc), r.marshal(&sattr), 0)
 			}
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(&iattr), 0)
@@ -1377,10 +1433,7 @@ func (r *redisMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst
 	return eno
 }
 
-func (r *redisMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
-	parent = r.checkRoot(parent)
-	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+func (r *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
 	return r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if err != nil {
@@ -2516,7 +2569,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	}
 	var err error
 	var dirs map[string]string
-	if m.root == 1 {
+	if m.snap != nil {
 		dirs = m.snap.hashMap[m.entryKey(inode)]
 	} else {
 		dirs, err = m.rdb.HGetAll(context.Background(), m.entryKey(inode)).Result()
@@ -2539,7 +2592,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	for idx, name := range sortedName {
 		typ, inode := m.parseEntry([]byte(dirs[name]))
 		var entry *DumpedEntry
-		if m.root == 1 {
+		if m.snap != nil {
 			entry = m.dumpEntryFast(inode)
 		} else {
 			entry, err = m.dumpEntry(inode)
@@ -2683,7 +2736,7 @@ func (m *redisMeta) makeSnap() error {
 	return nil
 }
 
-func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
+func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -2708,15 +2761,18 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 		length, _ := strconv.ParseUint(parts[1], 10, 64)
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
-	var tree *DumpedEntry
-	if m.root == 1 {
+	var tree, trash *DumpedEntry
+	if root == 0 {
+		root = m.root
+	}
+	if root == 1 {
 		if err := m.makeSnap(); err != nil {
 			return errors.Errorf("Fetch all metadata from Redis: %s", err)
 		}
-		tree = m.dumpEntryFast(m.root)
+		tree = m.dumpEntryFast(root)
+		trash = m.dumpEntryFast(TrashInode)
 	} else {
-		tree, err = m.dumpEntry(m.root)
-		if err != nil {
+		if tree, err = m.dumpEntry(root); err != nil {
 			return err
 		}
 	}
@@ -2727,6 +2783,11 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
 	bar.Increment()
+	if trash != nil {
+		trash.Name = "Trash"
+		total++
+		bar.Increment()
+	}
 	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
@@ -2738,7 +2799,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 		return err
 	}
 
-	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession"}...).Result()
+	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextTrash"}...).Result()
 	cs := make([]int64, len(rs))
 	for i, r := range rs {
 		if r != nil {
@@ -2754,7 +2815,7 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 	for _, k := range keys {
 		sid, _ := strconv.ParseUint(k, 10, 64)
 		var ss []string
-		if m.root == 1 {
+		if root == 1 {
 			ss = m.snap.listMap[m.sustained(sid)]
 		} else {
 			ss, err = m.rdb.SMembers(ctx, m.sustained(sid)).Result()
@@ -2773,25 +2834,33 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 	}
 
 	dm := &DumpedMeta{
-		format,
-		&DumpedCounters{
+		Setting: format,
+		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
 			NextInode:   cs[2] + 1, // Redis counter is 1 smaller than sql/tkv
 			NextChunk:   cs[3] + 1,
 			NextSession: cs[4] + 1,
+			NextTrash:   cs[5] + 1,
 		},
-		sessions,
-		dels,
-		tree,
+		Sustained: sessions,
+		DelFiles:  dels,
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
 	}
 
-	if err = m.dumpDir(m.root, tree, bw, 1, showProgress); err != nil {
+	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
+	}
+	if trash != nil {
+		if _, err = bw.WriteString(","); err != nil {
+			return err
+		}
+		if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
+			return err
+		}
 	}
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
@@ -2802,6 +2871,8 @@ func (m *redisMeta) DumpMeta(w io.Writer) (err error) {
 	}
 	bar.SetTotal(0, true) // FIXME: current != total
 	progress.Wait()
+	m.snap = nil
+
 	return bw.Flush()
 }
 
@@ -2843,12 +2914,18 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		attr.Length = uint64(len(e.Symlink))
 		p.Set(ctx, m.symKey(inode), e.Symlink, 0)
 	}
-	if inode > 1 {
+	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(attr.Length)
 		cs.UsedInodes += 1
 	}
-	if cs.NextInode < int64(inode) {
-		cs.NextInode = int64(inode)
+	if inode < TrashInode {
+		if cs.NextInode < int64(inode) {
+			cs.NextInode = int64(inode)
+		}
+	} else {
+		if cs.NextTrash < int64(inode)-TrashInode {
+			cs.NextTrash = int64(inode) - TrashInode
+		}
 	}
 
 	if len(e.Xattrs) > 0 {
@@ -2885,15 +2962,23 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 
 	var total int64 = 1 // root
 	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
-	dm.FSTree.Attr.Inode = 1
-	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries, func(totalIncr, currentIncr int64) {
+	showProgress := func(totalIncr, currentIncr int64) {
 		total += totalIncr
 		bar.SetTotal(total, false)
 		bar.IncrInt64(currentIncr)
-	}); err != nil {
+	}
+	dm.FSTree.Attr.Inode = 1
+	entries := make(map[Ino]*DumpedEntry)
+	if err = collectEntry(dm.FSTree, entries, showProgress); err != nil {
 		return err
 	}
+	if dm.Trash != nil {
+		total++
+		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
+			return err
+		}
+	}
+
 	if bar.Current() != total {
 		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
 	}
@@ -2953,6 +3038,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	cs["nextinode"] = counters.NextInode
 	cs["nextchunk"] = counters.NextChunk
 	cs["nextsession"] = counters.NextSession
+	cs["nextTrash"] = counters.NextTrash
 	p.MSet(ctx, cs)
 	if len(dm.DelFiles) > 0 {
 		zs := make([]*redis.Z, 0, len(dm.DelFiles))

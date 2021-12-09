@@ -176,6 +176,7 @@ func format(c *cli.Context) error {
 		Inodes:      c.Uint64("inodes"),
 		BlockSize:   fixObjectSize(c.Int("block-size")),
 		Compression: c.String("compress"),
+		TrashDays:   c.Int("trash-days"),
 	}
 	if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 		format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -289,6 +290,11 @@ func formatFlags() *cli.Command {
 			&cli.StringFlag{
 				Name:  "encrypt-rsa-key",
 				Usage: "A path to RSA private key (PEM)",
+			},
+			&cli.IntFlag{
+				Name:  "trash-days",
+				Value: 1,
+				Usage: "number of days after which removed files will be permanently deleted",
 			},
 
 			&cli.BoolFlag{

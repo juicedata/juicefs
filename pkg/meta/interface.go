@@ -69,6 +69,18 @@ const (
 	SetAttrMtimeNow
 )
 
+const TrashInode = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
+const TrashName = ".trash"
+
+func isTrash(ino Ino) bool {
+	return ino >= TrashInode
+}
+
+type internalNode struct {
+	inode Ino
+	name  string
+}
+
 // MsgCallback is a callback for messages from meta service.
 type MsgCallback func(...interface{}) error
 
@@ -312,7 +324,8 @@ type Meta interface {
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 
-	DumpMeta(w io.Writer) error
+	// Dump the tree under root; 0 means using root of the current metadata engine
+	DumpMeta(w io.Writer, root Ino) error
 	LoadMeta(r io.Reader) error
 }
 
