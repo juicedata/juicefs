@@ -221,3 +221,39 @@ READ_OPENS          Files opened for read activity:             188,317        6
 ```
 
 系统整体创建 128 KiB 文件速度为每秒 498 个，读取文件速度为每秒 627 个。
+
+#### 其他参考示例
+
+以下是一些本地简单评估文件系统性能时可用的配置文件，以供参考；具体测试集规模和并发数可根据实际情况调整。
+
+##### 顺序读写大文件
+
+文件大小均为 1GiB，其中 `fwd1` 是顺序写大文件，`fwd2` 是顺序读大文件。
+
+```bash
+$ cat local-big
+fsd=fsd1,anchor=/mnt/jfs/local-big,depth=1,width=1,files=4,size=1g,openflags=o_direct
+
+fwd=fwd1,fsd=fsd1,operation=write,xfersize=1m,fileio=sequential,fileselect=sequential,threads=4
+fwd=fwd2,fsd=fsd1,operation=read,xfersize=1m,fileio=sequential,fileselect=sequential,threads=4
+
+rd=rd1,fwd=fwd1,fwdrate=max,format=restart,elapsed=120,interval=1
+rd=rd2,fwd=fwd2,fwdrate=max,format=restart,elapsed=120,interval=1
+```
+
+##### 随机读写小文件
+
+文件大小均为 128KiB，其中 `fwd1` 是随机写小文件，`fwd2` 是随机读小文件，`fwd3` 是混合读写小文件（读写比 = 7:3）。
+
+```bash
+$ cat local-small
+fsd=fsd1,anchor=/mnt/jfs/local-small,depth=1,width=20,files=2000,size=128k,openflags=o_direct
+
+fwd=fwd1,fsd=fsd1,operation=write,xfersize=128k,fileio=random,fileselect=random,threads=4
+fwd=fwd2,fsd=fsd1,operation=read,xfersize=128k,fileio=random,fileselect=random,threads=4
+fwd=fwd3,fsd=fsd1,rdpct=70,xfersize=128k,fileio=random,fileselect=random,threads=4
+
+rd=rd1,fwd=fwd1,fwdrate=max,format=restart,elapsed=120,interval=1
+rd=rd2,fwd=fwd2,fwdrate=max,format=restart,elapsed=120,interval=1
+rd=rd3,fwd=fwd3,fwdrate=max,format=restart,elapsed=120,interval=1
+```
