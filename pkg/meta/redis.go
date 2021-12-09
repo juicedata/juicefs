@@ -2827,7 +2827,7 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 				var attr Attr
 				r.parseAttr([]byte(v.(string)), &attr)
 				ino, _ := strconv.Atoi(keys[i][1:])
-				if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Atime, 0).Before(cutoff) {
+				if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
 					logger.Infof("found dangling inode: %s %+v", keys[i], attr)
 					if delete {
 						err = r.deleteInode(Ino(ino), false)
