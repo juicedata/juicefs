@@ -228,6 +228,8 @@ READ_OPENS          Files opened for read activity:             188,317        6
 
 ##### 顺序读写大文件
 
+文件大小均为 1GiB，其中 `fwd1` 是顺序写大文件，`fwd2` 是顺序读大文件。
+
 ```bash
 $ cat local-big
 fsd=fsd1,anchor=/mnt/jfs/local-big,depth=1,width=1,files=4,size=1g,openflags=o_direct
@@ -240,6 +242,8 @@ rd=rd2,fwd=fwd2,fwdrate=max,format=restart,elapsed=120,interval=1
 ```
 
 ##### 随机读写小文件
+
+文件大小均为 128KiB，其中 `fwd1` 是随机写小文件，`fwd2` 是随机读小文件，`fwd3` 是混合读写小文件（读写比 = 7:3）。
 
 ```bash
 $ cat local-small
