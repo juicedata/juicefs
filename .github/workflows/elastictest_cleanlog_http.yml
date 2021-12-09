@@ -75,7 +75,6 @@ jobs:
           sudo pip3 install esrally
           sudo apt-get install pbzip2
           sudo ls -l /data/jfs/
-          esrally race --track=geopoint --target-hosts=127.0.0.1:9200 --pipeline=benchmark-only --report-file=/tmp/report.md &
-          for i in {1..20}; do sleep 5m;echo "num $i";cat ~/.rally/logs/rally.log;sudo ls -l /data/jfs;done
+          esrally race --track=geopoint --target-hosts=127.0.0.1:9200 --pipeline=benchmark-only --report-file=/tmp/report.md
           sudo ls -l /data/jfs/
           cat /tmp/report.md

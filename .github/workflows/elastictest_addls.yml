@@ -59,9 +59,7 @@ jobs:
         run: |
           sudo chmod 777 /data/jfs/
           sudo service elasticsearch stop
-          sudo cat /etc/elasticsearch/elasticsearch.yml
           sudo sed  -i "s?^path\.data.*?path\.data: /data/jfs/?" /etc/elasticsearch/elasticsearch.yml
-          sudo cat /etc/elasticsearch/elasticsearch.yml
           sudo service elasticsearch restart
           sudo ls -l /data/jfs/
           sudo service elasticsearch status
@@ -69,9 +67,6 @@ jobs:
 
       - name: Esrally Test
         run: |
-          echo "JAVA_HOME"
-          echo "$JAVA_HOME"
-          echo "install esrally"
           sudo pip3 install esrally
           sudo apt-get install pbzip2
           sudo ls -l /data/jfs/
