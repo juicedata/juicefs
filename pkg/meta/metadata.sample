@@ -19,7 +19,7 @@
     "nextInodes": 30,
     "nextChunk": 9,
     "nextSession": 1,
-    "nextTrash": 2,
+    "nextTrash": 1,
     "nextCleanupSlices": 0
   },
   "Sustained": [],
