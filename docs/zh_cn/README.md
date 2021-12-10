@@ -9,63 +9,12 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 ## 核心特性
 
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
-2. **HDFS 兼容**：完整兼容 [HDFS API](hadoop_java_sdk.md)，提供更强的元数据性能；
-3. **S3 兼容**：提供 [S3 网关](s3_gateway.md) 实现 S3 协议兼容的访问接口；
-4. **云原生**：通过 [Kubernetes CSI Driver](how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
+2. **HDFS 兼容**：完整兼容 [HDFS API](deployment/hadoop_java_sdk.md)，提供更强的元数据性能；
+3. **S3 兼容**：提供 [S3 网关](deployment/s3_gateway.md) 实现 S3 协议兼容的访问接口；
+4. **云原生**：通过 [Kubernetes CSI Driver](deployment/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
 5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
-7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](benchmark.md)；
-8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](encrypt.md)；
+7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](benchmark/benchmark.md)；
+8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](security/encrypt.md)；
 9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
 10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
-
-## 目录
-
-- 介绍
-  - [JuiceFS 是什么？](introduction.md)
-  - [JuiceFS 的技术架构](architecture.md)
-  - [JuiceFS 如何存储文件？](how_juicefs_store_files.md)
-  - [JuiceFS 支持的对象存储](how_to_setup_object_storage.md)
-  - [JuiceFS 支持的元数据存储引擎](databases_for_metadata.md)
-- [快速上手](quick_start_guide.md)
-- 基本用法
-  - [Linux 系统使用 JuiceFS](juicefs_on_linux.md)
-  - [Windows 系统使用 JuiceFS](juicefs_on_windows.md)
-  - [macOS 系统使用 JuiceFS](juicefs_on_macos.md)
-  - [Docker 使用 JuiceFS](juicefs_on_docker.md)
-  - [Kubernetes 使用 JuiceFS](how_to_use_on_kubernetes.md)
-  - [K3s 使用 JuiceFS](juicefs_on_k3s.md)
-  - [KubeSphere 平台一键部署 JuiceFS](juicefs_on_kubesphere.md)
-  - [Rancher 平台一键部署 JuiceFS](juicefs_on_rancher.md)
-  - [Hadoop 生态使用 JuiceFS 存储](hadoop_java_sdk.md)
-  - [启用 JuiceFS 的 S3 网关](s3_gateway.md)
-  - [JuiceFS 客户端编译和升级](client_compile_and_upgrade.md)
-- 云平台
-  - [在阿里云安装和使用 JuiceFS 存储](clouds/aliyun.md)
-  - [在腾讯云安装和使用 JuiceFS 存储](clouds/qcloud.md)
-  - [在 AWS 安装和使用 JuiceFS 存储](clouds/aws.md)
-  - [在 DigitalOcean 安装和使用 JuiceFS 存储](clouds/digitalocean.md)
-- [命令参考](command_reference.md)
-- 进阶主题
-  - [Redis 最佳实践](redis_best_practices.md)
-  - [JuiceFS 性能测试](benchmark.md)
-  - [JuiceFS 元数据引擎对比测试](metadata_engines_benchmark.md)
-  - [JuiceFS 元数据备份和恢复](metadata_dump_load.md)
-  - [数据加密](encrypt.md)
-  - [POSIX 兼容性](posix_compatibility.md)
-  - [JuiceFS 缓存管理](cache_management.md)
-  - [JuiceFS 性能诊断](operations_profiling.md)
-  - [JuiceFS 性能统计监控](stats_watcher.md)
-  - [JuiceFS 故障诊断和分析](fault_diagnosis_and_analysis.md)
-  - [JuiceFS 监控指标](p8s_metrics.md)
-  - [JuiceFS 性能评估指南](performance_evaluation_guide.md)
-  - [FUSE 挂载选项](fuse_mount_options.md)
-  - [JuiceFS 多主机间同步账户](sync_accounts_between_multiple_hosts.md)
-  - [同类技术对比](comparison_with_others.md)
-  - [用量统计](usage_tracking.md)
-- 开发者
-  - [读写请求处理流程介绍](internals/io_processing.md)
-- [应用场景&案例](case.md)
-- [常见问题](faq.md)
-- [发行注记](release_notes.md)
-- [术语表](glossary.md)

@@ -16,7 +16,7 @@ JuiceFS 支持在 Windows 环境中创建和挂载文件系统。但你需要先
 
 ## 3. 挂载 JuiceFS 文件系统
 
-这里假设你已经准备好了对象存储、Redis 数据库，并且已经创建好了 JuiceFS 文件系统。如果你还没有准备好这些必须的资源，请参考 [快速上手指南](quick_start_guide.md)。
+这里假设你已经准备好了对象存储、Redis 数据库，并且已经创建好了 JuiceFS 文件系统。如果你还没有准备好这些必须的资源，请参考 [快速上手指南](../getting-started/quick_start_guide.md)。
 
 这里，我们假设在当前局域网中 IP 地址为 `192.168.1.8` 的 Linux 主机上部署了 MinIO 对象存储和 Redis 数据库，然后执行了以下命令，创建了名为 `music` 的 JuiceFS 文件系统。
 
@@ -66,8 +66,3 @@ ws.Run "C:\juicefs\juicefs.exe mount redis://192.168.1.8:6379/1 Z:",0
 如果需要取消开机启动，请参照[第 2 步](#2-设置开机启动) 设置开机启动)打开 Windows 启动文件夹，删除相应的 VBS 脚本即可。
 
 ## 5. 卸载文件系统
-
-## 你可能需要
-
-- [Linux 系统使用 JuiceFS](juicefs_on_linux.md)
-- [macOS 系统使用 JuiceFS](juicefs_on_macos.md)
