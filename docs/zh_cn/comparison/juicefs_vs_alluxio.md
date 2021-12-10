@@ -25,17 +25,17 @@
 
 ### 存储格式
 
-JuiceFS 中一个文件的[存储格式](how_juicefs_store_files.md)包含三个层级：chunk、slice 和 block。一个文件将被分割成多个块，并被压缩和加密（可选）存储到对象存储中。
+JuiceFS 中一个文件的[存储格式](../reference/how_juicefs_store_files.md)包含三个层级：chunk、slice 和 block。一个文件将被分割成多个块，并被压缩和加密（可选）存储到对象存储中。
 
 Alluxio 将文件作为「对象」存储到 UFS。文件不会像 JuiceFS 那样被拆分成 block。
 
 ### 缓存粒度
 
-JuiceFS 的[默认块大小](how_juicefs_store_files.md)为 4MiB，相比 Alluxio 的 64MiB，粒度更小。较小的块大小更适合随机读取（例如 Parquet 和 ORC）工作负载，即缓存管理将更有效率。
+JuiceFS 的[默认块大小](../reference/how_juicefs_store_files.md)为 4MiB，相比 Alluxio 的 64MiB，粒度更小。较小的块大小更适合随机读取（例如 Parquet 和 ORC）工作负载，即缓存管理将更有效率。
 
 ### Hadoop 兼容
 
-JuiceFS [完整兼容 HDFS](hadoop_java_sdk.md)。不仅兼容 Hadoop 2.x 和 Hadoop 3.x，还兼容 Hadoop 生态系统中的各种组件。
+JuiceFS [完整兼容 HDFS](../deployment/hadoop_java_sdk.md)。不仅兼容 Hadoop 2.x 和 Hadoop 3.x，还兼容 Hadoop 生态系统中的各种组件。
 
 ### Kubernetes CSI Driver
 
@@ -69,4 +69,4 @@ JuiceFS 支持传输中加密（encryption in transit）以及静态加密（enc
 
 Alluxio 的架构可以分为 3 个组件：master、worker 和客户端。一个典型的集群由一个主节点（master）、多个备用主节点（standby master）、一个作业主节点（job master）、多个备用作业主节点（standby job master）、多个 worker 和 job worker 组成。您需要自己运维这些节点。
 
-JuiceFS 使用 Redis 或者[其它系统](databases_for_metadata.md)作为元数据引擎。您可以轻松使用由公有云提供商托管的服务作为 JuiceFS 的元数据引擎，没有任何运维负担。
+JuiceFS 使用 Redis 或者[其它系统](../reference/how_to_setup_metadata_engine.md)作为元数据引擎。您可以轻松使用由公有云提供商托管的服务作为 JuiceFS 的元数据引擎，没有任何运维负担。

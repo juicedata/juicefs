@@ -158,8 +158,3 @@ Of course, you can also add the `--force` or `-f` parameter to the unmount comma
 ```shell
 $ juicefs umount --force ~/music
 ```
-
-## Go further
-
-- [JuiceFS on Linux](juicefs_on_linux.md)
-- [JuiceFS on Windows](juicefs_on_windows.md)

@@ -44,7 +44,7 @@ PS C:\> .\juicefs.exe format localhost test
 2021/03/22 15:16:18.024710 juicefs[7064] <INFO>: Data use file:///C:/jfs/local/test/
 ```
 
-For other supported object storage, please check out ["How to Setup Object Storage"](how_to_setup_object_storage.md).
+For other supported object storage, please check out ["How to Setup Object Storage"](reference/how_to_setup_object_storage.md).
 
 ### Mount JuiceFS
 
