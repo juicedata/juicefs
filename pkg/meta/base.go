@@ -272,7 +272,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		*inode = parent
 		return 0
 	}
-	if parent == m.root && name == TrashName {
+	if parent == 1 && name == TrashName {
 		if st := m.GetAttr(ctx, TrashInode, attr); st != 0 {
 			return st
 		}
@@ -418,7 +418,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		return syscall.EPERM
 	}
 	if parent == 1 && name == TrashName {
-		return syscall.EEXIST
+		return syscall.EPERM
 	}
 	defer timeit(time.Now())
 	return m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
@@ -429,7 +429,7 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 		return syscall.EPERM
 	}
 	if parent == 1 && name == TrashName {
-		return syscall.EEXIST
+		return syscall.EPERM
 	}
 	defer timeit(time.Now())
 	if attr == nil {
@@ -450,7 +450,7 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 		return syscall.EPERM
 	}
 	if parent == 1 && name == TrashName {
-		return syscall.EEXIST
+		return syscall.EPERM
 	}
 	defer timeit(time.Now())
 	return m.en.doMknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
@@ -461,7 +461,7 @@ func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 		return syscall.EPERM
 	}
 	if parent == 1 && name == TrashName {
-		return syscall.EEXIST
+		return syscall.EPERM
 	}
 	defer timeit(time.Now())
 	return m.en.doMknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
