@@ -98,7 +98,6 @@ public class JuiceFileSystemImpl extends FileSystem {
   private Method setStorageIds;
   private String[] storageIds;
   private Random random = new Random();
-  private String callerContext;
 
   public static interface Libjfs {
     long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
@@ -361,8 +360,6 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     hflushMethod = getConf(conf, "hflush", "writeback");
     initializeStorageIds(conf);
-
-    callerContext = getConf(conf, "caller-context", null);
 
     if ("true".equalsIgnoreCase(getConf(conf, "enable-metrics", "false"))) {
       metricsEnable = true;
@@ -920,39 +917,6 @@ public class JuiceFileSystemImpl extends FileSystem {
       fd = 0;
       if (r < 0)
         throw error(r, path);
-    }
-  }
-
-  private Map<String, FileSystem> fsCache = new HashMap<String, FileSystem>();
-
-  private FileSystem getFileSystem(Path path) throws IOException {
-    URI uri = path.toUri();
-    String scheme = uri.getScheme();
-    if (scheme == null) {
-      return this;
-    }
-    String key = scheme.toLowerCase() + "://";
-    String authority = uri.getAuthority();
-    if (authority != null) {
-      key += authority.toLowerCase();
-    }
-    if (callerContext != null && !"".equals(callerContext.trim())) {
-      try {
-        Class<?> ctx = Class.forName("io.juicefs.utils.CallerContextUtil");
-        Method setContext = ctx.getDeclaredMethod("setContext", String.class);
-        setContext.invoke(null, callerContext);
-      } catch (ClassNotFoundException ignored) {
-      } catch (Throwable e) {
-        LOG.error(e.getMessage(), e);
-      }
-    }
-    synchronized (this) {
-      FileSystem fs = fsCache.get(key);
-      if (fs == null) {
-        fs = FileSystem.newInstance(uri, getConf());
-        fsCache.put(key, fs);
-      }
-      return fs;
     }
   }
 

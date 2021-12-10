@@ -15,6 +15,7 @@
 
 package io.juicefs;
 
+import io.juicefs.utils.PatchUtil;
 import junit.framework.TestCase;
 import org.apache.commons.io.IOUtils;
 import org.apache.flink.runtime.fs.hdfs.HadoopRecoverableWriter;
@@ -129,6 +130,26 @@ public class JuiceFileSystemTest extends TestCase {
     } catch (IOException e) {
       fs.setPermission(new Path("/hello"), new FsPermission((short) 0644));
     }
+  }
+
+  public void testReadSkip() throws Exception {
+    Path p = new Path("/test_readskip");
+    fs.create(p).close();
+    String content = "12345";
+    writeFile(fs, p, content);
+    FSDataInputStream in = fs.open(p);
+    long skip = in.skip(2);
+    assertEquals(2, skip);
+
+    byte[] bytes = new byte[content.length() - (int)skip];
+    in.readFully(bytes);
+    assertEquals("345", new String(bytes));
+  }
+
+  public void testInitStubLoaderFailed() throws Exception {
+    PatchUtil.patchBefore(JuiceFileSystemImpl.class.getName(), "initStubLoader", null, "Thread.currentThread().interrupt();");
+    FileSystem newFs = createNewFs(cfg, null, null);
+    newFs.close();
   }
 
   public void testReadAfterClose() throws Exception {
