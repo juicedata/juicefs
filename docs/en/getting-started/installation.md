@@ -94,6 +94,12 @@ Because WSL is a highly complete Linux system (Ubuntu by default) running on a W
 
 ### macOS
 
+Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io/) first to implement support for FUSE.
+
+:::tip
+[macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems, enabling JuiceFS clients to mount file systems for use on macOS systems.
+:::
+
 #### Homebrew
 
 If you have the [Homebrew](https://brew.sh/) package manager installed on your system, you can install the JuiceFS client by executing the following command.

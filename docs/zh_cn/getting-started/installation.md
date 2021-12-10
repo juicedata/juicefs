@@ -95,6 +95,12 @@ JuiceFS 的 Windows 客户端也是一个独立的二进制程序，下载解压
 
 ### macOS 系统
 
+由于 macOS 默认不支持 FUSE 接口，需要先安装 [macFUSE](https://osxfuse.github.io/) 实现对 FUSE 的支持。
+
+:::tip 提示
+[macFUSE](https://github.com/osxfuse/osxfuse) 是一个开源的文件系统增强工具，它让 macOS 可以挂载第三方的文件系统，使得 JuiceFS 客户端可以将文件系统挂载到 macOS 系统中使用。
+:::
+
 #### Homebrew 安装
 
 如果你的系统安装了 [Homebrew](https://brew.sh/) 包管理器，可以执行以下命令安装 JuiceFS 客户端：
