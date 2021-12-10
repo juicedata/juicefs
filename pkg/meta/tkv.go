@@ -2354,8 +2354,8 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 				cs.NextInode = int64(inode) + 1
 			}
 		} else {
-			if cs.NextTrash <= int64(inode)-TrashInode {
-				cs.NextTrash = int64(inode) - TrashInode + 1
+			if cs.NextTrash < int64(inode)-TrashInode {
+				cs.NextTrash = int64(inode) - TrashInode
 			}
 		}
 
@@ -2418,7 +2418,6 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		NextInode:   2,
 		NextChunk:   1,
 		NextSession: 1,
-		NextTrash:   1,
 	}
 	refs := make(map[string]int64)
 

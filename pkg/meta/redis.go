@@ -2841,7 +2841,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			NextInode:   cs[2] + 1, // Redis counter is 1 smaller than sql/tkv
 			NextChunk:   cs[3] + 1,
 			NextSession: cs[4] + 1,
-			NextTrash:   cs[5] + 1,
+			NextTrash:   cs[5],
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
