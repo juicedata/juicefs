@@ -48,7 +48,7 @@ All users are allowed to browse the trash and see the full list of removed files
 
 It is not permitted to create files within the trash. Deleting or purging a file are forbidden as well for non-root users, even if he/she is owner of this file.
 
-#### Recover／Purge
+#### Recover/Purge
 
 It is suggested to ask root user to recover files, since root is allowed to move them out of trash with a single `mv` command, and causes no data copy. Other users, however, can only recover a file by reading its content and write it to another new file.
 
