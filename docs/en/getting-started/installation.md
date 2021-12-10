@@ -183,7 +183,7 @@ git checkout v0.17.4
 The development branch often involves large changes, so please do not use the clients compiled in the "development branch" for the production environment.
 :::
 
-1. Compiling
+4. Compiling
 
 ```shell
 make
