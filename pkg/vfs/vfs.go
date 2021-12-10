@@ -909,6 +909,10 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 		nextfh:  1,
 	}
 
+	if conf.Meta.Subdir != "" { // don't show trash directory
+		internalNodes = internalNodes[:len(internalNodes)-1]
+	}
+
 	v.handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "fuse_open_handlers",
 		Help: "number of open files and directories.",
