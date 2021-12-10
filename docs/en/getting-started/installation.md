@@ -78,7 +78,7 @@ Since Windows does not natively support the FUSE interface, you first need to do
 **[WinFsp](https://github.com/billziss-gh/winfsp)** is an open source Windows file system agent that provides a FUSE emulation layer that allows JuiceFS clients to mount file systems for use on Windows systems.
 :::
 
-1. Install the client
+2. Install the client
 
 Take Windows 10 system as an example, download the file with the filename `windows-amd64`, unzip it and get `juicefs.exe` which is the JuiceFS client binary.
 
