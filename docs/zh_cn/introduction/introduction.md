@@ -8,9 +8,9 @@ slug: .
 
 ![JuiceFS LOGO](../images/juicefs-logo.png)
 
-**JuiceFS** 是一款面向云计算设计的高性能共享文件系统，在 AGPL v3.0 开源协议下发布。提供完备的 [POSIX](https://en.wikipedia.org/wiki/POSIX) 兼容性，可将几乎所有主流云存储接入本地作为海量本地磁盘使用，亦可同时在跨平台、跨地区的不同主机上挂载读写。
+**JuiceFS** 是一款面向云原生设计的高性能共享文件系统，在 AGPL v3.0 开源协议下发布。提供完备的 [POSIX](https://en.wikipedia.org/wiki/POSIX) 兼容性，可将几乎所有对象存储接入本地作为海量本地磁盘使用，亦可同时在跨平台、跨地区的不同主机上挂载读写。
 
-JuiceFS 采用「数据」与「元数据」分离存储的架构，从而实现文件系统的分布式设计。使用 JuiceFS 存储数据，数据本身会被持久化在[对象存储](../reference/how_to_setup_object_storage.md#支持的存储服务)（例如，Amazon S3），相对应的元数据可以按需持久化在 Redis、MySQL、SQLite 等多种[数据库](../reference/how_to_setup_metadata_engine.md)中。
+JuiceFS 采用「数据」与「元数据」分离存储的架构，从而实现文件系统的分布式设计。使用 JuiceFS 存储数据，数据本身会被持久化在[对象存储](../reference/how_to_setup_object_storage.md#支持的存储服务)（例如，Amazon S3），相对应的元数据可以按需持久化在 Redis、MySQL、TiKV、SQLite 等多种[数据库](../reference/how_to_setup_metadata_engine.md)中。
 
 JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析、归档、备份，可以在不修改代码的前提下无缝对接大数据、机器学习、人工智能等应用平台，为其提供海量、弹性、低价的高性能存储。运维人员不用再为可用性、灾难恢复、监控、扩容等工作烦恼，专注于业务开发，提升研发效率。同时运维细节的简化，也让运维团队更容易向 DevOps 团队转型。
 
@@ -33,13 +33,13 @@ JuiceFS 文件系统由三个部分组成：
 
 - **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes CSI Driver、S3 Gateway 等文件系统接口的实现；
 - **数据存储**：存储数据本身，支持本地磁盘、公有云或私有云对象存储、HDFS 等介质；
-- **元数据引擎**：存储数据对应的元数据（metadata）包含文件名、文件大小、权限组、创建修改时间和目录结构，支持 Redis、MySQL、TiKV 等多种引擎；
+- **元数据引擎**：存储数据对应的元数据（metadata）包含文件名、文件大小、权限组、创建修改时间和目录结构等，支持 Redis、MySQL、TiKV 等多种引擎；
 
 ![image](../images/juicefs-arch-new.png)
 
-作为文件系统，JuiceFS 会分别处理数据及其对应的元数据，数据会被存储在对象存储中，元数据会被存储在元数据服务引擎中。
+作为文件系统，JuiceFS 会分别处理数据及其对应的元数据，数据会被存储在对象存储中，元数据会被存储在元数据引擎中。
 
-在 **数据存储** 方面，JuiceFS 支持几乎所有的公有云对象存储，同时也支持 OpenStack Swift、Ceph、MinIO 等私有化的对象存储。
+在 **数据存储** 方面，JuiceFS 支持几乎所有的公有云对象存储，同时也支持 OpenStack Swift、Ceph、MinIO 等支持私有化部署的开源对象存储。
 
 在 **元数据存储** 方面，JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等作为元数据服务引擎，也将陆续实现更多元数据存储引擎。欢迎 [提交 Issue](https://github.com/juicedata/juicefs/issues) 反馈你的需求。
 
@@ -63,6 +63,3 @@ JuiceFS 为海量数据存储设计，可以作为很多分布式文件系统和
 ## 数据隐私
 
 JuiceFS 是开源软件，你可以在 [GitHub](https://github.com/juicedata/juicefs) 找到完整的源代码。在使用 JuiceFS 存储数据时，数据会按照一定的规则被拆分成数据块并保存在你自己定义的对象存储或其它存储介质中，数据所对应的元数据则存储在你自己定义的数据库中。
-
-:::note 注意
-如果你使用的是 [JuiceFS 云服务](/cloud/hosted_service)，你的数据仍然存储在你自己定义的对象存储或其它存储介质中，但「元数据」会存储在 JuiceFS 官方的高可用元数据存储集群中。
