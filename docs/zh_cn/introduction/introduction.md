@@ -31,9 +31,9 @@ JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析�
 
 JuiceFS 文件系统由三个部分组成：
 
-- **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes CSI Driver、S3 Gateway 等文件系统接口的实现；
-- **数据存储**：存储数据本身，支持本地磁盘、公有云或私有云对象存储、HDFS 等介质；
-- **元数据引擎**：存储数据对应的元数据（metadata）包含文件名、文件大小、权限组、创建修改时间和目录结构等，支持 Redis、MySQL、TiKV 等多种引擎；
+1. **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes CSI Driver、S3 Gateway 等文件系统接口的实现；
+2. **数据存储**：存储数据本身，支持本地磁盘、公有云或私有云对象存储、HDFS 等介质；
+3. **元数据引擎**：存储数据对应的元数据（metadata）包含文件名、文件大小、权限组、创建修改时间和目录结构等，支持 Redis、MySQL、TiKV 等多种引擎；
 
 ![image](../images/juicefs-arch-new.png)
 

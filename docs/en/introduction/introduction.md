@@ -3,53 +3,62 @@ sidebar_label: What is JuiceFS
 sidebar_position: 1
 slug: .
 ---
-
-# What is JuiceFS
-
-[![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/juicedata/juicefs/blob/main/LICENSE) [![Go Report](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=flat)](https://goreportcard.com/badge/github.com/juicedata/juicefs) [![Join Slack](https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack)](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-0bJojPaql8cfFgwerDQJgA)
+#
 
 ![JuiceFS LOGO](../images/juicefs-logo.png)
 
-JuiceFS is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under GNU Affero General Public License v3.0. It is specially optimized for the cloud-native environment. Using the JuiceFS  to store data, the data itself will be persisted in object storage (e.g. Amazon S3), and the metadata corresponding to the data can be persisted in various database engines such as Redis, MySQL, and SQLite according to the needs of the scene. 
+**JuiceFS** is a high-performance shared file system designed for cloud-native use and released under the AGPL v3.0 open source license. It provides full [POSIX](https://en.wikipedia.org/wiki/POSIX) compatibility, allowing almost all object stores to be used locally as massive local disks, and to be mounted and read on different hosts across platforms and regions at the same time.
 
-JuiceFS can simply and conveniently connect massive cloud storage directly to big data, machine learning, artificial intelligence, and various application platforms that have been put into production environment, without modifying the code, you can use massive cloud storage as efficiently as using local storage. 
+JuiceFS implements the distributed design of file system by separating "data" and "metadata" storage architecture. When using JuiceFS to store data, the data itself is persisted in [object storage](../reference/how_to_setup_object_storage.md#supported-object-storage) (e.g., Amazon S3), and the corresponding metadata can be persisted on-demand in various [databases](../reference/how_to_setup_metadata_engine.md) such as Redis, MySQL, TiKV, SQLite, etc.
 
-📺 **Video**: [What is JuiceFS?](https://www.youtube.com/watch?v=8RdZoBG-D6Y)
+JuiceFS provides rich APIs for various forms of data management, analysis, archiving, and backup, and can seamlessly interface with big data, machine learning, artificial intelligence and other application platforms without modifying code, providing them with massive, elastic, and low-cost high-performance storage. It allows you to focus on business development and improve R&D efficiency without worrying about availability, disaster recovery, monitoring, and expansion. Make it easier for operations and maintenance teams to transform to DevOps teams.
 
-## Highlighted Features
+## Features
 
-1. **Fully POSIX-compatible**: Use like a local file system, seamlessly docking with existing applications, no business intrusion.
-2. **Fully Hadoop-compatible**: JuiceFS [Hadoop Java SDK](../deployment/hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x. As well as variety of components in Hadoop ecosystem.
-3. **S3-compatible**:  JuiceFS [S3 Gateway](../deployment/s3_gateway.md) provides S3-compatible interface.
-4. **Cloud Native**: JuiceFS provides [Kubernetes CSI driver](../deployment/how_to_use_on_kubernetes.md) to help people who want to use JuiceFS in Kubernetes.
-5. **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
-6. **Strong Consistency**: The confirmed modification will be immediately visible on all servers mounted with the same file system .
-7. **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. [Test results](../benchmark/benchmark.md)
-8. **Data Encryption**: Supports data encryption in transit and at rest, read [the guide](../security/encrypt.md) for more information.
-9. **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
-10. **Data Compression**: JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data.
+1. **POSIX Compatible**: used like a local file system, seamlessly interfacing with existing applications.
+2. **HDFS Compatible**: Full compatibility with the [HDFS API](../deployment/hadoop_java_sdk.md), providing enhanced metadata performance.
+3. **S3 Compatible**: Provides [S3 gateway](../deployment/s3_gateway.md) implementing the S3-compatible access interface.
+4. **Cloud-Native**: Use JuiceFS in Kubernetes easily via [CSI Driver](../deployment/how_to_use_on_kubernetes.md).
+5. **Distributed**: the same file system can be mounted on thousands of servers at the same time, with high performance concurrent reads and writes and shared data.
+6. **Strong Consistency**: confirmed file changes are immediately visible on all servers, ensuring strong consistency.
+7. **Better Performance**: millisecond latency, nearly unlimited throughput (depending on object storage scale), see [performance test results](../benchmark/benchmark.md).
+8. **Data Security**: Supports encryption in transit and encryption at rest, [View Details](../security/encrypt.md).
+9. **File lock**: support for BSD lock (flock) and POSIX lock (fcntl).
+10. **Data Compression**: Supports [LZ4](https://lz4.github.io/lz4) and [Zstandard](https://facebook.github.io/zstd) compression algorithms to save storage space.
 
-## Performance Comparison
+## Architecture
 
-### Throughput
+The JuiceFS file system consists of three parts:
 
-Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio), here is the result:
+1. **JuiceFS Client**: coordinating object storage and metadata engine, and implementation of file system interfaces such as POSIX, Hadoop, Kubernetes CSI Driver, S3 Gateway, etc..
+2. **Data Storage**: storage of the data itself, supporting media such as local disk, public or private cloud object storage, HDFS, etc.
+3. **Metadata Engine**: storage data corresponding metadata contains file name, file size, permission group, creation and modification time and directory structure, etc., supporting Redis, MySQL, TiKV and other engines.
 
-[![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
+![image](../images/juicefs-arch-new.png)
 
-It shows JuiceFS can provide 10X more throughput than the other two, read [more details](../benchmark/fio.md).
+As a file system, JuiceFS handles the data and its corresponding metadata separately, with the data being stored in the object store and the metadata being stored in the metadata engine.
 
-### Metadata IOPS
+In terms of **data storage**, JuiceFS supports almost all public cloud object stores, as well as OpenStack Swift, Ceph, MinIO and other open source object stores that support private deployments.
 
-Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior), here is the result:
+In terms of **metadata storage**, JuiceFS is designed with multiple engines, and currently supports Redis, TiKV, MySQL/MariaDB, PostgreSQL, SQLite, etc. as metadata service engines, and will implement more multiple data storage engines one after another. Welcome to [Submit Issue](https://github.com/juicedata/juicefs/issues) to feedback your requirements.
 
-[![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
+In terms of **File System Interface** implementation:
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](../benchmark/mdtest.md).
+- With **FUSE**, the JuiceFS file system can be mounted to the server in a POSIX-compatible manner to use massive cloud storage directly as local storage.
+- With **Hadoop Java SDK**, JuiceFS file system can directly replace HDFS and provide low-cost mass storage for Hadoop.
+- With the **Kubernetes CSI Driver**, the JuiceFS file system can directly provide mass storage for Kubernetes.
+- With **S3 Gateway**, applications using S3 as the storage layer can directly access the JuiceFS file system and use tools such as AWS CLI, s3cmd, and MinIO client.
 
-## Quick start
+## Scenarios
 
-Now, you can refer to [Quick Start Guide](../getting-started/quick_start_guide.md) to start using JuiceFS immediately! 😊
+JuiceFS is designed for massive data storage and can be used as an alternative to many distributed file systems and network file systems, especially for the following scenarios.
 
-If you want to understand the working principle of JuiceFS, you can check [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md).
+- **Big Data Analytics**: HDFS-compatible without any special API intrusion into the business; seamless integration with mainstream computing engines (Spark, Presto, Hive, etc.); infinitely scalable storage space; almost 0 operation and maintenance cost; perfect caching mechanism, several times higher than object storage performance.
+- **Machine Learning**: POSIX compatible, can support all machine learning, deep learning frameworks; sharing capabilities to improve the efficiency of team management, use of data.
+- **Persistent volumes in container clusters**: Kubernetes CSI support; persistent storage and independent from container lifetime; strong consistency to ensure correct data; take over data storage requirements to ensure statelessness of the service.
+- **Shared Workspace**: can be mounted on any host; no client concurrent read/write restrictions; POSIX compatible with existing data flow and scripting operations.
+- **Data Backup**: Back up all kinds of data in unlimited smoothly scalable storage space; combined with the shared mount feature, you can aggregate multi-host data to one place and do unified backup.
 
+## Data Privacy
+
+JuiceFS is open source software, and you can find the full source code at [GitHub](https://github.com/juicedata/juicefs). When using JuiceFS to store data, the data is split into chunks according to certain rules and stored in your own defined object storage or other storage media, and the metadata corresponding to the data is stored in your own defined database.
