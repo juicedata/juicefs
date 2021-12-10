@@ -20,10 +20,13 @@ import org.apache.commons.io.IOUtils;
 import org.apache.flink.runtime.fs.hdfs.HadoopRecoverableWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.MD5Hash;
+import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.UserGroupInformation;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -173,6 +176,45 @@ public class JuiceFileSystemTest extends TestCase {
       throw new Exception("create should fail");
     } catch (IOException e) {
     }
+  }
+
+  public void testCreateNonRecursive() throws Exception {
+    Path p = new Path("/NOT_EXIST_DIR");
+    p = new Path(p, "file");
+    try (FSDataOutputStream ou = fs.createNonRecursive(p, false, 1 << 20, (short) 1, 128 << 20, null);) {
+      fail("createNonRecursive in a not exit dir should fail");
+    } catch (IOException ignored) {
+    }
+  }
+
+  public void testTruncate() throws Exception {
+    Path p = new Path("/test_truncate");
+    fs.create(p).close();
+    fs.truncate(p, 1 << 20);
+    assertEquals(1 << 20, fs.getFileStatus(p).getLen());
+    fs.truncate(p, 1 << 10);
+    assertEquals(1 << 10, fs.getFileStatus(p).getLen());
+  }
+
+  public void testAccess() throws Exception {
+    Path p1 = new Path("/test_access");
+    FileSystem newFs = createNewFs(cfg, "user1", new String[]{"group1"});
+    newFs.create(p1).close();
+    newFs.setPermission(p1, new FsPermission((short) 0444));
+    newFs.access(p1, FsAction.READ);
+    try {
+      newFs.access(p1, FsAction.WRITE);
+      fail("The access call should have failed.");
+    } catch (AccessControlException e) {
+    }
+
+    Path badPath = new Path("/bad/bad");
+    try {
+      newFs.access(badPath, FsAction.READ);
+      fail("The access call should have failed");
+    } catch (FileNotFoundException e) {
+    }
+    newFs.close();
   }
 
   public void testSetPermission() throws Exception {
@@ -439,7 +481,7 @@ public class JuiceFileSystemTest extends TestCase {
     FSDataOutputStream sou2 = fs.create(src2);
     sou2.write("hello".getBytes());
     sou2.close();
-    fs.concat(trg, new Path[]{src1, src2} );
+    fs.concat(trg, new Path[]{src1, src2});
     FSDataInputStream in = fs.open(trg);
     assertEquals("hellohellohello", IOUtils.toString(in));
     in.close();
@@ -467,5 +509,50 @@ public class JuiceFileSystemTest extends TestCase {
     }
     Arrays.sort(org);
     assertArrayEquals(org, res);
+  }
+
+  private void writeFile(FileSystem fs, Path p, String content) throws IOException {
+    FSDataOutputStream ou = fs.create(p);
+    ou.write(content.getBytes());
+    ou.close();
+  }
+
+  public FileSystem createNewFs(Configuration conf, String user, String[] group) throws IOException, InterruptedException {
+    if (user != null && group != null) {
+      UserGroupInformation root = UserGroupInformation.createUserForTesting(user, group);
+      return root.doAs((PrivilegedExceptionAction<FileSystem>) () -> FileSystem.newInstance(FileSystem.getDefaultUri(conf), conf));
+    }
+    return FileSystem.newInstance(FileSystem.getDefaultUri(conf), conf);
+  }
+
+  public void testUsersAndGroups() throws Exception {
+    Path users1 = new Path("/tmp/users1");
+    Path groups1 = new Path("/tmp/groups1");
+    Path users2 = new Path("/tmp/users2");
+    Path groups2 = new Path("/tmp/groups2");
+
+    writeFile(fs, users1, "user1:2001\n");
+    writeFile(fs, groups1, "group1:3001:user1\n");
+    writeFile(fs, users2, "user2:2001\n");
+    writeFile(fs, groups2, "group2:3001:user2\n");
+
+    Configuration conf = new Configuration(cfg);
+    conf.set("juicefs.users", users1.toUri().getPath());
+    conf.set("juicefs.groups", groups1.toUri().getPath());
+    conf.set("juicefs.superuser", UserGroupInformation.getCurrentUser().getShortUserName());
+
+    FileSystem newFs = createNewFs(conf, null, null);
+    Path p = new Path("/test_user_group_file");
+    newFs.create(p).close();
+    newFs.setOwner(p, "user1", "group1");
+    newFs.close();
+
+    conf.set("juicefs.users", users2.toUri().getPath());
+    conf.set("juicefs.groups", groups2.toUri().getPath());
+    newFs = createNewFs(conf, null, null);
+    FileStatus fileStatus = newFs.getFileStatus(p);
+    assertEquals("user2", fileStatus.getOwner());
+    assertEquals("group2", fileStatus.getGroup());
+    newFs.close();
   }
 }

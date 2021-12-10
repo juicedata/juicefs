@@ -75,7 +75,6 @@ public class JuiceFileSystemImpl extends FileSystem {
   private int minBufferSize;
   private int cacheReplica;
   private boolean fileChecksumEnabled;
-  private boolean posixBehavior;
   private Libjfs lib;
   private long handle;
   private UserGroupInformation ugi;
@@ -135,10 +134,6 @@ public class JuiceFileSystemImpl extends FileSystem {
     int jfs_mkdir(long pid, long h, String path, short mode);
 
     int jfs_rename(long pid, long h, String src, String dst);
-
-    int jfs_symlink(long pid, long h, String target, String path);
-
-    int jfs_readlink(long pid, long h, String path, Pointer buf, int bufsize);
 
     int jfs_stat1(long pid, long h, String path, Pointer buf);
 
@@ -292,10 +287,6 @@ public class JuiceFileSystemImpl extends FileSystem {
     String superuser = getConf(conf, "superuser", "hdfs");
     String supergroup = getConf(conf, "supergroup", conf.get("dfs.permissions.superusergroup", "supergroup"));
     String mountpoint = getConf(conf, "mountpoint", "");
-    posixBehavior = !mountpoint.equals("");
-    if (posixBehavior) {
-      LOG.info("change to POSIX behavior: overwrite in rename, unlink don't follow symlink");
-    }
 
     initCache(conf);
     refreshCache(conf);
@@ -394,6 +385,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     URI uri = path.toUri();
     FileSystem fs;
     try {
+      URI defaultUri = getDefaultUri(getConf());
+      if (uri.getScheme() == null) {
+        uri = defaultUri;
+      } else {
+        if (uri.getAuthority() == null && (uri.getScheme().equals(defaultUri.getScheme()))) {
+          uri = defaultUri;
+        }
+      }
       if (getScheme().equals(uri.getScheme()) &&
               (name != null && name.equals(uri.getAuthority()))) {
         fs = this;
@@ -1123,7 +1122,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       }
       if (fd == EEXIST) {
         if (!overwrite || isDirectory(f)) {
-          throw new FileAlreadyExistsException("File already exists: " + f);
+          throw new FileAlreadyExistsException("Path already exists: " + f);
         }
         delete(f, false);
         continue;
@@ -1268,12 +1267,17 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
     statistics.incrementWriteOps(1);
+    String srcStr = makeQualified(src).toUri().getPath();
+    String dstStr = makeQualified(dst).toUri().getPath();
+    if (src.equals(dst)) {
+      FileStatus st = getFileStatus(src);
+      return st.isFile();
+    }
+    if (dstStr.startsWith(srcStr) && (dstStr.charAt(srcStr.length()) == Path.SEPARATOR_CHAR)) {
+      return false;
+    }
     int r = lib.jfs_rename(Thread.currentThread().getId(), handle, normalizePath(src), normalizePath(dst));
     if (r == EEXIST) {
-      if (posixBehavior) {
-        FileStatus stt = getFileLinkStatus(dst);
-        throw new IOException("unexpected " + stt);
-      }
       try {
         FileStatus st = getFileStatus(dst);
         if (st.isDirectory()) {
@@ -1301,41 +1305,12 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private boolean rmr(Path p) throws IOException {
-    FileStatus st;
-    try {
-      st = getFileLinkStatus(p);
-    } catch (FileNotFoundException e) {
-      return false;
-    }
     int r = lib.jfs_rmr(Thread.currentThread().getId(), handle, normalizePath(p));
     if (r == ENOENT) {
       return false;
     }
     if (r < 0) {
       throw error(r, p);
-    }
-    if (posixBehavior)
-      return true;
-    try {
-      st = getFileLinkStatus(p);
-    } catch (FileNotFoundException e) {
-      return true;
-    }
-    if (st.isSymlink()) {
-      try {
-        Path target = st.getSymlink();
-        FileSystem fs = getFileSystem(target);
-        fs.delete(target, true);
-      } catch (FileNotFoundException e) {
-      }
-      return delete(p, false);
-    }
-    if (st.isDirectory()) {
-      FileStatus[] children = listStatus(p);
-      for (int i = 0; i < children.length; i++) {
-        rmr(children[i].getPath());
-      }
-      return rmr(p);
     }
     return true;
   }
@@ -1345,29 +1320,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     statistics.incrementWriteOps(1);
     if (recursive)
       return rmr(p);
-    FileStatus st = null;
-    if (!posixBehavior) {
-      try {
-        st = getFileLinkStatus(p);
-      } catch (FileNotFoundException e) {
-        return false;
-      }
-    }
     int r = lib.jfs_delete(Thread.currentThread().getId(), handle, normalizePath(p));
     if (r == ENOENT) {
       return false;
     }
     if (r < 0) {
       throw error(r, p);
-    }
-    if (!posixBehavior && st.isSymlink()) {
-      Path target = st.getSymlink();
-      try {
-        FileSystem fs = getFileSystem(target);
-        fs.delete(target, false);
-      } catch (IllegalArgumentException ignored) {
-        LOG.warn("invalid symlink " + p + " -> " + target);
-      }
     }
     return true;
   }
@@ -1398,12 +1356,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     String user = buf.getString(28);
     String group = buf.getString(28 + user.length() + 1);
     assert (30 + user.length() + group.length() == size);
-    if (readlink && ((mode >> 27) & 1) == 1) {
-      return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group,
-              getLinkTarget(p), p);
-    } else {
-      return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group, p);
-    }
+    return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group, p);
   }
 
   @Override
@@ -1436,18 +1389,8 @@ public class JuiceFileSystemImpl extends FileSystem {
           System.arraycopy(results, 0, rs, 0, j);
           results = rs;
         }
-        // resolve symlink to target
         Path p = makeQualified(new Path(f, new String(name)));
-        FileStatus st = newFileStatus(p, buf.slice(offset + 1), size, true);
-        if (st.isSymlink() && !posixBehavior) {
-          Path target = st.getSymlink();
-          try {
-            st = getFileSystem(target).getFileStatus(target);
-          } catch (IOException e) {
-            LOG.warn("broken symlink " + p + " -> " + target);
-          }
-          st.setPath(p);
-        }
+        FileStatus st = newFileStatus(p, buf.slice(offset + 1), size, false);
         results[j] = st;
         offset += 1 + size;
         j++;
@@ -1503,40 +1446,11 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
     statistics.incrementReadOps(1);
-    return getFileStatusInternal(f, true);
-  }
-
-  @Override
-  public void createSymlink(final Path target, final Path link, final boolean createParent) throws IOException {
-    statistics.incrementWriteOps(1);
-    if (createParent) {
-      Path parent = link.getParent();
-      if (parent != null) {
-        FsPermission perm = FsPermission.getDirDefault().applyUMask(FsPermission.getUMask(getConf()));
-        mkdirs(parent, perm);
-      }
-    }
-    String targetPath;
     try {
-      targetPath = normalizePath(target);
-    } catch (IllegalArgumentException e) {
-      targetPath = URLDecoder.decode(target.toUri().toString());
+      return getFileStatusInternal(f, true);
+    } catch (ParentNotDirectoryException e) {
+      throw new FileNotFoundException(f.toString());
     }
-    int r = lib.jfs_symlink(Thread.currentThread().getId(), handle, targetPath, normalizePath(link));
-    if (r != 0) {
-      throw error(r, link.getParent());
-    }
-  }
-
-  @Override
-  public FileStatus getFileLinkStatus(final Path f) throws IOException {
-    statistics.incrementReadOps(1);
-    FileStatus st = getFileStatusInternal(f, false);
-    if (st.isSymlink()) {
-      Path targetQual = FSLinkResolver.qualifySymlinkTarget(getUri(), st.getPath(), st.getSymlink());
-      st.setSymlink(targetQual);
-    }
-    return st;
   }
 
   private FileStatus getFileStatusInternal(final Path f, boolean dereference) throws IOException {
@@ -1572,19 +1486,6 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public String getCanonicalServiceName() {
     return null; // Does not support Token
-  }
-
-  @Override
-  public Path getLinkTarget(Path f) throws IOException {
-    statistics.incrementReadOps(1);
-    Pointer tbuf = Memory.allocate(Runtime.getRuntime(lib), 4096);
-    int r = lib.jfs_readlink(Thread.currentThread().getId(), handle, normalizePath(f), tbuf, 4096);
-    if (r < 0) {
-      throw error(r, f);
-    }
-    Path target = new Path(tbuf.getString(0));
-    Path fullTarget = FSLinkResolver.qualifySymlinkTarget(getUri(), f, target);
-    return fullTarget;
   }
 
   @Override
