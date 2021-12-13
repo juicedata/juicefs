@@ -56,7 +56,7 @@ storageClasses:
 ```shell
 $ helm repo add juicefs-csi-driver https://juicedata.github.io/juicefs-csi-driver/
 $ helm repo update
-$ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install -f ./values.yaml
+$ helm install juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver -n kube-system -f ./values.yaml
 ```
 
 3. 检查部署状态
