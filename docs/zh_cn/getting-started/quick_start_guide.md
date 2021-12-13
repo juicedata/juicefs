@@ -3,6 +3,7 @@ sidebar_label: 快速上手指南
 sidebar_position: 2
 slug: /quick_start_guide
 ---
+
 # JuiceFS 快速上手指南
 
 创建 JuiceFS 文件系统，需要以下 3 个方面的准备：
@@ -11,7 +12,9 @@ slug: /quick_start_guide
 2. 准备对象存储
 3. 下载安装 JuiceFS 客户端
 
-> 还不了解 JuiceFS？可以先查阅 [JuiceFS 是什么？](../introduction/introduction.md)
+:::tip 提示
+还不了解 JuiceFS？可以先查阅 [JuiceFS 是什么？](../introduction/introduction.md)
+:::
 
 ## 1. 准备 Redis 数据库
 
@@ -27,9 +30,13 @@ $ sudo docker run -d --name redis \
 
 容器创建成功以后，可使用 `redis://127.0.0.1:6379` 访问 redis 数据库。
 
-> **注意**：以上命令将 Redis 的数据持久化在 Docker 的 `redis-data` 数据卷当中，你可以按需修改数据持久化的存储位置。
+:::info 说明
+以上命令将 Redis 的数据持久化在 Docker 的 `redis-data` 数据卷当中，你可以按需修改数据持久化的存储位置。
+:::
 
-> **安全提示**：以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
+:::caution 注意
+以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
+:::
 
 有关 Redis 数据库相关的更多内容，[点此查看](../reference/how_to_setup_metadata_engine.md#Redis)。
 
@@ -55,11 +62,13 @@ $ sudo docker run -d --name minio \
 
 对象存储初始的 Access Key 和 Secret Key 均为 `minioadmin`。
 
-> **注意**：最新的 MinIO 集成了新版控制台界面，以上命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口。另外，还将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数。
+:::info 说明
+最新的 MinIO 集成了新版控制台界面，以上命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口。另外，还将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数。
+:::
 
 ## 3. 安装 JuiceFS 客户端
 
-JuiceFS 同时支持 Linux、Windows、macOS 三大操作系统平台，你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，请根据实际使用的系统和架构选择对应的版本。
+JuiceFS 同时支持 Linux、Windows、macOS 等操作系统及各种处理器架构，你可以在 [这里下载](https://github.com/juicedata/juicefs/releases/latest) 最新的预编译的二进制程序，请参考[这个文档](installation.md#安装预编译客户端)根据实际使用的系统和处理器架构选择对应的版本。
 
 以 x86 架构的 Linux 系统为例，下载文件名包含 `linux-amd64` 的压缩包：
 
@@ -75,7 +84,9 @@ $ tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
-> **提示**：你也可以从源代码手动编译 JuiceFS 客户端。
+:::tip 提示
+你也可以从源代码[「手动编译 JuiceFS 客户端」](installation.md#手动编译客户端)
+:::
 
 ## 4. 创建 JuiceFS 文件系统
 
@@ -104,9 +115,13 @@ $ juicefs format \
 
 可以通过 `juicefs format -h` 命令，获得创建文件系统的完整帮助信息。
 
-> **注意**：你可以根据需要，创建无限多个 JuiceFS 文件系统。但需要注意的是，每个 Redis 数据库中只能创建一个文件系统。比如要再创建一个名为 `memory` 的文件系统时，可以使用 Redis 中的 2 号数据库，即 `redis://127.0.0.1:6379/2` 。
+:::info 说明
+你可以根据需要，创建无限多个 JuiceFS 文件系统。但需要注意的是，每个 Redis 数据库中只能创建一个文件系统。比如要再创建一个名为 `memory` 的文件系统时，可以使用 Redis 中的 2 号数据库，即 `redis://127.0.0.1:6379/2` 。
+:::
 
-> **注意**：如果不指定 `--storage` 选项，JuiceFS 客户端会使用本地磁盘作为数据存储。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](../reference/how_to_setup_object_storage.md#本地磁盘)查看详情。
+:::info 说明
+如果不指定 `--storage` 选项，JuiceFS 客户端会使用本地磁盘作为数据存储。使用本地存储时，JuiceFS 只能在本地单机使用，无法被网络内其他客户端挂载，[点此](../reference/how_to_setup_object_storage.md#本地磁盘)查看详情。
+:::
 
 ## 5. 挂载 JuiceFS 文件系统
 
@@ -116,7 +131,9 @@ JuiceFS 文件系统创建完成以后，接下来就可以把它挂载到操作
 $ sudo juicefs mount -d redis://127.0.0.1:6379/1 /mnt/jfs
 ```
 
-> **注意**：挂载 JuiceFS 文件系统时，不需要显式指定文件系统的名称，只要填写正确的 Redis 服务器地址和数据库编号即可。
+:::tip 提示
+挂载 JuiceFS 文件系统时，不需要显式指定文件系统的名称，只要填写正确的 Redis 服务器地址和数据库编号即可。
+:::
 
 执行命令后，会看到类似下面的内容输出，说明 JuiceFS 文件系统已经成功挂载到系统上了。
 
@@ -136,7 +153,9 @@ $ df -Th
 JuiceFS:pics   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
 ```
 
-> **注意**：默认情况下， JuiceFS 的缓存位于 `/var/jfsCache` 目录，为了获得该目录的读写权限，这里使用了 sudo 命令，以管理员权限挂载的 JuiceFS 文件系统。普通用户在读写 `/mnt/jfs` 时，需要为用户赋予该目录的操作权限。
+:::info 说明
+默认情况下， JuiceFS 的缓存位于 `/var/jfsCache` 目录，为了获得该目录的读写权限，这里使用了 `sudo` 命令，以管理员权限挂载的 JuiceFS 文件系统。普通用户在读写 `/mnt/jfs` 时，需要为用户赋予该目录的操作权限。
+:::
 
 ## 6. 开机自动挂载 JuiceFS
 
@@ -146,7 +165,9 @@ JuiceFS:pics   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
 $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 ```
 
-> **注意**：执行以上命令之前，我们假设 `juicefs` 客户端程序已经在 `/usr/local/bin` 目录。你也可以直接从下载的客户端压缩包中再解压一份  `juicefs`  程序出来，按上述要求重命名并复制到 `/sbin/` 目录。
+:::info 说明
+执行以上命令之前，我们假设 `juicefs` 客户端程序已经在 `/usr/local/bin` 目录。你也可以直接从下载的客户端压缩包中再解压一份  `juicefs`  程序出来，按上述要求重命名并复制到 `/sbin/` 目录。
+:::
 
 编辑 `/etc/fstab` 配置文件，另起新行，参照以下格式添加一条记录：
 
@@ -164,7 +185,9 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=2048     0  0
 ```
 
-> **注意**：默认情况下，CentOS 6 在系统启动时不会挂载网络文件系统，你需要执行命令开启网络文件系统的自动挂载支持：
+:::caution 注意
+默认情况下，CentOS 6 在系统启动时不会挂载网络文件系统，你需要执行命令开启网络文件系统的自动挂载支持：
+:::
 
 ```bash
 $ sudo chkconfig --add netfs
@@ -188,7 +211,9 @@ JuiceFS:pics   fuse.juicefs  1.0P  1.1G  1.0P    1% /mnt/jfs
 $ sudo juicefs umount /mnt/jfs
 ```
 
-> **提示**：执行 `juicefs umount -h` 命令，可以获取卸载命令的详细帮助信息。
+:::tip 提示
+执行 `juicefs umount -h` 命令，可以获取卸载命令的详细帮助信息。
+:::
 
 ### 卸载失败
 
@@ -201,7 +226,9 @@ exit status 1
 
 发生这种情况，可能是因为某些程序正在读写文件系统中的文件。为了确保数据安全，你应该首先排查是哪些程序正在与文件系统中的文件进行交互（例如通过 `lsof` 命令），并尝试结束他们之间的交互动作，然后再重新执行卸载命令。
 
-> **风险提示**：以下内容包含的命令可能会导致文件损坏、丢失，请务必谨慎操作！
+:::caution 注意
+以下内容包含的命令可能会导致文件损坏、丢失，请务必谨慎操作！
+:::
 
 当然，在你能够确保数据安全的前提下，也可以在卸载命令中添加 `--force` 或 `-f` 参数，强制卸载文件系统：
 

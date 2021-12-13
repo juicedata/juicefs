@@ -12,6 +12,10 @@ To create a JuiceFS file system, you need the following 3 preparations:
 2. Object storage is used to store data blocks
 3. JuiceFS Client
 
+:::tip
+Don’t know JuiceFS? You can check first [What is JuiceFS?](../introduction/introduction.md)
+:::
+
 ## 1. Redis Database
 
 You can easily buy cloud Redis databases in various configurations on the cloud computing platform, but if you just want to quickly evaluate JuiceFS, you can use Docker to quickly run a Redis database instance on your local computer:
@@ -26,9 +30,13 @@ $ sudo docker run -d --name redis \
 
 After the container is successfully created, you can use `redis://127.0.0.1:6379` to access the Redis database.
 
-> **Note**: The above command persists Redis data in the `redis-data` data volume of docker, and you can modify the storage location of data persistence as needed.
+:::info
+The above command persists Redis data in the `redis-data` data volume of docker, and you can modify the storage location of data persistence as needed.
+:::
 
-> **Security Tips**: The Redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database via the Internet, it is strongly recommended to refer to [Redis official documentation](https: //redis.io/topics/security) Enable protected mode.
+:::caution
+The Redis database instance created by the above command does not enable authentication and exposes the host's `6379` port. If you want to access this database via the Internet, it is strongly recommended to refer to [Redis official documentation](https://redis.io/topics/security) to enable protected mode.
+:::
 
 For more information about Redis database, [click here to view](../reference/how_to_setup_metadata_engine.md#redis).
 
@@ -56,11 +64,13 @@ The initial Access Key and Secret Key of the root user are both `minioadmin`.
 
 After the container is successfully created, use `http://127.0.0.1:9000` to access the MinIO management interface. The initial Access Key and Secret Key of the root user are both `minioadmin`.
 
-> **Note**: The latest MinIO includes a new web console, the above command sets and maps port `9900` through  `--console-address ":9900"`  option. In addtion, it maps the data path in the MinIO container to the `minio-data` folder in the current directory. You can modify these options as needed.
+:::info
+The latest MinIO includes a new web console, the above command sets and maps port `9900` through  `--console-address ":9900"`  option. In addtion, it maps the data path in the MinIO container to the `minio-data` folder in the current directory. You can modify these options as needed.
+:::
 
 ## 3. JuiceFS Client
 
-JuiceFS supports Linux, Windows, and MacOS. You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest). Please refer to the actual system and Select the corresponding version of the architecture.
+JuiceFS supports Linux, Windows, macOS and other operating systems and various processor architectures. You can download the latest pre-compiled binary program from [here](https://github.com/juicedata/juicefs/releases/latest), please refer to [this document](installation.md#install-the-pre-compiled-client) to select the corresponding version according to the actual system and processor architecture used.
 
 Take the x86-based Linux system as an example, download the compressed package containing `linux-amd64` in the file name:
 
@@ -76,7 +86,9 @@ $ tar -zxf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 $ sudo install juicefs /usr/local/bin
 ```
 
-> **Note**: You can also build the JuiceFS client manually from the source code. 
+:::tip
+You can also compile the JuiceFS client manually from the source code, please refer to [document](installation.md#manually-compiling).
+:::
 
 ## 4. Create JuiceFS file system
 
@@ -103,9 +115,13 @@ After executing the command, you will see output similar to the following, indic
 2021/04/29 23:01:18.361674 juicefs[34223] <INFO>: Volume is formatted as {Name:pics UUID:9c0fab76-efd0-43fd-a81e-ae0916e2fc90 Storage:minio Bucket:http://127.0.0.1:9000/pics AccessKey:minioadmin SecretKey:removed BlockSize:4096 Compression:none Partitions:0 EncryptKey:}
 ```
 
-> **Note**: You can create as many JuiceFS file systems as you need. But it should be noted that only one file system can be created in each Redis database. For example, when you want to create another file system named `memory`, you have to use another database in Redis, such as No.2, which is `redis://127.0.0.1:6379/2`.
+:::info
+You can create as many JuiceFS file systems as you need. But it should be noted that only one file system can be created in each Redis database. For example, when you want to create another file system named `memory`, you have to use another database in Redis, such as No.2, which is `redis://127.0.0.1:6379/2`.
+:::
 
-> **Note**: If you don't specify `--storage` option, the JuiceFS client will use the local disk as data storage. When using local storage, JuiceFS can only be used on a local stand-alone machine and cannot be mounted by other clients in the network. [Click here](../reference/how_to_setup_object_storage.md#local-disk) for details.
+:::info
+If you don't specify `--storage` option, the JuiceFS client will use the local disk as data storage. When using local storage, JuiceFS can only be used on a local stand-alone machine and cannot be mounted by other clients in the network. [Click here](../reference/how_to_setup_object_storage.md#local-disk) for details.
+:::
 
 ## 5. Mount JuiceFS file system
 
@@ -115,7 +131,9 @@ After the JuiceFS file system is created, you can mount it on the operating syst
 $ sudo juicefs mount -d redis://127.0.0.1:6379/1 /mnt/jfs
 ```
 
-> **Note**: When mounting the JuiceFS file system, there is no need to explicitly specify the name of the file system, just fill in the correct Redis server address and database number.
+:::tip
+When mounting the JuiceFS file system, there is no need to explicitly specify the name of the file system, just fill in the correct Redis server address and database number.
+:::
 
 After executing the command, you will see output similar to the following, indicating that the JuiceFS file system has been successfully mounted on the system.
 
@@ -135,7 +153,9 @@ Filesystem     Type          Size    Used   Avail    Use%    Mounted on
 JuiceFS:pics   fuse.juicefs  1.0P     64K    1.0P     1%     /mnt/jfs
 ```
 
-> **Note**: By default, the cache of JuiceFS is located in the `/var/jfsCache` directory. In order to obtain the read and write permissions of this directory, the `sudo` command is used here to mount the JuiceFS file system with administrator privileges. When ordinary users read and write `/mnt/jfs`, please assign them the appropriate permissions.
+:::info
+By default, the cache of JuiceFS is located in the `/var/jfsCache` directory. In order to obtain the read and write permissions of this directory, the `sudo` command is used here to mount the JuiceFS file system with administrator privileges. When ordinary users read and write `/mnt/jfs`, please assign them the appropriate permissions.
+:::
 
 ## 6. Automatically mount JuiceFS on boot
 
@@ -145,7 +165,9 @@ Rename the `juicefs` client to `mount.juicefs` and copy it to the `/sbin/` direc
 $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 ```
 
-> **Note**: Before executing the above command, we assume that the `juicefs` client program is already in the `/usr/local/bin` directory. You can also unzip a copy of the `juicefs` program directly from the downloaded compression package, rename it according to the above requirements, and copy it to the `/sbin/` directory.
+:::info
+Before executing the above command, we assume that the `juicefs` client program is already in the `/usr/local/bin` directory. You can also unzip a copy of the `juicefs` program directly from the downloaded compression package, rename it according to the above requirements, and copy it to the `/sbin/` directory.
+:::
 
 Edit the `/etc/fstab` configuration file, start a new line, and add a record according to the following format:
 
@@ -155,7 +177,7 @@ Edit the `/etc/fstab` configuration file, start a new line, and add a record acc
 
 - Please replace `<META-URL>` with the actual Redis database address in the format of `redis://<user>:<password>@<host>:<port>/<db>`, for example: `redis ://localhost:6379/1`.
 - Please replace `<MOUNTPOINT>` with the actual mount point of the file system, for example: `/jfs`.
-- If necessary, please replace `[,<MOUNT-OPTIONS>]` with the actual [mount option](../reference/command_reference.md#juicefs-mount) to be set, and multiple options are separated by commas.
+- If necessary, please replace `[,<MOUNT-OPTIONS>]` with the actual [mount options](../reference/command_reference.md#juicefs-mount) to be set, and multiple options are separated by commas.
 
 For example:
 
@@ -163,7 +185,9 @@ For example:
 redis://localhost:6379/1 /jfs juicefs _netdev,max-uploads=50,writeback,cache-size=2048 0 0
 ```
 
-> **Note**: By default, CentOS 6 will not mount the network file system when the system starts. You need to execute the command to enable the automatic mounting support of the network file system:
+:::caution
+By default, CentOS 6 will not mount the network file system when the system starts. You need to execute the command to enable the automatic mounting support of the network file system:
+:::
 
 ```bash
 $ sudo chkconfig --add netfs
@@ -187,7 +211,9 @@ You can see that the mount point of the file system `pics` is `/mnt/jfs`, execut
 $ sudo juicefs umount /mnt/jfs
 ```
 
-> **Prompt**: Execute the `juicefs umount -h` command to obtain detailed help information for the unmount command.
+:::tip
+Execute the `juicefs umount -h` command to obtain detailed help information for the unmount command.
+:::
 
 ### Unmount failed
 
@@ -200,7 +226,9 @@ exit status 1
 
 This can happen because some programs are reading and writing files in the file system. To ensure data security, you should first check which programs are interacting with files in the file system (e.g. through the `lsof` command), and try to end the interaction between them, and then execute the uninstall command again.
 
-> **Risk Tips**: The commands contained in the following content may cause files damage or loss, please be cautious!
+:::caution
+The commands contained in the following content may cause files damage or loss, please be cautious!
+:::
 
 Of course, you can also add the `--force` or `-f` parameter to the unmount command to force the file system to be unmounted, but you have to bear the possible catastrophic consequences:
 
