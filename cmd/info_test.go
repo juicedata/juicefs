@@ -29,20 +29,6 @@ import (
 func TestInfo(t *testing.T) {
 	Convey("TestInfo", t, func() {
 		Convey("TestInfo", func() {
-
-			var res string
-			tmpFile, err := os.CreateTemp("/tmp", "")
-			if err != nil {
-				t.Fatalf("creat tmp file failed: %v", err)
-			}
-			defer os.Remove(tmpFile.Name())
-			if err != nil {
-				t.Fatalf("create temporary file: %v", err)
-			}
-			// mock os.Stdout
-			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
-			defer patches.Reset()
-
 			metaUrl := "redis://127.0.0.1:6379/10"
 			mountpoint := "/tmp/testDir"
 			defer ResetRedis(metaUrl)
@@ -50,23 +36,29 @@ func TestInfo(t *testing.T) {
 				t.Fatalf("mount failed: %v", err)
 			}
 			defer func(mountpoint string) {
-				err := UmountTmp(mountpoint)
-				if err != nil {
+				if err := UmountTmp(mountpoint); err != nil {
 					t.Fatalf("umount failed: %v", err)
 				}
 			}(mountpoint)
 
-			err = os.MkdirAll(fmt.Sprintf("%s/dir1", mountpoint), 0777)
-			if err != nil {
-				t.Fatalf("mount failed: %v", err)
+			if err := os.MkdirAll(fmt.Sprintf("%s/dir1", mountpoint), 0777); err != nil {
+				t.Fatalf("mkdirAll failed: %v", err)
 			}
 			for i := 0; i < 10; i++ {
 				filename := fmt.Sprintf("%s/dir1/f%d.txt", mountpoint, i)
-				err := ioutil.WriteFile(filename, []byte("test"), 0644)
-				if err != nil {
-					t.Fatalf("mount failed: %v", err)
+				if err := ioutil.WriteFile(filename, []byte("test"), 0644); err != nil {
+					t.Fatalf("writeFile failed: %v", err)
 				}
 			}
+
+			tmpFile, err := os.CreateTemp("/tmp", "")
+			if err != nil {
+				t.Fatalf("creat temporary file failed: %v", err)
+			}
+			defer os.Remove(tmpFile.Name())
+			// mock os.Stdout
+			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
+			defer patches.Reset()
 
 			infoArgs := []string{"", "info", fmt.Sprintf("%s/dir1", mountpoint)}
 			err = Main(infoArgs)
@@ -77,7 +69,7 @@ func TestInfo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("readFile failed: %v", err)
 			}
-			res = string(content)
+			res := string(content)
 			var answer = `/tmp/testDir/dir1: inode: 2 files:	10 dirs:	1 length:	40 size:	45056`
 			replacer := strings.NewReplacer("\n", "", " ", "")
 			res = replacer.Replace(res)
