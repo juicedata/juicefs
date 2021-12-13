@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/google/uuid"
 	"github.com/hanwen/go-fuse/v2/posixtest"
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -207,8 +208,8 @@ func StatFS(t *testing.T, mp string) {
 	if st.Blocks-st.Bavail != 0 {
 		t.Fatalf("used blocks should be 0 but got %d", st.Blocks-st.Bavail)
 	}
-	if st.Files != 0 {
-		t.Fatalf("used files should be 0 but got %e", st.Files)
+	if st.Files-st.Ffree != 0 {
+		t.Fatalf("used files should be 0 but got %d", st.Files)
 	}
 }
 
@@ -239,6 +240,22 @@ func Xattrs(t *testing.T, mp string) {
 	}
 }
 
+func Flock(t *testing.T, mp string) {
+	path := filepath.Join(mp, "go-lock.lock")
+	ioutil.WriteFile(path, []byte(""), 0644)
+
+	fileLock := flock.New(path)
+	locked, err := fileLock.TryLock()
+	if err != nil {
+		t.Fatalf("try lock: %s", err)
+	}
+	if locked {
+		fileLock.Unlock()
+	} else {
+		t.Fatal("no lock")
+	}
+}
+
 func TestFUSE(t *testing.T) {
 	f, err := os.CreateTemp("", "meta")
 	if err != nil {
@@ -258,6 +275,7 @@ func TestFUSE(t *testing.T) {
 
 	posixtest.All["Xattrs"] = Xattrs
 	posixtest.All["StatFS"] = StatFS
+	posixtest.All["Flock"] = Flock
 	for c, f := range posixtest.All {
 		cleanup(mp)
 		t.Run(c, func(t *testing.T) {

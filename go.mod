@@ -23,6 +23,7 @@ require (
 	github.com/emersion/go-webdav v0.3.0
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/go-sql-driver/mysql v1.5.0
+	github.com/gofrs/flock v0.8.1 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/google/btree v1.0.1
 	github.com/google/gops v0.3.13
