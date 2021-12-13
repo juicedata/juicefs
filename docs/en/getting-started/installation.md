@@ -84,7 +84,7 @@ Take Windows 10 system as an example, download the file with the filename `windo
 
 To make it easier to use, you can create a folder named `juicefs` in the root directory of the `C:\` disk, and extract `juicefs.exe` to that folder. Then add `C:\juicefs` to the environment variables of your system, restart the system to let the settings take effect, and then you can run `juicefs` commands directly using the `Command Prompt` or `PowerShell` terminal that come with your system.
 
-![Windows ENV path](../images/windows-path.png)
+![Windows ENV path](../images/windows-path-en.png)
 
 #### Using the Linux client in WSL
 
