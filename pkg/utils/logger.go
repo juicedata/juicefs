@@ -69,7 +69,7 @@ func (l *logHandle) Log(args ...interface{}) {
 
 func newLogger(name string) *logHandle {
 	l := &logHandle{name: name}
-	l.Out = os.Stderr
+	l.Out = os.Stdout
 	l.Formatter = l
 	l.Level = logrus.InfoLevel
 	l.Hooks = make(logrus.LevelHooks)
