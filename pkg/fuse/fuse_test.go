@@ -256,6 +256,35 @@ func Flock(t *testing.T, mp string) {
 	}
 }
 
+func PosixLock(t *testing.T, mp string) {
+	path := filepath.Join(mp, "go-lock.lock")
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fl syscall.Flock_t
+	fl.Pid = int32(os.Getpid())
+	fl.Type = syscall.F_WRLCK
+	fl.Whence = int16(os.SEEK_SET)
+	err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &fl)
+	for err == syscall.EAGAIN {
+		err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &fl)
+	}
+	if err != nil {
+		t.Fatalf("lock: %s", err)
+	}
+	if err = syscall.FcntlFlock(f.Fd(), syscall.F_GETLK, &fl); err != nil {
+		t.Fatalf("getlk: %s", err)
+	}
+	if int(fl.Pid) != os.Getpid() {
+		t.Fatalf("pid: %d != %d", fl.Pid, os.Getpid())
+	}
+	fl.Type = syscall.F_UNLCK
+	if err = syscall.FcntlFlock(f.Fd(), syscall.F_GETLK, &fl); err != nil {
+		t.Fatalf("unlock: %s", err)
+	}
+}
+
 func TestFUSE(t *testing.T) {
 	f, err := os.CreateTemp("", "meta")
 	if err != nil {
