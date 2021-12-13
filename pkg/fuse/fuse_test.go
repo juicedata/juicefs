@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -195,8 +196,26 @@ func cleanup(mp string) {
 	}
 }
 
+func StatFS(t *testing.T, mp string) {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(mp, &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.Bsize != 4096 {
+		t.Fatalf("bsize should be 4096 but got %d ", st.Bsize)
+	}
+	if st.Blocks-st.Bavail != 0 {
+		t.Fatalf("used blocks should be 0 but got %d", st.Blocks-st.Bavail)
+	}
+	if st.Files != 0 {
+		t.Fatalf("used files should be 0 but got %e", st.Files)
+	}
+}
+
 func Xattrs(t *testing.T, mp string) {
 	path := filepath.Join(mp, "myfile")
+	ioutil.WriteFile(path, []byte(""), 0644)
+
 	const prefix = "user."
 	var value = []byte("test-attr-value")
 	if err := xattr.Set(path, prefix+"test", value); err != nil {
@@ -208,7 +227,7 @@ func Xattrs(t *testing.T, mp string) {
 
 	if data, err := xattr.Get(path, prefix+"test"); err != nil {
 		t.Fatal(err)
-	} else if bytes.Equal(data, value) {
+	} else if !bytes.Equal(data, value) {
 		t.Fatalf("expect %v bot got %v", value, data)
 	}
 	if err := xattr.Remove(path, prefix+"test"); err != nil {
@@ -238,6 +257,7 @@ func TestFUSE(t *testing.T) {
 	defer umount(mp, true)
 
 	posixtest.All["Xattrs"] = Xattrs
+	posixtest.All["StatFS"] = StatFS
 	for c, f := range posixtest.All {
 		cleanup(mp)
 		t.Run(c, func(t *testing.T) {
