@@ -35,11 +35,11 @@ func TestInfo(t *testing.T) {
 			if err := MountTmp(metaUrl, mountpoint); err != nil {
 				t.Fatalf("mount failed: %v", err)
 			}
-			defer func(mountpoint string) {
+			defer func() {
 				if err := UmountTmp(mountpoint); err != nil {
 					t.Fatalf("umount failed: %v", err)
 				}
-			}(mountpoint)
+			}()
 
 			if err := os.MkdirAll(fmt.Sprintf("%s/dir1", mountpoint), 0777); err != nil {
 				t.Fatalf("mkdirAll failed: %v", err)
@@ -55,15 +55,15 @@ func TestInfo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("creat temporary file failed: %v", err)
 			}
+			defer tmpFile.Close()
 			defer os.Remove(tmpFile.Name())
 			// mock os.Stdout
 			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
 			defer patches.Reset()
 
 			infoArgs := []string{"", "info", fmt.Sprintf("%s/dir1", mountpoint)}
-			err = Main(infoArgs)
-			if err != nil {
-				t.Fatalf("info failed: %v", err)
+			if err = Main(infoArgs); err != nil {
+				t.Fatalf("test info failed: %v", err)
 			}
 			content, err := ioutil.ReadFile(tmpFile.Name())
 			if err != nil {
