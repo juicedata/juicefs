@@ -15,18 +15,18 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+//nolint:errcheck
 package fuse
 
 import (
 	"bytes"
 	"errors"
-	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -112,51 +112,33 @@ func mount(url, mp string) {
 	conf.DirEntryTimeout = time.Second
 	conf.HideInternal = true
 	v := vfs.NewVFS(conf, m, store)
-	err = Serve(v, "allow_other,debug,rw", true)
+	err = Serve(v, "debug", true)
 	if err != nil {
 		log.Fatalf("fuse server err: %s\n", err)
 	}
 	_ = m.CloseSession()
 }
 
-func umount(mp string, force bool) error {
+func umount(mp string, force bool) {
 	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
+	if _, err := exec.LookPath("fusermount"); err == nil {
 		if force {
-			cmd = exec.Command("diskutil", "umount", "force", mp)
+			cmd = exec.Command("fusermount", "-uz", mp)
 		} else {
-			cmd = exec.Command("diskutil", "umount", mp)
+			cmd = exec.Command("fusermount", "-u", mp)
 		}
-	case "linux":
-		if _, err := exec.LookPath("fusermount"); err == nil {
-			if force {
-				cmd = exec.Command("fusermount", "-uz", mp)
-			} else {
-				cmd = exec.Command("fusermount", "-u", mp)
-			}
+	} else {
+		if force {
+			cmd = exec.Command("umount", "-l", mp)
 		} else {
-			if force {
-				cmd = exec.Command("umount", "-l", mp)
-			} else {
-				cmd = exec.Command("umount", mp)
-			}
+			cmd = exec.Command("umount", mp)
 		}
-	case "windows":
-		if !force {
-			_ = os.Mkdir(filepath.Join(mp, ".UMOUNTIT"), 0755)
-			return nil
-		} else {
-			cmd = exec.Command("taskkill", "/IM", "juicefs.exe", "/F")
-		}
-	default:
-		return fmt.Errorf("OS %s is not supported", runtime.GOOS)
 	}
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Print(string(out))
 	}
-	return err
 }
 
 func waitMountpoint(mp string) chan error {
@@ -269,7 +251,7 @@ func PosixLock(t *testing.T, mp string) {
 	var fl syscall.Flock_t
 	fl.Pid = int32(os.Getpid())
 	fl.Type = syscall.F_WRLCK
-	fl.Whence = int16(os.SEEK_SET)
+	fl.Whence = io.SEEK_SET
 	err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &fl)
 	for err == syscall.EAGAIN {
 		err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &fl)
