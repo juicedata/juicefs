@@ -28,7 +28,7 @@ $ sudo docker run -d --name redis \
 	redis redis-server --appendonly yes
 ```
 
-容器创建成功以后，可使用 `redis://127.0.0.1:6379` 访问 redis 数据库。
+容器创建成功以后，可使用 `redis://127.0.0.1:6379` 访问 Redis 数据库。
 
 :::info 说明
 以上命令将 Redis 的数据持久化在 Docker 的 `redis-data` 数据卷当中，你可以按需修改数据持久化的存储位置。
@@ -38,7 +38,7 @@ $ sudo docker run -d --name redis \
 以上命令创建的 Redis 数据库实例没有启用身份认证，且暴露了主机的 `6379` 端口，如果你要通过互联网访问这个数据库实例，请参考 [Redis Security](https://redis.io/topics/security) 中的建议。
 :::
 
-有关 Redis 数据库相关的更多内容，[点此查看](../reference/how_to_setup_metadata_engine.md#Redis)。
+有关 Redis 数据库相关的更多内容，[点此查看](../reference/how_to_setup_metadata_engine.md#redis)。
 
 ## 2. 准备对象存储
 
