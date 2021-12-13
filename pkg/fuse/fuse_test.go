@@ -18,6 +18,7 @@
 package fuse
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -36,6 +37,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/pkg/xattr"
 )
 
 func format(url string) {
@@ -193,6 +195,31 @@ func cleanup(mp string) {
 	}
 }
 
+func Xattrs(t *testing.T, mp string) {
+	path := filepath.Join(mp, "myfile")
+	const prefix = "user."
+	var value = []byte("test-attr-value")
+	if err := xattr.Set(path, prefix+"test", value); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := xattr.List(path); err != nil {
+		t.Fatal(err)
+	}
+
+	if data, err := xattr.Get(path, prefix+"test"); err != nil {
+		t.Fatal(err)
+	} else if bytes.Equal(data, value) {
+		t.Fatalf("expect %v bot got %v", value, data)
+	}
+	if err := xattr.Remove(path, prefix+"test"); err != nil {
+		t.Fatal(err)
+	}
+	// One can also specify the flags parameter to be passed to the OS.
+	if err := xattr.SetWithFlags(path, prefix+"test", []byte("test-attr-value2"), xattr.XATTR_CREATE); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestFUSE(t *testing.T) {
 	f, err := os.CreateTemp("", "meta")
 	if err != nil {
@@ -209,6 +236,8 @@ func TestFUSE(t *testing.T) {
 		t.Fatalf("setup: %s", err)
 	}
 	defer umount(mp, true)
+
+	posixtest.All["Xattrs"] = Xattrs
 	for c, f := range posixtest.All {
 		cleanup(mp)
 		t.Run(c, func(t *testing.T) {
