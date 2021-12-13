@@ -1,3 +1,5 @@
+// +build linux
+
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
  *
@@ -105,6 +107,7 @@ func mount(url, mp string) {
 	conf.AttrTimeout = time.Second
 	conf.EntryTimeout = time.Second
 	conf.DirEntryTimeout = time.Second
+	conf.HideInternal = true
 	v := vfs.NewVFS(conf, m, store)
 	err = Serve(v, "", true)
 	if err != nil {
@@ -175,6 +178,21 @@ func setUp(metaUrl, mp string) error {
 	return <-waitMountpoint(mp)
 }
 
+func cleanup(mp string) {
+	parent, err := os.Open(mp)
+	if err != nil {
+		return
+	}
+	defer parent.Close()
+	names, err := parent.Readdirnames(-1)
+	if err != nil {
+		return
+	}
+	for _, n := range names {
+		os.RemoveAll(filepath.Join(mp, n))
+	}
+}
+
 func TestFUSE(t *testing.T) {
 	f, err := os.CreateTemp("", "meta")
 	if err != nil {
@@ -192,8 +210,9 @@ func TestFUSE(t *testing.T) {
 	}
 	defer umount(mp, true)
 	for c, f := range posixtest.All {
+		cleanup(mp)
 		t.Run(c, func(t *testing.T) {
-			f(t, c)
+			f(t, mp)
 		})
 	}
 }
