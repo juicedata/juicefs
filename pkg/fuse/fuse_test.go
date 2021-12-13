@@ -98,7 +98,6 @@ func mount(url, mp string) {
 	conf := &vfs.Config{
 		Meta:       metaConf,
 		Format:     format,
-		Version:    "Juicefs",
 		Mountpoint: mp,
 		Chunk:      &chunkConf,
 	}
@@ -113,7 +112,7 @@ func mount(url, mp string) {
 	conf.DirEntryTimeout = time.Second
 	conf.HideInternal = true
 	v := vfs.NewVFS(conf, m, store)
-	err = Serve(v, "", true)
+	err = Serve(v, "allow_other,writeback_cache,debug,rw", true)
 	if err != nil {
 		log.Fatalf("fuse server err: %s\n", err)
 	}
@@ -262,6 +261,11 @@ func PosixLock(t *testing.T, mp string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer f.Close()
+	f.WriteString("hello")
+	if err := f.Sync(); err != nil {
+		t.Fatalf("fsync: %s", err)
+	}
 	var fl syscall.Flock_t
 	fl.Pid = int32(os.Getpid())
 	fl.Type = syscall.F_WRLCK
@@ -280,7 +284,7 @@ func PosixLock(t *testing.T, mp string) {
 		t.Fatalf("pid: %d != %d", fl.Pid, os.Getpid())
 	}
 	fl.Type = syscall.F_UNLCK
-	if err = syscall.FcntlFlock(f.Fd(), syscall.F_GETLK, &fl); err != nil {
+	if err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &fl); err != nil {
 		t.Fatalf("unlock: %s", err)
 	}
 }
@@ -305,6 +309,7 @@ func TestFUSE(t *testing.T) {
 	posixtest.All["Xattrs"] = Xattrs
 	posixtest.All["StatFS"] = StatFS
 	posixtest.All["Flock"] = Flock
+	posixtest.All["POSIXLock"] = PosixLock
 	for c, f := range posixtest.All {
 		cleanup(mp)
 		t.Run(c, func(t *testing.T) {
