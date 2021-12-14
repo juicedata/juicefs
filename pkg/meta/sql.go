@@ -235,8 +235,11 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.engine.Sync2(new(setting), new(counter)); err != nil {
 		logger.Fatalf("create table setting, counter: %s", err)
 	}
-	if err := m.engine.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
-		logger.Fatalf("create table node, edge, symlink, xattr: %s", err)
+	if err := m.engine.Sync2(new(edge)); err != nil && !strings.Contains(err.Error(), "Duplicate entry") {
+		logger.Fatalf("create table edge: %s", err)
+	}
+	if err := m.engine.Sync2(new(node), new(symlink), new(xattr)); err != nil {
+		logger.Fatalf("create table node, symlink, xattr: %s", err)
 	}
 	if err := m.engine.Sync2(new(chunk), new(chunkRef)); err != nil {
 		logger.Fatalf("create table chunk, chunk_ref: %s", err)
