@@ -251,7 +251,7 @@ func PosixLock(t *testing.T, mp string) {
 	var fl syscall.Flock_t
 	fl.Pid = int32(os.Getpid())
 	fl.Type = syscall.F_WRLCK
-	fl.Whence = io.SEEK_SET
+	fl.Whence = io.SeekStart
 	err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &fl)
 	for err == syscall.EAGAIN {
 		err = syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &fl)
