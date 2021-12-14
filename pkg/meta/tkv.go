@@ -373,7 +373,6 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			tx.set(m.inodeKey(1), m.marshal(attr))
 			tx.incrBy(m.counterKey("nextInode"), 2)
 			tx.incrBy(m.counterKey("nextChunk"), 1)
-			tx.incrBy(m.counterKey("nextSession"), 1)
 		}
 		return nil
 	})
@@ -2415,9 +2414,8 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	progress.Wait()
 
 	counters := &DumpedCounters{
-		NextInode:   2,
-		NextChunk:   1,
-		NextSession: 1,
+		NextInode: 2,
+		NextChunk: 1,
 	}
 	refs := make(map[string]int64)
 
