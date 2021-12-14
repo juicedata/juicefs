@@ -267,11 +267,16 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	}
 	return m.txn(func(s *xorm.Session) error {
 		if format.TrashDays > 0 {
-			n.Inode = TrashInode
-			n.Mode = 0555
-			_, err := s.InsertOne(n)
-			if err != nil && !strings.Contains(err.Error(), "UNIQUE") {
+			ok2, err := s.Get(&node{Inode: TrashInode})
+			if err != nil {
 				return err
+			}
+			if !ok2 {
+				n.Inode = TrashInode
+				n.Mode = 0555
+				if err = mustInsert(s, n); err != nil {
+					return err
+				}
 			}
 		}
 		if ok {
