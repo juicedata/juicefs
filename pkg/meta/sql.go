@@ -284,7 +284,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		var cs = []counter{
 			{"nextInode", 2}, // 1 is root
 			{"nextChunk", 1},
-			{"nextSession", 1},
+			{"nextSession", 0},
 			{"usedSpace", 0},
 			{"totalInodes", 0},
 			{"nextCleanupSlices", 0},
@@ -2761,9 +2761,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	progress.Wait()
 
 	counters := &DumpedCounters{
-		NextInode:   2,
-		NextChunk:   1,
-		NextSession: 1,
+		NextInode: 2,
+		NextChunk: 1,
 	}
 	refs := make(map[uint64]*chunkRef)
 

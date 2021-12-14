@@ -901,8 +901,8 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	var ino Ino
 	var err error
 	if parent == TrashInode {
-		var next uint64
-		next, err = r.rdb.Incr(ctx, "nextTrash").Uint64()
+		var next int64
+		next, err = r.incrCounter("nextTrash", 1)
 		ino = TrashInode + Ino(next)
 	} else {
 		ino, err = r.nextInode()
@@ -2149,11 +2149,11 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 
-	chunkid, err := r.rdb.Incr(ctx, "nextchunk").Uint64()
-	if err != nil {
+	var chunkid uint64
+	st := r.NewChunk(ctx, &chunkid)
+	if st != 0 {
 		return
 	}
-
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
 	err = r.newMsg(CompactChunk, chunks, chunkid)
 	if err != nil {
@@ -2838,9 +2838,9 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
-			NextInode:   cs[2] + 1, // Redis counter is 1 smaller than sql/tkv
+			NextInode:   cs[2] + 1, // Redis nextInode/nextChunk is 1 smaller than sql/tkv
 			NextChunk:   cs[3] + 1,
-			NextSession: cs[4] + 1,
+			NextSession: cs[4],
 			NextTrash:   cs[5],
 		},
 		Sustained: sessions,

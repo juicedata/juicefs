@@ -18,7 +18,7 @@
     "usedInodes": 11,
     "nextInodes": 30,
     "nextChunk": 9,
-    "nextSession": 1,
+    "nextSession": 0,
     "nextTrash": 1,
     "nextCleanupSlices": 0
   },
