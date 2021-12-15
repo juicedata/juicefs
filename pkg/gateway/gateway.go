@@ -152,7 +152,7 @@ func (n *jfsObjects) path(p ...string) string {
 	if len(p) > 0 && p[0] == n.conf.Format.Name {
 		p = p[1:]
 	}
-	return sep + minio.PathJoin(p...)
+	return sep + path.Join(p...)
 }
 
 func (n *jfsObjects) tpath(p ...string) string {
@@ -520,7 +520,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		return
 	}
 	if strings.HasSuffix(object, sep) && !fi.IsDir() {
-		err = jfsToObjectErr(ctx, os.ErrNotExist, bucket, object)
+		err = jfsToObjectErr(ctx, syscall.ENOENT, bucket, object)
 		return
 	}
 	return minio.ObjectInfo{
