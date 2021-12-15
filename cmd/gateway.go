@@ -80,8 +80,8 @@ func gatewayFlags() *cli.Command {
 			Usage: "disable MinIO startup information",
 		},
 		&cli.BoolFlag{
-			Name:  "multi-bucket",
-			Usage: "enable Multi-bucket model",
+			Name:  "multi-buckets",
+			Usage: "use top level of directories as buckets",
 		})
 	return &cli.Command{
 		Name:      "gateway",
@@ -255,5 +255,5 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, "gateway "+version.Version())
 	}
-	return jfsgateway.NewJFSGateway(conf, m, store, c.Bool("multi-bucket"))
+	return jfsgateway.NewJFSGateway(conf, m, store, c.Bool("multi-buckets"))
 }
