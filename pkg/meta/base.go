@@ -341,7 +341,7 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	return w.Bytes()
 }
 
-func clearSGID(ctx Context, cur *Attr, set *Attr) {
+func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	switch runtime.GOOS {
 	case "darwin":
 		if ctx.Uid() != 0 {

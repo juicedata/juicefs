@@ -598,7 +598,7 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return errno(err)
 }
 
-func clearSGIDSQL(ctx Context, cur *node, set *Attr) {
+func clearSUGIDSQL(ctx Context, cur *node, set *Attr) {
 	switch runtime.GOOS {
 	case "darwin":
 		if ctx.Uid() != 0 {
@@ -640,7 +640,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		}
 		var changed bool
 		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			clearSGIDSQL(ctx, &cur, attr)
+			clearSUGIDSQL(ctx, &cur, attr)
 			changed = true
 		}
 		if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
