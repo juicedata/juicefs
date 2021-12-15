@@ -48,7 +48,7 @@ func format(url string) {
 		Name:      "test",
 		UUID:      uuid.New().String(),
 		Storage:   "file",
-		Bucket:    os.TempDir(),
+		Bucket:    os.TempDir() + "/",
 		BlockSize: 4096,
 	}
 	err := m.Init(format, true)
