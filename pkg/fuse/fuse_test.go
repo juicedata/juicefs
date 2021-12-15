@@ -288,8 +288,10 @@ func TestFUSE(t *testing.T) {
 	}
 	defer umount(mp, true)
 
+	t.Run("StatFS", func(t *testing.T) {
+		StatFS(t, mp)
+	})
 	posixtest.All["Xattrs"] = Xattrs
-	posixtest.All["StatFS"] = StatFS
 	posixtest.All["Flock"] = Flock
 	posixtest.All["POSIXLock"] = PosixLock
 	for c, f := range posixtest.All {
