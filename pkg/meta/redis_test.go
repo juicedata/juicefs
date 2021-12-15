@@ -188,7 +188,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	// check owner permission
 	var p1, c1 Ino
-	if st := m.Mkdir(ctx2, 1, "d1", 02766, 022, 0, &p1, attr); st != 0 {
+	if st := m.Mkdir(ctx2, 1, "d1", 02755, 022, 0, &p1, attr); st != 0 {
 		t.Fatalf("mkdir d1: %s", st)
 	}
 	attr.Gid = 1
