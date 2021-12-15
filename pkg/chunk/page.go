@@ -18,11 +18,15 @@ package chunk
 import (
 	"errors"
 	"io"
+	"os"
 	"runtime"
+	"runtime/debug"
 	"sync/atomic"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
+
+var pageStack = os.Getenv("JFS_PAGE_STACK") != ""
 
 // Page is a page with refcount
 type Page struct {
@@ -30,6 +34,7 @@ type Page struct {
 	offheap bool
 	dep     *Page
 	Data    []byte
+	stack   []byte
 }
 
 // NewPage create a new page.
@@ -43,10 +48,13 @@ func NewOffPage(size int) *Page {
 	}
 	p := utils.Alloc(size)
 	page := &Page{refs: 1, offheap: true, Data: p}
+	if pageStack {
+		page.stack = debug.Stack()
+	}
 	runtime.SetFinalizer(page, func(p *Page) {
 		refcnt := atomic.LoadInt32(&p.refs)
 		if refcnt != 0 {
-			logger.Errorf("refcount of page %p is not zero: %d", p, refcnt)
+			logger.Errorf("refcount of page %p (%d bytes) is not zero: %d, created by: %s", p, cap(p.Data), refcnt, string(p.stack))
 			if refcnt > 0 {
 				p.Release()
 			}
@@ -64,11 +72,17 @@ func (p *Page) Slice(off, len int) *Page {
 
 // Acquire increase the refcount
 func (p *Page) Acquire() {
+	// if pageStack {
+	// 	p.stack = append(p.stack, debug.Stack()...)
+	// }
 	atomic.AddInt32(&p.refs, 1)
 }
 
 // Release decrease the refcount
 func (p *Page) Release() {
+	// if pageStack {
+	// 	p.stack = append(p.stack, debug.Stack()...)
+	// }
 	if atomic.AddInt32(&p.refs, -1) == 0 {
 		if p.offheap {
 			utils.Free(p.Data)
