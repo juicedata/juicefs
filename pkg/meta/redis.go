@@ -1,3 +1,4 @@
+//go:build !noredis
 // +build !noredis
 
 /*
@@ -820,7 +821,7 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			attr.Mode |= (cur.Mode & 06000)
 		}
 		var changed bool
-		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
+		if cur.Typ == TypeFile && (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
 			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
 				// clear SUID and SGID
 				cur.Mode &= 01777
