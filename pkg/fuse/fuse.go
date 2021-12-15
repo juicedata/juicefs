@@ -214,13 +214,6 @@ func (fs *fileSystem) RemoveXAttr(cancel <-chan struct{}, header *fuse.InHeader,
 	return fuse.Status(err)
 }
 
-func (fs *fileSystem) Access(cancel <-chan struct{}, in *fuse.AccessIn) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
-	defer releaseContext(ctx)
-	err := fs.v.Access(ctx, Ino(in.NodeId), int(in.Mask))
-	return fuse.Status(err)
-}
-
 func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name string, out *fuse.CreateOut) (code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)

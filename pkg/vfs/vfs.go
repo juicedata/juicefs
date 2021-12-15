@@ -50,6 +50,7 @@ type Config struct {
 	EntryTimeout    time.Duration
 	FastResolve     bool   `json:",omitempty"`
 	AccessLog       string `json:",omitempty"`
+	HideInternal    bool
 }
 
 var (
@@ -310,7 +311,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 			return
 		}
 		h.children = inodes
-		if ino == rootID {
+		if ino == rootID && !v.Conf.HideInternal {
 			// add internal nodes
 			for _, node := range internalNodes {
 				h.children = append(h.children, &meta.Entry{
