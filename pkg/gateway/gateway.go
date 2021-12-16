@@ -47,20 +47,21 @@ const (
 var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
-func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore) (minio.ObjectLayer, error) {
+func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, multiBucket bool) (minio.ObjectLayer, error) {
 	jfs, err := fs.NewFileSystem(conf, m, store)
 	if err != nil {
 		return nil, fmt.Errorf("Initialize failed: %s", err)
 	}
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	return &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30)}, nil
+	return &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), multiBucket: multiBucket}, nil
 }
 
 type jfsObjects struct {
 	minio.GatewayUnsupported
-	conf     *vfs.Config
-	fs       *fs.FileSystem
-	listPool *minio.TreeWalkPool
+	conf        *vfs.Config
+	fs          *fs.FileSystem
+	listPool    *minio.TreeWalkPool
+	multiBucket bool
 }
 
 func (n *jfsObjects) IsCompressionSupported() bool {
@@ -142,7 +143,7 @@ func jfsToObjectErr(ctx context.Context, err error, params ...string) error {
 
 // isValidBucketName verifies whether a bucket name is valid.
 func (n *jfsObjects) isValidBucketName(bucket string) bool {
-	if n.conf.Format.Name != "" && bucket != n.conf.Format.Name {
+	if !n.multiBucket && bucket != n.conf.Format.Name {
 		return false
 	}
 	return s3utils.CheckValidBucketNameStrict(bucket) == nil
@@ -171,7 +172,7 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	if !n.isValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-	if n.conf.Format.Name != "" {
+	if !n.multiBucket {
 		return minio.BucketNotEmpty{Bucket: bucket}
 	}
 	eno := n.fs.Delete(mctx, n.path(bucket))
@@ -182,7 +183,7 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 	if !n.isValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-	if n.conf.Format.Name != "" {
+	if !n.multiBucket {
 		return nil
 	}
 	eno := n.fs.Mkdir(mctx, n.path(bucket), 0755)
@@ -212,7 +213,7 @@ func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
 }
 
 func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
-	if n.conf.Format.Name != "" {
+	if !n.multiBucket {
 		fi, eno := n.fs.Stat(mctx, "/")
 		if eno != 0 {
 			return nil, jfsToObjectErr(ctx, eno)
@@ -233,7 +234,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 		return nil, jfsToObjectErr(ctx, eno)
 	}
 
-	for _, entry := range entries[2:] {
+	for _, entry := range entries {
 		// Ignore all reserved bucket names and invalid bucket names.
 		if isReservedOrInvalidBucket(entry.Name(), false) || !n.isValidBucketName(entry.Name()) {
 			continue
@@ -251,6 +252,20 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 		return buckets[i].Name < buckets[j].Name
 	})
 	return buckets, nil
+}
+
+func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
+	f, eno := n.fs.Open(mctx, n.path(bucket, object), 0)
+	if eno != 0 {
+		return false
+	}
+	defer f.Close(mctx)
+
+	fis, err := f.Readdir(mctx, 0)
+	if err != 0 {
+		return false
+	}
+	return len(fis) == 0
 }
 
 func (n *jfsObjects) isLeafDir(bucket, leafPath string) bool {
@@ -500,14 +515,6 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 		length -= int64(n)
 	}
 	return jfsToObjectErr(ctx, err, bucket, object)
-}
-
-func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
-	fi, eno := n.fs.Stat(mctx, minio.PathJoin(bucket, object))
-	if eno != 0 {
-		return false
-	}
-	return fi.IsDir()
 }
 
 func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {

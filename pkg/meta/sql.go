@@ -202,8 +202,11 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.db.Sync2(new(setting), new(counter)); err != nil {
 		logger.Fatalf("create table setting, counter: %s", err)
 	}
-	if err := m.db.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
-		logger.Fatalf("create table node, edge, symlink, xattr: %s", err)
+	if err := m.db.Sync2(new(edge)); err != nil && !strings.Contains(err.Error(), "Duplicate entry") {
+		logger.Fatalf("create table edge: %s", err)
+	}
+	if err := m.db.Sync2(new(node), new(symlink), new(xattr)); err != nil {
+		logger.Fatalf("create table node, symlink, xattr: %s", err)
 	}
 	if err := m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
 		logger.Fatalf("create table chunk, chunk_ref: %s", err)
@@ -267,11 +270,16 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	}
 	return m.txn(func(s *xorm.Session) error {
 		if format.TrashDays > 0 {
-			n.Inode = TrashInode
-			n.Mode = 0555
-			_, err := s.InsertOne(n)
-			if err != nil && !strings.Contains(err.Error(), "UNIQUE") {
+			ok2, err := s.Get(&node{Inode: TrashInode})
+			if err != nil {
 				return err
+			}
+			if !ok2 {
+				n.Inode = TrashInode
+				n.Mode = 0555
+				if err = mustInsert(s, n); err != nil {
+					return err
+				}
 			}
 		}
 		if ok {
@@ -598,6 +606,30 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return errno(err)
 }
 
+func clearSUGIDSQL(ctx Context, cur *node, set *Attr) {
+	switch runtime.GOOS {
+	case "darwin":
+		if ctx.Uid() != 0 {
+			// clear SUID and SGID
+			cur.Mode &= 01777
+			set.Mode &= 01777
+		}
+	case "linux":
+		// same as ext
+		if cur.Type != TypeDirectory {
+			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
+				// clear SUID and SGID
+				cur.Mode &= 01777
+				set.Mode &= 01777
+			} else {
+				// keep SGID if the file is non-group-executable
+				cur.Mode &= 03777
+				set.Mode &= 03777
+			}
+		}
+	}
+}
+
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
@@ -616,15 +648,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		}
 		var changed bool
 		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
-				// clear SUID and SGID
-				cur.Mode &= 01777
-				attr.Mode &= 01777
-			} else {
-				// keep SGID if the file is non-group-executable
-				cur.Mode &= 03777
-				attr.Mode &= 03777
-			}
+			clearSUGIDSQL(ctx, &cur, attr)
 			changed = true
 		}
 		if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
