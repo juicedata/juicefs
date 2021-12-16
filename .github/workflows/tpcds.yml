@@ -26,20 +26,22 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build linux target
-        run: make juicefs
-
-      - name: Build Hadoop SDK
-        run: make -C sdk/java
-
-      - name: Juicefs Format
-        run: |
-          sudo ./juicefs format memkv:// dev --trash-days 0
+#      - name: Build linux target
+#        run: make juicefs
+#
+#      - name: Build Hadoop SDK
+#        run: make -C sdk/java
+#
+#      - name: Juicefs Format
+#        run: |
+#          sudo ./juicefs format memkv:// dev --trash-days 0
 
       - name: Set up Spark
         run: |
           echo $PWD
-#
+          cd ~
+          echo $PWD
+#          cd /tmp
 #          wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
 #          tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
 #          ln -s spark-3.0.3-bin-hadoop2.7 spark
