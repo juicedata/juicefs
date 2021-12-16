@@ -17,6 +17,7 @@ package chunk
 
 import (
 	"errors"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -38,6 +39,12 @@ func newMemStore(config *Config) *memcache {
 		capacity: config.CacheSize << 20,
 		pages:    make(map[string]memItem),
 	}
+	runtime.SetFinalizer(c, func(c *memcache) {
+		for _, p := range c.pages {
+			p.page.Release()
+		}
+		c.pages = nil
+	})
 	return c
 }
 
