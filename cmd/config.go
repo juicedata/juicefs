@@ -16,12 +16,30 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/urfave/cli/v2"
 )
+
+func userConfirmed(prompt string) bool {
+	fmt.Println(prompt)
+	fmt.Print("Still proceed? [y/N]: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		if text := strings.ToLower(scanner.Text()); text == "y" || text == "yes" {
+			return true
+		} else if text == "" || text == "n" || text == "no" {
+			return false
+		} else {
+			fmt.Print("Please input y(yes) or n(no): ")
+		}
+	}
+	return false
+}
 
 func config(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
@@ -34,33 +52,85 @@ func config(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if len(ctx.LocalFlagNames()) == 0 {
+		format.RemoveSecret()
+		printJson(format)
+		return nil
+	}
+
+	var quota, storage, trash bool
 	var msg strings.Builder
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
-			msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.Capacity, ctx.Uint64(flag)))
-			format.Capacity = ctx.Uint64(flag)
+			if new := ctx.Uint64(flag); new != format.Capacity>>30 {
+				msg.WriteString(fmt.Sprintf("%10s: %d GiB -> %d GiB\n", flag, format.Capacity>>30, new))
+				format.Capacity = new << 30
+				quota = true
+			}
 		case "inodes":
-			msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.Inodes, ctx.Uint64(flag)))
-			format.Inodes = ctx.Uint64(flag)
+			if new := ctx.Uint64(flag); new != format.Inodes {
+				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.Inodes, new))
+				format.Inodes = new
+				quota = true
+			}
 		case "bucket":
-			msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Bucket, ctx.String(flag)))
-			format.Bucket = ctx.String(flag)
+			if new := ctx.String(flag); new != format.Bucket {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Bucket, new))
+				format.Bucket = new
+				storage = true
+			}
 		case "access-key":
-			msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.AccessKey, ctx.String(flag)))
-			format.AccessKey = ctx.String(flag)
+			if new := ctx.String(flag); new != format.AccessKey {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.AccessKey, new))
+				format.AccessKey = new
+				storage = true
+			}
 		case "secret-key":
-			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
-			format.SecretKey = ctx.String(flag)
+			if new := ctx.String(flag); new != format.SecretKey {
+				msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
+				format.SecretKey = new
+				storage = true
+			}
 		case "trash-days":
-			msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.TrashDays, ctx.Uint64(flag)))
-			format.TrashDays = ctx.Int(flag)
+			if new := ctx.Int(flag); new != format.TrashDays {
+				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.TrashDays, new))
+				format.TrashDays = new
+				trash = true
+			}
 		}
 	}
 	if msg.Len() == 0 {
-		format.RemoveSecret()
-		printJson(format)
+		fmt.Println("Nothing changed.")
 		return nil
+	}
+
+	if !ctx.Bool("force") {
+		if storage {
+			blob, err := createStorage(format)
+			if err != nil {
+				return err
+			}
+			if err = test(blob); err != nil {
+				return err
+			}
+		}
+		if quota {
+			var totalSpace, availSpace, iused, iavail uint64
+			_ = m.StatFS(meta.Background, &totalSpace, &availSpace, &iused, &iavail)
+			usedSpace := totalSpace - availSpace
+			if format.Capacity > 0 && usedSpace >= format.Capacity ||
+				format.Inodes > 0 && iused >= format.Inodes {
+				if !userConfirmed(fmt.Sprintf("New quota is too small (used / quota): %d / %d bytes, %d / %d inodes.",
+					usedSpace, format.Capacity, iused, format.Inodes)) {
+					return fmt.Errorf("Aborted.")
+				}
+			}
+		}
+		if trash && format.TrashDays == 0 &&
+			!userConfirmed("The current trash will be emptied and future removed files will purged immediately.") {
+			return fmt.Errorf("Aborted.")
+		}
 	}
 
 	if err = m.Init(*format, false); err == nil {
@@ -99,6 +169,10 @@ func configFlags() *cli.Command {
 			&cli.IntFlag{
 				Name:  "trash-days",
 				Usage: "number of days after which removed files will be permanently deleted",
+			},
+			&cli.BoolFlag{
+				Name:  "force",
+				Usage: "skip sanity check and force update the configurations",
 			},
 		},
 	}

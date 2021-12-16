@@ -62,7 +62,7 @@ func TestConfig(t *testing.T) {
 		t.Fatalf("trash-days %d != expect 2", format.TrashDays)
 	}
 
-	if err = Main([]string{"", "config", metaUrl, "--capacity", "100", "--inodes", "1000000"}); err != nil {
+	if err = Main([]string{"", "config", metaUrl, "--capacity", "10", "--inodes", "1000000"}); err != nil {
 		t.Fatalf("config: %s", err)
 	}
 	if err = Main([]string{"", "config", metaUrl, "--bucket", "/tmp/newBucket", "--access-key", "testAK", "--secret-key", "testSK"}); err != nil {
@@ -74,7 +74,7 @@ func TestConfig(t *testing.T) {
 	if err = json.Unmarshal(data, &format); err != nil {
 		t.Fatalf("json unmarshal: %s", err)
 	}
-	if format.Capacity != 100 || format.Inodes != 1000000 ||
+	if format.Capacity != 10<<30 || format.Inodes != 1000000 ||
 		format.Bucket != "/tmp/newBucket" || format.AccessKey != "testAK" || format.SecretKey != "removed" {
 		t.Fatalf("unexpect format: %+v", format)
 	}
