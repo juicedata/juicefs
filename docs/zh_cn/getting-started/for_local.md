@@ -1,11 +1,11 @@
 ---
-sidebar_label: 快速上手（单机）
+sidebar_label: 快速上手（单机模式）
 sidebar_position: 2
 ---
 
 # JuiceFS 单机模式快速上手指南
 
-JuiceFS 文件系统由「[对象存储](../reference/how_to_setup_object_storage.md)」和「[数据库](../reference/how_to_setup_metadata_engine.md)」共同驱动。除了对象存储，还支持使用本地磁盘、WebDAV 和 HDFS 等作为底层存储。因此，可以使用本地磁盘和 SQLite 数据库快速创建一个单机文件系统用以了解和体验 JuiceFS。
+JuiceFS 文件系统由[「对象存储」](../reference/how_to_setup_object_storage.md)和[「数据库」](../reference/how_to_setup_metadata_engine.md)共同驱动。除了对象存储，还支持使用本地磁盘、WebDAV 和 HDFS 等作为底层存储。因此，可以使用本地磁盘和 SQLite 数据库快速创建一个单机文件系统用以了解和体验 JuiceFS。
 
 ## 安装客户端
 
@@ -17,7 +17,7 @@ JuiceFS 文件系统由「[对象存储](../reference/how_to_setup_object_storag
 
 ### 基本概念
 
-创建文件系统使用客户端提供的 [format](../reference/command_reference.md#juicefs-format) 命令，一般格式为：
+创建文件系统使用客户端提供的 [`format`](../reference/command_reference.md#juicefs-format) 命令，一般格式为：
 
 ```shell
 juicefs format [command options] META-URL NAME
@@ -57,7 +57,7 @@ juicefs format sqlite3://myjfs.db myjfs
 
 ### 基本概念
 
-挂载文件系统使用客户端提供的 [mount](../reference/command_reference.md#juicefs-mount) 命令，一般格式为：
+挂载文件系统使用客户端提供的 [`mount`](../reference/command_reference.md#juicefs-mount) 命令，一般格式为：
 
 ```shell
 juicefs mount [command options] META-URL MOUNTPOINT
@@ -91,7 +91,13 @@ juicefs mount sqlite3://myjfs.db mnt
 juicefs mount sqlite3://myjfs.db mnt -d
 ```
 
-接下来，任何存入挂载点 `mnt` 的文件，都会按照 [JuiceFS 的管理规则](../reference/how_juicefs_store_files.md)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
+接下来，任何存入挂载点 `mnt` 的文件，都会按照 [JuiceFS 的文件存储格式](../introduction/architecture.md#如何存储文件)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
+
+最后执行以下命令可以将挂载点 `mnt` 卸载：
+
+```shell
+juicefs umount mnt
+```
 
 ## 更进一步
 
@@ -109,8 +115,8 @@ JuiceFS 支持几乎所有的对象存储服务，一般来说，创建对象存
 以阿里云 OSS 为例，创建好的资源大概像下面这样：
 
 - **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
-- **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
-- **Access Key Secret**: `ZYXwvutsrqpoNMLkJiHgfeDCBA`
+- **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
+- **Access Key Secret**：`ZYXwvutsrqpoNMLkJiHgfeDCBA`
 
 :::note 注意
 创建对象存储时的过程各个平台会略有差别，建议查看云平台的帮助手册操作。另外，有些平台可能会针对内外网提供不同的 Endpoint 地址，由于本文要从本地访问对象存储，因此请选择使用面向外网访问的地址。
@@ -119,6 +125,10 @@ JuiceFS 支持几乎所有的对象存储服务，一般来说，创建对象存
 ### 上手实践
 
 接下来使用 SQLite 和阿里云 OSS 对象存储创建一个 JuiceFS 文件系统：
+
+:::note 注意
+如果 `myjfs.db` 文件已经存在，请先删除它再执行以下命令。
+:::
 
 ```shell
 juicefs format --storage oss \
@@ -130,10 +140,10 @@ juicefs format --storage oss \
 
 在上述命令中，数据库和文件系统名称保持不变，增加了对象存储相关的信息：
 
-- **--storage**：设置存储类型，比如 oss、s3 等；
-- **--bucket**：设置对象存储的 Endpoint 地址；
-- **--access-key**：设置对象存储 API 访问密钥 Access Key ID；
-- **--secret-key**：设置对象存储 API 访问密钥 Access Key Secret。
+- `--storage`：设置存储类型，比如 oss、s3 等；
+- `--bucket`：设置对象存储的 Endpoint 地址；
+- `--access-key`：设置对象存储 API 访问密钥 Access Key ID；
+- `--secret-key`：设置对象存储 API 访问密钥 Access Key Secret。
 
 :::note 注意
 请使用你自己的对象存储信息替换上述命令中的信息。
