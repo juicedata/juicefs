@@ -38,11 +38,12 @@ jobs:
 
       - name: Set up Spark
         run: |
-          wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
-          tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
-          ln -s spark-3.0.3-bin-hadoop2.7 spark
-          cp juicefs/sdk/java/target/juicefs-hadoop*jar spark/jars
           echo $PWD
+#
+#          wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
+#          tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
+#          ln -s spark-3.0.3-bin-hadoop2.7 spark
+#          cp juicefs/sdk/java/target/juicefs-hadoop*jar spark/jars
 
 #      - name: Set up tpcds-kit
 #        run: |
