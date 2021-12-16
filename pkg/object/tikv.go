@@ -19,6 +19,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -27,12 +28,12 @@ import (
 	"time"
 
 	"github.com/tikv/client-go/v2/config"
-	kv "github.com/tikv/client-go/v2/tikv"
+	"github.com/tikv/client-go/v2/rawkv"
 )
 
 type tikv struct {
 	DefaultObjectStorage
-	c    *kv.RawKVClient
+	c    *rawkv.Client
 	addr string
 }
 
@@ -41,7 +42,7 @@ func (t *tikv) String() string {
 }
 
 func (t *tikv) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	d, err := t.c.Get([]byte(key))
+	d, err := t.c.Get(context.TODO(), []byte(key))
 	if len(d) == 0 {
 		err = errors.New("not found")
 	}
@@ -60,11 +61,11 @@ func (t *tikv) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	return t.c.Put([]byte(key), d)
+	return t.c.Put(context.TODO(), []byte(key), d)
 }
 
 func (t *tikv) Head(key string) (Object, error) {
-	data, err := t.c.Get([]byte(key))
+	data, err := t.c.Get(context.TODO(), []byte(key))
 	return &obj{
 		key,
 		int64(len(data)),
@@ -74,7 +75,7 @@ func (t *tikv) Head(key string) (Object, error) {
 }
 
 func (t *tikv) Delete(key string) error {
-	return t.c.Delete([]byte(key))
+	return t.c.Delete(context.TODO(), []byte(key))
 }
 
 func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
@@ -90,7 +91,7 @@ func newTiKV(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
 		}
 		pds[i] = pd
 	}
-	c, err := kv.NewRawKVClient(pds, config.DefaultConfig().Security)
+	c, err := rawkv.NewClient(context.TODO(), pds, config.DefaultConfig().Security)
 	if err != nil {
 		return nil, err
 	}
