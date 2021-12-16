@@ -14,10 +14,10 @@ When using `juicefs format` command to initialize JuiceFS volume, users may spec
 - use `--trash-days 0` to disable this feature; the trash will be emptied in a short time, and all files removed afterwards will be purged immediately.
 - trash is disabled for older versions. If you want to enable it for an existed volume, please upgrade **ALL** clients first and then change `--trash-days` to a positive value manually.
 
-After initializing a volume, you can still update `trash-days` with the `format` command, and please note that you have to make sure **all other arguments are included** as well, e.g:
+After initializing a volume, you can still update `trash-days` with the `config` command, e.g:
 
 ```bash
-$ juicefs format --trash-days 7 ... META-URL NAME
+$ juicefs config META-URL --trash-days 7
 ```
 
 Then you can check new configurations through `status` command:
