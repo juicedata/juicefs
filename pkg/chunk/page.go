@@ -72,17 +72,17 @@ func (p *Page) Slice(off, len int) *Page {
 
 // Acquire increase the refcount
 func (p *Page) Acquire() {
-	// if pageStack {
-	// 	p.stack = append(p.stack, debug.Stack()...)
-	// }
+	if pageStack {
+		p.stack = append(p.stack, debug.Stack()...)
+	}
 	atomic.AddInt32(&p.refs, 1)
 }
 
 // Release decrease the refcount
 func (p *Page) Release() {
-	// if pageStack {
-	// 	p.stack = append(p.stack, debug.Stack()...)
-	// }
+	if pageStack {
+		p.stack = append(p.stack, debug.Stack()...)
+	}
 	if atomic.AddInt32(&p.refs, -1) == 0 {
 		if p.offheap {
 			utils.Free(p.Data)
