@@ -69,6 +69,7 @@ jobs:
           [repositories]
           local
           maven-central: https://repo1.maven.org/maven2/
+          typesafe-releases: https://repo.typesafe.com/typesafe/ivy-releases/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
           EOF
           git clone --depth 1 https://github.com/databricks/spark-sql-perf.git
           cd spark-sql-perf
