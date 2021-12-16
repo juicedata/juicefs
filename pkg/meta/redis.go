@@ -2515,7 +2515,9 @@ func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	e := &DumpedEntry{}
 	a := []byte(m.snap.stringMap[m.inodeKey(inode)])
 	if len(a) == 0 {
-		logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+		if inode != TrashInode {
+			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+		}
 		return nil
 	}
 	attr := &Attr{}
