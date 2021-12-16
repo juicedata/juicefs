@@ -2334,7 +2334,9 @@ func (m *dbMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
 	if !ok {
-		logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+		if inode != TrashInode {
+			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+		}
 		return nil
 	}
 	attr := &Attr{}
