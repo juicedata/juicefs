@@ -39,11 +39,11 @@ jobs:
       - name: Set up Spark
         working-directory: /tmp
         run: |
-          wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
+          wget --quiet https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
           tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
           ln -s spark-3.0.3-bin-hadoop2.7 spark
-          cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
-          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/jars/conf
+#          cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
+#          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/jars/conf
           echo /tmp/spark/bin >> $GITHUB_PATH
           echo /tmp/spark/sbin >> $GITHUB_PATH
           start-master.sh -i localhost
