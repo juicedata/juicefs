@@ -808,6 +808,30 @@ func (m *dbMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return 0
 }
 
+func clearSUGIDSQL(ctx Context, cur *node, set *Attr) {
+	switch runtime.GOOS {
+	case "darwin":
+		if ctx.Uid() != 0 {
+			// clear SUID and SGID
+			cur.Mode &= 01777
+			set.Mode &= 01777
+		}
+	case "linux":
+		// same as ext
+		if cur.Type != TypeDirectory {
+			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
+				// clear SUID and SGID
+				cur.Mode &= 01777
+				set.Mode &= 01777
+			} else {
+				// keep SGID if the file is non-group-executable
+				cur.Mode &= 03777
+				set.Mode &= 03777
+			}
+		}
+	}
+}
+
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
@@ -826,15 +850,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		}
 		var changed bool
 		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
-				// clear SUID and SGID
-				cur.Mode &= 01777
-				attr.Mode &= 01777
-			} else {
-				// keep SGID if the file is non-group-executable
-				cur.Mode &= 03777
-				attr.Mode &= 03777
-			}
+			clearSUGIDSQL(ctx, &cur, attr)
 			changed = true
 		}
 		if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
