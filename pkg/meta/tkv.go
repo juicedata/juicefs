@@ -2186,11 +2186,11 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 
 func (r *kvMeta) cleanupZeroRef(chunkid uint64, size uint32) {
 	_ = r.txn(func(tx kvTxn) error {
-		v := tx.incrBy(r.fmtKey(chunkid, size), 0)
+		v := tx.incrBy(r.sliceKey(chunkid, size), 0)
 		if v != 0 {
 			return syscall.EINVAL
 		}
-		tx.dels(r.fmtKey(chunkid, size))
+		tx.dels(r.sliceKey(chunkid, size))
 		return nil
 	})
 }
