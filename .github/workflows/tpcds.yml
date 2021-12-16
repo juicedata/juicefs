@@ -37,15 +37,14 @@ jobs:
 #          sudo ./juicefs format memkv:// dev --trash-days 0
 
       - name: Set up Spark
+        working-directory: /tmp
         run: |
           echo $PWD
-          cd ~
-          echo $PWD
-#          cd /tmp
-#          wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
-#          tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
-#          ln -s spark-3.0.3-bin-hadoop2.7 spark
-#          cp juicefs/sdk/java/target/juicefs-hadoop*jar spark/jars
+          wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
+          tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
+          ln -s spark-3.0.3-bin-hadoop2.7 spark
+          cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
+          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/jars/conf
 
 #      - name: Set up tpcds-kit
 #        run: |
