@@ -29,8 +29,8 @@ jobs:
 #      - name: Build linux target
 #        run: make juicefs
 #
-#      - name: Build Hadoop SDK
-#        run: make -C sdk/java
+      - name: Build Hadoop SDK
+        run: make -C sdk/java
 #
 #      - name: Juicefs Format
 #        run: |
