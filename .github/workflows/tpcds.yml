@@ -29,27 +29,15 @@ jobs:
         run: |
           wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
           tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
-          cd spark-3.0.3-bin-hadoop2.7
 
-      - name: Check out tpcds-kit
-        uses: actions/checkout@v2
-        with:
-          repository: databricks/tpcds-kit
-          fetch-depth: 1
-
-      - name: Build tpcds-kit
+      - name: Set up tpcds-kit
         run: |
           sudo apt-get install gcc make flex bison byacc git
+          git clone --depth 1 https://github.com/databricks/tpcds-kit.git
           cd tpcds-kit/tools
           make OS=LINUX
 
-      - name: Check out spark-sql-perf
-        uses: actions/checkout@v2
-        with:
-          repository: databricks/spark-sql-perf
-          fetch-depth: 1
-
-      - name: Build spark-sql-perf
+      - name: Set up spark-sql-perf
         run: |
           sudo apt-get update
           sudo apt-get install apt-transport-https curl gnupg -yqq
@@ -59,5 +47,6 @@ jobs:
           sudo chmod 644 /etc/apt/trusted.gpg.d/scalasbt-release.gpg
           sudo apt-get update
           sudo apt-get install sbt
+          git clone --depth 1 https://github.com/databricks/spark-sql-perf.git
           cd spark-sql-perf
           sbt package
