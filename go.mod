@@ -22,8 +22,8 @@ require (
 	github.com/dnaeon/go-vcr v1.2.0 // indirect
 	github.com/emersion/go-webdav v0.3.0
 	github.com/go-redis/redis/v8 v8.4.0
-	github.com/go-sql-driver/mysql v1.5.0
-	github.com/gofrs/flock v0.8.1 // indirect
+	github.com/go-sql-driver/mysql v1.6.0
+	github.com/gofrs/flock v0.8.1
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/google/btree v1.0.1
 	github.com/google/gops v0.3.13
@@ -48,10 +48,10 @@ require (
 	github.com/nats-io/nats-server/v2 v2.6.2 // indirect
 	github.com/ncw/swift v1.0.53
 	github.com/pengsrc/go-shared v0.2.0 // indirect
-	github.com/pingcap/log v0.0.0-20210317133921-96f4fcab92a4
+	github.com/pingcap/log v0.0.0-20210625125904-98ed8e2eb1c7
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.10.0
-	github.com/pkg/xattr v0.4.4 // indirect
+	github.com/pkg/xattr v0.4.4
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect
 	github.com/prometheus/client_golang v1.9.0
 	github.com/prometheus/client_model v0.2.0
@@ -63,7 +63,7 @@ require (
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
 	github.com/tidwall/gjson v1.9.3 // indirect
-	github.com/tikv/client-go/v2 v2.0.0-alpha.0.20210709052506-aadf3cf62721
+	github.com/tikv/client-go/v2 v2.0.0-rc
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
 	github.com/upyun/go-sdk/v3 v3.0.2
 	github.com/urfave/cli/v2 v2.3.0
@@ -73,7 +73,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
-	golang.org/x/sys v0.0.0-20210823070655-63515b42dcdf
+	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 	google.golang.org/api v0.5.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
