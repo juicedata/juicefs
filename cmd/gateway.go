@@ -711,11 +711,17 @@ func (n *jfsObjects) GetObject(ctx context.Context, bucket, object string, start
 }
 
 func (n *jfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
-	fi, eno := n.fs.Stat(mctx, minio.PathJoin(bucket, object))
+	f, eno := n.fs.Open(mctx, n.path(bucket, object), 0)
 	if eno != 0 {
 		return false
 	}
-	return fi.IsDir()
+	defer f.Close(mctx)
+
+	fis, err := f.Readdir(mctx, 0)
+	if err != 0 {
+		return false
+	}
+	return len(fis) == 0
 }
 
 func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
