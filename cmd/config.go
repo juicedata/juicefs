@@ -23,32 +23,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var changableConfigs = []cli.Flag{
-	&cli.Uint64Flag{
-		Name:  "capacity",
-		Value: 0,
-		Usage: "the limit for space in GiB",
-	},
-	&cli.Uint64Flag{
-		Name:  "inodes",
-		Value: 0,
-		Usage: "the limit for number of inodes",
-	},
-	&cli.StringFlag{
-		Name:  "access-key",
-		Usage: "Access key for object storage (env ACCESS_KEY)",
-	},
-	&cli.StringFlag{
-		Name:  "secret-key",
-		Usage: "Secret key for object storage (env SECRET_KEY)",
-	},
-	&cli.IntFlag{
-		Name:  "trash-days",
-		Value: 1,
-		Usage: "number of days after which removed files will be permanently deleted",
-	},
-}
-
 func config(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
@@ -69,6 +43,9 @@ func config(ctx *cli.Context) error {
 		case "inodes":
 			msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.Inodes, ctx.Uint64(flag)))
 			format.Inodes = ctx.Uint64(flag)
+		case "bucket":
+			msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Bucket, ctx.String(flag)))
+			format.Bucket = ctx.String(flag)
 		case "access-key":
 			msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.AccessKey, ctx.String(flag)))
 			format.AccessKey = ctx.String(flag)
@@ -98,6 +75,31 @@ func configFlags() *cli.Command {
 		Usage:     "change config of a volume",
 		ArgsUsage: "META-URL",
 		Action:    config,
-		Flags:     changableConfigs,
+		Flags: []cli.Flag{
+			&cli.Uint64Flag{
+				Name:  "capacity",
+				Usage: "the limit for space in GiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "inodes",
+				Usage: "the limit for number of inodes",
+			},
+			&cli.StringFlag{
+				Name:  "bucket",
+				Usage: "A bucket URL to store data",
+			},
+			&cli.StringFlag{
+				Name:  "access-key",
+				Usage: "Access key for object storage",
+			},
+			&cli.StringFlag{
+				Name:  "secret-key",
+				Usage: "Secret key for object storage",
+			},
+			&cli.IntFlag{
+				Name:  "trash-days",
+				Usage: "number of days after which removed files will be permanently deleted",
+			},
+		},
 	}
 }

@@ -239,7 +239,7 @@ func formatFlags() *cli.Command {
 	default:
 		defaultBucket = "/var/jfs"
 	}
-	cmd := &cli.Command{
+	return &cli.Command{
 		Name:      "format",
 		Usage:     "format a volume",
 		ArgsUsage: "META-URL NAME",
@@ -248,6 +248,16 @@ func formatFlags() *cli.Command {
 				Name:  "block-size",
 				Value: 4096,
 				Usage: "size of block in KiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "capacity",
+				Value: 0,
+				Usage: "the limit for space in GiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "inodes",
+				Value: 0,
+				Usage: "the limit for number of inodes",
 			},
 			&cli.StringFlag{
 				Name:  "compress",
@@ -270,9 +280,23 @@ func formatFlags() *cli.Command {
 				Usage: "A bucket URL to store data",
 			},
 			&cli.StringFlag{
+				Name:  "access-key",
+				Usage: "Access key for object storage (env ACCESS_KEY)",
+			},
+			&cli.StringFlag{
+				Name:  "secret-key",
+				Usage: "Secret key for object storage (env SECRET_KEY)",
+			},
+			&cli.StringFlag{
 				Name:  "encrypt-rsa-key",
 				Usage: "A path to RSA private key (PEM)",
 			},
+			&cli.IntFlag{
+				Name:  "trash-days",
+				Value: 1,
+				Usage: "number of days after which removed files will be permanently deleted",
+			},
+
 			&cli.BoolFlag{
 				Name:  "force",
 				Usage: "overwrite existing format",
@@ -284,6 +308,4 @@ func formatFlags() *cli.Command {
 		},
 		Action: format,
 	}
-	cmd.Flags = append(cmd.Flags, changableConfigs...)
-	return cmd
 }
