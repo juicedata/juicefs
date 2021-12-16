@@ -239,6 +239,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		} else {
 			format.UUID = old.UUID
 			// these can be safely updated.
+			old.Bucket = format.Bucket
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
