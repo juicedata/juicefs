@@ -29,40 +29,46 @@ jobs:
 #      - name: Build linux target
 #        run: make juicefs
 #
-      - name: Build Hadoop SDK
-        run: make -C sdk/java
+#      - name: Build Hadoop SDK
+#        run: make -C sdk/java
 #
 #      - name: Juicefs Format
 #        run: |
 #          sudo ./juicefs format memkv:// dev --trash-days 0
-
-      - name: Set up Spark
-        working-directory: /tmp
-        run: |
-          echo $PWD
-          wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
-          tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
-          ln -s spark-3.0.3-bin-hadoop2.7 spark
-          cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
-          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/jars/conf
-
+#
+#      - name: Set up Spark
+#        working-directory: /tmp
+#        run: |
+#          wget https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
+#          tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
+#          ln -s spark-3.0.3-bin-hadoop2.7 spark
+#          cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
+#          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/jars/conf
+#
 #      - name: Set up tpcds-kit
+#        working-directory: /tmp
 #        run: |
 #          sudo apt-get install gcc make flex bison byacc git
 #          git clone --depth 1 https://github.com/databricks/tpcds-kit.git
 #          cd tpcds-kit/tools
 #          make OS=LINUX
-#
-#      - name: Set up spark-sql-perf
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install apt-transport-https curl gnupg -yqq
-#          echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list
-#          echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | sudo tee /etc/apt/sources.list.d/sbt_old.list
-#          curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | sudo -H gpg --no-default-keyring --keyring gnupg-ring:/etc/apt/trusted.gpg.d/scalasbt-release.gpg --import
-#          sudo chmod 644 /etc/apt/trusted.gpg.d/scalasbt-release.gpg
-#          sudo apt-get update
-#          sudo apt-get install sbt
-#          git clone --depth 1 https://github.com/databricks/spark-sql-perf.git
-#          cd spark-sql-perf
-#          sbt package
+
+      - name: Set up spark-sql-perf
+        working-directory: /tmp
+        run: |
+          sudo apt-get update
+          sudo apt-get install apt-transport-https curl gnupg -yqq
+          echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list
+          echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | sudo tee /etc/apt/sources.list.d/sbt_old.list
+          curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | sudo -H gpg --no-default-keyring --keyring gnupg-ring:/etc/apt/trusted.gpg.d/scalasbt-release.gpg --import
+          sudo chmod 644 /etc/apt/trusted.gpg.d/scalasbt-release.gpg
+          sudo apt-get update
+          sudo apt-get install sbt
+          cat > ~/.sbt/repositories <<EOF
+          [repositories]
+          local
+          maven-central: https://repo1.maven.org/maven2/
+          EOF
+          git clone --depth 1 https://github.com/databricks/spark-sql-perf.git
+          cd spark-sql-perf
+          sbt package
