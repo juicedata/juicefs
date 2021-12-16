@@ -1,9 +1,9 @@
 ---
-sidebar_label: 快速上手（本地）
+sidebar_label: 快速上手（单机）
 sidebar_position: 2
 ---
 
-# JuiceFS 本地快速体验
+# JuiceFS 单机模式快速上手指南
 
 JuiceFS 文件系统由「[对象存储](../reference/how_to_setup_object_storage.md)」和「[数据库](../reference/how_to_setup_metadata_engine.md)」共同驱动。除了对象存储，还支持使用本地磁盘、WebDAV 和 HDFS 等作为底层存储。因此，可以使用本地磁盘和 SQLite 数据库快速创建一个单机文件系统用以了解和体验 JuiceFS。
 
@@ -88,7 +88,7 @@ juicefs mount sqlite3://myjfs.db mnt
 为了让文件系统可以在后台保持挂载，你可以在挂载时指定 `-d` 或 `--background` 选项，即让客户端在守护进程中挂载文件系统。
 
 ```shell
-juicefs mount -d sqlite3://myjfs.db mnt
+juicefs mount sqlite3://myjfs.db mnt -d
 ```
 
 接下来，任何存入挂载点 `mnt` 的文件，都会按照 [JuiceFS 的管理规则](../reference/how_juicefs_store_files.md)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
