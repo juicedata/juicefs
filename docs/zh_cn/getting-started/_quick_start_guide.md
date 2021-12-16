@@ -1,8 +1,9 @@
 ---
 sidebar_label: 快速上手指南
-sidebar_position: 2
+sidebar_position: 4
 slug: /quick_start_guide
 ---
+
 
 # JuiceFS 快速上手指南
 
