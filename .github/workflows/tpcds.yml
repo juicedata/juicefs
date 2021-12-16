@@ -35,6 +35,8 @@ jobs:
         with:
           repository: databricks/tpcds-kit
           fetch-depth: 1
+
+      - name: Build tpcds-kit
         run: |
           sudo apt-get install gcc make flex bison byacc git
           cd tpcds-kit/tools
@@ -45,6 +47,8 @@ jobs:
         with:
           repository: databricks/spark-sql-perf
           fetch-depth: 1
+
+      - name: Build spark-sql-perf
         run: |
           sudo apt-get update
           sudo apt-get install apt-transport-https curl gnupg -yqq
@@ -56,11 +60,3 @@ jobs:
           sudo apt-get install sbt
           cd spark-sql-perf
           sbt package
-#
-#
-#      - name: Build JuiceFS
-#        run: make juicefs
-#      - name: Build Hadoop JAVA SDK
-#        run: make -C sdk/java
-#      - name: JuiceFS Format
-#        run: sudo ./juicefs format memkv:// dev
