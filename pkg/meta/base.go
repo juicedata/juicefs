@@ -17,6 +17,7 @@ package meta
 
 import (
 	"fmt"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -338,6 +339,30 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	w.Put64(uint64(attr.Parent))
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
+}
+
+func clearSUGID(ctx Context, cur *Attr, set *Attr) {
+	switch runtime.GOOS {
+	case "darwin":
+		if ctx.Uid() != 0 {
+			// clear SUID and SGID
+			cur.Mode &= 01777
+			set.Mode &= 01777
+		}
+	case "linux":
+		// same as ext
+		if cur.Typ != TypeDirectory {
+			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
+				// clear SUID and SGID
+				cur.Mode &= 01777
+				set.Mode &= 01777
+			} else {
+				// keep SGID if the file is non-group-executable
+				cur.Mode &= 03777
+				set.Mode &= 03777
+			}
+		}
+	}
 }
 
 func (r *baseMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
