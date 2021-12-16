@@ -42,6 +42,7 @@ jobs:
           wget --quiet https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
           tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
           ln -s spark-3.0.3-bin-hadoop2.7 spark
+          export PATH=$PATH:/tmp/spark/bin:/tmp/spark/sbin
           echo /tmp/spark/bin >> $GITHUB_PATH
           echo /tmp/spark/sbin >> $GITHUB_PATH
           start-master.sh -i localhost
