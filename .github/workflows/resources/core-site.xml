@@ -23,6 +23,6 @@
     </property>
     <property>
         <name>juicefs.dev.meta</name>
-        <value>memkv://</value>
+        <value>redis://127.0.0.1:6379/1</value>
     </property>
 </configuration>
