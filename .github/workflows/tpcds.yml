@@ -34,9 +34,6 @@ jobs:
       - name: Juicefs Format
         run: sudo ./juicefs format memkv:// dev --trash-days 0
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-
       - name: Set up Spark
         working-directory: /tmp
         run: |
@@ -104,3 +101,6 @@ jobs:
           --driver-memory 2G \
           --num-executors 1 \
           -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_run.scala
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
