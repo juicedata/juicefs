@@ -1,0 +1,58 @@
+name: disk_test
+
+on:
+  push:
+    branches:
+      - 'tpcds_action'
+
+jobs:
+  tpcds:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - run: sudo swapoff -a
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format redis://127.0.0.1:6379/1 dev --trash-days 0 --bucket /mnt/jfs
+          sudo chmod -R 777 /mnt/jfs/dev/
+          sudo ./juicefs format redis://127.0.0.1:6379/2 dev --trash-days 0 --bucket /tmp/jfs
+          sudo chmod -R 777 /tmp/jfs/dev/
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs-ssd
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/2 /jfs-hdd
+
+      - name: test ssd
+        run: |
+          ./juicefs bench /jfs-ssd
+
+      - name: test hdd
+        run: |
+          ./juicefs bench /jfs-hdd
+

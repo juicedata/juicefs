@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - 'tpcds_action'
+    paths-ignore:
+      - '.github/**'
 
 jobs:
   tpcds:
