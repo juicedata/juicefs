@@ -1,12 +1,12 @@
 ---
-sidebar_label: Quick Start (Local)
+sidebar_label: Quick Start (Standalone Mode)
 sidebar_position: 2
 slug: /quick_start_guide
 ---
 
 # JuiceFS Quick Start Guide for Standalone Mode
 
-The JuiceFS file system consists of ["Object Storage"](../reference/how_to_setup_object_storage.md) and ["Database"](../reference/how_to_setup_object_storage.md) are jointly driven. In addition to object storage, it also supports the use of local disk, WebDAV and HDFS as the underlying storage.  Therefore, you can quickly create a standalone file system using local disks and SQLite database to understand and experience JuiceFS.
+The JuiceFS file system consists of ["Object Storage"](../reference/how_to_setup_object_storage.md) and ["Database"](../reference/how_to_setup_object_storage.md) are jointly driven. In addition to object storage, it also supports the use of local disk, WebDAV and HDFS, and so on as the underlying storage. Therefore, you can quickly create a standalone file system using local disks and SQLite database to understand and experience JuiceFS.
 
 ## Install Client
 
@@ -32,7 +32,7 @@ As you can see, there are 3 types of information required to format a file syste
 
 ### Hands-on Practice
 
-On a Linux system, for example, the following command creates a filesystem named `myjfs`.
+On a Linux system, for example, the following command creates a file system named `myjfs`.
 
 ```shell
 juicefs format sqlite3://myjfs.db myjfs
@@ -48,7 +48,7 @@ Completion of the creation will return an output similar to the following.
 2021/12/14 18:26:37.689683 juicefs[40362] <INFO>: Volume is formatted as {Name:myjfs UUID:d5bdf7ea-472c-4640-98a6-6f56aea13982 Storage:file Bucket:/Users/herald/.juicefs/local/ AccessKey: SecretKey: BlockSize:4096 Compression:none Shards:0 Partitions:0 Capacity:0 Inodes:0 EncryptKey:}
 ```
 
-As you can see from the output, the file system uses SQLite as the metadata storage engine and the database file is located in the current directory with the file name `myjfs.db`, which stores all the information of the `myjfs` file system. It has been constructed with a perfect table structure that will be used as a storage for all the meta information of the data.
+As you can see from the output, the file system uses SQLite as the metadata storage engine and the database file is located in the current directory with the file name `myjfs.db`, which stores all the information of the `myjfs` file system. It has been constructed with a complete table structure that will be used as a storage for all the meta information of the data.
 
 ![](../images/sqlite-info.png)
 
@@ -58,7 +58,7 @@ Since no storage-related options are specified, the client uses the local disk a
 
 ### Basic Concept
 
-To mount a filesystem use the client-provided [`mount`](../reference/command_reference.md#juicefs-mount) command, generally in the following format
+To mount a file system use the client-provided [`mount`](../reference/command_reference.md#juicefs-mount) command, generally in the following format
 
 ```shell
 juicefs mount [command options] META-URL MOUNTPOINT
@@ -76,7 +76,7 @@ Similar to the command to create a file system, the following information is req
 As SQLite is a single file database, you should pay attention to the path of the database file when mounting it, JuiceFS supports both relative and absolute paths.
 :::
 
-The following command mounts the `myjfs` file system to the mnt folder in the current directory.
+The following command mounts the `myjfs` file system to the `mnt` folder in the current directory.
 
 ```shell
 juicefs mount sqlite3://myjfs.db mnt
@@ -84,15 +84,15 @@ juicefs mount sqlite3://myjfs.db mnt
 
 ![](../images/sqlite-mount-local.png)
 
-By default, the client mounts the filesystem in the foreground. As you can see in the image above, the program will always run in the current terminal process, and the file system will be unmounted using the <kbd>Ctrl</kbd> +  <kbd>C</kbd> key combination or by closing the terminal window.
+By default, the client mounts the file system in the foreground. As you can see in the image above, the program will always run in the current terminal process, and the file system will be unmounted using the <kbd>Ctrl</kbd> + <kbd>C</kbd> key combination or by closing the terminal window.
 
-In order to allow the filesystem to remain mounted in the background, you can specify the `-d` or `-background` option when mounting, i.e. to allow the client to mount the filesystem in the daemon.
+In order to allow the file system to remain mounted in the background, you can specify the `-d` or `--background` option when mounting, i.e. to allow the client to mount the file system in the daemon.
 
 ```shell
 juicefs mount sqlite3://myjfs.db mnt -d
 ```
 
-Next, any files stored on mount point `mnt` will be split into specific `blocks` according to [How JuiceFS Stores Files](../introduction/architecture.md#how-juicefs-stores-files) and stored in `$HOME/.juicefs/local/myjfs` directory, and the corresponding `metadata` will be stored in the `myjfs.db` database.
+Next, any files stored on mount point `mnt` will be split into specific blocks according to [How JuiceFS Stores Files](../introduction/architecture.md#how-juicefs-stores-files) and stored in `$HOME/.juicefs/local/myjfs` directory, and the corresponding metadata will be stored in the `myjfs.db` database.
 
 Finally, the mount point `mnt` can be unmounted by executing the following command.
 
@@ -115,9 +115,9 @@ JuiceFS supports almost all object storage services, and in general, creating an
 
 Using AWS S3 as an example, a created resource would look something like the following.
 
-- **Bucket Endpoint**：`https://myjfs.s3.us-west-1.amazonaws.com`
-- **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
-- **Access Key Secret**：`ZYXwvutsrqpoNMLkJiHgfeDCBA`
+- **Bucket Endpoint**: `https://myjfs.s3.us-west-1.amazonaws.com`
+- **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
+- **Access Key Secret**: `ZYXwvutsrqpoNMLkJiHgfeDCBA`
 
 :::note
 The process of creating an object store may vary slightly from platform to platform, so it is recommended to check the help manual of the cloud platform. In addition, some platforms may provide different Endpoint addresses for internal and external networks, so please choose to use the address for external network access since this article is to access the object store from local.
@@ -125,7 +125,7 @@ The process of creating an object store may vary slightly from platform to platf
 
 ### Hands-on Practice
 
-Next, create a JuiceFS file system using SQLite and AWS S3 object storage.
+Next, create a JuiceFS file system using SQLite and Amazon S3 object storage.
 
 :::note
 If the `myjfs.db` file already exists, delete it first and then execute the following command.

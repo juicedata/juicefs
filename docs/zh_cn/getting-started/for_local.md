@@ -76,7 +76,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 由于 SQLite 是单文件数据库，挂载时要注意数据库文件的的路径，JuiceFS 同时支持相对路径和绝对路径。
 :::
 
-以下命令将 `myjfs` 文件系统挂载到当前目录下的 mnt 文件夹：
+以下命令将 `myjfs` 文件系统挂载到当前目录下的 `mnt` 文件夹：
 
 ```shell
 juicefs mount sqlite3://myjfs.db mnt
@@ -84,7 +84,7 @@ juicefs mount sqlite3://myjfs.db mnt
 
 ![](../images/sqlite-mount-local.png)
 
-默认情况下，客户端会在前台挂载文件系统。就像你在上图中看到的那样，程序会一直运行在当前终端进程中，使用 <kbd>Ctrl</kbd> +  <kbd>C</kbd> 组合键或关闭终端窗口，文件系统会被卸载。
+默认情况下，客户端会在前台挂载文件系统。就像你在上图中看到的那样，程序会一直运行在当前终端进程中，使用 <kbd>Ctrl</kbd> + <kbd>C</kbd> 组合键或关闭终端窗口，文件系统会被卸载。
 
 为了让文件系统可以在后台保持挂载，你可以在挂载时指定 `-d` 或 `--background` 选项，即让客户端在守护进程中挂载文件系统。
 

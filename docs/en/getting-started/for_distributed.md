@@ -1,27 +1,27 @@
 ---
-sidebar_label: Quick Start (Distributed)
+sidebar_label: Quick Start (Distributed Mode)
 sidebar_position: 3
 ---
 
-# JuiceFS Distributed Mode Quick Start Guide
+# JuiceFS Quick Start Guide for Distributed Mode
 
-The previous document ["JuiceFS Standalone Mode Quick Start Guide"](/community/quick_start_guide) created a file system that can be mounted on any host by using a combination of an "object store" and a "SQLite" database. Thanks to the feature that the object store is accessible by any computer with privileges on the network, we can access the same JuiceFS file system on different computers by simply copying the SQLite database file to any computer that wants to access the store.
+The previous document ["JuiceFS Quick Start Guide for Standalone Mode "](/community/quick_start_guide) created a file system that can be mounted on any host by using a combination of an "object store" and a "SQLite" database. Thanks to the feature that the object store is accessible by any computer with privileges on the network, we can access the same JuiceFS file system on different computers by simply copying the SQLite database file to any computer that wants to access the store.
 
 Obviously, it is feasible to share the file system by copying the SQLite database between computers, but the real-time availability of the files is not guaranteed. Since SQLite is a single file database that cannot be accessed by multiple computers at the same time, we need to use a database that supports network access, such as Redis, PostgreSQL, MySQL, etc., in order to allow a file system to be mounted and read by multiple computers in a distributed environment.
 
-In this paper, based on the previous document, we further replace the database from a single-user "SQLite" to a multi-user "cloud database", thus realizing a distributed file system that can be mounted on any computer on the network for reading and writing.
+In this document, based on the previous document, we further replace the database from a single-user "SQLite" to a multi-user "cloud database", thus realizing a distributed file system that can be mounted on any computer on the network for reading and writing.
 
-## Web-based Database
+## Network Database
 
-The meaning of “Web Database" here refers to a database that allows multiple users to access it simultaneously over the network. From this perspective, the database can be simply divided into:
+The meaning of "Network Database" here refers to a database that allows multiple users to access it simultaneously over the network. From this perspective, the database can be simply divided into:
 
-1. **Stand-alone Database**: Such databases are single file and usually only accessible on a single machine, such as SQLite, Microsoft Access, etc.
-2. **Web-based Database**: Such databases are usually complex multi-file structures that provide nextwork-based access interfaces and support simultaneous multi-user access, such as Redis, PostgreSQL, etc.
+1. **Standalone Database**: such databases are single file and usually only accessible on a single machine, such as SQLite, Microsoft Access, etc.
+2. **Network Database**: such databases are usually complex multi-file structures that provide network-based access interfaces and support simultaneous multi-user access, such as Redis, PostgreSQL, etc.
 
 JuiceFS currently supports the following network-based databases.
 
 - **Key-Value Database**: Redis, TiKV
-- **Relational Databases**: PostgreSQL, MySQL, MariaDB
+- **Relational Database**: PostgreSQL, MySQL, MariaDB
 
 Different databases have different performance and stability, for example, Redis is an in-memory key-value database with excellent performance but relatively weak reliability, and PostgreSQL is a relational database with less performance than in-memory, but it is more reliable.
 
@@ -33,28 +33,28 @@ Cloud computing platforms usually have a wide variety of cloud database offering
 
 Of course, you can build your own database on the server if you wish.
 
-For simplicity, here is an example of the AWS ElastiCache Redis version. For a web-based database, the most basic information is the following 2 items.
+For simplicity, here is an example of the Amazon ElastiCache for Redis. For a network database, the most basic information is the following 2 items.
 
 1. **Database Address**: the access address of the database, the cloud platform may provide different links for internal and external networks.
-2. **Username and Password**: Authentication information used to access the database.
+2. **Username and Password**: authentication information used to access the database.
 
 ## Hands-on Practice
 
 ### 1. Install Client
 
-Install the JuiceFS client on all computers that need to mount the file system, refer to [Install & Upgrade](installation.md) for details.
+Install the JuiceFS client on all computers that need to mount the file system, refer to [Installation & Upgrade](installation.md) for details.
 
 ### 2. Preparing Object Storage
 
-Here is a pseudo-sample with AWS S3 as an example, you can switch to other object storage, refer to [JuiceFS Supported Storage](../reference/how_to_setup_object_storage.md#supported-object-storage) for details
+Here is a pseudo-sample with Amazon S3 as an example, you can switch to other object storage, refer to [JuiceFS Supported Storage](../reference/how_to_setup_object_storage.md#supported-object-storage) for details.
 
-- **Bucket Endpoint**：`https://myjfs.s3.us-west-1.amazonaws.com`
-- **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
-- **Access Key Secret**：`ZYXwvutsrqpoNMLkJiHgfeDCBA`
+- **Bucket Endpoint**: `https://myjfs.s3.us-west-1.amazonaws.com`
+- **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
+- **Access Key Secret**: `ZYXwvutsrqpoNMLkJiHgfeDCBA`
 
 ### 3. Preparing Database
 
-The following is a pseudo-sample of the AWS ElastiCache Redis version as an example, you can switch to other types of databases, refer to [JuiceFS Supported Databases](../reference/how_to_setup_metadata_engine.md) for details.
+The following is a pseudo-sample of the Amazon ElastiCache for Redis as an example, you can switch to other types of databases, refer to [JuiceFS Supported Databases](../reference/how_to_setup_metadata_engine.md) for details.
 
 - **Database Address**: `myjfs-sh-abc.apse1.cache.amazonaws.com:6379`
 - **Database Username**: `tom`
@@ -67,7 +67,7 @@ redis://<username>:<password>@<Database-IP-or-URL>:6379/1
 ```
 
 :::tip
-Redis versions prior to 6.0 do not have usernames, omit the `<username>` part of the URL, e.g. `redis://:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1` (please note that the colon in front of the password is a separator and needs to be preserved).
+Redis versions prior to 6.0 do not have username, omit the `<username>` part of the URL, e.g. `redis://:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1` (please note that the colon in front of the password is a separator and needs to be preserved).
 :::
 
 ### 4. Creating a file system
@@ -95,28 +95,28 @@ Once the file system is created, the terminal will output something like the fol
 ```
 
 :::info
-Once a file system is created, the relevant information including name, object storage, access keys, etc. are recorded in the database in full. In the current example, the file system information is recorded in the Redis database, so any computer with the database address, username, and password information can mount and read the file system.
+Once a file system is created, the relevant information including name, object storage, access keys, etc. are recorded in the database. In the current example, the file system information is recorded in the Redis database, so any computer with the database address, username, and password information can mount and read the file system.
 :::
 
 ### 5. Mounting the file system
 
-Since the "data" and "metadata" of this file system are stored in a web-based cloud service, it can be mounted on any computer with a JuiceFS client installed for shared reads and writes at the same time. For example:
+Since the "data" and "metadata" of this file system are stored in cloud services, it can be mounted on any computer with a JuiceFS client installed for shared reads and writes at the same time. For example:
 
 ```shell
 juicefs mount redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 mnt
 ```
 
-#### Strong data consistency assurance
+#### Strong data consistency guarantee
 
 JuiceFS provides a "close-to-open" consistency guarantee, which means that when two or more clients read and write the same file at the same time, the changes made by client A may not be immediately visible to client B. However, once the file is closed by client A, any client re-opened it afterwards is guaranteed to see the latest data, no matter it is on the same node with A or not.
 
 #### Increase cache size to improve performance
 
-Since Object Storage is a network-based storage service, it will inevitably encounter access latency. To solve this problem, JuiceFS provides and enables caching mechanism by default, i.e. allocating a part of local storage as a buffer layer between data and object storage, and caching data to local storage asynchronously when reading and writing files, please refer to ["Caching"](../administration/cache_management.md) for more details.
+Since Object Storage is a network-based storage service, it will inevitably encounter access latency. To solve this problem, JuiceFS provides and enables caching mechanism by default, i.e. allocating a part of local storage as a buffer layer between data and object storage, and caching data to local storage asynchronously when reading files, please refer to ["Cache"](../administration/cache_management.md) for more details.
 
 By default, JuiceFS will set `1024MiB` cache in `$HOME/.juicefs/cache` or `/var/jfsCache` directory. Setting a larger cache space on a faster SSD can effectively improve JuiceFS's read and write performance.
 
-You can use `-cache-dir` to adjust the location of the cache directory and `-cache-size` to adjust the size of the cache space, e.g.
+You can use `--cache-dir` to adjust the location of the cache directory and `--cache-size` to adjust the size of the cache space, e.g.:
 
 ```shell
 juicefs mount
