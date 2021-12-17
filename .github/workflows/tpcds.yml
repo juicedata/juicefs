@@ -9,7 +9,6 @@ jobs:
   tpcds:
     runs-on: ubuntu-latest
     steps:
-
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
@@ -27,10 +26,12 @@ jobs:
           fetch-depth: 1
 
       - name: Build linux target
-          run: make juicefs
+          run: |
+            make juicefs
 
       - name: Build Hadoop SDK
-          run: make -C sdk/java
+          run: |
+            make -C sdk/java
 
       - name: Juicefs Format
           run: |
