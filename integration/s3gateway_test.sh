@@ -16,6 +16,16 @@
 
 # environment
 set -x
+
+os="linux"
+errno=$errno
+if [[ `uname  -a` =~ "Darwin" ]];then
+    os="mac"
+    errno=254
+fi
+echo "os=$os"
+
+
 MINT_DATA_DIR=testdata
 MINT_MODE=core
 SERVER_ENDPOINT="127.0.0.1:9008"
@@ -44,13 +54,18 @@ data_file_map["datafile-65-MB"]="65M"
 data_file_map["datafile-129-MB"]="129M"
 
 mkdir -p "$MINT_DATA_DIR"
-for filename in "${!data_file_map[@]}"; do
-    echo "creating $MINT_DATA_DIR/$filename"
-    if ! shred -n 1 -s "${data_file_map[$filename]}" - 1>"$MINT_DATA_DIR/$filename" 2>/dev/null; then
-        echo "unable to create data file $MINT_DATA_DIR/$filename"
-        exit 1
-    fi
-done
+
+
+
+if [ ! "$(ls $MINT_DATA_DIR)" ]; then
+    for filename in "${!data_file_map[@]}"; do
+        echo "creating $MINT_DATA_DIR/$filename"
+        if ! shred -n 1 -s "${data_file_map[$filename]}" - 1>"$MINT_DATA_DIR/$filename" 2>/dev/null; then
+            echo "unable to create data file $MINT_DATA_DIR/$filename"
+            exit 1
+        fi
+    done
+fi
 
 # configuration
 aws configure set aws_access_key_id "$ACCESS_KEY"
@@ -81,12 +96,24 @@ fi
 
 
 # test
-HASH_1_KB=$(md5sum "${MINT_DATA_DIR}/datafile-1-kB" | awk '{print $1}')
-HASH_65_MB=$(md5sum "${MINT_DATA_DIR}/datafile-65-MB" | awk '{print $1}')
+function get_md5() {
+    if [ $os == "mac" ]; then
+        md5rt=$(md5 "$1" | awk '{print $4}')
+    else
+        md5rt=$(md5sum "$1" | awk '{print $1}')
+    fi
+}
+
+get_md5 "${MINT_DATA_DIR}/datafile-1-kB"
+HASH_1_KB=$md5rt
+
+get_md5 "${MINT_DATA_DIR}/datafile-65-MB"
+HASH_65_MB=$md5rt
 
 _init() {
     AWS="aws --endpoint-url $1"
 }
+
 
 function get_time() {
     date +%s%N
@@ -216,7 +243,8 @@ function test_upload_object() {
         out=$($function 2>&1)
         rv=$?
         # calculate the md5 hash of downloaded file
-        hash2=$(md5sum /tmp/datafile-1-kB | awk '{print $1}')
+        get_md5 "/tmp/datafile-1-kB"
+        hash2=$md5rt
     fi
 
     # if download succeeds, verify downloaded file
@@ -812,7 +840,8 @@ function test_presigned_object() {
         url=$($function)
         rv=$?
         curl -sS -X GET "${url}" > /tmp/datafile-1-kB
-        hash2=$(md5sum /tmp/datafile-1-kB | awk '{print $1}')
+        get_md5 /tmp/datafile-1-kB
+        hash2=$md5rt
         if [ "$HASH_1_KB" == "$hash2" ]; then
             function="delete_bucket"
             out=$(delete_bucket "$bucket_name")
@@ -1134,7 +1163,7 @@ function test_list_objects_error() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne $errno ]; then
             rv=1
         else
             rv=0
@@ -1147,7 +1176,7 @@ function test_list_objects_error() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne $errno ]; then
             rv=1
         else
             rv=0
@@ -1195,7 +1224,7 @@ function test_put_object_error() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne $errno ]; then
             rv=1
         else
             rv=0
@@ -1208,7 +1237,7 @@ function test_put_object_error() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne $errno ]; then
             rv=1
         else
             rv=0
@@ -1266,7 +1295,8 @@ function test_serverside_encryption() {
         etag2=$(echo "$out" | jq -r .ETag)
         sse_customer_key2=$(echo "$out" | jq -r .SSECustomerKeyMD5)
         sse_customer_algo2=$(echo "$out" | jq -r .SSECustomerAlgorithm)
-        hash2=$(md5sum /tmp/datafile-1-kB | awk '{print $1}')
+        get_md5 "/tmp/datafile-1-kB"
+        hash2=$md5rt
         # match downloaded object's hash to original
         if [ "$HASH_1_KB" == "$hash2" ]; then
             function="delete_bucket"
@@ -1339,7 +1369,8 @@ function test_serverside_encryption_multipart() {
         etag2=$(echo "$out" | jq -r .ETag)
         sse_customer_key2=$(echo "$out" | jq -r .SSECustomerKeyMD5)
         sse_customer_algo2=$(echo "$out" | jq -r .SSECustomerAlgorithm)
-        hash2=$(md5sum /tmp/datafile-65-MB | awk '{print $1}')
+        get_md5 "${MINT_DATA_DIR}/datafile-65-MB"
+        hash2=$md5rt
         # match downloaded object's hash to original
         if [ "$HASH_65_MB" == "$hash2" ]; then
             function="delete_bucket"
@@ -1450,7 +1481,7 @@ function test_serverside_encryption_multipart_copy() {
         test_function=${function}
         out=$($function)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne $errno ]; then
             rv=1
         else
             rv=0
@@ -1534,7 +1565,7 @@ function test_serverside_encryption_error() {
         rv=$?
     fi
 
-    if [ $rv -ne 255 ]; then
+    if [ $rv -ne $errno ]; then
         rv=1
     else
         rv=0
@@ -1547,7 +1578,7 @@ function test_serverside_encryption_error() {
         rv=$?
     fi
 
-    if [ $rv -ne 255 ]; then
+    if [ $rv -ne $errno ]; then
         rv=1
     else
         rv=0
@@ -1568,7 +1599,7 @@ function test_serverside_encryption_error() {
         out=$($function 2>&1)
         rv=$?
     fi
-    if [ $rv -ne 255 ]; then
+    if [ $rv -ne $errno ]; then
         rv=1
     else
         rv=0
