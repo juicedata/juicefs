@@ -10,6 +10,10 @@
         <value>io.juicefs.JuiceFileSystem</value>
     </property>
     <property>
+        <name>juicefs.cache-size</name>
+        <value>0</value>
+    </property>
+    <property>
         <name>juicefs.no-usage-report</name>
         <value>true</value>
     </property>
