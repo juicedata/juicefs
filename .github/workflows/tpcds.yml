@@ -26,16 +26,13 @@ jobs:
           fetch-depth: 1
 
       - name: Build linux target
-          run: |
-            make juicefs
+        run: make juicefs
 
       - name: Build Hadoop SDK
-          run: |
-            make -C sdk/java
+        run: make -C sdk/java
 
       - name: Juicefs Format
-          run: |
-            sudo ./juicefs format memkv:// dev --trash-days 0
+        run: sudo ./juicefs format memkv:// dev --trash-days 0
 
       - name: Set up Spark
         working-directory: /tmp
