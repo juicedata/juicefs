@@ -467,10 +467,13 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		err = jfsToObjectErr(ctx, eno, dstBucket, dstObject)
 		return
 	}
+
+	etag, _ := n.fs.GetXattr(mctx, src, partEtag)
+	_ = n.fs.SetXattr(mctx, dst, partEtag, etag, 0)
 	return minio.ObjectInfo{
-		Bucket: dstBucket,
-		Name:   dstObject,
-		// ETag:    r.MD5CurrentHexString(),
+		Bucket:  dstBucket,
+		Name:    dstObject,
+		ETag:    string(etag),
 		ModTime: fi.ModTime(),
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
@@ -530,6 +533,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		err = jfsToObjectErr(ctx, os.ErrNotExist, bucket, object)
 		return
 	}
+	etag, _ := n.fs.GetXattr(mctx, n.path(bucket, object), partEtag)
 	return minio.ObjectInfo{
 		Bucket:  bucket,
 		Name:    object,
@@ -537,6 +541,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
 		AccTime: fi.ModTime(),
+		ETag:    string(etag),
 	}, nil
 }
 
@@ -630,10 +635,12 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	if eno != 0 {
 		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
 	}
+	etag := r.MD5CurrentHexString()
+	_ = n.fs.SetXattr(mctx, p, partEtag, []byte(etag), 0)
 	return minio.ObjectInfo{
 		Bucket:  bucket,
 		Name:    object,
-		ETag:    r.MD5CurrentHexString(),
+		ETag:    etag,
 		ModTime: fi.ModTime(),
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
@@ -649,7 +656,7 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 	p := n.upath(bucket, uploadID)
 	err = n.mkdirAll(ctx, p, os.FileMode(0755))
 	if err == nil {
-		eno := n.fs.SetXattr(mctx, p, "s3-object", []byte(object), 0)
+		eno := n.fs.SetXattr(mctx, p, uploadKeyName, []byte(object), 0)
 		if eno != 0 {
 			logger.Warnf("set object %s on upload %s: %s", object, uploadID, eno)
 		}
@@ -848,6 +855,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
+	_ = n.fs.SetXattr(mctx, name, partEtag, []byte(s3MD5), 0)
 	return minio.ObjectInfo{
 		Bucket:  bucket,
 		Name:    object,
