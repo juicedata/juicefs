@@ -276,10 +276,13 @@ func TestFileSystem(t *testing.T) {
 	if err := fs.Delete(ctx, "/ddd/"); err != syscall.ENOTEMPTY {
 		t.Fatalf("delete /ddd/: %s", err)
 	}
-	if err := fs.Rmr(ctx, "/ddd/"); err != 0 {
-		t.Fatalf("rmr /ddd/: %s", err)
+	if err := fs.Rename(ctx, "/ddd/", "/ttt/", 0); err != 0 {
+		t.Fatalf("delete /ddd/: %s", err)
 	}
-	if _, err := fs.Stat(ctx, "/ddd/"); err != syscall.ENOENT {
-		t.Fatalf("stat /ddd/: %s", err)
+	if err := fs.Rmr(ctx, "/ttt/"); err != 0 {
+		t.Fatalf("rmr /ttt/: %s", err)
+	}
+	if _, err := fs.Stat(ctx, "/ttt/"); err != syscall.ENOENT {
+		t.Fatalf("stat /ttt/: %s", err)
 	}
 }
