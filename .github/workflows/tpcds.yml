@@ -9,6 +9,8 @@ jobs:
   tpcds:
     runs-on: ubuntu-latest
     steps:
+      run: sudo swapoff -a
+
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
@@ -32,7 +34,9 @@ jobs:
         run: make -C sdk/java
 
       - name: Juicefs Format
-        run: sudo ./juicefs format memkv:// dev --trash-days 0
+        run: |
+          sudo ./juicefs format memkv:// dev --trash-days 0 --bucket /mnt/jfs
+          sudo chmod -R 777 /mnt/jfs/dev/
 
       - name: Set up Spark
         working-directory: /tmp
@@ -101,6 +105,3 @@ jobs:
           --driver-memory 2G \
           --num-executors 1 \
           -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_run.scala
-
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
