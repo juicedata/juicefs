@@ -1,6 +1,7 @@
 ---
 sidebar_label: 快速上手（单机模式）
 sidebar_position: 2
+slug: /quick_start_guide
 ---
 
 # JuiceFS 单机模式快速上手指南
