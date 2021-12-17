@@ -26,6 +26,16 @@ echo "os=$os"
 
 
 set -x
+
+os="linux"
+errno=$errno
+if [[ `uname  -a` =~ "Darwin" ]];then
+    os="mac"
+    errno=254
+fi
+echo "os=$os"
+
+
 MINT_DATA_DIR=testdata
 MINT_MODE=core
 SERVER_ENDPOINT="127.0.0.1:9008"
@@ -59,8 +69,6 @@ data_file_map["datafile-129-MB"]="129M"
 mkdir -p "$MINT_DATA_DIR"
 
 
-
-# look for empty dir
 if [ ! "$(ls $MINT_DATA_DIR)" ]; then
     for filename in "${!data_file_map[@]}"; do
         echo "creating $MINT_DATA_DIR/$filename"

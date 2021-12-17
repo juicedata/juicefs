@@ -262,4 +262,27 @@ func TestFileSystem(t *testing.T) {
 	if e := fs.Close(); e != nil {
 		t.Fatalf("close: %s", e)
 	}
+
+	// path with trailing /
+	if err := fs.Mkdir(ctx, "/ddd/", 0777); err != 0 {
+		t.Fatalf("mkdir /ddd/: %s", err)
+	}
+	if _, err := fs.Create(ctx, "/ddd/ddd", 0777); err != 0 {
+		t.Fatalf("create /ddd/ddd: %s", err)
+	}
+	if _, err := fs.Create(ctx, "/ddd/fff/", 0777); err != syscall.EINVAL {
+		t.Fatalf("create /ddd/fff/: %s", err)
+	}
+	if err := fs.Delete(ctx, "/ddd/"); err != syscall.ENOTEMPTY {
+		t.Fatalf("delete /ddd/: %s", err)
+	}
+	if err := fs.Rename(ctx, "/ddd/", "/ttt/", 0); err != 0 {
+		t.Fatalf("delete /ddd/: %s", err)
+	}
+	if err := fs.Rmr(ctx, "/ttt/"); err != 0 {
+		t.Fatalf("rmr /ttt/: %s", err)
+	}
+	if _, err := fs.Stat(ctx, "/ttt/"); err != syscall.ENOENT {
+		t.Fatalf("stat /ttt/: %s", err)
+	}
 }

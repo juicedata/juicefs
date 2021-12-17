@@ -85,6 +85,7 @@ func Main(args []string) error {
 			warmupFlags(),
 			dumpFlags(),
 			loadFlags(),
+			configFlags(),
 		},
 	}
 

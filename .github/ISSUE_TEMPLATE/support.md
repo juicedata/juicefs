@@ -2,7 +2,6 @@
 name: Support Request
 about: Support request or question relating to JuiceFS
 labels: kind/question
-
 ---
 
 <!--

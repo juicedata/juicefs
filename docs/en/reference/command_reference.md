@@ -20,7 +20,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0-dev (2021-10-22 0adbc74)
+   1.0-dev (2021-12-16 d4b8723d)
 
 COMMANDS:
    format   format a volume
@@ -39,6 +39,7 @@ COMMANDS:
    warmup   build cache for target directories/files
    dump     dump metadata into a JSON file
    load     load metadata from a previously dumped JSON file
+   config   change config of a volume
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -638,3 +639,38 @@ juicefs load [command options] META-URL [FILE]
 ```
 
 When the FILE is not provided, STDIN will be used instead.
+
+### juicefs config
+
+#### Description
+
+Change config of a volume
+
+#### Synopsis
+
+```
+juicefs config [command options] META-URL
+```
+
+#### Options
+
+`--capacity value`<br />
+the limit for space in GiB
+
+`--inodes value`<br />
+the limit for number of inodes
+
+`--bucket value`<br />
+a bucket URL to store data
+
+`--access-key value`<br />
+access key for object storage
+
+`--secret-key value`<br />
+secret key for object storage
+
+`--trash-days value`<br />
+number of days after which removed files will be permanently deleted
+
+`--force`<br />
+skip sanity check and force update the configurations (default: false)

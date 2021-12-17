@@ -1,6 +1,6 @@
 ---
 sidebar_label: 安装 & 升级
-sidebar_position: 3
+sidebar_position: 1
 slug: /installation
 ---
 

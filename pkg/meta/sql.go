@@ -239,6 +239,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		} else {
 			format.UUID = old.UUID
 			// these can be safely updated.
+			old.Bucket = format.Bucket
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
 			old.Capacity = format.Capacity
@@ -2334,7 +2335,9 @@ func (m *dbMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
 	if !ok {
-		logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+		if inode != TrashInode {
+			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+		}
 		return nil
 	}
 	attr := &Attr{}

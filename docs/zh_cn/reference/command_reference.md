@@ -20,7 +20,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0-dev (2021-10-22 0adbc74)
+   1.0-dev (2021-12-16 d4b8723d)
 
 COMMANDS:
    format   format a volume
@@ -39,6 +39,7 @@ COMMANDS:
    warmup   build cache for target directories/files
    dump     dump metadata into a JSON file
    load     load metadata from a previously dumped JSON file
+   config   change config of a volume
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -642,3 +643,38 @@ juicefs load [command options] META-URL [FILE]
 ```
 
 如果没有指定导入文件路径，会从标准输入导入。
+
+### juicefs config
+
+#### 描述
+
+修改指定文件系统的配置项。
+
+#### 使用
+
+```
+juicefs config [command options] META-URL
+```
+
+#### 选项
+
+`--capacity value`<br />
+容量配额；单位为 GiB
+
+`--inodes value`<br />
+文件数配额
+
+`--bucket value`<br />
+存储数据的桶路径
+
+`--access-key value`<br />
+对象存储的 Access key
+
+`--secret-key value`<br />
+对象存储的 Secret key
+
+`--trash-days value`<br />
+文件被自动清理前在回收站内保留的天数
+
+`--force`<br />
+跳过合理性检查并强制更新指定配置项 (默认: false)
