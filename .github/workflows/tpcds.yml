@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - 'tpcds_action'
-    paths-ignore:
-      - '.github/**'
 
 jobs:
   tpcds:
@@ -49,8 +47,8 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 dev --trash-days 0 --bucket /mnt/jfs
-          sudo chmod -R 777 /mnt/jfs/dev/
+          sudo ./juicefs format redis://127.0.0.1:6379/1 dev --trash-days 0 --bucket /tmp/jfs
+          sudo chmod -R 777 /tmp/jfs/dev/
 
       - name: Set up Spark
         working-directory: /tmp
