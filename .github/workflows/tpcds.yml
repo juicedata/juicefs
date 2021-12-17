@@ -9,7 +9,7 @@ jobs:
   tpcds:
     runs-on: ubuntu-latest
     steps:
-      run: sudo swapoff -a
+      - run: sudo swapoff -a
 
       - name: Set up Go
         uses: actions/setup-go@v2
