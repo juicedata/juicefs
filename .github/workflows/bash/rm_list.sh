@@ -1,5 +1,5 @@
 #!/bin/bash
-
+IFS=$'\n\n'
 
 LIST=`cat $1`
 
