@@ -26,16 +26,16 @@ jobs:
         with:
           fetch-depth: 1
 
-#      - name: Build linux target
-#        run: make juicefs
-#
-#      - name: Build Hadoop SDK
-#        run: make -C sdk/java
-#
-#      - name: Juicefs Format
-#        run: |
-#          sudo ./juicefs format memkv:// dev --trash-days 0
-#
+      #      - name: Build linux target
+      #        run: make juicefs
+      #
+      #      - name: Build Hadoop SDK
+      #        run: make -C sdk/java
+      #
+      #      - name: Juicefs Format
+      #        run: |
+      #          sudo ./juicefs format memkv:// dev --trash-days 0
+      #
       - name: Set up Spark
         working-directory: /tmp
         run: |
@@ -81,7 +81,6 @@ jobs:
       - name: Gen data
         working-directory: /tmp
         run: |
-          spark-shell --version
           spark-shell \
           --jars /tmp/spark-sql-perf/target/scala-2.12/spark-sql-perf*.jar \
           --master spark://localhost:7077 \
@@ -90,3 +89,15 @@ jobs:
           --driver-memory 2G \
           --num-executors 1 \
           -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_datagen.scala
+
+      - name: Run tpcds
+        working-directory: /tmp
+        run: |
+          spark-shell \
+          --jars /tmp/spark-sql-perf/target/scala-2.12/spark-sql-perf*.jar \
+          --master spark://localhost:7077 \
+          --deploy-mode client \
+          --executor-memory 2G \
+          --driver-memory 2G \
+          --num-executors 1 \
+          -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_run.scala
