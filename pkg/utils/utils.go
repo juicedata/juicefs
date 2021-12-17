@@ -79,10 +79,7 @@ func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
 
 // NewProgressCounter init a progress counter
 func NewProgressCounter(title string) (*mpb.Progress, *mpb.Bar) {
-	var quiet bool
-	if os.Getenv("PROGRESSBAR_DISPLAY") == "false" {
-		quiet = true
-	}
+	quiet := os.Getenv("DISPLAY_PROGRESSBAR") == "false"
 	var progress *mpb.Progress
 	if !quiet && isatty.IsTerminal(os.Stdout.Fd()) {
 		progress = mpb.New(mpb.WithWidth(64))
