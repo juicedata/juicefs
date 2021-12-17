@@ -378,6 +378,11 @@ func (fs *FileSystem) Stat(ctx meta.Context, path string) (fi *FileStat, err sys
 	return fs.resolve(ctx, path, false)
 }
 
+// parentDir returns parent of /foo/bar/ as /foo
+func parentDir(p string) string {
+	return filepath.Dir(strings.TrimRight(p, "/"))
+}
+
 func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Mkdir").End()
 	l := vfs.NewLogContext(ctx)
@@ -385,7 +390,7 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16) (err syscal
 	if p == "/" {
 		return syscall.EEXIST
 	}
-	fi, err := fs.resolve(ctx, path.Dir(p), true)
+	fi, err := fs.resolve(ctx, parentDir(p), true)
 	if err != 0 {
 		return err
 	}
@@ -403,7 +408,7 @@ func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Delete").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Delete (%s): %s", p, errstr(err)) }()
-	parent, err := fs.resolve(ctx, path.Dir(p), true)
+	parent, err := fs.resolve(ctx, parentDir(p), true)
 	if err != 0 {
 		return
 	}
@@ -428,7 +433,7 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Rmr").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rmr (%s): %s", p, errstr(err)) }()
-	parent, err := fs.resolve(ctx, path.Dir(p), true)
+	parent, err := fs.resolve(ctx, parentDir(p), true)
 	if err != 0 {
 		return
 	}
@@ -441,7 +446,7 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	defer trace.StartRegion(context.TODO(), "fs.Rename").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Rename (%s,%s,%d): %s", oldpath, newpath, flags, errstr(err)) }()
-	oldfi, err := fs.resolve(ctx, path.Dir(oldpath), true)
+	oldfi, err := fs.resolve(ctx, parentDir(oldpath), true)
 	if err != 0 {
 		return
 	}
@@ -449,7 +454,7 @@ func (fs *FileSystem) Rename(ctx meta.Context, oldpath string, newpath string, f
 	if err != 0 {
 		return
 	}
-	newfi, err := fs.resolve(ctx, path.Dir(newpath), true)
+	newfi, err := fs.resolve(ctx, parentDir(newpath), true)
 	if err != 0 {
 		return
 	}
@@ -467,11 +472,14 @@ func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err
 	defer trace.StartRegion(context.TODO(), "fs.Symlink").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Symlink (%s,%s): %s", target, link, errstr(err)) }()
-	fi, err := fs.resolve(ctx, path.Dir(link), true)
+	if strings.HasSuffix(link, "/") {
+		return syscall.EINVAL
+	}
+	fi, err := fs.resolve(ctx, parentDir(link), true)
 	if err != 0 {
 		return
 	}
-	rel, e := filepath.Rel(path.Dir(link), target)
+	rel, e := filepath.Rel(parentDir(link), target)
 	if e != nil {
 		// external link
 		rel = target
@@ -749,10 +757,13 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16) (f *File, 
 	defer trace.StartRegion(context.TODO(), "fs.Create").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Create (%s,%o): %s", p, mode, errstr(err)) }()
+	if strings.HasSuffix(p, "/") {
+		return nil, syscall.EINVAL
+	}
 	var inode Ino
 	var attr = &Attr{}
 	var fi *FileStat
-	fi, err = fs.resolve(ctx, path.Dir(p), true)
+	fi, err = fs.resolve(ctx, parentDir(p), true)
 	if err != 0 {
 		return
 	}
