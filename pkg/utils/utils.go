@@ -52,7 +52,7 @@ func SplitDir(d string) []string {
 
 // NewDynProgressBar init a dynamic progress bar,the title will appears at the head of the progress bar
 func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
-	if os.Getenv("ENV") == "juicefs_ci" {
+	if os.Getenv("PROGRESSBAR_DISPLAY") == "false" {
 		quiet = true
 	}
 
@@ -80,7 +80,7 @@ func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
 // NewProgressCounter init a progress counter
 func NewProgressCounter(title string) (*mpb.Progress, *mpb.Bar) {
 	var quiet bool
-	if os.Getenv("ENV") == "juicefs_ci" {
+	if os.Getenv("PROGRESSBAR_DISPLAY") == "false" {
 		quiet = true
 	}
 	var progress *mpb.Progress
