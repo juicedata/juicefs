@@ -65,7 +65,3 @@ jobs:
           sudo tail -n 500 runtest/syscalls > runtest/syscallstail
           sudo chmod 777 runtest/syscallstail
           sudo ./runltp -d /tmp/jfs -f syscallstail -C result.log.failed -T result.log.tconf -l result.log
-
-      - name: Setup tmate session
-        if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3

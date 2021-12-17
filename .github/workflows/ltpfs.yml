@@ -63,7 +63,3 @@ jobs:
           sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
           sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
           sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
-
-      - name: Setup tmate session
-        if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
