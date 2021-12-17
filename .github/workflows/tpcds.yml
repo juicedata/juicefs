@@ -41,7 +41,7 @@ jobs:
           tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
           ln -s spark-3.0.3-bin-hadoop2.7 spark
           cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
-          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/jars/conf
+          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/conf
           export PATH=$PATH:/tmp/spark/bin:/tmp/spark/sbin
           echo /tmp/spark/bin >> $GITHUB_PATH
           echo /tmp/spark/sbin >> $GITHUB_PATH
