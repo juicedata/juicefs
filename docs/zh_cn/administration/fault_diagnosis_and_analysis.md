@@ -48,7 +48,7 @@ $ cat /jfs/.accesslog
 
 ## 运行时信息
 
-JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 HTTP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。默认监听的端口号范围是从 6060 开始至 6099 结束，你可以通过系统命令查看当前 JuiceFS 客户端监听的具体端口号：
+JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 HTTP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。你可以通过系统命令查看当前 JuiceFS 客户端监听的具体端口号：
 
 :::note 注意
 如果 JuiceFS 是通过 root 用户挂载，那么需要在 `lsof` 命令前加上 `sudo`。
@@ -57,8 +57,11 @@ JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在�
 ```bash
 $ lsof -i -nP | grep LISTEN | grep juicefs
 juicefs   32666 user    8u  IPv4 0x44992f0610d9870b      0t0  TCP 127.0.0.1:6061 (LISTEN)
-...
+juicefs   32666 user    9u  IPv4 0x44992f0619bf91cb      0t0  TCP 127.0.0.1:6071 (LISTEN)
+juicefs   32666 user   15u  IPv4 0x44992f062886fc5b      0t0  TCP 127.0.0.1:9567 (LISTEN)
 ```
+
+默认 pprof 监听的端口号范围是从 6060 开始至 6099 结束，因此上面示例中对应的实际端口号是 6061。
 
 在获取到监听端口号以后就可以通过 `http://localhost:<port>/debug/pprof` 地址查看所有可供查询的运行时信息，一些重要的运行时信息如下：
 
@@ -101,7 +104,7 @@ Showing top 10 nodes out of 192
      0.21s  0.66% 95.35%      0.21s  0.66%  runtime.madvise
 ```
 
-也可以将运行时信息导出为可视化图表，以更加直观的方式进行分析，例如导出内存分配统计信息为 PDF 文件：
+也可以将运行时信息导出为可视化图表，以更加直观的方式进行分析。可视化图表支持导出为多种格式，如 HTML、PDF、SVG、PNG 等。例如导出内存分配统计信息为 PDF 文件的命令如下：
 
 :::note 注意
 导出为可视化图表功能依赖 [Graphviz](https://graphviz.org)，请先将它安装好。
