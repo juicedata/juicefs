@@ -54,7 +54,7 @@ COPYRIGHT:
    AGPLv3
 ```
 
-> **注意**：如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](../getting-started/quick_start_guide.md) 了解安装相关内容。
+> **注意**：如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](/zh/community/quick_start_guide) 了解安装相关内容。
 
 > **注意**：如果命令选项是布尔（boolean）类型（例如 `--debug` 选项），在指定此类型选项时无需设置具体的值。例如不应该像 `--debug true` 这样写，直接写作 `--debug` 即可。指定了即代表此选项生效，反之不生效。
 

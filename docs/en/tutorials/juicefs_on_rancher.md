@@ -76,7 +76,7 @@ The JuiceFS CSI Driver defaults to `kube-system`, and there is no need to set th
 
 ### Step 2: Adjust configuration parameters
 
-This page provides a YAML editor, you can adjust JuiceFS-related information according to your needs. Usually you only need to modify the `storageClasses` part, where the `backend` part is used to define the backend database and object storage of the file system. You can refer to [JuiceFS Quick Start Guide](../getting-started/quick_start_guide.md) to learn the detail. If you are using a pre-created file system, you only need to fill in the two items `metaurl` and `name`, for example:
+This page provides a YAML editor, you can adjust JuiceFS-related information according to your needs. Usually you only need to modify the `storageClasses` part, where the `backend` part is used to define the backend database and object storage of the file system. You can refer to [JuiceFS Quick Start Guide](/community/quick_start_guide) to learn the detail. If you are using a pre-created file system, you only need to fill in the two items `metaurl` and `name`, for example:
 
 ```yaml
 ...

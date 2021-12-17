@@ -201,7 +201,7 @@ The JuiceFS client has only one binary file, so to upgrade the new version you o
 - **Manually compile the client**: You can pull the latest source code and recompile it to overwrite the old version of the client.
 
 :::caution
-For the file system that has been mounted using the old version of JuiceFS client, you need to [unmount file system](quick_start_guide.md#7-unmount-juicefs), and then re-mount it with the new version of JuiceFS client.
+For the file system that has been mounted using the old version of JuiceFS client, you need to [unmount file system](for_distributed.md#6-unmounting-the-file-system), and then re-mount it with the new version of JuiceFS client.
 :::
 
 ## Uninstall
