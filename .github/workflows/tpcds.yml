@@ -103,7 +103,8 @@ jobs:
           --deploy-mode client \
           --executor-memory 2G \
           --driver-memory 2G \
-          --num-executors 1 \
+          --executor-cores 1 \
+          --conf spark.sql.shuffle.partitions=10 \
           -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_datagen.scala
 
       - name: Run tpcds
@@ -115,5 +116,6 @@ jobs:
           --deploy-mode client \
           --executor-memory 2G \
           --driver-memory 2G \
-          --num-executors 1 \
+          --executor-cores 1 \
+          --conf spark.sql.shuffle.partitions=10 \
           -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_run.scala
