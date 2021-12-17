@@ -26,22 +26,24 @@ jobs:
         with:
           fetch-depth: 1
 
-      #      - name: Build linux target
-      #        run: make juicefs
-      #
-      #      - name: Build Hadoop SDK
-      #        run: make -C sdk/java
-      #
-      #      - name: Juicefs Format
-      #        run: |
-      #          sudo ./juicefs format memkv:// dev --trash-days 0
-      #
+      - name: Build linux target
+          run: make juicefs
+
+      - name: Build Hadoop SDK
+          run: make -C sdk/java
+
+      - name: Juicefs Format
+          run: |
+            sudo ./juicefs format memkv:// dev --trash-days 0
+
       - name: Set up Spark
         working-directory: /tmp
         run: |
           wget --quiet https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
           tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
           ln -s spark-3.0.3-bin-hadoop2.7 spark
+          cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
+          cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/jars/conf
           export PATH=$PATH:/tmp/spark/bin:/tmp/spark/sbin
           echo /tmp/spark/bin >> $GITHUB_PATH
           echo /tmp/spark/sbin >> $GITHUB_PATH

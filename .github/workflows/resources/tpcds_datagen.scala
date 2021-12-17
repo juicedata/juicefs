@@ -12,7 +12,7 @@ val filterNull = false
 val shuffle = true
 
 // s3/dbfs path to generate the data to.
-val rootDir = s"/tmp/performance-datasets/tpcds/sf$scaleFactor-$format/useDecimal=$useDecimal,useDate=$useDate,filterNull=$filterNull"
+val rootDir = s"jfs:///tmp/performance-datasets/tpcds/sf$scaleFactor-$format/"
 // name of database to be created.
 val databaseName = s"tpcds_sf${scaleFactor}" +
   s"""_${if (useDecimal) "with" else "no"}decimal""" +

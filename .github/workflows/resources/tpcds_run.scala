@@ -27,7 +27,7 @@ val query_filter = Seq("q1-v2.4", "q2-v2.4", "q3-v2.4", "q4-v2.4", "q5-v2.4", "q
 val randomizeQueries = false // run queries in a random order. Recommended for parallel runs.
 
 // detailed results will be written as JSON to this location.
-val resultLocation = "/tmp/performance-datasets/tpcds/results"
+val resultLocation = "file:///tmp/performance-datasets/tpcds/results"
 
 // COMMAND ----------
 
