@@ -79,8 +79,12 @@ func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
 
 // NewProgressCounter init a progress counter
 func NewProgressCounter(title string) (*mpb.Progress, *mpb.Bar) {
+	var quiet bool
+	if os.Getenv("ENV") == "juicefs_ci" {
+		quiet = true
+	}
 	var progress *mpb.Progress
-	if isatty.IsTerminal(os.Stdout.Fd()) {
+	if !quiet && isatty.IsTerminal(os.Stdout.Fd()) {
 		progress = mpb.New(mpb.WithWidth(64))
 	} else {
 		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil))
