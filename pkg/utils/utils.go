@@ -52,6 +52,10 @@ func SplitDir(d string) []string {
 
 // NewDynProgressBar init a dynamic progress bar,the title will appears at the head of the progress bar
 func NewDynProgressBar(title string, quiet bool) (*mpb.Progress, *mpb.Bar) {
+	if os.Getenv("ENV") == "juicefs_ci" {
+		quiet = true
+	}
+
 	var progress *mpb.Progress
 	if !quiet && isatty.IsTerminal(os.Stdout.Fd()) {
 		progress = mpb.New(mpb.WithWidth(64))
