@@ -34,6 +34,9 @@ jobs:
       - name: Juicefs Format
         run: sudo ./juicefs format memkv:// dev --trash-days 0
 
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+
       - name: Set up Spark
         working-directory: /tmp
         run: |
