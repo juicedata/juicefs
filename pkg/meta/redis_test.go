@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vbauerster/mpb/v7"
 	"github.com/vbauerster/mpb/v7/decor"
 )
@@ -936,7 +935,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		t.Fatalf("truncate file %s", st)
 	}
 	var total int64
-	process := mpb.New(mpb.WithWidth(32), mpb.WithOutput(logger.WriterLevel(logrus.InfoLevel)))
+	process := mpb.New(mpb.WithWidth(32), mpb.WithOutput(nil))
 	bar := process.AddSpinner(total,
 		mpb.PrependDecorators(
 			// display our name with one space on the right
