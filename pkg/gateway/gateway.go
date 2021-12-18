@@ -618,9 +618,17 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	}
 
 	p := n.path(bucket, object)
-	if strings.HasSuffix(object, sep) && r.Size() == 0 {
+	if strings.HasSuffix(object, sep) {
 		if err = n.mkdirAll(ctx, p, os.FileMode(0755)); err != nil {
 			err = jfsToObjectErr(ctx, err, bucket, object)
+			return
+		}
+		if r.Size() > 0 {
+			err = minio.ObjectExistsAsDirectory{
+				Bucket: bucket,
+				Object: object,
+				Err:    syscall.EEXIST,
+			}
 			return
 		}
 	} else if err = n.putObject(ctx, bucket, p, r, opts); err != nil {

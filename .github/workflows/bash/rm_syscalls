@@ -146,3 +146,4 @@ ioctl_ns07 ioctl_ns07
 kill11 kill11
 mkdir02 mkdir02
 setxattr03 setxattr03
+rename03 rename03
