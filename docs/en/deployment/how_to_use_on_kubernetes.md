@@ -25,7 +25,7 @@ Helm is the package manager of Kubernetes, and Chart is the package managed by H
 
 This installation method requires Helm **3.1.0** and above. For the specific installation method, please refer to ["Helm Installation Guide"](https://github.com/helm/helm#install).
 
-1. Prepare a configuration file for setting the basic information of the storage class, for example: `values.yaml`, copy and complete the following configuration information. Among them, the `backend` part is JuiceFS file system related information, you can refer to [JuiceFS Quick Start Guide](/community/quick_start_guide) for related content. If you are using a JuiceFS volume that has been created in advance, you only need to fill in the two items `name` and `metaurl`. The `mountPod` part can set the resource configuration of CPU and memory for the Pod using this driver. Unneeded items can be deleted, or its value can be left blank.
+1. Prepare a configuration file for setting the basic information of the storage class, for example: `values.yaml`, copy and complete the following configuration information. Among them, the `backend` part is JuiceFS file system related information, you can refer to [JuiceFS Quick Start Guide](../getting-started/for_local.md) for related content. If you are using a JuiceFS volume that has been created in advance, you only need to fill in the two items `name` and `metaurl`. The `mountPod` part can set the resource configuration of CPU and memory for the Pod using this driver. Unneeded items can be deleted, or its value can be left blank.
 
 ```yaml
 storageClasses:

@@ -31,7 +31,7 @@ slug: /performance_evaluation_guide
 
 ### JuiceFS Bench
 
-JuiceFS `bench` 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[快速上手指南](./quick_start_guide.md)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
+JuiceFS `bench` 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[快速上手指南](../getting-started/for_local.md)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
 
 ```bash
 $ juicefs bench /mnt/jfs -p 4

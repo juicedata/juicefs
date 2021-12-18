@@ -76,7 +76,7 @@ JuiceFS CSI Driver 默认为 `kube-system`，这一步无需设置。
 
 ### 第二步：调整配置参数
 
-这个页面提供了 YAML 编辑器，你可以根据需要调整 JuiceFS 相关的信息，通常只需要修改 `storageClasses` 部分，其中 `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅[「JuiceFS 快速上手指南」](/zh/community/quick_start_guide)了解相关内容。如果你使用的是已经预先创建的文件系统，那么只需填写 `metaurl` 和 `name` 两项即可，例如：
+这个页面提供了 YAML 编辑器，你可以根据需要调整 JuiceFS 相关的信息，通常只需要修改 `storageClasses` 部分，其中 `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅[「JuiceFS 快速上手指南」](../getting-started/for_local.md)了解相关内容。如果你使用的是已经预先创建的文件系统，那么只需填写 `metaurl` 和 `name` 两项即可，例如：
 
 ```yaml
 ...

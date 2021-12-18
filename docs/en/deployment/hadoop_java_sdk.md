@@ -21,7 +21,7 @@ JuiceFS use local mapping of `user` and `UID`. So, you should [sync all the need
 
 You should first create at least one JuiceFS file system to provide storage for components related to the Hadoop ecosystem through the JuiceFS Java SDK. When deploying the Java SDK, specify the metadata engine address of the created file system in the configuration file.
 
-To create a file system, please refer to [JuiceFS Quick Start Guide](/community/quick_start_guide).
+To create a file system, please refer to [JuiceFS Quick Start Guide](../getting-started/for_local.md).
 
 > **Note**: If you want to use JuiceFS in a distributed environment, when creating a file system, please plan the object storage and database to be used reasonably to ensure that they can be accessed by each node in the cluster.
 
