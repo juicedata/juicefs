@@ -60,7 +60,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 进入配置修改页面后一致，修改以下两个地方：
 - namespace：改成对应的项目名
 - storageClass.backend：
-  `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [「JuiceFS 快速上手指南」](../getting-started/quick_start_guide.md) 了解相关内容。
+  `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [「JuiceFS 快速上手指南」](../getting-started/for_local.md) 了解相关内容。
 
 您也可以通过 KubeSphere 的应用商店快速创建数据库（如 Redis）和对象存储（如 MinIO）。
 比如在 KubeSphere 平台搭建 Redis：在当前所在项目中选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」，选择「Redis」，然后快速部署即可。Redis 的访问 URL 可以通过部署好的应用的服务名，如下：

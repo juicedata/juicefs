@@ -18,9 +18,3 @@ Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the de
 Using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you will find that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform. There is a chunks directory and a bunch of digitally numbered directories and files in the bucket. Don't panic, this is the secret of the high-performance operation of the JuiceFS file system!
 
 ![How JuiceFS stores your files](../images/how-juicefs-stores-files-new.png)
-
-## Go further
-
-Now, you can refer to [Quick Start Guide](../getting-started/quick_start_guide.md) to start using JuiceFS immediately!
-
-You can also learn more about [JuiceFS Technical Architecture](../introduction/architecture.md)

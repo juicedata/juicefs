@@ -21,7 +21,7 @@ JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下�
 
 通过 JuiceFS Java 客户端为 Hadoop 生态提供存储，需要提前创建 JuiceFS 文件系统。部署 Java 客户端时，在配置文件中指定已创建文件系统的元数据引擎地址。
 
-创建文件系统可以参考 [JuiceFS 快速上手指南](../getting-started/quick_start_guide.md)。
+创建文件系统可以参考 [JuiceFS 快速上手指南](../getting-started/for_local.md)。
 
 > **注意**：如果要在分布式环境中使用 JuiceFS，创建文件系统时，请合理规划要使用的对象存储和数据库，确保它们可以被每个集群节点正常访问。
 

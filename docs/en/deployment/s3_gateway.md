@@ -13,7 +13,7 @@ Because JuiceFS stores files in chunks, the files cannot be accessed directly us
 
 ## Prerequisites
 
-The S3 gateway is a feature built on top of the JuiceFS file system. If you do not have a JuiceFS file system, please refer to the [quick start guide](../getting-started/quick_start_guide.md) to create one first.
+The S3 gateway is a feature built on top of the JuiceFS file system. If you do not have a JuiceFS file system, please refer to the [quick start guide](../getting-started/for_local.md) to create one first.
 
 JuiceFS S3 gateway is a feature introduced in v0.11, please make sure you have the latest version of JuiceFS.
 
