@@ -6,7 +6,7 @@
 
 // Database to be used:
 // TPCDS Scale factor
-val scaleFactor = "1"
+val scaleFactor = "10"
 // If false, float type will be used instead of decimal.
 val useDecimal = true
 // If false, string type will be used instead of date.
@@ -53,7 +53,7 @@ def queries = {
   if (randomizeQueries) scala.util.Random.shuffle(filtered_queries) else filtered_queries
 }
 val experiment = tpcds.runExperiment(
-  queries, 
+  queries,
   iterations = iterations,
   resultLocation = resultLocation,
   tags = Map("runtype" -> "benchmark", "database" -> databaseName, "scale_factor" -> scaleFactor))
