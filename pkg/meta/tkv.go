@@ -55,6 +55,7 @@ type kvTxn interface {
 type tkvClient interface {
 	name() string
 	txn(f func(kvTxn) error) error
+	reset(prefix []byte) error
 }
 
 type kvMeta struct {
@@ -377,6 +378,10 @@ func (m *kvMeta) Init(format Format, force bool) error {
 		}
 		return nil
 	})
+}
+
+func (m *kvMeta) Reset() error {
+	return m.client.reset(nil)
 }
 
 func (m *kvMeta) Load() (*Format, error) {

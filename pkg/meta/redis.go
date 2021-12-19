@@ -215,6 +215,10 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	return r.rdb.Set(ctx, r.inodeKey(1), r.marshal(attr), 0).Err()
 }
 
+func (r *redisMeta) Reset() error {
+	return r.rdb.FlushDB(Background).Err()
+}
+
 func (r *redisMeta) Load() (*Format, error) {
 	body, err := r.rdb.Get(Background, "setting").Bytes()
 	if err == redis.Nil {

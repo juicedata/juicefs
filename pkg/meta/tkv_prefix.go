@@ -109,6 +109,10 @@ func (c *prefixClient) txn(f func(kvTxn) error) error {
 	})
 }
 
+func (c *prefixClient) reset(prefix []byte) error { // prefix ignored
+	return c.tkvClient.reset(c.prefix)
+}
+
 func withPrefix(client tkvClient, prefix []byte) tkvClient {
 	return &prefixClient{client, prefix}
 }

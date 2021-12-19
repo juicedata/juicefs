@@ -26,10 +26,8 @@ const subSampleFile = "metadata-sub.sample"
 
 func testLoad(t *testing.T, uri, fname string) Meta {
 	m := NewClient(uri, &Config{Retries: 10, Strict: true})
-	ctx := Background
-	switch r := m.(type) {
-	case *redisMeta:
-		r.rdb.FlushDB(ctx)
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
 	}
 	fp, err := os.Open(fname)
 	if err != nil {
@@ -40,6 +38,7 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("load meta: %s", err)
 	}
 
+	ctx := Background
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
@@ -103,14 +102,12 @@ func TestLoadDump(t *testing.T) {
 	})
 
 	t.Run("Metadata Engine: SQLite", func(t *testing.T) {
-		os.Remove("test10.db")
-		m := testLoad(t, "sqlite3://test10.db", sampleFile)
+		m := testLoad(t, "sqlite3:///tmp/jfs-load-dump-test.db", sampleFile)
 		testDump(t, m, 0, sampleFile, "sqlite3.dump")
 	})
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
-		os.Remove("test10.db")
-		_ = testLoad(t, "sqlite3://test10.db", sampleFile)
-		m := NewClient("sqlite3://test10.db", &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		_ = testLoad(t, "sqlite3:///tmp/jfs-load-dump-test.db", sampleFile)
+		m := NewClient("sqlite3:///tmp/jfs-load-dump-test.db", &Config{Retries: 10, Strict: true, Subdir: "d1"})
 		testDump(t, m, 0, subSampleFile, "sqlite3_subdir.dump")
 		testDump(t, m, 1, sampleFile, "sqlite3.dump")
 	})
