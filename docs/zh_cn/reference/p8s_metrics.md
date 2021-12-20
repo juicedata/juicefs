@@ -7,7 +7,7 @@ slug: /p8s_metrics
 
 JuiceFS 为每个文件系统提供一个 [Prometheus](https://prometheus.io) API。默认的 API 地址是 `http://localhost:9567/metrics`，你可以在执行 [`juicefs mount`](../reference/command_reference.md#juicefs-mount) 或 [`juicefs gateway`](../reference/command_reference.md#juicefs-gateway) 命令时通过 `--metrics` 选项自定义这个地址。
 
-JuiceFS 同时提供一个 [Grafana](https://grafana.com) 的 [dashboard 模板](../en/grafana_template.json)，将模板导入以后就可以展示这些收集上来的监控指标。
+JuiceFS 同时提供一个 [Grafana](https://grafana.com) 的[仪表盘模板](../../en/grafana_template.json)，将模板导入以后就可以展示这些收集上来的监控指标。
 
 ## 使用 Consul 注册中心
 
@@ -28,9 +28,13 @@ JuiceFS 支持使用 Consul 作为 metrics API 的注册中心。您可以在执
 | `vol_name` | Volume 名称 |
 | `mp`       | 挂载点路径  |
 
-> **提示**：Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识别不同的抓取目标，格式为 `<host>:<port>`。详见[官方文档](https://prometheus.io/docs/concepts/jobs_instances)。
+:::info 说明
+Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识别不同的抓取目标，格式为 `<host>:<port>`。详见[官方文档](https://prometheus.io/docs/concepts/jobs_instances)。
+:::
 
-> **提示**：如果是通过 [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 的方式上报监控指标（例如 [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md#监控指标收集)），`mp` 标签的值为 `sdk-<PID>`，`instance` 标签的值为主机名。
+:::info 说明
+如果是通过 [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 的方式上报监控指标（例如 [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md#监控指标收集)），`mp` 标签的值为 `sdk-<PID>`，`instance` 标签的值为主机名。
+:::
 
 ## 文件系统
 
