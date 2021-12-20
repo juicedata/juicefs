@@ -82,6 +82,10 @@ func gatewayFlags() *cli.Command {
 		&cli.BoolFlag{
 			Name:  "multi-buckets",
 			Usage: "use top level of directories as buckets",
+		},
+		&cli.BoolFlag{
+			Name:  "keep-etag",
+			Usage: "keep the etag information of the object",
 		})
 	return &cli.Command{
 		Name:      "gateway",
@@ -255,5 +259,5 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, "gateway "+version.Version())
 	}
-	return jfsgateway.NewJFSGateway(conf, m, store, c.Bool("multi-buckets"))
+	return jfsgateway.NewJFSGateway(conf, m, store, c.Bool("multi-buckets"), c.Bool("keep-etag"))
 }
