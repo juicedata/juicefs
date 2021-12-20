@@ -34,7 +34,7 @@ slug: /performance_evaluation_guide
 JuiceFS `bench` 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[快速上手指南](../getting-started/for_local.md)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
 
 ```bash
-$ juicefs bench /mnt/jfs -p 4
+juicefs bench /mnt/jfs -p 4
 ```
 
 测试结果会将各项性能指标显示为绿色，黄色或红色。若您的结果中有红色指标，请先检查相关配置，需要帮助可以在 [GitHub Discussions](https://github.com/juicedata/juicefs/discussions) 详细描述你的问题。
@@ -60,11 +60,17 @@ JuiceFS `bench` 基准性能测试的具体流程如下（它的实现逻辑非�
 
 不难看出，在上面的测试中，JuiceFS 的顺序读写能力明显优于 AWS EFS，吞吐能力也超过了常用的 EBS。但是写小文件的速度不算快，因为每写一个文件都需要将数据持久化到 S3 中，调用对象存储 API 通常有 10~30ms 的固定开销。
 
-> 注 1：Amazon EFS 的性能与容量线性相关（[参考官方文档](https://docs.aws.amazon.com/efs/latest/ug/performance.html#performancemodes)），这样就不适合用在小数据量高吞吐的场景中。
->
-> 注 2：价格参考 [AWS 美东区（US East, Ohio Region）](https://aws.amazon.com/ebs/pricing/?nc1=h_ls)，不同 Region 的价格有细微差异。
->
-> 注 3：以上数据来自 [AWS 官方文档](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html)，性能指标为最大值，EBS 的实际性能与卷容量和挂载 EC2 实例类型相关，总的来说是越大容量，搭配约高配置的 EC2，得到的 EBS 性能越好，但不超过上面提到的最大值。
+:::note 注
+Amazon EFS 的性能与容量线性相关（[参考官方文档](https://docs.aws.amazon.com/efs/latest/ug/performance.html#performancemodes)），这样就不适合用在小数据量高吞吐的场景中。
+:::
+
+:::note 注
+价格参考 [AWS 美东区（US East, Ohio Region）](https://aws.amazon.com/ebs/pricing/?nc1=h_ls)，不同 Region 的价格有细微差异。
+:::
+
+:::note 注
+以上数据来自 [AWS 官方文档](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html)，性能指标为最大值，EBS 的实际性能与卷容量和挂载 EC2 实例类型相关，总的来说是越大容量，搭配约高配置的 EC2，得到的 EBS 性能越好，但不超过上面提到的最大值。
+:::
 
 ## 性能观测和分析工具
 
@@ -75,7 +81,7 @@ JuiceFS `bench` 基准性能测试的具体流程如下（它的实现逻辑非�
 JuiceFS `stats` 是一个实时统计 JuiceFS 性能指标的工具，类似 Linux 系统的 `dstat` 命令，可以实时显示 JuiceFS 客户端的指标变化（详细说明和使用方法见[文档](./stats_watcher.md)）。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
 
 ```bash
-$ juicefs stats /mnt/jfs --verbosity 1
+juicefs stats /mnt/jfs --verbosity 1
 ```
 
 结果如下，可以将其与上述基准测试流程对照来看，更易理解：
@@ -108,13 +114,13 @@ $ juicefs stats /mnt/jfs --verbosity 1
 JuiceFS `profile` 一方面用来实时输出 JuiceFS 客户端的所有访问日志，包含每个请求的信息。同时，它也可以用来回放、统计 JuiceFS 访问日志，方便用户直观了解 JuiceFS 的运行情况（详细的说明和使用方法见[文档](./operations_profiling.md)）。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
 
 ```bash
-$ cat /mnt/jfs/.accesslog > access.log
+cat /mnt/jfs/.accesslog > access.log
 ```
 
 其中 `.accesslog` 是一个虚拟文件，它平时不会产生任何数据，只有在读取（如执行 `cat`）时才会有 JuiceFS 的访问日志输出。结束后使用 <kbd>Ctrl-C</kbd> 结束 `cat` 命令，并运行：
 
 ```bash
-$ juicefs profile access.log --interval 0
+juicefs profile access.log --interval 0
 ```
 
 其中 `--interval` 参数设置访问日志的采样间隔，设为 0 时用于快速重放一个指定的日志文件，生成统计信息，如下图所示：
@@ -141,16 +147,30 @@ Fio 是业界常用的一个性能测试工具，完成 JuiceFS bench 后可以�
 
 #### 测试任务
 
-执行下面四个 Fio 任务，分别进行顺序写、顺序读、随机写、随机读测试：
+执行下面四个 Fio 任务，分别进行顺序写、顺序读、随机写、随机读测试。
+
+顺序写
+
+```shell
+fio --name=jfs-test --directory=/mnt/jfs --ioengine=libaio --rw=write --bs=1m --size=1g --numjobs=4 --direct=1 --group_reporting
+```
+
+顺序读
 
 ```bash
-# Sequential
-$ fio --name=jfs-test --directory=/mnt/jfs --ioengine=libaio --rw=write --bs=1m --size=1g --numjobs=4 --direct=1 --group_reporting
-$ fio --name=jfs-test --directory=/mnt/jfs --ioengine=libaio --rw=read --bs=1m --size=1g --numjobs=4 --direct=1 --group_reporting
+fio --name=jfs-test --directory=/mnt/jfs --ioengine=libaio --rw=read --bs=1m --size=1g --numjobs=4 --direct=1 --group_reporting
+```
 
-# Random
-$ fio --name=jfs-test --directory=/mnt/jfs --ioengine=libaio --rw=randwrite --bs=1m --size=1g --numjobs=4 --direct=1 --group_reporting
-$ fio --name=jfs-test --directory=/mnt/jfs --ioengine=libaio --rw=randread --bs=1m --size=1g --numjobs=4 --direct=1 --group_reporting
+随机写
+
+```shell
+fio --name=jfs-test --directory=/mnt/jfs --ioengine=libaio --rw=randwrite --bs=1m --size=1g --numjobs=4 --direct=1 --group_reporting
+```
+
+随机读
+
+```shell
+fio --name=jfs-test --directory=/mnt/jfs --ioengine=libaio --rw=randread --bs=1m --size=1g --numjobs=4 --direct=1 --group_reporting
 ```
 
 参数说明：
