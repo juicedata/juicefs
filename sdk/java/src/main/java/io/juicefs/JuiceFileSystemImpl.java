@@ -25,6 +25,7 @@ import jnr.ffi.Pointer;
 import jnr.ffi.Runtime;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
@@ -1201,11 +1202,15 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (getFileStatus(dst).getLen() == 0) {
       throw new IOException(dst + "is empty");
     }
+    Path dp = dst.getParent();
     for (Path src : srcs) {
-      if (!exists(src)) {
-        throw new FileNotFoundException(src.toString());
+      if (!src.getParent().equals(dp)) {
+        throw new HadoopIllegalArgumentException("Source file " + src
+                + " is not in the same directory with the target "
+                + dst);
       }
     }
+    if (srcs.length == 0) { return; }
     byte[][] srcbytes = new byte[srcs.length][];
     int bufsize = 0;
     for (int i = 0; i < srcs.length; i++) {
@@ -1221,10 +1226,8 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     int r = lib.jfs_concat(Thread.currentThread().getId(), handle, normalizePath(dst), buf, bufsize);
     if (r < 0) {
+      // TODO: show correct path (one of srcs)
       throw error(r, dst);
-    }
-    for (Path src : srcs) {
-      delete(src, false);
     }
   }
 
