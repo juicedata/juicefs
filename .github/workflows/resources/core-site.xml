@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <property>
+        <name>fs.defaultFS</name>
+        <value>jfs://dev/</value>
+    </property>
+    <property>
+        <name>fs.jfs.impl</name>
+        <value>io.juicefs.JuiceFileSystem</value>
+    </property>
+    <property>
+        <name>juicefs.cache-size</name>
+        <value>0</value>
+    </property>
+    <property>
+        <name>juicefs.no-usage-report</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>juicefs.access-log</name>
+        <value>/tmp/juicefs-access.log</value>
+    </property>
+    <property>
+        <name>juicefs.dev.meta</name>
+        <value>redis://127.0.0.1:6379/1</value>
+    </property>
+</configuration>
