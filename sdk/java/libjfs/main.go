@@ -970,7 +970,24 @@ func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int 
 
 	dfi, _ := df.Stat()
 	_, err = w.CopyFileRange(ctx, tmp, 0, dst, uint64(dfi.Size()), 1<<63)
-	return errno(err)
+	r := errno(err)
+	if r == 0 {
+		var wg sync.WaitGroup
+		var limit = make(chan bool, 100)
+		for _, src := range srcs {
+			limit <- true
+			wg.Add(1)
+			go func(p string) {
+				defer func() { <-limit }()
+				defer wg.Done()
+				if r := w.Delete(ctx, p); r != 0 {
+					logger.Errorf("delete source %s: %s", p, r)
+				}
+			}(src)
+		}
+		wg.Wait()
+	}
+	return r
 }
 
 //export jfs_lseek

@@ -490,7 +490,7 @@ public class JuiceFileSystemTest extends TestCase {
   }
 
   public void testConcat() throws Exception {
-    Path trg = new Path("/concat");
+    Path trg = new Path("/tmp/concat");
     Path src1 = new Path("/tmp/concat1");
     Path src2 = new Path("/tmp/concat2");
     FSDataOutputStream ou = fs.create(trg);
