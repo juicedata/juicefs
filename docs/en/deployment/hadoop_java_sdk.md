@@ -23,13 +23,19 @@ You should first create at least one JuiceFS file system to provide storage for 
 
 To create a file system, please refer to [JuiceFS Quick Start Guide](../getting-started/for_local.md).
 
-> **Note**: If you want to use JuiceFS in a distributed environment, when creating a file system, please plan the object storage and database to be used reasonably to ensure that they can be accessed by each node in the cluster.
+:::note
+If you want to use JuiceFS in a distributed environment, when creating a file system, please plan the object storage and database to be used reasonably to ensure that they can be accessed by each node in the cluster.
+:::
 
 ### 4. Memory
 
 JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
 
 ## Client compilation
+
+:::note
+No matter which system environment the client is compiled for, the compiled JAR file has the same name and can only be deployed in the matching system environment. For example, when compiled in Linux, it can only be used in the Linux environment. In addition, since the compiled package depends on glibc, it is recommended to compile with a lower version system to ensure better compatibility.
+:::
 
 Compilation depends on the following tools:
 
@@ -40,8 +46,6 @@ Compilation depends on the following tools:
 - make
 - GCC 5.4+
 
-> **Note**: If Ceph RADOS is used to store data, you need to install librados-dev and build `libjfs.so` with `-tag ceph`.
-
 ### Linux and macOS
 
 Clone the repository:
@@ -51,6 +55,10 @@ $ git clone https://github.com/juicedata/juicefs.git
 ```
 
 Enter the directory and compile:
+
+:::note
+If Ceph RADOS is used to store data, you need to install `librados-dev` first and [build `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L22) with `-tags ceph`.
+:::
 
 ```shell
 $ cd juicefs/sdk/java
@@ -80,8 +88,6 @@ Clone and enter the JuiceFS source code directory, execute the following code to
 $ cd juicefs/sdk/java
 $ make win
 ```
-
-> **Note**: No matter which system environment the client is compiled for, the compiled JAR file has the same name and can only be deployed in the matching system environment. For example, when compiled in Linux, it can only be used in the Linux environment. In addition, since the compiled package depends on glibc, it is recommended to compile with a lower version system to ensure better compatibility.
 
 ## Deploy the client
 
@@ -239,7 +245,9 @@ Add configuration parameters to `conf/flink-conf.yaml`. If you only use JuiceFS 
 
 ### Hudi
 
-> **Note**: The latest version of Hudi (v0.9.0) does not yet support JuiceFS, you need to compile the latest master branch yourself.
+:::note
+The latest version of Hudi (v0.10.0) does not yet support JuiceFS, you need to compile the latest master branch yourself.
+:::
 
 Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/next/jfs_hoodie) to learn how to configure JuiceFS.
 
@@ -247,7 +255,9 @@ Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/nex
 
 When the following components need to access JuiceFS, they should be restarted.
 
-> **Note**: Before restart, you need to confirm JuiceFS related configuration has been written to the configuration file of each component, usually you can find them in `core-site.xml` on the machine where the service of the component was deployed.
+:::note
+Before restart, you need to confirm JuiceFS related configuration has been written to the configuration file of each component, usually you can find them in `core-site.xml` on the machine where the service of the component was deployed.
+:::
 
 | Components | Services                   |
 | ---------- | -------------------------- |
@@ -271,7 +281,9 @@ After the deployment of the JuiceFS Java SDK, the following methods can be used 
 $ hadoop fs -ls jfs://{JFS_NAME}/
 ```
 
-> **Note**: The `JFS_NAME` is the volume name when you format JuiceFS file system.
+:::info
+The `JFS_NAME` is the volume name when you format JuiceFS file system.
+:::
 
 ### Hive
 
@@ -285,9 +297,9 @@ CREATE TABLE IF NOT EXISTS person
 
 ## Monitoring metrics collection
 
-JuiceFS Hadoop Java SDK supports reporting metrics to [Prometheus Pushgateway](https://github.com/prometheus/pushgateway), then you can use [Grafana](https://grafana.com) and [dashboard template](grafana_template.json) to visualize these metrics.
+JuiceFS Hadoop Java SDK supports reporting metrics in [Prometheus](https://prometheus.io) format to [Pushgateway](https://github.com/prometheus/pushgateway), and then let Prometheus scrapes metrics from Pushgateway, finally, through [Grafana](https://grafana.com) and [JuiceFS dashboard template](grafana_template.json) to visualize these metrics.
 
-Enable metrics reporting through following configurations:
+Enable metrics reporting through following configuration:
 
 ```xml
 <property>
@@ -296,15 +308,27 @@ Enable metrics reporting through following configurations:
 </property>
 ```
 
-> **Note**: Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus crawling metrics. It is recommended to clean up metrics which `job` is `juicefs` on Pushgateway regularly.
->
-> It is recommended to use the following command to clean up once every hour. The running Hadoop Java SDK will continue to update after the metrics are cleared, which basically does not affect the use.
->
-> ```bash
-> $ curl -X DELETE http://host:9091/metrics/job/juicefs
-> ```
+At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds.
 
-For a description of all monitoring metrics, please refer to [JuiceFS Metrics](../reference/p8s_metrics.md).
+:::info
+According to the suggestion of [Pushgateway official document](https://github.com/prometheus/pushgateway/blob/master/README.md#configure-the-pushgateway-as-a-target-to-scrape), Prometheus's [scrape configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) needs to set `honor_labels: true`.
+
+It is important to note that the timestamp of the metrics scraped by Prometheus from Pushgateway is not the time when the JuiceFS Hadoop Java SDK reported it, but the time when it was scraped. For details, please refer to [Pushgateway official document](https://github.com/prometheus/pushgateway/blob/master/README.md#about-timestamps).
+
+By default, Pushgateway will only save metrics in memory. If you need to persist to disk, you can specify the file path for saving with the `--persistence.file` option and the frequency of saving to the file with the `--persistence.interval` option (the default save time is 5 minutes).
+:::
+
+:::note
+Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus scrapes metrics. It is recommended to clean up metrics on Pushgateway regularly.
+
+Regularly use the following command to clean up the metrics of Pushgateway. Clearing the metrics will not affect the running JuiceFS Hadoop Java SDK to continuously report data. **Note that the `--web.enable-admin-api` option must be specified when Pushgateway is started, and the following command will clear all monitoring metrics in Pushgateway.**
+
+```bash
+$ curl -X PUT http://host:9091/api/v1/admin/wipe
+```
+:::
+
+For a description of all monitoring metrics, please refer to [JuiceFS Metrics](../reference/p8s_metrics.md). For more information about Pushgateway, please check [official document](https://github.com/prometheus/pushgateway/blob/master/README.md).
 
 ## Benchmark
 
