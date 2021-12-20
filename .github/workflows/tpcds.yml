@@ -40,7 +40,6 @@ jobs:
           fetch-depth: 1
 
       - name: Build linux target
-        timeout-minutes: 1
         run: make juicefs
 
       - name: Build Hadoop SDK
