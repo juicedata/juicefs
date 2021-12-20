@@ -2,8 +2,8 @@ name: tpcds
 
 on:
   push:
-    branches:
-      - 'tpcds_action'
+    tags:
+      - v*
 
 jobs:
   tpcds:
@@ -40,6 +40,7 @@ jobs:
           fetch-depth: 1
 
       - name: Build linux target
+        timeout-minutes: 1
         run: make juicefs
 
       - name: Build Hadoop SDK
@@ -95,6 +96,7 @@ jobs:
           sbt package
 
       - name: Gen data
+        timeout-minutes: 35
         working-directory: /tmp
         run: |
           spark-shell \
