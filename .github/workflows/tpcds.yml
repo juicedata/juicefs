@@ -3,7 +3,7 @@ name: tpcds
 on:
   push:
     tags:
-      - v*
+      - release*
 
 jobs:
   tpcds:
