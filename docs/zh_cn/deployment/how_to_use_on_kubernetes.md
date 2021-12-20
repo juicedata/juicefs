@@ -364,7 +364,7 @@ scrape_configs:
 
 #### 配置 Grafana 仪表盘
 
-JuiceFS 为 [Grafana](https://grafana.com) 提供了一个[仪表盘模板](../en/grafana_template.json)，可以导入到 Grafana 中用于展示 Prometheus 收集的监控指标。
+JuiceFS 为 [Grafana](https://grafana.com) 提供了一个[仪表盘模板](../../en/grafana_template.json)，可以导入到 Grafana 中用于展示 Prometheus 收集的监控指标。
 
 ## 在容器中挂载 JuiceFS
 
