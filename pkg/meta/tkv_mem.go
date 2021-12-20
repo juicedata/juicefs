@@ -257,7 +257,10 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 	return nil
 }
 
-func (c *memKV) reset(prefix []byte) error { // prefix ignored
+func (c *memKV) reset(prefix []byte) error {
+	if prefix != nil {
+		return fmt.Errorf("prefix must be nil")
+	}
 	c.Lock()
 	c.items = btree.New(2)
 	c.temp = &kvItem{}
