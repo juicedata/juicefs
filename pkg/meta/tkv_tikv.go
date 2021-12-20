@@ -113,26 +113,6 @@ func (tx *tikvTxn) scan(prefix []byte, handler func(key, value []byte)) {
 	}
 }
 
-func nextKey(key []byte) []byte {
-	if len(key) == 0 {
-		return nil
-	}
-	next := make([]byte, len(key))
-	copy(next, key)
-	p := len(next) - 1
-	for {
-		next[p]++
-		if next[p] != 0 {
-			break
-		}
-		p--
-		if p < 0 {
-			panic("can't scan keys for 0xFF")
-		}
-	}
-	return next
-}
-
 func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 	it, err := tx.Iter(prefix, nextKey(prefix))
 	if err != nil {
