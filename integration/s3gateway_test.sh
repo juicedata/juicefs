@@ -24,9 +24,7 @@ if [[ `uname  -a` =~ "Darwin" ]];then
 fi
 echo "os=$os"
 
-
 set -x
-
 
 os="linux"
 errno=$errno
