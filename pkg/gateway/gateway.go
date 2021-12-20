@@ -527,7 +527,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		return
 	}
 	if strings.HasSuffix(object, sep) && !fi.IsDir() {
-		err = jfsToObjectErr(ctx, os.ErrNotExist, bucket, object)
+		err = jfsToObjectErr(ctx, syscall.ENOENT, bucket, object)
 		return
 	}
 	return minio.ObjectInfo{
