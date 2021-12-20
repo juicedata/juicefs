@@ -1621,6 +1621,43 @@ function test_serverside_encryption_error() {
     return $rv
 }
 
+
+# test GetObjectInfo http code is 404
+function test_get_object_error(){
+    # log start time
+    start_time=$(get_time)
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+
+    # if make bucket succeeds upload a file
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # if upload succeeds download the file
+        if [ $rv -eq 0 ]; then
+            function="${AWS} s3api get-object --bucket ${bucket_name} --key datafile-1-kB/ /tmp/datafile-1-kB"
+            # save the ref to function being tested, so it can be logged
+            test_function=${function}
+            out=$($function 2>&1)
+            if [ $? -eq $errno ];then
+                rv=0
+            fi
+            if ! [[ "$out" =~ "The specified key does not exist" ]];then
+                log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+                rv=1
+            fi
+        fi
+    return $rv
+}
+
+
 # main handler for all the tests.
 main() {
     # Success tests
@@ -1648,9 +1685,10 @@ main() {
     # Error tests
     test_list_objects_error && \
     test_put_object_error && \
-    test_serverside_encryption_error
+    test_serverside_encryption_error && \
     # test_worm_bucket && \
     # test_legal_hold
+    test_get_object_error
 
     return $?
 }
