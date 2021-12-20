@@ -234,6 +234,8 @@ type Meta interface {
 	Name() string
 	// Init is used to initialize a meta service.
 	Init(format Format, force bool) error
+	// Reset cleans up all metadata, VERY DANGEROUS!
+	Reset() error
 	// Load loads the existing setting of a formatted volume from meta service.
 	Load() (*Format, error)
 	// NewSession creates a new client session.

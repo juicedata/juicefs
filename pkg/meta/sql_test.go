@@ -17,69 +17,15 @@
 package meta
 
 import (
-	"io/ioutil"
-	"log"
-	"os"
 	"testing"
-	"time"
 )
 
-func tempFile(t *testing.T) string {
-	fp, err := ioutil.TempFile("/tmp", "jfstest-*.db")
-	if err != nil {
-		t.Fatalf("create temp file: %s", err)
-	}
-	if err = fp.Close(); err != nil {
-		log.Fatalf("close temp file: %s", err)
-	}
-	return fp.Name()
-}
-
 func TestSQLiteClient(t *testing.T) {
-	tmp := tempFile(t)
-	defer func() {
-		if !t.Failed() {
-			_ = os.Remove(tmp)
-		}
-	}()
-	m, err := newSQLMeta("sqlite3", tmp, &Config{MaxDeletes: 1})
+	m, err := newSQLMeta("sqlite3", "/tmp/jfs-unit-test.db", &Config{MaxDeletes: 1})
 	if err != nil || m.Name() != "sqlite3" {
 		t.Fatalf("create meta: %s", err)
 	}
-
-	testMetaClient(t, m)
-	testTruncateAndDelete(t, m)
-	testTrash(t, m)
-	testRemove(t, m)
-	testStickyBit(t, m)
-	testLocks(t, m)
-	testConcurrentWrite(t, m)
-	testCompaction(t, m)
-	testCopyFileRange(t, m)
-	testCloseSession(t, m)
-	m.(*dbMeta).conf.CaseInsensi = true
-	testCaseIncensi(t, m)
-	m.(*dbMeta).conf.OpenCache = time.Second
-	m.(*dbMeta).of.expire = time.Second
-	testOpenCache(t, m)
-	m.(*dbMeta).conf.ReadOnly = true
-	testReadOnly(t, m)
-}
-
-func resetDB(m *dbMeta) {
-	m.db.DropTables(&setting{})
-	m.db.DropTables(&counter{})
-	m.db.DropTables(&node{})
-	m.db.DropTables(&edge{})
-	m.db.DropTables(&symlink{})
-	m.db.DropTables(&chunk{})
-	m.db.DropTables(&chunkRef{})
-	m.db.DropTables(&session{})
-	m.db.DropTables(&sustained{})
-	m.db.DropTables(&xattr{})
-	m.db.DropTables(&delfile{})
-	m.db.DropTables(&flock{})
-	m.db.DropTables(&plock{})
+	testMeta(t, m)
 }
 
 func TestMySQLClient(t *testing.T) {
@@ -87,25 +33,7 @@ func TestMySQLClient(t *testing.T) {
 	if err != nil || m.Name() != "mysql" {
 		t.Fatalf("create meta: %s", err)
 	}
-	resetDB(m.(*dbMeta))
-
-	testMetaClient(t, m)
-	testTruncateAndDelete(t, m)
-	testTrash(t, m)
-	testRemove(t, m)
-	testStickyBit(t, m)
-	testLocks(t, m)
-	testConcurrentWrite(t, m)
-	testCompaction(t, m)
-	testCopyFileRange(t, m)
-	testCloseSession(t, m)
-	m.(*dbMeta).conf.CaseInsensi = true
-	testCaseIncensi(t, m)
-	m.(*dbMeta).conf.OpenCache = time.Second
-	m.(*dbMeta).of.expire = time.Second
-	testOpenCache(t, m)
-	m.(*dbMeta).conf.ReadOnly = true
-	testReadOnly(t, m)
+	testMeta(t, m)
 }
 
 func TestPostgreSQLClient(t *testing.T) {
@@ -113,23 +41,5 @@ func TestPostgreSQLClient(t *testing.T) {
 	if err != nil || m.Name() != "postgres" {
 		t.Fatalf("create meta: %s", err)
 	}
-	resetDB(m.(*dbMeta))
-
-	testMetaClient(t, m)
-	testTruncateAndDelete(t, m)
-	testTrash(t, m)
-	testRemove(t, m)
-	testStickyBit(t, m)
-	testLocks(t, m)
-	testConcurrentWrite(t, m)
-	testCompaction(t, m)
-	testCopyFileRange(t, m)
-	testCloseSession(t, m)
-	m.(*dbMeta).conf.CaseInsensi = true
-	testCaseIncensi(t, m)
-	m.(*dbMeta).conf.OpenCache = time.Second
-	m.(*dbMeta).of.expire = time.Second
-	testOpenCache(t, m)
-	m.(*dbMeta).conf.ReadOnly = true
-	testReadOnly(t, m)
+	testMeta(t, m)
 }

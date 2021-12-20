@@ -15,6 +15,8 @@
 
 package meta
 
+import "fmt"
+
 type prefixTxn struct {
 	kvTxn
 	prefix []byte
@@ -107,6 +109,13 @@ func (c *prefixClient) txn(f func(kvTxn) error) error {
 	return c.tkvClient.txn(func(tx kvTxn) error {
 		return f(&prefixTxn{tx, c.prefix})
 	})
+}
+
+func (c *prefixClient) reset(prefix []byte) error {
+	if prefix != nil {
+		return fmt.Errorf("prefix must be nil")
+	}
+	return c.tkvClient.reset(c.prefix)
 }
 
 func withPrefix(client tkvClient, prefix []byte) tkvClient {
