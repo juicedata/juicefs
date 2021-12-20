@@ -2,8 +2,8 @@ name: tpcds
 
 on:
   push:
-    branches:
-      - 'tpcds_action'
+    tags:
+      - v*
 
 jobs:
   tpcds:
