@@ -1,4 +1,4 @@
-val scaleFactor = "10"
+val scaleFactor = "5"
 
 // data format.
 val format = "parquet"

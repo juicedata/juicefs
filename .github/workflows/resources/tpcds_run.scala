@@ -6,7 +6,7 @@
 
 // Database to be used:
 // TPCDS Scale factor
-val scaleFactor = "10"
+val scaleFactor = "5"
 // If false, float type will be used instead of decimal.
 val useDecimal = true
 // If false, string type will be used instead of date.
