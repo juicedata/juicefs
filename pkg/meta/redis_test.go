@@ -18,7 +18,6 @@ package meta
 
 import (
 	"bytes"
-	"context"
 	"runtime"
 	"strconv"
 	"sync"
@@ -40,8 +39,22 @@ func TestRedisClient(t *testing.T) {
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
 	}
-	m.(*redisMeta).rdb.FlushDB(context.Background())
+	testMeta(t, m)
+}
 
+func testMeta(t *testing.T, m Meta) {
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	var base *baseMeta
+	switch m := m.(type) {
+	case *redisMeta:
+		base = &m.baseMeta
+	case *dbMeta:
+		base = &m.baseMeta
+	case *kvMeta:
+		base = &m.baseMeta
+	}
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
@@ -52,12 +65,12 @@ func TestRedisClient(t *testing.T) {
 	testCompaction(t, m)
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
-	m.(*redisMeta).conf.CaseInsensi = true
+	base.conf.CaseInsensi = true
 	testCaseIncensi(t, m)
-	m.(*redisMeta).conf.OpenCache = time.Second
-	m.(*redisMeta).of.expire = time.Second
+	base.conf.OpenCache = time.Second
+	base.of.expire = time.Second
 	testOpenCache(t, m)
-	m.(*redisMeta).conf.ReadOnly = true
+	base.conf.ReadOnly = true
 	testReadOnly(t, m)
 }
 

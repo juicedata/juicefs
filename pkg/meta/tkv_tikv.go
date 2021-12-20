@@ -113,28 +113,8 @@ func (tx *tikvTxn) scan(prefix []byte, handler func(key, value []byte)) {
 	}
 }
 
-func (tx *tikvTxn) nextKey(key []byte) []byte {
-	if len(key) == 0 {
-		return nil
-	}
-	next := make([]byte, len(key))
-	copy(next, key)
-	p := len(next) - 1
-	for {
-		next[p]++
-		if next[p] != 0 {
-			break
-		}
-		p--
-		if p < 0 {
-			panic("can't scan keys for 0xFF")
-		}
-	}
-	return next
-}
-
 func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
-	it, err := tx.Iter(prefix, tx.nextKey(prefix))
+	it, err := tx.Iter(prefix, nextKey(prefix))
 	if err != nil {
 		panic(err)
 	}
@@ -150,11 +130,11 @@ func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 }
 
 func (tx *tikvTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
-	return tx.scanRange0(prefix, tx.nextKey(prefix), filter)
+	return tx.scanRange0(prefix, nextKey(prefix), filter)
 }
 
 func (tx *tikvTxn) exist(prefix []byte) bool {
-	it, err := tx.Iter(prefix, tx.nextKey(prefix))
+	it, err := tx.Iter(prefix, nextKey(prefix))
 	if err != nil {
 		panic(err)
 	}
@@ -226,5 +206,10 @@ func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 		tx.SetEnableAsyncCommit(true)
 		err = tx.Commit(context.Background())
 	}
+	return err
+}
+
+func (c *tikvClient) reset(prefix []byte) error {
+	_, err := c.client.DeleteRange(context.Background(), prefix, nextKey(prefix), 1)
 	return err
 }

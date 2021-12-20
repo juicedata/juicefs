@@ -107,7 +107,7 @@ func (tx *memTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
 	})
 }
 
-func (tx *memTxn) nextKey(key []byte) []byte {
+func nextKey(key []byte) []byte {
 	if len(key) == 0 {
 		return nil
 	}
@@ -136,7 +136,7 @@ func (tx *memTxn) scanKeys(prefix []byte) [][]byte {
 }
 
 func (tx *memTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
-	res := tx.scanRange(prefix, tx.nextKey(prefix))
+	res := tx.scanRange(prefix, nextKey(prefix))
 	for k, v := range res {
 		if filter != nil && !filter([]byte(k), v) {
 			delete(res, k)
@@ -254,5 +254,16 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 	for k, value := range tx.buffer {
 		c.set(k, value)
 	}
+	return nil
+}
+
+func (c *memKV) reset(prefix []byte) error {
+	if prefix != nil {
+		return fmt.Errorf("prefix must be nil")
+	}
+	c.Lock()
+	c.items = btree.New(2)
+	c.temp = &kvItem{}
+	c.Unlock()
 	return nil
 }

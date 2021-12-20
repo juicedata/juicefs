@@ -302,6 +302,14 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	})
 }
 
+func (m *dbMeta) Reset() error {
+	return m.db.DropTables(&setting{}, &counter{},
+		&node{}, &edge{}, &symlink{}, &xattr{},
+		&chunk{}, &chunkRef{},
+		&session{}, &sustained{}, &delfile{},
+		&flock{}, &plock{})
+}
+
 func (m *dbMeta) Load() (*Format, error) {
 	var s = setting{Name: "format"}
 	ok, err := m.db.Get(&s)
