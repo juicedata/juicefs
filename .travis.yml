@@ -8,6 +8,7 @@ services:
   - docker
 env:
   - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false
+  - PLATFORM=cdh5
 go:
   - "1.16"
 branches:
