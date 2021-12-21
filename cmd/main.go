@@ -86,6 +86,7 @@ func Main(args []string) error {
 			dumpFlags(),
 			loadFlags(),
 			configFlags(),
+			destroyFlags(),
 		},
 	}
 

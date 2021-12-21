@@ -246,6 +246,8 @@ type Meta interface {
 	GetSession(sid uint64) (*Session, error)
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
+	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
+	CleanStaleSessions()
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno
