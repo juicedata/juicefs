@@ -15,8 +15,16 @@
 #  limitations under the License.
 
 # environment
-set -x
 
+os="linux"
+errno=$errno
+if [[ `uname  -a` =~ "Darwin" ]];then
+    os="mac"
+    errno=254
+fi
+echo "os=$os"
+
+set -x
 os="linux"
 errno=$errno
 if [[ `uname  -a` =~ "Darwin" ]];then
@@ -34,6 +42,9 @@ SECRET_KEY="testUserPassword"
 ENABLE_HTTPS=0
 SERVER_REGION=us-east-1
 ENABLE_VIRTUAL_STYLE=0
+
+
+
 
 # create testdata
 declare -A data_file_map
@@ -54,7 +65,6 @@ data_file_map["datafile-65-MB"]="65M"
 data_file_map["datafile-129-MB"]="129M"
 
 mkdir -p "$MINT_DATA_DIR"
-
 
 
 if [ ! "$(ls $MINT_DATA_DIR)" ]; then
@@ -516,6 +526,16 @@ function test_multipart_upload_0byte() {
     fi
 
     if [ $rv -eq 0 ]; then
+        ret_etag=$(echo "$out" | jq -r .ETag | sed -e 's/^"//' -e 's/"$//')
+        # match etag
+        if [ "$etag" != "$ret_etag" ]; then
+            rv=1
+            out="Etag mismatch for multipart 0 byte object"
+        fi
+        rm -f /tmp/datafile-0-b
+    fi
+
+    if [ $rv -eq 0 ]; then
         function="delete_bucket"
         out=$(delete_bucket "$bucket_name")
         rv=$?
@@ -526,7 +546,7 @@ function test_multipart_upload_0byte() {
     if [ $rv -eq 0 ]; then
         log_success "$(get_duration "$start_time")" "${test_function}"
     else
-        #clean up and log error
+        # clean up and log error
         ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
         rm -f /tmp/multipart
         log_failure "$(get_duration "$start_time")" "${function}" "${out}"
@@ -681,6 +701,7 @@ function test_max_key_list() {
 
     return $rv
 }
+
 # Copy object tests for server side copy
 # of the object, validates returned md5sum.
 function test_copy_object() {
@@ -707,10 +728,11 @@ function test_copy_object() {
         test_function=${function}
         out=$($function)
         rv=$?
-        if [ $rv -ne 0 ] ; then
+        hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
+        if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
             # Verification failed
             rv=1
-            out="test copy-object failed"
+            out="Hash mismatch expected $HASH_1_KB, got $hash2"
         fi
     fi
 
@@ -751,10 +773,18 @@ function test_copy_object_storage_class() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
+        # if this functionality is not implemented return right away.
         if [ $rv -ne 0 ]; then
+            if echo "$out" | grep -q "NotImplemented"; then
+                ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+                return 0
+            fi
+        fi
+        hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
+        if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
             # Verification failed
             rv=1
-            out="test copy object failed"
+            out="Hash mismatch expected $HASH_1_KB, got $hash2"
         fi
     fi
 
@@ -794,12 +824,18 @@ function test_copy_object_storage_class_same() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-
-        # if copy succeeds stat the object
+        # if this functionality is not implemented return right away.
         if [ $rv -ne 0 ]; then
+            if echo "$out" | grep -q "NotImplemented"; then
+                ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+                return 0
+            fi
+        fi
+        hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
+        if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
             # Verification failed
             rv=1
-            out="test copy object failed"
+            out="Hash mismatch expected $HASH_1_KB, got $hash2"
         fi
     fi
 
