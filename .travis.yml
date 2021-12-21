@@ -1,3 +1,4 @@
+sudo: required
 os: linux
 dist: xenial
 language: go
@@ -7,6 +8,13 @@ services:
   - docker
 env:
   - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false
+  - PLATFORM=hdp2
+  - PLATFORM=cdh5
+  - PLATFORM=cdh6
+  - PLATFORM=cdh6 KERBEROS=true RPC_PROTECTION=authentication DATA_TRANSFER_PROTECTION=authentication
+  - PLATFORM=cdh6 KERBEROS=true RPC_PROTECTION=integrity DATA_TRANSFER_PROTECTION=integrity
+  - PLATFORM=cdh6 KERBEROS=true RPC_PROTECTION=privacy DATA_TRANSFER_PROTECTION=privacy
+  - PLATFORM=cdh6 KERBEROS=true RPC_PROTECTION=privacy DATA_TRANSFER_PROTECTION=privacy AES=true
 go:
   - "1.16"
 branches:
@@ -25,7 +33,13 @@ addons:
 before_install:
   - source ./check-changed.sh
   - if [ $SKIP_TEST == true ]; then exit 0; fi
-install: true
+  - export GO111MODULE=on # Travis installs into $GOPATH/src, which disables module support by default.
+install:
+  - git clone https://github.com/sstephenson/bats $HOME/bats
+  - mkdir -p $HOME/bats/build
+  - "$HOME/bats/install.sh $HOME/bats/build"
+  - export PATH="$PATH:$HOME/bats/build/bin"
+  - ./travis-setup.sh $PLATFORM
 before_script:
   - export GO111MODULE=on
   - sudo mysql -e "create database dev;"
@@ -35,6 +49,8 @@ before_script:
   - wget https://dl.min.io/client/mc/release/linux-amd64/mc && chmod +x mc && ./mc config host add local http://127.0.0.1:9000 testUser testUserPassword && ./mc mb local/testbucket
   - make
   - sudo make -C fstests setup
+  - export HADOOP_CONF_DIR="/etc/hadoop/conf"
+  - find internal/protocol -name *.pb.go | xargs touch # so make doesn't try to regen protobuf files
 script:
   - sudo chmod 777 /var/jfsCache
   - make test
@@ -59,3 +75,20 @@ after_success:
 notifications:
   slack:
     secure: VD92Vium23tdNvXyb1cQTI/4/JGXecXY3t2YHjpzfrIWc8RzGxYN28275g6a8gL+AEURDcsLPUxr243tHSqAyQmHhM4JHrX+eXTshqOKcikSzU6kYQTZE6B1vigp1bgn68ExdM9jFMnue4MmsN/tsGsZ5t8eM0lFERdActZaDoR1c5DJ1WMjAUKzUhihGV+10QHI8nZwh+G3zM9SmSfh6obFk3QN0zKCMJEyC8z9UPS3MQspwt23MySYIVHU0beu0PkcZHnXbXNNG3P27e349f8uChhJSwnLVS5G0zFVrxO3rWVTlEAU1ksUeGFPP883v3XwDrFxIT1WOujH7uKwEV/QT3d+8+mmL8yFr1gnU4Gl3hApRzepsvr/IIQjaGtC7HHIqv4gvP/FJB9r5VDH4al4pSbAtMfWYwspmfiPI5mADpmUqW0Anwt9gnTQ5NxPVVo5txyG9LSwseYQ/P2Tx3h8w/kPvW0sPqX/qIxxwnZLVzRbdOGfUlNfmwEmBqWPGkJIEsYto8BEpw932p6ytijElTj+3ISo8hn2L1Lm+vCbsWRWTVyjNL5lqfBCNdsh7JHBUgcBdm1lQ2kKogWtAPtY5DxqLMto9vyVCIoM+gCE1VWZHTjazaFbhLsIg7j2qvwZs97VGQ3Wr/FfqVh3/3mUJNj6X0CWRBpWJRQwVDA=
+
+deploy:
+  skip_cleanup: true
+  provider: releases
+  api_key:
+    secure: MhNMuDo2ptwA3pXVJfIppskC0/Tg2pyoBcK/A1MAh8ifRrcw3HA2HjOgOj8HxE136aWLW90vnO1rpPRS60lyQikKyJtn2bg0/Earyz40bdQIxpxjeGyzS2yGdyuORivAoBqRMNXDBeMYjwIB/D/BkBJFRjk+VKn6hy6XgalbHcA=
+  file: gohdfs-*.tar.gz
+  file_glob: true
+  on:
+    repo: colinmarc/hdfs
+    tags: true
+    all_branches: true
+    condition: $PLATFORM = hdp2
+cache:
+  directories:
+    - $HOME/.cache/go-build
+    - $GOPATH/pkg/mod
