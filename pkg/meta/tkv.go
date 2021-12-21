@@ -1295,6 +1295,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if tx.exist(m.entryKey(dino, "")) {
 						return syscall.ENOTEMPTY
 					}
+					dattr.Nlink--
 					if trash > 0 {
 						tattr.Parent = trash
 					}
@@ -1367,9 +1368,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 							newSpace, newInode = -align4K(tattr.Length), -1
 						}
 					} else {
-						if dtyp == TypeDirectory {
-							dattr.Nlink--
-						} else if dtyp == TypeSymlink {
+						if dtyp == TypeSymlink {
 							tx.dels(m.symKey(dino))
 						}
 						tx.dels(m.inodeKey(dino))

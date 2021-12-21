@@ -1320,6 +1320,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					if cnt != 0 {
 						return syscall.ENOTEMPTY
 					}
+					dattr.Nlink--
 					if trash > 0 {
 						tattr.Parent = trash
 					}
@@ -1401,9 +1402,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 								pipe.Decr(ctx, totalInodes)
 							}
 						} else {
-							if dtyp == TypeDirectory {
-								dattr.Nlink--
-							} else if dtyp == TypeSymlink {
+							if dtyp == TypeSymlink {
 								pipe.Del(ctx, r.symKey(dino))
 							}
 							pipe.Del(ctx, r.inodeKey(dino))

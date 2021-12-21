@@ -1352,6 +1352,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if exist {
 						return syscall.ENOTEMPTY
 					}
+					dpn.Nlink--
 					if trash > 0 {
 						dn.Parent = trash
 					}
@@ -1443,9 +1444,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 							newSpace, newInode = -align4K(dn.Length), -1
 						}
 					} else {
-						if de.Type == TypeDirectory {
-							dpn.Nlink--
-						} else if de.Type == TypeSymlink {
+						if de.Type == TypeSymlink {
 							if _, err := s.Delete(&symlink{Inode: dino}); err != nil {
 								return err
 							}
