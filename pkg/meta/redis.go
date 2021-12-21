@@ -1603,7 +1603,7 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (r *redisMeta) cleanStaleSessions() {
+func (r *redisMeta) CleanStaleSessions() {
 	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(time.Now().Add(time.Minute * -5).Unix())), Count: 100}
 	staleSessions, _ := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
 	for _, ssid := range staleSessions {
@@ -1625,7 +1625,7 @@ func (r *redisMeta) refreshSession() {
 		if _, err := r.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
-		go r.cleanStaleSessions()
+		go r.CleanStaleSessions()
 	}
 }
 

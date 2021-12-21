@@ -442,7 +442,7 @@ func (m *kvMeta) refreshSession() {
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
-		go m.cleanStaleSessions()
+		go m.CleanStaleSessions()
 	}
 }
 
@@ -521,7 +521,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *kvMeta) cleanStaleSessions() {
+func (m *kvMeta) CleanStaleSessions() {
 	vals, err := m.scanValues(m.fmtKey("SH"), nil)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
