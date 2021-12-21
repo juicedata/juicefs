@@ -472,10 +472,10 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	var etag []byte
 	if n.keepEtag {
 		etag, _ = n.fs.GetXattr(mctx, src, s3Etag)
-		if string(etag) != "" {
+		if len(etag) != 0 {
 			eno = n.fs.SetXattr(mctx, dst, s3Etag, etag, 0)
 			if eno != 0 {
-				logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", dst, s3Etag, etag, 0)
+				logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", dst, s3Etag, etag, 0)
 			}
 		}
 	}
@@ -545,10 +545,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	}
 	var etag []byte
 	if n.keepEtag {
-		etag, eno = n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
-		if eno != 0 {
-			logger.Errorf("get xattr error, path: %s,xattr: %s", n.path(bucket, object), s3Etag)
-		}
+		etag, _ = n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
 	}
 	return minio.ObjectInfo{
 		Bucket:  bucket,
@@ -694,8 +691,8 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 }
 
 const uploadKeyName = "s3-object"
-const s3PartEtag = "s3-part-etag"
-const s3Etag = "s3-etag"
+const s3PartEtag = "s3-etag"
+const s3Etag = "s3-complete-etag"
 
 func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
@@ -889,7 +886,6 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		eno = n.fs.SetXattr(mctx, name, s3Etag, []byte(s3MD5), 0)
 		if eno != 0 {
 			logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", name, s3Etag, s3MD5, 0)
-			return
 		}
 	}
 	return minio.ObjectInfo{
