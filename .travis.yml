@@ -32,6 +32,7 @@ install:
   - mkdir -p $HOME/bats/build
   - "$HOME/bats/install.sh $HOME/bats/build"
   - export PATH="$PATH:$HOME/bats/build/bin"
+  - chmod +x  travis-setup-cdh5.sh
   - ./travis-setup-cdh5.sh
 before_script:
   - export GO111MODULE=on
