@@ -231,7 +231,7 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)
 
 `--cache-size value`<br />
-缓存对象的总大小；单位为 MiB (默认: 1024)
+缓存对象的总大小；单位为 MiB (默认: 102400)
 
 `--free-space-ratio value`<br />
 最小剩余空间比例 (默认: 0.1)
@@ -316,7 +316,7 @@ juicefs gateway [command options] META-URL ADDRESS
 本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
 
 `--cache-size value`<br />
-缓存对象的总大小；单位为 MiB (默认: 1024)
+缓存对象的总大小；单位为 MiB (默认: 102400)
 
 `--free-space-ratio value`<br />
 最小剩余空间比例 (默认: 0.1)
