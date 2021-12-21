@@ -55,7 +55,7 @@ PS C:\> .\juicefs.exe mount localhost Z:
 2021/03/22 15:16:18.003547 juicefs[7064] <INFO>: Meta address: redis://localhost
 2021/03/22 15:16:18.022972 juicefs[7064] <WARNING>: AOF is not enabled, you may lose data if Redis is not shutdown properly.
 2021/03/22 15:16:18.024710 juicefs[7064] <INFO>: Data use file:///C:/jfs/local/test/
-2021/03/22 15:16:18.024710 juicefs[7064] <INFO>: Cache: C:\Users\bob\.juicefs\cache\7088b6fa-ef2b-4792-b6c9-98fcdd6d45fb capacity: 1024 MB
+2021/03/22 15:16:18.024710 juicefs[7064] <INFO>: Cache: C:\Users\bob\.juicefs\cache\7088b6fa-ef2b-4792-b6c9-98fcdd6d45fb capacity: 102400 MB
 The service juicefs has been started.
 ```
 

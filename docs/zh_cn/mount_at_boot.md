@@ -13,7 +13,7 @@ Copy `juicefs` as `/sbin/mount.juicefs`, then edit `/etc/fstab` with following l
 The format of `<META-URL>` is `redis://<user>:<password>@<host>:<port>/<db>`, e.g. `redis://localhost:6379/1`. And replace `<MOUNTPOINT>` with specific path you wanna mount JuiceFS to, e.g. `/jfs`. If you need set [mount options](reference/command_reference.md#juicefs-mount), replace `[,<MOUNT-OPTIONS>]` with comma separated options list. The following line is an example:
 
 ```
-redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=2048     0  0
+redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=204800     0  0
 ```
 
 **Note: By default, CentOS 6 will NOT mount network file system after boot, run following command to enable it:**
@@ -87,4 +87,3 @@ Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Re
                 <string>homebrew.mxcl.redis</string>
         </dict>
 ```
-

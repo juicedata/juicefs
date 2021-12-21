@@ -132,15 +132,15 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 
 #### Cache Configurations
 
-| Configuration                | Default Value | Description                                                  |
-| ---------------------------- | ------------- | ------------------------------------------------------------ |
-| `juicefs.cache-dir`          |               | Directory paths of local cache. Use colon to separate multiple paths. Also support wildcard in path. **It's recommended create these directories manually and set `0777` permission so that different applications could share the cache data.** |
-| `juicefs.cache-size`         | 0             | Maximum size of local cache in MiB. It's the total size when set multiple cache directories. |
-| `juicefs.cache-full-block`   | `true`        | Whether cache every read blocks, `false` means only cache random/small read blocks. |
-| `juicefs.free-space`         | 0.1           | Min free space ratio of cache directory                      |
-| `juicefs.attr-cache`         | 0             | Expire of attributes cache in seconds                        |
-| `juicefs.entry-cache`        | 0             | Expire of file entry cache in seconds                        |
-| `juicefs.dir-entry-cache`    | 0             | Expire of directory entry cache in seconds                   |
+| Configuration                | Default Value | Description                                                                                                                                                                                                                                                                                           |
+| ---------------------------- | ------------- | ------------------------------------------------------------                                                                                                                                                                                                                                          |
+| `juicefs.cache-dir`          |               | Directory paths of local cache. Use colon to separate multiple paths. Also support wildcard in path. **It's recommended create these directories manually and set `0777` permission so that different applications could share the cache data.**                                                      |
+| `juicefs.cache-size`         | 102400        | Maximum size of local cache in MiB. It's the total size when set multiple cache directories.                                                                                                                                                                                                          |
+| `juicefs.cache-full-block`   | `true`        | Whether cache every read blocks, `false` means only cache random/small read blocks.                                                                                                                                                                                                                   |
+| `juicefs.free-space`         | 0.1           | Min free space ratio of cache directory                                                                                                                                                                                                                                                               |
+| `juicefs.attr-cache`         | 0             | Expire of attributes cache in seconds                                                                                                                                                                                                                                                                 |
+| `juicefs.entry-cache`        | 0             | Expire of file entry cache in seconds                                                                                                                                                                                                                                                                 |
+| `juicefs.dir-entry-cache`    | 0             | Expire of directory entry cache in seconds                                                                                                                                                                                                                                                            |
 | `juicefs.discover-nodes-url` |               | The URL to discover cluster nodes, refresh every 10 minutes.<br /><br />YARN: `yarn`<br />Spark Standalone: `http://spark-master:web-ui-port/json/`<br />Spark ThriftServer: `http://thrift-server:4040/api/v1/applications/`<br />Presto: `http://coordinator:discovery-uri-port/v1/service/presto/` |
 
 #### I/O Configurations
@@ -211,7 +211,7 @@ The following is a commonly used configuration example. Please replace the `{HOS
 </property>
 <property>
   <name>juicefs.cache-size</name>
-  <value>1024</value>
+  <value>204800</value>
 </property>
 <property>
   <name>juicefs.access-log</name>

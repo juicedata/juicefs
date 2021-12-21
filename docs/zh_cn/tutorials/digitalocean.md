@@ -189,7 +189,7 @@ $ sudo juicefs mount -d \
 2021/08/23 16:39:14.234925 juicefs[2869081] <WARNING>: AOF is not enabled, you may lose data if Redis is not shutdown properly.
 2021/08/23 16:39:14.235536 juicefs[2869081] <INFO>: Ping redis: 446.247µs
 2021/08/23 16:39:14.236231 juicefs[2869081] <INFO>: Data use space://juicefs/mystor/
-2021/08/23 16:39:14.236540 juicefs[2869081] <INFO>: Disk cache (/var/jfsCache/6b0452fc-0502-404c-b163-c9ab577ec766/): capacity (1024 MB), free ratio (10%), max pending pages (15)
+2021/08/23 16:39:14.236540 juicefs[2869081] <INFO>: Disk cache (/var/jfsCache/6b0452fc-0502-404c-b163-c9ab577ec766/): capacity (102400 MB), free ratio (10%), max pending pages (15)
 2021/08/23 16:39:14.738416 juicefs[2869081] <INFO>: OK, mystor is ready at mnt
 ```
 
@@ -201,10 +201,10 @@ $ df -Th
 JuiceFS:mystor fuse.juicefs  1.0P   64K  1.0P   1% /home/herald/mnt
 ```
 
-从挂载命令的输出信息中可以看到，JuiceFS 默认设置了 1024 MB 的作为本地缓存。设置更大的缓存，可以让 JuiceFS 有更好的性能表现，可以在挂载文件系统时通过 `--cache-size` 选项设置缓存（单位 MiB），例如，设置 20GB 的本地缓存：
+从挂载命令的输出信息中可以看到，JuiceFS 默认设置了 102400MB 的作为本地缓存。设置更大的缓存，可以让 JuiceFS 有更好的性能表现，可以在挂载文件系统时通过 `--cache-size` 选项设置缓存（单位 MiB），例如，设置 200GB 的本地缓存：
 
 ```shell
-$ sudo juicefs mount -d --cache-size 20000 \
+$ sudo juicefs mount -d --cache-size 204800 \
     rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 mnt
 ```
 
@@ -278,10 +278,10 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 编辑 `/etc/fstab` 配置文件，新增一条记录：
 
 ```shell
-rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=20480     0  0
+rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=204800     0  0
 ```
 
-挂载选项中 `cache-size=20480` 代表分配 20GiB 本地磁盘空间作为 JuiceFS 的本地缓存，请根据实际的硬件配置决定分配的缓存大小。你可以根据需要调整上述配置中的 [FUSE 挂载选项](../reference/fuse_mount_options.md)。
+挂载选项中 `cache-size=204800` 代表分配 200GiB 本地磁盘空间作为 JuiceFS 的本地缓存，请根据实际的硬件配置决定分配的缓存大小。你可以根据需要调整上述配置中的 [FUSE 挂载选项](../reference/fuse_mount_options.md)。
 
 ### 7. 多主机共享挂载
 

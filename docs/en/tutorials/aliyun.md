@@ -217,7 +217,7 @@ Output similar to the following means that the file system was mounted successfu
 2021/07/13 16:40:37.101279 juicefs[22307] <WARNING>: maxmemory_policy is "volatile-lru", please set it to 'noeviction'.
 2021/07/13 16:40:37.104870 juicefs[22307] <INFO>: Ping redis: 3.408807ms
 2021/07/13 16:40:37.384977 juicefs[22307] <INFO>: Data use oss://mytest/mystor/
-2021/07/13 16:40:37.387412 juicefs[22307] <INFO>: Disk cache (/var/jfsCache/4ad0bb86-6ef5-4861-9ce2-a16ac5dea81b/): capacity (1024 MB), free ratio (10%), max pending pages (15)
+2021/07/13 16:40:37.387412 juicefs[22307] <INFO>: Disk cache (/var/jfsCache/4ad0bb86-6ef5-4861-9ce2-a16ac5dea81b/): capacity (102400 MB), free ratio (10%), max pending pages (15)
 .2021/07/13 16:40:38.410742 juicefs[22307] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
 

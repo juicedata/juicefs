@@ -202,7 +202,7 @@ Output similar to the following means that the file system was mounted successfu
 2021/07/30 11:49:56.845100 juicefs[44175] <WARNING>: AOF is not enabled, you may lose data if Redis is not shutdown properly.
 2021/07/30 11:49:56.845562 juicefs[44175] <INFO>: Ping redis: 383.157µs
 2021/07/30 11:49:56.846164 juicefs[44175] <INFO>: Data use cos://juice-0000000000/mystor/
-2021/07/30 11:49:56.846731 juicefs[44175] <INFO>: Disk cache (/var/jfsCache/dbf05314-57af-4a2c-8ac1-19329d73170c/): capacity (1024 MB), free ratio (10%), max pending pages (15)
+2021/07/30 11:49:56.846731 juicefs[44175] <INFO>: Disk cache (/var/jfsCache/dbf05314-57af-4a2c-8ac1-19329d73170c/): capacity (102400 MB), free ratio (10%), max pending pages (15)
 2021/07/30 11:49:57.354763 juicefs[44175] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
 

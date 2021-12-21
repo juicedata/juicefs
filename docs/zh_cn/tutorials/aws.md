@@ -183,10 +183,10 @@ $ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:
 
 > **注意**：挂载文件系统时，只需填写数据库地址，不需要文件系统名称。默认的缓存路径为 `/var/jfsCache`，请确保当前用户有足够的读写权限。
 
-你可以通过调整[挂载参数](../reference/command_reference.md#juicefs-mount)，对 JuiceFS 进行优化，比如可以通过 `--cache-size` 将缓存修改为 20GB：
+你可以通过调整[挂载参数](../reference/command_reference.md#juicefs-mount)，对 JuiceFS 进行优化，比如可以通过 `--cache-size` 将缓存修改为 200GB：
 
 ```shell
-$ sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs
+$ sudo juicefs mount --cache-size 204800 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1 /mnt/jfs
 ```
 
 看到类似下面的输出，代表文件系统挂载成功。
@@ -234,10 +234,10 @@ $ sudo cp juice/juicefs /sbin/mount.juicefs
 编辑 `/etc/fstab` 配置文件，新增一条记录：
 
 ```shell
-redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1    /mnt/jfs       juicefs     _netdev,cache-size=20480     0  0
+redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1    /mnt/jfs       juicefs     _netdev,cache-size=204800     0  0
 ```
 
-挂载选项中 `cache-size=20480` 代表分配 20GB 本地磁盘空间作为 JuiceFS 的缓存使用，请根据你实际的 EBS 磁盘容量去决定分配的缓存大小。
+挂载选项中 `cache-size=204800` 代表分配 200GB 本地磁盘空间作为 JuiceFS 的缓存使用，请根据你实际的 EBS 磁盘容量去决定分配的缓存大小。
 
 你可以根据需要调整上述配置中的 FUSE 挂载选项，更多内容请[查阅文档](../reference/fuse_mount_options.md)。
 

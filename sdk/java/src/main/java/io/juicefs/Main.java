@@ -190,7 +190,7 @@ public class Main {
           System.out.println("- " + jfsName);
         }
         System.out.println("\tcacheSize=" + cacheSize.getOrDefault("juicefs." + jfsName + ".cache-size",
-                cacheSize.getOrDefault("juicefs.cache-size", "100")) + "MiB");
+                cacheSize.getOrDefault("juicefs.cache-size", "102400")) + "MiB");
       }
 
       for (Map.Entry<String, String> entry : cacheDir.entrySet()) {

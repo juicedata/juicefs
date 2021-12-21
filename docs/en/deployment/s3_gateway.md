@@ -29,10 +29,10 @@ $ juicefs gateway redis://localhost:6379 localhost:9000
 
 Among the above three commands, the first two commands are used to set environment variables. Note that the length of `MINIO_ROOT_USER` is at least 3 characters, and the length of `MINIO_ROOT_PASSWORD` is at least 8 characters (Windows users should set the environment variable with the `set` command instead, e.g., `set MINIO_ROOT_USER=admin`).
 
-The last command is used to enable the S3 gateway. The `gateway` subcommand requires at least two parameters, the first is the URL of the database where the metadata is stored, and the second is the address and port on which the S3 gateway is listening. You can add [other options](../reference/command_reference.md#juicefs-gateway) to the `gateway` subcommand to optimize the S3 gateway as needed, for example, to set the default local cache to 20 GiB.
+The last command is used to enable the S3 gateway. The `gateway` subcommand requires at least two parameters, the first is the URL of the database where the metadata is stored, and the second is the address and port on which the S3 gateway is listening. You can add [other options](../reference/command_reference.md#juicefs-gateway) to the `gateway` subcommand to optimize the S3 gateway as needed, for example, to set the default local cache to 200 GiB.
 
 ```shell
-$ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
+$ juicefs gateway --cache-size 204800 redis://localhost:6379 localhost:9000
 ```
 
 In this example, we assume that the JuiceFS file system is using a local Redis database. When the S3 gateway is enabled, the administrative interface of the S3 gateway can be accessed on the **current host** using the address `http://localhost:9000`.

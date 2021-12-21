@@ -142,7 +142,7 @@ $ sudo juicefs mount -d redis://127.0.0.1:6379/1 /mnt/jfs
 2021/04/29 23:22:25.838419 juicefs[37999] <INFO>: Meta address: redis://127.0.0.1:6379/1
 2021/04/29 23:22:25.839184 juicefs[37999] <INFO>: Ping redis: 67.625µs
 2021/04/29 23:22:25.839399 juicefs[37999] <INFO>: Data use minio://127.0.0.1:9000/pics/pics/
-2021/04/29 23:22:25.839554 juicefs[37999] <INFO>: Cache: /var/jfsCache/9c0fab76-efd0-43fd-a81e-ae0916e2fc90 capacity: 1024 MB
+2021/04/29 23:22:25.839554 juicefs[37999] <INFO>: Cache: /var/jfsCache/9c0fab76-efd0-43fd-a81e-ae0916e2fc90 capacity: 102400 MB
 2021/04/29 23:22:26.340509 juicefs[37999] <INFO>: OK, pics is ready at /mnt/jfs
 ```
 
@@ -183,7 +183,7 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 **例如：**
 
 ```
-redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=2048     0  0
+redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=204800     0  0
 ```
 
 :::caution 注意

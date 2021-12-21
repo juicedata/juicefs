@@ -187,7 +187,7 @@ If you see output similar to the following, it means that the file system is mou
 2021/08/23 16:39:14.234925 juicefs[2869081] <WARNING>: AOF is not enabled, you may lose data if Redis is not shutdown properly.
 2021/08/23 16:39:14.235536 juicefs[2869081] <INFO>: Ping redis: 446.247µs
 2021/08/23 16:39:14.236231 juicefs[2869081] <INFO>: Data use space://juicefs/mystor/
-2021/08/23 16:39:14.236540 juicefs[2869081] <INFO>: Disk cache (/var/jfsCache/6b0452fc-0502-404c-b163-c9ab577ec766/): capacity (1024 MB), free ratio (10%), max pending pages (15)
+2021/08/23 16:39:14.236540 juicefs[2869081] <INFO>: Disk cache (/var/jfsCache/6b0452fc-0502-404c-b163-c9ab577ec766/): capacity (102400 MB), free ratio (10%), max pending pages (15)
 2021/08/23 16:39:14.738416 juicefs[2869081] <INFO>: OK, mystor is ready at mnt
 ```
 
@@ -199,10 +199,10 @@ File system    type             capacity used usable used%  mount point
 JuiceFS:mystor fuse.juicefs       1.0P   64K  1.0P   1%     /home/herald/mnt
 ```
 
-As you can see from the output information of the mount command, JuiceFS defaults to sets 1024 MB as the local cache. Setting a larger cache can make JuiceFS have better performance. You can set the cache (in MiB) through the `--cache-size` option when mounting a file system. For example, set a 20GB local cache:
+As you can see from the output information of the mount command, JuiceFS defaults to sets 102400 MB as the local cache. Setting a larger cache can make JuiceFS have better performance. You can set the cache (in MiB) through the `--cache-size` option when mounting a file system. For example, set a 200GB local cache:
 
 ```shell
-$ sudo juicefs mount -d --cache-size 20000 \
+$ sudo juicefs mount -d --cache-size 204800 \
     rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 mnt
 ```
 
@@ -276,10 +276,10 @@ $ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 Edit the `/etc/fstab` configuration file and add a new record:
 
 ```shell
-rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=20480     0  0
+rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=204800     0  0
 ```
 
-In the mount option, `cache-size=20480` means to allocate 20GiB of local disk space as the local cache of JuiceFS. Please decide the allocated cache size according to the actual hardware. You can adjust the [FUSE mount options](../reference/fuse_mount_options.md) in the above configuration according to your needs.
+In the mount option, `cache-size=204800` means to allocate 200GiB of local disk space as the local cache of JuiceFS. Please decide the allocated cache size according to the actual hardware. You can adjust the [FUSE mount options](../reference/fuse_mount_options.md) in the above configuration according to your needs.
 
 ### 7. Multi-host shared
 

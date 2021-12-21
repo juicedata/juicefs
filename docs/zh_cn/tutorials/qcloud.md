@@ -214,7 +214,7 @@ $ sudo juicefs mount -d redis://:<your-redis-password>@192.168.5.5:6379/1 /mnt/j
 2021/07/30 11:49:56.845100 juicefs[44175] <WARNING>: AOF is not enabled, you may lose data if Redis is not shutdown properly.
 2021/07/30 11:49:56.845562 juicefs[44175] <INFO>: Ping redis: 383.157µs
 2021/07/30 11:49:56.846164 juicefs[44175] <INFO>: Data use cos://juice-0000000000/mystor/
-2021/07/30 11:49:56.846731 juicefs[44175] <INFO>: Disk cache (/var/jfsCache/dbf05314-57af-4a2c-8ac1-19329d73170c/): capacity (1024 MB), free ratio (10%), max pending pages (15)
+2021/07/30 11:49:56.846731 juicefs[44175] <INFO>: Disk cache (/var/jfsCache/dbf05314-57af-4a2c-8ac1-19329d73170c/): capacity (102400 MB), free ratio (10%), max pending pages (15)
 2021/07/30 11:49:57.354763 juicefs[44175] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
 
@@ -298,10 +298,10 @@ $ sudo cp juice/juicefs /sbin/mount.juicefs
 编辑 `/etc/fstab` 配置文件，新增一条记录：
 
 ```shell
-redis://:<your-redis-password>@192.168.5.5:6379/1    /mnt/jfs       juicefs     _netdev,cache-size=20480     0  0
+redis://:<your-redis-password>@192.168.5.5:6379/1    /mnt/jfs       juicefs     _netdev,cacheesize=204800     0  0
 ```
 
-挂载选项中 `cache-size=20480` 代表分配 20GB 本地磁盘空间作为 JuiceFS 的缓存使用，请根据你实际的 CVM 硬盘容量去决定分配的缓存大小。一般来说，为 JuiceFS 分配更大的缓存空间，可以获得更好的性能表现。
+挂载选项中 `cache-size=204800` 代表分配 200GB 本地磁盘空间作为 JuiceFS 的缓存使用，请根据你实际的 CVM 硬盘容量去决定分配的缓存大小。一般来说，为 JuiceFS 分配更大的缓存空间，可以获得更好的性能表现。
 
 你可以根据需要调整上述配置中的 FUSE 挂载选项，更多内容请[查阅文档](../reference/fuse_mount_options.md)。
 

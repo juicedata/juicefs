@@ -304,7 +304,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("bucket", getConf(conf, "bucket", ""));
     obj.put("readOnly", Boolean.valueOf(getConf(conf, "read-only", "false")));
     obj.put("cacheDir", getConf(conf, "cache-dir", "memory"));
-    obj.put("cacheSize", Integer.valueOf(getConf(conf, "cache-size", "100")));
+    obj.put("cacheSize", Integer.valueOf(getConf(conf, "cache-size", "102400")));
     obj.put("openCache", Float.valueOf(getConf(conf, "open-cache", "0.0")));
     obj.put("backupMeta", Integer.valueOf(getConf(conf, "backup-meta", "3600")));
     obj.put("attrTimeout", Float.valueOf(getConf(conf, "attr-cache", "0.0")));
