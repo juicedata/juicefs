@@ -691,8 +691,7 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 }
 
 const uploadKeyName = "s3-object"
-const s3PartEtag = "s3-etag"
-const s3Etag = "s3-complete-etag"
+const s3Etag = "s3-etag"
 
 func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
@@ -766,7 +765,7 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	for _, entry := range entries {
 		num, er := strconv.Atoi(string(entry.Name))
 		if er == nil && num > partNumberMarker {
-			etag, _ := n.fs.GetXattr(mctx, n.ppath(bucket, uploadID, string(entry.Name)), s3PartEtag)
+			etag, _ := n.fs.GetXattr(mctx, n.ppath(bucket, uploadID, string(entry.Name)), s3Etag)
 			result.Parts = append(result.Parts, minio.PartInfo{
 				PartNumber:   num,
 				Size:         int64(entry.Attr.Length),
@@ -809,7 +808,9 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		return
 	}
 	etag := r.MD5CurrentHexString()
-	_ = n.fs.SetXattr(mctx, p, s3PartEtag, []byte(etag), 0)
+	if n.fs.SetXattr(mctx, p, s3Etag, []byte(etag), 0) != 0 {
+		logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", p, s3Etag, etag, 0)
+	}
 	info.PartNumber = partID
 	info.ETag = etag
 	info.LastModified = minio.UTCNow()
