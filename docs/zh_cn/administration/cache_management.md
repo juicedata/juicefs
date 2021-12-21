@@ -68,7 +68,7 @@ JuiceFS 客户端会根据读取模式自动预读数据放入缓存，从而提
 ```
 --prefetch value          并发预读 N 个块 (默认: 1)
 --cache-dir value         本地缓存目录路径；使用冒号隔离多个路径 (默认: "$HOME/.juicefs/cache" 或 "/var/jfsCache")
---cache-size value        缓存对象的总大小；单位为 MiB (默认: 1024)
+--cache-size value        缓存对象的总大小；单位为 MiB (默认: 102400)
 --free-space-ratio value  最小剩余空间比例 (默认: 0.1)
 --cache-partial-only      仅缓存随机小块读 (默认: false)
 ```
