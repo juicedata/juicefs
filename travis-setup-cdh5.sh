@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -e
+set -ex
 
 UBUNTU_CODENAME=$(lsb_release -c | awk '{print $2}')
 
