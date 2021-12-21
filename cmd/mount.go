@@ -117,15 +117,13 @@ func exposeMetrics(m meta.Meta, c *cli.Context) string {
 }
 
 func wrapRegister(mp, name string) {
-	reg := prometheus.DefaultRegisterer
-	reg.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	reg.Unregister(prometheus.NewGoCollector())
+	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
+	prometheus.DefaultGatherer = registry
 	metricLabels := prometheus.Labels{"mp": mp, "vol_name": name}
-	reg = prometheus.WrapRegistererWith(metricLabels, reg)
-	reg = prometheus.WrapRegistererWithPrefix("juicefs_", reg)
-	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	reg.MustRegister(prometheus.NewGoCollector())
-	prometheus.DefaultRegisterer = reg
+	prometheus.DefaultRegisterer = prometheus.WrapRegistererWithPrefix("juicefs_",
+		prometheus.WrapRegistererWith(metricLabels, registry))
+	prometheus.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	prometheus.MustRegister(prometheus.NewGoCollector())
 }
 
 func mount(c *cli.Context) error {
