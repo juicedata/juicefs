@@ -1606,7 +1606,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *dbMeta) cleanStaleSessions() {
+func (m *dbMeta) CleanStaleSessions() {
 	var s session
 	rows, err := m.db.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Rows(&s)
 	if err != nil {
@@ -1647,7 +1647,7 @@ func (m *dbMeta) refreshSession() {
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
-		go m.cleanStaleSessions()
+		go m.CleanStaleSessions()
 	}
 }
 
