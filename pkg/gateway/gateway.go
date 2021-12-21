@@ -809,7 +809,7 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	}
 	etag := r.MD5CurrentHexString()
 	if n.fs.SetXattr(mctx, p, s3Etag, []byte(etag), 0) != 0 {
-		logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", p, s3Etag, etag, 0)
+		logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", p, s3Etag, etag, 0)
 	}
 	info.PartNumber = partID
 	info.ETag = etag
