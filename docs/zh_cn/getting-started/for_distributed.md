@@ -114,7 +114,7 @@ juicefs mount redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 
 
 由于「对象存储」是基于网络的存储服务，不可避免会产生访问延时。为了解决这个问题，JuiceFS 提供并默认启用了缓存机制，即划拨一部分本地存储作为数据与对象存储之间的一个缓冲层，读取文件时会异步地将数据缓存到本地存储，详情请查阅[「缓存」](../administration/cache_management.md)。
 
-缓存机制让 JuiceFS 可以高效处理海量数据的读写任务，默认情况下，JuiceFS 会在 `$HOME/.juicefs/cache` 或 `/var/jfsCache` 目录设置 `1024MiB` 的缓存。在速度更快的 SSD 上设置更大的缓存空间可以有效提升 JuiceFS 的读写性能。
+缓存机制让 JuiceFS 可以高效处理海量数据的读写任务，默认情况下，JuiceFS 会在 `$HOME/.juicefs/cache` 或 `/var/jfsCache` 目录设置 100GiB 的缓存。在速度更快的 SSD 上设置更大的缓存空间可以有效提升 JuiceFS 的读写性能。
 
 你可以使用 `--cache-dir` 调整缓存目录的位置，使用 `--cache-size` 调整缓存空间的大小，例如：
 
@@ -130,7 +130,7 @@ juicefs mount
 JuiceFS 进程需要具有读写 `--cache-dir` 目录的权限。
 :::
 
-上述命令将缓存目录设置在了 `/mycache` 目录，并指定缓存空间为 `500GiB`。
+上述命令将缓存目录设置在了 `/mycache` 目录，并指定缓存空间为 500GiB。
 
 #### 开机自动挂载
 
