@@ -59,7 +59,7 @@ To create a JuiceFS, you need the following 3 preparations:
 2. Object storage is used to store data blocks
 3. JuiceFS Client
 
-Please refer to [Quick Start Guide](docs/en/getting-started/_quick_start_guide.md) to start using JuiceFS immediately!
+Please refer to [Quick Start Guide](docs/en/getting-started/for_local.md) to start using JuiceFS immediately!
 
 ### Command Reference
 
