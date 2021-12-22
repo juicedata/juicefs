@@ -183,6 +183,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
+	wrapRegister("s3gateway", format.Name)
 
 	chunkConf := chunk.Config{
 		BlockSize: format.BlockSize * 1024,
