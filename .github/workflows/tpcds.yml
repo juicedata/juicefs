@@ -129,3 +129,7 @@ jobs:
           --executor-cores 1 \
           --conf spark.sql.shuffle.partitions=10 \
           -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_run.scala
+
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3

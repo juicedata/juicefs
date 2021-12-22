@@ -87,3 +87,7 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=64 --time=300 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
+
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
