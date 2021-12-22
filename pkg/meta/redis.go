@@ -1320,6 +1320,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					if cnt != 0 {
 						return syscall.ENOTEMPTY
 					}
+					dattr.Nlink--
 					if trash > 0 {
 						tattr.Parent = trash
 					}
@@ -1401,9 +1402,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 								pipe.Decr(ctx, totalInodes)
 							}
 						} else {
-							if dtyp == TypeDirectory {
-								dattr.Nlink--
-							} else if dtyp == TypeSymlink {
+							if dtyp == TypeSymlink {
 								pipe.Del(ctx, r.symKey(dino))
 							}
 							pipe.Del(ctx, r.inodeKey(dino))
@@ -1604,7 +1603,7 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (r *redisMeta) cleanStaleSessions() {
+func (r *redisMeta) CleanStaleSessions() {
 	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(time.Now().Add(time.Minute * -5).Unix())), Count: 100}
 	staleSessions, _ := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
 	for _, ssid := range staleSessions {
@@ -1626,7 +1625,7 @@ func (r *redisMeta) refreshSession() {
 		if _, err := r.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
-		go r.cleanStaleSessions()
+		go r.CleanStaleSessions()
 	}
 }
 

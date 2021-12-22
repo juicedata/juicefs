@@ -382,5 +382,5 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		DirEntryTimeout: time.Second,
 		Chunk:           &chunkConf,
 	}
-	return jfsgateway.NewJFSGateway(conf, m, store, true)
+	return jfsgateway.NewJFSGateway(conf, m, store, true, true)
 }

@@ -47,13 +47,13 @@ const (
 var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
-func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, multiBucket bool) (minio.ObjectLayer, error) {
+func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, multiBucket, keepEtag bool) (minio.ObjectLayer, error) {
 	jfs, err := fs.NewFileSystem(conf, m, store)
 	if err != nil {
 		return nil, fmt.Errorf("Initialize failed: %s", err)
 	}
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	return &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), multiBucket: multiBucket}, nil
+	return &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), multiBucket: multiBucket, keepEtag: keepEtag}, nil
 }
 
 type jfsObjects struct {
@@ -62,6 +62,7 @@ type jfsObjects struct {
 	fs          *fs.FileSystem
 	listPool    *minio.TreeWalkPool
 	multiBucket bool
+	keepEtag    bool
 }
 
 func (n *jfsObjects) IsCompressionSupported() bool {
@@ -467,10 +468,22 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		err = jfsToObjectErr(ctx, eno, dstBucket, dstObject)
 		return
 	}
+
+	var etag []byte
+	if n.keepEtag {
+		etag, _ = n.fs.GetXattr(mctx, src, s3Etag)
+		if len(etag) != 0 {
+			eno = n.fs.SetXattr(mctx, dst, s3Etag, etag, 0)
+			if eno != 0 {
+				logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", dst, s3Etag, etag, 0)
+			}
+		}
+	}
+
 	return minio.ObjectInfo{
-		Bucket: dstBucket,
-		Name:   dstObject,
-		// ETag:    r.MD5CurrentHexString(),
+		Bucket:  dstBucket,
+		Name:    dstObject,
+		ETag:    string(etag),
 		ModTime: fi.ModTime(),
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
@@ -530,6 +543,10 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		err = jfsToObjectErr(ctx, syscall.ENOENT, bucket, object)
 		return
 	}
+	var etag []byte
+	if n.keepEtag {
+		etag, _ = n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
+	}
 	return minio.ObjectInfo{
 		Bucket:  bucket,
 		Name:    object,
@@ -537,6 +554,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
 		AccTime: fi.ModTime(),
+		ETag:    string(etag),
 	}, nil
 }
 
@@ -638,10 +656,17 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 	if eno != 0 {
 		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
 	}
+	etag := r.MD5CurrentHexString()
+	if n.keepEtag {
+		eno = n.fs.SetXattr(mctx, p, s3Etag, []byte(etag), 0)
+		if eno != 0 {
+			logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", p, s3Etag, etag, 0)
+		}
+	}
 	return minio.ObjectInfo{
 		Bucket:  bucket,
 		Name:    object,
-		ETag:    r.MD5CurrentHexString(),
+		ETag:    etag,
 		ModTime: fi.ModTime(),
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
@@ -657,7 +682,7 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 	p := n.upath(bucket, uploadID)
 	err = n.mkdirAll(ctx, p, os.FileMode(0755))
 	if err == nil {
-		eno := n.fs.SetXattr(mctx, p, "s3-object", []byte(object), 0)
+		eno := n.fs.SetXattr(mctx, p, uploadKeyName, []byte(object), 0)
 		if eno != 0 {
 			logger.Warnf("set object %s on upload %s: %s", object, uploadID, eno)
 		}
@@ -666,7 +691,7 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 }
 
 const uploadKeyName = "s3-object"
-const partEtag = "s3-etag"
+const s3Etag = "s3-etag"
 
 func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
@@ -740,7 +765,7 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	for _, entry := range entries {
 		num, er := strconv.Atoi(string(entry.Name))
 		if er == nil && num > partNumberMarker {
-			etag, _ := n.fs.GetXattr(mctx, n.ppath(bucket, uploadID, string(entry.Name)), partEtag)
+			etag, _ := n.fs.GetXattr(mctx, n.ppath(bucket, uploadID, string(entry.Name)), s3Etag)
 			result.Parts = append(result.Parts, minio.PartInfo{
 				PartNumber:   num,
 				Size:         int64(entry.Attr.Length),
@@ -783,7 +808,9 @@ func (n *jfsObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		return
 	}
 	etag := r.MD5CurrentHexString()
-	_ = n.fs.SetXattr(mctx, p, partEtag, []byte(etag), 0)
+	if n.fs.SetXattr(mctx, p, s3Etag, []byte(etag), 0) != 0 {
+		logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", p, s3Etag, etag, 0)
+	}
 	info.PartNumber = partID
 	info.ETag = etag
 	info.LastModified = minio.UTCNow()
@@ -856,6 +883,12 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
+	if n.keepEtag {
+		eno = n.fs.SetXattr(mctx, name, s3Etag, []byte(s3MD5), 0)
+		if eno != 0 {
+			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", name, s3Etag, s3MD5, 0)
+		}
+	}
 	return minio.ObjectInfo{
 		Bucket:  bucket,
 		Name:    object,

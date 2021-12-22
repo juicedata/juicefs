@@ -107,18 +107,16 @@ func testMetaClient(t *testing.T, m Meta) {
 		if r.sid != ses[0].Sid {
 			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
 		}
-		go r.cleanStaleSessions()
 	case *dbMeta:
 		if r.sid != ses[0].Sid {
 			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
 		}
-		go r.cleanStaleSessions()
 	case *kvMeta:
 		if r.sid != ses[0].Sid {
 			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
 		}
-		go r.cleanStaleSessions()
 	}
+	go m.CleanStaleSessions()
 
 	var parent, inode, dummyInode Ino
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &parent, attr); st != 0 {

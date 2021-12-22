@@ -25,9 +25,12 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func userConfirmed(prompt string) bool {
-	fmt.Println(prompt)
-	fmt.Print("Still proceed? [y/N]: ")
+func warn(format string, a ...interface{}) {
+	fmt.Printf("\033[1;33mWARNING\033[0m: "+format+"\n", a...)
+}
+
+func userConfirmed() bool {
+	fmt.Print("Proceed anyway? [y/N]: ")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		if text := strings.ToLower(scanner.Text()); text == "y" || text == "yes" {
@@ -121,15 +124,18 @@ func config(ctx *cli.Context) error {
 			usedSpace := totalSpace - availSpace
 			if format.Capacity > 0 && usedSpace >= format.Capacity ||
 				format.Inodes > 0 && iused >= format.Inodes {
-				if !userConfirmed(fmt.Sprintf("New quota is too small (used / quota): %d / %d bytes, %d / %d inodes.",
-					usedSpace, format.Capacity, iused, format.Inodes)) {
+				warn("New quota is too small (used / quota): %d / %d bytes, %d / %d inodes.",
+					usedSpace, format.Capacity, iused, format.Inodes)
+				if !userConfirmed() {
 					return fmt.Errorf("Aborted.")
 				}
 			}
 		}
-		if trash && format.TrashDays == 0 &&
-			!userConfirmed("The current trash will be emptied and future removed files will purged immediately.") {
-			return fmt.Errorf("Aborted.")
+		if trash && format.TrashDays == 0 {
+			warn("The current trash will be emptied and future removed files will purged immediately.")
+			if !userConfirmed() {
+				return fmt.Errorf("Aborted.")
+			}
 		}
 	}
 

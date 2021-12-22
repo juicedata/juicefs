@@ -442,7 +442,7 @@ func (m *kvMeta) refreshSession() {
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
-		go m.cleanStaleSessions()
+		go m.CleanStaleSessions()
 	}
 }
 
@@ -521,7 +521,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *kvMeta) cleanStaleSessions() {
+func (m *kvMeta) CleanStaleSessions() {
 	vals, err := m.scanValues(m.fmtKey("SH"), nil)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
@@ -1295,6 +1295,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if tx.exist(m.entryKey(dino, "")) {
 						return syscall.ENOTEMPTY
 					}
+					dattr.Nlink--
 					if trash > 0 {
 						tattr.Parent = trash
 					}
@@ -1367,9 +1368,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 							newSpace, newInode = -align4K(tattr.Length), -1
 						}
 					} else {
-						if dtyp == TypeDirectory {
-							dattr.Nlink--
-						} else if dtyp == TypeSymlink {
+						if dtyp == TypeSymlink {
 							tx.dels(m.symKey(dino))
 						}
 						tx.dels(m.inodeKey(dino))

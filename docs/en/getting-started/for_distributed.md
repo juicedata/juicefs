@@ -114,7 +114,7 @@ JuiceFS provides a "close-to-open" consistency guarantee, which means that when 
 
 Since Object Storage is a network-based storage service, it will inevitably encounter access latency. To solve this problem, JuiceFS provides and enables caching mechanism by default, i.e. allocating a part of local storage as a buffer layer between data and object storage, and caching data to local storage asynchronously when reading files, please refer to ["Cache"](../administration/cache_management.md) for more details.
 
-By default, JuiceFS will set `1024MiB` cache in `$HOME/.juicefs/cache` or `/var/jfsCache` directory. Setting a larger cache space on a faster SSD can effectively improve JuiceFS's read and write performance.
+By default, JuiceFS will set 100GiB cache in `$HOME/.juicefs/cache` or `/var/jfsCache` directory. Setting a larger cache space on a faster SSD can effectively improve JuiceFS's read and write performance.
 
 You can use `--cache-dir` to adjust the location of the cache directory and `--cache-size` to adjust the size of the cache space, e.g.:
 
@@ -130,7 +130,7 @@ juicefs mount
 The JuiceFS process needs permission to read and write to the `--cache-dir` directory.
 :::
 
-The above command sets the cache directory in the `/mycache` directory and specifies the cache space as `500GiB`.
+The above command sets the cache directory in the `/mycache` directory and specifies the cache space as 500GiB.
 
 #### Auto-mount on boot
 

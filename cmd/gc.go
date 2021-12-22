@@ -97,10 +97,8 @@ func gc(ctx *cli.Context) error {
 		GetTimeout: time.Second * 60,
 		PutTimeout: time.Second * 60,
 		MaxUpload:  20,
-		Prefetch:   0,
 		BufferSize: 300,
 		CacheDir:   "memory",
-		CacheSize:  300,
 	}
 
 	blob, err := createStorage(format)
