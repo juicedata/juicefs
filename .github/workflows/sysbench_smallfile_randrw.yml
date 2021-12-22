@@ -60,10 +60,10 @@ jobs:
           sudo ls -lh
           sudo df -lh
           sudo stat /jfs
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=500  prepare
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  prepare
           sudo ls -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=500  run
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=500  cleanup
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  run
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  cleanup
           sudo ls -lh
           sudo df -lh
 
@@ -73,10 +73,10 @@ jobs:
           pwd
           sudo ls -lh
           sudo df -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=500  prepare
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  prepare
           sudo ls -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=500  run
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=500  cleanup
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  run
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  cleanup
           sudo ls -lh
           sudo df -lh
 
