@@ -333,7 +333,11 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		}
 
 		if jConf.PushGateway != "" && pusher == nil {
-			prometheus.DefaultRegisterer = prometheus.WrapRegistererWithPrefix("juicefs_", prometheus.DefaultRegisterer)
+			registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
+			prometheus.DefaultGatherer = registry
+			prometheus.DefaultRegisterer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
+			prometheus.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+			prometheus.MustRegister(prometheus.NewGoCollector())
 			// TODO: support multiple volumes
 			pusher = push.New(jConf.PushGateway, "juicefs").Gatherer(prometheus.DefaultGatherer)
 			pusher = pusher.Grouping("vol_name", format.Name).Grouping("mp", "sdk-"+strconv.Itoa(os.Getpid()))
