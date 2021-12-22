@@ -75,27 +75,27 @@ jobs:
           sudo ls -lh
           sudo df -lh
           sudo stat /jfs
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  prepare
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  run
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  cleanup
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  run
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
           sudo ls -lh
           sudo df -lh
 
-      - name: Smallfile Test 100K
+      - name: Smallfile Test Read 100K
         run: |
           cd /jfs
           pwd
           sudo ls -lh
           sudo df -lh
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  prepare
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  run
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  run
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  cleanup
           sudo ls -lh
           sudo df -lh
 
-      - name: Smallfile Test 100K
+      - name: Smallfile Test Write 100K
         run: |
           cd /jfs
           pwd
