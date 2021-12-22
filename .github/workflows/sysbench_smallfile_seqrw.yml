@@ -1,4 +1,4 @@
-name: "mysqltest"
+name: "sysbench"
 
 on:
   push:
@@ -45,7 +45,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs &
 
 
       - name: Install Sysbench
@@ -56,22 +56,26 @@ jobs:
 
       - name: Bigfile Test
         run: |
-          cd /tmp/jfs
+          cd /jfs
           sudo ls -lh
-          sudo stat /tmp/jfs
-          sysbench fileio --file-num=3  --file-total-size=15G --file-test-mode=seqwr --time=300  prepare
+          sudo df -lh
+          sudo stat /jfs
+          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  prepare
           sudo ls -lh
-          sysbench fileio --file-num=3  --file-total-size=15G --file-test-mode=seqwr --time=300  run
-          sysbench fileio --file-num=3  --file-total-size=15G --file-test-mode=seqwr --time=300  cleanup
+          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  run
+          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  cleanup
           sudo ls -lh
+          sudo df -lh
 
       - name: Bigfile Test
         run: |
           cd ~
           pwd
           sudo ls -lh
-          sysbench fileio --file-num=3  --file-total-size=15G --file-test-mode=seqwr --time=300  prepare
+          sudo df -lh
+          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  prepare
           sudo ls -lh
-          sysbench fileio --file-num=3  --file-total-size=15G --file-test-mode=seqwr --time=300  run
-          sysbench fileio --file-num=3  --file-total-size=15G --file-test-mode=seqwr --time=300  cleanup
+          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  run
+          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  cleanup
           sudo ls -lh
+          sudo df -lh
