@@ -19,59 +19,23 @@ package meta
 import (
 	"os"
 	"testing"
-	"time"
 )
 
 func TestMemKVClient(t *testing.T) {
 	_ = os.Remove(settingPath)
-	m, err := newKVMeta("memkv", "test/jfs", &Config{MaxDeletes: 1})
-	// newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{MaxDeletes: 1})
+	m, err := newKVMeta("memkv", "jfs-unit-test", &Config{MaxDeletes: 1})
 	if err != nil || m.Name() != "memkv" {
 		t.Fatalf("create meta: %s", err)
 	}
-
-	testMetaClient(t, m)
-	testTruncateAndDelete(t, m)
-	testTrash(t, m)
-	testRemove(t, m)
-	testStickyBit(t, m)
-	testLocks(t, m)
-	testConcurrentWrite(t, m)
-	testCompaction(t, m)
-	testCopyFileRange(t, m)
-	testCloseSession(t, m)
-	m.(*kvMeta).conf.CaseInsensi = true
-	testCaseIncensi(t, m)
-	m.(*kvMeta).conf.OpenCache = time.Second
-	m.(*kvMeta).of.expire = time.Second
-	testOpenCache(t, m)
-	m.(*kvMeta).conf.ReadOnly = true
-	testReadOnly(t, m)
+	testMeta(t, m)
 }
 
 func TestTiKVClient(t *testing.T) {
-	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs", &Config{MaxDeletes: 1})
+	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", &Config{MaxDeletes: 1})
 	if err != nil || m.Name() != "tikv" {
 		t.Fatalf("create meta: %s", err)
 	}
-
-	testMetaClient(t, m)
-	testTruncateAndDelete(t, m)
-	testTrash(t, m)
-	testRemove(t, m)
-	testStickyBit(t, m)
-	testLocks(t, m)
-	testConcurrentWrite(t, m)
-	testCompaction(t, m)
-	testCopyFileRange(t, m)
-	testCloseSession(t, m)
-	m.(*kvMeta).conf.CaseInsensi = true
-	testCaseIncensi(t, m)
-	m.(*kvMeta).conf.OpenCache = time.Second
-	m.(*kvMeta).of.expire = time.Second
-	testOpenCache(t, m)
-	m.(*kvMeta).conf.ReadOnly = true
-	testReadOnly(t, m)
+	testMeta(t, m)
 }
 
 func TestMemKV(t *testing.T) {
