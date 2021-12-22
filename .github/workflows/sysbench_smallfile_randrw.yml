@@ -63,7 +63,7 @@ jobs:
           sudo stat /jfs
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
           sudo ls -lh
-          fileName=result_rndrw_1M_6000_'date +%Y_%m_%d_%H_%M_%S'
+          fileName=result_rndrw_1M_6000_$(date +%Y_%m_%d_%H_%M_%S)
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
           sudo ls -lh
@@ -79,7 +79,7 @@ jobs:
           sudo df -lh
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
           sudo ls -lh
-          fileName=result_rndrw_100K_60000_'date +%Y_%m_%d_%H_%M_%S'
+          fileName=result_rndrw_100K_60000_$(date +%Y_%m_%d_%H_%M_%S)
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
           sudo ls -lh
