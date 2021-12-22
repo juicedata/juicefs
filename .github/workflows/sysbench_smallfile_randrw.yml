@@ -57,26 +57,27 @@ jobs:
       - name: Smallfile Test 1M
         run: |
           cd /jfs
-          sudo ls -lh
-          sudo df -lh
-          sudo stat /jfs
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  prepare
-          sudo ls -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  run
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  cleanup
-          sudo ls -lh
-          sudo df -lh
-
-      - name: Smallfile Test
-        run: |
-          cd ~
           pwd
           sudo ls -lh
           sudo df -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  prepare
+          sudo stat /jfs
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  run
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=480  cleanup
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
+          sudo ls -lh
+          sudo df -lh
+
+      - name: Smallfile Test 100K
+        run: |
+          cd /jfs
+          pwd
+          sudo ls -lh
+          sudo df -lh
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
+          sudo ls -lh
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
           sudo ls -lh
           sudo df -lh
 
