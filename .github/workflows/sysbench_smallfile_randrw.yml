@@ -69,7 +69,8 @@ jobs:
           sudo ls -lh
           sudo df -lh
           sudo ls -lh $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+          cat $fileName
+          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Smallfile Test 100K
         run: |
@@ -85,6 +86,9 @@ jobs:
           sudo ls -lh
           sudo df -lh
           sudo ls -lh $fileName
+          cat $fileName
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
-
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3

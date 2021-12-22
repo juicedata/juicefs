@@ -63,10 +63,13 @@ jobs:
           sudo stat /jfs
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  run
+          fileName=result_seqrd_1M_6000_$(date +%Y_%m_%d_%H_%M_%S)
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  run >"$fileName"
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  cleanup
           sudo ls -lh
           sudo df -lh
+          sudo ls -lh $fileName
+          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
       - name: Smallfile Test Write 1M
@@ -78,10 +81,14 @@ jobs:
           sudo stat /jfs
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  run
+          fileName=result_seqwr_1M_6000_$(date +%Y_%m_%d_%H_%M_%S)
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  run >"$fileName"
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
           sudo ls -lh
           sudo df -lh
+          sudo ls -lh $fileName
+          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
 
       - name: Smallfile Test Read 100K
         run: |
@@ -91,10 +98,14 @@ jobs:
           sudo df -lh
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  run
+          fileName=result_seqrd_100K_60000_$(date +%Y_%m_%d_%H_%M_%S)
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  run >"$fileName"
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  cleanup
           sudo ls -lh
           sudo df -lh
+          sudo ls -lh $fileName
+          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
 
       - name: Smallfile Test Write 100K
         run: |
@@ -104,7 +115,14 @@ jobs:
           sudo df -lh
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  run
+          fileName=result_seqwr_100K_60000_$(date +%Y_%m_%d_%H_%M_%S)
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  run >"$fileName"
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
           sudo ls -lh
           sudo df -lh
+          sudo ls -lh $fileName
+          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
