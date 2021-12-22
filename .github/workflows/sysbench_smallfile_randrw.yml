@@ -69,7 +69,7 @@ jobs:
           sudo ls -lh
           sudo df -lh
           sudo ls -lh $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName
+          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}
 
       - name: Smallfile Test 100K
         run: |
@@ -85,6 +85,6 @@ jobs:
           sudo ls -lh
           sudo df -lh
           sudo ls -lh $fileName
-          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName
+          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.GH_PERSONAL_ACCESS_TOKEN}}
 
 
