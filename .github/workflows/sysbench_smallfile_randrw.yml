@@ -55,7 +55,9 @@ jobs:
 
       - name: Get Token
         run: |
-          echo ${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+          echo "${{secrets.FILE_UPLOAD_AUTH_TOKEN}}"
+          echo "hello" > hello
+          curl -w '%{http_code}' -F file=@hello https://juicefs.com/upload-file-u80sdvuke/hello?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Smallfile Test 1M
         run: |
@@ -66,10 +68,11 @@ jobs:
           sudo stat /jfs
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >result_rw_1M_600s
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
           sudo ls -lh
           sudo df -lh
+          curl -w '%{http_code}' -F file=@result_read_1M_600s https://juicefs.com/upload-file-u80sdvuke/result_rw_1M_600s
 
       - name: Smallfile Test 100K
         run: |
@@ -79,9 +82,10 @@ jobs:
           sudo df -lh
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
           sudo ls -lh
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run
+          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >result_rw_100K_600s
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
           sudo ls -lh
           sudo df -lh
+          curl -w '%{http_code}' -F file=@result_rw_100K_600s https://juicefs.com/upload-file-u80sdvuke/result_rw_100K_600s
 
 
