@@ -53,6 +53,9 @@ jobs:
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
           sudo apt -y install sysbench
 
+      - name: Get Token
+        run: |
+          echo ${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Smallfile Test 1M
         run: |
