@@ -15,7 +15,7 @@ on:
 
 
 jobs:
-  sysbenchbigfileseqrw:
+  sysbenchsmallfileseqrw:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -54,28 +54,28 @@ jobs:
           sudo apt -y install sysbench
 
 
-      - name: Bigfile Test
+      - name: Smallfile Test 1M
         run: |
           cd /jfs
           sudo ls -lh
           sudo df -lh
           sudo stat /jfs
-          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  prepare
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=500  prepare
           sudo ls -lh
-          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  run
-          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  cleanup
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=500  run
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=500  cleanup
           sudo ls -lh
           sudo df -lh
 
-      - name: Bigfile Test
+      - name: Smallfile Test
         run: |
           cd ~
           pwd
           sudo ls -lh
           sudo df -lh
-          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  prepare
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=500  prepare
           sudo ls -lh
-          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  run
-          sysbench fileio --file-num=10000  --file-total-size=10G --file-test-mode=seqwr --time=300  cleanup
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=500  run
+          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=500  cleanup
           sudo ls -lh
           sudo df -lh
