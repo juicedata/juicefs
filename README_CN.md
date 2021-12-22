@@ -58,7 +58,7 @@ JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高�
 2. 准备对象存储
 3. 下载安装 JuiceFS 客户端
 
-请参照 [快速上手指南](docs/zh_cn/getting-started/quick_start_guide.md) 立即开始使用 JuiceFS！
+请参照 [快速上手指南](docs/zh_cn/getting-started/for_local.md) 立即开始使用 JuiceFS！
 
 ### 命令索引
 
