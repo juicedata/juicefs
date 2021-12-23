@@ -221,6 +221,7 @@ func (h *hdfsclient) walk(path string, walkFn filepath.WalkFunc) error {
 func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 	listed := make(chan Object, 10240)
 	root := h.path(prefix)
+	root = strings.TrimSuffix(root, "/")
 	_, err := h.c.Stat(root)
 	if err != nil && err.(*os.PathError).Err == os.ErrNotExist && !strings.HasSuffix(prefix, "/") {
 		root = filepath.Dir(root)

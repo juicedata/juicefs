@@ -6,7 +6,7 @@ services:
   - postgresql
   - docker
 env:
-  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false
+  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false HDFS_ADDR=localhost:8020
 go:
   - "1.16"
 branches:
@@ -35,6 +35,8 @@ before_script:
   - wget https://dl.min.io/client/mc/release/linux-amd64/mc && chmod +x mc && ./mc config host add local http://127.0.0.1:9000 testUser testUserPassword && ./mc mb local/testbucket
   - make
   - sudo make -C fstests setup
+  - chmod +x travis-setup-hdfs.sh
+  - ./travis-setup-hdfs.sh
 script:
   - sudo chmod 777 /var/jfsCache
   - make test
