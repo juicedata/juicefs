@@ -48,19 +48,13 @@ jobs:
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs &
 
 
-      - name: Install Sysbench
-        run: |
-          curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
-          sudo apt -y install sysbench
-
-
       - name: ACL Test
         run: |
           git clone https://github.com/iustin/pylibacl.git
           cd pylibacl
           pip -V
           pip install pytest
-          time sudo TEST_DIR=/jfs/ python -m pytest tests
+          TEST_DIR=/jfs/ make test
 
       - name: Setup tmate session
         if: ${{ failure() }}
