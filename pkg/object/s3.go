@@ -34,7 +34,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-var awsDefaultRegion = "us-east-1"
+const awsDefaultRegion = "us-east-1"
 
 var disableSha256Func = func(r *request.Request) {
 	if op := r.Operation.Name; r.ClientInfo.ServiceID != "S3" || !(op == "PutObject" || op == "UploadPart") {
