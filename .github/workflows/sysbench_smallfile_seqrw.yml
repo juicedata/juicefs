@@ -118,7 +118,6 @@ jobs:
           fileName=result_seqwr_100K_60000_$(date +%Y_%m_%d_%H_%M_%S)
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  run >"$fileName"
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
-          sudo ls -lh
           sudo df -lh
           sudo ls -lh $fileName
           curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}

@@ -17,6 +17,8 @@ on:
 jobs:
   sysbenchsmallfilerandrw:
     runs-on: ubuntu-latest
+    env:
+      DATE_TIME: $(date +%Y_%m_%d_%H_%M_%S)
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -56,20 +58,19 @@ jobs:
 
       - name: Smallfile Test 1M
         run: |
+          echo "DATE_TIME is"
+          echo ${{env.DATE_TIME}}
           cd /jfs
           pwd
-          sudo ls -lh
           sudo df -lh
           sudo stat /jfs
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
-          sudo ls -lh
-          datetime=$(date +%Y_%m_%d_%H_%M_%S)
-          fileName=result_rndrw_1M_6000_$datetime
-          echo "$fileName is"
+          echo "DATE_TIME is"
+          fileName=result_rndrw_1M_6000_${{env.DATE_TIME}}
+          echo "fileName is"
           echo $fileName
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
-          sudo ls -lh
           sudo df -lh
           sudo ls -lh $fileName
           cat $fileName
@@ -77,20 +78,19 @@ jobs:
 
       - name: Smallfile Test 100K
         run: |
-          echo "$datetime is"
-          echo $datetime
+          echo "DATE_TIME is"
+          echo ${{env.DATE_TIME}}
           echo "pwd is"
           pwd
           cd /jfs
           pwd
-          sudo ls -lh
           sudo df -lh
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
-          sudo ls -lh
-          fileName=result_rndrw_100K_60000_$datetime
+          echo "DATE_TIME is"
+          echo ${{env.DATE_TIME}}
+          fileName=result_rndrw_1M_6000_${{env.DATE_TIME}}
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
-          sudo ls -lh
           sudo df -lh
           sudo ls -lh $fileName
           cat $fileName
