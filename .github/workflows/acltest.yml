@@ -54,6 +54,7 @@ jobs:
           cd pylibacl
           pip -V
           python -V
+          pip install pytest
           sudo apt install libacl1-dev
           TEST_DIR=/jfs/ make test
 
