@@ -141,6 +141,9 @@ Secret key for object storage (env `SECRET_KEY`)
 `--encrypt-rsa-key value`<br />
 A path to RSA private key (PEM)
 
+`--trash-days value`<br />
+number of days after which removed files will be permanently deleted (default: 1)
+
 `--force`<br />
 overwrite existing format (default: false)
 
