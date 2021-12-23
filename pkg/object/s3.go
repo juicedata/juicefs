@@ -385,7 +385,9 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 			}
 		}
 	}
-	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = os.Getenv("AWS_REGION")
+	}
 	if region == "" {
 		region = os.Getenv("AWS_DEFAULT_REGION")
 	}	
