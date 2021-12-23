@@ -345,10 +345,6 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		ep         string
 	)
 
-	awsRegion, exist := os.LookupEnv("AWS_REGION")
-	if exist {
-		awsDefaultRegion = awsRegion
-	}
 	if uri.Path != "" {
 		// [ENDPOINT]/[BUCKET]
 		pathParts := strings.Split(uri.Path, "/")
@@ -362,7 +358,6 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		} else {
 			// compatible s3
 			ep = uri.Host
-			region = awsDefaultRegion
 		}
 	} else {
 		// [BUCKET].[ENDPOINT]
@@ -387,9 +382,15 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 				// compatible s3
 				bucketName = hostParts[0]
 				ep = hostParts[1]
-				region = awsDefaultRegion
 			}
 		}
+	}
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = os.Getenv("AWS_DEFAULT_REGION")
+	}	
+	if region == "" {
+		region = awsDefaultRegion
 	}
 
 	ssl := strings.ToLower(uri.Scheme) == "https"
