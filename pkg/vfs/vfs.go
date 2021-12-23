@@ -905,7 +905,7 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 		Meta:    m,
 		Store:   store,
 		reader:  reader,
-		writer:  NewDataWriter(conf, m, store, reader),
+		writer:  writer,
 		handles: make(map[Ino][]*handle),
 		nextfh:  1,
 	}
