@@ -53,7 +53,8 @@ jobs:
           git clone https://github.com/iustin/pylibacl.git
           cd pylibacl
           pip -V
-          pip install pytest
+          python -V
+          sudo apt install libacl1-dev
           TEST_DIR=/jfs/ make test
 
       - name: Setup tmate session
