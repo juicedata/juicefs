@@ -58,42 +58,23 @@ jobs:
         run: |
           date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
           DATE_TIME=$(cat /tmp/datetime)
-          echo "DATE_TIME is"
-          echo $DATE_TIME
           cd /jfs
-          pwd
-          sudo df -lh
           sudo stat /jfs
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
-          echo "DATE_TIME is"
           fileName=result_rndrw_1M_6000_$DATE_TIME
-          echo "fileName is"
-          echo $fileName
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
-          sudo df -lh
-          sudo ls -lh $fileName
           cat $fileName
           curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Smallfile Test 100K
         run: |
           DATE_TIME=$(cat /tmp/datetime)
-          echo "DATE_TIME is"
-          echo $DATE_TIME
-          echo "pwd is"
-          pwd
           cd /jfs
-          pwd
-          sudo df -lh
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
-          echo "DATE_TIME is"
-          echo $DATE_TIME
           fileName=result_rndrw_100K_60000_$DATE_TIME
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
-          sudo df -lh
-          sudo ls -lh $fileName
           cat $fileName
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 

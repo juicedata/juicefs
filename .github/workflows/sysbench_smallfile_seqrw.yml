@@ -58,80 +58,46 @@ jobs:
         run: |
           date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
           DATE_TIME=$(cat /tmp/datetime)
-          echo "DATE_TIME is"
-          echo $DATE_TIME
           cd /jfs
-          pwd
-          sudo df -lh
           sudo stat /jfs
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  prepare
           fileName=result_seqrd_1M_6000_$DATE_TIME
-          echo "fileName is"
-          echo $fileName
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  run >"$fileName"
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  cleanup
-          sudo df -lh
-          sudo ls -lh $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
       - name: Smallfile Test Write 1M
         run: |
           DATE_TIME=$(cat /tmp/datetime)
-          echo "DATE_TIME is"
-          echo $DATE_TIME
           cd /jfs
-          pwd
-          sudo df -lh
-          sudo stat /jfs
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  prepare
           fileName=result_seqwr_1M_6000_$DATE_TIME
-          echo "fileName is"
-          echo $fileName
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  run >"$fileName"
           sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
-          sudo df -lh
-          sudo ls -lh $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
       - name: Smallfile Test Read 100K
         run: |
           DATE_TIME=$(cat /tmp/datetime)
-          echo "DATE_TIME is"
-          echo $DATE_TIME
           cd /jfs
-          pwd
-          sudo df -lh
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  prepare
           fileName=result_seqrd_100K_60000_$DATE_TIME
-          echo "fileName is"
-          echo $fileName
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  run >"$fileName"
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  cleanup
-          sudo df -lh
-          sudo ls -lh $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
       - name: Smallfile Test Write 100K
         run: |
           DATE_TIME=$(cat /tmp/datetime)
-          echo "DATE_TIME is"
-          echo $DATE_TIME
           cd /jfs
-          pwd
-          sudo ls -lh
-          sudo df -lh
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  prepare
           fileName=result_seqwr_100K_60000_$DATE_TIME
-          echo "fileName is"
-          echo $fileName
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  run >"$fileName"
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
-          sudo df -lh
-          sudo ls -lh $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Setup tmate session
         if: ${{ failure() }}
