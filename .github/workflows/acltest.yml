@@ -1,4 +1,4 @@
-name: "sysbench"
+name: "acltest"
 
 on:
   push:
@@ -15,7 +15,7 @@ on:
 
 
 jobs:
-  sysbenchsmallfilerandrw:
+  acltest:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -54,12 +54,13 @@ jobs:
           sudo apt -y install sysbench
 
 
-      - name: Smallfile Test 1M
+      - name: ACL Test
         run: |
           git clone https://github.com/iustin/pylibacl.git
           cd pylibacl
-          pip3 install pytest
-          time sudo -u nobody TEST_DIR=/jfs/ python3 -m pytest tests
+          pip -V
+          pip install pytest
+          time sudo TEST_DIR=/jfs/ python -m pytest tests
 
       - name: Setup tmate session
         if: ${{ failure() }}
