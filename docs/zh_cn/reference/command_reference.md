@@ -141,6 +141,9 @@ juicefs format [command options] META-URL NAME
 `--encrypt-rsa-key value`<br />
 RSA 私钥的路径 (PEM)
 
+`--trash-days value`<br />
+文件被自动清理前在回收站内保留的天数 (默认: 1)
+
 `--force`<br />
 强制覆盖当前的格式化配置 (默认: false)
 
