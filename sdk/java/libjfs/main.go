@@ -145,6 +145,18 @@ func (w *wrapper) withPid(pid int) meta.Context {
 	return ctx
 }
 
+func (w *wrapper) isSuperuser(name string, groups []string) bool {
+	if name == w.superuser {
+		return true
+	}
+	for _, g := range groups {
+		if g == w.supergroup {
+			return true
+		}
+	}
+	return false
+}
+
 func (w *wrapper) lookupUid(name string) uint32 {
 	if name == w.superuser {
 		return 0
@@ -263,11 +275,11 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
 	w := &wrapper{jfs, nil, m, user, superuser, supergroup}
-	w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
-	// root is a normal user in Hadoop, but super user in POSIX (ignored in GUID mapping)
-	// woraround: lookup it here to create a bidirectional mapping
-	w.lookupUid("root")
-	w.lookupGid("root")
+	if w.isSuperuser(user, strings.Split(group, ",")) {
+		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
+	} else {
+		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(user), w.lookupGids(group))
+	}
 	activefs[name] = append(ws, w)
 	h := uintptr(unsafe.Pointer(w)) & 0x7fffffff // low 32bits
 	handlers[h] = w
@@ -504,11 +516,11 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 	}
 	w.m.update(uids, gids)
 
-	curGids := w.ctx.Gids()
-	if len(groups) > 0 {
-		curGids = w.lookupGids(strings.Join(groups, ","))
+	if w.isSuperuser(w.user, groups) {
+		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
+	} else if len(groups) > 0 {
+		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(groups, ",")))
 	}
-	w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), curGids)
 }
 
 //export jfs_term
