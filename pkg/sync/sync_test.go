@@ -92,7 +92,7 @@ func TestSync(t *testing.T) {
 		Exclude:   []string{"ab.*"},
 		Include:   []string{"[a|b].*"},
 		Verbose:   false,
-		Quiet:     false,
+		Quiet:     true,
 	}
 
 	a, _ := object.CreateStorage("mem", "a", "", "")
@@ -107,8 +107,8 @@ func TestSync(t *testing.T) {
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
-	if copied != 1 {
-		t.Fatalf("should copy 1 keys, but got %d", copied)
+	if c := copied.Current(); c != 1 {
+		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 
 	// Now a: {"a", "ab", "abc"}, b: {"a", "ba"}
@@ -116,9 +116,8 @@ func TestSync(t *testing.T) {
 	if err := Sync(b, a, config); err != nil {
 		t.FailNow()
 	}
-	// 1 copy occured, `copied` incresed 1
-	if copied != 2 {
-		t.Fatalf("should copy 2 keys, but got %d", copied)
+	if c := copied.Current(); c != 1 {
+		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 
 	// Now a: {"a", "ab", "abc", "ba"}, b: {"a", "ba"}
@@ -135,9 +134,9 @@ func TestSync(t *testing.T) {
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
-	// No copy occured, `copied` isn't change
-	if copied != 2 {
-		t.Fatalf("should copy 2 keys, but got %d", copied)
+	// No copy occured
+	if c := copied.Current(); c != 0 {
+		t.Fatalf("should copy 0 keys, but got %d", c)
 	}
 
 	// Test --force-update option

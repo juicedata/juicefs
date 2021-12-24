@@ -29,7 +29,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -44,10 +43,10 @@ type Stat struct {
 }
 
 func updateStats(r *Stat) {
-	atomic.AddInt64(&copied, r.Copied)
-	atomic.AddInt64(&copiedBytes, r.CopiedBytes)
-	atomic.AddInt64(&failed, r.Failed)
-	atomic.AddInt64(&deleted, r.Deleted)
+	copied.IncrInt64(r.Copied)
+	copiedBytes.IncrInt64(r.CopiedBytes)
+	failed.IncrInt64(r.Failed)
+	deleted.IncrInt64(r.Deleted)
 }
 
 func httpRequest(url string, body []byte) (ans []byte, err error) {
@@ -70,19 +69,19 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 
 func sendStats(addr string) {
 	var r Stat
-	r.Copied = atomic.LoadInt64(&copied)
-	r.CopiedBytes = atomic.LoadInt64(&copiedBytes)
-	r.Failed = atomic.LoadInt64(&failed)
-	r.Deleted = atomic.LoadInt64(&deleted)
+	r.Copied = copied.Current()
+	r.CopiedBytes = copiedBytes.Current()
+	r.Failed = failed.Current()
+	r.Deleted = deleted.Current()
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
 		logger.Errorf("update stats: %s %s", string(ans), err)
 	} else {
-		atomic.AddInt64(&copied, -r.Copied)
-		atomic.AddInt64(&copiedBytes, -r.CopiedBytes)
-		atomic.AddInt64(&failed, -r.Failed)
-		atomic.AddInt64(&deleted, -r.Deleted)
+		copied.IncrInt64(-r.Copied)
+		copiedBytes.IncrInt64(-r.CopiedBytes)
+		failed.IncrInt64(-r.Failed)
+		deleted.IncrInt64(-r.Deleted)
 	}
 }
 
