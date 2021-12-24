@@ -38,8 +38,9 @@ const (
 	maxResults      = 1000
 	defaultPartSize = 5 << 20
 	maxBlock        = defaultPartSize * 2
-	markDelete      = -1
-	markCopyPerms   = -2
+	markDeleteSrc   = -1
+	markDeleteDst   = -2
+	markCopyPerms   = -3
 )
 
 var (
@@ -344,36 +345,34 @@ func worker(todo chan object.Object, src, dst object.ObjectStorage, config *Conf
 		}
 		start := time.Now()
 		var err error
-		if obj.Size() == markDelete {
-			if config.DeleteSrc {
-				if config.Dry {
-					logger.Debugf("Will delete %s from %s", obj.Key(), src)
-					continue
-				}
-				if err = try(3, func() error {
-					return src.Delete(obj.Key())
-				}); err == nil {
-					logger.Debugf("Deleted %s from %s", obj.Key(), src)
-					atomic.AddInt64(&deleted, 1)
-				} else {
-					logger.Errorf("Failed to delete %s from %s: %s", obj.Key(), src, err.Error())
-					atomic.AddInt64(&failed, 1)
-				}
+		if obj.Size() == markDeleteSrc {
+			if config.Dry {
+				logger.Debugf("Will delete %s from %s", obj.Key(), src)
+				continue
 			}
-			if config.DeleteDst {
-				if config.Dry {
-					logger.Debugf("Will delete %s from %s", obj.Key(), dst)
-					continue
-				}
-				if err = try(3, func() error {
-					return dst.Delete(obj.Key())
-				}); err == nil {
-					logger.Debugf("Deleted %s from %s", obj.Key(), dst)
-					atomic.AddInt64(&deleted, 1)
-				} else {
-					logger.Errorf("Failed to delete %s from %s: %s", obj.Key(), dst, err.Error())
-					atomic.AddInt64(&failed, 1)
-				}
+			if err = try(3, func() error {
+				return src.Delete(obj.Key())
+			}); err == nil {
+				logger.Debugf("Deleted %s from %s", obj.Key(), src)
+				atomic.AddInt64(&deleted, 1)
+			} else {
+				logger.Errorf("Failed to delete %s from %s: %s", obj.Key(), src, err.Error())
+				atomic.AddInt64(&failed, 1)
+			}
+			continue
+		} else if obj.Size() == markDeleteDst {
+			if config.Dry {
+				logger.Debugf("Will delete %s from %s", obj.Key(), dst)
+				continue
+			}
+			if err = try(3, func() error {
+				return dst.Delete(obj.Key())
+			}); err == nil {
+				logger.Debugf("Deleted %s from %s", obj.Key(), dst)
+				atomic.AddInt64(&deleted, 1)
+			} else {
+				logger.Errorf("Failed to delete %s from %s: %s", obj.Key(), dst, err.Error())
+				atomic.AddInt64(&failed, 1)
 			}
 			continue
 		}
@@ -440,7 +439,7 @@ func (o *withFSize) Size() int64 {
 }
 
 func deleteFromDst(tasks chan object.Object, dstobj object.Object) {
-	tasks <- &withSize{dstobj, markDelete}
+	tasks <- &withSize{dstobj, markDeleteDst}
 	atomic.AddInt64(&found, 1)
 	atomic.AddInt64(&todo, 1)
 }
@@ -512,7 +511,7 @@ OUT:
 			tasks <- obj
 			atomic.AddInt64(&todo, 1)
 		} else if config.DeleteSrc && dstobj != nil && obj.Key() == dstobj.Key() && obj.Size() == dstobj.Size() {
-			tasks <- &withSize{obj, markDelete}
+			tasks <- &withSize{obj, markDeleteSrc}
 			atomic.AddInt64(&todo, 1)
 		} else if config.Perms {
 			f1 := obj.(object.File)
