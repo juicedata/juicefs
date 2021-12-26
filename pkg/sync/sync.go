@@ -315,29 +315,29 @@ func copyInParallel(src, dst object.ObjectStorage, obj object.Object) error {
 }
 
 func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
-	deleteObj := func(storage object.ObjectStorage, obj object.Object, start time.Time, dry bool) {
+	deleteObj := func(storage object.ObjectStorage, key string, start time.Time, dry bool) {
 		if dry {
-			logger.Infof("Will delete %s from %s", obj.Key(), storage)
+			logger.Infof("Will delete %s from %s", key, storage)
 			return
 		}
-		if err := try(3, func() error { return storage.Delete(obj.Key()) }); err == nil {
+		if err := try(3, func() error { return storage.Delete(key) }); err == nil {
 			deleted.Increment()
-			logger.Debugf("Deleted %s from %s in %s", obj.Key(), storage, time.Since(start))
+			logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
 		} else {
 			failed.Increment()
-			logger.Errorf("Failed to delete %s from %s: %s", obj.Key(), storage, err)
+			logger.Errorf("Failed to delete %s from %s: %s", key, storage, err)
 		}
 	}
-	copyPerms := func(obj object.Object, start time.Time, log, dry bool) {
-		fi := obj.(object.File)
-		if err := dst.(object.FileSystem).Chmod(obj.Key(), fi.Mode()); err != nil {
-			logger.Warnf("Chmod %s to %d: %s", obj.Key(), fi.Mode(), err)
+	copyPerms := func(fi object.File, start time.Time, log bool) {
+		key := fi.Key()
+		if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
+			logger.Warnf("Chmod %s to %d: %s", key, fi.Mode(), err)
 		}
-		if err := dst.(object.FileSystem).Chown(obj.Key(), fi.Owner(), fi.Group()); err != nil {
-			logger.Warnf("Chown %s to (%s,%s): %s", obj.Key(), fi.Owner(), fi.Group(), err)
+		if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
+			logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
 		}
 		if log {
-			logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), obj.Key(), time.Since(start))
+			logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), key, time.Since(start))
 		}
 	}
 
@@ -345,15 +345,15 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 		start := time.Now()
 		switch obj.Size() {
 		case markDeleteSrc:
-			deleteObj(src, obj, start, config.Dry)
+			deleteObj(src, obj.Key(), start, config.Dry)
 		case markDeleteDst:
-			deleteObj(dst, obj, start, config.Dry)
+			deleteObj(dst, obj.Key(), start, config.Dry)
 		case markCopyPerms:
 			if config.Dry {
 				logger.Infof("Will copy permissions for %s", obj.Key())
 				break
 			}
-			copyPerms(obj, start, true, config.Dry)
+			copyPerms(obj.(object.File), start, true)
 			copied.Increment()
 		default:
 			if config.Dry {
@@ -367,7 +367,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					}
 				}
 				if config.Perms {
-					copyPerms(obj, start, false, config.Dry)
+					copyPerms(obj.(object.File), start, false)
 				}
 				copied.Increment()
 				logger.Debugf("Copied %s (%d bytes) in %s", obj.Key(), obj.Size(), time.Since(start))
@@ -433,6 +433,11 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 		dstkeys = filter(dstkeys, config.Include, config.Exclude)
 	}
 
+	needCopyPerms := func(o1, o2 object.Object) bool {
+		f1 := o1.(object.File)
+		f2 := o2.(object.File)
+		return f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group()
+	}
 	defer close(tasks)
 	var dstobj object.Object
 	for obj := range srckeys {
@@ -468,7 +473,6 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 				dstobj = nil
 			}
 		}
-		// assert(dstobj == nil || obj.Key() <= dstobj.Key())
 
 		// FIXME: there is a race when source is modified during coping
 		if dstobj == nil || obj.Key() < dstobj.Key() || config.ForceUpdate ||
@@ -476,22 +480,15 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 			totalBytes += obj.Size()
 			copiedBytes.SetTotal(totalBytes, false)
 			tasks <- obj
-		} else if config.DeleteSrc && obj.Size() == dstobj.Size() { // obj.Key() == dstobj.Key()
-			tasks <- &withSize{obj, markDeleteSrc}
-		} else if config.Perms {
-			f1 := obj.(object.File)
-			f2 := dstobj.(object.File)
-			if f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group() {
-				tasks <- &withFSize{f1, markCopyPerms}
+		} else { // obj.Key() == dstobj.Key()
+			if config.DeleteSrc && obj.Size() == dstobj.Size() {
+				tasks <- &withSize{obj, markDeleteSrc}
+			} else if config.Perms && needCopyPerms(obj, dstobj) {
+				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {
 				skipped.Increment()
 				bar.Increment()
 			}
-		} else {
-			skipped.Increment()
-			bar.Increment()
-		}
-		if dstobj != nil && dstobj.Key() == obj.Key() {
 			dstobj = nil
 		}
 	}
