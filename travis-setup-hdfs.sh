@@ -78,4 +78,5 @@ cd ~/app/hadoop-${HADOOP_VERSION}/sbin
 
 jps
 
+
 echo "hdfs started successfully"
