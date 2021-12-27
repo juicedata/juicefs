@@ -226,7 +226,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	attr.Mtime = 2
 	attr.Uid = 1
 	attr.Gid = 1
-	attr.Mode = 0644
+	attr.Mode = 0640
 	if st := m.SetAttr(ctx, inode, SetAttrAtime|SetAttrMtime|SetAttrUID|SetAttrGID|SetAttrMode, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
@@ -236,14 +236,14 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		t.Fatalf("getattr f: %s", st)
 	}
-	if attr.Atime != 2 || attr.Mtime != 2 || attr.Uid != 1 || attr.Gid != 1 || attr.Mode != 0644 {
+	if attr.Atime != 2 || attr.Mtime != 2 || attr.Uid != 1 || attr.Gid != 1 || attr.Mode != 0640 {
 		t.Fatalf("atime:%d mtime:%d uid:%d gid:%d mode:%o", attr.Atime, attr.Mtime, attr.Uid, attr.Gid, attr.Mode)
 	}
 	if st := m.SetAttr(ctx, inode, SetAttrAtimeNow|SetAttrMtimeNow, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
-	fakeCtx := NewContext(100, 1, []uint32{1})
-	if st := m.Access(fakeCtx, parent, 4, nil); st != syscall.EACCES {
+	fakeCtx := NewContext(100, 2, []uint32{2, 1})
+	if st := m.Access(fakeCtx, parent, 2, nil); st != syscall.EACCES {
 		t.Fatalf("access d: %s", st)
 	}
 	if st := m.Access(fakeCtx, inode, 4, nil); st != 0 {

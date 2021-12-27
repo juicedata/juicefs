@@ -76,7 +76,7 @@ func errno(err error) syscall.Errno {
 	return syscall.EIO
 }
 
-func accessMode(attr *Attr, uid uint32, gid uint32) uint8 {
+func accessMode(attr *Attr, uid uint32, gids []uint32) uint8 {
 	if uid == 0 {
 		return 0x7
 	}
@@ -84,8 +84,10 @@ func accessMode(attr *Attr, uid uint32, gid uint32) uint8 {
 	if uid == attr.Uid {
 		return uint8(mode>>6) & 7
 	}
-	if gid == attr.Gid {
-		return uint8(mode>>3) & 7
+	for _, gid := range gids {
+		if gid == attr.Gid {
+			return uint8(mode>>3) & 7
+		}
 	}
 	return uint8(mode & 7)
 }
