@@ -21,7 +21,7 @@ sudo apt-get install openjdk-8-jdk -y
 HADOOP_VERSION="2.8.5"
 wget https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
 mkdir ~/app
-tar -zxvf hadoop-${HADOOP_VERSION}.tar.gz -C ~/app
+tar -zxf hadoop-${HADOOP_VERSION}.tar.gz -C ~/app
 
 sudo tee -a ~/.bashrc <<EOF
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
