@@ -190,7 +190,6 @@ public class JuiceFileSystemImpl extends FileSystem {
       return new FileNotFoundException(p.toString() + ": not found");
     } else if (errno == EACCESS) {
       try {
-        UserGroupInformation ugi = UserGroupInformation.getCurrentUser();
         String user = ugi.getShortUserName();
         FileStatus stat = getFileStatusInternalNoException(p);
         if (stat != null) {
