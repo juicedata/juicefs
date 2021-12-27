@@ -51,7 +51,7 @@ jobs:
           cd /jfs
           git clone https://github.com/danjacques/gofslock.git
           cd gofslock
-          go mod init
+          go mod init https://github.com/danjacques/gofslock.git
           go mod tidy
           go test -v ./fslock/...
 
