@@ -576,4 +576,24 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals("group2", fileStatus.getGroup());
     newFs.close();
   }
+
+  public void testGroupPerm() throws Exception {
+    Path testPath = new Path("/test_group_perm");
+
+    Configuration conf = new Configuration(cfg);
+    conf.set("juicefs.supergroup", "hadoop");
+    conf.set("juicefs.superuser", "hadoop");
+    FileSystem uer1Fs = createNewFs(conf, "user1", new String[]{"hadoop"});
+    uer1Fs.delete(testPath, true);
+    uer1Fs.mkdirs(testPath);
+    uer1Fs.setPermission(testPath, FsPermission.createImmutable((short) 0775));
+    uer1Fs.close();
+
+    FileSystem uer2Fs = createNewFs(conf, "user2", new String[]{"hadoop"});
+    Path f = new Path(testPath, "test_file");
+    uer2Fs.create(f).close();
+    FileStatus fileStatus = uer2Fs.getFileStatus(f);
+    assertEquals("user2", fileStatus.getOwner());
+    uer2Fs.close();
+  }
 }
