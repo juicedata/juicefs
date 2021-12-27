@@ -185,6 +185,9 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 
 	for _, e := range entries {
 		p := filepath.Join(path, e.Name())
+		if e.IsDir() {
+			p = filepath.ToSlash(p + "/")
+		}
 		in, err := e.Info()
 		if err == nil {
 			err = walk(p, in, walkFn)
@@ -325,9 +328,6 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 			}
 			if info.IsDir() {
 				f.size = 0
-				if f.key != "" || !strings.HasSuffix(d.root, dirSuffix) {
-					f.key += dirSuffix
-				}
 			}
 			listed <- f
 			return nil
