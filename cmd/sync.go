@@ -237,7 +237,7 @@ func syncFlags() *cli.Command {
 			&cli.BoolFlag{
 				Name:    "delete-src",
 				Aliases: []string{"deleteSrc"},
-				Usage:   "delete objects from source after synced",
+				Usage:   "delete objects from source those already exist in destination",
 			},
 			&cli.BoolFlag{
 				Name:    "delete-dst",
