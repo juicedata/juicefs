@@ -94,7 +94,7 @@ func (p *withPrefix) ListAll(prefix, marker string) (<-chan Object, error) {
 	ln := len(p.prefix)
 	go func() {
 		for o := range r {
-			if o != nil {
+			if o != nil && o.Key() != "" {
 				switch p := o.(type) {
 				case *obj:
 					p.key = p.key[ln:]

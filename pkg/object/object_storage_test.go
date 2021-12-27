@@ -94,20 +94,26 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
 	}
 
-	objs, err2 := listAll(s, "", "", 1)
+	objs, err2 := listAll(s, "", "", 2)
 	if err2 == nil {
-		if len(objs) != 1 {
-			t.Fatalf("List should return 1 keys, but got %d", len(objs))
+		if len(objs) != 2 {
+			t.Fatalf("List should return 2 keys, but got %d", len(objs))
 		}
-		if objs[0].Key() != "test" {
-			t.Fatalf("First key should be test, but got %s", objs[0].Key())
+		if objs[0].Key() != "" {
+			t.Fatalf("First key should be empty string, but got %s", objs[0].Key())
 		}
-		if !strings.Contains(s.String(), "encrypted") && objs[0].Size() != 5 {
-			t.Fatalf("Size of first key shold be 5, but got %v", objs[0].Size())
+		if objs[0].Size() != 0 {
+			t.Fatalf("First object size should be 0, but got %d", objs[0].Size())
+		}
+		if objs[1].Key() != "test" {
+			t.Fatalf("First key should be test, but got %s", objs[1].Key())
+		}
+		if !strings.Contains(s.String(), "encrypted") && objs[1].Size() != 5 {
+			t.Fatalf("Size of first key shold be 5, but got %v", objs[1].Size())
 		}
 		now := time.Now()
-		if objs[0].Mtime().Before(now.Add(-30*time.Second)) || objs[0].Mtime().After(now.Add(time.Second*30)) {
-			t.Fatalf("Mtime of key should be within 10 seconds, but got %s", objs[0].Mtime().Sub(now))
+		if objs[1].Mtime().Before(now.Add(-30*time.Second)) || objs[1].Mtime().After(now.Add(time.Second*30)) {
+			t.Fatalf("Mtime of key should be within 10 seconds, but got %s", objs[1].Mtime().Sub(now))
 		}
 	} else {
 		t.Fatalf("list failed: %s", err2.Error())
