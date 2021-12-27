@@ -6,7 +6,7 @@ services:
   - postgresql
   - docker
 env:
-  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false HDFS_ADDR=localhost:8020
+  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false HDFS_ADDR=localhost:8020 SFTP_HOST=localhost:2222/tmp/ SFTP_USER=foo SFTP_PASS=pass
 go:
   - "1.16"
 branches:
@@ -33,6 +33,8 @@ before_script:
   - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
   - docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio server /data --console-address ":9001"
   - wget https://dl.min.io/client/mc/release/linux-amd64/mc && chmod +x mc && ./mc config host add local http://127.0.0.1:9000 testUser testUserPassword && ./mc mb local/testbucket
+  - docker run  --name sftp -v /tmp/upload:/home/foo/upload -p 2222:22 -d atmoz/sftp foo:pass:1001:::upload
+  - docker exec sftp chmod 777 /home/foo/upload/ -R
   - make
   - sudo make -C fstests setup
   - chmod +x travis-setup-hdfs.sh
