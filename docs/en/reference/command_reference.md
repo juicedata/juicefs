@@ -20,7 +20,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0-dev (2021-12-16 d4b8723d)
+   1.0-dev (2021-12-27 3462bdbf)
 
 COMMANDS:
    format   format a volume
@@ -40,6 +40,7 @@ COMMANDS:
    dump     dump metadata into a JSON file
    load     load metadata from a previously dumped JSON file
    config   change config of a volume
+   destroy  destroy an existing volume
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -54,13 +55,19 @@ COPYRIGHT:
    AGPLv3
 ```
 
-> **Note**: If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience.
+:::note
+If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience.
+:::
 
-> **Note**: If the command option is boolean type (such as `--debug` option), there is no need to set a specific value when specifying this type of option. For example, it should not be written like `--debug true`, and directly written as `--debug`. If it is specified, it means this option takes effect, otherwise it does not take effect.
+:::note
+If the command option is boolean type (such as `--debug` option), there is no need to set a specific value when specifying this type of option. For example, it should not be written like `--debug true`, and directly written as `--debug`. If it is specified, it means this option takes effect, otherwise it does not take effect.
+:::
 
 ## Auto Completion
 
-> **Note**: This feature requires JuiceFS >= 0.15.0. It is implemented based on `github.com/urfave/cli/v2`. You can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
+:::note
+This feature requires JuiceFS >= 0.15.0. It is implemented based on `github.com/urfave/cli/v2`. You can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
+:::
 
 To enable commands completion, simply source the script provided within `hack/autocomplete`. For example:
 
@@ -677,3 +684,20 @@ number of days after which removed files will be permanently deleted
 
 `--force`<br />
 skip sanity check and force update the configurations (default: false)
+
+### juicefs destroy
+
+#### Description
+
+Destroy an existing volume
+
+#### Synopsis
+
+```
+juicefs destroy [command options] META-URL UUID
+```
+
+#### Options
+
+`--force`<br />
+skip sanity check and force destroy the volume (default: false)
