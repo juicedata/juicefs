@@ -1,4 +1,5 @@
-//+build !nogateway
+//go:build !nogateway
+// +build !nogateway
 
 /*
  * JuiceFS, Copyright (C) 2020 Juicedata, Inc.
@@ -177,6 +178,8 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Strict:     true,
 		ReadOnly:   c.Bool("read-only"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
+		MountPoint: "s3gateway",
+		Subdir:     c.String("subdir"),
 		MaxDeletes: c.Int("max-deletes"),
 	})
 	format, err := m.Load()

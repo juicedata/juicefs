@@ -6,7 +6,7 @@ services:
   - postgresql
   - docker
 env:
-  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false SFTP_HOST=127.0.0.1 SFTP_USER=foo SFTP_PASS=pass
+  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false HDFS_ADDR=localhost:8020 SFTP_HOST=127.0.0.1 SFTP_USER=foo SFTP_PASS=pass 
 go:
   - "1.16"
 branches:
@@ -37,6 +37,8 @@ before_script:
   - docker exec sftp chmod 777 /home/foo/upload/ -R
   - make
   - sudo make -C fstests setup
+  - chmod +x travis-setup-hdfs.sh
+  - ./travis-setup-hdfs.sh
 script:
   - sudo chmod 777 /var/jfsCache
   - make test
