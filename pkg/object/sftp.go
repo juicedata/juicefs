@@ -413,7 +413,7 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	idx := strings.LastIndex(endpoint, ":")
 	host, port, err := net.SplitHostPort(endpoint[:idx])
 	if err != nil && strings.Contains(err.Error(), "missing port") {
-		host, port, err = net.SplitHostPort(endpoint[:idx] + ":22")
+		host, port, err = net.SplitHostPort(endpoint)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse host from endpoint (%s): %q", endpoint, err)
