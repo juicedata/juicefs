@@ -27,6 +27,7 @@ before_install:
   - if [ $SKIP_TEST == true ]; then exit 0; fi
 install: true
 before_script:
+  - curl https://www.apache.org/dyn/closer.cgi/hadoop/core/
   - export GO111MODULE=on
   - sudo mysql -e "create database dev;"
   - psql -c 'create database test;' -U postgres
