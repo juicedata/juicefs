@@ -86,7 +86,7 @@ func gatewayFlags() *cli.Command {
 		},
 		&cli.BoolFlag{
 			Name:  "keep-etag",
-			Usage: "keep the etag information of the object",
+			Usage: "keep the ETag for uploaded objects",
 		})
 	return &cli.Command{
 		Name:      "gateway",

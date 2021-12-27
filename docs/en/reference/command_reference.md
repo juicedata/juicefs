@@ -364,6 +364,13 @@ do not send usage report (default: false)
 `--no-banner`<br />
 disable MinIO startup information (default: false)
 
+`--multi-buckets`<br />
+use top level of directories as buckets (default: false)
+
+`--keep-etag`<br />
+Save the ETag for uploaded objects (default: false)
+
+
 ### juicefs sync
 
 #### Description

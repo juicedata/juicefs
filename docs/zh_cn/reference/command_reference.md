@@ -364,6 +364,12 @@ juicefs gateway [command options] META-URL ADDRESS
 `--no-banner`<br />
 禁用 MinIO 的启动信息 (默认: false)
 
+`--multi-buckets`<br />
+使用第一级目录作为存储桶 (默认: false)
+
+`--keep-etag`<br />
+保留对象上传时的 ETag (默认: false)
+
 ### juicefs sync
 
 #### 描述
