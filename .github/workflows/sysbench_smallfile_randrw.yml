@@ -52,8 +52,6 @@ jobs:
         run: |
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
           sudo apt -y install sysbench
-          df -lh
-          cat /tmp/err
 
 
       - name: Smallfile Test 1M
