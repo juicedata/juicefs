@@ -50,7 +50,6 @@ jobs:
 
       - name: Pjdfstest
         run: |
-          cat /tmp/err
           sudo apt-get update
           sudo apt-get install -y libtap-harness-archive-perl
           cd /tmp/jfs/
