@@ -18,8 +18,8 @@ set -e
 sudo apt-get update
 sudo apt-get install openjdk-8-jdk -y
 
-HADOOP_VERSION="2.8.5"
-wget https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
+HADOOP_VERSION="2.10.1"
+wget https://dlcdn.apache.org/hadoop/core/stable2/hadoop-2.10.1.tar.gz
 mkdir ~/app
 tar -zxvf hadoop-${HADOOP_VERSION}.tar.gz -C ~/app
 
