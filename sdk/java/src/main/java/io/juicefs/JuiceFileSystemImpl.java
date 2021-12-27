@@ -149,8 +149,6 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_utime(long pid, long h, String path, long mtime, long atime);
 
-    int jfs_chown(long pid, long h, String path);
-
     int jfs_listdir(long pid, long h, String path, int offset, Pointer buf, int size);
 
     int jfs_concat(long pid, long h, String path, Pointer buf, int bufsize);

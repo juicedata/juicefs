@@ -614,6 +614,10 @@ func jfs_create(pid int, h uintptr, cpath *C.char, mode uint16) int {
 	if err != 0 {
 		return errno(err)
 	}
+	if w.ctx.Uid() == 0 && w.user != w.superuser {
+		// belongs to supergroup
+		_ = setOwner(w, w.withPid(pid), C.GoString(cpath), w.user, "")
+	}
 	return nextFileHandle(f, w)
 }
 
@@ -623,7 +627,12 @@ func jfs_mkdir(pid int, h uintptr, cpath *C.char, mode C.mode_t) int {
 	if w == nil {
 		return EINVAL
 	}
-	return errno(w.Mkdir(w.withPid(pid), C.GoString(cpath), uint16(mode)))
+	err := errno(w.Mkdir(w.withPid(pid), C.GoString(cpath), uint16(mode)))
+	if err == 0 && w.ctx.Uid() == 0 && w.user != w.superuser {
+		// belongs to supergroup
+		_ = setOwner(w, w.withPid(pid), C.GoString(cpath), w.user, "")
+	}
+	return err
 }
 
 //export jfs_delete
@@ -840,20 +849,6 @@ func jfs_chmod(pid int, h uintptr, cpath *C.char, mode C.mode_t) int {
 	return errno(f.Chmod(w.withPid(pid), uint16(mode)))
 }
 
-//export jfs_chown
-func jfs_chown(pid int, h uintptr, cpath *C.char, uid uint32, gid uint32) int {
-	w := F(h)
-	if w == nil {
-		return EINVAL
-	}
-	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
-	if err != 0 {
-		return errno(err)
-	}
-	defer f.Close(w.withPid(pid))
-	return errno(f.Chown(w.withPid(pid), uid, gid))
-}
-
 //export jfs_utime
 func jfs_utime(pid int, h uintptr, cpath *C.char, mtime, atime int64) int {
 	w := F(h)
@@ -874,21 +869,25 @@ func jfs_setOwner(pid int, h uintptr, cpath *C.char, owner *C.char, group *C.cha
 	if w == nil {
 		return EINVAL
 	}
-	f, err := w.Open(w.withPid(pid), C.GoString(cpath), 0)
+	return setOwner(w, w.withPid(pid), C.GoString(cpath), C.GoString(owner), C.GoString(group))
+}
+
+func setOwner(w *wrapper, ctx meta.Context, path string, owner, group string) int {
+	f, err := w.Open(ctx, path, 0)
 	if err != 0 {
 		return errno(err)
 	}
-	defer f.Close(w.withPid(pid))
+	defer f.Close(ctx)
 	st, _ := f.Stat()
 	uid := uint32(st.(*fs.FileStat).Uid())
 	gid := uint32(st.(*fs.FileStat).Gid())
-	if owner != nil {
-		uid = w.lookupUid(C.GoString(owner))
+	if owner != "" {
+		uid = w.lookupUid(owner)
 	}
-	if group != nil {
-		gid = w.lookupGid(C.GoString(group))
+	if group != "" {
+		gid = w.lookupGid(group)
 	}
-	return errno(f.Chown(w.withPid(pid), uid, gid))
+	return errno(f.Chown(ctx, uid, gid))
 }
 
 //export jfs_listdir
