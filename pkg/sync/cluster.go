@@ -29,7 +29,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -44,10 +43,11 @@ type Stat struct {
 }
 
 func updateStats(r *Stat) {
-	atomic.AddInt64(&copied, r.Copied)
-	atomic.AddInt64(&copiedBytes, r.CopiedBytes)
-	atomic.AddInt64(&failed, r.Failed)
-	atomic.AddInt64(&deleted, r.Deleted)
+	copied.IncrInt64(r.Copied)
+	copiedBytes.IncrInt64(r.CopiedBytes)
+	failed.IncrInt64(r.Failed)
+	deleted.IncrInt64(r.Deleted)
+	bar.IncrInt64(r.Copied + r.Deleted + r.Failed)
 }
 
 func httpRequest(url string, body []byte) (ans []byte, err error) {
@@ -70,19 +70,19 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 
 func sendStats(addr string) {
 	var r Stat
-	r.Copied = atomic.LoadInt64(&copied)
-	r.CopiedBytes = atomic.LoadInt64(&copiedBytes)
-	r.Failed = atomic.LoadInt64(&failed)
-	r.Deleted = atomic.LoadInt64(&deleted)
+	r.Copied = copied.Current()
+	r.CopiedBytes = copiedBytes.Current()
+	r.Failed = failed.Current()
+	r.Deleted = deleted.Current()
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
 		logger.Errorf("update stats: %s %s", string(ans), err)
 	} else {
-		atomic.AddInt64(&copied, -r.Copied)
-		atomic.AddInt64(&copiedBytes, -r.CopiedBytes)
-		atomic.AddInt64(&failed, -r.Failed)
-		atomic.AddInt64(&deleted, -r.Deleted)
+		copied.IncrInt64(-r.Copied)
+		copiedBytes.IncrInt64(-r.CopiedBytes)
+		failed.IncrInt64(-r.Failed)
+		deleted.IncrInt64(-r.Deleted)
 	}
 }
 
@@ -123,7 +123,7 @@ func findLocalIP() (string, error) {
 	return "", errors.New("are you connected to the network?")
 }
 
-func startManager(tasks chan object.Object) (string, error) {
+func startManager(tasks <-chan object.Object) (string, error) {
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
 		obj, ok := <-tasks
@@ -243,8 +243,11 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				args = append(args, "--manager", address)
 				args = append(args, os.Args[1:]...)
 			}
+			if !config.Verbose && !config.Quiet {
+				args = append(args, "-q")
+			}
 
-			logger.Debugf("launch worker command args: [ssh, %s]\n", strings.Join(args, ", "))
+			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(args, ", "))
 			cmd = exec.Command("ssh", args...)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
@@ -295,9 +298,8 @@ func unmarshalObjects(d []byte) ([]object.Object, error) {
 	return objs, nil
 }
 
-func fetchJobs(todo chan object.Object, config *Config) {
+func fetchJobs(tasks chan<- object.Object, config *Config) {
 	for {
-		// fetch jobs
 		url := fmt.Sprintf("http://%s/fetch", config.Manager)
 		ans, err := httpRequest(url, nil)
 		if err != nil {
@@ -313,12 +315,15 @@ func fetchJobs(todo chan object.Object, config *Config) {
 			continue
 		}
 		logger.Debugf("got %d jobs", len(jobs))
-		if len(jobs) == 0 {
+		if l := len(jobs); l == 0 {
 			break
+		} else if bar != nil {
+			total += int64(l)
+			bar.SetTotal(total, false)
 		}
 		for _, obj := range jobs {
-			todo <- obj
+			tasks <- obj
 		}
 	}
-	close(todo)
+	close(tasks)
 }

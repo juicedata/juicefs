@@ -40,7 +40,7 @@ func TestCluster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sendStats(addr)
+	// sendStats(addr)
 	// worker
 	var conf Config
 	conf.Manager = addr
