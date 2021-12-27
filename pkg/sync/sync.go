@@ -616,22 +616,22 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	wg.Wait()
-	if c := total - bar.Current(); c != 0 {
-		logger.Warnf("%d objects are not handled properly", c)
-	}
 	for _, b := range []*mpb.Bar{bar, copied, copiedBytes, skipped, deleted, failed} {
 		b.SetTotal(0, true)
 	}
 	progress.Wait()
 
-	if n := failed.Current(); n > 0 {
-		return fmt.Errorf("Failed to copy %d objects", n)
-	}
 	if config.Manager == "" {
-		logger.Infof("Found: %d, copied: %d (%s), skipped: %d,deleted: %d, failed: %d",
+		logger.Infof("Found: %d, copied: %d (%s), skipped: %d, deleted: %d, failed: %d",
 			total, copied.Current(), formatSize(copiedBytes.Current()), skipped.Current(), deleted.Current(), failed.Current())
 	} else {
 		sendStats(config.Manager)
+	}
+	if n := failed.Current(); n > 0 {
+		return fmt.Errorf("Failed to handle %d objects", n)
+	}
+	if bar.Current() != total {
+		return fmt.Errorf("Number of handled objects %d != expected %d", bar.Current(), total)
 	}
 	return nil
 }
