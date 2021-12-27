@@ -268,6 +268,14 @@ func syncFlags() *cli.Command {
 				Name:  "no-https",
 				Usage: "donot use HTTPS",
 			},
+			&cli.BoolFlag{
+				Name:  "check-all",
+				Usage: "verify checksum of all files in source and destination",
+			},
+			&cli.BoolFlag{
+				Name:  "check-new",
+				Usage: "verify checksum of newly copied files",
+			},
 		},
 	}
 }
