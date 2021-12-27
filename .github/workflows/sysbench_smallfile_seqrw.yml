@@ -61,10 +61,10 @@ jobs:
           DATE_TIME=$(cat /tmp/datetime)
           cd /jfs
           sudo stat /jfs
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  prepare
-          fileName=result_seqrd_1M_6000_$DATE_TIME
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  run >"$fileName"
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqrd --time=600  cleanup
+          sysbench fileio --file-num=4000  --file-total-size=4G --file-test-mode=seqrd --time=600  prepare
+          fileName=result_seqrd_1M_4000_$DATE_TIME
+          sysbench fileio --file-num=4000  --file-total-size=4G --file-test-mode=seqrd --time=600  run >"$fileName"
+          sysbench fileio --file-num=4000  --file-total-size=4G --file-test-mode=seqrd --time=600  cleanup
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
@@ -72,10 +72,10 @@ jobs:
         run: |
           DATE_TIME=$(cat /tmp/datetime)
           cd /jfs
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  prepare
-          fileName=result_seqwr_1M_6000_$DATE_TIME
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  run >"$fileName"
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
+          sysbench fileio --file-num=4000  --file-total-size=4G --file-test-mode=seqwr --time=600  prepare
+          fileName=result_seqwr_1M_4000_$DATE_TIME
+          sysbench fileio --file-num=4000  --file-total-size=4G --file-test-mode=seqwr --time=600  run >"$fileName"
+          sysbench fileio --file-num=4000  --file-total-size=4G --file-test-mode=seqwr --time=600  cleanup
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
@@ -83,10 +83,10 @@ jobs:
         run: |
           DATE_TIME=$(cat /tmp/datetime)
           cd /jfs
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  prepare
-          fileName=result_seqrd_100K_60000_$DATE_TIME
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  run >"$fileName"
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqrd --time=600  cleanup
+          sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqrd --time=600  prepare
+          fileName=result_seqrd_100K_40000_$DATE_TIME
+          sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqrd --time=600  run >"$fileName"
+          sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqrd --time=600  cleanup
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
@@ -94,10 +94,10 @@ jobs:
         run: |
           DATE_TIME=$(cat /tmp/datetime)
           cd /jfs
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  prepare
-          fileName=result_seqwr_100K_60000_$DATE_TIME
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  run >"$fileName"
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=seqwr --time=600  cleanup
+          sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqwr --time=600  prepare
+          fileName=result_seqwr_100K_40000_$DATE_TIME
+          sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqwr --time=600  run >"$fileName"
+          sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqwr --time=600  cleanup
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Setup tmate session
