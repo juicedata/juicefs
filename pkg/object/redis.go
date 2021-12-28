@@ -1,3 +1,4 @@
+//go:build !noredis
 // +build !noredis
 
 /*

@@ -1,3 +1,4 @@
+//go:build !nobos
 // +build !nobos
 
 /*

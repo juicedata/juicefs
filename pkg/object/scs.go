@@ -1,3 +1,4 @@
+//go:build !noscs
 // +build !noscs
 
 /*

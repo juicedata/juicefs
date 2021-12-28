@@ -1,3 +1,4 @@
+//go:build !fdb
 // +build !fdb
 
 /*

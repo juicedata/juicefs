@@ -1,3 +1,4 @@
+//go:build !nos3
 // +build !nos3
 
 /*
@@ -390,7 +391,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 	if region == "" {
 		region = os.Getenv("AWS_DEFAULT_REGION")
-	}	
+	}
 	if region == "" {
 		region = awsDefaultRegion
 	}
