@@ -1,3 +1,4 @@
+//go:build ceph
 // +build ceph
 
 /*

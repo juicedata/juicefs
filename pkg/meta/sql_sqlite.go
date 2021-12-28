@@ -1,3 +1,4 @@
+//go:build !nosqlite
 // +build !nosqlite
 
 /*
