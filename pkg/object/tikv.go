@@ -1,3 +1,4 @@
+//go:build !notikv
 // +build !notikv
 
 /*

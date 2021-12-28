@@ -1,3 +1,4 @@
+//go:build !noupyun
 // +build !noupyun
 
 /*

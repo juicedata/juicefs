@@ -1,3 +1,4 @@
+//go:build !nob2
 // +build !nob2
 
 /*

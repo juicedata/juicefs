@@ -1,3 +1,4 @@
+//go:build !nosftp
 // +build !nosftp
 
 // Part of this file is borrowed from Rclone under MIT license:

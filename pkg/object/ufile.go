@@ -1,3 +1,4 @@
+//go:build !noufile
 // +build !noufile
 
 /*
