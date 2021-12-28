@@ -147,7 +147,7 @@ func TestFsSftp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
 	}
-	expectedKeys = []string{"/", "/x.txt", "y.txt", "yz/", "yz/xyz.txt"}
+	expectedKeys = []string{"", "/x.txt", "y.txt", "yz/", "yz/xyz.txt"}
 	if err = testKeysEqual(objs, expectedKeys); err != nil {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
