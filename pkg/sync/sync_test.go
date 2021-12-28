@@ -113,7 +113,7 @@ func TestSync(t *testing.T) {
 
 	// Now a: {"a", "ab", "abc"}, b: {"a", "ba"}
 	// Copy "ba" from mem://b to mem://a
-	total, totalBytes = 0, 0
+	total = 0
 	if err := Sync(b, a, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -132,7 +132,7 @@ func TestSync(t *testing.T) {
 		t.FailNow()
 	}
 
-	total, totalBytes = 0, 0
+	total = 0
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -144,7 +144,7 @@ func TestSync(t *testing.T) {
 	// Test --force-update option
 	config.ForceUpdate = true
 	// Forcibly copy {"a", "ba"} from mem://a to mem://b.
-	total, totalBytes = 0, 0
+	total = 0
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}

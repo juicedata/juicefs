@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"os"
@@ -47,15 +46,13 @@ const (
 )
 
 var (
-	total                 int64
-	copyTotal, checkTotal int64 // Bytes
-	bar                   *mpb.Bar
-	copied, copiedBytes   *mpb.Bar
-	checked, checkedBytes *mpb.Bar
-	skipped, deleted      *mpb.Bar
-	mismatch, failed      *mpb.Bar
-	concurrent            chan int
-	limiter               *ratelimit.Bucket
+	total                    int64
+	handled                  *mpb.Bar
+	copied, copiedBytes      *mpb.Bar
+	checkedBytes             *mpb.Bar
+	deleted, skipped, failed *mpb.Bar
+	concurrent               chan int
+	limiter                  *ratelimit.Bucket
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -182,54 +179,113 @@ var bufPool = sync.Pool{
 	},
 }
 
-type checksumReader struct {
-	io.ReadCloser
-	done bool
-	h    hash.Hash
-}
-
-func (c *checksumReader) Read(buf []byte) (n int, err error) {
-	n, err = c.ReadCloser.Read(buf)
-	if !c.done {
-		_, _ = c.h.Write(buf[0:n])
-		c.done = err == io.EOF
+func try(n int, f func() error) (err error) {
+	for i := 0; i < n; i++ {
+		err = f()
+		if err == nil {
+			return
+		}
+		time.Sleep(time.Second * time.Duration(i*i))
 	}
 	return
 }
 
-func (c *checksumReader) checksum() []byte {
-	if c.done {
-		return c.h.Sum(nil)
+func deleteObj(storage object.ObjectStorage, key string, dry bool) {
+	if dry {
+		logger.Infof("Will delete %s from %s", key, storage)
+		return
+	}
+	start := time.Now()
+	if err := try(3, func() error { return storage.Delete(key) }); err == nil {
+		deleted.Increment()
+		logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
 	} else {
-		return nil
+		failed.Increment()
+		logger.Errorf("Failed to delete %s from %s in %s: %s", key, storage, time.Since(start), err)
 	}
 }
 
-func copyObject(src, dst object.ObjectStorage, obj object.Object, check bool) error {
+func copyPerms(dst object.ObjectStorage, obj object.Object) {
+	start := time.Now()
+	key := obj.Key()
+	fi := obj.(object.File)
+	if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
+		logger.Warnf("Chmod %s to %d: %s", key, fi.Mode(), err)
+	}
+	if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
+		logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
+	}
+	logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), key, time.Since(start))
+}
+
+func doCheckSum(src, dst object.ObjectStorage, key string, equal *bool) error {
+	buf := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf)
+
+	srcIn, err := src.Get(key, 0, -1)
+	if err != nil {
+		return fmt.Errorf("src get: %s", err)
+	}
+	defer srcIn.Close()
+	srcH := md5.New()
+	if _, err = io.CopyBuffer(srcH, srcIn, *buf); err != nil {
+		return fmt.Errorf("src read: %s", err)
+	}
+
+	dstIn, err := dst.Get(key, 0, -1)
+	if err != nil {
+		return fmt.Errorf("dest get: %s", err)
+	}
+	defer dstIn.Close()
+	dstH := md5.New()
+	if _, err = io.CopyBuffer(dstH, dstIn, *buf); err != nil {
+		return fmt.Errorf("dest read: %s", err)
+	}
+
+	if d, s := dstH.Sum(nil), srcH.Sum(nil); bytes.Equal(d, s) {
+		*equal = true
+	} else {
+		*equal = false
+		logger.Warnf("dest md5sum %x != expect md5sum %x", d, s)
+	}
+	return nil
+}
+
+func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, error) {
+	start := time.Now()
+	var equal bool
+	err := try(3, func() error { return doCheckSum(src, dst, key, &equal) })
+	if err == nil {
+		checkedBytes.IncrInt64(size)
+		logger.Debugf("Checked %s OK (equal: %v) in %s,", key, equal, time.Since(start))
+	} else {
+		logger.Errorf("Failed to check %s in %s: %s", key, time.Since(start), err)
+	}
+	return equal, err
+}
+
+func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	if limiter != nil {
-		limiter.Wait(obj.Size())
+		limiter.Wait(size)
 	}
 	concurrent <- 1
 	defer func() {
 		<-concurrent
 	}()
-	key := obj.Key()
 	in, err := src.Get(key, 0, -1)
 	if err != nil {
 		if _, e := src.Head(key); e != nil {
+			logger.Debugf("Head src %s: %s", key, err)
 			return nil
 		}
 		return err
 	}
-	if check {
-		in = &checksumReader{ReadCloser: in, h: md5.New()}
-	}
 	defer in.Close()
 
-	if obj.Size() <= maxBlock ||
+	if size <= maxBlock ||
 		strings.HasPrefix(src.String(), "file://") ||
 		strings.HasPrefix(dst.String(), "file://") {
-		err = dst.Put(key, in)
+		return dst.Put(key, in)
 	} else { // obj.Size > maxBlock, download the object into disk first
 		f, err := ioutil.TempFile("", "rep")
 		if err != nil {
@@ -245,83 +301,29 @@ func copyObject(src, dst object.ObjectStorage, obj object.Object, check bool) er
 		if _, err = f.Seek(0, 0); err != nil {
 			return err
 		}
-		err = dst.Put(key, f)
+		return dst.Put(key, f)
 	}
-	if err != nil {
-		return err
-	}
-	if check {
-		destIn, err := dst.Get(key, 0, -1)
-		if err != nil {
-			return fmt.Errorf("dest get: %s", err)
-		}
-		buf := bufPool.Get().(*[]byte)
-		defer bufPool.Put(buf)
-		h := md5.New()
-		if _, err = io.CopyBuffer(h, destIn, *buf); err != nil {
-			return fmt.Errorf("dest read: %s", err)
-		}
-		if d, s := h.Sum(nil), in.(*checksumReader).checksum(); !bytes.Equal(d, s) {
-			return fmt.Errorf("dest md5sum %x != expect md5sum %x", d, s)
-		}
-	}
-	return nil
 }
 
-func try(n int, f func() error) (err error) {
-	for i := 0; i < n; i++ {
-		err = f()
-		if err == nil {
-			return
-		}
-		time.Sleep(time.Second * time.Duration(i*i))
-	}
-	return
-}
-
-func copyInParallel(src, dst object.ObjectStorage, obj object.Object, check bool) error {
-	if obj.Size() < maxBlock {
-		err := try(3, func() error { return copyObject(src, dst, obj, check) })
-		if err == nil {
-			copiedBytes.IncrInt64(obj.Size())
-		}
-		if check {
-			checkedBytes.IncrInt64(obj.Size())
-		}
-		return err
-	}
-	upload, err := dst.CreateMultipartUpload(obj.Key())
-	if err != nil {
-		err = try(3, func() error { return copyObject(src, dst, obj, check) })
-		if err == nil {
-			copiedBytes.IncrInt64(obj.Size())
-		}
-		if check {
-			checkedBytes.IncrInt64(obj.Size())
-		}
-		return err
-	}
+func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
 	partSize := int64(upload.MinPartSize)
 	if partSize == 0 {
 		partSize = defaultPartSize
 	}
-	if obj.Size() > partSize*int64(upload.MaxCount) {
-		partSize = obj.Size() / int64(upload.MaxCount)
+	if size > partSize*int64(upload.MaxCount) {
+		partSize = size / int64(upload.MaxCount)
 		partSize = ((partSize-1)>>20 + 1) << 20 // align to MB
 	}
-	n := int((obj.Size()-1)/partSize) + 1
-	key := obj.Key()
-	logger.Debugf("Copying object %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
+	n := int((size-1)/partSize) + 1
+	logger.Debugf("Copying data of %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
 	parts := make([]*object.Part, n)
-	checksums := make([][md5.Size]byte, n)
 	errs := make(chan error, n)
 	for i := 0; i < n; i++ {
 		go func(num int) {
 			sz := partSize
 			if num == n-1 {
-				sz = obj.Size() - int64(num)*partSize
+				sz = size - int64(num)*partSize
 			}
-			var err error
 			if limiter != nil {
 				limiter.Wait(sz)
 			}
@@ -330,34 +332,30 @@ func copyInParallel(src, dst object.ObjectStorage, obj object.Object, check bool
 				<-concurrent
 			}()
 			data := make([]byte, sz)
-			err = try(3, func() error {
-				r, err := src.Get(key, int64(num)*partSize, int64(sz))
+			if err := try(3, func() error {
+				in, err := src.Get(key, int64(num)*partSize, sz)
 				if err != nil {
 					return err
 				}
-				_, err = io.ReadFull(r, data)
-				return err
-			})
-			if err == nil {
-				err = try(3, func() error {
-					// PartNumber starts from 1
-					parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, data)
+				defer in.Close()
+				if _, err = io.ReadFull(in, data); err != nil {
 					return err
-				})
-			}
-			if err != nil {
-				errs <- fmt.Errorf("part %d: %s", num, err.Error())
-				logger.Warningf("Failed to copy %s part %d: %s", key, num, err.Error())
-			} else {
+				}
+				// PartNumber starts from 1
+				parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, data)
+				return err
+			}); err == nil {
 				errs <- nil
 				copiedBytes.IncrInt64(sz)
-				if check {
-					checksums[num] = md5.Sum(data)
-				}
-				logger.Debugf("Copied %s part %d", key, num)
+				logger.Debugf("Copied data of %s part %d", key, num)
+			} else {
+				errs <- fmt.Errorf("part %d: %s", num, err)
+				logger.Warnf("Failed to copy data of %s part %d: %s", key, num, err)
 			}
 		}(i)
 	}
+
+	var err error
 	for i := 0; i < n; i++ {
 		if err = <-errs; err != nil {
 			break
@@ -368,158 +366,99 @@ func copyInParallel(src, dst object.ObjectStorage, obj object.Object, check bool
 	}
 	if err != nil {
 		dst.AbortUpload(key, upload.UploadID)
-		return fmt.Errorf("multipart: %s", err.Error())
-	}
-	if err == nil && check {
-		in, err := dst.Get(key, 0, -1)
-		if err != nil {
-			return fmt.Errorf("dest get: %s", err)
-		}
-		for i := 0; i < n; i++ {
-			sz := partSize
-			if i == n-1 {
-				sz = obj.Size() - int64(i)*partSize
-			}
-			h := md5.New()
-			if _, err = io.CopyN(h, in, partSize); err != nil {
-				return fmt.Errorf("dest read: %s", err)
-			}
-			if d, s := h.Sum(nil), checksums[i][:]; !bytes.Equal(d, s) {
-				return fmt.Errorf("dest md5sum %x != expect md5sum %x", d, s)
-			}
-			checkedBytes.IncrInt64(sz)
-		}
+		return fmt.Errorf("multipart: %s", err)
 	}
 	return nil
 }
 
-func getRealSize(obj object.Object) int64 {
-	switch o := obj.(type) {
-	case *withSize:
-		return o.Object.Size()
-	case *withFSize:
-		return o.File.Size()
-	default:
-		return o.Size()
-	}
-}
-
-func checkSum(src, dst object.ObjectStorage, key string, size int64, start time.Time) (err error) {
-	defer func() {
-		checked.Increment()
-		checkedBytes.IncrInt64(size)
-		if err == nil {
-			logger.Debugf("Checked %s OK in %s", key, time.Since(start))
-		} else {
-			mismatch.Increment()
-			logger.Warnf("Check %s failed: %s", key, err)
+func copyData(src, dst object.ObjectStorage, key string, size int64) error {
+	start := time.Now()
+	var multiple bool
+	var err error
+	if size < maxBlock {
+		err = try(3, func() error { return doCopySingle(src, dst, key, size) })
+	} else {
+		var upload *object.MultipartUpload
+		if upload, err = dst.CreateMultipartUpload(key); err == nil {
+			multiple = true
+			err = doCopyMultiple(src, dst, key, size, upload)
+		} else { // fallback
+			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 		}
-	}()
-
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
-	srcIn, err := src.Get(key, 0, -1)
-	if err != nil {
-		return fmt.Errorf("src get: %s", err)
 	}
-	srcH := md5.New()
-	if _, err = io.CopyBuffer(srcH, srcIn, *buf); err != nil {
-		return fmt.Errorf("src read: %s", err)
+	if err == nil {
+		if !multiple {
+			copiedBytes.IncrInt64(size)
+		}
+		logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
+	} else {
+		logger.Errorf("Failed to copy data of %s in %s: %s", key, time.Since(start), err)
 	}
-	destIn, err := dst.Get(key, 0, -1)
-	if err != nil {
-		return fmt.Errorf("dest get: %s", err)
-	}
-	dstH := md5.New()
-	if _, err = io.CopyBuffer(dstH, destIn, *buf); err != nil {
-		return fmt.Errorf("dest read: %s", err)
-	}
-	if d, s := dstH.Sum(nil), srcH.Sum(nil); !bytes.Equal(d, s) {
-		return fmt.Errorf("dest md5sum %x != expect md5sum %x", d, s)
-	}
-	return
+	return err
 }
 
 func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
-	deleteObj := func(storage object.ObjectStorage, key string, start time.Time, dry bool) {
-		if dry {
-			logger.Infof("Will delete %s from %s", key, storage)
-			return
-		}
-		if err := try(3, func() error { return storage.Delete(key) }); err == nil {
-			deleted.Increment()
-			logger.Debugf("Deleted %s from %s in %s", key, storage, time.Since(start))
-		} else {
-			failed.Increment()
-			logger.Errorf("Failed to delete %s from %s: %s", key, storage, err)
-		}
-	}
-	copyPerms := func(fi object.File, start time.Time, log bool) {
-		key := fi.Key()
-		if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
-			logger.Warnf("Chmod %s to %d: %s", key, fi.Mode(), err)
-		}
-		if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
-			logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
-		}
-		if log {
-			logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), key, time.Since(start))
-		}
-	}
-
-	check := config.CheckAll || config.CheckNew
 	for obj := range tasks {
-		start := time.Now()
+		key := obj.Key()
 		switch obj.Size() {
 		case markDeleteSrc:
-			deleteObj(src, obj.Key(), start, config.Dry)
+			deleteObj(src, key, config.Dry)
 		case markDeleteDst:
-			deleteObj(dst, obj.Key(), start, config.Dry)
+			deleteObj(dst, key, config.Dry)
 		case markCopyPerms:
 			if config.Dry {
-				logger.Infof("Will copy permissions for %s", obj.Key())
+				logger.Infof("Will copy permissions for %s", key)
 				break
 			}
-			copyPerms(obj.(object.File), start, true)
-			if config.CheckAll {
-				checkSum(src, dst, obj.Key(), getRealSize(obj), start)
-			}
+			copyPerms(dst, obj)
 			copied.Increment()
 		case markChecksum:
 			if config.Dry {
-				logger.Infof("Will compare checksum for %s", obj.Key())
+				logger.Infof("Will compare checksum for %s", key)
 				break
 			}
-			checkSum(src, dst, obj.Key(), getRealSize(obj), start)
+			obj = obj.(*withSize).Object
+			if equal, err := checkSum(src, dst, key, obj.Size()); err == nil && equal {
+				if config.DeleteSrc {
+					deleteObj(src, key, false)
+				} else if config.Perms { // FIXME: && needCopyPerms(obj, dstobj)
+					copyPerms(dst, obj)
+					copied.Increment()
+				} else {
+					skipped.Increment()
+				}
+				break
+			}
+			// checkSum failed or not equal, copy the object
+			fallthrough
 		default:
 			if config.Dry {
 				logger.Infof("Will copy %s (%d bytes)", obj.Key(), obj.Size())
 				break
 			}
-			if err := copyInParallel(src, dst, obj, check); err == nil {
+			err := copyData(src, dst, key, obj.Size())
+			if err == nil && (config.CheckAll || config.CheckNew) {
+				var equal bool
+				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
+					err = fmt.Errorf("checksums of copied object %s don't match", key)
+				}
+			}
+			if err == nil {
 				if mc, ok := dst.(object.MtimeChanger); ok {
 					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil {
-						logger.Warnf("Update mtime of %s: %s", obj.Key(), err)
+						logger.Warnf("Update mtime of %s: %s", key, err)
 					}
 				}
 				if config.Perms {
-					copyPerms(obj.(object.File), start, false)
+					copyPerms(dst, obj)
 				}
 				copied.Increment()
-				if check {
-					checked.Increment()
-				}
-				logger.Debugf("Copied %s (%d bytes) in %s", obj.Key(), obj.Size(), time.Since(start))
 			} else {
 				failed.Increment()
-				if check {
-					checked.Increment()
-					mismatch.Increment()
-				}
-				logger.Errorf("Failed to copy %s: %s", obj.Key(), err)
+				logger.Errorf("Failed to copy object %s: %s", key, err)
 			}
 		}
-		bar.Increment()
+		handled.Increment()
 	}
 }
 
@@ -548,7 +487,7 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, dirs bool) 
 	}
 	tasks <- &withSize{dstobj, markDeleteDst}
 	total++
-	bar.SetTotal(total, false)
+	handled.SetTotal(total, false)
 }
 
 func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) {
@@ -593,7 +532,7 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 			continue
 		}
 		total++
-		bar.SetTotal(total, false)
+		handled.SetTotal(total, false)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if config.DeleteDst {
@@ -617,32 +556,28 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 			}
 		}
 
-		var check bool
 		// FIXME: there is a race when source is modified during coping
-		if dstobj == nil || obj.Key() < dstobj.Key() || config.ForceUpdate ||
-			obj.Size() != dstobj.Size() || config.Update && obj.Mtime().After(dstobj.Mtime()) {
-			copyTotal += obj.Size()
-			copiedBytes.SetTotal(copyTotal, false)
-			check = config.CheckAll || config.CheckNew
+		if dstobj == nil || obj.Key() < dstobj.Key() {
 			tasks <- obj
-		} else { // obj.Key() == dstobj.Key()
-			if config.DeleteSrc && obj.Size() == dstobj.Size() {
+		} else { // obj.key == dstobj.key
+			if config.ForceUpdate ||
+				(config.Update && obj.Mtime().After(dstobj.Mtime())) ||
+				(!config.Update && obj.Size() != dstobj.Size()) {
+				tasks <- obj
+			} else if config.Update { // obj.mtime <= dstobj.mtime
+				skipped.Increment()
+				handled.Increment()
+			} else if config.CheckAll { // !update && obj.size == dstobj.size
+				tasks <- &withSize{obj, markChecksum}
+			} else if config.DeleteSrc {
 				tasks <- &withSize{obj, markDeleteSrc}
 			} else if config.Perms && needCopyPerms(obj, dstobj) {
-				check = config.CheckAll
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
-			} else if config.CheckAll {
-				check = true
-				tasks <- &withSize{obj, markChecksum}
 			} else {
 				skipped.Increment()
-				bar.Increment()
+				handled.Increment()
 			}
 			dstobj = nil
-		}
-		if check {
-			checkTotal += obj.Size()
-			checkedBytes.SetTotal(checkTotal, false)
 		}
 	}
 	if config.DeleteDst {
@@ -717,17 +652,17 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	var progress *mpb.Progress
-	progress, bar = utils.NewDynProgressBar("scanning objects: ", config.Verbose || config.Quiet || config.Manager != "")
+	progress, handled = utils.NewDynProgressBar("scanning objects: ", config.Verbose || config.Quiet || config.Manager != "")
 	addBytes := func(name string) *mpb.Bar {
-		return progress.AddBar(0,
+		return progress.Add(0,
+			utils.NewSpinner(),
 			mpb.PrependDecorators(
 				decor.Name(name+" bytes: ", decor.WCSyncWidth),
-				decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidthR),
-			),
-			mpb.AppendDecorators(
+				decor.CurrentKibiByte("% .2f", decor.WCSyncWidthR),
 				// FIXME: maybe use EWMA speed
-				decor.AverageSpeed(decor.UnitKiB, "% .2f", decor.WCSyncWidthR),
+				decor.AverageSpeed(decor.UnitKiB, "   % .2f", decor.WCSyncWidthR),
 			),
+			mpb.BarFillerClearOnComplete(),
 		)
 	}
 	addSpinner := func(name string) *mpb.Bar {
@@ -740,10 +675,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 			mpb.BarFillerClearOnComplete(),
 		)
 	}
+	copied = addSpinner("copied")
 	copiedBytes, checkedBytes = addBytes("copied"), addBytes("checked")
-	copied, checked = addSpinner("copied"), addSpinner("checked")
-	skipped, deleted = addSpinner("skipped"), addSpinner("deleted")
-	mismatch, failed = addSpinner("mismatch"), addSpinner("failed")
+	deleted, skipped, failed = addSpinner("deleted"), addSpinner("skipped"), addSpinner("failed")
 
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
@@ -773,27 +707,23 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	wg.Wait()
-	for _, b := range []*mpb.Bar{bar, copiedBytes, checkedBytes, copied, checked, skipped, deleted, mismatch, failed} {
+	for _, b := range []*mpb.Bar{handled, copied, copiedBytes, checkedBytes, deleted, skipped, failed} {
 		b.SetTotal(0, true)
 	}
 	progress.Wait()
 
 	if config.Manager == "" {
-		logger.Infof("Found: %d, copied: %d (%s), checked: %d (%s), skipped: %d, deleted: %d, mismatch: %d, failed: %d",
-			total, copied.Current(), formatSize(copiedBytes.Current()),
-			checked.Current(), formatSize(checkedBytes.Current()),
-			skipped.Current(), deleted.Current(), mismatch.Current(), failed.Current())
+		logger.Infof("Found: %d, copied: %d (%s), checked: %s, deleted: %d, skipped: %d, failed: %d",
+			total, copied.Current(), formatSize(copiedBytes.Current()), formatSize(checkedBytes.Current()),
+			deleted.Current(), skipped.Current(), failed.Current())
 	} else {
 		sendStats(config.Manager)
 	}
 	if n := failed.Current(); n > 0 {
 		return fmt.Errorf("Failed to handle %d objects", n)
 	}
-	if bar.Current() != total {
-		return fmt.Errorf("Number of handled objects %d != expected %d", bar.Current(), total)
-	}
-	if n := mismatch.Current(); n > 0 {
-		return fmt.Errorf("%d objects are not identical when comparing checksums", mismatch.Current())
+	if handled.Current() != total {
+		return fmt.Errorf("Number of handled objects %d != expected %d", handled.Current(), total)
 	}
 	return nil
 }

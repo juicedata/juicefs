@@ -38,23 +38,20 @@ import (
 type Stat struct {
 	Copied       int64 // the number of copied files
 	CopiedBytes  int64 // total amount of copied data in bytes
-	Checked      int64 // the number of checked files
 	CheckedBytes int64 // total amount of checked data in bytes
-	Mismatch     int64 // the number of files that are mismatch
-	Handled      int64 // the number of files handled
-	Failed       int64 // the number of files that fail to copy
 	Deleted      int64 // the number of deleted files
+	Skipped      int64 // the number of files skipped
+	Failed       int64 // the number of files that fail to copy
 }
 
 func updateStats(r *Stat) {
 	copied.IncrInt64(r.Copied)
 	copiedBytes.IncrInt64(r.CopiedBytes)
-	checked.IncrInt64(r.Checked)
 	checkedBytes.IncrInt64(r.CheckedBytes)
-	mismatch.IncrInt64(r.Mismatch)
-	bar.IncrInt64(r.Handled)
-	failed.IncrInt64(r.Failed)
 	deleted.IncrInt64(r.Deleted)
+	skipped.IncrInt64(r.Skipped)
+	failed.IncrInt64(r.Failed)
+	handled.IncrInt64(r.Copied + r.Deleted + r.Skipped + r.Failed)
 }
 
 func httpRequest(url string, body []byte) (ans []byte, err error) {
@@ -79,12 +76,10 @@ func sendStats(addr string) {
 	var r Stat
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
-	r.Checked = checked.Current()
 	r.CheckedBytes = checkedBytes.Current()
-	r.Mismatch = mismatch.Current()
-	r.Handled = bar.Current()
-	r.Failed = failed.Current()
 	r.Deleted = deleted.Current()
+	r.Skipped = skipped.Current()
+	r.Failed = failed.Current()
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
@@ -92,12 +87,10 @@ func sendStats(addr string) {
 	} else {
 		copied.IncrInt64(-r.Copied)
 		copiedBytes.IncrInt64(-r.CopiedBytes)
-		checked.IncrInt64(-r.Checked)
 		checkedBytes.IncrInt64(-r.CheckedBytes)
-		mismatch.IncrInt64(-r.Mismatch)
-		bar.IncrInt64(-r.Handled)
-		failed.IncrInt64(-r.Failed)
 		deleted.IncrInt64(-r.Deleted)
+		skipped.IncrInt64(-r.Skipped)
+		failed.IncrInt64(-r.Failed)
 	}
 }
 
@@ -330,11 +323,10 @@ func fetchJobs(tasks chan<- object.Object, config *Config) {
 			continue
 		}
 		logger.Debugf("got %d jobs", len(jobs))
-		if l := len(jobs); l == 0 {
-			break
-		} else if bar != nil {
+		if l := len(jobs); l > 0 {
 			total += int64(l)
-			bar.SetTotal(total, false)
+		} else {
+			break
 		}
 		for _, obj := range jobs {
 			tasks <- obj
