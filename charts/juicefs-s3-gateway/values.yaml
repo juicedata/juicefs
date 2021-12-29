@@ -64,5 +64,9 @@ secret:
   accessKey: ""
   # -- Secret key for object storage
   secretKey: ""
-  # -- Bucket URL. Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_setup_object_storage.md) to learn how to setup different object storage.
+  # -- Bucket URL. Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/reference/how_to_setup_object_storage.md) to learn how to setup different object storage.
   bucket: ""
+
+# -- Gateway Options. Separated by spaces. Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/reference/command_reference.md#juicefs-gateway) to learn how to set different gateway options.
+options: ""
+# Example: "--get-timeout=60 --put-timeout=60"

@@ -45,7 +45,7 @@ spec:
           command:
             - sh
             - -c
-            - juicefs gateway $(METAURL) $(NODE_IP):{{ .Values.port }}
+            - juicefs gateway $(METAURL) $(NODE_IP):{{ .Values.port }} {{ .Values.options }}
           env:
             - name: NODE_IP
               valueFrom:
