@@ -82,6 +82,6 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if .Values.node.hostNetwork }}
+      {{- if .Values.hostNetwork }}
       hostNetwork: true
       {{- end }}
