@@ -1,0 +1,13 @@
+FROM debian:stretch-slim
+RUN sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list
+RUN apt-get clean
+RUN apt-get update
+
+RUN apt-get install openssh-server -y
+
+RUN mkdir /run/sshd
+RUN sed -i 's/UsePAM yes/UsePAM no/g' /etc/ssh/sshd_config
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
+RUN echo "root:password"|chpasswd
+EXPOSE 22
+CMD    ["/usr/sbin/sshd", "-D"]
