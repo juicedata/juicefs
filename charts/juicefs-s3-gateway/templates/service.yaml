@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-s3-gateway
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "juicefs-s3-gateway.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.port }}
+      targetPort: {{ .Values.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "juicefs-s3-gateway.selectorLabels" . | nindent 4 }}

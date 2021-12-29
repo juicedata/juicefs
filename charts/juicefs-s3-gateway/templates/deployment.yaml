@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juicefs-s3-gateway
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "juicefs-s3-gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "juicefs-s3-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "juicefs-s3-gateway.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: format
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          {{- if .Values.image.pullPolicy }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - juicefs format --storage=$(storage) --bucket=$(bucket) --access-key=$(access-key) --secret-key=$(secret-key) $(metaurl) $(name)
+          envFrom:
+            - secretRef:
+                name: juicefs-secret
+      containers:
+        - name: gateway
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          {{- if .Values.image.pullPolicy }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - juicefs gateway $(METAURL) $(NODE_IP):{{ .Values.port }}
+          env:
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: METAURL
+              valueFrom:
+                secretKeyRef:
+                  name: juicefs-secret
+                  key: metaurl
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: juicefs-secret
+                  key: access-key
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: juicefs-secret
+                  key: secret-key
+          ports:
+            - containerPort: {{ .Values.port }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.node.hostNetwork }}
+      hostNetwork: true
+      {{- end }}

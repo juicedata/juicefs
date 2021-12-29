@@ -109,3 +109,75 @@ $ mc ls juicefs/jfs
 > **Note**: This feature needs to run JuiceFS client version 0.17.1 and above.
 
 JuiceFS S3 gateway provides a Prometheus API for collecting monitoring metrics, the default address is `http://localhost:9567/metrics`. More information please check the ["JuiceFS Metrics"](../reference/p8s_metrics.md) document.
+
+## Deploy JuiceFS S3 Gateway in Kubernetes
+
+Create a secret (take Amazon S3 as an example):
+
+```shell
+export NAMESPACE=default
+kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
+    --from-literal=name=<NAME> \
+    --from-literal=metaurl=redis://[:<PASSWORD>]@<HOST>:6379[/<DB>] \
+    --from-literal=storage=s3 \
+    --from-literal=bucket=https://<BUCKET>.s3.<REGION>.amazonaws.com \
+    --from-literal=access-key=<ACCESS_KEY> \
+    --from-literal=secret-key=<SECRET_KEY>
+```
+
+- `name`: The JuiceFS file system name.
+- `metaurl`: Connection URL for metadata engine (e.g. Redis). Read [this document](https://juicefs.com/docs/community/databases_for_metadata) for more information.
+- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](https://juicefs.com/docs/community/how_to_setup_object_storage) for the full supported list.
+- `bucket`: Bucket URL. Read [this document](https://juicefs.com/docs/community/how_to_setup_object_storage) to learn how to setup different object storage.
+- `access-key`: Access key.
+- `secret-key`: Secret key.
+
+Deploy S3 Gateway:
+
+```shell
+curl -sSL https://raw.githubusercontent.com/juicedata/juicefs/main/deploy/juicefs-s3-gateway.yaml | sed "s@kube-system@${NAMESPACE}@g" | kubectl apply -f -
+```
+
+Check if it's deployed successfully:
+
+```shell
+# kubectl get po -n $NAMESPACE -owide | grep s3
+juicefs-s3-gateway-5c7d65c77f-gj69l         1/1     Running   0          37m     10.244.2.238   kube-node-3   <none>           <none>
+# kubectl get svc -n $NAMESPACE | grep s3
+juicefs-s3-gateway            ClusterIP   10.106.81.216    <none>        9000/TCP         34m
+```
+
+You can use `juicefs-s3-gateway.${NAMESPACE}.svc.cluster.local` or podIP of juicefs-s3-gateway podIP `10.244.2.238` in the application pod to access JuiceFS S3 Gateway.
+
+If you want to access through Ingress, you need to ensure that the Ingress Controller has been deployed in the cluster. Refer to [Ingress Controller Deployment Document](https://kubernetes.github.io/ingress-nginx/deploy/). 
+Then create an Ingress resource:
+
+```shell
+kubectl apply -f - <<EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: juicefs-s3-gateway
+  namespace: ${NAMESPACE}
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: juicefs-s3-gateway
+            port:
+              number: 9000
+EOF
+```
+
+The S3 gateway can be accessed through `<external IP>` of ingress controller as follows:
+
+```shell
+kubectl get services -n ingress-nginx
+```
+
+There are some differences between the various versions of Ingress. For more usage methods, please refer to [Ingress Controller Usage Document](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/)
