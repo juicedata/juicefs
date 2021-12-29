@@ -390,7 +390,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 	if region == "" {
 		region = os.Getenv("AWS_DEFAULT_REGION")
-	}	
+	}
 	if region == "" {
 		region = awsDefaultRegion
 	}
@@ -412,6 +412,10 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	ses, err := session.NewSession(awsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
+	}
+	_, err = (&s3client{bucketName, s3.New(ses), ses}).List("", "", 1)
+	if err == credentials.ErrNoValidProvidersFoundInChain {
+		ses.Config.Credentials = credentials.AnonymousCredentials
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
 	return &s3client{bucketName, s3.New(ses), ses}, nil
