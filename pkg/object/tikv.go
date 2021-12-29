@@ -28,6 +28,8 @@ import (
 	"strings"
 	"time"
 
+	plog "github.com/pingcap/log"
+	"github.com/sirupsen/logrus"
 	"github.com/tikv/client-go/v2/config"
 	"github.com/tikv/client-go/v2/rawkv"
 )
@@ -84,6 +86,22 @@ func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
 }
 
 func newTiKV(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
+	var plvl string // TiKV (PingCap) uses uber-zap logging, make it less verbose
+	switch logger.Level {
+	case logrus.TraceLevel:
+		plvl = "debug"
+	case logrus.DebugLevel:
+		plvl = "info"
+	case logrus.InfoLevel, logrus.WarnLevel:
+		plvl = "warn"
+	case logrus.ErrorLevel:
+		plvl = "error"
+	default:
+		plvl = "dpanic"
+	}
+	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
+	plog.ReplaceGlobals(l, prop)
+
 	pds := strings.Split(endpoint, ",")
 	for i, pd := range pds {
 		pd = strings.TrimSpace(pd)

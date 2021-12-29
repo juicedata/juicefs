@@ -35,7 +35,9 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
+	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
 )
 
@@ -150,6 +152,19 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
 	}
+	switch logger.Level { // make xorm less verbose
+	case logrus.TraceLevel:
+		engine.SetLogLevel(log.LOG_DEBUG)
+	case logrus.DebugLevel:
+		engine.SetLogLevel(log.LOG_INFO)
+	case logrus.InfoLevel, logrus.WarnLevel:
+		engine.SetLogLevel(log.LOG_WARNING)
+	case logrus.ErrorLevel:
+		engine.SetLogLevel(log.LOG_ERR)
+	default:
+		engine.SetLogLevel(log.LOG_OFF)
+	}
+
 	start := time.Now()
 	if err = engine.Ping(); err != nil {
 		return nil, fmt.Errorf("ping database: %s", err)
