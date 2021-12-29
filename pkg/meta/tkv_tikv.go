@@ -22,8 +22,9 @@ import (
 	"context"
 	"strings"
 
+	plog "github.com/pingcap/log"
 	"github.com/pkg/errors"
-
+	"github.com/sirupsen/logrus"
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
 )
@@ -35,6 +36,22 @@ func init() {
 }
 
 func newTikvClient(addr string) (tkvClient, error) {
+	var plvl string // TiKV (PingCap) uses uber-zap logging, make it less verbose
+	switch logger.Level {
+	case logrus.TraceLevel:
+		plvl = "debug"
+	case logrus.DebugLevel:
+		plvl = "info"
+	case logrus.InfoLevel, logrus.WarnLevel:
+		plvl = "warn"
+	case logrus.ErrorLevel:
+		plvl = "error"
+	default:
+		plvl = "dpanic"
+	}
+	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
+	plog.ReplaceGlobals(l, prop)
+
 	p := strings.Index(addr, "/")
 	var prefix string
 	if p > 0 {
