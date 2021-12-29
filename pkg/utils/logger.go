@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 
-	plog "github.com/pingcap/log"
 	"github.com/sirupsen/logrus"
 )
 
@@ -97,24 +96,6 @@ func SetLogLevel(lvl logrus.Level) {
 	for _, logger := range loggers {
 		logger.Level = lvl
 	}
-	var plvl string // TiKV (PingCap) uses uber-zap logging, make it less verbose
-	switch lvl {
-	case logrus.TraceLevel:
-		plvl = "debug"
-	case logrus.DebugLevel:
-		plvl = "info"
-	case logrus.InfoLevel:
-		fallthrough
-	case logrus.WarnLevel:
-		plvl = "warn"
-	case logrus.ErrorLevel:
-		plvl = "error"
-	default:
-		plvl = "dpanic"
-	}
-	conf := &plog.Config{Level: plvl}
-	l, p, _ := plog.InitLogger(conf)
-	plog.ReplaceGlobals(l, p)
 }
 
 func SetOutFile(name string) {
