@@ -246,7 +246,7 @@ func doCheckSum(src, dst object.ObjectStorage, key string, equal *bool) error {
 		*equal = true
 	} else {
 		*equal = false
-		logger.Warnf("dest md5sum %x != expect md5sum %x", d, s)
+		logger.Warnf("%s: dest md5sum %x != expect md5sum %x", key, d, s)
 	}
 	return nil
 }
