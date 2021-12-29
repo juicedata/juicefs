@@ -104,6 +104,7 @@ func TestSync(t *testing.T) {
 	b.Put("ba", bytes.NewReader([]byte("ba")))
 
 	// Copy "a" from mem://a to mem://b
+	total = 0
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
