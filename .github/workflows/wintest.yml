@@ -105,7 +105,7 @@ jobs:
           echo  "<name>jfs</name>"  >> juicefs-service.xml
           echo  "<description>jfs</description>"  >> juicefs-service.xml
           echo  "<executable>$PWD\juicefs.exe</executable>"  >> juicefs-service.xml
-          echo  "<arguments>mount redis://127.0.0.1:6379/1 Z:</arguments>"  >> juicefs-service.xml
+          echo  "<arguments>mount redis://127.0.0.1:6379/1 Z: --no-usage-report</arguments>"  >> juicefs-service.xml
           echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
           echo  "</service>"  >> juicefs-service.xml
           .\juicefs-service.exe install
