@@ -112,6 +112,8 @@ JuiceFS S3 gateway provides a Prometheus API for collecting monitoring metrics, 
 
 ## Deploy JuiceFS S3 Gateway in Kubernetes
 
+### Install via kubectl
+
 Create a secret (take Amazon S3 as an example):
 
 ```shell
@@ -181,3 +183,52 @@ kubectl get services -n ingress-nginx
 ```
 
 There are some differences between the various versions of Ingress. For more usage methods, please refer to [Ingress Controller Usage Document](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/)
+
+### Install via helm
+
+1. Prepare a YAML file
+
+Create a configuration file, for example: `values.yaml`, copy and complete the following configuration information. Among them, the `secret` part is the information related to the JuiceFS file system, you can refer to [JuiceFS Quick Start Guide](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md) for more information. 
+
+```yaml
+secret:
+  name: "<name>"
+  metaurl: "<meta-url>"
+  storage: "<storage-type>"
+  accessKey: "<access-key>"
+  secretKey: "<secret-key>"
+  bucket: "<bucket>"
+```
+
+If you want to deploy ingress, add these in values.yaml:
+
+```yaml
+ingress:
+  enables: true
+```
+
+2. Deploy
+
+```sh
+helm repo add juicefs-s3-gateway https://juicedata.github.io/juicefs/
+helm repo update
+helm install juicefs-s3-gateway juicefs-s3-gateway/juicefs-s3-gateway -n kube-system -f ./values.yaml
+```
+
+3. Check the deployment
+
+- **Check pods are running**: the deployment will launch a `Deployment` named `juicefs-s3-gateway`, so run `kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway` should see all running pods. For example:
+
+```sh
+$ kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                                  READY   STATUS    RESTARTS   AGE
+juicefs-s3-gateway-5c69d574cc-t92b6   1/1     Running   0          136m
+```
+
+- **Check Service**: run `kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway` to check Service:
+
+```shell
+$ kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
+```
