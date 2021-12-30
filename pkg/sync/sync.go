@@ -205,6 +205,12 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) {
 	}
 }
 
+func needCopyPerms(o1, o2 object.Object) bool {
+	f1 := o1.(object.File)
+	f2 := o2.(object.File)
+	return f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group()
+}
+
 func copyPerms(dst object.ObjectStorage, obj object.Object) {
 	start := time.Now()
 	key := obj.Key()
@@ -418,18 +424,30 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				break
 			}
 			obj = obj.(*withSize).Object
-			if equal, err := checkSum(src, dst, key, obj.Size()); err == nil && equal {
+			if equal, err := checkSum(src, dst, key, obj.Size()); err != nil {
+				failed.Increment()
+				break
+			} else if equal {
 				if config.DeleteSrc {
 					deleteObj(src, key, false)
-				} else if config.Perms { // FIXME: && needCopyPerms(obj, dstobj)
-					copyPerms(dst, obj)
-					copied.Increment()
+				} else if config.Perms {
+					if o, e := dst.Head(key); e == nil {
+						if needCopyPerms(obj, o) {
+							copyPerms(dst, obj)
+							copied.Increment()
+						} else {
+							skipped.Increment()
+						}
+					} else {
+						logger.Warnf("Failed to head object %s: %s", key, e)
+						failed.Increment()
+					}
 				} else {
 					skipped.Increment()
 				}
 				break
 			}
-			// checkSum failed or not equal, copy the object
+			// checkSum not equal, copy the object
 			fallthrough
 		default:
 			if config.Dry {
@@ -515,11 +533,6 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 		dstkeys = filter(dstkeys, config.Include, config.Exclude)
 	}
 
-	needCopyPerms := func(o1, o2 object.Object) bool {
-		f1 := o1.(object.File)
-		f2 := o2.(object.File)
-		return f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group()
-	}
 	defer close(tasks)
 	var dstobj object.Object
 	for obj := range srckeys {
