@@ -1,0 +1,72 @@
+# Default values for juicefs-s3-gateway.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: juicedata/juicefs-csi-driver
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "v0.11.1"
+
+port: 9000
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: ""
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  limits:
+    cpu: 5000m
+    memory: 5Gi
+  requests:
+    cpu: 1000m
+    memory: 1Gi
+
+hostNetwork: false
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+secret:
+  # -- The JuiceFS file system name.
+  name: ""
+  # -- Connection URL for metadata engine (e.g. Redis). Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/databases_for_metadata.md) for more information.
+  metaurl: ""
+  # -- Object storage type, such as `s3`, `gs`, `oss`. Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_setup_object_storage.md) for the full supported list.
+  storage: ""
+  # -- Access key for object storage
+  accessKey: ""
+  # -- Secret key for object storage
+  secretKey: ""
+  # -- Bucket URL. Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/reference/how_to_setup_object_storage.md) to learn how to setup different object storage.
+  bucket: ""
+
+# -- Gateway Options. Separated by spaces. Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/reference/command_reference.md#juicefs-gateway) to learn how to set different gateway options.
+options: ""
+# Example: "--get-timeout=60 --put-timeout=60"

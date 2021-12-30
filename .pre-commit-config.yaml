@@ -3,6 +3,7 @@ repos:
     rev: v2.3.0
     hooks:
       - id: check-yaml
+        args: [--allow-multiple-documents]
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/golangci/golangci-lint
