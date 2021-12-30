@@ -413,7 +413,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
-	_, err = (&s3client{bucketName, s3.New(ses), ses}).List("", "", 1)
+	_, err = ses.Config.Credentials.Get()
 	if err == credentials.ErrNoValidProvidersFoundInChain {
 		ses.Config.Credentials = credentials.AnonymousCredentials
 	}
