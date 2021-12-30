@@ -561,13 +561,13 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 			tasks <- obj
 		} else { // obj.key == dstobj.key
 			if config.ForceUpdate ||
-				(config.Update && obj.Mtime().After(dstobj.Mtime())) ||
+				(config.Update && obj.Mtime().Unix() > dstobj.Mtime().Unix()) ||
 				(!config.Update && obj.Size() != dstobj.Size()) {
 				tasks <- obj
-			} else if config.Update { // obj.mtime <= dstobj.mtime
+			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
 				skipped.Increment()
 				handled.Increment()
-			} else if config.CheckAll { // !update && obj.size == dstobj.size
+			} else if config.CheckAll { // two objects are likely the same
 				tasks <- &withSize{obj, markChecksum}
 			} else if config.DeleteSrc {
 				tasks <- &withSize{obj, markDeleteSrc}
