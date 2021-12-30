@@ -17,7 +17,6 @@ package sync
 
 import (
 	"bytes"
-	"crypto/md5"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -174,7 +173,7 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 
 var bufPool = sync.Pool{
 	New: func() interface{} {
-		buf := make([]byte, 32<<10)
+		buf := make([]byte, defaultPartSize)
 		return &buf
 	},
 }
@@ -224,46 +223,57 @@ func copyPerms(dst object.ObjectStorage, obj object.Object) {
 	logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), key, time.Since(start))
 }
 
-func doCheckSum(src, dst object.ObjectStorage, key string, equal *bool) error {
+func doCheckSum(src, dst object.ObjectStorage, key string, size int64, equal *bool) error {
+	if limiter != nil {
+		limiter.Wait(size)
+	}
+	concurrent <- 1
+	defer func() {
+		<-concurrent
+	}()
+	in1, err1 := src.Get(key, 0, -1)
+	if err1 != nil {
+		return fmt.Errorf("src get: %s", err1)
+	}
+	defer in1.Close()
+	in2, err2 := dst.Get(key, 0, -1)
+	if err2 != nil {
+		return fmt.Errorf("dest get: %s", err2)
+	}
+	defer in2.Close()
+
+	var n1, n2 int
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
-
-	srcIn, err := src.Get(key, 0, -1)
-	if err != nil {
-		return fmt.Errorf("src get: %s", err)
+	buf2 := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf2)
+	for err1 != io.EOF && err2 != io.EOF {
+		if n1, err1 = in1.Read(*buf); err1 != nil && err1 != io.EOF {
+			return fmt.Errorf("src read: %s", err1)
+		}
+		if n2, err2 = in2.Read(*buf2); err2 != nil && err2 != io.EOF {
+			return fmt.Errorf("dest read: %s", err2)
+		}
+		if n1 != n2 || !bytes.Equal((*buf)[:n1], (*buf2)[:n2]) {
+			*equal = false
+			return nil
+		}
 	}
-	defer srcIn.Close()
-	srcH := md5.New()
-	if _, err = io.CopyBuffer(srcH, srcIn, *buf); err != nil {
-		return fmt.Errorf("src read: %s", err)
-	}
-
-	dstIn, err := dst.Get(key, 0, -1)
-	if err != nil {
-		return fmt.Errorf("dest get: %s", err)
-	}
-	defer dstIn.Close()
-	dstH := md5.New()
-	if _, err = io.CopyBuffer(dstH, dstIn, *buf); err != nil {
-		return fmt.Errorf("dest read: %s", err)
-	}
-
-	if d, s := dstH.Sum(nil), srcH.Sum(nil); bytes.Equal(d, s) {
-		*equal = true
-	} else {
-		*equal = false
-		logger.Warnf("%s: dest md5sum %x != expect md5sum %x", key, d, s)
-	}
+	*equal = true
 	return nil
 }
 
 func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, error) {
 	start := time.Now()
 	var equal bool
-	err := try(3, func() error { return doCheckSum(src, dst, key, &equal) })
+	err := try(3, func() error { return doCheckSum(src, dst, key, size, &equal) })
 	if err == nil {
 		checkedBytes.IncrInt64(size)
-		logger.Debugf("Checked %s OK (equal: %v) in %s,", key, equal, time.Since(start))
+		if equal {
+			logger.Debugf("Checked %s OK (and equal) in %s,", key, time.Since(start))
+		} else {
+			logger.Warnf("Checked %s OK (but NOT equal) in %s,", key, time.Since(start))
+		}
 	} else {
 		logger.Errorf("Failed to check %s in %s: %s", key, time.Since(start), err)
 	}
