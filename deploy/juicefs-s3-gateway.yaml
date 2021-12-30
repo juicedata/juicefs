@@ -65,6 +65,8 @@ kind: Service
 metadata:
   name: juicefs-s3-gateway
   namespace: kube-system
+  labels:
+    app.kubernetes.io/name: juicefs-s3-gateway
 spec:
   selector:
     app.kubernetes.io/name: juicefs-s3-gateway

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: juicefs-s3-gateway
-description: A Helm chart for JuiceFS s3 gateway
+description: A Helm chart for JuiceFS S3 Gateway
 type: application
 version: 0.1.0
 appVersion: "1.0.0"

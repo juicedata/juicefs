@@ -55,7 +55,9 @@ $ juicefs gateway redis://localhost:6379 0.0.0.0:9000
 
 各类支持 S3 API 的客户端、桌面程序、Web 程序等都可以访问 JuiceFS S3 网关。使用时请注意 S3 网关监听的地址和端口。
 
-> **提示**：以下示例均为使用第三方客户端访问本地主机上运行的 S3 网关。在具体场景下，请根据实际情况调整访问 S3 网关的地址。
+:::tip 提示
+以下示例均为使用第三方客户端访问本地主机上运行的 S3 网关。在具体场景下，请根据实际情况调整访问 S3 网关的地址。
+:::
 
 ### 使用 AWS CLI
 
@@ -108,7 +110,9 @@ $ mc ls juicefs/jfs
 
 ## 监控指标收集
 
-> **注意**：该特性需要运行 0.17.1 及以上版本 JuiceFS 客户端
+:::note 注意
+该特性需要运行 0.17.1 及以上版本 JuiceFS 客户端
+:::
 
 JuiceFS S3 网关提供一个 Prometheus API 用于收集监控指标，默认地址是 `http://localhost:9567/metrics`。更多信息请查看[「JuiceFS 监控指标」](../reference/p8s_metrics.md)文档。
 
@@ -120,6 +124,9 @@ JuiceFS S3 网关提供一个 Prometheus API 用于收集监控指标，默认�
 
 ```shell
 export NAMESPACE=default
+```
+
+```shell
 kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
     --from-literal=name=<NAME> \
     --from-literal=metaurl=redis://[:<PASSWORD>]@<HOST>:6379[/<DB>] \
@@ -131,30 +138,41 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 
 其中：
 - `name`：JuiceFS 文件系统名称
-- `metaurl`：元数据服务的访问 URL (比如 Redis)。更多信息参考[这篇文档](https://juicefs.com/docs/zh/community/databases_for_metadata) 。
-- `storage`：对象存储类型，比如 `s3`，`gs`，`oss`。更多信息参考[这篇文档](https://juicefs.com/docs/zh/community/how_to_setup_object_storage) 。
-- `bucket`：Bucket URL。更多信息参考[这篇文档](https://juicefs.com/docs/zh/community/how_to_setup_object_storage) 。
-- `access-key`：对象存储的 access key。
-- `secret-key`：对象存储的 secret key。
+- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../reference/how_to_setup_metadata_engine.md)。
+- `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../reference/how_to_setup_object_storage.md)。
+- `bucket`：Bucket URL。更多信息参考[这篇文档](../reference/how_to_setup_object_storage.md)。
+- `access-key`：对象存储的 access key。更多信息参考[这篇文档](../reference/how_to_setup_object_storage.md)。
+- `secret-key`：对象存储的 secret key。更多信息参考[这篇文档](../reference/how_to_setup_object_storage.md)。
 
-部署 S3 网关:
+然后下载 S3 网关[部署 YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) 并通过 `kubectl` 创建 `Deployment` 和 `Service` 资源。以下几点需要特别注意：
+
+- 请将以下命令的 `${NAMESPACE}` 替换为实际部署 S3 网关的 Kubernetes 名字空间，默认为 `kube-system`。
+- `Deployment` 的 `replicas` 默认为 1，请根据实际情况调整。
+- 默认使用 `juicedata/juicefs-csi-driver` 最新版镜像，其中已经集成了最新版 JuiceFS 客户端，具体集成的 JuiceFS 客户端版本请查看[这里](https://github.com/juicedata/juicefs-csi-driver/releases)。
+- `Deployment` 的 `initContainers` 会先尝试格式化 JuiceFS 文件系统，如果你已经提前格式化完毕，这一步不会影响现有 JuiceFS 文件系统。
+- S3 网关默认监听的端口号为 9000
+- S3 网关[启动选项](../reference/command_reference.md#juicefs-gateway)均为默认值，请根据实际需求调整。
+- `MINIO_ROOT_USER` 环境变量的值为 Secret 中的 `access-key`，`MINIO_ROOT_PASSWORD` 环境变量的值为 Secret 中的 `secret-key`。
 
 ```shell
 curl -sSL https://raw.githubusercontent.com/juicedata/juicefs/main/deploy/juicefs-s3-gateway.yaml | sed "s@kube-system@${NAMESPACE}@g" | kubectl apply -f -
 ```
 
 检查是否已经部署成功：
+
 ```shell
-# kubectl get po -n $NAMESPACE -owide | grep s3
+# kubectl -n $NAMESPACE get po -o wide -l app.kubernetes.io/name=juicefs-s3-gateway
 juicefs-s3-gateway-5c7d65c77f-gj69l         1/1     Running   0          37m     10.244.2.238   kube-node-3   <none>           <none>
-# kubectl get svc -n $NAMESPACE | grep s3
-juicefs-s3-gateway            ClusterIP   10.106.81.216    <none>        9000/TCP         34m
+# kubectl -n $NAMESPACE get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
 ```
 
-可以在应用 pod 中使用 `juicefs-s3-gateway.${NAMESPACE}.svc.cluster.local` 或 juicefs-s3-gateway 的 podIP `10.244.2.238` 访问 JuiceFS S3 Gateway.
+可以在应用 pod 中通过 `juicefs-s3-gateway.${NAMESPACE}.svc.cluster.local:9000` 域名或 `juicefs-s3-gateway` 的 pod IP 及端口号（例如 `10.244.2.238:9000`）访问 JuiceFS S3 网关。
 
-若想通过 Ingress 访问，需要确保集群中已经部署了 Ingress Controller，参考[Ingress Controller 部署文档](https://kubernetes.github.io/ingress-nginx/deploy/) 。创建 Ingress 资源：
-```shell
+若想通过 Ingress 访问，需要确保集群中已经部署了 Ingress Controller，参考 [Ingress Controller 部署文档](https://kubernetes.github.io/ingress-nginx/deploy/)。创建 `Ingress` 资源：
+
+```yaml
 kubectl apply -f - <<EOF
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -176,61 +194,61 @@ spec:
 EOF
 ```
 
-可以通过 ingress controller 的 `<external IP>` 来访问 S3 网关，如下：
+可以通过 Ingress Controller 的 `<external IP>` 来访问 S3 网关（不需要带上 9000 端口号），如下：
 
 ```shell
 kubectl get services -n ingress-nginx
 ```
 
-Ingress 的各个版本之间差异较大，更多使用方式请参考[Ingress Controller 使用文档](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/)
+Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress Controller 使用文档](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/)。
 
-### 通过 helm 部署
+### 通过 Helm 部署
 
 1. 准备配置文件
 
-创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`secret` 部分是 JuiceFS 文件系统相关的信息，你可以参照 [JuiceFS 快速上手指南](https://github.com/juicedata/juicefs/blob/main/docs/zh_cn/quick_start_guide.md) 了解相关内容。
+   创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`secret` 部分是 JuiceFS 文件系统相关的信息，你可以参照 [JuiceFS 快速上手指南](../getting-started/for_local.md) 了解相关内容。
 
-```yaml
-secret:
-  name: "<name>"
-  metaurl: "<meta-url>"
-  storage: "<storage-type>"
-  accessKey: "<access-key>"
-  secretKey: "<secret-key>"
-  bucket: "<bucket>"
-```
+   ```yaml
+   secret:
+     name: "<name>"
+     metaurl: "<meta-url>"
+     storage: "<storage-type>"
+     accessKey: "<access-key>"
+     secretKey: "<secret-key>"
+     bucket: "<bucket>"
+   ```
 
-若需要部署 ingress，在 values.yaml 中再加上：
+   若需要部署 Ingress，在 `values.yaml` 中再加上：
 
-```yaml
-ingress:
-  enables: true
-```
+   ```yaml
+   ingress:
+     enables: true
+   ```
 
 2. 部署
 
-依次执行以下三条命令，通过 helm 部署 JuiceFS S3 Gateway。 
+   依次执行以下三条命令，通过 Helm 部署 JuiceFS S3 网关（注意以下示例是部署到 `kube-system` 名字空间）。
 
-```sh
-helm repo add juicefs-s3-gateway https://juicedata.github.io/juicefs/
-helm repo update
-helm install juicefs-s3-gateway juicefs-s3-gateway/juicefs-s3-gateway -n kube-system -f ./values.yaml
-```
+   ```sh
+   helm repo add juicefs-s3-gateway https://juicedata.github.io/juicefs/
+   helm repo update
+   helm install juicefs-s3-gateway juicefs-s3-gateway/juicefs-s3-gateway -n kube-system -f ./values.yaml
+   ```
 
 3. 检查部署状态
 
-- **检查 Pods**：部署过程会启动一个名为 `juicefs-s3-gateway` 的 `Deployment`。执行命令 `kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway` 查看部署的 pod：
+   - **检查 Pods**：部署过程会启动一个名为 `juicefs-s3-gateway` 的 `Deployment`。执行命令 `kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway` 查看部署的 pod：
 
-```sh
-$ kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway
-NAME                                  READY   STATUS    RESTARTS   AGE
-juicefs-s3-gateway-5c69d574cc-t92b6   1/1     Running   0          136m
-```
+     ```sh
+     $ kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway
+     NAME                                  READY   STATUS    RESTARTS   AGE
+     juicefs-s3-gateway-5c69d574cc-t92b6   1/1     Running   0          136m
+     ```
 
-- **检查 Service**：执行命令 `kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway` 查看部署的 Service：
+   - **检查 Service**：执行命令 `kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway` 查看部署的 Service：
 
-```shell
-$ kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway
-NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
-```
+     ```shell
+     $ kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+     NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+     juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
+     ```
