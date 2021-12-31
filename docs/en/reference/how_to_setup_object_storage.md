@@ -508,7 +508,7 @@ JuiceFS supports the use of native Ceph APIs based on `librados`. You need insta
 First installing `librados`:
 
 :::note
-Please use `librados` that matches your version of Ceph, e.g. if Ceph version is Octopus (v15.2.\*), then `librados` needs to be v15.2.\* as well. Some Linux distributions (e.g. CentOS 7) may come with a lower version of `librados` and you will need to download a higher version of the package yourself.
+It is recommended to use `librados` that matches your Ceph version, e.g. if Ceph version is Octopus (v15.2.\*), then `librados` is also recommended to use v15.2.\*. Some Linux distributions (e.g. CentOS 7) may come with a lower version of `librados`, so if you fail to compile JuiceFS try downloading a higher version of the package.
 :::
 
 ```bash
