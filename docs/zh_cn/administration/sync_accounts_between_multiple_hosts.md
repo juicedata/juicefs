@@ -3,15 +3,18 @@ sidebar_label: 多主机间同步账户
 sidebar_position: 10
 slug: /sync_accounts_between_multiple_hosts
 ---
+
 # JuiceFS 多主机间同步账户
 
 JuiceFS 支持 POSIX 兼容的 ACL，以目录或文件的粒度管理权限。该行为与本地文件系统相同。
 
-为了让用户获得直观的权限管理体验（例如，用户 A 在主机 X 中访问的文件，在主机 Y 中也应该可以用相同的用户身份访问），想要访问 JuiceFS 存储的同一个用户，应该在所有主机上具有相同的 UID 和 GID。
+为了让用户获得直观一致的权限管理体验（例如，用户 A 在主机 X 中访问的文件，在主机 Y 中也应该可以用相同的用户身份访问），想要访问 JuiceFS 存储的同一个用户，应该在所有主机上具有相同的 UID 和 GID。
 
 在这里，我们提供了一个简单的 [Ansible](https://www.ansible.com/community) playbook 来演示如何确保一个帐户在多个主机上具有相同的 UID 和 GID。
 
-> **注意**：除了在多主机间同步账户以外，也可以指定一个全局的用户列表和所属用户组文件，具体请参见[这里](../deployment/hadoop_java_sdk.md#其他配置)。
+:::note 注意
+如果你是在 Hadoop 环境使用 JuiceFS，除了在多主机间同步账户以外，也可以指定一个全局的用户列表和所属用户组文件，具体请参见[这里](../deployment/hadoop_java_sdk.md#其他配置)。
+:::
 
 ## 安装 Ansible
 
@@ -43,7 +46,7 @@ JuiceFS 支持 POSIX 兼容的 ACL，以目录或文件的粒度管理权限。�
 
 在这里，我们确保在 2 台主机上使用 UID 1200 的帐户 `alice` 和 GID 500 的 `staff` 组：
 
-```
+```shell
 ~/account-sync$ cat hosts
 172.16.255.163
 172.16.255.180
@@ -73,7 +76,7 @@ PLAY RECAP *********************************************************************
 
 如果指定的 UID 或 GID 已分配给某些主机上的另一个用户或组，则创建将失败。
 
-```
+```shell
 ~/account-sync$ ansible-playbook -i hosts -u root --ssh-extra-args "-o StrictHostKeyChecking=no" \
 --extra-vars "group=ubuntu gid=1000 user=ubuntu uid=1000" play.yaml
 
@@ -98,32 +101,30 @@ PLAY RECAP *********************************************************************
 
 在上面的示例中，组 ID 1000 已分配给主机 `172.16.255.180` 上的另一个组，我们应该 **更改 GID** 或 **删除主机 `172.16.255.180` 上 GID 为 1000** 的组，然后再次运行 playbook。
 
+:::caution 注意
+如果用户帐户已经存在于主机上，并且我们将其更改为另一个 UID 或 GID 值，则用户可能会失去对他们以前拥有的文件和目录的权限。例如：
 
+```shell
+$ ls -l /tmp/hello.txt
+-rw-r--r-- 1 alice staff 6 Apr 26 21:43 /tmp/hello.txt
+$ id alice
+uid=1200(alice) gid=500(staff) groups=500(staff)
+```
 
-> **小心**
->
-> 如果用户帐户已经存在于主机上，并且我们将其更改为另一个 UID 或 GID 值，则用户可能会失去对他们以前拥有的文件和目录的权限。例如：
->
-> ```
-> $ ls -l /tmp/hello.txt
-> -rw-r--r-- 1 alice staff 6 Apr 26 21:43 /tmp/hello.txt
-> $ id alice
-> uid=1200(alice) gid=500(staff) groups=500(staff)
-> ```
->
-> 我们将 alice 的 UID 从 1200 改为 1201
->
-> ```
-> ~/account-sync$ ansible-playbook -i hosts -u root --ssh-extra-args "-o StrictHostKeyChecking=no" \
-> --extra-vars "group=staff gid=500 user=alice uid=1201" play.yaml
-> ```
->
-> 现在我们没有权限删除这个文件，因为它的所有者不是 alice：
->
-> ```
-> $ ls -l /tmp/hello.txt
-> -rw-r--r-- 1 1200 staff 6 Apr 26 21:43 /tmp/hello.txt
-> $ rm /tmp/hello.txt
-> rm: remove write-protected regular file '/tmp/hello.txt'? y
-> rm: cannot remove '/tmp/hello.txt': Operation not permitted
-> ```
+我们将 alice 的 UID 从 1200 改为 1201
+
+```shell
+~/account-sync$ ansible-playbook -i hosts -u root --ssh-extra-args "-o StrictHostKeyChecking=no" \
+--extra-vars "group=staff gid=500 user=alice uid=1201" play.yaml
+```
+
+现在我们没有权限删除这个文件，因为它的所有者不是 alice：
+
+```shell
+$ ls -l /tmp/hello.txt
+-rw-r--r-- 1 1200 staff 6 Apr 26 21:43 /tmp/hello.txt
+$ rm /tmp/hello.txt
+rm: remove write-protected regular file '/tmp/hello.txt'? y
+rm: cannot remove '/tmp/hello.txt': Operation not permitted
+```
+:::
