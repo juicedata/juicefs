@@ -374,6 +374,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	}
 	n := int((size-1)/partSize) + 1
 	logger.Debugf("Copying data of %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
+	abort := make(chan struct{})
 	parts := make([]*object.Part, n)
 	errs := make(chan error, n)
 	for i := 0; i < n; i++ {
@@ -385,10 +386,16 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 			if limiter != nil {
 				limiter.Wait(sz)
 			}
-			concurrent <- 1
-			defer func() {
-				<-concurrent
-			}()
+			select {
+			case <-abort:
+				errs <- fmt.Errorf("aborted")
+				return
+			case concurrent <- 1:
+				defer func() {
+					<-concurrent
+				}()
+			}
+
 			data := make([]byte, sz)
 			if err := try(3, func() error {
 				in, err := src.Get(key, int64(num)*partSize, sz)
@@ -416,6 +423,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	var err error
 	for i := 0; i < n; i++ {
 		if err = <-errs; err != nil {
+			close(abort)
 			break
 		}
 	}
