@@ -3,7 +3,7 @@ name: Release Helm Charts
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - "charts/**"
 
