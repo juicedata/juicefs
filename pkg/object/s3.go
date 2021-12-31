@@ -403,10 +403,8 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 	if accessKey == "anonymous" {
 		awsConfig.Credentials = credentials.AnonymousCredentials
-	} else {
-		if accessKey != "" {
-			awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
-		}
+	} else if accessKey != "" {
+		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
 	}
 	if ep != "" {
 		awsConfig.Endpoint = aws.String(ep)
