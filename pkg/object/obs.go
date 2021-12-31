@@ -1,3 +1,4 @@
+//go:build !noobs
 // +build !noobs
 
 /*

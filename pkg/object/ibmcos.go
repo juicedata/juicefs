@@ -1,3 +1,4 @@
+//go:build !noibmcos
 // +build !noibmcos
 
 /*

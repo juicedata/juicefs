@@ -1,3 +1,4 @@
+//go:build !noqingstore
 // +build !noqingstore
 
 /*

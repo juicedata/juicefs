@@ -1,3 +1,4 @@
+//go:build !nos3
 // +build !nos3
 
 /*

@@ -1,3 +1,4 @@
+//go:build !noqiniu && !nos3
 // +build !noqiniu,!nos3
 
 /*

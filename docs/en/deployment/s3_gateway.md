@@ -55,7 +55,9 @@ In this way, the S3 gateway will accept all network requests by default. S3 clie
 
 The JuiceFS S3 gateway can be accessed by various clients, desktop applications, web applications, etc. that support the S3 API. Please note the address and port that the S3 gateway listens on when using it.
 
-> **Tip**: The following examples are for using a third-party client to access the S3 gateway running on the local host. In specific scenarios, please adjust the address to access the S3 gateway according to the actual situation.
+:::tip
+The following examples are for using a third-party client to access the S3 gateway running on the local host. In specific scenarios, please adjust the address to access the S3 gateway according to the actual situation.
+:::
 
 ### Using the AWS CLI
 
@@ -106,6 +108,144 @@ $ mc ls juicefs/jfs
 
 ## Monitoring metrics collection
 
-> **Note**: This feature needs to run JuiceFS client version 0.17.1 and above.
+:::note
+This feature needs to run JuiceFS client version 0.17.1 and above.
+:::
 
 JuiceFS S3 gateway provides a Prometheus API for collecting monitoring metrics, the default address is `http://localhost:9567/metrics`. More information please check the ["JuiceFS Metrics"](../reference/p8s_metrics.md) document.
+
+## Deploy JuiceFS S3 Gateway in Kubernetes
+
+### Install via kubectl
+
+Create a secret (take Amazon S3 as an example):
+
+```shell
+export NAMESPACE=default
+```
+
+```shell
+kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
+    --from-literal=name=<NAME> \
+    --from-literal=metaurl=redis://[:<PASSWORD>]@<HOST>:6379[/<DB>] \
+    --from-literal=storage=s3 \
+    --from-literal=bucket=https://<BUCKET>.s3.<REGION>.amazonaws.com \
+    --from-literal=access-key=<ACCESS_KEY> \
+    --from-literal=secret-key=<SECRET_KEY>
+```
+
+- `name`: The JuiceFS file system name.
+- `metaurl`: Connection URL for metadata engine (e.g. Redis). Read [this document](../reference/how_to_setup_metadata_engine.md) for more information.
+- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../reference/how_to_setup_object_storage.md) for the full supported list.
+- `bucket`: Bucket URL. Read [this document](../reference/how_to_setup_object_storage.md) to learn how to setup different object storage.
+- `access-key`: Access key of object storage. Read [this document](../reference/how_to_setup_object_storage.md) for more information.
+- `secret-key`: Secret key of object storage. Read [this document](../reference/how_to_setup_object_storage.md) for more information.
+
+Then download the S3 gateway [deployment YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) and create the `Deployment` and `Service` resources via `kubectl`. The following points require special attention:
+
+- Please replace `${NAMESPACE}` in the following command with the Kubernetes namespace of the actual S3 gateway deployment, which defaults to `kube-system`.
+- The `replicas` for `Deployment` defaults to 1, please adjust as appropriate.
+- The latest version of `juicedata/juicefs-csi-driver` image is used by default, which already integrates the latest version of JuiceFS client, please check [here](https://github.com/juicedata/juicefs-csi-driver/releases) for the specific integrated JuiceFS client version.
+- The `initContainers` of `Deployment` will first try to format the JuiceFS file system, if you have already formatted it in advance, this step will not affect the existing JuiceFS file system.
+- The default port number that the S3 gateway listens on is 9000
+- The [startup options](../reference/command_reference.md#juicefs-gateway) of S3 gateway are the default values, please adjust them according to your actual needs.
+- The value of `MINIO_ROOT_USER` environment variable is `access-key` in Secret, and the value of `MINIO_ROOT_PASSWORD` environment variable is `secret-key` in Secret.
+
+```shell
+curl -sSL https://raw.githubusercontent.com/juicedata/juicefs/main/deploy/juicefs-s3-gateway.yaml | sed "s@kube-system@${NAMESPACE}@g" | kubectl apply -f -
+```
+
+Check if it's deployed successfully:
+
+```shell
+# kubectl -n $NAMESPACE get po -o wide -l app.kubernetes.io/name=juicefs-s3-gateway
+juicefs-s3-gateway-5c7d65c77f-gj69l         1/1     Running   0          37m     10.244.2.238   kube-node-3   <none>           <none>
+# kubectl -n $NAMESPACE get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
+```
+
+You can use `juicefs-s3-gateway.${NAMESPACE}.svc.cluster.local:9000` or pod IP and port number of `juicefs-s3-gateway` (e.g. `10.244.2.238:9000`) in the application pod to access JuiceFS S3 Gateway.
+
+If you want to access through Ingress, you need to ensure that the Ingress Controller has been deployed in the cluster. Refer to [Ingress Controller Deployment Document](https://kubernetes.github.io/ingress-nginx/deploy/). Then create an `Ingress` resource:
+
+```yaml
+kubectl apply -f - <<EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: juicefs-s3-gateway
+  namespace: ${NAMESPACE}
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: juicefs-s3-gateway
+            port:
+              number: 9000
+EOF
+```
+
+The S3 gateway can be accessed through `<external IP>` of ingress controller as follows (no need to include the 9000 port number):
+
+```shell
+kubectl get services -n ingress-nginx
+```
+
+There are some differences between the various versions of Ingress. For more usage methods, please refer to [Ingress Controller Usage Document](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/).
+
+### Install via Helm
+
+1. Prepare a YAML file
+
+   Create a configuration file, for example: `values.yaml`, copy and complete the following configuration information. Among them, the `secret` part is the information related to the JuiceFS file system, you can refer to [JuiceFS Quick Start Guide](../getting-started/for_local.md) for more information.
+
+   ```yaml
+   secret:
+     name: "<name>"
+     metaurl: "<meta-url>"
+     storage: "<storage-type>"
+     accessKey: "<access-key>"
+     secretKey: "<secret-key>"
+     bucket: "<bucket>"
+   ```
+
+   If you want to deploy Ingress, add these in `values.yaml`:
+
+   ```yaml
+   ingress:
+     enables: true
+   ```
+
+2. Deploy
+
+   Execute the following three commands in sequence to deploy the JuiceFS S3 gateway via Helm (note that the following example is deployed to the `kube-system` namespace).
+
+   ```sh
+   helm repo add juicefs-s3-gateway https://juicedata.github.io/juicefs/
+   helm repo update
+   helm install juicefs-s3-gateway juicefs-s3-gateway/juicefs-s3-gateway -n kube-system -f ./values.yaml
+   ```
+
+3. Check the deployment
+
+   - **Check pods are running**: the deployment will launch a `Deployment` named `juicefs-s3-gateway`, so run `kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway` should see all running pods. For example:
+
+     ```sh
+     $ kubectl -n kube-system get po -l app.kubernetes.io/name=juicefs-s3-gateway
+     NAME                                  READY   STATUS    RESTARTS   AGE
+     juicefs-s3-gateway-5c69d574cc-t92b6   1/1     Running   0          136m
+     ```
+
+   - **Check Service**: run `kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway` to check Service:
+
+     ```shell
+     $ kubectl -n kube-system get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+     NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+     juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
+     ```
