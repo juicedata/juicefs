@@ -37,6 +37,7 @@ import (
 const (
 	maxResults      = 1000
 	defaultPartSize = 5 << 20
+	bufferSize      = 32 << 10
 	maxBlock        = defaultPartSize * 2
 	markDeleteSrc   = -1
 	markDeleteDst   = -2
@@ -173,7 +174,7 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 
 var bufPool = sync.Pool{
 	New: func() interface{} {
-		buf := make([]byte, defaultPartSize)
+		buf := make([]byte, bufferSize)
 		return &buf
 	},
 }
@@ -224,43 +225,84 @@ func copyPerms(dst object.ObjectStorage, obj object.Object) {
 }
 
 func doCheckSum(src, dst object.ObjectStorage, key string, size int64, equal *bool) error {
-	if limiter != nil {
-		limiter.Wait(size)
-	}
-	concurrent <- 1
-	defer func() {
-		<-concurrent
-	}()
-	in1, err1 := src.Get(key, 0, -1)
-	if err1 != nil {
-		return fmt.Errorf("src get: %s", err1)
-	}
-	defer in1.Close()
-	in2, err2 := dst.Get(key, 0, -1)
-	if err2 != nil {
-		return fmt.Errorf("dest get: %s", err2)
-	}
-	defer in2.Close()
+	abort := make(chan struct{})
+	checkPart := func(offset, length int64) error {
+		if limiter != nil {
+			limiter.Wait(length)
+		}
+		select {
+		case <-abort:
+			return fmt.Errorf("aborted")
+		case concurrent <- 1:
+			defer func() {
+				<-concurrent
+			}()
+		}
+		in, err := src.Get(key, offset, length)
+		if err != nil {
+			return fmt.Errorf("src get: %s", err)
+		}
+		defer in.Close()
+		in2, err := dst.Get(key, offset, length)
+		if err != nil {
+			return fmt.Errorf("dest get: %s", err)
+		}
+		defer in2.Close()
 
-	var n1, n2 int
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
-	buf2 := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf2)
-	for err1 != io.EOF && err2 != io.EOF {
-		if n1, err1 = in1.Read(*buf); err1 != nil && err1 != io.EOF {
-			return fmt.Errorf("src read: %s", err1)
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+		buf2 := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf2)
+		for left := int(length); left > 0; left -= bufferSize {
+			bs := bufferSize
+			if left < bufferSize {
+				bs = left
+			}
+			*buf = (*buf)[:bs]
+			*buf2 = (*buf2)[:bs]
+			if _, err = io.ReadFull(in, *buf); err != nil {
+				return fmt.Errorf("src read: %s", err)
+			}
+			if _, err = io.ReadFull(in2, *buf2); err != nil {
+				return fmt.Errorf("dest read: %s", err)
+			}
+			if !bytes.Equal(*buf, *buf2) {
+				return fmt.Errorf("bytes not equal")
+			}
 		}
-		if n2, err2 = in2.Read(*buf2); err2 != nil && err2 != io.EOF {
-			return fmt.Errorf("dest read: %s", err2)
+		return nil
+	}
+
+	var err error
+	if size < maxBlock {
+		err = checkPart(0, size)
+	} else {
+		n := int((size-1)/defaultPartSize) + 1
+		errs := make(chan error, n)
+		for i := 0; i < n; i++ {
+			go func(num int) {
+				sz := int64(defaultPartSize)
+				if num == n-1 {
+					sz = size - int64(num)*defaultPartSize
+				}
+				errs <- checkPart(int64(num)*defaultPartSize, sz)
+			}(i)
 		}
-		if n1 != n2 || !bytes.Equal((*buf)[:n1], (*buf2)[:n2]) {
-			*equal = false
-			return nil
+		for i := 0; i < n; i++ {
+			if err = <-errs; err != nil {
+				close(abort)
+				break
+			}
 		}
 	}
-	*equal = true
-	return nil
+
+	if err != nil && err.Error() == "bytes not equal" {
+		*equal = false
+		err = nil
+	} else {
+		*equal = err == nil
+	}
+	return err
 }
 
 func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, error) {
