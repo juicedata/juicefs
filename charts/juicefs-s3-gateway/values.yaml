@@ -56,9 +56,9 @@ affinity: {}
 secret:
   # -- The JuiceFS file system name.
   name: ""
-  # -- Connection URL for metadata engine (e.g. Redis). Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/databases_for_metadata.md) for more information.
+  # -- Connection URL for metadata engine (e.g. Redis). Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/reference/how_to_setup_metadata_engine.md) for more information.
   metaurl: ""
-  # -- Object storage type, such as `s3`, `gs`, `oss`. Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_setup_object_storage.md) for the full supported list.
+  # -- Object storage type, such as `s3`, `gs`, `oss`. Read [this document](https://github.com/juicedata/juicefs/blob/main/docs/en/reference/how_to_setup_object_storage.md) for the full supported list.
   storage: ""
   # -- Access key for object storage
   accessKey: ""
