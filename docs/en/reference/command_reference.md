@@ -422,6 +422,8 @@ limit bandwidth in Mbps (0 means unlimited) (default: 0)
 `--no-https`<br />
 do not use HTTPS (default: false)
 
+> **Note**: If source is the S3 storage with the public access setting, please set `accessKey` equal `anonymous`
+
 ### juicefs rmr
 
 #### Description
