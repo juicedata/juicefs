@@ -435,6 +435,8 @@ juicefs sync [command options] SRC DST
 `--no-https`<br />
 不要使用 HTTPS (默认: false)
 
+> **注意**： 如果源存储是公共访问权限的桶，请将`accessKey`设置为`anonymous`
+
 ### juicefs rmr
 
 #### 描述
