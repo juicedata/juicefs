@@ -3,6 +3,7 @@ sidebar_label: 如何设置对象存储
 sidebar_position: 4
 slug: /how_to_setup_object_storage
 ---
+
 # JuiceFS 如何设置对象存储
 
 通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md) 和 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中。
@@ -499,21 +500,29 @@ $ ./juicefs format \
 
 ## Ceph RADOS
 
-[Ceph 存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。 `librados` API 使您可以与这两种类型的守护程序进行交互：
+:::note 注意
+JuiceFS 支持的 Ceph 最低版本是 Luminous（v12.2.*），请确认你的 Ceph 版本是否符合要求。
+:::
+
+[Ceph 存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。[`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API 使您可以与这两种类型的守护程序进行交互：
 
 - [Ceph Monitor](https://docs.ceph.com/en/latest/rados/configuration/common/#monitors) 维护群集映射的主副本
 - [Ceph OSD Daemon (OSD)](https://docs.ceph.com/en/latest/rados/configuration/common/#osds) 将数据作为对象存储在存储节点上
 
 JuiceFS 支持使用基于 `librados` 的本地 Ceph API。您需要分别安装 `librados` 库并重新编译 `juicefs` 二进制文件。
 
-首先安装  `librados`：
+首先安装 `librados`：
+
+:::note 注意
+请使用匹配你的 Ceph 版本的 `librados`，例如 Ceph 版本是 Octopus（v15.2.\*），那么 `librados` 也需要使用 v15.2.\* 版本。某些 Linux 发行版（如 CentOS 7）自带的 `librados` 版本可能较低，你需要自行下载更高版本的安装包。
+:::
 
 ```bash
 # Debian based system
 $ sudo apt-get install librados-dev
 
 # RPM based system
-$ sudo yum install librados-devel
+$ sudo yum install librados2-devel
 ```
 
 然后为 Ceph 编译 JuiceFS（要求 Go 1.16+ 和 GCC 5.4+）：

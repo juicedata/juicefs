@@ -1,6 +1,6 @@
 ---
 sidebar_label: How to Setup Metadata Engine
-sidebar_position: 4
+sidebar_position: 3
 slug: /databases_for_metadata
 ---
 # How to Setup Metadata Engine
