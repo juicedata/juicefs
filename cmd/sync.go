@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -114,6 +115,11 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	}
 	name := strings.ToLower(u.Scheme)
 	endpoint := u.Host
+
+	//localhost[:8080] 127.0.0.1[:8080]  s3.ap-southeast-1.amazonaws.com[:8080] s3-ap-southeast-1.amazonaws.com[:8080]
+	pattern := `^((localhost)|(s3[.-].*.amazonaws.com)|((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|[1-9])\.((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.){2}(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)))?(:\d*)?$`
+	isS3PathType := regexp.MustCompile(pattern).MatchString(endpoint)
+
 	if name == "file" {
 		endpoint = u.Path
 	} else if name == "hdfs" {
@@ -122,7 +128,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	} else {
 		endpoint = "http://" + endpoint
 	}
-	if name == "minio" {
+	if name == "minio" || name == "s3" && isS3PathType {
 		// bucket name is part of path
 		endpoint += u.Path
 	}
@@ -143,6 +149,12 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		if strings.Count(u.Path, "/") > 1 {
 			// skip bucket name
 			store = object.WithPrefix(store, strings.SplitN(u.Path[1:], "/", 2)[1])
+		}
+	case "s3":
+		if isS3PathType && strings.Count(u.Path, "/") > 1 {
+			store = object.WithPrefix(store, strings.SplitN(u.Path[1:], "/", 2)[1])
+		} else if len(u.Path) > 1 {
+			store = object.WithPrefix(store, u.Path[1:])
 		}
 	default:
 		if len(u.Path) > 1 {
