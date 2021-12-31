@@ -8,7 +8,7 @@ slug: /sync_accounts_between_multiple_hosts
 
 JuiceFS supports POSIX compatible ACL to manage permissions in the granularity of directory or file. The behavior is the same as a local file system.
 
-In order to make the permission experience intuitive to user (e.g. the files accessible by user A in host X should be accessible in host Y with the same user), the same user who want to access JuiceFS should have the same UID and GID on all hosts.
+To provide users with an intuitive and consistent permission management experience (e.g. the files accessible by user A in host X should be accessible in host Y with the same user), the same user who want to access JuiceFS should have the same UID and GID on all hosts.
 
 Here we provide a simple [Ansible](https://www.ansible.com/community) playbook to demonstrate how to ensure an account with same UID and GID on multiple hosts.
 
@@ -18,7 +18,7 @@ If you are using JuiceFS in Hadoop environment, besides sync accounts between mu
 
 ## Install Ansible
 
-Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Install ansible on this host. Read [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for more installation details.
+Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Install Ansible on this host. Read [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for more installation details.
 
 
 
