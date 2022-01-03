@@ -61,3 +61,30 @@ func TestSync(t *testing.T) {
 	}
 
 }
+
+func Test_isS3PathType(t *testing.T) {
+
+	tests := []struct {
+		endpoint string
+		want     bool
+	}{
+		{"localhost", true},
+		{"localhost:8080", true},
+		{"127.0.0.1", true},
+		{"127.0.0.1:8080", true},
+		{"s3.ap-southeast-1.amazonaws.com", true},
+		{"s3.ap-southeast-1.amazonaws.com:8080", true},
+		{"s3-ap-southeast-1.amazonaws.com", true},
+		{"s3-ap-southeast-1.amazonaws.com:8080", true},
+		{"ap-southeast-1.amazonaws.com", false},
+		{"s3-ap-southeast-1", false},
+		{"s3-ap-southeast-1:8080", false},
+	}
+	for _, tt := range tests {
+		t.Run("Test host", func(t *testing.T) {
+			if got := isS3PathType(tt.endpoint); got != tt.want {
+				t.Errorf("isS3PathType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
