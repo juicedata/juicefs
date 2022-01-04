@@ -1,3 +1,4 @@
+//go:build !nohdfs
 // +build !nohdfs
 
 // Copyright (c) 2014 Colin Marc (colinmarc@gmail.com)

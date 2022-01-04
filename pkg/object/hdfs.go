@@ -1,3 +1,4 @@
+//go:build !nohdfs
 // +build !nohdfs
 
 /*

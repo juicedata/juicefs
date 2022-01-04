@@ -1,3 +1,4 @@
+//go:build !nos3
 // +build !nos3
 
 /*
@@ -390,7 +391,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 	if region == "" {
 		region = os.Getenv("AWS_DEFAULT_REGION")
-	}	
+	}
 	if region == "" {
 		region = awsDefaultRegion
 	}
@@ -401,7 +402,9 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		DisableSSL: aws.Bool(!ssl),
 		HTTPClient: httpClient,
 	}
-	if accessKey != "" {
+	if accessKey == "anonymous" {
+		awsConfig.Credentials = credentials.AnonymousCredentials
+	} else if accessKey != "" {
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
 	}
 	if ep != "" {

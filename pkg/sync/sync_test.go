@@ -107,6 +107,7 @@ func TestSync(t *testing.T) {
 	b.Put("ba", bytes.NewReader([]byte("ba")))
 
 	// Copy "a" from sftp://a to sftp://b
+	total = 0
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -116,7 +117,7 @@ func TestSync(t *testing.T) {
 
 	// Now a: {"a", "ab", "abc"}, b: {"a", "ba"}
 	// Copy "ba" from sftp://b to sftp://a
-	total, totalBytes = 0, 0
+	total = 0
 	if err := Sync(b, a, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -143,7 +144,7 @@ func TestSync(t *testing.T) {
 		t.FailNow()
 	}
 
-	total, totalBytes = 0, 0
+	total = 0
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -155,7 +156,7 @@ func TestSync(t *testing.T) {
 	// Test --force-update option
 	config.ForceUpdate = true
 	// Forcibly copy {"a", "ba"} from sftp://a to sftp://b.
-	total, totalBytes = 0, 0
+	total = 0
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}

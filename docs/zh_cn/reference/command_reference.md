@@ -20,7 +20,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0-dev (2021-12-16 d4b8723d)
+   1.0-dev (2021-12-27 3462bdbf)
 
 COMMANDS:
    format   format a volume
@@ -40,6 +40,7 @@ COMMANDS:
    dump     dump metadata into a JSON file
    load     load metadata from a previously dumped JSON file
    config   change config of a volume
+   destroy  destroy an existing volume
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -54,13 +55,19 @@ COPYRIGHT:
    AGPLv3
 ```
 
-> **注意**：如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](../getting-started/for_local.md) 了解安装相关内容。
+:::note 注意
+如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](../getting-started/for_local.md) 了解安装相关内容。
+:::
 
-> **注意**：如果命令选项是布尔（boolean）类型（例如 `--debug` 选项），在指定此类型选项时无需设置具体的值。例如不应该像 `--debug true` 这样写，直接写作 `--debug` 即可。指定了即代表此选项生效，反之不生效。
+:::note 注意
+如果命令选项是布尔（boolean）类型（例如 `--debug` 选项），在指定此类型选项时无需设置具体的值。例如不应该像 `--debug true` 这样写，直接写作 `--debug` 即可。指定了即代表此选项生效，反之不生效。
+:::
 
 ## 自动补全
 
-> **注意**：此特性需要使用 0.15.0 及以上版本的 JuiceFS。它基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
+:::note 注意
+此特性需要使用 0.15.0 及以上版本的 JuiceFS。它基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
+:::
 
 通过加载 `hack/autocomplete` 下的对应脚本可以启用命令的自动补全，例如：
 
@@ -357,6 +364,12 @@ juicefs gateway [command options] META-URL ADDRESS
 `--no-banner`<br />
 禁用 MinIO 的启动信息 (默认: false)
 
+`--multi-buckets`<br />
+使用第一级目录作为存储桶 (默认: false)
+
+`--keep-etag`<br />
+保留对象上传时的 ETag (默认: false)
+
 ### juicefs sync
 
 #### 描述
@@ -421,6 +434,8 @@ juicefs sync [command options] SRC DST
 
 `--no-https`<br />
 不要使用 HTTPS (默认: false)
+
+> **注意**： 如果源存储是公共访问权限的桶，请将`accessKey`设置为`anonymous`
 
 ### juicefs rmr
 
@@ -681,3 +696,20 @@ juicefs config [command options] META-URL
 
 `--force`<br />
 跳过合理性检查并强制更新指定配置项 (默认: false)
+
+### juicefs destroy
+
+#### 描述
+
+销毁一个已经存在的文件系统
+
+#### 使用
+
+```
+juicefs destroy [command options] META-URL UUID
+```
+
+#### 选项
+
+`--force`<br />
+跳过合理性检查并强制销毁文件系统 (默认: false)

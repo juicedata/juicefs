@@ -1,8 +1,9 @@
 ---
 sidebar_label: How to Setup Object Storage
-sidebar_position: 3
+sidebar_position: 4
 slug: /how_to_setup_object_storage
 ---
+
 # How to Setup Object Storage
 
 By reading [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database.
@@ -493,7 +494,11 @@ $ ./juicefs format \
 
 ## Ceph RADOS
 
-The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messaging layer protocol that enables clients to interact with a Ceph Monitor and a Ceph OSD Daemon. The `librados` API enables you to interact with the two types of daemons:
+:::note
+The minimum version of Ceph supported by JuiceFS is Luminous (v12.2.*), please make sure your version of Ceph meets the requirements.
+:::
+
+The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messaging layer protocol that enables clients to interact with a Ceph Monitor and a Ceph OSD Daemon. The [`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API enables you to interact with the two types of daemons:
 
 - The [Ceph Monitor](https://docs.ceph.com/en/latest/rados/configuration/common/#monitors), which maintains a master copy of the cluster map.
 - The [Ceph OSD Daemon (OSD)](https://docs.ceph.com/en/latest/rados/configuration/common/#osds), which stores data as objects on a storage node.
@@ -502,12 +507,16 @@ JuiceFS supports the use of native Ceph APIs based on `librados`. You need insta
 
 First installing `librados`:
 
+:::note
+It is recommended to use `librados` that matches your Ceph version, e.g. if Ceph version is Octopus (v15.2.\*), then `librados` is also recommended to use v15.2.\*. Some Linux distributions (e.g. CentOS 7) may come with a lower version of `librados`, so if you fail to compile JuiceFS try downloading a higher version of the package.
+:::
+
 ```bash
 # Debian based system
 $ sudo apt-get install librados-dev
 
 # RPM based system
-$ sudo yum install librados-devel
+$ sudo yum install librados2-devel
 ```
 
 Then compile JuiceFS for Ceph (ensure you have Go 1.16+ and GCC 5.4+):
