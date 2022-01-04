@@ -63,7 +63,7 @@ func benchmarkDecompress(b *testing.B, comp Compressor) {
 	var c = make([]byte, 5<<20)
 	var d = make([]byte, 4<<20)
 	n, err := io.ReadFull(f, d)
-	f.Close()
+	_ = f.Close()
 	if err != nil {
 		b.Skip()
 		return
@@ -103,7 +103,7 @@ func benchmarkCompress(b *testing.B, comp Compressor) {
 	f, _ := os.Open(os.Getenv("PAYLOAD"))
 	var d = make([]byte, 4<<20)
 	n, err := io.ReadFull(f, d)
-	f.Close()
+	_ = f.Close()
 	if err != nil {
 		b.Skip()
 		return

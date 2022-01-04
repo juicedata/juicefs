@@ -51,7 +51,9 @@ func TestUsageReport(t *testing.T) {
 		_, _ = rw.Write([]byte("OK"))
 		done <- true
 	})
-	go http.Serve(l, mux)
+	go func() {
+		_ = http.Serve(l, mux)
+	}()
 
 	addr := l.Addr().String()
 	reportUrl = fmt.Sprintf("http://%s/report-usage", addr)

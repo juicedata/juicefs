@@ -180,11 +180,11 @@ func format(c *cli.Context) error {
 	}
 	if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 		format.AccessKey = os.Getenv("ACCESS_KEY")
-		os.Unsetenv("ACCESS_KEY")
+		_ = os.Unsetenv("ACCESS_KEY")
 	}
 	if format.SecretKey == "" && os.Getenv("SECRET_KEY") != "" {
 		format.SecretKey = os.Getenv("SECRET_KEY")
-		os.Unsetenv("SECRET_KEY")
+		_ = os.Unsetenv("SECRET_KEY")
 	}
 
 	if format.Storage == "file" && !strings.HasSuffix(format.Bucket, "/") {

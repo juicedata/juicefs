@@ -202,7 +202,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("mkdir d1: %s", st)
 	}
 	attr.Gid = 1
-	m.SetAttr(ctx, p1, SetAttrGID, 0, attr)
+	_ = m.SetAttr(ctx, p1, SetAttrGID, 0, attr)
 	if attr.Mode&02000 == 0 {
 		t.Fatalf("SGID is lost")
 	}
@@ -219,8 +219,8 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
 	}
-	m.Rmdir(ctx2, p1, "d2")
-	m.Rmdir(ctx2, 1, "d1")
+	_ = m.Rmdir(ctx2, p1, "d2")
+	_ = m.Rmdir(ctx2, 1, "d1")
 
 	attr.Atime = 2
 	attr.Mtime = 2
@@ -522,12 +522,12 @@ func testStickyBit(t *testing.T, m Meta) {
 	ctx := Background
 	var sticky, normal, inode Ino
 	var attr = &Attr{}
-	m.Mkdir(ctx, 1, "tmp", 01777, 0, 0, &sticky, attr)
-	m.Mkdir(ctx, 1, "tmp2", 0777, 0, 0, &normal, attr)
+	_ = m.Mkdir(ctx, 1, "tmp", 01777, 0, 0, &sticky, attr)
+	_ = m.Mkdir(ctx, 1, "tmp2", 0777, 0, 0, &normal, attr)
 	ctxA := NewContext(1, 1, []uint32{1})
 	// file
-	m.Create(ctxA, sticky, "f", 0777, 0, 0, &inode, attr)
-	m.Create(ctxA, normal, "f", 0777, 0, 0, &inode, attr)
+	_ = m.Create(ctxA, sticky, "f", 0777, 0, 0, &inode, attr)
+	_ = m.Create(ctxA, normal, "f", 0777, 0, 0, &inode, attr)
 	ctxB := NewContext(1, 2, []uint32{1})
 	if e := m.Unlink(ctxB, sticky, "f"); e != syscall.EACCES {
 		t.Fatalf("unlink f: %s", e)
@@ -538,7 +538,7 @@ func testStickyBit(t *testing.T, m Meta) {
 	if e := m.Rename(ctxB, sticky, "f", normal, "f2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename f: %s", e)
 	}
-	m.Create(ctxB, sticky, "f2", 0777, 0, 0, &inode, attr)
+	_ = m.Create(ctxB, sticky, "f2", 0777, 0, 0, &inode, attr)
 	if e := m.Rename(ctxB, sticky, "f2", sticky, "f", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("overwrite f: %s", e)
 	}
@@ -555,8 +555,8 @@ func testStickyBit(t *testing.T, m Meta) {
 		t.Fatalf("unlink f3: %s", e)
 	}
 	// dir
-	m.Mkdir(ctxA, sticky, "d", 0777, 0, 0, &inode, attr)
-	m.Mkdir(ctxA, normal, "d", 0777, 0, 0, &inode, attr)
+	_ = m.Mkdir(ctxA, sticky, "d", 0777, 0, 0, &inode, attr)
+	_ = m.Mkdir(ctxA, normal, "d", 0777, 0, 0, &inode, attr)
 	if e := m.Rmdir(ctxB, sticky, "d"); e != syscall.EACCES {
 		t.Fatalf("rmdir d: %s", e)
 	}
@@ -566,7 +566,7 @@ func testStickyBit(t *testing.T, m Meta) {
 	if e := m.Rename(ctxB, sticky, "d", normal, "d2", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("rename d: %s", e)
 	}
-	m.Mkdir(ctxB, sticky, "d2", 0777, 0, 0, &inode, attr)
+	_ = m.Mkdir(ctxB, sticky, "d2", 0777, 0, 0, &inode, attr)
 	if e := m.Rename(ctxB, sticky, "d2", sticky, "d", 0, &inode, attr); e != syscall.EACCES {
 		t.Fatalf("overwrite d: %s", e)
 	}
@@ -805,11 +805,11 @@ func testCompaction(t *testing.T, m Meta) {
 
 	// random write
 	var chunkid uint64
-	m.NewChunk(ctx, &chunkid)
+	_ = m.NewChunk(ctx, &chunkid)
 	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Chunkid: chunkid, Size: 64 << 20, Len: 64 << 20})
-	m.NewChunk(ctx, &chunkid)
+	_ = m.NewChunk(ctx, &chunkid)
 	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Chunkid: chunkid, Size: 8, Len: 8})
-	m.NewChunk(ctx, &chunkid)
+	_ = m.NewChunk(ctx, &chunkid)
 	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Chunkid: chunkid, Size: 8, Len: 8})
 	var cs1 []Slice
 	_ = m.Read(ctx, inode, 1, &cs1)
@@ -829,7 +829,7 @@ func testCompaction(t *testing.T, m Meta) {
 	var size uint32 = 100000
 	for i := 0; i < 200; i++ {
 		var chunkid uint64
-		m.NewChunk(ctx, &chunkid)
+		_ = m.NewChunk(ctx, &chunkid)
 		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: chunkid, Size: size, Len: size}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
@@ -896,7 +896,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 			defer g.Done()
 			for j := 0; j < 100; j++ {
 				var chunkid uint64
-				m.NewChunk(ctx, &chunkid)
+				_ = m.NewChunk(ctx, &chunkid)
 				var slice = Slice{Chunkid: chunkid, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
@@ -921,7 +921,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
-	m.Unlink(ctx, 1, "f")
+	_ = m.Unlink(ctx, 1, "f")
 	if st := m.Truncate(ctx, 1, 0, 4<<10, attr); st != syscall.EPERM {
 		t.Fatalf("truncate dir %s", st)
 	}
@@ -956,7 +956,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		mpb.BarFillerClearOnComplete(),
 	)
 	slices := make(map[Ino][]Slice)
-	m.ListSlices(ctx, slices, false, func() {
+	_ = m.ListSlices(ctx, slices, false, func() {
 		bar.SetTotal(total+2048, false)
 		bar.Increment()
 	})
@@ -974,7 +974,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 
 	time.Sleep(time.Millisecond * 100)
 	slices = make(map[Ino][]Slice)
-	m.ListSlices(ctx, slices, false, nil)
+	_ = m.ListSlices(ctx, slices, false, nil)
 	totalSlices = 0
 	for _, ss := range slices {
 		totalSlices += len(ss)
@@ -1004,10 +1004,10 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "fout")
-	m.Write(ctx, iin, 0, 100, Slice{10, 200, 0, 100})
-	m.Write(ctx, iin, 1, 100<<10, Slice{11, 40 << 20, 0, 40 << 20})
-	m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20})
-	m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20})
+	_ = m.Write(ctx, iin, 0, 100, Slice{10, 200, 0, 100})
+	_ = m.Write(ctx, iin, 1, 100<<10, Slice{11, 40 << 20, 0, 40 << 20})
+	_ = m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20})
+	_ = m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20})
 	var copied uint64
 	if st := m.CopyFileRange(ctx, iin, 150, iout, 30<<20, 200<<20, 0, &copied); st != 0 {
 		t.Fatalf("copy file range: %s", st)

@@ -121,16 +121,16 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 
 	f, _ := ioutil.TempFile("", "test")
-	f.Write([]byte("this is a file"))
-	f.Seek(0, 0)
-	os.Remove(f.Name())
+	_, _ = f.Write([]byte("this is a file"))
+	_, _ = f.Seek(0, 0)
+	_ = os.Remove(f.Name())
 	defer f.Close()
 	if err := s.Put("file", f); err != nil {
 		t.Fatalf("failed to put from file")
 	} else if _, err := s.Head("file"); err != nil {
 		t.Fatalf("file should exists")
 	} else {
-		s.Delete("file")
+		_ = s.Delete("file")
 	}
 
 	if _, err := s.Head("test"); err != nil {

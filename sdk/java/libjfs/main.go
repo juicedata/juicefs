@@ -560,7 +560,7 @@ func jfs_term(pid int, h uintptr) int {
 					ws[i] = ws[len(ws)-1]
 					activefs[name] = ws[:len(ws)-1]
 				} else {
-					w.Flush()
+					_ = w.Flush()
 					// don't close the filesystem, so it can be re-used later
 					// w.Close()
 					// delete(activefs, name)

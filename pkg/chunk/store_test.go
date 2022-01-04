@@ -100,10 +100,10 @@ func TestAsyncStore(t *testing.T) {
 	dir := t.TempDir()
 	conf.CacheDir = filepath.Join(dir, "testdirAsync")
 	p := filepath.Join(conf.CacheDir, stagingDir, "chunks/0/0/123_0_4")
-	os.MkdirAll(filepath.Dir(p), 0744)
+	_ = os.MkdirAll(filepath.Dir(p), 0744)
 	f, _ := os.Create(p)
-	f.WriteString("good")
-	f.Close()
+	_, _ = f.WriteString("good")
+	_ = f.Close()
 	conf.Writeback = true
 	_ = NewCachedStore(mem, conf)
 	time.Sleep(time.Millisecond * 50) // wait for scan to finish

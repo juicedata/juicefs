@@ -42,21 +42,21 @@ func TestMemKV(t *testing.T) {
 	c, _ := newTkvClient("memkv", "")
 	c = withPrefix(c, []byte("jfs"))
 	var count int64
-	c.txn(func(tx kvTxn) error {
+	_ = c.txn(func(tx kvTxn) error {
 		count = tx.incrBy([]byte("counter"), -1)
 		return nil
 	})
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx kvTxn) error {
+	_ = c.txn(func(tx kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 0)
 		return nil
 	})
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx kvTxn) error {
+	_ = c.txn(func(tx kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 1)
 		return nil
 	})
