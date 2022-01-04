@@ -27,7 +27,7 @@ jobs:
           hostname -I
           sudo apt update
           sudo apt install redis-server
-          iptables -I INPUT -i ech0 -p icmp -s 0/0 -d 0/0 -j ACCEPT
+          sudo iptables -I INPUT -i ech0 -p icmp -s 0/0 -d 0/0 -j ACCEPT
           sudo ufw allow 6379
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
