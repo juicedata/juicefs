@@ -314,7 +314,7 @@ func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (st
 	// try oss internal endpoint
 	if conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s-internal.aliyuncs.com:http",
 		bucketLocation), time.Second*3); err == nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Sprintf("http://%s-internal.aliyuncs.com", bucketLocation), nil
 	}
 

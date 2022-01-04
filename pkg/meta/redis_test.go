@@ -967,7 +967,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if totalSlices != 1 {
 		t.Fatalf("number of chunks: %d != 1, %+v", totalSlices, slices)
 	}
-	m.Close(ctx, inode)
+	_ = m.Close(ctx, inode)
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink file %s", st)
 	}

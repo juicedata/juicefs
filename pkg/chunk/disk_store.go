@@ -77,7 +77,7 @@ func (c *diskFile) Finish(length int) error {
 }
 
 func (c *diskFile) Abort() {
-	os.Remove(c.path)
+	_ = os.Remove(c.path)
 }
 
 type diskStore struct {

@@ -105,7 +105,7 @@ func TestFileSystem(t *testing.T) {
 	if f.Name() != "/hello" {
 		t.Fatalf("name: %s", f.Name())
 	}
-	f.Close(ctx)
+	_ = f.Close(ctx)
 	f, err = fs.Open(ctx, "/hello", mMaskR|mMaskW)
 	if err != 0 {
 		t.Fatalf("open %s", err)

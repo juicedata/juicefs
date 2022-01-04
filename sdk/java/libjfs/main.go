@@ -539,7 +539,7 @@ func jfs_term(pid int, h uintptr) int {
 			m.Add(1)
 			go func(f *fs.File) {
 				defer m.Done()
-				f.Close(ctx)
+				_ = f.Close(ctx)
 			}(f.File)
 			toClose = append(toClose, fd)
 		}

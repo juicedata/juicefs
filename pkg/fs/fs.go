@@ -275,7 +275,7 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 		var fi os.FileInfo
 		fi, err = f.Stat()
 		if err == nil && fi.Size() > rotateAccessLog {
-			f.Close()
+			_ = f.Close()
 			fi, err = os.Stat(path)
 			if err == nil && fi.Size() > rotateAccessLog {
 				tmp := fmt.Sprintf("%s.%p", path, fs)
@@ -795,7 +795,7 @@ func (fs *FileSystem) Flush() error {
 }
 
 func (fs *FileSystem) Close() error {
-	fs.Flush()
+	_ = fs.Flush()
 	buffer := fs.logBuffer
 	if buffer != nil {
 		fs.logBuffer = nil
@@ -997,7 +997,7 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	}
 	err = f.wdata.Write(ctx, uint64(offset), b)
 	if err != 0 {
-		f.wdata.Close(meta.Background)
+		_ = f.wdata.Close(meta.Background)
 		f.wdata = nil
 		return
 	}
@@ -1052,7 +1052,7 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 			err = f.wdata.Close(meta.Background)
 			f.wdata = nil
 		}
-		f.fs.m.Close(ctx, f.inode)
+		_ = f.fs.m.Close(ctx, f.inode)
 	}
 	return
 }
