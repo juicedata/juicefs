@@ -39,6 +39,8 @@ type Config struct {
 	NoHTTPS     bool
 	Verbose     bool
 	Quiet       bool
+	CheckAll    bool
+	CheckNew    bool
 }
 
 func NewConfigFromCli(c *cli.Context) *Config {
@@ -61,5 +63,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		NoHTTPS:     c.Bool("no-https"),
 		Verbose:     c.Bool("verbose"),
 		Quiet:       c.Bool("quiet"),
+		CheckAll:    c.Bool("check-all"),
+		CheckNew:    c.Bool("check-new"),
 	}
 }
