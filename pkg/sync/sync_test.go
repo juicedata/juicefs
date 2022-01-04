@@ -16,6 +16,7 @@ package sync
 
 import (
 	"bytes"
+	"os"
 	"reflect"
 	"testing"
 
@@ -78,7 +79,9 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 
 // nolint:errcheck
 func TestSync(t *testing.T) {
-	// utils.SetLogLevel(logrus.DebugLevel)
+	if os.Getenv("SFTP_HOST") == "" {
+		t.SkipNow()
+	}
 
 	config := &Config{
 		Start:     "",
@@ -95,15 +98,15 @@ func TestSync(t *testing.T) {
 		Quiet:     true,
 	}
 
-	a, _ := object.CreateStorage("mem", "a", "", "")
+	a, _ := object.CreateStorage("sftp", os.Getenv("SFTP_HOST")+"a", os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
 	a.Put("a", bytes.NewReader([]byte("a")))
 	a.Put("ab", bytes.NewReader([]byte("ab")))
 	a.Put("abc", bytes.NewReader([]byte("abc")))
 
-	b, _ := object.CreateStorage("mem", "b", "", "")
+	b, _ := object.CreateStorage("sftp", os.Getenv("SFTP_HOST")+"b", os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
 	b.Put("ba", bytes.NewReader([]byte("ba")))
 
-	// Copy "a" from mem://a to mem://b
+	// Copy "a" from sftp://a to sftp://b
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -112,7 +115,7 @@ func TestSync(t *testing.T) {
 	}
 
 	// Now a: {"a", "ab", "abc"}, b: {"a", "ba"}
-	// Copy "ba" from mem://b to mem://a
+	// Copy "ba" from sftp://b to sftp://a
 	total, totalBytes = 0, 0
 	if err := Sync(b, a, config); err != nil {
 		t.Fatalf("sync: %s", err)
@@ -122,13 +125,21 @@ func TestSync(t *testing.T) {
 	}
 
 	// Now a: {"a", "ab", "abc", "ba"}, b: {"a", "ba"}
-	akeys, _ := a.List("", "", 4)
-	bkeys, _ := b.List("", "", 4)
+	aRes, _ := a.ListAll("", "")
+	bRes, _ := b.ListAll("", "")
 
-	if !reflect.DeepEqual(akeys[0], bkeys[0]) {
+	var aObjs, bObjs []object.Object
+	for obj := range aRes {
+		aObjs = append(aObjs, obj)
+	}
+	for obj := range bRes {
+		bObjs = append(bObjs, obj)
+	}
+
+	if !reflect.DeepEqual(aObjs[0], bObjs[0]) {
 		t.FailNow()
 	}
-	if !reflect.DeepEqual(akeys[len(akeys)-1], bkeys[len(bkeys)-1]) {
+	if !reflect.DeepEqual(aObjs[len(aObjs)-1], bObjs[len(bObjs)-1]) {
 		t.FailNow()
 	}
 
@@ -143,7 +154,7 @@ func TestSync(t *testing.T) {
 
 	// Test --force-update option
 	config.ForceUpdate = true
-	// Forcibly copy {"a", "ba"} from mem://a to mem://b.
+	// Forcibly copy {"a", "ba"} from sftp://a to sftp://b.
 	total, totalBytes = 0, 0
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
