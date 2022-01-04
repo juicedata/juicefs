@@ -147,7 +147,7 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 	var inode Ino
 	var attr = &Attr{}
-	err = v.Meta.Mknod(ctx, parent, name, _type, mode&07777, cumask, uint32(rdev), &inode, attr)
+	err = v.Meta.Mknod(ctx, parent, name, _type, mode&07777, cumask, rdev, &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
@@ -488,7 +488,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 				return
 			}
 			data := h.data
-			if off < uint64(h.off) {
+			if off < h.off {
 				data = nil
 			} else {
 				off -= h.off
@@ -562,13 +562,13 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		rb := utils.ReadBuffer(h.pending)
 		cmd := rb.Get32()
 		size := int(rb.Get32())
-		if rb.Left() < int(size) {
+		if rb.Left() < size {
 			logger.Debugf("message not complete: %d %d > %d", cmd, size, rb.Left())
 			return
 		}
 		h.data = append(h.data, h.pending...)
 		h.pending = h.pending[:0]
-		if rb.Left() == int(size) {
+		if rb.Left() == size {
 			h.data = append(h.data, v.handleInternalMsg(ctx, cmd, rb)...)
 		} else {
 			logger.Warnf("broken message: %d %d < %d", cmd, size, rb.Left())
@@ -699,7 +699,7 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	}
 	err = v.Meta.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied)
 	if err == 0 {
-		v.reader.Invalidate(nodeOut, offOut, uint64(size))
+		v.reader.Invalidate(nodeOut, offOut, size)
 	}
 	return
 }

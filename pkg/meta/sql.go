@@ -1288,7 +1288,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		if parentSrc == parentDst && se.Name == nameDst {
 			if inode != nil {
-				*inode = Ino(se.Inode)
+				*inode = se.Inode
 			}
 			return nil
 		}
@@ -1343,7 +1343,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if flags == RenameNoReplace {
 				return syscall.EEXIST
 			}
-			dino = Ino(de.Inode)
+			dino = de.Inode
 			ok, err := s.Get(&dn)
 			if err != nil {
 				return err
@@ -1866,7 +1866,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			}
 			return nil
 		}
-		coff := uint64(offIn/ChunkSize) * ChunkSize
+		coff := offIn / ChunkSize * ChunkSize
 		for coff < offIn+size {
 			if coff%ChunkSize != 0 {
 				panic("coff")

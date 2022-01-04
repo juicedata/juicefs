@@ -122,7 +122,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 }
 
 func test(store object.ObjectStorage) error {
-	rand.Seed(int64(time.Now().UnixNano()))
+	rand.Seed(time.Now().UnixNano())
 	key := "testing/" + randSeq(10)
 	data := make([]byte, 100)
 	_, _ = rand.Read(data)

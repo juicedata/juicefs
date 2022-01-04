@@ -33,7 +33,7 @@ func getNlink(fi os.FileInfo) int {
 func getDiskUsage(path string) (uint64, uint64, uint64, uint64) {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err == nil {
-		return stat.Blocks * uint64(stat.Bsize), stat.Bavail * uint64(stat.Bsize), uint64(stat.Files), uint64(stat.Ffree)
+		return stat.Blocks * uint64(stat.Bsize), stat.Bavail * uint64(stat.Bsize), stat.Files, stat.Ffree
 	} else {
 		logger.Warnf("statfs %s: %s", path, err)
 		return 1, 1, 1, 1

@@ -817,7 +817,7 @@ func (r *dataReader) Read(ctx context.Context, page *chunk.Page, chunks []meta.S
 	size := len(buf)
 	for i := 0; i < len(chunks); i++ {
 		if read < size && offset < pos+chunks[i].Len {
-			toread := utils.Min(int(size-read), int(pos+chunks[i].Len-offset))
+			toread := utils.Min(size-read, int(pos+chunks[i].Len-offset))
 			go func(s *meta.Slice, p *chunk.Page, off, pos uint32) {
 				defer p.Release()
 				errs <- r.readSlice(ctx, s, p, int(off))
@@ -859,7 +859,7 @@ func (r *dataReader) readManyChunks(ctx context.Context, page *chunk.Page, chunk
 CHUNKS:
 	for i := 0; i < len(chunks); i++ {
 		if read < size && offset < pos+chunks[i].Len {
-			toread := utils.Min(int(size-read), int(pos+chunks[i].Len-offset))
+			toread := utils.Min(size-read, int(pos+chunks[i].Len-offset))
 		WAIT:
 			for {
 				select {
