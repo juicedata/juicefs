@@ -69,15 +69,16 @@ jobs:
           make pjdfstest
           cd /juice/data1/pjdfstest
           sudo prove -rv tests/ >/tmp/data1_result &
+          sleep 60s
           cd /juice/data2/pjdfstest
           sudo prove -rv tests/ >/tmp/data2_result &
+          sleep 60s
           cd /tmp/jfs/pjdfstest
           sudo prove -rv tests/ | tee /tmp/jfs_result
-          echo "diff /tmp/jfs_result /tmp/data1_result begin"
+          echo "diff begin"
           diff /tmp/jfs_result /tmp/data1_result
-          echo "diff /tmp/jfs_result /tmp/data1_result end"
-          diff /tmp/jfs_result /tmp/data1_result && exit 1
-          diff /tmp/jfs_result /tmp/data2_result && exit 1
+          diff /tmp/jfs_result /tmp/data2_result
+          echo "diff end"
 
 
       - name: Setup tmate session
