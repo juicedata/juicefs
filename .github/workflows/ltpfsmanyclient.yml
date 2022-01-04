@@ -1,8 +1,9 @@
-name: "pjdfstest"
+name: "ltp"
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - 'release-**'
     paths-ignore:
       - 'docs/**'
   pull_request:
@@ -13,7 +14,7 @@ on:
       - 'docs/**'
 
 jobs:
-  pjdfstest:
+  ltpfsmanyclient:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -24,17 +25,16 @@ jobs:
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
-      - uses: shogo82148/actions-setup-perl@v1
-        with:
-          perl-version: '5.34'
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
 
       - name: Build linux target
-        run: make juicefs
+        run: |
+          make juicefs
+          cp .github/workflows/bash/rm_fs /tmp/
+          cp .github/workflows/bash/rm_list.sh /tmp/
 
       - name: Run Redis
         run: |
@@ -43,23 +43,26 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 --trash-days 0 pics
+          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
 
-      - name: Pjdfstest
+      - name: LTP FS
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libtap-harness-archive-perl
-          cd /tmp/jfs/
-          git clone https://github.com/pjd/pjdfstest.git
-          cd pjdfstest
-          autoreconf -ifs
+          git clone https://github.com/linux-test-project/ltp.git
+          cd ltp
+          make autotools
           ./configure
-          make pjdfstest
-          sudo prove -rv tests/
+          make
+          sudo make install
+          cd /opt/ltp
+          sudo chmod +x /tmp/rm_list.sh
+          sudo chmod 777 runtest/fs
+          sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
+          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
+          sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
 
       - name: Setup tmate session
         if: ${{ failure() }}
