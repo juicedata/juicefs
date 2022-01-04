@@ -474,7 +474,10 @@ func TestEncrypted(t *testing.T) {
 }
 
 func TestMarsharl(t *testing.T) {
-	s, _ := CreateStorage("mem", "", "", "")
+	if os.Getenv("HDFS_ADDR") == "" {
+		t.Skip()
+	}
+	s, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
 	_ = s.Put("hello", bytes.NewReader([]byte("world")))
 	fs := s.(FileSystem)
 	_ = fs.Chown("hello", "user", "group")
