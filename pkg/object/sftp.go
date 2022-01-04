@@ -202,7 +202,7 @@ func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 	if off > 0 {
 		if _, err := ff.Seek(off, 0); err != nil {
-			ff.Close()
+			_ = ff.Close()
 			return nil, err
 		}
 	}
@@ -245,7 +245,7 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(ff, in, *buf)
 	if err != nil {
-		ff.Close()
+		_ = ff.Close()
 		return err
 	}
 	err = ff.Close()

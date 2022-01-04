@@ -393,7 +393,7 @@ func (cache *cacheStore) cleanup() {
 	}
 	cache.Unlock()
 	for _, key := range todel {
-		os.Remove(cache.cachePath(key))
+		_ = os.Remove(cache.cachePath(key))
 	}
 	cache.Lock()
 }

@@ -49,7 +49,7 @@ func (c *b2client) getFileInfo(key string) (*backblaze.File, error) {
 	}
 	var buf [2]byte
 	_, _ = r.Read(buf[:])
-	r.Close()
+	_ = r.Close()
 	return f, nil
 }
 

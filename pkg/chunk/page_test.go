@@ -73,7 +73,7 @@ func TestPageReader(t *testing.T) {
 	if n, err := r.ReadAt(buf, 5); n != 0 || err != io.EOF {
 		t.Fatalf("read should return 0")
 	}
-	r.Close()
+	_ = r.Close()
 	if n, err := r.ReadAt(buf, 5); n != 0 || err == nil {
 		t.Fatalf("read should fail after close")
 	}

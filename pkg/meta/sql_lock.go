@@ -58,7 +58,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 					locks[key{l.Sid, l.Owner}] = l
 				}
 			}
-			rows.Close()
+			_ = rows.Close()
 
 			if ltype == F_RDLCK {
 				for _, l := range locks {
@@ -121,7 +121,7 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, sta
 			locks[key{l.Sid, l.Owner}] = dup(l.Records)
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	for k, d := range locks {
 		ls := loadLocks([]byte(d))
@@ -195,7 +195,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 					locks[key{l.Sid, l.Owner}] = dup(l.Records)
 				}
 			}
-			rows.Close()
+			_ = rows.Close()
 			lkey := key{m.sid, owner}
 			for k, d := range locks {
 				if k == lkey {

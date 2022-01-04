@@ -108,7 +108,7 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 	if off > 0 {
 		if _, err := f.Seek(off, io.SeekStart); err != nil {
-			f.Close()
+			_ = f.Close()
 			return nil, err
 		}
 	}
@@ -150,7 +150,7 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(f, in, *buf)
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	err = f.Close()

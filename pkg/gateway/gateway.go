@@ -79,8 +79,7 @@ func (n *jfsObjects) IsReady(_ context.Context) bool {
 }
 
 func (n *jfsObjects) Shutdown(ctx context.Context) error {
-	n.fs.Close()
-	return nil
+	return n.fs.Close()
 }
 
 func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {

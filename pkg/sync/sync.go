@@ -349,7 +349,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		if err != nil {
 			return err
 		}
-		os.Remove(f.Name()) // will be deleted after Close()
+		_ = os.Remove(f.Name()) // will be deleted after Close()
 		defer f.Close()
 
 		if _, err = io.Copy(f, in); err != nil {
