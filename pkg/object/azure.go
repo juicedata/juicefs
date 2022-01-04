@@ -112,7 +112,7 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]Object, error) {
 		mtime := time.Time(blob.Properties.LastModified)
 		objs[i] = &obj{
 			blob.Name,
-			int64(blob.Properties.ContentLength),
+			blob.Properties.ContentLength,
 			mtime,
 			strings.HasSuffix(blob.Name, "/"),
 		}

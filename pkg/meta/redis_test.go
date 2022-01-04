@@ -1065,7 +1065,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	var sid uint64
 	switch m := m.(type) {
 	case *redisMeta:
-		sid = uint64(m.sid)
+		sid = m.sid
 	case *dbMeta:
 		sid = m.sid
 	case *kvMeta:

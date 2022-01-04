@@ -221,16 +221,16 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	store := chunk.NewCachedStore(blob, chunkConf)
-	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
+	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
 		length := args[1].(uint32)
 		return store.Remove(chunkid, int(length))
-	}))
-	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
+	})
+	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 		slices := args[0].([]meta.Slice)
 		chunkid := args[1].(uint64)
 		return vfs.Compact(chunkConf, store, slices, chunkid)
-	}))
+	})
 	conf := &vfs.Config{
 		Meta:       metaConf,
 		Format:     format,

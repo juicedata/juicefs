@@ -158,7 +158,7 @@ func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
 	}
 	var size uint32
 	for _, c := range chunk {
-		size += uint32(c.Len)
+		size += c.Len
 	}
 	return pos, size, chunk
 }
