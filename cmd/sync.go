@@ -215,7 +215,7 @@ func syncFlags() *cli.Command {
 			&cli.BoolFlag{
 				Name:    "update",
 				Aliases: []string{"u"},
-				Usage:   "update existing file if the source is newer",
+				Usage:   "skip files if the destination is newer",
 			},
 			&cli.BoolFlag{
 				Name:    "force-update",
