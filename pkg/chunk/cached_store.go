@@ -146,19 +146,19 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if int(off) >= c.length {
+	if off >= c.length {
 		return 0, io.EOF
 	}
 
 	indx := c.index(off)
-	boff := int(off) % c.store.conf.BlockSize
+	boff := off % c.store.conf.BlockSize
 	blockSize := c.blockSize(indx)
 	if boff+len(p) > blockSize {
 		// read beyond currend page
 		var got int
 		for got < len(p) {
 			// aligned to current page
-			l := utils.Min(len(p)-got, c.blockSize(c.index(off))-int(off)%c.store.conf.BlockSize)
+			l := utils.Min(len(p)-got, c.blockSize(c.index(off))-off%c.store.conf.BlockSize)
 			pp := page.Slice(got, l)
 			n, err = c.ReadAt(ctx, pp, off)
 			pp.Release()

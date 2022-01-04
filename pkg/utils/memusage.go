@@ -32,7 +32,7 @@ func MemoryUsage() (virt, rss uint64) {
 		if len(stats) >= 24 {
 			v, _ := strconv.ParseUint(string(stats[22]), 10, 64)
 			r, _ := strconv.ParseUint(string(stats[23]), 10, 64)
-			return uint64(v), uint64(r) * 4096
+			return v, r * 4096
 		}
 	}
 

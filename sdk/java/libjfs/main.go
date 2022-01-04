@@ -420,16 +420,16 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 		}
 		store := chunk.NewCachedStore(blob, chunkConf)
-		m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
+		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 			chunkid := args[0].(uint64)
 			length := args[1].(uint32)
 			return store.Remove(chunkid, int(length))
-		}))
-		m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
+		})
+		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
 			chunkid := args[1].(uint64)
 			return vfs.Compact(chunkConf, store, slices, chunkid)
-		}))
+		})
 		err = m.NewSession()
 		if err != nil {
 			logger.Fatalf("new session: %s", err)
@@ -700,7 +700,7 @@ func jfs_getXattr(pid int, h uintptr, path *C.char, name *C.char, buf uintptr, b
 	if len(buff) >= bufsize {
 		return bufsize
 	}
-	copy(toBuf(uintptr(buf), bufsize), buff)
+	copy(toBuf(buf, bufsize), buff)
 	return len(buff)
 }
 
@@ -717,7 +717,7 @@ func jfs_listXattr(pid int, h uintptr, path *C.char, buf uintptr, bufsize int) i
 	if len(buff) >= bufsize {
 		return bufsize
 	}
-	copy(toBuf(uintptr(buf), bufsize), buff)
+	copy(toBuf(buf, bufsize), buff)
 	return len(buff)
 }
 
@@ -1008,11 +1008,11 @@ func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int 
 //export jfs_lseek
 func jfs_lseek(pid, fd int, offset int64, whence int) int64 {
 	filesLock.Lock()
-	f, ok := openFiles[int(fd)]
+	f, ok := openFiles[fd]
 	if ok {
 		filesLock.Unlock()
 		off, _ := f.Seek(f.w.withPid(pid), offset, whence)
-		return int64(off)
+		return off
 	}
 	filesLock.Unlock()
 	return int64(EINVAL)
@@ -1021,7 +1021,7 @@ func jfs_lseek(pid, fd int, offset int64, whence int) int64 {
 //export jfs_read
 func jfs_read(pid, fd int, cbuf uintptr, count int) int {
 	filesLock.Lock()
-	f, ok := openFiles[int(fd)]
+	f, ok := openFiles[fd]
 	if !ok {
 		filesLock.Unlock()
 		return EINVAL
@@ -1033,13 +1033,13 @@ func jfs_read(pid, fd int, cbuf uintptr, count int) int {
 		logger.Errorf("read %s: %s", f.Name(), err)
 		return errno(err)
 	}
-	return int(n)
+	return n
 }
 
 //export jfs_pread
 func jfs_pread(pid, fd int, cbuf uintptr, count C.size_t, offset C.off_t) int {
 	filesLock.Lock()
-	f, ok := openFiles[int(fd)]
+	f, ok := openFiles[fd]
 	if !ok {
 		filesLock.Unlock()
 		return EINVAL
@@ -1054,32 +1054,32 @@ func jfs_pread(pid, fd int, cbuf uintptr, count C.size_t, offset C.off_t) int {
 		logger.Errorf("read %s: %s", f.Name(), err)
 		return errno(err)
 	}
-	return int(n)
+	return n
 }
 
 //export jfs_write
 func jfs_write(pid, fd int, cbuf uintptr, count C.size_t) int {
 	filesLock.Lock()
-	f, ok := openFiles[int(fd)]
+	f, ok := openFiles[fd]
 	if !ok {
 		filesLock.Unlock()
 		return EINVAL
 	}
 	filesLock.Unlock()
 
-	buf := toBuf(uintptr(cbuf), int(count))
+	buf := toBuf(cbuf, int(count))
 	n, err := f.Write(f.w.withPid(pid), buf)
 	if err != 0 {
 		logger.Errorf("write %s: %s", f.Name(), err)
 		return errno(err)
 	}
-	return int(n)
+	return n
 }
 
 //export jfs_flush
 func jfs_flush(pid, fd int) int {
 	filesLock.Lock()
-	f, ok := openFiles[int(fd)]
+	f, ok := openFiles[fd]
 	if !ok {
 		filesLock.Unlock()
 		return EINVAL
@@ -1092,7 +1092,7 @@ func jfs_flush(pid, fd int) int {
 //export jfs_fsync
 func jfs_fsync(pid, fd int) int {
 	filesLock.Lock()
-	f, ok := openFiles[int(fd)]
+	f, ok := openFiles[fd]
 	if !ok {
 		filesLock.Unlock()
 		return EINVAL
