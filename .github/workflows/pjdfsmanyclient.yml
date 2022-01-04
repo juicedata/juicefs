@@ -79,10 +79,15 @@ jobs:
           head -n -2 /tmp/data2_result_tmp >/tmp/data2_result
           head -n -2 /tmp/jfs_result_tmp >/tmp/jfs_result
           echo "diff begin"
-          diff /tmp/jfs_result /tmp/data1_result
-          diff /tmp/jfs_result /tmp/data2_result
-          echo "diff end"
           diff_jfs_data1=$(diff /tmp/jfs_result /tmp/data1_result)
+          diff_jfs_data2=$(diff /tmp/jfs_result /tmp/data2_result)
+          echo $diff_jfs_data1
+          echo $diff_jfs_data2
+          echo "diff end"
+          if [ $diff_jfs_data1 != "" ] || [ $diff_jfs_data2 != "" ]; then
+            exit 1
+          fi
+
 
       - name: Setup tmate session
         if: ${{ failure() }}
