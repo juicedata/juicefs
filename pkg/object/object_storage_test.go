@@ -94,7 +94,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
 	}
 	switch s.(*withPrefix).os.(type) {
-	case *sftpStore, *hdfsclient, *filestore:
+	case FileSystem:
 		objs, err2 := listAll(s, "", "", 2)
 		if err2 == nil {
 			if len(objs) != 2 {

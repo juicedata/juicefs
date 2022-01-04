@@ -320,7 +320,7 @@ func fileInfo(key string, fi os.FileInfo) Object {
 		fi.Mode(),
 	}
 	if fi.IsDir() {
-		if key != "" {
+		if key != "" && !strings.HasSuffix(key, "/") {
 			f.key += "/"
 		}
 		f.size = 0
@@ -356,7 +356,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 			return
 		}
 		if marker == "" {
-			out <- fileInfo("", fi)
+			out <- fileInfo(path[len(f.root):], fi)
 		}
 		f.doFind(c, path, marker, out)
 	} else {
@@ -380,11 +380,14 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 			}
 
 			key := p[len(f.root):]
-			if key > marker || marker == "" {
-				out <- fileInfo(key, fi)
-			}
-			if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
-				f.doFind(c, p+dirSuffix, marker, out)
+			prefix := path[len(f.root):]
+			if strings.HasPrefix(key, prefix) {
+				if key > marker || marker == "" {
+					out <- fileInfo(key, fi)
+				}
+				if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
+					f.doFind(c, p+dirSuffix, marker, out)
+				}
 			}
 		}
 	}
