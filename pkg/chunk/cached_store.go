@@ -180,7 +180,7 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		r, err := c.store.bcache.load(key)
 		if err == nil {
 			n, err = r.ReadAt(p, int64(boff))
-			r.Close()
+			_ = r.Close()
 			if err == nil {
 				cacheHits.Add(1)
 				cacheHitBytes.Add(float64(n))
@@ -189,7 +189,7 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			}
 			if f, ok := r.(*os.File); ok {
 				logger.Warnf("remove partial cached block %s: %d %s", f.Name(), n, err)
-				os.Remove(f.Name())
+				_ = os.Remove(f.Name())
 			}
 		}
 	}
@@ -206,7 +206,7 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		in, err := c.store.storage.Get(key, int64(boff), int64(len(p)))
 		if err == nil {
 			n, err = io.ReadFull(in, p)
-			in.Close()
+			_ = in.Close()
 		}
 		used := time.Since(st)
 		logger.Debugf("GET %s RANGE(%d,%d) (%s, %.3fs)", key, boff, len(p), err, used.Seconds())
@@ -483,7 +483,7 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 
 		block = NewOffPage(blockSize)
 		_, err = io.ReadFull(f, block.Data)
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			logger.Errorf("read stagging file %s: %s", stagingPath, err)
 			block.Release()
@@ -517,7 +517,7 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 		time.Sleep(time.Second * time.Duration(try))
 	}
 	buf.Release()
-	os.Remove(stagingPath)
+	_ = os.Remove(stagingPath)
 }
 
 func (c *wChunk) upload(indx int) {
@@ -697,7 +697,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 			buf = page.Data
 		}
 		n, err = io.ReadFull(in, buf)
-		in.Close()
+		_ = in.Close()
 	}
 	used := time.Since(start)
 	logger.Debugf("GET %s (%s, %.3fs)", key, err, used.Seconds())
@@ -843,7 +843,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		blockSize := parseObjOrigSize(key)
 		block := NewOffPage(blockSize)
 		_, err = io.ReadFull(f, block.Data)
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			block.Release()
 			logger.Errorf("read %s: %s", stagingPath, err)
@@ -922,7 +922,7 @@ func (store *cachedStore) FillCache(chunkid uint64, length uint32) error {
 	for _, k := range keys {
 		f, e := store.bcache.load(k)
 		if e == nil { // already cached
-			f.Close()
+			_ = f.Close()
 			continue
 		}
 		size := parseObjOrigSize(k)

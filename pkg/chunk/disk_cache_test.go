@@ -61,7 +61,7 @@ func BenchmarkLoadCached(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if f, e := s.load(key); e == nil {
-			f.Close()
+			_ = f.Close()
 		} else {
 			b.FailNow()
 		}
@@ -75,7 +75,7 @@ func BenchmarkLoadUncached(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if f, e := s.load(key); e != nil {
-			f.Close()
+			_ = f.Close()
 		}
 	}
 }

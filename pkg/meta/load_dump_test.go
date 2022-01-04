@@ -113,12 +113,12 @@ func TestLoadDump(t *testing.T) {
 	})
 
 	t.Run("Metadata Engine: TKV", func(t *testing.T) {
-		os.Remove(settingPath)
+		_ = os.Remove(settingPath)
 		m := testLoad(t, "memkv://test/jfs", sampleFile)
 		testDump(t, m, 0, sampleFile, "tkv.dump")
 	})
 	t.Run("Metadata Engine: TKV --SubDir d1 ", func(t *testing.T) {
-		os.Remove(settingPath)
+		_ = os.Remove(settingPath)
 		m := testLoad(t, "memkv://user:passwd@test/jfs", sampleFile)
 		if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
 			var err error
