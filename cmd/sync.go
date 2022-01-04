@@ -231,12 +231,12 @@ func syncFlags() *cli.Command {
 			&cli.BoolFlag{
 				Name:    "update",
 				Aliases: []string{"u"},
-				Usage:   "update existing file if the source is newer",
+				Usage:   "skip files if the destination is newer",
 			},
 			&cli.BoolFlag{
 				Name:    "force-update",
 				Aliases: []string{"f"},
-				Usage:   "always update existing file",
+				Usage:   "always update existing files",
 			},
 			&cli.BoolFlag{
 				Name:  "perms",
@@ -283,6 +283,14 @@ func syncFlags() *cli.Command {
 			&cli.BoolFlag{
 				Name:  "no-https",
 				Usage: "donot use HTTPS",
+			},
+			&cli.BoolFlag{
+				Name:  "check-all",
+				Usage: "verify integrity of all files in source and destination",
+			},
+			&cli.BoolFlag{
+				Name:  "check-new",
+				Usage: "verify integrity of newly copied files",
 			},
 		},
 	}
