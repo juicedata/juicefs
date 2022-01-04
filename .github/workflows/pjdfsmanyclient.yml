@@ -48,8 +48,11 @@ jobs:
       - name: Juicefs Mount
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          sleep 5s
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /juice/data1 --no-usage-report &
+          sleep 5s
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /juice/data2 --no-usage-report &
+          sleep 5s
           stat /tmp/jfs
           stat /juice/data1
           stat /juice/data2
