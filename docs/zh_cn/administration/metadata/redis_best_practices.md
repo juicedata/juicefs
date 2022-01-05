@@ -36,7 +36,11 @@ used_memory_dataset_perc: 70.12%
 
 ## 数据可用性
 
-[Redis 哨兵](https://redis.io/topics/sentinel) 是 Redis 官方的高可用解决方案。它提供以下功能：
+:::caution 注意
+JuiceFS 使用 「[Redis 事务](https://redis.io/topics/transactions)」保证元数据操作的原子性。但由于 Redis Cluster 集群模式不支持事务（Transactions），因此 Redis 集群不可用作 JuiceFS 元数据存储。如有 Redis 高可用需求，请使用 Sentinel 哨兵模式。
+:::
+
+[Redis 哨兵](https://redis.io/topics/sentinel) 是 Redis 官方的高可用解决方案，它提供以下功能：
 
 - **监控**，哨兵会不断检查您的 master 实例和 replica 实例是否按预期工作。
 - **通知**，当受监控的 Redis 实例出现问题时，哨兵可以通过 API 通知系统管理员或其他计算机程序。
