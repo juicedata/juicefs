@@ -76,6 +76,13 @@ jobs:
           head -n -2 /tmp/data1_result_tmp >/tmp/data1_result
           head -n -2 /tmp/data2_result_tmp >/tmp/data2_result
           head -n -2 /tmp/jfs_result_tmp >/tmp/jfs_result
+          echo "check result begin"
+          tail -n 1 /tmp/jfs_result
+          tail_result= tail -n 1 /tmp/jfs_result | grep PASS
+          echo "tail_result is "
+          echo $tail_result
+          if [[ $tail_result = "" ]]; then exit 1; fi
+          echo "check result end"
           echo "diff begin"
           diff_jfs_data1=$(diff /tmp/jfs_result /tmp/data1_result)
           diff_jfs_data2=$(diff /tmp/jfs_result /tmp/data2_result)
