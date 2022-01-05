@@ -138,6 +138,10 @@ func gc(ctx *cli.Context) error {
 		} else {
 			logger.Infof("Compacted %d chunks (%d slices, %d bytes).", nc, ns, nb)
 		}
+	} else {
+		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+			return nil // ignore compaction
+		})
 	}
 
 	blob = object.WithPrefix(blob, "chunks/")

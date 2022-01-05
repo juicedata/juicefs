@@ -1884,43 +1884,51 @@ func (r *redisMeta) cleanupSlices() {
 			continue
 		}
 		r.rdb.Set(ctx, "nextCleanupSlices", now, 0)
+		r.doCleanupSlices(false)
+	}
+}
 
-		var ckeys []string
-		var cursor uint64
-		var err error
-		for {
-			ckeys, cursor, err = r.rdb.HScan(ctx, sliceRefs, cursor, "*", 1000).Result()
+func (r *redisMeta) doCleanupSlices(parallel bool) {
+	var ctx = Background
+	var ckeys []string
+	var cursor uint64
+	var err error
+	for {
+		ckeys, cursor, err = r.rdb.HScan(ctx, sliceRefs, cursor, "*", 1000).Result()
+		if err != nil {
+			logger.Errorf("scan slices: %s", err)
+			break
+		}
+		if len(ckeys) > 0 {
+			values, err := r.rdb.HMGet(ctx, sliceRefs, ckeys...).Result()
 			if err != nil {
-				logger.Errorf("scan slices: %s", err)
+				logger.Warnf("mget slices: %s", err)
 				break
 			}
-			if len(ckeys) > 0 {
-				values, err := r.rdb.HMGet(ctx, sliceRefs, ckeys...).Result()
-				if err != nil {
-					logger.Warnf("mget slices: %s", err)
-					break
+			for i, v := range values {
+				if v == nil {
+					continue
 				}
-				for i, v := range values {
-					if v == nil {
-						continue
-					}
-					if strings.HasPrefix(v.(string), "-") { // < 0
-						ps := strings.Split(ckeys[i], "_")
-						if len(ps) == 2 {
-							chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
-							size, _ := strconv.ParseUint(ps[1], 10, 32)
-							if chunkid > 0 && size > 0 {
+				if strings.HasPrefix(v.(string), "-") { // < 0
+					ps := strings.Split(ckeys[i], "_")
+					if len(ps) == 2 {
+						chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
+						size, _ := strconv.ParseUint(ps[1], 10, 32)
+						if chunkid > 0 && size > 0 {
+							if parallel {
+								go r.deleteSlice(chunkid, uint32(size))
+							} else {
 								r.deleteSlice(chunkid, uint32(size))
 							}
 						}
-					} else if v == "0" {
-						r.cleanupZeroRef(ckeys[i])
 					}
+				} else if v == "0" {
+					r.cleanupZeroRef(ckeys[i])
 				}
 			}
-			if cursor == 0 {
-				break
-			}
+		}
+		if cursor == 0 {
+			break
 		}
 	}
 }
@@ -2331,6 +2339,9 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	r.cleanupLeakedInodes(delete)
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
+	if delete {
+		r.doCleanupSlices(true)
+	}
 
 	var cursor uint64
 	p := r.rdb.Pipeline()

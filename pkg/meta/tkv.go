@@ -1740,22 +1740,29 @@ func (m *kvMeta) cleanupSlices() {
 			continue
 		}
 		_ = m.setValue(m.counterKey("nextCleanupSlices"), m.packInt64(now))
+		m.doCleanupSlices(false)
+	}
+}
 
-		klen := 1 + 8 + 4
-		vals, _ := m.scanValues(m.fmtKey("K"), func(k, v []byte) bool {
-			// filter out invalid ones
-			return len(k) == klen && len(v) == 8 && parseCounter(v) <= 0
-		})
-		for k, v := range vals {
-			rb := utils.FromBuffer([]byte(k)[1:])
-			chunkid := rb.Get64()
-			size := rb.Get32()
-			refs := parseCounter(v)
-			if refs < 0 {
-				m.deleteSlice(chunkid, size)
+func (m *kvMeta) doCleanupSlices(parallel bool) {
+	klen := 1 + 8 + 4
+	vals, _ := m.scanValues(m.fmtKey("K"), func(k, v []byte) bool {
+		// filter out invalid ones
+		return len(k) == klen && len(v) == 8 && parseCounter(v) <= 0
+	})
+	for k, v := range vals {
+		rb := utils.FromBuffer([]byte(k)[1:])
+		chunkid := rb.Get64()
+		size := rb.Get32()
+		refs := parseCounter(v)
+		if refs < 0 {
+			if parallel {
+				go m.deleteSlice(chunkid, size)
 			} else {
-				m.cleanupZeroRef(chunkid, size)
+				m.deleteSlice(chunkid, size)
 			}
+		} else {
+			m.cleanupZeroRef(chunkid, size)
 		}
 	}
 }
@@ -1929,6 +1936,9 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 }
 
 func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
+	if delete {
+		m.doCleanupSlices(true)
+	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
 	result, err := m.scanValues(m.fmtKey("A"), func(k, v []byte) bool {
