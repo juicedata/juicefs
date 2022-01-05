@@ -75,6 +75,11 @@ func (c *objCounter) done() {
 	c.bytes.SetTotal(0, true)
 }
 
+type dChunk struct {
+	chunkid uint64
+	length  uint32
+}
+
 func gc(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
@@ -107,12 +112,36 @@ func gc(ctx *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
+	delete := ctx.Bool("delete")
 	store := chunk.NewCachedStore(blob, chunkConf)
-	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
-		chunkid := args[0].(uint64)
-		length := args[1].(uint32)
-		return store.Remove(chunkid, int(length))
-	})
+	var pendingProgress *mpb.Progress
+	var pending *mpb.Bar
+	var pendingObj chan *dChunk
+	var wg sync.WaitGroup
+	if delete {
+		pendingProgress, pending = utils.NewProgressCounter("pending deletes counter: ")
+		pendingObj = make(chan *dChunk, 10240)
+		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+			pending.Increment()
+			pendingObj <- &dChunk{args[0].(uint64), args[1].(uint32)}
+			return nil
+		})
+		for i := 0; i < ctx.Int("threads"); i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for c := range pendingObj {
+					if err := store.Remove(c.chunkid, int(c.length)); err != nil {
+						logger.Warnf("remove %d_%d: %s", c.chunkid, c.length, err)
+					}
+				}
+			}()
+		}
+	} else {
+		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+			return store.Remove(args[0].(uint64), int(args[1].(uint32)))
+		})
+	}
 	if ctx.Bool("compact") {
 		var nc, ns, nb int
 		var lastLog time.Time
@@ -144,22 +173,28 @@ func gc(ctx *cli.Context) error {
 		})
 	}
 
+	progress, bar := utils.NewProgressCounter("listed slices counter: ")
+	var c = meta.NewContext(0, 0, []uint32{0})
+	slices := make(map[meta.Ino][]meta.Slice)
+	r := m.ListSlices(c, slices, delete, bar.Increment)
+	if r != 0 {
+		logger.Fatalf("list all slices: %s", r)
+	}
+	if delete {
+		close(pendingObj)
+		wg.Wait()
+		pending.SetTotal(0, true)
+		pendingProgress.Wait()
+		logger.Infof("deleted %d pending objects", pending.Current())
+	}
+	bar.SetTotal(0, true)
+	progress.Wait()
+
 	blob = object.WithPrefix(blob, "chunks/")
 	objs, err := osync.ListAll(blob, "", "")
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
-
-	progress, bar := utils.NewProgressCounter("listed slices counter: ")
-	var c = meta.NewContext(0, 0, []uint32{0})
-	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, ctx.Bool("delete"), bar.Increment)
-	if r != 0 {
-		logger.Fatalf("list all slices: %s", r)
-	}
-	bar.SetTotal(0, true)
-	progress.Wait()
-
 	keys := make(map[uint64]uint32)
 	var total int64
 	var totalBytes uint64
@@ -197,7 +232,6 @@ func gc(ctx *cli.Context) error {
 
 	maxMtime := time.Now().Add(time.Hour * -1)
 	var leakedObj = make(chan string, 10240)
-	var wg sync.WaitGroup
 	for i := 0; i < ctx.Int("threads"); i++ {
 		wg.Add(1)
 		go func() {
@@ -214,10 +248,11 @@ func gc(ctx *cli.Context) error {
 		total++
 		bar.SetTotal(total, false)
 		leaked.add(obj.Size())
-		if ctx.Bool("delete") {
+		if delete {
 			leakedObj <- obj.Key()
 		}
 	}
+
 	for obj := range objs {
 		if obj == nil {
 			break // failed listing
@@ -278,7 +313,7 @@ func gc(ctx *cli.Context) error {
 
 	logger.Infof("scanned %d objects, %d valid, %d leaked (%d bytes), %d skipped (%d bytes)",
 		bar.Current(), valid.count.Current(), leaked.count.Current(), leaked.bytes.Current(), skipped.count.Current(), skipped.bytes.Current())
-	if leaked.count.Current() > 0 && !ctx.Bool("delete") {
+	if leaked.count.Current() > 0 && !delete {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
 	return nil

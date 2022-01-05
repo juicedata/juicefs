@@ -1884,11 +1884,11 @@ func (r *redisMeta) cleanupSlices() {
 			continue
 		}
 		r.rdb.Set(ctx, "nextCleanupSlices", now, 0)
-		r.doCleanupSlices(false)
+		r.doCleanupSlices()
 	}
 }
 
-func (r *redisMeta) doCleanupSlices(parallel bool) {
+func (r *redisMeta) doCleanupSlices() {
 	var ctx = Background
 	var ckeys []string
 	var cursor uint64
@@ -1915,11 +1915,7 @@ func (r *redisMeta) doCleanupSlices(parallel bool) {
 						chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
 						size, _ := strconv.ParseUint(ps[1], 10, 32)
 						if chunkid > 0 && size > 0 {
-							if parallel {
-								go r.deleteSlice(chunkid, uint32(size))
-							} else {
-								r.deleteSlice(chunkid, uint32(size))
-							}
+							r.deleteSlice(chunkid, uint32(size))
 						}
 					}
 				} else if v == "0" {
@@ -2340,7 +2336,7 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	r.cleanupLeakedChunks()
 	r.cleanupOldSliceRefs()
 	if delete {
-		r.doCleanupSlices(true)
+		r.doCleanupSlices()
 	}
 
 	var cursor uint64

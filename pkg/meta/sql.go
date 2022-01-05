@@ -1959,11 +1959,11 @@ func (m *dbMeta) cleanupSlices() {
 			_, err := ses.Update(&counter{Value: now}, counter{Name: "nextCleanupSlices"})
 			return err
 		})
-		m.doCleanupSlices(false)
+		m.doCleanupSlices()
 	}
 }
 
-func (m *dbMeta) doCleanupSlices(parallel bool) {
+func (m *dbMeta) doCleanupSlices() {
 	var ck chunkRef
 	rows, err := m.db.Where("refs <= 0").Rows(&ck)
 	if err != nil {
@@ -1977,11 +1977,7 @@ func (m *dbMeta) doCleanupSlices(parallel bool) {
 	}
 	_ = rows.Close()
 	for _, ck := range cks {
-		if parallel {
-			go m.deleteSlice(ck.Chunkid, ck.Size)
-		} else {
-			m.deleteSlice(ck.Chunkid, ck.Size)
-		}
+		m.deleteSlice(ck.Chunkid, ck.Size)
 	}
 }
 
@@ -2183,7 +2179,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
 	if delete {
-		m.doCleanupSlices(true)
+		m.doCleanupSlices()
 	}
 	var c chunk
 	rows, err := m.db.Rows(&c)
