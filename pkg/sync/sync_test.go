@@ -16,7 +16,6 @@ package sync
 
 import (
 	"bytes"
-	"os"
 	"reflect"
 	"testing"
 
@@ -79,9 +78,6 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 
 // nolint:errcheck
 func TestSync(t *testing.T) {
-	if os.Getenv("SFTP_HOST") == "" {
-		t.SkipNow()
-	}
 
 	config := &Config{
 		Start:     "",
@@ -98,12 +94,12 @@ func TestSync(t *testing.T) {
 		Quiet:     true,
 	}
 
-	a, _ := object.CreateStorage("sftp", os.Getenv("SFTP_HOST")+"a", os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
 	a.Put("a", bytes.NewReader([]byte("a")))
 	a.Put("ab", bytes.NewReader([]byte("ab")))
 	a.Put("abc", bytes.NewReader([]byte("abc")))
 
-	b, _ := object.CreateStorage("sftp", os.Getenv("SFTP_HOST")+"b", os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
 	b.Put("ba", bytes.NewReader([]byte("ba")))
 
 	// Copy "a" from sftp://a to sftp://b
@@ -125,7 +121,7 @@ func TestSync(t *testing.T) {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 
-	// Now a: {"a", "ab", "abc", "ba"}, b: {"a", "ba"}
+	// Now aRes: {"","a", "ab", "abc", "ba"}, bRes: {"","a", "ba"}
 	aRes, _ := a.ListAll("", "")
 	bRes, _ := b.ListAll("", "")
 
@@ -137,9 +133,10 @@ func TestSync(t *testing.T) {
 		bObjs = append(bObjs, obj)
 	}
 
-	if !reflect.DeepEqual(aObjs[0], bObjs[0]) {
+	if !reflect.DeepEqual(aObjs[1], bObjs[1]) {
 		t.FailNow()
 	}
+
 	if !reflect.DeepEqual(aObjs[len(aObjs)-1], bObjs[len(bObjs)-1]) {
 		t.FailNow()
 	}
