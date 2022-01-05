@@ -137,7 +137,7 @@ func (h *handle) Close() {
 		h.reader = nil
 	}
 	if h.writer != nil {
-		h.writer.Close(meta.Background)
+		_ = h.writer.Close(meta.Background)
 		h.writer = nil
 	}
 }
