@@ -227,14 +227,14 @@ func checkMountpointInTenSeconds(mp string, ch chan int) {
 				return
 			}
 		}
-		_, _ = os.Stdout.WriteString(".")
-		_ = os.Stdout.Sync()
+		os.Stdout.WriteString(".")
+		os.Stdout.Sync()
 	}
 	//1 is failure
 	if ch != nil {
 		ch <- 1
 	}
-	_, _ = os.Stdout.WriteString("\n")
+	os.Stdout.WriteString("\n")
 	log.Printf("fail to mount after 10 seconds, please mount in foreground")
 }
 

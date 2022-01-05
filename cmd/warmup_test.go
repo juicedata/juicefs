@@ -63,7 +63,7 @@ func TestWarmup(t *testing.T) {
 		cacheDir = "/var/jfsCache"
 	}
 
-	_ = os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
+	os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
 	defer os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
 
 	warmupArgs := []string{"", "warmup", mountpoint}

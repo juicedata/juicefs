@@ -33,10 +33,10 @@ func collectAll(c <-chan object.Object) []string {
 // nolint:errcheck
 func TestIterator(t *testing.T) {
 	m, _ := object.CreateStorage("mem", "", "", "")
-	_ = m.Put("a", bytes.NewReader([]byte("a")))
-	_ = m.Put("b", bytes.NewReader([]byte("a")))
-	_ = m.Put("aa", bytes.NewReader([]byte("a")))
-	_ = m.Put("c", bytes.NewReader([]byte("a")))
+	m.Put("a", bytes.NewReader([]byte("a")))
+	m.Put("b", bytes.NewReader([]byte("a")))
+	m.Put("aa", bytes.NewReader([]byte("a")))
+	m.Put("c", bytes.NewReader([]byte("a")))
 
 	ch, _ := ListAll(m, "a", "b")
 	keys := collectAll(ch)
@@ -49,7 +49,7 @@ func TestIterator(t *testing.T) {
 
 	// Single object
 	s, _ := object.CreateStorage("mem", "", "", "")
-	_ = s.Put("a", bytes.NewReader([]byte("a")))
+	s.Put("a", bytes.NewReader([]byte("a")))
 	ch, _ = ListAll(s, "", "")
 	keys = collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{"a"}) {
@@ -96,12 +96,12 @@ func TestSync(t *testing.T) {
 	}
 
 	a, _ := object.CreateStorage("mem", "a", "", "")
-	_ = a.Put("a", bytes.NewReader([]byte("a")))
-	_ = a.Put("ab", bytes.NewReader([]byte("ab")))
-	_ = a.Put("abc", bytes.NewReader([]byte("abc")))
+	a.Put("a", bytes.NewReader([]byte("a")))
+	a.Put("ab", bytes.NewReader([]byte("ab")))
+	a.Put("abc", bytes.NewReader([]byte("abc")))
 
 	b, _ := object.CreateStorage("mem", "b", "", "")
-	_ = b.Put("ba", bytes.NewReader([]byte("ba")))
+	b.Put("ba", bytes.NewReader([]byte("ba")))
 
 	// Copy "a" from mem://a to mem://b
 	total = 0

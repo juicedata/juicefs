@@ -34,7 +34,7 @@ func TestBench(t *testing.T) {
 		}
 	}(mountpoint)
 	benchArgs := []string{"", "bench", mountpoint}
-	_ = os.Setenv("SKIP_DROP_CACHES", "true")
+	os.Setenv("SKIP_DROP_CACHES", "true")
 	defer os.Unsetenv("SKIP_DROP_CACHES")
 	err := Main(benchArgs)
 	if err != nil {
