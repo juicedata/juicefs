@@ -44,7 +44,8 @@ script:
   - cat cov2.out >> coverage.txt
   - cd /jfs
   - git clone https://github.com/danjacques/gofslock.git
-  - cd gofslock && go mod tidy
+  - cd gofslock
+  - go mod init github.com/danjacques/gofslock.git && go mod tidy
   - go test -v ./fslock/...
   - cd /home/travis/gopath/src/github.com/juicedata/juicefs
   - sudo DURATION=10 make -C fstests all
