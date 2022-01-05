@@ -425,7 +425,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 		}
 		defer h.Wunlock()
 	}
-	v.writer.Flush(ctx, ino)
+	_ = v.writer.Flush(ctx, ino)
 	err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr)
 	if err == 0 {
 		v.writer.Truncate(ino, uint64(size))
@@ -465,7 +465,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 			owner := f.flockOwner
 			f.Unlock()
 			if f.writer != nil {
-				f.writer.Flush(ctx)
+				_ = f.writer.Flush(ctx)
 			}
 			if locks&1 != 0 {
 				_ = v.Meta.Flock(ctx, ino, owner, F_UNLCK, false)
@@ -532,7 +532,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	}
 	defer h.Runlock()
 
-	v.writer.Flush(ctx, ino)
+	_ = v.writer.Flush(ctx, ino)
 	n, err = h.reader.Read(ctx, off, buf)
 	for err == syscall.EAGAIN {
 		n, err = h.reader.Read(ctx, off, buf)

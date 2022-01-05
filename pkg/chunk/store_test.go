@@ -103,7 +103,7 @@ func TestAsyncStore(t *testing.T) {
 	os.MkdirAll(filepath.Dir(p), 0744)
 	f, _ := os.Create(p)
 	f.WriteString("good")
-	_ = f.Close()
+	f.Close()
 	conf.Writeback = true
 	_ = NewCachedStore(mem, conf)
 	time.Sleep(time.Millisecond * 50) // wait for scan to finish
