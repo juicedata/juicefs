@@ -76,6 +76,7 @@ func Test_isS3PathType(t *testing.T) {
 		{"s3.ap-southeast-1.amazonaws.com:8080", true},
 		{"s3-ap-southeast-1.amazonaws.com", true},
 		{"s3-ap-southeast-1.amazonaws.com:8080", true},
+		{"s3-ap-southeast-1.amazonaws..com:8080", false},
 		{"ap-southeast-1.amazonaws.com", false},
 		{"s3-ap-southeast-1amazonaws.com:8080", false},
 		{"s3-ap-southeast-1", false},
