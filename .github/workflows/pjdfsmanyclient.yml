@@ -78,7 +78,7 @@ jobs:
           head -n -2 /tmp/jfs_result_tmp >/tmp/jfs_result
           echo "check result begin"
           tail -n 1 /tmp/jfs_result_tmp
-          tail_result= tail -n 1 /tmp/jfs_result_tmp | grep PASS
+          tail_result=$(tail -n 1 /tmp/jfs_result_tmp | grep PASS)
           echo "tail_result is "
           echo $tail_result
           if [[ $tail_result = "" ]]; then exit 1; fi
