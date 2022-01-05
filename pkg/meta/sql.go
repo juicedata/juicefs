@@ -458,8 +458,8 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 		return nil, err
 	}
 	sessions := make([]*Session, 0, len(rows))
-	for _, row := range rows {
-		s, err := m.getSession(&row, false)
+	for i := range rows {
+		s, err := m.getSession(&rows[i], false)
 		if err != nil {
 			logger.Errorf("get session: %s", err)
 			continue
@@ -1855,12 +1855,12 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		_ = rows.Close()
 
 		ses := s
-		updateSlices := func(indx uint32, buf []byte, s *Slice) error {
+		updateSlices := func(indx uint32, buf []byte, chunkid uint64, size uint32) error {
 			if err := m.appendSlice(ses, fout, indx, buf); err != nil {
 				return err
 			}
-			if s.Chunkid > 0 {
-				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", s.Chunkid, s.Size); err != nil {
+			if chunkid > 0 {
+				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", chunkid, size); err != nil {
 					return err
 				}
 			}
@@ -1892,15 +1892,15 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 					indx := uint32(doff / ChunkSize)
 					dpos := uint32(doff % ChunkSize)
 					if dpos+s.Len > ChunkSize {
-						if err := updateSlices(indx, marshalSlice(dpos, s.Chunkid, s.Size, s.Off, ChunkSize-dpos), &s); err != nil {
+						if err := updateSlices(indx, marshalSlice(dpos, s.Chunkid, s.Size, s.Off, ChunkSize-dpos), s.Chunkid, s.Size); err != nil {
 							return err
 						}
 						skip := ChunkSize - dpos
-						if err := updateSlices(indx+1, marshalSlice(0, s.Chunkid, s.Size, s.Off+skip, s.Len-skip), &s); err != nil {
+						if err := updateSlices(indx+1, marshalSlice(0, s.Chunkid, s.Size, s.Off+skip, s.Len-skip), s.Chunkid, s.Size); err != nil {
 							return err
 						}
 					} else {
-						if err := updateSlices(indx, marshalSlice(dpos, s.Chunkid, s.Size, s.Off, s.Len), &s); err != nil {
+						if err := updateSlices(indx, marshalSlice(dpos, s.Chunkid, s.Size, s.Off, s.Len), s.Chunkid, s.Size); err != nil {
 							return err
 						}
 					}

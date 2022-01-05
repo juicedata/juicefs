@@ -78,7 +78,7 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chu
 		for read < int(s.Len) {
 			l := utils.Min(conf.BlockSize, int(s.Len)-read)
 			p := chunk.NewOffPage(l)
-			if err := readSlice(store, &s, p, read); err != nil {
+			if err := readSlice(store, &slices[i], p, read); err != nil {
 				logger.Debugf("can't compact chunk %d, retry later, read %d: %s", chunkid, i, err)
 				p.Release()
 				writer.Abort()
