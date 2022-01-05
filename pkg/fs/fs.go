@@ -107,8 +107,8 @@ func (fs *FileStat) Sys() interface{} { return fs.attr }
 func (fs *FileStat) Uid() int         { return int(fs.attr.Uid) }
 func (fs *FileStat) Gid() int         { return int(fs.attr.Gid) }
 
-func (fs *FileStat) Atime() int64 { return int64(fs.attr.Atime*1000) + int64(fs.attr.Atimensec/1e6) }
-func (fs *FileStat) Mtime() int64 { return int64(fs.attr.Mtime*1000) + int64(fs.attr.Mtimensec/1e6) }
+func (fs *FileStat) Atime() int64 { return fs.attr.Atime*1000 + int64(fs.attr.Atimensec/1e6) }
+func (fs *FileStat) Mtime() int64 { return fs.attr.Mtime*1000 + int64(fs.attr.Mtimensec/1e6) }
 
 func AttrToFileInfo(inode Ino, attr *Attr) *FileStat {
 	return &FileStat{inode: inode, attr: attr}
@@ -275,7 +275,7 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 		var fi os.FileInfo
 		fi, err = f.Stat()
 		if err == nil && fi.Size() > rotateAccessLog {
-			f.Close()
+			_ = f.Close()
 			fi, err = os.Stat(path)
 			if err == nil && fi.Size() > rotateAccessLog {
 				tmp := fmt.Sprintf("%s.%p", path, fs)
@@ -795,7 +795,7 @@ func (fs *FileSystem) Flush() error {
 }
 
 func (fs *FileSystem) Close() error {
-	fs.Flush()
+	_ = fs.Flush()
 	buffer := fs.logBuffer
 	if buffer != nil {
 		fs.logBuffer = nil
@@ -997,7 +997,7 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	}
 	err = f.wdata.Write(ctx, uint64(offset), b)
 	if err != 0 {
-		f.wdata.Close(meta.Background)
+		_ = f.wdata.Close(meta.Background)
 		f.wdata = nil
 		return
 	}
@@ -1052,7 +1052,7 @@ func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 			err = f.wdata.Close(meta.Background)
 			f.wdata = nil
 		}
-		f.fs.m.Close(ctx, f.inode)
+		_ = f.fs.m.Close(ctx, f.inode)
 	}
 	return
 }

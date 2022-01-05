@@ -107,7 +107,7 @@ func marshalPlock(ls map[lockOwner][]byte) []byte {
 	b := utils.NewBuffer(size)
 	for k, records := range ls {
 		b.Put64(k.sid)
-		b.Put64(uint64(k.owner))
+		b.Put64(k.owner)
 		b.Put32(uint32(len(records)))
 		b.Put(records)
 	}

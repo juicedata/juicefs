@@ -65,11 +65,11 @@ func releaseContext(ctx *fuseContext) {
 }
 
 func (c *fuseContext) Uid() uint32 {
-	return uint32(c.header.Uid)
+	return c.header.Uid
 }
 
 func (c *fuseContext) Gid() uint32 {
-	return uint32(c.header.Gid)
+	return c.header.Gid
 }
 
 func (c *fuseContext) Gids() []uint32 {
@@ -77,7 +77,7 @@ func (c *fuseContext) Gids() []uint32 {
 }
 
 func (c *fuseContext) Pid() uint32 {
-	return uint32(c.header.Pid)
+	return c.header.Pid
 }
 
 func (c *fuseContext) Duration() time.Duration {

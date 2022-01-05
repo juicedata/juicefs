@@ -83,17 +83,17 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 	finfo, err := f.Stat()
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, err
 	}
 	if finfo.IsDir() {
-		f.Close()
+		_ = f.Close()
 		return ioutil.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
 	if off > 0 {
 		if _, err := f.Seek(off, 0); err != nil {
-			f.Close()
+			_ = f.Close()
 			return nil, err
 		}
 	}

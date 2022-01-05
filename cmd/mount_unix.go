@@ -44,10 +44,10 @@ func checkMountpoint(name, mp string) {
 				return
 			}
 		}
-		os.Stdout.WriteString(".")
-		os.Stdout.Sync()
+		_, _ = os.Stdout.WriteString(".")
+		_ = os.Stdout.Sync()
 	}
-	os.Stdout.WriteString("\n")
+	_, _ = os.Stdout.WriteString("\n")
 	logger.Fatalf("fail to mount after 10 seconds, please check the log (/var/log/juicefs.log) or re-mount in foreground")
 }
 

@@ -784,12 +784,12 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			}
 			for rows.Next() {
 				if err = rows.Scan(&c); err != nil {
-					rows.Close()
+					_ = rows.Close()
 					return err
 				}
 				zeroChunks = append(zeroChunks, c.Indx)
 			}
-			rows.Close()
+			_ = rows.Close()
 		}
 
 		l := uint32(right - left)
@@ -1288,7 +1288,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		if parentSrc == parentDst && se.Name == nameDst {
 			if inode != nil {
-				*inode = Ino(se.Inode)
+				*inode = se.Inode
 			}
 			return nil
 		}
@@ -1343,7 +1343,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if flags == RenameNoReplace {
 				return syscall.EEXIST
 			}
-			dino = Ino(de.Inode)
+			dino = de.Inode
 			ok, err := s.Get(&dn)
 			if err != nil {
 				return err
@@ -1603,7 +1603,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) {
 			inodes = append(inodes, s.Inode)
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	done := true
 	for _, inode := range inodes {
@@ -1634,7 +1634,7 @@ func (m *dbMeta) CleanStaleSessions() {
 			ids = append(ids, s.Sid)
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 	for _, sid := range ids {
 		m.doCleanStaleSession(sid)
 	}
@@ -1847,12 +1847,12 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		for rows.Next() {
 			err = rows.Scan(&c)
 			if err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return err
 			}
 			chunks[c.Indx] = readSliceBuf(c.Slices)
 		}
-		rows.Close()
+		_ = rows.Close()
 
 		ses := s
 		updateSlices := func(indx uint32, buf []byte, s *Slice) error {
@@ -1866,7 +1866,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			}
 			return nil
 		}
-		coff := uint64(offIn/ChunkSize) * ChunkSize
+		coff := offIn / ChunkSize * ChunkSize
 		for coff < offIn+size {
 			if coff%ChunkSize != 0 {
 				panic("coff")
@@ -1933,7 +1933,7 @@ func (m *dbMeta) cleanupDeletedFiles() {
 				fs = append(fs, d)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 		for _, f := range fs {
 			logger.Debugf("cleanup chunks of inode %d with %d bytes", f.Inode, f.Length)
 			m.doDeleteFileData(f.Inode, f.Length)
@@ -1971,7 +1971,7 @@ func (m *dbMeta) cleanupSlices() {
 				cks = append(cks, ck)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 		for _, ck := range cks {
 			if ck.Refs <= 0 {
 				m.deleteSlice(ck.Chunkid, ck.Size)
@@ -2030,7 +2030,7 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 			indexes = append(indexes, c.Indx)
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 	for _, indx := range indexes {
 		err = m.deleteChunk(inode, indx)
 		if err != nil {
@@ -2167,7 +2167,7 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 			cs = append(cs, c)
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	for _, c := range cs {
 		logger.Debugf("compact chunk %d:%d (%d slices)", c.Inode, c.Indx, len(c.Slices)/sliceBytes)

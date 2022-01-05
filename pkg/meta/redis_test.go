@@ -967,7 +967,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if totalSlices != 1 {
 		t.Fatalf("number of chunks: %d != 1, %+v", totalSlices, slices)
 	}
-	m.Close(ctx, inode)
+	_ = m.Close(ctx, inode)
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink file %s", st)
 	}
@@ -1065,7 +1065,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	var sid uint64
 	switch m := m.(type) {
 	case *redisMeta:
-		sid = uint64(m.sid)
+		sid = m.sid
 	case *dbMeta:
 		sid = m.sid
 	case *kvMeta:

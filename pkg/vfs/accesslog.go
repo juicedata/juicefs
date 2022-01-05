@@ -112,7 +112,7 @@ func readAccessLog(fh uint64, buf []byte) int {
 			}
 		case <-t.C:
 			if n == 0 {
-				n = copy(buf, []byte("#\n"))
+				n = copy(buf, "#\n")
 			}
 			return n
 		}

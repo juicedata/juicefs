@@ -58,7 +58,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 					locks[key{l.Sid, l.Owner}] = l
 				}
 			}
-			rows.Close()
+			_ = rows.Close()
 
 			if ltype == F_RDLCK {
 				for _, l := range locks {
@@ -121,10 +121,10 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, sta
 			locks[key{l.Sid, l.Owner}] = dup(l.Records)
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	for k, d := range locks {
-		ls := loadLocks([]byte(d))
+		ls := loadLocks(d)
 		for _, l := range ls {
 			// find conflicted locks
 			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end >= l.start && *start <= l.end {
@@ -168,7 +168,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				if !ok {
 					return nil
 				}
-				ls := loadLocks([]byte(l.Records))
+				ls := loadLocks(l.Records)
 				if len(ls) == 0 {
 					return nil
 				}
@@ -195,13 +195,13 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 					locks[key{l.Sid, l.Owner}] = dup(l.Records)
 				}
 			}
-			rows.Close()
+			_ = rows.Close()
 			lkey := key{m.sid, owner}
 			for k, d := range locks {
 				if k == lkey {
 					continue
 				}
-				ls := loadLocks([]byte(d))
+				ls := loadLocks(d)
 				for _, l := range ls {
 					// find conflicted locks
 					if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end >= l.start && start <= l.end {
@@ -209,7 +209,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 					}
 				}
 			}
-			ls := updateLocks(loadLocks([]byte(locks[lkey])), lock)
+			ls := updateLocks(loadLocks(locks[lkey]), lock)
 			var n int64
 			if len(locks[lkey]) > 0 {
 				n, err = s.Cols("records").Update(plock{Records: dumpLocks(ls)},

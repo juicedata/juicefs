@@ -79,8 +79,7 @@ func (n *jfsObjects) IsReady(_ context.Context) bool {
 }
 
 func (n *jfsObjects) Shutdown(ctx context.Context) error {
-	n.fs.Close()
-	return nil
+	return n.fs.Close()
 }
 
 func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {
@@ -293,7 +292,7 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 		}
 		root := n.path(bucket, prefixDir) == "/"
 		for _, fi := range fis {
-			if root && len(fi.Name()) == len(metaBucket) && string(fi.Name()) == metaBucket {
+			if root && len(fi.Name()) == len(metaBucket) && fi.Name() == metaBucket {
 				continue
 			}
 			if fi.IsDir() {
@@ -720,7 +719,7 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 				lmi.Uploads = append(lmi.Uploads, minio.MultipartInfo{
 					Object:    object,
 					UploadID:  uploadID,
-					Initiated: time.Unix(int64(e.Attr.Atime), int64(e.Attr.Atimensec)),
+					Initiated: time.Unix(e.Attr.Atime, int64(e.Attr.Atimensec)),
 				})
 			}
 		}
@@ -769,7 +768,7 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 			result.Parts = append(result.Parts, minio.PartInfo{
 				PartNumber:   num,
 				Size:         int64(entry.Attr.Length),
-				LastModified: time.Unix(int64(entry.Attr.Mtime), 0),
+				LastModified: time.Unix(entry.Attr.Mtime, 0),
 				ETag:         string(etag),
 			})
 		}
