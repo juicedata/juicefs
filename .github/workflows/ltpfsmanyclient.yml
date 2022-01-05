@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
 
@@ -48,6 +48,12 @@ jobs:
       - name: Juicefs Mount
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /juice/data1 --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /juice/data2 --no-usage-report &
+          sleep 5s
+          stat /tmp/jfs
+          stat /juice/data1
+          stat /juice/data2
 
       - name: LTP FS
         run: |
@@ -61,8 +67,23 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/fs
           sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
-          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
-          sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
+          sudo ./runltp -d /juice/data1 -f fs_bind,fs_perms_simple,fsx,io,smoketest -C result_other_data1.log.failed -T result_other_data1.log.tconf -l result_other_data1.log &
+          sudo ./runltp -d /juice/data2 -f fs_bind,fs_perms_simple,fsx,io,smoketest -C result_other_data2.log.failed -T result_other_data2.log.tconf -l result_other_data2.log &
+          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest -C result_other_tmp.log.failed -T result_other_tmp.log.tconf -l result_other_tmp.log | tee /tmp/result_other_tmp
+          echo "check other result begin"
+          diff results/result_other_data1.log.failed results/result_other_data2.log.failed
+          diff results/result_other_data1.log.failed results/result_other_tmp.log.failed
+          echo "check other result end"
+          sudo ./runltp -d /juice/data1 -f fs -C result_data1.log.failed -T result_data1.log.tconf -l result_data1.log
+          sleep 60s
+          sudo ./runltp -d /juice/data2 -f fs -C result_data2.log.failed -T result_data2.log.tconf -l result_data2.log
+          sleep 60s
+          sudo ./runltp -d /tmp/jfs -f fs -C result_tmp.log.failed -T result_tmp.log.tconf -l result_tmp.log | tee /tmp/result_tmp
+          echo "check fs result begin"
+          diff results/result_data1.log.failed results/result_data2.log.failed
+          diff results/result_data1.log.failed results/result_tmp.log.failed
+          echo "check fs result end"
+
 
       - name: Setup tmate session
         if: ${{ failure() }}
