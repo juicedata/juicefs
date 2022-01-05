@@ -14,7 +14,7 @@ on:
       - 'docs/**'
 
 jobs:
-  ltpsyscallsheadmanyclient:
+  ltpsyscallsmiddlemanyclient:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -68,13 +68,14 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/syscalls
           sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
-          sudo head -n 600 runtest/syscalls > runtest/syscallshead
-          sudo chmod 777 runtest/syscallshead
-          sudo ./runltp -d /juice/data1 -f syscallshead -C result_data1.log.failed -T result_data1.log.tconf -l result_data1.log &
+          sudo head -n 1300 runtest/syscalls > runtest/syscallstmp
+          sudo tail -n 700  runtest/syscallstmp > runtest/syscallsmiddle
+          sudo chmod 777 runtest/syscallsmiddle
+          sudo ./runltp -d /juice/data1 -f syscallsmiddle -C result_data1.log.failed -T result_data1.log.tconf -l result_data1.log &
           sleep 60s
-          sudo ./runltp -d /juice/data2 -f syscallshead -C result_data2.log.failed -T result_data2.log.tconf -l result_data2.log &
+          sudo ./runltp -d /juice/data2 -f syscallsmiddle -C result_data2.log.failed -T result_data2.log.tconf -l result_data2.log &
           sleep 60s
-          sudo ./runltp -d /tmp/jfs -f syscallshead -C result_tmp.log.failed -T result_tmp.log.tconf -l result_tmp.log | tee /tmp/result_tmp
+          sudo ./runltp -d /tmp/jfs -f syscallsmiddle -C result_tmp.log.failed -T result_tmp.log.tconf -l result_tmp.log | tee /tmp/result_tmp
           if [ -f "/opt/ltp/results/result_data1.log.failed" ];then cat /opt/ltp/results/result_data1.log.failed;exit 1; fi
           if [ -f "/opt/ltp/results/result_data2.log.failed" ];then cat /opt/ltp/results/result_data2.log.failed;exit 1; fi
           if [ -f "/opt/ltp/results/result_tmp.log.failed" ];then cat /opt/ltp/results/result_tmp.log.failed;exit 1; fi
