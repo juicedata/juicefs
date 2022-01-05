@@ -16,6 +16,7 @@ package sync
 
 import (
 	"bytes"
+	"math"
 	"reflect"
 	"testing"
 
@@ -75,10 +76,13 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 		t.Fatalf("result wrong: %s", keys)
 	}
 }
+func deepEqualWithOutMtime(a, b object.Object) bool {
+	return a.IsDir() == b.IsDir() && a.Key() == b.Key() && a.Size() == b.Size() &&
+		math.Abs(a.Mtime().Sub(b.Mtime()).Seconds()) < 1
+}
 
 // nolint:errcheck
 func TestSync(t *testing.T) {
-
 	config := &Config{
 		Start:     "",
 		End:       "",
@@ -133,11 +137,11 @@ func TestSync(t *testing.T) {
 		bObjs = append(bObjs, obj)
 	}
 
-	if !reflect.DeepEqual(aObjs[1], bObjs[1]) {
+	if !deepEqualWithOutMtime(aObjs[1], bObjs[1]) {
 		t.FailNow()
 	}
 
-	if !reflect.DeepEqual(aObjs[len(aObjs)-1], bObjs[len(bObjs)-1]) {
+	if !deepEqualWithOutMtime(aObjs[len(aObjs)-1], bObjs[len(bObjs)-1]) {
 		t.FailNow()
 	}
 
