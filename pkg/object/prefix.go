@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 )
 
 type withPrefix struct {
@@ -94,7 +95,7 @@ func (p *withPrefix) ListAll(prefix, marker string) (<-chan Object, error) {
 	ln := len(p.prefix)
 	go func() {
 		for o := range r {
-			if o != nil {
+			if o != nil && o.Key() != "" {
 				switch p := o.(type) {
 				case *obj:
 					p.key = p.key[ln:]
@@ -119,6 +120,13 @@ func (p *withPrefix) Chmod(path string, mode os.FileMode) error {
 func (p *withPrefix) Chown(path string, owner, group string) error {
 	if fs, ok := p.os.(FileSystem); ok {
 		return fs.Chown(p.prefix+path, owner, group)
+	}
+	return nil
+}
+
+func (p *withPrefix) Chtimes(key string, mtime time.Time) error {
+	if fs, ok := p.os.(FileSystem); ok {
+		return fs.Chtimes(p.prefix+key, mtime)
 	}
 	return nil
 }

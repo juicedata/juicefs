@@ -222,9 +222,8 @@ func (h *hdfsclient) walk(path string, walkFn filepath.WalkFunc) error {
 func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 	listed := make(chan Object, 10240)
 	root := h.path(prefix)
-	root = strings.TrimSuffix(root, "/")
 	_, err := h.c.Stat(root)
-	if err != nil && err.(*os.PathError).Err == os.ErrNotExist && !strings.HasSuffix(prefix, "/") {
+	if err != nil && err.(*os.PathError).Err == os.ErrNotExist || !strings.HasSuffix(prefix, "/") {
 		root = filepath.Dir(root)
 	}
 	_, err = h.c.Stat(root)
@@ -243,6 +242,14 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return err
 			}
+
+			if !strings.HasSuffix(prefix, "/") && !strings.HasPrefix(info.Name(), prefix) {
+				if info.IsDir() && root != path {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
 			key := path[1:]
 			if !strings.HasPrefix(key, prefix) || key < marker {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {

@@ -109,40 +109,6 @@ func (m *memStore) Put(key string, in io.Reader) error {
 	return nil
 }
 
-func (m *memStore) Chmod(key string, mode os.FileMode) error {
-	m.Lock()
-	defer m.Unlock()
-	obj, ok := m.objects[key]
-	if !ok {
-		return errors.New("not found")
-	}
-	obj.mode = mode
-	return nil
-}
-
-func (m *memStore) Chown(key string, owner, group string) error {
-	m.Lock()
-	defer m.Unlock()
-	obj, ok := m.objects[key]
-	if !ok {
-		return errors.New("not found")
-	}
-	obj.owner = owner
-	obj.group = group
-	return nil
-}
-
-func (m *memStore) Chtimes(key string, mtime time.Time) error {
-	m.Lock()
-	defer m.Unlock()
-	obj, ok := m.objects[key]
-	if !ok {
-		return errors.New("not found")
-	}
-	obj.mtime = mtime
-	return nil
-}
-
 func (m *memStore) Copy(dst, src string) error {
 	d, err := m.Get(src, 0, -1)
 	if err != nil {
@@ -187,6 +153,10 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]Object, error) {
 		objs = objs[:limit]
 	}
 	return objs, nil
+}
+
+func (m *memStore) ListAll(prefix, marker string) (<-chan Object, error) {
+	return nil, notSupported
 }
 
 func newMem(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
