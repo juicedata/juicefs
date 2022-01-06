@@ -11,7 +11,7 @@ slug: /command_reference
 
 在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
 
-```bash
+```shell
 $ juicefs -h
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
@@ -55,12 +55,12 @@ COPYRIGHT:
    AGPLv3
 ```
 
-:::note 注意
-如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [快速上手指南](../getting-started/for_local.md) 了解安装相关内容。
+:::tip 提示
+如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [安装&升级](../getting-started/installation.md) 了解安装相关内容。
 :::
 
 :::note 注意
-如果命令选项是布尔（boolean）类型（例如 `--debug` 选项），在指定此类型选项时无需设置具体的值。例如不应该像 `--debug true` 这样写，直接写作 `--debug` 即可。指定了即代表此选项生效，反之不生效。
+如果命令选项是布尔（boolean）类型，例如 `--debug` ，无需设置任何值，只要在命令中添加 `--debug` 即代表启用该功能，反之则代表不启用。
 :::
 
 ## 自动补全
@@ -71,35 +71,38 @@ COPYRIGHT:
 
 通过加载 `hack/autocomplete` 下的对应脚本可以启用命令的自动补全，例如：
 
-Bash：
+### Bash
 
-```bash
-$ source hack/autocomplete/bash_autocomplete
+```shell
+source hack/autocomplete/bash_autocomplete
 ```
 
-Zsh：
+### Zsh
 
-```bash
-$ source hack/autocomplete/zsh_autocomplete
+```shell
+source hack/autocomplete/zsh_autocomplete
 ```
 
 请注意自动补全功能仅对当前会话有效。如果你希望对所有新会话都启用此功能，请将 `source` 命令添加到 `.bashrc` 或 `.zshrc` 中：
 
-```bash
-$ echo "source path/to/bash_autocomplete" >> ~/.bashrc
+```shell
+echo "source path/to/bash_autocomplete" >> ~/.bashrc
 ```
 
 或
 
-```bash
-$ echo "source path/to/zsh_autocomplete" >> ~/.zshrc
+```shell
+echo "source path/to/zsh_autocomplete" >> ~/.zshrc
 ```
 
 另外，如果你是在 Linux 系统上使用 bash，也可以直接将脚本拷贝到 `/etc/bash_completion.d` 目录并将其重命名为 `juicefs`：
 
-```bash
-$ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
-$ source /etc/bash_completion.d/juicefs
+```shell
+sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
+```
+
+```shell
+source /etc/bash_completion.d/juicefs
 ```
 
 ## 命令列表
@@ -115,6 +118,9 @@ $ source /etc/bash_completion.d/juicefs
 ```
 juicefs format [command options] META-URL NAME
 ```
+
+- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](how_to_setup_metadata_engine.md)」。
+- **NAME**：文件系统名称
 
 #### 选项
 
@@ -168,6 +174,9 @@ RSA 私钥的路径 (PEM)
 ```
 juicefs mount [command options] META-URL MOUNTPOINT
 ```
+
+- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](how_to_setup_metadata_engine.md)」。
+- **MOUNTPOINT**：文件系统挂载点，例如：`/mnt/jfs`
 
 #### 选项
 
@@ -287,6 +296,9 @@ juicefs umount [command options] MOUNTPOINT
 juicefs gateway [command options] META-URL ADDRESS
 ```
 
+- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](how_to_setup_metadata_engine.md)」。
+- **ADDRESS**：S3 网关地址和监听的端口，例如：`localhost:9000`
+
 #### 选项
 
 `--bucket value`<br />
@@ -382,6 +394,9 @@ juicefs gateway [command options] META-URL ADDRESS
 juicefs sync [command options] SRC DST
 ```
 
+- **SRC**：源路径
+- **DST**：目标路径
+
 #### 选项
 
 `--start KEY, -s KEY`<br />
@@ -435,7 +450,9 @@ juicefs sync [command options] SRC DST
 `--no-https`<br />
 不要使用 HTTPS (默认: false)
 
-> **注意**： 如果源存储是公共访问权限的桶，请将`accessKey`设置为`anonymous`
+:::note 注意 
+如果源存储是公共访问权限的桶，请将 `accessKey` 设置为 `anonymous`
+:::
 
 ### juicefs rmr
 
@@ -473,7 +490,7 @@ juicefs info [command options] PATH or INODE
 
 #### 描述
 
-跑一轮基准性能测试，包括对大文件和小文件的读/写/获取属性操作。
+对指定的路径做基准测试，包括对大文件和小文件的读/写/获取属性操作。
 
 #### 使用
 
