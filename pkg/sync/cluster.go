@@ -183,16 +183,16 @@ func startManager(tasks <-chan object.Object) (string, error) {
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
-	l, err := net.Listen("tcp", "0.0.0.0:0")
+	ip, err := findLocalIP()
+	if err != nil {
+		return "", fmt.Errorf("find local ip: %s", err)
+	}
+	l, err := net.Listen("tcp", ip+":")
 	if err != nil {
 		return "", fmt.Errorf("listen: %s", err)
 	}
 	logger.Infof("Listen at %s", l.Addr())
 	go func() { _ = http.Serve(l, nil) }()
-	ip, err := findLocalIP()
-	if err != nil {
-		return "", fmt.Errorf("find local ip: %s", err)
-	}
 	ps := strings.Split(l.Addr().String(), ":")
 	port := ps[len(ps)-1]
 	return fmt.Sprintf("%s:%s", ip, port), nil
