@@ -13,7 +13,7 @@ slug: /databases_for_metadata
 
 JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性能的云原生文件系统，JuiceFS 最先支持的是运行在内存上的键值数据库—— [Redis](https://redis.io)，这使得 JuiceFS 拥有十倍于 Amazon [EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的性能表现，[查看测试结果](../benchmark/benchmark.md)。
 
-通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模的使用。因此，JuiceFS 陆续开放了对 MySQL/MariaDB、SQLite 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
+通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模地使用。因此，JuiceFS 陆续开放了对 MySQL/MariaDB、TiKV 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
 
 :::caution 特别提示
 不论采用哪种数据库存储元数据，**务必确保元数据的安全**。元数据一旦损坏或丢失，将导致对应数据彻底损坏或丢失，甚至损毁整个文件系统。对于生产环境，应该始终选择具有高可用能力的数据库，与此同时，建议定期「[备份元数据](../administration/metadata_dump_load.md)」。
@@ -34,7 +34,7 @@ redis://username:password@host:6379/1
 可以通过环境变量 `REDIS_PASSWORD` 设置密码，避免在命令行选项中显式设置。
 
 :::note 注意
-在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了`用户名`和`密码`两个参数。6.0.0 以前版本只需在 URL 中省略 `username` 参数，例如 `redis://:password@host:6379/1`（密码前面的`:`冒号需要保留）。
+在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了 `用户名` 和 `密码` 两个参数。6.0.0 以前版本只需在 URL 中省略 `username` 参数，例如 `redis://:password@host:6379/1`（密码前面的 `:` 冒号需要保留）。
 :::
 
 例如，以下命令创建名为 `pics` 的 JuiceFS 文件系统，使用 Redis 中的 `1` 号数据库存储元数据：
@@ -144,7 +144,7 @@ SQLite 数据库只有一个文件，创建和使用都非常灵活，用它作�
 ```shell
 $ juicefs format --storage s3 \
     ...
-    sqlite3://my-jfs.db \
+    "sqlite3://my-jfs.db" \
     pics
 ```
 
@@ -153,13 +153,13 @@ $ juicefs format --storage s3 \
 挂载文件系统：
 
 ```shell
-sudo juicefs mount -d sqlite3://my-jfs.db
+sudo juicefs mount -d "sqlite3://my-jfs.db"
 ```
 
 请注意数据库文件的位置，如果不在当前目录，则需要指定数据库文件的绝对路径，比如：
 
 ```shell
-sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
+sudo juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 ```
 
 :::note 注意
@@ -168,9 +168,9 @@ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 
 ## TiKV
 
-> [TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCAP](https://pingcap.com) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects) 毕业。
+[TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCAP](https://pingcap.com) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects) 毕业。
 
-TiKV 的测试环境搭建非常简单，使用官方提供的 `TiUP` 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/5.1/deploy/install/install/)。
+TiKV 的测试环境搭建非常简单，使用官方提供的 TiUP 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/5.1/deploy/install/install/)。
 
 ### 创建文件系统
 
