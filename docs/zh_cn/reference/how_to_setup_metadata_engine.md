@@ -13,7 +13,7 @@ slug: /databases_for_metadata
 
 JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性能的云原生文件系统，JuiceFS 最先支持的是运行在内存上的键值数据库—— [Redis](https://redis.io)，这使得 JuiceFS 拥有十倍于 Amazon [EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的性能表现，[查看测试结果](../benchmark/benchmark.md)。
 
-通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模的使用。因此，JuiceFS 陆续开放了对 MySQL/MariaDB、SQLite 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
+通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模地使用。因此，JuiceFS 陆续开放了对 MySQL/MariaDB、TiKV 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
 
 :::caution 特别提示
 不论采用哪种数据库存储元数据，**务必确保元数据的安全**。元数据一旦损坏或丢失，将导致对应数据彻底损坏或丢失，甚至损毁整个文件系统。对于生产环境，应该始终选择具有高可用能力的数据库，与此同时，建议定期「[备份元数据](../administration/metadata_dump_load.md)」。
@@ -31,24 +31,13 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 redis://username:password@host:6379/1
 ```
 
-`username` 是 Redis 6.0.0 之后引入的。如果没有用户名可以忽略，如  `redis://:password@host:6379/1`（密码前面的`:`冒号需要保留）。
+可以通过环境变量 `REDIS_PASSWORD` 设置密码，避免在命令行选项中显式设置。
+
+:::note 注意
+在 Redis 6.0.0 之后，[AUTH](https://redis.io/commands/auth) 命令扩展了 `用户名` 和 `密码` 两个参数。6.0.0 以前版本只需在 URL 中省略 `username` 参数，例如 `redis://:password@host:6379/1`（密码前面的 `:` 冒号需要保留）。
+:::
 
 例如，以下命令创建名为 `pics` 的 JuiceFS 文件系统，使用 Redis 中的 `1` 号数据库存储元数据：
-
-```shell
-$ juicefs format --storage s3 \
-    ...
-    "redis://:mypassword@192.168.1.6:6379/1" \
-    pics
-```
-
-安全起见，建议使用环境变量 `REDIS_PASSWORD` 传递密码，例如：
-
-```shell
-export REDIS_PASSWORD=mypassword
-```
-
-然后就无需在元数据 URL 中设置密码了：
 
 ```shell
 $ juicefs format --storage s3 \
@@ -85,45 +74,26 @@ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 postgres://[<username>:<password>@]<IP or Domain name>[:5432]/<database-name>[?parameters]
 ```
 
-例如：
+比如：
 
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "postgres://user:password@192.168.1.6:5432/juicefs" \
+    "postgres://user:password@192.168.1.6:5432/juicefs?sslmode=disable" \
     pics
 ```
 
-安全起见，建议使用环境变量传递数据库密码，例如：
-
-```shell
-export $PG_PASSWD=mypassword
-```
-
-然后将元数据 URL 改为 `"postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs"`
+更多的连接参数，请 [参考这里](https://pkg.go.dev/github.com/lib/pq#hdr-Connection_String_Parameters).
 
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs" /mnt/jfs
+sudo juicefs mount -d "postgres://user:password@192.168.1.6:5432/juicefs?sslmode=disable" /mnt/jfs
 ```
-
-### 故障排除
-
-JuiceFS 客户端默认采用 SSL 加密连接 PostgreSQL，如果连接时报错  `pq: SSL is not enabled on the server` 说明数据库没有启用 SSL。可以根据业务场景为 PostgreSQL 启用 SSL 加密，也可以在元数据 URL 中添加参数禁用加密验证：
-
-```shell
-$ juicefs format --storage s3 \
-    ...
-    "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs?sslmode=disable" \
-    pics
-```
-
-元数据 URL 中还可以附加更多参数，[查看详情](https://pkg.go.dev/github.com/lib/pq#hdr-Connection_String_Parameters)。
 
 ## MySQL
 
-[MySQL](https://www.mysql.com/) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库。
+[MySQL](https://www.mysql.com/) 是世界上最受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库。
 
 ### 创建文件系统
 
@@ -142,21 +112,13 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-安全起见，建议使用环境变量传递数据库密码，例如：
-
-```shell
-export $MYSQL_PASSWD=mypassword
-```
-
-然后将元数据 URL 改为 `"mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs"`
+更多 MySQL 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
 
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs" /mnt/jfs
+sudo juicefs mount -d "mysql://user:password@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
-
-更多 MySQL 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
 
 ## MariaDB
 
@@ -169,7 +131,7 @@ MariaDB 与 MySQL 高度兼容，在使用上也没有任何差别，创建和�
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs" \
+    "mysql://user:password@(192.168.1.6:3306)/juicefs" \
     pics
 ```
 
@@ -182,7 +144,7 @@ SQLite 数据库只有一个文件，创建和使用都非常灵活，用它作�
 ```shell
 $ juicefs format --storage s3 \
     ...
-    sqlite3://my-jfs.db \
+    "sqlite3://my-jfs.db" \
     pics
 ```
 
@@ -191,13 +153,13 @@ $ juicefs format --storage s3 \
 挂载文件系统：
 
 ```shell
-sudo juicefs mount -d sqlite3://my-jfs.db
+sudo juicefs mount -d "sqlite3://my-jfs.db"
 ```
 
 请注意数据库文件的位置，如果不在当前目录，则需要指定数据库文件的绝对路径，比如：
 
 ```shell
-sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
+sudo juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 ```
 
 :::note 注意
@@ -208,7 +170,7 @@ sudo juicefs mount -d sqlite3:///home/herald/my-jfs.db /mnt/jfs/
 
 [TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCAP](https://pingcap.com) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects) 毕业。
 
-TiKV 的测试环境搭建非常简单，使用官方提供的 `TiUP` 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/5.1/deploy/install/install/)。
+TiKV 的测试环境搭建非常简单，使用官方提供的 TiUP 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/5.1/deploy/install/install/)。
 
 ### 创建文件系统
 
@@ -221,8 +183,10 @@ tikv://<pd_addr>[,<pd_addr>...]/<prefix>
 其中 `prefix` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 TiKV 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
 ```shell
-$ juicefs format --storage s3 \
-    ...
+$ juicefs format --storage minio \
+    --bucket https://192.168.1.6:9000/jfs \
+    --access-key minioadmin \
+    --secret-key minioadmin \
     "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" \
     pics
 ```
