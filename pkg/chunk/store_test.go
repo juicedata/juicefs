@@ -64,11 +64,6 @@ func testStore(t *testing.T, store ChunkStore) {
 	}
 }
 
-func TestDiskStore(t *testing.T) {
-	dir := t.TempDir()
-	testStore(t, NewDiskStore(filepath.Join(dir, "diskStore")))
-}
-
 var defaultConf = Config{
 	BlockSize:  1024,
 	CacheDir:   filepath.Join(os.TempDir(), "diskCache"),
