@@ -46,4 +46,4 @@ JuiceFS 作为一个文件系统也不例外，它的强一致性、高性能等
 
 ![How JuiceFS stores your files](../images/how-juicefs-stores-files-new.png)
 
-除了挂载文件系统以外，你还可以使用 [JuiceFS S3](../deployment/s3_gateway.md) 网关，这样既可以使用 S3 兼容的客户端，也可以使用内置的基于网页的文件管理器访问 JuiceFS 存储的文件。
+除了挂载文件系统以外，你还可以使用 [JuiceFS S3 网关](../deployment/s3_gateway.md)，这样既可以使用 S3 兼容的客户端，也可以使用内置的基于网页的文件管理器访问 JuiceFS 存储的文件。
