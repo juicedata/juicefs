@@ -819,7 +819,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 }
 
 func (store *cachedStore) shouldCache(size int) bool {
-	return size < store.conf.BlockSize || store.conf.CacheFullBlock
+	return store.conf.CacheFullBlock || size < store.conf.BlockSize || store.conf.UploadDelay > 0
 }
 
 func parseObjOrigSize(key string) int {
