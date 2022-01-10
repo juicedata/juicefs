@@ -3,11 +3,17 @@ sidebar_label: JuiceFS 监控指标
 sidebar_position: 2
 slug: /p8s_metrics
 ---
+
 # JuiceFS 监控指标
 
 JuiceFS 为每个文件系统提供一个 [Prometheus](https://prometheus.io) API。默认的 API 地址是 `http://localhost:9567/metrics`，你可以在执行 [`juicefs mount`](../reference/command_reference.md#juicefs-mount) 或 [`juicefs gateway`](../reference/command_reference.md#juicefs-gateway) 命令时通过 `--metrics` 选项自定义这个地址。
 
-JuiceFS 同时提供一个 [Grafana](https://grafana.com) 的[仪表盘模板](../../en/grafana_template.json)，将模板导入以后就可以展示这些收集上来的监控指标。
+JuiceFS 同时提供一些 [Grafana](https://grafana.com) 的仪表盘模板，将模板导入以后就可以展示这些收集上来的监控指标。目前提供的仪表盘模板有：
+
+| 模板名称                                                                                                        | 说明                                                   |
+| ----                                                                                                            | ----                                                   |
+| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | 用于展示自挂载点、S3 网关及 Hadoop Java SDK 收集的指标 |
+| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | 用于展示自 Kubernetes CSI 驱动收集的指标               |
 
 ## 使用 Consul 注册中心
 

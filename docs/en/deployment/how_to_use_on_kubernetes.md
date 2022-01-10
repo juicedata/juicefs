@@ -364,7 +364,7 @@ scrape_configs:
 
 #### Configure Grafana dashboard
 
-JuiceFS provides a [dashboard template](grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
+JuiceFS provides a [dashboard template](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
 
 ## Mount JuiceFS in the container
 
