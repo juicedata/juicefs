@@ -43,17 +43,18 @@ jobs:
         id: Cache-Choco
         uses: actions/cache@v2
         with:
-          path: 'C:\Program Files (x86)\WinFsp'
+          path: 'C:\ProgramData\chocolatey\lib\winfsp'
           key: ${{ runner.os }}-chocolatey-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-chocolatey-
 
 
       - name: Install WinFsp
-        if: steps.Cache-Choco.outputs.cache-hit != 'true'
         run: |
           choco install winfsp -y
-
+          dir "C:\ProgramData\chocolatey\lib\winfsp"
+          echo "hellohello"
+          dir "C:\ProgramData\chocolatey\lib\winfsp\tools"
 
 
       - name: Set up Include Headers
