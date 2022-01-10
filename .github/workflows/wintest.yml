@@ -42,8 +42,8 @@ jobs:
       - name: Cache Choco
         uses: actions/cache@v2
         with:
-        path: C:\Users\runneradmin\AppData\Local\Temp\chocolatey
-        key: ${{ runner.os }}-chocolatey-${{ github.sha }}
+          path: C:\Users\runneradmin\AppData\Local\Temp\chocolatey
+          key: ${{ runner.os }}-chocolatey-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-chocolatey-
 
