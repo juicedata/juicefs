@@ -23,8 +23,7 @@ import (
 )
 
 func TestNewCacheStore(t *testing.T) {
-	dir := t.TempDir()
-	s := newCacheStore(filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
+	s := newCacheStore(defaultConf.CacheDir, 1<<30, 1, &defaultConf, nil)
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
