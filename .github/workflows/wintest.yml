@@ -43,7 +43,7 @@ jobs:
         id: Cache-Choco
         uses: actions/cache@v2
         with:
-          path: 'C:\tmp\'
+          path: 'C:\tmptmp\'
           key: ${{ runner.os }}-chocolatey-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-chocolatey-
@@ -74,6 +74,7 @@ jobs:
 
       - name: Install Scoop Redis and MinIO
         run: |
+          dir "C:\Program Files (x86)\WinFsp"
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
           iwr -useb get.scoop.sh | iex
           echo $env:USERNAME
