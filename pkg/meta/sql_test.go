@@ -17,11 +17,12 @@
 package meta
 
 import (
+	"path"
 	"testing"
 )
 
 func TestSQLiteClient(t *testing.T) {
-	m, err := newSQLMeta("sqlite3", "/tmp/jfs-unit-test.db", &Config{MaxDeletes: 1})
+	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), &Config{MaxDeletes: 1})
 	if err != nil || m.Name() != "sqlite3" {
 		t.Fatalf("create meta: %s", err)
 	}
