@@ -18,6 +18,7 @@ package meta
 import (
 	"os"
 	"os/exec"
+	"path"
 	"testing"
 )
 
@@ -101,13 +102,14 @@ func TestLoadDump(t *testing.T) {
 		testDump(t, m, 1, sampleFile, "redis.dump")
 	})
 
+	sqluri := "sqlite3://" + path.Join(t.TempDir(), "jfs-load-dump-test.db")
 	t.Run("Metadata Engine: SQLite", func(t *testing.T) {
-		m := testLoad(t, "sqlite3:///tmp/jfs-load-dump-test.db", sampleFile)
+		m := testLoad(t, sqluri, sampleFile)
 		testDump(t, m, 0, sampleFile, "sqlite3.dump")
 	})
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
-		_ = testLoad(t, "sqlite3:///tmp/jfs-load-dump-test.db", sampleFile)
-		m := NewClient("sqlite3:///tmp/jfs-load-dump-test.db", &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		_ = testLoad(t, sqluri, sampleFile)
+		m := NewClient(sqluri, &Config{Retries: 10, Strict: true, Subdir: "d1"})
 		testDump(t, m, 0, subSampleFile, "sqlite3_subdir.dump")
 		testDump(t, m, 1, sampleFile, "sqlite3.dump")
 	})
