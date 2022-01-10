@@ -53,16 +53,16 @@ jobs:
         if: steps.Cache-Choco.outputs.cache-hit != 'true'
         run: |
           choco install wget
-          mkdir "C:\tmp\"
+          mkdir "C:\tmptmp\"
           wget -O winfsp.msi  https://github.com/billziss-gh/winfsp/releases/download/v1.9/winfsp-1.9.21096.msi
           echo "hellohello"
-          copy winfsp.msi "C:\tmp\"
-          dir  "C:\tmp\"
+          copy winfsp.msi "C:\tmptmp\"
+          dir  "C:\tmptmp\"
 
       - name: Set up Include Headers
         run: |
-          dir  "C:\tmp\"
-          msiexec.exe /i "C:\tmp\winfsp.msi" /qn /norestart INSTALLLEVEL=1000
+          dir  "C:\tmptmp\"
+          msiexec.exe /i "C:\tmptmp\winfsp.msi" /qn /norestart INSTALLLEVEL=1000
           mkdir "C:\WinFsp\inc\fuse"
           copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
           dir "C:\WinFsp\inc\fuse"
