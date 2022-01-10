@@ -54,8 +54,9 @@ jobs:
         run: |
           choco install wget
           mkdir "C:\tmp\"
-          wget -O winfsp.msi -P "C:\tmp\"  https://github.com/billziss-gh/winfsp/releases/download/v1.9/winfsp-1.9.21096.msi
+          wget -O winfsp.msi  https://github.com/billziss-gh/winfsp/releases/download/v1.9/winfsp-1.9.21096.msi
           echo "hellohello"
+          copy winfsp.msi "C:\tmp\"
           dir  "C:\tmp\"
 
       - name: Set up Include Headers
