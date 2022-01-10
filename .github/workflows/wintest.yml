@@ -155,5 +155,6 @@ jobs:
       #    cd TestSuite
       #    .\run-winfstest
 
-
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
 
