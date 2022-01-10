@@ -43,7 +43,7 @@ jobs:
       - name: Cache Choco
         uses: actions/cache@v2
         with:
-          path: "C:\Program Files (x86)\WinFsp"
+          path: C:\Program Files (x86)\WinFsp
           key: ${{ runner.os }}-chocolatey-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-chocolatey-
