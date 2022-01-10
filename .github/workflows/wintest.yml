@@ -39,11 +39,11 @@ jobs:
 
       #- name: Setup MSBuild.exe
       #  uses: warrenbuckley/Setup-MSBuild@v1
-      
+
       - name: Cache Choco
         uses: actions/cache@v2
         with:
-          path: C:\Users\runneradmin\AppData\Local\Temp\chocolatey
+          path: "C:\Program Files (x86)\WinFsp"
           key: ${{ runner.os }}-chocolatey-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-chocolatey-
