@@ -41,15 +41,17 @@ jobs:
       #  uses: warrenbuckley/Setup-MSBuild@v1
 
       - name: Cache Choco
+        id: Cache-Choco
         uses: actions/cache@v2
         with:
-          path: C:\Program Files (x86)\WinFsp
+          path: 'C:\Program Files (x86)\WinFsp'
           key: ${{ runner.os }}-chocolatey-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-chocolatey-
 
 
       - name: Install WinFsp
+        if: steps.Cache-Choco.outputs.cache-hit != 'true'
         run: |
           choco install winfsp -y
 
@@ -153,7 +155,5 @@ jobs:
       #    cd TestSuite
       #    .\run-winfstest
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
 
 
