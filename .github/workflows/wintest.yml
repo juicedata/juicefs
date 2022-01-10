@@ -43,22 +43,21 @@ jobs:
         id: Cache-Choco
         uses: actions/cache@v2
         with:
-          path: 'C:\ProgramData\chocolatey\lib\winfsp'
+          path: 'C:\tmp\'
           key: ${{ runner.os }}-chocolatey-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-chocolatey-
 
 
       - name: Install WinFsp
+        if: steps.Cache-Choco.outputs.cache-hit != 'true'
         run: |
-          choco install winfsp -y
-          dir "C:\ProgramData\chocolatey\lib\winfsp"
-          echo "hellohello"
-          dir "C:\ProgramData\chocolatey\lib\winfsp\tools"
-
+          wget -O winfsp.msi -P "C:\tmp\"  https://github.com/billziss-gh/winfsp/releases/download/v1.9/winfsp-1.9.21096.msi
 
       - name: Set up Include Headers
         run: |
+          dir  "C:\tmp\"
+          "C:\Windows\System32\msiexec.exe" /i "C:\tmp\winfsp.msi" /qn /norestart INSTALLLEVEL=1000
           mkdir "C:\WinFsp\inc\fuse"
           copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
           dir "C:\WinFsp\inc\fuse"
