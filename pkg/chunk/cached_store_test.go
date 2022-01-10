@@ -210,18 +210,21 @@ func TestStoreMultiBuckets(t *testing.T) {
 
 func TestFillCache(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "")
-	_ = os.RemoveAll(defaultConf.CacheDir)
-	store := NewCachedStore(mem, defaultConf)
-	bsize := defaultConf.BlockSize
+	conf := defaultConf
+	conf.CacheSize = 10
+	_ = os.RemoveAll(conf.CacheDir)
+	store := NewCachedStore(mem, conf)
 	if err := forgeChunk(store, 10, 1024); err != nil {
 		t.Fatalf("forge chunk 10 1024: %s", err)
 	}
 	defer store.Remove(10, 1024)
+	bsize := conf.BlockSize
 	if err := forgeChunk(store, 11, bsize); err != nil {
 		t.Fatalf("forge chunk 11 %d: %s", bsize, err)
 	}
 	defer store.Remove(11, bsize)
 
+	time.Sleep(time.Millisecond * 100) // waiting for flush
 	bcache := store.(*cachedStore).bcache
 	if cnt, used := bcache.stats(); cnt != 1 || used != 1024+4096 { // only chunk 10 cached
 		t.Fatalf("cache cnt %d used %d, expect cnt 1 used 5120", cnt, used)
@@ -232,7 +235,8 @@ func TestFillCache(t *testing.T) {
 	if err := store.FillCache(11, uint32(bsize)); err != nil {
 		t.Fatalf("fill cache 11 %d: %s", bsize, err)
 	}
-	expect := int64(1024 + 4096 + bsize)
+	time.Sleep(time.Second)
+	expect := int64(1024 + 4096 + bsize + 4096)
 	if cnt, used := bcache.stats(); cnt != 2 || used != expect {
 		t.Fatalf("cache cnt %d used %d, expect cnt 2 used %d", cnt, used, expect)
 	}
