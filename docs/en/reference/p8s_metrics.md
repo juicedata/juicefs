@@ -3,16 +3,21 @@ sidebar_label: JuiceFS Metrics
 sidebar_position: 2
 slug: /p8s_metrics
 ---
+
 # JuiceFS Metrics
 
-JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system. The default API address is `http://localhost:9567/metrics`, you could custom the address through `--metrics` option when execute [`juicefs mount`](../reference/command_reference.md#juicefs-mount) or [`juicefs gateway`](../reference/command_reference.md#juicefs-gateway) command.
+JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system. The default API address is `http://localhost:9567/metrics`, you could custom the address through `--metrics` option when execute [`juicefs mount`](command_reference.md#juicefs-mount) or [`juicefs gateway`](command_reference.md#juicefs-gateway) command.
 
-JuiceFS also provides a [dashboard template](grafana_template.json) for [Grafana](https://grafana.com), which can be
-imported to show the collected metrics in Prometheus.
+JuiceFS also provides some dashboard templates for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus. The dashboard templates currently available are:
+
+| Name                                                                                                            | Description                                                                 |
+| ----                                                                                                            | -----------                                                                 |
+| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | For show metrics collected from mount point, S3 gateway and Hadoop Java SDK |
+| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | For show metrics collected from Kubernetes CSI Driver                       |
 
 ## Use Consul as registration center
 
-JuiceFS support use Consul as registration center for metrics API. You could custom the address through `--consul` option when execute [`juicefs mount`](../reference/command_reference.md#juicefs-mount) or [`juicefs gateway`](../reference/command_reference.md#juicefs-gateway) command.
+JuiceFS support use Consul as registration center for metrics API. You could custom the address through `--consul` option when execute [`juicefs mount`](command_reference.md#juicefs-mount) or [`juicefs gateway`](command_reference.md#juicefs-gateway) command.
 
 When the Consul address is configured, the `--metrics` option does not need to be configured. JuiceFS will automatically configure metrics URL according to its own network and port conditions. If `--metrics` is set at the same time, it will first try to listen on the configured metrics URL.
 
