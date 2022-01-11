@@ -37,12 +37,28 @@ jobs:
         with:
           sdk-version: 18362
 
-      #- name: Setup MSBuild.exe
-      #  uses: warrenbuckley/Setup-MSBuild@v1
+
+      - name: Cache WinFsp
+        id: Cache-WinFsp
+        uses: actions/cache@v2
+        with:
+          path: 'C:\wfsp\'
+          key: ${{ runner.os }}-winfsp-key
+          restore-keys: |
+            ${{ runner.os }}-winfsp
+
+
+      - name: Download WinFsp
+        if: steps.Cache-WinFsp.outputs.cache-hit != 'true'
+        run: |
+          choco install wget
+          wget -O winfsp.msi  https://github.com/billziss-gh/winfsp/releases/download/v1.9/winfsp-1.9.21096.msi
+          copy winfsp.msi "C:\wfsp\"
 
       - name: Install WinFsp
         run: |
-          choco install winfsp -y
+          msiexec.exe /i "C:\wfsp\winfsp.msi" /qn /norestart INSTALLLEVEL=1000
+
 
       - name: Set up Include Headers
         run: |
@@ -57,6 +73,7 @@ jobs:
 
       - name: Install Scoop Redis and MinIO
         run: |
+          dir "C:\Program Files (x86)\WinFsp"
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
           iwr -useb get.scoop.sh | iex
           echo $env:USERNAME
@@ -99,6 +116,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
+          echo "C:\Program Files (x86)\WinFsp\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o juicefs-service.exe
           echo  "<service>"   >> juicefs-service.xml
           echo  "<id>jfs</id>"  >> juicefs-service.xml
@@ -143,7 +161,3 @@ jobs:
       #    msbuild.exe winfstest.sln
       #    cd TestSuite
       #    .\run-winfstest
-
-
-
-
