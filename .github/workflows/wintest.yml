@@ -37,8 +37,7 @@ jobs:
         with:
           sdk-version: 18362
 
-      #- name: Setup MSBuild.exe
-      #  uses: warrenbuckley/Setup-MSBuild@v1
+
       - name: Cache WinFsp
         id: Cache-WinFsp
         uses: actions/cache@v2
