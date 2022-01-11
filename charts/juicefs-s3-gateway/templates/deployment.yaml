@@ -45,7 +45,7 @@ spec:
           command:
             - sh
             - -c
-            - juicefs gateway $(METAURL) $(NODE_IP):{{ .Values.port }} {{ .Values.options }}
+            - juicefs gateway $(METAURL) $(NODE_IP):{{ .Values.port }} --metrics=0.0.0.0:{{ .Values.metricsPort }} {{ .Values.options }}
           env:
             - name: NODE_IP
               valueFrom:
@@ -68,6 +68,7 @@ spec:
                   key: secret-key
           ports:
             - containerPort: {{ .Values.port }}
+            - containerPort: {{ .Values.metricsPort }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

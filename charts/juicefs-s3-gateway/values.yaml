@@ -11,6 +11,7 @@ image:
   tag: "v0.11.1"
 
 port: 9000
+metricsPort: 9567
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
