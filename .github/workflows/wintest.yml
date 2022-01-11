@@ -39,23 +39,28 @@ jobs:
 
       #- name: Setup MSBuild.exe
       #  uses: warrenbuckley/Setup-MSBuild@v1
-      - name: Cache Choco
-        id: Cache-Choco
+      - name: Cache WinFsp
+        id: Cache-WinFsp
         uses: actions/cache@v2
         with:
           path: 'C:\wfsp\'
-          key: ${{ runner.os }}-chocolatey-${{ github.sha }}
+          key: ${{ runner.os }}-winfsp-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-chocolatey-
+            ${{ runner.os }}-winfsp-
 
 
       - name: Download WinFsp
-        if: steps.Cache-Choco.outputs.cache-hit != 'true'
+        if: steps.Cache-WinFsp.outputs.cache-hit != 'true'
         run: |
           choco install wget
           mkdir "C:\wfsp\"
           wget -O winfsp.msi  https://github.com/billziss-gh/winfsp/releases/download/v1.9/winfsp-1.9.21096.msi
           copy winfsp.msi "C:\wfsp\"
+
+      - name: Install WinFsp
+        run: |
+          msiexec.exe /i "C:\wfsp\winfsp.msi" /qn /norestart INSTALLLEVEL=1000
+
 
       - name: Set up Include Headers
         run: |
