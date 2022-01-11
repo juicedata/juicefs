@@ -1,7 +1,7 @@
 //go:build !nohdfs
 // +build !nohdfs
 
-// Copyright (c) 2014 Colin Marc (colinmarc@gmail.com)
+// Copyright 2014 Colin Marc (colinmarc@gmail.com)
 // borrowed from https://github.com/colinmarc/hdfs/blob/master/cmd/hdfs/kerberos.go
 
 package object

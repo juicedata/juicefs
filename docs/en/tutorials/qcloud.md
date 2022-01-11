@@ -142,7 +142,7 @@ GLOBAL OPTIONS:
    --version, -V           print only the version (default: false)
 
 COPYRIGHT:
-   AGPLv3
+   Apache License 2.0
 ```
 
 JuiceFS has good cross-platform compatibility and is supported on Linux, Windows and macOS. This article focuses on the installation and use of JuiceFS on Linux, if you need to know how to install it on other systems, please [check the documentation](../getting-started/installation.md).

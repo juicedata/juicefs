@@ -40,7 +40,7 @@
 | Kubernetes CSI Driver | ✕                  | ✓                          |
 | S3 网关               | ✕                  | ✓                          |
 | 开发语言              | Python             | Go                         |
-| 开源协议              | GPLv3              | AGPLv3                     |
+| 开源协议              | GPLv3              | Apache License 2.0                     |
 | 开源时间              | 2011               | 2021.1                     |
 
 ## 易用性

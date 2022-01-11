@@ -52,7 +52,7 @@ GLOBAL OPTIONS:
    --version, -V           print only the version (default: false)
 
 COPYRIGHT:
-   AGPLv3
+   Apache License 2.0
 ```
 
 :::tip 提示

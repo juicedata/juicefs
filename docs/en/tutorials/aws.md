@@ -122,7 +122,7 @@ GLOBAL OPTIONS:
    --version, -V           print only the version (default: false)
 
 COPYRIGHT:
-   AGPLv3
+   Apache License 2.0
 ```
 
 > **Tip**: If you execute the `juicefs` command and the terminal returns `command not found`, it may be because the `/usr/local/bin` directory is not in the system's `PATH` executable path. You can use the `echo $PATH` command to check the system's set executable path and reinstall the client to the correct location. You can also add `/usr/local/bin` to the `PATH`.
