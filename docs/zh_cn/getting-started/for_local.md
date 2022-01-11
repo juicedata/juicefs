@@ -26,9 +26,13 @@ juicefs format [command options] META-URL NAME
 
 可见，格式化文件系统需要提供 3 种信息：
 
-1. **[command options]**：用来提供数据存储相关的信息，如果不作任何指定则**默认使用本地磁盘**作为存储介质，默认为 `"$HOME/.juicefs/local"` 或 `"/var/jfs"`；
-2. **META-URL**：用来设置元数据存储。即数据库相关的信息，通常是数据库的 URL 或文件路径；
+1. **[command options]**：设定文件系统的存储介质，留空则**默认使用本地磁盘**作为存储介质，路径为 `"$HOME/.juicefs/local"` 或 `"/var/jfs"`；
+2. **META-URL**：用来设置元数据存储，即数据库相关的信息，通常是数据库的 URL 或文件路径；
 3. **NAME**：是文件系统的名称。
+
+:::tip 提示
+JuiceFS 支持丰富的存储介质和元数据存储引擎，查看 [JuiceFS 支持的存储介质](../reference/how_to_setup_object_storage.md) 和 [JuiceFS 支持的元数据存储引擎](../reference/how_to_setup_metadata_engine.md)。
+:::
 
 ### 上手实践
 
@@ -108,7 +112,9 @@ juicefs umount mnt
 
 对象存储是一种基于 HTTP 协议的，提供简单访问 API 的网络存储服务。它的结构扁平，易于扩展，价格相对低廉，非常适合存储海量的非结构化数据。几乎所有主流的云计算平台都有提供对象存储服务，如亚马逊 S3、阿里云 OSS、Backblaze B2 等。
 
-JuiceFS 支持几乎所有的对象存储服务，一般来说，创建对象存储通常只需要 2 个环节：
+JuiceFS 支持几乎所有的对象存储服务，查看「[JuiceFS 支持的存储介质](../reference/how_to_setup_object_storage.md)」。
+
+一般来说，创建对象存储通常只需要 2 个环节：
 
 1. 创建 `Bucket` 存储桶，拿到 Endpoint 地址；
 2. 创建 `Access Key ID` 和 `Access Key Secret`，即对象存储 API 的访问密钥。
