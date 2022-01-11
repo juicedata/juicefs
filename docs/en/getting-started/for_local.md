@@ -26,9 +26,13 @@ juicefs format [command options] META-URL NAME
 
 As you can see, there are 3 types of information required to format a file system.
 
-1. **[command options]**: used to provide data storage related information, if nothing is specified then **default to local disk** as the storage medium, default path is `"$HOME/.juicefs/local"` or `"/var/jfs"`.
+1. **[command options]**: Sets the storage media for the file system, if nothing is specified then **default to local disk** as the storage media, default path is `"$HOME/.juicefs/local"` or `"/var/jfs"`.
 2. **META-URL**: used to set the metadata engine, usually the URL or file path to the database.
 3. **NAME**: the name of the file system.
+
+:::tip
+JuiceFS supports a wide range of storage media and metadata storage engines, see [JuiceFS supported storage medias](../reference/how_to_setup_object_storage.md) and [JuiceFS supported metadata storage engines](../reference/how_to_setup_metadata_engine.md)。
+:::
 
 ### Hands-on Practice
 
@@ -108,7 +112,9 @@ The previous content is only suitable to quickly help you experience and underst
 
 Object Storage is a web storage service based on the HTTP protocol that offers simple API for access. It has a flat structure, easy to scale, relatively inexpensive, and is ideal for storing large amounts of unstructured data. Almost all major cloud computing platforms provide object storage services, such as Amazon S3, Alibaba Cloud OSS, Backblaze B2, etc.
 
-JuiceFS supports almost all object storage services, and in general, creating an object store usually requires only 2 parts.
+JuiceFS supports almost all object storage services, see [JuiceFS supported storage medias](../reference/how_to_setup_object_storage.md).
+
+In general, creating an object store usually requires only 2 parts.
 
 1. Create a `Bucket` and get the Endpoint address.
 2. Create the `Access Key ID` and `Access Key Secret`, the access keys for the Object Storage API.
