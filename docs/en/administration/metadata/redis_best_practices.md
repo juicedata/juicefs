@@ -1,5 +1,5 @@
 ---
-sidebar_label: Redis Best Practices
+sidebar_label: Redis
 sidebar_position: 1
 slug: /redis_best_practices
 ---
