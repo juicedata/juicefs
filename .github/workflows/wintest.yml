@@ -52,7 +52,6 @@ jobs:
         if: steps.Cache-WinFsp.outputs.cache-hit != 'true'
         run: |
           choco install wget
-          mkdir "C:\wfsp\"
           wget -O winfsp.msi  https://github.com/billziss-gh/winfsp/releases/download/v1.9/winfsp-1.9.21096.msi
           copy winfsp.msi "C:\wfsp\"
 
