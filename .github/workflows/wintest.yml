@@ -64,7 +64,6 @@ jobs:
 
       - name: Set up Include Headers
         run: |
-          msiexec.exe /i "C:\wfsp\winfsp.msi" /qn /norestart INSTALLLEVEL=1000
           mkdir "C:\WinFsp\inc\fuse"
           copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
           dir "C:\WinFsp\inc\fuse"
