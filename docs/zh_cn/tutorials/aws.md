@@ -123,7 +123,7 @@ GLOBAL OPTIONS:
    --version, -V           print only the version (default: false)
 
 COPYRIGHT:
-   AGPLv3
+   Apache License 2.0
 ```
 
 > **提示**：如果执行 `juicefs` 命令，终端返回 `command not found`，可能是因为 `/usr/local/bin` 目录不在系统的 `PATH` 可执行路径中。你可以通过 `echo $PATH` 命令查看系统已设置的可执行路径，并将客户端重新安装到正确的位置。也可以将 `/usr/local/bin` 添加到 `PATH` 中。

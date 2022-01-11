@@ -40,7 +40,7 @@ Similar to JuiceFS, [S3QL](https://github.com/s3ql/s3ql) is also an open source 
 | Kubernetes CSI Driver     | ✕                     | ✓                             |
 | S3 gateway                | ✕                     | ✓                             |
 | Language                  | Python                | Go                            |
-| Open source license       | GPLv3                 | AGPLv3                        |
+| Open source license       | GPLv3                 | Apache License 2.0                        |
 | Open source date          | 2011                  | 2021.1                        |
 
 ## Usage

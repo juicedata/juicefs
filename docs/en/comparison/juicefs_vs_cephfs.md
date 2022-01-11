@@ -49,7 +49,7 @@ JuiceFS mainly implements a libjfs library and FUSE client application, Java SDK
 | S3-compatible                   | ✕                     | ✓                  |
 | Quota                           | Directory level quota | Volume level quota |
 | Languages                       | C++                   | Go                 |
-| License                         | LGPLv2.1 & LGPLv3     | AGPLv3             |
+| License                         | LGPLv2.1 & LGPLv3     | Apache License 2.0             |
 
 #### [1] File Chunking
 
