@@ -129,7 +129,7 @@ GLOBAL OPTIONS:
    --version, -V           print only the version (default: false)
 
 COPYRIGHT:
-   AGPLv3
+   Apache License 2.0
 ```
 
 另外，你也可以访问 [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) 页面选择其他版本进行手动安装。

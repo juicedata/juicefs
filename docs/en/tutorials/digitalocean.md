@@ -127,7 +127,7 @@ GLOBAL OPTIONS:
    --version, -V           print only the version (default: false)
 
 COPYRIGHT:
-   AGPLv3
+   Apache License 2.0
 ```
 
 In addition, you can also visit the [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) page to select other versions for manual installation.

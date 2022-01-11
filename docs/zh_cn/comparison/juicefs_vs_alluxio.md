@@ -20,7 +20,7 @@
 | 数据加密              | ✕                  | ✓       |
 | 零运维                | ✕                  | ✓       |
 | 开发语言              | Java               | Go      |
-| 开源协议              | Apache License 2.0 | AGPLv3  |
+| 开源协议              | Apache License 2.0 | Apache License 2.0  |
 | 开源时间              | 2011               | 2021.1  |
 
 ### 存储格式
