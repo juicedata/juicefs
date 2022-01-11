@@ -60,6 +60,7 @@ jobs:
           msiexec.exe /i "C:\wfsp\winfsp.msi" /qn /norestart INSTALLLEVEL=1000
 
 
+
       - name: Set up Include Headers
         run: |
           mkdir "C:\WinFsp\inc\fuse"
