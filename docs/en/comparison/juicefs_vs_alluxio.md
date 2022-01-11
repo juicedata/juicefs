@@ -20,7 +20,7 @@ The following table shows difference of main features between Alluxio and JuiceF
 | Data encryption           | ✕                  | ✓       |
 | Zero-effort operation     | ✕                  | ✓       |
 | Language                  | Java               | Go      |
-| Open source license       | Apache License 2.0 | AGPLv3  |
+| Open source license       | Apache License 2.0 | Apache License 2.0  |
 | Open source date          | 2011               | 2021.1  |
 
 ### Storage format

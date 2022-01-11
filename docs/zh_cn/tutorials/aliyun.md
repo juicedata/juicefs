@@ -147,7 +147,7 @@ GLOBAL OPTIONS:
    --version, -V           print only the version (default: false)
 
 COPYRIGHT:
-   AGPLv3
+   Apache License 2.0
 ```
 
 JuiceFS 具有良好的跨平台兼容性，同时支持在 Linux、Windows 和 macOS 上使用。本文着重介绍 JuiceFS 在 Linux 系统上的安装和使用，如果你需要了解其他系统上的安装方法，请[查阅文档](../getting-started/installation.md)。

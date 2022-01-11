@@ -8,7 +8,7 @@ slug: .
 
 ![JuiceFS LOGO](../images/juicefs-logo.png)
 
-**JuiceFS** is a high-performance shared file system designed for cloud-native use and released under the AGPL v3.0 open source license. It provides full [POSIX](https://en.wikipedia.org/wiki/POSIX) compatibility, allowing almost all object stores to be used locally as massive local disks, and to be mounted and read on different hosts across platforms and regions at the same time.
+**JuiceFS** is a high-performance shared file system designed for cloud-native use and released under the Apache License 2.0. It provides full [POSIX](https://en.wikipedia.org/wiki/POSIX) compatibility, allowing almost all object stores to be used locally as massive local disks, and to be mounted and read on different hosts across platforms and regions at the same time.
 
 JuiceFS implements the distributed design of file system by separating "data" and "metadata" storage architecture. When using JuiceFS to store data, the data itself is persisted in [object storage](../reference/how_to_setup_object_storage.md#supported-object-storage) (e.g., Amazon S3), and the corresponding metadata can be persisted on-demand in various [databases](../reference/how_to_setup_metadata_engine.md) such as Redis, MySQL, TiKV, SQLite, etc.
 

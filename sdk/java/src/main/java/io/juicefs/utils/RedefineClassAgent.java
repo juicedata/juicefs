@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017 Turn Inc
+Copyright 2017 Turn Inc
 All rights reserved.
 The contents of this file are subject to the MIT License as provided
 below. Alternatively, the contents of this file may be used under

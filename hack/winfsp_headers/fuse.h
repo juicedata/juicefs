@@ -4,7 +4,7 @@
  *
  * This file is derived from libfuse/include/fuse.h:
  *     FUSE: Filesystem in Userspace
- *     Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+ *     Copyright 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
  *
  * @copyright 2015-2020 Bill Zissimopoulos
  */
