@@ -43,9 +43,9 @@ jobs:
         uses: actions/cache@v2
         with:
           path: 'C:\wfsp\'
-          key: ${{ runner.os }}-winfsp-${{ github.sha }}
+          key: ${{ runner.os }}-winfsp-key
           restore-keys: |
-            ${{ runner.os }}-winfsp-
+            ${{ runner.os }}-winfsp
 
 
       - name: Download WinFsp
