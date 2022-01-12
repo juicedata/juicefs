@@ -116,7 +116,7 @@ $ mc ls juicefs/jfs
 
 JuiceFS S3 网关提供一个 Prometheus API 用于收集监控指标，默认地址是 `http://localhost:9567/metrics`。更多信息请查看[「JuiceFS 监控指标」](../reference/p8s_metrics.md)文档。
 
-## 在 Kubernetes 中部署 S3 网关
+## 在 Kubernetes 中使用 S3 网关
 
 ### 通过 kubectl 部署
 
@@ -252,3 +252,34 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
      NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
      juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
      ```
+     
+### 监控
+
+JuiceFS S3 Gateway 可以在 `9567` 端口导出 [Prometheus](https://prometheus.io) 指标。关于所有监控指标的详细描述，请参考 [JuiceFS 监控指标](../reference/p8s_metrics.md)。
+
+#### 配置 Prometheus 服务
+
+新增一个任务到 `prometheus.yml`：
+
+```yaml
+scrape_configs:
+  - job_name: 'juicefs-s3-gateway'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        action: keep
+        regex: juicefs-s3-gateway
+      - source_labels: [__address__]
+        action: replace
+        regex: ([^:]+)(:\d+)?
+        replacement: $1:9567
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+        action: replace
+```
+
+#### 配置 Grafana 仪表盘
+
+JuiceFS 为 [Grafana](https://grafana.com) 提供了一个[仪表盘模板](../../en/grafana_template.json)，可以导入到 Grafana 中用于展示 Prometheus 收集的监控指标。

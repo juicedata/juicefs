@@ -29,7 +29,7 @@ spec:
           command:
             - sh
             - -c
-            - juicefs gateway $(METAURL) $(NODE_IP):9000 --metrics=0.0.0.0:9567
+            - juicefs gateway $(METAURL) $(NODE_IP):9000 --metrics=$(NODE_IP):9567
           env:
             - name: NODE_IP
               valueFrom:
