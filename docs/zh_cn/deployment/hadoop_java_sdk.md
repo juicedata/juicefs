@@ -156,7 +156,7 @@ $ make win
 | `juicefs.upload-limit`   | 0      | 上传带宽限制，单位为 Mbps，默认不限制。 |
 | `juicefs.download-limit` | 0      | 下载带宽限制，单位为 Mbps，默认不限制。 |
 
-  #### 其他配置
+#### 其他配置
 
 | 配置项                    | 默认值  | 描述                                                         |
 | ------------------------- | ------- | ------------------------------------------------------------ |
@@ -297,38 +297,7 @@ CREATE TABLE IF NOT EXISTS person
 
 ## 监控指标收集
 
-JuiceFS Hadoop Java SDK 支持把运行指标以 [Prometheus](https://prometheus.io) 格式上报到 [Pushgateway](https://github.com/prometheus/pushgateway)，然后让 Prometheus 从 Pushgateway 抓取指标，最后通过 [Grafana](https://grafana.com) 以及 [JuiceFS 仪表盘模板](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)来展示收集的运行指标。
-
-请用如下参数启用指标收集：
-
-```xml
-<property>
-  <name>juicefs.push-gateway</name>
-  <value>host:port</value>
-</property>
-```
-
-同时可以通过 `juicefs.push-interval` 配置修改上报指标的频率，默认为 10 秒上报一次。
-
-:::info 说明
-根据 [Pushgateway 官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md#configure-the-pushgateway-as-a-target-to-scrape)的建议，Prometheus 的[抓取配置](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config)中需要设置 `honor_labels: true`。
-
-需要特别注意，Prometheus 从 Pushgateway 抓取的指标的时间戳不是 JuiceFS Hadoop Java SDK 上报时的时间，而是抓取时的时间，具体请参考 [Pushgateway 官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md#about-timestamps)。
-
-默认情况下 Pushgateway 只会在内存中保存指标，如果需要持久化到磁盘上，可以通过 `--persistence.file` 选项指定保存的文件路径以及 `--persistence.interval` 选项指定保存到文件的频率（默认 5 分钟保存一次）。
-:::
-
-:::note 注意
-每一个使用 JuiceFS Hadoop Java SDK 的进程会有唯一的指标，而 Pushgateway 会一直记住所有收集到的指标，导致指标数持续积累占用过多内存，也会使得 Prometheus 抓取指标时变慢，建议定期清理 Pushgateway 上的指标。
-
-定期使用下面的命令清理 Pushgateway 的指标数据，清空指标不影响运行中的 JuiceFS Hadoop Java SDK 持续上报数据。**注意 Pushgateway 启动时必须指定 `--web.enable-admin-api` 选项，同时以下命令会清空 Pushgateway 中的所有监控指标。**
-
-```bash
-$ curl -X PUT http://host:9091/api/v1/admin/wipe
-```
-:::
-
-关于所有监控指标的描述，请查看 [JuiceFS 监控指标](../reference/p8s_metrics.md)。有关 Pushgateway 的更多信息，请查看[官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md)。
+请查看[「监控」](../administration/monitoring.md)文档了解如何收集及展示 JuiceFS 监控指标
 
 ## 基准测试
 
