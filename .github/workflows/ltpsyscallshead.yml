@@ -54,6 +54,7 @@ jobs:
         run: |
           git clone https://github.com/linux-test-project/ltp.git
           cd ltp
+          git checkout 20210927
           make autotools
           ./configure
           make
