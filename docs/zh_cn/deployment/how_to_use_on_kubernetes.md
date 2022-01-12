@@ -319,52 +319,7 @@ standard (default)   k8s.io/minikube-hostpath   Delete          Immediate       
 
 ### 监控
 
-JuiceFS CSI Driver 可以在 `9567` 端口导出 [Prometheus](https://prometheus.io) 指标。关于所有监控指标的详细描述，请参考 [JuiceFS 监控指标](../reference/p8s_metrics.md)。
-
-#### 配置 Prometheus 服务
-
-新增一个任务到 `prometheus.yml`：
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - role: pod
-    relabel_configs:
-    - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-      action: keep
-      regex: juicefs-mount
-    - source_labels: [__address__]
-      action: replace
-      regex: ([^:]+)(:\d+)?
-      replacement: $1:9567
-      target_label: __address__
-    - source_labels: [__meta_kubernetes_pod_node_name]
-      target_label: node
-      action: replace
-```
-
-这里我们假设 Prometheus 服务运行在 Kubernetes 集群中，如果你的 Prometheus 服务运行在 Kubernetes 集群之外，请确保 Prometheus 服务可以访问 Kubernetes 节点，请参考[这个 issue](https://github.com/prometheus/prometheus/issues/4633) 添加 `api_server` 和 `tls_config` 配置到以上文件：
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - api_server: <Kubernetes API Server>
-      role: pod
-      tls_config:
-        ca_file: <...>
-        cert_file: <...>
-        key_file: <...>
-        insecure_skip_verify: false
-    relabel_configs:
-    ...
-    ...
-```
-
-#### 配置 Grafana 仪表盘
-
-JuiceFS 为 [Grafana](https://grafana.com) 提供了一个[仪表盘模板](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json)，可以导入到 Grafana 中用于展示 Prometheus 收集的监控指标。
+请查看[「监控」](../administration/monitoring.md)文档了解如何收集及展示 JuiceFS 监控指标
 
 ## 在容器中挂载 JuiceFS
 
