@@ -12,5 +12,8 @@ spec:
       targetPort: {{ .Values.port }}
       protocol: TCP
       name: http
+    - name: metrics
+      port: {{ .Values.metricsPort }}
+      targetPort: {{ .Values.metricsPort }}
   selector:
     {{- include "juicefs-s3-gateway.selectorLabels" . | nindent 4 }}
