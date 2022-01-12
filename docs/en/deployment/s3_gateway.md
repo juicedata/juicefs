@@ -249,3 +249,35 @@ There are some differences between the various versions of Ingress. For more usa
      NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
      juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
      ```
+     
+### Monitoring
+
+JuiceFS S3 Gateway can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](../reference/p8s_metrics.md).
+
+#### Configure Prometheus server
+
+Add a job to `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'juicefs-s3-gateway'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        action: keep
+        regex: juicefs-s3-gateway
+      - source_labels: [__address__]
+        action: replace
+        regex: ([^:]+)(:\d+)?
+        replacement: $1:9567
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+        action: replace
+```
+
+#### Configure Grafana dashboard
+
+JuiceFS provides a [dashboard template](grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
+

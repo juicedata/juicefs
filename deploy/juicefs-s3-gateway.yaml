@@ -29,7 +29,7 @@ spec:
           command:
             - sh
             - -c
-            - juicefs gateway $(METAURL) $(NODE_IP):9000
+            - juicefs gateway $(METAURL) $(NODE_IP):9000 --metrics=$(NODE_IP):9567
           env:
             - name: NODE_IP
               valueFrom:
@@ -52,6 +52,7 @@ spec:
                   key: secret-key
           ports:
             - containerPort: 9000
+            - containerPort: 9567
           resources:
             limits:
               cpu: 5000m
@@ -74,3 +75,6 @@ spec:
     - name: http
       port: 9000
       targetPort: 9000
+    - name: metrics
+      port: 9567
+      targetPort: 9567
