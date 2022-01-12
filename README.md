@@ -21,7 +21,7 @@ JuiceFS can simply and conveniently connect massive cloud storage directly to bi
 5. **Sharing**: JuiceFS is a shared file storage that can be read and written by thousands clients.
 6. **Strong Consistency**: The confirmed modification will be immediately visible on all servers mounted with the same file system .
 7. **Outstanding Performance**: The latency can be as low as a few milliseconds and the throughput can be expanded to nearly unlimited. [Test results](docs/en/benchmark/benchmark.md)
-8. **Data Encryption**: Supports data encryption in transit and at rest, read [the guide](docs/en/secuirty/encrypt.md) for more information.
+8. **Data Encryption**: Supports data encryption in transit and at rest, read [the guide](docs/en/security/encrypt.md) for more information.
 9. **Global File Locks**: JuiceFS supports both BSD locks (flock) and POSIX record locks (fcntl).
 10. **Data Compression**: JuiceFS supports use [LZ4](https://lz4.github.io/lz4) or [Zstandard](https://facebook.github.io/zstd) to compress all your data.
 
