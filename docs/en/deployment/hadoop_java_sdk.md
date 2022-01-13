@@ -297,38 +297,7 @@ CREATE TABLE IF NOT EXISTS person
 
 ## Monitoring metrics collection
 
-JuiceFS Hadoop Java SDK supports reporting metrics in [Prometheus](https://prometheus.io) format to [Pushgateway](https://github.com/prometheus/pushgateway), and then let Prometheus scrapes metrics from Pushgateway, finally, through [Grafana](https://grafana.com) and [JuiceFS dashboard template](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json) to visualize these metrics.
-
-Enable metrics reporting through following configuration:
-
-```xml
-<property>
-  <name>juicefs.push-gateway</name>
-  <value>host:port</value>
-</property>
-```
-
-At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds.
-
-:::info
-According to the suggestion of [Pushgateway official document](https://github.com/prometheus/pushgateway/blob/master/README.md#configure-the-pushgateway-as-a-target-to-scrape), Prometheus's [scrape configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) needs to set `honor_labels: true`.
-
-It is important to note that the timestamp of the metrics scraped by Prometheus from Pushgateway is not the time when the JuiceFS Hadoop Java SDK reported it, but the time when it was scraped. For details, please refer to [Pushgateway official document](https://github.com/prometheus/pushgateway/blob/master/README.md#about-timestamps).
-
-By default, Pushgateway will only save metrics in memory. If you need to persist to disk, you can specify the file path for saving with the `--persistence.file` option and the frequency of saving to the file with the `--persistence.interval` option (the default save time is 5 minutes).
-:::
-
-:::note
-Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushgateway will always remember all the collected metrics, resulting in the continuous accumulation of metrics and taking up too much memory, which will also slow down Prometheus scrapes metrics. It is recommended to clean up metrics on Pushgateway regularly.
-
-Regularly use the following command to clean up the metrics of Pushgateway. Clearing the metrics will not affect the running JuiceFS Hadoop Java SDK to continuously report data. **Note that the `--web.enable-admin-api` option must be specified when Pushgateway is started, and the following command will clear all monitoring metrics in Pushgateway.**
-
-```bash
-$ curl -X PUT http://host:9091/api/v1/admin/wipe
-```
-:::
-
-For a description of all monitoring metrics, please refer to [JuiceFS Metrics](../reference/p8s_metrics.md). For more information about Pushgateway, please check [official document](https://github.com/prometheus/pushgateway/blob/master/README.md).
+Please see the ["Monitoring"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.
 
 ## Benchmark
 

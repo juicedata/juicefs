@@ -319,52 +319,7 @@ standard (default)   k8s.io/minikube-hostpath   Delete          Immediate       
 
 ### Monitoring
 
-JuiceFS CSI Driver can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](../reference/p8s_metrics.md).
-
-#### Configure Prometheus server
-
-Add a job to `prometheus.yml`:
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - role: pod
-    relabel_configs:
-    - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-      action: keep
-      regex: juicefs-mount
-    - source_labels: [__address__]
-      action: replace
-      regex: ([^:]+)(:\d+)?
-      replacement: $1:9567
-      target_label: __address__
-    - source_labels: [__meta_kubernetes_pod_node_name]
-      target_label: node
-      action: replace
-```
-
-Here we assume the Prometheus server is running inside Kubernetes cluster, if your Prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable from Prometheus server, refer to [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration like this:
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - api_server: <Kubernetes API Server>
-      role: pod
-      tls_config:
-        ca_file: <...>
-        cert_file: <...>
-        key_file: <...>
-        insecure_skip_verify: false
-    relabel_configs:
-    ...
-    ...
-```
-
-#### Configure Grafana dashboard
-
-JuiceFS provides a [dashboard template](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
+Please see the ["Monitoring"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.
 
 ## Mount JuiceFS in the container
 
