@@ -123,7 +123,7 @@ scrape_configs:
 
 [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) 支持把监控指标上报到 [Pushgateway](https://github.com/prometheus/pushgateway)，然后让 Prometheus 从 Pushgateway 抓取指标。
 
-请用如下配置启用指标收集：
+请用如下配置启用指标上报：
 
 ```xml
 <property>
@@ -154,7 +154,7 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 
 有关 Pushgateway 的更多信息，请查看[官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md)。
 
-### 使用 Consul 注册中心
+### 使用 Consul 作为注册中心
 
 JuiceFS 支持使用 Consul 作为监控指标 API 的注册中心，默认的 Consul 地址是 `127.0.0.1:8500`，你也可以通过 `--consul` 选项自定义。如：
 
