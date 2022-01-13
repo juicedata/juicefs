@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-func TestSigleFlight(t *testing.T) {
+func TestSingleFlight(t *testing.T) {
 	g := &Controller{}
 	gp := &sync.WaitGroup{}
 	for i := 0; i < 100000; i++ {
