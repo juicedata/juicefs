@@ -106,14 +106,6 @@ $ mc ls juicefs/jfs
 [2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
 ```
 
-## Monitoring metrics collection
-
-:::note
-This feature needs to run JuiceFS client version 0.17.1 and above.
-:::
-
-JuiceFS S3 gateway provides a Prometheus API for collecting monitoring metrics, the default address is `http://localhost:9567/metrics`. More information please check the ["JuiceFS Metrics"](../reference/p8s_metrics.md) document.
-
 ## Deploy JuiceFS S3 Gateway in Kubernetes
 
 ### Install via kubectl
@@ -249,35 +241,7 @@ There are some differences between the various versions of Ingress. For more usa
      NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
      juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
      ```
-     
-### Monitoring
 
-JuiceFS S3 Gateway can export [Prometheus](https://prometheus.io) metrics at port `9567`. For a description of all monitoring metrics, please refer to [JuiceFS Metrics](../reference/p8s_metrics.md).
+## Monitoring
 
-#### Configure Prometheus server
-
-Add a job to `prometheus.yml`:
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs-s3-gateway'
-    kubernetes_sd_configs:
-      - role: pod
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-        action: keep
-        regex: juicefs-s3-gateway
-      - source_labels: [__address__]
-        action: replace
-        regex: ([^:]+)(:\d+)?
-        replacement: $1:9567
-        target_label: __address__
-      - source_labels: [__meta_kubernetes_pod_node_name]
-        target_label: node
-        action: replace
-```
-
-#### Configure Grafana dashboard
-
-JuiceFS provides a [dashboard template](grafana_template.json) for [Grafana](https://grafana.com), which can be imported to show the collected metrics in Prometheus.
-
+Please see the ["Monitoring"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.
