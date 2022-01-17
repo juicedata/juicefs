@@ -1,25 +1,26 @@
-## Data encryption
+# Data encryption
 
-# # Data encryption in the transmission
+## Data encryption in the Transit
 
 JuiceFS encrypts data during transmission over the network to prevent unauthorized users from eavesdropping on network traffic.
 
 JuiceFS clients always use HTTPS to upload data to the Object Storage Service, except for the following cases.
 
 - Uploading to AliCloud OSS using internal endpoints
-- Upload to UCloud US3 using internal endpoints
+- Uploading to UCloud US3 using internal endpoints
 
 
-## Static Data Encryption
+## Data At Rest Encryption
 
-JuiceFS supports static data encryption, which means that data is encrypted before uploading to the object-store like AWS s3.  In this case, the data stored in the object store will be encrypted, which can effectively prevent data leakage in case the object store itself is compromised.
+JuiceFS supports Data At Rest Encryption. Any data will be encrypted first
+before uploading to the object store. With such ability, JuiceFS can effectively prevent data leakage as along as the meta data is safe and sound.
 
 JuiceFS uses industry-standard encryption methods (AES-GCM and RSA) in client-side encryption. Encryption and decryption are performed on the JuiceFS client side. The only thing the user needs to do is to provide a private key or password when JuiceFS is mounted and use it like a normal file system. It is completely transparent to the application.
 
 > **NOTE**: Data cached on the client-side is **NOT** encrypted. However, only the root user or owner can access this data. To encrypt the cached data as well, you can put the cached directory in an encrypted file system or block storage.
 
 
-### Encryption and decryption methods
+### Encryption and Decryption Method
 A global RSA private key `M` must be created for each encrypted file system. Each object stored in the object store will have its own random symmetric key `S`. Data is encrypted with the symmetric key `S` for AES-GCM encryption, `S` is encrypted with the global RSA private key `M`, and the RSA private key is encrypted using a user-specified passphrase.
 
 ! [Encryption At-rest](. /images/encryption.png)
