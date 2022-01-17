@@ -249,6 +249,14 @@ func TestQingStor(t *testing.T) {
 	s, _ := newQingStor("https://test.pek3a.qingstor.com",
 		os.Getenv("QY_ACCESS_KEY"), os.Getenv("QY_SECRET_KEY"))
 	testStorage(t, s)
+
+	//private cloud
+	if os.Getenv("PRIVATE_QY_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
+	s2, _ := newQingStor("http://test.jn1.is.shanhe.com",
+		os.Getenv("PRIVATE_QY_ACCESS_KEY"), os.Getenv("PRIVATE_QY_SECRET_KEY"))
+	testStorage(t, s2)
 }
 
 func TestS3(t *testing.T) {
