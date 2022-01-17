@@ -95,8 +95,13 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 			return fmt.Errorf("Failed to put: %s", err)
 		}
 		if err2 := store.Create(); err2 != nil {
-			return fmt.Errorf("Failed to create %s: %s,  previous error: %s\nplease create bucket %s manually, then format again",
-				store, err2, err, store)
+			if strings.Contains(err.Error(), "NoSuchBucket") {
+				return fmt.Errorf("Failed to create bucket %s: %s, previous error: %s\nPlease create bucket %s manually, then format again.",
+					store, err2, err, store)
+			} else {
+				return fmt.Errorf("Failed to create bucket %s: %s, previous error: %s",
+					store, err2, err)
+			}
 		}
 		if err := store.Put(key, bytes.NewReader(data)); err != nil {
 			return fmt.Errorf("Failed to put: %s", err)
