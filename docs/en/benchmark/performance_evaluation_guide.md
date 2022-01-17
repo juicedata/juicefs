@@ -93,21 +93,21 @@ The specific meaning of each of these indicators is as follows:
 - usage
   - cpu: CPU consumed by the JuiceFS process
   - mem: the physical memory consumed by the JuiceFS process
-  - buf: internal read/write buffer size of JuiceFS process, limited by mount `--buffer-size
-  - cache: internal metric, optional.
+  - buf: internal read/write buffer size of JuiceFS process, limited by mount option `--buffer-size`
+  - cache: internal metric, can be simply ignored
 - fuse
-  - ops/lat: number of requests per second processed by the FUSE interface and their average latency (in milliseconds, same below)
+  - ops/lat: number of requests per second processed by the FUSE interface and their average latency (in milliseconds)
   - read/write: bandwidth value of the FUSE interface to handle read and write requests per second
 - meta
-  - ops/lat: number of requests per second processed by the metadata engine and their average latency (please note that some requests that can be processed directly in the cache are not included in the statistics to better reflect the time spent by the client interacting with the metadata engine)
-  - txn/lat: the number of **write transactions** processed by the metadata engine per second and their average latency (read-only requests such as `getattr` are only counted as ops and not txn)
+  - ops/lat: number of requests per second processed by the metadata engine and their average latency (in milliseconds). Please note that some requests that can be processed directly in the cache are not included in the statistics to better reflect the time spent by the client interacting with the metadata engine.
+  - txn/lat: the number of **write transactions** processed by the metadata engine per second and their average latency (in milliseconds). Read-only requests such as `getattr` are only counted as ops and not txn.
   - retry: the number of **write transactions** that the metadata engine retries per second
 - blockcache
   - read/write: read/write traffic per second for the client's local data cache
 - object
-  - get/get_c/lat: bandwidth value of object store per second for processing **read requests**, number of requests and their average latency
-  - put/put_c/lat: bandwidth value of object store for **write requests** per second, number of requests and their average latency
-  - del_c/lat: The number of **delete requests** per second and the average latency of the object store
+  - get/get_c/lat: bandwidth value of object store per second for processing **read requests**, number of requests and their average latency (in milliseconds)
+  - put/put_c/lat: bandwidth value of object store for **write requests** per second, number of requests and their average latency (in milliseconds)
+  - del_c/lat: the number of **delete requests** per second and the average latency (in milliseconds) of the object store
 
 ### JuiceFS Profile
 

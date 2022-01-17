@@ -178,6 +178,10 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 
 ### 使用 Consul 作为注册中心
 
+:::note 注意
+该特性需要运行 1.0.0 及以上版本 JuiceFS 客户端
+:::
+
 JuiceFS 支持使用 Consul 作为监控指标 API 的注册中心，默认的 Consul 地址是 `127.0.0.1:8500`，你也可以通过 `--consul` 选项自定义。如：
 
 ```shell
