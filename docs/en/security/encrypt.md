@@ -27,16 +27,14 @@ A global RSA private key `M` must be created for each encrypted file system. Eac
 
 ![Encryption At-rest](../images/encryption.png
 
-The detailed process of data encryption is as follows.
-
+The detailed process of data encryption is as follows:
 - Before writing to the object store, the data blocks are compressed using LZ4 or ZStandard.
 - A random 256-bit symmetric key `S` and a random seed `N` are generated for each data block.
 - AES-GCM-based encryption of each data block using `S` and `N` yields `encrypted_data`.
 - To avoid the symmetric key `S` from being transmitted in clear text over the network, the symmetric key `S` is encrypted with the RSA key `M` to obtain the ciphertext `K`.
 - The encrypted data `encrypted_data`, the ciphertext `K`, and the random seed `N` are combined into an object and then written to the object storage.
 
-The steps for decrypting the data are as follows.
-
+The steps for decrypting the data are as follows:
 - Read the entire encrypted object (it may be a bit larger than 4MB).
 - Parse the object data to get the ciphertext `K`, the random seed `N`, and the encrypted data `encrypted_data`.
 - Decrypt `K` with RSA key to get symmetric key `S`.
