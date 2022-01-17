@@ -444,7 +444,7 @@ $ juicefs format \
 
 ## 青云 QingStor
 
-使用青云 QingStor 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.qingcloud.com/qingstor/api/common/signature.html#%E8%8E%B7%E5%8F%96-access-key) 了解如何创建 `Access key` 和 `Secret key`。
+使用青云 QingStor 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docsv3.qingcloud.com/storage/object-storage/api/practices/signature/#%E8%8E%B7%E5%8F%96-access-key) 了解如何创建 `Access key` 和 `Secret key`。
 
 `--bucket` 选项的格式为 `https://<bucket>.<region>.qingstor.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：北京 3-A 的区域代码为 `pek3a`。[点此查看](https://docs.qingcloud.com/qingstor/#%E5%8C%BA%E5%9F%9F%E5%8F%8A%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D) 所有可用的区域代码。例如：
 
