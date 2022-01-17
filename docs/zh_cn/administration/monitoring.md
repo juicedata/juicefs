@@ -119,11 +119,33 @@ scrape_configs:
         action: replace
 ```
 
+#### 通过 Prometheus Operator 收集
+
+[Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) 让用户在 Kubernetes 环境中能够快速部署和管理 Prometheus，借助 Prometheus Operator 提供的 `ServiceMonitor` CRD 可以自动生成抓取配置。例如（假设 JuiceFS S3 网关的 `Service` 部署在 `kube-system` 名字空间）：
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: juicefs-s3-gateway
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: juicefs-s3-gateway
+  endpoints:
+    - port: metrics
+```
+
+有关 Prometheus Operator 的更多信息，请查看[官方文档](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md)。
+
 ### Hadoop
 
 [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) 支持把监控指标上报到 [Pushgateway](https://github.com/prometheus/pushgateway)，然后让 Prometheus 从 Pushgateway 抓取指标。
 
-请用如下配置启用指标收集：
+请用如下配置启用指标上报：
 
 ```xml
 <property>
@@ -154,7 +176,7 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 
 有关 Pushgateway 的更多信息，请查看[官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md)。
 
-### 使用 Consul 注册中心
+### 使用 Consul 作为注册中心
 
 JuiceFS 支持使用 Consul 作为监控指标 API 的注册中心，默认的 Consul 地址是 `127.0.0.1:8500`，你也可以通过 `--consul` 选项自定义。如：
 
