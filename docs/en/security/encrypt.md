@@ -1,6 +1,6 @@
-# Data encryption
+# Data Encryption
 
-## Data encryption in the Transit
+## Data Encryption in the Transit
 
 JuiceFS encrypts data during transmission over the network to prevent unauthorized users from eavesdropping on network traffic.
 
@@ -15,15 +15,17 @@ JuiceFS clients always use HTTPS to upload data to the Object Storage Service, e
 JuiceFS supports Data At Rest Encryption. Any data will be encrypted first
 before uploading to the object store. With such ability, JuiceFS can effectively prevent data leakage as along as the meta data is safe and sound.
 
-JuiceFS uses industry-standard encryption methods (AES-GCM and RSA) in client-side encryption. Encryption and decryption are performed on the JuiceFS client side. The only thing the user needs to do is to provide a private key or password when JuiceFS is mounted and use it like a normal file system. It is completely transparent to the application.
+JuiceFS uses industry-standard encryption methods (AES-GCM and RSA) in client-side. Encryption and decryption are performed on the JuiceFS client side. 
+The user only need to do one thing is providing a private key or password when JuiceFS is mounted and use it like a normal file system. 
+After the setup, the mounted file system is completely transparent to the application.
 
-> **NOTE**: Data cached on the client-side is **NOT** encrypted. However, only the root user or owner can access this data. To encrypt the cached data as well, you can put the cached directory in an encrypted file system or block storage.
+> **NOTE**: The cached data on the client-side is **NOT** encrypted. However, only the root user or owner can access this data. To encrypt the cached data as well, you can put the cached directory in an encrypted file system or block storage.
 
 
 ### Encryption and Decryption Method
 A global RSA private key `M` must be created for each encrypted file system. Each object stored in the object store will have its own random symmetric key `S`. Data is encrypted with the symmetric key `S` for AES-GCM encryption, `S` is encrypted with the global RSA private key `M`, and the RSA private key is encrypted using a user-specified passphrase.
 
-! [Encryption At-rest](. /images/encryption.png)
+![Encryption At-rest](../images/encryption.png
 
 The detailed process of data encryption is as follows.
 
