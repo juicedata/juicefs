@@ -25,7 +25,7 @@ After the setup, the mounted file system is completely transparent to the applic
 ### Encryption and Decryption Method
 A global RSA private key `M` must be created for each encrypted file system. Each object stored in the object store will have its own random symmetric key `S`. Data is encrypted with the symmetric key `S` for AES-GCM encryption, `S` is encrypted with the global RSA private key `M`, and the RSA private key is encrypted using a user-specified passphrase.
 
-![Encryption At-rest](../images/encryption.png
+![Encryption At-rest](../images/encryption.png)
 
 The detailed process of data encryption is as follows:
 - Before writing to the object store, the data blocks are compressed using LZ4 or ZStandard.
