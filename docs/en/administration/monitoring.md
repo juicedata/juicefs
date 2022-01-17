@@ -178,6 +178,10 @@ For more information about Pushgateway, please check [official document](https:/
 
 ### Use Consul as registration center
 
+:::note
+This feature needs to run JuiceFS client version 1.0.0 and above.
+:::
+
 JuiceFS support use Consul as registration center for metrics API. The default Consul address is `127.0.0.1:8500`. You could custom the address through `--consul` option, e.g.:
 
 ```shell
