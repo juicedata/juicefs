@@ -1,6 +1,6 @@
 # Data Encryption
 
-## Data Encryption in the Transit
+## Data Encryption In Transit
 
 JuiceFS encrypts data during transmission over the network to prevent unauthorized users from eavesdropping on network traffic.
 
