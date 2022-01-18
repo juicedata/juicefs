@@ -257,7 +257,11 @@ func bench(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		logger.Fatalln("PATH must be provided")
 	}
-	tmpdir := filepath.Join(ctx.Args().First(), fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
+	tmpdir, err := filepath.Abs(ctx.Args().First())
+	if err != nil {
+		logger.Fatalf("Failed to get absolute path of %s: %s", ctx.Args().First(), err)
+	}
+	tmpdir = filepath.Join(tmpdir, fmt.Sprintf("__juicefs_benchmark_%d__", time.Now().UnixNano()))
 	bm := newBenchmark(tmpdir, int(ctx.Uint("block-size")), int(ctx.Uint("big-file-size")),
 		int(ctx.Uint("small-file-size")), int(ctx.Uint("small-file-count")), int(ctx.Uint("threads")))
 	if bm.big == nil && bm.small == nil {
