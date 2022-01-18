@@ -16,7 +16,7 @@ slug: /how_to_setup_object_storage
 
 ## 存储参数
 
-在创建 JFS 文件系统时，设置数据存储一般涉及以下几个选项：
+在创建 JuiceFS 文件系统时，设置数据存储一般涉及以下几个选项：
 
 - `--storage` 指定文件系统要使用的存储类型，例如：`--storage s3`。
 - `--bucket` 指定存储访问地址，例如：`--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`。
@@ -35,7 +35,7 @@ $ juicefs format --storage s3 \
 
 ## Access Key 和 Secret Key
 
-一般而言，对象存储通过 `Access Key ID` 和 `Access Key Secret` 验证用户身份。
+一般而言，对象存储通过 `Access Key ID` 和 `Access Key Secret` 验证用户身份，对应到 JuiceFS 文件系统就是 `--access-key` 和 `--secret-key` 这两个选项（或者简称为 AK、SK）。
 
 创建文件系统时除了使用 `--access-key` 和 `--secret-key` 两个选项显式指定，更安全的做法是通过 `ACCESS_KEY` 和 `SECRET_KEY` 环境变量传递密钥信息，例如：
 
@@ -48,7 +48,7 @@ $ juicefs format --storage s3 \
 	myjfs
 ```
 
-公有云通常允许用户创建 IAM (Identity and Access Management) 角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有读写对象存储的权限，则无需再指定 `--access-key` 和 `--secret-key`。
+公有云通常允许用户创建 IAM（Identity and Access Management）角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有读写对象存储的权限，则无需再指定 `--access-key` 和 `--secret-key`。
 
 ## 支持的存储服务
 
@@ -132,7 +132,7 @@ $ juicefs format \
 
 ## Google 云存储
 
-由于 Google 云存储没有 `Access key` 和 `Secret key`，因此在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。请查阅 Google Cloud 的文档了解 [身份验证](https://cloud.google.com/docs/authentication) 和 [身份及访问管理 (IAM)](https://cloud.google.com/iam/docs/overview) 相关内容。
+由于 Google 云存储没有 `Access key` 和 `Secret key`，因此在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。请查阅 Google Cloud 的文档了解 [身份验证](https://cloud.google.com/docs/authentication) 和 [身份及访问管理（IAM）](https://cloud.google.com/iam/docs/overview) 相关内容。
 
 一般来说，无需额外配置，在使用 Google 云服务器时默认已经拥有云存储的访问权限。
 
@@ -695,7 +695,7 @@ JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端
 
 ## Redis
 
-Redis 即可以作为 JuiceFS 的元数据存储，也可以作为数据存储，但当使用 Redis 作为数据存储时，建议不要存储大规模数据。
+Redis 既可以作为 JuiceFS 的元数据存储，也可以作为数据存储，但当使用 Redis 作为数据存储时，建议不要存储大规模数据。
 
 `--bucket` 选项格式为 `redis://<host>:<port>/<db>`。`--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 
@@ -727,7 +727,7 @@ $ juicefs format \
 
 ## 本地磁盘
 
-在创建 JFS 文件系统时，如果没有指定任何存储类型，会默认使用本地磁盘作为数据存储，root 用户默认存储路径为 `/var/jfs`，普通用户默认存储路径为 `~/.juicefs/local`。
+在创建 JuiceFS 文件系统时，如果没有指定任何存储类型，会默认使用本地磁盘作为数据存储，root 用户默认存储路径为 `/var/jfs`，普通用户默认存储路径为 `~/.juicefs/local`。
 
 例如，以下命令使用本地的 Redis 数据库和本地磁盘创建了一个名为 `myfs` 的文件系统：
 
