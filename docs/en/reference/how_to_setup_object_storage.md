@@ -82,7 +82,11 @@ S3 supports [two style endpoint URI](https://docs.aws.amazon.com/AmazonS3/latest
 - Virtual hosted-style: `https://<bucket>.s3.<region>.amazonaws.com`
 - Path-style: `https://s3.<region>.amazonaws.com/<bucket>`
 
-The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia) is `us-east-1`. You could find all available regions at [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions).
+The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia)
+is `us-east-1`. You could find all available regions
+at [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions)
+. In addition, the `region` information can also be set manually through the environment variables `AWS_REGION`
+or `AWS_DEFAULT_REGION`.
 
 > **Note**: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.
 
@@ -412,7 +416,10 @@ $ ./juicefs format \
 
 Please follow [this document](https://docsv3.qingcloud.com/storage/object-storage/api/practices/signature/#%E8%8E%B7%E5%8F%96-access-key) to learn how to get access key and secret key.
 
-The `--bucket` option format is `https://<bucket>.<region>.qingstor.com`, replace `<region>` with specific region code, e.g. the region code of Beijing 3-A is `pek3a`. You could find all available regions at [here](https://docs.qingcloud.com/qingstor/#%E5%8C%BA%E5%9F%9F%E5%8F%8A%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D). For example:
+The `--bucket` option format is `https://<bucket>.<region>.qingstor.com`, replace `<region>` with specific region code,
+e.g. the region code of Beijing 3-A is `pek3a`. You could find all available regions
+at [here](https://docs.qingcloud.com/qingstor/#%E5%8C%BA%E5%9F%9F%E5%8F%8A%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D). For
+example:
 
 ```bash
 $ ./juicefs format \
@@ -422,11 +429,19 @@ $ ./juicefs format \
     localhost test
 ```
 
+When accessing qingstor in an s3-compatible way, The `--bucket` option format
+is `http://<bucket>.s3.<region>.qingstor.com` or `http://s3.<region>.qingstor.com/<bucket>`, and the `region`
+information still needs to be set manually through the environment variable `AWS_REGION` or `AWS_DEFAULT_REGION`.
+
 ## Qiniu
 
-Please follow [this document](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) to learn how to get access key and secret key.
+Please
+follow [this document](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) to
+learn how to get access key and secret key.
 
-The `--bucket` option format is `https://<bucket>.s3-<region>.qiniucs.com`, replace `<region>` with specific region code, e.g. the region code of China East is `cn-east-1`. You could find all available regions at [here](https://developer.qiniu.com/kodo/4088/s3-access-domainname). For example:
+The `--bucket` option format is `https://<bucket>.s3-<region>.qiniucs.com`, replace `<region>` with specific region
+code, e.g. the region code of China East is `cn-east-1`. You could find all available regions
+at [here](https://developer.qiniu.com/kodo/4088/s3-access-domainname). For example:
 
 ```bash
 $ ./juicefs format \
