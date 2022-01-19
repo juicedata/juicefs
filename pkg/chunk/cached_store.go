@@ -700,6 +700,9 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		n, err = io.ReadFull(in, buf)
 		_ = in.Close()
 	}
+	if compressed && err == io.ErrUnexpectedEOF {
+		err = nil
+	}
 	used := time.Since(start)
 	logger.Debugf("GET %s (%s, %.3fs)", key, err, used.Seconds())
 	if used > SlowRequest {
@@ -707,9 +710,6 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	}
 	if store.downLimit != nil && compressed {
 		store.downLimit.Wait(int64(n))
-	}
-	if compressed && err == io.ErrUnexpectedEOF {
-		err = nil
 	}
 	objectDataBytes.WithLabelValues("GET").Add(float64(n))
 	objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
