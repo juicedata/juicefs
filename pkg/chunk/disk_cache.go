@@ -166,7 +166,7 @@ func (cache *cacheStore) curFreeRatio() (float32, float32) {
 	return float32(free) / float32(total), float32(ffree) / float32(files)
 }
 
-func (cache *cacheStore) flushPage(path string, data []byte) error {
+func (cache *cacheStore) flushPage(path string, data []byte) (err error) {
 	start := time.Now()
 	cacheWrites.Add(1)
 	cacheWriteBytes.Add(float64(len(data)))
@@ -177,22 +177,28 @@ func (cache *cacheStore) flushPage(path string, data []byte) error {
 	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE, cache.mode)
 	if err != nil {
-		logger.Infof("Can't create cache file %s: %s", tmp, err)
+		logger.Warnf("Can't create cache file %s: %s", tmp, err)
 		return err
 	}
 	defer func() {
-		_ = f.Close()
-		_ = os.Remove(tmp)
+		if err != nil {
+			_ = os.Remove(tmp)
+		}
 	}()
 
 	if _, err = f.Write(data); err != nil {
 		logger.Warnf("Write to cache file %s failed: %s", tmp, err)
-		return err
+		_ = f.Close()
+		return
+	}
+	if err = f.Close(); err != nil {
+		logger.Warnf("Close cache file %s failed: %s", tmp, err)
+		return
 	}
 	if err = os.Rename(tmp, path); err != nil {
-		logger.Infof("Rename cache file %s -> %s failed: %s", tmp, path, err)
+		logger.Warnf("Rename cache file %s -> %s failed: %s", tmp, path, err)
 	}
-	return err
+	return
 }
 
 func (cache *cacheStore) createDir(dir string) {
