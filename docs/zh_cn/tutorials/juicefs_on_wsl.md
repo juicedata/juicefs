@@ -28,7 +28,7 @@ wsl --install
 wsl --install -d ubuntu
 ```
 
-:::note 提示
+:::tip 提示
 `wsl --list --online`  命令可以查看所有可选的发行版。
 :::
 
@@ -83,11 +83,11 @@ WSL 安装完成以后，即可在开始菜单找到新安装的 Linux 发行版
 
 ### 创建文件系统
 
-JuiceFS 是数据与元数据分离的分布式文件系统，通常用对象存储作为数据存储，用 Redis、PostgresSQL 或 MySQL 作为元数据存储。这里假设已经准备了如下材料：
+JuiceFS 是数据与元数据分离的分布式文件系统，通常用对象存储作为数据存储，用 Redis、PostgreSQL 或 MySQL 作为元数据存储。这里假设已经准备了如下材料：
 
 #### 对象存储
 
-查看「[JuiceFS 支持的数据存储](../reference/how_juicefs_store_files.md)」
+查看「[JuiceFS 支持的数据存储](../reference/how_to_setup_object_storage.md)」
 
 - **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
@@ -136,7 +136,7 @@ export REDIS_PASSWORD=mypassword
 sudo juicefs mount -d redis://myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 $HOME/mnt
 ```
 
-如果需要从 Windows 系统访问 Linux 子系统中挂载的 JFS 文件系统，在资源管理器左侧列表中找到 Linux 子系统，然后找到并打开挂载点路径即可。
+如果需要从 Windows 系统访问 Linux 子系统中挂载的 JuiceFS 文件系统，在资源管理器左侧列表中找到 Linux 子系统，然后找到并打开挂载点路径即可。
 
 ![](../images/wsl/access-jfs-from-win.png)
 
@@ -156,12 +156,12 @@ WSL 打通了 Windows 与 Linux 子系统，允许二者相互访问彼此系统
 
 为了保证性能最优，在 WSL 中使用 JuiceFS 时，不论存储还是缓存路径都应设置在 Linux 子系统中。换言之，应该避免把存储或缓存设置在 `/mnt/c` 类似的 Windows 分区挂载点上。
 
-通过使用 JuiceFS 自带的 bench 基准测试工具，结果显示，将文件系统挂载到 Windows（如 `/mnt/c`）的性能要比挂载到 Linux 子系统内部（如 `$HOME/mnt`）低 30% 左右。
+通过使用 JuiceFS 自带的 `bench` 基准测试工具，结果显示，将文件系统挂载到 Windows（如 `/mnt/c`）的性能要比挂载到 Linux 子系统内部（如 `$HOME/mnt`）低 30% 左右。
 
 ## 已知问题
 
-当通过 Windows 资源管理器拷贝文件到 Linux 子系统时，WSL 会自动为每个文件附加一个带有 `Zone.Identifier` 标识的同名文件。这是 NTFS 文件系统的一种安全防护机制，意在对外部文件的来源进行跟踪，但对于 WSL 来说，这个功能应该属于 BUG 且已经有人在 Github 上向微软开发团队反馈 [#7456](https://github.com/microsoft/WSL/issues/7456)。
+当通过 Windows 资源管理器拷贝文件到 Linux 子系统时，WSL 会自动为每个文件附加一个带有 `Zone.Identifier` 标识的同名文件。这是 NTFS 文件系统的一种安全防护机制，意在对外部文件的来源进行跟踪，但对于 WSL 来说，这个功能应该属于 bug 且已经有人在 GitHub 上向微软开发团队反馈 [#7456](https://github.com/microsoft/WSL/issues/7456)。
 
-受此问题影响，通过 Windows 资源管理器向 Linux 子系统中挂载的 JFS 文件系统存入文件时也会出现同样的问题。但在 Linux 子系统内部读写 JFS 文件系统不受该 BUG 的干扰。
+受此问题影响，通过 Windows 资源管理器向 Linux 子系统中挂载的 JuiceFS 文件系统存入文件时也会出现同样的问题。但在 Linux 子系统内部读写 JuiceFS 文件系统不受该 bug 的干扰。
 
 ![](../images/wsl/zone-identifier.png)
