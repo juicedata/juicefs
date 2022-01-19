@@ -90,7 +90,7 @@ S3 支持  [两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/Amaz
 - 虚拟托管类型：`https://<bucket>.s3.<region>.amazonaws.com`
 - 路径类型：`https://s3.<region>.amazonaws.com/<bucket>`
 
-其中 `<region>` 要替换成实际的区域代码，比如：美国西部（俄勒冈）的区域代码为 `us-west-2`。[点此查看](https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions)所有的区域代码。 另外`region`信息也可以通过环境变量`AWS_REGION`或者`AWS_DEFAULT_REGION`来手动设置。
+其中 `<region>` 要替换成实际的区域代码，比如：美国西部（俄勒冈）的区域代码为 `us-west-2`。[点此查看](https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions)所有的区域代码。
 
 :::note 注意
 
@@ -450,7 +450,7 @@ $ juicefs format \
     myjfs
 ```
 
-当使用 s3 兼容的方式访问 qingstor 的时候，`--bucket` 选项的格式为 `http://<bucket>.s3.<region>.qingstor.com` 或者 `http://s3.<region>.qingstor.com/<bucket>`，而且 `region`信息仍旧需要通过环境变量`AWS_REGION`或者`AWS_DEFAULT_REGION`来手动设置。
+> **提示**: 所有 QingStor 兼容的对象存储服务其 `--bucket`选项的格式为`http://<bucket>.<endpoint>`
 
 ## 七牛云 Kodo
 

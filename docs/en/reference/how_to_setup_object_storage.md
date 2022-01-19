@@ -82,7 +82,7 @@ S3 supports [two style endpoint URI](https://docs.aws.amazon.com/AmazonS3/latest
 - Virtual hosted-style: `https://<bucket>.s3.<region>.amazonaws.com`
 - Path-style: `https://s3.<region>.amazonaws.com/<bucket>`
 
-The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia) is `us-east-1`. You could find all available regions at [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions). In addition, the `region` information can also be set manually through the environment variables `AWS_REGION` or `AWS_DEFAULT_REGION`.
+The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia) is `us-east-1`. You could find all available regions at [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions).
 
 > **Note**: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.
 
@@ -422,7 +422,7 @@ $ ./juicefs format \
     localhost test
 ```
 
-When accessing qingstor in an s3-compatible way, The `--bucket` option format is `http://<bucket>.s3.<region>.qingstor.com` or `http://s3.<region>.qingstor.com/<bucket>`, and the `region` information still needs to be set manually through the environment variable `AWS_REGION` or `AWS_DEFAULT_REGION`.
+> **Note**: The format of `--bucket` option for all QingStor compatible object storage services is `http://<bucket>.<endpoint>`.
 
 ## Qiniu
 
