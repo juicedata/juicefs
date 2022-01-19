@@ -2231,12 +2231,17 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 	var cursor uint64
 	p := r.rdb.Pipeline()
+	var total int64
+	progress, bar := utils.NewDynProgressBar("compacting chunks: ", false)
 	for {
 		keys, c, err := r.rdb.Scan(ctx, cursor, "c*_*", 10000).Result()
 		if err != nil {
 			logger.Warnf("scan chunks: %s", err)
 			return errno(err)
 		}
+
+		total += int64(len(keys))
+		bar.SetTotal(total, false)
 		for _, key := range keys {
 			_ = p.LLen(ctx, key)
 		}
@@ -2256,12 +2261,15 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 					r.compactChunk(Ino(inode), indx, true)
 				}
 			}
+			bar.Increment()
 		}
 		if c == 0 {
 			break
 		}
 		cursor = c
 	}
+	bar.SetTotal(0, true)
+	progress.Wait()
 	return 0
 }
 
