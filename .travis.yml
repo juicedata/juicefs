@@ -44,7 +44,7 @@ script:
   - cat cov1.out >> coverage.txt
   - cat cov2.out >> coverage.txt
   - cd /jfs
-  - git clone https://github.com/danjacques/gofslock.git
+  - git clone https://github.com/sanwan/gofslock.git
   - cd gofslock
   - go test -v ./fslock/...
   - cd /home/travis/gopath/src/github.com/juicedata/juicefs
