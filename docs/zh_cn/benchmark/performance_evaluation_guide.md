@@ -93,21 +93,21 @@ juicefs stats /mnt/jfs --verbosity 1
 - usage
   - cpu: JuiceFS 进程消耗的 CPU
   - mem: JuiceFS 进程占用的物理内存
-  - buf: JuiceFS 进程内部的读写 buffer 大小，受挂载项 `--buffer-size` 限制
+  - buf: JuiceFS 进程内部的读写 buffer 大小，受挂载选项 `--buffer-size` 限制
   - cache: 内部指标，可不关注
 - fuse
-  - ops/lat: FUSE 接口每秒处理的请求个数及其平均时延（单位为毫秒，下同）
+  - ops/lat: FUSE 接口每秒处理的请求个数及其平均时延（单位为毫秒）
   - read/write: FUSE 接口每秒处理读写请求的带宽值
 - meta
-  - ops/lat: 元数据引擎每秒处理的请求个数及其平均时延（请注意部分能在缓存中直接处理的请求未列入统计，以更好地体现客户端与元数据引擎交互的耗时）
-  - txn/lat: 元数据引擎每秒处理的**写事务**个数及其平均时延（只读请求如 `getattr` 只会计入 ops 而不会计入 txn）
+  - ops/lat: 元数据引擎每秒处理的请求个数及其平均时延（单位为毫秒）。请注意部分能在缓存中直接处理的请求未列入统计，以更好地体现客户端与元数据引擎交互的耗时。
+  - txn/lat: 元数据引擎每秒处理的**写事务**个数及其平均时延（单位为毫秒）。只读请求如 `getattr` 只会计入 ops 而不会计入 txn。
   - retry: 元数据引擎每秒重试**写事务**的次数
 - blockcache
   - read/write: 客户端本地数据缓存的每秒读写流量
 - object
-  - get/get_c/lat: 对象存储每秒处理**读请求**的带宽值，请求个数及其平均时延
-  - put/put_c/lat: 对象存储每秒处理**写请求**的带宽值，请求个数及其平均时延
-  - del_c/lat: 对象存储每秒处理**删除请求**的个数和平均时延
+  - get/get_c/lat: 对象存储每秒处理**读请求**的带宽值，请求个数及其平均时延（单位为毫秒）
+  - put/put_c/lat: 对象存储每秒处理**写请求**的带宽值，请求个数及其平均时延（单位为毫秒）
+  - del_c/lat: 对象存储每秒处理**删除请求**的个数和平均时延（单位为毫秒）
 
 ### JuiceFS Profile
 
