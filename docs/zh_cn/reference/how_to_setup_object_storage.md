@@ -8,12 +8,6 @@ slug: /how_to_setup_object_storage
 
 通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md)可以了解到，JuiceFS 是一个数据与元数据分离的分布式文件系统，以对象存储作为主要的数据存储，以 Redis、PostgreSQL、MySQL 等数据库作为元数据存储。
 
-:::tip 提示
-
-除了最常用的对象存储，JuiceFS 还支持硬盘、HDFS、WebDAV、Redis、TiKV 等作为数据存储。
-
-:::
-
 ## 存储参数
 
 在创建 JuiceFS 文件系统时，设置数据存储一般涉及以下几个选项：
