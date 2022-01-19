@@ -305,6 +305,7 @@ Here are a series of methods to use the built-in stress testing tool of the Juic
 
 
 ### 1. Local Benchmark
+
 #### Metadata
 
 - **create**
@@ -337,12 +338,12 @@ Here are a series of methods to use the built-in stress testing tool of the Juic
 
 - **For reference**
 
-| Operation | TPS  | Latency (ms) |
-| --------- | ---- | ------------ |
-| create    | 644  | 1.55         |
-| open      | 3467 | 0.29         |
-| rename    | 483  | 2.07         |
-| delete    | 506  | 1.97         |
+  | Operation | TPS  | Latency (ms) |
+  | --------- | ---- | ------------ |
+  | create    | 644  | 1.55         |
+  | open      | 3467 | 0.29         |
+  | rename    | 483  | 2.07         |
+  | delete    | 506  | 1.97         |
 
 #### I/O Performance
 
@@ -362,10 +363,10 @@ Here are a series of methods to use the built-in stress testing tool of the Juic
 
 - **For reference**
 
-| Operation | Throughput (MB/s) |
-| --------- | ----------------- |
-| write     | 647               |
-| read      | 111               |
+  | Operation | Throughput (MB/s) |
+  | --------- | ----------------- |
+  | write     | 647               |
+  | read      | 111               |
 
 If the network bandwidth of the machine is relatively low, it can generally reach the network bandwidth bottleneck.
 
@@ -416,21 +417,21 @@ Computing resources used in this test:
 
   - 10 threads
 
-  | Operation | IOPS | Latency (ms) |
-  | --------- | ---- | ------------ |
-  | create    | 4178 | 2.2          |
-  | open      | 9407 | 0.8          |
-  | rename    | 3197 | 2.9          |
-  | delete    | 3060 | 3.0          |
+    | Operation | IOPS | Latency (ms) |
+    | --------- | ---- | ------------ |
+    | create    | 4178 | 2.2          |
+    | open      | 9407 | 0.8          |
+    | rename    | 3197 | 2.9          |
+    | delete    | 3060 | 3.0          |
 
   - 100 threads
 
-  | Operation | IOPS  | Latency (ms) |
-  | --------- | ----  | ------------ |
-  | create    | 11773 | 7.9          |
-  | open      | 34083 | 2.4          |
-  | rename    | 8995  | 10.8         |
-  | delete    | 7191  | 13.6         |
+    | Operation | IOPS  | Latency (ms) |
+    | --------- | ----  | ------------ |
+    | create    | 11773 | 7.9          |
+    | open      | 34083 | 2.4          |
+    | rename    | 8995  | 10.8         |
+    | delete    | 7191  | 13.6         |
 
 #### I/O Performance
 
@@ -453,10 +454,124 @@ Computing resources used in this test:
 
 - **For reference**
 
-| Operation | Average throughput (MB/s) | Total Throughput (MB/s) |
-| --------- | ------------------------- | ----------------------- |
-| write     | 198                       | 1835                    |
-| read      | 124                       | 1234                    |
+  | Operation | Average throughput (MB/s) | Total Throughput (MB/s) |
+  | --------- | ------------------------- | ----------------------- |
+  | write     | 198                       | 1835                    |
+  | read      | 124                       | 1234                    |
+
+### 3. TPC-DS
+
+The test dataset is 100GB in size, and both Parquet and ORC file formats are tested.
+
+This test only tests the first 10 queries.
+
+Spark Thrift JDBC/ODBC Server is used to start the Spark resident process and then submit the task via Beeline connection.
+
+#### Test Hardware
+
+| Node Category | Instance Type               | CPU | Memory | Disk                                                      | Number |
+| ------------- | -------------               | --- | ------ | ----                                                      | ------ |
+| Master        | Alibaba Cloud ecs.r6.xlarge | 4   | 32GiB  | System Disk: 100GiB                                       | 1      |
+| Core          | Alibaba Cloud ecs.r6.xlarge | 4   | 32GiB  | System Disk: 100GiB<br />Data Disk: 500GiB Ultra Disk x 2 | 3      |
+
+#### Software Configuration
+
+##### Spark Thrift JDBC/ODBC Server
+
+```shell
+${SPARK_HOME}/sbin/start-thriftserver.sh \
+  --master yarn \
+  --driver-memory 8g \
+  --executor-memory 10g \
+  --executor-cores 3 \
+  --num-executors 3 \
+  --conf spark.locality.wait=100 \
+  --conf spark.sql.crossJoin.enabled=true \
+  --hiveconf hive.server2.thrift.port=10001
+```
+
+##### JuiceFS Cache Configurations
+
+The 2 data disks of Core node are mounted in the `/data01` and `/data02` directories, and `core-site.xml` is configured as follows:
+
+```xml
+<property>
+  <name>juicefs.cache-size</name>
+  <value>200000</value>
+</property>
+<property>
+  <name>juicefs.cache-dir</name>
+  <value>/data*/jfscache</value>
+</property>
+<property>
+  <name>juicefs.cache-full-block</name>
+  <value>false</value>
+</property>
+<property>
+  <name>juicefs.discover-nodes-url</name>
+  <value>yarn</value>
+</property>
+<property>
+  <name>juicefs.attr-cache</name>
+  <value>3</value>
+</property>
+<property>
+  <name>juicefs.entry-cache</name>
+  <value>3</value>
+</property>
+<property>
+  <name>juicefs.dir-entry-cache</name>
+  <value>3</value>
+</property>
+```
+
+#### Test
+
+The task submission command is as follows:
+
+```shell
+${SPARK_HOME}/bin/beeline -u jdbc:hive2://localhost:10001/${DATABASE} \
+  -n hadoop \
+  -f query{i}.sql
+```
+
+#### Results
+
+JuiceFS can use local disk as a cache to accelerate data access, the following data is the result (in seconds) after 4 runs using Redis and TiKV as the metadata engine of JuiceFS respectively.
+
+##### ORC
+
+| Queries | JuiceFS (Redis) | JuiceFS (TiKV) | HDFS |
+| ------- | --------------- | -------------- | ---- |
+| q1      | 20              | 20             | 20   |
+| q2      | 28              | 33             | 26   |
+| q3      | 24              | 27             | 28   |
+| q4      | 300             | 309            | 290  |
+| q5      | 116             | 117            | 91   |
+| q6      | 37              | 42             | 41   |
+| q7      | 24              | 28             | 23   |
+| q8      | 13              | 15             | 16   |
+| q9      | 87              | 112            | 89   |
+| q10     | 23              | 24             | 22   |
+
+![orc](../images/spark_ql_orc.png)
+
+##### Parquet
+
+| Queries | JuiceFS (Redis) | JuiceFS (TiKV) | HDFS |
+| ------- | --------------- | -------------- | ---- |
+| q1      | 33              | 35             | 39   |
+| q2      | 28              | 32             | 31   |
+| q3      | 23              | 25             | 24   |
+| q4      | 273             | 284            | 266  |
+| q5      | 96              | 107            | 94   |
+| q6      | 36              | 35             | 42   |
+| q7      | 28              | 30             | 24   |
+| q8      | 11              | 12             | 14   |
+| q9      | 85              | 97             | 77   |
+| q10     | 24              | 28             | 38   |
+
+![parquet](../images/spark_sql_parquet.png)
 
 
 ## FAQ
