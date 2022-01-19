@@ -60,7 +60,7 @@ func fsck(ctx *cli.Context) error {
 		GetTimeout: time.Second * 60,
 		PutTimeout: time.Second * 60,
 		MaxUpload:  20,
-		BufferSize: 300,
+		BufferSize: 300 << 20,
 		CacheDir:   "memory",
 	}
 
