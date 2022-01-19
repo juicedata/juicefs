@@ -16,7 +16,7 @@ JuiceFS 为每个文件系统提供一个 [Prometheus](https://prometheus.io) AP
 当通过 [`juicefs mount`](../reference/command_reference.md#juicefs-mount) 命令挂载 JuiceFS 文件系统后，可以通过 `http://localhost:9567/metrics` 这个地址收集监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
 ```shell
-$ juicefs mount --metrics localhost:9568 ...
+$ juicefs mount --metrics localhost:9567 ...
 ```
 
 你可以使用命令行工具查看这些监控指标：
@@ -45,7 +45,7 @@ metadata:
 spec:
   ...
   mountOptions:
-    - metrics=0.0.0.0:9568
+    - metrics=0.0.0.0:9567
 ```
 
 新增一个抓取任务到 `prometheus.yml` 来收集监控指标：
@@ -95,7 +95,7 @@ scrape_configs:
 [JuiceFS S3 网关](../deployment/s3_gateway.md)默认会在 `http://localhost:9567/metrics` 这个地址提供监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
 ```shell
-$ juicefs gateway --metrics localhost:9568 ...
+$ juicefs gateway --metrics localhost:9567 ...
 ```
 
 如果你是在 Kubernetes 中部署 JuiceFS S3 网关，可以参考 [Kubernetes](#kubernetes) 小节的 Prometheus 配置来收集监控指标（区别主要在于 `__meta_kubernetes_pod_label_app_kubernetes_io_name` 这个标签的正则表达式），例如：
