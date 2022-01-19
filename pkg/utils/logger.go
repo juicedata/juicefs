@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,32 +32,36 @@ var syslogHook logrus.Hook
 type logHandle struct {
 	logrus.Logger
 
-	name string
-	lvl  *logrus.Level
+	name     string
+	lvl      *logrus.Level
+	tty      bool
+	prefixes []string
 }
 
 func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
-	// Mon Jan 2 15:04:05 -0700 MST 2006
-	timestamp := ""
 	lvl := e.Level
 	if l.lvl != nil {
 		lvl = *l.lvl
 	}
 
-	const timeFormat = "2006/01/02 15:04:05.000000"
-	timestamp = e.Time.Format(timeFormat)
+	var str string
+	if l.tty {
+		str = fmt.Sprintf("%s: %s", l.prefixes[lvl], e.Message)
+	} else {
+		const timeFormat = "2006/01/02 15:04:05.000000"
+		timestamp := e.Time.Format(timeFormat)
 
-	str := fmt.Sprintf("%v %s[%d] <%v>: %v",
-		timestamp,
-		l.name,
-		os.Getpid(),
-		strings.ToUpper(lvl.String()),
-		e.Message)
+		str = fmt.Sprintf("%v %s[%d] <%v>: %v",
+			timestamp,
+			l.name,
+			os.Getpid(),
+			strings.ToUpper(lvl.String()),
+			e.Message)
+	}
 
 	if len(e.Data) != 0 {
 		str += " " + fmt.Sprint(e.Data)
 	}
-
 	str += "\n"
 	return []byte(str), nil
 }
@@ -67,11 +72,19 @@ func (l *logHandle) Log(args ...interface{}) {
 }
 
 func newLogger(name string) *logHandle {
-	l := &logHandle{name: name}
-	l.Out = os.Stderr
+	l := &logHandle{Logger: *logrus.New(), name: name, tty: isatty.IsTerminal(os.Stderr.Fd())}
+	if l.tty {
+		l.prefixes = make([]string, 7)
+		ps := []string{"PANIC", "FATAL", "ERROR", " WARN", " INFO", "DEBUG", "TRACE"}
+		for i := 0; i < 3; i++ {
+			l.prefixes[i] = fmt.Sprintf("\033[1;%dm%s\033[0m", 31, ps[i])
+		}
+		for i := 3; i < 6; i++ {
+			l.prefixes[i] = fmt.Sprintf("\033[1;%dm%s\033[0m", 30+i, ps[i])
+		}
+		l.prefixes[6] = fmt.Sprintf("\033[1;%dm%s\033[0m", 35, ps[6])
+	}
 	l.Formatter = l
-	l.Level = logrus.InfoLevel
-	l.Hooks = make(logrus.LevelHooks)
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)
 	}
@@ -98,6 +111,12 @@ func SetLogLevel(lvl logrus.Level) {
 	}
 }
 
+func DisableLogColor() {
+	for _, logger := range loggers {
+		logger.tty = false
+	}
+}
+
 func SetOutFile(name string) {
 	file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -105,5 +124,6 @@ func SetOutFile(name string) {
 	}
 	for _, logger := range loggers {
 		logger.SetOutput(file)
+		logger.tty = false
 	}
 }
