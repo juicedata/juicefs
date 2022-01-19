@@ -5,7 +5,7 @@ slug: /metadata_dump_load
 ---
 # JuiceFS Metadata Backup & Recovery
 
-> **Note**: This feature requires JuiceFS >= 0.15.0.
+> **Note**: This feature requires JuiceFS >= 0.15.2.
 
 JuiceFS supports [multiple metadata engines](../reference/how_to_setup_metadata_engine.md). Each engine has its own internal format, but with the `dump` command it can export all the metadata to an identical [JSON](https://www.json.org/json-en.html) file ([example](../../pkg/meta/metadata.sample)). Meanwhile, there is also a `load` command to import metadata from the JSON file. Metadata backup, recovery and migration are achieved with these two [commands](../reference/command_reference.md#juicefs-dump).
 
