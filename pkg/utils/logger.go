@@ -32,10 +32,9 @@ var syslogHook logrus.Hook
 type logHandle struct {
 	logrus.Logger
 
-	name     string
-	lvl      *logrus.Level
-	tty      bool
-	prefixes []string
+	name string
+	lvl  *logrus.Level
+	tty  bool
 }
 
 func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
@@ -43,21 +42,29 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 	if l.lvl != nil {
 		lvl = *l.lvl
 	}
-
-	var str string
+	lvlStr := strings.ToUpper(lvl.String())
 	if l.tty {
-		str = fmt.Sprintf("%s: %s", l.prefixes[lvl], e.Message)
-	} else {
-		const timeFormat = "2006/01/02 15:04:05.000000"
-		timestamp := e.Time.Format(timeFormat)
-
-		str = fmt.Sprintf("%v %s[%d] <%v>: %v",
-			timestamp,
-			l.name,
-			os.Getpid(),
-			strings.ToUpper(lvl.String()),
-			e.Message)
+		var color int
+		switch lvl {
+		case logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel:
+			color = 31 // RED
+		case logrus.WarnLevel:
+			color = 33 // YELLOW
+		case logrus.InfoLevel:
+			color = 34 // BLUE
+		default: // logrus.TraceLevel, logrus.DebugLevel
+			color = 35 // MAGENTA
+		}
+		lvlStr = fmt.Sprintf("\033[1;%dm%s\033[0m", color, lvlStr)
 	}
+	const timeFormat = "2006/01/02 15:04:05.000000"
+	timestamp := e.Time.Format(timeFormat)
+	str := fmt.Sprintf("%v %s[%d] <%v>: %v",
+		timestamp,
+		l.name,
+		os.Getpid(),
+		lvlStr,
+		e.Message)
 
 	if len(e.Data) != 0 {
 		str += " " + fmt.Sprint(e.Data)
@@ -73,17 +80,6 @@ func (l *logHandle) Log(args ...interface{}) {
 
 func newLogger(name string) *logHandle {
 	l := &logHandle{Logger: *logrus.New(), name: name, tty: isatty.IsTerminal(os.Stderr.Fd())}
-	if l.tty {
-		l.prefixes = make([]string, 7)
-		ps := []string{"PANIC", "FATAL", "ERROR", " WARN", " INFO", "DEBUG", "TRACE"}
-		for i := 0; i < 3; i++ {
-			l.prefixes[i] = fmt.Sprintf("\033[1;%dm%s\033[0m", 31, ps[i])
-		}
-		for i := 3; i < 6; i++ {
-			l.prefixes[i] = fmt.Sprintf("\033[1;%dm%s\033[0m", 30+i, ps[i])
-		}
-		l.prefixes[6] = fmt.Sprintf("\033[1;%dm%s\033[0m", 35, ps[6])
-	}
 	l.Formatter = l
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)
