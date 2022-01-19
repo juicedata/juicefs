@@ -41,7 +41,7 @@ func checkMountpoint(name, mp string) {
 		st, err := os.Stat(mp)
 		if err == nil {
 			if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == 1 {
-				logger.Infof("\033[92mOK\033[0m, %s is ready at %s", name, mp)
+				logger.Infof("[OK]%s is ready at %s", name, mp)
 				return
 			}
 		}
