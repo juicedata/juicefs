@@ -66,7 +66,7 @@ If the command option is boolean type (such as `--debug` option), there is no ne
 ## Auto Completion
 
 :::note
-This feature requires JuiceFS >= 0.15.0. It is implemented based on `github.com/urfave/cli/v2`. You can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
+This feature requires JuiceFS >= 0.15.2. It is implemented based on `github.com/urfave/cli/v2`. You can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
 :::
 
 To enable commands completion, simply source the script provided within `hack/autocomplete`. For example:
