@@ -126,6 +126,8 @@ $ ./juicefs format \
     localhost test
 ```
 
+> **Note**: The format of `--bucket` option for all S3 compatible object storage services is `https://<bucket>.<endpoint>` or `https://<endpoint>/<bucket>`. The default `region` is `us-east-1`. When a different `region` is required, it can be set manually via the environment variable `AWS_REGION` or `AWS_DEFAULT_REGION`.
+
 
 
 ## Google Cloud Storage

@@ -118,9 +118,29 @@ $ juicefs format \
     myjfs
 ```
 
+你也可以将`--storage`设置为`s3`用来连接S3兼容的对象存储，比如：
+
+```bash
+# virtual hosted-style
+$ ./juicefs format \
+    --storage s3 \
+    --bucket https://<bucket>.<endpoint> \
+    ... \
+    localhost test
+```
+
+```bash
+# path-style
+$ ./juicefs format \
+    --storage s3 \
+    --bucket https://<endpoint>/<bucket> \
+    ... \
+    localhost test
+```
+
 :::tip 提示
 
-所有 S3 兼容的对象存储服务都可以参照 Amazon S3 存储类型进行设定。
+所有 S3 兼容的对象存储服务其 `--bucket`选项的格式为`https://<bucket>.<endpoint>`或者 `https://<endpoint>/<bucket>`，默认的`region`为`us-east-1`，当需要不同的`region`的时候，可以通过环境变量`AWS_REGION`或者`AWS_DEFAULT_REGION`手动设置。
 
 :::
 
