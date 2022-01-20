@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -115,15 +116,13 @@ func gc(ctx *cli.Context) error {
 
 	delete := ctx.Bool("delete")
 	store := chunk.NewCachedStore(blob, chunkConf)
-	var pendingProgress *mpb.Progress
-	var pending *mpb.Bar
+	var pending uint32
 	var pendingObj chan *dChunk
 	var wg sync.WaitGroup
 	if delete {
-		pendingProgress, pending = utils.NewProgressCounter("pending deletes counter: ")
 		pendingObj = make(chan *dChunk, 10240)
 		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
-			pending.Increment()
+			atomic.AddUint32(&pending, 1)
 			pendingObj <- &dChunk{args[0].(uint64), args[1].(uint32)}
 			return nil
 		})
@@ -183,12 +182,12 @@ func gc(ctx *cli.Context) error {
 	if delete {
 		close(pendingObj)
 		wg.Wait()
-		pending.SetTotal(0, true)
-		pendingProgress.Wait()
-		logger.Infof("deleted %d pending objects", pending.Current())
 	}
 	bar.SetTotal(0, true)
 	progress.Wait()
+	if delete { // the log has to be emitted after progress bar finished, otherwise it may be overwritten
+		logger.Infof("deleted %d pending objects", atomic.LoadUint32(&pending))
+	}
 
 	blob = object.WithPrefix(blob, "chunks/")
 	objs, err := osync.ListAll(blob, "", "")
