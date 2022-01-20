@@ -146,19 +146,31 @@ $ ./juicefs format \
 
 ## Google 云存储
 
-由于 Google 云存储没有 `Access key` 和 `Secret key`，因此在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。请查阅 Google Cloud 的文档了解 [身份验证](https://cloud.google.com/docs/authentication) 和 [身份及访问管理（IAM）](https://cloud.google.com/iam/docs/overview) 相关内容。
+Google 云采用 [IAM](https://cloud.google.com/iam/docs/overview) 管理资源的访问权限，通过对[服务账号](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud)授权，可以对云服务器、对象存储的访问权限进行精细化的控制。
 
-一般来说，无需额外配置，在使用 Google 云服务器时默认已经拥有云存储的访问权限。
+对于归属于同一服务账号下的云服务器和对象存储，创建 JuiceFS 文件系统时无需提供身份验证信息，云平台会自行完成鉴权。
 
-另外，由于 bucket 名称是 [全局唯一](https://cloud.google.com/storage/docs/naming-buckets#considerations) 的，创建文件系统时，`--bucket` 选项中只需指定 bucket 名称即可。例如：
+对于要从谷歌云平台外部访问对象存储的情况，比如要在本地计算机上使用 Google 云存储创建 JuiceFS 文件系统，则需要配置认证信息。由于 Google 云存储并不使用 `Access Key ID` 和 `Access Key Secret`，而是通过服务账号的 `JSON 密钥文件`验证身份。
+
+请参考《[以服务帐号身份进行身份验证](https://cloud.google.com/docs/authentication/production)》为服务账号创建 `JSON 密钥文件`并下载到本地计算机，通过 `GOOGLE_APPLICATION_CREDENTIALS` 环境变量定义密钥文件的路径，例如：
+
+```shell
+export GOOGLE_APPLICATION_CREDENTIALS="$HOME/service-account-file.json"
+```
+
+可以把创建环境变量的命令写入 `~/.bashrc` 或 `~/.profile` 让 Shell 在每次启动时自动设置。
+
+配置了传递密钥信息的环境变量以后，在本地和在 Google 云服务器上创建文件系统的命令是完全相同的。例如：
 
 ```bash
 $ juicefs format \
     --storage gs \
-    --bucket gs://<bucket> \
+    --bucket <bucket> \
     ... \
     myjfs
 ```
+
+可以看到，命令中无需包含身份验证信息，客户端会通过前面环境变量设置的 JSON 密钥文件完成对象存储的访问鉴权。同时，由于 bucket 名称是 [全局唯一](https://cloud.google.com/storage/docs/naming-buckets#considerations) 的，创建文件系统时，`--bucket` 选项中只需指定 bucket 名称即可。
 
 ## Azure Blob 存储
 
