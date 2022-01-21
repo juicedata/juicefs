@@ -56,11 +56,11 @@ COPYRIGHT:
 ```
 
 :::note
-If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience.
+If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience. You can refer to [installation & upgrade](../getting-started/installation.md) for more information.
 :::
 
 :::note
-If the command option is boolean type (such as `--debug` option), there is no need to set a specific value when specifying this type of option. For example, it should not be written like `--debug true`, and directly written as `--debug`. If it is specified, it means this option takes effect, otherwise it does not take effect.
+If the command option is of boolean type, such as `-debug`, there is no need to set any value, just add `-debug` to the command to enable the function, and vice versa to disable it.
 :::
 
 ## Auto Completion
@@ -74,32 +74,35 @@ To enable commands completion, simply source the script provided within `hack/au
 Bash:
 
 ```bash
-$ source hack/autocomplete/bash_autocomplete
+source hack/autocomplete/bash_autocomplete
 ```
 
 Zsh:
 
 ```bash
-$ source hack/autocomplete/zsh_autocomplete
+source hack/autocomplete/zsh_autocomplete
 ```
 
 Please note the auto-completion is only enabled for the current session. If you want it for all new sessions, add the `source` command to `.bashrc` or `.zshrc`:
 
 ```bash
-$ echo "source path/to/bash_autocomplete" >> ~/.bashrc
+echo "source path/to/bash_autocomplete" >> ~/.bashrc
 ```
 
 or
 
 ```bash
-$ echo "source path/to/zsh_autocomplete" >> ~/.zshrc
+echo "source path/to/zsh_autocomplete" >> ~/.zshrc
 ```
 
 Alternatively, if you are using bash on a Linux system, you may just copy the script to `/etc/bash_completion.d` and rename it to `juicefs`:
 
 ```bash
-$ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
-$ source /etc/bash_completion.d/juicefs
+sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
+```
+
+```shell
+source /etc/bash_completion.d/juicefs
 ```
 
 ## Commands
@@ -116,19 +119,22 @@ Format a volume. It's the first step for initializing a new file system volume.
 juicefs format [command options] META-URL NAME
 ```
 
+- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](how_to_setup_metadata_engine.md)" for details.
+- **NAME**: the name of the file system
+
 #### Options
 
 `--block-size value`<br />
 size of block in KiB (default: 4096)
-
-`--compress value`<br />
-compression algorithm (lz4, zstd, none) (default: "none")
 
 `--capacity value`<br />
 the limit for space in GiB (default: unlimited)
 
 `--inodes value`<br />
 the limit for number of inodes (default: unlimited)
+
+`--compress value`<br />
+compression algorithm (lz4, zstd, none) (default: "none")
 
 `--shards value`<br />
 store the blocks into N buckets by hash of key (default: 0)
@@ -168,6 +174,9 @@ Mount a volume. The volume shoud be formatted first.
 ```
 juicefs mount [command options] META-URL MOUNTPOINT
 ```
+
+- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](how_to_setup_metadata_engine.md)" for details.
+- **MOUNTPOINT**: file system mount point, e.g. `/mnt/jfs`, `Z:`.
 
 #### Options
 
@@ -287,6 +296,9 @@ S3-compatible gateway.
 juicefs gateway [command options] META-URL ADDRESS
 ```
 
+- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](how_to_setup_metadata_engine.md)" for details.
+- **ADDRESS**: S3 gateway address and listening port, for example: `localhost:9000`
+
 #### Options
 
 `--bucket value`<br />
@@ -382,6 +394,9 @@ Sync between two storage.
 ```
 juicefs sync [command options] SRC DST
 ```
+
+- **SRC**: source path
+- **DST**: target path
 
 #### Options
 
