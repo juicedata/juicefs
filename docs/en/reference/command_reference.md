@@ -396,7 +396,14 @@ juicefs sync [command options] SRC DST
 ```
 
 - **SRC**: source path
-- **DST**: target path
+- **DST**: destination path
+
+The format of both the source and destination paths is `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`, among the path:
+
+- `NAME`: JuiceFS supported data storage types (e.g. `s3`, `oss`), please refer to [document](how_to_setup_object_storage.md#supported-object-storage).
+- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, please refer to [document](how_to_setup_object_storage.md#access-key-and-secret-key).
+- `BUCKET[.ENDPOINT]`: The access address of the data storage service, the format may be different for different storage types, please refer to [document](how_to_setup_object_storage.md#supported-object-storage).
+- `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit the synchronization to only data in certain paths.
 
 #### Options
 
@@ -451,7 +458,11 @@ limit bandwidth in Mbps (0 means unlimited) (default: 0)
 `--no-https`<br />
 do not use HTTPS (default: false)
 
-> **Note**: If source is the S3 storage with the public access setting, please use `anonymous` as access key ID.
+`--check-all`<br />
+verify integrity of all files in source and destination (default: false)
+
+`--check-new`<br />
+verify integrity of newly copied files (default: false)
 
 ### juicefs rmr
 
