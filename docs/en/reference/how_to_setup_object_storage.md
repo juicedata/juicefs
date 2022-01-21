@@ -37,9 +37,7 @@ Public cloud provider usually allow user create IAM (Identity and Access Managem
 
 ## Supported Object Storage
 
-The following table lists the object storage services supported by JuiceFS. Click the name to view the setting details:
-
-> If the object storage service you want is not in the list, please submit a request [issue](https://github.com/juicedata/juicefs/issues).
+If the object storage service you want is not in the list, please submit a request [issue](https://github.com/juicedata/juicefs/issues).
 
 | Name                                                      | Value      |
 | --------------------------------------------------------- | ---------- |
@@ -84,7 +82,13 @@ S3 supports [two style endpoint URI](https://docs.aws.amazon.com/AmazonS3/latest
 
 The `<region>` should be replaced with specific region code, e.g. the region code of US East (N. Virginia) is `us-east-1`. You could find all available regions at [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions).
 
-> **Note**: For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.
+:::note
+For AWS China user, you need add `.cn` to the host, i.e. `amazonaws.com.cn`. And check [this document](https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-arns.html) to know your region code.
+:::
+
+:::note
+If the S3 bucket has public access (anonymous access is supported), please set `--access-key` to `anonymous`.
+:::
 
 JuiceFS supports both types of endpoint since v0.12 (before v0.12, only virtual hosted-style were supported). So when you format a volume, the `--bucket` option can be either virtual hosted-style URI or path-style URI. For example:
 
@@ -126,9 +130,9 @@ $ ./juicefs format \
     localhost test
 ```
 
-> **Note**: The format of `--bucket` option for all S3 compatible object storage services is `https://<bucket>.<endpoint>` or `https://<endpoint>/<bucket>`. The default `region` is `us-east-1`. When a different `region` is required, it can be set manually via the environment variable `AWS_REGION` or `AWS_DEFAULT_REGION`.
-
-
+:::tip
+The format of `--bucket` option for all S3 compatible object storage services is `https://<bucket>.<endpoint>` or `https://<endpoint>/<bucket>`. The default `region` is `us-east-1`. When a different `region` is required, it can be set manually via the environment variable `AWS_REGION` or `AWS_DEFAULT_REGION`.
+:::
 
 ## Google Cloud Storage
 
@@ -158,7 +162,9 @@ $ ./juicefs format \
     localhost test
 ```
 
-> **Note**: For Azure China user, the value of `EndpointSuffix` is `core.chinacloudapi.cn`.
+:::note
+For Azure China user, the value of `EndpointSuffix` is `core.chinacloudapi.cn`.
+:::
 
 ## Backblaze B2
 
@@ -234,7 +240,9 @@ $ ./juicefs format \
     localhost test
 ```
 
-***Note: For Tokyo (ap-northeast-1) region user, see [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) to learn how to get appropriate endpoint URI.***
+:::note
+For Tokyo (ap-northeast-1) region user, see [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) to learn how to get appropriate endpoint URI.
+:::
 
 ## Storj DCS
 
@@ -424,7 +432,9 @@ $ ./juicefs format \
     localhost test
 ```
 
-> **Note**: The format of `--bucket` option for all QingStor compatible object storage services is `http://<bucket>.<endpoint>`.
+:::note
+The format of `--bucket` option for all QingStor compatible object storage services is `http://<bucket>.<endpoint>`.
+:::
 
 ## Qiniu
 
@@ -671,4 +681,6 @@ Local storage is only used to understand and experience the basic functions of J
 
 If you need to evaluate JuiceFS, it is recommended to use object storage services.
 
-> **Note**: JuiceFS storage created using local storage cannot be mounted by other hosts on the network. This is because the data sharing function of JuiceFS relies on the object storage and metadata service that can be accessed by all clients. If the storage service and metadata service used when creating JuiceFS storage cannot be accessed by other clients in the network, other clients cannot mount and use the JuiceFS storage.
+:::note
+JuiceFS storage created using local storage cannot be mounted by other hosts on the network. This is because the data sharing function of JuiceFS relies on the object storage and metadata service that can be accessed by all clients. If the storage service and metadata service used when creating JuiceFS storage cannot be accessed by other clients in the network, other clients cannot mount and use the JuiceFS storage.
+:::
