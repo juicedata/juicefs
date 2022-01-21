@@ -56,11 +56,11 @@ COPYRIGHT:
 ```
 
 :::note
-If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience. You can refer to [installation & upgrade](../getting-started/installation.md) for more information.
+If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience. You can refer to [Installation & Upgrade](../getting-started/installation.md) for more information.
 :::
 
 :::note
-If the command option is of boolean type, such as `-debug`, there is no need to set any value, just add `-debug` to the command to enable the function, and vice versa to disable it.
+If the command option is of boolean type, such as `--debug`, there is no need to set any value, just add `--debug` to the command to enable the function, and vice versa to disable it.
 :::
 
 ## Auto Completion
