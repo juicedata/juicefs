@@ -370,7 +370,7 @@
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Write {{node}}",
+          "legendFormat": "Ops {{node}}",
           "refId": "A"
         }
       ],
