@@ -12,9 +12,9 @@ As you can learn from [JuiceFS Technical Architecture](../introduction/architect
 
 When creating a JuiceFS file system, setting up the storage generally involves the following options:
 
-- `--storage` Specify the type of storage to be used by the file system, e.g. `--storage s3`
-- `--bucket` Specify the storage access address, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`
-- `--access-key` and `--secret-key` Specify the authentication information when accessing the storage
+- `--storage`: Specify the type of storage to be used by the file system, e.g. `--storage s3`
+- `--bucket`: Specify the storage access address, e.g. `--bucket https://myjuicefs.s3.us-east-2.amazonaws.com`
+- `--access-key` and `--secret-key`: Specify the authentication information when accessing the storage
 
 For example, the following command uses Amazon S3 object storage to create a file system:
 
@@ -42,7 +42,7 @@ $ juicefs format --storage s3 \
 	myjfs
 ```
 
-Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) or [AliCloud RAM role](https://help.aliyun.com/document_detail/93689.html), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
+Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
 
 ## Supported Object Storage
 
@@ -60,8 +60,8 @@ If you wish to use a storage type that is not listed, feel free to submit a requ
 | [Wasabi](#wasabi)                                         | `wasabi`   |
 | [Storj DCS](#storj-dcs)                                   | `s3`       |
 | [Vultr Object Storage](#vultr-object-storage)             | `s3`       |
-| [Aliyun OSS](#aliyun-oss)                                 | `oss`      |
-| [Tencent COS](#tencent-cos)                               | `cos`      |
+| [Alibaba Cloud OSS](#alibaba-cloud-oss)                   | `oss`      |
+| [Tencent Cloud COS](#tencent-cloud-cos)                   | `cos`      |
 | [Huawei Cloud OBS](#huawei-cloud-obs)                     | `obs`      |
 | [Baidu Object Storage](#baidu-object-storage)             | `bos`      |
 | [Kingsoft KS3](#kingsoft-ks3)                             | `ks3`      |
@@ -314,9 +314,9 @@ $ juicefs format \
 
 Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage/).
 
-## Aliyun OSS
+## Alibaba Cloud OSS
 
-Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. And if you already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assign it to VM instance, you could omit `--access-key` and `--secret-key` options. 
+Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. And if you already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assign it to VM instance, you could omit `--access-key` and `--secret-key` options.
 
 Alibaba Cloud also supports use [Security Token Service (STS)](https://www.alibabacloud.com/help/doc-detail/100624.htm) to authorize temporary access to OSS. If you wanna use STS, you should omit `--access-key` and `--secret-key` options and set `ALICLOUD_ACCESS_KEY_ID`, `ALICLOUD_ACCESS_KEY_SECRET`, `SECURITY_TOKEN` environment variables instead, for example:
 
@@ -332,7 +332,7 @@ $ juicefs format \
     myjfs
 ```
 
-OSS provides [multiple endpoints](https://www.alibabacloud.com/help/doc-detail/31834.htm) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint. 
+OSS provides [multiple endpoints](https://www.alibabacloud.com/help/doc-detail/31834.htm) for each region, depends on your network (e.g. public or internal network), you should use appropriate endpoint.
 
 If you are creating a filesystem on AliCloud's server, you can specify the bucket name directly in the `--bucket` option. For example.
 
@@ -345,7 +345,7 @@ $ juicefs format \
     myjfs
 ```
 
-## Tencent COS
+## Tencent Cloud COS
 
 The naming rule of bucket in Tencent Cloud is `<bucket>-<APPID>`, so you must append `APPID` to the bucket name. Please follow [this document](https://intl.cloud.tencent.com/document/product/436/13312) to learn how to get `APPID`.
 
@@ -624,7 +624,7 @@ $ juicefs format \
 
 The `--bucket` option format is `http://<container>.<endpoint>`. A container defines a namespace for objects.
 
-**Currently, JuiceFS only supports [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html).** 
+**Currently, JuiceFS only supports [Swift V1 authentication](https://www.swiftstack.com/docs/cookbooks/swift_usage/auth.html).**
 
 The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 

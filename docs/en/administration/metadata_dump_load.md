@@ -6,7 +6,7 @@ slug: /metadata_dump_load
 # JuiceFS Metadata Backup & Recovery
 
 :::tip
-- JuiceFS v0.15.2 started to support manual backup, recovery and inter-engine migration of metadata.<br />
+- JuiceFS v0.15.2 started to support manual backup, recovery and inter-engine migration of metadata.
 - JuiceFS v1.0.0 starts to support automatic metadata backup
 :::
 
