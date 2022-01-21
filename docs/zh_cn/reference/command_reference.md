@@ -176,7 +176,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
 - **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](how_to_setup_metadata_engine.md)」。
-- **MOUNTPOINT**：文件系统挂载点，例如：`/mnt/jfs`
+- **MOUNTPOINT**：文件系统挂载点，例如：`/mnt/jfs`、`Z:`。
 
 #### 选项
 

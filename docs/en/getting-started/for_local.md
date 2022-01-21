@@ -74,6 +74,10 @@ Similar to the command to create a file system, the following information is req
 2. **META-URL**: used to set up metadata storage, usually the URL or file path to the database.
 3. **MOUNTPOINT**: the name of the file system.
 
+:::tip
+The mount point (MOUNTPOINT) on Windows systems should use a disk letter that is not yet occupied, e.g. `Z:`, `Y:`.
+:::
+
 ### Hands-on Practice
 
 :::note
