@@ -93,9 +93,7 @@ S3 支持[两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/Amazon
 其中 `<region>` 要替换成实际的区域代码，比如：美国西部（俄勒冈）的区域代码为 `us-west-2`。[点此查看](https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions)所有的区域代码。
 
 :::note 注意
-
 AWS 中国的用户，应使用 `amazonaws.com.cn` 域名。相应的区域代码信息[点此查看](https://docs.amazonaws.cn/aws/latest/userguide/endpoints-arns.html)。
-
 :::
 
 :::note 注意
@@ -130,7 +128,7 @@ $ ./juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
     ... \
-    localhost test
+    myjfs
 ```
 
 ```bash
@@ -139,20 +137,18 @@ $ ./juicefs format \
     --storage s3 \
     --bucket https://<endpoint>/<bucket> \
     ... \
-    localhost test
+    myjfs
 ```
 
 :::tip 提示
-
 所有 S3 兼容的对象存储服务其 `--bucket` 选项的格式为 `https://<bucket>.<endpoint>` 或者 `https://<endpoint>/<bucket>`，默认的 `region` 为 `us-east-1`，当需要不同的 `region` 的时候，可以通过环境变量 `AWS_REGION` 或者 `AWS_DEFAULT_REGION` 手动设置。
-
 :::
 
 ## Google 云存储
 
 Google 云采用 [IAM](https://cloud.google.com/iam/docs/overview) 管理资源的访问权限，通过对[服务账号](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud)授权，可以对云服务器、对象存储的访问权限进行精细化的控制。
 
-对于归属于同一服务账号下的云服务器和对象存储，创建 JuiceFS 文件系统时无需提供身份验证信息，云平台会自行完成鉴权。
+对于归属于同一服务账号的云服务器和对象存储，只要该账号赋予了相关资源的访问权限，创建 JuiceFS 文件系统时无需提供身份验证信息，云平台会自行完成鉴权。
 
 对于要从谷歌云平台外部访问对象存储的情况，比如要在本地计算机上使用 Google 云存储创建 JuiceFS 文件系统，则需要配置认证信息。由于 Google 云存储并不使用 `Access Key ID` 和 `Access Key Secret`，而是通过服务账号的 `JSON 密钥文件`验证身份。
 
@@ -191,9 +187,7 @@ $ juicefs format \
 ```
 
 :::note 注意
-
 Azure China 用户，`EndpointSuffix` 值为 `core.chinacloudapi.cn`。
-
 :::
 
 ## Backblaze B2
@@ -289,9 +283,7 @@ $ juicefs format \
 ```
 
 :::note 注意
-
 Tokyo (ap-northeast-1) 区域的用户，查看 [这篇文档](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) 了解 endpoint URI 的设置方法。
-
 :::
 
 ## Storj DCS
@@ -307,7 +299,7 @@ $ juicefs format \
 	--access-key <your-access-key> \
 	--secret-key <your-sceret-key> \
 	... \
-	my-jfs
+	myjfs
 ```
 
 ## Vultr 对象存储
@@ -320,7 +312,8 @@ $ juicefs format \
 	--bucket https://<bucket>.ewr1.vultrobjects.com/ \
 	--access-key <your-access-key> \
 	--secret-key <your-sceret-key> \
-	redis://localhost/1 my-jfs
+	... \
+    myjfs
 ```
 
 访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage/) 中找到。
@@ -333,6 +326,7 @@ $ juicefs format \
 阿里云也支持使用 [Security Token Service (STS)](https://help.aliyun.com/document_detail/100624.html) 作为 OSS 的临时访问身份验证。如果你要使用 STS，请设置  `ALICLOUD_ACCESS_KEY_ID`、`ALICLOUD_ACCESS_KEY_SECRET` 和 `SECURITY_TOKEN ` 环境变量，不要设置 `--access-key` and `--secret-key` 选项。例如：
 
 ```bash
+# Use Security Token Service (STS)
 $ export ALICLOUD_ACCESS_KEY_ID=XXX
 $ export ALICLOUD_ACCESS_KEY_SECRET=XXX
 $ export SECURITY_TOKEN=XXX
@@ -685,9 +679,7 @@ $ juicefs format \
 ```
 
 :::note 注意
-
 当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`。
-
 :::
 
 ## WebDAV
@@ -765,7 +757,7 @@ $ juicefs format \
 
 例如，以下命令使用本地的 Redis 数据库和本地磁盘创建了一个名为 `myfs` 的文件系统：
 
-```
+```shell
 $ juicefs format redis://localhost:6379/1 myjfs
 ```
 
