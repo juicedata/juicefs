@@ -343,7 +343,7 @@ func stats(ctx *cli.Context) error {
 	}
 
 	watcher := &statsWatcher{
-		tty:      !ctx.Bool("nocolor") && isatty.IsTerminal(os.Stdout.Fd()),
+		tty:      !ctx.Bool("no-color") && isatty.IsTerminal(os.Stdout.Fd()),
 		interval: ctx.Uint("interval"),
 		path:     path.Join(mp, ".stats"),
 	}
@@ -394,10 +394,6 @@ func statsFlags() *cli.Command {
 			&cli.UintFlag{
 				Name:  "verbosity",
 				Usage: "verbosity level, 0 or 1 is enough for most cases",
-			},
-			&cli.BoolFlag{
-				Name:  "nocolor",
-				Usage: "disable colors",
 			},
 		},
 	}

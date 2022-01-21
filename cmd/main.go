@@ -54,6 +54,10 @@ func globalFlags() []cli.Flag {
 			Name:  "no-agent",
 			Usage: "Disable pprof (:6060) and gops (:6070) agent",
 		},
+		&cli.BoolFlag{
+			Name:  "no-color",
+			Usage: "disable colors",
+		},
 	}
 }
 
@@ -280,6 +284,9 @@ func setLoggerLevel(c *cli.Context) {
 		utils.SetLogLevel(logrus.WarnLevel)
 	} else {
 		utils.SetLogLevel(logrus.InfoLevel)
+	}
+	if c.Bool("no-color") {
+		utils.DisableLogColor()
 	}
 	setupAgent(c)
 }

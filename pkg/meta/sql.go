@@ -2171,10 +2171,15 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	}
 	_ = rows.Close()
 
+	progress, bar := utils.NewDynProgressBar("compacting chunks: ", false)
+	bar.SetTotal(int64(len(cs)), false)
 	for _, c := range cs {
 		logger.Debugf("compact chunk %d:%d (%d slices)", c.Inode, c.Indx, len(c.Slices)/sliceBytes)
 		m.compactChunk(c.Inode, c.Indx, true)
+		bar.Increment()
 	}
+	bar.SetTotal(0, true)
+	progress.Wait()
 	return 0
 }
 

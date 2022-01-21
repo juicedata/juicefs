@@ -16,7 +16,7 @@ There are different ways to collect monitoring metrics depending on how JuiceFS 
 When the JuiceFS file system is mounted via the [`juicefs mount`](../reference/command_reference.md#juicefs-mount) command, you can collect monitoring metrics via the address `http://localhost:9567/metrics`, or you can customize it via the `--metrics` option. For example:
 
 ```shell
-$ juicefs mount --metrics localhost:9568 ...
+$ juicefs mount --metrics localhost:9567 ...
 ```
 
 You can view these monitoring metrics using the command line tool:
@@ -45,7 +45,7 @@ metadata:
 spec:
   ...
   mountOptions:
-    - metrics=0.0.0.0:9568
+    - metrics=0.0.0.0:9567
 ```
 
 Add a crawl job to `prometheus.yml` to collect monitoring metrics:
@@ -95,7 +95,7 @@ This feature needs to run JuiceFS client version 0.17.1 and above.
 The [JuiceFS S3 Gateway](../deployment/s3_gateway.md) will provide monitoring metrics at the address `http://localhost:9567/metrics` by default, or you can customize it with the `-metrics` option. For example:
 
 ```shell
-$ juicefs gateway --metrics localhost:9568 ...
+$ juicefs gateway --metrics localhost:9567 ...
 ```
 
 If you are deploying JuiceFS S3 Gateway in Kubernetes, you can refer to the Prometheus configuration in the [Kubernetes](#kubernetes) section to collect monitoring metrics (the difference is mainly in the regular expression for the label `__meta_kubernetes_pod_label_app_kubernetes_io_name`), e.g.:

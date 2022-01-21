@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,30 +34,41 @@ type logHandle struct {
 
 	name string
 	lvl  *logrus.Level
+	tty  bool
 }
 
 func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
-	// Mon Jan 2 15:04:05 -0700 MST 2006
-	timestamp := ""
 	lvl := e.Level
 	if l.lvl != nil {
 		lvl = *l.lvl
 	}
-
+	lvlStr := strings.ToUpper(lvl.String())
+	if l.tty {
+		var color int
+		switch lvl {
+		case logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel:
+			color = 31 // RED
+		case logrus.WarnLevel:
+			color = 33 // YELLOW
+		case logrus.InfoLevel:
+			color = 34 // BLUE
+		default: // logrus.TraceLevel, logrus.DebugLevel
+			color = 35 // MAGENTA
+		}
+		lvlStr = fmt.Sprintf("\033[1;%dm%s\033[0m", color, lvlStr)
+	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
-	timestamp = e.Time.Format(timeFormat)
-
+	timestamp := e.Time.Format(timeFormat)
 	str := fmt.Sprintf("%v %s[%d] <%v>: %v",
 		timestamp,
 		l.name,
 		os.Getpid(),
-		strings.ToUpper(lvl.String()),
+		lvlStr,
 		e.Message)
 
 	if len(e.Data) != 0 {
 		str += " " + fmt.Sprint(e.Data)
 	}
-
 	str += "\n"
 	return []byte(str), nil
 }
@@ -67,11 +79,8 @@ func (l *logHandle) Log(args ...interface{}) {
 }
 
 func newLogger(name string) *logHandle {
-	l := &logHandle{name: name}
-	l.Out = os.Stderr
+	l := &logHandle{Logger: *logrus.New(), name: name, tty: isatty.IsTerminal(os.Stderr.Fd())}
 	l.Formatter = l
-	l.Level = logrus.InfoLevel
-	l.Hooks = make(logrus.LevelHooks)
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)
 	}
@@ -98,6 +107,12 @@ func SetLogLevel(lvl logrus.Level) {
 	}
 }
 
+func DisableLogColor() {
+	for _, logger := range loggers {
+		logger.tty = false
+	}
+}
+
 func SetOutFile(name string) {
 	file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -105,5 +120,6 @@ func SetOutFile(name string) {
 	}
 	for _, logger := range loggers {
 		logger.SetOutput(file)
+		logger.tty = false
 	}
 }

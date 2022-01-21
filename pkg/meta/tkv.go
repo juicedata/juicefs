@@ -1922,13 +1922,18 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 		logger.Warnf("scan chunks: %s", err)
 		return errno(err)
 	}
+	progress, bar := utils.NewDynProgressBar("compacting chunks: ", false)
+	bar.SetTotal(int64(len(result)), false)
 	for k, value := range result {
 		key := []byte(k[1:])
 		inode := r.decodeInode(key[:8])
 		indx := binary.BigEndian.Uint32(key[9:])
 		logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, len(value)/sliceBytes)
 		r.compactChunk(inode, indx, true)
+		bar.Increment()
 	}
+	bar.SetTotal(0, true)
+	progress.Wait()
 	return 0
 }
 

@@ -103,7 +103,7 @@ func gc(ctx *cli.Context) error {
 		GetTimeout: time.Second * 60,
 		PutTimeout: time.Second * 60,
 		MaxUpload:  20,
-		BufferSize: 300,
+		BufferSize: 300 << 20,
 		CacheDir:   "memory",
 	}
 
@@ -161,7 +161,6 @@ func gc(ctx *cli.Context) error {
 			}
 			return err
 		})
-		logger.Infof("start to compact chunks ...")
 		err := m.CompactAll(meta.Background)
 		if err != 0 {
 			logger.Errorf("compact all chunks: %s", err)
