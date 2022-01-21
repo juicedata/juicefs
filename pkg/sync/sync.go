@@ -30,8 +30,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 )
 
 // The max number of key per listing request
@@ -47,11 +45,10 @@ const (
 )
 
 var (
-	total                    int64
-	handled                  *mpb.Bar
-	copied, copiedBytes      *mpb.Bar
-	checkedBytes             *mpb.Bar
-	deleted, skipped, failed *mpb.Bar
+	handled                  *utils.Bar
+	copied, copiedBytes      *utils.Bar
+	checkedBytes             *utils.Bar
+	deleted, skipped, failed *utils.Bar
 	concurrent               chan int
 	limiter                  *ratelimit.Bucket
 )
@@ -565,8 +562,7 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, dirs bool) 
 		return
 	}
 	tasks <- &withSize{dstobj, markDeleteDst}
-	total++
-	handled.SetTotal(total, false)
+	handled.IncrTotal(1)
 }
 
 func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) {
@@ -605,8 +601,7 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
-		total++
-		handled.SetTotal(total, false)
+		handled.IncrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if config.DeleteDst {
@@ -725,34 +720,14 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
 	}
 
-	var progress *mpb.Progress
-	progress, handled = utils.NewDynProgressBar("scanning objects: ", config.Verbose || config.Quiet || config.Manager != "")
-	addBytes := func(name string) *mpb.Bar {
-		return progress.Add(0,
-			utils.NewSpinner(),
-			mpb.PrependDecorators(
-				decor.Name(name+" bytes: ", decor.WCSyncWidth),
-				decor.CurrentKibiByte("% .2f", decor.WCSyncWidthR),
-				// FIXME: maybe use EWMA speed
-				decor.AverageSpeed(decor.UnitKiB, "   % .2f", decor.WCSyncWidthR),
-			),
-			mpb.BarFillerClearOnComplete(),
-		)
-	}
-	addSpinner := func(name string) *mpb.Bar {
-		return progress.Add(0,
-			utils.NewSpinner(),
-			mpb.PrependDecorators(
-				decor.Name(name+" count: ", decor.WCSyncWidth),
-				decor.CurrentNoUnit("%d", decor.WCSyncWidthR),
-			),
-			mpb.BarFillerClearOnComplete(),
-		)
-	}
-	copied = addSpinner("copied")
-	copiedBytes, checkedBytes = addBytes("copied"), addBytes("checked")
-	deleted, skipped, failed = addSpinner("deleted"), addSpinner("skipped"), addSpinner("failed")
-
+	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "", true)
+	handled = progress.AddCountBar("Scanned objects", 0)
+	copied = progress.AddCountSpinner("Copied objects")
+	copiedBytes = progress.AddByteSpinner("Copied objects")
+	checkedBytes = progress.AddByteSpinner("Checked objects")
+	deleted = progress.AddCountSpinner("Deleted objects")
+	skipped = progress.AddCountSpinner("Skipped objects")
+	failed = progress.AddCountSpinner("Failed objects")
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
@@ -781,23 +756,17 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	wg.Wait()
-	for _, b := range []*mpb.Bar{handled, copied, copiedBytes, checkedBytes, deleted, skipped, failed} {
-		b.SetTotal(0, true)
-	}
-	progress.Wait()
+	progress.Done()
 
 	if config.Manager == "" {
 		logger.Infof("Found: %d, copied: %d (%s), checked: %s, deleted: %d, skipped: %d, failed: %d",
-			total, copied.Current(), formatSize(copiedBytes.Current()), formatSize(checkedBytes.Current()),
+			handled.Current(), copied.Current(), formatSize(copiedBytes.Current()), formatSize(checkedBytes.Current()),
 			deleted.Current(), skipped.Current(), failed.Current())
 	} else {
 		sendStats(config.Manager)
 	}
 	if n := failed.Current(); n > 0 {
 		return fmt.Errorf("Failed to handle %d objects", n)
-	}
-	if handled.Current() != total {
-		return fmt.Errorf("Number of handled objects %d != expected %d", handled.Current(), total)
 	}
 	return nil
 }

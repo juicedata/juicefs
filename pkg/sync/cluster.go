@@ -324,9 +324,7 @@ func fetchJobs(tasks chan<- object.Object, config *Config) {
 			continue
 		}
 		logger.Debugf("got %d jobs", len(jobs))
-		if l := len(jobs); l > 0 {
-			total += int64(l)
-		} else {
+		if len(jobs) == 0 {
 			break
 		}
 		for _, obj := range jobs {

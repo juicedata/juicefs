@@ -2156,7 +2156,7 @@ func dup(b []byte) []byte {
 	return r
 }
 
-func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
+func (m *dbMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	var c chunk
 	rows, err := m.db.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Rows(&c)
 	if err != nil {
@@ -2171,15 +2171,17 @@ func (m *dbMeta) CompactAll(ctx Context) syscall.Errno {
 	}
 	_ = rows.Close()
 
-	progress, bar := utils.NewDynProgressBar("compacting chunks: ", false)
-	bar.SetTotal(int64(len(cs)), false)
+	if bar == nil {
+		var p *utils.Progress
+		p, bar = utils.MockProgress()
+		defer p.Done()
+	}
+	bar.IncrTotal(int64(len(cs)))
 	for _, c := range cs {
 		logger.Debugf("compact chunk %d:%d (%d slices)", c.Inode, c.Indx, len(c.Slices)/sliceBytes)
 		m.compactChunk(c.Inode, c.Indx, true)
 		bar.Increment()
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
 	return 0
 }
 
@@ -2476,7 +2478,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	return nil
 }
 
-func (m *dbMeta) makeSnap() error {
+func (m *dbMeta) makeSnap(bar *utils.Bar) error {
 	m.snap = &dbSnap{
 		node:    make(map[Ino]*node),
 		symlink: make(map[Ino]*symlink),
@@ -2485,17 +2487,13 @@ func (m *dbMeta) makeSnap() error {
 		chunk:   make(map[string]*chunk),
 	}
 
-	var total int64
 	for _, s := range []interface{}{new(node), new(symlink), new(edge), new(xattr), new(chunk)} {
-		count, err := m.db.Count(s)
-		if err != nil {
+		if count, err := m.db.Count(s); err == nil {
+			bar.IncrTotal(count)
+		} else {
 			return err
 		}
-		total += count
 	}
-
-	progress, bar := utils.NewDynProgressBar("Make snap progress: ", false)
-	bar.SetTotal(total, false)
 
 	bufferSize := 10000
 	if err := m.db.BufferSize(bufferSize).Iterate(new(node), func(idx int, bean interface{}) error {
@@ -2541,8 +2539,6 @@ func (m *dbMeta) makeSnap() error {
 	}); err != nil {
 		return err
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
 	return nil
 }
 
@@ -2565,14 +2561,17 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
 	}
 
+	progress := utils.NewProgress(false, false)
 	var tree, trash *DumpedEntry
 	if root == 0 {
 		root = m.root
 	}
 	if root == 1 {
-		if err = m.makeSnap(); err != nil {
+		bar := progress.AddCountBar("Snapshot keys", 0)
+		if err = m.makeSnap(bar); err != nil {
 			return fmt.Errorf("Fetch all metadata from DB: %s", err)
 		}
+		bar.Done()
 		tree = m.dumpEntryFast(root)
 		trash = m.dumpEntryFast(TrashInode)
 	} else {
@@ -2636,17 +2635,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 
-	var total int64 = 1 // root
-	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
+	bar := progress.AddCountBar("Dumped entries", 1) // with root
 	bar.Increment()
 	if trash != nil {
 		trash.Name = "Trash"
-		total++
+		bar.IncrTotal(1)
 		bar.Increment()
 	}
 	showProgress := func(totalIncr, currentIncr int64) {
-		total += totalIncr
-		bar.SetTotal(total, false)
+		bar.IncrTotal(totalIncr)
 		bar.IncrInt64(currentIncr)
 	}
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
@@ -2663,11 +2660,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
 	}
-	if bar.Current() != total {
-		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
-	}
-	bar.SetTotal(0, true)
-	progress.Wait()
+	progress.Done()
 	m.snap = nil
 
 	return bw.Flush()
@@ -2796,11 +2789,10 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
-	var total int64 = 1 // root
-	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
+	progress := utils.NewProgress(false, false)
+	bar := progress.AddCountBar("Collected entries", 1) // with root
 	showProgress := func(totalIncr, currentIncr int64) {
-		total += totalIncr
-		bar.SetTotal(total, false)
+		bar.IncrTotal(totalIncr)
 		bar.IncrInt64(currentIncr)
 	}
 	dm.FSTree.Attr.Inode = 1
@@ -2809,25 +2801,19 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	if dm.Trash != nil {
-		total++
+		bar.IncrTotal(1)
 		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
 			return err
 		}
 	}
-	if bar.Current() != total {
-		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
-	}
-	bar.SetTotal(0, true)
-	progress.Wait()
+	bar.Done()
 
 	counters := &DumpedCounters{
 		NextInode: 2,
 		NextChunk: 1,
 	}
 	refs := make(map[uint64]*chunkRef)
-
-	lProgress, lBar := utils.NewDynProgressBar("LoadEntry progress: ", false)
-	lBar.SetTotal(int64(len(entries)), false)
+	bar = progress.AddCountBar("Loaded entries", int64(len(entries)))
 	maxNum := 100
 	pool := make(chan struct{}, maxNum)
 	errCh := make(chan error, 100)
@@ -2843,7 +2829,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		wg.Add(1)
 		go func(entry *DumpedEntry) {
 			defer func() {
-				lBar.Increment()
+				bar.Increment()
 				wg.Done()
 				<-pool
 			}()
@@ -2863,10 +2849,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	case <-done:
 	}
-
-	lBar.SetTotal(0, true)
-	lProgress.Wait()
-
+	progress.Done()
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 

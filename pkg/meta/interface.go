@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 )
 
@@ -322,7 +323,7 @@ type Meta interface {
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
 
 	// Compact all the chunks by merge small slices together
-	CompactAll(ctx Context) syscall.Errno
+	CompactAll(ctx Context, bar *utils.Bar) syscall.Errno
 	// ListSlices returns all slices used by all files.
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 

@@ -25,9 +25,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 )
 
 func TestRedisClient(t *testing.T) {
@@ -855,7 +852,7 @@ func testCompaction(t *testing.T, m Meta) {
 	}
 
 	// TODO: check result if that's predictable
-	if st := m.CompactAll(ctx); st != 0 {
+	if st := m.CompactAll(ctx, nil); st != 0 {
 		logger.Fatalf("compactall: %s", st)
 	}
 	slices := make(map[Ino][]Slice)
@@ -947,20 +944,8 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		t.Fatalf("truncate file %s", st)
 	}
 	var total int64
-	process := mpb.New(mpb.WithWidth(32), mpb.WithOutput(nil))
-	bar := process.AddSpinner(total,
-		mpb.PrependDecorators(
-			// display our name with one space on the right
-			decor.Name("listed slices counter:", decor.WC{W: len("listed slices counter:") + 1, C: decor.DidentRight}),
-			decor.CurrentNoUnit("%d"),
-		),
-		mpb.BarFillerClearOnComplete(),
-	)
 	slices := make(map[Ino][]Slice)
-	m.ListSlices(ctx, slices, false, func() {
-		bar.SetTotal(total+2048, false)
-		bar.Increment()
-	})
+	m.ListSlices(ctx, slices, false, func() { total++ })
 	var totalSlices int
 	for _, ss := range slices {
 		totalSlices += len(ss)

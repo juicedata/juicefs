@@ -121,8 +121,8 @@ func warmup(ctx *cli.Context) error {
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, batchMax)
-	progress, bar := utils.NewDynProgressBar("warming up paths: ", background)
-	bar.SetTotal(int64(len(paths)), false)
+	progress := utils.NewProgress(background, false)
+	bar := progress.AddCountBar("Warmed up paths", int64(len(paths)))
 	var index int
 	for _, path := range paths {
 		if strings.HasPrefix(path, mp) {
@@ -142,8 +142,7 @@ func warmup(ctx *cli.Context) error {
 		sendCommand(controller, batch, index, threads, background)
 		bar.IncrBy(index)
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
+	progress.Done()
 
 	return nil
 }

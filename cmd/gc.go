@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,10 +30,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 
-	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 )
 
 func gcFlags() *cli.Command {
@@ -59,21 +55,6 @@ func gcFlags() *cli.Command {
 			},
 		},
 	}
-}
-
-type objCounter struct {
-	count *mpb.Bar
-	bytes *mpb.Bar
-}
-
-func (c *objCounter) add(size int64) {
-	c.count.Increment()
-	c.bytes.IncrInt64(size)
-}
-
-func (c *objCounter) done() {
-	c.count.SetTotal(0, true)
-	c.bytes.SetTotal(0, true)
 }
 
 type dChunk struct {
@@ -112,60 +93,33 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-
-	delete := ctx.Bool("delete")
 	store := chunk.NewCachedStore(blob, chunkConf)
-	var pendingProgress *mpb.Progress
-	var pending *mpb.Bar
-	var pendingObj chan *dChunk
-	var wg sync.WaitGroup
-	if delete {
-		pendingProgress, pending = utils.NewProgressCounter("pending deletes counter: ")
-		pendingObj = make(chan *dChunk, 10240)
-		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
-			pending.Increment()
-			pendingObj <- &dChunk{args[0].(uint64), args[1].(uint32)}
-			return nil
-		})
-		for i := 0; i < ctx.Int("threads"); i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for c := range pendingObj {
-					if err := store.Remove(c.chunkid, int(c.length)); err != nil {
-						logger.Warnf("remove %d_%d: %s", c.chunkid, c.length, err)
-					}
-				}
-			}()
-		}
-	} else {
+
+	// Scan all chunks first and do compaction if necessary
+	progress := utils.NewProgress(false, false)
+	if ctx.Bool("compact") {
+		bar := progress.AddCountBar("Scanned chunks", 0)
+		spin := progress.AddDoubleSpinner("Compacted slices")
 		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 			return store.Remove(args[0].(uint64), int(args[1].(uint32)))
 		})
-	}
-	if ctx.Bool("compact") {
-		var nc, ns, nb int
-		var lastLog time.Time
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
-			chunkid := args[1].(uint64)
-			err = vfs.Compact(chunkConf, store, slices, chunkid)
-			nc++
+			err := vfs.Compact(chunkConf, store, slices, args[1].(uint64))
 			for _, s := range slices {
-				ns++
-				nb += int(s.Len)
-			}
-			if time.Since(lastLog) > time.Second && isatty.IsTerminal(os.Stdout.Fd()) {
-				fmt.Printf("Compacted %d chunks (%d slices, %d bytes).\r", nc, ns, nb)
-				lastLog = time.Now()
+				spin.IncrInt64(int64(s.Len))
 			}
 			return err
 		})
-		err := m.CompactAll(meta.Background)
-		if err != 0 {
-			logger.Errorf("compact all chunks: %s", err)
+		if st := m.CompactAll(meta.Background, bar); st == 0 {
+			bar.Done()
+			spin.Done()
+			if progress.Quiet {
+				c, b := spin.Current()
+				logger.Infof("Compacted %d chunks (%d slices, %d bytes).", bar.Current(), c, b)
+			}
 		} else {
-			logger.Infof("Compacted %d chunks (%d slices, %d bytes).", nc, ns, nb)
+			logger.Errorf("compact all chunks: %s", st)
 		}
 	} else {
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
@@ -173,23 +127,53 @@ func gc(ctx *cli.Context) error {
 		})
 	}
 
-	progress, bar := utils.NewProgressCounter("listed slices counter: ")
+	// put it above delete count spinner
+	sliceCSpin := progress.AddCountSpinner("Listed slices")
+
+	// Delete pending chunks while listing slices
+	delete := ctx.Bool("delete")
+	var delSpin *utils.Bar
+	var chunkChan chan *dChunk // pending delete chunks
+	var wg sync.WaitGroup
+	if delete {
+		delSpin = progress.AddCountSpinner("Deleted pending")
+		chunkChan = make(chan *dChunk, 10240)
+		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+			delSpin.Increment()
+			chunkChan <- &dChunk{args[0].(uint64), args[1].(uint32)}
+			return nil
+		})
+		for i := 0; i < ctx.Int("threads"); i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for c := range chunkChan {
+					if err := store.Remove(c.chunkid, int(c.length)); err != nil {
+						logger.Warnf("remove %d_%d: %s", c.chunkid, c.length, err)
+					}
+				}
+			}()
+		}
+	}
+
+	// List all slices in metadata engine
 	var c = meta.NewContext(0, 0, []uint32{0})
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, delete, bar.Increment)
+	r := m.ListSlices(c, slices, delete, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
 	if delete {
-		close(pendingObj)
+		close(chunkChan)
 		wg.Wait()
-		pending.SetTotal(0, true)
-		pendingProgress.Wait()
-		logger.Infof("deleted %d pending objects", pending.Current())
+		delSpin.Done()
+		if progress.Quiet {
+			logger.Infof("Deleted %d pending chunks", delSpin.Current())
+		}
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
+	sliceCSpin.Done()
 
+	// Scan all objects to find leaked ones
 	blob = object.WithPrefix(blob, "chunks/")
 	objs, err := osync.ListAll(blob, "", "")
 	if err != nil {
@@ -205,31 +189,14 @@ func gc(ctx *cli.Context) error {
 			totalBytes += uint64(s.Size)
 		}
 	}
-	logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
-
-	progress, bar = utils.NewDynProgressBar("scanning objects: ", false)
-	bar.SetTotal(total, false)
-	addSpinner := func(name string) *objCounter {
-		count := progress.Add(0,
-			utils.NewSpinner(),
-			mpb.PrependDecorators(
-				decor.Name(name+" count: ", decor.WCSyncWidth),
-				decor.CurrentNoUnit("%d", decor.WCSyncWidthR),
-			),
-			mpb.BarFillerClearOnComplete(),
-		)
-		bytes := progress.Add(0,
-			utils.NewSpinner(),
-			mpb.PrependDecorators(
-				decor.Name(name+" bytes: ", decor.WCSyncWidth),
-				decor.CurrentKibiByte("% d", decor.WCSyncWidthR),
-			),
-			mpb.BarFillerClearOnComplete(),
-		)
-		return &objCounter{count, bytes}
+	if progress.Quiet {
+		logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
 	}
-	valid, leaked, skipped := addSpinner("valid"), addSpinner("leaked"), addSpinner("skipped")
 
+	bar := progress.AddCountBar("Scanned objects", total)
+	valid := progress.AddDoubleSpinner("Valid objects")
+	leaked := progress.AddDoubleSpinner("Leaked objects")
+	skipped := progress.AddDoubleSpinner("Skipped objects")
 	maxMtime := time.Now().Add(time.Hour * -1)
 	var leakedObj = make(chan string, 10240)
 	for i := 0; i < ctx.Int("threads"); i++ {
@@ -245,9 +212,8 @@ func gc(ctx *cli.Context) error {
 	}
 
 	foundLeaked := func(obj object.Object) {
-		total++
-		bar.SetTotal(total, false)
-		leaked.add(obj.Size())
+		bar.IncrTotal(1)
+		leaked.IncrInt64(obj.Size())
 		if delete {
 			leakedObj <- obj.Key()
 		}
@@ -263,7 +229,7 @@ func gc(ctx *cli.Context) error {
 		if obj.Mtime().After(maxMtime) || obj.Mtime().Unix() == 0 {
 			logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
 			bar.Increment()
-			skipped.add(obj.Size())
+			skipped.IncrInt64(obj.Size())
 			continue
 		}
 
@@ -292,28 +258,27 @@ func gc(ctx *cli.Context) error {
 				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
 			} else {
-				valid.add(obj.Size())
+				valid.IncrInt64(obj.Size())
 			}
 		} else {
 			if indx*chunkConf.BlockSize+csize != int(size) {
 				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
 			} else {
-				valid.add(obj.Size())
+				valid.IncrInt64(obj.Size())
 			}
 		}
 	}
 	close(leakedObj)
 	wg.Wait()
-	bar.SetTotal(0, true)
-	valid.done()
-	leaked.done()
-	skipped.done()
-	progress.Wait()
+	progress.Done()
 
+	vc, _ := valid.Current()
+	lc, lb := leaked.Current()
+	sc, sb := skipped.Current()
 	logger.Infof("scanned %d objects, %d valid, %d leaked (%d bytes), %d skipped (%d bytes)",
-		bar.Current(), valid.count.Current(), leaked.count.Current(), leaked.bytes.Current(), skipped.count.Current(), skipped.bytes.Current())
-	if leaked.count.Current() > 0 && !delete {
+		bar.Current(), vc, lc, lb, sc, sb)
+	if lc > 0 && !delete {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
 	return nil

@@ -1912,7 +1912,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}()
 }
 
-func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
+func (r *kvMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
 	result, err := r.scanValues(r.fmtKey("A"), func(k, v []byte) bool {
@@ -1922,8 +1922,13 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 		logger.Warnf("scan chunks: %s", err)
 		return errno(err)
 	}
-	progress, bar := utils.NewDynProgressBar("compacting chunks: ", false)
-	bar.SetTotal(int64(len(result)), false)
+
+	if bar == nil {
+		var p *utils.Progress
+		p, bar = utils.MockProgress()
+		defer p.Done()
+	}
+	bar.IncrTotal(int64(len(result)))
 	for k, value := range result {
 		key := []byte(k[1:])
 		inode := r.decodeInode(key[:8])
@@ -1932,8 +1937,6 @@ func (r *kvMeta) CompactAll(ctx Context) syscall.Errno {
 		r.compactChunk(inode, indx, true)
 		bar.Increment()
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
 	return 0
 }
 
@@ -2171,6 +2174,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		inode := m.decodeInode(b.Get(8))
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
+
+	progress := utils.NewProgress(false, false)
 	var tree, trash *DumpedEntry
 	if root == 0 {
 		root = m.root
@@ -2181,27 +2186,27 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			m.snap = c
 		default:
 			m.snap = &memKV{items: btree.New(2), temp: &kvItem{}}
+			bar := progress.AddCountBar("Snapshot keys", 0)
 			if err = m.txn(func(tx kvTxn) error {
 				used := parseCounter(tx.get(m.counterKey(usedSpace)))
 				inodeTotal := parseCounter(tx.get(m.counterKey(totalInodes)))
 				guessKeyTotal := int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
-				progress, bar := utils.NewDynProgressBar("Make snap progress: ", false)
-				bar.SetTotal(guessKeyTotal, false)
+				bar.SetCurrent(0) // Reset
+				bar.SetTotal(guessKeyTotal)
 				threshold := 0.1
 				tx.scan(nil, func(key, value []byte) {
 					m.snap.set(string(key), value)
 					if bar.Current() > int64(math.Ceil(float64(guessKeyTotal)*(1-threshold))) {
 						guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
-						bar.SetTotal(guessKeyTotal, false)
+						bar.SetTotal(guessKeyTotal)
 					}
 					bar.Increment()
 				})
-				bar.SetTotal(0, true)
-				progress.Wait()
 				return nil
 			}); err != nil {
 				return err
 			}
+			bar.Done()
 		}
 		if trash, err = m.dumpEntry(TrashInode); err != nil {
 			trash = nil
@@ -2283,17 +2288,15 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 
-	var total int64 = 1 //root
-	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
+	bar := progress.AddCountBar("Dumped entries", 1) // with root
 	bar.Increment()
 	if trash != nil {
 		trash.Name = "Trash"
-		total++
+		bar.IncrTotal(1)
 		bar.Increment()
 	}
 	showProgress := func(totalIncr, currentIncr int64) {
-		total += totalIncr
-		bar.SetTotal(total, false)
+		bar.IncrTotal(totalIncr)
 		bar.IncrInt64(currentIncr)
 	}
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
@@ -2310,11 +2313,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
 	}
-	if bar.Current() != total {
-		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
-	}
-	bar.SetTotal(0, true)
-	progress.Wait()
+	progress.Done()
 	m.snap = nil
 
 	return bw.Flush()
@@ -2398,11 +2397,10 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
-	var total int64 = 1 // root
-	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
+	progress := utils.NewProgress(false, false)
+	bar := progress.AddCountBar("Collected entries", 1) // with root
 	showProgress := func(totalIncr, currentIncr int64) {
-		total += totalIncr
-		bar.SetTotal(total, false)
+		bar.IncrTotal(totalIncr)
 		bar.IncrInt64(currentIncr)
 	}
 	dm.FSTree.Attr.Inode = 1
@@ -2411,25 +2409,19 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	if dm.Trash != nil {
-		total++
+		bar.IncrTotal(1)
 		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
 			return err
 		}
 	}
-	if bar.Current() != total {
-		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
-	}
-	bar.SetTotal(0, true)
-	progress.Wait()
+	bar.Done()
 
 	counters := &DumpedCounters{
 		NextInode: 2,
 		NextChunk: 1,
 	}
 	refs := make(map[string]int64)
-
-	lProgress, lBar := utils.NewDynProgressBar("LoadEntry progress: ", false)
-	lBar.SetTotal(int64(len(entries)), false)
+	bar = progress.AddCountBar("Loaded entries", int64(len(entries)))
 	maxNum := 100
 	pool := make(chan struct{}, maxNum)
 	errCh := make(chan error, 100)
@@ -2446,7 +2438,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		go func(entry *DumpedEntry) {
 			defer func() {
 				wg.Done()
-				lBar.Increment()
+				bar.Increment()
 				<-pool
 			}()
 			if err = m.loadEntry(entry, counters, refs); err != nil {
@@ -2465,8 +2457,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return err
 	case <-done:
 	}
-	lBar.SetTotal(0, true)
-	lProgress.Wait()
+	progress.Done()
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 

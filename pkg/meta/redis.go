@@ -2228,20 +2228,22 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 }
 
-func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
+func (r *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	var cursor uint64
 	p := r.rdb.Pipeline()
-	var total int64
-	progress, bar := utils.NewDynProgressBar("compacting chunks: ", false)
+
+	if bar == nil {
+		var p *utils.Progress
+		p, bar = utils.MockProgress()
+		defer p.Done()
+	}
 	for {
 		keys, c, err := r.rdb.Scan(ctx, cursor, "c*_*", 10000).Result()
 		if err != nil {
 			logger.Warnf("scan chunks: %s", err)
 			return errno(err)
 		}
-
-		total += int64(len(keys))
-		bar.SetTotal(total, false)
+		bar.IncrTotal(int64(len(keys)))
 		for _, key := range keys {
 			_ = p.LLen(ctx, key)
 		}
@@ -2268,8 +2270,6 @@ func (r *redisMeta) CompactAll(ctx Context) syscall.Errno {
 		}
 		cursor = c
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
 	return 0
 }
 
@@ -2645,15 +2645,13 @@ type redisSnap struct {
 	hashMap   map[string]map[string]string //d*(included delfiles) x*
 }
 
-func (m *redisMeta) makeSnap() error {
+func (m *redisMeta) makeSnap(bar *utils.Bar) error {
 	m.snap = &redisSnap{
 		stringMap: make(map[string]string),
 		listMap:   make(map[string][]string),
 		hashMap:   make(map[string]map[string]string),
 	}
 	ctx := context.Background()
-	progress, bar := utils.NewDynProgressBar("Make snap progress: ", false)
-	bar.SetTotal(m.rdb.DBSize(ctx).Val(), false)
 
 	listType := func(keys []string) error {
 		p := m.rdb.Pipeline()
@@ -2746,8 +2744,6 @@ func (m *redisMeta) makeSnap() error {
 			return err
 		}
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
 	return nil
 }
 
@@ -2776,14 +2772,18 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		length, _ := strconv.ParseUint(parts[1], 10, 64)
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
+
+	progress := utils.NewProgress(false, false)
 	var tree, trash *DumpedEntry
 	if root == 0 {
 		root = m.root
 	}
 	if root == 1 {
-		if err := m.makeSnap(); err != nil {
+		bar := progress.AddCountBar("Snapshot keys", m.rdb.DBSize(ctx).Val())
+		if err = m.makeSnap(bar); err != nil {
 			return errors.Errorf("Fetch all metadata from Redis: %s", err)
 		}
+		bar.Done()
 		tree = m.dumpEntryFast(root)
 		trash = m.dumpEntryFast(TrashInode)
 	} else {
@@ -2795,20 +2795,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return errors.New("The entry of the root inode was not found")
 	}
 	tree.Name = "FSTree"
-	var total int64 = 1 // root
-	progress, bar := utils.NewDynProgressBar("Dump dir progress: ", false)
-	bar.Increment()
-	if trash != nil {
-		trash.Name = "Trash"
-		total++
-		bar.Increment()
-	}
-	showProgress := func(totalIncr, currentIncr int64) {
-		total += totalIncr
-		bar.SetTotal(total, false)
-		bar.IncrInt64(currentIncr)
-	}
-
 	format, err := m.Load()
 	if err != nil {
 		return err
@@ -2866,6 +2852,17 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 
+	bar := progress.AddCountBar("Dumped entries", 1) // with root
+	bar.Increment()
+	if trash != nil {
+		trash.Name = "Trash"
+		bar.IncrTotal(1)
+		bar.Increment()
+	}
+	showProgress := func(totalIncr, currentIncr int64) {
+		bar.IncrTotal(totalIncr)
+		bar.IncrInt64(currentIncr)
+	}
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
 	}
@@ -2880,12 +2877,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	if _, err = bw.WriteString("\n}\n"); err != nil {
 		return err
 	}
-
-	if bar.Current() != total {
-		logger.Warnf("Dumped %d / total %d, some entries are not dumped", bar.Current(), total)
-	}
-	bar.SetTotal(0, true) // FIXME: current != total
-	progress.Wait()
+	progress.Done()
 	m.snap = nil
 
 	return bw.Flush()
@@ -2975,11 +2967,10 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 
-	var total int64 = 1 // root
-	progress, bar := utils.NewDynProgressBar("CollectEntry progress: ", false)
+	progress := utils.NewProgress(false, false)
+	bar := progress.AddCountBar("Collected entries", 1) // with root
 	showProgress := func(totalIncr, currentIncr int64) {
-		total += totalIncr
-		bar.SetTotal(total, false)
+		bar.IncrTotal(totalIncr)
 		bar.IncrInt64(currentIncr)
 	}
 	dm.FSTree.Attr.Inode = 1
@@ -2988,23 +2979,16 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	if dm.Trash != nil {
-		total++
+		bar.IncrTotal(1)
 		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
 			return err
 		}
 	}
-
-	if bar.Current() != total {
-		logger.Warnf("Collected %d / total %d, some entries are not collected", bar.Current(), total)
-	}
-	bar.SetTotal(0, true) // FIXME: current != total
-	progress.Wait()
+	bar.Done()
 
 	counters := &DumpedCounters{}
 	refs := make(map[string]int)
-
-	lProgress, lBar := utils.NewDynProgressBar("LoadEntry progress: ", false)
-	lBar.SetTotal(int64(len(entries)), false)
+	bar = progress.AddCountBar("Loaded entries", int64(len(entries)))
 	maxNum := 100
 	pool := make(chan struct{}, maxNum)
 	errCh := make(chan error, 100)
@@ -3021,7 +3005,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		go func(entry *DumpedEntry) {
 			defer func() {
 				wg.Done()
-				lBar.Increment()
+				bar.Increment()
 				<-pool
 			}()
 			if err = m.loadEntry(entry, counters, refs); err != nil {
@@ -3040,8 +3024,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 		return err
 	case <-done:
 	}
-	lBar.SetTotal(0, true)
-	lProgress.Wait()
+	progress.Done()
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 
