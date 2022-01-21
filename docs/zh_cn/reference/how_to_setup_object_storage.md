@@ -85,7 +85,7 @@ $ juicefs format --storage s3 \
 
 ## Amazon S3
 
-S3 支持  [两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/VirtualHosting.html)：`虚拟托管类型` 和 `路径类型`。
+S3 支持[两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/VirtualHosting.html)：`虚拟托管类型` 和 `路径类型`。
 
 - 虚拟托管类型：`https://<bucket>.s3.<region>.amazonaws.com`
 - 路径类型：`https://s3.<region>.amazonaws.com/<bucket>`
@@ -94,6 +94,10 @@ S3 支持  [两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/Amaz
 
 :::note 注意
 AWS 中国的用户，应使用 `amazonaws.com.cn` 域名。相应的区域代码信息[点此查看](https://docs.amazonaws.cn/aws/latest/userguide/endpoints-arns.html)。
+:::
+
+:::note 注意
+如果 S3 的桶具有公共访问权限（支持匿名访问），请将 `--access-key` 设置为 `anonymous`。
 :::
 
 JuiceFS v0.12 之前的版本仅支持虚拟托管类型，v0.12 以及之后的版本两种风格都支持。例如：
@@ -116,10 +120,10 @@ $ juicefs format \
     myjfs
 ```
 
-你也可以将`--storage`设置为`s3`用来连接 S3 兼容的对象存储，比如：
+你也可以将 `--storage` 设置为 `s3` 用来连接 S3 兼容的对象存储，比如：
 
 ```bash
-# virtual hosted-style
+# 虚拟托管类型
 $ ./juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
@@ -128,7 +132,7 @@ $ ./juicefs format \
 ```
 
 ```bash
-# path-style
+# 路径类型
 $ ./juicefs format \
     --storage s3 \
     --bucket https://<endpoint>/<bucket> \
@@ -137,7 +141,7 @@ $ ./juicefs format \
 ```
 
 :::tip 提示
-所有 S3 兼容的对象存储服务其 `--bucket`选项的格式为`https://<bucket>.<endpoint>`或者 `https://<endpoint>/<bucket>`，默认的`region`为`us-east-1`，当需要不同的`region`的时候，可以通过环境变量`AWS_REGION`或者`AWS_DEFAULT_REGION`手动设置。
+所有 S3 兼容的对象存储服务其 `--bucket` 选项的格式为 `https://<bucket>.<endpoint>` 或者 `https://<endpoint>/<bucket>`，默认的 `region` 为 `us-east-1`，当需要不同的 `region` 的时候，可以通过环境变量 `AWS_REGION` 或者 `AWS_DEFAULT_REGION` 手动设置。
 :::
 
 ## Google 云存储
@@ -477,7 +481,7 @@ $ juicefs format \
 ```
 
 :::note 注意
-所有 QingStor 兼容的对象存储服务其 `--bucket`选项的格式为`http://<bucket>.<endpoint>`
+所有 QingStor 兼容的对象存储服务其 `--bucket` 选项的格式为 `http://<bucket>.<endpoint>`。
 :::
 
 ## 七牛云 Kodo

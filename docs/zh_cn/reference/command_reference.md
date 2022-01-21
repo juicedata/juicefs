@@ -397,6 +397,13 @@ juicefs sync [command options] SRC DST
 - **SRC**：源路径
 - **DST**：目标路径
 
+源路径和目标路径的格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`，其中：
+
+- `NAME`：JuiceFS 支持的数据存储类型（如 `s3`、`oss`），请参考[文档](how_to_setup_object_storage.md#支持的存储服务)。
+- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，请参考[文档](how_to_setup_object_storage.md#access-key-和-secret-key)。
+- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，具体请参考[文档](how_to_setup_object_storage.md#支持的存储服务)。
+- `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
+
 #### 选项
 
 `--start KEY, -s KEY`<br />
@@ -450,9 +457,11 @@ juicefs sync [command options] SRC DST
 `--no-https`<br />
 不要使用 HTTPS (默认: false)
 
-:::note 注意
-如果源存储是公共访问权限的桶，请将 `accessKey` 设置为 `anonymous`
-:::
+`--check-all`<br />
+验证源路径和目标路径中所有文件的数据完整性 (默认: false)
+
+`--check-new`<br />
+验证新拷贝文件的数据完整性 (默认: false)
 
 ### juicefs rmr
 
