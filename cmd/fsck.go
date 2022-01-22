@@ -29,8 +29,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 
 	"github.com/urfave/cli/v2"
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 )
 
 func checkFlags() *cli.Command {
@@ -69,15 +67,16 @@ func fsck(ctx *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-
-	logger.Infof("Listing all blocks ...")
 	blob = object.WithPrefix(blob, "chunks/")
 	objs, err := osync.ListAll(blob, "", "")
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
+
+	// Find all blocks in object storage
+	progress := utils.NewProgress(false, false)
+	blockDSpin := progress.AddDoubleSpinner("Found blocks")
 	var blocks = make(map[string]int64)
-	var totalBlockBytes int64
 	for obj := range objs {
 		if obj == nil {
 			break // failed listing
@@ -93,50 +92,31 @@ func fsck(ctx *cli.Context) error {
 		}
 		name := parts[2]
 		blocks[name] = obj.Size()
-		totalBlockBytes += obj.Size()
+		blockDSpin.IncrInt64(obj.Size())
 	}
-	logger.Infof("Found %d blocks (%d bytes)", len(blocks), totalBlockBytes)
+	blockDSpin.Done()
+	if progress.Quiet {
+		c, b := blockDSpin.Current()
+		logger.Infof("Found %d blocks (%d bytes)", c, b)
+	}
 
-	logger.Infof("Listing all slices ...")
-	progress, bar := utils.NewProgressCounter("listed slices counter: ")
+	// List all slices in metadata engine
+	sliceCSpin := progress.AddCountSpinner("Listed slices")
 	var c = meta.NewContext(0, 0, []uint32{0})
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, false, bar.Increment)
+	r := m.ListSlices(c, slices, false, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
+	sliceCSpin.Done()
 
-	var totalSlices int
-	for _, ss := range slices {
-		totalSlices += len(ss)
-	}
-	progress, bar = utils.NewDynProgressBar("scanning slices: ", false)
-	bar.SetTotal(int64(totalSlices), false)
-	lost := progress.Add(0,
-		utils.NewSpinner(),
-		mpb.PrependDecorators(
-			decor.Name("lost count: ", decor.WCSyncWidth),
-			decor.CurrentNoUnit("%d", decor.WCSyncWidthR),
-		),
-		mpb.BarFillerClearOnComplete(),
-	)
-	lostBytes := progress.Add(0,
-		utils.NewSpinner(),
-		mpb.PrependDecorators(
-			decor.Name("lost bytes: ", decor.WCSyncWidth),
-			decor.CurrentKibiByte("% d", decor.WCSyncWidthR),
-		),
-		mpb.BarFillerClearOnComplete(),
-	)
-
-	var totalBytes uint64
+	// Scan all slices to find lost blocks
+	sliceCBar := progress.AddCountBar("Scanned slices", sliceCSpin.Current())
+	sliceBSpin := progress.AddByteSpinner("Scanned slices")
+	lostDSpin := progress.AddDoubleSpinner("Lost blocks")
 	brokens := make(map[meta.Ino]string)
 	for inode, ss := range slices {
 		for _, s := range ss {
-			bar.Increment()
-			totalBytes += uint64(s.Size)
 			n := (s.Size - 1) / uint32(chunkConf.BlockSize)
 			for i := uint32(0); i <= n; i++ {
 				sz := chunkConf.BlockSize
@@ -155,20 +135,20 @@ func fsck(ctx *cli.Context) error {
 							}
 						}
 						logger.Errorf("can't find block %s for file %s: %s", key, brokens[inode], err)
-						lost.Increment()
-						lostBytes.IncrBy(sz)
+						lostDSpin.IncrInt64(int64(sz))
 					}
 				}
 			}
+			sliceCBar.Increment()
+			sliceBSpin.IncrInt64(int64(s.Size))
 		}
 	}
-	bar.SetTotal(0, true) // should be complete
-	lost.SetTotal(0, true)
-	lostBytes.SetTotal(0, true)
-	progress.Wait()
-	logger.Infof("Used by %d slices (%d bytes)", totalSlices, totalBytes)
-	if lost.Current() > 0 {
-		msg := fmt.Sprintf("%d objects are lost (%d bytes), %d broken files:\n", lost.Current(), lostBytes.Current(), len(brokens))
+	progress.Done()
+	if progress.Quiet {
+		logger.Infof("Used by %d slices (%d bytes)", sliceCBar.Current(), sliceBSpin.Current())
+	}
+	if lc, lb := lostDSpin.Current(); lc > 0 {
+		msg := fmt.Sprintf("%d objects are lost (%d bytes), %d broken files:\n", lc, lb, len(brokens))
 		msg += fmt.Sprintf("%13s: PATH\n", "INODE")
 		var fileList []string
 		for i, p := range brokens {

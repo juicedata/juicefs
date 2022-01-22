@@ -53,28 +53,6 @@ func TestGetInode(t *testing.T) {
 	}
 }
 
-func TestProgresBar(t *testing.T) {
-	p, bar := NewProgressCounter("test")
-	go func() {
-		for i := 0; i < 100; i++ {
-			time.Sleep(time.Millisecond)
-			bar.Increment()
-		}
-		bar.SetTotal(0, true)
-	}()
-	p.Wait()
-
-	p, bar = NewDynProgressBar("test", true)
-	go func() {
-		for i := 0; i < 100; i++ {
-			time.Sleep(time.Millisecond)
-			bar.Increment()
-		}
-		bar.SetTotal(0, true)
-	}()
-	p.Wait()
-}
-
 func TestLocalIp(t *testing.T) {
 	_, err := GetLocalIp("127.0.0.1")
 	if err == nil {
