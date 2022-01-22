@@ -2232,11 +2232,6 @@ func (r *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	var cursor uint64
 	p := r.rdb.Pipeline()
 
-	if bar == nil {
-		var p *utils.Progress
-		p, bar = utils.MockProgress()
-		defer p.Done()
-	}
 	for {
 		keys, c, err := r.rdb.Scan(ctx, cursor, "c*_*", 10000).Result()
 		if err != nil {

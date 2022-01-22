@@ -2171,11 +2171,6 @@ func (m *dbMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	}
 	_ = rows.Close()
 
-	if bar == nil {
-		var p *utils.Progress
-		p, bar = utils.MockProgress()
-		defer p.Done()
-	}
 	bar.IncrTotal(int64(len(cs)))
 	for _, c := range cs {
 		logger.Debugf("compact chunk %d:%d (%d slices)", c.Inode, c.Indx, len(c.Slices)/sliceBytes)

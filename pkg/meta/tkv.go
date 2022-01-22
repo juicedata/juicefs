@@ -1923,11 +1923,6 @@ func (r *kvMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 		return errno(err)
 	}
 
-	if bar == nil {
-		var p *utils.Progress
-		p, bar = utils.MockProgress()
-		defer p.Done()
-	}
 	bar.IncrTotal(int64(len(result)))
 	for k, value := range result {
 		key := []byte(k[1:])

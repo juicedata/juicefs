@@ -25,6 +25,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func TestRedisClient(t *testing.T) {
@@ -852,12 +854,14 @@ func testCompaction(t *testing.T, m Meta) {
 	}
 
 	// TODO: check result if that's predictable
-	if st := m.CompactAll(ctx, nil); st != 0 {
-		logger.Fatalf("compactall: %s", st)
+	p, bar := utils.MockProgress()
+	if st := m.CompactAll(ctx, bar); st != 0 {
+		t.Fatalf("compactall: %s", st)
 	}
+	p.Done()
 	slices := make(map[Ino][]Slice)
 	if st := m.ListSlices(ctx, slices, false, nil); st != 0 {
-		logger.Fatalf("list all slices: %s", st)
+		t.Fatalf("list all slices: %s", st)
 	}
 
 	l.Lock()
