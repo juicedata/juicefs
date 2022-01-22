@@ -28,10 +28,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 )
 
 var resultRange = map[string][4]float64{
@@ -52,9 +51,9 @@ var resultRange = map[string][4]float64{
 type benchCase struct {
 	bm               *benchmark
 	name             string
-	fsize, bsize     int      // file/block size in Bytes
-	fcount, bcount   int      // file/block count
-	wbar, rbar, sbar *mpb.Bar // progress bar for write/read/stat
+	fsize, bsize     int        // file/block size in Bytes
+	fcount, bcount   int        // file/block count
+	wbar, rbar, sbar *utils.Bar // progress bar for write/read/stat
 }
 
 type benchmark struct {
@@ -306,31 +305,18 @@ func bench(ctx *cli.Context) error {
 		fmt.Println("Cleaning kernel cache, may ask for root privilege...")
 	}
 	dropCaches()
-	var progress *mpb.Progress
 	bm.tty = isatty.IsTerminal(os.Stdout.Fd())
-	if bm.tty {
-		progress = mpb.New(mpb.WithWidth(64))
-	} else {
-		progress = mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil))
-	}
-	addBar := func(name string, total int) *mpb.Bar {
-		return progress.AddBar(int64(total),
-			mpb.PrependDecorators(
-				decor.Name(name+" ", decor.WCSyncWidth),
-				decor.CountersNoUnit("%d / %d"),
-			),
-			mpb.AppendDecorators(
-				decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
-			),
-		)
-	}
+	progress := utils.NewProgress(!bm.tty, false)
 	if b := bm.big; b != nil {
-		total := bm.threads * b.fcount * b.bcount
-		b.wbar, b.rbar = addBar("WriteBig", total), addBar("ReadBig", total)
+		total := int64(bm.threads * b.fcount * b.bcount)
+		b.wbar = progress.AddCountBar("Write big", total)
+		b.rbar = progress.AddCountBar("Read big", total)
 	}
 	if s := bm.small; s != nil {
-		total := bm.threads * s.fcount * s.bcount
-		s.wbar, s.rbar, s.sbar = addBar("WriteSmall", total), addBar("ReadSmall", total), addBar("Stat", bm.threads*s.fcount)
+		total := int64(bm.threads * s.fcount * s.bcount)
+		s.wbar = progress.AddCountBar("Write small", total)
+		s.rbar = progress.AddCountBar("Read small", total)
+		s.sbar = progress.AddCountBar("Stat file", int64(bm.threads*s.fcount))
 	}
 
 	/* --- Run Benchmark --- */
@@ -379,7 +365,7 @@ func bench(ctx *cli.Context) error {
 		line[2] += " ms/file"
 		result = append(result, line)
 	}
-	progress.Wait()
+	progress.Done()
 
 	/* --- Clean-up --- */
 	if err := exec.Command("rm", "-rf", bm.tmpdir).Run(); err != nil {

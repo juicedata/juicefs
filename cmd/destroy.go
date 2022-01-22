@@ -75,7 +75,8 @@ func destroy(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("list all objects: %s", err)
 	}
-	progress, bar := utils.NewProgressCounter("deleting objects: ")
+	progress := utils.NewProgress(false, false)
+	spin := progress.AddCountSpinner("Deleted objects")
 	var failed int
 	var dirs []string
 	var mu sync.Mutex
@@ -95,7 +96,7 @@ func destroy(ctx *cli.Context) error {
 					continue
 				}
 				if err := blob.Delete(obj.Key()); err == nil {
-					bar.Increment()
+					spin.Increment()
 				} else {
 					failed++
 					logger.Warnf("delete %s: %s", obj.Key(), err)
@@ -107,23 +108,25 @@ func destroy(ctx *cli.Context) error {
 	sort.Strings(dirs)
 	for i := len(dirs) - 1; i >= 0; i-- {
 		if err := blob.Delete(dirs[i]); err == nil {
-			bar.Increment()
+			spin.Increment()
 		} else {
 			failed++
 			logger.Warnf("delete %s: %s", dirs[i], err)
 		}
 	}
-	bar.SetTotal(0, true)
-	progress.Wait()
+	progress.Done()
+	if progress.Quiet {
+		logger.Infof("Deleted %d objects", spin.Current())
+	}
 	if failed > 0 {
-		fmt.Printf("%d objects are failed to delete, please do it manually.\n", failed)
+		logger.Errorf("%d objects are failed to delete, please do it manually.", failed)
 	}
 
 	if err = m.Reset(); err != nil {
 		logger.Fatalf("reset meta: %s", err)
 	}
 
-	fmt.Println("The volume has been destroyed! You may need to delete cache directory manually.")
+	logger.Infof("The volume has been destroyed! You may need to delete cache directory manually.")
 	return nil
 }
 
