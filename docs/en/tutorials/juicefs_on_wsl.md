@@ -86,18 +86,18 @@ JuiceFS is a distributed file system with data and metadata separated, usually u
 
 #### Object Storage
 
-View "[JuiceFS Supported Datastores](../reference/how_to_setup_object_storage.md)"
+View "[JuiceFS Supported Data Stores](../reference/how_to_setup_object_storage.md)"
 
-- **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
-- **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
-- **Access Key Secret**：`ZYXwvutsrqpoNMLkJiHgfeDCBA`
+- **Bucket Endpoint**: `https://myjfs.oss-cn-shanghai.aliyuncs.com`
+- **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
+- **Access Key Secret**: `ZYXwvutsrqpoNMLkJiHgfeDCBA`
 
 #### Database
 
 View "[JuiceFS Supported Metadata Engines](../reference/how_to_setup_metadata_engine.md)"
 
-- **Database Url**：`myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
-- **Database Password**：`mypassword`
+- **Database URL**: `myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
+- **Database Password**: `mypassword`
 
 Write private information to environment variables:
 
@@ -159,7 +159,7 @@ Using the `bench` benchmarking tool that comes with JuiceFS, the results show th
 
 ## Known Issues
 
-When copying files to a Linux subsystem via Windows Explorer, WSL automatically appends a file of the same name with the `Zone.Identifier` identifier to each file. This is an NTFS file system security mechanism intended to track the origin of external files, but it is a bug for WSL and has been reported to the Microsoft development team on GitHub [#7456](https://github.com/microsoft/WSL/issues/7456). 
+When copying files to a Linux subsystem via Windows Explorer, WSL automatically appends a file of the same name with the `Zone.Identifier` identifier to each file. This is an NTFS file system security mechanism intended to track the origin of external files, but it is a bug for WSL and has been reported to the Microsoft development team on GitHub [#7456](https://github.com/microsoft/WSL/issues/7456).
 
 This issue also affects the same problem when saving files to a mounted JuiceFS file system in the Linux subsystem via Windows Explorer. However, reading and writing JuiceFS file systems inside the Linux subsystem is not affected by this bug.
 
