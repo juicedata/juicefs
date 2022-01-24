@@ -4,24 +4,24 @@
 
 The following table shows difference of main features between Alluxio and JuiceFS.
 
-| Features                  | Alluxio            | JuiceFS |
-| --------                  | -------            | ------- |
-| Storage format            | Object             | Block   |
-| Cache granularity         | 64MiB              | 4MiB    |
-| Multi-tier cache          | ✓                  | ✓       |
-| Hadoop-compatible         | ✓                  | ✓       |
-| S3-compatible             | ✓                  | ✓       |
-| Kubernetes CSI Driver     | ✓                  | ✓       |
-| Hadoop data locality      | ✓                  | ✓       |
-| Fully POSIX-compatible    | ✕                  | ✓       |
-| Atomic metadata operation | ✕                  | ✓       |
-| Consistency               | ✕                  | ✓       |
-| Data compression          | ✕                  | ✓       |
-| Data encryption           | ✕                  | ✓       |
-| Zero-effort operation     | ✕                  | ✓       |
-| Language                  | Java               | Go      |
-| Open source license       | Apache License 2.0 | Apache License 2.0  |
-| Open source date          | 2011               | 2021.1  |
+| Features                  | Alluxio            | JuiceFS            |
+| --------                  | -------            | -------            |
+| Storage format            | Object             | Block              |
+| Cache granularity         | 64MiB              | 4MiB               |
+| Multi-tier cache          | ✓                  | ✓                  |
+| Hadoop-compatible         | ✓                  | ✓                  |
+| S3-compatible             | ✓                  | ✓                  |
+| Kubernetes CSI Driver     | ✓                  | ✓                  |
+| Hadoop data locality      | ✓                  | ✓                  |
+| Fully POSIX-compatible    | ✕                  | ✓                  |
+| Atomic metadata operation | ✕                  | ✓                  |
+| Consistency               | ✕                  | ✓                  |
+| Data compression          | ✕                  | ✓                  |
+| Data encryption           | ✕                  | ✓                  |
+| Zero-effort operation     | ✕                  | ✓                  |
+| Language                  | Java               | Go                 |
+| Open source license       | Apache License 2.0 | Apache License 2.0 |
+| Open source date          | 2011               | 2021.1             |
 
 ### Storage format
 
