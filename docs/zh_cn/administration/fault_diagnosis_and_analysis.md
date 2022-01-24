@@ -48,7 +48,7 @@ $ cat /jfs/.accesslog
 
 ## 运行时信息
 
-JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 TCP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。你可以通过系统命令查看当前 JuiceFS 客户端监听的具体端口号：
+JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 TCP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。你可以通过系统命令（如 `lsof`）查看当前 JuiceFS 客户端监听的具体端口号：
 
 :::note 注意
 如果 JuiceFS 是通过 root 用户挂载，那么需要在 `lsof` 命令前加上 `sudo`。
