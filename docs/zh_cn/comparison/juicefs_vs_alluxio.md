@@ -4,24 +4,24 @@
 
 下表显示了 Alluxio 和 JuiceFS 之间的主要功能差异。
 
-| 特性                  | Alluxio            | JuiceFS |
-| --------------------- | -------            | ------- |
-| 存储格式              | Object             | Block   |
-| 缓存粒度              | 64MiB              | 4MiB    |
-| 多级缓存              | ✓                  | ✓       |
-| Hadoop 兼容           | ✓                  | ✓       |
-| S3 兼容               | ✓                  | ✓       |
-| Kubernetes CSI Driver | ✓                  | ✓       |
-| Hadoop 数据本地性     | ✓                  | ✓       |
-| 完全兼容 POSIX        | ✕                  | ✓       |
-| 原子元数据操作        | ✕                  | ✓       |
-| 一致性                | ✕                  | ✓       |
-| 数据压缩              | ✕                  | ✓       |
-| 数据加密              | ✕                  | ✓       |
-| 零运维                | ✕                  | ✓       |
-| 开发语言              | Java               | Go      |
-| 开源协议              | Apache License 2.0 | Apache License 2.0  |
-| 开源时间              | 2011               | 2021.1  |
+| 特性                  | Alluxio            | JuiceFS            |
+| --------------------- | -------            | -------            |
+| 存储格式              | Object             | Block              |
+| 缓存粒度              | 64MiB              | 4MiB               |
+| 多级缓存              | ✓                  | ✓                  |
+| Hadoop 兼容           | ✓                  | ✓                  |
+| S3 兼容               | ✓                  | ✓                  |
+| Kubernetes CSI Driver | ✓                  | ✓                  |
+| Hadoop 数据本地性     | ✓                  | ✓                  |
+| 完全兼容 POSIX        | ✕                  | ✓                  |
+| 原子元数据操作        | ✕                  | ✓                  |
+| 一致性                | ✕                  | ✓                  |
+| 数据压缩              | ✕                  | ✓                  |
+| 数据加密              | ✕                  | ✓                  |
+| 零运维                | ✕                  | ✓                  |
+| 开发语言              | Java               | Go                 |
+| 开源协议              | Apache License 2.0 | Apache License 2.0 |
+| 开源时间              | 2011               | 2021.1             |
 
 ### 存储格式
 
@@ -43,7 +43,7 @@ JuiceFS 提供了 [Kubernetes CSI Driver](https://github.com/juicedata/juicefs-c
 
 ### 完全兼容 POSIX
 
-JuiceFS [完全兼容 POSIX](posix_compatibility.md)。来自[京东](https://www.slideshare.net/Alluxio/using-alluxio-posix-fuse-api-in-jdcom)的一个 pjdfstest 显示 Alluxio 没有通过 POSIX 兼容性测试，例如 Alluxio 不支持符号链接、truncate、fallocate、append、xattr、mkfifo、mknod 和 utimes。除了 pjdfstest 涵盖的东西外，JuiceFS 还提供了关闭再打开（close-to-open）一致性、原子元数据操作、mmap、fallocate 打洞、xattr、BSD 锁（flock）和 POSIX 记录锁（fcntl）。
+JuiceFS [完全兼容 POSIX](../reference/posix_compatibility.md)。来自[京东](https://www.slideshare.net/Alluxio/using-alluxio-posix-fuse-api-in-jdcom)的一个 pjdfstest 显示 Alluxio 没有通过 POSIX 兼容性测试，例如 Alluxio 不支持符号链接、truncate、fallocate、append、xattr、mkfifo、mknod 和 utimes。除了 pjdfstest 涵盖的东西外，JuiceFS 还提供了关闭再打开（close-to-open）一致性、原子元数据操作、mmap、fallocate 打洞、xattr、BSD 锁（flock）和 POSIX 记录锁（fcntl）。
 
 ### 原子元数据操作
 
