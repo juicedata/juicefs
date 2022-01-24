@@ -381,7 +381,7 @@ func (fs *FileSystem) Stat(ctx meta.Context, path string) (fi *FileStat, err sys
 
 // parentDir returns parent of /foo/bar/ as /foo
 func parentDir(p string) string {
-	return filepath.Dir(strings.TrimRight(p, "/"))
+	return path.Dir(strings.TrimRight(p, "/"))
 }
 
 func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16) (err syscall.Errno) {
