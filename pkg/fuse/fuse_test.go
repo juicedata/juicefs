@@ -45,7 +45,7 @@ import (
 )
 
 func format(url string) {
-	m := meta.NewClient(url, &meta.Config{}, false)
+	m := meta.NewClient(url, &meta.Config{})
 	format := meta.Format{
 		Name:      "test",
 		UUID:      uuid.New().String(),
@@ -69,7 +69,7 @@ func mount(url, mp string) {
 		Strict:     true,
 		MountPoint: mp,
 	}
-	m := meta.NewClient(url, metaConf, false)
+	m := meta.NewClient(url, metaConf)
 	format, err := m.Load()
 	if err != nil {
 		log.Fatalf("load setting: %s", err)

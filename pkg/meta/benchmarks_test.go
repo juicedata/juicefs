@@ -589,16 +589,16 @@ func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir, readdir
 }
 
 func BenchmarkRedisDir(b *testing.B) {
-	m := NewClient(redisAddr, &Config{}, false)
+	m := NewClient(redisAddr, &Config{})
 	benchmarkDir(b, m)
 }
 func BenchmarkSQLDir(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{}, false)
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkDir(b, m)
 }
 
 func BenchmarkTKVDir(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{}, false)
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkDir(b, m)
 }
 
@@ -616,17 +616,17 @@ func benchmarkFile(b *testing.B, m Meta) {
 }
 
 func BenchmarkRedisFile(b *testing.B) {
-	m := NewClient(redisAddr, &Config{}, false)
+	m := NewClient(redisAddr, &Config{})
 	benchmarkFile(b, m)
 }
 
 func BenchmarkSQLFile(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{}, false)
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkFile(b, m)
 }
 
 func BenchmarkTKVFile(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{}, false)
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkFile(b, m)
 }
 
@@ -641,17 +641,17 @@ func benchmarkXattr(b *testing.B, m Meta) {
 }
 
 func BenchmarkRedisXattr(b *testing.B) {
-	m := NewClient(redisAddr, &Config{}, false)
+	m := NewClient(redisAddr, &Config{})
 	benchmarkXattr(b, m)
 }
 
 func BenchmarkSQLXattr(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{}, false)
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkXattr(b, m)
 }
 
 func BenchmarkTKVXattr(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{}, false)
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkXattr(b, m)
 }
 
@@ -665,17 +665,17 @@ func benchmarkLink(b *testing.B, m Meta) {
 }
 
 func BenchmarkRedisLink(b *testing.B) {
-	m := NewClient(redisAddr, &Config{}, false)
+	m := NewClient(redisAddr, &Config{})
 	benchmarkLink(b, m)
 }
 
 func BenchmarkSQLLink(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{}, false)
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkLink(b, m)
 }
 
 func BenchmarkTKVLink(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{}, false)
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkLink(b, m)
 }
 
@@ -691,16 +691,16 @@ func benchmarkData(b *testing.B, m Meta) {
 }
 
 func BenchmarkRedisData(b *testing.B) {
-	m := NewClient(redisAddr, &Config{}, false)
+	m := NewClient(redisAddr, &Config{})
 	benchmarkData(b, m)
 }
 
 func BenchmarkSQLData(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{}, false)
+	m := NewClient(sqlAddr, &Config{})
 	benchmarkData(b, m)
 }
 
 func BenchmarkTKVData(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{}, false)
+	m := NewClient(tkvAddr, &Config{})
 	benchmarkData(b, m)
 }

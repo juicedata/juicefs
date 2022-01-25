@@ -41,7 +41,8 @@ func dump(ctx *cli.Context) error {
 		}
 		defer fp.Close()
 	}
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")}, true)
+	removePassword(ctx.Args().Get(0))
+	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
 	if err := m.DumpMeta(fp, 0); err != nil {
 		return err
 	}

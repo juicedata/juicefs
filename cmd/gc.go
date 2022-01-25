@@ -67,11 +67,12 @@ func gc(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		return fmt.Errorf("META-URL is needed")
 	}
+	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{
 		Retries:    10,
 		Strict:     true,
 		MaxDeletes: ctx.Int("threads"),
-	}, true)
+	})
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)

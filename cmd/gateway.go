@@ -174,6 +174,7 @@ func (g *GateWay) Production() bool {
 func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	c := g.ctx
 	addr := c.Args().Get(0)
+	removePassword(addr)
 	m := meta.NewClient(addr, &meta.Config{
 		Retries:    10,
 		Strict:     true,
@@ -182,7 +183,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		MountPoint: "s3gateway",
 		Subdir:     c.String("subdir"),
 		MaxDeletes: c.Int("max-deletes"),
-	}, true)
+	})
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)

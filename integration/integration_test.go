@@ -73,7 +73,7 @@ func createSimpleStorage(format *meta.Format) (object.ObjectStorage, error) {
 }
 
 func formatSimpleMethod(url, name string) {
-	m := meta.NewClient(url, &meta.Config{Retries: 2}, true)
+	m := meta.NewClient(url, &meta.Config{Retries: 2})
 	format := meta.Format{
 		Name:      name,
 		UUID:      uuid.New().String(),
@@ -117,7 +117,7 @@ func mountSimpleMethod(url, mp string) {
 		Strict:     true,
 		MountPoint: mp,
 	}
-	m := meta.NewClient(url, metaConf, true)
+	m := meta.NewClient(url, metaConf)
 	format, err := m.Load()
 	if err != nil {
 		log.Fatalf("load setting: %s", err)
@@ -335,7 +335,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	m := meta.NewClient(metaUrl, &meta.Config{
 		Retries: 10,
 		Strict:  true,
-	}, true)
+	})
 
 	format, err := m.Load()
 	if err != nil {

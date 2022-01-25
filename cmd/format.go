@@ -149,7 +149,8 @@ func format(c *cli.Context) error {
 	if c.Args().Len() < 1 {
 		logger.Fatalf("Meta URL and name are required")
 	}
-	m := meta.NewClient(c.Args().Get(0), &meta.Config{Retries: 2}, true)
+	removePassword(c.Args().Get(0))
+	m := meta.NewClient(c.Args().Get(0), &meta.Config{Retries: 2})
 
 	if c.Args().Len() < 2 {
 		logger.Fatalf("Please give it a name")

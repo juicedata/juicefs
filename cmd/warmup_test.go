@@ -45,7 +45,7 @@ func TestWarmup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test mount failed: %v", err)
 	}
-	m := meta.NewClient(metaUrl, &meta.Config{Retries: 10, Strict: true}, false)
+	m := meta.NewClient(metaUrl, &meta.Config{Retries: 10, Strict: true})
 	format, err := m.Load()
 	if err != nil {
 		t.Fatalf("load setting err: %s", err)

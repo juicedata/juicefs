@@ -23,7 +23,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/erikdubbelboer/gspt"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 )
@@ -336,19 +335,6 @@ type Meta interface {
 	LoadMeta(r io.Reader) error
 }
 
-func removePassword(uri string) string {
-	p := strings.Index(uri, "@")
-	if p < 0 {
-		return uri
-	}
-	sp := strings.Index(uri, "://")
-	cp := strings.Index(uri[sp+3:], ":")
-	if cp < 0 || sp+3+cp > p {
-		return uri
-	}
-	return uri[:sp+3+cp] + ":****" + uri[p:]
-}
-
 type Creator func(driver, addr string, conf *Config) (Meta, error)
 
 var metaDrivers = make(map[string]Creator)
@@ -358,23 +344,11 @@ func Register(name string, register Creator) {
 }
 
 // NewClient creates a Meta client for given uri.
-func NewClient(uri string, conf *Config, hidePasswd bool) Meta {
-	var changed bool
+func NewClient(uri string, conf *Config) Meta {
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
-		changed = true
 	}
-	uri2 := removePassword(uri)
-	logger.Infof("Meta address: %s", uri2)
-	if hidePasswd && uri2 != uri {
-		for i, a := range os.Args {
-			if a == uri || changed && a == uri[8:] {
-				os.Args[i] = uri2
-				break
-			}
-		}
-		gspt.SetProcTitle(strings.Join(os.Args, " "))
-	}
+	logger.Infof("Meta address: %s", utils.RemovePassword(uri))
 	if os.Getenv("META_PASSWORD") != "" {
 		p := strings.Index(uri, ":@")
 		if p > 0 {
