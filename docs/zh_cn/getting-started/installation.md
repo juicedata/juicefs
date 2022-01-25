@@ -195,7 +195,49 @@ CMD [ "juicefs" ]
 
    编译好的 `juicefs` 二进制程序位于当前目录。
 
-### Windows 客户端
+### 在 Windows 下编译
+
+在 Windows 系统中编译 JuiceFS 客户端，需要安装 [Go](https://golang.org) 1.16+ 和 GCC 5.4+。
+
+由于 GCC 没有原生 Windows 客户端，因此需要使用第三方提供的版本，可以使用 [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) 或 [Cygwin](https://www.cygwin.com/)，这里以 MinGW-w64 为例介绍。
+
+下载 MinGW-w64 并将其内的 `bin` 目录添加到系统环境变量。
+
+1. 克隆并进入项目目录：
+
+   ```shell
+   git clone https://github.com/juicedata/juicefs.git && cd juicefs
+   ```
+
+2. 复制 winfsp 头文件
+
+   ```shell
+   mkdir "C:\WinFsp\inc\fuse"
+   ```
+
+   ```shell
+   copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
+   ```
+
+   ```shell
+   dir "C:\WinFsp\inc\fuse"
+   ```
+
+   ```shell
+   set CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+   ```
+
+   ```shell
+   go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+   ```
+
+3. 编译客户端
+
+   ```shell
+   go build -ldflags="-s -w" -o juicefs.exe ./cmd
+   ```
+
+### 在 Linux 中交叉编译 Windows 客户端
 
 为 Windows 编译特定版本客户端的过程与[类 Unix 客户端](#类-unix-客户端)基本一致，可以直接在 Linux 系统中进行编译，但除了 `go` 和 `gcc` 必须安装以外，还需要安装：
 

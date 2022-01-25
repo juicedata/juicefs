@@ -191,7 +191,49 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
    The compiled `juicefs` binary is located in the current directory.
 
-### Windows Client
+### Compiling on Windows
+
+To compile the JuiceFS client on Windows, you need to install [Go](https://golang.org) 1.16+ and GCC 5.4+.
+
+Since GCC does not have a native Windows client, you need to use the version provided by a third party, either [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) or [Cygwin](https://www.cygwin.com/). Here is the example of MinGW-w64.
+
+Download MinGW-w64 and add its `bin` directory to the system environment variables.
+
+1. Clone and enter the project directory at:
+
+   ```shell
+   git clone https://github.com/juicedata/juicefs.git && cd juicefs
+   ```
+
+2. Copy winfsp headers
+
+   ```shell
+   mkdir "C:\WinFsp\inc\fuse"
+   ```
+
+   ```shell
+   copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
+   ```
+
+   ```shell
+   dir "C:\WinFsp\inc\fuse"
+   ```
+
+   ```shell
+   set CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+   ```
+
+   ```shell
+   go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+   ```
+
+3. Compile client
+
+   ```shell
+   go build -ldflags="-s -w" -o juicefs.exe ./cmd
+   ```
+
+### Cross-compiling Windows clients in Linux
 
 Compiling a specific version of the client for Windows is essentially the same as [Unix-like Client](#unix-like-client) and can be done directly on a Linux system, but in addition to `go` and `gcc`, which must be installed, you also need to install:
 
