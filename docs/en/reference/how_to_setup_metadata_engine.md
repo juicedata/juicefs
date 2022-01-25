@@ -59,6 +59,10 @@ $ juicefs format --storage s3 \
     pics
 ```
 
+:::caution
+JuiceFS requires at least 4.0.0 version for redis
+:::
+
 ### Mount a file system
 
 ```shell

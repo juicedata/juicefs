@@ -57,6 +57,10 @@ $ juicefs format --storage s3 \
     pics
 ```
 
+:::caution 特别提示
+JuiceFS 对 redis 的最低版本要求为 4.0.0
+:::
+
 ### 挂载文件系统
 
 ```shell
