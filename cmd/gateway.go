@@ -182,7 +182,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		MountPoint: "s3gateway",
 		Subdir:     c.String("subdir"),
 		MaxDeletes: c.Int("max-deletes"),
-	})
+	}, true)
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)

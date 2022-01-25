@@ -27,7 +27,7 @@ const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
 
 func testLoad(t *testing.T, uri, fname string) Meta {
-	m := NewClient(uri, &Config{Retries: 10, Strict: true})
+	m := NewClient(uri, &Config{Retries: 10, Strict: true}, false)
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
@@ -98,7 +98,7 @@ func TestLoadDump(t *testing.T) {
 	})
 	t.Run("Metadata Engine: Redis; --SubDir d1 ", func(t *testing.T) {
 		_ = testLoad(t, "redis://127.0.0.1/10", sampleFile)
-		m := NewClient("redis://127.0.0.1/10", &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		m := NewClient("redis://127.0.0.1/10", &Config{Retries: 10, Strict: true, Subdir: "d1"}, false)
 		testDump(t, m, 0, subSampleFile, "redis_subdir.dump")
 		testDump(t, m, 1, sampleFile, "redis.dump")
 	})
@@ -110,7 +110,7 @@ func TestLoadDump(t *testing.T) {
 	})
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
 		_ = testLoad(t, sqluri, sampleFile)
-		m := NewClient(sqluri, &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		m := NewClient(sqluri, &Config{Retries: 10, Strict: true, Subdir: "d1"}, false)
 		testDump(t, m, 0, subSampleFile, "sqlite3_subdir.dump")
 		testDump(t, m, 1, sampleFile, "sqlite3.dump")
 	})

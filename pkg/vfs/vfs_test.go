@@ -42,7 +42,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 		Strict:     true,
 		MountPoint: mp,
 	}
-	m := meta.NewClient("memkv://", metaConf)
+	m := meta.NewClient("memkv://", metaConf, false)
 	format := meta.Format{
 		Name:        "test",
 		UUID:        uuid.New().String(),

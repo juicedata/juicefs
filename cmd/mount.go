@@ -33,6 +33,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 
+	"github.com/juicedata/godaemon"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/metric"
@@ -171,7 +172,8 @@ func mount(c *cli.Context) error {
 		Subdir:      c.String("subdir"),
 		MaxDeletes:  c.Int("max-deletes"),
 	}
-	m := meta.NewClient(addr, metaConf)
+	background := c.Bool("background") && os.Getenv("JFS_FOREGROUND") == ""
+	m := meta.NewClient(addr, metaConf, !background || godaemon.Stage() == 2)
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
@@ -240,7 +242,7 @@ func mount(c *cli.Context) error {
 		Chunk:      &chunkConf,
 	}
 
-	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
+	if background {
 		if runtime.GOOS != "windows" {
 			d := c.String("cache-dir")
 			if d != "memory" && !strings.HasPrefix(d, "/") {

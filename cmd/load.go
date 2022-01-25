@@ -41,7 +41,7 @@ func load(ctx *cli.Context) error {
 		}
 		defer fp.Close()
 	}
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true}, true)
 	if err := m.LoadMeta(fp); err != nil {
 		return err
 	}
