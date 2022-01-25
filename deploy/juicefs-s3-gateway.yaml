@@ -15,21 +15,32 @@ spec:
     spec:
       initContainers:
         - name: format
-          image: juicedata/juicefs-csi-driver:v0.11.1
+          image: juicedata/juicefs-csi-driver:v0.12.0
           command:
             - sh
             - -c
-            - juicefs format --storage=$(storage) --bucket=$(bucket) --access-key=$(access-key) --secret-key=$(secret-key) $(metaurl) $(name)
+            - juicefs format --storage=${storage} --bucket=${bucket} --access-key=${accesskey} --secret-key=${secretkey} ${metaurl} ${name}
           envFrom:
             - secretRef:
                 name: juicefs-secret
+          env:
+            - name: accesskey
+              valueFrom:
+                secretKeyRef:
+                  name: juicefs-secret
+                  key: access-key
+            - name: secretkey
+              valueFrom:
+                secretKeyRef:
+                  name: juicefs-secret
+                  key: secret-key
       containers:
         - name: gateway
           image: juicedata/juicefs-csi-driver:v0.11.1
           command:
             - sh
             - -c
-            - juicefs gateway $(METAURL) $(NODE_IP):9000 --metrics=$(NODE_IP):9567
+            - juicefs gateway ${METAURL} ${NODE_IP}:9000 --metrics=${NODE_IP}:9567
           env:
             - name: NODE_IP
               valueFrom:
