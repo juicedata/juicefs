@@ -76,3 +76,16 @@ func WithTimeout(f func() error, timeout time.Duration) error {
 	}
 	return err
 }
+
+func RemovePassword(uri string) string {
+	p := strings.Index(uri, "@")
+	if p < 0 {
+		return uri
+	}
+	sp := strings.Index(uri, "://")
+	cp := strings.Index(uri[sp+3:], ":")
+	if cp < 0 || sp+3+cp > p {
+		return uri
+	}
+	return uri[:sp+3+cp] + ":****" + uri[p:]
+}
