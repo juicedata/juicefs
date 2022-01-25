@@ -242,7 +242,7 @@ Compiling a specific version of the client for Windows is essentially the same a
 Just install the latest version provided by the Linux distribution package manager, e.g. Ubuntu 20.04+ can be installed directly as follows.
 
 ```shell
-sudo apt-get install mingw-w64
+sudo apt install mingw-w64
 ```
 
 Compile the Windows client:

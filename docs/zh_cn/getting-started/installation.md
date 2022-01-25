@@ -246,7 +246,7 @@ CMD [ "juicefs" ]
 安装 Linux 发行版包管理器提供的最新版本即可，例如 Ubuntu 20.04+ 可以直接安装：
 
 ```shell
-sudo apt-get install mingw-w64
+sudo apt install mingw-w64
 ```
 
 编译 Windows 客户端：
