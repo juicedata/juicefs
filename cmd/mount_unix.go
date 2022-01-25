@@ -86,6 +86,10 @@ func makeDaemon(c *cli.Context, name, mp string) error {
 	return err
 }
 
+func isDaemon() bool {
+	return godaemon.Stage() == 2
+}
+
 func mount_flags() []cli.Flag {
 	var defaultLogDir = "/var/log"
 	switch runtime.GOOS {

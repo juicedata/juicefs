@@ -33,7 +33,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 
-	"github.com/juicedata/godaemon"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/metric"
@@ -173,7 +172,7 @@ func mount(c *cli.Context) error {
 		MaxDeletes:  c.Int("max-deletes"),
 	}
 	background := c.Bool("background") && os.Getenv("JFS_FOREGROUND") == ""
-	m := meta.NewClient(addr, metaConf, !background || godaemon.Stage() == 2)
+	m := meta.NewClient(addr, metaConf, !background || isDaemon())
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
