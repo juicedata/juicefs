@@ -27,7 +27,7 @@ type redisVersion struct {
 	major, minor int
 }
 
-var oldestSupportedVer = redisVersion{"2.2.x", 2, 2}
+var oldestSupportedVer = redisVersion{"4.0.0", 4, 0}
 
 func parseRedisVersion(v string) (ver redisVersion, err error) {
 	parts := strings.Split(v, ".")
