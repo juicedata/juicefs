@@ -91,7 +91,7 @@ JuiceFS 的 Windows 客户端也是一个独立的二进制程序，下载解压
 
 [WSL](https://docs.microsoft.com/zh-cn/windows/wsl/about) 全称 Windows Subsystem for Linux，即 Windows 的 Linux 子系统，从 Windows 10 版本 2004 以上或 Windows 11 开始支持该功能。它可以让你在 Windows 系统中运行原生的 GNU/Linux 的大多数命令行工具、实用工具和应用程序且不会产生传统虚拟机或双启动设置开销。
 
-因为 WSL 是运行在 Windows 系统上高度完整的 Linux 系统（默认是 Ubuntu）。因此，进入 WSL 子系统终端以后，你应该完全参照在 [Linux 上安装使用 JuiceFS 客户端](#linux-发行版) 的方法进行安装和使用。
+详情查看「[在 WSL 中使用 JuiceFS](../tutorials/juicefs_on_wsl.md)」
 
 ### macOS 系统
 
@@ -152,11 +152,9 @@ CMD [ "juicefs" ]
 
 另外，手动编译客户端可以让你优先体验到 JuiceFS 开发中的各种新功能，但这需要你具备一定的软件编译相关的基础知识。
 
-### 前置条件
+### 类 Unix 客户端
 
-这里的编译操作同时适用于各种 CPU 架构的 Linux、macOS 和 BSD 系统。
-
-JuiceFS 客户端使用 Go 语言开发，编译依赖以下工具：
+编译面向 Linux、macOS、BSD 等类 Unix 系统的客户端需要满足以下依赖：
 
 - [Go](https://golang.org) 1.16+
 - GCC 5.4+
@@ -196,6 +194,26 @@ JuiceFS 客户端使用 Go 语言开发，编译依赖以下工具：
    ```
 
    编译好的 `juicefs` 二进制程序位于当前目录。
+
+### Windows 客户端
+
+为 Windows 编译特定版本客户端的过程与[类 Unix 客户端](#类-unix-客户端)基本一致，可以直接在 Linux 系统中进行编译，但除了 `go` 和 `gcc` 必须安装以外，还需要安装：
+
+- [mingw-w64](https://www.mingw-w64.org/downloads/)
+
+安装 Linux 发行版包管理器提供的最新版本即可，例如 Ubuntu 20.04+ 可以直接安装：
+
+```shell
+sudo apt install mingw-w64
+```
+
+编译 Windows 客户端：
+
+```shell
+make juicefs.exe
+```
+
+编译好的客户端是一个名为 `juicefs.exe` 的二进制文件，位于当前目录。
 
 ## 客户端升级
 
