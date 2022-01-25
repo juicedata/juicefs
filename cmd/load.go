@@ -41,6 +41,7 @@ func load(ctx *cli.Context) error {
 		}
 		defer fp.Close()
 	}
+	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	if err := m.LoadMeta(fp); err != nil {
 		return err

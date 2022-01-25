@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/erikdubbelboer/gspt"
 	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 
@@ -289,4 +290,22 @@ func setLoggerLevel(c *cli.Context) {
 		utils.DisableLogColor()
 	}
 	setupAgent(c)
+}
+
+func removePassword(uri string) {
+	var uri2 string
+	if strings.Contains(uri, "://") {
+		uri2 = utils.RemovePassword(uri)
+	} else {
+		uri2 = utils.RemovePassword("redis://" + uri)
+	}
+	if uri2 != uri {
+		for i, a := range os.Args {
+			if a == uri {
+				os.Args[i] = uri2
+				break
+			}
+		}
+		gspt.SetProcTitle(strings.Join(os.Args, " "))
+	}
 }

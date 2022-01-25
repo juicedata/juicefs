@@ -278,6 +278,7 @@ func mount(c *cli.Context) error {
 		go checkMountpoint(conf.Format.Name, mp)
 	}
 
+	removePassword(addr)
 	err = m.NewSession()
 	if err != nil {
 		logger.Fatalf("new session: %s", err)

@@ -21,6 +21,7 @@ require (
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/dnaeon/go-vcr v1.2.0 // indirect
 	github.com/emersion/go-webdav v0.3.0
+	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377 // indirect
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gofrs/flock v0.8.1

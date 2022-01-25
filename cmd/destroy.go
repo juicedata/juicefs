@@ -32,6 +32,7 @@ func destroy(ctx *cli.Context) error {
 	if ctx.Args().Len() < 2 {
 		return fmt.Errorf("META-URL and UUID are required")
 	}
+	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 
 	format, err := m.Load()
