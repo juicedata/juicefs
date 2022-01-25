@@ -32,10 +32,21 @@ spec:
           command:
             - sh
             - -c
-            - juicefs format --storage=$(storage) --bucket=$(bucket) --access-key=$(access-key) --secret-key=$(secret-key) $(metaurl) $(name)
+            - juicefs format --storage=${storage} --bucket=${bucket} --access-key=${accesskey} --secret-key=${secretkey} ${metaurl} ${name}
           envFrom:
             - secretRef:
                 name: juicefs-secret
+          env:
+            - name: accesskey
+              valueFrom:
+                secretKeyRef:
+                  name: juicefs-secret
+                  key: access-key
+            - name: secretkey
+              valueFrom:
+                secretKeyRef:
+                  name: juicefs-secret
+                  key: secret-key
       containers:
         - name: gateway
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
@@ -45,7 +56,7 @@ spec:
           command:
             - sh
             - -c
-            - juicefs gateway $(METAURL) $(NODE_IP):{{ .Values.port }} --metrics=$(NODE_IP):{{ .Values.metricsPort }} {{ .Values.options }}
+            - juicefs gateway ${METAURL} ${NODE_IP}:{{ .Values.port }} --metrics=${NODE_IP}:{{ .Values.metricsPort }} {{ .Values.options }}
           env:
             - name: NODE_IP
               valueFrom:
