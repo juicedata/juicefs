@@ -19,8 +19,21 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
+	"strings"
 	"testing"
+	"time"
 )
+
+func WriteLeakedData() {
+	var templateContent = "aaaaaaaabbbbbbbb"
+	var writeContent strings.Builder
+	for i := 0;i < 64*1024;i++ {
+		writeContent.Write([]byte(templateContent))
+	}
+	ioutil.WriteFile("/tmp/testMountDir/test/chunks/0/0/" + "123456789_0_1048576", []byte(writeContent.String()),0644)
+}
+
 
 func TestGc(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
@@ -42,11 +55,24 @@ func TestGc(t *testing.T) {
 			t.Fatalf("mount failed: %v", err)
 		}
 	}
+	strEnvSkipped := os.Getenv("JFS_GC_SKIPPEDTIME")
+	t.Logf("JFS_GC_SKIPPEDTIME is %s\n",strEnvSkipped)
 
-	fsckArgs := []string{"", "gc", metaUrl}
-	err := Main(fsckArgs)
+	WriteLeakedData()
+	time.Sleep(time.Duration(65)*time.Second)
+	t.Logf("waiting time")
+
+	t.Logf("gc info")
+	gcArgs := []string{"", "gc", metaUrl}
+	err := Main(gcArgs)
 	if err != nil {
-		t.Fatalf("fsck failed: %v", err)
+		t.Fatalf("gc failed: %v", err)
 	}
 
+	t.Logf("gc delete")
+	gcArgs = []string{"", "gc", "--delete",metaUrl}
+	err = Main(gcArgs)
+	if err != nil {
+		t.Fatalf("gc failed: %v", err)
+	}
 }
