@@ -91,7 +91,7 @@ The Windows client of JuiceFS is also a standalone binary that can be downloaded
 
 [WSL](https://docs.microsoft.com/en-us/windows/wsl/about) is the full name of Windows Subsystem for Linux, which is supported from Windows 10 version 2004 onwards or Windows 11. It allows you to run most of the command-line tools, utilities, and applications of GNU/Linux natively on a Windows system without incurring the overhead of a traditional virtual machine or dual-boot setup.
 
-Because WSL is a highly complete Linux system (Ubuntu by default) running on a Windows system. Therefore, after entering the WSL subsystem terminal, you should install and use it exactly as described in [Installing and using the JuiceFS client on Linux](#linux).
+For details, see "[Using JuiceFS on WSL](../tutorials/juicefs_on_wsl.md)"
 
 ### macOS
 
@@ -152,11 +152,9 @@ If the pre-compiled client does not have a version for you, such as FreeBSD or m
 
 In addition, manually compiling the client will give you priority access to various new features in JuiceFS development, but it requires some basic knowledge of software compilation.
 
-### Prerequisites
+### Unix-like Client
 
-The compilation operations here are available for Linux, macOS and BSD systems of all CPU architectures.
-
-The JuiceFS client is developed in the Go language and compiles with the following tool dependencies.
+Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
 - [Go](https://golang.org) 1.16+
 - GCC 5.4+
@@ -192,6 +190,68 @@ The JuiceFS client is developed in the Go language and compiles with the followi
    ```
 
    The compiled `juicefs` binary is located in the current directory.
+
+### Compiling on Windows
+
+To compile the JuiceFS client on Windows, you need to install [Go](https://golang.org) 1.16+ and GCC 5.4+.
+
+Since GCC does not have a native Windows client, you need to use the version provided by a third party, either [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) or [Cygwin](https://www.cygwin.com/). Here is the example of MinGW-w64.
+
+Download MinGW-w64 and add its `bin` directory to the system environment variables.
+
+1. Clone and enter the project directory at:
+
+   ```shell
+   git clone https://github.com/juicedata/juicefs.git && cd juicefs
+   ```
+
+2. Copy winfsp headers
+
+   ```shell
+   mkdir "C:\WinFsp\inc\fuse"
+   ```
+
+   ```shell
+   copy .\hack\winfsp_headers\* C:\WinFsp\inc\fuse\
+   ```
+
+   ```shell
+   dir "C:\WinFsp\inc\fuse"
+   ```
+
+   ```shell
+   set CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+   ```
+
+   ```shell
+   go env -w CGO_CFLAGS=-IC:/WinFsp/inc/fuse
+   ```
+
+3. Compile client
+
+   ```shell
+   go build -ldflags="-s -w" -o juicefs.exe ./cmd
+   ```
+
+### Cross-compiling Windows clients in Linux
+
+Compiling a specific version of the client for Windows is essentially the same as [Unix-like Client](#unix-like-client) and can be done directly on a Linux system, but in addition to `go` and `gcc`, which must be installed, you also need to install:
+
+- [mingw-w64](https://www.mingw-w64.org/downloads/)
+
+Just install the latest version provided by the Linux distribution package manager, e.g. Ubuntu 20.04+ can be installed directly as follows.
+
+```shell
+sudo apt install mingw-w64
+```
+
+Compile the Windows client:
+
+```shell
+make juicefs.exe
+```
+
+The compiled client is a binary file named `juicefs.exe`, located in the current directory.
 
 ## Upgrade
 
