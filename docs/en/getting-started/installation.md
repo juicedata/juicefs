@@ -152,7 +152,7 @@ If the pre-compiled client does not have a version for you, such as FreeBSD or m
 
 In addition, manually compiling the client will give you priority access to various new features in JuiceFS development, but it requires some basic knowledge of software compilation.
 
-### Unix-like clients
+### Unix-like Client
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
@@ -193,14 +193,14 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 ### Windows Client
 
-Compiling a specific version of the client for Windows is essentially the same as [Unix-like client](#unix-like-clients) and can be done directly on a Linux system, but in addition to `go` and `gcc`, which must be installed, you also need to install:
+Compiling a specific version of the client for Windows is essentially the same as [Unix-like Client](#unix-like-client) and can be done directly on a Linux system, but in addition to `go` and `gcc`, which must be installed, you also need to install:
 
 - [mingw-w64](https://www.mingw-w64.org/downloads/)
 
 Just install the latest version provided by the Linux distribution package manager, e.g. Ubuntu 20.04+ can be installed directly as follows.
 
 ```shell
-sudo apt install mingw-w64
+sudo apt-get install mingw-w64
 ```
 
 Compile the Windows client:
