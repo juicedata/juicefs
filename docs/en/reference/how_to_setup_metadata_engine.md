@@ -33,7 +33,7 @@ When using Redis as the metadata storage engine, the following format is usually
 redis://username:password@host:6379/1
 ```
 
-`username` was introduced after Redis 6.0.0. If you don't have a username  field you can ignore it, e.g. `redis://:password@host:6379/1` (the `:` colon in front of the password needs to be preserved).
+`username` was introduced after Redis 6.0. If you don't have a username  field you can ignore it, e.g. `redis://:password@host:6379/1` (the `:` colon in front of the password needs to be preserved).
 
 For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 
@@ -60,7 +60,7 @@ $ juicefs format --storage s3 \
 ```
 
 :::caution
-JuiceFS requires at least 4.0.0 version for redis
+JuiceFS requires at least 4.0 version for redis
 :::
 
 ### Mount a file system
