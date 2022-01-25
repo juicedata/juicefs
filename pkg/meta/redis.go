@@ -61,7 +61,7 @@ import (
 
 	Redis features:
 	  Sorted Set: 1.2+
-	  Hash Set: 2.0+
+	  Hash Set: 4.0+
 	  Transaction: 2.2+
 	  Scripting: 2.6+
 	  Scan: 2.8+
