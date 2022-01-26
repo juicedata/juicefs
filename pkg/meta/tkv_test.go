@@ -39,6 +39,14 @@ func TestTiKVClient(t *testing.T) {
 	testMeta(t, m)
 }
 
+func TestBadgerClient(t *testing.T) {
+	m, err := newKVMeta("badger", "badger", &Config{MaxDeletes: 1})
+	if err != nil || m.Name() != "badger" {
+		t.Fatalf("create meta: %s", err)
+	}
+	testMeta(t, m)
+}
+
 func TestMemKV(t *testing.T) {
 	c, _ := newTkvClient("memkv", "")
 	c = withPrefix(c, []byte("jfs"))
