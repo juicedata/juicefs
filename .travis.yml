@@ -39,7 +39,8 @@ before_script:
   - ls -l
   - docker ps
   - sleep 20s
-  - ./mc config host add local http://127.0.0.1:9000 testUser testUserPassword
+  - ./mc config host add local http://127.0.0.1:9000 testUser testUserPassword >result
+  - cat result
   - ./mc mb local/testbucket
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
   - make
