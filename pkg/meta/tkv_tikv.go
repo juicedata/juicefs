@@ -236,3 +236,7 @@ func (c *tikvClient) reset(prefix []byte) error {
 	_, err := c.client.DeleteRange(context.Background(), prefix, nextKey(prefix), 1)
 	return err
 }
+
+func (c *tikvClient) close() error {
+	return c.client.Close()
+}

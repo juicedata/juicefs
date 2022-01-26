@@ -20,20 +20,8 @@ import (
 	"bytes"
 
 	badger "github.com/dgraph-io/badger/v3"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
-
-func init() {
-	Register("badger", newKVMeta)
-	drivers["badger"] = newBadgerClient
-}
-
-func newBadgerClient(addr string) (tkvClient, error) {
-	client, err := badger.Open(badger.DefaultOptions(addr))
-	if err != nil {
-		return nil, err
-	}
-	return &badgerClient{client}, err
-}
 
 type badgerTxn struct {
 	t *badger.Txn
@@ -256,4 +244,23 @@ func (c *badgerClient) reset(prefix []byte) error {
 			return err
 		}
 	}
+}
+
+func (c *badgerClient) close() error {
+	return c.client.Close()
+}
+
+func newBadgerClient(addr string) (tkvClient, error) {
+	opt := badger.DefaultOptions(addr)
+	opt.Logger = utils.GetLogger("badger")
+	client, err := badger.Open(opt)
+	if err != nil {
+		return nil, err
+	}
+	return &badgerClient{client}, err
+}
+
+func init() {
+	Register("badger", newKVMeta)
+	drivers["badger"] = newBadgerClient
 }

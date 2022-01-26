@@ -185,6 +185,10 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	return m, err
 }
 
+func (m *dbMeta) shutdown() error {
+	return m.db.Close()
+}
+
 func (m *dbMeta) Name() string {
 	return m.db.DriverName()
 }

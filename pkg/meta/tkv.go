@@ -57,6 +57,7 @@ type tkvClient interface {
 	name() string
 	txn(f func(kvTxn) error) error
 	reset(prefix []byte) error
+	close() error
 	shouldRetry(err error) bool
 }
 
@@ -90,6 +91,10 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	m.en = m
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
+}
+
+func (m *kvMeta) shutdown() error {
+	return m.client.close()
 }
 
 func (m *kvMeta) Name() string {

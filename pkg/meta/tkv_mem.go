@@ -279,3 +279,8 @@ func (c *memKV) reset(prefix []byte) error {
 		return nil
 	})
 }
+
+func (c *memKV) close() error {
+	c.reset(nil)
+	return nil
+}
