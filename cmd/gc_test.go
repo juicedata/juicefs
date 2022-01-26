@@ -20,24 +20,39 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
 )
 
-func WriteLeakedData() {
+func WriteLeakedData(dataDir string) {
 	var templateContent = "aaaaaaaabbbbbbbb"
 	var writeContent strings.Builder
 	for i := 0;i < 64*1024;i++ {
 		writeContent.Write([]byte(templateContent))
 	}
-	ioutil.WriteFile("/tmp/testMountDir/test/chunks/0/0/" + "123456789_0_1048576", []byte(writeContent.String()),0644)
+	ioutil.WriteFile(dataDir + "chunks/0/0/" + "123456789_0_1048576", []byte(writeContent.String()),0644)
+}
+
+func RemoveAllFiles(dataDir string) {
+	_,err := os.Stat(dataDir)
+	if err == nil {
+		files, err := ioutil.ReadDir(dataDir)
+		if err == nil {
+			for _, f := range files {
+				os.RemoveAll(path.Join([]string{dataDir, f.Name()}...))
+			}
+		}
+	}
 }
 
 
 func TestGc(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
+	dataDir := "/tmp/testMountDir/test/"
+	RemoveAllFiles(dataDir + "chunks/")
 	defer ResetRedis(metaUrl)
 	if err := MountTmp(metaUrl, mountpoint); err != nil {
 		t.Fatalf("mount failed: %v", err)
@@ -55,22 +70,26 @@ func TestGc(t *testing.T) {
 			t.Fatalf("mount failed: %v", err)
 		}
 	}
-	strEnvSkipped := os.Getenv("JFS_GC_SKIPPEDTIME")
-	t.Logf("JFS_GC_SKIPPEDTIME is %s\n",strEnvSkipped)
 
-	WriteLeakedData()
+	strEnvSkippedTime := os.Getenv("JFS_GC_SKIPPEDTIME")
+	t.Logf("JFS_GC_SKIPPEDTIME is %s\n",strEnvSkippedTime)
+
+	WriteLeakedData(dataDir)
 	time.Sleep(time.Duration(65)*time.Second)
-	t.Logf("waiting time")
 
-	t.Logf("gc info")
 	gcArgs := []string{"", "gc", metaUrl}
 	err := Main(gcArgs)
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
 	}
 
-	t.Logf("gc delete")
 	gcArgs = []string{"", "gc", "--delete",metaUrl}
+	err = Main(gcArgs)
+	if err != nil {
+		t.Fatalf("gc failed: %v", err)
+	}
+
+	gcArgs = []string{"", "gc", metaUrl}
 	err = Main(gcArgs)
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
