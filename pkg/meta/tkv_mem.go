@@ -281,6 +281,5 @@ func (c *memKV) reset(prefix []byte) error {
 }
 
 func (c *memKV) close() error {
-	c.reset(nil)
 	return nil
 }
