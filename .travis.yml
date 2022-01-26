@@ -37,6 +37,8 @@ before_script:
   - echo "helloworld"
   - chmod +x mc
   - ls -l
+  - docker ps
+  - sleep 20s
   - ./mc config host add local http://127.0.0.1:9000 testUser testUserPassword
   - ./mc mb local/testbucket
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
