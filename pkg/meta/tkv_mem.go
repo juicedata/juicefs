@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"sync"
 
 	"github.com/google/btree"
@@ -200,6 +201,10 @@ func (c *memKV) name() string {
 	return "memkv"
 }
 
+func (c *memKV) shouldRetry(err error) bool {
+	return strings.Contains(err.Error(), "write conflict")
+}
+
 func (c *memKV) get(key string) *kvItem {
 	c.temp.key = key
 	it := c.items.Get(c.temp)
@@ -260,12 +265,17 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 }
 
 func (c *memKV) reset(prefix []byte) error {
-	if prefix != nil {
-		return fmt.Errorf("prefix must be nil")
+	if len(prefix) == 0 {
+		c.Lock()
+		c.items = btree.New(2)
+		c.temp = &kvItem{}
+		c.Unlock()
+		return nil
 	}
-	c.Lock()
-	c.items = btree.New(2)
-	c.temp = &kvItem{}
-	c.Unlock()
-	return nil
+	return c.txn(func(kt kvTxn) error {
+		kt.scan(prefix, func(key, value []byte) {
+			kt.dels(key)
+		})
+		return nil
+	})
 }

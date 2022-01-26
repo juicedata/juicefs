@@ -57,6 +57,7 @@ type tkvClient interface {
 	name() string
 	txn(f func(kvTxn) error) error
 	reset(prefix []byte) error
+	shouldRetry(err error) bool
 }
 
 type kvMeta struct {
@@ -633,8 +634,7 @@ func (m *kvMeta) shouldRetry(err error) bool {
 	if _, ok := err.(syscall.Errno); ok {
 		return false
 	}
-	// TODO: add other retryable errors here
-	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "TxnLockNotFound")
+	return m.client.shouldRetry(err)
 }
 
 func (m *kvMeta) txn(f func(tx kvTxn) error) error {

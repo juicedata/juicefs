@@ -202,6 +202,10 @@ func (c *tikvClient) name() string {
 	return "tikv"
 }
 
+func (c *tikvClient) shouldRetry(err error) bool {
+	return strings.Contains(err.Error(), "TxnLockNotFound")
+}
+
 func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 	tx, err := c.client.Begin()
 	if err != nil {
