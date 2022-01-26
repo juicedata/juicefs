@@ -597,4 +597,17 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals("user2", fileStatus.getOwner());
     uer2Fs.close();
   }
+
+  public void testUmask() throws Exception {
+    Configuration conf = new Configuration(cfg);
+    conf.set("juicefs.umask", "077");
+    UserGroupInformation currentUser = UserGroupInformation.getCurrentUser();
+    FileSystem newFs = createNewFs(conf, currentUser.getShortUserName(), currentUser.getGroupNames());
+    newFs.delete(new Path("/test_umask"), true);
+    newFs.mkdirs(new Path("/test_umask/dir"));
+    newFs.create(new Path("/test_umask/dir/f")).close();
+    assertEquals(FsPermission.createImmutable((short) 0700), newFs.getFileStatus(new Path("/test_umask")).getPermission());
+    assertEquals(FsPermission.createImmutable((short) 0700), newFs.getFileStatus(new Path("/test_umask/dir")).getPermission());
+    assertEquals(FsPermission.createImmutable((short) 0600), newFs.getFileStatus(new Path("/test_umask/dir/f")).getPermission());
+  }
 }
