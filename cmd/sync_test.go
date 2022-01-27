@@ -30,7 +30,6 @@ func TestSync(t *testing.T) {
 	if os.Getenv("MINIO_TEST_BUCKET") == "" {
 		t.Skip()
 	}
-
 	minioDir := "synctest"
 	localDir := "/tmp/synctest"
 	defer os.RemoveAll(localDir)
