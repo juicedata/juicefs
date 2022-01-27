@@ -9,6 +9,10 @@ JuiceFS v1.0 begins to support file system level storage quotas, a feature that 
 - Limit the total available capacity of the file system
 - Limit the total inodes of the file system
 
+:::tip
+The storage quota settings are stored in the metadata engine for all mount points to read, and the client of each mount point will also cache its own used capacity and inodes and synchronize them with the metadata engine once per second, while the client will read the latest usage value from the metadata engine every 10 seconds to synchronize the usage information among each mount point, but this information synchronization mechanism does not guarantee that the usage data will be counted accurately.
+:::
+
 ## View file system information
 
 In a Linux environment, for example, the default capacity of a JuiceFS type file system is identified as `1.0P` using the `df` command that comes with the system.
@@ -118,3 +122,7 @@ juicefs config $METAURL --capacity 102400
 ```shell
 juicefs config $METAURL --inodes 100000
 ```
+
+:::tip
+The client reads the latest storage quota settings from the metadata engine every 60 seconds to update the local settings, and this time frequency may cause other mount points to take up to 60 seconds to complete the quota setting update.
+:::
