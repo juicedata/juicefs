@@ -219,7 +219,7 @@ There are some differences between the various versions of Ingress. For more usa
    Execute the following three commands in sequence to deploy the JuiceFS S3 gateway via Helm (note that the following example is deployed to the `kube-system` namespace).
 
    ```sh
-   helm repo add juicefs-s3-gateway https://juicedata.github.io/juicefs/
+   helm repo add juicefs-s3-gateway https://juicedata.github.io/charts/
    helm repo update
    helm install juicefs-s3-gateway juicefs-s3-gateway/juicefs-s3-gateway -n kube-system -f ./values.yaml
    ```

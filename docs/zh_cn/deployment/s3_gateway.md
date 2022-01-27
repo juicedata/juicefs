@@ -222,7 +222,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
    依次执行以下三条命令，通过 Helm 部署 JuiceFS S3 网关（注意以下示例是部署到 `kube-system` 名字空间）。
 
    ```sh
-   helm repo add juicefs-s3-gateway https://juicedata.github.io/juicefs/
+   helm repo add juicefs-s3-gateway https://juicedata.github.io/charts/
    helm repo update
    helm install juicefs-s3-gateway juicefs-s3-gateway/juicefs-s3-gateway -n kube-system -f ./values.yaml
    ```
