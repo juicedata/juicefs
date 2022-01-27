@@ -1072,7 +1072,6 @@ func testCloseSession(t *testing.T, m Meta) {
 	if err = m.CloseSession(); err != nil {
 		t.Fatalf("close session: %s", err)
 	}
-
 	if _, err = m.GetSession(sid); err == nil {
 		t.Fatalf("get a deleted session: %s", err)
 	}

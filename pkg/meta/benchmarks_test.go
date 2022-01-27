@@ -36,7 +36,7 @@ const (
 
 func init() {
 	utils.SetLogLevel(logrus.InfoLevel)
-	utils.SetOutFile("bench-test.log")
+	// utils.SetOutFile("bench-test.log")
 }
 
 func encodeSlices(size int) []string {

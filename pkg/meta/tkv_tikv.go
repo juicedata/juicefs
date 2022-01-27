@@ -203,7 +203,7 @@ func (c *tikvClient) name() string {
 }
 
 func (c *tikvClient) shouldRetry(err error) bool {
-	return strings.Contains(err.Error(), "TxnLockNotFound")
+	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "TxnLockNotFound")
 }
 
 func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
