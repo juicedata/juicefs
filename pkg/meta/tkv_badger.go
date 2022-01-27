@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -180,6 +181,7 @@ func (tx *badgerTxn) dels(keys ...[]byte) {
 
 type badgerClient struct {
 	client *badger.DB
+	ticker *time.Ticker
 }
 
 func (c *badgerClient) name() string {
@@ -240,6 +242,7 @@ func (c *badgerClient) reset(prefix []byte) error {
 }
 
 func (c *badgerClient) close() error {
+	c.ticker.Stop()
 	return c.client.Close()
 }
 
@@ -250,7 +253,14 @@ func newBadgerClient(addr string) (tkvClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &badgerClient{client}, err
+	ticker := time.NewTicker(time.Hour)
+	go func() {
+		for range ticker.C {
+			for client.RunValueLogGC(0.7) == nil {
+			}
+		}
+	}()
+	return &badgerClient{client, ticker}, err
 }
 
 func init() {
