@@ -102,8 +102,12 @@ func (tx *memTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
 	tx.store.Lock()
 	defer tx.store.Unlock()
 	begin := string(prefix)
+	end := string(nextKey(prefix))
 	tx.store.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
 		it := i.(*kvItem)
+		if it.key >= end {
+			return false
+		}
 		tx.observed[it.key] = it.ver
 		handler([]byte(it.key), it.value)
 		return true
