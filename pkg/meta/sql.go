@@ -185,7 +185,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	return m, err
 }
 
-func (m *dbMeta) shutdown() error {
+func (m *dbMeta) Shutdown() error {
 	return m.db.Close()
 }
 

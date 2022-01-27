@@ -50,6 +50,9 @@ func (tx *badgerTxn) get(key []byte) []byte {
 	if err == badger.ErrKeyNotFound {
 		return nil
 	}
+	if err != nil {
+		panic(err)
+	}
 	value, err := item.ValueCopy(nil)
 	if err != nil {
 		panic(err)
@@ -60,17 +63,7 @@ func (tx *badgerTxn) get(key []byte) []byte {
 func (tx *badgerTxn) gets(keys ...[]byte) [][]byte {
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
-		item, err := tx.t.Get(key)
-		if err == badger.ErrKeyNotFound {
-			continue
-		}
-		if err != nil {
-			panic(err)
-		}
-		values[i], err = item.ValueCopy(nil)
-		if err != nil {
-			panic(err)
-		}
+		values[i] = tx.get(key)
 	}
 	return values
 }

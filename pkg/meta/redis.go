@@ -144,7 +144,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	return m, err
 }
 
-func (r *redisMeta) shutdown() error {
+func (r *redisMeta) Shutdown() error {
 	return r.rdb.Close()
 }
 

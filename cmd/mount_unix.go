@@ -84,8 +84,7 @@ func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 		}
 	}
 	if godaemon.Stage() <= 1 {
-		// close current session
-		err := m.CloseSession()
+		err := m.Shutdown()
 		if err != nil {
 			logger.Errorf("close session: %s", err)
 		}

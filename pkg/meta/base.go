@@ -53,8 +53,6 @@ type engine interface {
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
 	SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
-
-	shutdown() error
 }
 
 type baseMeta struct {
@@ -133,7 +131,7 @@ func (m *baseMeta) CloseSession() error {
 	m.umounting = true
 	m.Unlock()
 	m.en.doCleanStaleSession(m.sid)
-	return m.en.shutdown()
+	return nil
 }
 
 func (m *baseMeta) refreshUsage() {
