@@ -335,19 +335,6 @@ type Meta interface {
 	LoadMeta(r io.Reader) error
 }
 
-func removePassword(uri string) string {
-	p := strings.Index(uri, "@")
-	if p < 0 {
-		return uri
-	}
-	sp := strings.Index(uri, "://")
-	cp := strings.Index(uri[sp+3:], ":")
-	if cp < 0 || sp+3+cp > p {
-		return uri
-	}
-	return uri[:sp+3+cp] + uri[p:]
-}
-
 type Creator func(driver, addr string, conf *Config) (Meta, error)
 
 var metaDrivers = make(map[string]Creator)
@@ -361,7 +348,7 @@ func NewClient(uri string, conf *Config) Meta {
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
 	}
-	logger.Infof("Meta address: %s", removePassword(uri))
+	logger.Infof("Meta address: %s", utils.RemovePassword(uri))
 	if os.Getenv("META_PASSWORD") != "" {
 		p := strings.Index(uri, ":@")
 		if p > 0 {

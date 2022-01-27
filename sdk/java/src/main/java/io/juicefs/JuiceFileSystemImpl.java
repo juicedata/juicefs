@@ -1072,6 +1072,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
                                    short replication, long blockSize, Progressable progress) throws IOException {
     statistics.incrementWriteOps(1);
+    permission = permission.applyUMask(uMask);
     while (true) {
       int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort());
       if (fd == ENOENT) {
@@ -1108,6 +1109,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flag,
                                                int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
     statistics.incrementWriteOps(1);
+    permission = permission.applyUMask(uMask);
     int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort());
     while (fd == EEXIST) {
       if (!flag.contains(CreateFlag.OVERWRITE) || isDirectory(f)) {
