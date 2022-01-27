@@ -4,7 +4,7 @@ sidebar_position: 7
 ---
 # JuiceFS Storage Quota
 
-JuiceFS v1.0 begins to support file system level storage quotas, a feature that includes:
+JuiceFS v0.14.2 begins to support file system level storage quotas, a feature that includes:
 
 - Limit the total available capacity of the file system
 - Limit the total inodes of the file system
@@ -100,7 +100,7 @@ $ juicefs config $METAURL --inodes 100
     inodes: 0 -> 100
 ```
 
-## Flexible Usage
+## Put together
 
 You can combine `--capacity` and `--inodes` to set the capacity quota of a filesystem more flexibly, for example, to create a filesystem that limits the total capacity to 100TiB and allows only 100000 files to be stored:
 
