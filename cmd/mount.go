@@ -270,7 +270,7 @@ func mount(c *cli.Context) error {
 		}
 		// The default log to syslog is only in daemon mode.
 		utils.InitLoggers(!c.Bool("no-syslog"))
-		err := makeDaemon(c, conf.Format.Name, conf.Mountpoint)
+		err := makeDaemon(c, conf.Format.Name, conf.Mountpoint, m)
 		if err != nil {
 			logger.Fatalf("Failed to make daemon: %s", err)
 		}

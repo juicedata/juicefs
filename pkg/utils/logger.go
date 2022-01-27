@@ -69,7 +69,9 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 	if len(e.Data) != 0 {
 		str += " " + fmt.Sprint(e.Data)
 	}
-	str += "\n"
+	if !strings.HasSuffix(str, "\n") {
+		str += "\n"
+	}
 	return []byte(str), nil
 }
 

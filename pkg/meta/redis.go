@@ -144,6 +144,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	return m, err
 }
 
+func (r *redisMeta) Shutdown() error {
+	return r.rdb.Close()
+}
+
 func (m *redisMeta) doDeleteSlice(chunkid uint64, size uint32) error {
 	return m.rdb.HDel(Background, sliceRefs, m.sliceKey(chunkid, size)).Err()
 }

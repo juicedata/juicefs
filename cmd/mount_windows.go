@@ -17,6 +17,7 @@
 package main
 
 import (
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/juicedata/juicefs/pkg/winfsp"
 	"github.com/urfave/cli/v2"
@@ -44,7 +45,7 @@ func mount_flags() []cli.Flag {
 	}
 }
 
-func makeDaemon(c *cli.Context, name, mp string) error {
+func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 	logger.Warnf("Cannot run in background in Windows.")
 	return nil
 }

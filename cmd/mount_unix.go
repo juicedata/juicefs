@@ -31,6 +31,7 @@ import (
 
 	"github.com/juicedata/godaemon"
 	"github.com/juicedata/juicefs/pkg/fuse"
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
@@ -52,7 +53,7 @@ func checkMountpoint(name, mp string) {
 	logger.Fatalf("fail to mount after 10 seconds, please check the log (/var/log/juicefs.log) or re-mount in foreground")
 }
 
-func makeDaemon(c *cli.Context, name, mp string) error {
+func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 	var attrs godaemon.DaemonAttr
 	attrs.OnExit = func(stage int) error {
 		if stage != 0 {
@@ -80,6 +81,12 @@ func makeDaemon(c *cli.Context, name, mp string) error {
 		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			logger.Errorf("open log file %s: %s", logfile, err)
+		}
+	}
+	if godaemon.Stage() <= 1 {
+		err := m.Shutdown()
+		if err != nil {
+			logger.Errorf("shutdown: %s", err)
 		}
 	}
 	_, _, err := godaemon.MakeDaemon(&attrs)

@@ -19,6 +19,7 @@ require (
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/deckarep/golang-set v1.7.1 // indirect
+	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/dnaeon/go-vcr v1.2.0 // indirect
 	github.com/emersion/go-webdav v0.3.0
 	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377 // indirect
