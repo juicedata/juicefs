@@ -1,3 +1,6 @@
+//go:build !nobadger
+// +build !nobadger
+
 /*
  * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
