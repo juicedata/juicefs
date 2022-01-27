@@ -133,11 +133,7 @@ func (m *baseMeta) CloseSession() error {
 	m.umounting = true
 	m.Unlock()
 	m.en.doCleanStaleSession(m.sid)
-	err := m.en.shutdown()
-	if err != nil {
-		logger.Warnf("shutdown meta: %s", err)
-	}
-	return nil
+	return m.en.shutdown()
 }
 
 func (m *baseMeta) refreshUsage() {
