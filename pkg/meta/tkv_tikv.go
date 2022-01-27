@@ -202,6 +202,10 @@ func (c *tikvClient) name() string {
 	return "tikv"
 }
 
+func (c *tikvClient) shouldRetry(err error) bool {
+	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "TxnLockNotFound")
+}
+
 func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 	tx, err := c.client.Begin()
 	if err != nil {
@@ -231,4 +235,8 @@ func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 func (c *tikvClient) reset(prefix []byte) error {
 	_, err := c.client.DeleteRange(context.Background(), prefix, nextKey(prefix), 1)
 	return err
+}
+
+func (c *tikvClient) close() error {
+	return c.client.Close()
 }

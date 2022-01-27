@@ -22,17 +22,16 @@ import (
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	redisAddr = "redis://127.0.0.1/10"
-	// redisAddr = "redis://127.0.0.1:7369" // Titan
-	sqlAddr = "sqlite3://juicefs.db"
+	redisAddr = "redis://127.0.0.1/1"
+	sqlAddr   = "sqlite3://juicefs.db"
 	// sqlAddr = "mysql://root:@/juicefs" // MySQL
 	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/juicefs" // TiDB
-	tkvAddr = "tikv://127.0.0.1:2379/juicefs"
+	tkvAddr = "badger://test_db"
+	// tkvAddr = "tikv://127.0.0.1:2379/juicefs"
 )
 
 func init() {
@@ -588,20 +587,6 @@ func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir, readdir
 	// b.Run("readdir_100k", func(b *testing.B) { benchReaddir(b, m, 100000) })
 }
 
-func BenchmarkRedisDir(b *testing.B) {
-	m := NewClient(redisAddr, &Config{})
-	benchmarkDir(b, m)
-}
-func BenchmarkSQLDir(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{})
-	benchmarkDir(b, m)
-}
-
-func BenchmarkTKVDir(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{})
-	benchmarkDir(b, m)
-}
-
 func benchmarkFile(b *testing.B, m Meta) {
 	_ = m.Init(Format{Name: "benchmarkFile"}, true)
 	_ = m.NewSession()
@@ -615,21 +600,6 @@ func benchmarkFile(b *testing.B, m Meta) {
 	b.Run("access", func(b *testing.B) { benchAccess(b, m) })
 }
 
-func BenchmarkRedisFile(b *testing.B) {
-	m := NewClient(redisAddr, &Config{})
-	benchmarkFile(b, m)
-}
-
-func BenchmarkSQLFile(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{})
-	benchmarkFile(b, m)
-}
-
-func BenchmarkTKVFile(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{})
-	benchmarkFile(b, m)
-}
-
 func benchmarkXattr(b *testing.B, m Meta) {
 	_ = m.Init(Format{Name: "benchmarkXattr"}, true)
 	_ = m.NewSession()
@@ -640,21 +610,6 @@ func benchmarkXattr(b *testing.B, m Meta) {
 	b.Run("listxattr_10", func(b *testing.B) { benchListXattr(b, m, 10) })
 }
 
-func BenchmarkRedisXattr(b *testing.B) {
-	m := NewClient(redisAddr, &Config{})
-	benchmarkXattr(b, m)
-}
-
-func BenchmarkSQLXattr(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{})
-	benchmarkXattr(b, m)
-}
-
-func BenchmarkTKVXattr(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{})
-	benchmarkXattr(b, m)
-}
-
 func benchmarkLink(b *testing.B, m Meta) {
 	_ = m.Init(Format{Name: "benchmarkLink"}, true)
 	_ = m.NewSession()
@@ -662,21 +617,6 @@ func benchmarkLink(b *testing.B, m Meta) {
 	b.Run("symlink", func(b *testing.B) { benchSymlink(b, m) })
 	// maybe meaningless since symlink would be cached
 	// b.Run("readlink", func(b *testing.B) { benchReadlink(b, m) })
-}
-
-func BenchmarkRedisLink(b *testing.B) {
-	m := NewClient(redisAddr, &Config{})
-	benchmarkLink(b, m)
-}
-
-func BenchmarkSQLLink(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{})
-	benchmarkLink(b, m)
-}
-
-func BenchmarkTKVLink(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{})
-	benchmarkLink(b, m)
 }
 
 func benchmarkData(b *testing.B, m Meta) {
@@ -690,17 +630,25 @@ func benchmarkData(b *testing.B, m Meta) {
 	b.Run("read_10", func(b *testing.B) { benchRead(b, m, 10) })
 }
 
-func BenchmarkRedisData(b *testing.B) {
+func benchmarkAll(b *testing.B, m Meta) {
+	benchmarkDir(b, m)
+	benchmarkFile(b, m)
+	benchmarkXattr(b, m)
+	benchmarkLink(b, m)
+	benchmarkData(b, m)
+}
+
+func BenchmarkRedis(b *testing.B) {
 	m := NewClient(redisAddr, &Config{})
-	benchmarkData(b, m)
+	benchmarkAll(b, m)
 }
 
-func BenchmarkSQLData(b *testing.B) {
+func BenchmarkSQL(b *testing.B) {
 	m := NewClient(sqlAddr, &Config{})
-	benchmarkData(b, m)
+	benchmarkAll(b, m)
 }
 
-func BenchmarkTKVData(b *testing.B) {
+func BenchmarkTKV(b *testing.B) {
 	m := NewClient(tkvAddr, &Config{})
-	benchmarkData(b, m)
+	benchmarkAll(b, m)
 }
