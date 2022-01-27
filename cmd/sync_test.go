@@ -27,6 +27,9 @@ import (
 )
 
 func TestSync(t *testing.T) {
+	if os.Getenv("MINIO_TEST_BUCKET") == "" {
+		t.Skip()
+	}
 
 	minioDir := "synctest"
 	localDir := "/tmp/synctest"
@@ -60,7 +63,6 @@ func TestSync(t *testing.T) {
 			t.Fatalf("sync failed: %v", err)
 		}
 	}
-
 }
 
 func Test_isS3PathType(t *testing.T) {
