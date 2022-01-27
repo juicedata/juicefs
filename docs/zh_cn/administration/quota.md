@@ -15,7 +15,7 @@ JuiceFS v1.0 开始支持文件系统级别的存储配额，该功能包括：
 
 ```shell
 $ df -Th | grep juicefs
-JuiceFS:ujfs   fuse.juicefs  1.0P  682M  1.0P    1% /home/herald/mnt
+JuiceFS:ujfs   fuse.juicefs  1.0P  682M  1.0P    1% /mnt
 ```
 
 :::note 说明
@@ -68,7 +68,7 @@ $ juicefs config $METAURL --capacity 100
 
 ```shell
 $ df -Th | grep juicefs
-JuiceFS:ujfs   fuse.juicefs  100G  682M  100G    1% /home/herald/mnt
+JuiceFS:ujfs   fuse.juicefs  100G  682M  100G    1% /mnt
 ```
 
 ## 限制 inode 总量

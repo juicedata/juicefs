@@ -15,7 +15,7 @@ In a Linux environment, for example, the default capacity of a JuiceFS type file
 
 ```shell
 $ df -Th | grep juicefs
-JuiceFS:ujfs   fuse.juicefs  1.0P  682M  1.0P    1% /home/herald/mnt
+JuiceFS:ujfs   fuse.juicefs  1.0P  682M  1.0P    1% /mnt
 ```
 
 :::note
@@ -68,7 +68,7 @@ For file systems with storage quota set, the identification capacity becomes the
 
 ```shell
 $ df -Th | grep juicefs
-JuiceFS:ujfs   fuse.juicefs  100G  682M  100G    1% /home/herald/mnt
+JuiceFS:ujfs   fuse.juicefs  100G  682M  100G    1% /mnt
 ```
 
 ## Limit the total number of inodes
