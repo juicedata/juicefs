@@ -31,7 +31,7 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 redis://username:password@host:6379/1
 ```
 
-`username` 是 Redis 6.0.0 之后引入的。如果没有用户名可以忽略，如  `redis://:password@host:6379/1`（密码前面的`:`冒号需要保留）。
+`username` 是 Redis 6.0 之后引入的。如果没有用户名可以忽略，如  `redis://:password@host:6379/1`（密码前面的`:`冒号需要保留）。
 
 例如，以下命令创建名为 `pics` 的 JuiceFS 文件系统，使用 Redis 中的 `1` 号数据库存储元数据：
 
@@ -56,6 +56,10 @@ $ juicefs format --storage s3 \
     "redis://192.168.1.6:6379/1" \
     pics
 ```
+
+:::caution 特别提示
+JuiceFS 对 redis 的最低版本要求为 4.0
+:::
 
 ### 挂载文件系统
 

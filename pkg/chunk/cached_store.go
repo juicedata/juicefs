@@ -98,6 +98,15 @@ var (
 		Name: "object_request_data_bytes",
 		Help: "Object requests size in bytes.",
 	}, []string{"method"})
+
+	stageBlocks = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "staging_blocks",
+		Help: "Number of blocks in the staging path.",
+	})
+	stageBlockBytes = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "staging_block_bytes",
+		Help: "Total bytes of blocks in the staging path.",
+	})
 )
 
 // chunk for read only
@@ -518,7 +527,10 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 		time.Sleep(time.Second * time.Duration(try))
 	}
 	buf.Release()
-	_ = os.Remove(stagingPath)
+	if err = os.Remove(stagingPath); err == nil {
+		stageBlocks.Sub(1)
+		stageBlockBytes.Sub(float64(blockSize))
+	}
 }
 
 func (c *wChunk) upload(indx int) {
@@ -802,6 +814,8 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 	_ = prometheus.Register(objectReqsHistogram)
 	_ = prometheus.Register(objectReqErrors)
 	_ = prometheus.Register(objectDataBytes)
+	_ = prometheus.Register(stageBlocks)
+	_ = prometheus.Register(stageBlockBytes)
 
 	if store.conf.CacheDir != "memory" && store.conf.Writeback && store.conf.UploadDelay > 0 {
 		logger.Infof("delay uploading by %s", store.conf.UploadDelay)
@@ -886,7 +900,10 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		store.pendingMutex.Lock()
 		delete(store.pendingKeys, key)
 		store.pendingMutex.Unlock()
-		_ = os.Remove(stagingPath)
+		if err = os.Remove(stagingPath); err == nil {
+			stageBlocks.Sub(1)
+			stageBlockBytes.Sub(float64(blockSize))
+		}
 	}()
 }
 

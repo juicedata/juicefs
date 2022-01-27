@@ -62,7 +62,6 @@ func TestSync(t *testing.T) {
 			t.Fatalf("sync failed: %v", err)
 		}
 	}
-
 }
 
 func Test_isS3PathType(t *testing.T) {

@@ -229,7 +229,14 @@ func (cache *cacheStore) remove(key string) {
 	cache.Unlock()
 	if path != "" {
 		_ = os.Remove(path)
-		_ = os.Remove(cache.stagePath(key))
+		stagingPath := cache.stagePath(key)
+		if fi, err := os.Stat(stagingPath); err == nil {
+			size := fi.Size()
+			if err = os.Remove(stagingPath); err == nil {
+				stageBlocks.Sub(1)
+				stageBlockBytes.Sub(float64(size))
+			}
+		}
 	}
 }
 
@@ -307,13 +314,17 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 		return stagingPath, errors.New("Space not enough on device")
 	}
 	err := cache.flushPage(stagingPath, data)
-	if err == nil && cache.capacity > 0 && keepCache {
-		path := cache.cachePath(key)
-		cache.createDir(filepath.Dir(path))
-		if err := os.Link(stagingPath, path); err == nil {
-			cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
-		} else {
-			logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
+	if err == nil {
+		stageBlocks.Add(1)
+		stageBlockBytes.Add(float64(len(data)))
+		if cache.capacity > 0 && keepCache {
+			path := cache.cachePath(key)
+			cache.createDir(filepath.Dir(path))
+			if err := os.Link(stagingPath, path); err == nil {
+				cache.add(key, -int32(len(data)), uint32(time.Now().Unix()))
+			} else {
+				logger.Warnf("link %s to %s failed: %s", stagingPath, path, err)
+			}
 		}
 	}
 	return stagingPath, err
@@ -505,6 +516,8 @@ func (cache *cacheStore) scanStaging() {
 				}
 			} else {
 				logger.Debugf("Found staging block: %s", path)
+				stageBlocks.Add(1)
+				stageBlockBytes.Add(float64(fi.Size()))
 				key := path[len(stagingPrefix)+1:]
 				if runtime.GOOS == "windows" {
 					key = strings.ReplaceAll(key, "\\", "/")
