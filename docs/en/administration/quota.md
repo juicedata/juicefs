@@ -4,10 +4,9 @@ sidebar_position: 7
 ---
 # JuiceFS Storage Quota
 
-JuiceFS v1.0.0 begins to support file system level storage quotas, a feature that includes:
+JuiceFS v1.0 begins to support file system level storage quotas, a feature that includes:
 
 - Limit the total available capacity of the file system
-
 - Limit the total inodes of the file system
 
 ## View file system information
