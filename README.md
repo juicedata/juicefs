@@ -177,7 +177,6 @@ You are welcome to tell us after using JuiceFS and share your experience with ev
 - Directory quotas
 - Snapshot
 - Write once read many (WORM)
-- Trash
 
 ## Reporting Issues
 
