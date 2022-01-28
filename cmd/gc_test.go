@@ -84,7 +84,7 @@ func TestGc(t *testing.T) {
 	}
 	err := Main(gcArgs)
 	if err != nil {
-		t.Fatalf("gc failed: %s\n", err)
+		t.Fatalf("gc failed: %v", err)
 	}
 
 	gcArgs = []string{
@@ -94,6 +94,6 @@ func TestGc(t *testing.T) {
 	}
 	err = Main(gcArgs)
 	if err != nil {
-		t.Fatalf("gc failed: %s\n", err)
+		t.Fatalf("gc failed: %v", err)
 	}
 }
