@@ -385,8 +385,10 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
 		}
 		n := getInternalNode(ino)
-		entry = &meta.Entry{Inode: ino, Attr: n.attr}
-		return
+		if n != nil {
+			entry = &meta.Entry{Inode: ino, Attr: n.attr}
+			return
+		}
 	}
 	defer func() {
 		if entry != nil {

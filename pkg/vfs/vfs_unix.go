@@ -86,8 +86,10 @@ func (v *VFS) Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
 	}
 	if IsSpecialNode(ino) {
 		node := getInternalNode(ino)
-		err = accessTest(node.attr, mmask, ctx.Uid(), ctx.Gid())
-		return
+		if node != nil {
+			err = accessTest(node.attr, mmask, ctx.Uid(), ctx.Gid())
+			return
+		}
 	}
 
 	err = v.Meta.Access(ctx, ino, uint8(mmask), nil)
@@ -144,7 +146,11 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 	}()
 	if IsSpecialNode(ino) {
 		n := getInternalNode(ino)
-		entry = &meta.Entry{Inode: ino, Attr: n.attr}
+		if n != nil {
+			entry = &meta.Entry{Inode: ino, Attr: n.attr}
+		} else {
+			err = syscall.EPERM
+		}
 		return
 	}
 	err = syscall.EINVAL
