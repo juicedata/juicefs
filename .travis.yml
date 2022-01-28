@@ -41,9 +41,9 @@ before_script:
 script:
   - sudo chmod 777 /var/jfsCache
   - make test
-  - echo "worldworld"
   - cat cov1.out >> coverage.txt
   - cat cov2.out >> coverage.txt
+  - cat cov3.out >> coverage.txt
   - cd /jfs
   - git clone https://github.com/danjacques/gofslock.git
   - cd gofslock && git checkout cc7f001fe0e7df1710adc8f0cd9e9d6d21fdb3a9
