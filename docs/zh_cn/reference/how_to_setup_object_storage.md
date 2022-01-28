@@ -44,6 +44,21 @@ $ juicefs format --storage s3 \
 
 公有云通常允许用户创建 IAM（Identity and Access Management）角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有读写对象存储的权限，则无需再指定 `--access-key` 和 `--secret-key`。
 
+## 使用代理
+
+如果客户端所在的网络环境受防火墙策略或其他因素影响需要通过代理访问外部的对象存储服务，使用的操作系统不同，相应的代理设置方法也不同，请参考相应的用户手册进行设置。
+
+以 Linux 为例，可以通过创建 `http_proxy` 和 `https_proxy` 环境变量设置代理：
+
+```shell
+$ export http_proxy=http://localhost:8035/
+$ export https_proxy=http://localhost:8035/
+$ juicefs format \
+    --storage s3 \
+    ... \
+    myjfs
+```
+
 ## 支持的存储服务
 
 如果你希望使用的存储类型不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
