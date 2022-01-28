@@ -35,6 +35,14 @@ func WriteLeakedData(dataDir string) {
 	ioutil.WriteFile(dataDir+"chunks/0/0/"+"123456789_0_1048576", []byte(writeContent.String()), 0644)
 }
 
+func CheckLeakedData(dataDir string) bool {
+	_,err := os.Stat(dataDir+"chunks/0/0/"+"123456789_0_1048576")
+	if err != nil {
+		return true
+	}
+	return false
+}
+
 func RemoveAllFiles(dataDir string) {
 	_, err := os.Stat(dataDir)
 	if err == nil {
@@ -85,6 +93,11 @@ func TestGc(t *testing.T) {
 	err := Main(gcArgs)
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
+	}
+
+	bNotExist := CheckLeakedData(dataDir)
+	if bNotExist == false {
+		t.Fatalf("gc delete failed,leaked data was not deleted")
 	}
 
 	gcArgs = []string{
