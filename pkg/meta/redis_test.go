@@ -19,6 +19,7 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"runtime"
 	"strconv"
 	"sync"
@@ -619,6 +620,15 @@ func testLocks(t *testing.T, m Meta) {
 	if st := m.Flock(ctx, inode, o1, syscall.F_UNLCK, false); st != 0 {
 		t.Fatalf("flock unlock: %s", st)
 	}
+	if r, ok := m.(*redisMeta); ok {
+		ms, err := r.rdb.SMembers(context.Background(), r.lockedKey(r.sid)).Result()
+		if err != nil {
+			t.Fatalf("Smember %s: %s", r.lockedKey(r.sid), err)
+		}
+		if len(ms) != 0 {
+			t.Fatalf("locked inodes leaked: %d", len(ms))
+		}
+	}
 
 	// POSIX locks
 	if st := m.Setlk(ctx, inode, o1, false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
@@ -685,6 +695,16 @@ func testLocks(t *testing.T, m Meta) {
 	g.Wait()
 	if err != 0 {
 		t.Fatalf("lock fail: %s", err)
+	}
+
+	if r, ok := m.(*redisMeta); ok {
+		ms, err := r.rdb.SMembers(context.Background(), r.lockedKey(r.sid)).Result()
+		if err != nil {
+			t.Fatalf("Smember %s: %s", r.lockedKey(r.sid), err)
+		}
+		if len(ms) != 0 {
+			t.Fatalf("locked inode leaked: %d", len(ms))
+		}
 	}
 }
 

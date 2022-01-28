@@ -32,8 +32,20 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 	ikey := r.flockKey(inode)
 	lkey := r.ownerKey(owner)
 	if ltype == F_UNLCK {
-		_, err := r.rdb.HDel(ctx, ikey, lkey).Result()
-		return errno(err)
+		return r.txn(ctx, func(tx *redis.Tx) error {
+			lkeys, err := tx.HKeys(ctx, ikey).Result()
+			if err != nil {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.HDel(ctx, ikey, lkey)
+				if len(lkeys) == 1 && lkeys[0] == lkey {
+					pipe.SRem(ctx, r.lockedKey(r.sid), ikey)
+				}
+				return nil
+			})
+			return err
+		}, ikey)
 	}
 	var err syscall.Errno
 	for {
@@ -136,9 +148,19 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 					return nil
 				}
 				ls = updateLocks(ls, lock)
+				var lkeys []string
+				if len(ls) == 0 {
+					lkeys, err = tx.HKeys(ctx, ikey).Result()
+					if err != nil {
+						return err
+					}
+				}
 				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					if len(ls) == 0 {
 						pipe.HDel(ctx, ikey, lkey)
+						if len(lkeys) == 1 && lkeys[0] == lkey {
+							pipe.SRem(ctx, r.lockedKey(r.sid), ikey)
+						}
 					} else {
 						pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
 					}
