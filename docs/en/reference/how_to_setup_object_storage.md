@@ -44,6 +44,21 @@ $ juicefs format --storage s3 \
 
 Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
 
+## Using Proxy
+
+If the network environment where the client is located is affected by firewall policies or other factors that require access to external object storage services through a proxy, the corresponding proxy settings are different for different operating systems, please refer to the corresponding user manual for settings.
+
+On Linux, for example, the proxy can be set by creating `http_proxy` and `https_proxy` environment variables.
+
+```shell
+$ export http_proxy=http://localhost:8035/
+$ export https_proxy=http://localhost:8035/
+$ juicefs format \
+    --storage s3 \
+    ... \
+    myjfs
+```
+
 ## Supported Object Storage
 
 If you wish to use a storage type that is not listed, feel free to submit a requirement [issue](https://github.com/juicedata/juicefs/issues).
