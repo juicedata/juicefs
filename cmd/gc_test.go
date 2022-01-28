@@ -76,9 +76,9 @@ func TestGc(t *testing.T) {
 
 	WriteLeakedData(dataDir)
 	time.Sleep(time.Duration(65)*time.Second)
-	
-	gcArgs = []string{"", "gc", "--delete",metaUrl}
-	err = Main(gcArgs)
+
+	gcArgs := []string{"", "gc", "--delete",metaUrl}
+	err := Main(gcArgs)
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
 	}
