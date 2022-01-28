@@ -148,8 +148,10 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 		n := getInternalNode(ino)
 		if n != nil {
 			entry = &meta.Entry{Inode: ino, Attr: n.attr}
-			return
+		} else {
+			err = syscall.EPERM
 		}
+		return
 	}
 	err = syscall.EINVAL
 	var attr = &Attr{}
