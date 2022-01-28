@@ -41,6 +41,7 @@ before_script:
 script:
   - sudo chmod 777 /var/jfsCache
   - make test
+  - echo "worldworld"
   - cat cov1.out >> coverage.txt
   - cat cov2.out >> coverage.txt
   - cd /jfs

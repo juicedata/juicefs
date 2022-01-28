@@ -59,4 +59,5 @@ release:
 
 test:
 	sudo JFS_PAGE_STACK=1 JFS_GC_SKIPPEDTIME=1 `which go` test -v -cover ./pkg/... ./cmd/...  -coverprofile=cov1.out
+	echo "hellohello"
 	sudo `which go` test ./integration/... -cover -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
