@@ -203,7 +203,7 @@ func gc(ctx *cli.Context) error {
 	if strDuration != "" {
 		iDuration, err := strconv.Atoi(strDuration)
 		if err == nil {
-			maxMtime = time.Now().Add(time.Minute * -1 * time.Duration(iDuration))
+			maxMtime = time.Now().Add(time.Second * -1 * time.Duration(iDuration))
 		} else {
 			logger.Errorf("parse JFS_GC_SKIPPEDTIME=%s: %s", strDuration, err)
 		}

@@ -29,14 +29,14 @@ import (
 func WriteLeakedData(dataDir string) {
 	var templateContent = "aaaaaaaabbbbbbbb"
 	var writeContent strings.Builder
-	for i := 0;i < 64*1024;i++ {
+	for i := 0; i < 64*1024; i++ {
 		writeContent.Write([]byte(templateContent))
 	}
-	ioutil.WriteFile(dataDir + "chunks/0/0/" + "123456789_0_1048576", []byte(writeContent.String()),0644)
+	ioutil.WriteFile(dataDir+"chunks/0/0/"+"123456789_0_1048576", []byte(writeContent.String()), 0644)
 }
 
 func RemoveAllFiles(dataDir string) {
-	_,err := os.Stat(dataDir)
+	_, err := os.Stat(dataDir)
 	if err == nil {
 		files, err := ioutil.ReadDir(dataDir)
 		if err == nil {
@@ -46,7 +46,6 @@ func RemoveAllFiles(dataDir string) {
 		}
 	}
 }
-
 
 func TestGc(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
@@ -72,18 +71,27 @@ func TestGc(t *testing.T) {
 	}
 
 	strEnvSkippedTime := os.Getenv("JFS_GC_SKIPPEDTIME")
-	t.Logf("JFS_GC_SKIPPEDTIME is %s\n",strEnvSkippedTime)
+	t.Logf("JFS_GC_SKIPPEDTIME is %s", strEnvSkippedTime)
 
 	WriteLeakedData(dataDir)
-	time.Sleep(time.Duration(65)*time.Second)
+	time.Sleep(time.Duration(3) * time.Second)
 
-	gcArgs := []string{"", "gc", "--delete",metaUrl}
+	gcArgs := []string{
+		"",
+		"gc",
+		"--delete",
+		metaUrl,
+	}
 	err := Main(gcArgs)
 	if err != nil {
 		t.Fatalf("gc failed: %s\n", err)
 	}
 
-	gcArgs = []string{"", "gc", metaUrl}
+	gcArgs = []string{
+		"",
+		"gc",
+		metaUrl,
+	}
 	err = Main(gcArgs)
 	if err != nil {
 		t.Fatalf("gc failed: %s\n", err)
