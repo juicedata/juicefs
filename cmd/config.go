@@ -97,6 +97,12 @@ func config(ctx *cli.Context) error {
 				format.SecretKey = new
 				storage = true
 			}
+		case "cache-store":
+			if new := ctx.String(flag); new != format.CacheStore {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.CacheStore, new))
+				format.CacheStore = new
+				storage = true
+			}
 		case "trash-days":
 			if new := ctx.Int(flag); new != format.TrashDays {
 				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.TrashDays, new))
@@ -165,6 +171,10 @@ func configFlags() *cli.Command {
 			&cli.StringFlag{
 				Name:  "bucket",
 				Usage: "A bucket URL to store data",
+			},
+			&cli.StringFlag{
+				Name:  "cache-store",
+				Usage: "A bucket URL to cache hot data",
 			},
 			&cli.StringFlag{
 				Name:  "access-key",

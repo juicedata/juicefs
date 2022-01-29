@@ -37,6 +37,7 @@ type Format struct {
 	Bucket      string
 	AccessKey   string
 	SecretKey   string `json:",omitempty"`
+	CacheStore  string `json:",omitempty"`
 	BlockSize   int
 	Compression string
 	Shards      int

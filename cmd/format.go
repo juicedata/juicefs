@@ -33,6 +33,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
@@ -75,6 +76,14 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 		}
 		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
 		blob = object.NewEncrypted(blob, encryptor)
+	}
+	if format.CacheStore != "" {
+		var conf sync.Config
+		hot, err := createSyncStorage(format.CacheStore, &conf)
+		if err != nil {
+			return nil, err
+		}
+		blob = object.NewCachedStore(blob, hot)
 	}
 	return blob, nil
 }
