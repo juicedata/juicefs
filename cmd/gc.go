@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -199,6 +200,16 @@ func gc(ctx *cli.Context) error {
 	leaked := progress.AddDoubleSpinner("Leaked objects")
 	skipped := progress.AddDoubleSpinner("Skipped objects")
 	maxMtime := time.Now().Add(time.Hour * -1)
+	strDuration := os.Getenv("JFS_GC_SKIPPEDTIME")
+	if strDuration != "" {
+		iDuration, err := strconv.Atoi(strDuration)
+		if err == nil {
+			maxMtime = time.Now().Add(time.Second * -1 * time.Duration(iDuration))
+		} else {
+			logger.Errorf("parse JFS_GC_SKIPPEDTIME=%s: %s", strDuration, err)
+		}
+	}
+
 	var leakedObj = make(chan string, 10240)
 	for i := 0; i < ctx.Int("threads"); i++ {
 		wg.Add(1)
