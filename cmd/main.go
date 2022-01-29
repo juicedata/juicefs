@@ -306,6 +306,6 @@ func removePassword(uri string) {
 				break
 			}
 		}
-		gspt.SetProcTitle(strings.Join(os.Args, " "))
 	}
+	gspt.SetProcTitle(strings.Join(os.Args, " "))
 }
