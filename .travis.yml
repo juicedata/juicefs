@@ -61,7 +61,6 @@ script:
   - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
   - sudo ./juicefs gc localhost
   - sudo ./juicefs fsck localhost
-  - echo "hello world"
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 after_success:
