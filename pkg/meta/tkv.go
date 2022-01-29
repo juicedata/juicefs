@@ -447,6 +447,9 @@ func (m *kvMeta) refreshSession() {
 		_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 		m.Unlock()
 		if _, err := m.Load(); err != nil {
+			if err.Error() == "database is not formatted" {
+				logger.Fatalf("Volume setting not found! Is it destroyed?")
+			}
 			logger.Warnf("reload setting: %s", err)
 		}
 		go m.CleanStaleSessions()

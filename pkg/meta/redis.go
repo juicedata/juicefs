@@ -1629,6 +1629,9 @@ func (r *redisMeta) refreshSession() {
 		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
 		r.Unlock()
 		if _, err := r.Load(); err != nil {
+			if err.Error() == "database is not formatted" {
+				logger.Fatalf("Volume setting not found! Is it destroyed?")
+			}
 			logger.Warnf("reload setting: %s", err)
 		}
 		go r.CleanStaleSessions()

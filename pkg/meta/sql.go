@@ -333,7 +333,14 @@ func (m *dbMeta) Reset() error {
 
 func (m *dbMeta) Load() (*Format, error) {
 	var s = setting{Name: "format"}
-	ok, err := m.db.Get(&s)
+	ok, err := m.db.IsTableExist(&setting{})
+	if err == nil && !ok {
+		err = fmt.Errorf("database is not formatted")
+	}
+	if err != nil {
+		return nil, err
+	}
+	ok, err = m.db.Get(&s)
 	if err == nil && !ok {
 		err = fmt.Errorf("database is not formatted")
 	}
@@ -1665,6 +1672,9 @@ func (m *dbMeta) refreshSession() {
 		})
 		m.Unlock()
 		if _, err := m.Load(); err != nil {
+			if err.Error() == "database is not formatted" {
+				logger.Fatalf("Volume setting not found! Is it destroyed?")
+			}
 			logger.Warnf("reload setting: %s", err)
 		}
 		go m.CleanStaleSessions()
