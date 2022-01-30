@@ -100,7 +100,9 @@ func cleanupBackups(blob object.ObjectStorage, now time.Time) {
 	}
 	var objs []string
 	for o := range ch {
-		objs = append(objs, o.Key())
+		if !o.IsDir() {
+			objs = append(objs, o.Key())
+		}
 	}
 
 	toDel := rotate(objs, now)
