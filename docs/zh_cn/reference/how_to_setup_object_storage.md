@@ -44,16 +44,18 @@ $ juicefs format --storage s3 \
 
 公有云通常允许用户创建 IAM（Identity and Access Management）角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有读写对象存储的权限，则无需再指定 `--access-key` 和 `--secret-key`。
 
-## 内网和外网 Endpoint 的灵活使用
+## 内网和外网 Endpoint
 
-除了标准的外网 Endpoint，一些对象存储还提供了面向自身平台业务间通信的内网 Endpoint 地址，满足条件的云服务器使用内网 Endpoint 访问对象存储不但时延更低，而且内网通信产生的流量是免费的。
+通常情况下，对象存储服务提供统一的 URL 进行访问，但云平台会同时提供内网和外网通信线路，比如满足条件的同平台云服务会自动解析通过内网线路访问对象存储，这样不但时延更低，而且内网通信产生的流量是免费的。
 
-JuiceFS 支持灵活混用内外网 Endpoint 的功能，你可以混合使用实现更理想的性价比。对于共享同一个文件系统的场景，在满足条件的服务器上通过内网 Endpoint 访问对象存储，其他计算机通过外网 Endpoint 访问，可以这样使用：
+另外，一些云计算平台也区分内外网线路，但没有提供统一访问 URL，而是分别提供内网 Endpoint 和外网 Endpoint 地址。
 
-- **创建文件系统时**：`--bucket` 指定外网 Endpoint 地址；
-- **挂载文件系统时**：对于满足条件的云服务器，通过 `--bucket` 改用内网 Endpoint 地址。
+JuiceFS 对这种区分内网外地址的对象存储服务也做了灵活的支持，对于共享同一个文件系统的场景，在满足条件的服务器上通过内网 Endpoint 访问对象存储，其他计算机通过外网 Endpoint 访问，可以这样使用：
 
-使用外网 Endpoint 创建文件系统可以确保任何联网客户端都能挂载访问，而满足内网通信的客户端通过在挂载文件系统时主动改变默认的 `--bucket` 地址实现用内网 Endpoint 访问对象存储。
+- **创建文件系统时**：`--bucket` 建议使用内网 Endpoint 地址；
+- **挂载文件系统时**：对于不满足内网线路的客户端，可以通过 `--bucket` 指定外网 Endpoint 地址。
+
+使用内网 Endpoint 创建文件系统可以确保性能更好、延时更低，对于无法通过内网访问的客户端，可以在挂载文件系统时通过 `--bucket` 指定外网 Endpoint 进行挂载访问。
 
 ## 使用代理
 
