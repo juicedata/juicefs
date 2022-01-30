@@ -20,11 +20,11 @@ slug: /how_to_setup_object_storage
 
 ```shell
 $ juicefs format --storage s3 \
-	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
-	--access-key abcdefghijklmn \
-	--secret-key nmlkjihgfedAcBdEfg \
-	redis://192.168.1.6/1 \
-	myjfs
+    --bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
+    --access-key abcdefghijklmn \
+    --secret-key nmlkjihgfedAcBdEfg \
+    redis://192.168.1.6/1 \
+    myjfs
 ```
 
 ## Access Key 和 Secret Key
@@ -37,12 +37,25 @@ $ juicefs format --storage s3 \
 $ export ACCESS_KEY=abcdefghijklmn
 $ export SECRET_KEY=nmlkjihgfedAcBdEfg
 $ juicefs format --storage s3 \
-	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
-	redis://192.168.1.6/1 \
-	myjfs
+    --bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
+    redis://192.168.1.6/1 \
+    myjfs
 ```
 
 公有云通常允许用户创建 IAM（Identity and Access Management）角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有读写对象存储的权限，则无需再指定 `--access-key` 和 `--secret-key`。
+
+## 内网和外网 Endpoint
+
+通常情况下，对象存储服务提供统一的 URL 进行访问，但云平台会同时提供内网和外网通信线路，比如满足条件的同平台云服务会自动解析通过内网线路访问对象存储，这样不但时延更低，而且内网通信产生的流量是免费的。
+
+另外，一些云计算平台也区分内外网线路，但没有提供统一访问 URL，而是分别提供内网 Endpoint 和外网 Endpoint 地址。
+
+JuiceFS 对这种区分内网外地址的对象存储服务也做了灵活的支持，对于共享同一个文件系统的场景，在满足条件的服务器上通过内网 Endpoint 访问对象存储，其他计算机通过外网 Endpoint 访问，可以这样使用：
+
+- **创建文件系统时**：`--bucket` 建议使用内网 Endpoint 地址；
+- **挂载文件系统时**：对于不满足内网线路的客户端，可以通过 `--bucket` 指定外网 Endpoint 地址。
+
+使用内网 Endpoint 创建文件系统可以确保性能更好、延时更低，对于无法通过内网访问的客户端，可以在挂载文件系统时通过 `--bucket` 指定外网 Endpoint 进行挂载访问。
 
 ## 使用代理
 
@@ -64,30 +77,30 @@ $ juicefs format \
 如果你希望使用的存储类型不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
 
 | Name                                        | Value      |
-| --------------------------------------      | ---------- |
+| ------------------------------------------- | ---------- |
 | [Amazon S3](#amazon-s3)                     | `s3`       |
-| [Google 云存储](#google-云存储)             | `gs`       |
-| [Azure Blob 存储](#azure-blob-存储)         | `wasb`     |
+| [Google 云存储](#google-云存储)                   | `gs`       |
+| [Azure Blob 存储](#azure-blob-存储)             | `wasb`     |
 | [Backblaze B2](#backblaze-b2)               | `b2`       |
-| [IBM 云对象存储](#ibm-云对象存储)           | `ibmcos`   |
+| [IBM 云对象存储](#ibm-云对象存储)                     | `ibmcos`   |
 | [Scaleway](#scaleway)                       | `scw`      |
 | [DigitalOcean Spaces](#digitalocean-spaces) | `space`    |
 | [Wasabi](#wasabi)                           | `wasabi`   |
 | [Storj DCS](#storj-dcs)                     | `s3`       |
-| [Vultr 对象存储](#vultr-对象存储)           | `s3`       |
-| [阿里云 OSS](#阿里云-oss)                   | `oss`      |
-| [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
-| [华为云 OBS](#华为云-obs)                   | `obs`      |
-| [百度云 BOS](#百度云-bos)                   | `bos`      |
-| [金山云 KS3](#金山云-ks3)                   | `ks3`      |
-| [美团云 MMS](#美团云-mms)                   | `mss`      |
-| [网易云 NOS](#网易云-nos)                   | `nos`      |
-| [青云 QingStor](#青云-qingstor)             | `qingstor` |
-| [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
-| [新浪云 SCS](#新浪云-scs)                   | `scs`      |
-| [天翼云 OOS](#天翼云-oos)                   | `oos`      |
-| [移动云 EOS](#移动云-eos)                   | `eos`      |
-| [优刻得 US3](#优刻得-us3)                   | `ufile`    |
+| [Vultr 对象存储](#vultr-对象存储)                   | `s3`       |
+| [阿里云 OSS](#阿里云-oss)                         | `oss`      |
+| [腾讯云 COS](#腾讯云-cos)                         | `cos`      |
+| [华为云 OBS](#华为云-obs)                         | `obs`      |
+| [百度云 BOS](#百度云-bos)                         | `bos`      |
+| [金山云 KS3](#金山云-ks3)                         | `ks3`      |
+| [美团云 MMS](#美团云-mms)                         | `mss`      |
+| [网易云 NOS](#网易云-nos)                         | `nos`      |
+| [青云 QingStor](#青云-qingstor)                 | `qingstor` |
+| [七牛云 Kodo](#七牛云-kodo)                       | `qiniu`    |
+| [新浪云 SCS](#新浪云-scs)                         | `scs`      |
+| [天翼云 OOS](#天翼云-oos)                         | `oos`      |
+| [移动云 EOS](#移动云-eos)                         | `eos`      |
+| [优刻得 US3](#优刻得-us3)                         | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                       | `s3`       |
 | [Swift](#swift)                             | `swift`    |
@@ -96,7 +109,7 @@ $ juicefs format \
 | [HDFS](#hdfs)                               | `hdfs`     |
 | [Redis](#redis)                             | `redis`    |
 | [TiKV](#tikv)                               | `tikv`     |
-| [本地磁盘](#本地磁盘)                       | `file`     |
+| [本地磁盘](#本地磁盘)                               | `file`     |
 
 ## Amazon S3
 
@@ -309,12 +322,12 @@ Storj DCS 兼容 AWS S3，存储类型使用 `s3` ，`--bucket` 格式为 `https
 
 ```shell
 $ juicefs format \
-	--storage s3 \
-	--bucket https://gateway.<region>.storjshare.io/<bucket> \
-	--access-key <your-access-key> \
-	--secret-key <your-sceret-key> \
-	... \
-	myjfs
+    --storage s3 \
+    --bucket https://gateway.<region>.storjshare.io/<bucket> \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
+    myjfs
 ```
 
 ## Vultr 对象存储
@@ -323,16 +336,15 @@ Vultr 的对象存储兼容 S3 API，存储类型使用 `s3`，`--bucket` 格式
 
 ```shell
 $ juicefs format \
-	--storage s3 \
-	--bucket https://<bucket>.ewr1.vultrobjects.com/ \
-	--access-key <your-access-key> \
-	--secret-key <your-sceret-key> \
-	... \
+    --storage s3 \
+    --bucket https://<bucket>.ewr1.vultrobjects.com/ \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
     myjfs
 ```
 
 访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage/) 中找到。
-
 
 ## 阿里云 OSS
 
