@@ -134,15 +134,14 @@ func nextKey(key []byte) []byte {
 	return next
 }
 
-func (tx *memTxn) scanKeys(prefix []byte) [][]byte {
+func (tx *memTxn) scanKeys(prefix_ []byte) [][]byte {
 	var keys [][]byte
 	tx.store.Lock()
 	defer tx.store.Unlock()
-	begin := string(prefix)
-	end := string(nextKey(prefix))
-	tx.store.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
+	prefix := string(prefix_)
+	tx.store.items.AscendGreaterOrEqual(&kvItem{key: prefix}, func(i btree.Item) bool {
 		it := i.(*kvItem)
-		if end == "" || it.key < end {
+		if strings.HasPrefix(it.key, prefix) {
 			tx.observed[it.key] = it.ver
 			keys = append(keys, []byte(it.key))
 			return true
