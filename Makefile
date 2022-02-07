@@ -29,6 +29,12 @@ juicefs.lite: Makefile cmd/*.go pkg/*/*.go
 juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 	go build -tags ceph -ldflags="$(LDFLAGS)"  -o juicefs.ceph ./cmd
 
+
+# This is the script for compiling the Linux version on the MacOS platform.
+# Please execute the `brew install FiloSottile/musl-cross/musl-cross` command before using it.
+juicefs.linux:
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-musl-gcc CGO_LDFLAGS="-static" go build -ldflags="$(LDFLAGS)"  -o juicefs ./cmd
+
 /usr/local/include/winfsp:
 	sudo mkdir -p /usr/local/include/winfsp
 	sudo cp hack/winfsp_headers/* /usr/local/include/winfsp
