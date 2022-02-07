@@ -27,6 +27,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -146,9 +148,15 @@ type dbSnap struct {
 }
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
-	if driver == "postgres" {
+
+	switch driver {
+	case "postgres":
+		addr = setsSPasswordFromEnv(addr)
 		addr = driver + "://" + addr
+	case "mysql":
+		addr = setsSPasswordFromEnv(addr)
 	}
+
 	engine, err := xorm.NewEngine(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
@@ -183,6 +191,15 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	m.root, err = lookupSubdir(m, conf.Subdir)
 
 	return m, err
+}
+
+func setsSPasswordFromEnv(addr string) string {
+	matches := regexp.MustCompile(`^(?:(?P<user>.*?)(?::(?P<passwd>.*))?@)?.*$`).FindStringSubmatch(addr)
+	if matches[2] == "" {
+		password := os.Getenv("META_PASSWORD")
+		addr = fmt.Sprintf("%s%s%s", addr[:len(matches[1])+1], password, addr[len(matches[1])+1:])
+	}
+	return addr
 }
 
 func (m *dbMeta) Shutdown() error {
