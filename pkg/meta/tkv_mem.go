@@ -136,9 +136,19 @@ func nextKey(key []byte) []byte {
 
 func (tx *memTxn) scanKeys(prefix []byte) [][]byte {
 	var keys [][]byte
-	for k := range tx.scanValues(prefix, nil) {
-		keys = append(keys, []byte(k))
-	}
+	tx.store.Lock()
+	defer tx.store.Unlock()
+	begin := string(prefix)
+	end := string(nextKey(prefix))
+	tx.store.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
+		it := i.(*kvItem)
+		if end == "" || it.key < end {
+			tx.observed[it.key] = it.ver
+			keys = append(keys, []byte(it.key))
+			return true
+		}
+		return false
+	})
 	return keys
 }
 
