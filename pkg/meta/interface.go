@@ -203,7 +203,7 @@ type Summary struct {
 
 type SessionInfo struct {
 	Version    string
-	Hostname   string
+	HostName   string
 	MountPoint string
 	ProcessID  int
 }
@@ -379,7 +379,7 @@ func newSessionInfo() *SessionInfo {
 		logger.Warnf("Failed to get hostname: %s", err)
 		host = ""
 	}
-	return &SessionInfo{Version: version.Version(), Hostname: host, ProcessID: os.Getpid()}
+	return &SessionInfo{Version: version.Version(), HostName: host, ProcessID: os.Getpid()}
 }
 
 func timeit(start time.Time) {

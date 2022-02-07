@@ -19,6 +19,8 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -26,6 +28,55 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
+
+func printSessions(ss [][3]string) string {
+	header := [3]string{"SID", "HostName", "MountPoint"}
+	var max [3]int
+	for i := 0; i < 3; i++ {
+		max[i] = len(header[i])
+	}
+	for _, s := range ss {
+		for i := 0; i < 3; i++ {
+			if l := len(s[i]); l > max[i] {
+				max[i] = l
+			}
+		}
+	}
+
+	var ret, b strings.Builder
+	for i := 0; i < 3; i++ {
+		b.WriteByte('+')
+		b.WriteString(strings.Repeat("-", max[i]+2))
+	}
+	b.WriteString("+\n")
+	divider := b.String()
+	ret.WriteString(divider)
+
+	b.Reset()
+	for i := 0; i < 3; i++ {
+		b.WriteString(" | ")
+		b.WriteString(padding(header[i], max[i], ' '))
+	}
+	b.WriteString(" |\n")
+	ret.WriteString(b.String()[1:])
+	ret.WriteString(divider)
+
+	for _, s := range ss {
+		b.Reset()
+		for i := 0; i < 3; i++ {
+			b.WriteString(" | ")
+			if spaces := max[i] - len(s[i]); spaces > 0 {
+				b.WriteString(strings.Repeat(" ", spaces))
+			}
+			b.WriteString(s[i])
+		}
+		b.WriteString(" |\n")
+		ret.WriteString(b.String()[1:])
+	}
+	ret.WriteString(divider)
+
+	return ret.String()
+}
 
 func destroy(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
@@ -50,7 +101,11 @@ func destroy(ctx *cli.Context) error {
 			logger.Fatalf("list sessions: %s", err)
 		}
 		if num := len(sessions); num > 0 {
-			logger.Fatalf("%d sessions are active, please disconnect them first", num)
+			ss := make([][3]string, num)
+			for i, s := range sessions {
+				ss[i] = [3]string{strconv.FormatUint(s.Sid, 10), s.HostName, s.MountPoint}
+			}
+			logger.Fatalf("%d sessions are active, please disconnect them first:\n%s", num, printSessions(ss))
 		}
 		var totalSpace, availSpace, iused, iavail uint64
 		_ = m.StatFS(meta.Background, &totalSpace, &availSpace, &iused, &iavail)
