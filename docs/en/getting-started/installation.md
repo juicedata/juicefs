@@ -233,7 +233,7 @@ Download MinGW-w64 and add its `bin` directory to the system environment variabl
    go build -ldflags="-s -w" -o juicefs.exe ./cmd
    ```
 
-### Cross-compiling Windows clients in Linux
+### Cross-compiling Windows clients on Linux
 
 Compiling a specific version of the client for Windows is essentially the same as [Unix-like Client](#unix-like-client) and can be done directly on a Linux system, but in addition to `go` and `gcc`, which must be installed, you also need to install:
 
@@ -252,6 +252,23 @@ make juicefs.exe
 ```
 
 The compiled client is a binary file named `juicefs.exe`, located in the current directory.
+
+### Cross-compiling linux clients on MacOS
+
+1. Clone and enter the project directory at:
+
+   ```shell
+   git clone https://github.com/juicedata/juicefs.git && cd juicefs
+   ```
+
+2. Install dependencies
+   ```shell
+   brew install FiloSottile/musl-cross/musl-cross
+   ```
+3. Compile client
+   ```shell
+   make juicefs.linux
+   ```
 
 ## Upgrade
 
