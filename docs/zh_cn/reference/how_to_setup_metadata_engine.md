@@ -195,7 +195,7 @@ $ juicefs format --storage s3 \
 挂载文件系统：
 
 ```shell
-sudo juicefs mount -d "sqlite3://my-jfs.db"
+sudo juicefs mount -d "sqlite3://my-jfs.db" /mnt/jfs/
 ```
 
 请注意数据库文件的位置，如果不在当前目录，则需要指定数据库文件的绝对路径，比如：
