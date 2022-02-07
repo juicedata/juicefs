@@ -257,6 +257,24 @@ make juicefs.exe
 
 编译好的客户端是一个名为 `juicefs.exe` 的二进制文件，位于当前目录。
 
+### 在 MacOS 中交叉编译 linux 客户端
+
+1. 克隆并进入项目目录：
+
+   ```shell
+   git clone https://github.com/juicedata/juicefs.git && cd juicefs
+   ```
+
+2. 安装依赖
+   ```shell
+   brew install FiloSottile/musl-cross/musl-cross
+   ```
+3. 编译客户端
+   ```shell
+   make juicefs.linux
+   ```
+
+
 ## 客户端升级
 
 JuiceFS 客户端只有一个二进制程序，升级新版只需用新版程序替换旧版程序即可。
