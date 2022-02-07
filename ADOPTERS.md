@@ -12,6 +12,7 @@ For users of JuiceFS:
 | [Megvii](https://megvii.com)                                                            | Production  | AI                     |
 | [Piesat Information Technology Co., Ltd.](https://www.piesat.cn)                        | Production  | File Sharing           |
 | [Gene Way](http://www.geneway.cn)                                                       | Production  | File Sharing           |
+| [SAIC Motor](https://www.saicmotor.com/english/index.shtml)                             | Production  | AI           |
 | [Dingdong Fresh](https://www.100.me)                                                    | Testing     | Big Data               |
 | [UniSound](https://www.unisound.com)                                                    | Testing     | AI                     |
 | [SF-Express](https://www.sf-express.com)                                                | Testing     | Big Data, File Sharing |
