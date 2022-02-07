@@ -197,7 +197,7 @@ Executing the above command will automatically create a database file named `my-
 Mount the file system:
 
 ```shell
-sudo juicefs mount -d "sqlite3://my-jfs.db"
+sudo juicefs mount -d "sqlite3://my-jfs.db" /mnt/jfs/
 ```
 
 Please note the location of the database file, if it is not in the current directory, you need to specify the absolute path to the database file, e.g.
