@@ -12,6 +12,7 @@
 | [旷视](https://megvii.com)                       | Production | AI                   |
 | [航天宏图](https://www.piesat.cn)                | Production | 共享文件存储         |
 | [溯源精微](http://www.geneway.cn)                | Production | 共享文件存储         |
+| [上汽集团](https://www.saicmotor.com/chinese/)     | Production | AI         |
 | [叮咚买菜](https://www.100.me)                   | Testing    | 大数据               |
 | [云知声](https://www.unisound.com)               | Testing    | AI                   |
 | [顺丰速运](https://www.sf-express.com)           | Testing    | 大数据，共享文件存储 |
