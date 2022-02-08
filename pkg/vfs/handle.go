@@ -209,14 +209,12 @@ func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
 func (v *VFS) releaseFileHandle(ino Ino, fh uint64) {
 	h := v.findHandle(ino, fh)
 	if h != nil {
+		v.releaseHandle(ino, fh)
 		h.Lock()
-		// rwlock_wait_for_unlock:
 		for (h.writing | h.writers | h.readers) != 0 {
 			h.cond.WaitWithTimeout(time.Millisecond * 100)
 		}
-		h.writing = 1 // for remove
 		h.Unlock()
 		h.Close()
-		v.releaseHandle(ino, fh)
 	}
 }
