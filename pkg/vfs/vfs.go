@@ -426,7 +426,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 			err = syscall.EINTR
 			return
 		}
-		defer h.Wunlock()
+		defer func(h *handle) { h.Wunlock() }(h)
 	}
 	_ = v.writer.Flush(ctx, ino)
 	err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr)
@@ -455,7 +455,6 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 		f := v.findHandle(ino, fh)
 		if f != nil {
 			f.Lock()
-			// rwlock_wait_for_unlock:
 			for (f.writing | f.writers | f.readers) != 0 {
 				if f.cond.WaitWithTimeout(time.Second) && ctx.Canceled() {
 					f.Unlock()
@@ -707,22 +706,6 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	return
 }
 
-func (v *VFS) doFsync(ctx Context, h *handle) (err syscall.Errno) {
-	if h.writer != nil {
-		if !h.Wlock(ctx) {
-			return syscall.EINTR
-		}
-		defer h.Wunlock()
-		defer h.removeOp(ctx)
-
-		err = h.writer.Flush(ctx)
-		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
-			err = syscall.EBADF
-		}
-	}
-	return err
-}
-
 func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err syscall.Errno) {
 	if IsSpecialNode(ino) {
 		return
@@ -770,7 +753,18 @@ func (v *VFS) Fsync(ctx Context, ino Ino, datasync int, fh uint64) (err syscall.
 		err = syscall.EBADF
 		return
 	}
-	err = v.doFsync(ctx, h)
+	if h.writer != nil {
+		if !h.Wlock(ctx) {
+			return syscall.EINTR
+		}
+		defer h.Wunlock()
+		defer h.removeOp(ctx)
+
+		err = h.writer.Flush(ctx)
+		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
+			err = syscall.EBADF
+		}
+	}
 	return
 }
 
