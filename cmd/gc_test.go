@@ -97,7 +97,7 @@ func GetFileCount(dir string) int {
 }
 
 
-func TestGcDelete(t *testing.T) {
+func TestGc(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
 	dataDir := "/tmp/testMountDir/test/"
@@ -114,7 +114,7 @@ func TestGcDelete(t *testing.T) {
 	}(mountpoint)
 
 	WriteSmallBlock(mountpoint)
-	beforeCompactFileNum := GetFileCount(mountpoint + "chunks/")
+	beforeCompactFileNum := GetFileCount(dataDir + "chunks/")
 	gcArgs := []string{
 		"",
 		"gc",
