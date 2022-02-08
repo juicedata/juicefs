@@ -82,12 +82,12 @@ func WriteSmallBlock(mountDir string) error{
 	return nil
 }
 
-func GetFileNumber(dir string) int {
+func GetFileCount(dir string) int {
 	files,_ := ioutil.ReadDir(dir)
 	count := 0
 	for _,f := range files {
 		if f.IsDir() {
-			count = count + GetFileNumber(dir + "/" + f.Name())
+			count = count + GetFileCount(dir + "/" + f.Name())
 		} else {
 			count++
 		}
@@ -114,7 +114,7 @@ func TestGcDelete(t *testing.T) {
 	}(mountpoint)
 
 	WriteSmallBlock(mountpoint)
-	beforeCompactFileNum := GetFileNum(mountpoint + "chunks/")
+	beforeCompactFileNum := GetFileCount(mountpoint + "chunks/")
 	gcArgs := []string{
 		"",
 		"gc",
@@ -125,7 +125,7 @@ func TestGcDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
 	}
-	afterCompactFileNum := GetFileNum(mountpoint + "chunks/")
+	afterCompactFileNum := GetFileCount(mountpoint + "chunks/")
 	t.Logf("beforeCompactFileNum is %d,afterCompactFileNum is %d",beforeCompactFileNum,afterCompactFileNum)
 	if  beforeCompactFileNum <= afterCompactFileNum {
 		t.Fatalf("gc compact failed")
