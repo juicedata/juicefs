@@ -55,7 +55,49 @@ func RemoveAllFiles(dataDir string) {
 	}
 }
 
-func TestGc(t *testing.T) {
+func WriteSmallBlock(mountDir string) error{
+	file, err := os.OpenFile(
+		mountDir + "/" + "test.txt",
+		os.O_WRONLY|os.O_TRUNC|os.O_CREATE,
+		0666,
+	)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer file.Close()
+	var templateContent = "aaaaaaaabbbbbbbb"
+	var writeContent strings.Builder
+	for k := 0;k < 64;k++ {
+		writeContent.Reset()
+		for i := 0;i < 256;i++ {
+			writeContent.Write([]byte(templateContent))
+		}
+		_, err := file.Write([]byte(writeContent.String()))
+		if err != nil {
+			return err
+		}
+		file.Sync()
+	}
+
+	return nil
+}
+
+func GetFileNumber(dir string) int {
+	files,_ := ioutil.ReadDir(dir)
+	count := 0
+	for _,f := range files {
+		if f.IsDir() {
+			count = count + GetFileNumber(dir + "/" + f.Name())
+		} else {
+			count++
+		}
+	}
+
+	return count
+}
+
+
+func TestGcDelete(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
 	dataDir := "/tmp/testMountDir/test/"
@@ -70,6 +112,26 @@ func TestGc(t *testing.T) {
 			t.Fatalf("umount failed: %v", err)
 		}
 	}(mountpoint)
+
+	WriteSmallBlock(mountpoint)
+	beforeCompactFileNum := GetFileNum(mountpoint + "chunks/")
+	gcArgs := []string{
+		"",
+		"gc",
+		"--compact",
+		metaUrl,
+	}
+	err := Main(gcArgs)
+	if err != nil {
+		t.Fatalf("gc failed: %v", err)
+	}
+	afterCompactFileNum := GetFileNum(mountpoint + "chunks/")
+	t.Logf("beforeCompactFileNum is %d,afterCompactFileNum is %d",beforeCompactFileNum,afterCompactFileNum)
+	if  beforeCompactFileNum <= afterCompactFileNum {
+		t.Fatalf("gc compact failed")
+	}
+
+
 	for i := 0; i < 10; i++ {
 		filename := fmt.Sprintf("%s/f%d.txt", mountpoint, i)
 		err := ioutil.WriteFile(filename, []byte("test"), 0644)
@@ -84,13 +146,13 @@ func TestGc(t *testing.T) {
 	WriteLeakedData(dataDir)
 	time.Sleep(time.Duration(3) * time.Second)
 
-	gcArgs := []string{
+	gcArgs = []string{
 		"",
 		"gc",
 		"--delete",
 		metaUrl,
 	}
-	err := Main(gcArgs)
+	err = Main(gcArgs)
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
 	}
