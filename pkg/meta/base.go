@@ -714,6 +714,12 @@ func (m *baseMeta) cleanupTrash() {
 	key := "lastCleanup"
 	for {
 		time.Sleep(time.Hour)
+		if st := m.en.doGetAttr(ctx, TrashInode, nil); st != 0 {
+			if st != syscall.ENOENT {
+				logger.Warnf("getattr inode %d: %s", TrashInode, st)
+			}
+			continue
+		}
 		var value []byte
 		if st := m.en.GetXattr(ctx, TrashInode, key, &value); st != 0 && st != ENOATTR {
 			logger.Warnf("getxattr inode %d key %s: %s", TrashInode, key, st)

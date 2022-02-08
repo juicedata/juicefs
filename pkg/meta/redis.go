@@ -641,6 +641,7 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 		}
 		return errno(err)
 	}
+	logger.Warnf("Already tried 50 times, returning: %s", err)
 	return errno(err)
 }
 
