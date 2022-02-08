@@ -125,7 +125,7 @@ func TestGc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
 	}
-	afterCompactFileNum := GetFileCount(mountpoint + "chunks/")
+	afterCompactFileNum := GetFileCount(dataDir + "chunks/")
 	t.Logf("beforeCompactFileNum is %d,afterCompactFileNum is %d",beforeCompactFileNum,afterCompactFileNum)
 	if  beforeCompactFileNum <= afterCompactFileNum {
 		t.Fatalf("gc compact failed")
