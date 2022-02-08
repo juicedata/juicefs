@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -373,13 +374,23 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		} else {
 			// get region or endpoint
 			if strings.Contains(uri.Host, ".amazonaws.com") {
-				// standard s3
-				// [BUCKET].s3-[REGION].[REST_OF_ENDPOINT]
-				// [BUCKET].s3.[REGION].amazonaws.com[.cn]
-				hostParts = strings.SplitN(uri.Host, ".s3", 2)
-				bucketName = hostParts[0]
-				endpoint = "s3" + hostParts[1]
-				region = parseRegion(endpoint)
+				vpcCompile := regexp.MustCompile(`^.*\.(.*)\.vpce\.amazonaws\.com`)
+				//vpc link
+				if vpcCompile.MatchString(uri.Host) {
+					bucketName = hostParts[0]
+					ep = hostParts[1]
+					if len(vpcCompile.FindStringSubmatch(uri.Host)) == 2 {
+						region = vpcCompile.FindStringSubmatch(uri.Host)[1]
+					}
+				} else {
+					// standard s3
+					// [BUCKET].s3-[REGION].[REST_OF_ENDPOINT]
+					// [BUCKET].s3.[REGION].amazonaws.com[.cn]
+					hostParts = strings.SplitN(uri.Host, ".s3", 2)
+					bucketName = hostParts[0]
+					endpoint = "s3" + hostParts[1]
+					region = parseRegion(endpoint)
+				}
 			} else {
 				// compatible s3
 				bucketName = hostParts[0]
