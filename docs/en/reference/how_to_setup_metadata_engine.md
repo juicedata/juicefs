@@ -44,10 +44,10 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-For security purposes, it is recommended to pass the password using the environment variable `REDIS_PASSWORD`, e.g.
+For security purposes, it is recommended to pass the password using the environment variable `META_PASSWORD` or `REDIS_PASSWORD`, e.g.
 
 ```shell
-export REDIS_PASSWORD=mypassword
+export META_PASSWORD=mypassword
 ```
 
 Then there is no need to set a password in the metadata URL.
@@ -91,6 +91,8 @@ When using PostgreSQL as the metadata storage engine, the following format is us
 postgres://[<username>:<password>@]<IP or Domain name>[:5432]/<database-name>[?parameters]
 ```
 
+Juicefs also supports set the database password from the environment variable `META_PASSWORD`. In this case, the URL can omit the `<password>`. The format is `postgres://[<username>:@]<IP or Domain name>[:5432]/ <database-name>[?parameters]`
+
 For example:
 
 ```shell
@@ -100,18 +102,23 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-For security purposes, it is recommended to pass the password using an environment variable, e.g.
-
 ```shell
-export $PG_PASSWD=mypassword
+$ export META_PASSWORD=password
+$ juicefs format --storage s3 \
+    ...
+    "postgres://user:@192.168.1.6:5432/juicefs" \
+    pics
 ```
-
-Then change the metadata URL to `"postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs"`
 
 ### Mount a file system
 
 ```shell
 sudo juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs" /mnt/jfs
+```
+
+```shell
+export META_PASSWORD=password
+sudo juicefs mount -d "postgres://user:@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
 ### Troubleshooting
@@ -138,6 +145,7 @@ When using MySQL as the metadata storage engine, the following format is usually
 ```shell
 mysql://<username>:<password>@(<IP or Domain name>:3306)/<database-name>
 ```
+Juicefs also supports set the database password from the environment variable `META_PASSWORD`. In this case, the URL can omit the `<password`>. The format is `mysql://<username>:@(<IP or Domain name>:3306)/<database-name>`
 
 For example:
 
@@ -148,18 +156,23 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-For security purposes, it is recommended to pass the password using an environment variable, e.g.
-
 ```shell
-export $MYSQL_PASSWD=mypassword
+$ export META_PASSWORD=password
+$ juicefs format --storage s3 \
+    ...
+    "mysql://user:@(192.168.1.6:3306)/juicefs" \
+    pics
 ```
-
-Then change the metadata URL to `"mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs"`
 
 ### Mount a file system
 
 ```shell
 sudo juicefs mount -d "mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs" /mnt/jfs
+```
+
+```shell
+export META_PASSWORD=password
+sudo juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
 For more examples of MySQL database address format, [click here to view](https://github.com/Go-SQL-Driver/MySQL/#examples).

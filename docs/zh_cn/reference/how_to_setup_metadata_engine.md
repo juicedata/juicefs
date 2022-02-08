@@ -42,10 +42,10 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-安全起见，建议使用环境变量 `REDIS_PASSWORD` 传递密码，例如：
+安全起见，建议使用环境变量 `META_PASSWORD` 或者 `REDIS_PASSWORD` 传递密码，例如：
 
 ```shell
-export REDIS_PASSWORD=mypassword
+export META_PASSWORD=mypassword
 ```
 
 然后就无需在元数据 URL 中设置密码了：
@@ -88,6 +88,7 @@ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```shell
 postgres://[<username>:<password>@]<IP or Domain name>[:5432]/<database-name>[?parameters]
 ```
+Juicefs 也支持从环境变量`META_PASSWORD`中读取数据库密码，此时URL可以省略密码，省略后的格式为 `postgres://[<username>:@]<IP or Domain name>[:5432]/<database-name>[?parameters]`
 
 例如：
 
@@ -98,18 +99,24 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-安全起见，建议使用环境变量传递数据库密码，例如：
-
 ```shell
-export $PG_PASSWD=mypassword
+$ export META_PASSWORD=password
+$ juicefs format --storage s3 \
+    ...
+    "postgres://user:@192.168.1.6:5432/juicefs" \
+    pics
 ```
 
-然后将元数据 URL 改为 `"postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs"`
 
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs" /mnt/jfs
+sudo juicefs mount -d "postgres://user:password@192.168.1.6:5432/juicefs" /mnt/jfs
+```
+
+```shell
+export META_PASSWORD=password
+sudo juicefs mount -d "postgres://user:@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
 ### 故障排除
@@ -136,6 +143,7 @@ $ juicefs format --storage s3 \
 ```shell
 mysql://<username>:<password>@(<IP or Domain name>:3306)/<database-name>
 ```
+Juicefs 也支持从环境变量`META_PASSWORD`中读取数据库密码，此时URL可以省略密码，省略后的格式为 `mysql://<username>:@(<IP or Domain name>:3306)/<database-name>`
 
 例如：
 
@@ -146,19 +154,26 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-安全起见，建议使用环境变量传递数据库密码，例如：
 
 ```shell
-export $MYSQL_PASSWD=mypassword
+$ export META_PASSWORD=password
+$ juicefs format --storage s3 \
+    ...
+    "mysql://user:@(192.168.1.6:3306)/juicefs" \
+    pics
 ```
-
-然后将元数据 URL 改为 `"mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs"`
 
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs" /mnt/jfs
+sudo juicefs mount -d "mysql://user:password@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
+
+```shell
+export META_PASSWORD=password
+sudo juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs" /mnt/jfs
+```
+
 
 更多 MySQL 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
 
