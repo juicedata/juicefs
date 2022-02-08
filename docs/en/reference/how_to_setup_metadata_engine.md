@@ -44,10 +44,10 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-For security purposes, it is recommended to pass the password using the environment variable `REDIS_PASSWORD`, e.g.
+For security purposes, it is recommended to pass the password using the environment variable `META_PASSWORD` or `REDIS_PASSWORD`, e.g.
 
 ```shell
-export REDIS_PASSWORD=mypassword
+export META_PASSWORD=mypassword
 ```
 
 Then there is no need to set a password in the metadata URL.

@@ -42,10 +42,10 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-安全起见，建议使用环境变量 `REDIS_PASSWORD` 传递密码，例如：
+安全起见，建议使用环境变量 `META_PASSWORD` 或者 `REDIS_PASSWORD` 传递密码，例如：
 
 ```shell
-export REDIS_PASSWORD=mypassword
+export META_PASSWORD=mypassword
 ```
 
 然后就无需在元数据 URL 中设置密码了：

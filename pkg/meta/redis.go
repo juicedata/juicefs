@@ -113,6 +113,9 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		if fopt.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
 			fopt.Password = os.Getenv("REDIS_PASSWORD")
 		}
+		if fopt.Password == "" && os.Getenv("META_PASSWORD") != "" {
+			fopt.Password = os.Getenv("META_PASSWORD")
+		}
 		fopt.SentinelPassword = os.Getenv("SENTINEL_PASSWORD")
 		fopt.DB = opt.DB
 		fopt.TLSConfig = opt.TLSConfig
@@ -125,6 +128,9 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	} else {
 		if opt.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
 			opt.Password = os.Getenv("REDIS_PASSWORD")
+		}
+		if opt.Password == "" && os.Getenv("META_PASSWORD") != "" {
+			opt.Password = os.Getenv("META_PASSWORD")
 		}
 		opt.MaxRetries = conf.Retries
 		opt.MinRetryBackoff = time.Millisecond * 100
