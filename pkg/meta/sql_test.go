@@ -18,7 +18,6 @@
 package meta
 
 import (
-	"os"
 	"path"
 	"testing"
 )
@@ -45,38 +44,4 @@ func TestPostgreSQLClient(t *testing.T) {
 		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
-}
-
-func Test_setPasswordFromEnv(t *testing.T) {
-	os.Setenv("META_PASSWORD", "dbPasswd")
-	tests := []struct {
-		args string
-		want string
-	}{
-		//mysql
-		{
-			args: "root:password@(127.0.0.1:3306)/juicefs",
-			want: "root:password@(127.0.0.1:3306)/juicefs",
-		},
-		{
-			args: "root:@(127.0.0.1:3306)/juicefs",
-			want: "root:dbPasswd@(127.0.0.1:3306)/juicefs",
-		},
-		//postgres
-		{
-			args: "root:password@192.168.1.6:5432/juicefs",
-			want: "root:password@192.168.1.6:5432/juicefs",
-		},
-		{
-			args: "root:@192.168.1.6:5432/juicefs",
-			want: "root:dbPasswd@192.168.1.6:5432/juicefs",
-		},
-	}
-	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			if got := setsSPasswordFromEnv(tt.args); got != tt.want {
-				t.Errorf("setsSPasswordFromEnv() = %v, want %v", got, tt.want)
-			}
-		})
-	}
 }
