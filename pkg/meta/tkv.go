@@ -2177,9 +2177,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 	progress := utils.NewProgress(false, false)
 	var tree, trash *DumpedEntry
-	if root == 0 {
-		root = m.root
-	}
+	root = m.checkRoot(root)
 	if root == 1 { // make snap
 		switch c := m.client.(type) {
 		case *memKV:

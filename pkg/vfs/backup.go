@@ -35,7 +35,7 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 	for {
 		time.Sleep(interval / 10)
 		var value []byte
-		if st := m.GetXattr(ctx, 1, key, &value); st != 0 && st != meta.ENOATTR {
+		if st := m.GetXattr(ctx, 0, key, &value); st != 0 && st != meta.ENOATTR {
 			logger.Warnf("getxattr inode 1 key %s: %s", key, st)
 			continue
 		}
@@ -55,7 +55,7 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 				logger.Infof("backup metadata skipped because of too many inodes: %d %s", iused, interval)
 				continue
 			}
-			if st := m.SetXattr(ctx, 1, key, []byte(now.Format(time.RFC3339)), meta.XattrCreateOrReplace); st != 0 {
+			if st := m.SetXattr(ctx, 0, key, []byte(now.Format(time.RFC3339)), meta.XattrCreateOrReplace); st != 0 {
 				logger.Warnf("setxattr inode 1 key %s: %s", key, st)
 				continue
 			}
@@ -80,7 +80,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
 	defer os.Remove(fpath)
 	defer fp.Close()
 	zw := gzip.NewWriter(fp)
-	err = m.DumpMeta(zw, 1) // force dump the whole tree
+	err = m.DumpMeta(zw, 0) // force dump the whole tree
 	_ = zw.Close()
 	if err != nil {
 		return err
