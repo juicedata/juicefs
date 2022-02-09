@@ -652,6 +652,18 @@ func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 	return new, err
 }
 
+func (m *kvMeta) setIfSmall(name string, value, diff int64) (bool, error) {
+	old, err := m.get(m.counterKey(name))
+	if err != nil {
+		return false, err
+	}
+	if m.parseInt64(old) > value-diff {
+		return false, nil
+	} else {
+		return true, m.setValue(m.counterKey(name), m.packInt64(value))
+	}
+}
+
 func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 	if len(keys) == 0 {
 		return nil
@@ -1706,21 +1718,6 @@ func (m *kvMeta) cleanupDeletedFiles() {
 			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
 			m.doDeleteFileData(inode, length)
 		}
-	}
-}
-
-func (m *kvMeta) cleanupSlices() {
-	for {
-		time.Sleep(time.Hour)
-
-		// once per hour
-		now := time.Now().Unix()
-		last, err := m.get(m.counterKey("nextCleanupSlices"))
-		if err != nil || m.parseInt64(last)+3600 > now {
-			continue
-		}
-		_ = m.setValue(m.counterKey("nextCleanupSlices"), m.packInt64(now))
-		m.doCleanupSlices()
 	}
 }
 

@@ -281,6 +281,18 @@ func (r *redisMeta) incrCounter(name string, v int64) (int64, error) {
 	return r.rdb.IncrBy(Background, name, v).Result()
 }
 
+func (r *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
+	old, err := r.rdb.Get(Background, name).Int64()
+	if err != nil {
+		return false, err
+	}
+	if old > value-diff {
+		return false, nil
+	} else {
+		return true, r.rdb.Set(Background, name, value, 0).Err()
+	}
+}
+
 func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 	ctx := Background
 	info, err := r.rdb.HGet(ctx, sessionInfos, sid).Bytes()
@@ -1859,22 +1871,6 @@ func (r *redisMeta) cleanupDeletedFiles() {
 			logger.Debugf("cleanup chunks of inode %d with %d bytes (%s)", inode, length, member)
 			r.doDeleteFileData_(Ino(inode), uint64(length), member)
 		}
-	}
-}
-
-func (r *redisMeta) cleanupSlices() {
-	for {
-		time.Sleep(time.Hour)
-
-		// once per hour
-		var ctx = Background
-		last, _ := r.rdb.Get(ctx, "nextCleanupSlices").Uint64()
-		now := time.Now().Unix()
-		if last+3600 > uint64(now) {
-			continue
-		}
-		r.rdb.Set(ctx, "nextCleanupSlices", now, 0)
-		r.doCleanupSlices()
 	}
 }
 

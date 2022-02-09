@@ -37,6 +37,9 @@ const (
 
 type engine interface {
 	incrCounter(name string, value int64) (int64, error)
+	// Set name to value if old <= value - diff
+	setIfSmall(name string, value, diff int64) (bool, error)
+
 	doLoad() ([]byte, error)
 
 	doRefreshSession()
@@ -45,6 +48,7 @@ type engine interface {
 
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doDeleteFileData(inode Ino, length uint64)
+	doCleanupSlices()
 	doDeleteSlice(chunkid uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -226,6 +230,17 @@ func (m *baseMeta) flushStats() {
 			}
 		}
 		time.Sleep(time.Second)
+	}
+}
+
+func (m *baseMeta) cleanupSlices() {
+	for {
+		time.Sleep(time.Hour)
+		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), 3600); err != nil {
+			logger.Warnf("checking counter nextCleanupSlices: %s", err)
+		} else if ok {
+			m.en.doCleanupSlices()
+		}
 	}
 }
 

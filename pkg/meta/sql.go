@@ -485,6 +485,22 @@ func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
 	return v, err
 }
 
+func (m *dbMeta) setIfSmall(name string, value, diff int64) (bool, error) {
+	c := counter{Name: name}
+	_, err := m.db.Get(&c)
+	if err != nil {
+		return false, err
+	}
+	if c.Value > value-diff {
+		return false, nil
+	} else {
+		return true, m.txn(func(ses *xorm.Session) error {
+			_, err := ses.Update(&counter{Value: value}, &counter{Name: name})
+			return err
+		})
+	}
+}
+
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	var start, end int
 	batchSize := 200
@@ -1917,28 +1933,6 @@ func (m *dbMeta) cleanupDeletedFiles() {
 			logger.Debugf("cleanup chunks of inode %d with %d bytes", f.Inode, f.Length)
 			m.doDeleteFileData(f.Inode, f.Length)
 		}
-	}
-}
-
-func (m *dbMeta) cleanupSlices() {
-	for {
-		time.Sleep(time.Hour)
-
-		// once per hour
-		var c = counter{Name: "nextCleanupSlices"}
-		_, err := m.db.Get(&c)
-		if err != nil {
-			continue
-		}
-		now := time.Now().Unix()
-		if c.Value+3600 > now {
-			continue
-		}
-		_ = m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Update(&counter{Value: now}, counter{Name: "nextCleanupSlices"})
-			return err
-		})
-		m.doCleanupSlices()
 	}
 }
 
