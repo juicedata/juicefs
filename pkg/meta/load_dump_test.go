@@ -94,31 +94,31 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 func TestLoadDump(t *testing.T) {
 	t.Run("Metadata Engine: Redis", func(t *testing.T) {
 		m := testLoad(t, "redis://127.0.0.1/10", sampleFile)
-		testDump(t, m, 0, sampleFile, "redis.dump")
+		testDump(t, m, 1, sampleFile, "redis.dump")
 	})
 	t.Run("Metadata Engine: Redis; --SubDir d1 ", func(t *testing.T) {
 		_ = testLoad(t, "redis://127.0.0.1/10", sampleFile)
 		m := NewClient("redis://127.0.0.1/10", &Config{Retries: 10, Strict: true, Subdir: "d1"})
-		testDump(t, m, 0, subSampleFile, "redis_subdir.dump")
-		testDump(t, m, 1, sampleFile, "redis.dump")
+		testDump(t, m, 1, subSampleFile, "redis_subdir.dump")
+		testDump(t, m, 0, sampleFile, "redis.dump")
 	})
 
 	sqluri := "sqlite3://" + path.Join(t.TempDir(), "jfs-load-dump-test.db")
 	t.Run("Metadata Engine: SQLite", func(t *testing.T) {
 		m := testLoad(t, sqluri, sampleFile)
-		testDump(t, m, 0, sampleFile, "sqlite3.dump")
+		testDump(t, m, 1, sampleFile, "sqlite3.dump")
 	})
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
 		_ = testLoad(t, sqluri, sampleFile)
 		m := NewClient(sqluri, &Config{Retries: 10, Strict: true, Subdir: "d1"})
-		testDump(t, m, 0, subSampleFile, "sqlite3_subdir.dump")
-		testDump(t, m, 1, sampleFile, "sqlite3.dump")
+		testDump(t, m, 1, subSampleFile, "sqlite3_subdir.dump")
+		testDump(t, m, 0, sampleFile, "sqlite3.dump")
 	})
 
 	t.Run("Metadata Engine: TKV", func(t *testing.T) {
 		_ = os.Remove(settingPath)
 		m := testLoad(t, "memkv://test/jfs", sampleFile)
-		testDump(t, m, 0, sampleFile, "tkv.dump")
+		testDump(t, m, 1, sampleFile, "tkv.dump")
 	})
 	t.Run("Metadata Engine: TKV --SubDir d1 ", func(t *testing.T) {
 		_ = os.Remove(settingPath)
@@ -129,7 +129,7 @@ func TestLoadDump(t *testing.T) {
 				t.Fatalf("lookup subdir d1: %s", err)
 			}
 		}
-		testDump(t, m, 0, subSampleFile, "tkv_subdir.dump")
-		testDump(t, m, 1, sampleFile, "tkv.dump")
+		testDump(t, m, 1, subSampleFile, "tkv_subdir.dump")
+		testDump(t, m, 0, sampleFile, "tkv.dump")
 	})
 }

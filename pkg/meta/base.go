@@ -101,10 +101,14 @@ func newBaseMeta(conf *Config) baseMeta {
 }
 
 func (m *baseMeta) checkRoot(inode Ino) Ino {
-	if inode == 1 {
+	switch inode {
+	case 0:
+		return 1 // force using Root inode
+	case 1:
 		return m.root
+	default:
+		return inode
 	}
-	return inode
 }
 
 func (r *baseMeta) OnMsg(mtype uint32, cb MsgCallback) {
