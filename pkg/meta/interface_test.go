@@ -28,28 +28,6 @@ func Test_setPasswordFromEnv(t *testing.T) {
 		args string
 		want string
 	}{
-		//redis
-		{
-			args: "redis://:pwd@localhost:6379/1",
-			want: "redis://:pwd@localhost:6379/1",
-		},
-		{
-			args: "redis://localhost:6379/1",
-			want: "redis://:dbPasswd@localhost:6379/1",
-		},
-		{
-			args: "redis://root:password@masterName,1.2.3.4,1.2.5.6:26379/2",
-			want: "redis://root:password@masterName,1.2.3.4,1.2.5.6:26379/2",
-		},
-		{
-			args: "redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2",
-			want: "redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2",
-		},
-		{
-			args: "redis://masterName,1.2.3.4,1.2.5.6:26379/2",
-			want: "redis://:dbPasswd@masterName,1.2.3.4,1.2.5.6:26379/2",
-		},
-
 		//mysql
 		{
 			args: "mysql://root:password@(127.0.0.1:3306)/juicefs",

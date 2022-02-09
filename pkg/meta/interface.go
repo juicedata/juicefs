@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -347,24 +346,21 @@ func Register(name string, register Creator) {
 	metaDrivers[name] = register
 }
 
-func setPasswordFromEnv(addr string) string {
-	tmp := addr[strings.Index(addr, "://")+3:]
-	matches := regexp.MustCompile(`^(?:(?P<user>.*?)(?::(?P<passwd>.*))?@)?.*$`).FindStringSubmatch(tmp)
-	if matches[2] != "" {
-		return addr
+func setPasswordFromEnv(uri string) string {
+	if !strings.Contains(uri, "@") {
+		logger.Fatalf("invalid uri: %s", uri)
 	}
-	password := os.Getenv("META_PASSWORD")
-	//no user but password eg: redis://localhost:6379/1
-	if matches[1] == "" {
-		password += "@"
-	}
-	if strings.HasPrefix(tmp[len(matches[1]):], ":") {
-		tmp = fmt.Sprintf("%s%s%s", tmp[:len(matches[1])+1], password, tmp[len(matches[1])+1:])
+	userAndPwd := uri[strings.Index(uri, "://")+3 : strings.Index(uri, "@")]
+	var user string
+	if strings.Contains(userAndPwd, ":") {
+		user = userAndPwd[:strings.LastIndex(userAndPwd, ":")]
+		if userAndPwd[strings.LastIndex(userAndPwd, ":")+1:] != "" {
+			return uri
+		}
 	} else {
-		tmp = fmt.Sprintf("%s:%s%s", tmp[:len(matches[1])], password, tmp[len(matches[1]):])
+		user = userAndPwd
 	}
-
-	return addr[:strings.Index(addr, "://")+3] + tmp
+	return uri[:strings.Index(uri, "://")+3] + fmt.Sprintf("%s:%s", user, os.Getenv("META_PASSWORD")) + uri[strings.Index(uri, "@"):]
 }
 
 // NewClient creates a Meta client for given uri.
@@ -372,16 +368,15 @@ func NewClient(uri string, conf *Config) Meta {
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
 	}
-	logger.Infof("Meta address: %s", utils.RemovePassword(uri))
-
-	if os.Getenv("META_PASSWORD") != "" {
-		uri = setPasswordFromEnv(uri)
-	}
 	p := strings.Index(uri, "://")
 	if p < 0 {
 		logger.Fatalf("invalid uri: %s", uri)
 	}
 	driver := uri[:p]
+	if os.Getenv("META_PASSWORD") != "" && (driver == "mysql" || driver == "postgres") {
+		uri = setPasswordFromEnv(uri)
+	}
+	logger.Infof("Meta address: %s", utils.RemovePassword(uri))
 	f, ok := metaDrivers[driver]
 	if !ok {
 		logger.Fatalf("Invalid meta driver: %s", driver)
