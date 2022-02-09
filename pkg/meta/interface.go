@@ -346,25 +346,26 @@ func Register(name string, register Creator) {
 	metaDrivers[name] = register
 }
 
-func setPasswordFromEnv(uri string) string {
-	if !strings.Contains(uri, "@") {
-		logger.Fatalf("invalid uri: %s", uri)
+func setPasswordFromEnv(uri string) (string, error) {
+	atIndex := strings.Index(uri, "@")
+	if atIndex == -1 {
+		return "", fmt.Errorf("invalid uri: %s", uri)
 	}
-	userAndPwd := uri[strings.Index(uri, "://")+3 : strings.Index(uri, "@")]
-	var user string
-	if strings.Contains(userAndPwd, ":") {
-		user = userAndPwd[:strings.LastIndex(userAndPwd, ":")]
-		if userAndPwd[strings.LastIndex(userAndPwd, ":")+1:] != "" {
-			return uri
-		}
-	} else {
-		user = userAndPwd
+	s := strings.Split(uri[strings.Index(uri, "://")+3:atIndex], ":")
+
+	if len(s) > 2 || s[0] == "" {
+		return "", fmt.Errorf("invalid uri: %s", uri)
 	}
-	return uri[:strings.Index(uri, "://")+3] + fmt.Sprintf("%s:%s", user, os.Getenv("META_PASSWORD")) + uri[strings.Index(uri, "@"):]
+
+	if len(s) == 2 && s[1] != "" {
+		return uri, nil
+	}
+	return uri[:strings.Index(uri, "://")+3] + fmt.Sprintf("%s:%s", s[0], os.Getenv("META_PASSWORD")) + uri[atIndex:], nil
 }
 
 // NewClient creates a Meta client for given uri.
 func NewClient(uri string, conf *Config) Meta {
+	var err error
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
 	}
@@ -374,7 +375,9 @@ func NewClient(uri string, conf *Config) Meta {
 	}
 	driver := uri[:p]
 	if os.Getenv("META_PASSWORD") != "" && (driver == "mysql" || driver == "postgres") {
-		uri = setPasswordFromEnv(uri)
+		if uri, err = setPasswordFromEnv(uri); err != nil {
+			logger.Fatalf(err.Error())
+		}
 	}
 	logger.Infof("Meta address: %s", utils.RemovePassword(uri))
 	f, ok := metaDrivers[driver]

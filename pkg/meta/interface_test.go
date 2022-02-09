@@ -41,7 +41,18 @@ func Test_setPasswordFromEnv(t *testing.T) {
 			args: "mysql://root@(127.0.0.1:3306)/juicefs",
 			want: "mysql://root:dbPasswd@(127.0.0.1:3306)/juicefs",
 		},
-
+		{
+			args: "mysql://(127.0.0.1:3306)/juicefs",
+			want: "",
+		},
+		{
+			args: "mysql://:pwd@(127.0.0.1:3306)/juicefs",
+			want: "",
+		},
+		{
+			args: "mysql://a:b:c:@(127.0.0.1:3306)/juicefs",
+			want: "",
+		},
 		//postgres
 		{
 			args: "postgres://root:password@192.168.1.6:5432/juicefs",
@@ -58,7 +69,7 @@ func Test_setPasswordFromEnv(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			if got := setPasswordFromEnv(tt.args); got != tt.want {
+			if got, _ := setPasswordFromEnv(tt.args); got != tt.want {
 				t.Errorf("setPasswordFromEnv() = %v, want %v", got, tt.want)
 			}
 		})
