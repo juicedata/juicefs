@@ -110,8 +110,11 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 		fopt.Username = opt.Username
 		fopt.Password = opt.Password
-		if fopt.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
+		if fopt.Password == "" {
 			fopt.Password = os.Getenv("REDIS_PASSWORD")
+		}
+		if fopt.Password == "" {
+			fopt.Password = os.Getenv("META_PASSWORD")
 		}
 		fopt.SentinelPassword = os.Getenv("SENTINEL_PASSWORD")
 		fopt.DB = opt.DB
@@ -123,8 +126,11 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.WriteTimeout = time.Second * 5
 		rdb = redis.NewFailoverClient(&fopt)
 	} else {
-		if opt.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
+		if opt.Password == "" {
 			opt.Password = os.Getenv("REDIS_PASSWORD")
+		}
+		if opt.Password == "" {
+			opt.Password = os.Getenv("META_PASSWORD")
 		}
 		opt.MaxRetries = conf.Retries
 		opt.MinRetryBackoff = time.Millisecond * 100
