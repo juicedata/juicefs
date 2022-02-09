@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-func WriteLeakedData(dataDir string) {
+func writeLeakedData(dataDir string) {
 	var templateContent = "aaaaaaaabbbbbbbb"
 	var writeContent strings.Builder
 	for i := 0; i < 64*1024; i++ {
@@ -35,7 +35,7 @@ func WriteLeakedData(dataDir string) {
 	ioutil.WriteFile(dataDir+"chunks/0/0/"+"123456789_0_1048576", []byte(writeContent.String()), 0644)
 }
 
-func CheckLeakedData(dataDir string) bool {
+func checkLeakedData(dataDir string) bool {
 	_, err := os.Stat(dataDir + "chunks/0/0/" + "123456789_0_1048576")
 	if err != nil {
 		return true
@@ -43,7 +43,7 @@ func CheckLeakedData(dataDir string) bool {
 	return false
 }
 
-func RemoveAllFiles(dataDir string) {
+func removeAllFiles(dataDir string) {
 	_, err := os.Stat(dataDir)
 	if err == nil {
 		files, err := ioutil.ReadDir(dataDir)
@@ -55,7 +55,7 @@ func RemoveAllFiles(dataDir string) {
 	}
 }
 
-func WriteSmallblocks(mountDir string) error {
+func writeSmallBlocks(mountDir string) error {
 	file, err := os.OpenFile(
 		mountDir+"/"+"test.txt",
 		os.O_WRONLY|os.O_TRUNC|os.O_CREATE,
@@ -75,18 +75,21 @@ func WriteSmallblocks(mountDir string) error {
 		if err != nil {
 			return err
 		}
-		file.Sync()
+		syncErr := file.Sync()
+		if syncErr != nil {
+			return syncErr
+		}
 	}
 
 	return nil
 }
 
-func GetFileCount(dir string) int {
+func getFileCount(dir string) int {
 	files, _ := ioutil.ReadDir(dir)
 	count := 0
 	for _, f := range files {
 		if f.IsDir() {
-			count += GetFileCount(dir + "/" + f.Name())
+			count += getFileCount(dir + "/" + f.Name())
 		} else {
 			count++
 		}
@@ -99,7 +102,7 @@ func TestGc(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
 	mountpoint := "/tmp/testDir"
 	dataDir := "/tmp/testMountDir/test/"
-	RemoveAllFiles(dataDir + "chunks/")
+	removeAllFiles(dataDir + "chunks/")
 	defer ResetRedis(metaUrl)
 	if err := MountTmp(metaUrl, mountpoint); err != nil {
 		t.Fatalf("mount failed: %v", err)
@@ -111,11 +114,11 @@ func TestGc(t *testing.T) {
 		}
 	}(mountpoint)
 
-	err := WriteSmallblocks(mountpoint)
+	err := writeSmallBlocks(mountpoint)
 	if err != nil {
 		t.Fatalf("write small blocks failed,err is %v", err)
 	}
-	beforeCompactFileNum := GetFileCount(dataDir + "chunks/")
+	beforeCompactFileNum := getFileCount(dataDir + "chunks/")
 	gcArgs := []string{
 		"",
 		"gc",
@@ -126,7 +129,7 @@ func TestGc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
 	}
-	afterCompactFileNum := GetFileCount(dataDir + "chunks/")
+	afterCompactFileNum := getFileCount(dataDir + "chunks/")
 	t.Logf("beforeCompactFileNum is %d,afterCompactFileNum is %d", beforeCompactFileNum, afterCompactFileNum)
 	if beforeCompactFileNum <= afterCompactFileNum {
 		t.Fatalf("gc compact failed")
@@ -143,7 +146,7 @@ func TestGc(t *testing.T) {
 	strEnvSkippedTime := os.Getenv("JFS_GC_SKIPPEDTIME")
 	t.Logf("JFS_GC_SKIPPEDTIME is %s", strEnvSkippedTime)
 
-	WriteLeakedData(dataDir)
+	writeLeakedData(dataDir)
 	time.Sleep(time.Duration(3) * time.Second)
 
 	gcArgs = []string{
@@ -157,7 +160,7 @@ func TestGc(t *testing.T) {
 		t.Fatalf("gc failed: %v", err)
 	}
 
-	bNotExist := CheckLeakedData(dataDir)
+	bNotExist := checkLeakedData(dataDir)
 	if bNotExist == false {
 		t.Fatalf("gc delete failed,leaked data was not deleted")
 	}
