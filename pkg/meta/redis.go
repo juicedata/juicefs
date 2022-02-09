@@ -265,6 +265,7 @@ func (r *redisMeta) NewSession() error {
 	}
 
 	go r.refreshSession()
+	go r.cleanupLegacies()
 	go r.cleanupDeletedFiles()
 	go r.cleanupSlices()
 	go r.cleanupTrash()
@@ -1854,6 +1855,35 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 	}, r.inodeKey(fout), r.inodeKey(fin))
 }
 
+// For now only deleted files
+func (r *redisMeta) cleanupLegacies() {
+	for {
+		time.Sleep(time.Minute)
+		rng := &redis.ZRangeBy{Max: strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10), Count: 1000}
+		vals, err := r.rdb.ZRangeByScore(Background, delfiles, rng).Result()
+		if err != nil {
+			continue
+		}
+		var count int
+		for _, v := range vals {
+			ps := strings.Split(v, ":")
+			if len(ps) != 2 {
+				inode, _ := strconv.ParseUint(ps[0], 10, 64)
+				var length uint64 = 1 << 30
+				if len(ps) > 2 {
+					length, _ = strconv.ParseUint(ps[2], 10, 64)
+				}
+				logger.Infof("cleanup legacy delfile inode %d with %d bytes (%s)", inode, length, v)
+				r.doDeleteFileData_(Ino(inode), length, v)
+				count++
+			}
+		}
+		if count == 0 {
+			return
+		}
+	}
+}
+
 func (r *redisMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
 	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: 1000}
 	vals, err := r.rdb.ZRangeByScore(Background, delfiles, rng).Result()
@@ -1863,9 +1893,7 @@ func (r *redisMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
 	files := make(map[Ino]uint64, len(vals))
 	for _, v := range vals {
 		ps := strings.Split(v, ":")
-		if len(ps) != 2 {
-			// TODO: add to legacy cleanups
-			logger.Warnf("skip legacy delfile entry %s", v)
+		if len(ps) != 2 { // will be cleaned up as legacy
 			continue
 		}
 		inode, _ := strconv.ParseUint(ps[0], 10, 64)
