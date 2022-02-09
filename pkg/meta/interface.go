@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -347,41 +346,41 @@ func Register(name string, register Creator) {
 	metaDrivers[name] = register
 }
 
-func setPasswordFromEnv(addr string) string {
-	tmp := addr[strings.Index(addr, "://")+3:]
-	matches := regexp.MustCompile(`^(?:(?P<user>.*?)(?::(?P<passwd>.*))?@)?.*$`).FindStringSubmatch(tmp)
-	if matches[2] != "" {
-		return addr
+func setPasswordFromEnv(uri string) (string, error) {
+	atIndex := strings.Index(uri, "@")
+	if atIndex == -1 {
+		return "", fmt.Errorf("invalid uri: %s", uri)
 	}
-	password := os.Getenv("META_PASSWORD")
-	//no user but password eg: redis://localhost:6379/1
-	if matches[1] == "" {
-		password += "@"
-	}
-	if strings.HasPrefix(tmp[len(matches[1]):], ":") {
-		tmp = fmt.Sprintf("%s%s%s", tmp[:len(matches[1])+1], password, tmp[len(matches[1])+1:])
-	} else {
-		tmp = fmt.Sprintf("%s:%s%s", tmp[:len(matches[1])], password, tmp[len(matches[1]):])
+	dIndex := strings.Index(uri, "://") + 3
+	s := strings.Split(uri[dIndex:atIndex], ":")
+
+	if len(s) > 2 || s[0] == "" {
+		return "", fmt.Errorf("invalid uri: %s", uri)
 	}
 
-	return addr[:strings.Index(addr, "://")+3] + tmp
+	if len(s) == 2 && s[1] != "" {
+		return uri, nil
+	}
+	return uri[:dIndex] + fmt.Sprintf("%s:%s", s[0], os.Getenv("META_PASSWORD")) + uri[atIndex:], nil
 }
 
 // NewClient creates a Meta client for given uri.
 func NewClient(uri string, conf *Config) Meta {
+	var err error
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
-	}
-	logger.Infof("Meta address: %s", utils.RemovePassword(uri))
-
-	if os.Getenv("META_PASSWORD") != "" {
-		uri = setPasswordFromEnv(uri)
 	}
 	p := strings.Index(uri, "://")
 	if p < 0 {
 		logger.Fatalf("invalid uri: %s", uri)
 	}
 	driver := uri[:p]
+	if os.Getenv("META_PASSWORD") != "" && (driver == "mysql" || driver == "postgres") {
+		if uri, err = setPasswordFromEnv(uri); err != nil {
+			logger.Fatalf(err.Error())
+		}
+	}
+	logger.Infof("Meta address: %s", utils.RemovePassword(uri))
 	f, ok := metaDrivers[driver]
 	if !ok {
 		logger.Fatalf("Invalid meta driver: %s", driver)
