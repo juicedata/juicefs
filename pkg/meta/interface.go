@@ -17,8 +17,10 @@
 package meta
 
 import (
+	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -345,17 +347,35 @@ func Register(name string, register Creator) {
 	metaDrivers[name] = register
 }
 
+func setPasswordFromEnv(addr string) string {
+	tmp := addr[strings.Index(addr, "://")+3:]
+	matches := regexp.MustCompile(`^(?:(?P<user>.*?)(?::(?P<passwd>.*))?@)?.*$`).FindStringSubmatch(tmp)
+	if matches[2] != "" {
+		return addr
+	}
+	password := os.Getenv("META_PASSWORD")
+	//no user but password eg: redis://localhost:6379/1
+	if matches[1] == "" {
+		password += "@"
+	}
+	if strings.HasPrefix(tmp[len(matches[1]):], ":") {
+		tmp = fmt.Sprintf("%s%s%s", tmp[:len(matches[1])+1], password, tmp[len(matches[1])+1:])
+	} else {
+		tmp = fmt.Sprintf("%s:%s%s", tmp[:len(matches[1])], password, tmp[len(matches[1]):])
+	}
+
+	return addr[:strings.Index(addr, "://")+3] + tmp
+}
+
 // NewClient creates a Meta client for given uri.
 func NewClient(uri string, conf *Config) Meta {
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
 	}
 	logger.Infof("Meta address: %s", utils.RemovePassword(uri))
+
 	if os.Getenv("META_PASSWORD") != "" {
-		p := strings.Index(uri, ":@")
-		if p > 0 {
-			uri = uri[:p+1] + os.Getenv("META_PASSWORD") + uri[p+1:]
-		}
+		uri = setPasswordFromEnv(uri)
 	}
 	p := strings.Index(uri, "://")
 	if p < 0 {
