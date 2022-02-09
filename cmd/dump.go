@@ -43,7 +43,7 @@ func dump(ctx *cli.Context) error {
 	}
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
-	if err := m.DumpMeta(fp, 0); err != nil {
+	if err := m.DumpMeta(fp, 1); err != nil {
 		return err
 	}
 	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))

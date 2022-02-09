@@ -2775,9 +2775,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 	progress := utils.NewProgress(false, false)
 	var tree, trash *DumpedEntry
-	if root == 0 {
-		root = m.root
-	}
+	root = m.checkRoot(root)
 	if root == 1 {
 		bar := progress.AddCountBar("Snapshot keys", m.rdb.DBSize(ctx).Val())
 		if err = m.makeSnap(bar); err != nil {
