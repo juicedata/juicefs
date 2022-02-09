@@ -395,32 +395,14 @@ func (m *kvMeta) doLoad() ([]byte, error) {
 	return m.get(m.fmtKey("setting"))
 }
 
-func (m *kvMeta) NewSession() error {
-	go m.refreshUsage()
-	if m.conf.ReadOnly {
-		return nil
+func (m *kvMeta) doNewSession(sinfo []byte) error {
+	if err := m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix())); err != nil {
+		return fmt.Errorf("set session ID %d: %s", m.sid, err)
 	}
-	v, err := m.incrCounter("nextSession", 1)
-	if err != nil {
-		return fmt.Errorf("create session: %s", err)
-	}
-	m.sid = uint64(v)
-	logger.Debugf("session is %d", m.sid)
-	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
-	info := newSessionInfo()
-	info.MountPoint = m.conf.MountPoint
-	data, err := json.Marshal(info)
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
-	}
-	if err = m.setValue(m.sessionInfoKey(m.sid), data); err != nil {
+	if err := m.setValue(m.sessionInfoKey(m.sid), sinfo); err != nil {
 		return fmt.Errorf("set session info: %s", err)
 	}
 
-	go m.refreshSession()
-	go m.cleanupDeletedFiles()
-	go m.cleanupSlices()
-	go m.cleanupTrash()
 	go m.flushStats()
 	return nil
 }

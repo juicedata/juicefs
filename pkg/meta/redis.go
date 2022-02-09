@@ -233,42 +233,25 @@ func (r *redisMeta) doLoad() ([]byte, error) {
 	return body, err
 }
 
-func (r *redisMeta) NewSession() error {
-	go r.refreshUsage()
-	if r.conf.ReadOnly {
-		return nil
-	}
-	sid, err := r.incrCounter("nextsession", 1)
+func (r *redisMeta) doNewSession(sinfo []byte) error {
+	err := r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.FormatUint(r.sid, 10)}).Err()
 	if err != nil {
-		return fmt.Errorf("create session: %s", err)
+		return fmt.Errorf("set session ID %d: %s", r.sid, err)
 	}
-	r.sid = uint64(sid)
-	logger.Debugf("session is %d", r.sid)
-	r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
-	info := newSessionInfo()
-	info.MountPoint = r.conf.MountPoint
-	data, err := json.Marshal(info)
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
+	if err = r.rdb.HSet(Background, sessionInfos, r.sid, sinfo).Err(); err != nil {
+		return fmt.Errorf("set session info: %s", err)
 	}
-	r.rdb.HSet(Background, sessionInfos, r.sid, data)
 
-	r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result()
-	if err != nil {
+	if r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result(); err != nil {
 		logger.Warnf("load scriptLookup: %v", err)
 		r.shaLookup = ""
 	}
-	r.shaResolve, err = r.rdb.ScriptLoad(Background, scriptResolve).Result()
-	if err != nil {
+	if r.shaResolve, err = r.rdb.ScriptLoad(Background, scriptResolve).Result(); err != nil {
 		logger.Warnf("load scriptResolve: %v", err)
 		r.shaResolve = ""
 	}
 
-	go r.refreshSession()
 	go r.cleanupLegacies()
-	go r.cleanupDeletedFiles()
-	go r.cleanupSlices()
-	go r.cleanupTrash()
 	return nil
 }
 
@@ -278,6 +261,8 @@ func (r *redisMeta) incrCounter(name string, v int64) (int64, error) {
 		// the current one is already used
 		v, err := r.rdb.IncrBy(Background, strings.ToLower(name), v).Result()
 		return v + 1, err
+	} else if name == "nextSession" {
+		name = "nextsession"
 	}
 	return r.rdb.IncrBy(Background, name, v).Result()
 }

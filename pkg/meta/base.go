@@ -42,6 +42,7 @@ type engine interface {
 
 	doLoad() ([]byte, error)
 
+	doNewSession(sinfo []byte) error
 	doRefreshSession()
 	doFindStaleSessions(ts int64) ([]uint64, error)
 	doCleanStaleSession(sid uint64)
@@ -149,6 +150,35 @@ func (m *baseMeta) Load() (*Format, error) {
 		return nil, fmt.Errorf("json: %s", err)
 	}
 	return &m.fmt, nil
+}
+
+func (m *baseMeta) NewSession() error {
+	go m.refreshUsage()
+	if m.conf.ReadOnly {
+		return nil
+	}
+
+	v, err := m.en.incrCounter("nextSession", 1)
+	if err != nil {
+		return fmt.Errorf("get session ID: %s", err)
+	}
+	m.sid = uint64(v)
+	info := newSessionInfo()
+	info.MountPoint = m.conf.MountPoint
+	data, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("json: %s", err)
+	}
+	if err = m.en.doNewSession(data); err != nil {
+		return fmt.Errorf("create session: %s", err)
+	}
+	logger.Debugf("create session %d OK", m.sid)
+
+	go m.refreshSession()
+	go m.cleanupDeletedFiles()
+	go m.cleanupSlices()
+	go m.cleanupTrash()
+	return nil
 }
 
 func (m *baseMeta) refreshSession() {

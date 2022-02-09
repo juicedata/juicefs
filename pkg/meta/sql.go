@@ -337,55 +337,39 @@ func (m *dbMeta) doLoad() ([]byte, error) {
 	return []byte(s.Value), err
 }
 
-func (m *dbMeta) NewSession() error {
-	go m.refreshUsage()
-	if m.conf.ReadOnly {
-		return nil
+func (m *dbMeta) doNewSession(sinfo []byte) error {
+	// old client has no info field
+	err := m.db.Sync2(new(session))
+	if err != nil {
+		return fmt.Errorf("update table session: %s", err)
 	}
-	if err := m.db.Sync2(new(session)); err != nil { // old client has no info field
-		return err
+	// update the owner from uint64 to int64
+	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
+		return fmt.Errorf("update table flock, plock: %s", err)
 	}
 	if m.db.DriverName() == "mysql" {
 		m.updateCollate()
 	}
-	// update the owner from uint64 to int64
-	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
-		logger.Fatalf("update table flock, plock: %s", err)
-	}
 
-	info := newSessionInfo()
-	info.MountPoint = m.conf.MountPoint
-	data, err := json.Marshal(info)
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
-	}
-	var v int64
 	for {
-		v, err = m.incrCounter("nextSession", 1)
-		if err != nil {
-			return fmt.Errorf("create session: %s", err)
-		}
-		err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session{uint64(v), time.Now().Unix(), data})
-		})
-		if err == nil {
+		if err = m.txn(func(s *xorm.Session) error {
+			return mustInsert(s, &session{m.sid, time.Now().Unix(), sinfo})
+		}); err == nil {
 			break
 		}
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			logger.Warnf("session id %d is already used", v)
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("insert new session: %s", err)
+			logger.Warnf("session id %d is already used", m.sid)
+			if v, e := m.incrCounter("nextSession", 1); e == nil {
+				m.sid = uint64(v)
+				continue
+			} else {
+				return fmt.Errorf("get session ID: %s", e)
+			}
+		} else {
+			return fmt.Errorf("insert new session %d: %s", m.sid, err)
 		}
 	}
-	m.sid = uint64(v)
-	logger.Debugf("session is %d", m.sid)
 
-	go m.refreshSession()
-	go m.cleanupDeletedFiles()
-	go m.cleanupSlices()
-	go m.cleanupTrash()
 	go m.flushStats()
 	return nil
 }
