@@ -36,7 +36,7 @@ func WriteLeakedData(dataDir string) {
 }
 
 func CheckLeakedData(dataDir string) bool {
-	_,err := os.Stat(dataDir+"chunks/0/0/"+"123456789_0_1048576")
+	_, err := os.Stat(dataDir + "chunks/0/0/" + "123456789_0_1048576")
 	if err != nil {
 		return true
 	}
@@ -55,23 +55,22 @@ func RemoveAllFiles(dataDir string) {
 	}
 }
 
-func WriteSmallBlock(mountDir string) error{
+func WriteSmallblocks(mountDir string) error {
 	file, err := os.OpenFile(
-		mountDir + "/" + "test.txt",
+		mountDir+"/"+"test.txt",
 		os.O_WRONLY|os.O_TRUNC|os.O_CREATE,
 		0666,
 	)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 	defer file.Close()
 	var templateContent = "aaaaaaaabbbbbbbb"
 	var writeContent strings.Builder
-	for k := 0;k < 64;k++ {
-		writeContent.Reset()
-		for i := 0;i < 256;i++ {
-			writeContent.Write([]byte(templateContent))
-		}
+	for i := 0; i < 256; i++ {
+		writeContent.Write([]byte(templateContent))
+	}
+	for k := 0; k < 64; k++ {
 		_, err := file.Write([]byte(writeContent.String()))
 		if err != nil {
 			return err
@@ -83,11 +82,11 @@ func WriteSmallBlock(mountDir string) error{
 }
 
 func GetFileCount(dir string) int {
-	files,_ := ioutil.ReadDir(dir)
+	files, _ := ioutil.ReadDir(dir)
 	count := 0
-	for _,f := range files {
+	for _, f := range files {
 		if f.IsDir() {
-			count = count + GetFileCount(dir + "/" + f.Name())
+			count += GetFileCount(dir + "/" + f.Name())
 		} else {
 			count++
 		}
@@ -95,7 +94,6 @@ func GetFileCount(dir string) int {
 
 	return count
 }
-
 
 func TestGc(t *testing.T) {
 	metaUrl := "redis://127.0.0.1:6379/10"
@@ -113,7 +111,10 @@ func TestGc(t *testing.T) {
 		}
 	}(mountpoint)
 
-	WriteSmallBlock(mountpoint)
+	err := WriteSmallblocks(mountpoint)
+	if err != nil {
+		t.Fatalf("write small blocks failed,err is %v", err)
+	}
 	beforeCompactFileNum := GetFileCount(dataDir + "chunks/")
 	gcArgs := []string{
 		"",
@@ -121,16 +122,15 @@ func TestGc(t *testing.T) {
 		"--compact",
 		metaUrl,
 	}
-	err := Main(gcArgs)
+	err = Main(gcArgs)
 	if err != nil {
 		t.Fatalf("gc failed: %v", err)
 	}
 	afterCompactFileNum := GetFileCount(dataDir + "chunks/")
-	t.Logf("beforeCompactFileNum is %d,afterCompactFileNum is %d",beforeCompactFileNum,afterCompactFileNum)
-	if  beforeCompactFileNum <= afterCompactFileNum {
+	t.Logf("beforeCompactFileNum is %d,afterCompactFileNum is %d", beforeCompactFileNum, afterCompactFileNum)
+	if beforeCompactFileNum <= afterCompactFileNum {
 		t.Fatalf("gc compact failed")
 	}
-
 
 	for i := 0; i < 10; i++ {
 		filename := fmt.Sprintf("%s/f%d.txt", mountpoint, i)
