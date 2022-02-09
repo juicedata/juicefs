@@ -1914,26 +1914,20 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-func (m *dbMeta) cleanupDeletedFiles() {
-	for {
-		time.Sleep(time.Minute)
-		var d delfile
-		rows, err := m.db.Where("expire < ?", time.Now().Add(-time.Hour).Unix()).Rows(&d)
-		if err != nil {
-			continue
-		}
-		var fs []delfile
-		for rows.Next() {
-			if rows.Scan(&d) == nil {
-				fs = append(fs, d)
-			}
-		}
-		_ = rows.Close()
-		for _, f := range fs {
-			logger.Debugf("cleanup chunks of inode %d with %d bytes", f.Inode, f.Length)
-			m.doDeleteFileData(f.Inode, f.Length)
+func (m *dbMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
+	var d delfile
+	rows, err := m.db.Where("expire < ?", ts).Rows(&d)
+	if err != nil {
+		return nil, err
+	}
+	files := make(map[Ino]uint64)
+	for rows.Next() {
+		if rows.Scan(&d) == nil {
+			files[d.Inode] = d.Length
 		}
 	}
+	_ = rows.Close()
+	return files, nil
 }
 
 func (m *dbMeta) doCleanupSlices() {

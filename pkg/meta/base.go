@@ -47,6 +47,7 @@ type engine interface {
 	doCleanStaleSession(sid uint64)
 
 	doDeleteSustainedInode(sid uint64, inode Ino) error
+	doFindDeletedFiles(ts int64) (map[Ino]uint64, error)
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
 	doDeleteSlice(chunkid uint64, size uint32) error
@@ -230,6 +231,21 @@ func (m *baseMeta) flushStats() {
 			}
 		}
 		time.Sleep(time.Second)
+	}
+}
+
+func (m *baseMeta) cleanupDeletedFiles() {
+	for {
+		time.Sleep(time.Minute)
+		files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix())
+		if err != nil {
+			logger.Warnf("scan deleted files: %s", err)
+			continue
+		}
+		for inode, length := range files {
+			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
+			m.en.doDeleteFileData(inode, length)
+		}
 	}
 }
 

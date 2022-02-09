@@ -1702,23 +1702,21 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-func (m *kvMeta) cleanupDeletedFiles() {
-	for {
-		time.Sleep(time.Minute)
-		klen := 1 + 8 + 8
-		now := time.Now().Unix()
-		vals, _ := m.scanValues(m.fmtKey("D"), func(k, v []byte) bool {
-			// filter out invalid ones
-			return len(k) == klen && len(v) == 8 && m.parseInt64(v)+60 < now
-		})
-		for k := range vals {
-			rb := utils.FromBuffer([]byte(k)[1:])
-			inode := m.decodeInode(rb.Get(8))
-			length := rb.Get64()
-			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
-			m.doDeleteFileData(inode, length)
-		}
+func (m *kvMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
+	klen := 1 + 8 + 8
+	vals, err := m.scanValues(m.fmtKey("D"), func(k, v []byte) bool {
+		// filter out invalid ones
+		return len(k) == klen && len(v) == 8 && m.parseInt64(v) < ts
+	})
+	if err != nil {
+		return nil, err
 	}
+	files := make(map[Ino]uint64, len(vals))
+	for k := range vals {
+		rb := utils.FromBuffer([]byte(k)[1:])
+		files[m.decodeInode(rb.Get(8))] = rb.Get64()
+	}
+	return files, nil
 }
 
 func (m *kvMeta) doCleanupSlices() {
