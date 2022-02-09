@@ -23,6 +23,7 @@ import (
 
 func Test_setPasswordFromEnv(t *testing.T) {
 	os.Setenv("META_PASSWORD", "dbPasswd")
+	defer os.Unsetenv("META_PASSWORD")
 	tests := []struct {
 		args string
 		want string
