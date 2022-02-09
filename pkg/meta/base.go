@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"sort"
@@ -36,8 +37,12 @@ const (
 
 type engine interface {
 	incrCounter(name string, value int64) (int64, error)
+	doLoad() ([]byte, error)
 
+	doRefreshSession()
+	doFindStaleSessions(ts int64) ([]uint64, error)
 	doCleanStaleSession(sid uint64)
+
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doDeleteFileData(inode Ino, length uint64)
 	doDeleteSlice(chunkid uint64, size uint32) error
@@ -125,6 +130,48 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 		return cb(args...)
 	}
 	return fmt.Errorf("message %d is not supported", mid)
+}
+
+func (m *baseMeta) Load() (*Format, error) {
+	body, err := m.en.doLoad()
+	if err == nil && len(body) == 0 {
+		err = fmt.Errorf("database is not formatted")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(body, &m.fmt); err != nil {
+		return nil, fmt.Errorf("json: %s", err)
+	}
+	return &m.fmt, nil
+}
+
+func (m *baseMeta) refreshSession() {
+	for {
+		time.Sleep(time.Minute)
+		m.Lock()
+		if m.umounting {
+			m.Unlock()
+			return
+		}
+		m.en.doRefreshSession()
+		m.Unlock()
+		if _, err := m.Load(); err != nil {
+			logger.Warnf("reload setting: %s", err)
+		}
+		go m.CleanStaleSessions()
+	}
+}
+
+func (m *baseMeta) CleanStaleSessions() {
+	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute * -5).Unix())
+	if err != nil {
+		logger.Warnf("scan stale sessions: %s", err)
+		return
+	}
+	for _, sid := range sids {
+		m.en.doCleanStaleSession(sid)
+	}
 }
 
 func (m *baseMeta) CloseSession() error {

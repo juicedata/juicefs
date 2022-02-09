@@ -225,19 +225,12 @@ func (r *redisMeta) Reset() error {
 	return r.rdb.FlushDB(Background).Err()
 }
 
-func (r *redisMeta) Load() (*Format, error) {
+func (r *redisMeta) doLoad() ([]byte, error) {
 	body, err := r.rdb.Get(Background, "setting").Bytes()
 	if err == redis.Nil {
-		return nil, fmt.Errorf("database is not formatted")
+		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(body, &r.fmt)
-	if err != nil {
-		return nil, fmt.Errorf("json: %s", err)
-	}
-	return &r.fmt, nil
+	return body, err
 }
 
 func (r *redisMeta) NewSession() error {
@@ -1610,30 +1603,21 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (r *redisMeta) CleanStaleSessions() {
-	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(time.Now().Add(time.Minute * -5).Unix())), Count: 100}
-	staleSessions, _ := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
-	for _, ssid := range staleSessions {
-		sid, _ := strconv.Atoi(ssid)
-		r.doCleanStaleSession(uint64(sid))
+func (r *redisMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
+	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: 100}
+	vals, err := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
+	if err != nil {
+		return nil, err
 	}
+	sids := make([]uint64, len(vals))
+	for i, v := range vals {
+		sids[i], _ = strconv.ParseUint(v, 10, 64)
+	}
+	return sids, nil
 }
 
-func (r *redisMeta) refreshSession() {
-	for {
-		time.Sleep(time.Minute)
-		r.Lock()
-		if r.umounting {
-			r.Unlock()
-			return
-		}
-		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
-		r.Unlock()
-		if _, err := r.Load(); err != nil {
-			logger.Warnf("reload setting: %s", err)
-		}
-		go r.CleanStaleSessions()
-	}
+func (r *redisMeta) doRefreshSession() {
+	r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
 }
 
 func (r *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {

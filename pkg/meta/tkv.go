@@ -391,19 +391,8 @@ func (m *kvMeta) Reset() error {
 	return m.client.reset(nil)
 }
 
-func (m *kvMeta) Load() (*Format, error) {
-	body, err := m.get(m.fmtKey("setting"))
-	if err == nil && body == nil {
-		err = fmt.Errorf("database is not formatted")
-	}
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(body, &m.fmt)
-	if err != nil {
-		return nil, fmt.Errorf("json: %s", err)
-	}
-	return &m.fmt, nil
+func (m *kvMeta) doLoad() ([]byte, error) {
+	return m.get(m.fmtKey("setting"))
 }
 
 func (m *kvMeta) NewSession() error {
@@ -436,21 +425,8 @@ func (m *kvMeta) NewSession() error {
 	return nil
 }
 
-func (m *kvMeta) refreshSession() {
-	for {
-		time.Sleep(time.Minute)
-		m.Lock()
-		if m.umounting {
-			m.Unlock()
-			return
-		}
-		_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
-		m.Unlock()
-		if _, err := m.Load(); err != nil {
-			logger.Warnf("reload setting: %s", err)
-		}
-		go m.CleanStaleSessions()
-	}
+func (m *kvMeta) doRefreshSession() {
+	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 }
 
 func (m *kvMeta) doCleanStaleSession(sid uint64) {
@@ -528,21 +504,18 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *kvMeta) CleanStaleSessions() {
-	vals, err := m.scanValues(m.fmtKey("SH"), nil)
+func (m *kvMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
+	vals, err := m.scanValues(m.fmtKey("SH"), func(k, v []byte) bool {
+		return m.parseInt64(v) < ts
+	})
 	if err != nil {
-		logger.Warnf("scan stale sessions: %s", err)
-		return
+		return nil, err
 	}
-	var ids []uint64
-	for k, v := range vals {
-		if m.parseInt64(v) < time.Now().Add(time.Minute*-5).Unix() {
-			ids = append(ids, m.parseSid(k))
-		}
+	sids := make([]uint64, 0, len(vals))
+	for k := range vals {
+		sids = append(sids, m.parseSid(k))
 	}
-	for _, sid := range ids {
-		m.doCleanStaleSession(sid)
-	}
+	return sids, nil
 }
 
 func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {

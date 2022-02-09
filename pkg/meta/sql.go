@@ -331,21 +331,10 @@ func (m *dbMeta) Reset() error {
 		&flock{}, &plock{})
 }
 
-func (m *dbMeta) Load() (*Format, error) {
-	var s = setting{Name: "format"}
-	ok, err := m.db.Get(&s)
-	if err == nil && !ok {
-		err = fmt.Errorf("database is not formatted")
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal([]byte(s.Value), &m.fmt)
-	if err != nil {
-		return nil, fmt.Errorf("json: %s", err)
-	}
-	return &m.fmt, nil
+func (m *dbMeta) doLoad() ([]byte, error) {
+	s := setting{Name: "format"}
+	_, err := m.db.Get(&s)
+	return []byte(s.Value), err
 }
 
 func (m *dbMeta) NewSession() error {
@@ -1627,49 +1616,33 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *dbMeta) CleanStaleSessions() {
+func (m *dbMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
 	var s session
-	rows, err := m.db.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Rows(&s)
+	rows, err := m.db.Where("Heartbeat < ?", ts).Rows(&s)
 	if err != nil {
-		logger.Warnf("scan stale sessions: %s", err)
-		return
+		return nil, err
 	}
-	var ids []uint64
+	var sids []uint64
 	for rows.Next() {
 		if rows.Scan(&s) == nil {
-			ids = append(ids, s.Sid)
+			sids = append(sids, s.Sid)
 		}
 	}
 	_ = rows.Close()
-	for _, sid := range ids {
-		m.doCleanStaleSession(sid)
-	}
+	return sids, nil
 }
 
-func (m *dbMeta) refreshSession() {
-	for {
-		time.Sleep(time.Minute)
-		m.Lock()
-		if m.umounting {
-			m.Unlock()
-			return
+func (m *dbMeta) doRefreshSession() {
+	_ = m.txn(func(ses *xorm.Session) error {
+		n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
+		if err == nil && n == 0 {
+			err = fmt.Errorf("no session found matching sid: %d", m.sid)
 		}
-		_ = m.txn(func(ses *xorm.Session) error {
-			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
-			if err == nil && n == 0 {
-				err = fmt.Errorf("no session found matching sid: %d", m.sid)
-			}
-			if err != nil {
-				logger.Errorf("update session: %s", err)
-			}
-			return err
-		})
-		m.Unlock()
-		if _, err := m.Load(); err != nil {
-			logger.Warnf("reload setting: %s", err)
+		if err != nil {
+			logger.Errorf("update session: %s", err)
 		}
-		go m.CleanStaleSessions()
-	}
+		return err
+	})
 }
 
 func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
