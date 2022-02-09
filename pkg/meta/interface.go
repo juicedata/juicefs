@@ -351,7 +351,8 @@ func setPasswordFromEnv(uri string) (string, error) {
 	if atIndex == -1 {
 		return "", fmt.Errorf("invalid uri: %s", uri)
 	}
-	s := strings.Split(uri[strings.Index(uri, "://")+3:atIndex], ":")
+	dIndex := strings.Index(uri, "://") + 3
+	s := strings.Split(uri[dIndex:atIndex], ":")
 
 	if len(s) > 2 || s[0] == "" {
 		return "", fmt.Errorf("invalid uri: %s", uri)
@@ -360,7 +361,7 @@ func setPasswordFromEnv(uri string) (string, error) {
 	if len(s) == 2 && s[1] != "" {
 		return uri, nil
 	}
-	return uri[:strings.Index(uri, "://")+3] + fmt.Sprintf("%s:%s", s[0], os.Getenv("META_PASSWORD")) + uri[atIndex:], nil
+	return uri[:dIndex] + fmt.Sprintf("%s:%s", s[0], os.Getenv("META_PASSWORD")) + uri[atIndex:], nil
 }
 
 // NewClient creates a Meta client for given uri.
