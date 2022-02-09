@@ -471,17 +471,25 @@ func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
 
 func (m *dbMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	c := counter{Name: name}
-	_, err := m.db.Get(&c)
+	ok, err := m.db.Get(&c)
 	if err != nil {
 		return false, err
 	}
 	if c.Value > value-diff {
 		return false, nil
 	} else {
-		return true, m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Update(&counter{Value: value}, &counter{Name: name})
-			return err
-		})
+		if ok {
+			err = m.txn(func(s *xorm.Session) error {
+				_, err := s.Update(&counter{Value: value}, &counter{Name: name})
+				return err
+			})
+		} else {
+			err = m.txn(func(s *xorm.Session) error {
+				_, err := s.InsertOne(&counter{Name: name, Value: value})
+				return err
+			})
+		}
+		return true, err
 	}
 }
 

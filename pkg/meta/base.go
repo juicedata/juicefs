@@ -194,7 +194,11 @@ func (m *baseMeta) refreshSession() {
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
-		go m.CleanStaleSessions()
+		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), 60); err != nil {
+			logger.Warnf("checking counter lastCleanupSessions: %s", err)
+		} else if ok {
+			go m.CleanStaleSessions()
+		}
 	}
 }
 
@@ -267,14 +271,18 @@ func (m *baseMeta) flushStats() {
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
 		time.Sleep(time.Minute)
-		files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix())
-		if err != nil {
-			logger.Warnf("scan deleted files: %s", err)
-			continue
-		}
-		for inode, length := range files {
-			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
-			m.en.doDeleteFileData(inode, length)
+		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), 60); err != nil {
+			logger.Warnf("checking counter lastCleanupFiles: %s", err)
+		} else if ok {
+			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix())
+			if err != nil {
+				logger.Warnf("scan deleted files: %s", err)
+				continue
+			}
+			for inode, length := range files {
+				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
+				m.en.doDeleteFileData(inode, length)
+			}
 		}
 	}
 }
@@ -822,36 +830,17 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 }
 
 func (m *baseMeta) cleanupTrash() {
-	ctx := Background
-	key := "lastCleanup"
 	for {
 		time.Sleep(time.Hour)
-		if st := m.en.doGetAttr(ctx, TrashInode, nil); st != 0 {
+		if st := m.en.doGetAttr(Background, TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
 				logger.Warnf("getattr inode %d: %s", TrashInode, st)
 			}
 			continue
 		}
-		var value []byte
-		if st := m.en.GetXattr(ctx, TrashInode, key, &value); st != 0 && st != ENOATTR {
-			logger.Warnf("getxattr inode %d key %s: %s", TrashInode, key, st)
-			continue
-		}
-
-		var last time.Time
-		var err error
-		if len(value) > 0 {
-			last, err = time.Parse(time.RFC3339, string(value))
-		}
-		if err != nil {
-			logger.Warnf("parse time value %s: %s", value, err)
-			continue
-		}
-		if now := time.Now(); now.Sub(last) >= time.Hour {
-			if st := m.en.SetXattr(ctx, TrashInode, key, []byte(now.Format(time.RFC3339)), XattrCreateOrReplace); st != 0 {
-				logger.Warnf("setxattr inode %d key %s: %s", TrashInode, key, st)
-				continue
-			}
+		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), 3600); err != nil {
+			logger.Warnf("checking counter lastCleanupTrash: %s", err)
+		} else if ok {
 			go m.doCleanupTrash(false)
 		}
 	}
