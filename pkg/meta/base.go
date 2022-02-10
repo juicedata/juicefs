@@ -203,7 +203,7 @@ func (m *baseMeta) refreshSession() {
 }
 
 func (m *baseMeta) CleanStaleSessions() {
-	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute*-5).Unix(), 100)
+	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute*-5).Unix(), 1000)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -274,7 +274,7 @@ func (m *baseMeta) cleanupDeletedFiles() {
 		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), 60); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
-			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 1000)
+			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
 			if err != nil {
 				logger.Warnf("scan deleted files: %s", err)
 				continue
