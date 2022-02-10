@@ -44,11 +44,11 @@ type engine interface {
 
 	doNewSession(sinfo []byte) error
 	doRefreshSession()
-	doFindStaleSessions(ts int64) ([]uint64, error)
+	doFindStaleSessions(ts int64, limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64)
 
 	doDeleteSustainedInode(sid uint64, inode Ino) error
-	doFindDeletedFiles(ts int64) (map[Ino]uint64, error)
+	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
 	doDeleteSlice(chunkid uint64, size uint32) error
@@ -203,7 +203,7 @@ func (m *baseMeta) refreshSession() {
 }
 
 func (m *baseMeta) CleanStaleSessions() {
-	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute * -5).Unix())
+	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute*-5).Unix(), 100)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -274,7 +274,7 @@ func (m *baseMeta) cleanupDeletedFiles() {
 		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), 60); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
-			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix())
+			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 1000)
 			if err != nil {
 				logger.Warnf("scan deleted files: %s", err)
 				continue

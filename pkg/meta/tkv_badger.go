@@ -109,7 +109,11 @@ func (tx *badgerTxn) scanKeys(prefix []byte) [][]byte {
 	return ret
 }
 
-func (tx *badgerTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
+func (tx *badgerTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
+	if limit == 0 {
+		return nil
+	}
+
 	it := tx.t.NewIterator(badger.IteratorOptions{
 		PrefetchValues: true,
 		PrefetchSize:   1024,
@@ -125,6 +129,11 @@ func (tx *badgerTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) ma
 		}
 		if filter == nil || filter(item.Key(), value) {
 			ret[string(item.Key())] = value
+			if limit > 0 {
+				if limit--; limit == 0 {
+					break
+				}
+			}
 		}
 	}
 	return ret
