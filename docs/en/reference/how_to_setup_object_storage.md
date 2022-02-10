@@ -106,6 +106,7 @@ If you wish to use a storage type that is not listed, feel free to submit a requ
 | [MinIO](#minio)                                           | `minio`    |
 | [WebDAV](#webdav)                                         | `webdav`   |
 | [HDFS](#hdfs)                                             | `hdfs`     |
+| [Apache-Ozone](#Apache-Ozone)                             | `s3`       |
 | [Redis](#redis)                                           | `redis`    |
 | [TiKV](#tikv)                                             | `tikv`     |
 | [Local disk](#local-disk)                                 | `file`     |
@@ -747,6 +748,20 @@ When the `--access-key` is not specified during formatting, JuiceFS will use the
 JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_DIR` or `$HADOOP_HOME`. If an empty value is provided to `--bucket`, the default HDFS found in Hadoop configurations will be used.
 
 For HA cluster, the addresses of NameNodes can be specified together like this: `--bucket=namenode1:port,namenode2:port`.
+
+## Apache-Ozone
+
+Ozone is a scalable, redundant, and distributed object store for Hadoop.It supports S3-compatible interface, so we could set `--storage` to `s3` directly.
+
+```bash
+$ juicefs format \
+    --storage s3 \
+    --bucket http://<endpoint>/<bucket>\
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
+    myjfs
+```
 
 ## Redis
 

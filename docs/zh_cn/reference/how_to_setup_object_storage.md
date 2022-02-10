@@ -77,7 +77,7 @@ $ juicefs format \
 如果你希望使用的存储类型不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
 
 | Name                                        | Value      |
-| ------------------------------------------- | ---------- |
+| ------------------------------------------- |------------|
 | [Amazon S3](#amazon-s3)                     | `s3`       |
 | [Google 云存储](#google-云存储)                   | `gs`       |
 | [Azure Blob 存储](#azure-blob-存储)             | `wasb`     |
@@ -107,6 +107,7 @@ $ juicefs format \
 | [MinIO](#minio)                             | `minio`    |
 | [WebDAV](#webdav)                           | `webdav`   |
 | [HDFS](#hdfs)                               | `hdfs`     |
+| [Apache-Ozone](#Apache-Ozone)               | `s3`       |
 | [Redis](#redis)                             | `redis`    |
 | [TiKV](#tikv)                               | `tikv`     |
 | [本地磁盘](#本地磁盘)                               | `file`     |
@@ -745,6 +746,20 @@ $ juicefs format \
 JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端加载配置。如果 `--bucket` 选项留空，将使用在 Hadoop 配置中找到的默认 HDFS。
 
 对于 HA 群集，可以像下面这样一起指定 NameNodes 的地址：`--bucket=namenode1:port,namenode2:port`。
+
+## Apache-Ozone
+
+Ozone 是 Hadoop 的分布式对象存储系统，提供了 S3 兼容的 API。所以可以通过 S3 兼容的模式作为对象存储供 JuiceFS 使用。例如：
+
+```bash
+$ juicefs format \
+    --storage s3 \
+    --bucket http://<endpoint>/<bucket>\
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
+    myjfs
+```
 
 ## Redis
 
