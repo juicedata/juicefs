@@ -45,7 +45,7 @@ type kvTxn interface {
 	scanRange(begin, end []byte) map[string][]byte
 	scan(prefix []byte, handler func(key, value []byte))
 	scanKeys(prefix []byte) [][]byte
-	scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte
+	scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
 	append(key []byte, value []byte) []byte
@@ -311,10 +311,10 @@ func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 	return keys, err
 }
 
-func (m *kvMeta) scanValues(prefix []byte, filter func(k, v []byte) bool) (map[string][]byte, error) {
+func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) (map[string][]byte, error) {
 	var values map[string][]byte
 	err := m.client.txn(func(tx kvTxn) error {
-		values = tx.scanValues(prefix, filter)
+		values = tx.scanValues(prefix, limit, filter)
 		return nil
 	})
 	return values, err
@@ -413,7 +413,7 @@ func (m *kvMeta) doRefreshSession() {
 
 func (m *kvMeta) doCleanStaleSession(sid uint64) {
 	// release locks
-	flocks, err := m.scanValues(m.fmtKey("F"), nil)
+	flocks, err := m.scanValues(m.fmtKey("F"), -1, nil)
 	if err != nil {
 		logger.Warnf("scan flock for stale session %d: %s", sid, err)
 		return
@@ -440,7 +440,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) {
 			}
 		}
 	}
-	plocks, err := m.scanValues(m.fmtKey("P"), nil)
+	plocks, err := m.scanValues(m.fmtKey("P"), -1, nil)
 	if err != nil {
 		logger.Warnf("scan plock for stale session %d: %s", sid, err)
 		return
@@ -486,8 +486,8 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *kvMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
-	vals, err := m.scanValues(m.fmtKey("SH"), func(k, v []byte) bool {
+func (m *kvMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
+	vals, err := m.scanValues(m.fmtKey("SH"), limit, func(k, v []byte) bool {
 		return m.parseInt64(v) < ts
 	})
 	if err != nil {
@@ -523,7 +523,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			inode := m.decodeInode(sinode[10:]) // "SS" + sid
 			s.Sustained = append(s.Sustained, inode)
 		}
-		flocks, err := m.scanValues(m.fmtKey("F"), nil)
+		flocks, err := m.scanValues(m.fmtKey("F"), -1, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -536,7 +536,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 				}
 			}
 		}
-		plocks, err := m.scanValues(m.fmtKey("P"), nil)
+		plocks, err := m.scanValues(m.fmtKey("P"), -1, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -570,7 +570,7 @@ func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
 }
 
 func (m *kvMeta) ListSessions() ([]*Session, error) {
-	vals, err := m.scanValues(m.fmtKey("SH"), nil)
+	vals, err := m.scanValues(m.fmtKey("SH"), -1, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1409,7 +1409,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
 	// TODO: handle big directory
-	vals, err := m.scanValues(m.entryKey(inode, ""), nil)
+	vals, err := m.scanValues(m.entryKey(inode, ""), -1, nil)
 	if err != nil {
 		return errno(err)
 	}
@@ -1684,9 +1684,9 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-func (m *kvMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
+func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
 	klen := 1 + 8 + 8
-	vals, err := m.scanValues(m.fmtKey("D"), func(k, v []byte) bool {
+	vals, err := m.scanValues(m.fmtKey("D"), limit, func(k, v []byte) bool {
 		// filter out invalid ones
 		return len(k) == klen && len(v) == 8 && m.parseInt64(v) < ts
 	})
@@ -1703,7 +1703,7 @@ func (m *kvMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
 
 func (m *kvMeta) doCleanupSlices() {
 	klen := 1 + 8 + 4
-	vals, _ := m.scanValues(m.fmtKey("K"), func(k, v []byte) bool {
+	vals, _ := m.scanValues(m.fmtKey("K"), -1, func(k, v []byte) bool {
 		// filter out invalid ones
 		return len(k) == klen && len(v) == 8 && parseCounter(v) <= 0
 	})
@@ -1871,7 +1871,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 func (r *kvMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	result, err := r.scanValues(r.fmtKey("A"), func(k, v []byte) bool {
+	result, err := r.scanValues(r.fmtKey("A"), -1, func(k, v []byte) bool {
 		return len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes
 	})
 	if err != nil {
@@ -1897,7 +1897,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	}
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	result, err := m.scanValues(m.fmtKey("A"), func(k, v []byte) bool {
+	result, err := m.scanValues(m.fmtKey("A"), -1, func(k, v []byte) bool {
 		return len(k) == klen && k[1+8] == 'C'
 	})
 	if err != nil {
@@ -2003,7 +2003,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
 
-		vals := tx.scanValues(m.xattrKey(inode, ""), nil)
+		vals := tx.scanValues(m.xattrKey(inode, ""), -1, nil)
 		if len(vals) > 0 {
 			xattrs := make([]*DumpedXattr, 0, len(vals))
 			for k, v := range vals {
@@ -2054,11 +2054,11 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	var err error
 	if m.snap != nil {
 		err = m.snap.txn(func(tx kvTxn) error {
-			vals = tx.scanValues(m.entryKey(inode, ""), nil)
+			vals = tx.scanValues(m.entryKey(inode, ""), -1, nil)
 			return nil
 		})
 	} else {
-		vals, err = m.scanValues(m.entryKey(inode, ""), nil)
+		vals, err = m.scanValues(m.entryKey(inode, ""), -1, nil)
 	}
 	if err != nil {
 		return err
@@ -2112,7 +2112,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			}
 		}
 	}()
-	vals, err := m.scanValues(m.fmtKey("D"), nil)
+	vals, err := m.scanValues(m.fmtKey("D"), -1, nil)
 	if err != nil {
 		return err
 	}
@@ -2198,11 +2198,11 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 	if root == 1 {
 		err = m.snap.txn(func(tx kvTxn) error {
-			vals = tx.scanValues(m.fmtKey("SS"), nil)
+			vals = tx.scanValues(m.fmtKey("SS"), -1, nil)
 			return nil
 		})
 	} else {
-		vals, err = m.scanValues(m.fmtKey("SS"), nil)
+		vals, err = m.scanValues(m.fmtKey("SS"), -1, nil)
 	}
 	if err != nil {
 		return err

@@ -151,11 +151,23 @@ func (tx *memTxn) scanKeys(prefix_ []byte) [][]byte {
 	return keys
 }
 
-func (tx *memTxn) scanValues(prefix []byte, filter func(k, v []byte) bool) map[string][]byte {
+func (tx *memTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
+	if limit == 0 {
+		return nil
+	}
+
 	res := tx.scanRange(prefix, nextKey(prefix))
 	for k, v := range res {
 		if filter != nil && !filter([]byte(k), v) {
 			delete(res, k)
+		}
+	}
+	if n := len(res) - limit; limit > 0 && n > 0 {
+		for k := range res {
+			delete(res, k)
+			if n--; n == 0 {
+				break
+			}
 		}
 	}
 	return res
