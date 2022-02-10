@@ -609,5 +609,16 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals(FsPermission.createImmutable((short) 0700), newFs.getFileStatus(new Path("/test_umask")).getPermission());
     assertEquals(FsPermission.createImmutable((short) 0700), newFs.getFileStatus(new Path("/test_umask/dir")).getPermission());
     assertEquals(FsPermission.createImmutable((short) 0600), newFs.getFileStatus(new Path("/test_umask/dir/f")).getPermission());
+    newFs.close();
+
+    conf.set("juicefs.umask", "000");
+    newFs = createNewFs(conf, currentUser.getShortUserName(), currentUser.getGroupNames());
+    newFs.delete(new Path("/test_umask"), true);
+    newFs.mkdirs(new Path("/test_umask/dir"));
+    newFs.create(new Path("/test_umask/dir/f")).close();
+    assertEquals(FsPermission.createImmutable((short) 0777), newFs.getFileStatus(new Path("/test_umask")).getPermission());
+    assertEquals(FsPermission.createImmutable((short) 0777), newFs.getFileStatus(new Path("/test_umask/dir")).getPermission());
+    assertEquals(FsPermission.createImmutable((short) 0666), newFs.getFileStatus(new Path("/test_umask/dir/f")).getPermission());
+    newFs.close();
   }
 }
