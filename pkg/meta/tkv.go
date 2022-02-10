@@ -391,66 +391,24 @@ func (m *kvMeta) Reset() error {
 	return m.client.reset(nil)
 }
 
-func (m *kvMeta) Load() (*Format, error) {
-	body, err := m.get(m.fmtKey("setting"))
-	if err == nil && body == nil {
-		err = fmt.Errorf("database is not formatted")
-	}
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(body, &m.fmt)
-	if err != nil {
-		return nil, fmt.Errorf("json: %s", err)
-	}
-	return &m.fmt, nil
+func (m *kvMeta) doLoad() ([]byte, error) {
+	return m.get(m.fmtKey("setting"))
 }
 
-func (m *kvMeta) NewSession() error {
-	go m.refreshUsage()
-	if m.conf.ReadOnly {
-		return nil
+func (m *kvMeta) doNewSession(sinfo []byte) error {
+	if err := m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix())); err != nil {
+		return fmt.Errorf("set session ID %d: %s", m.sid, err)
 	}
-	v, err := m.incrCounter("nextSession", 1)
-	if err != nil {
-		return fmt.Errorf("create session: %s", err)
-	}
-	m.sid = uint64(v)
-	logger.Debugf("session is %d", m.sid)
-	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
-	info := newSessionInfo()
-	info.MountPoint = m.conf.MountPoint
-	data, err := json.Marshal(info)
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
-	}
-	if err = m.setValue(m.sessionInfoKey(m.sid), data); err != nil {
+	if err := m.setValue(m.sessionInfoKey(m.sid), sinfo); err != nil {
 		return fmt.Errorf("set session info: %s", err)
 	}
 
-	go m.refreshSession()
-	go m.cleanupDeletedFiles()
-	go m.cleanupSlices()
-	go m.cleanupTrash()
 	go m.flushStats()
 	return nil
 }
 
-func (m *kvMeta) refreshSession() {
-	for {
-		time.Sleep(time.Minute)
-		m.Lock()
-		if m.umounting {
-			m.Unlock()
-			return
-		}
-		_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
-		m.Unlock()
-		if _, err := m.Load(); err != nil {
-			logger.Warnf("reload setting: %s", err)
-		}
-		go m.CleanStaleSessions()
-	}
+func (m *kvMeta) doRefreshSession() {
+	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 }
 
 func (m *kvMeta) doCleanStaleSession(sid uint64) {
@@ -528,21 +486,18 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *kvMeta) CleanStaleSessions() {
-	vals, err := m.scanValues(m.fmtKey("SH"), nil)
+func (m *kvMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
+	vals, err := m.scanValues(m.fmtKey("SH"), func(k, v []byte) bool {
+		return m.parseInt64(v) < ts
+	})
 	if err != nil {
-		logger.Warnf("scan stale sessions: %s", err)
-		return
+		return nil, err
 	}
-	var ids []uint64
-	for k, v := range vals {
-		if m.parseInt64(v) < time.Now().Add(time.Minute*-5).Unix() {
-			ids = append(ids, m.parseSid(k))
-		}
+	sids := make([]uint64, 0, len(vals))
+	for k := range vals {
+		sids = append(sids, m.parseSid(k))
 	}
-	for _, sid := range ids {
-		m.doCleanStaleSession(sid)
-	}
+	return sids, nil
 }
 
 func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
@@ -677,6 +632,18 @@ func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 		return nil
 	})
 	return new, err
+}
+
+func (m *kvMeta) setIfSmall(name string, value, diff int64) (bool, error) {
+	old, err := m.get(m.counterKey(name))
+	if err != nil {
+		return false, err
+	}
+	if m.parseInt64(old) > value-diff {
+		return false, nil
+	} else {
+		return true, m.setValue(m.counterKey(name), m.packInt64(value))
+	}
 }
 
 func (m *kvMeta) deleteKeys(keys ...[]byte) error {
@@ -1717,38 +1684,21 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-func (m *kvMeta) cleanupDeletedFiles() {
-	for {
-		time.Sleep(time.Minute)
-		klen := 1 + 8 + 8
-		now := time.Now().Unix()
-		vals, _ := m.scanValues(m.fmtKey("D"), func(k, v []byte) bool {
-			// filter out invalid ones
-			return len(k) == klen && len(v) == 8 && m.parseInt64(v)+60 < now
-		})
-		for k := range vals {
-			rb := utils.FromBuffer([]byte(k)[1:])
-			inode := m.decodeInode(rb.Get(8))
-			length := rb.Get64()
-			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
-			m.doDeleteFileData(inode, length)
-		}
+func (m *kvMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
+	klen := 1 + 8 + 8
+	vals, err := m.scanValues(m.fmtKey("D"), func(k, v []byte) bool {
+		// filter out invalid ones
+		return len(k) == klen && len(v) == 8 && m.parseInt64(v) < ts
+	})
+	if err != nil {
+		return nil, err
 	}
-}
-
-func (m *kvMeta) cleanupSlices() {
-	for {
-		time.Sleep(time.Hour)
-
-		// once per hour
-		now := time.Now().Unix()
-		last, err := m.get(m.counterKey("nextCleanupSlices"))
-		if err != nil || m.parseInt64(last)+3600 > now {
-			continue
-		}
-		_ = m.setValue(m.counterKey("nextCleanupSlices"), m.packInt64(now))
-		m.doCleanupSlices()
+	files := make(map[Ino]uint64, len(vals))
+	for k := range vals {
+		rb := utils.FromBuffer([]byte(k)[1:])
+		files[m.decodeInode(rb.Get(8))] = rb.Get64()
 	}
+	return files, nil
 }
 
 func (m *kvMeta) doCleanupSlices() {

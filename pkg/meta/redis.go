@@ -231,56 +231,33 @@ func (r *redisMeta) Reset() error {
 	return r.rdb.FlushDB(Background).Err()
 }
 
-func (r *redisMeta) Load() (*Format, error) {
+func (r *redisMeta) doLoad() ([]byte, error) {
 	body, err := r.rdb.Get(Background, "setting").Bytes()
 	if err == redis.Nil {
-		return nil, fmt.Errorf("database is not formatted")
+		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(body, &r.fmt)
-	if err != nil {
-		return nil, fmt.Errorf("json: %s", err)
-	}
-	return &r.fmt, nil
+	return body, err
 }
 
-func (r *redisMeta) NewSession() error {
-	go r.refreshUsage()
-	if r.conf.ReadOnly {
-		return nil
-	}
-	sid, err := r.incrCounter("nextsession", 1)
+func (r *redisMeta) doNewSession(sinfo []byte) error {
+	err := r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.FormatUint(r.sid, 10)}).Err()
 	if err != nil {
-		return fmt.Errorf("create session: %s", err)
+		return fmt.Errorf("set session ID %d: %s", r.sid, err)
 	}
-	r.sid = uint64(sid)
-	logger.Debugf("session is %d", r.sid)
-	r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
-	info := newSessionInfo()
-	info.MountPoint = r.conf.MountPoint
-	data, err := json.Marshal(info)
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
+	if err = r.rdb.HSet(Background, sessionInfos, r.sid, sinfo).Err(); err != nil {
+		return fmt.Errorf("set session info: %s", err)
 	}
-	r.rdb.HSet(Background, sessionInfos, r.sid, data)
 
-	r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result()
-	if err != nil {
+	if r.shaLookup, err = r.rdb.ScriptLoad(Background, scriptLookup).Result(); err != nil {
 		logger.Warnf("load scriptLookup: %v", err)
 		r.shaLookup = ""
 	}
-	r.shaResolve, err = r.rdb.ScriptLoad(Background, scriptResolve).Result()
-	if err != nil {
+	if r.shaResolve, err = r.rdb.ScriptLoad(Background, scriptResolve).Result(); err != nil {
 		logger.Warnf("load scriptResolve: %v", err)
 		r.shaResolve = ""
 	}
 
-	go r.refreshSession()
-	go r.cleanupDeletedFiles()
-	go r.cleanupSlices()
-	go r.cleanupTrash()
+	go r.cleanupLegacies()
 	return nil
 }
 
@@ -290,8 +267,22 @@ func (r *redisMeta) incrCounter(name string, v int64) (int64, error) {
 		// the current one is already used
 		v, err := r.rdb.IncrBy(Background, strings.ToLower(name), v).Result()
 		return v + 1, err
+	} else if name == "nextSession" {
+		name = "nextsession"
 	}
 	return r.rdb.IncrBy(Background, name, v).Result()
+}
+
+func (r *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
+	old, err := r.rdb.Get(Background, name).Int64()
+	if err != nil {
+		return false, err
+	}
+	if old > value-diff {
+		return false, nil
+	} else {
+		return true, r.rdb.Set(Background, name, value, 0).Err()
+	}
 }
 
 func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
@@ -1616,30 +1607,21 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (r *redisMeta) CleanStaleSessions() {
-	rng := &redis.ZRangeBy{Max: strconv.Itoa(int(time.Now().Add(time.Minute * -5).Unix())), Count: 100}
-	staleSessions, _ := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
-	for _, ssid := range staleSessions {
-		sid, _ := strconv.Atoi(ssid)
-		r.doCleanStaleSession(uint64(sid))
+func (r *redisMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
+	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: 100}
+	vals, err := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
+	if err != nil {
+		return nil, err
 	}
+	sids := make([]uint64, len(vals))
+	for i, v := range vals {
+		sids[i], _ = strconv.ParseUint(v, 10, 64)
+	}
+	return sids, nil
 }
 
-func (r *redisMeta) refreshSession() {
-	for {
-		time.Sleep(time.Minute)
-		r.Lock()
-		if r.umounting {
-			r.Unlock()
-			return
-		}
-		r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
-		r.Unlock()
-		if _, err := r.Load(); err != nil {
-			logger.Warnf("reload setting: %s", err)
-		}
-		go r.CleanStaleSessions()
-	}
+func (r *redisMeta) doRefreshSession() {
+	r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
 }
 
 func (r *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
@@ -1864,40 +1846,51 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 	}, r.inodeKey(fout), r.inodeKey(fin))
 }
 
-func (r *redisMeta) cleanupDeletedFiles() {
+// For now only deleted files
+func (r *redisMeta) cleanupLegacies() {
 	for {
 		time.Sleep(time.Minute)
-		now := time.Now()
-		members, _ := r.rdb.ZRangeByScore(Background, delfiles, &redis.ZRangeBy{Min: strconv.Itoa(0), Max: strconv.Itoa(int(now.Add(-time.Hour).Unix())), Count: 1000}).Result()
-		for _, member := range members {
-			ps := strings.Split(member, ":")
-			inode, _ := strconv.ParseInt(ps[0], 10, 0)
-			var length int64 = 1 << 30
-			if len(ps) == 2 {
-				length, _ = strconv.ParseInt(ps[1], 10, 0)
-			} else if len(ps) > 2 {
-				length, _ = strconv.ParseInt(ps[2], 10, 0)
+		rng := &redis.ZRangeBy{Max: strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10), Count: 1000}
+		vals, err := r.rdb.ZRangeByScore(Background, delfiles, rng).Result()
+		if err != nil {
+			continue
+		}
+		var count int
+		for _, v := range vals {
+			ps := strings.Split(v, ":")
+			if len(ps) != 2 {
+				inode, _ := strconv.ParseUint(ps[0], 10, 64)
+				var length uint64 = 1 << 30
+				if len(ps) > 2 {
+					length, _ = strconv.ParseUint(ps[2], 10, 64)
+				}
+				logger.Infof("cleanup legacy delfile inode %d with %d bytes (%s)", inode, length, v)
+				r.doDeleteFileData_(Ino(inode), length, v)
+				count++
 			}
-			logger.Debugf("cleanup chunks of inode %d with %d bytes (%s)", inode, length, member)
-			r.doDeleteFileData_(Ino(inode), uint64(length), member)
+		}
+		if count == 0 {
+			return
 		}
 	}
 }
 
-func (r *redisMeta) cleanupSlices() {
-	for {
-		time.Sleep(time.Hour)
-
-		// once per hour
-		var ctx = Background
-		last, _ := r.rdb.Get(ctx, "nextCleanupSlices").Uint64()
-		now := time.Now().Unix()
-		if last+3600 > uint64(now) {
+func (r *redisMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
+	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: 1000}
+	vals, err := r.rdb.ZRangeByScore(Background, delfiles, rng).Result()
+	if err != nil {
+		return nil, err
+	}
+	files := make(map[Ino]uint64, len(vals))
+	for _, v := range vals {
+		ps := strings.Split(v, ":")
+		if len(ps) != 2 { // will be cleaned up as legacy
 			continue
 		}
-		r.rdb.Set(ctx, "nextCleanupSlices", now, 0)
-		r.doCleanupSlices()
+		inode, _ := strconv.ParseUint(ps[0], 10, 64)
+		files[Ino(inode)], _ = strconv.ParseUint(ps[1], 10, 64)
 	}
+	return files, nil
 }
 
 func (r *redisMeta) doCleanupSlices() {
