@@ -331,72 +331,45 @@ func (m *dbMeta) Reset() error {
 		&flock{}, &plock{})
 }
 
-func (m *dbMeta) Load() (*Format, error) {
-	var s = setting{Name: "format"}
-	ok, err := m.db.Get(&s)
-	if err == nil && !ok {
-		err = fmt.Errorf("database is not formatted")
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal([]byte(s.Value), &m.fmt)
-	if err != nil {
-		return nil, fmt.Errorf("json: %s", err)
-	}
-	return &m.fmt, nil
+func (m *dbMeta) doLoad() ([]byte, error) {
+	s := setting{Name: "format"}
+	_, err := m.db.Get(&s)
+	return []byte(s.Value), err
 }
 
-func (m *dbMeta) NewSession() error {
-	go m.refreshUsage()
-	if m.conf.ReadOnly {
-		return nil
+func (m *dbMeta) doNewSession(sinfo []byte) error {
+	// old client has no info field
+	err := m.db.Sync2(new(session))
+	if err != nil {
+		return fmt.Errorf("update table session: %s", err)
 	}
-	if err := m.db.Sync2(new(session)); err != nil { // old client has no info field
-		return err
+	// update the owner from uint64 to int64
+	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
+		return fmt.Errorf("update table flock, plock: %s", err)
 	}
 	if m.db.DriverName() == "mysql" {
 		m.updateCollate()
 	}
-	// update the owner from uint64 to int64
-	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
-		logger.Fatalf("update table flock, plock: %s", err)
-	}
 
-	info := newSessionInfo()
-	info.MountPoint = m.conf.MountPoint
-	data, err := json.Marshal(info)
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
-	}
-	var v int64
 	for {
-		v, err = m.incrCounter("nextSession", 1)
-		if err != nil {
-			return fmt.Errorf("create session: %s", err)
-		}
-		err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session{uint64(v), time.Now().Unix(), data})
-		})
-		if err == nil {
+		if err = m.txn(func(s *xorm.Session) error {
+			return mustInsert(s, &session{m.sid, time.Now().Unix(), sinfo})
+		}); err == nil {
 			break
 		}
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			logger.Warnf("session id %d is already used", v)
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("insert new session: %s", err)
+			logger.Warnf("session id %d is already used", m.sid)
+			if v, e := m.incrCounter("nextSession", 1); e == nil {
+				m.sid = uint64(v)
+				continue
+			} else {
+				return fmt.Errorf("get session ID: %s", e)
+			}
+		} else {
+			return fmt.Errorf("insert new session %d: %s", m.sid, err)
 		}
 	}
-	m.sid = uint64(v)
-	logger.Debugf("session is %d", m.sid)
 
-	go m.refreshSession()
-	go m.cleanupDeletedFiles()
-	go m.cleanupSlices()
-	go m.cleanupTrash()
 	go m.flushStats()
 	return nil
 }
@@ -494,6 +467,22 @@ func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
 		return err
 	})
 	return v, err
+}
+
+func (m *dbMeta) setIfSmall(name string, value, diff int64) (bool, error) {
+	c := counter{Name: name}
+	_, err := m.db.Get(&c)
+	if err != nil {
+		return false, err
+	}
+	if c.Value > value-diff {
+		return false, nil
+	} else {
+		return true, m.txn(func(ses *xorm.Session) error {
+			_, err := ses.Update(&counter{Value: value}, &counter{Name: name})
+			return err
+		})
+	}
 }
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
@@ -1627,49 +1616,33 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *dbMeta) CleanStaleSessions() {
+func (m *dbMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
 	var s session
-	rows, err := m.db.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Rows(&s)
+	rows, err := m.db.Where("Heartbeat < ?", ts).Rows(&s)
 	if err != nil {
-		logger.Warnf("scan stale sessions: %s", err)
-		return
+		return nil, err
 	}
-	var ids []uint64
+	var sids []uint64
 	for rows.Next() {
 		if rows.Scan(&s) == nil {
-			ids = append(ids, s.Sid)
+			sids = append(sids, s.Sid)
 		}
 	}
 	_ = rows.Close()
-	for _, sid := range ids {
-		m.doCleanStaleSession(sid)
-	}
+	return sids, nil
 }
 
-func (m *dbMeta) refreshSession() {
-	for {
-		time.Sleep(time.Minute)
-		m.Lock()
-		if m.umounting {
-			m.Unlock()
-			return
+func (m *dbMeta) doRefreshSession() {
+	_ = m.txn(func(ses *xorm.Session) error {
+		n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
+		if err == nil && n == 0 {
+			err = fmt.Errorf("no session found matching sid: %d", m.sid)
 		}
-		_ = m.txn(func(ses *xorm.Session) error {
-			n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
-			if err == nil && n == 0 {
-				err = fmt.Errorf("no session found matching sid: %d", m.sid)
-			}
-			if err != nil {
-				logger.Errorf("update session: %s", err)
-			}
-			return err
-		})
-		m.Unlock()
-		if _, err := m.Load(); err != nil {
-			logger.Warnf("reload setting: %s", err)
+		if err != nil {
+			logger.Errorf("update session: %s", err)
 		}
-		go m.CleanStaleSessions()
-	}
+		return err
+	})
 }
 
 func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
@@ -1925,48 +1898,20 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-func (m *dbMeta) cleanupDeletedFiles() {
-	for {
-		time.Sleep(time.Minute)
-		var d delfile
-		rows, err := m.db.Where("expire < ?", time.Now().Add(-time.Hour).Unix()).Rows(&d)
-		if err != nil {
-			continue
-		}
-		var fs []delfile
-		for rows.Next() {
-			if rows.Scan(&d) == nil {
-				fs = append(fs, d)
-			}
-		}
-		_ = rows.Close()
-		for _, f := range fs {
-			logger.Debugf("cleanup chunks of inode %d with %d bytes", f.Inode, f.Length)
-			m.doDeleteFileData(f.Inode, f.Length)
+func (m *dbMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
+	var d delfile
+	rows, err := m.db.Where("expire < ?", ts).Rows(&d)
+	if err != nil {
+		return nil, err
+	}
+	files := make(map[Ino]uint64)
+	for rows.Next() {
+		if rows.Scan(&d) == nil {
+			files[d.Inode] = d.Length
 		}
 	}
-}
-
-func (m *dbMeta) cleanupSlices() {
-	for {
-		time.Sleep(time.Hour)
-
-		// once per hour
-		var c = counter{Name: "nextCleanupSlices"}
-		_, err := m.db.Get(&c)
-		if err != nil {
-			continue
-		}
-		now := time.Now().Unix()
-		if c.Value+3600 > now {
-			continue
-		}
-		_ = m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Update(&counter{Value: now}, counter{Name: "nextCleanupSlices"})
-			return err
-		})
-		m.doCleanupSlices()
-	}
+	_ = rows.Close()
+	return files, nil
 }
 
 func (m *dbMeta) doCleanupSlices() {

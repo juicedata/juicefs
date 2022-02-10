@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"sort"
@@ -36,10 +37,20 @@ const (
 
 type engine interface {
 	incrCounter(name string, value int64) (int64, error)
+	// Set name to value if old <= value - diff
+	setIfSmall(name string, value, diff int64) (bool, error)
 
+	doLoad() ([]byte, error)
+
+	doNewSession(sinfo []byte) error
+	doRefreshSession()
+	doFindStaleSessions(ts int64) ([]uint64, error)
 	doCleanStaleSession(sid uint64)
+
 	doDeleteSustainedInode(sid uint64, inode Ino) error
+	doFindDeletedFiles(ts int64) (map[Ino]uint64, error)
 	doDeleteFileData(inode Ino, length uint64)
+	doCleanupSlices()
 	doDeleteSlice(chunkid uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -127,6 +138,77 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
+func (m *baseMeta) Load() (*Format, error) {
+	body, err := m.en.doLoad()
+	if err == nil && len(body) == 0 {
+		err = fmt.Errorf("database is not formatted")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(body, &m.fmt); err != nil {
+		return nil, fmt.Errorf("json: %s", err)
+	}
+	return &m.fmt, nil
+}
+
+func (m *baseMeta) NewSession() error {
+	go m.refreshUsage()
+	if m.conf.ReadOnly {
+		return nil
+	}
+
+	v, err := m.en.incrCounter("nextSession", 1)
+	if err != nil {
+		return fmt.Errorf("get session ID: %s", err)
+	}
+	m.sid = uint64(v)
+	info := newSessionInfo()
+	info.MountPoint = m.conf.MountPoint
+	data, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("json: %s", err)
+	}
+	if err = m.en.doNewSession(data); err != nil {
+		return fmt.Errorf("create session: %s", err)
+	}
+	logger.Debugf("create session %d OK", m.sid)
+
+	go m.refreshSession()
+	go m.cleanupDeletedFiles()
+	go m.cleanupSlices()
+	go m.cleanupTrash()
+	return nil
+}
+
+func (m *baseMeta) refreshSession() {
+	for {
+		time.Sleep(time.Minute)
+		m.Lock()
+		if m.umounting {
+			m.Unlock()
+			return
+		}
+		m.en.doRefreshSession()
+		m.Unlock()
+		if _, err := m.Load(); err != nil {
+			logger.Warnf("reload setting: %s", err)
+		}
+		go m.CleanStaleSessions()
+	}
+}
+
+func (m *baseMeta) CleanStaleSessions() {
+	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute * -5).Unix())
+	if err != nil {
+		logger.Warnf("scan stale sessions: %s", err)
+		return
+	}
+	for _, sid := range sids {
+		m.en.doCleanStaleSession(sid)
+	}
+}
+
 func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
@@ -179,6 +261,32 @@ func (m *baseMeta) flushStats() {
 			}
 		}
 		time.Sleep(time.Second)
+	}
+}
+
+func (m *baseMeta) cleanupDeletedFiles() {
+	for {
+		time.Sleep(time.Minute)
+		files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix())
+		if err != nil {
+			logger.Warnf("scan deleted files: %s", err)
+			continue
+		}
+		for inode, length := range files {
+			logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
+			m.en.doDeleteFileData(inode, length)
+		}
+	}
+}
+
+func (m *baseMeta) cleanupSlices() {
+	for {
+		time.Sleep(time.Hour)
+		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), 3600); err != nil {
+			logger.Warnf("checking counter nextCleanupSlices: %s", err)
+		} else if ok {
+			m.en.doCleanupSlices()
+		}
 	}
 }
 
