@@ -1607,8 +1607,8 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (r *redisMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
-	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: 100}
+func (r *redisMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
+	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: int64(limit)}
 	vals, err := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
 	if err != nil {
 		return nil, err
@@ -1875,8 +1875,8 @@ func (r *redisMeta) cleanupLegacies() {
 	}
 }
 
-func (r *redisMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
-	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: 1000}
+func (r *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
+	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: int64(limit)}
 	vals, err := r.rdb.ZRangeByScore(Background, delfiles, rng).Result()
 	if err != nil {
 		return nil, err

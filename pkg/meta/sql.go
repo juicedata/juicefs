@@ -1624,9 +1624,9 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) {
 	}
 }
 
-func (m *dbMeta) doFindStaleSessions(ts int64) ([]uint64, error) {
+func (m *dbMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
 	var s session
-	rows, err := m.db.Where("Heartbeat < ?", ts).Rows(&s)
+	rows, err := m.db.Where("Heartbeat < ?", ts).Limit(limit, 0).Rows(&s)
 	if err != nil {
 		return nil, err
 	}
@@ -1906,9 +1906,9 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	return errno(err)
 }
 
-func (m *dbMeta) doFindDeletedFiles(ts int64) (map[Ino]uint64, error) {
+func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
 	var d delfile
-	rows, err := m.db.Where("expire < ?", ts).Rows(&d)
+	rows, err := m.db.Where("expire < ?", ts).Limit(limit, 0).Rows(&d)
 	if err != nil {
 		return nil, err
 	}
