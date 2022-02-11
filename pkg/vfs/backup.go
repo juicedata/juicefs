@@ -26,6 +26,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 // Backup metadata periodically in the object storage
@@ -33,7 +34,7 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 	ctx := meta.Background
 	key := "lastBackup"
 	for {
-		time.Sleep(interval / 10)
+		utils.SleepWithJitter(interval / 10)
 		var value []byte
 		if st := m.GetXattr(ctx, 0, key, &value); st != 0 && st != meta.ENOATTR {
 			logger.Warnf("getxattr inode 1 key %s: %s", key, st)
