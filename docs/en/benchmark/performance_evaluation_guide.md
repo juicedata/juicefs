@@ -29,6 +29,10 @@ The following example describes the basic usage of the bench tool built-in to Ju
 - Object Storage: Amazon S3
 - JuiceFS Version: 0.17-dev (2021-09-23 2ec2badf)
 
+### Attention
+
+JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [recycle bin](../security/trash.md) for details.
+
 ### JuiceFS Bench
 
 The JuiceFS `bench` command can help you quickly complete a single machine performance test to determine if the environment configuration and performance are normal by the test results. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server (if you need help with JuiceFS initialization and mounting, please refer to the [Quick Start Guide](../getting-started/for_local.md), execute the following command (the `-p` parameter is recommended to set the number of CPU cores on the server).
@@ -136,6 +140,10 @@ From the description of the previous benchmarking process, a total of (1 + 100) 
 All these values correspond exactly to the results of `profile`. This is because JuiceFS `write` writes to the memory buffer first by default and then calls flush to upload data to the object store when the file is closed, as expected.
 
 ## Other Test Tool Configuration Examples
+
+:::tip
+JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [recycle bin](../security/trash.md) for details.
+:::
 
 ### Fio Standalone Performance Test
 
