@@ -53,7 +53,8 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 			var iused, dummy uint64
 			_ = m.StatFS(ctx, &dummy, &dummy, &iused, &dummy)
 			if iused/5e6 > uint64(interval/time.Hour) {
-				logger.Infof("backup metadata skipped because of too many inodes: %d %s", iused, interval)
+				logger.Warnf("backup metadata skipped because of too many inodes: %d %s; "+
+					"you may increase `--backup-meta` to enable it again", iused, interval)
 				continue
 			}
 			if st := m.SetXattr(ctx, 0, key, []byte(now.Format(time.RFC3339)), meta.XattrCreateOrReplace); st != 0 {
