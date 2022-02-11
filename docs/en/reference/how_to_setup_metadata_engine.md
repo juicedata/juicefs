@@ -5,11 +5,15 @@ slug: /databases_for_metadata
 ---
 # How to Setup Metadata Engine
 
-By reading [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database.
+:::tip Version Tips
+The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, older clients need to be upgraded to use it.
+:::
+
+By reading [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database. We call the database that supports storing metadata a "Metadata Storage Engine".
 
 ## Metadata Storage Engine
 
-Metadata and data are equally important. The metadata records the detailed information of each file, such as the name, size, permissions, location, and so on. Especially for this kind of file system where data and metadata are stored separately, the read and write performance of metadata directly determines the actual performance of the file system.
+Metadata is critical. The metadata records the detailed information of each file, such as the name, size, permissions, location, and so on. Especially for this kind of file system where data and metadata are stored separately, the read and write performance of metadata directly determines the actual performance of the file system. The engine that stores the metadata is the most fundamental determinant of performance and reliability.
 
 The metadata storage of JuiceFS uses a multi-engine design. In order to create an ultra-high-performance cloud-native file system, JuiceFS first supports [Redis](https://redis.io) a key-value database running in memory, which makes JuiceFS ten times more powerful than Amazon [ EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) performance, [View test results](../benchmark/benchmark.md) .
 
@@ -25,15 +29,22 @@ No matter which database is used to store metadata, **it is important to ensure 
 
 [Redis](https://redis.io/) is an open source (BSD license) memory-based key-value storage system, often used as a database, cache, and message broker.
 
+:::note
+JuiceFS requires Redis 4.0+
+:::
+
 ### Create a file system
 
 When using Redis as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
-redis://username:password@host:6379/1
+redis://[<username>:<password>@]<host>[:6379]/1
 ```
 
-`username` was introduced after Redis 6.0. If you don't have a username  field you can ignore it, e.g. `redis://:password@host:6379/1` (the `:` colon in front of the password needs to be preserved).
+Where `[]` enclosed are optional and the rest are mandatory.
+
+- `username` is introduced after Redis 6.0 and can be ignored if there is no username, but the `:` colon in front of the password needs to be kept, e.g. `redis://:password@host:6379/1`.
+- The default port number for the `redis://` protocol header is `6379`, which can be left blank if the default port number is not changed, e.g. `redis://:password@host/1`.
 
 For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 
@@ -59,14 +70,21 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-:::caution
-JuiceFS requires at least 4.0 version for redis
+:::note
+You can also use the standard URL format when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` preserves the `:` and `@` separators between the username and password.
 :::
 
 ### Mount a file system
 
 ```shell
-sudo juicefs mount -d redis://192.168.1.6:6379/1 /mnt/jfs
+sudo juicefs mount -d "redis://:mypassword@192.168.1.6:6379/1" /mnt/jfs
+```
+
+Passing passwords with the `META_PASSWORD` or `REDIS_PASSWORD` environment variables is also supported when mounting file systems.
+
+```shell
+$ export META_PASSWORD=mypassword
+$ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
 :::tip
@@ -88,37 +106,41 @@ Other PostgreSQL-compatible databases (such as CockroachDB) can also be used as 
 When using PostgreSQL as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
-postgres://[<username>:<password>@]<IP or Domain name>[:5432]/<database-name>[?parameters]
+postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
 ```
 
-Juicefs also supports set the database password from the environment variable `META_PASSWORD`. In this case, the URL can omit the `<password>`. The format is `postgres://[<username>:@]<IP or Domain name>[:5432]/ <database-name>[?parameters]`
+Where `[]` enclosed are optional and the rest are mandatory.
 
 For example:
 
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "postgres://user:password@192.168.1.6:5432/juicefs" \
+    "postgres://user:mypassword@192.168.1.6:5432/juicefs" \
     pics
 ```
+
+A more secure approach would be to pass the database password through the environment variable `META_PASSWORD`:
 
 ```shell
 $ export META_PASSWORD=password
 $ juicefs format --storage s3 \
     ...
-    "postgres://user:@192.168.1.6:5432/juicefs" \
+    "postgres://user@192.168.1.6:5432/juicefs" \
     pics
 ```
 
 ### Mount a file system
 
 ```shell
-sudo juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs" /mnt/jfs
+sudo juicefs mount -d "postgres://user:mypassword@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
+Passing password with the `META_PASSWORD` environment variable is also supported when mounting a file system.
+
 ```shell
-export META_PASSWORD=password
-sudo juicefs mount -d "postgres://user:@192.168.1.6:5432/juicefs" /mnt/jfs
+$ export META_PASSWORD=mypassword
+$ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
 ### Troubleshooting
@@ -128,7 +150,7 @@ The JuiceFS client connects to PostgreSQL via SSL encryption by default; if an e
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs?sslmode=disable" \
+    "postgres://user@192.168.1.6:5432/juicefs?sslmode=disable" \
     pics
 ```
 
@@ -143,36 +165,43 @@ Additional parameters can be appended to the metadata URL, [click here to view](
 When using MySQL as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
-mysql://<username>:<password>@(<IP or Domain name>:3306)/<database-name>
+mysql://<username>[:<password>]@(<host>:3306)/<database-name>
 ```
-Juicefs also supports set the database password from the environment variable `META_PASSWORD`. In this case, the URL can omit the `<password`>. The format is `mysql://<username>:@(<IP or Domain name>:3306)/<database-name>`
+
+:::note
+Don't leave out the `()` brackets on either side of the URL.
+:::
 
 For example:
 
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "mysql://user:password@(192.168.1.6:3306)/juicefs" \
+    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" \
     pics
 ```
 
+A more secure approach would be to pass the database password through the environment variable `META_PASSWORD`:
+
 ```shell
-$ export META_PASSWORD=password
+$ export META_PASSWORD=mypassword
 $ juicefs format --storage s3 \
     ...
-    "mysql://user:@(192.168.1.6:3306)/juicefs" \
+    "mysql://user@(192.168.1.6:3306)/juicefs" \
     pics
 ```
 
 ### Mount a file system
 
 ```shell
-sudo juicefs mount -d "mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs" /mnt/jfs
+sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
+Passing password with the `META_PASSWORD` environment variable is also supported when mounting a file system.
+
 ```shell
-export META_PASSWORD=password
-sudo juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs" /mnt/jfs
+$ export META_PASSWORD=mypassword
+$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
 For more examples of MySQL database address format, [click here to view](https://github.com/Go-SQL-Driver/MySQL/#examples).
@@ -188,8 +217,22 @@ For example:
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs" \
+    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" \
     pics
+
+$ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/jfs
+```
+
+Passing passwords through environment variables is also exactly the same:
+
+```shell
+$ export META_PASSWORD=mypassword
+$ juicefs format --storage s3 \
+    ...
+    "mysql://user@(192.168.1.6:3306)/juicefs" \
+    pics
+
+$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
 ## SQLite

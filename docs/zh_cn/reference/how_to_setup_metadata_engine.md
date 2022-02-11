@@ -5,15 +5,19 @@ slug: /databases_for_metadata
 ---
 # JuiceFS 如何设置元数据引擎
 
-通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md) 和 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中。
+:::tip 版本提示
+本文档使用的环境变量 `META_PASSWORD` 是 JuiceFS v1.0 新增功能，旧版客户端需要升级后才能使用。
+:::
 
-## 元数据存储引擎
+通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md) 和 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中，我们把这些支持存储元数据的数据库称为“元数据存储引擎”。
 
-元数据和数据同样至关重要，元数据中记录着每一个文件的详细信息，名称、大小、权限、位置等等。特别是这种数据与元数据分离存储的文件系统，元数据的读写性能直接决定了文件系统实际的性能表现。
+## 元数据与存储引擎
+
+**元数据**至关重要，它记录着每一个文件的详细信息，名称、大小、权限、位置等等。特别是这种数据与元数据分离存储的文件系统，元数据的读写性能决定了文件系统实际的性能表现，而存储元数据的引擎是性能和可靠性最根本的决定因素。
 
 JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性能的云原生文件系统，JuiceFS 最先支持的是运行在内存上的键值数据库—— [Redis](https://redis.io)，这使得 JuiceFS 拥有十倍于 Amazon [EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的性能表现，[查看测试结果](../benchmark/benchmark.md)。
 
-通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模地使用。因此，JuiceFS 陆续开放了对 MySQL/MariaDB、TiKV 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
+通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模地使用。因此，JuiceFS 陆续开放了对 PostgreSQL、MySQL、MariaDB、TiKV 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
 
 :::caution 特别提示
 不论采用哪种数据库存储元数据，**务必确保元数据的安全**。元数据一旦损坏或丢失，将导致对应数据彻底损坏或丢失，甚至损毁整个文件系统。对于生产环境，应该始终选择具有高可用能力的数据库，与此同时，建议定期「[备份元数据](../administration/metadata_dump_load.md)」。
@@ -23,17 +27,24 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 
 [Redis](https://redis.io/) 是基于内存的键值存储系统，在 BSD 协议下开源，可用于数据库、缓存和消息代理。
 
+:::note 注意
+JuiceFS 要求 Redis 4.0+ 版本
+:::
+
 ### 创建文件系统
 
 使用 Redis 作为元数据存储引擎时，通常使用以下格式访问数据库：
 
 ```shell
-redis://username:password@host:6379/1
+redis://[<username>:<password>@]<host>[:6379]/1
 ```
 
-`username` 是 Redis 6.0 之后引入的。如果没有用户名可以忽略，如  `redis://:password@host:6379/1`（密码前面的`:`冒号需要保留）。
+其中，`[]` 括起来的是可选项，其它部分为必选项。
 
-例如，以下命令创建名为 `pics` 的 JuiceFS 文件系统，使用 Redis 中的 `1` 号数据库存储元数据：
+- `username` 是 Redis 6.0 之后引入的，如果没有用户名可以忽略，但密码前面的 `:` 冒号需要保留，如 `redis://:password@host:6379/1`。
+- `redis://` 协议头默认端口号为 `6379`，如果没有改变默认端口号可以不用填写，如 `redis://:password@host/1`。
+
+例如，创建名为 `pics` 的文件系统，使用 Redis 的 `1` 号数据库存储元数据：
 
 ```shell
 $ juicefs format --storage s3 \
@@ -42,7 +53,7 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-安全起见，建议使用环境变量 `META_PASSWORD` 或者 `REDIS_PASSWORD` 传递密码，例如：
+安全起见，建议使用环境变量 `META_PASSWORD` 或 `REDIS_PASSWORD` 传递数据库密码，例如：
 
 ```shell
 export META_PASSWORD=mypassword
@@ -57,14 +68,21 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-:::caution 特别提示
-JuiceFS 对 redis 的最低版本要求为 4.0
+:::note 说明
+使用环境变量传递数据库密码也可以采用标准的 URL 格式，如：`"redis://:@192.168.1.6:6379/1"` 保留了用户名和密码之间的 `:` 以及 `@` 分隔符。
 :::
 
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
+sudo juicefs mount -d "redis://:mypassword@192.168.1.6:6379/1" /mnt/jfs
+```
+
+挂载文件系统也支持用 `META_PASSWORD` 或 `REDIS_PASSWORD` 环境变量传递密码：
+
+```shell
+$ export META_PASSWORD=mypassword
+$ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
 :::tip 提示
@@ -86,37 +104,41 @@ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 使用 PostgreSQL 作为元数据引擎时，需要使用如下的格式来指定参数：
 
 ```shell
-postgres://[<username>:<password>@]<IP or Domain name>[:5432]/<database-name>[?parameters]
+postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
 ```
-Juicefs 也支持从环境变量`META_PASSWORD`中读取数据库密码，此时URL可以省略密码，省略后的格式为 `postgres://[<username>:@]<IP or Domain name>[:5432]/<database-name>[?parameters]`
+
+其中，`[]` 括起来的是可选项，其它部分为必选项。
 
 例如：
 
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "postgres://user:password@192.168.1.6:5432/juicefs" \
+    "postgres://user:mypassword@192.168.1.6:5432/juicefs" \
     pics
 ```
+
+更安全的做法是可以通过环境变量 `META_PASSWORD` 传递数据库密码：
 
 ```shell
-$ export META_PASSWORD=password
+$ export META_PASSWORD=mypassword
 $ juicefs format --storage s3 \
     ...
-    "postgres://user:@192.168.1.6:5432/juicefs" \
+    "postgres://user@192.168.1.6:5432/juicefs" \
     pics
 ```
-
 
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "postgres://user:password@192.168.1.6:5432/juicefs" /mnt/jfs
+sudo juicefs mount -d "postgres://user:mypassword@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
+挂载文件系统也支持用 `META_PASSWORD` 环境变量传递密码：
+
 ```shell
-export META_PASSWORD=password
-sudo juicefs mount -d "postgres://user:@192.168.1.6:5432/juicefs" /mnt/jfs
+$ export META_PASSWORD=mypassword
+$ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
 ### 故障排除
@@ -126,7 +148,7 @@ JuiceFS 客户端默认采用 SSL 加密连接 PostgreSQL，如果连接时报�
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs?sslmode=disable" \
+    "postgres://user@192.168.1.6:5432/juicefs?sslmode=disable" \
     pics
 ```
 
@@ -141,39 +163,44 @@ $ juicefs format --storage s3 \
 使用 MySQL 作为元数据存储引擎时，通常使用以下格式访问数据库：
 
 ```shell
-mysql://<username>:<password>@(<IP or Domain name>:3306)/<database-name>
+mysql://<username>[:<password>]@(<host>:3306)/<database-name>
 ```
-Juicefs 也支持从环境变量`META_PASSWORD`中读取数据库密码，此时URL可以省略密码，省略后的格式为 `mysql://<username>:@(<IP or Domain name>:3306)/<database-name>`
+
+:::note 注意
+不要漏掉 URL 两边的 `()` 括号
+:::
 
 例如：
 
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "mysql://user:password@(192.168.1.6:3306)/juicefs" \
+    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" \
     pics
 ```
 
+更安全的做法是可以通过环境变量 `META_PASSWORD` 传递数据库密码：
 
 ```shell
-$ export META_PASSWORD=password
+$ export META_PASSWORD=mypassword
 $ juicefs format --storage s3 \
     ...
-    "mysql://user:@(192.168.1.6:3306)/juicefs" \
+    "mysql://user@(192.168.1.6:3306)/juicefs" \
     pics
 ```
 
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "mysql://user:password@(192.168.1.6:3306)/juicefs" /mnt/jfs
+sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
+
+挂载文件系统也支持用 `META_PASSWORD` 环境变量传递密码：
 
 ```shell
-export META_PASSWORD=password
-sudo juicefs mount -d "mysql://user:@(192.168.1.6:3306)/juicefs" /mnt/jfs
+$ export META_PASSWORD=mypassword
+$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
-
 
 更多 MySQL 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
 
@@ -188,8 +215,22 @@ MariaDB 与 MySQL 高度兼容，在使用上也没有任何差别，创建和�
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "mysql://user:$MYSQL_PASSWD@(192.168.1.6:3306)/juicefs" \
+    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" \
     pics
+
+$ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/jfs
+```
+
+通过环境变量传递密码的方式也完全一致：
+
+```shell
+$ export META_PASSWORD=mypassword
+$ juicefs format --storage s3 \
+    ...
+    "mysql://user@(192.168.1.6:3306)/juicefs" \
+    pics
+
+$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
 ## SQLite
