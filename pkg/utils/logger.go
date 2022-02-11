@@ -17,6 +17,7 @@ package utils
 import (
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"sync"
 
@@ -59,12 +60,14 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
 	timestamp := e.Time.Format(timeFormat)
-	str := fmt.Sprintf("%v %s[%d] <%v>: %v",
+	str := fmt.Sprintf("%v %s[%d] <%v>: %v [%s:%d]",
 		timestamp,
 		l.name,
 		os.Getpid(),
 		lvlStr,
-		e.Message)
+		e.Message,
+		path.Base(e.Caller.File),
+		e.Caller.Line)
 
 	if len(e.Data) != 0 {
 		str += " " + fmt.Sprint(e.Data)
@@ -86,6 +89,7 @@ func newLogger(name string) *logHandle {
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)
 	}
+	l.SetReportCaller(true)
 	return l
 }
 
