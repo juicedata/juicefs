@@ -4,6 +4,7 @@ language: go
 cache:
   directories:
     - $HOME/gopath/pkg/mod/
+    - /root/.m2/repository/
 services:
   - mysql
   - postgresql
