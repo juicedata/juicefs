@@ -80,7 +80,7 @@ func UpdateMetrics(m meta.Meta) {
 			usedSpace.Set(float64(totalSpace - availSpace))
 			usedInodes.Set(float64(iused))
 		}
-		time.Sleep(time.Second * 10)
+		utils.SleepWithJitter(time.Second * 10)
 	}
 }
 

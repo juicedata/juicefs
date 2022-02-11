@@ -1849,7 +1849,7 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 // For now only deleted files
 func (r *redisMeta) cleanupLegacies() {
 	for {
-		time.Sleep(time.Minute)
+		utils.SleepWithJitter(time.Minute)
 		rng := &redis.ZRangeBy{Max: strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10), Count: 1000}
 		vals, err := r.rdb.ZRangeByScore(Background, delfiles, rng).Result()
 		if err != nil {

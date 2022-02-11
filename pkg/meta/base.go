@@ -183,7 +183,7 @@ func (m *baseMeta) NewSession() error {
 
 func (m *baseMeta) refreshSession() {
 	for {
-		time.Sleep(time.Minute)
+		utils.SleepWithJitter(time.Minute)
 		m.Lock()
 		if m.umounting {
 			m.Unlock()
@@ -232,7 +232,7 @@ func (m *baseMeta) refreshUsage() {
 		if v, err := m.en.incrCounter(totalInodes, 0); err == nil {
 			atomic.StoreInt64(&m.usedInodes, v)
 		}
-		time.Sleep(time.Second * 10)
+		utils.SleepWithJitter(time.Second * 10)
 	}
 }
 
@@ -270,7 +270,7 @@ func (m *baseMeta) flushStats() {
 
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
-		time.Sleep(time.Minute)
+		utils.SleepWithJitter(time.Minute)
 		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), 60); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
@@ -289,7 +289,7 @@ func (m *baseMeta) cleanupDeletedFiles() {
 
 func (m *baseMeta) cleanupSlices() {
 	for {
-		time.Sleep(time.Hour)
+		utils.SleepWithJitter(time.Hour)
 		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), 3600); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
@@ -831,7 +831,7 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 
 func (m *baseMeta) cleanupTrash() {
 	for {
-		time.Sleep(time.Hour)
+		utils.SleepWithJitter(time.Hour)
 		if st := m.en.doGetAttr(Background, TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
 				logger.Warnf("getattr inode %d: %s", TrashInode, st)
