@@ -114,7 +114,7 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-JuiceFS 也支持从环境变量 `META_PASSWORD` 中读取数据库密码：
+更安全的做法是可以通过环境变量 `META_PASSWORD` 传递数据库密码：
 
 ```shell
 $ export META_PASSWORD=mypassword
@@ -175,7 +175,7 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-JuiceFS 也支持从环境变量 `META_PASSWORD` 中读取数据库密码：
+更安全的做法是可以通过环境变量 `META_PASSWORD` 传递数据库密码：
 
 ```shell
 $ export META_PASSWORD=mypassword
