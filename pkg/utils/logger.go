@@ -17,6 +17,7 @@ package utils
 import (
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"sync"
 
@@ -50,6 +51,7 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 			color = 31 // RED
 		case logrus.WarnLevel:
 			color = 33 // YELLOW
+			lvlStr = "WARN"
 		case logrus.InfoLevel:
 			color = 34 // BLUE
 		default: // logrus.TraceLevel, logrus.DebugLevel
@@ -59,11 +61,13 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
 	timestamp := e.Time.Format(timeFormat)
-	str := fmt.Sprintf("%v %s[%d] <%v>: %v",
+	str := fmt.Sprintf("%v %s[%d] %-18s %s:%d: %v",
 		timestamp,
 		l.name,
 		os.Getpid(),
-		lvlStr,
+		fmt.Sprintf("<%s>", lvlStr),
+		path.Base(e.Caller.File),
+		e.Caller.Line,
 		e.Message)
 
 	if len(e.Data) != 0 {
@@ -86,6 +90,7 @@ func newLogger(name string) *logHandle {
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)
 	}
+	l.SetReportCaller(true)
 	return l
 }
 
