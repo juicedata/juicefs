@@ -31,7 +31,7 @@ The following example describes the basic usage of the bench tool built-in to Ju
 
 ### Attention
 
-JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [recycle bin](../security/trash.md) for details.
+JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [trash](../security/trash.md) for details.
 
 ### JuiceFS Bench
 
@@ -142,7 +142,7 @@ All these values correspond exactly to the results of `profile`. This is because
 ## Other Test Tool Configuration Examples
 
 :::tip
-JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [recycle bin](../security/trash.md) for details.
+JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [trash](../security/trash.md) for details.
 :::
 
 ### Fio Standalone Performance Test
