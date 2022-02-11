@@ -5,6 +5,10 @@ slug: /databases_for_metadata
 ---
 # How to Setup Metadata Engine
 
+:::tip Version Tips
+The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, older clients need to be upgraded to use it.
+:::
+
 By reading [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database. We call the database that supports storing metadata a "Metadata Storage Engine".
 
 ## Metadata Storage Engine
