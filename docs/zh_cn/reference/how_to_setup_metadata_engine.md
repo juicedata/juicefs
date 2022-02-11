@@ -5,15 +5,15 @@ slug: /databases_for_metadata
 ---
 # JuiceFS 如何设置元数据引擎
 
-通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md) 和 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中。
+通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md) 和 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中，我们把这些支持存储元数据的数据库称为“元数据存储引擎”。
 
-## 元数据存储引擎
+## 元数据与存储引擎
 
-元数据和数据同样至关重要，元数据中记录着每一个文件的详细信息，名称、大小、权限、位置等等。特别是这种数据与元数据分离存储的文件系统，元数据的读写性能直接决定了文件系统实际的性能表现。
+**元数据**至关重要，它记录着每一个文件的详细信息，名称、大小、权限、位置等等。特别是这种数据与元数据分离存储的文件系统，元数据的读写性能决定了文件系统实际的性能表现，而存储元数据的引擎是性能和可靠性最根本的决定因素。
 
 JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性能的云原生文件系统，JuiceFS 最先支持的是运行在内存上的键值数据库—— [Redis](https://redis.io)，这使得 JuiceFS 拥有十倍于 Amazon [EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的性能表现，[查看测试结果](../benchmark/benchmark.md)。
 
-通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模地使用。因此，JuiceFS 陆续开放了对 MySQL/MariaDB、TiKV 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
+通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模地使用。因此，JuiceFS 陆续开放了对 PostgreSQL、MySQL、MariaDB、TiKV 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
 
 :::caution 特别提示
 不论采用哪种数据库存储元数据，**务必确保元数据的安全**。元数据一旦损坏或丢失，将导致对应数据彻底损坏或丢失，甚至损毁整个文件系统。对于生产环境，应该始终选择具有高可用能力的数据库，与此同时，建议定期「[备份元数据](../administration/metadata_dump_load.md)」。
@@ -124,10 +124,6 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-:::note 说明
-当通过环境变量传递数据库密码时，用户名和密码之间的 `:` 分隔符是可选的，比如：`"postgres://user:@192.168.1.6:5432/juicefs"` 也是正确的。
-:::
-
 ### 挂载文件系统
 
 ```shell
@@ -188,10 +184,6 @@ $ juicefs format --storage s3 \
     "mysql://user@(192.168.1.6:3306)/juicefs" \
     pics
 ```
-
-:::note 说明
-当通过环境变量传递数据库密码时，用户名和密码之间的 `:` 分隔符是可选的，比如：`"mysql://user:@(192.168.1.6:3306)/juicefs"` 也是正确的。
-:::
 
 ### 挂载文件系统
 
