@@ -17,7 +17,6 @@ package utils
 import (
 	"fmt"
 	"os"
-	"path"
 	"strings"
 	"sync"
 
@@ -44,9 +43,6 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		lvl = *l.lvl
 	}
 	lvlStr := strings.ToUpper(lvl.String())
-	if lvl == logrus.WarnLevel {
-		lvlStr = "WARN"
-	}
 	if l.tty {
 		var color int
 		switch lvl {
@@ -59,19 +55,15 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		default: // logrus.TraceLevel, logrus.DebugLevel
 			color = 35 // MAGENTA
 		}
-		lvlStr = fmt.Sprintf("%-18s", fmt.Sprintf("<\033[1;%dm%s\033[0m>", color, lvlStr))
-	} else {
-		lvlStr = fmt.Sprintf("%-7s", fmt.Sprintf("<%s>", lvlStr))
+		lvlStr = fmt.Sprintf("\033[1;%dm%s\033[0m", color, lvlStr)
 	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
 	timestamp := e.Time.Format(timeFormat)
-	str := fmt.Sprintf("%v %s[%d] %s %s:%d: %v",
+	str := fmt.Sprintf("%v %s[%d] <%v>: %v",
 		timestamp,
 		l.name,
 		os.Getpid(),
 		lvlStr,
-		path.Base(e.Caller.File),
-		e.Caller.Line,
 		e.Message)
 
 	if len(e.Data) != 0 {
@@ -94,7 +86,6 @@ func newLogger(name string) *logHandle {
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)
 	}
-	l.SetReportCaller(true)
 	return l
 }
 
