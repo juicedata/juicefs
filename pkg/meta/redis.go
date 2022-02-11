@@ -275,7 +275,7 @@ func (r *redisMeta) incrCounter(name string, v int64) (int64, error) {
 
 func (r *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	old, err := r.rdb.Get(Background, name).Int64()
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		return false, err
 	}
 	if old > value-diff {
