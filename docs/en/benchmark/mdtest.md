@@ -5,6 +5,10 @@ slug: /mdtest
 ---
 # Benchmark with mdtest
 
+:::tip
+JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [trash](../security/trash.md) for details.
+:::
+
 ## Testing Approach
 
 Performed a metadata test on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior).
