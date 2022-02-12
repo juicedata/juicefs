@@ -29,6 +29,10 @@ slug: /performance_evaluation_guide
 - 对象存储：Amazon S3
 - JuiceFS version：0.17-dev (2021-09-23 2ec2badf)
 
+### 注意事项
+
+JuiceFS v1.0+ 默认启用了回收站，基准测试会在文件系统中创建和删除临时文件，这些文件最终会被转存到回收站 `.trash` 占用存储空间，为了避免这种情况，可以在基准测试之前关闭回收站 `juicefs config META-URL --trash-days 0`，详情参考[回收站](../security/trash.md)。
+
 ### JuiceFS Bench
 
 JuiceFS `bench` 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[快速上手指南](../getting-started/for_local.md)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
@@ -136,6 +140,10 @@ juicefs profile access.log --interval 0
 以上这些值均能与 `profile` 的结果完全对应上。另外，结果中还显示 write 的平均时延非常小（45 微秒），而主要耗时点在 flush。这是因为 JuiceFS 的 write 默认先写入内存缓冲区，在文件关闭时再调用 flush 上传数据到对象存储，与预期吻合。
 
 ## 其他测试工具配置示例
+
+:::tip 提示
+JuiceFS v1.0+ 默认启用了回收站，基准测试会在文件系统中创建和删除临时文件，这些文件最终会被转存到回收站 `.trash` 占用存储空间，为了避免这种情况，可以在基准测试之前关闭回收站 `juicefs config META-URL --trash-days 0`，详情参考[回收站](../security/trash.md)。
+:::
 
 ### Fio 单机性能测试
 
