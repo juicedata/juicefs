@@ -107,6 +107,8 @@ The backup frequency can be accurate to the second and the units supported are a
 - `m`: accurate to the minute, e.g. `30m`, `1h30m`.
 - `s`: accurate to the second, such as `50s`, `30m50s`, `1h30m50s`;
 
+It is worth mentioning that the time cost of backup will increase with the number of files in the filesystem, so when the number is too large (by default 10 million), JuiceFS will automatically skip backup and print the corresponding warning log. At this point you may mount a new client with bigger `--backup-meta` option to re-enable automatic backups.
+
 ### Automatic Backup Policy
 
 Although automatic metadata backup becomes the default action for clients, backup conflicts do not occur when multiple hosts share the same filesystem mount.
