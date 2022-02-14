@@ -33,6 +33,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
+	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
@@ -213,6 +214,18 @@ func format(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
+		if objs, err := osync.ListAll(blob, "", ""); err == nil {
+			for o := range objs {
+				if o == nil || o.IsDir() {
+					continue
+				}
+				if k := o.Key(); strings.HasPrefix(k, "chunks/") || strings.HasPrefix(k, "meta/") {
+					logger.Fatalf("Storage %s is already used for another volume; clean it up to proceed", blob)
+				}
+			}
+		} else {
+			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
+		}
 		if err := test(blob); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
