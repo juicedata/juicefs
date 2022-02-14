@@ -214,6 +214,9 @@ func format(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
+		if err := test(blob); err != nil {
+			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
+		}
 		if objs, err := osync.ListAll(blob, "", ""); err == nil {
 			for o := range objs {
 				if o == nil || o.IsDir() {
@@ -224,9 +227,6 @@ func format(c *cli.Context) error {
 				}
 			}
 		} else {
-			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
-		}
-		if err := test(blob); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
 	}
