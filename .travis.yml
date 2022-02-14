@@ -4,6 +4,7 @@ language: go
 cache:
   directories:
     - $HOME/gopath/pkg/mod/
+    - /root/.m2/repository/
 services:
   - mysql
   - postgresql
@@ -67,6 +68,7 @@ script:
   - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
   - sudo ./juicefs gc localhost
   - sudo ./juicefs fsck localhost
+  - sudo chmod 777 /root/.m2/repository/
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 after_success:
