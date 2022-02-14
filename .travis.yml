@@ -38,6 +38,7 @@ before_script:
   - docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
   - go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
   - ls -lh /home/travis/gopath/pkg/mod/
+  - ls -lh /home/travis/.m2/repository/
   - sudo chmod 777 /usr/local/maven-3.6.3/conf/settings.xml
   - sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/local/maven-3.6.3/conf/settings.xml
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
@@ -70,7 +71,6 @@ script:
   - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
   - sudo ./juicefs gc localhost
   - sudo ./juicefs fsck localhost
-  - sudo chmod 777 /root/.m2/repository/
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 after_success:
