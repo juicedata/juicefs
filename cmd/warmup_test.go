@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"testing"
@@ -28,24 +27,13 @@ import (
 )
 
 func TestWarmup(t *testing.T) {
-	metaUrl := "redis://127.0.0.1:6379/10"
-	mountpoint := "/tmp/testDir"
-	defer ResetRedis(metaUrl)
-	if err := MountTmp(metaUrl, mountpoint); err != nil {
-		t.Fatalf("mount failed: %v", err)
-	}
-	defer func() {
-		err := UmountTmp(mountpoint)
-		if err != nil {
-			t.Fatalf("umount failed: %v", err)
-		}
-	}()
+	mountTemp(t, nil)
+	defer umountTemp(t)
 
-	err := ioutil.WriteFile(fmt.Sprintf("%s/f1.txt", mountpoint), []byte("test"), 0644)
-	if err != nil {
-		t.Fatalf("test mount failed: %v", err)
+	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("test"), 0644); err != nil {
+		t.Fatalf("write file failed: %s", err)
 	}
-	m := meta.NewClient(metaUrl, &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(testMeta, &meta.Config{Retries: 10, Strict: true})
 	format, err := m.Load()
 	if err != nil {
 		t.Fatalf("load setting err: %s", err)
@@ -67,16 +55,14 @@ func TestWarmup(t *testing.T) {
 	os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
 	defer os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
 
-	warmupArgs := []string{"", "warmup", mountpoint}
-	err = Main(warmupArgs)
-	if err != nil {
-		t.Fatalf("warmup error: %v", err)
+	if err = Main([]string{"", "warmup", testMountPoint}); err != nil {
+		t.Fatalf("warmup: %s", err)
 	}
 
 	time.Sleep(2 * time.Second)
 	filePath = fmt.Sprintf("%s/%s/raw/chunks/0/0/1_0_4", cacheDir, uuid)
-	content, err := ioutil.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil || string(content) != "test" {
-		t.Fatalf("warmup error:%v", err)
+		t.Fatalf("warmup: %s; got content %s", err, content)
 	}
 }

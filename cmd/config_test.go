@@ -42,16 +42,15 @@ func getStdout(args []string) ([]byte, error) {
 }
 
 func TestConfig(t *testing.T) {
-	metaUrl := "redis://localhost:6379/10"
-	ResetRedis(metaUrl)
-	if err := Main([]string{"", "format", metaUrl, "--bucket", "/tmp/testBucket", "test"}); err != nil {
+	_ = resetTestMeta()
+	if err := Main([]string{"", "format", testMeta, "--bucket", "/tmp/testBucket", "test"}); err != nil {
 		t.Fatalf("format: %s", err)
 	}
 
-	if err := Main([]string{"", "config", metaUrl, "--trash-days", "2"}); err != nil {
+	if err := Main([]string{"", "config", testMeta, "--trash-days", "2"}); err != nil {
 		t.Fatalf("config: %s", err)
 	}
-	data, err := getStdout([]string{"", "config", metaUrl})
+	data, err := getStdout([]string{"", "config", testMeta})
 	if err != nil {
 		t.Fatalf("getStdout: %s", err)
 	}
@@ -63,13 +62,13 @@ func TestConfig(t *testing.T) {
 		t.Fatalf("trash-days %d != expect 2", format.TrashDays)
 	}
 
-	if err = Main([]string{"", "config", metaUrl, "--capacity", "10", "--inodes", "1000000"}); err != nil {
+	if err = Main([]string{"", "config", testMeta, "--capacity", "10", "--inodes", "1000000"}); err != nil {
 		t.Fatalf("config: %s", err)
 	}
-	if err = Main([]string{"", "config", metaUrl, "--bucket", "/tmp/newBucket", "--access-key", "testAK", "--secret-key", "testSK"}); err != nil {
+	if err = Main([]string{"", "config", testMeta, "--bucket", "/tmp/newBucket", "--access-key", "testAK", "--secret-key", "testSK"}); err != nil {
 		t.Fatalf("config: %s", err)
 	}
-	if data, err = getStdout([]string{"", "config", metaUrl}); err != nil {
+	if data, err = getStdout([]string{"", "config", testMeta}); err != nil {
 		t.Fatalf("getStdout: %s", err)
 	}
 	if err = json.Unmarshal(data, &format); err != nil {

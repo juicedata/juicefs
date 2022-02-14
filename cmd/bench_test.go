@@ -22,23 +22,12 @@ import (
 )
 
 func TestBench(t *testing.T) {
-	metaUrl := "redis://127.0.0.1:6379/10"
-	mountpoint := "/tmp/testDir"
-	defer ResetRedis(metaUrl)
-	if err := MountTmp(metaUrl, mountpoint); err != nil {
-		t.Fatalf("mount failed: %v", err)
-	}
-	defer func(mountpoint string) {
-		err := UmountTmp(mountpoint)
-		if err != nil {
-			t.Fatalf("umount failed: %v", err)
-		}
-	}(mountpoint)
-	benchArgs := []string{"", "bench", mountpoint}
+	mountTemp(t, nil)
+	defer umountTemp(t)
+
 	os.Setenv("SKIP_DROP_CACHES", "true")
 	defer os.Unsetenv("SKIP_DROP_CACHES")
-	err := Main(benchArgs)
-	if err != nil {
-		t.Fatalf("test bench failed: %v", err)
+	if err := Main([]string{"", "bench", testMountPoint}); err != nil {
+		t.Fatalf("test bench failed: %s", err)
 	}
 }

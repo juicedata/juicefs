@@ -19,24 +19,25 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/go-redis/redis/v8"
-
-	"github.com/juicedata/juicefs/pkg/meta"
-
 	"github.com/agiledragon/gomonkey/v2"
-
+	"github.com/go-redis/redis/v8"
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/urfave/cli/v2"
 )
+
+const testMeta = "redis://127.0.0.1:6379/10"
+const testMountPoint = "/tmp/jfs-unit-test"
 
 func Test_exposeMetrics(t *testing.T) {
 	Convey("Test_exposeMetrics", t, func() {
@@ -66,7 +67,7 @@ func Test_exposeMetrics(t *testing.T) {
 			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
 			resp, err := http.Get(u.String())
 			So(err, ShouldBeNil)
-			all, err := ioutil.ReadAll(resp.Body)
+			all, err := io.ReadAll(resp.Body)
 			So(err, ShouldBeNil)
 			So(string(all), ShouldNotBeBlank)
 		})
@@ -78,50 +79,58 @@ func ResetPrometheus() {
 	prometheus.DefaultRegisterer = prometheus.NewRegistry()
 }
 
-func MountTmp(metaUrl, mountpoint string) error {
-	ResetRedis(metaUrl)
-	formatArgs := []string{"", "format", "--storage", "file", "--bucket", "/tmp/testMountDir", metaUrl, "test"}
-	err := Main(formatArgs)
-	if err != nil {
-		return err
-	}
-	mountArgs := []string{"", "mount", metaUrl, mountpoint}
+func resetTestMeta() *redis.Client { // using Redis
+	opt, _ := redis.ParseURL(testMeta)
+	rdb := redis.NewClient(opt)
+	_ = rdb.FlushDB(context.Background())
+	return rdb
+}
 
-	//Must be reset, otherwise panic will appear
+func mountTemp(t *testing.T, bucket *string) {
+	_ = resetTestMeta()
+	testDir := t.TempDir()
+	if bucket != nil {
+		*bucket = testDir
+	}
+	if err := Main([]string{"", "format", "--bucket", testDir, testMeta, "test"}); err != nil {
+		t.Fatalf("format failed: %s", err)
+	}
+
+	// must do reset, otherwise will panic
 	ResetPrometheus()
 
 	go func() {
-		err := Main(mountArgs)
-		if err != nil {
-			fmt.Printf("mount failed: %v", err)
+		if err := Main([]string{"", "mount", testMeta, testMountPoint}); err != nil {
+			t.Fatalf("mount failed: %s", err)
 		}
 	}()
 	time.Sleep(2 * time.Second)
-	return nil
 }
-func ResetRedis(metaUrl string) {
-	opt, _ := redis.ParseURL(metaUrl)
-	rdb := redis.NewClient(opt)
-	rdb.FlushDB(context.Background())
+
+func umountTemp(t *testing.T) {
+	if err := Main([]string{"", "umount", testMountPoint}); err != nil {
+		t.Fatalf("umount failed: %s", err)
+	}
 }
 
 func TestMount(t *testing.T) {
-	metaUrl := "redis://127.0.0.1:6379/10"
-	mountpoint := "/tmp/testDir"
-	defer ResetRedis(metaUrl)
-	if err := MountTmp(metaUrl, mountpoint); err != nil {
-		t.Fatalf("mount failed: %v", err)
-	}
-	defer func(mountpoint string) {
-		err := UmountTmp(mountpoint)
-		if err != nil {
-			t.Fatalf("umount failed: %v", err)
-		}
-	}(mountpoint)
+	mountTemp(t, nil)
+	defer umountTemp(t)
 
-	err := ioutil.WriteFile(fmt.Sprintf("%s/f1.txt", mountpoint), []byte("test"), 0644)
+	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("test"), 0644); err != nil {
+		t.Fatalf("write file failed: %s", err)
+	}
+}
+
+func TestUmount(t *testing.T) {
+	mountTemp(t, nil)
+	umountTemp(t)
+
+	inode, err := utils.GetFileInode(testMountPoint)
 	if err != nil {
-		t.Fatalf("Test mount failed: %v", err)
+		t.Fatalf("get file inode failed: %s", err)
 	}
-
+	if inode == 1 {
+		t.Fatalf("umount failed: inode of %s is 1", testMountPoint)
+	}
 }

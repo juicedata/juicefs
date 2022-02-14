@@ -18,12 +18,10 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/agiledragon/gomonkey/v2"
-
 	. "github.com/smartystreets/goconvey/convey"
 )
 
@@ -32,46 +30,30 @@ func TestStatus(t *testing.T) {
 		Convey("TestInfo", func() {
 			tmpFile, err := os.CreateTemp("/tmp", "")
 			if err != nil {
-				t.Fatalf("creat tmp file failed: %v", err)
+				t.Fatalf("create temporary file: %s", err)
 			}
 			defer tmpFile.Close()
 			defer os.Remove(tmpFile.Name())
-			if err != nil {
-				t.Fatalf("create temporary file: %v", err)
-			}
 			// mock os.Stdout
 			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
 			defer patches.Reset()
-			metaUrl := "redis://localhost:6379/10"
-			mountpoint := "/tmp/testDir"
-			statusArgs := []string{"", "status", metaUrl}
 
-			defer ResetRedis(metaUrl)
-			if err := MountTmp(metaUrl, mountpoint); err != nil {
-				t.Fatalf("mount failed: %v", err)
+			mountTemp(t, nil)
+			defer umountTemp(t)
+
+			if err = Main([]string{"", "status", testMeta}); err != nil {
+				t.Fatalf("status failed: %s", err)
 			}
-			defer func() {
-				err := UmountTmp(mountpoint)
-				if err != nil {
-					t.Fatalf("umount failed: %v", err)
-				}
-			}()
-
-			if err := Main(statusArgs); err != nil {
-				t.Fatalf("test status failed: %v", err)
-			}
-
-			content, err := ioutil.ReadFile(tmpFile.Name())
+			content, err := os.ReadFile(tmpFile.Name())
 			if err != nil {
-				t.Fatalf("readFile failed: %v", err)
+				t.Fatalf("read file failed: %s", err)
 			}
-
 			s := sections{}
 			if err = json.Unmarshal(content, &s); err != nil {
-				t.Fatalf("test status failed: %v", err)
+				t.Fatalf("json unmarshal failed: %s", err)
 			}
 			if s.Setting.Name != "test" || s.Setting.Storage != "file" {
-				t.Fatalf("test status failed: %v", err)
+				t.Fatalf("setting is not as expected: %+v", s.Setting)
 			}
 		})
 	})
