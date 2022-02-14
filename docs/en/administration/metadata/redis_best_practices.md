@@ -95,6 +95,14 @@ This means that copying the RDB file is completely safe while the server is runn
 
 Please read the [official documentation](https://redis.io/topics/persistence) for more information.
 
+## Restore Redis Data
+
+After generating the AOF or RDB backup file, you can restore the data by copying the backup file to the path corresponding to the `dir` configuration of the new Redis instance, which you can get by using the [`CONFIG GET dir`](https://redis.io/commands/config-get) command.
+
+If both AOF and RDB persistence are enabled, Redis will start using the AOF file first to recover the data because AOF is guaranteed to be the most complete data.
+
+After recovering Redis data, you can continue to use the JuiceFS file system with the new Redis address. It is recommended to run [`juicefs fsck`](../../reference/command_reference.md#juicefs-fsck) command to check the integrity of the file system data.
+
 ---
 
 ## Recommended Managed Redis Service
