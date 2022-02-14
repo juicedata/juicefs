@@ -111,6 +111,14 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 更多信息请阅读[官方文档](https://redis.io/topics/persistence)。
 
+## 恢复 Redis 数据
+
+当生成 AOF 或者 RDB 备份文件以后，可以将备份文件拷贝到新 Redis 实例的 `dir` 配置对应的路径中来恢复数据，你可以通过 [`CONFIG GET dir`](https://redis.io/commands/config-get) 命令获取当前 Redis 实例的配置信息。
+
+如果 AOF 和 RDB 同时开启，Redis 启动时会优先使用 AOF 文件来恢复数据，因为 AOF 保证是最完整的数据。
+
+在恢复完 Redis 数据以后，可以继续通过新的 Redis 地址使用 JuiceFS 文件系统。建议运行 [`juicefs fsck`](../../reference/command_reference.md#juicefs-fsck) 命令检查文件系统数据的完整性。
+
 ---
 
 ## 推荐的 Redis 托管服务
