@@ -17,8 +17,8 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,8 +77,8 @@ func doUmount(mp string, force bool) error {
 		return fmt.Errorf("OS %s is not supported", runtime.GOOS)
 	}
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Print(string(out))
+	if err != nil && len(out) != 0 {
+		err = errors.New(string(out))
 	}
 	return err
 }
