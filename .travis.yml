@@ -4,7 +4,6 @@ language: go
 cache:
   directories:
     - $HOME/gopath/pkg/mod/
-    - /root/.m2/repository/
 services:
   - mysql
   - postgresql
@@ -38,7 +37,6 @@ before_script:
   - docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
   - go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
   - ls -lh /home/travis/gopath/pkg/mod/
-  - sudo ls -lh /root/.m2/repository/
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
   - make
   - sudo make -C fstests setup
