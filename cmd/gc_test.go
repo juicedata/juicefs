@@ -71,7 +71,7 @@ func TestGc(t *testing.T) {
 	if err := writeSmallBlocks(testMountPoint); err != nil {
 		t.Fatalf("write small blocks failed: %s", err)
 	}
-	dataDir := filepath.Join(bucket, "test", "chunks")
+	dataDir := filepath.Join(bucket, testVolume, "chunks")
 	beforeCompactFileNum := getFileCount(dataDir)
 	if err := Main([]string{"", "gc", "--compact", testMeta}); err != nil {
 		t.Fatalf("gc compact failed: %s", err)

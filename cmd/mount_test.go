@@ -38,6 +38,7 @@ import (
 
 const testMeta = "redis://127.0.0.1:6379/10"
 const testMountPoint = "/tmp/jfs-unit-test"
+const testVolume = "test"
 
 func Test_exposeMetrics(t *testing.T) {
 	Convey("Test_exposeMetrics", t, func() {
@@ -92,7 +93,7 @@ func mountTemp(t *testing.T, bucket *string) {
 	if bucket != nil {
 		*bucket = testDir
 	}
-	if err := Main([]string{"", "format", "--bucket", testDir, testMeta, "test"}); err != nil {
+	if err := Main([]string{"", "format", "--bucket", testDir, testMeta, testVolume}); err != nil {
 		t.Fatalf("format failed: %s", err)
 	}
 

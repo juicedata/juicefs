@@ -52,7 +52,7 @@ func TestStatus(t *testing.T) {
 			if err = json.Unmarshal(content, &s); err != nil {
 				t.Fatalf("json unmarshal failed: %s", err)
 			}
-			if s.Setting.Name != "test" || s.Setting.Storage != "file" {
+			if s.Setting.Name != testVolume || s.Setting.Storage != "file" {
 				t.Fatalf("setting is not as expected: %+v", s.Setting)
 			}
 		})

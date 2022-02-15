@@ -58,8 +58,7 @@ func TestFixObjectSize(t *testing.T) {
 
 func TestFormat(t *testing.T) {
 	rdb := resetTestMeta()
-	name := "test"
-	if err := Main([]string{"", "format", "--bucket", t.TempDir(), testMeta, name}); err != nil {
+	if err := Main([]string{"", "format", "--bucket", t.TempDir(), testMeta, testVolume}); err != nil {
 		t.Fatalf("format error: %s", err)
 	}
 	body, err := rdb.Get(context.Background(), "setting").Bytes()
@@ -70,7 +69,7 @@ func TestFormat(t *testing.T) {
 	if err = json.Unmarshal(body, &f); err != nil {
 		t.Fatalf("json unmarshal: %s", err)
 	}
-	if f.Name != name {
-		t.Fatalf("volume name %s != expected %s", f.Name, name)
+	if f.Name != testVolume {
+		t.Fatalf("volume name %s != expected %s", f.Name, testVolume)
 	}
 }
