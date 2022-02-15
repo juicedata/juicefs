@@ -220,7 +220,8 @@ func format(c *cli.Context) error {
 		if objs, err := osync.ListAll(blob, "", ""); err == nil {
 			for o := range objs {
 				if o == nil {
-					logger.Fatalf("List storage %s failed", blob)
+					logger.Warnf("List storage %s failed", blob)
+					break
 				} else if o.IsDir() {
 					continue
 				} else if !strings.HasPrefix(o.Key(), "testing/") {
@@ -228,7 +229,7 @@ func format(c *cli.Context) error {
 				}
 			}
 		} else {
-			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
+			logger.Warnf("List storage %s failed: %s", blob, err)
 		}
 	}
 
