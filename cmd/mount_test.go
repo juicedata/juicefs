@@ -102,7 +102,7 @@ func mountTemp(t *testing.T, bucket *string) {
 
 	go func() {
 		if err := Main([]string{"", "mount", testMeta, testMountPoint}); err != nil {
-			t.Fatalf("mount failed: %s", err)
+			t.Errorf("mount failed: %s", err)
 		}
 	}()
 	time.Sleep(2 * time.Second)
