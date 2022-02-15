@@ -35,6 +35,8 @@ before_script:
   - export GO111MODULE=on
   - sudo mysql -e "create database dev;"
   - psql -c 'create database test;' -U postgres
+  - sudo du -sh /home/travis/docker
+  - ls -lh /home/travis/docker
   - echo '{"graph":"/home/travis/docker"}' >daemon.json
   - sudo mv daemon.json /etc/docker/
   - sudo service docker restart
