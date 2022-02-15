@@ -34,7 +34,7 @@ before_script:
   - export GO111MODULE=on
   - sudo mysql -e "create database dev;"
   - psql -c 'create database test;' -U postgres
-  - if [ -f "/home/travis/.m2/minio.tar" ]; then docker load </home/travis/.m2/minio.tar fi
+  - if [ -f "/home/travis/.m2/minio.tar" ];then docker load </home/travis/.m2/minio.tar fi
   - docker images
   - ls -lh
   - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
