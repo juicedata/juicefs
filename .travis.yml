@@ -40,7 +40,7 @@ before_script:
   - go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
   - sudo chmod 777 /usr/local/maven-3.6.3/conf/settings.xml
   - sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/local/maven-3.6.3/conf/settings.xml
-  - echo "{\"graph\": \"/home/travis/docker\"}" >daemon.json
+  - echo '{"graph":"/home/travis/docker"}' >daemon.json
   - sudo mv daemon.json /etc/docker/
   - sudo service docker restart
   - sudo chmod 777 /home/travis/docker
