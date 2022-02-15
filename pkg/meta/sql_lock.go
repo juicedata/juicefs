@@ -75,10 +75,14 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 			if len(locks) > 0 {
 				return syscall.EAGAIN
 			}
+			var n int64
 			if ok {
-				_, err = s.Cols("Ltype").Update(&flock{Ltype: 'W'}, &flock{Inode: inode, Owner: owner, Sid: m.sid})
+				n, err = s.Cols("Ltype").Update(&flock{Ltype: 'W'}, &flock{Inode: inode, Owner: owner, Sid: m.sid})
 			} else {
-				err = mustInsert(s, flock{Inode: inode, Owner: owner, Ltype: 'W', Sid: m.sid})
+				n, err = s.InsertOne(&flock{Inode: inode, Owner: owner, Ltype: 'W', Sid: m.sid})
+			}
+			if err == nil && n == 0 {
+				err = fmt.Errorf("insert/update failed")
 			}
 			return err
 		}))
