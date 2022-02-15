@@ -44,6 +44,7 @@ before_script:
   - sudo chmod 777 -R /home/travis/docker
   - ls -lh /home/travis/docker
   - sudo chmod 777 /home/travis/docker/overlay2
+  - echo $?
   - ls -lh /home/travis/docker
   - ls -lh /home/travis/docker/overlay2
   - sudo du -sh /home/travis/docker
@@ -92,6 +93,8 @@ script:
   - sudo du -sh /home/travis/docker
   - ls -lh /home/travis/docker
   - ls -lh /home/travis/
+  - sudo chmod 777 -R /home/travis/docker
+  - ls -lh /home/travis/docker
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 after_success:
