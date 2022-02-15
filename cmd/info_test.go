@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -30,58 +29,39 @@ import (
 func TestInfo(t *testing.T) {
 	Convey("TestInfo", t, func() {
 		Convey("TestInfo", func() {
-
-			var res string
 			tmpFile, err := os.CreateTemp("/tmp", "")
 			if err != nil {
-				t.Fatalf("creat tmp file failed: %v", err)
+				t.Fatalf("create temporary file: %s", err)
 			}
+			defer tmpFile.Close()
 			defer os.Remove(tmpFile.Name())
-			if err != nil {
-				t.Fatalf("create temporary file: %v", err)
-			}
 			// mock os.Stdout
 			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
 			defer patches.Reset()
 
-			metaUrl := "redis://127.0.0.1:6379/10"
-			mountpoint := "/tmp/testDir"
-			defer ResetRedis(metaUrl)
-			if err := MountTmp(metaUrl, mountpoint); err != nil {
-				t.Fatalf("mount failed: %v", err)
-			}
-			defer func(mountpoint string) {
-				err := UmountTmp(mountpoint)
-				if err != nil {
-					t.Fatalf("umount failed: %v", err)
-				}
-			}(mountpoint)
+			mountTemp(t, nil)
+			defer umountTemp(t)
 
-			err = os.MkdirAll(fmt.Sprintf("%s/dir1", mountpoint), 0777)
-			if err != nil {
-				t.Fatalf("mount failed: %v", err)
+			if err = os.MkdirAll(fmt.Sprintf("%s/dir1", testMountPoint), 0777); err != nil {
+				t.Fatalf("mkdirAll failed: %s", err)
 			}
 			for i := 0; i < 10; i++ {
-				filename := fmt.Sprintf("%s/dir1/f%d.txt", mountpoint, i)
-				err := ioutil.WriteFile(filename, []byte("test"), 0644)
-				if err != nil {
-					t.Fatalf("mount failed: %v", err)
+				filename := fmt.Sprintf("%s/dir1/f%d.txt", testMountPoint, i)
+				if err = os.WriteFile(filename, []byte("test"), 0644); err != nil {
+					t.Fatalf("write file failed: %s", err)
 				}
 			}
 
-			infoArgs := []string{"", "info", fmt.Sprintf("%s/dir1", mountpoint)}
-			err = Main(infoArgs)
-			if err != nil {
-				t.Fatalf("info failed: %v", err)
+			if err = Main([]string{"", "info", fmt.Sprintf("%s/dir1", testMountPoint)}); err != nil {
+				t.Fatalf("info failed: %s", err)
 			}
-			content, err := ioutil.ReadFile(tmpFile.Name())
+			content, err := os.ReadFile(tmpFile.Name())
 			if err != nil {
-				t.Fatalf("readFile failed: %v", err)
+				t.Fatalf("read file failed: %s", err)
 			}
-			res = string(content)
-			var answer = `/tmp/testDir/dir1: inode: 2 files:	10 dirs:	1 length:	40 size:	45056`
 			replacer := strings.NewReplacer("\n", "", " ", "")
-			res = replacer.Replace(res)
+			res := replacer.Replace(string(content))
+			answer := fmt.Sprintf("%s/dir1: inode: 2 files:	10 dirs:	1 length:	40 size:	45056", testMountPoint)
 			answer = replacer.Replace(answer)
 			So(res, ShouldEqual, answer)
 		})

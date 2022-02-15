@@ -22,8 +22,6 @@ import (
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/meta"
-
-	"github.com/go-redis/redis/v8"
 )
 
 func TestFixObjectSize(t *testing.T) {
@@ -59,36 +57,19 @@ func TestFixObjectSize(t *testing.T) {
 }
 
 func TestFormat(t *testing.T) {
-	metaUrl := "redis://127.0.0.1:6379/10"
-	opt, err := redis.ParseURL(metaUrl)
-	if err != nil {
-		t.Fatalf("ParseURL: %v", err)
+	rdb := resetTestMeta()
+	if err := Main([]string{"", "format", "--bucket", t.TempDir(), testMeta, testVolume}); err != nil {
+		t.Fatalf("format error: %s", err)
 	}
-	rdb := redis.NewClient(opt)
-	ctx := context.Background()
-	rdb.FlushDB(ctx)
-	defer rdb.FlushDB(ctx)
-	name := "test"
-	formatArgs := []string{"", "format", "--storage", "file", "--bucket", "/tmp/testMountDir", metaUrl, name}
-	err = Main(formatArgs)
+	body, err := rdb.Get(context.Background(), "setting").Bytes()
 	if err != nil {
-		t.Fatalf("format error: %v", err)
-	}
-	body, err := rdb.Get(ctx, "setting").Bytes()
-	if err == redis.Nil {
-		t.Fatalf("database is not formatted")
-	}
-	if err != nil {
-		t.Fatalf("database is not formatted")
+		t.Fatalf("get setting: %s", err)
 	}
 	f := meta.Format{}
-	err = json.Unmarshal(body, &f)
-	if err != nil {
-		t.Fatalf("database formatted error: %v", err)
+	if err = json.Unmarshal(body, &f); err != nil {
+		t.Fatalf("json unmarshal: %s", err)
 	}
-
-	if f.Name != name {
-		t.Fatalf("database formatted error: %v", err)
+	if f.Name != testVolume {
+		t.Fatalf("volume name %s != expected %s", f.Name, testVolume)
 	}
-
 }
