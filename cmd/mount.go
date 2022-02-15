@@ -147,9 +147,12 @@ func mount(c *cli.Context) error {
 				logger.Fatalf("create %s: %s", mp, err)
 			}
 		}
-	} else if err == nil && fi.Size() == 0 {
-		// a broken mount point, umount it
-		_ = doUmount(mp, true)
+	} else if err == nil {
+		ino, _ := utils.GetFileInode(mp)
+		if ino <= 1 && fi.Size() == 0 {
+			// a broken mount point, umount it
+			_ = doUmount(mp, true)
+		}
 	}
 	var readOnly = c.Bool("read-only")
 	for _, o := range strings.Split(c.String("o"), ",") {
