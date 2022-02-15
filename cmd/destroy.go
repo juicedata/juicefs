@@ -83,8 +83,12 @@ func destroy(ctx *cli.Context) error {
 	if ctx.Args().Len() < 2 {
 		return fmt.Errorf("META-URL and UUID are required")
 	}
-	removePassword(ctx.Args().Get(0))
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	uri := ctx.Args().Get(0)
+	if !strings.Contains(uri, "://") {
+		uri = "redis://" + uri
+	}
+	removePassword(uri)
+	m := meta.NewClient(uri, &meta.Config{Retries: 10, Strict: true})
 
 	format, err := m.Load()
 	if err != nil {
@@ -120,8 +124,8 @@ func destroy(ctx *cli.Context) error {
 		fmt.Printf("  used bytes: %d\n", totalSpace-availSpace)
 		fmt.Printf(" used inodes: %d\n", iused)
 		warn("The target volume will be destoried permanently, including:")
-		warn("1. ALL objects in the data storage")
-		warn("2. ALL entries in the metadata engine")
+		warn("1. ALL objects in the data storage: %s", blob)
+		warn("2. ALL entries in the metadata engine: %s", utils.RemovePassword(uri))
 		if !userConfirmed() {
 			logger.Fatalln("Aborted.")
 		}
