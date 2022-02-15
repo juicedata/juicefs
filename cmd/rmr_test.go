@@ -18,48 +18,36 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 )
 
 func TestRmr(t *testing.T) {
-	metaUrl := "redis://127.0.0.1:6379/10"
-	mountpoint := "/tmp/testDir"
-	defer ResetRedis(metaUrl)
-	if err := MountTmp(metaUrl, mountpoint); err != nil {
-		t.Fatalf("mount failed: %v", err)
-	}
-	defer func(mountpoint string) {
-		err := UmountTmp(mountpoint)
-		if err != nil {
-			t.Fatalf("umount failed: %v", err)
-		}
-	}(mountpoint)
+	mountTemp(t, nil)
+	defer umountTemp(t)
 
 	paths := []string{"/dir1", "/dir2", "/dir3/dir2"}
 	for _, path := range paths {
-		if err := os.MkdirAll(fmt.Sprintf("%s%s/dir2/dir3/dir4/dir5", mountpoint, path), 0777); err != nil {
-			t.Fatalf("Test mount err %v", err)
+		if err := os.MkdirAll(fmt.Sprintf("%s%s/dir2/dir3/dir4/dir5", testMountPoint, path), 0777); err != nil {
+			t.Fatalf("mkdirAll err %s", err)
 		}
 	}
 	for i := 0; i < 5; i++ {
-		filename := fmt.Sprintf("%s/dir1/f%d.txt", mountpoint, i)
-		err := ioutil.WriteFile(filename, []byte("test"), 0644)
-		if err != nil {
-			t.Fatalf("Test mount failed : %v", err)
+		filename := fmt.Sprintf("%s/dir1/f%d.txt", testMountPoint, i)
+		if err := os.WriteFile(filename, []byte("test"), 0644); err != nil {
+			t.Fatalf("write file failed : %s", err)
 		}
 	}
 
-	rmrArgs := []string{"", "rmr", mountpoint + paths[0], mountpoint + paths[1], mountpoint + paths[2]}
+	rmrArgs := []string{"", "rmr", testMountPoint + paths[0], testMountPoint + paths[1], testMountPoint + paths[2]}
 	if err := Main(rmrArgs); err != nil {
-		t.Fatalf("rmr failed : %v", err)
+		t.Fatalf("rmr failed : %s", err)
 	}
 
 	for _, path := range paths {
-		dir, err := os.ReadDir(mountpoint + path)
+		dir, err := os.ReadDir(testMountPoint + path)
 		if len(dir) != 0 {
-			t.Fatalf("test rmr error: %v", err)
+			t.Fatalf("test rmr error: %s", err)
 		}
 	}
 }
