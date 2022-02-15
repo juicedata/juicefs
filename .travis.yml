@@ -38,7 +38,7 @@ before_script:
   - echo '{"graph":"/home/travis/docker"}' >daemon.json
   - sudo mv daemon.json /etc/docker/
   - sudo service docker restart
-  - sudo chmod 777 /home/travis/docker
+  - sudo chmod 777 -R /home/travis/docker
   - sudo du -sh /home/travis/docker
   - docker info
   - docker images
