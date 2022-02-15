@@ -76,41 +76,41 @@ $ juicefs format \
 
 如果你希望使用的存储类型不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
 
-| Name                                        | Value      |
-| ------------------------------------------- |------------|
-| [Amazon S3](#amazon-s3)                     | `s3`       |
-| [Google 云存储](#google-云存储)                   | `gs`       |
-| [Azure Blob 存储](#azure-blob-存储)             | `wasb`     |
-| [Backblaze B2](#backblaze-b2)               | `b2`       |
-| [IBM 云对象存储](#ibm-云对象存储)                     | `ibmcos`   |
-| [Scaleway](#scaleway)                       | `scw`      |
-| [DigitalOcean Spaces](#digitalocean-spaces) | `space`    |
-| [Wasabi](#wasabi)                           | `wasabi`   |
-| [Storj DCS](#storj-dcs)                     | `s3`       |
-| [Vultr 对象存储](#vultr-对象存储)                   | `s3`       |
-| [阿里云 OSS](#阿里云-oss)                         | `oss`      |
-| [腾讯云 COS](#腾讯云-cos)                         | `cos`      |
-| [华为云 OBS](#华为云-obs)                         | `obs`      |
-| [百度云 BOS](#百度云-bos)                         | `bos`      |
-| [金山云 KS3](#金山云-ks3)                         | `ks3`      |
-| [美团云 MMS](#美团云-mms)                         | `mss`      |
-| [网易云 NOS](#网易云-nos)                         | `nos`      |
-| [青云 QingStor](#青云-qingstor)                 | `qingstor` |
-| [七牛云 Kodo](#七牛云-kodo)                       | `qiniu`    |
-| [新浪云 SCS](#新浪云-scs)                         | `scs`      |
-| [天翼云 OOS](#天翼云-oos)                         | `oos`      |
-| [移动云 EOS](#移动云-eos)                         | `eos`      |
-| [优刻得 US3](#优刻得-us3)                         | `ufile`    |
-| [Ceph RADOS](#ceph-rados)                   | `ceph`     |
-| [Ceph RGW](#ceph-rgw)                       | `s3`       |
-| [Swift](#swift)                             | `swift`    |
-| [MinIO](#minio)                             | `minio`    |
-| [WebDAV](#webdav)                           | `webdav`   |
-| [HDFS](#hdfs)                               | `hdfs`     |
-| [Apache-Ozone](#Apache-Ozone)               | `s3`       |
-| [Redis](#redis)                             | `redis`    |
-| [TiKV](#tikv)                               | `tikv`     |
-| [本地磁盘](#本地磁盘)                               | `file`     |
+| Name                                        | Value        |
+| ------------------------------------------- | ------------ |
+| [Amazon S3](#amazon-s3)                     | `s3`         |
+| [Google 云存储](#google-云存储)             | `gs`         |
+| [Azure Blob 存储](#azure-blob-存储)         | `wasb`       |
+| [Backblaze B2](#backblaze-b2)               | `b2`         |
+| [IBM 云对象存储](#ibm-云对象存储)           | `ibmcos`     |
+| [Scaleway](#scaleway)                       | `scw`        |
+| [DigitalOcean Spaces](#digitalocean-spaces) | `space`      |
+| [Wasabi](#wasabi)                           | `wasabi`     |
+| [Storj DCS](#storj-dcs)                     | `s3`         |
+| [Vultr 对象存储](#vultr-对象存储)           | `s3`         |
+| [阿里云 OSS](#阿里云-oss)                   | `oss`        |
+| [腾讯云 COS](#腾讯云-cos)                   | `cos`        |
+| [华为云 OBS](#华为云-obs)                   | `obs`        |
+| [百度云 BOS](#百度云-bos)                   | `bos`        |
+| [金山云 KS3](#金山云-ks3)                   | `ks3`        |
+| [美团云 MMS](#美团云-mms)                   | `mss`        |
+| [网易云 NOS](#网易云-nos)                   | `nos`        |
+| [青云 QingStor](#青云-qingstor)             | `qingstor`   |
+| [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`      |
+| [新浪云 SCS](#新浪云-scs)                   | `scs`        |
+| [天翼云 OOS](#天翼云-oos)                   | `oos`        |
+| [移动云 EOS](#移动云-eos)                   | `eos`        |
+| [优刻得 US3](#优刻得-us3)                   | `ufile`      |
+| [Ceph RADOS](#ceph-rados)                   | `ceph`       |
+| [Ceph RGW](#ceph-rgw)                       | `s3`         |
+| [Swift](#swift)                             | `swift`      |
+| [MinIO](#minio)                             | `minio`      |
+| [WebDAV](#webdav)                           | `webdav`     |
+| [HDFS](#hdfs)                               | `hdfs`       |
+| [Apache Ozone](#apache-ozone)               | `s3`         |
+| [Redis](#redis)                             | `redis`      |
+| [TiKV](#tikv)                               | `tikv`       |
+| [本地磁盘](#本地磁盘)                       | `file`       |
 
 ## Amazon S3
 
@@ -747,9 +747,9 @@ JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端
 
 对于 HA 群集，可以像下面这样一起指定 NameNodes 的地址：`--bucket=namenode1:port,namenode2:port`。
 
-## Apache-Ozone
+## Apache Ozone
 
-Ozone 是 Hadoop 的分布式对象存储系统，提供了 S3 兼容的 API。所以可以通过 S3 兼容的模式作为对象存储供 JuiceFS 使用。例如：
+Apache Ozone 是 Hadoop 的分布式对象存储系统，提供了 S3 兼容的 API。所以可以通过 S3 兼容的模式作为对象存储供 JuiceFS 使用。例如：
 
 ```bash
 $ juicefs format \

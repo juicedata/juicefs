@@ -106,7 +106,7 @@ If you wish to use a storage type that is not listed, feel free to submit a requ
 | [MinIO](#minio)                                           | `minio`    |
 | [WebDAV](#webdav)                                         | `webdav`   |
 | [HDFS](#hdfs)                                             | `hdfs`     |
-| [Apache-Ozone](#Apache-Ozone)                             | `s3`       |
+| [Apache Ozone](#apache-ozone)                             | `s3`       |
 | [Redis](#redis)                                           | `redis`    |
 | [TiKV](#tikv)                                             | `tikv`     |
 | [Local disk](#local-disk)                                 | `file`     |
@@ -749,9 +749,9 @@ JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_D
 
 For HA cluster, the addresses of NameNodes can be specified together like this: `--bucket=namenode1:port,namenode2:port`.
 
-## Apache-Ozone
+## Apache Ozone
 
-Ozone is a scalable, redundant, and distributed object store for Hadoop.It supports S3-compatible interface, so we could set `--storage` to `s3` directly.
+Apache Ozone is a scalable, redundant, and distributed object store for Hadoop. It supports S3-compatible interface, so we could set `--storage` to `s3` directly.
 
 ```bash
 $ juicefs format \
