@@ -219,11 +219,12 @@ func format(c *cli.Context) error {
 		}
 		if objs, err := osync.ListAll(blob, "", ""); err == nil {
 			for o := range objs {
-				if o == nil || o.IsDir() {
+				if o == nil {
+					logger.Fatalf("List storage %s failed", blob)
+				} else if o.IsDir() {
 					continue
-				}
-				if k := o.Key(); strings.HasPrefix(k, "chunks/") || strings.HasPrefix(k, "meta/") {
-					logger.Fatalf("Storage %s is already used for another volume; clean it up to proceed", blob)
+				} else if !strings.HasPrefix(o.Key(), "testing/") {
+					logger.Fatalf("Storage %s is not empty; please clean it up or pick another volume name", blob)
 				}
 			}
 		} else {
