@@ -48,6 +48,9 @@ before_script:
   - sudo chmod 777 /usr/local/maven-3.6.3/conf/settings.xml
   - sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/local/maven-3.6.3/conf/settings.xml
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
+  - docker images
+  - ls -lh /home/travis/docker
+  - sudo du -sh /home/travis/docker
   - make
   - sudo make -C fstests setup
   - chmod +x travis-setup-hdfs.sh
@@ -79,6 +82,9 @@ script:
   - sudo ./juicefs fsck localhost
   - sudo docker info
   - sudo docker images
+  - sudo du -sh /home/travis/docker
+  - ls -lh /home/travis/docker
+  - ls -lh /home/travis/
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 after_success:
