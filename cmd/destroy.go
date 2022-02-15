@@ -93,6 +93,10 @@ func destroy(ctx *cli.Context) error {
 	if uuid := ctx.Args().Get(1); uuid != format.UUID {
 		logger.Fatalf("UUID %s != expected %s", uuid, format.UUID)
 	}
+	blob, err := createStorage(format)
+	if err != nil {
+		logger.Fatalf("create object storage: %s", err)
+	}
 
 	if !ctx.Bool("force") {
 		m.CleanStaleSessions()
@@ -112,21 +116,17 @@ func destroy(ctx *cli.Context) error {
 
 		fmt.Printf(" volume name: %s\n", format.Name)
 		fmt.Printf(" volume UUID: %s\n", format.UUID)
-		fmt.Printf("data storage: %s://%s\n", format.Storage, format.Bucket)
+		fmt.Printf("data storage: %s\n", blob)
 		fmt.Printf("  used bytes: %d\n", totalSpace-availSpace)
 		fmt.Printf(" used inodes: %d\n", iused)
 		warn("The target volume will be destoried permanently, including:")
-		warn("1. objects in the data storage")
-		warn("2. entries in the metadata engine")
+		warn("1. ALL objects in the data storage")
+		warn("2. ALL entries in the metadata engine")
 		if !userConfirmed() {
 			logger.Fatalln("Aborted.")
 		}
 	}
 
-	blob, err := createStorage(format)
-	if err != nil {
-		logger.Fatalf("create object storage: %s", err)
-	}
 	objs, err := osync.ListAll(blob, "", "")
 	if err != nil {
 		logger.Fatalf("list all objects: %s", err)
