@@ -90,7 +90,7 @@ script:
   - sudo ./juicefs fsck localhost
   - sudo docker info
   - sudo docker images
-  - docker rm $(docker ps -aq)
+  - docker stop $(docker ps -aq)
   - docker ps -aq
   - sudo du -sh /home/travis/docker
   - ls -lh /home/travis/docker
