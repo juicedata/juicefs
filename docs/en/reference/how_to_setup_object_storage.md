@@ -59,7 +59,7 @@ Creating a file system using an internal Endpoint ensures better performance and
 
 ## Storage Class
 
-Object storage usually supports multiple storage classes, such as standard storage, infrequent access storage, and archive storage. When creating an object storage bucket you can choose the appropriate storage class according to your actual needs, or automatically convert the storage class of existing objects through lifecycle management. Regardless of the storage class used, it is supported as the underlying data storage for JuiceFS.
+Object storage usually supports multiple storage classes, such as standard storage, infrequent access storage, and archive storage. When creating an object storage bucket you can choose the appropriate storage class according to your actual needs, or automatically convert the storage class of existing objects through lifecycle management. Storage classes that support real-time access to data (e.g. standard storage, infrequent access storage) can be used as the underlying JuiceFS data store, while those that require advance thawing for access (e.g. archive storage) cannot.
 
 :::note
 When using certain storage classes (such as infrequent access), there are minimum billable object size and additional charges may be incurred for reading data, please consult the user manual of the object storage you are using for details.
