@@ -142,17 +142,16 @@ func mount(c *cli.Context) error {
 		if err := os.MkdirAll(mp, 0777); err != nil {
 			if os.IsExist(err) {
 				// a broken mount point, umount it
-				if err = doUmount(mp, true); err != nil {
-					logger.Fatalf("umount %s: %s", mp, err)
-				}
+				_ = doUmount(mp, true)
 			} else {
 				logger.Fatalf("create %s: %s", mp, err)
 			}
 		}
-	} else if err == nil && fi.Size() == 0 {
-		// a broken mount point, umount it
-		if err = doUmount(mp, true); err != nil {
-			logger.Fatalf("umount %s: %s", mp, err)
+	} else if err == nil {
+		ino, _ := utils.GetFileInode(mp)
+		if ino <= 1 && fi.Size() == 0 {
+			// a broken mount point, umount it
+			_ = doUmount(mp, true)
 		}
 	}
 	var readOnly = c.Bool("read-only")
