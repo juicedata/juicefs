@@ -92,6 +92,7 @@ script:
   - sudo docker images
   - docker stop $(docker ps -aq)
   - docker ps -aq
+  - docker rm $(docker ps -aq)
   - sudo du -sh /home/travis/docker
   - ls -lh /home/travis/docker
   - ls -lh /home/travis/
