@@ -98,6 +98,9 @@ script:
   - sudo du -sh $HOME/gopath/pkg
   - sudo du -sh $HOME/.m2/
   - sudo du -sh $HOME/.m2/repository
+  - sudo chmod 777 -R $HOME/.m2/
+  - ls -lh $HOME
+  - ls -lh $HOME/.m2
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 after_success:
