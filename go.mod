@@ -89,4 +89,4 @@ replace github.com/golang-jwt/jwt v3.2.2+incompatible => github.com/dgrijalva/jw
 
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt v3.2.2+incompatible
 
-replace github.com/vbauerster/mpb/v7 v7.0.3 => github.com/juicedata/mpb/v7 v7.0.4-0.20220216125417-4c072f84d02a
+replace github.com/vbauerster/mpb/v7 v7.0.3 => github.com/juicedata/mpb/v7 v7.0.4-0.20220216145631-6e0757f14703
