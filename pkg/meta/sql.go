@@ -494,20 +494,15 @@ func (m *dbMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 }
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
-	var start, end int
-	batchSize := 200
-	for i := 0; i < len(beans)/batchSize; i++ {
-		end = start + batchSize
-		inserted, err := s.Insert(beans[start:end]...)
-		if err == nil && int(inserted) < end-start {
-			return fmt.Errorf("%d records not inserted: %+v", end-start-int(inserted), beans[start:end])
+	for start, end, size := 0, 0, len(beans); end < size; start = end {
+		end = start + 200
+		if end > size {
+			end = size
 		}
-		start = end
-	}
-	if len(beans)%batchSize != 0 {
-		inserted, err := s.Insert(beans[end:]...)
-		if err == nil && int(inserted) < len(beans)-end {
-			return fmt.Errorf("%d records not inserted: %+v", len(beans)-end-int(inserted), beans[end:])
+		if n, err := s.Insert(beans[start:end]...); err != nil {
+			return err
+		} else if d := end - start - int(n); d > 0 {
+			return fmt.Errorf("%d records not inserted: %+v", d, beans[start:end])
 		}
 	}
 	return nil
