@@ -29,6 +29,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"net/url"
 	"os"
 	"runtime"
 	"sort"
@@ -85,10 +86,10 @@ func init() {
 
 // newRedisMeta return a meta store using Redis.
 func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
-	url := driver + "://" + addr
-	opt, err := redis.ParseURL(url)
+	uri := driver + "://" + addr
+	opt, err := redis.ParseURL(uri)
 	if err != nil {
-		return nil, fmt.Errorf("parse %s: %s", url, err)
+		return nil, fmt.Errorf("parse %s: %s", uri, err)
 	}
 	var rdb *redis.Client
 	if strings.Contains(opt.Addr, ",") {
@@ -124,6 +125,11 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.MaxRetryBackoff = time.Minute * 1
 		fopt.ReadTimeout = time.Second * 30
 		fopt.WriteTimeout = time.Second * 5
+		if conf.ReadOnly {
+			u, _ := url.Parse(uri)
+			// NOTE: RouteByLatency and RouteRandomly are not supported since they require cluster client
+			fopt.SlaveOnly = u.Query().Get("route-read") == "replica"
+		}
 		rdb = redis.NewFailoverClient(&fopt)
 	} else {
 		if opt.Password == "" {
