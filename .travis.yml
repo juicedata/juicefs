@@ -76,9 +76,6 @@ script:
   - sudo ./juicefs fsck localhost
   - if [ ! -f "/home/travis/.m2/minio.tar" ];then docker save -o /home/travis/.m2/minio.tar quay.io/minio/minio; fi
   - if [ ! -f "/home/travis/.m2/sftp.tar" ];then docker save -o /home/travis/.m2/sftp.tar juicedata/ci-sftp; fi
-  - sudo chmod 777 $HOME/gopath/pkg/mod/
-  - sudo chmod 777 $HOME/.m2/
-  - sudo chmod 777 $HOME/.tiup/components
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 after_success:
