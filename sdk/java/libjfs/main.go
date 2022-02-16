@@ -448,7 +448,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
 		}
-		if d := jConf.BackupMeta; d > 0 {
+		if d := jConf.BackupMeta; d > 0 && !jConf.ReadOnly {
 			go vfs.Backup(m, blob, time.Duration(d*1e9))
 		}
 		if !jConf.NoUsageReport {
