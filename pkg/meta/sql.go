@@ -495,7 +495,8 @@ func (m *dbMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
 	for start, end, size := 0, 0, len(beans); end < size; start = end {
-		if end = start + 200; end > size {
+		end = start + 200
+		if end > size {
 			end = size
 		}
 		if n, err := s.Insert(beans[start:end]...); err != nil {
