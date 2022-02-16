@@ -5,7 +5,7 @@ cache:
   directories:
     - $HOME/gopath/pkg/mod/
     - $HOME/.m2/
-    - $HOME/.tiup/components
+    - $HOME/.tiup/components/
 services:
   - mysql
   - postgresql
