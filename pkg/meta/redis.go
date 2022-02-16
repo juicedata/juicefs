@@ -87,6 +87,12 @@ func init() {
 // newRedisMeta return a meta store using Redis.
 func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	uri := driver + "://" + addr
+	var query string
+	if p := strings.Index(uri, "?"); p > 0 && p+1 < len(uri) {
+		query = uri[p+1:]
+		uri = uri[:p]
+		logger.Debugf("query string: %s", query)
+	}
 	opt, err := redis.ParseURL(uri)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", uri, err)
@@ -125,10 +131,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.MaxRetryBackoff = time.Minute * 1
 		fopt.ReadTimeout = time.Second * 30
 		fopt.WriteTimeout = time.Second * 5
-		if conf.ReadOnly {
-			u, _ := url.Parse(uri)
+		if conf.ReadOnly && query != "" {
+			v, _ := url.ParseQuery(query)
 			// NOTE: RouteByLatency and RouteRandomly are not supported since they require cluster client
-			fopt.SlaveOnly = u.Query().Get("route-read") == "replica"
+			fopt.SlaveOnly = v.Get("route-read") == "replica"
 		}
 		rdb = redis.NewFailoverClient(&fopt)
 	} else {
