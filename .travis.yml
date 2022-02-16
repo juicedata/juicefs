@@ -74,8 +74,8 @@ script:
   - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
   - sudo ./juicefs gc localhost
   - sudo ./juicefs fsck localhost
-  - if [ ! -f "/home/travis/.m2/minio.tar" ]; then docker save -o /home/travis/.m2/minio.tar quay.io/minio/minio; fi
-  - if [ ! -f "/home/travis/.m2/sftp.tar" ]; then docker save -o /home/travis/.m2/sftp.tar juicedata/ci-sftp; fi
+  - if [ ! -f "/home/travis/.m2/minio.tar" ];then docker save -o /home/travis/.m2/minio.tar quay.io/minio/minio; fi
+  - if [ ! -f "/home/travis/.m2/sftp.tar" ];then docker save -o /home/travis/.m2/sftp.tar juicedata/ci-sftp; fi
   - sudo chmod 777 -R $HOME/gopath
   - sudo chmod 777 -R $HOME/.m2/
   - sudo chmod 777 -R $HOME/.tiup/components
