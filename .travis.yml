@@ -45,7 +45,6 @@ before_script:
   - ls -lh /home/travis/.m2
   - sudo du -sh $HOME/gopath/pkg/mod/
   - sudo du -sh $HOME/.m2/
-  - sudo du -sh $HOME/.m2/repository
   - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
   - docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
   - go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
