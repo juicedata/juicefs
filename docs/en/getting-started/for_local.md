@@ -142,7 +142,7 @@ If the `myjfs.db` file already exists, delete it first and then execute the foll
 :::
 
 ```shell
-juicefs format --storage oss \
+juicefs format --storage s3 \
     --bucket https://myjfs.s3.us-west-1.amazonaws.com \
     --access-key ABCDEFGHIJKLMNopqXYZ \
     --secret-key ZYXwvutsrqpoNMLkJiHgfeDCBA \
