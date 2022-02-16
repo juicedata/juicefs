@@ -288,7 +288,7 @@ func mount(c *cli.Context) error {
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
-	if d := c.Duration("backup-meta"); d > 0 {
+	if d := c.Duration("backup-meta"); d > 0 && !readOnly {
 		go vfs.Backup(m, blob, d)
 	}
 	if !c.Bool("no-usage-report") {
