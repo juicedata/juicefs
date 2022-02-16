@@ -70,11 +70,14 @@ func (s *DoubleSpinner) Current() (int64, int64) {
 }
 
 func NewProgress(quiet, showSpeed bool) *Progress {
+	var p *Progress
 	if quiet || os.Getenv("DISPLAY_PROGRESSBAR") == "false" || !isatty.IsTerminal(os.Stdout.Fd()) {
-		return &Progress{mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil)), true, showSpeed, nil}
+		p = &Progress{mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil)), true, showSpeed, nil}
 	} else {
-		return &Progress{mpb.New(mpb.WithWidth(64)), false, showSpeed, nil}
+		p = &Progress{mpb.New(mpb.WithWidth(64)), false, showSpeed, nil}
+		SetOutput(p, true)
 	}
+	return p
 }
 
 func (p *Progress) AddCountBar(name string, total int64) *Bar {
@@ -150,6 +153,7 @@ func (p *Progress) Done() {
 		}
 	}
 	p.Progress.Wait()
+	SetOutput(os.Stderr, true)
 }
 
 func MockProgress() (*Progress, *Bar) {

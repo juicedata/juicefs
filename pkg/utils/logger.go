@@ -16,6 +16,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -127,5 +128,12 @@ func SetOutFile(name string) {
 	for _, logger := range loggers {
 		logger.SetOutput(file)
 		logger.tty = false
+	}
+}
+
+func SetOutput(w io.Writer, istty bool) {
+	for _, logger := range loggers {
+		logger.SetOutput(w)
+		logger.tty = istty
 	}
 }
