@@ -39,13 +39,13 @@ before_script:
   - sudo du -sh $HOME/gopath/pkg/mod/
   - ls -lh $HOME/gopath/pkg/mod/
   - ls -lh $HOME/gopath/pkg
-  - ls -lh $HOME/gopath
-  - ls -lh $HOME/
+  - ls -lah $HOME/gopath
+  - ls -lah $HOME/
   - if [ -f "/home/travis/.m2/minio.tar" ];then docker load </home/travis/.m2/minio.tar; fi
   - if [ -f "/home/travis/.m2/sftp.tar" ]; then docker load </home/travis/.m2/sftp.tar; fi
   - docker images
-  - ls -lh /home/travis
-  - ls -lh /home/travis/.m2
+  - ls -lah /home/travis
+  - ls -lah /home/travis/.m2
   - sudo du -sh $HOME/gopath/pkg/mod/
   - sudo du -sh $HOME/.m2/
   - curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
@@ -100,8 +100,8 @@ script:
   - sudo du -sh $HOME/.m2/
   - sudo du -sh $HOME/.m2/repository
   - sudo chmod 777 -R $HOME/.m2/
-  - ls -lh $HOME
-  - ls -lh $HOME/.m2
+  - ls -lah $HOME
+  - ls -lah $HOME/.m2
 after_failure:
   - sudo tail -n 100 /var/log/syslog
 after_success:
