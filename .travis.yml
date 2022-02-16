@@ -37,6 +37,7 @@ before_script:
   - ls -lh $HOME/gopath/pkg/mod/
   - ls -lh $HOME/gopath/pkg
   - ls -lh $HOME/gopath
+  - ls -lh $HOME/
   - if [ -f "/home/travis/.m2/minio.tar" ];then docker load </home/travis/.m2/minio.tar; fi
   - if [ -f "/home/travis/.m2/sftp.tar" ]; then docker load </home/travis/.m2/sftp.tar; fi
   - docker images
@@ -85,7 +86,7 @@ script:
   - ls -lh $HOME/gopath/pkg/mod/
   - ls -lh $HOME/gopath/pkg
   - ls -lh $HOME/gopath
-  - sudo chmod 777 $HOME/gopath/pkg/mod/
+  - sudo chmod 777 -R $HOME/gopath
   - ls -lh /home/travis/.m2/
   - sudo du -sh $HOME/gopath/pkg/mod/
   - sudo du -sh $HOME/.m2/
