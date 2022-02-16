@@ -85,9 +85,12 @@ script:
   - ls -lh $HOME/gopath/pkg/mod/
   - ls -lh $HOME/gopath/pkg
   - ls -lh $HOME/gopath
+  - ls -lh $HOME
   - sudo chmod 777 -R $HOME/gopath
+  - ls -lh $HOME/gopath/pkg/mod/
   - ls -lh /home/travis/.m2/
   - sudo du -sh $HOME/gopath/pkg/mod/
+  - sudo du -sh $HOME/gopath/pkg
   - sudo du -sh $HOME/.m2/
   - sudo du -sh $HOME/.m2/repository
 after_failure:
