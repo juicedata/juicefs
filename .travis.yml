@@ -44,7 +44,7 @@ before_script:
   - ls -lah $HOME/
   - if [ -f "/home/travis/.m2/minio.tar" ];then docker load </home/travis/.m2/minio.tar; fi
   - if [ -f "/home/travis/.m2/sftp.tar" ];then docker load </home/travis/.m2/sftp.tar; fi
-  - if [ ! -f "/home/travis/.m2/install.sh"];then wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh; fi
+  - if [ ! -f "/home/travis/.m2/install.sh" ];then wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh; fi
   - docker images
   - ls -lah /home/travis
   - ls -lah /home/travis/.m2
