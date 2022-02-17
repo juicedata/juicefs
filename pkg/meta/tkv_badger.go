@@ -171,11 +171,8 @@ func (tx *badgerTxn) append(key []byte, value []byte) []byte {
 }
 
 func (tx *badgerTxn) incrBy(key []byte, value int64) int64 {
-	var newCounter int64
 	buf := tx.get(key)
-	if len(buf) > 0 {
-		newCounter = parseCounter(buf)
-	}
+	newCounter := parseCounter(buf)
 	if value != 0 {
 		newCounter += value
 		tx.set(key, packCounter(newCounter))
