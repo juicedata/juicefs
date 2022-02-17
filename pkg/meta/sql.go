@@ -170,10 +170,12 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if err = engine.Ping(); err != nil {
 		return nil, fmt.Errorf("ping database: %s", err)
 	}
-	if time.Since(start) > time.Millisecond {
+	if time.Since(start) > time.Millisecond*5 {
 		logger.Warnf("The latency to database is too high: %s", time.Since(start))
 	}
 
+	engine.DB().SetMaxIdleConns(runtime.NumCPU() * 2)
+	engine.DB().SetConnMaxIdleTime(time.Minute * 5)
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	m := &dbMeta{
 		baseMeta: newBaseMeta(conf),
