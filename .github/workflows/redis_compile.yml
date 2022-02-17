@@ -57,6 +57,7 @@ jobs:
           cd redis
           ls -lh
           make
+          echo "11111"
           make test
 
 
