@@ -132,9 +132,7 @@ func SetOutFile(name string) {
 }
 
 func SetOutput(w io.Writer) {
-	colorful := isatty.IsTerminal(os.Stderr.Fd())
 	for _, logger := range loggers {
 		logger.SetOutput(w)
-		logger.colorful = colorful
 	}
 }
