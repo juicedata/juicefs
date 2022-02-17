@@ -240,6 +240,7 @@ func (m *kvMeta) counterKey(key string) []byte {
 	return m.fmtKey("C", key)
 }
 
+// Used for values that are modified by directly set; mostly timestamps
 func (m *kvMeta) packInt64(value int64) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, uint64(value))
@@ -256,6 +257,7 @@ func (m *kvMeta) parseInt64(buf []byte) int64 {
 	return int64(binary.BigEndian.Uint64(buf))
 }
 
+// Used for most counter values that are modified by incrBy
 func packCounter(value int64) []byte {
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(value))
@@ -288,15 +290,6 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 	var value []byte
 	err := m.client.txn(func(tx kvTxn) error {
 		value = tx.get(key)
-		return nil
-	})
-	return value, err
-}
-
-func (m *kvMeta) getCounter(key []byte) (int64, error) {
-	var value int64
-	err := m.client.txn(func(tx kvTxn) error {
-		value = tx.incrBy(key, 0)
 		return nil
 	})
 	return value, err
@@ -624,6 +617,11 @@ func (m *kvMeta) setValue(key, value []byte) error {
 	})
 }
 
+func (m *kvMeta) getCounter(name string) (int64, error) {
+	buf, err := m.get(m.counterKey(name))
+	return parseCounter(buf), err
+}
+
 func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 	var new int64
 	key := m.counterKey(name)
@@ -635,15 +633,20 @@ func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 }
 
 func (m *kvMeta) setIfSmall(name string, value, diff int64) (bool, error) {
-	old, err := m.get(m.counterKey(name))
-	if err != nil {
-		return false, err
-	}
-	if m.parseInt64(old) > value-diff {
-		return false, nil
-	} else {
-		return true, m.setValue(m.counterKey(name), m.packInt64(value))
-	}
+	var changed bool
+	key := m.counterKey(name)
+	err := m.txn(func(tx kvTxn) error {
+		changed = false
+		if m.parseInt64(tx.get(key)) > value-diff {
+			return nil
+		} else {
+			changed = true
+			tx.set(key, m.packInt64(value))
+			return nil
+		}
+	})
+
+	return changed, err
 }
 
 func (m *kvMeta) deleteKeys(keys ...[]byte) error {
@@ -1852,9 +1855,12 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
 		m.cleanupZeroRef(chunkid, size)
+		var refs int64
 		for _, s := range ss {
-			refs, err := m.getCounter(m.sliceKey(s.chunkid, s.size))
-			if err == nil && refs < 0 {
+			if m.client.txn(func(tx kvTxn) error {
+				refs = tx.incrBy(m.sliceKey(s.chunkid, s.size), 0)
+				return nil
+			}) == nil && refs < 0 {
 				m.deleteSlice(s.chunkid, s.size)
 			}
 		}

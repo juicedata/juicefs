@@ -273,28 +273,46 @@ func (r *redisMeta) doNewSession(sinfo []byte) error {
 	return nil
 }
 
-func (r *redisMeta) incrCounter(name string, v int64) (int64, error) {
+func (m *redisMeta) getCounter(name string) (int64, error) {
+	v, err := m.rdb.Get(Background, name).Int64()
+	if err == redis.Nil {
+		err = nil
+	}
+	return v, err
+}
+
+func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
+	if m.conf.ReadOnly {
+		return 0, syscall.EROFS
+	}
 	if name == "nextInode" || name == "nextChunk" {
 		// for nextinode, nextchunk
 		// the current one is already used
-		v, err := r.rdb.IncrBy(Background, strings.ToLower(name), v).Result()
+		v, err := m.rdb.IncrBy(Background, strings.ToLower(name), value).Result()
 		return v + 1, err
 	} else if name == "nextSession" {
 		name = "nextsession"
 	}
-	return r.rdb.IncrBy(Background, name, v).Result()
+	return m.rdb.IncrBy(Background, name, value).Result()
 }
 
-func (r *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
-	old, err := r.rdb.Get(Background, name).Int64()
-	if err != nil && err != redis.Nil {
-		return false, err
-	}
-	if old > value-diff {
-		return false, nil
-	} else {
-		return true, r.rdb.Set(Background, name, value, 0).Err()
-	}
+func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
+	var changed bool
+	err := m.txn(Background, func(tx *redis.Tx) error {
+		changed = false
+		old, err := tx.Get(Background, name).Int64()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+		if old > value-diff {
+			return nil
+		} else {
+			changed = true
+			return tx.Set(Background, name, value, 0).Err()
+		}
+	}, name)
+
+	return changed, err
 }
 
 func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
