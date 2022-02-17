@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/fs"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -294,6 +296,13 @@ func mount(c *cli.Context) error {
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
+	if c.String("http") != "" {
+		jfs, err := fs.NewFileSystem(conf, m, store)
+		if err != nil {
+			logger.Fatalf("Initialize FileSystem failed: %s", err)
+		}
+		go fs.StartHTTPServer(jfs, c.String("http"), c.Bool("gzip"), c.Bool("disallowList"))
+	}
 	mount_main(v, c)
 	return m.CloseSession()
 }
@@ -431,6 +440,18 @@ func mountFlags() *cli.Command {
 			&cli.BoolFlag{
 				Name:  "no-usage-report",
 				Usage: "do not send usage report",
+			},
+			&cli.StringFlag{
+				Name:  "http",
+				Usage: "address to serve files via HTTP",
+			},
+			&cli.BoolFlag{
+				Name:  "gzip",
+				Usage: "compress served files via gzip",
+			},
+			&cli.BoolFlag{
+				Name:  "disallowList",
+				Usage: "disallow list a directory",
 			},
 		},
 	}
