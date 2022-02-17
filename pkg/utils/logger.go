@@ -16,6 +16,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -33,9 +34,9 @@ var syslogHook logrus.Hook
 type logHandle struct {
 	logrus.Logger
 
-	name string
-	lvl  *logrus.Level
-	tty  bool
+	name     string
+	lvl      *logrus.Level
+	colorful bool
 }
 
 func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
@@ -44,7 +45,7 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		lvl = *l.lvl
 	}
 	lvlStr := strings.ToUpper(lvl.String())
-	if l.tty {
+	if l.colorful {
 		var color int
 		switch lvl {
 		case logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel:
@@ -84,7 +85,7 @@ func (l *logHandle) Log(args ...interface{}) {
 }
 
 func newLogger(name string) *logHandle {
-	l := &logHandle{Logger: *logrus.New(), name: name, tty: isatty.IsTerminal(os.Stderr.Fd())}
+	l := &logHandle{Logger: *logrus.New(), name: name, colorful: isatty.IsTerminal(os.Stderr.Fd())}
 	l.Formatter = l
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)
@@ -115,7 +116,7 @@ func SetLogLevel(lvl logrus.Level) {
 
 func DisableLogColor() {
 	for _, logger := range loggers {
-		logger.tty = false
+		logger.colorful = false
 	}
 }
 
@@ -126,6 +127,12 @@ func SetOutFile(name string) {
 	}
 	for _, logger := range loggers {
 		logger.SetOutput(file)
-		logger.tty = false
+		logger.colorful = false
+	}
+}
+
+func SetOutput(w io.Writer) {
+	for _, logger := range loggers {
+		logger.SetOutput(w)
 	}
 }
