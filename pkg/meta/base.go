@@ -36,8 +36,11 @@ const (
 )
 
 type engine interface {
+	// Get the value of counter name.
+	getCounter(name string) (int64, error)
+	// Increase counter name by value. Do not use this if value is 0, use getCounter instead.
 	incrCounter(name string, value int64) (int64, error)
-	// Set name to value if old <= value - diff
+	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
 
 	doLoad() ([]byte, error)
@@ -226,11 +229,15 @@ func (m *baseMeta) CloseSession() error {
 
 func (m *baseMeta) refreshUsage() {
 	for {
-		if v, err := m.en.incrCounter(usedSpace, 0); err == nil {
+		if v, err := m.en.getCounter(usedSpace); err == nil {
 			atomic.StoreInt64(&m.usedSpace, v)
+		} else {
+			logger.Warnf("Get counter %s: %s", usedSpace, err)
 		}
-		if v, err := m.en.incrCounter(totalInodes, 0); err == nil {
+		if v, err := m.en.getCounter(totalInodes); err == nil {
 			atomic.StoreInt64(&m.usedInodes, v)
+		} else {
+			logger.Warnf("Get counter %s: %s", totalInodes, err)
 		}
 		utils.SleepWithJitter(time.Second * 10)
 	}
@@ -303,14 +310,14 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 	var used, inodes int64
 	var err error
 	err = utils.WithTimeout(func() error {
-		used, err = m.en.incrCounter(usedSpace, 0)
+		used, err = m.en.getCounter(usedSpace)
 		return err
 	}, time.Millisecond*150)
 	if err != nil {
 		used = atomic.LoadInt64(&m.usedSpace)
 	}
 	err = utils.WithTimeout(func() error {
-		inodes, err = m.en.incrCounter(totalInodes, 0)
+		inodes, err = m.en.getCounter(totalInodes)
 		return err
 	}, time.Millisecond*150)
 	if err != nil {

@@ -188,11 +188,8 @@ func (tx *memTxn) append(key []byte, value []byte) []byte {
 }
 
 func (tx *memTxn) incrBy(key []byte, value int64) int64 {
-	var new int64
 	buf := tx.get(key)
-	if len(buf) > 0 {
-		new = parseCounter(buf)
-	}
+	new := parseCounter(buf)
 	if value != 0 {
 		new += value
 		tx.set(key, packCounter(new))

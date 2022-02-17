@@ -447,7 +447,13 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 	return sessions, nil
 }
 
-func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
+func (m *dbMeta) getCounter(name string) (int64, error) {
+	c := counter{Name: name}
+	_, err := m.db.Get(&c)
+	return c.Value, err
+}
+
+func (m *dbMeta) incrCounter(name string, value int64) (int64, error) {
 	var v int64
 	err := m.txn(func(s *xorm.Session) error {
 		var c = counter{Name: name}
@@ -455,8 +461,8 @@ func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
 		if err != nil {
 			return err
 		}
-		v = c.Value + batch
-		if batch > 0 {
+		v = c.Value + value
+		if value > 0 {
 			c.Value = v
 			if ok {
 				_, err = s.Cols("value").Update(&c, &counter{Name: name})
@@ -470,27 +476,29 @@ func (m *dbMeta) incrCounter(name string, batch int64) (int64, error) {
 }
 
 func (m *dbMeta) setIfSmall(name string, value, diff int64) (bool, error) {
-	c := counter{Name: name}
-	ok, err := m.db.Get(&c)
-	if err != nil {
-		return false, err
-	}
-	if c.Value > value-diff {
-		return false, nil
-	} else {
-		if ok {
-			err = m.txn(func(s *xorm.Session) error {
-				_, err := s.Update(&counter{Value: value}, &counter{Name: name})
-				return err
-			})
-		} else {
-			err = m.txn(func(s *xorm.Session) error {
-				_, err := s.InsertOne(&counter{Name: name, Value: value})
-				return err
-			})
+	var changed bool
+	err := m.txn(func(s *xorm.Session) error {
+		changed = false
+		c := counter{Name: name}
+		ok, err := s.Get(&c)
+		if err != nil {
+			return err
 		}
-		return true, err
-	}
+		if c.Value > value-diff {
+			return nil
+		} else {
+			changed = true
+			c.Value = value
+			if ok {
+				_, err = s.Cols("value").Update(&c, &counter{Name: name})
+			} else {
+				err = mustInsert(s, &c)
+			}
+			return err
+		}
+	})
+
+	return changed, err
 }
 
 func mustInsert(s *xorm.Session, beans ...interface{}) error {
