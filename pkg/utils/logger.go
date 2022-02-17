@@ -131,7 +131,8 @@ func SetOutFile(name string) {
 	}
 }
 
-func SetOutput(w io.Writer, istty bool) {
+func SetOutput(w io.Writer) {
+	istty := isatty.IsTerminal(os.Stderr.Fd())
 	for _, logger := range loggers {
 		logger.SetOutput(w)
 		logger.tty = istty

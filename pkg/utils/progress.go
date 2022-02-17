@@ -75,7 +75,7 @@ func NewProgress(quiet, showSpeed bool) *Progress {
 		p = &Progress{mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil)), true, showSpeed, nil}
 	} else {
 		p = &Progress{mpb.New(mpb.WithWidth(64)), false, showSpeed, nil}
-		SetOutput(p, true)
+		SetOutput(p)
 	}
 	return p
 }
@@ -153,7 +153,7 @@ func (p *Progress) Done() {
 		}
 	}
 	p.Progress.Wait()
-	SetOutput(os.Stderr, true)
+	SetOutput(os.Stderr)
 }
 
 func MockProgress() (*Progress, *Bar) {
