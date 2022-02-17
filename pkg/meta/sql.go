@@ -2371,12 +2371,8 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	}
 	var edges []*edge
 	var err error
-	var ok bool
 	if m.snap != nil {
-		edges, ok = m.snap.edges[inode]
-		if !ok {
-			logger.Warnf("no edge target for inode %d", inode)
-		}
+		edges = m.snap.edges[inode]
 	} else {
 		if err := m.db.Find(&edges, &edge{Parent: inode}); err != nil {
 			return err
