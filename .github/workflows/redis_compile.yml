@@ -51,17 +51,22 @@ jobs:
       - name: Change Data Dir
         run: |
           cd /tmp/jfs
-          wget -O redis.tar.gz https://github.com/redis/redis/archive/refs/tags/6.2.6.tar.gz
+          wget -O redis.tar.gz https://github.com/redis/redis/archive/refs/tags/6.0.16.tar.gz
           mkdir redis
           tar -xvf redis.tar.gz -C redis --strip-components 1
           cd redis
+          du -sh
+          echo "00000"
           ls -lh
           make
           echo "11111"
           make test
+          echo "22222"
           stat /tmp/jfs
           ps -axu | grep juicefs
           ps -aux | grep redis
+          echo "33333"
+          du -sh
 
 
       - name: Setup tmate session
