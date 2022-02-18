@@ -37,16 +37,14 @@ jobs:
       - name: Install Sqlite3
         run: |
           sqlite3 -version
-          sudo apt-get install sqlite3
-          sqlite3 -version
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis:///tmp/myjfs.db pics
+          sudo ./juicefs format sqlite3:///tmp/myjfs.db pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis:///tmp/myjfs.db /tmp/jfs --no-usage-report
+          sudo ./juicefs mount -d sqlite3:///tmp/myjfs.db /tmp/jfs --no-usage-report
 
 
       - name: Compile Redis
