@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
+      - 'release-**'
     paths-ignore:
       - 'docs/**'
 
@@ -51,19 +51,9 @@ jobs:
           mkdir redis
           tar -xvf redis.tar.gz -C redis --strip-components 1
           cd redis
-          du -sh
-          echo "00000"
           make
-          du -sh
-          echo "11111"
           make test
           stat /tmp/jfs
-          ps -axu | grep juicefs
-          ps -aux | grep redis
-          du -sh
-          echo "33333"
-
-
 
       - name: Setup tmate session
         if: ${{ failure() }}
