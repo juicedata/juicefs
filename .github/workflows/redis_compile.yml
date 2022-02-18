@@ -47,7 +47,7 @@ jobs:
       - name: Compile Redis
         run: |
           cd /tmp/jfs
-          wget -O redis.tar.gz https://github.com/redis/redis/archive/refs/tags/6.0.16.tar.gz
+          wget -O redis.tar.gz https://github.com/redis/redis/archive/refs/tags/6.2.6.tar.gz
           mkdir redis
           tar -xvf redis.tar.gz -C redis --strip-components 1
           cd redis
