@@ -34,7 +34,7 @@ jobs:
       - name: Build linux target
         run: make juicefs
 
-      - name:Install Sqlite3
+      - name: Install Sqlite3
         run: |
           sqlite3 -version
           sudo apt-get install sqlite3
