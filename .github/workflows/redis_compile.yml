@@ -34,18 +34,19 @@ jobs:
       - name: Build linux target
         run: make juicefs
 
-      - name: Run Redis
+      - name:Install Sqlite3
         run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
+          sqlite3 -version
+          sudo apt-get install sqlite3
+          sqlite3 -version
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+          sudo ./juicefs format redis:///tmp/myjfs.db pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          sudo ./juicefs mount -d redis:///tmp/myjfs.db /tmp/jfs --no-usage-report
 
 
       - name: Compile Redis
@@ -59,9 +60,8 @@ jobs:
           echo "00000"
           ls -lh
           make
+          du -sh
           echo "11111"
-          make test
-          echo "22222"
           stat /tmp/jfs
           ps -axu | grep juicefs
           ps -aux | grep redis
