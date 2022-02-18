@@ -59,6 +59,9 @@ jobs:
           make
           echo "11111"
           make test
+          stat /tmp/jfs
+          ps -axu | grep juicefs
+          ps -aux | grep redis
 
 
       - name: Setup tmate session
