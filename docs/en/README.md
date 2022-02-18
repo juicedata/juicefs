@@ -15,7 +15,7 @@ With JuiceFS, massive cloud storage can be directly connected to big data, machi
 2. **Fully Hadoop-compatible**: JuiceFS' [Hadoop Java SDK](deployment/hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x as well as a variety of components in the Hadoop ecosystem.
 3. **S3-compatible**:  JuiceFS' [S3 Gateway](deployment/s3_gateway.md) provides an S3-compatible interface.
 4. **Cloud Native**:  A [Kubernetes CSI driver](deployment/how_to_use_on_kubernetes.md) is provided for easily using JuiceFS in Kubernetes.
-5. **Shareable**: JuiceFS is a shareable file storage that can be read and written by thousands of clients.
+5. **Shareable**: JuiceFS is a shared file storage that can be read and written by thousands of clients.
 6. **Strong Consistency**: The confirmed modification will be immediately visible on all the servers mounted with the same file system.
 7. **Outstanding Performance**: The latency can be as low as a few milliseconds, and the throughput can be expanded nearly unlimitedly (depending on the size of the object storage). [Test results](benchmark/benchmark.md)
 8. **Data Encryption**: Supports data encryption in transit and at rest (please refer to [the guide](security/encrypt.md) for more information).
