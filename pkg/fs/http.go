@@ -212,6 +212,7 @@ func StartHTTPServer(fs *FileSystem, addr string, gzipEnabled bool, disallowList
 		h = makeGzipHandler(h)
 	}
 	http.Handle("/", h)
+	logger.Infof("WebDAV listening on %s", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		logger.Fatalf("Error with WebDAV server: %v", err)
 	}
