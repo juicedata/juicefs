@@ -217,19 +217,21 @@ func format(c *cli.Context) error {
 		if err := test(blob); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
-		if objs, err := osync.ListAll(blob, "", ""); err == nil {
-			for o := range objs {
-				if o == nil {
-					logger.Warnf("List storage %s failed", blob)
-					break
-				} else if o.IsDir() {
-					continue
-				} else if !strings.HasPrefix(o.Key(), "testing/") {
-					logger.Fatalf("Storage %s is not empty; please clean it up or pick another volume name", blob)
+		if _, err := m.Load(); err != nil { // not formatted
+			if objs, err := osync.ListAll(blob, "", ""); err == nil {
+				for o := range objs {
+					if o == nil {
+						logger.Warnf("List storage %s failed", blob)
+						break
+					} else if o.IsDir() {
+						continue
+					} else if !strings.HasPrefix(o.Key(), "testing/") {
+						logger.Fatalf("Storage %s is not empty; please clean it up or pick another volume name", blob)
+					}
 				}
+			} else {
+				logger.Warnf("List storage %s failed: %s", blob, err)
 			}
-		} else {
-			logger.Warnf("List storage %s failed: %s", blob, err)
 		}
 	}
 
