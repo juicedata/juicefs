@@ -199,13 +199,13 @@ Since GCC does not have a native Windows client, you need to use the version pro
 
 Download MinGW-w64 and add its `bin` directory to the system environment variables.
 
-1. Clone and enter the project directory at:
+1. Clone and enter the project directory
 
    ```shell
    git clone https://github.com/juicedata/juicefs.git && cd juicefs
    ```
 
-2. Copy winfsp headers
+2. Copy WinFsp headers
 
    ```shell
    mkdir "C:\WinFsp\inc\fuse"
@@ -253,19 +253,22 @@ make juicefs.exe
 
 The compiled client is a binary file named `juicefs.exe`, located in the current directory.
 
-### Cross-compiling linux clients on MacOS
+### Cross-compiling Linux clients on macOS
 
-1. Clone and enter the project directory at:
+1. Clone and enter the project directory
 
    ```shell
    git clone https://github.com/juicedata/juicefs.git && cd juicefs
    ```
 
 2. Install dependencies
+
    ```shell
    brew install FiloSottile/musl-cross/musl-cross
    ```
+
 3. Compile client
+
    ```shell
    make juicefs.linux
    ```

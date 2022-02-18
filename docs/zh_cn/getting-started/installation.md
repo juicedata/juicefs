@@ -203,13 +203,13 @@ CMD [ "juicefs" ]
 
 下载 MinGW-w64 并将其内的 `bin` 目录添加到系统环境变量。
 
-1. 克隆并进入项目目录：
+1. 克隆并进入项目目录
 
    ```shell
    git clone https://github.com/juicedata/juicefs.git && cd juicefs
    ```
 
-2. 复制 winfsp 头文件
+2. 复制 WinFsp 头文件
 
    ```shell
    mkdir "C:\WinFsp\inc\fuse"
@@ -257,19 +257,22 @@ make juicefs.exe
 
 编译好的客户端是一个名为 `juicefs.exe` 的二进制文件，位于当前目录。
 
-### 在 MacOS 中交叉编译 linux 客户端
+### 在 macOS 中交叉编译 Linux 客户端
 
-1. 克隆并进入项目目录：
+1. 克隆并进入项目目录
 
    ```shell
    git clone https://github.com/juicedata/juicefs.git && cd juicefs
    ```
 
 2. 安装依赖
+
    ```shell
    brew install FiloSottile/musl-cross/musl-cross
    ```
+
 3. 编译客户端
+
    ```shell
    make juicefs.linux
    ```
