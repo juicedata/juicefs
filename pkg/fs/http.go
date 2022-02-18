@@ -26,9 +26,7 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
-
 	"github.com/juicedata/juicefs/pkg/vfs"
-
 	"golang.org/x/net/webdav"
 )
 
