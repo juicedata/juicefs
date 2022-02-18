@@ -34,9 +34,6 @@ jobs:
       - name: Build linux target
         run: make juicefs
 
-      - name: Install Sqlite3
-        run: |
-          sqlite3 -version
 
       - name: Juicefs Format
         run: |
@@ -56,15 +53,16 @@ jobs:
           cd redis
           du -sh
           echo "00000"
-          ls -lh
           make
           du -sh
           echo "11111"
+          make test
           stat /tmp/jfs
           ps -axu | grep juicefs
           ps -aux | grep redis
-          echo "33333"
           du -sh
+          echo "33333"
+
 
 
       - name: Setup tmate session
