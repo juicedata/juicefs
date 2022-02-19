@@ -52,8 +52,7 @@ func (tx *prefixTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 }
 func (tx *prefixTxn) scan(prefix []byte, handler func(key, value []byte)) {
 	tx.kvTxn.scan(tx.realKey(prefix), func(key, value []byte) {
-		key = tx.origKey(key)
-		handler(key, value)
+		handler(tx.origKey(key), value)
 	})
 }
 func (tx *prefixTxn) scanKeys(prefix []byte) [][]byte {
