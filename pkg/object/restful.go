@@ -81,6 +81,10 @@ func init() {
 	}
 }
 
+func GetHttpClient() *http.Client {
+	return httpClient
+}
+
 func cleanup(response *http.Response) {
 	if response != nil && response.Body != nil {
 		_, _ = ioutil.ReadAll(response.Body)
