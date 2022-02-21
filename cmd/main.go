@@ -79,6 +79,7 @@ func Main(args []string) error {
 			mountFlags(),
 			umountFlags(),
 			gatewayFlags(),
+			webDavFlags(),
 			syncFlags(),
 			rmrFlags(),
 			infoFlags(),
