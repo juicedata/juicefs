@@ -248,7 +248,7 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-Executing the above command will automatically create a database file named `my-jfs.db` in the current directory, **please take good care of this file**！
+Executing the above command will automatically create a database file named `my-jfs.db` in the current directory, **please take good care of this file**!
 
 Mount the file system:
 

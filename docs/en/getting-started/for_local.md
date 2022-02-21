@@ -10,7 +10,7 @@ The JuiceFS file system consists of ["Object Storage"](../reference/how_to_setup
 
 ## Install Client
 
-For details, please refer to [Installation & Upgrade](installation.md)。
+For details, please refer to [Installation & Upgrade](installation.md).
 
 Regardless of the operating system you are using, when you execute `juicefs` in the terminal and it returns the help message of the program, it means that you have successfully installed the JuiceFS client.
 
@@ -31,7 +31,7 @@ As you can see, there are 3 types of information required to format a file syste
 3. **NAME**: the name of the file system.
 
 :::tip
-JuiceFS supports a wide range of storage media and metadata storage engines, see [JuiceFS supported storage medias](../reference/how_to_setup_object_storage.md) and [JuiceFS supported metadata storage engines](../reference/how_to_setup_metadata_engine.md)。
+JuiceFS supports a wide range of storage media and metadata storage engines, see [JuiceFS supported storage medias](../reference/how_to_setup_object_storage.md) and [JuiceFS supported metadata storage engines](../reference/how_to_setup_metadata_engine.md).
 :::
 
 ### Hands-on Practice

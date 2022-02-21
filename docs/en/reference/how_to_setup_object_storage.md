@@ -689,8 +689,8 @@ $ sudo docker run -d --name minio \
 
 It is accessed using the following address:
 
-- **MinIO UI**：[http://127.0.0.1:9900](http://127.0.0.1:9900/)
-- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000/)
+- **MinIO UI**: [http://127.0.0.1:9900](http://127.0.0.1:9900/)
+- **MinIO API**: [http://127.0.0.1:9000](http://127.0.0.1:9000/)
 
 The initial Access Key and Secret Key of the object store are both `minioadmin`.
 

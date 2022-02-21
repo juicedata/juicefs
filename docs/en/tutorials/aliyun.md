@@ -52,7 +52,7 @@ If you must access the database through the public network, you can enhance the 
 
 On the other hand, if you cannot successfully connect to the cloud database through the public network, then you can check the whitelist of the database.
 
-|    Database     |                          Redis                          |                      MySQL、PostgreSQL                       |                            SQLite                            |
+|    Database     |                          Redis                          |                      MySQL/PostgreSQL                       |                            SQLite                            |
 | :-------------: | :-----------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
 | **Performance** |                          High                           |                            Medium                            |                             Low                              |
 | **Management**  |                          High                           |                            Medium                            |                             Low                              |

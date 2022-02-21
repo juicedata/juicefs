@@ -28,7 +28,7 @@ JuiceFS can be installed on all operating systems provided by Tencent Cloud CVM.
 | **CPU**               | 1 Core                   |
 | **RAM**               | 2 GB                     |
 | **Storage**           | 50 GB                    |
-| **OS**                | Ubuntu Server 20.04 64位 |
+| **OS**                | Ubuntu Server 20.04 64-bit |
 | **Location**          | Shanghai 5               |
 
 ### 2. Database
@@ -43,7 +43,7 @@ Of course, you can also use cloud database services provided on other cloud plat
 
 If you must access the database through the public network, you can enhance the security of your data by strictly limiting the IP addresses that are allowed to access the database through the whitelist feature provided by the cloud database console. On the other hand, if you cannot connect to the cloud database through the public network, then you can check the whitelist of the database.
 
-|    Database     |                          Redis                          |                      MySQL、PostgreSQL                       |                            SQLite                            |
+|    Database     |                          Redis                          |                      MySQL/PostgreSQL                       |                            SQLite                            |
 | :-------------: | :-----------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
 | **Performance** |                          High                           |                            Medium                            |                             Low                              |
 | **Management**  |                          High                           |                            Medium                            |                             Low                              |

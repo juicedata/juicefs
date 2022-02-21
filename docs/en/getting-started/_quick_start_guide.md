@@ -13,7 +13,7 @@ To create a JuiceFS file system, you need the following 3 preparations:
 3. JuiceFS Client
 
 :::tip
-Don’t know JuiceFS? You can check first [What is JuiceFS?](../introduction/introduction.md)
+Don't know JuiceFS? You can check first [What is JuiceFS?](../introduction/introduction.md)
 :::
 
 ## 1. Redis Database
@@ -57,8 +57,8 @@ $ sudo docker run -d --name minio \
 
 Then, access the service:
 
-- **MinIO Web Console**：http://127.0.0.1:9900
-- **MinIO API**：http://127.0.0.1:9000
+- **MinIO Web Console**: http://127.0.0.1:9900
+- **MinIO API**: http://127.0.0.1:9000
 
 The initial Access Key and Secret Key of the root user are both `minioadmin`.
 
