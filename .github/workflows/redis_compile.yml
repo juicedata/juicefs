@@ -2,7 +2,7 @@ name: "rediscompile"
 
 on:
   schedule:
-    - cron:  '30 14 * * *'
+    - cron:  '40 2 * * *'
 
 
 jobs:
