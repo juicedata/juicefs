@@ -27,6 +27,10 @@ $ juicefs format --storage s3 \
 	myjfs
 ```
 
+## Other options
+
+When executing the `format` or `mount` commands, you can set some special parameters in the form of URL parameters in the `--bucket` parameter, such as `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` is skips certificate verification for https requests.
+
 ## Access Key and Secret Key
 
 In general, object storages are authenticated by `Access Key ID` and `Access Key Secret`, which correspond to the `--access-key` and `--secret-key` options (or AK, SK for short) on the JuiceFS file system.
