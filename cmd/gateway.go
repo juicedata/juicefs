@@ -16,25 +16,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package main
 
 import (
-	"path/filepath"
-
-	"github.com/juicedata/juicefs/pkg/metric"
-
+	"fmt"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
-	jfsgateway "github.com/juicedata/juicefs/pkg/gateway"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
+
+	jfsgateway "github.com/juicedata/juicefs/pkg/gateway"
 	"github.com/urfave/cli/v2"
 
 	mcli "github.com/minio/cli"
@@ -175,21 +176,25 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	c := g.ctx
 	addr := c.Args().Get(0)
 	removePassword(addr)
-	m := meta.NewClient(addr, &meta.Config{
+	m, store, conf := initForSvc(c, "s3gateway", addr)
+	return jfsgateway.NewJFSGateway(conf, m, store, c.Bool("multi-buckets"), c.Bool("keep-etag"))
+}
+
+func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
+	metaConf := &meta.Config{
 		Retries:    10,
 		Strict:     true,
 		ReadOnly:   c.Bool("read-only"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
-		MountPoint: "s3gateway",
+		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 		MaxDeletes: c.Int("max-deletes"),
-	})
+	}
+	m := meta.NewClient(metaUrl, metaConf)
 	format, err := m.Load()
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	wrapRegister("s3gateway", format.Name)
-
 	chunkConf := chunk.Config{
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
@@ -243,27 +248,25 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	}
 
 	conf := &vfs.Config{
-		Meta: &meta.Config{
-			Retries: 10,
-		},
+		AccessLog:       c.String("access-log"),
+		Meta:            metaConf,
 		Format:          format,
 		Version:         version.Version(),
+		Chunk:           &chunkConf,
 		AttrTimeout:     time.Millisecond * time.Duration(c.Float64("attr-cache")*1000),
 		EntryTimeout:    time.Millisecond * time.Duration(c.Float64("entry-cache")*1000),
 		DirEntryTimeout: time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000),
-		AccessLog:       c.String("access-log"),
-		Chunk:           &chunkConf,
 	}
 
 	metricsAddr := exposeMetrics(m, c)
 	if c.IsSet("consul") {
-		metric.RegisterToConsul(c.String("consul"), metricsAddr, "s3gateway")
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
 	if d := c.Duration("backup-meta"); d > 0 && !c.Bool("read-only") {
 		go vfs.Backup(m, blob, d)
 	}
 	if !c.Bool("no-usage-report") {
-		go usage.ReportUsage(m, "gateway "+version.Version())
+		go usage.ReportUsage(m, fmt.Sprintf("%s %s", mp, version.Version()))
 	}
-	return jfsgateway.NewJFSGateway(conf, m, store, c.Bool("multi-buckets"), c.Bool("keep-etag"))
+	return m, store, conf
 }
