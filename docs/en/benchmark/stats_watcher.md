@@ -13,25 +13,25 @@ By default, this command will monitor the JuiceFS process corresponding to the s
 
 #### usage
 
-- cpu：CPU usage of the process
-- mem：physical memory used by the process
-- buf：current buffer size of JuiceFS, limited by mount option `--buffer-size`
+- cpu: CPU usage of the process
+- mem: physical memory used by the process
+- buf: current buffer size of JuiceFS, limited by mount option `--buffer-size`
 
 #### fuse
 
-- ops/lat：number of operations handled by FUSE per second, and the average latency (in milliseconds) of them
-- read/write：read/write bandwidth handled by FUSE
+- ops/lat: number of operations handled by FUSE per second, and the average latency (in milliseconds) of them
+- read/write: read/write bandwidth handled by FUSE
 
 #### meta
 
-- ops/lat：number of metadata operations and the average latency (in milliseconds) of them. Please note operations returned directly in cache are not counted, so that the result is closer to real performance of metadata engines
+- ops/lat: number of metadata operations and the average latency (in milliseconds) of them. Please note operations returned directly in cache are not counted, so that the result is closer to real performance of metadata engines
 
 #### blockcache
 
-- read/write：read/write bandwidth of client local data cache
+- read/write: read/write bandwidth of client local data cache
 
 #### object
 
-- get/put：Get/Put bandwidth between client and object storage
+- get/put: Get/Put bandwidth between client and object storage
 
 Moreover, users can acquire verbose statistics (like read/write ops and the average latency) by setting `--verbosity 1`, or customize displayed items by changing `--schema`. For more information, please check `juicefs stats -h`.
