@@ -237,6 +237,7 @@ func mount(c *cli.Context) error {
 		Version:    version.Version(),
 		Mountpoint: mp,
 		Chunk:      &chunkConf,
+		BackupMeta: c.Duration("backup-meta"),
 	}
 
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
@@ -288,8 +289,8 @@ func mount(c *cli.Context) error {
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
-	if d := c.Duration("backup-meta"); d > 0 && !readOnly {
-		go vfs.Backup(m, blob, d)
+	if !readOnly && conf.BackupMeta > 0 {
+		go vfs.Backup(m, blob, conf.BackupMeta)
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())

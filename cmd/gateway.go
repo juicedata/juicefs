@@ -253,14 +253,15 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		DirEntryTimeout: time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000),
 		AccessLog:       c.String("access-log"),
 		Chunk:           &chunkConf,
+		BackupMeta:      c.Duration("backup-meta"),
 	}
 
 	metricsAddr := exposeMetrics(m, c)
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, "s3gateway")
 	}
-	if d := c.Duration("backup-meta"); d > 0 && !c.Bool("read-only") {
-		go vfs.Backup(m, blob, d)
+	if !c.Bool("read-only") && conf.BackupMeta > 0 {
+		go vfs.Backup(m, blob, conf.BackupMeta)
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, "gateway "+version.Version())
