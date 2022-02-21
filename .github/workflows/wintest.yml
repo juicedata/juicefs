@@ -81,7 +81,7 @@ jobs:
           scoop
           scoop install curl
           scoop install redis
-          scoop install minio
+          scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
           curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o redis-service.exe
           echo  "<service>"   >> redis-service.xml
