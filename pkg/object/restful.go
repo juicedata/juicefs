@@ -40,48 +40,44 @@ var httpClient *http.Client
 
 func init() {
 	rand.Seed(time.Now().Unix())
-	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		TLSHandshakeTimeout:   time.Second * 20,
-		ResponseHeaderTimeout: time.Second * 30,
-		IdleConnTimeout:       time.Second * 300,
-		MaxIdleConnsPerHost:   500,
-		Dial: func(network string, address string) (net.Conn, error) {
-			separator := strings.LastIndex(address, ":")
-			host := address[:separator]
-			port := address[separator:]
-			ips, err := resolver.Fetch(host)
-			if err != nil {
-				return nil, err
-			}
-			if len(ips) == 0 {
-				return nil, fmt.Errorf("No such host: %s", host)
-			}
-			var conn net.Conn
-			n := len(ips)
-			first := rand.Intn(n)
-			dialer := &net.Dialer{Timeout: time.Second * 10}
-			for i := 0; i < n; i++ {
-				ip := ips[(first+i)%n]
-				address = ip.String()
-				if port != "" {
-					address = net.JoinHostPort(address, port[1:])
-				}
-				conn, err = dialer.Dial(network, address)
-				if err == nil {
-					return conn, nil
-				}
-			}
-			return nil, err
-		},
-		DisableCompression: true,
-	}
-	if _, exist := os.LookupEnv("TLS_INSECURE_SKIP_VERIFY"); exist {
-		transport.TLSClientConfig.InsecureSkipVerify = true
-	}
 	httpClient = &http.Client{
-		Transport: transport,
-		Timeout:   time.Hour,
+		Transport: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			TLSHandshakeTimeout:   time.Second * 20,
+			ResponseHeaderTimeout: time.Second * 30,
+			IdleConnTimeout:       time.Second * 300,
+			MaxIdleConnsPerHost:   500,
+			Dial: func(network string, address string) (net.Conn, error) {
+				separator := strings.LastIndex(address, ":")
+				host := address[:separator]
+				port := address[separator:]
+				ips, err := resolver.Fetch(host)
+				if err != nil {
+					return nil, err
+				}
+				if len(ips) == 0 {
+					return nil, fmt.Errorf("No such host: %s", host)
+				}
+				var conn net.Conn
+				n := len(ips)
+				first := rand.Intn(n)
+				dialer := &net.Dialer{Timeout: time.Second * 10}
+				for i := 0; i < n; i++ {
+					ip := ips[(first+i)%n]
+					address = ip.String()
+					if port != "" {
+						address = net.JoinHostPort(address, port[1:])
+					}
+					conn, err = dialer.Dial(network, address)
+					if err == nil {
+						return conn, nil
+					}
+				}
+				return nil, err
+			},
+			DisableCompression: true,
+		},
+		Timeout: time.Hour,
 	}
 }
 
