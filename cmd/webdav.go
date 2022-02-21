@@ -98,8 +98,16 @@ func webdavSvc(c *cli.Context) error {
 		logger.Fatalf("listen address is required")
 	}
 	listenAddr := c.Args().Get(1)
+	m, store, conf := initForSvc(c, "webdav", metaUrl)
+	jfs, err := fs.NewFileSystem(conf, m, store)
+	if err != nil {
+		logger.Fatalf("initialize failed: %s", err)
+	}
+	fs.StartHTTPServer(jfs, listenAddr, c.Bool("gzip"), c.Bool("disallowList"))
+	return m.CloseSession()
+}
 
-	mp := "webdav"
+func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
 	metaConf := &meta.Config{
 		Retries:    10,
 		Strict:     true,
@@ -187,10 +195,5 @@ func webdavSvc(c *cli.Context) error {
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, fmt.Sprintf("%s %s", mp, version.Version()))
 	}
-	jfs, err := fs.NewFileSystem(conf, m, store)
-	if err != nil {
-		return fmt.Errorf("initialize failed: %s", err)
-	}
-	fs.StartHTTPServer(jfs, listenAddr, c.Bool("gzip"), c.Bool("disallowList"))
-	return m.CloseSession()
+	return m, store, conf
 }
