@@ -256,14 +256,15 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 		AttrTimeout:     time.Millisecond * time.Duration(c.Float64("attr-cache")*1000),
 		EntryTimeout:    time.Millisecond * time.Duration(c.Float64("entry-cache")*1000),
 		DirEntryTimeout: time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000),
+		BackupMeta:      c.Duration("backup-meta"),
 	}
 
 	metricsAddr := exposeMetrics(m, c)
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
-	if d := c.Duration("backup-meta"); d > 0 && !c.Bool("read-only") {
-		go vfs.Backup(m, blob, d)
+	if !c.Bool("read-only") && conf.BackupMeta > 0 {
+		go vfs.Backup(m, blob, conf.BackupMeta)
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, fmt.Sprintf("%s %s", mp, version.Version()))
