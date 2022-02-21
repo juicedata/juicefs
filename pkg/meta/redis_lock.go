@@ -32,7 +32,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 	ikey := r.flockKey(inode)
 	lkey := r.ownerKey(owner)
 	if ltype == F_UNLCK {
-		return r.txn(ctx, func(tx *redis.Tx) error {
+		return errno(r.txn(ctx, func(tx *redis.Tx) error {
 			lkeys, err := tx.HKeys(ctx, ikey).Result()
 			if err != nil {
 				return err
@@ -45,9 +45,9 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				return nil
 			})
 			return err
-		}, ikey)
+		}, ikey))
 	}
-	var err syscall.Errno
+	var err error
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
 			owners, err := tx.HGetAll(ctx, ikey).Result()
@@ -90,7 +90,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			return syscall.EINTR
 		}
 	}
-	return err
+	return errno(err)
 }
 
 func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
@@ -134,7 +134,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
 	ikey := r.plockKey(inode)
 	lkey := r.ownerKey(owner)
-	var err syscall.Errno
+	var err error
 	lock := plockRecord{ltype, pid, start, end}
 	for {
 		err = r.txn(ctx, func(tx *redis.Tx) error {
@@ -204,5 +204,5 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 			return syscall.EINTR
 		}
 	}
-	return err
+	return errno(err)
 }
