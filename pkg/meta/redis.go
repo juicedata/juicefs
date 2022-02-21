@@ -2513,6 +2513,9 @@ func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	st := m.txn(ctx, func(tx *redis.Tx) error {
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
+			if err == redis.Nil {
+				logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+			}
 			return err
 		}
 		attr := &Attr{}
@@ -2548,6 +2551,9 @@ func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 			}
 		} else if attr.Typ == TypeSymlink {
 			if e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result(); err != nil {
+				if err == redis.Nil {
+					logger.Warnf("The symlink of inode %d is not found", inode)
+				}
 				return err
 			}
 		}
@@ -2557,6 +2563,9 @@ func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	if st == 0 {
 		return e, nil
 	} else {
+		if st == syscall.ENOENT {
+			return nil, redis.Nil
+		}
 		return nil, fmt.Errorf("dump entry error: %d", st)
 	}
 }
@@ -2640,7 +2649,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			entry = m.dumpEntryFast(inode)
 		} else {
 			entry, err = m.dumpEntry(inode)
-			if err != nil {
+			if err != nil && err != redis.Nil {
 				return err
 			}
 		}
@@ -2650,7 +2659,9 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 
 		entry.Name = name
 		if typ == TypeDirectory {
-			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
+			if err = m.dumpDir(inode, entry, bw, depth+2, showProgress); err == redis.Nil {
+				continue
+			}
 		} else {
 			err = entry.writeJSON(bw, depth+2)
 		}
