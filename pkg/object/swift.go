@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ncw/swift"
 )
 
@@ -59,7 +60,8 @@ func (s *swiftOSS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (s *swiftOSS) Put(key string, in io.Reader) error {
-	_, err := s.conn.ObjectPut(s.container, key, in, true, "", "", nil)
+	mimeType := utils.GuessMimeType(key)
+	_, err := s.conn.ObjectPut(s.container, key, in, true, "", mimeType, nil)
 	return err
 }
 

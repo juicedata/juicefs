@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ks3sdklib/aws-sdk-go/aws"
 	"github.com/ks3sdklib/aws-sdk-go/aws/credentials"
 	"github.com/ks3sdklib/aws-sdk-go/service/s3"
@@ -98,10 +99,12 @@ func (s *ks3) Put(key string, in io.Reader) error {
 		}
 		body = bytes.NewReader(data)
 	}
+	mimeType := utils.GuessMimeType(key)
 	params := &s3.PutObjectInput{
-		Bucket: &s.bucket,
-		Key:    &key,
-		Body:   body,
+		Bucket:      &s.bucket,
+		Key:         &key,
+		Body:        body,
+		ContentType: &mimeType,
 	}
 	_, err := s.s3.PutObject(params)
 	return err
