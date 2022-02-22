@@ -44,6 +44,11 @@ func status(ctx *cli.Context) error {
 	}
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	format, err := m.Load()
+	if err != nil {
+		logger.Fatalf("load setting: %s", err)
+	}
+	format.RemoveSecret()
 
 	if sid := ctx.Uint64("session"); sid != 0 {
 		s, err := m.GetSession(sid)
@@ -53,12 +58,6 @@ func status(ctx *cli.Context) error {
 		printJson(s)
 		return nil
 	}
-
-	format, err := m.Load()
-	if err != nil {
-		logger.Fatalf("load setting: %s", err)
-	}
-	format.RemoveSecret()
 
 	sessions, err := m.ListSessions()
 	if err != nil {

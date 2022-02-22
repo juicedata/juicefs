@@ -152,6 +152,9 @@ func (m *baseMeta) Load() (*Format, error) {
 	if err = json.Unmarshal(body, &m.fmt); err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
+	if !m.fmt.compatible() {
+		return nil, fmt.Errorf("client is not compatible with metadata")
+	}
 	return &m.fmt, nil
 }
 

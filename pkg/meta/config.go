@@ -45,6 +45,7 @@ type Format struct {
 	Inodes      uint64
 	EncryptKey  string `json:",omitempty"`
 	TrashDays   int
+	MetaVersion int
 }
 
 func (f *Format) RemoveSecret() {
@@ -54,4 +55,8 @@ func (f *Format) RemoveSecret() {
 	if f.EncryptKey != "" {
 		f.EncryptKey = "removed"
 	}
+}
+
+func (f *Format) compatible() bool {
+	return f.MetaVersion == 0
 }

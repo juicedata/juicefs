@@ -2535,10 +2535,6 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return errors.New("The entry of the root inode was not found")
 	}
 	tree.Name = "FSTree"
-	format, err := m.Load()
-	if err != nil {
-		return err
-	}
 
 	var crows []counter
 	if err = m.db.Find(&crows); err != nil {
@@ -2576,7 +2572,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting:   format,
+		Setting:   &m.fmt,
 		Counters:  counters,
 		Sustained: sessions,
 		DelFiles:  dels,
