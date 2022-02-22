@@ -11,11 +11,10 @@ Conclusion first:
 - For small I/O (~100 KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis; TiKV performs similarly to MySQL
 - For large I/O (~4 MiB) workloads, total time costs with different metadata engines show no obvious difference (object storage becomes the bottleneck)
 
->**Note**:
->
->1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability; more information can be found [here](https://redis.io/topics/persistence)
->2. Both Redis and MySQL store only one replica locally, while TiKV stores three replicas in three different hosts using Raft protocol
-
+:::note
+1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability; more information can be found [here](https://redis.io/topics/persistence)
+2. Both Redis and MySQL store only one replica locally, while TiKV stores three replicas in three different hosts using Raft protocol
+:::
 
 Details are provided below. Please note all the tests are run with the same object storage (to save data), client and metadata hosts; only metadata engines differ.
 
@@ -185,4 +184,3 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 |                 | Redis-Always | Redis-Everysec | MySQL     | TiKV      |
 | --------------- | ------------ | -------------- | --------- | --------- |
 | Write bandwidth | 350 MiB/s    | 360 MiB/s      | 360 MiB/s | 358 MiB/s |
-

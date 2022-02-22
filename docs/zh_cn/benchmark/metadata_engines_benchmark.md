@@ -11,10 +11,10 @@ slug: /metadata_engines_benchmark
 - 对于小 IO（～100 KiB）压力，使用 MySQL 引擎的操作总耗时大约是使用 Redis 引擎总耗时的 1～3 倍；TiKV 耗时与 MySQL 接近
 - 对于大 IO（～4 MiB）压力，使用不同元数据引擎的总耗时未见明显差异（此时对象存储成为瓶颈）
 
-> **注意**：
->
-> 1. Redis 可以通过将 `appendfsync` 配置项由 `always` 改为 `everysec`，牺牲少量可靠性来换取一定的性能提升；更多信息可参见[这里](https://redis.io/topics/persistence)
-> 2. 测试中 Redis 和 MySQL 数据均仅在本地存储单副本，TiKV 数据会在三个节点间通过 Raft 协议存储三副本
+:::note 注意
+1. Redis 可以通过将 `appendfsync` 配置项由 `always` 改为 `everysec`，牺牲少量可靠性来换取一定的性能提升；更多信息可参见[这里](https://redis.io/topics/persistence)
+2. 测试中 Redis 和 MySQL 数据均仅在本地存储单副本，TiKV 数据会在三个节点间通过 Raft 协议存储三副本
+:::
 
 以下提供了测试的具体细节。这些测试都运行在相同的对象存储（用来存放数据），客户端和元数据节点上；只有元数据引擎不同。
 
@@ -81,7 +81,7 @@ $ ./juicefs bench /mnt/jfs
 
 - 版本: mdtest-3.4.0+dev
 
-在3个客户端节点上并发执行测试：
+在 3 个客户端节点上并发执行测试：
 
 ```bash
 $ cat myhost
