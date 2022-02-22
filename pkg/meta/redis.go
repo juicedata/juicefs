@@ -645,7 +645,7 @@ func shouldRetry(err error, retryOnFailure bool) bool {
 	return true
 }
 
-func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) syscall.Errno {
+func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) error {
 	if r.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -666,10 +666,10 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		}
-		return errno(err)
+		return err
 	}
 	logger.Warnf("Already tried 50 times, returning: %s", err)
-	return errno(err)
+	return err
 }
 
 func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
@@ -680,7 +680,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		defer f.Unlock()
 	}
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	return errno(r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -763,7 +763,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			}
 		}
 		return err
-	}, r.inodeKey(inode))
+	}, r.inodeKey(inode)))
 }
 
 func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
@@ -789,7 +789,7 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		defer f.Unlock()
 	}
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	return errno(r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -841,14 +841,14 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 			return nil
 		})
 		return err
-	}, r.inodeKey(inode))
+	}, r.inodeKey(inode)))
 }
 
 func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	inode = r.checkRoot(inode)
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	return errno(r.txn(ctx, func(tx *redis.Tx) error {
 		var cur Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -917,7 +917,7 @@ func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			*attr = cur
 		}
 		return err
-	}, r.inodeKey(inode))
+	}, r.inodeKey(inode)))
 }
 
 func (m *redisMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
@@ -966,7 +966,7 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		*inode = ino
 	}
 
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	return errno(r.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
 		a, err := tx.Get(ctx, r.inodeKey(parent)).Bytes()
 		if err != nil {
@@ -1040,7 +1040,7 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return nil
 		})
 		return err
-	}, r.inodeKey(parent), r.entryKey(parent))
+	}, r.inodeKey(parent), r.entryKey(parent)))
 }
 
 func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
@@ -1071,7 +1071,7 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 	}
 	var opened bool
 	var attr Attr
-	eno := r.txn(ctx, func(tx *redis.Tx) error {
+	err = r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil {
 			return redis.Nil
@@ -1152,10 +1152,10 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 
 		return err
 	}, keys...)
-	if eno == 0 && _type == TypeFile && attr.Nlink == 0 {
+	if err == nil && _type == TypeFile && attr.Nlink == 0 {
 		r.fileDeleted(opened, inode, attr.Length)
 	}
-	return eno
+	return errno(err)
 }
 
 func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -1183,7 +1183,7 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 	if trash > 0 {
 		keys = append(keys, r.entryKey(trash))
 	}
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	return errno(r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil {
 			return redis.Nil
@@ -1246,7 +1246,7 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			return nil
 		})
 		return err
-	}, keys...)
+	}, keys...))
 }
 
 func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -1298,7 +1298,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			keys = append(keys, r.entryKey(dino))
 		}
 	}
-	eno := r.txn(ctx, func(tx *redis.Tx) error {
+	err = r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return redis.Nil
@@ -1457,14 +1457,14 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		})
 		return err
 	}, keys...)
-	if eno == 0 && !exchange && dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
+	if err == nil && !exchange && dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 		r.fileDeleted(opened, dino, tattr.Length)
 	}
-	return eno
+	return errno(err)
 }
 
 func (r *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	return errno(r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if err != nil {
 			return err
@@ -1509,7 +1509,7 @@ func (r *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			*attr = iattr
 		}
 		return err
-	}, r.inodeKey(inode), r.entryKey(parent), r.inodeKey(parent))
+	}, r.inodeKey(inode), r.entryKey(parent), r.inodeKey(parent)))
 }
 
 func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
@@ -1712,7 +1712,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 	}
 	defer func() { r.of.InvalidateChunk(inode, indx) }()
 	var needCompact bool
-	eno := r.txn(ctx, func(tx *redis.Tx) error {
+	err := r.txn(ctx, func(tx *redis.Tx) error {
 		var attr Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -1753,10 +1753,10 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		}
 		return err
 	}, r.inodeKey(inode))
-	if eno == 0 && needCompact {
+	if err == nil && needCompact {
 		go r.compactChunk(inode, indx, false)
 	}
-	return eno
+	return errno(err)
 }
 
 func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
@@ -1767,7 +1767,7 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		defer f.Unlock()
 	}
 	defer func() { r.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	return errno(r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(fin), r.inodeKey(fout)).Result()
 		if err != nil {
 			return err
@@ -1873,7 +1873,7 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			*copied = size
 		}
 		return err
-	}, r.inodeKey(fout), r.inodeKey(fin))
+	}, r.inodeKey(fout), r.inodeKey(fin)))
 }
 
 // For now only deleted files
@@ -2098,7 +2098,7 @@ func (r *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 			})
 			return err
 		}, key)
-		if err != syscall.Errno(0) {
+		if err != nil {
 			return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", key, err)
 		}
 		for i, s := range slices {
@@ -2200,7 +2200,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 	var rs []*redis.IntCmd
 	key := r.chunkKey(inode, indx)
-	errno := r.txn(ctx, func(tx *redis.Tx) error {
+	errno := errno(r.txn(ctx, func(tx *redis.Tx) error {
 		rs = nil
 		vals2, err := tx.LRange(ctx, key, 0, int64(len(vals)-1)).Result()
 		if err != nil {
@@ -2228,7 +2228,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return nil
 		})
 		return err
-	}, key)
+	}, key))
 	// there could be false-negative that the compaction is successful, double-check
 	if errno != 0 && errno != syscall.EINVAL {
 		if e := r.rdb.HGet(ctx, sliceRefs, r.sliceKey(chunkid, size)).Err(); e == redis.Nil {
@@ -2449,7 +2449,7 @@ func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, 
 	inode = r.checkRoot(inode)
 	c := Background
 	key := r.xattrKey(inode)
-	return r.txn(ctx, func(tx *redis.Tx) error {
+	return errno(r.txn(ctx, func(tx *redis.Tx) error {
 		switch flags {
 		case XattrCreate:
 			ok, err := tx.HSetNX(c, key, name, value).Result()
@@ -2472,7 +2472,7 @@ func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, 
 			_, err := r.rdb.HSet(ctx, key, name, value).Result()
 			return err
 		}
-	}, key)
+	}, key))
 }
 
 func (r *redisMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
@@ -2507,10 +2507,10 @@ func (r *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis: %s", time.Since(start))
 }
 
-func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
+func (m *redisMeta) dumpEntry(inode Ino,Typ uint8 ) (*DumpedEntry, error) {
 	ctx := Background
 	e := &DumpedEntry{}
-	st := m.txn(ctx, func(tx *redis.Tx) error {
+	return e, m.txn(ctx, func(tx *redis.Tx) error {
 		attr := &Attr{Typ: Typ}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err == nil {
@@ -2560,11 +2560,6 @@ func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 
 		return nil
 	}, m.inodeKey(inode))
-	if st == 0 {
-		return e, nil
-	} else {
-		return nil, fmt.Errorf("dump entry error: %d", st)
-	}
 }
 
 func (m *redisMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {

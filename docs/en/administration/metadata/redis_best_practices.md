@@ -119,7 +119,7 @@ After recovering Redis data, you can continue to use the JuiceFS file system wit
 
 ### Azure Cache for Redis
 
-[Azure Cache for Redis](https://azure.microsoft.com/en-us/services/cache) is a fully managed, in-memory cache that enables high-performance and scalable architectures. Use it to create cloud or hybrid deployments that handle millions of requests per second at sub-millisecond latency—all with the configuration, security, and availability benefits of a managed service.
+[Azure Cache for Redis](https://azure.microsoft.com/en-us/services/cache) is a fully managed, in-memory cache that enables high-performance and scalable architectures. Use it to create cloud or hybrid deployments that handle millions of requests per second at sub-millisecond latency-all with the configuration, security, and availability benefits of a managed service.
 
 ### Alibaba Cloud ApsaraDB for Redis
 

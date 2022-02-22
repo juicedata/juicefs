@@ -27,6 +27,10 @@ $ juicefs format --storage s3 \
 	myjfs
 ```
 
+## Other options
+
+When executing the `format` or `mount` commands, you can set some special parameters in the form of URL parameters in the `--bucket` parameter, such as `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` is skips certificate verification for https requests.
+
 ## Access Key and Secret Key
 
 In general, object storages are authenticated by `Access Key ID` and `Access Key Secret`, which correspond to the `--access-key` and `--secret-key` options (or AK, SK for short) on the JuiceFS file system.
@@ -697,8 +701,8 @@ $ sudo docker run -d --name minio \
 
 It is accessed using the following address:
 
-- **MinIO UI**：[http://127.0.0.1:9900](http://127.0.0.1:9900/)
-- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000/)
+- **MinIO UI**: [http://127.0.0.1:9900](http://127.0.0.1:9900/)
+- **MinIO API**: [http://127.0.0.1:9000](http://127.0.0.1:9000/)
 
 The initial Access Key and Secret Key of the object store are both `minioadmin`.
 

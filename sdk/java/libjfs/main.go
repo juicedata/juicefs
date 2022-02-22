@@ -447,9 +447,10 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			DirEntryTimeout: time.Millisecond * time.Duration(jConf.DirEntryTimeout*1000),
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
+			BackupMeta:      time.Second * time.Duration(jConf.BackupMeta),
 		}
-		if d := jConf.BackupMeta; d > 0 && !jConf.ReadOnly {
-			go vfs.Backup(m, blob, time.Duration(d*1e9))
+		if !jConf.ReadOnly && conf.BackupMeta > 0 {
+			go vfs.Backup(m, blob, conf.BackupMeta)
 		}
 		if !jConf.NoUsageReport {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())

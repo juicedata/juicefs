@@ -52,7 +52,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -507,7 +506,16 @@ public class JuiceFileSystemImpl extends FileSystem {
       dir = new File(System.getProperty("java.io.tmpdir"));
     }
     File libFile = new File(dir, name);
-    URL res = JuiceFileSystemImpl.class.getResource("/libjfs.so.gz");
+
+    URL res = null;
+    String jarPath = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+    Enumeration<URL> resources = JuiceFileSystemImpl.class.getClassLoader().getResources("libjfs.so.gz");
+    while (resources.hasMoreElements()) {
+      res = resources.nextElement();
+      if (URI.create(res.getPath()).getPath().startsWith(jarPath)) {
+        break;
+      }
+    }
     if (res == null) {
       // jar may changed
       return libjfsLibraryLoader.load(libFile.getAbsolutePath());
@@ -522,9 +530,6 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     long soTime = conn.getLastModified();
     if (res.getProtocol().equalsIgnoreCase("jar")) {
-      String jarPath = Paths.get(URI.create(res.getFile()))
-              .getParent().toUri().getPath().trim();
-      jarPath = jarPath.substring(0, jarPath.length() - 1);
       soTime = new JarFile(jarPath).getJarEntry("libjfs.so.gz")
               .getLastModifiedTime()
               .toMillis();

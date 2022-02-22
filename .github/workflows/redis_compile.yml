@@ -1,0 +1,59 @@
+name: "rediscompile"
+
+on:
+  push:
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  schedule:
+    - cron:  '30 20 * * *'
+
+
+jobs:
+  rediscompile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format sqlite3:///tmp/myjfs.db pics
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d sqlite3:///tmp/myjfs.db /tmp/jfs --no-usage-report
+
+
+      - name: Compile Redis
+        run: |
+          cd /tmp/jfs
+          wget -O redis.tar.gz https://github.com/redis/redis/archive/refs/tags/6.0.16.tar.gz
+          mkdir redis
+          tar -xvf redis.tar.gz -C redis --strip-components 1
+          cd redis
+          make
+          make test
+          stat /tmp/jfs
+
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3

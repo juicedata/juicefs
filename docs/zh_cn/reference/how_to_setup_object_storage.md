@@ -27,6 +27,10 @@ $ juicefs format --storage s3 \
     myjfs
 ```
 
+## 其他参数
+
+在执行 `format` 或 `mount` 命令时，可以在`--bucket`参数中以URL参数的形式设置一些特别的参数，比如`https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` 即为https请求跳过证书验证。
+
 ## Access Key 和 Secret Key
 
 一般而言，对象存储通过 `Access Key ID` 和 `Access Key Secret` 验证用户身份，对应到 JuiceFS 文件系统就是 `--access-key` 和 `--secret-key` 这两个选项（或者简称为 AK、SK）。

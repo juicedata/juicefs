@@ -49,6 +49,7 @@ type Config struct {
 	AttrTimeout     time.Duration
 	DirEntryTimeout time.Duration
 	EntryTimeout    time.Duration
+	BackupMeta      time.Duration
 	FastResolve     bool   `json:",omitempty"`
 	AccessLog       string `json:",omitempty"`
 	HideInternal    bool

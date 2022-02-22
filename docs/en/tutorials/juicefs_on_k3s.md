@@ -13,8 +13,8 @@ In this article, we will build a K3s cluster with two nodes, install and configu
 
 K3s has very low **minimum requirements** for hardware:
 
-- **Memory**：512MB+（recommend 1GB+）
-- **CPU**：1 core
+- **Memory**: 512MB+ (recommend 1GB+)
+- **CPU**: 1 core
 
 When deploying a production cluster, you can usually use the Raspberry Pi 4B (4 CPU cores, 8G memory) as the starting point for the hardware of a node. For details, see [Hardware Requirements](https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#hardware).
 
@@ -38,7 +38,7 @@ NAME     STATUS   ROLES                  AGE   VERSION
 k3s-s1   Ready    control-plane,master   28h   v1.21.4+k3s1
 ```
 
-Get the `node-token`：
+Get the `node-token`:
 
 ```shell
 $ sudo -u root cat /var/lib/rancher/k3s/server/node-token

@@ -12,7 +12,8 @@ on:
       - 'release-**'
     paths-ignore:
       - 'docs/**'
-
+  schedule:
+    - cron:  '30 20 * * *'
 
 jobs:
   mysqltestbigtable:

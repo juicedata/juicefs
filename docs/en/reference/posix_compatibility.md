@@ -53,7 +53,7 @@ JuiceFS passed most of its file system related tests.
 ### Test Steps
 
 1. Download LTP [release](https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2) from GitHub
-2. Unarchive, compile and install：
+2. Unarchive, compile and install:
 
 ```bash
 $ tar -jvxf ltp-full-20210524.tar.bz2
@@ -100,11 +100,11 @@ Machine Architecture: x86_64
 
 Reasons for the skipped and failed tests:
 
-- fcntl17，fcntl17_64: automatically detect deadlock when trying to add POSIX locks. JuiceFS doesn't support it yet
+- fcntl17, fcntl17_64: automatically detect deadlock when trying to add POSIX locks. JuiceFS doesn't support it yet
 - getxattr05: need ACL, which is not supported yet
-- ioctl_loop05，ioctl_ns07，setxattr03: need `ioctl`, which is not supported yet
+- ioctl_loop05, ioctl_ns07, setxattr03: need `ioctl`, which is not supported yet
 - lseek11: handle SEEK_DATA and SEEK_HOLE flags properly in `lseek`. JuiceFS uses kernel general function, which doesn't support these two flags
-- open14，openat03: handle O_TMPFILE flag in `open`. JuiceFS can do nothing with it since it's not supported by FUSE
+- open14, openat03: handle O_TMPFILE flag in `open`. JuiceFS can do nothing with it since it's not supported by FUSE
 
 ### Appendix
 
