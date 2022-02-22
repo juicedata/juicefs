@@ -2507,7 +2507,7 @@ func (r *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis: %s", time.Since(start))
 }
 
-func (m *redisMeta) dumpEntry(inode Ino,Typ uint8 ) (*DumpedEntry, error) {
+func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 	ctx := Background
 	e := &DumpedEntry{}
 	return e, m.txn(ctx, func(tx *redis.Tx) error {
