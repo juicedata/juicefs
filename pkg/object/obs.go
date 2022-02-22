@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"golang.org/x/net/http/httpproxy"
 )
 
@@ -118,14 +119,14 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 		sum = s[:]
 		body = bytes.NewReader(data)
 	}
-
+	mimeType := utils.GuessMimeType(key)
 	params := &obs.PutObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key
 	params.Body = body
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
-
+	params.ContentType = mimeType
 	_, err := s.c.PutObject(params)
 	return err
 }

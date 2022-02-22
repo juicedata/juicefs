@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/qingstor/qingstor-sdk-go/v4/config"
 	qs "github.com/qingstor/qingstor-sdk-go/v4/service"
 )
@@ -121,7 +122,12 @@ func (q *qingstor) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	input := &qs.PutObjectInput{Body: body, ContentLength: &vlen}
+	mimeType := utils.GuessMimeType(key)
+	input := &qs.PutObjectInput{
+		Body:          body,
+		ContentLength: &vlen,
+		ContentType:   &mimeType,
+	}
 	out, err := q.bucket.PutObject(key, input)
 	if err != nil {
 		return err
