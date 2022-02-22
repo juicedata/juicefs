@@ -2002,8 +2002,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 	f := func(tx kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
-			logger.Warnf("inode %d not found", inode)
-			return nil
+			return fmt.Errorf("inode %d not found", inode)
 		}
 		attr := &Attr{}
 		m.parseAttr(a, attr)
@@ -2037,8 +2036,7 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		} else if attr.Typ == TypeSymlink {
 			l := tx.get(m.symKey(inode))
 			if l == nil {
-				logger.Warnf("no link target for inode %d", inode)
-				return nil
+				return fmt.Errorf("no link target for inode %d", inode)
 			}
 			e.Symlink = string(l)
 		}
@@ -2089,9 +2087,6 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		entry, err = m.dumpEntry(inode)
 		if err != nil {
 			return err
-		}
-		if entry == nil {
-			continue
 		}
 		entry.Name = name[10:]
 		if typ == TypeDirectory {
