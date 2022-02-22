@@ -2041,7 +2041,9 @@ func (m *kvMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 			}
 			e.Symlink = string(l)
 		}
-
+		if e.Attr.Nlink == 0 {
+			e.Attr.Nlink = 1
+		}
 		return nil
 	}
 	if m.snap != nil {

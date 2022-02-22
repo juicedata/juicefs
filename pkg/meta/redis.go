@@ -2551,13 +2551,16 @@ func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 		} else if attr.Typ == TypeSymlink {
 			if e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result(); err != nil {
 				if err == redis.Nil {
+					e.Attr.Nlink = 1
 					logger.Warnf("The symlink of inode %d is not found", inode)
 					return nil
 				}
 				return err
 			}
 		}
-
+		if e.Attr.Nlink == 0 {
+			e.Attr.Nlink = 1
+		}
 		return nil
 	}, m.inodeKey(inode))
 }
@@ -2601,6 +2604,9 @@ func (m *redisMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 			logger.Warnf("The symlink of inode %d is not found", inode)
 		}
 		e.Symlink = m.snap.stringMap[m.symKey(inode)]
+	}
+	if e.Attr.Nlink == 0 {
+		e.Attr.Nlink = 1
 	}
 	return e
 }

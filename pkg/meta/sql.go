@@ -2320,6 +2320,9 @@ func (m *dbMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 			e.Symlink = l.Target
 		}
 
+		if e.Attr.Nlink == 0 {
+			e.Attr.Nlink = 1
+		}
 		return nil
 	})
 }
@@ -2368,6 +2371,9 @@ func (m *dbMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 			l = &symlink{}
 		}
 		e.Symlink = l.Target
+	}
+	if e.Attr.Nlink == 0 {
+		e.Attr.Nlink = 1
 	}
 	return e
 }
