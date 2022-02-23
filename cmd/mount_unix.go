@@ -104,7 +104,7 @@ func mount_flags() []cli.Flag {
 		}
 		defaultLogDir = path.Join(homeDir, ".juicefs")
 	}
-	return []cli.Flag{
+	selfFlags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "d",
 			Aliases: []string{"background"},
@@ -123,26 +123,12 @@ func mount_flags() []cli.Flag {
 			Name:  "o",
 			Usage: "other FUSE options",
 		},
-		&cli.Float64Flag{
-			Name:  "attr-cache",
-			Value: 1.0,
-			Usage: "attributes cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "entry-cache",
-			Value: 1.0,
-			Usage: "file entry cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "dir-entry-cache",
-			Value: 1.0,
-			Usage: "dir entry cache timeout in seconds",
-		},
 		&cli.BoolFlag{
 			Name:  "enable-xattr",
 			Usage: "enable extended attributes (xattr)",
 		},
 	}
+	return append(selfFlags, cacheFlags()...)
 }
 
 func disableUpdatedb() {

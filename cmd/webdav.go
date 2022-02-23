@@ -26,7 +26,7 @@ import (
 )
 
 func webDavFlags() *cli.Command {
-	flags := append(clientFlags(),
+	selfFlags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:  "gzip",
 			Usage: "compress served files via gzip",
@@ -35,45 +35,23 @@ func webDavFlags() *cli.Command {
 			Name:  "disallowList",
 			Usage: "disallow list a directory",
 		},
-		&cli.Float64Flag{
-			Name:  "attr-cache",
-			Value: 1.0,
-			Usage: "attributes cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "entry-cache",
-			Value: 0,
-			Usage: "file entry cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "dir-entry-cache",
-			Value: 1.0,
-			Usage: "dir entry cache timeout in seconds",
-		},
 		&cli.StringFlag{
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
 		},
-		&cli.StringFlag{
-			Name:  "metrics",
-			Value: "127.0.0.1:9567",
-			Usage: "address to export metrics",
-		},
-		&cli.StringFlag{
-			Name:  "consul",
-			Value: "127.0.0.1:8500",
-			Usage: "consul address to register",
-		},
-		&cli.BoolFlag{
-			Name:  "no-usage-report",
-			Usage: "do not send usage report",
-		},
-	)
+	}
+	compoundFlags := [][]cli.Flag{
+		clientFlags(),
+		selfFlags,
+		cacheFlags(),
+		shareInfoFlag(),
+	}
+
 	return &cli.Command{
 		Name:      "webdav",
 		Usage:     "start a webdav server",
 		ArgsUsage: "META-URL ADDRESS",
-		Flags:     flags,
+		Flags:     expandFlags(compoundFlags),
 		Action:    webdavSvc,
 	}
 }

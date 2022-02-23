@@ -22,12 +22,13 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/object"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -127,16 +128,78 @@ func wrapRegister(mp, name string) {
 	prometheus.MustRegister(prometheus.NewGoCollector())
 }
 
-func mount(c *cli.Context) error {
-	setLoggerLevel(c)
-	if c.Args().Len() < 1 {
-		logger.Fatalf("Meta URL and mountpoint are required")
+func getFormat(c *cli.Context, metaCli meta.Meta) *meta.Format {
+	format, err := metaCli.Load()
+	if err != nil {
+		logger.Fatalf("load setting: %s", err)
 	}
-	addr := c.Args().Get(0)
-	if c.Args().Len() < 2 {
-		logger.Fatalf("MOUNTPOINT is required")
+	if c.IsSet("bucket") {
+		format.Bucket = c.String("bucket")
 	}
-	mp := c.Args().Get(1)
+	return format
+}
+
+func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
+	if runtime.GOOS != "windows" {
+		d := c.String("cache-dir")
+		if d != "memory" && !strings.HasPrefix(d, "/") {
+			ad, err := filepath.Abs(d)
+			if err != nil {
+				logger.Fatalf("cache-dir should be absolute path in daemon mode")
+			} else {
+				for i, a := range os.Args {
+					if a == d || a == "--cache-dir="+d {
+						os.Args[i] = a[:len(a)-len(d)] + ad
+					}
+				}
+			}
+		}
+	}
+	sqliteScheme := "sqlite3://"
+	if strings.HasPrefix(addr, sqliteScheme) {
+		path := addr[len(sqliteScheme):]
+		path2, err := filepath.Abs(path)
+		if err == nil && path2 != path {
+			for i, a := range os.Args {
+				if a == addr {
+					os.Args[i] = sqliteScheme + path2
+				}
+			}
+		}
+	}
+	// The default log to syslog is only in daemon mode.
+	utils.InitLoggers(!c.Bool("no-syslog"))
+	err := makeDaemon(c, vfsConf.Format.Name, vfsConf.Mountpoint, m)
+	if err != nil {
+		logger.Fatalf("Failed to make daemon: %s", err)
+	}
+}
+
+func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config, opts ...func(vConf *vfs.Config)) *vfs.Config {
+	conf := &vfs.Config{
+		Meta:       metaConf,
+		Format:     format,
+		Version:    version.Version(),
+		Mountpoint: metaConf.MountPoint,
+		Chunk:      chunkConf,
+		BackupMeta: c.Duration("backup-meta"),
+	}
+	for _, opt := range opts {
+		opt(conf)
+	}
+	return conf
+}
+
+func metaRegisterMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Config) {
+	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+		return store.Remove(args[0].(uint64), int(args[1].(uint32)))
+	})
+	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
+		return vfs.Compact(*chunkConf, store, args[0].([]meta.Slice), args[1].(uint64))
+	})
+}
+
+func prepareMp(mp string) {
 	fi, err := os.Stat(mp)
 	if !strings.Contains(mp, ":") && err != nil {
 		if err := os.MkdirAll(mp, 0777); err != nil {
@@ -154,36 +217,36 @@ func mount(c *cli.Context) error {
 			_ = doUmount(mp, true)
 		}
 	}
-	var readOnly = c.Bool("read-only")
-	for _, o := range strings.Split(c.String("o"), ",") {
-		if o == "ro" {
-			readOnly = true
-		}
-	}
+}
+
+func getMetaConf(c *cli.Context, mp string, readOnly bool, opts ...func(metaConf *meta.Config)) *meta.Config {
 	metaConf := &meta.Config{
-		Retries:     10,
-		Strict:      true,
-		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
-		ReadOnly:    readOnly,
-		OpenCache:   time.Duration(c.Float64("open-cache") * 1e9),
-		MountPoint:  mp,
-		Subdir:      c.String("subdir"),
-		MaxDeletes:  c.Int("max-deletes"),
+		Retries:    10,
+		Strict:     true,
+		ReadOnly:   readOnly,
+		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
+		MountPoint: mp,
+		Subdir:     c.String("subdir"),
+		MaxDeletes: c.Int("max-deletes"),
 	}
-	m := meta.NewClient(addr, metaConf)
-	format, err := m.Load()
+	for _, opt := range opts {
+		opt(metaConf)
+	}
+	return metaConf
+}
+
+func newStore(format *meta.Format, chunkConf *chunk.Config) (object.ObjectStorage, chunk.ChunkStore) {
+	blob, err := createStorage(format)
 	if err != nil {
-		logger.Fatalf("load setting: %s", err)
+		logger.Fatalf("object storage: %s", err)
 	}
+	logger.Infof("Data use %s", blob)
+	store := chunk.NewCachedStore(blob, *chunkConf)
+	return blob, store
+}
 
-	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
-	wrapRegister(mp, format.Name)
-
-	if !c.Bool("writeback") && c.IsSet("upload-delay") {
-		logger.Warnf("delayed upload only work in writeback mode")
-	}
-
-	chunkConf := chunk.Config{
+func getChunkConf(c *cli.Context, format *meta.Format, opts ...func(chunkConf *chunk.Config)) *chunk.Config {
+	chunkConf := &chunk.Config{
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
 
@@ -191,7 +254,6 @@ func mount(c *cli.Context) error {
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
 		Writeback:     c.Bool("writeback"),
-		UploadDelay:   c.Duration("upload-delay"),
 		Prefetch:      c.Int("prefetch"),
 		BufferSize:    c.Int("buffer-size") << 20,
 		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
@@ -205,6 +267,10 @@ func mount(c *cli.Context) error {
 		AutoCreate:     true,
 	}
 
+	for _, opt := range opts {
+		opt(chunkConf)
+	}
+
 	if chunkConf.CacheDir != "memory" {
 		ds := utils.SplitDir(chunkConf.CacheDir)
 		for i := range ds {
@@ -212,230 +278,94 @@ func mount(c *cli.Context) error {
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
-	if c.IsSet("bucket") {
-		format.Bucket = c.String("bucket")
-	}
-	blob, err := createStorage(format)
-	if err != nil {
-		logger.Fatalf("object storage: %s", err)
-	}
-	logger.Infof("Data use %s", blob)
-	store := chunk.NewCachedStore(blob, chunkConf)
-	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
-		chunkid := args[0].(uint64)
-		length := args[1].(uint32)
-		return store.Remove(chunkid, int(length))
-	})
-	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
-		slices := args[0].([]meta.Slice)
-		chunkid := args[1].(uint64)
-		return vfs.Compact(chunkConf, store, slices, chunkid)
-	})
-	conf := &vfs.Config{
-		Meta:       metaConf,
-		Format:     format,
-		Version:    version.Version(),
-		Mountpoint: mp,
-		Chunk:      &chunkConf,
-		BackupMeta: c.Duration("backup-meta"),
-	}
+	return chunkConf
+}
 
-	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
-		if runtime.GOOS != "windows" {
-			d := c.String("cache-dir")
-			if d != "memory" && !strings.HasPrefix(d, "/") {
-				ad, err := filepath.Abs(d)
-				if err != nil {
-					logger.Fatalf("cache-dir should be absolute path in daemon mode")
-				} else {
-					for i, a := range os.Args {
-						if a == d || a == "--cache-dir="+d {
-							os.Args[i] = a[:len(a)-len(d)] + ad
-						}
-					}
-				}
-			}
-		}
-		sqliteScheme := "sqlite3://"
-		if strings.HasPrefix(addr, sqliteScheme) {
-			path := addr[len(sqliteScheme):]
-			path2, err := filepath.Abs(path)
-			if err == nil && path2 != path {
-				for i, a := range os.Args {
-					if a == addr {
-						os.Args[i] = sqliteScheme + path2
-					}
-				}
-			}
-		}
-		// The default log to syslog is only in daemon mode.
-		utils.InitLoggers(!c.Bool("no-syslog"))
-		err := makeDaemon(c, conf.Format.Name, conf.Mountpoint, m)
-		if err != nil {
-			logger.Fatalf("Failed to make daemon: %s", err)
-		}
-	} else {
-		go checkMountpoint(conf.Format.Name, mp)
-	}
-
-	removePassword(addr)
-	err = m.NewSession()
-	if err != nil {
-		logger.Fatalf("new session: %s", err)
-	}
-	installHandler(mp)
-	v := vfs.NewVFS(conf, m, store)
+func initBackgroundTasks(c *cli.Context, m meta.Meta, vfsConf *vfs.Config, blob object.ObjectStorage, readOnly bool) {
 	metricsAddr := exposeMetrics(m, c)
 	if c.IsSet("consul") {
-		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, vfsConf.Mountpoint)
 	}
-	if !readOnly && conf.BackupMeta > 0 {
-		go vfs.Backup(m, blob, conf.BackupMeta)
+	if !readOnly && vfsConf.BackupMeta > 0 {
+		go vfs.Backup(m, blob, vfsConf.BackupMeta)
 	}
 	if !c.Bool("no-usage-report") {
 		go usage.ReportUsage(m, version.Version())
 	}
-	mount_main(v, c)
-	return m.CloseSession()
 }
 
-func clientFlags() []cli.Flag {
-	var defaultCacheDir = "/var/jfsCache"
-	switch runtime.GOOS {
-	case "darwin":
-		fallthrough
-	case "windows":
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			logger.Fatalf("%v", err)
-			return nil
+func mount(c *cli.Context) error {
+	setLoggerLevel(c)
+	if c.Args().Len() < 1 {
+		logger.Fatalf("Meta URL and mountpoint are required")
+	}
+	addr := c.Args().Get(0)
+	if c.Args().Len() < 2 {
+		logger.Fatalf("MOUNTPOINT is required")
+	}
+	mp := c.Args().Get(1)
+
+	prepareMp(mp)
+	var readOnly = c.Bool("read-only")
+	for _, o := range strings.Split(c.String("o"), ",") {
+		if o == "ro" {
+			readOnly = true
 		}
-		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
 	}
-	return []cli.Flag{
-		&cli.StringFlag{
-			Name:  "bucket",
-			Usage: "customized endpoint to access object store",
-		},
-		&cli.IntFlag{
-			Name:  "get-timeout",
-			Value: 60,
-			Usage: "the max number of seconds to download an object",
-		},
-		&cli.IntFlag{
-			Name:  "put-timeout",
-			Value: 60,
-			Usage: "the max number of seconds to upload an object",
-		},
-		&cli.IntFlag{
-			Name:  "io-retries",
-			Value: 30,
-			Usage: "number of retries after network failure",
-		},
-		&cli.IntFlag{
-			Name:  "max-uploads",
-			Value: 20,
-			Usage: "number of connections to upload",
-		},
-		&cli.IntFlag{
-			Name:  "max-deletes",
-			Value: 2,
-			Usage: "number of threads to delete objects",
-		},
-		&cli.IntFlag{
-			Name:  "buffer-size",
-			Value: 300,
-			Usage: "total read/write buffering in MB",
-		},
-		&cli.Int64Flag{
-			Name:  "upload-limit",
-			Value: 0,
-			Usage: "bandwidth limit for upload in Mbps",
-		},
-		&cli.Int64Flag{
-			Name:  "download-limit",
-			Value: 0,
-			Usage: "bandwidth limit for download in Mbps",
-		},
 
-		&cli.IntFlag{
-			Name:  "prefetch",
-			Value: 1,
-			Usage: "prefetch N blocks in parallel",
-		},
-		&cli.BoolFlag{
-			Name:  "writeback",
-			Usage: "upload objects in background",
-		},
-		&cli.DurationFlag{
-			Name:  "upload-delay",
-			Usage: "delayed duration for uploading objects (\"s\", \"m\", \"h\")",
-		},
-		&cli.StringFlag{
-			Name:  "cache-dir",
-			Value: defaultCacheDir,
-			Usage: "directory paths of local cache, use colon to separate multiple paths",
-		},
-		&cli.IntFlag{
-			Name:  "cache-size",
-			Value: 100 << 10,
-			Usage: "size of cached objects in MiB",
-		},
-		&cli.Float64Flag{
-			Name:  "free-space-ratio",
-			Value: 0.1,
-			Usage: "min free space (ratio)",
-		},
-		&cli.BoolFlag{
-			Name:  "cache-partial-only",
-			Usage: "cache only random/small read",
-		},
-		&cli.DurationFlag{
-			Name:  "backup-meta",
-			Value: time.Hour,
-			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
-		},
+	metaConf := getMetaConf(c, mp, readOnly, func(metaConf *meta.Config) {
+		metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
+	})
+	metaCli := meta.NewClient(addr, metaConf)
 
-		&cli.BoolFlag{
-			Name:  "read-only",
-			Usage: "allow lookup/read operations only",
-		},
-		&cli.Float64Flag{
-			Name:  "open-cache",
-			Value: 0.0,
-			Usage: "open files cache timeout in seconds (0 means disable this feature)",
-		},
-		&cli.StringFlag{
-			Name:  "subdir",
-			Usage: "mount a sub-directory as root",
-		},
+	format := getFormat(c, metaCli)
+
+	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
+	wrapRegister(mp, format.Name)
+
+	if !c.Bool("writeback") && c.IsSet("upload-delay") {
+		logger.Warnf("delayed upload only work in writeback mode")
 	}
+
+	chunkConf := getChunkConf(c, format, func(chunkConf *chunk.Config) {
+		chunkConf.UploadDelay = c.Duration("upload-delay")
+	})
+
+	blob, store := newStore(format, chunkConf)
+	metaRegisterMsg(metaCli, store, chunkConf)
+
+	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
+
+	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
+		daemonRun(c, addr, vfsConf, metaCli)
+	} else {
+		go checkMountpoint(vfsConf.Format.Name, mp)
+	}
+
+	removePassword(addr)
+	err := metaCli.NewSession()
+	if err != nil {
+		logger.Fatalf("new session: %s", err)
+	}
+
+	installHandler(mp)
+	v := vfs.NewVFS(vfsConf, metaCli, store)
+	initBackgroundTasks(c, metaCli, vfsConf, blob, readOnly)
+	mount_main(v, c)
+	return metaCli.CloseSession()
 }
 
 func mountFlags() *cli.Command {
-	cmd := &cli.Command{
+	compoundFlags := [][]cli.Flag{
+		mount_flags(),
+		clientFlags(),
+		shareInfoFlag(),
+	}
+	return &cli.Command{
 		Name:      "mount",
 		Usage:     "mount a volume",
 		ArgsUsage: "META-URL MOUNTPOINT",
 		Action:    mount,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "metrics",
-				Value: "127.0.0.1:9567",
-				Usage: "address to export metrics",
-			},
-			&cli.StringFlag{
-				Name:  "consul",
-				Value: "127.0.0.1:8500",
-				Usage: "consul address to register",
-			},
-			&cli.BoolFlag{
-				Name:  "no-usage-report",
-				Usage: "do not send usage report",
-			},
-		},
+		Flags:     expandFlags(compoundFlags),
 	}
-	cmd.Flags = append(cmd.Flags, mount_flags()...)
-	cmd.Flags = append(cmd.Flags, clientFlags()...)
-	return cmd
 }
