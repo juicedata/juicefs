@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright 2020 Juicedata, Inc.
+ * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,47 +14,94 @@
  * limitations under the License.
  */
 
+// Reference: https://semver.org; NOT strictly followed.
 package version
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
-
-	"golang.org/x/mod/semver"
 )
 
-var (
-	version      = "1.0.0-beta"
-	revision     = "$Format:%h$"
-	revisionDate = "$Format:%as$"
-)
+var ver = Semver{
+	major:        1,
+	minor:        0,
+	patch:        0,
+	preRelease:   "dev",
+	revision:     "$Format:%h$", // value is assigned in Makefile
+	revisionDate: "$Format:%as$",
+}
 
-func init() {
-	if v := Canonical(version); v == "" {
-		panic("Invalid version: " + version)
-	} else {
-		version = v
-	}
-	// values are assigned in Makefile
-	if !strings.Contains(revision, "Format") && !strings.Contains(revisionDate, "Format") {
-		version = fmt.Sprintf("%s+%s.%s", version, revisionDate, revision)
-	}
+type Semver struct {
+	major, minor, patch uint64
+	preRelease          string
+	revision            string
+	revisionDate        string
 }
 
 func Version() string {
-	return version
+	pr := ver.preRelease
+	if pr != "" {
+		pr = "-" + pr
+	}
+	return fmt.Sprintf("%d.%d.%d%s+%s.%s",
+		ver.major, ver.minor, ver.patch, pr, ver.revisionDate, ver.revision)
 }
 
-func Canonical(v string) string {
-	if !strings.HasPrefix(v, "v") {
-		v = "v" + v
+func Compare(vs string) (int, error) {
+	v := Parse(vs)
+	if v == nil {
+		return 1, fmt.Errorf("invalid version string: %s", vs)
 	}
-	if p := strings.Index(v, "+"); p > 0 {
-		v = v[:p]
+	var less bool
+	if ver.major != v.major {
+		less = ver.major < v.major
+	} else if ver.minor != v.minor {
+		less = ver.minor < v.minor
+	} else if ver.patch != v.patch {
+		less = ver.patch < v.patch
+	} else if ver.preRelease != v.preRelease {
+		less = ver.preRelease < v.preRelease
+		if ver.preRelease == "" || v.preRelease == "" {
+			less = !less
+		}
+	} else {
+		return 0, nil
 	}
-	return semver.Canonical(v)
+	if less {
+		return -1, nil
+	} else {
+		return 1, nil
+	}
 }
 
-func Compare(v, w string) int {
-	return semver.Compare(Canonical(v), Canonical(w))
+func Parse(vs string) *Semver {
+	if p := strings.Index(vs, "+"); p > 0 {
+		vs = vs[:p] // ignore build information
+	}
+	var v Semver
+	if p := strings.Index(vs, "-"); p > 0 {
+		v.preRelease = vs[p+1:]
+		vs = vs[:p]
+	}
+
+	ps := strings.Split(vs, ".")
+	if len(ps) > 3 {
+		return nil
+	}
+	var err error
+	if v.major, err = strconv.ParseUint(ps[0], 10, 64); err != nil {
+		return nil
+	}
+	if len(ps) > 1 {
+		if v.minor, err = strconv.ParseUint(ps[1], 10, 64); err != nil {
+			return nil
+		}
+	}
+	if len(ps) > 2 {
+		if v.patch, err = strconv.ParseUint(ps[2], 10, 64); err != nil {
+			return nil
+		}
+	}
+	return &v
 }

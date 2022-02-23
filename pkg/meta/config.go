@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/version"
-	"golang.org/x/mod/semver"
 )
 
 // Config for clients.
@@ -72,19 +71,25 @@ func (f *Format) CheckVersion() bool {
 	if f.ClientVersions == "" {
 		return true
 	}
-	ps := strings.Split(f.ClientVersions, " ")
-	if version.Canonical(ps[0]) == "" {
-		logger.Errorf("Invalid version string: %s", ps[0])
+	ps := strings.Fields(f.ClientVersions)
+	if len(ps) == 0 {
+		return true
+	}
+
+	var ok bool
+	if r, err := version.Compare(ps[0]); err == nil {
+		ok = r >= 0
+	} else {
+		logger.Errorf("Compare versions: %s", err)
 		return false
 	}
-	v := version.Version()
-	ok := semver.Compare(v, ps[0]) >= 0
 	if ok && len(ps) > 1 {
-		if version.Canonical(ps[1]) == "" {
-			logger.Errorf("Invalid version string: %s", ps[1])
+		if r, err := version.Compare(ps[1]); err == nil {
+			ok = r <= 0
+		} else {
+			logger.Errorf("Compare versions: %s", err)
 			return false
 		}
-		ok = semver.Compare(v, ps[1]) <= 0
 	}
 	return ok
 }

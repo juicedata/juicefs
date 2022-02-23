@@ -72,7 +72,6 @@ require (
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
-	golang.org/x/mod v0.5.1
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 	golang.org/x/oauth2 v0.0.0-20190517181255-950ef44c6e07
 	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e
