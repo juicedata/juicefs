@@ -229,6 +229,7 @@ type javaConf struct {
 	MetaURL         string  `json:"meta"`
 	Bucket          string  `json:"bucket"`
 	ReadOnly        bool    `json:"readOnly"`
+	NoBGJob         bool    `json:"noBGJob"`
 	OpenCache       float64 `json:"openCache"`
 	BackupMeta      int64   `json:"backupMeta"`
 	CacheDir        string  `json:"cacheDir"`
@@ -332,14 +333,15 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			utils.SetLogLevel(logrus.WarnLevel)
 		}
 
-		addr := jConf.MetaURL
-		m := meta.NewClient(addr, &meta.Config{
+		metaConf := &meta.Config{
 			Retries:    10,
 			Strict:     true,
 			ReadOnly:   jConf.ReadOnly,
+			NoBGJob:    jConf.NoBGJob,
 			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
 			MaxDeletes: jConf.MaxDeletes,
-		})
+		}
+		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load()
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
@@ -437,9 +439,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		}
 
 		conf := &vfs.Config{
-			Meta: &meta.Config{
-				Retries: 10,
-			},
+			Meta:            metaConf,
 			Format:          format,
 			Chunk:           &chunkConf,
 			AttrTimeout:     time.Millisecond * time.Duration(jConf.AttrTimeout*1000),
@@ -449,7 +449,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			FastResolve:     jConf.FastResolve,
 			BackupMeta:      time.Second * time.Duration(jConf.BackupMeta),
 		}
-		if !jConf.ReadOnly && conf.BackupMeta > 0 {
+		if !jConf.ReadOnly && !jConf.NoBGJob && conf.BackupMeta > 0 {
 			go vfs.Backup(m, blob, conf.BackupMeta)
 		}
 		if !jConf.NoUsageReport {
