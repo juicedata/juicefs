@@ -11,7 +11,9 @@
     "Partitions": 0,
     "Capacity": 0,
     "Inodes": 0,
-    "TrashDays": 1
+    "TrashDays": 1,
+    "MetaVersion": 1,
+    "ClientVersions": ""
   },
   "Counters": {
     "usedSpace": 115380224,
