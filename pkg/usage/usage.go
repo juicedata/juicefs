@@ -70,7 +70,7 @@ func sendUsage(u usage) error {
 func ReportUsage(m meta.Meta, version string) {
 	ctx := meta.Background
 	var u usage
-	if format, err := m.Load(); err == nil {
+	if format, err := m.Load(false); err == nil {
 		u.VolumeID = format.UUID
 		u.DataStore = format.Storage
 	}

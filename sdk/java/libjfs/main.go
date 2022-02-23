@@ -340,7 +340,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
 			MaxDeletes: jConf.MaxDeletes,
 		})
-		format, err := m.Load()
+		format, err := m.Load(true)
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
 		}

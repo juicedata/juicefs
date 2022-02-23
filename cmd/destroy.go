@@ -90,7 +90,7 @@ func destroy(ctx *cli.Context) error {
 	removePassword(uri)
 	m := meta.NewClient(uri, &meta.Config{Retries: 10, Strict: true})
 
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}

@@ -268,6 +268,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
+			old.ClientVersions = format.ClientVersions
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""

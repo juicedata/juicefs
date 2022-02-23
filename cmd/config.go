@@ -53,7 +53,7 @@ func config(ctx *cli.Context) error {
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 
-	format, err := m.Load()
+	format, err := m.Load(false)
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func config(ctx *cli.Context) error {
 		return nil
 	}
 
-	var quota, storage, trash bool
+	var quota, storage, trash, clientVer bool
 	var msg strings.Builder
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
@@ -103,6 +103,12 @@ func config(ctx *cli.Context) error {
 				format.TrashDays = new
 				trash = true
 			}
+		case "client-versions":
+			if new := ctx.String(flag); new != format.ClientVersions {
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.ClientVersions, new))
+				format.ClientVersions = new
+				clientVer = true
+			}
 		}
 	}
 	if msg.Len() == 0 {
@@ -135,6 +141,12 @@ func config(ctx *cli.Context) error {
 		}
 		if trash && format.TrashDays == 0 {
 			warn("The current trash will be emptied and future removed files will purged immediately.")
+			if !userConfirmed() {
+				return fmt.Errorf("Aborted.")
+			}
+		}
+		if clientVer && !format.CheckVersion() {
+			warn("Clients with the same version of this will be rejected after modification.")
 			if !userConfirmed() {
 				return fmt.Errorf("Aborted.")
 			}
@@ -177,6 +189,10 @@ func configFlags() *cli.Command {
 			&cli.IntFlag{
 				Name:  "trash-days",
 				Usage: "number of days after which removed files will be permanently deleted",
+			},
+			&cli.StringFlag{
+				Name:  "client-versions",
+				Usage: "allowed client versions in format \"MIN_VER [MAX_VER]\", both sides included",
 			},
 			&cli.BoolFlag{
 				Name:  "force",

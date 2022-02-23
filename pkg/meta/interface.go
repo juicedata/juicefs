@@ -242,7 +242,7 @@ type Meta interface {
 	// Reset cleans up all metadata, VERY DANGEROUS!
 	Reset() error
 	// Load loads the existing setting of a formatted volume from meta service.
-	Load() (*Format, error)
+	Load(checkVersion bool) (*Format, error)
 	// NewSession creates a new client session.
 	NewSession() error
 	// CloseSession does cleanup and close the session.

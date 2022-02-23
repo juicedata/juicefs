@@ -118,7 +118,7 @@ func mountSimpleMethod(url, mp string) {
 		MountPoint: mp,
 	}
 	m := meta.NewClient(url, metaConf)
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		log.Fatalf("load setting: %s", err)
 	}
@@ -337,7 +337,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		Strict:  true,
 	})
 
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		log.Fatalf("load setting: %s", err)
 	}

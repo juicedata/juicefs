@@ -171,7 +171,7 @@ func mount(c *cli.Context) error {
 		MaxDeletes:  c.Int("max-deletes"),
 	}
 	m := meta.NewClient(addr, metaConf)
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}

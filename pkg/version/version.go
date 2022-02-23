@@ -16,16 +16,26 @@
 
 package version
 
-import "fmt"
+import (
+	"fmt"
+
+	"golang.org/x/mod/semver"
+)
 
 var (
-	version      = "1.0-dev"
+	version      = "1.0.0-beta"
 	revision     = "$Format:%h$"
 	revisionDate = "$Format:%as$"
 )
 
-// Version returns version in format - `VERSION (REVISIONDATE REVISION)`
-// value is assigned in Makefile
+func init() {
+	// values are assigned in Makefile
+	version = fmt.Sprintf("v%s+%s.%s", version, revisionDate, revision)
+	if !semver.IsValid(version) {
+		panic("Invalid version: " + version)
+	}
+}
+
 func Version() string {
-	return fmt.Sprintf("%v (%v %v)", version, revisionDate, revision)
+	return version
 }

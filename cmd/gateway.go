@@ -191,7 +191,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 		MaxDeletes: c.Int("max-deletes"),
 	}
 	m := meta.NewClient(metaUrl, metaConf)
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}

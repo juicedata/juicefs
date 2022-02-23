@@ -141,7 +141,7 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (m *baseMeta) Load() (*Format, error) {
+func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
 		err = fmt.Errorf("database is not formatted")
@@ -152,8 +152,9 @@ func (m *baseMeta) Load() (*Format, error) {
 	if err = json.Unmarshal(body, &m.fmt); err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
-	if !m.fmt.compatible() {
-		return nil, fmt.Errorf("client is not compatible with metadata")
+	if checkVersion && !m.fmt.CheckVersion() {
+		return nil, fmt.Errorf("client is rejected! Meta version: %d, allowed client versions: %s",
+			m.fmt.MetaVersion, m.fmt.ClientVersions)
 	}
 	return &m.fmt, nil
 }
@@ -197,7 +198,7 @@ func (m *baseMeta) refreshSession() {
 		}
 		m.en.doRefreshSession()
 		m.Unlock()
-		if _, err := m.Load(); err != nil {
+		if _, err := m.Load(false); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
 		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), 60); err != nil {

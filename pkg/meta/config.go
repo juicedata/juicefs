@@ -16,7 +16,13 @@
 
 package meta
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	"github.com/juicedata/juicefs/pkg/version"
+	"golang.org/x/mod/semver"
+)
 
 // Config for clients.
 type Config struct {
@@ -31,21 +37,22 @@ type Config struct {
 }
 
 type Format struct {
-	Name        string
-	UUID        string
-	Storage     string
-	Bucket      string
-	AccessKey   string
-	SecretKey   string `json:",omitempty"`
-	BlockSize   int
-	Compression string
-	Shards      int
-	Partitions  int
-	Capacity    uint64
-	Inodes      uint64
-	EncryptKey  string `json:",omitempty"`
-	TrashDays   int
-	MetaVersion int
+	Name           string
+	UUID           string
+	Storage        string
+	Bucket         string
+	AccessKey      string
+	SecretKey      string `json:",omitempty"`
+	BlockSize      int
+	Compression    string
+	Shards         int
+	Partitions     int
+	Capacity       uint64
+	Inodes         uint64
+	EncryptKey     string `json:",omitempty"`
+	TrashDays      int
+	MetaVersion    int
+	ClientVersions string
 }
 
 func (f *Format) RemoveSecret() {
@@ -57,6 +64,28 @@ func (f *Format) RemoveSecret() {
 	}
 }
 
-func (f *Format) compatible() bool {
-	return f.MetaVersion == 0
+func (f *Format) CheckVersion() bool {
+	if f.MetaVersion > 1 {
+		return false
+	}
+
+	if f.ClientVersions == "" {
+		return true
+	}
+	ps := strings.Split(f.ClientVersions, " ")
+	if !semver.IsValid(ps[0]) {
+		logger.Errorf("Invalid version string: %s", ps[0])
+		return false
+	}
+	v := version.Version()
+	ok := semver.Compare(v, ps[0]) >= 0
+	if ok && len(ps) > 1 {
+		if !semver.IsValid(ps[1]) {
+			logger.Errorf("Invalid version string: %s", ps[1])
+			return false
+		}
+		ok = semver.Compare(v, ps[1]) <= 0
+	}
+	return ok
+
 }

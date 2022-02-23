@@ -89,7 +89,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err := m.Init(Format{Name: "test2"}, false); err == nil { // not allowed
 		t.Fatalf("change name without --force is not allowed")
 	}
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		t.Fatalf("load failed after initialization: %s", err)
 	}
