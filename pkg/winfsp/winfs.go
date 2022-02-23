@@ -126,7 +126,7 @@ func (j *juice) Mknod(p string, mode uint32, dev uint64) (e int) {
 // Mkdir creates a directory.
 func (j *juice) Mkdir(path string, mode uint32) (e int) {
 	if path == "/.UMOUNTIT" {
-		logger.Infof("Umount %s ...", j.conf.Mountpoint)
+		logger.Infof("Umount %s ...", j.conf.Meta.MountPoint)
 		go j.host.Unmount()
 		return -fuse.ENOENT
 	}
@@ -589,9 +589,9 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	if fuseOpt != "" {
 		options += "," + fuseOpt
 	}
-	host.SetCapCaseInsensitive(strings.HasSuffix(conf.Mountpoint, ":"))
+	host.SetCapCaseInsensitive(strings.HasSuffix(conf.Meta.MountPoint, ":"))
 	host.SetCapReaddirPlus(true)
-	logger.Debugf("mount point: %s, options: %s", conf.Mountpoint, options)
-	_ = host.Mount(conf.Mountpoint, []string{"-o", options})
+	logger.Debugf("mount point: %s, options: %s", conf.Meta.MountPoint, options)
+	_ = host.Mount(conf.Meta.MountPoint, []string{"-o", options})
 	return nil
 }

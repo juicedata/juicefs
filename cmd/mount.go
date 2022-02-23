@@ -169,7 +169,7 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 	}
 	// The default log to syslog is only in daemon mode.
 	utils.InitLoggers(!c.Bool("no-syslog"))
-	err := makeDaemon(c, vfsConf.Format.Name, vfsConf.Mountpoint, m)
+	err := makeDaemon(c, vfsConf.Format.Name, vfsConf.Meta.MountPoint, m)
 	if err != nil {
 		logger.Fatalf("Failed to make daemon: %s", err)
 	}
@@ -180,7 +180,6 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Meta:       metaConf,
 		Format:     format,
 		Version:    version.Version(),
-		Mountpoint: metaConf.MountPoint,
 		Chunk:      chunkConf,
 		BackupMeta: c.Duration("backup-meta"),
 	}
@@ -272,7 +271,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 func initBackgroundTasks(c *cli.Context, m meta.Meta, vfsConf *vfs.Config, blob object.ObjectStorage, readOnly bool) {
 	metricsAddr := exposeMetrics(m, c)
 	if c.IsSet("consul") {
-		metric.RegisterToConsul(c.String("consul"), metricsAddr, vfsConf.Mountpoint)
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, vfsConf.Meta.MountPoint)
 	}
 	if !readOnly && vfsConf.BackupMeta > 0 {
 		go vfs.Backup(m, blob, vfsConf.BackupMeta)

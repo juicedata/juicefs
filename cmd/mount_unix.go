@@ -169,7 +169,7 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
-	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Mountpoint)
+	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Meta.MountPoint)
 	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
