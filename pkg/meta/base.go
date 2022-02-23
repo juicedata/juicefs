@@ -423,7 +423,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 }
 
 func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
-	if attr == nil {
+	if attr == nil || len(buf) == 0 {
 		return
 	}
 	rb := utils.FromBuffer(buf)
