@@ -30,17 +30,31 @@ var (
 )
 
 func init() {
-	var build string
+	if v := Canonical(version); v == "" {
+		panic("Invalid version: " + version)
+	} else {
+		version = v
+	}
 	// values are assigned in Makefile
 	if !strings.Contains(revision, "Format") && !strings.Contains(revisionDate, "Format") {
-		build = fmt.Sprintf("+%s.%s", revisionDate, revision)
-	}
-	version = fmt.Sprintf("v%s%s", version, build)
-	if !semver.IsValid(version) {
-		panic("Invalid version: " + version)
+		version = fmt.Sprintf("%s+%s.%s", version, revisionDate, revision)
 	}
 }
 
 func Version() string {
 	return version
+}
+
+func Canonical(v string) string {
+	if !strings.HasPrefix(v, "v") {
+		v = "v" + v
+	}
+	if p := strings.Index(v, "+"); p > 0 {
+		v = v[:p]
+	}
+	return semver.Canonical(v)
+}
+
+func Compare(v, w string) int {
+	return semver.Compare(Canonical(v), Canonical(w))
 }

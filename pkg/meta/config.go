@@ -73,14 +73,14 @@ func (f *Format) CheckVersion() bool {
 		return true
 	}
 	ps := strings.Split(f.ClientVersions, " ")
-	if !semver.IsValid(ps[0]) {
+	if version.Canonical(ps[0]) == "" {
 		logger.Errorf("Invalid version string: %s", ps[0])
 		return false
 	}
 	v := version.Version()
 	ok := semver.Compare(v, ps[0]) >= 0
 	if ok && len(ps) > 1 {
-		if !semver.IsValid(ps[1]) {
+		if version.Canonical(ps[1]) == "" {
 			logger.Errorf("Invalid version string: %s", ps[1])
 			return false
 		}
