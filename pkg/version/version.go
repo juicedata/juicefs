@@ -18,6 +18,7 @@ package version
 
 import (
 	"fmt"
+	"strings"
 
 	"golang.org/x/mod/semver"
 )
@@ -29,8 +30,12 @@ var (
 )
 
 func init() {
+	var build string
 	// values are assigned in Makefile
-	version = fmt.Sprintf("v%s+%s.%s", version, revisionDate, revision)
+	if !strings.Contains(revision, "Format") && !strings.Contains(revisionDate, "Format") {
+		build = fmt.Sprintf("+%s.%s", revisionDate, revision)
+	}
+	version = fmt.Sprintf("v%s%s", version, build)
 	if !semver.IsValid(version) {
 		panic("Invalid version: " + version)
 	}

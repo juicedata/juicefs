@@ -87,5 +87,4 @@ func (f *Format) CheckVersion() bool {
 		ok = semver.Compare(v, ps[1]) <= 0
 	}
 	return ok
-
 }
