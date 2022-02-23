@@ -174,19 +174,18 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	logger.Infof("Data use %s", blob)
 
 	store := chunk.NewCachedStore(blob, *chunkConf)
-	metaRegisterMsg(metaCli, store, chunkConf)
+	registerMetaMsg(metaCli, store, chunkConf)
 
 	err = metaCli.NewSession()
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
 
-	vfsConf := getVfsConf(c, metaConf, format, chunkConf, func(vConf *vfs.Config) {
-		vConf.AccessLog = c.String("access-log")
-		vConf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
-		vConf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
-		vConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
-	})
+	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
+	vfsConf.AccessLog = c.String("access-log")
+	vfsConf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
+	vfsConf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
+	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 
 	initBackgroundTasks(c, metaCli, vfsConf, blob, readOnly)
 

@@ -175,8 +175,8 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 	}
 }
 
-func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config, opts ...func(vConf *vfs.Config)) *vfs.Config {
-	conf := &vfs.Config{
+func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
+	return &vfs.Config{
 		Meta:       metaConf,
 		Format:     format,
 		Version:    version.Version(),
@@ -184,13 +184,9 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Chunk:      chunkConf,
 		BackupMeta: c.Duration("backup-meta"),
 	}
-	for _, opt := range opts {
-		opt(conf)
-	}
-	return conf
 }
 
-func metaRegisterMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Config) {
+func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Config) {
 	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 		return store.Remove(args[0].(uint64), int(args[1].(uint32)))
 	})
@@ -219,8 +215,8 @@ func prepareMp(mp string) {
 	}
 }
 
-func getMetaConf(c *cli.Context, mp string, readOnly bool, opts ...func(metaConf *meta.Config)) *meta.Config {
-	metaConf := &meta.Config{
+func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
+	return &meta.Config{
 		Retries:    10,
 		Strict:     true,
 		ReadOnly:   readOnly,
@@ -229,10 +225,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool, opts ...func(metaConf
 		Subdir:     c.String("subdir"),
 		MaxDeletes: c.Int("max-deletes"),
 	}
-	for _, opt := range opts {
-		opt(metaConf)
-	}
-	return metaConf
 }
 
 func newStore(format *meta.Format, chunkConf *chunk.Config) (object.ObjectStorage, chunk.ChunkStore) {
@@ -245,7 +237,7 @@ func newStore(format *meta.Format, chunkConf *chunk.Config) (object.ObjectStorag
 	return blob, store
 }
 
-func getChunkConf(c *cli.Context, format *meta.Format, opts ...func(chunkConf *chunk.Config)) *chunk.Config {
+func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
 		BlockSize: format.BlockSize * 1024,
 		Compress:  format.Compression,
@@ -265,10 +257,6 @@ func getChunkConf(c *cli.Context, format *meta.Format, opts ...func(chunkConf *c
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
-	}
-
-	for _, opt := range opts {
-		opt(chunkConf)
 	}
 
 	if chunkConf.CacheDir != "memory" {
@@ -313,9 +301,8 @@ func mount(c *cli.Context) error {
 		}
 	}
 
-	metaConf := getMetaConf(c, mp, readOnly, func(metaConf *meta.Config) {
-		metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
-	})
+	metaConf := getMetaConf(c, mp, readOnly)
+	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
 	metaCli := meta.NewClient(addr, metaConf)
 
 	format := getFormat(c, metaCli)
@@ -327,12 +314,11 @@ func mount(c *cli.Context) error {
 		logger.Warnf("delayed upload only work in writeback mode")
 	}
 
-	chunkConf := getChunkConf(c, format, func(chunkConf *chunk.Config) {
-		chunkConf.UploadDelay = c.Duration("upload-delay")
-	})
+	chunkConf := getChunkConf(c, format)
+	chunkConf.UploadDelay = c.Duration("upload-delay")
 
 	blob, store := newStore(format, chunkConf)
-	metaRegisterMsg(metaCli, store, chunkConf)
+	registerMetaMsg(metaCli, store, chunkConf)
 
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 
