@@ -269,7 +269,9 @@ func (r *redisMeta) doNewSession(sinfo []byte) error {
 		r.shaResolve = ""
 	}
 
-	go r.cleanupLegacies()
+	if !r.conf.NoBGJob {
+		go r.cleanupLegacies()
+	}
 	return nil
 }
 

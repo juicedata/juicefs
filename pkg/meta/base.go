@@ -178,9 +178,11 @@ func (m *baseMeta) NewSession() error {
 	logger.Debugf("create session %d OK", m.sid)
 
 	go m.refreshSession()
-	go m.cleanupDeletedFiles()
-	go m.cleanupSlices()
-	go m.cleanupTrash()
+	if !m.conf.NoBGJob {
+		go m.cleanupDeletedFiles()
+		go m.cleanupSlices()
+		go m.cleanupTrash()
+	}
 	return nil
 }
 
@@ -196,6 +198,9 @@ func (m *baseMeta) refreshSession() {
 		m.Unlock()
 		if _, err := m.Load(); err != nil {
 			logger.Warnf("reload setting: %s", err)
+		}
+		if m.conf.NoBGJob {
+			continue
 		}
 		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), 60); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
