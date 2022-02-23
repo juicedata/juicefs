@@ -185,6 +185,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 		Retries:    10,
 		Strict:     true,
 		ReadOnly:   c.Bool("read-only"),
+		NoBGJob:    c.Bool("no-bgjob"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
@@ -263,7 +264,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
-	if !c.Bool("read-only") && conf.BackupMeta > 0 {
+	if !metaConf.ReadOnly && !metaConf.NoBGJob && conf.BackupMeta > 0 {
 		go vfs.Backup(m, blob, conf.BackupMeta)
 	}
 	if !c.Bool("no-usage-report") {
