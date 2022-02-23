@@ -43,8 +43,8 @@ func webDavFlags() *cli.Command {
 	compoundFlags := [][]cli.Flag{
 		clientFlags(),
 		selfFlags,
-		cacheFlags(),
-		shareInfoFlag(),
+		cacheFlags(0),
+		shareInfoFlags(),
 	}
 
 	return &cli.Command{

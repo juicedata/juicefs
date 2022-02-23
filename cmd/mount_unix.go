@@ -128,7 +128,7 @@ func mount_flags() []cli.Flag {
 			Usage: "enable extended attributes (xattr)",
 		},
 	}
-	return append(selfFlags, cacheFlags()...)
+	return append(selfFlags, cacheFlags(1.0)...)
 }
 
 func disableUpdatedb() {

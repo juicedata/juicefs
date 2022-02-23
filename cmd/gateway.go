@@ -58,9 +58,9 @@ func gatewayFlags() *cli.Command {
 
 	compoundFlags := [][]cli.Flag{
 		clientFlags(),
-		cacheFlags(),
+		cacheFlags(0),
 		selfFlags,
-		shareInfoFlag(),
+		shareInfoFlags(),
 	}
 
 	return &cli.Command{

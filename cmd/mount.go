@@ -345,7 +345,7 @@ func mountFlags() *cli.Command {
 	compoundFlags := [][]cli.Flag{
 		mount_flags(),
 		clientFlags(),
-		shareInfoFlag(),
+		shareInfoFlags(),
 	}
 	return &cli.Command{
 		Name:      "mount",

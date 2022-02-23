@@ -140,7 +140,7 @@ func clientFlags() []cli.Flag {
 	}
 }
 
-func shareInfoFlag() []cli.Flag {
+func shareInfoFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{
 			Name:  "metrics",
@@ -159,7 +159,7 @@ func shareInfoFlag() []cli.Flag {
 	}
 }
 
-func cacheFlags() []cli.Flag {
+func cacheFlags(defaultEntryCache float64) []cli.Flag {
 	return []cli.Flag{
 		&cli.Float64Flag{
 			Name:  "attr-cache",
@@ -168,7 +168,7 @@ func cacheFlags() []cli.Flag {
 		},
 		&cli.Float64Flag{
 			Name:  "entry-cache",
-			Value: 1.0,
+			Value: defaultEntryCache,
 			Usage: "file entry cache timeout in seconds",
 		},
 		&cli.Float64Flag{
