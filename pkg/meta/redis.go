@@ -2511,14 +2511,15 @@ func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 	ctx := Background
 	e := &DumpedEntry{}
 	return e, m.txn(ctx, func(tx *redis.Tx) error {
-		attr := &Attr{Typ: Typ}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
-		if err == nil {
-			m.parseAttr(a, attr)
+		if err != nil {
+			if err != redis.Nil {
+				return err
+			}
+			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		}
-		if err != nil && err != redis.Nil {
-			return err
-		}
+		attr := &Attr{Typ: Typ, Nlink: 1}
+		m.parseAttr(a, attr)
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
 
@@ -2550,16 +2551,11 @@ func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 			}
 		} else if attr.Typ == TypeSymlink {
 			if e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result(); err != nil {
-				if err == redis.Nil {
-					e.Attr.Nlink = 1
-					logger.Warnf("The symlink of inode %d is not found", inode)
-					return nil
+				if err != redis.Nil {
+					return err
 				}
-				return err
+				logger.Warnf("The symlink of inode %d is not found", inode)
 			}
-		}
-		if e.Attr.Nlink == 0 {
-			e.Attr.Nlink = 1
 		}
 		return nil
 	}, m.inodeKey(inode))
@@ -2568,14 +2564,13 @@ func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 func (m *redisMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
 	a := []byte(m.snap.stringMap[m.inodeKey(inode)])
-	attr := &Attr{Typ: Typ}
 	if len(a) == 0 {
 		if inode != TrashInode {
 			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		}
-	} else {
-		m.parseAttr(a, attr)
 	}
+	attr := &Attr{Typ: Typ, Nlink: 1}
+	m.parseAttr(a, attr)
 	e.Attr = dumpAttr(attr)
 	e.Attr.Inode = inode
 
@@ -2604,9 +2599,6 @@ func (m *redisMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 			logger.Warnf("The symlink of inode %d is not found", inode)
 		}
 		e.Symlink = m.snap.stringMap[m.symKey(inode)]
-	}
-	if e.Attr.Nlink == 0 {
-		e.Attr.Nlink = 1
 	}
 	return e
 }
@@ -2824,6 +2816,9 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		if tree, err = m.dumpEntry(root, TypeDirectory); err != nil {
 			return err
 		}
+	}
+	if tree == nil {
+		return errors.New("The entry of the root inode was not found")
 	}
 	tree.Name = "FSTree"
 	format, err := m.Load()

@@ -2001,12 +2001,12 @@ func (m *kvMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
 	f := func(tx kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
-		attr := &Attr{Typ: Typ}
 		if a == nil {
 			logger.Warnf("inode %d not found", inode)
-		} else {
-			m.parseAttr(a, attr)
 		}
+
+		attr := &Attr{Typ: Typ, Nlink: 1}
+		m.parseAttr(a, attr)
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
 
@@ -2040,9 +2040,6 @@ func (m *kvMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 				logger.Warnf("no link target for inode %d", inode)
 			}
 			e.Symlink = string(l)
-		}
-		if e.Attr.Nlink == 0 {
-			e.Attr.Nlink = 1
 		}
 		return nil
 	}
@@ -2176,6 +2173,9 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 	if tree, err = m.dumpEntry(root, TypeDirectory); err != nil {
 		return err
+	}
+	if tree == nil {
+		return errors.New("The entry of the root inode was not found")
 	}
 	tree.Name = "FSTree"
 	format, err := m.Load()

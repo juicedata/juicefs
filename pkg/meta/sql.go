@@ -567,7 +567,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 }
 
 func (m *dbMeta) parseAttr(n *node, attr *Attr) {
-	if attr == nil {
+	if attr == nil || n == nil {
 		return
 	}
 	attr.Typ = n.Type
@@ -2265,11 +2265,11 @@ func (m *dbMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
 	return e, m.txn(func(s *xorm.Session) error {
 		n := &node{Inode: inode}
-		attr := &Attr{Typ: Typ}
 		ok, err := m.db.Get(n)
 		if err != nil {
 			return err
 		}
+		attr := &Attr{Typ: Typ, Nlink: 1}
 		if !ok {
 			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		} else {
@@ -2319,24 +2319,20 @@ func (m *dbMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 			}
 			e.Symlink = l.Target
 		}
-
-		if e.Attr.Nlink == 0 {
-			e.Attr.Nlink = 1
-		}
 		return nil
 	})
 }
 func (m *dbMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
-	attr := &Attr{Typ: Typ}
 	n, ok := m.snap.node[inode]
 	if !ok {
 		if inode != TrashInode {
 			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		}
-	} else {
-		m.parseAttr(n, attr)
 	}
+
+	attr := &Attr{Typ: Typ, Nlink: 1}
+	m.parseAttr(n, attr)
 	e.Attr = dumpAttr(attr)
 	e.Attr.Inode = inode
 
@@ -2371,9 +2367,6 @@ func (m *dbMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 			l = &symlink{}
 		}
 		e.Symlink = l.Target
-	}
-	if e.Attr.Nlink == 0 {
-		e.Attr.Nlink = 1
 	}
 	return e
 }
@@ -2536,7 +2529,9 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			return err
 		}
 	}
-
+	if tree == nil {
+		return errors.New("The entry of the root inode was not found")
+	}
 	tree.Name = "FSTree"
 	format, err := m.Load()
 	if err != nil {
