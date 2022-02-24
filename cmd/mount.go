@@ -219,7 +219,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		Retries:    10,
 		Strict:     true,
 		ReadOnly:   readOnly,
-		NoBGJob:     c.Bool("no-bgjob"),
+		NoBGJob:    c.Bool("no-bgjob"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
@@ -269,12 +269,12 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	return chunkConf
 }
 
-func initBackgroundTasks(c *cli.Context, m meta.Meta, vfsConf *vfs.Config, blob object.ObjectStorage, readOnly bool) {
+func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage) {
 	metricsAddr := exposeMetrics(m, c)
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, vfsConf.Meta.MountPoint)
 	}
-	if !readOnly && vfsConf.BackupMeta > 0 {
+	if !metaConf.ReadOnly && !metaConf.NoBGJob && vfsConf.BackupMeta > 0 {
 		go vfs.Backup(m, blob, vfsConf.BackupMeta)
 	}
 	if !c.Bool("no-usage-report") {
@@ -336,7 +336,7 @@ func mount(c *cli.Context) error {
 
 	installHandler(mp)
 	v := vfs.NewVFS(vfsConf, metaCli, store)
-	initBackgroundTasks(c, metaCli, vfsConf, blob, readOnly)
+	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob)
 	mount_main(v, c)
 	return metaCli.CloseSession()
 }

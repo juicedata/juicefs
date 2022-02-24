@@ -128,6 +128,10 @@ func clientFlags() []cli.Flag {
 			Name:  "read-only",
 			Usage: "allow lookup/read operations only",
 		},
+		&cli.BoolFlag{
+			Name:  "no-bgjob",
+			Usage: "disable background jobs (clean-up, backup, etc.)",
+		},
 		&cli.Float64Flag{
 			Name:  "open-cache",
 			Value: 0.0,

@@ -187,7 +187,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	vfsConf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 
-	initBackgroundTasks(c, metaCli, vfsConf, blob, readOnly)
+	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob)
 
 	return metaCli, store, vfsConf
 }
