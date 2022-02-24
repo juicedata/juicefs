@@ -452,7 +452,7 @@ func Serve(v *vfs.VFS, options string, xattrs bool) error {
 		opt.Options = append(opt.Options, "volname="+conf.Format.Name)
 		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
 	}
-	fssrv, err := fuse.NewServer(imp, conf.Mountpoint, &opt)
+	fssrv, err := fuse.NewServer(imp, conf.Meta.MountPoint, &opt)
 	if err != nil {
 		return fmt.Errorf("fuse: %s", err)
 	}
