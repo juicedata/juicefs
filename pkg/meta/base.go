@@ -65,8 +65,8 @@ type engine interface {
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
-	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
-	SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
+	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
+	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 }
 
 type baseMeta struct {
@@ -571,58 +571,41 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	return Ino(n), nil
 }
 
-func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
+func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
 	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
+
 	defer timeit(time.Now())
-	return m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
+	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
+	return m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
 }
 
 func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	if isTrash(parent) {
-		return syscall.EPERM
-	}
-	if parent == 1 && name == TrashName {
-		return syscall.EPERM
-	}
-	defer timeit(time.Now())
 	if attr == nil {
 		attr = &Attr{}
 	}
-	err := m.en.doMknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
-	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
-		err = 0
+	eno := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
+	if eno == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
+		eno = 0
 	}
-	if err == 0 && inode != nil {
+	if eno == 0 && inode != nil {
 		m.of.Open(*inode, attr)
 	}
-	return err
+	return eno
 }
 
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	if isTrash(parent) {
-		return syscall.EPERM
-	}
-	if parent == 1 && name == TrashName {
-		return syscall.EPERM
-	}
-	defer timeit(time.Now())
-	return m.en.doMknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
+	return m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
-	if isTrash(parent) {
-		return syscall.EPERM
-	}
-	if parent == 1 && name == TrashName {
-		return syscall.EPERM
-	}
-	defer timeit(time.Now())
-	return m.en.doMknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
+	return m.Mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
@@ -776,6 +759,22 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
 	return m.en.doReaddir(ctx, inode, plus, entries)
+}
+
+func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
+	if name == "" {
+		return syscall.EINVAL
+	}
+	defer timeit(time.Now())
+	return m.en.doSetXattr(ctx, m.checkRoot(inode), name, value, flags)
+}
+
+func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
+	if name == "" {
+		return syscall.EINVAL
+	}
+	defer timeit(time.Now())
+	return m.en.doRemoveXattr(ctx, m.checkRoot(inode), name)
 }
 
 func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {

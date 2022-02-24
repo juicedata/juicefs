@@ -911,10 +911,6 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
 }
 
 func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	if m.checkQuota(4<<10, 1) {
-		return syscall.ENOSPC
-	}
-	parent = m.checkRoot(parent)
 	var ino Ino
 	var err error
 	if parent == TrashInode {
@@ -1955,14 +1951,9 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	return 0
 }
 
-func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
-	if name == "" {
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
-	inode = m.checkRoot(inode)
+func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	key := m.xattrKey(inode, name)
-	err := m.txn(func(tx kvTxn) error {
+	return errno(m.txn(func(tx kvTxn) error {
 		switch flags {
 		case XattrCreate:
 			v := tx.get(key)
@@ -1977,16 +1968,10 @@ func (m *kvMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 		}
 		tx.set(key, value)
 		return nil
-	})
-	return errno(err)
+	}))
 }
 
-func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
-	if name == "" {
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
-	inode = m.checkRoot(inode)
+func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	value, err := m.get(m.xattrKey(inode, name))
 	if err != nil {
 		return errno(err)
