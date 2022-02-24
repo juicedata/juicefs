@@ -146,11 +146,10 @@ func mountSimpleMethod(url, mp string) {
 	})
 
 	conf := &vfs.Config{
-		Meta:       metaConf,
-		Format:     format,
-		Version:    "Juicefs",
-		Mountpoint: mp,
-		Chunk:      &chunkConf,
+		Meta:    metaConf,
+		Format:  format,
+		Version: "Juicefs",
+		Chunk:   &chunkConf,
 	}
 
 	go checkMountpointInTenSeconds(mp, nil)

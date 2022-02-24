@@ -45,7 +45,6 @@ type Config struct {
 	Format          *meta.Format
 	Chunk           *chunk.Config
 	Version         string
-	Mountpoint      string
 	AttrTimeout     time.Duration
 	DirEntryTimeout time.Duration
 	EntryTimeout    time.Duration

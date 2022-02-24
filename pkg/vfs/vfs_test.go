@@ -55,10 +55,9 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 		log.Fatalf("setting: %s", err)
 	}
 	conf := &Config{
-		Meta:       metaConf,
-		Format:     &format,
-		Version:    "Juicefs",
-		Mountpoint: mp,
+		Meta:    metaConf,
+		Format:  &format,
+		Version: "Juicefs",
 		Chunk: &chunk.Config{
 			BlockSize:  format.BlockSize * 1024,
 			Compress:   format.Compression,
