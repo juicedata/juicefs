@@ -269,7 +269,9 @@ func (r *redisMeta) doNewSession(sinfo []byte) error {
 		r.shaResolve = ""
 	}
 
-	go r.cleanupLegacies()
+	if !r.conf.NoBGJob {
+		go r.cleanupLegacies()
+	}
 	return nil
 }
 
@@ -2507,15 +2509,18 @@ func (r *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis: %s", time.Since(start))
 }
 
-func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
+func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 	ctx := Background
 	e := &DumpedEntry{}
 	return e, m.txn(ctx, func(tx *redis.Tx) error {
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
-			return err
+			if err != redis.Nil {
+				return err
+			}
+			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		}
-		attr := &Attr{}
+		attr := &Attr{Typ: Typ, Nlink: 1}
 		m.parseAttr(a, attr)
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
@@ -2548,24 +2553,25 @@ func (m *redisMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 			}
 		} else if attr.Typ == TypeSymlink {
 			if e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result(); err != nil {
-				return err
+				if err != redis.Nil {
+					return err
+				}
+				logger.Warnf("The symlink of inode %d is not found", inode)
 			}
 		}
-
 		return nil
 	}, m.inodeKey(inode))
 }
 
-func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
+func (m *redisMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
 	a := []byte(m.snap.stringMap[m.inodeKey(inode)])
 	if len(a) == 0 {
 		if inode != TrashInode {
 			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		}
-		return nil
 	}
-	attr := &Attr{}
+	attr := &Attr{Typ: Typ, Nlink: 1}
 	m.parseAttr(a, attr)
 	e.Attr = dumpAttr(attr)
 	e.Attr.Inode = inode
@@ -2593,9 +2599,8 @@ func (m *redisMeta) dumpEntryFast(inode Ino) *DumpedEntry {
 	} else if attr.Typ == TypeSymlink {
 		if m.snap.stringMap[m.symKey(inode)] == "" {
 			logger.Warnf("The symlink of inode %d is not found", inode)
-		} else {
-			e.Symlink = m.snap.stringMap[m.symKey(inode)]
 		}
+		e.Symlink = m.snap.stringMap[m.symKey(inode)]
 	}
 	return e
 }
@@ -2632,9 +2637,9 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		typ, inode := m.parseEntry([]byte(dirs[name]))
 		var entry *DumpedEntry
 		if m.snap != nil {
-			entry = m.dumpEntryFast(inode)
+			entry = m.dumpEntryFast(inode, typ)
 		} else {
-			entry, err = m.dumpEntry(inode)
+			entry, err = m.dumpEntry(inode, typ)
 			if err != nil {
 				return err
 			}
@@ -2790,7 +2795,8 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	for _, z := range zs {
 		parts := strings.Split(z.Member.(string), ":")
 		if len(parts) != 2 {
-			return fmt.Errorf("invalid delfile string: %s", z.Member.(string))
+			logger.Warnf("invalid delfile string: %s", z.Member.(string))
+			continue
 		}
 		inode, _ := strconv.ParseUint(parts[0], 10, 64)
 		length, _ := strconv.ParseUint(parts[1], 10, 64)
@@ -2806,10 +2812,10 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			return errors.Errorf("Fetch all metadata from Redis: %s", err)
 		}
 		bar.Done()
-		tree = m.dumpEntryFast(root)
-		trash = m.dumpEntryFast(TrashInode)
+		tree = m.dumpEntryFast(root, TypeDirectory)
+		trash = m.dumpEntryFast(TrashInode, TypeDirectory)
 	} else {
-		if tree, err = m.dumpEntry(root); err != nil {
+		if tree, err = m.dumpEntry(root, TypeDirectory); err != nil {
 			return err
 		}
 	}
