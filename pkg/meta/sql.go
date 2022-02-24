@@ -926,10 +926,6 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
 }
 
 func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	if m.checkQuota(4<<10, 1) {
-		return syscall.ENOSPC
-	}
-	parent = m.checkRoot(parent)
 	var ino Ino
 	var err error
 	if parent == TrashInode {
@@ -2208,12 +2204,7 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	return 0
 }
 
-func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
-	if name == "" {
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
-	inode = m.checkRoot(inode)
+func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var x = xattr{inode, name, value}
 		var err error
@@ -2243,12 +2234,7 @@ func (m *dbMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, fla
 	}))
 }
 
-func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
-	if name == "" {
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
-	inode = m.checkRoot(inode)
+func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		n, err := s.Delete(&xattr{Inode: inode, Name: name})
 		if err != nil {

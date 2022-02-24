@@ -927,10 +927,6 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
 }
 
 func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	if r.checkQuota(4<<10, 1) {
-		return syscall.ENOSPC
-	}
-	parent = r.checkRoot(parent)
 	var ino Ino
 	var err error
 	if parent == TrashInode {
@@ -2443,12 +2439,7 @@ func (r *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 	return 0
 }
 
-func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
-	if name == "" {
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
-	inode = r.checkRoot(inode)
+func (r *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	c := Background
 	key := r.xattrKey(inode)
 	return errno(r.txn(ctx, func(tx *redis.Tx) error {
@@ -2477,12 +2468,7 @@ func (r *redisMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, 
 	}, key))
 }
 
-func (r *redisMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
-	if name == "" {
-		return syscall.EINVAL
-	}
-	defer timeit(time.Now())
-	inode = r.checkRoot(inode)
+func (r *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	n, err := r.rdb.HDel(ctx, r.xattrKey(inode), name).Result()
 	if err != nil {
 		return errno(err)
