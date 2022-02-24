@@ -82,6 +82,9 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 		t.Fatalf("open file %s: %s", result, err)
 	}
 	defer fp.Close()
+	if _, err = m.Load(true); err != nil {
+		t.Fatalf("load setting: %s", err)
+	}
 	if err = m.DumpMeta(fp, root); err != nil {
 		t.Fatalf("dump meta: %s", err)
 	}

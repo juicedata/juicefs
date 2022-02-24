@@ -187,10 +187,9 @@ func format(c *cli.Context) error {
 	if compressor == nil {
 		logger.Fatalf("Unsupported compress algorithm: %s", c.String("compress"))
 	}
-	if c.Bool("no-update") {
-		if _, err := m.Load(); err == nil {
-			return nil
-		}
+	old, _ := m.Load(false)
+	if c.Bool("no-update") && old != nil {
+		return nil
 	}
 
 	format := meta.Format{
@@ -206,6 +205,7 @@ func format(c *cli.Context) error {
 		BlockSize:   fixObjectSize(c.Int("block-size")),
 		Compression: c.String("compress"),
 		TrashDays:   c.Int("trash-days"),
+		MetaVersion: 1,
 	}
 	if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 		format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -215,9 +215,12 @@ func format(c *cli.Context) error {
 		format.SecretKey = os.Getenv("SECRET_KEY")
 		_ = os.Unsetenv("SECRET_KEY")
 	}
-
 	if format.Storage == "file" && !strings.HasSuffix(format.Bucket, "/") {
 		format.Bucket += "/"
+	}
+	if old != nil { // keep old values
+		format.MinClientVersion = old.MinClientVersion
+		format.MaxClientVersion = old.MaxClientVersion
 	}
 
 	keyPath := c.String("encrypt-rsa-key")
@@ -238,7 +241,7 @@ func format(c *cli.Context) error {
 		if err := test(blob); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
-		if _, err := m.Load(); err != nil { // not formatted
+		if old == nil { // creating new volume
 			if objs, err := osync.ListAll(blob, "", ""); err == nil {
 				for o := range objs {
 					if o == nil {
@@ -257,7 +260,7 @@ func format(c *cli.Context) error {
 	}
 
 	if !c.Bool("force") && format.Compression == "none" { // default
-		if old, err := m.Load(); err == nil && old.Compression == "lz4" { // lz4 is the previous default algr
+		if old != nil && old.Compression == "lz4" { // lz4 is the previous default algr
 			format.Compression = old.Compression // keep the existing default compress algr
 		}
 	}

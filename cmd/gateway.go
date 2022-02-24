@@ -157,7 +157,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	readOnly := c.Bool("read-only")
 	metaConf := getMetaConf(c, mp, readOnly)
 	metaCli := meta.NewClient(metaUrl, metaConf)
-	format, err := metaCli.Load()
+	format, err := metaCli.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}

@@ -70,7 +70,7 @@ func mount(url, mp string) {
 		MountPoint: mp,
 	}
 	m := meta.NewClient(url, metaConf)
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		log.Fatalf("load setting: %s", err)
 	}

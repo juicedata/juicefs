@@ -141,7 +141,7 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (m *baseMeta) Load() (*Format, error) {
+func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
 		err = fmt.Errorf("database is not formatted")
@@ -151,6 +151,11 @@ func (m *baseMeta) Load() (*Format, error) {
 	}
 	if err = json.Unmarshal(body, &m.fmt); err != nil {
 		return nil, fmt.Errorf("json: %s", err)
+	}
+	if checkVersion {
+		if err = m.fmt.CheckVersion(); err != nil {
+			return nil, fmt.Errorf("check version: %s", err)
+		}
 	}
 	return &m.fmt, nil
 }
@@ -196,7 +201,7 @@ func (m *baseMeta) refreshSession() {
 		}
 		m.en.doRefreshSession()
 		m.Unlock()
-		if _, err := m.Load(); err != nil {
+		if _, err := m.Load(false); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
 		if m.conf.NoBGJob {
