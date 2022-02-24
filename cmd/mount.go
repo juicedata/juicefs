@@ -165,6 +165,7 @@ func mount(c *cli.Context) error {
 		Strict:      true,
 		CaseInsensi: strings.HasSuffix(mp, ":") && runtime.GOOS == "windows",
 		ReadOnly:    readOnly,
+		NoBGJob:     c.Bool("no-bgjob"),
 		OpenCache:   time.Duration(c.Float64("open-cache") * 1e9),
 		MountPoint:  mp,
 		Subdir:      c.String("subdir"),
@@ -289,7 +290,7 @@ func mount(c *cli.Context) error {
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
 	}
-	if !readOnly && conf.BackupMeta > 0 {
+	if !metaConf.ReadOnly && !metaConf.NoBGJob && conf.BackupMeta > 0 {
 		go vfs.Backup(m, blob, conf.BackupMeta)
 	}
 	if !c.Bool("no-usage-report") {
@@ -399,6 +400,10 @@ func clientFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:  "read-only",
 			Usage: "allow lookup/read operations only",
+		},
+		&cli.BoolFlag{
+			Name:  "no-bgjob",
+			Usage: "disable background jobs (clean-up, backup, etc.)",
 		},
 		&cli.Float64Flag{
 			Name:  "open-cache",

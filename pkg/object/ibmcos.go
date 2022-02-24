@@ -31,6 +31,7 @@ import (
 	"github.com/IBM/ibm-cos-sdk-go/aws/credentials/ibmiam"
 	"github.com/IBM/ibm-cos-sdk-go/aws/session"
 	"github.com/IBM/ibm-cos-sdk-go/service/s3"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type ibmcos struct {
@@ -79,10 +80,12 @@ func (s *ibmcos) Put(key string, in io.Reader) error {
 		}
 		body = bytes.NewReader(data)
 	}
+	mimeType := utils.GuessMimeType(key)
 	params := &s3.PutObjectInput{
-		Bucket: &s.bucket,
-		Key:    &key,
-		Body:   body,
+		Bucket:      &s.bucket,
+		Key:         &key,
+		Body:        body,
+		ContentType: &mimeType,
 	}
 	_, err := s.s3.PutObject(params)
 	return err

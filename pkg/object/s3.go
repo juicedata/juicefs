@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const awsDefaultRegion = "us-east-1"
@@ -128,11 +129,13 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		body = bytes.NewReader(data)
 	}
 	checksum := generateChecksum(body)
+	mimeType := utils.GuessMimeType(key)
 	params := &s3.PutObjectInput{
-		Bucket:   &s.bucket,
-		Key:      &key,
-		Body:     body,
-		Metadata: map[string]*string{checksumAlgr: &checksum},
+		Bucket:      &s.bucket,
+		Key:         &key,
+		Body:        body,
+		ContentType: &mimeType,
+		Metadata:    map[string]*string{checksumAlgr: &checksum},
 	}
 	_, err := s.s3.PutObject(params)
 	return err

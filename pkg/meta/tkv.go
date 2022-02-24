@@ -1998,14 +1998,15 @@ func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	return errno(m.deleteKeys(m.xattrKey(inode, name)))
 }
 
-func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
+func (m *kvMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
 	f := func(tx kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
-			return fmt.Errorf("inode %d not found", inode)
+			logger.Warnf("inode %d not found", inode)
 		}
-		attr := &Attr{}
+
+		attr := &Attr{Typ: Typ, Nlink: 1}
 		m.parseAttr(a, attr)
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
@@ -2037,11 +2038,10 @@ func (m *kvMeta) dumpEntry(inode Ino) (*DumpedEntry, error) {
 		} else if attr.Typ == TypeSymlink {
 			l := tx.get(m.symKey(inode))
 			if l == nil {
-				return fmt.Errorf("no link target for inode %d", inode)
+				logger.Warnf("no link target for inode %d", inode)
 			}
 			e.Symlink = string(l)
 		}
-
 		return nil
 	}
 	if m.snap != nil {
@@ -2085,7 +2085,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	for idx, name := range sortedName {
 		typ, inode := m.parseEntry(vals[name])
 		var entry *DumpedEntry
-		entry, err = m.dumpEntry(inode)
+		entry, err = m.dumpEntry(inode, typ)
 		if err != nil {
 			return err
 		}
@@ -2127,7 +2127,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	for k, v := range vals {
 		b := utils.FromBuffer([]byte(k[1:])) // "D"
 		if b.Len() != 16 {
-			return fmt.Errorf("invalid delfileKey: %s", k)
+			logger.Warnf("invalid delfileKey: %s", k)
+			continue
 		}
 		inode := m.decodeInode(b.Get(8))
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
@@ -2167,11 +2168,11 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			}
 			bar.Done()
 		}
-		if trash, err = m.dumpEntry(TrashInode); err != nil {
+		if trash, err = m.dumpEntry(TrashInode, TypeDirectory); err != nil {
 			trash = nil
 		}
 	}
-	if tree, err = m.dumpEntry(root); err != nil {
+	if tree, err = m.dumpEntry(root, TypeDirectory); err != nil {
 		return err
 	}
 	if tree == nil {

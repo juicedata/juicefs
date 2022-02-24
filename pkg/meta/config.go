@@ -29,6 +29,7 @@ type Config struct {
 	Retries     int
 	CaseInsensi bool
 	ReadOnly    bool
+	NoBGJob     bool // disable background jobs like clean-up, backup, etc.
 	OpenCache   time.Duration
 	MountPoint  string
 	Subdir      string
