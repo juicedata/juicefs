@@ -2509,7 +2509,7 @@ func (r *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis: %s", time.Since(start))
 }
 
-func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
+func (m *redisMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 	ctx := Background
 	e := &DumpedEntry{}
 	return e, m.txn(ctx, func(tx *redis.Tx) error {
@@ -2520,7 +2520,7 @@ func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 			}
 			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		}
-		attr := &Attr{Typ: Typ, Nlink: 1}
+		attr := &Attr{Typ: typ, Nlink: 1}
 		m.parseAttr(a, attr)
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
@@ -2563,7 +2563,7 @@ func (m *redisMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 	}, m.inodeKey(inode))
 }
 
-func (m *redisMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
+func (m *redisMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
 	a := []byte(m.snap.stringMap[m.inodeKey(inode)])
 	if len(a) == 0 {
@@ -2571,7 +2571,7 @@ func (m *redisMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		}
 	}
-	attr := &Attr{Typ: Typ, Nlink: 1}
+	attr := &Attr{Typ: typ, Nlink: 1}
 	m.parseAttr(a, attr)
 	e.Attr = dumpAttr(attr)
 	e.Attr.Inode = inode

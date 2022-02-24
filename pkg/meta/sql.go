@@ -2261,7 +2261,7 @@ func (m *dbMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	}))
 }
 
-func (m *dbMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
+func (m *dbMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
 	return e, m.txn(func(s *xorm.Session) error {
 		n := &node{Inode: inode}
@@ -2269,7 +2269,7 @@ func (m *dbMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 		if err != nil {
 			return err
 		}
-		attr := &Attr{Typ: Typ, Nlink: 1}
+		attr := &Attr{Typ: typ, Nlink: 1}
 		if !ok {
 			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		} else {
@@ -2322,7 +2322,7 @@ func (m *dbMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 		return nil
 	})
 }
-func (m *dbMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
+func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
 	if !ok {
@@ -2331,7 +2331,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, Typ uint8) *DumpedEntry {
 		}
 	}
 
-	attr := &Attr{Typ: Typ, Nlink: 1}
+	attr := &Attr{Typ: typ, Nlink: 1}
 	m.parseAttr(n, attr)
 	e.Attr = dumpAttr(attr)
 	e.Attr.Inode = inode
