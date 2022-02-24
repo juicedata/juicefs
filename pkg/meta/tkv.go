@@ -1997,7 +1997,7 @@ func (m *kvMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno 
 	return errno(m.deleteKeys(m.xattrKey(inode, name)))
 }
 
-func (m *kvMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
+func (m *kvMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
 	f := func(tx kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
@@ -2005,7 +2005,7 @@ func (m *kvMeta) dumpEntry(inode Ino, Typ uint8) (*DumpedEntry, error) {
 			logger.Warnf("inode %d not found", inode)
 		}
 
-		attr := &Attr{Typ: Typ, Nlink: 1}
+		attr := &Attr{Typ: typ, Nlink: 1}
 		m.parseAttr(a, attr)
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
