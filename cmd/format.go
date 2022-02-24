@@ -187,27 +187,25 @@ func format(c *cli.Context) error {
 	if compressor == nil {
 		logger.Fatalf("Unsupported compress algorithm: %s", c.String("compress"))
 	}
-	if c.Bool("no-update") {
-		if _, err := m.Load(false); err == nil {
-			return nil
-		}
+	old, _ := m.Load(false)
+	if c.Bool("no-update") && old != nil {
+		return nil
 	}
 
 	format := meta.Format{
-		Name:           name,
-		UUID:           uuid.New().String(),
-		Storage:        c.String("storage"),
-		Bucket:         c.String("bucket"),
-		AccessKey:      c.String("access-key"),
-		SecretKey:      c.String("secret-key"),
-		Shards:         c.Int("shards"),
-		Capacity:       c.Uint64("capacity") << 30,
-		Inodes:         c.Uint64("inodes"),
-		BlockSize:      fixObjectSize(c.Int("block-size")),
-		Compression:    c.String("compress"),
-		TrashDays:      c.Int("trash-days"),
-		MetaVersion:    1,
-		ClientVersions: c.String("client-versions"),
+		Name:        name,
+		UUID:        uuid.New().String(),
+		Storage:     c.String("storage"),
+		Bucket:      c.String("bucket"),
+		AccessKey:   c.String("access-key"),
+		SecretKey:   c.String("secret-key"),
+		Shards:      c.Int("shards"),
+		Capacity:    c.Uint64("capacity") << 30,
+		Inodes:      c.Uint64("inodes"),
+		BlockSize:   fixObjectSize(c.Int("block-size")),
+		Compression: c.String("compress"),
+		TrashDays:   c.Int("trash-days"),
+		MetaVersion: 1,
 	}
 	if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 		format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -217,9 +215,12 @@ func format(c *cli.Context) error {
 		format.SecretKey = os.Getenv("SECRET_KEY")
 		_ = os.Unsetenv("SECRET_KEY")
 	}
-
 	if format.Storage == "file" && !strings.HasSuffix(format.Bucket, "/") {
 		format.Bucket += "/"
+	}
+	if old != nil { // keep old values
+		format.MinClientVersion = old.MinClientVersion
+		format.MaxClientVersion = old.MaxClientVersion
 	}
 
 	keyPath := c.String("encrypt-rsa-key")
@@ -240,7 +241,7 @@ func format(c *cli.Context) error {
 		if err := test(blob); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
-		if _, err := m.Load(false); err != nil { // not formatted
+		if old == nil { // creating new volume
 			if objs, err := osync.ListAll(blob, "", ""); err == nil {
 				for o := range objs {
 					if o == nil {
@@ -259,7 +260,7 @@ func format(c *cli.Context) error {
 	}
 
 	if !c.Bool("force") && format.Compression == "none" { // default
-		if old, err := m.Load(false); err == nil && old.Compression == "lz4" { // lz4 is the previous default algr
+		if old != nil && old.Compression == "lz4" { // lz4 is the previous default algr
 			format.Compression = old.Compression // keep the existing default compress algr
 		}
 	}
@@ -342,10 +343,6 @@ func formatFlags() *cli.Command {
 				Name:  "trash-days",
 				Value: 1,
 				Usage: "number of days after which removed files will be permanently deleted",
-			},
-			&cli.StringFlag{
-				Name:  "client-versions",
-				Usage: "allowed client versions in format \"MIN_VER [MAX_VER]\", both sides included",
 			},
 
 			&cli.BoolFlag{

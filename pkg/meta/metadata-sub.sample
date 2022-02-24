@@ -13,7 +13,8 @@
     "Inodes": 0,
     "TrashDays": 1,
     "MetaVersion": 1,
-    "ClientVersions": ""
+    "MinClientVersion": "",
+    "MaxClientVersion": ""
   },
   "Counters": {
     "usedSpace": 115380224,

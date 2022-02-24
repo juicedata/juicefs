@@ -337,7 +337,8 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
-			old.ClientVersions = format.ClientVersions
+			old.MinClientVersion = format.MinClientVersion
+			old.MaxClientVersion = format.MaxClientVersion
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""

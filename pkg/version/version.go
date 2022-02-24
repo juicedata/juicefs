@@ -23,20 +23,21 @@ import (
 	"strings"
 )
 
-var ver = Semver{
-	major:        1,
-	minor:        0,
-	patch:        0,
-	preRelease:   "dev",
-	revision:     "$Format:%h$", // value is assigned in Makefile
-	revisionDate: "$Format:%as$",
-}
+var (
+	revision     = "$Format:%h$" // value is assigned in Makefile
+	revisionDate = "$Format:%as$"
+	ver          = Semver{
+		major:      1,
+		minor:      0,
+		patch:      0,
+		preRelease: "dev",
+		build:      fmt.Sprintf("%s.%s", revisionDate, revision),
+	}
+)
 
 type Semver struct {
 	major, minor, patch uint64
-	preRelease          string
-	revision            string
-	revisionDate        string
+	preRelease, build   string
 }
 
 func Version() string {
@@ -44,8 +45,10 @@ func Version() string {
 	if pr != "" {
 		pr = "-" + pr
 	}
-	return fmt.Sprintf("%d.%d.%d%s+%s.%s",
-		ver.major, ver.minor, ver.patch, pr, ver.revisionDate, ver.revision)
+	if strings.Contains(ver.build, "Format") {
+		ver.build = "unknown"
+	}
+	return fmt.Sprintf("%d.%d.%d%s+%s", ver.major, ver.minor, ver.patch, pr, ver.build)
 }
 
 func Compare(vs string) (int, error) {

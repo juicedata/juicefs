@@ -20,11 +20,10 @@ import "testing"
 
 func TestVersion(t *testing.T) {
 	ver = Semver{
-		major:        1,
-		minor:        0,
-		patch:        0,
-		revision:     "f4692af9",
-		revisionDate: "2022-02-22",
+		major: 1,
+		minor: 0,
+		patch: 0,
+		build: "2022-02-22.f4692af9",
 	}
 	if v := Version(); v != "1.0.0+2022-02-22.f4692af9" {
 		t.Fatalf("Version %s != expected 1.0.0+2022-02-22.f4692af9", v)

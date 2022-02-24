@@ -17,7 +17,7 @@
 package meta
 
 import (
-	"strings"
+	"fmt"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/version"
@@ -37,22 +37,23 @@ type Config struct {
 }
 
 type Format struct {
-	Name           string
-	UUID           string
-	Storage        string
-	Bucket         string
-	AccessKey      string
-	SecretKey      string `json:",omitempty"`
-	BlockSize      int
-	Compression    string
-	Shards         int
-	Partitions     int
-	Capacity       uint64
-	Inodes         uint64
-	EncryptKey     string `json:",omitempty"`
-	TrashDays      int
-	MetaVersion    int
-	ClientVersions string
+	Name             string
+	UUID             string
+	Storage          string
+	Bucket           string
+	AccessKey        string
+	SecretKey        string `json:",omitempty"`
+	BlockSize        int
+	Compression      string
+	Shards           int
+	Partitions       int
+	Capacity         uint64
+	Inodes           uint64
+	EncryptKey       string `json:",omitempty"`
+	TrashDays        int
+	MetaVersion      int
+	MinClientVersion string
+	MaxClientVersion string
 }
 
 func (f *Format) RemoveSecret() {
@@ -64,33 +65,28 @@ func (f *Format) RemoveSecret() {
 	}
 }
 
-func (f *Format) CheckVersion() bool {
+func (f *Format) CheckVersion() error {
 	if f.MetaVersion > 1 {
-		return false
+		return fmt.Errorf("incompatible metadata version: %d; please upgrade the client", f.MetaVersion)
 	}
 
-	if f.ClientVersions == "" {
-		return true
-	}
-	ps := strings.Fields(f.ClientVersions)
-	if len(ps) == 0 {
-		return true
-	}
-
-	var ok bool
-	if r, err := version.Compare(ps[0]); err == nil {
-		ok = r >= 0
-	} else {
-		logger.Errorf("Compare versions: %s", err)
-		return false
-	}
-	if ok && len(ps) > 1 {
-		if r, err := version.Compare(ps[1]); err == nil {
-			ok = r <= 0
-		} else {
-			logger.Errorf("Compare versions: %s", err)
-			return false
+	if f.MinClientVersion != "" {
+		r, err := version.Compare(f.MinClientVersion)
+		if err == nil && r < 0 {
+			err = fmt.Errorf("allowed minimum version: %s; please upgrade the client", f.MinClientVersion)
+		}
+		if err != nil {
+			return err
 		}
 	}
-	return ok
+	if f.MaxClientVersion != "" {
+		r, err := version.Compare(f.MaxClientVersion)
+		if err == nil && r > 0 {
+			err = fmt.Errorf("allowed maximum version: %s; please use an older client", f.MaxClientVersion)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

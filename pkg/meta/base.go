@@ -152,9 +152,10 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if err = json.Unmarshal(body, &m.fmt); err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
-	if checkVersion && !m.fmt.CheckVersion() {
-		return nil, fmt.Errorf("client is rejected! Meta version: %d, allowed client versions: %s",
-			m.fmt.MetaVersion, m.fmt.ClientVersions)
+	if checkVersion {
+		if err = m.fmt.CheckVersion(); err != nil {
+			return nil, fmt.Errorf("check version: %s", err)
+		}
 	}
 	return &m.fmt, nil
 }

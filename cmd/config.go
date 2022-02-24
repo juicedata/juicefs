@@ -103,10 +103,16 @@ func config(ctx *cli.Context) error {
 				format.TrashDays = new
 				trash = true
 			}
-		case "client-versions":
-			if new := ctx.String(flag); new != format.ClientVersions {
-				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.ClientVersions, new))
-				format.ClientVersions = new
+		case "min-client-version":
+			if new := ctx.String(flag); new != format.MinClientVersion {
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MinClientVersion, new))
+				format.MinClientVersion = new
+				clientVer = true
+			}
+		case "max-client-version":
+			if new := ctx.String(flag); new != format.MaxClientVersion {
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MaxClientVersion, new))
+				format.MaxClientVersion = new
 				clientVer = true
 			}
 		}
@@ -145,7 +151,7 @@ func config(ctx *cli.Context) error {
 				return fmt.Errorf("Aborted.")
 			}
 		}
-		if clientVer && !format.CheckVersion() {
+		if clientVer && format.CheckVersion() != nil {
 			warn("Clients with the same version of this will be rejected after modification.")
 			if !userConfirmed() {
 				return fmt.Errorf("Aborted.")
@@ -191,8 +197,12 @@ func configFlags() *cli.Command {
 				Usage: "number of days after which removed files will be permanently deleted",
 			},
 			&cli.StringFlag{
-				Name:  "client-versions",
-				Usage: "allowed client versions in format \"MIN_VER [MAX_VER]\", both sides included",
+				Name:  "min-client-version",
+				Usage: "minimum client version allowed to connect",
+			},
+			&cli.StringFlag{
+				Name:  "max-client-version",
+				Usage: "maximum client version allowed to connect",
 			},
 			&cli.BoolFlag{
 				Name:  "force",
