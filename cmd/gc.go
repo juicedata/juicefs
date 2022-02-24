@@ -74,7 +74,7 @@ func gc(ctx *cli.Context) error {
 		Strict:     true,
 		MaxDeletes: ctx.Int("threads"),
 	})
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}

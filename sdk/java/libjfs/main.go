@@ -342,7 +342,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			MaxDeletes: jConf.MaxDeletes,
 		}
 		m := meta.NewClient(jConf.MetaURL, metaConf)
-		format, err := m.Load()
+		format, err := m.Load(true)
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
 		}

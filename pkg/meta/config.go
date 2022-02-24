@@ -16,7 +16,12 @@
 
 package meta
 
-import "time"
+import (
+	"fmt"
+	"time"
+
+	"github.com/juicedata/juicefs/pkg/version"
+)
 
 // Config for clients.
 type Config struct {
@@ -32,20 +37,23 @@ type Config struct {
 }
 
 type Format struct {
-	Name        string
-	UUID        string
-	Storage     string
-	Bucket      string
-	AccessKey   string
-	SecretKey   string `json:",omitempty"`
-	BlockSize   int
-	Compression string
-	Shards      int
-	Partitions  int
-	Capacity    uint64
-	Inodes      uint64
-	EncryptKey  string `json:",omitempty"`
-	TrashDays   int
+	Name             string
+	UUID             string
+	Storage          string
+	Bucket           string
+	AccessKey        string
+	SecretKey        string `json:",omitempty"`
+	BlockSize        int
+	Compression      string
+	Shards           int
+	Partitions       int
+	Capacity         uint64
+	Inodes           uint64
+	EncryptKey       string `json:",omitempty"`
+	TrashDays        int
+	MetaVersion      int
+	MinClientVersion string
+	MaxClientVersion string
 }
 
 func (f *Format) RemoveSecret() {
@@ -55,4 +63,30 @@ func (f *Format) RemoveSecret() {
 	if f.EncryptKey != "" {
 		f.EncryptKey = "removed"
 	}
+}
+
+func (f *Format) CheckVersion() error {
+	if f.MetaVersion > 1 {
+		return fmt.Errorf("incompatible metadata version: %d; please upgrade the client", f.MetaVersion)
+	}
+
+	if f.MinClientVersion != "" {
+		r, err := version.Compare(f.MinClientVersion)
+		if err == nil && r < 0 {
+			err = fmt.Errorf("allowed minimum version: %s; please upgrade the client", f.MinClientVersion)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if f.MaxClientVersion != "" {
+		r, err := version.Compare(f.MaxClientVersion)
+		if err == nil && r > 0 {
+			err = fmt.Errorf("allowed maximum version: %s; please use an older client", f.MaxClientVersion)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

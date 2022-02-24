@@ -129,7 +129,7 @@ func wrapRegister(mp, name string) {
 }
 
 func getFormat(c *cli.Context, metaCli meta.Meta) *meta.Format {
-	format, err := metaCli.Load()
+	format, err := metaCli.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
@@ -300,11 +300,9 @@ func mount(c *cli.Context) error {
 			readOnly = true
 		}
 	}
-
 	metaConf := getMetaConf(c, mp, readOnly)
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
 	metaCli := meta.NewClient(addr, metaConf)
-
 	format := getFormat(c, metaCli)
 
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards

@@ -198,6 +198,8 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
+			old.MinClientVersion = format.MinClientVersion
+			old.MaxClientVersion = format.MaxClientVersion
 			if format != old {
 				old.SecretKey = ""
 				format.SecretKey = ""
@@ -2809,10 +2811,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return errors.New("The entry of the root inode was not found")
 	}
 	tree.Name = "FSTree"
-	format, err := m.Load()
-	if err != nil {
-		return err
-	}
 
 	rs, _ := m.rdb.MGet(ctx, []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextTrash"}...).Result()
 	cs := make([]int64, len(rs))
@@ -2849,7 +2847,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := &DumpedMeta{
-		Setting: format,
+		Setting: &m.fmt,
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
