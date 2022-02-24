@@ -148,7 +148,7 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 	var inode Ino
 	var attr = &Attr{}
-	err = v.Meta.Mknod(ctx, parent, name, _type, mode&07777, cumask, rdev, &inode, attr)
+	err = v.Meta.Mknod(ctx, parent, name, _type, mode&07777, cumask, rdev, "", &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}

@@ -231,7 +231,7 @@ func benchMknod(b *testing.B, m Meta) {
 	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := m.Mknod(ctx, parent, fmt.Sprintf("f%d", i), TypeFile, 0644, 022, 0, nil, nil); err != 0 {
+		if err := m.Mknod(ctx, parent, fmt.Sprintf("f%d", i), TypeFile, 0644, 022, 0, "", nil, nil); err != 0 {
 			b.Fatalf("mknod: %s", err)
 		}
 	}

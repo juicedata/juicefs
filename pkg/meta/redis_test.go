@@ -172,10 +172,10 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rmdir(ctx, 1, "d"); st != syscall.ENOTEMPTY {
 		t.Fatalf("rmdir d: %s", st)
 	}
-	if st := m.Mknod(ctx, inode, "df", TypeFile, 0650, 022, 0, &dummyInode, nil); st != syscall.ENOTDIR {
+	if st := m.Mknod(ctx, inode, "df", TypeFile, 0650, 022, 0, "", &dummyInode, nil); st != syscall.ENOTDIR {
 		t.Fatalf("create fd: %s", st)
 	}
-	if st := m.Mknod(ctx, parent, "f", TypeFile, 0650, 022, 0, &inode, attr); st != syscall.EEXIST {
+	if st := m.Mknod(ctx, parent, "f", TypeFile, 0650, 022, 0, "", &inode, attr); st != syscall.EEXIST {
 		t.Fatalf("create f: %s", st)
 	}
 	if st := m.Lookup(ctx, parent, "f", &inode, attr); st != 0 {
@@ -312,7 +312,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	} else if attr.Parent != 1 {
 		t.Fatalf("after rename d4/d5 <-> d5 parent %d expect 1", attr.Parent)
 	}
-	if st := m.Mknod(ctx, parent2, "f6", TypeFile, 0650, 022, 0, &inode, attr); st != 0 {
+	if st := m.Mknod(ctx, parent2, "f6", TypeFile, 0650, 022, 0, "", &inode, attr); st != 0 {
 		t.Fatalf("create dir d4/f6: %s", st)
 	}
 	if st := m.Rename(ctx, 1, "d5", parent2, "f6", RenameExchange, &inode, attr); st != 0 {
