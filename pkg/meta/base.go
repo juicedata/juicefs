@@ -578,6 +578,9 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
 
 	defer timeit(time.Now())
 	if m.checkQuota(4<<10, 1) {
@@ -615,6 +618,10 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+
 	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
@@ -643,9 +650,12 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	if parent == 1 && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+
 	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	return m.en.doUnlink(ctx, parent, name)
+	return m.en.doUnlink(ctx, m.checkRoot(parent), name)
 }
 
 func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -658,9 +668,12 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if parent == 1 && name == TrashName || parent == TrashInode || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+
 	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	return m.en.doRmdir(ctx, parent, name)
+	return m.en.doRmdir(ctx, m.checkRoot(parent), name)
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -670,6 +683,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if isTrash(parentDst) || isTrash(parentSrc) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
 	switch flags {
 	case 0, RenameNoReplace, RenameExchange:
 	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
@@ -677,10 +693,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	default:
 		return syscall.EINVAL
 	}
+
 	defer timeit(time.Now())
-	parentSrc = m.checkRoot(parentSrc)
-	parentDst = m.checkRoot(parentDst)
-	return m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, attr)
+	return m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
 }
 
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
@@ -762,17 +777,25 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
 	if name == "" {
 		return syscall.EINVAL
 	}
+
 	defer timeit(time.Now())
 	return m.en.doSetXattr(ctx, m.checkRoot(inode), name, value, flags)
 }
 
 func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
 	if name == "" {
 		return syscall.EINVAL
 	}
+
 	defer timeit(time.Now())
 	return m.en.doRemoveXattr(ctx, m.checkRoot(inode), name)
 }
