@@ -65,11 +65,13 @@ func cmdGateway() *cli.Command {
 
 	return &cli.Command{
 		Name:      "gateway",
-		Category:  "SERVICE",
-		Usage:     "S3-compatible gateway",
-		ArgsUsage: "META-URL ADDRESS",
-		Flags:     expandFlags(compoundFlags),
 		Action:    gateway,
+		Category:  "SERVICE",
+		Usage:     "Start an S3-compatible gateway",
+		ArgsUsage: "META-URL ADDRESS",
+		Description: `
+TEST description`,
+		Flags: expandFlags(compoundFlags),
 	}
 }
 

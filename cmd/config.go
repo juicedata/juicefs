@@ -30,30 +30,32 @@ import (
 func cmdConfig() *cli.Command {
 	return &cli.Command{
 		Name:      "config",
-		Usage:     "change config of a volume",
-		ArgsUsage: "META-URL",
 		Action:    config,
 		Category:  "ADMIN",
+		Usage:     "Change configuration of a volume",
+		ArgsUsage: "META-URL",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:  "capacity",
-				Usage: "the limit for space in GiB",
+				Usage: "hard quota of the volume limiting its usage of space in GiB",
 			},
 			&cli.Uint64Flag{
 				Name:  "inodes",
-				Usage: "the limit for number of inodes",
+				Usage: "hard quota of the volume limiting its number of inodes",
 			},
 			&cli.StringFlag{
 				Name:  "bucket",
-				Usage: "A bucket URL to store data",
+				Usage: "the bucket URL of object storage to store data",
 			},
 			&cli.StringFlag{
 				Name:  "access-key",
-				Usage: "Access key for object storage",
+				Usage: "access key for object storage",
 			},
 			&cli.StringFlag{
 				Name:  "secret-key",
-				Usage: "Secret key for object storage",
+				Usage: "secret key for object storage",
 			},
 			&cli.IntFlag{
 				Name:  "trash-days",

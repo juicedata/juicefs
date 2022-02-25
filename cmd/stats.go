@@ -33,10 +33,12 @@ import (
 func cmdStats() *cli.Command {
 	return &cli.Command{
 		Name:      "stats",
-		Usage:     "show runtime statistics",
 		Action:    stats,
 		Category:  "MONITOR",
+		Usage:     "Show runtime statistics",
 		ArgsUsage: "MOUNTPOINT",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "schema",

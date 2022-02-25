@@ -34,10 +34,12 @@ import (
 func cmdFsck() *cli.Command {
 	return &cli.Command{
 		Name:      "fsck",
-		Category:  "ADMIN",
-		Usage:     "Check consistency of file system",
-		ArgsUsage: "META-URL",
 		Action:    fsck,
+		Category:  "ADMIN",
+		Usage:     "Check consistency of a volume",
+		ArgsUsage: "META-URL",
+		Description: `
+TEST description`,
 	}
 }
 

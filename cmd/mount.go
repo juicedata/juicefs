@@ -51,11 +51,13 @@ func cmdMount() *cli.Command {
 	}
 	return &cli.Command{
 		Name:      "mount",
-		Usage:     "mount a volume",
-		ArgsUsage: "META-URL MOUNTPOINT",
-		Category:  "SERVICE",
 		Action:    mount,
-		Flags:     expandFlags(compoundFlags),
+		Category:  "SERVICE",
+		Usage:     "Mount a volume",
+		ArgsUsage: "META-URL MOUNTPOINT",
+		Description: `
+TEST description`,
+		Flags: expandFlags(compoundFlags),
 	}
 }
 

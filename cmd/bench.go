@@ -36,30 +36,41 @@ import (
 func cmdBench() *cli.Command {
 	return &cli.Command{
 		Name:      "bench",
-		Usage:     "run benchmark to read/write/stat big/small files",
 		Action:    bench,
 		Category:  "TOOL",
+		Usage:     "Run benchmarks on a path",
 		ArgsUsage: "PATH",
+		Description: `
+TEST Description.
+It will do read/write/stat big/small files.
+
+Examples:
+
+# Run on a local file
+$ juicefs bench /mnt/local
+
+# Run on a jfs
+$ juicefs bench /mnt/jfs`,
 		Flags: []cli.Flag{
 			&cli.UintFlag{
 				Name:  "block-size",
 				Value: 1,
-				Usage: "block size in MiB",
+				Usage: "size of each IO block in MiB",
 			},
 			&cli.UintFlag{
 				Name:  "big-file-size",
 				Value: 1024,
-				Usage: "size of big file in MiB",
+				Usage: "size of each big file in MiB",
 			},
 			&cli.UintFlag{
 				Name:  "small-file-size",
 				Value: 128,
-				Usage: "size of small file in KiB",
+				Usage: "size of each small file in KiB",
 			},
 			&cli.UintFlag{
 				Name:  "small-file-count",
 				Value: 100,
-				Usage: "number of small files",
+				Usage: "number of small files per thread",
 			},
 			&cli.UintFlag{
 				Name:    "threads",

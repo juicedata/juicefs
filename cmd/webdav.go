@@ -49,15 +49,17 @@ func cmdWebDav() *cli.Command {
 
 	return &cli.Command{
 		Name:      "webdav",
+		Action:    webdav,
 		Category:  "SERVICE",
-		Usage:     "start a webdav server",
+		Usage:     "Start a WebDAV server",
 		ArgsUsage: "META-URL ADDRESS",
-		Flags:     expandFlags(compoundFlags),
-		Action:    webdavSvc,
+		Description: `
+TEST description`,
+		Flags: expandFlags(compoundFlags),
 	}
 }
 
-func webdavSvc(c *cli.Context) error {
+func webdav(c *cli.Context) error {
 	setLoggerLevel(c)
 	if c.Args().Len() < 1 {
 		logger.Fatalf("meta url are required")

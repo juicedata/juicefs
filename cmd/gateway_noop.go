@@ -28,7 +28,9 @@ func cmdGateway() *cli.Command {
 	return &cli.Command{
 		Name:     "gateway",
 		Category: "SERVICE",
-		Usage:    "S3-compatible gateway (not included)",
+		Usage:    "Start an S3-compatible gateway (not included)",
+		Description: `
+TEST description`,
 		Action: func(*cli.Context) error {
 			return errors.New("not supported")
 		},

@@ -38,10 +38,12 @@ import (
 func cmdSync() *cli.Command {
 	return &cli.Command{
 		Name:      "sync",
-		Usage:     "sync between two storage",
-		ArgsUsage: "SRC DST",
 		Action:    doSync,
 		Category:  "TOOL",
+		Usage:     "Sync between two storages",
+		ArgsUsage: "SRC DST",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "start",

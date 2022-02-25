@@ -32,10 +32,12 @@ import (
 func cmdInfo() *cli.Command {
 	return &cli.Command{
 		Name:      "info",
-		Usage:     "show internal information for paths or inodes",
-		ArgsUsage: "PATH or INODE",
 		Action:    info,
 		Category:  "MONITOR",
+		Usage:     "Show internal information if a path or inode",
+		ArgsUsage: "PATH/INODE",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "inode",

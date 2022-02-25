@@ -29,7 +29,9 @@ func cmdWebDav() *cli.Command {
 	return &cli.Command{
 		Name:     "webdav",
 		Category: "SERVICE",
-		Usage:    "start a webdav server (not included)",
+		Usage:    "Start a WebDAV server (not included)",
+		Description: `
+TEST description`,
 		Action: func(*cli.Context) error {
 			return errors.New("not supported")
 		},

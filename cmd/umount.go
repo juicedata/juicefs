@@ -30,10 +30,12 @@ import (
 func cmdUmount() *cli.Command {
 	return &cli.Command{
 		Name:      "umount",
-		Usage:     "unmount a volume",
-		ArgsUsage: "MOUNTPOINT",
 		Action:    umount,
 		Category:  "SERVICE",
+		Usage:     "Unmount a volume",
+		ArgsUsage: "MOUNTPOINT",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",

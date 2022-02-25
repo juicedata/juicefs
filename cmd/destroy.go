@@ -32,10 +32,12 @@ import (
 func cmdDestroy() *cli.Command {
 	return &cli.Command{
 		Name:      "destroy",
-		Usage:     "destroy an existing volume",
-		ArgsUsage: "META-URL UUID",
 		Action:    destroy,
 		Category:  "ADMIN",
+		Usage:     "Destroy an existing volume",
+		ArgsUsage: "META-URL UUID",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "force",

@@ -35,10 +35,12 @@ import (
 func cmdProfile() *cli.Command {
 	return &cli.Command{
 		Name:      "profile",
-		Usage:     "analyze access log",
 		Action:    profile,
 		Category:  "MONITOR",
+		Usage:     "Analyze access log",
 		ArgsUsage: "MOUNTPOINT/LOGFILE",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "uid",

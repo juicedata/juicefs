@@ -27,10 +27,12 @@ import (
 func cmdStatus() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
-		Usage:     "show status of JuiceFS",
-		ArgsUsage: "META-URL",
-		Category:  "MONITOR",
 		Action:    status,
+		Category:  "MONITOR",
+		Usage:     "Show status of a volume",
+		ArgsUsage: "META-URL",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:    "session",

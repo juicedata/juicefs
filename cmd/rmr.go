@@ -32,10 +32,12 @@ import (
 func cmdRmr() *cli.Command {
 	return &cli.Command{
 		Name:      "rmr",
-		Category:  "TOOL",
-		Usage:     "remove directories recursively",
-		ArgsUsage: "PATH ...",
 		Action:    rmr,
+		Category:  "TOOL",
+		Usage:     "Remove directories recursively",
+		ArgsUsage: "PATH ...",
+		Description: `
+TEST description`,
 	}
 }
 

@@ -58,9 +58,12 @@ func cmdFormat() *cli.Command {
 	}
 	return &cli.Command{
 		Name:      "format",
+		Action:    format,
 		Category:  "ADMIN",
-		Usage:     "format a volume",
+		Usage:     "Format a volume",
 		ArgsUsage: "META-URL NAME",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:  "block-size",
@@ -124,7 +127,6 @@ func cmdFormat() *cli.Command {
 				Usage: "don't update existing volume",
 			},
 		},
-		Action: format,
 	}
 }
 

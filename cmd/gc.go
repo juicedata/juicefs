@@ -37,23 +37,26 @@ import (
 func cmdGC() *cli.Command {
 	return &cli.Command{
 		Name:      "gc",
-		Usage:     "collect any leaked objects",
-		ArgsUsage: "META-URL",
 		Action:    gc,
 		Category:  "ADMIN",
+		Usage:     "Garbage collector of objects in data storage",
+		ArgsUsage: "META-URL",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "delete",
-				Usage: "deleted leaked objects",
-			},
 			&cli.BoolFlag{
 				Name:  "compact",
 				Usage: "compact small slices into bigger ones",
 			},
+			&cli.BoolFlag{
+				Name:  "delete",
+				Usage: "deleted leaked objects",
+			},
 			&cli.IntFlag{
-				Name:  "threads",
-				Value: 10,
-				Usage: "number threads to delete leaked objects",
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   10,
+				Usage:   "number threads to delete leaked objects",
 			},
 		},
 	}

@@ -28,10 +28,12 @@ import (
 func cmdLoad() *cli.Command {
 	return &cli.Command{
 		Name:      "load",
-		Category:  "ADMIN",
-		Usage:     "load metadata from a previously dumped JSON file",
-		ArgsUsage: "META-URL [FILE]",
 		Action:    load,
+		Category:  "ADMIN",
+		Usage:     "Load metadata from a previously dumped JSON file",
+		ArgsUsage: "META-URL [FILE]",
+		Description: `
+TEST description`,
 	}
 }
 

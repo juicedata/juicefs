@@ -28,14 +28,16 @@ import (
 func cmdDump() *cli.Command {
 	return &cli.Command{
 		Name:      "dump",
-		Usage:     "dump metadata into a JSON file",
-		ArgsUsage: "META-URL [FILE]",
 		Action:    dump,
 		Category:  "ADMIN",
+		Usage:     "Dump metadata into a JSON file",
+		ArgsUsage: "META-URL [FILE]",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "subdir",
-				Usage: "only dump a sub-directory.",
+				Usage: "only dump a sub-directory",
 			},
 		},
 	}

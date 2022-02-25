@@ -30,10 +30,12 @@ import (
 func cmdWarmup() *cli.Command {
 	return &cli.Command{
 		Name:      "warmup",
-		Usage:     "build cache for target directories/files",
-		ArgsUsage: "[PATH ...]",
 		Action:    warmup,
 		Category:  "TOOL",
+		Usage:     "Build cache for target directories/files",
+		ArgsUsage: "[PATH ...]",
+		Description: `
+TEST description`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "file",
