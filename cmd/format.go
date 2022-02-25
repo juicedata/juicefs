@@ -183,9 +183,11 @@ func format(c *cli.Context) error {
 		logger.Fatalf("invalid name: %s, only alphabet, number and - are allowed, and the length should be 3 to 63 characters.", name)
 	}
 
-	compressor := compress.NewCompressor(c.String("compress"))
-	if compressor == nil {
-		logger.Fatalf("Unsupported compress algorithm: %s", c.String("compress"))
+	if v := c.String("compress"); compress.NewCompressor(v) == nil {
+		logger.Fatalf("Unsupported compress algorithm: %s", v)
+	}
+	if v := c.Int("trash-days"); v < 0 {
+		logger.Fatalf("Invalid trash days: %d", v)
 	}
 	old, _ := m.Load(false)
 	if c.Bool("no-update") && old != nil {

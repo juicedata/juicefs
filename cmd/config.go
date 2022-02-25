@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -99,18 +100,27 @@ func config(ctx *cli.Context) error {
 			}
 		case "trash-days":
 			if new := ctx.Int(flag); new != format.TrashDays {
+				if new < 0 {
+					return fmt.Errorf("Invalid trash days: %d", new)
+				}
 				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.TrashDays, new))
 				format.TrashDays = new
 				trash = true
 			}
 		case "min-client-version":
 			if new := ctx.String(flag); new != format.MinClientVersion {
+				if version.Parse(new) == nil {
+					return fmt.Errorf("Invalid version string: %s", new)
+				}
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MinClientVersion, new))
 				format.MinClientVersion = new
 				clientVer = true
 			}
 		case "max-client-version":
 			if new := ctx.String(flag); new != format.MaxClientVersion {
+				if version.Parse(new) == nil {
+					return fmt.Errorf("Invalid version string: %s", new)
+				}
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MaxClientVersion, new))
 				format.MaxClientVersion = new
 				clientVer = true
