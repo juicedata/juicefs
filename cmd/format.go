@@ -42,7 +42,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func formatFlags() *cli.Command {
+func cmdFormat() *cli.Command {
 	var defaultBucket string
 	switch runtime.GOOS {
 	case "darwin":

@@ -24,7 +24,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func gatewayFlags() *cli.Command {
+func cmdGateway() *cli.Command {
 	return &cli.Command{
 		Name:     "gateway",
 		Category: "SERVICE",

@@ -43,7 +43,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
-func mountFlags() *cli.Command {
+func cmdMount() *cli.Command {
 	compoundFlags := [][]cli.Flag{
 		mount_flags(),
 		clientFlags(),

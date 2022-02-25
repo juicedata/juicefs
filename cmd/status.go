@@ -24,7 +24,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func statusFlags() *cli.Command {
+func cmdStatus() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
 		Usage:     "show status of JuiceFS",

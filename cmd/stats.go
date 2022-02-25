@@ -30,7 +30,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func statsFlags() *cli.Command {
+func cmdStats() *cli.Command {
 	return &cli.Command{
 		Name:      "stats",
 		Usage:     "show runtime statistics",

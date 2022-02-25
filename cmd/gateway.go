@@ -36,7 +36,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 )
 
-func gatewayFlags() *cli.Command {
+func cmdGateway() *cli.Command {
 	selfFlags := []cli.Flag{
 		&cli.StringFlag{
 			Name:  "access-log",

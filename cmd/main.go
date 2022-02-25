@@ -49,25 +49,25 @@ func Main(args []string) error {
 		EnableBashCompletion: true,
 		Flags:                globalFlags(),
 		Commands: []*cli.Command{
-			formatFlags(),
-			mountFlags(),
-			umountFlags(),
-			gatewayFlags(),
-			webDavFlags(),
-			syncFlags(),
-			rmrFlags(),
-			infoFlags(),
-			benchFlags(),
-			gcFlags(),
-			checkFlags(),
-			profileFlags(),
-			statsFlags(),
-			statusFlags(),
-			warmupFlags(),
-			dumpFlags(),
-			loadFlags(),
-			configFlags(),
-			destroyFlags(),
+			cmdFormat(),
+			cmdConfig(),
+			cmdDestroy(),
+			cmdGC(),
+			cmdFsck(),
+			cmdDump(),
+			cmdLoad(),
+			cmdStatus(),
+			cmdStats(),
+			cmdProfile(),
+			cmdInfo(),
+			cmdMount(),
+			cmdUmount(),
+			cmdGateway(),
+			cmdWebDav(),
+			cmdBench(),
+			cmdWarmup(),
+			cmdRmr(),
+			cmdSync(),
 		},
 	}
 
@@ -102,7 +102,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
-	for _, f := range append(mountFlags().Flags, globalFlags()...) {
+	for _, f := range append(cmdMount().Flags, globalFlags()...) {
 		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
 			_, cmdFlagsLookup[names[0]] = f.(*cli.BoolFlag)
 		}

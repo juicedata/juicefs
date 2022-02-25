@@ -31,7 +31,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func checkFlags() *cli.Command {
+func cmdFsck() *cli.Command {
 	return &cli.Command{
 		Name:      "fsck",
 		Category:  "ADMIN",

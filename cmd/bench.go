@@ -33,7 +33,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func benchFlags() *cli.Command {
+func cmdBench() *cli.Command {
 	return &cli.Command{
 		Name:      "bench",
 		Usage:     "run benchmark to read/write/stat big/small files",

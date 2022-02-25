@@ -35,7 +35,7 @@ import (
 	"golang.org/x/term"
 )
 
-func syncFlags() *cli.Command {
+func cmdSync() *cli.Command {
 	return &cli.Command{
 		Name:      "sync",
 		Usage:     "sync between two storage",

@@ -25,7 +25,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func loadFlags() *cli.Command {
+func cmdLoad() *cli.Command {
 	return &cli.Command{
 		Name:      "load",
 		Category:  "ADMIN",

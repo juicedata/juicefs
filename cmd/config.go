@@ -27,7 +27,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func configFlags() *cli.Command {
+func cmdConfig() *cli.Command {
 	return &cli.Command{
 		Name:      "config",
 		Usage:     "change config of a volume",

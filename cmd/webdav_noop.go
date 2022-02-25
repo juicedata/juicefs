@@ -25,7 +25,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func webDavFlags() *cli.Command {
+func cmdWebDav() *cli.Command {
 	return &cli.Command{
 		Name:     "webdav",
 		Category: "SERVICE",

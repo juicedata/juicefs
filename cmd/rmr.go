@@ -29,7 +29,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func rmrFlags() *cli.Command {
+func cmdRmr() *cli.Command {
 	return &cli.Command{
 		Name:      "rmr",
 		Category:  "TOOL",

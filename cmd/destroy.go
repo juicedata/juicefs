@@ -29,7 +29,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func destroyFlags() *cli.Command {
+func cmdDestroy() *cli.Command {
 	return &cli.Command{
 		Name:      "destroy",
 		Usage:     "destroy an existing volume",

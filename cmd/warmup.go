@@ -27,7 +27,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func warmupFlags() *cli.Command {
+func cmdWarmup() *cli.Command {
 	return &cli.Command{
 		Name:      "warmup",
 		Usage:     "build cache for target directories/files",

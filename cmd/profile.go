@@ -32,7 +32,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func profileFlags() *cli.Command {
+func cmdProfile() *cli.Command {
 	return &cli.Command{
 		Name:      "profile",
 		Usage:     "analyze access log",

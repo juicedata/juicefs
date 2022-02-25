@@ -25,7 +25,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func dumpFlags() *cli.Command {
+func cmdDump() *cli.Command {
 	return &cli.Command{
 		Name:      "dump",
 		Usage:     "dump metadata into a JSON file",

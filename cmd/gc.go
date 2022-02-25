@@ -34,7 +34,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func gcFlags() *cli.Command {
+func cmdGC() *cli.Command {
 	return &cli.Command{
 		Name:      "gc",
 		Usage:     "collect any leaked objects",
