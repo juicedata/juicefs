@@ -26,8 +26,9 @@ import (
 
 func gatewayFlags() *cli.Command {
 	return &cli.Command{
-		Name:  "gateway",
-		Usage: "S3-compatible gateway (not included)",
+		Name:     "gateway",
+		Category: "SERVICE",
+		Usage:    "S3-compatible gateway (not included)",
 		Action: func(*cli.Context) error {
 			return errors.New("not supported")
 		},

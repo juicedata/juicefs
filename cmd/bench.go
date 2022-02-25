@@ -38,6 +38,7 @@ func benchFlags() *cli.Command {
 		Name:      "bench",
 		Usage:     "run benchmark to read/write/stat big/small files",
 		Action:    bench,
+		Category:  "TOOL",
 		ArgsUsage: "PATH",
 		Flags: []cli.Flag{
 			&cli.UintFlag{

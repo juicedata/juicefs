@@ -53,6 +53,7 @@ func mountFlags() *cli.Command {
 		Name:      "mount",
 		Usage:     "mount a volume",
 		ArgsUsage: "META-URL MOUNTPOINT",
+		Category:  "SERVICE",
 		Action:    mount,
 		Flags:     expandFlags(compoundFlags),
 	}

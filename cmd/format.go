@@ -58,6 +58,7 @@ func formatFlags() *cli.Command {
 	}
 	return &cli.Command{
 		Name:      "format",
+		Category:  "ADMIN",
 		Usage:     "format a volume",
 		ArgsUsage: "META-URL NAME",
 		Flags: []cli.Flag{

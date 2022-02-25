@@ -29,6 +29,7 @@ func statusFlags() *cli.Command {
 		Name:      "status",
 		Usage:     "show status of JuiceFS",
 		ArgsUsage: "META-URL",
+		Category:  "MONITOR",
 		Action:    status,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{

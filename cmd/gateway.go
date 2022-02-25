@@ -65,6 +65,7 @@ func gatewayFlags() *cli.Command {
 
 	return &cli.Command{
 		Name:      "gateway",
+		Category:  "SERVICE",
 		Usage:     "S3-compatible gateway",
 		ArgsUsage: "META-URL ADDRESS",
 		Flags:     expandFlags(compoundFlags),

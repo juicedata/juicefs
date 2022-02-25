@@ -33,6 +33,7 @@ func configFlags() *cli.Command {
 		Usage:     "change config of a volume",
 		ArgsUsage: "META-URL",
 		Action:    config,
+		Category:  "ADMIN",
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:  "capacity",

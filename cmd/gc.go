@@ -40,6 +40,7 @@ func gcFlags() *cli.Command {
 		Usage:     "collect any leaked objects",
 		ArgsUsage: "META-URL",
 		Action:    gc,
+		Category:  "ADMIN",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "delete",

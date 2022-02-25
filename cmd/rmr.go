@@ -32,6 +32,7 @@ import (
 func rmrFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "rmr",
+		Category:  "TOOL",
 		Usage:     "remove directories recursively",
 		ArgsUsage: "PATH ...",
 		Action:    rmr,

@@ -45,6 +45,7 @@ func Main(args []string) error {
 		Usage:                "A POSIX file system built on Redis and object storage.",
 		Version:              version.Version(),
 		Copyright:            "Apache License 2.0",
+		HideHelpCommand:      true,
 		EnableBashCompletion: true,
 		Flags:                globalFlags(),
 		Commands: []*cli.Command{

@@ -35,6 +35,7 @@ func infoFlags() *cli.Command {
 		Usage:     "show internal information for paths or inodes",
 		ArgsUsage: "PATH or INODE",
 		Action:    info,
+		Category:  "MONITOR",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "inode",

@@ -34,6 +34,7 @@ import (
 func checkFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "fsck",
+		Category:  "ADMIN",
 		Usage:     "Check consistency of file system",
 		ArgsUsage: "META-URL",
 		Action:    fsck,

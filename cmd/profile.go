@@ -37,6 +37,7 @@ func profileFlags() *cli.Command {
 		Name:      "profile",
 		Usage:     "analyze access log",
 		Action:    profile,
+		Category:  "MONITOR",
 		ArgsUsage: "MOUNTPOINT/LOGFILE",
 		Flags: []cli.Flag{
 			&cli.StringFlag{

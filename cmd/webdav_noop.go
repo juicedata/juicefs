@@ -27,8 +27,9 @@ import (
 
 func webDavFlags() *cli.Command {
 	return &cli.Command{
-		Name:  "webdav",
-		Usage: "start a webdav server (not included)",
+		Name:     "webdav",
+		Category: "SERVICE",
+		Usage:    "start a webdav server (not included)",
 		Action: func(*cli.Context) error {
 			return errors.New("not supported")
 		},

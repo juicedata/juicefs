@@ -28,6 +28,7 @@ import (
 func loadFlags() *cli.Command {
 	return &cli.Command{
 		Name:      "load",
+		Category:  "ADMIN",
 		Usage:     "load metadata from a previously dumped JSON file",
 		ArgsUsage: "META-URL [FILE]",
 		Action:    load,

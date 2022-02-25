@@ -31,6 +31,7 @@ func dumpFlags() *cli.Command {
 		Usage:     "dump metadata into a JSON file",
 		ArgsUsage: "META-URL [FILE]",
 		Action:    dump,
+		Category:  "ADMIN",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "subdir",

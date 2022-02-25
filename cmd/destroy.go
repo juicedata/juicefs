@@ -35,6 +35,7 @@ func destroyFlags() *cli.Command {
 		Usage:     "destroy an existing volume",
 		ArgsUsage: "META-URL UUID",
 		Action:    destroy,
+		Category:  "ADMIN",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "force",

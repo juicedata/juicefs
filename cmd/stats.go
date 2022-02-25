@@ -35,6 +35,7 @@ func statsFlags() *cli.Command {
 		Name:      "stats",
 		Usage:     "show runtime statistics",
 		Action:    stats,
+		Category:  "MONITOR",
 		ArgsUsage: "MOUNTPOINT",
 		Flags: []cli.Flag{
 			&cli.StringFlag{

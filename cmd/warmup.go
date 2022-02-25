@@ -33,6 +33,7 @@ func warmupFlags() *cli.Command {
 		Usage:     "build cache for target directories/files",
 		ArgsUsage: "[PATH ...]",
 		Action:    warmup,
+		Category:  "TOOL",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "file",

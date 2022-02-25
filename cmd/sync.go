@@ -41,6 +41,7 @@ func syncFlags() *cli.Command {
 		Usage:     "sync between two storage",
 		ArgsUsage: "SRC DST",
 		Action:    doSync,
+		Category:  "TOOL",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "start",

@@ -33,6 +33,7 @@ func umountFlags() *cli.Command {
 		Usage:     "unmount a volume",
 		ArgsUsage: "MOUNTPOINT",
 		Action:    umount,
+		Category:  "SERVICE",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",
