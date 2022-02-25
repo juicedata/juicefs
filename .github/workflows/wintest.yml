@@ -12,9 +12,10 @@ on:
       - 'docs/**'
 
 
+
 jobs:
   wintest:
-    runs-on: windows-latest
+    runs-on: windows-2019
     env:
       Actions_Allow_Unsecure_Commands: true
     steps:
