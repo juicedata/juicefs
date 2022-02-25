@@ -33,7 +33,7 @@ func cmdInfo() *cli.Command {
 	return &cli.Command{
 		Name:      "info",
 		Action:    info,
-		Category:  "MONITOR",
+		Category:  "INSPECTOR",
 		Usage:     "Show internal information if a path or inode",
 		ArgsUsage: "PATH/INODE",
 		Description: `

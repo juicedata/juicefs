@@ -28,7 +28,7 @@ func cmdStatus() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
 		Action:    status,
-		Category:  "MONITOR",
+		Category:  "INSPECTOR",
 		Usage:     "Show status of a volume",
 		ArgsUsage: "META-URL",
 		Description: `

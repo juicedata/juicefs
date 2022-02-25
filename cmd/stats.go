@@ -34,7 +34,7 @@ func cmdStats() *cli.Command {
 	return &cli.Command{
 		Name:      "stats",
 		Action:    stats,
-		Category:  "MONITOR",
+		Category:  "INSPECTOR",
 		Usage:     "Show runtime statistics",
 		ArgsUsage: "MOUNTPOINT",
 		Description: `

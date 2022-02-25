@@ -36,7 +36,7 @@ func cmdProfile() *cli.Command {
 	return &cli.Command{
 		Name:      "profile",
 		Action:    profile,
-		Category:  "MONITOR",
+		Category:  "INSPECTOR",
 		Usage:     "Analyze access log",
 		ArgsUsage: "MOUNTPOINT/LOGFILE",
 		Description: `
