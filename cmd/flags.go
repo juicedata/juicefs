@@ -25,6 +25,33 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func globalFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "verbose",
+			Aliases: []string{"debug", "v"},
+			Usage:   "enable debug log",
+		},
+		&cli.BoolFlag{
+			Name:    "quiet",
+			Aliases: []string{"q"},
+			Usage:   "only warning and errors",
+		},
+		&cli.BoolFlag{
+			Name:  "trace",
+			Usage: "enable trace log",
+		},
+		&cli.BoolFlag{
+			Name:  "no-agent",
+			Usage: "Disable pprof (:6060) and gops (:6070) agent",
+		},
+		&cli.BoolFlag{
+			Name:  "no-color",
+			Usage: "disable colors",
+		},
+	}
+}
+
 func clientFlags() []cli.Flag {
 	var defaultCacheDir = "/var/jfsCache"
 	switch runtime.GOOS {

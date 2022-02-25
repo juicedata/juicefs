@@ -43,6 +43,21 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
+func mountFlags() *cli.Command {
+	compoundFlags := [][]cli.Flag{
+		mount_flags(),
+		clientFlags(),
+		shareInfoFlags(),
+	}
+	return &cli.Command{
+		Name:      "mount",
+		Usage:     "mount a volume",
+		ArgsUsage: "META-URL MOUNTPOINT",
+		Action:    mount,
+		Flags:     expandFlags(compoundFlags),
+	}
+}
+
 func installHandler(mp string) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
@@ -337,19 +352,4 @@ func mount(c *cli.Context) error {
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob)
 	mount_main(v, c)
 	return metaCli.CloseSession()
-}
-
-func mountFlags() *cli.Command {
-	compoundFlags := [][]cli.Flag{
-		mount_flags(),
-		clientFlags(),
-		shareInfoFlags(),
-	}
-	return &cli.Command{
-		Name:      "mount",
-		Usage:     "mount a volume",
-		ArgsUsage: "META-URL MOUNTPOINT",
-		Action:    mount,
-		Flags:     expandFlags(compoundFlags),
-	}
 }

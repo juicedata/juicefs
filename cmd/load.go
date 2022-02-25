@@ -25,6 +25,15 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func loadFlags() *cli.Command {
+	return &cli.Command{
+		Name:      "load",
+		Usage:     "load metadata from a previously dumped JSON file",
+		ArgsUsage: "META-URL [FILE]",
+		Action:    load,
+	}
+}
+
 func load(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
@@ -48,13 +57,4 @@ func load(ctx *cli.Context) error {
 	}
 	logger.Infof("Load metadata from %s succeed", ctx.Args().Get(1))
 	return nil
-}
-
-func loadFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "load",
-		Usage:     "load metadata from a previously dumped JSON file",
-		ArgsUsage: "META-URL [FILE]",
-		Action:    load,
-	}
 }

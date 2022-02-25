@@ -32,6 +32,37 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func profileFlags() *cli.Command {
+	return &cli.Command{
+		Name:      "profile",
+		Usage:     "analyze access log",
+		Action:    profile,
+		ArgsUsage: "MOUNTPOINT/LOGFILE",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "uid",
+				Aliases: []string{"u"},
+				Usage:   "track only specified UIDs(separated by comma ,)",
+			},
+			&cli.StringFlag{
+				Name:    "gid",
+				Aliases: []string{"g"},
+				Usage:   "track only specified GIDs(separated by comma ,)",
+			},
+			&cli.StringFlag{
+				Name:    "pid",
+				Aliases: []string{"p"},
+				Usage:   "track only specified PIDs(separated by comma ,)",
+			},
+			&cli.Int64Flag{
+				Name:  "interval",
+				Value: 2,
+				Usage: "flush interval in seconds; set it to 0 when replaying a log file to get an immediate result",
+			},
+		},
+	}
+}
+
 var findDigits = regexp.MustCompile(`\d+`)
 
 type profiler struct {
@@ -364,36 +395,5 @@ func profile(ctx *cli.Context) error {
 		if prof.replay {
 			prof.pause <- true // pause/continue
 		}
-	}
-}
-
-func profileFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "profile",
-		Usage:     "analyze access log",
-		Action:    profile,
-		ArgsUsage: "MOUNTPOINT/LOGFILE",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "uid",
-				Aliases: []string{"u"},
-				Usage:   "track only specified UIDs(separated by comma ,)",
-			},
-			&cli.StringFlag{
-				Name:    "gid",
-				Aliases: []string{"g"},
-				Usage:   "track only specified GIDs(separated by comma ,)",
-			},
-			&cli.StringFlag{
-				Name:    "pid",
-				Aliases: []string{"p"},
-				Usage:   "track only specified PIDs(separated by comma ,)",
-			},
-			&cli.Int64Flag{
-				Name:  "interval",
-				Value: 2,
-				Usage: "flush interval in seconds; set it to 0 when replaying a log file to get an immediate result",
-			},
-		},
 	}
 }

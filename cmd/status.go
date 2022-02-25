@@ -24,6 +24,22 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func statusFlags() *cli.Command {
+	return &cli.Command{
+		Name:      "status",
+		Usage:     "show status of JuiceFS",
+		ArgsUsage: "META-URL",
+		Action:    status,
+		Flags: []cli.Flag{
+			&cli.Uint64Flag{
+				Name:    "session",
+				Aliases: []string{"s"},
+				Usage:   "show detailed information (sustained inodes, locks) of the specified session (sid)",
+			},
+		},
+	}
+}
+
 type sections struct {
 	Setting  *meta.Format
 	Sessions []*meta.Session
@@ -66,20 +82,4 @@ func status(ctx *cli.Context) error {
 
 	printJson(&sections{format, sessions})
 	return nil
-}
-
-func statusFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "status",
-		Usage:     "show status of JuiceFS",
-		ArgsUsage: "META-URL",
-		Action:    status,
-		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:    "session",
-				Aliases: []string{"s"},
-				Usage:   "show detailed information (sustained inodes, locks) of the specified session (sid)",
-			},
-		},
-	}
 }

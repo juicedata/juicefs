@@ -25,6 +25,21 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func dumpFlags() *cli.Command {
+	return &cli.Command{
+		Name:      "dump",
+		Usage:     "dump metadata into a JSON file",
+		ArgsUsage: "META-URL [FILE]",
+		Action:    dump,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "subdir",
+				Usage: "only dump a sub-directory.",
+			},
+		},
+	}
+}
+
 func dump(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
@@ -51,19 +66,4 @@ func dump(ctx *cli.Context) error {
 	}
 	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))
 	return nil
-}
-
-func dumpFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "dump",
-		Usage:     "dump metadata into a JSON file",
-		ArgsUsage: "META-URL [FILE]",
-		Action:    dump,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "subdir",
-				Usage: "only dump a sub-directory.",
-			},
-		},
-	}
 }

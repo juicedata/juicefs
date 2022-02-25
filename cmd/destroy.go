@@ -29,6 +29,21 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func destroyFlags() *cli.Command {
+	return &cli.Command{
+		Name:      "destroy",
+		Usage:     "destroy an existing volume",
+		ArgsUsage: "META-URL UUID",
+		Action:    destroy,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "force",
+				Usage: "skip sanity check and force destroy the volume",
+			},
+		},
+	}
+}
+
 func printSessions(ss [][3]string) string {
 	header := [3]string{"SID", "HostName", "MountPoint"}
 	var max [3]int
@@ -188,19 +203,4 @@ func destroy(ctx *cli.Context) error {
 
 	logger.Infof("The volume has been destroyed! You may need to delete cache directory manually.")
 	return nil
-}
-
-func destroyFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "destroy",
-		Usage:     "destroy an existing volume",
-		ArgsUsage: "META-URL UUID",
-		Action:    destroy,
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "force",
-				Usage: "skip sanity check and force destroy the volume",
-			},
-		},
-	}
 }

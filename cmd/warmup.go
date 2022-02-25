@@ -27,6 +27,33 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func warmupFlags() *cli.Command {
+	return &cli.Command{
+		Name:      "warmup",
+		Usage:     "build cache for target directories/files",
+		ArgsUsage: "[PATH ...]",
+		Action:    warmup,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "file",
+				Aliases: []string{"f"},
+				Usage:   "file containing a list of paths",
+			},
+			&cli.UintFlag{
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   50,
+				Usage:   "number of concurrent workers",
+			},
+			&cli.BoolFlag{
+				Name:    "background",
+				Aliases: []string{"b"},
+				Usage:   "run in background",
+			},
+		},
+	}
+}
+
 const batchMax = 10240
 
 // send fill-cache command to controller file
@@ -145,31 +172,4 @@ func warmup(ctx *cli.Context) error {
 	progress.Done()
 
 	return nil
-}
-
-func warmupFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "warmup",
-		Usage:     "build cache for target directories/files",
-		ArgsUsage: "[PATH ...]",
-		Action:    warmup,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "file",
-				Aliases: []string{"f"},
-				Usage:   "file containing a list of paths",
-			},
-			&cli.UintFlag{
-				Name:    "threads",
-				Aliases: []string{"p"},
-				Value:   50,
-				Usage:   "number of concurrent workers",
-			},
-			&cli.BoolFlag{
-				Name:    "background",
-				Aliases: []string{"b"},
-				Usage:   "run in background",
-			},
-		},
-	}
 }

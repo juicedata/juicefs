@@ -33,6 +33,43 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func benchFlags() *cli.Command {
+	return &cli.Command{
+		Name:      "bench",
+		Usage:     "run benchmark to read/write/stat big/small files",
+		Action:    bench,
+		ArgsUsage: "PATH",
+		Flags: []cli.Flag{
+			&cli.UintFlag{
+				Name:  "block-size",
+				Value: 1,
+				Usage: "block size in MiB",
+			},
+			&cli.UintFlag{
+				Name:  "big-file-size",
+				Value: 1024,
+				Usage: "size of big file in MiB",
+			},
+			&cli.UintFlag{
+				Name:  "small-file-size",
+				Value: 128,
+				Usage: "size of small file in KiB",
+			},
+			&cli.UintFlag{
+				Name:  "small-file-count",
+				Value: 100,
+				Usage: "number of small files",
+			},
+			&cli.UintFlag{
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   1,
+				Usage:   "number of concurrent threads",
+			},
+		},
+	}
+}
+
 var resultRange = map[string][4]float64{
 	"bigwr":   {100, 200, 10, 50},
 	"bigrd":   {100, 200, 10, 50},
@@ -412,41 +449,4 @@ func bench(ctx *cli.Context) error {
 	}
 	bm.printResult(result)
 	return nil
-}
-
-func benchFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "bench",
-		Usage:     "run benchmark to read/write/stat big/small files",
-		Action:    bench,
-		ArgsUsage: "PATH",
-		Flags: []cli.Flag{
-			&cli.UintFlag{
-				Name:  "block-size",
-				Value: 1,
-				Usage: "block size in MiB",
-			},
-			&cli.UintFlag{
-				Name:  "big-file-size",
-				Value: 1024,
-				Usage: "size of big file in MiB",
-			},
-			&cli.UintFlag{
-				Name:  "small-file-size",
-				Value: 128,
-				Usage: "size of small file in KiB",
-			},
-			&cli.UintFlag{
-				Name:  "small-file-count",
-				Value: 100,
-				Usage: "number of small files",
-			},
-			&cli.UintFlag{
-				Name:    "threads",
-				Aliases: []string{"p"},
-				Value:   1,
-				Usage:   "number of concurrent threads",
-			},
-		},
-	}
 }

@@ -42,6 +42,91 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func formatFlags() *cli.Command {
+	var defaultBucket string
+	switch runtime.GOOS {
+	case "darwin":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Fatalf("%v", err)
+		}
+		defaultBucket = path.Join(homeDir, ".juicefs", "local")
+	case "windows":
+		defaultBucket = path.Join("C:/jfs/local")
+	default:
+		defaultBucket = "/var/jfs"
+	}
+	return &cli.Command{
+		Name:      "format",
+		Usage:     "format a volume",
+		ArgsUsage: "META-URL NAME",
+		Flags: []cli.Flag{
+			&cli.IntFlag{
+				Name:  "block-size",
+				Value: 4096,
+				Usage: "size of block in KiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "capacity",
+				Value: 0,
+				Usage: "the limit for space in GiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "inodes",
+				Value: 0,
+				Usage: "the limit for number of inodes",
+			},
+			&cli.StringFlag{
+				Name:  "compress",
+				Value: "none",
+				Usage: "compression algorithm (lz4, zstd, none)",
+			},
+			&cli.IntFlag{
+				Name:  "shards",
+				Value: 0,
+				Usage: "store the blocks into N buckets by hash of key",
+			},
+			&cli.StringFlag{
+				Name:  "storage",
+				Value: "file",
+				Usage: "Object storage type (e.g. s3, gcs, oss, cos)",
+			},
+			&cli.StringFlag{
+				Name:  "bucket",
+				Value: defaultBucket,
+				Usage: "A bucket URL to store data",
+			},
+			&cli.StringFlag{
+				Name:  "access-key",
+				Usage: "Access key for object storage (env ACCESS_KEY)",
+			},
+			&cli.StringFlag{
+				Name:  "secret-key",
+				Usage: "Secret key for object storage (env SECRET_KEY)",
+			},
+			&cli.StringFlag{
+				Name:  "encrypt-rsa-key",
+				Usage: "A path to RSA private key (PEM)",
+			},
+			&cli.IntFlag{
+				Name:  "trash-days",
+				Value: 1,
+				Usage: "number of days after which removed files will be permanently deleted",
+			},
+
+			&cli.BoolFlag{
+				Name:  "force",
+				Usage: "overwrite existing format",
+			},
+			&cli.BoolFlag{
+				Name:  "no-update",
+				Usage: "don't update existing volume",
+			},
+		},
+		Action: format,
+	}
+}
+
 func fixObjectSize(s int) int {
 	const min, max = 64, 16 << 10
 	var bits uint
@@ -273,89 +358,4 @@ func format(c *cli.Context) error {
 	format.RemoveSecret()
 	logger.Infof("Volume is formatted as %+v", format)
 	return nil
-}
-
-func formatFlags() *cli.Command {
-	var defaultBucket string
-	switch runtime.GOOS {
-	case "darwin":
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			logger.Fatalf("%v", err)
-		}
-		defaultBucket = path.Join(homeDir, ".juicefs", "local")
-	case "windows":
-		defaultBucket = path.Join("C:/jfs/local")
-	default:
-		defaultBucket = "/var/jfs"
-	}
-	return &cli.Command{
-		Name:      "format",
-		Usage:     "format a volume",
-		ArgsUsage: "META-URL NAME",
-		Flags: []cli.Flag{
-			&cli.IntFlag{
-				Name:  "block-size",
-				Value: 4096,
-				Usage: "size of block in KiB",
-			},
-			&cli.Uint64Flag{
-				Name:  "capacity",
-				Value: 0,
-				Usage: "the limit for space in GiB",
-			},
-			&cli.Uint64Flag{
-				Name:  "inodes",
-				Value: 0,
-				Usage: "the limit for number of inodes",
-			},
-			&cli.StringFlag{
-				Name:  "compress",
-				Value: "none",
-				Usage: "compression algorithm (lz4, zstd, none)",
-			},
-			&cli.IntFlag{
-				Name:  "shards",
-				Value: 0,
-				Usage: "store the blocks into N buckets by hash of key",
-			},
-			&cli.StringFlag{
-				Name:  "storage",
-				Value: "file",
-				Usage: "Object storage type (e.g. s3, gcs, oss, cos)",
-			},
-			&cli.StringFlag{
-				Name:  "bucket",
-				Value: defaultBucket,
-				Usage: "A bucket URL to store data",
-			},
-			&cli.StringFlag{
-				Name:  "access-key",
-				Usage: "Access key for object storage (env ACCESS_KEY)",
-			},
-			&cli.StringFlag{
-				Name:  "secret-key",
-				Usage: "Secret key for object storage (env SECRET_KEY)",
-			},
-			&cli.StringFlag{
-				Name:  "encrypt-rsa-key",
-				Usage: "A path to RSA private key (PEM)",
-			},
-			&cli.IntFlag{
-				Name:  "trash-days",
-				Value: 1,
-				Usage: "number of days after which removed files will be permanently deleted",
-			},
-
-			&cli.BoolFlag{
-				Name:  "force",
-				Usage: "overwrite existing format",
-			},
-			&cli.BoolFlag{
-				Name:  "no-update",
-				Usage: "don't update existing volume",
-			},
-		},
-		Action: format,
-	}
 }
