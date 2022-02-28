@@ -67,9 +67,9 @@ func exposeMetrics(m meta.Meta, c *cli.Context) string {
 		logger.Fatalf("metrics format error: %v", err)
 	}
 
-	meta.InitMetrics()
-	vfs.InitMetrics()
-	go metric.UpdateMetrics(m)
+	meta.InitMetricsByRegister(nil)
+	vfs.InitMetricsByRegister(nil)
+	go metric.UpdateMetricsByRegister(m, nil)
 	http.Handle("/metrics", promhttp.HandlerFor(
 		prometheus.DefaultGatherer,
 		promhttp.HandlerOpts{
@@ -221,7 +221,7 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	store := chunk.NewCachedStore(blob, chunkConf)
+	store := chunk.NewCachedStore(blob, chunkConf, nil)
 	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
 		length := args[1].(uint32)

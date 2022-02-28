@@ -232,7 +232,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	}
 	logger.Infof("Data use %s", blob)
 
-	store := chunk.NewCachedStore(blob, chunkConf)
+	store := chunk.NewCachedStore(blob, chunkConf, nil)
 	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
 		length := args[1].(uint32)

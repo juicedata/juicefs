@@ -944,13 +944,7 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 	return v
 }
 
-func InitMetrics() {
-	prometheus.MustRegister(readSizeHistogram)
-	prometheus.MustRegister(writtenSizeHistogram)
-	prometheus.MustRegister(opsDurationsHistogram)
-	prometheus.MustRegister(compactSizeHistogram)
-}
-func InitMetricsByRegisterer(registry *prometheus.Registry) {
+func InitMetricsByRegister(registry *prometheus.Registry) {
 	registry.MustRegister(readSizeHistogram)
 	registry.MustRegister(writtenSizeHistogram)
 	registry.MustRegister(opsDurationsHistogram)

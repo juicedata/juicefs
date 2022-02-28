@@ -743,7 +743,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 }
 
 // NewCachedStore create a cached store.
-func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
+func NewCachedStore(storage object.ObjectStorage, config Config, registry *prometheus.Registry) ChunkStore {
 	compressor := compress.NewCompressor(config.Compress)
 	if compressor == nil {
 		logger.Fatalf("unknown compress algorithm: %s", config.Compress)
@@ -783,40 +783,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 		defer p.Release()
 		_ = store.load(key, p, true, true)
 	})
-	_ = prometheus.Register(cacheHits)
-	_ = prometheus.Register(cacheHitBytes)
-	_ = prometheus.Register(cacheMiss)
-	_ = prometheus.Register(cacheMissBytes)
-	_ = prometheus.Register(cacheWrites)
-	_ = prometheus.Register(cacheWriteBytes)
-	_ = prometheus.Register(cacheDrops)
-	_ = prometheus.Register(cacheEvicts)
-	_ = prometheus.Register(cacheReadHist)
-	_ = prometheus.Register(cacheWriteHist)
-	_ = prometheus.Register(prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Name: "blockcache_blocks",
-			Help: "number of cached blocks",
-		},
-		func() float64 {
-			cnt, _ := store.bcache.stats()
-			return float64(cnt)
-		}))
-	_ = prometheus.Register(prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Name: "blockcache_bytes",
-			Help: "number of cached bytes",
-		},
-		func() float64 {
-			_, used := store.bcache.stats()
-			return float64(used)
-		}))
-	_ = prometheus.Register(objectReqsHistogram)
-	_ = prometheus.Register(objectReqErrors)
-	_ = prometheus.Register(objectDataBytes)
-	_ = prometheus.Register(stageBlocks)
-	_ = prometheus.Register(stageBlockBytes)
-
+	InitMetricsByRegister(store, registry)
 	if store.conf.CacheDir != "memory" && store.conf.Writeback && store.conf.UploadDelay > 0 {
 		logger.Infof("delay uploading by %s", store.conf.UploadDelay)
 		go func() {
@@ -832,7 +799,44 @@ func NewCachedStore(storage object.ObjectStorage, config Config) ChunkStore {
 	}
 	return store
 }
-
+func InitMetricsByRegister(store *cachedStore, registry *prometheus.Registry) {
+	if registry == nil {
+		registry, _ = prometheus.DefaultRegisterer.(*prometheus.Registry)
+	}
+	_ = registry.Register(cacheHits)
+	_ = registry.Register(cacheHitBytes)
+	_ = registry.Register(cacheMiss)
+	_ = registry.Register(cacheMissBytes)
+	_ = registry.Register(cacheWrites)
+	_ = registry.Register(cacheWriteBytes)
+	_ = registry.Register(cacheDrops)
+	_ = registry.Register(cacheEvicts)
+	_ = registry.Register(cacheReadHist)
+	_ = registry.Register(cacheWriteHist)
+	_ = registry.Register(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "blockcache_blocks",
+			Help: "number of cached blocks",
+		},
+		func() float64 {
+			cnt, _ := store.bcache.stats()
+			return float64(cnt)
+		}))
+	_ = registry.Register(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "blockcache_bytes",
+			Help: "number of cached bytes",
+		},
+		func() float64 {
+			_, used := store.bcache.stats()
+			return float64(used)
+		}))
+	_ = registry.Register(objectReqsHistogram)
+	_ = registry.Register(objectReqErrors)
+	_ = registry.Register(objectDataBytes)
+	_ = registry.Register(stageBlocks)
+	_ = registry.Register(stageBlockBytes)
+}
 func (store *cachedStore) shouldCache(size int) bool {
 	return store.conf.CacheFullBlock || size < store.conf.BlockSize || store.conf.UploadDelay > 0
 }

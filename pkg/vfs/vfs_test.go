@@ -70,7 +70,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 	}
 
 	blob, _ := object.CreateStorage("mem", "", "", "")
-	store := chunk.NewCachedStore(blob, *conf.Chunk)
+	store := chunk.NewCachedStore(blob, *conf.Chunk, nil)
 	return NewVFS(conf, m, store), blob
 }
 

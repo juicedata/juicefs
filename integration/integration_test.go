@@ -137,7 +137,7 @@ func mountSimpleMethod(url, mp string) {
 		log.Fatalf("object storage: %s", err)
 	}
 	log.Printf("Data use %s", blob)
-	store := chunk.NewCachedStore(blob, chunkConf)
+	store := chunk.NewCachedStore(blob, chunkConf, nil)
 
 	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 		slices := args[0].([]meta.Slice)
@@ -356,7 +356,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		log.Fatalf("object storage: %s", err)
 	}
 
-	store := chunk.NewCachedStore(blob, chunkConf)
+	store := chunk.NewCachedStore(blob, chunkConf, nil)
 	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
 		length := args[1].(uint32)

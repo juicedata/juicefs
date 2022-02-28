@@ -348,16 +348,15 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
 		}
+		registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 		if jConf.PushGateway != "" {
-			registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 			registerer := prometheus.WrapRegistererWithPrefix("juicefs_", registry)
 			registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 			registerer.MustRegister(prometheus.NewGoCollector())
-			// TODO: support multiple volumes
 			pusher := push.New(jConf.PushGateway, "juicefs").Gatherer(registry)
-			pusher = pusher.Grouping("vol_name", name).Grouping("mp", "sdk-"+strconv.Itoa(os.Getpid()))
+			pusher.Grouping("vol_name", name).Grouping("mp", "sdk-"+strconv.Itoa(os.Getpid()))
 			if h, err := os.Hostname(); err == nil {
-				pusher = pusher.Grouping("instance", h)
+				pusher.Grouping("instance", h)
 			} else {
 				logger.Warnf("cannot get hostname: %s", err)
 			}
@@ -382,8 +381,8 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 					}
 				}()
 			})
-			meta.InitMetricsByRegisterer(registry)
-			vfs.InitMetricsByRegisterer(registry)
+			meta.InitMetricsByRegister(registry)
+			vfs.InitMetricsByRegister(registry)
 			go metric.UpdateMetricsByRegister(m, registry)
 		}
 
@@ -427,7 +426,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			}
 			chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 		}
-		store := chunk.NewCachedStore(blob, chunkConf)
+		store := chunk.NewCachedStore(blob, chunkConf, registry)
 		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 			chunkid := args[0].(uint64)
 			length := args[1].(uint32)

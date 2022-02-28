@@ -89,7 +89,7 @@ func mount(url, mp string) {
 		log.Fatalf("object storage: %s", err)
 	}
 	blob = object.WithPrefix(blob, format.Name+"/")
-	store := chunk.NewCachedStore(blob, chunkConf)
+	store := chunk.NewCachedStore(blob, chunkConf, nil)
 
 	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
 		slices := args[0].([]meta.Slice)

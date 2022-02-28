@@ -23,7 +23,7 @@ import (
 )
 
 func TestInitMetrics(t *testing.T) {
-	InitMetrics()
+	InitMetricsByRegister(nil)
 	for _, collector := range []prometheus.Collector{txDist, txRestart, opDist} {
 		if _, ok := prometheus.Register(collector).(prometheus.AlreadyRegisteredError); !ok {
 			t.Fatalf("TestInitMetrics Failed")
