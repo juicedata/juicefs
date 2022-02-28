@@ -298,14 +298,10 @@ func (bm *benchmark) printResult(result [][3]string) {
 }
 
 func bench(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-
+	setup(ctx, 1)
 	/* --- Pre-check --- */
 	if ctx.Uint("block-size") == 0 || ctx.Uint("threads") == 0 {
 		return os.ErrInvalid
-	}
-	if ctx.NArg() < 1 {
-		logger.Fatalln("PATH must be provided")
 	}
 	tmpdir, err := filepath.Abs(ctx.Args().First())
 	if err != nil {

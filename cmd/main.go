@@ -236,22 +236,12 @@ func reorderOptions(app *cli.App, args []string) []string {
 	return append(newArgs, others...)
 }
 
-func setupAgent(c *cli.Context) {
-	if !c.Bool("no-agent") {
-		go func() {
-			for port := 6060; port < 6100; port++ {
-				_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
-			}
-		}()
-		go func() {
-			for port := 6070; port < 6100; port++ {
-				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
-			}
-		}()
+// Check number of positional arguments, set logger level and setup agent if needed
+func setup(c *cli.Context, n int) {
+	if c.NArg() < n {
+		cli.ShowCommandHelpAndExit(c, c.Command.Name, 1)
 	}
-}
 
-func setLoggerLevel(c *cli.Context) {
 	if c.Bool("trace") {
 		utils.SetLogLevel(logrus.TraceLevel)
 	} else if c.Bool("verbose") {
@@ -264,7 +254,19 @@ func setLoggerLevel(c *cli.Context) {
 	if c.Bool("no-color") {
 		utils.DisableLogColor()
 	}
-	setupAgent(c)
+
+	if !c.Bool("no-agent") {
+		go func() {
+			for port := 6060; port < 6100; port++ {
+				_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+			}
+		}()
+		go func() {
+			for port := 6070; port < 6100; port++ {
+				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+			}
+		}()
+	}
 }
 
 func removePassword(uri string) {

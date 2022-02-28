@@ -85,12 +85,7 @@ Details: https://juicefs.com/docs/community/s3_gateway`,
 }
 
 func gateway(c *cli.Context) error {
-	setLoggerLevel(c)
-
-	if c.Args().Len() < 2 {
-		logger.Fatalf("Meta URL and listen address are required")
-	}
-
+	setup(c, 2)
 	ak := os.Getenv("MINIO_ROOT_USER")
 	if ak == "" {
 		ak = os.Getenv("MINIO_ACCESS_KEY")

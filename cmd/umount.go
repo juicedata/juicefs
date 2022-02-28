@@ -88,9 +88,7 @@ func doUmount(mp string, force bool) error {
 }
 
 func umount(ctx *cli.Context) error {
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("MOUNTPOINT is needed")
-	}
+	setup(ctx, 1)
 	mp := ctx.Args().Get(0)
 	force := ctx.Bool("force")
 	return doUmount(mp, force)
