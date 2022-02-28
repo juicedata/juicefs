@@ -37,7 +37,10 @@ func cmdRmr() *cli.Command {
 		Usage:     "Remove directories recursively",
 		ArgsUsage: "PATH ...",
 		Description: `
-TEST description`,
+This command provides a faster way to remove huge directories in JuiceFS.
+
+Examples:
+$ juicefs rmr /mnt/jfs/foo`,
 	}
 }
 

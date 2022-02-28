@@ -56,7 +56,23 @@ func cmdMount() *cli.Command {
 		Usage:     "Mount a volume",
 		ArgsUsage: "META-URL MOUNTPOINT",
 		Description: `
-TEST description`,
+Mount the target volume at the mount point.
+
+Examples:
+# Mount in background
+$ juicefs mount redis://localhost /mnt/jfs -d
+
+# Mount with a sub-directory as root
+$ juicefs mount redis://localhost /mnt/jfs --subdir /dir/in/jfs
+
+# Enable "writeback" mode, which improves performance at the risk of losing objects
+$ juicefs mount redis://localhost /mnt/jfs -d --writeback
+
+# Enable "read-only" mode with a Redis replica
+$ juicefs mount redis://localhost:6389 /mnt/jfs -d --read-only
+
+# Disable metadata backup
+$ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
 		Flags: expandFlags(compoundFlags),
 	}
 }

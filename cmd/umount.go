@@ -35,7 +35,8 @@ func cmdUmount() *cli.Command {
 		Usage:     "Unmount a volume",
 		ArgsUsage: "MOUNTPOINT",
 		Description: `
-TEST description`,
+Examples:
+$ juicefs umount /mnt/jfs`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",

@@ -35,10 +35,18 @@ func cmdStats() *cli.Command {
 		Name:      "stats",
 		Action:    stats,
 		Category:  "INSPECTOR",
-		Usage:     "Show runtime statistics",
+		Usage:     "Show real time performance statistics of JuiceFS",
 		ArgsUsage: "MOUNTPOINT",
 		Description: `
-TEST description`,
+This is a tool that reads Prometheus metrics and shows real time statistics of the target mount point.
+
+Examples:
+$ juicefs stats /mnt/jfs
+
+# More metrics
+$ juicefs stats /mnt/jfs -L 1
+
+Details: https://juicefs.com/docs/community/stats_watcher`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "schema",
@@ -51,8 +59,9 @@ TEST description`,
 				Usage: "interval in seconds between each update",
 			},
 			&cli.UintFlag{
-				Name:  "verbosity",
-				Usage: "verbosity level, 0 or 1 is enough for most cases",
+				Name:    "verbosity",
+				Aliases: []string{"L"},
+				Usage:   "verbosity level, 0 or 1 is enough for most cases",
 			},
 		},
 	}

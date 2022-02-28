@@ -29,8 +29,7 @@ func cmdGateway() *cli.Command {
 		Name:     "gateway",
 		Category: "SERVICE",
 		Usage:    "Start an S3-compatible gateway (not included)",
-		Description: `
-TEST description`,
+		Description: `This feature is not included. If you want it, recompile juicefs without "nogateway" flag`,
 		Action: func(*cli.Context) error {
 			return errors.New("not supported")
 		},

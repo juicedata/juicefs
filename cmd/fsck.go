@@ -39,7 +39,11 @@ func cmdFsck() *cli.Command {
 		Usage:     "Check consistency of a volume",
 		ArgsUsage: "META-URL",
 		Description: `
-TEST description`,
+It scans all objects in data storage and slices in metadata, comparing them to see if there is any
+lost object or broken file.
+
+Examples:
+$ juicefs fsck redis://localhost`,
 	}
 }
 

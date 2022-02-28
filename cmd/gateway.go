@@ -70,7 +70,16 @@ func cmdGateway() *cli.Command {
 		Usage:     "Start an S3-compatible gateway",
 		ArgsUsage: "META-URL ADDRESS",
 		Description: `
-TEST description`,
+It is implemented based on the MinIO S3 Gateway. Before starting the gateway, you need to set
+MINIO_ROOT_USER and MINIO_ROOT_PASSWORD environment variables, which are the access key and secret
+key used for accessing S3 APIs.
+
+Examples:
+$ export MINIO_ROOT_USER=admin
+$ export MINIO_ROOT_PASSWORD=12345678
+$ juicefs gateway redis://localhost localhost:9000
+
+Details: https://juicefs.com/docs/community/s3_gateway`,
 		Flags: expandFlags(compoundFlags),
 	}
 }

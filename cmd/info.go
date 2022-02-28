@@ -34,10 +34,18 @@ func cmdInfo() *cli.Command {
 		Name:      "info",
 		Action:    info,
 		Category:  "INSPECTOR",
-		Usage:     "Show internal information if a path or inode",
+		Usage:     "Show internal information of a path or inode",
 		ArgsUsage: "PATH/INODE",
 		Description: `
-TEST description`,
+It is used to inspect internal metadata values of the target file.
+
+Examples:
+$ Check a path
+$ juicefs info /mnt/jfs/foo
+
+# Check an inode
+$ cd /mnt/jfs
+$ juicefs info -i 100`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "inode",

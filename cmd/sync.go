@@ -43,18 +43,26 @@ func cmdSync() *cli.Command {
 		Usage:     "Sync between two storages",
 		ArgsUsage: "SRC DST",
 		Description: `
-TEST description`,
+This tool spawns multiple threads to concurrently syncs objects of two data storages.
+
+Examples:
+# Sync object from OSS to S3
+$ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
+
+# Sync objects from S3 to JuiceFS
+$ juicefs mount -d redis://localhost /mnt/jfs
+$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com file:///mnt/jfs
+
+Supported storage systems: https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "start",
 				Aliases: []string{"s"},
-				Value:   "",
 				Usage:   "the first `KEY` to sync",
 			},
 			&cli.StringFlag{
 				Name:    "end",
 				Aliases: []string{"e"},
-				Value:   "",
 				Usage:   "the last `KEY` to sync",
 			},
 			&cli.IntFlag{
@@ -84,11 +92,11 @@ TEST description`,
 			},
 			&cli.BoolFlag{
 				Name:  "dirs",
-				Usage: "Sync directories or holders",
+				Usage: "sync directories or holders",
 			},
 			&cli.BoolFlag{
 				Name:  "dry",
-				Usage: "Don't copy file",
+				Usage: "don't copy file",
 			},
 			&cli.BoolFlag{
 				Name:    "delete-src",

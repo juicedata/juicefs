@@ -35,7 +35,18 @@ func cmdConfig() *cli.Command {
 		Usage:     "Change configuration of a volume",
 		ArgsUsage: "META-URL",
 		Description: `
-TEST description`,
+Examples:
+# Show the current configurations
+$ juicefs config redis://localhost
+
+# Change volume "quota"
+$ juicefs conifg redis://localhost --inode 10000000 --capacity 1048576
+
+# Change maximum days before files in trash are deleted
+$ juicefs conifg redis://localhost --trash-days 7
+
+# Limit client version that is allowed to connect
+$ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:  "capacity",

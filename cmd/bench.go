@@ -38,19 +38,21 @@ func cmdBench() *cli.Command {
 		Name:      "bench",
 		Action:    bench,
 		Category:  "TOOL",
-		Usage:     "Run benchmarks on a path",
+		Usage:     "Run benchmark on a path",
 		ArgsUsage: "PATH",
 		Description: `
-TEST Description.
-It will do read/write/stat big/small files.
+Run basic benchmark on the target PATH to test if it works as expected. Results are colored with
+green/yellow/red to indicate whether they are in a normal range. If you see any red value, please
+double check relevant configuration before further test.
 
 Examples:
+# Run benchmark with 4 threads
+$ juicefs bench /mnt/jfs -p 4
 
-# Run on a local file
-$ juicefs bench /mnt/local
+# Run benchmark of only small files
+$ juicefs bench /mnt/jfs --big-file-size 0
 
-# Run on a jfs
-$ juicefs bench /mnt/jfs`,
+Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs-bench`,
 		Flags: []cli.Flag{
 			&cli.UintFlag{
 				Name:  "block-size",

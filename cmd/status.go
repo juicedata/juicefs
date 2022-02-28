@@ -32,7 +32,11 @@ func cmdStatus() *cli.Command {
 		Usage:     "Show status of a volume",
 		ArgsUsage: "META-URL",
 		Description: `
-TEST description`,
+It shows basic setting of the target volume, and a list of active sessions (including mount, SDK,
+S3-gateway and WebDAV) that are connected with the metadata engine.
+
+Examples:
+$ juicefs status redis://localhost`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:    "session",

@@ -33,7 +33,14 @@ func cmdLoad() *cli.Command {
 		Usage:     "Load metadata from a previously dumped JSON file",
 		ArgsUsage: "META-URL [FILE]",
 		Description: `
-TEST description`,
+Load metadata into an empty metadata engine.
+WARNING: Do NOT use new engine and the old one at the same time, otherwise it will probably break
+consistency of the volume.
+
+Examples:
+$ juicefs load meta-dump redis://localhost/1
+
+Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
 }
 

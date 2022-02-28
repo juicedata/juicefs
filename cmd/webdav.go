@@ -54,7 +54,8 @@ func cmdWebDav() *cli.Command {
 		Usage:     "Start a WebDAV server",
 		ArgsUsage: "META-URL ADDRESS",
 		Description: `
-TEST description`,
+Examples:
+$ juicefs webdav redis://localhost localhost:9007`,
 		Flags: expandFlags(compoundFlags),
 	}
 }

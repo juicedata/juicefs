@@ -42,7 +42,19 @@ func cmdGC() *cli.Command {
 		Usage:     "Garbage collector of objects in data storage",
 		ArgsUsage: "META-URL",
 		Description: `
-TEST description`,
+It scans all objects in data storage and slices in metadata, comparing them to see if there is any
+leaked object. It can also actively trigger compaction of slices.
+Use this command if you find that data storage takes more than expected.
+
+Examples:
+# Check only, no writable change
+$ juicefs gc redis://localhost
+
+# Trigger compaction of all slices
+$ juicefs gc redis://localhost --compact
+
+# Delete leaked objects
+$ juicefs gc redis://localhost --delete`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "compact",

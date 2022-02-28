@@ -37,10 +37,24 @@ func cmdProfile() *cli.Command {
 		Name:      "profile",
 		Action:    profile,
 		Category:  "INSPECTOR",
-		Usage:     "Analyze access log",
+		Usage:     "Show profiling of operations completed in JuiceFS",
 		ArgsUsage: "MOUNTPOINT/LOGFILE",
 		Description: `
-TEST description`,
+This is a tool that analyzes access log of JuiceFS and shows an overview of recently completed operations.
+
+Examples:
+# Monitor real time operations
+$ juicefs profile /mnt/jfs
+
+# Replay an access log
+$ cat /mnt/jfs/.accesslog > /tmp/jfs.alog
+# Press Ctrl-C to stop the "cat" command after some time
+$ juicefs profile /tmp/jfs.alog
+
+# Analyze an access log and print the total statistics immediately
+$ juicefs profile /tmp/jfs.alog --interval 0
+
+Details: https://juicefs.com/docs/community/operations_profiling`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "uid",
