@@ -121,6 +121,9 @@ func getInternalNodeByName(name string) *internalNode {
 }
 
 func collectMetrics(registry *prometheus.Registry) []byte {
+	if registry == nil {
+		return []byte("")
+	}
 	mfs, err := registry.Gather()
 	if err != nil {
 		logger.Errorf("collect metrics: %s", err)
