@@ -499,18 +499,23 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
+    String resource = "libjfs.so.gz";
     String name = "libjfs.4.so";
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
     if (os.toLowerCase().contains("windows")) {
+      resource = "libjfs.dll.gz";
       name = "libjfs3.dll";
       dir = new File(System.getProperty("java.io.tmpdir"));
+    } else if (os.toLowerCase().contains("mac")) {
+      resource = "libjfs.dylib.gz";
+      name = "libjfs.dylib";
     }
     File libFile = new File(dir, name);
 
     URL res = null;
     String jarPath = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-    Enumeration<URL> resources = JuiceFileSystemImpl.class.getClassLoader().getResources("libjfs.so.gz");
+    Enumeration<URL> resources = JuiceFileSystemImpl.class.getClassLoader().getResources(resource);
     while (resources.hasMoreElements()) {
       res = resources.nextElement();
       if (URI.create(res.getPath()).getPath().startsWith(jarPath)) {
