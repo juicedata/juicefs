@@ -31,12 +31,19 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func checkFlags() *cli.Command {
+func cmdFsck() *cli.Command {
 	return &cli.Command{
 		Name:      "fsck",
-		Usage:     "Check consistency of file system",
-		ArgsUsage: "META-URL",
 		Action:    fsck,
+		Category:  "ADMIN",
+		Usage:     "Check consistency of a volume",
+		ArgsUsage: "META-URL",
+		Description: `
+It scans all objects in data storage and slices in metadata, comparing them to see if there is any
+lost object or broken file.
+
+Examples:
+$ juicefs fsck redis://localhost`,
 	}
 }
 

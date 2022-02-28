@@ -25,6 +25,25 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func cmdLoad() *cli.Command {
+	return &cli.Command{
+		Name:      "load",
+		Action:    load,
+		Category:  "ADMIN",
+		Usage:     "Load metadata from a previously dumped JSON file",
+		ArgsUsage: "META-URL [FILE]",
+		Description: `
+Load metadata into an empty metadata engine.
+WARNING: Do NOT use new engine and the old one at the same time, otherwise it will probably break
+consistency of the volume.
+
+Examples:
+$ juicefs load meta-dump redis://localhost/1
+
+Details: https://juicefs.com/docs/community/metadata_dump_load`,
+	}
+}
+
 func load(ctx *cli.Context) error {
 	setLoggerLevel(ctx)
 	if ctx.Args().Len() < 1 {
@@ -48,13 +67,4 @@ func load(ctx *cli.Context) error {
 	}
 	logger.Infof("Load metadata from %s succeed", ctx.Args().Get(1))
 	return nil
-}
-
-func loadFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "load",
-		Usage:     "load metadata from a previously dumped JSON file",
-		ArgsUsage: "META-URL [FILE]",
-		Action:    load,
-	}
 }

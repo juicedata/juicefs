@@ -29,12 +29,18 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func rmrFlags() *cli.Command {
+func cmdRmr() *cli.Command {
 	return &cli.Command{
 		Name:      "rmr",
-		Usage:     "remove directories recursively",
-		ArgsUsage: "PATH ...",
 		Action:    rmr,
+		Category:  "TOOL",
+		Usage:     "Remove directories recursively",
+		ArgsUsage: "PATH ...",
+		Description: `
+This command provides a faster way to remove huge directories in JuiceFS.
+
+Examples:
+$ juicefs rmr /mnt/jfs/foo`,
 	}
 }
 

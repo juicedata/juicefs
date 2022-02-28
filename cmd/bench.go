@@ -33,6 +33,57 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func cmdBench() *cli.Command {
+	return &cli.Command{
+		Name:      "bench",
+		Action:    bench,
+		Category:  "TOOL",
+		Usage:     "Run benchmark on a path",
+		ArgsUsage: "PATH",
+		Description: `
+Run basic benchmark on the target PATH to test if it works as expected. Results are colored with
+green/yellow/red to indicate whether they are in a normal range. If you see any red value, please
+double check relevant configuration before further test.
+
+Examples:
+# Run benchmark with 4 threads
+$ juicefs bench /mnt/jfs -p 4
+
+# Run benchmark of only small files
+$ juicefs bench /mnt/jfs --big-file-size 0
+
+Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs-bench`,
+		Flags: []cli.Flag{
+			&cli.UintFlag{
+				Name:  "block-size",
+				Value: 1,
+				Usage: "size of each IO block in MiB",
+			},
+			&cli.UintFlag{
+				Name:  "big-file-size",
+				Value: 1024,
+				Usage: "size of each big file in MiB",
+			},
+			&cli.UintFlag{
+				Name:  "small-file-size",
+				Value: 128,
+				Usage: "size of each small file in KiB",
+			},
+			&cli.UintFlag{
+				Name:  "small-file-count",
+				Value: 100,
+				Usage: "number of small files per thread",
+			},
+			&cli.UintFlag{
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   1,
+				Usage:   "number of concurrent threads",
+			},
+		},
+	}
+}
+
 var resultRange = map[string][4]float64{
 	"bigwr":   {100, 200, 10, 50},
 	"bigrd":   {100, 200, 10, 50},
@@ -412,41 +463,4 @@ func bench(ctx *cli.Context) error {
 	}
 	bm.printResult(result)
 	return nil
-}
-
-func benchFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "bench",
-		Usage:     "run benchmark to read/write/stat big/small files",
-		Action:    bench,
-		ArgsUsage: "PATH",
-		Flags: []cli.Flag{
-			&cli.UintFlag{
-				Name:  "block-size",
-				Value: 1,
-				Usage: "block size in MiB",
-			},
-			&cli.UintFlag{
-				Name:  "big-file-size",
-				Value: 1024,
-				Usage: "size of big file in MiB",
-			},
-			&cli.UintFlag{
-				Name:  "small-file-size",
-				Value: 128,
-				Usage: "size of small file in KiB",
-			},
-			&cli.UintFlag{
-				Name:  "small-file-count",
-				Value: 100,
-				Usage: "number of small files",
-			},
-			&cli.UintFlag{
-				Name:    "threads",
-				Aliases: []string{"p"},
-				Value:   1,
-				Usage:   "number of concurrent threads",
-			},
-		},
-	}
 }

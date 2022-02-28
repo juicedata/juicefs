@@ -35,6 +35,115 @@ import (
 	"golang.org/x/term"
 )
 
+func cmdSync() *cli.Command {
+	return &cli.Command{
+		Name:      "sync",
+		Action:    doSync,
+		Category:  "TOOL",
+		Usage:     "Sync between two storages",
+		ArgsUsage: "SRC DST",
+		Description: `
+This tool spawns multiple threads to concurrently syncs objects of two data storages.
+
+Examples:
+# Sync object from OSS to S3
+$ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
+
+# Sync objects from S3 to JuiceFS
+$ juicefs mount -d redis://localhost /mnt/jfs
+$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com /mnt/jfs
+
+Supported storage systems: https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage`,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "start",
+				Aliases: []string{"s"},
+				Usage:   "the first `KEY` to sync",
+			},
+			&cli.StringFlag{
+				Name:    "end",
+				Aliases: []string{"e"},
+				Usage:   "the last `KEY` to sync",
+			},
+			&cli.IntFlag{
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   10,
+				Usage:   "number of concurrent threads",
+			},
+			&cli.IntFlag{
+				Name:  "http-port",
+				Value: 6070,
+				Usage: "HTTP `PORT` to listen to",
+			},
+			&cli.BoolFlag{
+				Name:    "update",
+				Aliases: []string{"u"},
+				Usage:   "skip files if the destination is newer",
+			},
+			&cli.BoolFlag{
+				Name:    "force-update",
+				Aliases: []string{"f"},
+				Usage:   "always update existing files",
+			},
+			&cli.BoolFlag{
+				Name:  "perms",
+				Usage: "preserve permissions",
+			},
+			&cli.BoolFlag{
+				Name:  "dirs",
+				Usage: "sync directories or holders",
+			},
+			&cli.BoolFlag{
+				Name:  "dry",
+				Usage: "don't copy file",
+			},
+			&cli.BoolFlag{
+				Name:    "delete-src",
+				Aliases: []string{"deleteSrc"},
+				Usage:   "delete objects from source those already exist in destination",
+			},
+			&cli.BoolFlag{
+				Name:    "delete-dst",
+				Aliases: []string{"deleteDst"},
+				Usage:   "delete extraneous objects from destination",
+			},
+			&cli.StringSliceFlag{
+				Name:  "exclude",
+				Usage: "exclude keys containing `PATTERN` (POSIX regular expressions)",
+			},
+			&cli.StringSliceFlag{
+				Name:  "include",
+				Usage: "only include keys containing `PATTERN` (POSIX regular expressions)",
+			},
+			&cli.StringFlag{
+				Name:  "manager",
+				Usage: "manager address",
+			},
+			&cli.StringSliceFlag{
+				Name:  "worker",
+				Usage: "hosts (seperated by comma) to launch worker",
+			},
+			&cli.IntFlag{
+				Name:  "bwlimit",
+				Usage: "limit bandwidth in Mbps (0 means unlimited)",
+			},
+			&cli.BoolFlag{
+				Name:  "no-https",
+				Usage: "donot use HTTPS",
+			},
+			&cli.BoolFlag{
+				Name:  "check-all",
+				Usage: "verify integrity of all files in source and destination",
+			},
+			&cli.BoolFlag{
+				Name:  "check-new",
+				Usage: "verify integrity of newly copied files",
+			},
+		},
+	}
+}
+
 func supportHTTPS(name, endpoint string) bool {
 	switch name {
 	case "ufile":
@@ -197,102 +306,4 @@ func doSync(c *cli.Context) error {
 		return err
 	}
 	return sync.Sync(src, dst, config)
-}
-
-func syncFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "sync",
-		Usage:     "sync between two storage",
-		ArgsUsage: "SRC DST",
-		Action:    doSync,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "start",
-				Aliases: []string{"s"},
-				Value:   "",
-				Usage:   "the first `KEY` to sync",
-			},
-			&cli.StringFlag{
-				Name:    "end",
-				Aliases: []string{"e"},
-				Value:   "",
-				Usage:   "the last `KEY` to sync",
-			},
-			&cli.IntFlag{
-				Name:    "threads",
-				Aliases: []string{"p"},
-				Value:   10,
-				Usage:   "number of concurrent threads",
-			},
-			&cli.IntFlag{
-				Name:  "http-port",
-				Value: 6070,
-				Usage: "HTTP `PORT` to listen to",
-			},
-			&cli.BoolFlag{
-				Name:    "update",
-				Aliases: []string{"u"},
-				Usage:   "skip files if the destination is newer",
-			},
-			&cli.BoolFlag{
-				Name:    "force-update",
-				Aliases: []string{"f"},
-				Usage:   "always update existing files",
-			},
-			&cli.BoolFlag{
-				Name:  "perms",
-				Usage: "preserve permissions",
-			},
-			&cli.BoolFlag{
-				Name:  "dirs",
-				Usage: "Sync directories or holders",
-			},
-			&cli.BoolFlag{
-				Name:  "dry",
-				Usage: "Don't copy file",
-			},
-			&cli.BoolFlag{
-				Name:    "delete-src",
-				Aliases: []string{"deleteSrc"},
-				Usage:   "delete objects from source those already exist in destination",
-			},
-			&cli.BoolFlag{
-				Name:    "delete-dst",
-				Aliases: []string{"deleteDst"},
-				Usage:   "delete extraneous objects from destination",
-			},
-			&cli.StringSliceFlag{
-				Name:  "exclude",
-				Usage: "exclude keys containing `PATTERN` (POSIX regular expressions)",
-			},
-			&cli.StringSliceFlag{
-				Name:  "include",
-				Usage: "only include keys containing `PATTERN` (POSIX regular expressions)",
-			},
-			&cli.StringFlag{
-				Name:  "manager",
-				Usage: "manager address",
-			},
-			&cli.StringSliceFlag{
-				Name:  "worker",
-				Usage: "hosts (seperated by comma) to launch worker",
-			},
-			&cli.IntFlag{
-				Name:  "bwlimit",
-				Usage: "limit bandwidth in Mbps (0 means unlimited)",
-			},
-			&cli.BoolFlag{
-				Name:  "no-https",
-				Usage: "donot use HTTPS",
-			},
-			&cli.BoolFlag{
-				Name:  "check-all",
-				Usage: "verify integrity of all files in source and destination",
-			},
-			&cli.BoolFlag{
-				Name:  "check-new",
-				Usage: "verify integrity of newly copied files",
-			},
-		},
-	}
 }

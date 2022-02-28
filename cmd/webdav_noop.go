@@ -25,10 +25,12 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func webDavFlags() *cli.Command {
+func cmdWebDav() *cli.Command {
 	return &cli.Command{
-		Name:  "webdav",
-		Usage: "start a webdav server (not included)",
+		Name:        "webdav",
+		Category:    "SERVICE",
+		Usage:       "Start a WebDAV server (not included)",
+		Description: `This feature is not included. If you want it, recompile juicefs without "nowebdav" flag`,
 		Action: func(*cli.Context) error {
 			return errors.New("not supported")
 		},

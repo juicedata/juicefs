@@ -27,12 +27,16 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func umountFlags() *cli.Command {
+func cmdUmount() *cli.Command {
 	return &cli.Command{
 		Name:      "umount",
-		Usage:     "unmount a volume",
-		ArgsUsage: "MOUNTPOINT",
 		Action:    umount,
+		Category:  "SERVICE",
+		Usage:     "Unmount a volume",
+		ArgsUsage: "MOUNTPOINT",
+		Description: `
+Examples:
+$ juicefs umount /mnt/jfs`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",

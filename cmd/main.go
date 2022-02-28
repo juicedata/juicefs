@@ -35,33 +35,6 @@ import (
 
 var logger = utils.GetLogger("juicefs")
 
-func globalFlags() []cli.Flag {
-	return []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "verbose",
-			Aliases: []string{"debug", "v"},
-			Usage:   "enable debug log",
-		},
-		&cli.BoolFlag{
-			Name:    "quiet",
-			Aliases: []string{"q"},
-			Usage:   "only warning and errors",
-		},
-		&cli.BoolFlag{
-			Name:  "trace",
-			Usage: "enable trace log",
-		},
-		&cli.BoolFlag{
-			Name:  "no-agent",
-			Usage: "Disable pprof (:6060) and gops (:6070) agent",
-		},
-		&cli.BoolFlag{
-			Name:  "no-color",
-			Usage: "disable colors",
-		},
-	}
-}
-
 func Main(args []string) error {
 	cli.VersionFlag = &cli.BoolFlag{
 		Name: "version", Aliases: []string{"V"},
@@ -72,28 +45,29 @@ func Main(args []string) error {
 		Usage:                "A POSIX file system built on Redis and object storage.",
 		Version:              version.Version(),
 		Copyright:            "Apache License 2.0",
+		HideHelpCommand:      true,
 		EnableBashCompletion: true,
 		Flags:                globalFlags(),
 		Commands: []*cli.Command{
-			formatFlags(),
-			mountFlags(),
-			umountFlags(),
-			gatewayFlags(),
-			webDavFlags(),
-			syncFlags(),
-			rmrFlags(),
-			infoFlags(),
-			benchFlags(),
-			gcFlags(),
-			checkFlags(),
-			profileFlags(),
-			statsFlags(),
-			statusFlags(),
-			warmupFlags(),
-			dumpFlags(),
-			loadFlags(),
-			configFlags(),
-			destroyFlags(),
+			cmdFormat(),
+			cmdConfig(),
+			cmdDestroy(),
+			cmdGC(),
+			cmdFsck(),
+			cmdDump(),
+			cmdLoad(),
+			cmdStatus(),
+			cmdStats(),
+			cmdProfile(),
+			cmdInfo(),
+			cmdMount(),
+			cmdUmount(),
+			cmdGateway(),
+			cmdWebDav(),
+			cmdBench(),
+			cmdWarmup(),
+			cmdRmr(),
+			cmdSync(),
 		},
 	}
 
@@ -128,7 +102,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
-	for _, f := range append(mountFlags().Flags, globalFlags()...) {
+	for _, f := range append(cmdMount().Flags, globalFlags()...) {
 		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
 			_, cmdFlagsLookup[names[0]] = f.(*cli.BoolFlag)
 		}
