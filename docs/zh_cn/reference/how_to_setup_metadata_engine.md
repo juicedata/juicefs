@@ -91,6 +91,16 @@ $ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 
 如果你自己维护 Redis 数据库，建议阅读 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
 
+## KeyDB
+
+[KeyDB](https://keydb.dev/) 是 Redis 的开源分支，在开发上保持与 Redis 主线对齐。KeyDB 在 Redis 的基础上实现了多线程支持、更好的内存利用率和更大的吞吐量，另外还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 `Active Active` "双活"功能。
+
+:::note 注意
+KeyDB 的数据复制是异步的，使用 `Active Active` "双活"功能可能导致数据一致性问题，请务必充分验证、谨慎使用！
+:::
+
+在用于 JuiceFS 元数据存储时，KeyDB 与 Redis 的用法完全一致，这里不再赘述，请参考 [Redis](#redis) 部分使用。
+
 ## PostgreSQL
 
 [PostgreSQL](https://www.postgresql.org/) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，也可以用来作为 JuiceFS 的元数据引擎。
