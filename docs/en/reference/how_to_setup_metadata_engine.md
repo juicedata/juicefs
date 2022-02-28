@@ -93,6 +93,16 @@ If you need to share the same file system on multiple servers, you must ensure t
 
 If you maintain your own Redis database, we recommend reading [Redis Best Practices](../administration/metadata/redis_best_practices.md).
 
+## KeyDB
+
+[KeyDB](https://keydb.dev/) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https:// github.com/JohnSully/KeyDB/wiki/Active-Replication), the `Active Active` feature.
+
+:::note
+KeyDB does not provide performance beyond that of Redis when used as a metadata storage, and the Active Replication feature has not been fully validated in the market, so there may be data consistency issues, so be sure to fully validate and use with caution!
+:::
+
+When used for JuiceFS metadata storage, the usage of KeyDB is exactly the same as Redis, so please refer to the [Redis](#redis) section for usage.
+
 ## PostgreSQL
 
 [PostgreSQL](https://www.postgresql.org/) is a powerful open source relational database with a perfect ecosystem and rich application scenarios, and it is well suited as the metadata engine of JuiceFS.
