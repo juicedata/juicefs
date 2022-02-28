@@ -84,6 +84,25 @@ func UpdateMetrics(m meta.Meta) {
 	}
 }
 
+func UpdateMetricsByRegister(m meta.Meta, registry *prometheus.Registry) {
+	registry.MustRegister(cpu)
+	registry.MustRegister(memory)
+	registry.MustRegister(uptime)
+	registry.MustRegister(usedSpace)
+	registry.MustRegister(usedInodes)
+
+	ctx := meta.Background
+	for {
+		var totalSpace, availSpace, iused, iavail uint64
+		err := m.StatFS(ctx, &totalSpace, &availSpace, &iused, &iavail)
+		if err == 0 {
+			usedSpace.Set(float64(totalSpace - availSpace))
+			usedInodes.Set(float64(iused))
+		}
+		utils.SleepWithJitter(time.Second * 10)
+	}
+}
+
 func RegisterToConsul(consulAddr, metricsAddr, mountPoint string) {
 	if metricsAddr == "" {
 		logger.Errorf("Metrics server start err,so can't register to consul")

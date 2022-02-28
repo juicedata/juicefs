@@ -40,3 +40,9 @@ func InitMetrics() {
 	prometheus.MustRegister(txRestart)
 	prometheus.MustRegister(opDist)
 }
+
+func InitMetricsByRegisterer(registry *prometheus.Registry) {
+	registry.MustRegister(txDist)
+	registry.MustRegister(txRestart)
+	registry.MustRegister(opDist)
+}

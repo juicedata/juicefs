@@ -950,3 +950,9 @@ func InitMetrics() {
 	prometheus.MustRegister(opsDurationsHistogram)
 	prometheus.MustRegister(compactSizeHistogram)
 }
+func InitMetricsByRegisterer(registry *prometheus.Registry) {
+	registry.MustRegister(readSizeHistogram)
+	registry.MustRegister(writtenSizeHistogram)
+	registry.MustRegister(opsDurationsHistogram)
+	registry.MustRegister(compactSizeHistogram)
+}

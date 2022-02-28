@@ -66,7 +66,9 @@ var (
 	handlers = make(map[uintptr]*wrapper)
 	activefs = make(map[string][]*wrapper)
 	logger   = utils.GetLogger("juicefs")
-	pusher   *push.Pusher
+
+	once    sync.Once
+	pushers []*push.Pusher
 )
 
 const (
@@ -346,16 +348,14 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
 		}
-
-		if jConf.PushGateway != "" && pusher == nil {
+		if jConf.PushGateway != "" {
 			registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
-			prometheus.DefaultGatherer = registry
-			prometheus.DefaultRegisterer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
-			prometheus.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-			prometheus.MustRegister(prometheus.NewGoCollector())
+			registerer := prometheus.WrapRegistererWithPrefix("juicefs_", registry)
+			registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+			registerer.MustRegister(prometheus.NewGoCollector())
 			// TODO: support multiple volumes
-			pusher = push.New(jConf.PushGateway, "juicefs").Gatherer(prometheus.DefaultGatherer)
-			pusher = pusher.Grouping("vol_name", format.Name).Grouping("mp", "sdk-"+strconv.Itoa(os.Getpid()))
+			pusher := push.New(jConf.PushGateway, "juicefs").Gatherer(registry)
+			pusher = pusher.Grouping("vol_name", name).Grouping("mp", "sdk-"+strconv.Itoa(os.Getpid()))
 			if h, err := os.Hostname(); err == nil {
 				pusher = pusher.Grouping("instance", h)
 			} else {
@@ -363,23 +363,28 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			}
 			if strings.Contains(jConf.PushAuth, ":") {
 				parts := strings.Split(jConf.PushAuth, ":")
-				pusher = pusher.BasicAuth(parts[0], parts[1])
+				pusher.BasicAuth(parts[0], parts[1])
 			}
+			pushers = append(pushers, pusher)
 			interval := time.Second * 10
 			if jConf.PushInterval > 0 {
-				interval = time.Second * time.Duration(jConf.PushInterval)
+				interval = time.Duration(jConf.PushInterval)
 			}
-			go func() {
-				for {
-					time.Sleep(interval)
-					if err := pusher.Push(); err != nil {
-						logger.Warnf("push metrics to %s: %s", jConf.PushGateway, err)
+			once.Do(func() {
+				go func() {
+					for {
+						time.Sleep(interval)
+						for _, p := range pushers {
+							if err := p.Push(); err != nil {
+								logger.Warnf("push metrics to %s: %s", jConf.PushGateway, err)
+							}
+						}
 					}
-				}
-			}()
-			meta.InitMetrics()
-			vfs.InitMetrics()
-			go metric.UpdateMetrics(m)
+				}()
+			})
+			meta.InitMetricsByRegisterer(registry)
+			vfs.InitMetricsByRegisterer(registry)
+			go metric.UpdateMetricsByRegister(m, registry)
 		}
 
 		if jConf.Bucket != "" {
@@ -570,7 +575,7 @@ func jfs_term(pid int, h uintptr) int {
 			}
 		}
 	}
-	if pusher != nil {
+	for _, pusher := range pushers {
 		if err := pusher.Push(); err != nil {
 			logger.Warnf("push metrics: %s", err)
 		}
