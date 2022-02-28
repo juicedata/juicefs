@@ -61,7 +61,7 @@ func Test_exposeMetrics(t *testing.T) {
 			})
 			defer stringPatches.Reset()
 			defer isSetPatches.Reset()
-			ResetPrometheus()
+			ResetHttp()
 			registerer, registry := wrapRegister("test", "test")
 			metricsAddr := exposeMetrics(appCtx, client, registerer, registry)
 
@@ -75,9 +75,8 @@ func Test_exposeMetrics(t *testing.T) {
 	})
 }
 
-func ResetPrometheus() {
+func ResetHttp() {
 	http.DefaultServeMux = http.NewServeMux()
-	//prometheus.DefaultRegisterer = prometheus.NewRegistry()
 }
 
 func resetTestMeta() *redis.Client { // using Redis
@@ -98,7 +97,7 @@ func mountTemp(t *testing.T, bucket *string) {
 	}
 
 	// must do reset, otherwise will panic
-	ResetPrometheus()
+	ResetHttp()
 
 	go func() {
 		if err := Main([]string{"", "mount", testMeta, testMountPoint}); err != nil {
