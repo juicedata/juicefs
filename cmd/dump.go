@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 
@@ -54,10 +53,7 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 }
 
 func dump(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-URL is needed")
-	}
+	setup(ctx, 1)
 	var fp io.WriteCloser
 	if ctx.Args().Len() == 1 {
 		fp = os.Stdout

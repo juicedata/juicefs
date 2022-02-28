@@ -62,12 +62,9 @@ $ juicefs info -i 100`,
 }
 
 func info(ctx *cli.Context) error {
+	setup(ctx, 1)
 	if runtime.GOOS == "windows" {
 		logger.Infof("Windows is not supported")
-		return nil
-	}
-	if ctx.Args().Len() < 1 {
-		logger.Infof("DIR or FILE is needed")
 		return nil
 	}
 	var recursive uint8

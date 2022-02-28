@@ -316,14 +316,8 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 }
 
 func mount(c *cli.Context) error {
-	setLoggerLevel(c)
-	if c.Args().Len() < 1 {
-		logger.Fatalf("Meta URL and mountpoint are required")
-	}
+	setup(c, 2)
 	addr := c.Args().Get(0)
-	if c.Args().Len() < 2 {
-		logger.Fatalf("MOUNTPOINT is required")
-	}
 	mp := c.Args().Get(1)
 
 	prepareMp(mp)

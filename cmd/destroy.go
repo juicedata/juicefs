@@ -103,10 +103,7 @@ func printSessions(ss [][3]string) string {
 }
 
 func destroy(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 2 {
-		return fmt.Errorf("META-URL and UUID are required")
-	}
+	setup(ctx, 2)
 	uri := ctx.Args().Get(0)
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
