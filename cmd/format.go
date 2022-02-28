@@ -271,16 +271,9 @@ func test(store object.ObjectStorage) error {
 }
 
 func format(c *cli.Context) error {
-	setLoggerLevel(c)
-	if c.Args().Len() < 1 {
-		logger.Fatalf("Meta URL and name are required")
-	}
+	setup(c, 2)
 	removePassword(c.Args().Get(0))
 	m := meta.NewClient(c.Args().Get(0), &meta.Config{Retries: 2})
-
-	if c.Args().Len() < 2 {
-		logger.Fatalf("Please give it a name")
-	}
 	name := c.Args().Get(1)
 	validName := regexp.MustCompile(`^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$`)
 	if !validName.MatchString(name) {

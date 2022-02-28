@@ -44,6 +44,7 @@ func cmdSync() *cli.Command {
 		ArgsUsage: "SRC DST",
 		Description: `
 This tool spawns multiple threads to concurrently syncs objects of two data storages.
+SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX].
 
 Examples:
 # Sync object from OSS to S3
@@ -278,16 +279,8 @@ func isS3PathType(endpoint string) bool {
 	return regexp.MustCompile(pattern).MatchString(endpoint)
 }
 
-const USAGE = `juicefs [options] sync [options] SRC DST
-SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`
-
 func doSync(c *cli.Context) error {
-	setLoggerLevel(c)
-
-	if c.Args().Len() != 2 {
-		logger.Errorf(USAGE)
-		return nil
-	}
+	setup(c, 2)
 	config := sync.NewConfigFromCli(c)
 	go func() { _ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", config.HTTPPort), nil) }()
 

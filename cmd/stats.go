@@ -366,10 +366,7 @@ func readStats(path string) map[string]float64 {
 }
 
 func stats(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		logger.Fatalln("mount point must be provided")
-	}
+	setup(ctx, 1)
 	mp := ctx.Args().First()
 	inode, err := utils.GetFileInode(mp)
 	if err != nil {

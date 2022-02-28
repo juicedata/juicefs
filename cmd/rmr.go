@@ -57,12 +57,9 @@ func openController(path string) *os.File {
 }
 
 func rmr(ctx *cli.Context) error {
+	setup(ctx, 1)
 	if runtime.GOOS == "windows" {
 		logger.Infof("Windows is not supported")
-		return nil
-	}
-	if ctx.Args().Len() < 1 {
-		logger.Infof("PATH is needed")
 		return nil
 	}
 	for i := 0; i < ctx.Args().Len(); i++ {

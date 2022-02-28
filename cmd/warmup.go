@@ -102,6 +102,7 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 }
 
 func warmup(ctx *cli.Context) error {
+	setup(ctx, 0)
 	fname := ctx.String("file")
 	paths := ctx.Args().Slice()
 	if fname != "" {

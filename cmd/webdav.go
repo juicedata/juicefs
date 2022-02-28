@@ -61,14 +61,8 @@ $ juicefs webdav redis://localhost localhost:9007`,
 }
 
 func webdav(c *cli.Context) error {
-	setLoggerLevel(c)
-	if c.Args().Len() < 1 {
-		logger.Fatalf("meta url are required")
-	}
+	setup(c, 2)
 	metaUrl := c.Args().Get(0)
-	if c.Args().Len() < 2 {
-		logger.Fatalf("listen address is required")
-	}
 	listenAddr := c.Args().Get(1)
 	m, store, conf := initForSvc(c, "webdav", metaUrl)
 	jfs, err := fs.NewFileSystem(conf, m, store)
