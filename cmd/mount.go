@@ -59,8 +59,13 @@ func cmdMount() *cli.Command {
 Mount the target volume at the mount point.
 
 Examples:
-# Mount in background
-$ juicefs mount redis://localhost /mnt/jfs -d
+# Mount in foreground
+$ juicefs mount redis://localhost /mnt/jfs
+
+# Mount in background with password protected Redis
+$ juicefs mount redis://:mypassword@localhost /mnt/jfs -d
+# A safer alternative
+$ META_PASSWORD=mypassword juicefs mount redis://localhost /mnt/jfs -d
 
 # Mount with a sub-directory as root
 $ juicefs mount redis://localhost /mnt/jfs --subdir /dir/in/jfs
