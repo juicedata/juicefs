@@ -161,7 +161,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-
+	registerer, registry := wrapRegister(mp, format.Name)
 	if !c.Bool("writeback") && c.IsSet("upload-delay") {
 		logger.Warnf("delayed upload only work in writeback mode")
 	}
@@ -173,7 +173,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	}
 	logger.Infof("Data use %s", blob)
 
-	store := chunk.NewCachedStore(blob, *chunkConf)
+	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	err = metaCli.NewSession()
@@ -187,7 +187,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	vfsConf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 
-	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob)
+	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 
 	return metaCli, store, vfsConf
 }

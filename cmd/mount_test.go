@@ -31,7 +31,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/prometheus/client_golang/prometheus"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/urfave/cli/v2"
 )
@@ -63,7 +62,8 @@ func Test_exposeMetrics(t *testing.T) {
 			defer stringPatches.Reset()
 			defer isSetPatches.Reset()
 			ResetPrometheus()
-			metricsAddr := exposeMetrics(client, appCtx)
+			registerer, registry := wrapRegister("test", "test")
+			metricsAddr := exposeMetrics(appCtx, client, registerer, registry)
 
 			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
 			resp, err := http.Get(u.String())
@@ -77,7 +77,7 @@ func Test_exposeMetrics(t *testing.T) {
 
 func ResetPrometheus() {
 	http.DefaultServeMux = http.NewServeMux()
-	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+	//prometheus.DefaultRegisterer = prometheus.NewRegistry()
 }
 
 func resetTestMeta() *redis.Client { // using Redis

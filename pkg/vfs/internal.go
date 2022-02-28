@@ -120,8 +120,8 @@ func getInternalNodeByName(name string) *internalNode {
 	return nil
 }
 
-func collectMetrics() []byte {
-	mfs, err := prometheus.DefaultGatherer.Gather()
+func collectMetrics(registry *prometheus.Registry) []byte {
+	mfs, err := registry.Gather()
 	if err != nil {
 		logger.Errorf("collect metrics: %s", err)
 		return nil

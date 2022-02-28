@@ -60,7 +60,7 @@ func installHandler(mp string) {
 	}()
 }
 
-func exposeMetrics(m meta.Meta, c *cli.Context) string {
+func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer, registry *prometheus.Registry) string {
 	var ip, port string
 	//default set
 	ip, port, err := net.SplitHostPort(c.String("metrics"))
@@ -68,17 +68,17 @@ func exposeMetrics(m meta.Meta, c *cli.Context) string {
 		logger.Fatalf("metrics format error: %v", err)
 	}
 
-	meta.InitMetrics()
-	vfs.InitMetrics()
-	go metric.UpdateMetrics(m)
+	meta.InitMetrics(registerer)
+	vfs.InitMetrics(registerer)
+	go metric.UpdateMetrics(m, registerer)
 	http.Handle("/metrics", promhttp.HandlerFor(
-		prometheus.DefaultGatherer,
+		registry,
 		promhttp.HandlerOpts{
 			// Opt into OpenMetrics to support exemplars.
 			EnableOpenMetrics: true,
 		},
 	))
-	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
+	registerer.MustRegister(prometheus.NewBuildInfoCollector())
 
 	// If not set metrics addr,the port will be auto set
 	if !c.IsSet("metrics") {
@@ -118,14 +118,13 @@ func exposeMetrics(m meta.Meta, c *cli.Context) string {
 	return metricsAddr
 }
 
-func wrapRegister(mp, name string) {
+func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry) {
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
-	prometheus.DefaultGatherer = registry
-	metricLabels := prometheus.Labels{"mp": mp, "vol_name": name}
-	prometheus.DefaultRegisterer = prometheus.WrapRegistererWithPrefix("juicefs_",
-		prometheus.WrapRegistererWith(metricLabels, registry))
-	prometheus.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	prometheus.MustRegister(prometheus.NewGoCollector())
+	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
+		prometheus.WrapRegistererWith(prometheus.Labels{"mp": mp, "vol_name": name}, registry))
+	registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	registerer.MustRegister(prometheus.NewGoCollector())
+	return registerer, registry
 }
 
 func getFormat(c *cli.Context, metaCli meta.Meta) *meta.Format {
@@ -227,13 +226,13 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	}
 }
 
-func newStore(format *meta.Format, chunkConf *chunk.Config) (object.ObjectStorage, chunk.ChunkStore) {
+func newStore(format *meta.Format, chunkConf *chunk.Config, registerer prometheus.Registerer) (object.ObjectStorage, chunk.ChunkStore) {
 	blob, err := createStorage(format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	store := chunk.NewCachedStore(blob, *chunkConf)
+	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	return blob, store
 }
 
@@ -269,8 +268,8 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	return chunkConf
 }
 
-func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage) {
-	metricsAddr := exposeMetrics(m, c)
+func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage, registerer prometheus.Registerer, registry *prometheus.Registry) {
+	metricsAddr := exposeMetrics(c, m, registerer, registry)
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, vfsConf.Meta.MountPoint)
 	}
@@ -306,7 +305,7 @@ func mount(c *cli.Context) error {
 	format := getFormat(c, metaCli)
 
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
-	wrapRegister(mp, format.Name)
+	registerer, registry := wrapRegister(mp, format.Name)
 
 	if !c.Bool("writeback") && c.IsSet("upload-delay") {
 		logger.Warnf("delayed upload only work in writeback mode")
@@ -315,7 +314,7 @@ func mount(c *cli.Context) error {
 	chunkConf := getChunkConf(c, format)
 	chunkConf.UploadDelay = c.Duration("upload-delay")
 
-	blob, store := newStore(format, chunkConf)
+	blob, store := newStore(format, chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
@@ -333,8 +332,8 @@ func mount(c *cli.Context) error {
 	}
 
 	installHandler(mp)
-	v := vfs.NewVFS(vfsConf, metaCli, store)
-	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob)
+	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
+	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mount_main(v, c)
 	return metaCli.CloseSession()
 }

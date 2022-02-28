@@ -379,7 +379,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		case logInode:
 			openAccessLog(fh)
 		case statsInode:
-			h.data = collectMetrics()
+			h.data = collectMetrics(v.registry)
 		case configInode:
 			v.Conf.Format.RemoveSecret()
 			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
@@ -891,26 +891,36 @@ type VFS struct {
 	handlersGause  prometheus.GaugeFunc
 	usedBufferSize prometheus.GaugeFunc
 	storeCacheSize prometheus.GaugeFunc
+	registry       *prometheus.Registry
 }
 
-func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
+func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer prometheus.Registerer, registry *prometheus.Registry) *VFS {
 	reader := NewDataReader(conf, m, store)
 	writer := NewDataWriter(conf, m, store, reader)
 
 	v := &VFS{
-		Conf:    conf,
-		Meta:    m,
-		Store:   store,
-		reader:  reader,
-		writer:  writer,
-		handles: make(map[Ino][]*handle),
-		nextfh:  1,
+		Conf:     conf,
+		Meta:     m,
+		Store:    store,
+		reader:   reader,
+		writer:   writer,
+		handles:  make(map[Ino][]*handle),
+		nextfh:   1,
+		registry: registry,
 	}
 
 	if conf.Meta.Subdir != "" { // don't show trash directory
 		internalNodes = internalNodes[:len(internalNodes)-1]
 	}
 
+	initVFSMetrics(v, writer, registerer)
+	return v
+}
+
+func initVFSMetrics(v *VFS, writer DataWriter, registerer prometheus.Registerer) {
+	if registerer == nil {
+		return
+	}
 	v.handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "fuse_open_handlers",
 		Help: "number of open files and directories.",
@@ -937,15 +947,17 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 		}
 		return 0.0
 	})
-	_ = prometheus.Register(v.handlersGause)
-	_ = prometheus.Register(v.usedBufferSize)
-	_ = prometheus.Register(v.storeCacheSize)
-	return v
+	_ = registerer.Register(v.handlersGause)
+	_ = registerer.Register(v.usedBufferSize)
+	_ = registerer.Register(v.storeCacheSize)
 }
 
-func InitMetrics() {
-	prometheus.MustRegister(readSizeHistogram)
-	prometheus.MustRegister(writtenSizeHistogram)
-	prometheus.MustRegister(opsDurationsHistogram)
-	prometheus.MustRegister(compactSizeHistogram)
+func InitMetrics(registerer prometheus.Registerer) {
+	if registerer == nil {
+		return
+	}
+	registerer.MustRegister(readSizeHistogram)
+	registerer.MustRegister(writtenSizeHistogram)
+	registerer.MustRegister(opsDurationsHistogram)
+	registerer.MustRegister(compactSizeHistogram)
 }
