@@ -51,7 +51,7 @@ $ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-e
 
 # Sync objects from S3 to JuiceFS
 $ juicefs mount -d redis://localhost /mnt/jfs
-$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com file:///mnt/jfs
+$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com /mnt/jfs
 
 Supported storage systems: https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage`,
 		Flags: []cli.Flag{

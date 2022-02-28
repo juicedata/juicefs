@@ -68,8 +68,8 @@ $ juicefs mount redis://localhost /mnt/jfs --subdir /dir/in/jfs
 # Enable "writeback" mode, which improves performance at the risk of losing objects
 $ juicefs mount redis://localhost /mnt/jfs -d --writeback
 
-# Enable "read-only" mode with a Redis replica
-$ juicefs mount redis://localhost:6389 /mnt/jfs -d --read-only
+# Enable "read-only" mode
+$ juicefs mount redis://localhost /mnt/jfs -d --read-only
 
 # Disable metadata backup
 $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
