@@ -63,13 +63,19 @@ func cmdFormat() *cli.Command {
 		Usage:     "Format a volume",
 		ArgsUsage: "META-URL NAME",
 		Description: `
-Create a new JuiceFS volume.
+Create a new JuiceFS volume. Here META-URL is used to set up the metadata engine (Redis, TiKV, MySQL, etc.),
+and NAME is the prefix of all objects in data storage.
 DEPRECATED: It was also used to change configuration of an existing volume, but now this function is
 deprecated, instead please use the "config" command.
 
 Examples:
-# Create a simple test volume
+# Create a simple test volume (data will be stored in a local directory)
 $ juicefs format sqlite3://myjfs.db myjfs
+
+# Create a volume with password protected MySQL
+$ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
+# A safer alternative
+$ META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
 
 # Create a volume with Redis and S3
 $ juicefs format redis://localhost myjfs --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com
