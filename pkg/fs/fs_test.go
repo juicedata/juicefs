@@ -90,7 +90,7 @@ func TestFileSystem(t *testing.T) {
 		AccessLog:       "/tmp/juicefs.access.log",
 	}
 	objStore, _ := object.CreateStorage("mem", "", "", "")
-	store := chunk.NewCachedStore(objStore, *conf.Chunk)
+	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
 	fs, _ := NewFileSystem(&conf, m, store)
 	ctx := meta.NewContext(1, 1, []uint32{2})
 	if total, avail := fs.StatFS(ctx); total != 1<<30 || avail != (1<<30) {

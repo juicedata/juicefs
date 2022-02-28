@@ -65,17 +65,19 @@ var (
 	})
 )
 
-func UpdateMetrics(m meta.Meta) {
-	prometheus.MustRegister(cpu)
-	prometheus.MustRegister(memory)
-	prometheus.MustRegister(uptime)
-	prometheus.MustRegister(usedSpace)
-	prometheus.MustRegister(usedInodes)
+func UpdateMetrics(m meta.Meta, registerer prometheus.Registerer) {
+	if registerer == nil {
+		return
+	}
+	registerer.MustRegister(cpu)
+	registerer.MustRegister(memory)
+	registerer.MustRegister(uptime)
+	registerer.MustRegister(usedSpace)
+	registerer.MustRegister(usedInodes)
 
-	ctx := meta.Background
 	for {
 		var totalSpace, availSpace, iused, iavail uint64
-		err := m.StatFS(ctx, &totalSpace, &availSpace, &iused, &iavail)
+		err := m.StatFS(meta.Background, &totalSpace, &availSpace, &iused, &iavail)
 		if err == 0 {
 			usedSpace.Set(float64(totalSpace - availSpace))
 			usedInodes.Set(float64(iused))
