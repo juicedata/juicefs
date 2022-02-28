@@ -25,7 +25,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func webDavFlags() *cli.Command {
+func cmdWebDav() *cli.Command {
 	selfFlags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:  "gzip",
@@ -49,14 +49,18 @@ func webDavFlags() *cli.Command {
 
 	return &cli.Command{
 		Name:      "webdav",
-		Usage:     "start a webdav server",
+		Action:    webdav,
+		Category:  "SERVICE",
+		Usage:     "Start a WebDAV server",
 		ArgsUsage: "META-URL ADDRESS",
-		Flags:     expandFlags(compoundFlags),
-		Action:    webdavSvc,
+		Description: `
+Examples:
+$ juicefs webdav redis://localhost localhost:9007`,
+		Flags: expandFlags(compoundFlags),
 	}
 }
 
-func webdavSvc(c *cli.Context) error {
+func webdav(c *cli.Context) error {
 	setLoggerLevel(c)
 	if c.Args().Len() < 1 {
 		logger.Fatalf("meta url are required")

@@ -29,6 +29,30 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func cmdDestroy() *cli.Command {
+	return &cli.Command{
+		Name:      "destroy",
+		Action:    destroy,
+		Category:  "ADMIN",
+		Usage:     "Destroy an existing volume",
+		ArgsUsage: "META-URL UUID",
+		Description: `
+Destroy the target volume, removing all objects in the data storage and all entries in its metadata engine.
+BE CAREFUL! This operation cannot be undone.
+
+Examples:
+$ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
+
+Details: https://juicefs.com/docs/community/administration/destroy`,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "force",
+				Usage: "skip sanity check and force destroy the volume",
+			},
+		},
+	}
+}
+
 func printSessions(ss [][3]string) string {
 	header := [3]string{"SID", "HostName", "MountPoint"}
 	var max [3]int
@@ -188,19 +212,4 @@ func destroy(ctx *cli.Context) error {
 
 	logger.Infof("The volume has been destroyed! You may need to delete cache directory manually.")
 	return nil
-}
-
-func destroyFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "destroy",
-		Usage:     "destroy an existing volume",
-		ArgsUsage: "META-URL UUID",
-		Action:    destroy,
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "force",
-				Usage: "skip sanity check and force destroy the volume",
-			},
-		},
-	}
 }

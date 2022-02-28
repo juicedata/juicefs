@@ -36,7 +36,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 )
 
-func gatewayFlags() *cli.Command {
+func cmdGateway() *cli.Command {
 	selfFlags := []cli.Flag{
 		&cli.StringFlag{
 			Name:  "access-log",
@@ -65,10 +65,22 @@ func gatewayFlags() *cli.Command {
 
 	return &cli.Command{
 		Name:      "gateway",
-		Usage:     "S3-compatible gateway",
-		ArgsUsage: "META-URL ADDRESS",
-		Flags:     expandFlags(compoundFlags),
 		Action:    gateway,
+		Category:  "SERVICE",
+		Usage:     "Start an S3-compatible gateway",
+		ArgsUsage: "META-URL ADDRESS",
+		Description: `
+It is implemented based on the MinIO S3 Gateway. Before starting the gateway, you need to set
+MINIO_ROOT_USER and MINIO_ROOT_PASSWORD environment variables, which are the access key and secret
+key used for accessing S3 APIs.
+
+Examples:
+$ export MINIO_ROOT_USER=admin
+$ export MINIO_ROOT_PASSWORD=12345678
+$ juicefs gateway redis://localhost localhost:9000
+
+Details: https://juicefs.com/docs/community/s3_gateway`,
+		Flags: expandFlags(compoundFlags),
 	}
 }
 

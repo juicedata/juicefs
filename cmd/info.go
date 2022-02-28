@@ -29,12 +29,23 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func infoFlags() *cli.Command {
+func cmdInfo() *cli.Command {
 	return &cli.Command{
 		Name:      "info",
-		Usage:     "show internal information for paths or inodes",
-		ArgsUsage: "PATH or INODE",
 		Action:    info,
+		Category:  "INSPECTOR",
+		Usage:     "Show internal information of a path or inode",
+		ArgsUsage: "PATH/INODE",
+		Description: `
+It is used to inspect internal metadata values of the target file.
+
+Examples:
+$ Check a path
+$ juicefs info /mnt/jfs/foo
+
+# Check an inode
+$ cd /mnt/jfs
+$ juicefs info -i 100`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "inode",

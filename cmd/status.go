@@ -24,6 +24,30 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func cmdStatus() *cli.Command {
+	return &cli.Command{
+		Name:      "status",
+		Action:    status,
+		Category:  "INSPECTOR",
+		Usage:     "Show status of a volume",
+		ArgsUsage: "META-URL",
+		Description: `
+It shows basic setting of the target volume, and a list of active sessions (including mount, SDK,
+S3-gateway and WebDAV) that are connected with the metadata engine.
+NOTE: Read-only session is not listed since it cannot register itself in the metadata.
+
+Examples:
+$ juicefs status redis://localhost`,
+		Flags: []cli.Flag{
+			&cli.Uint64Flag{
+				Name:    "session",
+				Aliases: []string{"s"},
+				Usage:   "show detailed information (sustained inodes, locks) of the specified session (sid)",
+			},
+		},
+	}
+}
+
 type sections struct {
 	Setting  *meta.Format
 	Sessions []*meta.Session
@@ -66,20 +90,4 @@ func status(ctx *cli.Context) error {
 
 	printJson(&sections{format, sessions})
 	return nil
-}
-
-func statusFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "status",
-		Usage:     "show status of JuiceFS",
-		ArgsUsage: "META-URL",
-		Action:    status,
-		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:    "session",
-				Aliases: []string{"s"},
-				Usage:   "show detailed information (sustained inodes, locks) of the specified session (sid)",
-			},
-		},
-	}
 }

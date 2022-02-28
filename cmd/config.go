@@ -27,6 +27,67 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func cmdConfig() *cli.Command {
+	return &cli.Command{
+		Name:      "config",
+		Action:    config,
+		Category:  "ADMIN",
+		Usage:     "Change configuration of a volume",
+		ArgsUsage: "META-URL",
+		Description: `
+Examples:
+# Show the current configurations
+$ juicefs config redis://localhost
+
+# Change volume "quota"
+$ juicefs conifg redis://localhost --inode 10000000 --capacity 1048576
+
+# Change maximum days before files in trash are deleted
+$ juicefs conifg redis://localhost --trash-days 7
+
+# Limit client version that is allowed to connect
+$ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0`,
+		Flags: []cli.Flag{
+			&cli.Uint64Flag{
+				Name:  "capacity",
+				Usage: "hard quota of the volume limiting its usage of space in GiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "inodes",
+				Usage: "hard quota of the volume limiting its number of inodes",
+			},
+			&cli.StringFlag{
+				Name:  "bucket",
+				Usage: "the bucket URL of object storage to store data",
+			},
+			&cli.StringFlag{
+				Name:  "access-key",
+				Usage: "access key for object storage",
+			},
+			&cli.StringFlag{
+				Name:  "secret-key",
+				Usage: "secret key for object storage",
+			},
+			&cli.IntFlag{
+				Name:  "trash-days",
+				Usage: "number of days after which removed files will be permanently deleted",
+			},
+			&cli.StringFlag{
+				Name:  "min-client-version",
+				Usage: "minimum client version allowed to connect",
+			},
+			&cli.StringFlag{
+				Name:  "max-client-version",
+				Usage: "maximum client version allowed to connect",
+			},
+			&cli.BoolFlag{
+				Name:  "force",
+				Usage: "skip sanity check and force update the configurations",
+			},
+		},
+	}
+}
+
 func warn(format string, a ...interface{}) {
 	fmt.Printf("\033[1;33mWARNING\033[0m: "+format+"\n", a...)
 }
@@ -173,51 +234,4 @@ func config(ctx *cli.Context) error {
 		fmt.Println(msg.String()[:msg.Len()-1])
 	}
 	return err
-}
-
-func configFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "config",
-		Usage:     "change config of a volume",
-		ArgsUsage: "META-URL",
-		Action:    config,
-		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:  "capacity",
-				Usage: "the limit for space in GiB",
-			},
-			&cli.Uint64Flag{
-				Name:  "inodes",
-				Usage: "the limit for number of inodes",
-			},
-			&cli.StringFlag{
-				Name:  "bucket",
-				Usage: "A bucket URL to store data",
-			},
-			&cli.StringFlag{
-				Name:  "access-key",
-				Usage: "Access key for object storage",
-			},
-			&cli.StringFlag{
-				Name:  "secret-key",
-				Usage: "Secret key for object storage",
-			},
-			&cli.IntFlag{
-				Name:  "trash-days",
-				Usage: "number of days after which removed files will be permanently deleted",
-			},
-			&cli.StringFlag{
-				Name:  "min-client-version",
-				Usage: "minimum client version allowed to connect",
-			},
-			&cli.StringFlag{
-				Name:  "max-client-version",
-				Usage: "maximum client version allowed to connect",
-			},
-			&cli.BoolFlag{
-				Name:  "force",
-				Usage: "skip sanity check and force update the configurations",
-			},
-		},
-	}
 }

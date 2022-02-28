@@ -43,6 +43,40 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
+func cmdMount() *cli.Command {
+	compoundFlags := [][]cli.Flag{
+		mount_flags(),
+		clientFlags(),
+		shareInfoFlags(),
+	}
+	return &cli.Command{
+		Name:      "mount",
+		Action:    mount,
+		Category:  "SERVICE",
+		Usage:     "Mount a volume",
+		ArgsUsage: "META-URL MOUNTPOINT",
+		Description: `
+Mount the target volume at the mount point.
+
+Examples:
+# Mount in background
+$ juicefs mount redis://localhost /mnt/jfs -d
+
+# Mount with a sub-directory as root
+$ juicefs mount redis://localhost /mnt/jfs --subdir /dir/in/jfs
+
+# Enable "writeback" mode, which improves performance at the risk of losing objects
+$ juicefs mount redis://localhost /mnt/jfs -d --writeback
+
+# Enable "read-only" mode
+$ juicefs mount redis://localhost /mnt/jfs -d --read-only
+
+# Disable metadata backup
+$ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
+		Flags: expandFlags(compoundFlags),
+	}
+}
+
 func installHandler(mp string) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
@@ -337,19 +371,4 @@ func mount(c *cli.Context) error {
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob)
 	mount_main(v, c)
 	return metaCli.CloseSession()
-}
-
-func mountFlags() *cli.Command {
-	compoundFlags := [][]cli.Flag{
-		mount_flags(),
-		clientFlags(),
-		shareInfoFlags(),
-	}
-	return &cli.Command{
-		Name:      "mount",
-		Usage:     "mount a volume",
-		ArgsUsage: "META-URL MOUNTPOINT",
-		Action:    mount,
-		Flags:     expandFlags(compoundFlags),
-	}
 }
