@@ -386,7 +386,7 @@ juicefs gateway [command options] META-URL ADDRESS
 
 #### 描述
 
-启动一个 webdav 服务。
+启动一个 WebDAV 服务。
 
 #### 使用
 
