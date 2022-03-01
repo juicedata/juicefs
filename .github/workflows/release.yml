@@ -39,14 +39,7 @@ jobs:
         run: sudo chown -R $USER $HOME/go/pkg/mod
 
       - name: Build SDK
-        run: make -C sdk/java docker-package && sudo chown -R $USER sdk/java/target
-
-      - name: Canonicalize SDK name
-        run: |
-          sdk1=$(ls sdk/java/target/juicefs-hadoop-*.jar)
-          sdk2=$(echo $sdk1 | sed 's@^\(.*\)\.jar$@\1-linux-amd64.jar@')
-          mv $sdk1 $sdk2
-        shell: bash
+        run: make -C sdk/java package-all && sudo chown -R $USER sdk/java/target
 
       - name: Upload SDK
         uses: softprops/action-gh-release@v1
