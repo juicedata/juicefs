@@ -152,16 +152,16 @@ CMD [ "juicefs" ]
 
 另外，手动编译客户端可以让你优先体验到 JuiceFS 开发中的各种新功能，但这需要你具备一定的软件编译相关的基础知识。
 
+:::tip 提示
+对于中国地区用户，为了加快获取 Go 模块的速度，建议通过执行 `go env -w GOPROXY=https://goproxy.cn,direct`来将`GOPROXY`环境变量设置国内的镜像服务器。详情请参考：[Goproxy China](https://github.com/goproxy/goproxy.cn)。
+:::
+
 ### 类 Unix 客户端
 
 编译面向 Linux、macOS、BSD 等类 Unix 系统的客户端需要满足以下依赖：
 
 - [Go](https://golang.org) 1.16+
 - GCC 5.4+
-
-:::tip 提示
-对于中国地区用户，为了加快获取 Go 模块的速度，建议通过 `GOPROXY` 环境变量设置国内的镜像服务器。例如：[Goproxy China](https://github.com/goproxy/goproxy.cn)。
-:::
 
 1. 克隆源码
 
