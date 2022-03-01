@@ -383,6 +383,113 @@ use top level of directories as buckets (default: false)
 Save the ETag for uploaded objects (default: false)
 
 
+### juicefs webdav
+
+#### Description
+
+Start a WebDAV server
+
+#### Synopsis
+
+```
+juicefs webdav [command options] META-URL ADDRESS
+```
+
+- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](how_to_setup_metadata_engine.md)" for details.
+- **ADDRESS**: WebDAV address and listening port, for example: `localhost:9007`
+
+#### Options
+
+`--bucket value`<br />
+customized endpoint to access object store
+
+`--get-timeout value`<br />
+the max number of seconds to download an object (default: 60)
+
+`--put-timeout value`<br />
+the max number of seconds to upload an object (default: 60)
+
+`--io-retries value`<br />
+number of retries after network failure (default: 30)
+
+`--max-uploads value`<br />
+number of connections to upload (default: 20)
+
+`--max-deletes value`<br />
+number of threads to delete objects (default: 2)
+
+`--buffer-size value`<br />
+total read/write buffering in MiB (default: 300)
+
+`--upload-limit value`<br />
+bandwidth limit for upload in Mbps (default: 0)
+
+`--download-limit value`<br />
+bandwidth limit for download in Mbps (default: 0)
+
+`--prefetch value`<br />
+prefetch N blocks in parallel (default: 1)
+
+`--writeback`<br />
+upload objects in background (default: false)
+
+`--upload-delay`<br />
+delayed duration for uploading objects ("s", "m", "h") (default: 0s)
+
+`--cache-dir value`<br />
+directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
+
+`--cache-size value`<br />
+size of cached objects in MiB (default: 102400)
+
+`--free-space-ratio value`<br />
+min free space (ratio) (default: 0.1)
+
+`--cache-partial-only`<br />
+cache only random/small read (default: false)
+
+`--read-only`<br />
+allow lookup/read operations only (default: false)
+
+`--backup-meta`<br />
+interval to automatically backup metadata in the object storage (0 means disable backup) (default: 1h0m0s)
+
+`--no-bgjob`<br />
+disable background jobs (clean-up, backup, etc.) (default: false)
+
+`--open-cache value`<br />
+open file cache timeout in seconds (0 means disable this feature) (default: 0)
+
+`--subdir value`<br />
+mount a sub-directory as root (default: "")
+
+`--attr-cache value`<br />
+attributes cache timeout in seconds (default: 1)
+
+`--entry-cache value`<br />
+file entry cache timeout in seconds (default: 0)
+
+`--dir-entry-cache value`<br />
+dir entry cache timeout in seconds (default: 1)
+
+`--gzip`<br />
+compress served files via gzip (default: false)
+
+`--disallowList`<br />
+disallow list a directory (default: false)
+
+`--access-log value`<br />
+path for JuiceFS access log
+
+`--metrics value`<br />
+address to export metrics (default: "127.0.0.1:9567")
+
+`--consul value`<br />
+consul address to register (default: "127.0.0.1:8500")
+
+`--no-usage-report`<br />
+do not send usage report (default: false)
+
 ### juicefs sync
 
 #### Description

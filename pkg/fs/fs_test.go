@@ -68,30 +68,7 @@ func TestFileStat(t *testing.T) {
 
 // nolint:errcheck
 func TestFileSystem(t *testing.T) {
-	checkAccessFile = time.Millisecond
-	rotateAccessLog = 500
-	m := meta.NewClient("memkv://", &meta.Config{MaxDeletes: 1})
-	format := meta.Format{
-		Name:      "test",
-		BlockSize: 4096,
-		Capacity:  1 << 30,
-	}
-	_ = m.Init(format, true)
-	var conf = vfs.Config{
-		Meta: &meta.Config{},
-		Chunk: &chunk.Config{
-			BlockSize:  format.BlockSize << 10,
-			MaxUpload:  1,
-			BufferSize: 100 << 20,
-		},
-		DirEntryTimeout: time.Millisecond * 100,
-		EntryTimeout:    time.Millisecond * 100,
-		AttrTimeout:     time.Millisecond * 100,
-		AccessLog:       "/tmp/juicefs.access.log",
-	}
-	objStore, _ := object.CreateStorage("mem", "", "", "")
-	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
-	fs, _ := NewFileSystem(&conf, m, store)
+	fs := createTestFS(t)
 	ctx := meta.NewContext(1, 1, []uint32{2})
 	if total, avail := fs.StatFS(ctx); total != 1<<30 || avail != (1<<30) {
 		t.Fatalf("statfs: %d %d", total, avail)
@@ -286,4 +263,35 @@ func TestFileSystem(t *testing.T) {
 	if _, err := fs.Stat(ctx, "/ttt/"); err != syscall.ENOENT {
 		t.Fatalf("stat /ttt/: %s", err)
 	}
+}
+
+func createTestFS(t *testing.T) *FileSystem {
+	checkAccessFile = time.Millisecond
+	rotateAccessLog = 500
+	m := meta.NewClient("memkv://", &meta.Config{MaxDeletes: 1})
+	format := meta.Format{
+		Name:      "test",
+		BlockSize: 4096,
+		Capacity:  1 << 30,
+	}
+	_ = m.Init(format, true)
+	var conf = vfs.Config{
+		Meta: &meta.Config{},
+		Chunk: &chunk.Config{
+			BlockSize:  format.BlockSize << 10,
+			MaxUpload:  1,
+			BufferSize: 100 << 20,
+		},
+		DirEntryTimeout: time.Millisecond * 100,
+		EntryTimeout:    time.Millisecond * 100,
+		AttrTimeout:     time.Millisecond * 100,
+		AccessLog:       "/tmp/juicefs.access.log",
+	}
+	objStore, _ := object.CreateStorage("mem", "", "", "")
+	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
+	jfs, err := NewFileSystem(&conf, m, store)
+	if err != nil {
+		t.Fatalf("initialize failed: %s", err)
+	}
+	return jfs
 }
