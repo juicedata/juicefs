@@ -72,13 +72,13 @@ Examples:
 # Create a simple test volume (data will be stored in a local directory)
 $ juicefs format sqlite3://myjfs.db myjfs
 
+# Create a volume with Redis and S3
+$ juicefs format redis://localhost myjfs --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com
+
 # Create a volume with password protected MySQL
 $ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
 # A safer alternative
 $ META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
-
-# Create a volume with Redis and S3
-$ juicefs format redis://localhost myjfs --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com
 
 # Create a volume with "quota" enabled
 $ juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
