@@ -44,7 +44,7 @@ Examples:
 $ juicefs stats /mnt/jfs
 
 # More metrics
-$ juicefs stats /mnt/jfs -L 1
+$ juicefs stats /mnt/jfs -l 1
 
 Details: https://juicefs.com/docs/community/stats_watcher`,
 		Flags: []cli.Flag{
@@ -60,7 +60,7 @@ Details: https://juicefs.com/docs/community/stats_watcher`,
 			},
 			&cli.UintFlag{
 				Name:    "verbosity",
-				Aliases: []string{"L"},
+				Aliases: []string{"l"},
 				Usage:   "verbosity level, 0 or 1 is enough for most cases",
 			},
 		},
