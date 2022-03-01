@@ -152,6 +152,10 @@ If the pre-compiled client does not have a version for you, such as FreeBSD or m
 
 In addition, manually compiling the client will give you priority access to various new features in JuiceFS development, but it requires some basic knowledge of software compilation.
 
+:::tip
+For users in China, in order to speed up the acquisition of Go modules, it is recommended to set the `GOPROXY` environment variable to the domestic mirror server by executing `go env -w GOPROXY=https://goproxy.cn,direct`. For details, please refer to: [Goproxy China](https://github.com/goproxy/goproxy.cn).
+:::
+
 ### Unix-like Client
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
