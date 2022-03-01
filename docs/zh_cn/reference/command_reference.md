@@ -382,6 +382,112 @@ juicefs gateway [command options] META-URL ADDRESS
 `--keep-etag`<br />
 保留对象上传时的 ETag (默认: false)
 
+### juicefs webdav
+
+#### 描述
+
+启动一个 WebDAV 服务。
+
+#### 使用
+
+```
+juicefs webdav [command options] META-URL ADDRESS
+```
+- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](how_to_setup_metadata_engine.md)」。
+- **ADDRESS**：webdav 服务监听的地址与端口，例如：`localhost:9007`
+
+#### 选项
+
+`--bucket value`<br />
+为当前网关指定访问访对象存储的 endpoint
+
+`--get-timeout value`<br />
+下载一个对象的超时时间；单位为秒 (默认: 60)
+
+`--put-timeout value`<br />
+上传一个对象的超时时间；单位为秒 (默认: 60)
+
+`--io-retries value`<br />
+网络异常时的重试次数 (默认: 30)
+
+`--max-uploads value`<br />
+上传对象的连接数 (默认: 20)
+
+`--max-deletes value`<br />
+删除对象的连接数 (默认: 2)
+
+`--buffer-size value`<br />
+读写缓存的总大小；单位为 MiB (默认: 300)
+
+`--upload-limit value`<br />
+上传带宽限制，单位为 Mbps (默认: 0)
+
+`--download-limit value`<br />
+下载带宽限制，单位为 Mbps (默认: 0)
+
+`--prefetch value`<br />
+并发预读 N 个块 (默认: 1)
+
+`--writeback`<br />
+后台异步上传对象 (默认: false)
+
+`--upload-delay`<br />
+数据上传到对象存储的延迟时间,支持秒分时精度，对应格式分别为("s", "m", "h")，默认为 0 秒
+
+`--cache-dir value`<br />
+本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
+
+`--cache-size value`<br />
+缓存对象的总大小；单位为 MiB (默认: 102400)
+
+`--free-space-ratio value`<br />
+最小剩余空间比例 (默认: 0.1)
+
+`--cache-partial-only`<br />
+仅缓存随机小块读 (默认: false)
+
+`--read-only`<br />
+只读模式 (默认: false)
+
+`--backup-meta`<br />
+在对象存储中自动备份元数据的时间间隔（0 表示禁用备份）（默认值：1h0m0s）
+
+`--no-bgjob`<br />
+禁用后台作业（清理、备份等）（默认值：false）
+
+`--open-cache value`<br />
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
+
+`--subdir value`<br />
+将某个子目录挂载为根 (默认: "")
+
+`--attr-cache value`<br />
+属性缓存过期时间；单位为秒 (默认: 1)
+
+`--entry-cache value`<br />
+文件项缓存过期时间；单位为秒 (默认: 0)
+
+`--dir-entry-cache value`<br />
+目录项缓存过期时间；单位为秒 (默认: 1)
+
+`--gzip`<br />
+通过 gzip 压缩提供的文件（默认值：false）
+
+`--disallowList`<br />
+禁止列出目录（默认值：false）
+
+`--access-log value`<br />
+访问日志的路径
+
+`--metrics value`<br />
+监控数据导出地址 (默认: "127.0.0.1:9567")
+
+`--consul value`<br />
+consul注册中心地址(默认: "127.0.0.1:8500")
+
+`--no-usage-report`<br />
+不发送使用量信息 (默认: false)
+
 ### juicefs sync
 
 #### 描述
