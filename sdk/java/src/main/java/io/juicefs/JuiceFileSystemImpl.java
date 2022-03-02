@@ -536,7 +536,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     long soTime = conn.getLastModified();
     if (res.getProtocol().equalsIgnoreCase("jar")) {
-      soTime = new JarFile(jarPath).getJarEntry("libjfs.so.gz")
+      soTime = new JarFile(jarPath).getJarEntry(resource)
               .getLastModifiedTime()
               .toMillis();
     }
