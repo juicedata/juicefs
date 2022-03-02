@@ -75,7 +75,7 @@ func TestConfig(t *testing.T) {
 		t.Fatalf("json unmarshal: %s", err)
 	}
 	if format.Capacity != 10<<30 || format.Inodes != 1000000 ||
-		format.Bucket != "/tmp/newBucket" || format.AccessKey != "testAK" || format.SecretKey != "removed" {
+		format.Bucket != "/tmp/newBucket/" || format.AccessKey != "testAK" || format.SecretKey != "removed" {
 		t.Fatalf("unexpect format: %+v", format)
 	}
 }
