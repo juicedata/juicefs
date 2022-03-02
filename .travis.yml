@@ -11,7 +11,7 @@ services:
   - postgresql
   - docker
 env:
-  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false HDFS_ADDR=localhost:8020 SFTP_HOST=localhost:2222:/upload/ SFTP_USER=root SFTP_PASS=password
+  - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false HDFS_ADDR=localhost:8020 SFTP_HOST=localhost:2222:/upload/ SFTP_USER=root SFTP_PASS=password WEBDAV_TEST_BUCKET=127.0.0.1:9007
 go:
   - "1.16"
 branches:
@@ -38,10 +38,12 @@ before_script:
   - if [ -f "/home/travis/.m2/minio.tar" ];then docker load </home/travis/.m2/minio.tar; fi
   - if [ -f "/home/travis/.m2/sftp.tar" ];then docker load </home/travis/.m2/sftp.tar; fi
   - if [ ! -f "/home/travis/.m2/install.sh" ];then wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh; fi
+  - if [ ! -f "/home/travis/.m2/rclone-v1.57.0-linux-amd64.zip" ];then wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip && unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2; fi
   - docker images
   - sh /home/travis/.m2/install.sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
   - docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
   - go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
+  - nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
   - sudo chmod 777 /usr/local/maven-3.6.3/conf/settings.xml
   - sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/local/maven-3.6.3/conf/settings.xml
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
@@ -49,7 +51,7 @@ before_script:
   - sudo make -C fstests setup
   - chmod +x travis-setup-hdfs.sh
   - ./travis-setup-hdfs.sh
-  - for i in {2222,3306,5432,8020,9000} ; do nc -z localhost $i;if [ $? != 0 ];then sleep 5; else continue; fi; nc -z localhost $i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+  - for i in {2222,3306,5432,8020,9000,9007} ; do nc -z localhost $i;if [ $? != 0 ];then sleep 5; else continue; fi; nc -z localhost $i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
   - nc -z localhost 2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 script:
   - sudo chmod 777 /var/jfsCache
