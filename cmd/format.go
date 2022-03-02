@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -243,7 +244,7 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("Failed to get: %s", err)
 	}
-	data2, err := ioutil.ReadAll(p)
+	data2, err := io.ReadAll(p)
 	_ = p.Close()
 	if err != nil {
 		return err
@@ -285,59 +286,93 @@ func format(c *cli.Context) error {
 	if !validName.MatchString(name) {
 		logger.Fatalf("invalid name: %s, only alphabet, number and - are allowed, and the length should be 3 to 63 characters.", name)
 	}
-
 	if v := c.String("compress"); compress.NewCompressor(v) == nil {
 		logger.Fatalf("Unsupported compress algorithm: %s", v)
 	}
 	if v := c.Int("trash-days"); v < 0 {
 		logger.Fatalf("Invalid trash days: %d", v)
 	}
-	old, _ := m.Load(false)
-	if c.Bool("no-update") && old != nil {
-		return nil
-	}
 
-	format := meta.Format{
-		Name:        name,
-		UUID:        uuid.New().String(),
-		Storage:     c.String("storage"),
-		Bucket:      c.String("bucket"),
-		AccessKey:   c.String("access-key"),
-		SecretKey:   c.String("secret-key"),
-		Shards:      c.Int("shards"),
-		Capacity:    c.Uint64("capacity") << 30,
-		Inodes:      c.Uint64("inodes"),
-		BlockSize:   fixObjectSize(c.Int("block-size")),
-		Compression: c.String("compress"),
-		TrashDays:   c.Int("trash-days"),
-		MetaVersion: 1,
-	}
-	if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
-		format.AccessKey = os.Getenv("ACCESS_KEY")
-		_ = os.Unsetenv("ACCESS_KEY")
-	}
-	if format.SecretKey == "" && os.Getenv("SECRET_KEY") != "" {
-		format.SecretKey = os.Getenv("SECRET_KEY")
-		_ = os.Unsetenv("SECRET_KEY")
-	}
-	if format.Storage == "file" && !strings.HasSuffix(format.Bucket, "/") {
-		format.Bucket += "/"
-	}
-	if old != nil { // keep old values
-		format.MinClientVersion = old.MinClientVersion
-		format.MaxClientVersion = old.MaxClientVersion
-	}
-
-	keyPath := c.String("encrypt-rsa-key")
-	if keyPath != "" {
-		pem, err := ioutil.ReadFile(keyPath)
+	loadEncrypt := func(keyPath string) string {
+		if keyPath == "" {
+			return ""
+		}
+		pem, err := os.ReadFile(keyPath)
 		if err != nil {
 			logger.Fatalf("load RSA key from %s: %s", keyPath, err)
 		}
-		format.EncryptKey = string(pem)
+		return string(pem)
 	}
 
-	blob, err := createStorage(&format)
+	var format *meta.Format
+	var create bool
+	if format, _ = m.Load(false); format == nil {
+		create = true
+		format = &meta.Format{
+			Name:        name,
+			UUID:        uuid.New().String(),
+			Storage:     c.String("storage"),
+			Bucket:      c.String("bucket"),
+			AccessKey:   c.String("access-key"),
+			SecretKey:   c.String("secret-key"),
+			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
+			Shards:      c.Int("shards"),
+			Capacity:    c.Uint64("capacity") << 30,
+			Inodes:      c.Uint64("inodes"),
+			BlockSize:   fixObjectSize(c.Int("block-size")),
+			Compression: c.String("compress"),
+			TrashDays:   c.Int("trash-days"),
+			MetaVersion: 1,
+		}
+		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
+			format.AccessKey = os.Getenv("ACCESS_KEY")
+			_ = os.Unsetenv("ACCESS_KEY")
+		}
+		if format.SecretKey == "" && os.Getenv("SECRET_KEY") != "" {
+			format.SecretKey = os.Getenv("SECRET_KEY")
+			_ = os.Unsetenv("SECRET_KEY")
+		}
+	} else {
+		if c.Bool("no-update") {
+			return nil
+		}
+		format.Name = name
+		for _, flag := range c.LocalFlagNames() {
+			switch flag {
+			case "capacity":
+				format.Capacity = c.Uint64(flag)
+			case "inodes":
+				format.Capacity = c.Uint64(flag)
+			case "bucket":
+				format.Bucket = c.String(flag)
+			case "access-key":
+				format.AccessKey = c.String(flag)
+			case "secret-key":
+				format.SecretKey = c.String(flag)
+			case "trash-days":
+				format.TrashDays = c.Int(flag)
+			case "block-size":
+				format.BlockSize = fixObjectSize(c.Int(flag))
+			case "compress":
+				format.Compression = c.String(flag)
+			case "shards":
+				format.Shards = c.Int(flag)
+			case "storage":
+				format.Storage = c.String(flag)
+			case "encrypt-rsa-key":
+				format.EncryptKey = loadEncrypt(c.String(flag))
+			}
+		}
+	}
+	if format.Storage == "file" {
+		if p, err := filepath.Abs(format.Bucket); err == nil {
+			format.Bucket = p + "/"
+		} else {
+			logger.Fatalf("Failed to get absolute path of %s: %s", format.Bucket, err)
+		}
+	}
+
+	blob, err := createStorage(format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
@@ -346,7 +381,7 @@ func format(c *cli.Context) error {
 		if err := test(blob); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
-		if old == nil { // creating new volume
+		if create {
 			if objs, err := osync.ListAll(blob, "", ""); err == nil {
 				for o := range objs {
 					if o == nil {
@@ -364,16 +399,10 @@ func format(c *cli.Context) error {
 		}
 	}
 
-	if !c.Bool("force") && format.Compression == "none" { // default
-		if old != nil && old.Compression == "lz4" { // lz4 is the previous default algr
-			format.Compression = old.Compression // keep the existing default compress algr
-		}
-	}
-	err = m.Init(format, c.Bool("force"))
-	if err != nil {
+	if err = m.Init(*format, c.Bool("force")); err != nil {
 		logger.Fatalf("format: %s", err)
 	}
 	format.RemoveSecret()
-	logger.Infof("Volume is formatted as %+v", format)
+	logger.Infof("Volume is formatted as %+v", *format)
 	return nil
 }
