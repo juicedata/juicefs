@@ -52,9 +52,9 @@ func doUmount(mp string, force bool) error {
 	switch runtime.GOOS {
 	case "darwin":
 		if force {
-			cmd = exec.Command("diskutil", "umount", "force", mp)
+			cmd = exec.Command("umount", "-f", mp)
 		} else {
-			cmd = exec.Command("diskutil", "umount", mp)
+			cmd = exec.Command("umount", mp)
 		}
 	case "linux":
 		if _, err := exec.LookPath("fusermount"); err == nil {
