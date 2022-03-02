@@ -7,25 +7,25 @@ slug: .
 
 ## Basic benchmark
 
-JuiceFS provides a subcommand to run a few basic benchmarks to understand how it works in your environment:
+JuiceFS provides a subcommand `bench` to run a few basic benchmarks to evaluate how it works in your environment:
 
 ![JuiceFS Bench](../images/juicefs-bench.png)
 
 ## Throughput
 
-Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio), here is the result:
+Performed a sequential read/write benchmarks on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio). Here is the result:
 
 [![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
 
-It shows JuiceFS can provide 10X more throughput than the other two, read [more details](fio.md).
+It shows JuiceFS can provide 10X more throughput than the other two. Read [more details](fio.md).
 
 ## Metadata IOPS
 
-Performed a simple mdtest benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior), here is the result:
+Performed a simple [mdtest](https://github.com/hpc/ior) benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior). Here is the result:
 
 [![Metadata Benchmark](../images/metadata-benchmark.svg)](../images/metadata-benchmark.svg)
 
-It shows JuiceFS can provide significantly more metadata IOPS than the other two, read [more details](mdtest.md).
+It shows JuiceFS can provide significantly more metadata IOPS than the other two. Read [more details](mdtest.md).
 
 ## Analyze performance
 
@@ -38,4 +38,5 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-The last number on each line is the time (in seconds) current operation takes. You can use this directly to debug and analyze performance issues, or try `./juicefs profile /jfs` to monitor real time statistics. Please run `./juicefs profile -h` or refer to [here](../benchmark/operations_profiling.md) to learn more about this subcommand.
+The last number in each line is the time (in seconds) the current operation takes. You can use this directly to debug and analyze performance issues, or try `./juicefs profile /jfs` to monitor real time statistics. Please run `./juicefs profile -h` or refer [here](../benchmark/operations_profiling.md) to learn more about this subcommand.
+a
