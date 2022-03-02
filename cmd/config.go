@@ -140,6 +140,9 @@ func config(ctx *cli.Context) error {
 			}
 		case "bucket":
 			if new := ctx.String(flag); new != format.Bucket {
+				if format.Storage == "file" && !strings.HasSuffix(new, "/") {
+					new += "/"
+				}
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Bucket, new))
 				format.Bucket = new
 				storage = true
