@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -140,8 +141,12 @@ func config(ctx *cli.Context) error {
 			}
 		case "bucket":
 			if new := ctx.String(flag); new != format.Bucket {
-				if format.Storage == "file" && !strings.HasSuffix(new, "/") {
-					new += "/"
+				if format.Storage == "file" {
+					if p, err := filepath.Abs(new); err == nil {
+						new = p + "/"
+					} else {
+						logger.Fatalf("Failed to get absolute path of %s: %s", new, err)
+					}
 				}
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Bucket, new))
 				format.Bucket = new

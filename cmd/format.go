@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -335,13 +336,7 @@ func format(c *cli.Context) error {
 		if c.Bool("no-update") {
 			return nil
 		}
-		if name != format.Name {
-			if c.Bool("force") {
-				format.Name = name
-			} else {
-				logger.Fatalf("Cannot update volume name")
-			}
-		}
+		format.Name = name
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
@@ -369,8 +364,12 @@ func format(c *cli.Context) error {
 			}
 		}
 	}
-	if format.Storage == "file" && !strings.HasSuffix(format.Bucket, "/") {
-		format.Bucket += "/"
+	if format.Storage == "file" {
+		if p, err := filepath.Abs(format.Bucket); err == nil {
+			format.Bucket = p + "/"
+		} else {
+			logger.Fatalf("Failed to get absolute path of %s: %s", format.Bucket, err)
+		}
 	}
 
 	blob, err := createStorage(format)
