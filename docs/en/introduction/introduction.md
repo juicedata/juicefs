@@ -31,9 +31,9 @@ JuiceFS provides rich APIs for various forms of data management, analysis, archi
 
 The JuiceFS file system consists of three parts:
 
-1. **JuiceFS Client**: coordinating implementation of object storage and metadata engine and file system interfaces such as POSIX, Hadoop, Kubernetes CSI Driver, S3 Gateway, etc..
-2. **Data Storage**: storing data in different media such as local disk, public or private cloud object storage, HDFS, etc.
-3. **Metadata Engine**: storing the corresponding metadata that contains information of file name, file size, permission group, creation and modification time and directory structure, etc., on multiple engines, e.g., Redis, MySQL, and TiKV.
+1. **JuiceFS Client**: Coordinates object storage and metadata engine as well as implementation of file system interfaces such as POSIX, Hadoop, Kubernetes CSI Driver, S3 Gateway.
+2. **Data Storage**: Stores data, with supports of a variety of data storage media, e.g., local disk, public or private cloud object storage, and HDFS.
+3. **Metadata Engine**: Stores the corresponding metadata that contains information of file name, file size, permission group, creation and modification time and directory structure, etc., with supports of different metadata engines, e.g., Redis, MySQL and TiKV.
 
 ![image](../images/juicefs-arch-new.png)
 
@@ -41,7 +41,7 @@ As a file system, JuiceFS handles the data and its corresponding metadata separa
 
 In terms of **data storage**, JuiceFS supports almost all kinds of public cloud object storage as well as other open source object storage that support private deployments, e.g., OpenStack Swift, Ceph, and MinIO.
 
-In terms of **metadata storage**, JuiceFS is designed with multiple engines, and currently supports Redis, TiKV, MySQL/MariaDB, PostgreSQL, SQLite, etc. as metadata service engines. More metadata storage engines will be implemeted soon. Welcome to [Submit Issue](https://github.com/juicedata/juicefs/issues) and send us your requirements.
+In terms of **metadata storage**, JuiceFS is designed with multiple engines, and currently supports Redis, TiKV, MySQL/MariaDB, PostgreSQL, SQLite, etc., as metadata service engines. More metadata storage engines will be implemeted soon. Welcome to [Submit Issue](https://github.com/juicedata/juicefs/issues) and send us your requirements.
 
 In terms of **File System Interface** implementation:
 
