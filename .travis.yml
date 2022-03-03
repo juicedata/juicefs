@@ -52,13 +52,14 @@ before_script:
   - sudo make -C fstests setup
   - chmod +x travis-setup-hdfs.sh
   - ./travis-setup-hdfs.sh
-  - for i in {2222,3306,5432,8020,9000,9007} ; do nc -z localhost $i;if [ $? != 0 ];then sleep 5; else continue; fi; nc -z localhost $i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+  - sudo chmod 777 /var/jfsCache /var/jfs
+  - ./juicefs format "sqlite3://webdavtest.db" webdavtest
+  - nohup ./juicefs webdav "sqlite3://webdavtest.db" 127.0.0.1:10001 >> jfswebdav.log 2>&1 &
+  - sleep 4
+  - for i in {2222,3306,5432,8020,9000,9007,10001} ; do nc -z localhost $i;if [ $? != 0 ];then sleep 5; else continue; fi; nc -z localhost $i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
   - nc -z localhost 2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 script:
-  - ./juicefs format "sqlite3://webdavtest.db" webdavtest
-  - nohup ./juicefs webdav "sqlite3://webdavtest.db" 127.0.0.1:9008  >> jfs-webdav.log 2>&1 &
-  - for i in {"basic","copymove","http"} ; do /root/litmus-0.13/${i} http://127.0.0.1:9008 ; done
-  - sudo chmod 777 /var/jfsCache
+  - cd /home/travis/.m2/litmus-0.13; for i in {"basic","copymove","http"} ; do sudo /home/travis/.m2/litmus-0.13/${i} http://127.0.0.1:10001 ; done; cd -;
   - make test
   - cat cov1.out >> coverage.txt
   - cat cov2.out >> coverage.txt
