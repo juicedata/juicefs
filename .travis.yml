@@ -39,6 +39,7 @@ before_script:
   - if [ -f "/home/travis/.m2/sftp.tar" ];then docker load </home/travis/.m2/sftp.tar; fi
   - if [ ! -f "/home/travis/.m2/install.sh" ];then wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh; fi
   - if [ ! -f "/home/travis/.m2/rclone-v1.57.0-linux-amd64.zip" ];then wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip && unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2; fi
+  - if [ ! -f "/home/travis/.m2/litmus-0.13.tar.g" ];then wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz; tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2;cd /home/travis/.m2/litmus-0.13;./configure;make;cd -; fi
   - docker images
   - sh /home/travis/.m2/install.sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
   - docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
@@ -54,6 +55,9 @@ before_script:
   - for i in {2222,3306,5432,8020,9000,9007} ; do nc -z localhost $i;if [ $? != 0 ];then sleep 5; else continue; fi; nc -z localhost $i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
   - nc -z localhost 2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 script:
+  - ./juicefs format "sqlite3://webdavtest.db" webdavtest
+  - nohup ./juicefs webdav "sqlite3://webdavtest.db" 127.0.0.1:9008  >> jfs-webdav.log 2>&1 &
+  - for i in {"basic","copymove","http"} ; do /root/litmus-0.13/${i} http://127.0.0.1:9008 ; done
   - sudo chmod 777 /var/jfsCache
   - make test
   - cat cov1.out >> coverage.txt
