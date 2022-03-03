@@ -100,6 +100,7 @@ func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm o
 	if flag&(os.O_EXCL) != 0 {
 		mode |= vfs.MODE_MASK_X
 	}
+	name = strings.TrimRight(name, "/")
 	f, err := hfs.fs.Open(hfs.ctx, name, uint32(mode))
 	if err != 0 {
 		if err == syscall.ENOENT && flag&os.O_CREATE != 0 {
