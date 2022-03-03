@@ -37,6 +37,10 @@ func TestWebdav(t *testing.T) {
 	if err != nil {
 		t.Fatalf("webdavFS create failed: %s", err)
 	}
+	_, err = webdavFS.OpenFile(ctx, "/b/", os.O_CREATE, 0644)
+	if err != nil {
+		t.Fatalf("webdavFS create failed: %s", err)
+	}
 	aInfo, err := aFile.Stat()
 	if err != nil || aInfo.Name() != "a" || aInfo.Mode().Perm() != fs.FileMode(0644) {
 		t.Fatalf("webdavFS stat failed: %s", err)
