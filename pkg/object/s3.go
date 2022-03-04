@@ -382,8 +382,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 				if vpcCompile.MatchString(uri.Host) {
 					bucketName = hostParts[0]
 					ep = hostParts[1]
-					submatch := vpcCompile.FindStringSubmatch(uri.Host)
-					if len(submatch) == 2 {
+					if submatch := vpcCompile.FindStringSubmatch(uri.Host); len(submatch) == 2 {
 						region = submatch[1]
 					}
 				} else {
@@ -401,8 +400,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 				ep = hostParts[1]
 				oracleCompile := regexp.MustCompile(`.*\\.compat\\.objectstorage\\.(.*)\\.oraclecloud.com`)
 				if oracleCompile.MatchString(ep) {
-					submatch := oracleCompile.FindStringSubmatch(ep)
-					if len(submatch) == 2 {
+					if submatch := oracleCompile.FindStringSubmatch(ep); len(submatch) == 2 {
 						region = submatch[1]
 					}
 				}
