@@ -38,13 +38,13 @@ With JuiceFS, massive cloud storage can be directly connected to big data, machi
 
 JuiceFS consists of three parts:
 
-1. **JuiceFS Client**: Coordinate the implementation of object storage and metadata storage engines as well as file system interfaces such as POSIX, Hadoop, Kubernetes, and S3 gateway.
-2. **Data Storage**: Support data storage in local disk and object storage.
-3. **Metadata Engine**: Support storage of metadata that corresponds to the stored data on multiple engines such as Redis, MySQL, and SQLite.
+1. **JuiceFS Client**: Coordinates object storage and metadata storage engine as well as implementation of file system interfaces such as POSIX, Hadoop, Kubernetes, and S3 gateway.
+2. **Data Storage**: Stores data, with supports of a variety of data storage media, e.g., local disk, public or private cloud object storage, and HDFS.
+3. **Metadata Engine**: Stores the corresponding metadata that contains information of file name, file size, permission group, creation and modification time and directory structure, etc., with supports of different metadata engines, e.g., Redis, MySQL, SQLite and TiKV.
 
 ![JuiceFS Architecture](docs/en/images/juicefs-arch-new.png)
 
-The metadata of file system will be stored via JuiceFS through Redis, which is a fast, open-source, in-memory key-value data storage, particularly suitable for storing metadata; meanwhile, all the data will be stored in object storage through JuiceFS client. [Learn more](docs/en/introduction/architecture.md)
+JuiceFS can store the metadata of file system on Redis, which is a fast, open-source, in-memory key-value data storage, particularly suitable for storing metadata; meanwhile, all the data will be stored in object storage through JuiceFS client. [Learn more](docs/en/introduction/architecture.md)
 
 ![JuiceFS Storage Format](docs/en/images/juicefs-storage-format-new.png)
 
@@ -52,7 +52,7 @@ Each file stored in JuiceFS is split into **"Chunk"** s at a fixed size with the
 
 ![How JuiceFS stores your files](docs/en/images/how-juicefs-stores-files-new.png)
 
-When using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you may find that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform. Instead, there are only a chunks directory and a bunch of digitally numbered directories and files in the bucket. But don't panic! This is just the secret of the high-performance operation of JuiceFS!
+When using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, the source files stored in JuiceFS cannot be found in the file browser of the object storage platform; instead, there are only a chunks directory and a bunch of digitally numbered directories and files in the bucket. Don't panic! This is just the secret of the high-performance operation of JuiceFS!
 
 ## Getting Started
 
