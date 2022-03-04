@@ -2558,12 +2558,12 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting:   &m.fmt,
+		Setting:   m.fmt,
 		Counters:  counters,
 		Sustained: sessions,
 		DelFiles:  dels,
 	}
-
+	dm.Setting.RemoveSecret()
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
