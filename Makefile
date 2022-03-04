@@ -66,4 +66,3 @@ release:
 test:
 	JFS_PAGE_STACK=1 go test -v -cover ./pkg/... -coverprofile=cov1.out
 	sudo JFS_PAGE_STACK=1 JFS_GC_SKIPPEDTIME=1 `which go` test -v -cover ./cmd/... -coverprofile=cov2.out
-	sudo `which go` test ./integration/... -cover -coverprofile=cov3.out -coverpkg=./pkg/...,./cmd/...
