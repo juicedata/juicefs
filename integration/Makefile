@@ -27,6 +27,4 @@ s3test:
 	bash s3gateway_test.sh
 
 webdav:
-	/home/travis/.m2/litmus-0.13/basic http://localhost:9009
-	/home/travis/.m2/litmus-0.13/copymove http://localhost:9009
-	/home/travis/.m2/litmus-0.13/http http://localhost:9009
+	cd /home/travis/.m2/litmus-0.13 ; for i in {"basic","copymove","http"} ; do sudo ./${i} http://127.0.0.1:9009 ; done
