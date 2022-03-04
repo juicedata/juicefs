@@ -66,6 +66,7 @@ func cmdFormat() *cli.Command {
 		Description: `
 Create a new JuiceFS volume. Here META-URL is used to set up the metadata engine (Redis, TiKV, MySQL, etc.),
 and NAME is the prefix of all objects in data storage.
+
 DEPRECATED: It was also used to change configuration of an existing volume, but now this function is
 deprecated, instead please use the "config" command.
 

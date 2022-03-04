@@ -36,6 +36,9 @@ Dump metadata of the volume in JSON format so users are able to see its content 
 Output of this command can be loaded later into an empty database, serving as a method to backup
 metadata or to change metadata engine.
 
+WARNING: The output may contain sensitive information about your environment, please inspect its
+contents before sharing it with others.
+
 Examples:
 $ juicefs dump redis://localhost meta-dump
 
@@ -74,5 +77,6 @@ func dump(ctx *cli.Context) error {
 		return err
 	}
 	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))
+	warn("The output may contain sensitive information about your environment, please inspect its contents before sharing it with others.")
 	return nil
 }
