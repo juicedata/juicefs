@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright 2020 Juicedata, Inc.
+ * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"github.com/go-redis/redis/v8"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func startGateway(t *testing.T) {
 	ResetHttp()
 
 	go func() {
-		if err := Main([]string{"", "gateway", gatewayMeta, gatewayAddr}); err != nil {
+		if err := Main([]string{"", "gateway", gatewayMeta, gatewayAddr, "--multi-buckets", "--keep-etag"}); err != nil {
 			t.Errorf("gateway failed: %s", err)
 		}
 	}()
@@ -76,8 +77,8 @@ func TestIntegration(t *testing.T) {
 	defer umountTemp(t)
 	startGateway(t)
 	startWebdav(t)
-
-	makeCmd := exec.Command("make -C ../integration")
+	_ = os.Chdir("../integration")
+	makeCmd := exec.Command("make")
 	out, err := makeCmd.CombinedOutput()
 	if err != nil {
 		t.Logf("std out:\n%s\n", string(out))
