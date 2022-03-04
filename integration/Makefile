@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: xattrs fsx s3test
+all: xattrs fsx s3test webdav
 
 
 xattrs:
@@ -26,7 +26,7 @@ s3test:
 	pip install awscli --upgrade
 	bash s3gateway_test.sh
 
-webdav.test:
+webdav:
 	/home/travis/.m2/litmus-0.13/basic http://localhost:9009
 	/home/travis/.m2/litmus-0.13/copymove http://localhost:9009
 	/home/travis/.m2/litmus-0.13/http http://localhost:9009
