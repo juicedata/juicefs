@@ -1,18 +1,18 @@
 DURATION ?= 10
 
-all: xattrs fsx s3test
+all: xattrs fsx s3test webdav
 
 
 xattrs:
-	touch /tmp/jfs/test_xattrs
-	setfattr -n user.k -v value /tmp/jfs/test_xattrs
-	getfattr -n user.k /tmp/jfs/test_xattrs | grep -q user.k=
+	touch /tmp/jfs-unit-test/test_xattrs
+	setfattr -n user.k -v value /tmp/jfs-unit-test/test_xattrs
+	getfattr -n user.k /tmp/jfs-unit-test/test_xattrs | grep -q user.k=
 
 fsracer: secfs.test/tools/bin/fsracer
-	secfs.test/tools/bin/fsracer $(DURATION) /tmp/jfs > fsracer.log
+	secfs.test/tools/bin/fsracer $(DURATION) /tmp/jfs-unit-test > fsracer.log
 
 fsx: secfs.test/tools/bin/fsx
-	secfs.test/tools/bin/fsx -d $(DURATION) -p 10000 -F 100000 /tmp/jfs/fsx.out
+	secfs.test/tools/bin/fsx -d $(DURATION) -p 10000 -F 100000 /tmp/jfs-unit-test/fsx.out
 
 secfs.test/tools/bin/fsx: secfs.test
 
@@ -25,3 +25,6 @@ secfs.test:
 s3test:
 	pip install awscli --upgrade
 	bash s3gateway_test.sh
+
+webdav:
+	cd /home/travis/.m2/litmus-0.13 ; for i in "basic" "copymove" "http"; do sudo ./$${i} http://127.0.0.1:9009 ; done
