@@ -356,14 +356,14 @@ func bench(ctx *cli.Context) error {
 	progress := utils.NewProgress(!bm.tty, false)
 	if b := bm.big; b != nil {
 		total := int64(bm.threads * b.fcount * b.bcount)
-		b.wbar = progress.AddCountBar("Write big", total)
-		b.rbar = progress.AddCountBar("Read big", total)
+		b.wbar = progress.AddCountBar("Write big blocks", total)
+		b.rbar = progress.AddCountBar("Read big blocks", total)
 	}
 	if s := bm.small; s != nil {
 		total := int64(bm.threads * s.fcount * s.bcount)
-		s.wbar = progress.AddCountBar("Write small", total)
-		s.rbar = progress.AddCountBar("Read small", total)
-		s.sbar = progress.AddCountBar("Stat file", int64(bm.threads*s.fcount))
+		s.wbar = progress.AddCountBar("Write small blocks", total)
+		s.rbar = progress.AddCountBar("Read small blocks", total)
+		s.sbar = progress.AddCountBar("Stat small files", int64(bm.threads*s.fcount))
 	}
 
 	/* --- Run Benchmark --- */
