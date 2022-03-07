@@ -89,6 +89,17 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
 
+      - name: Show Log
+        if: always()
+        run: |
+          stat /tmp/jfs
+          echo "hhhhh"
+          stat /tmp/jfs/mysql/
+          echo "bbbbb"
+          sudo cat /var/log/syslog | grep 'juicefs'
+          sudo tail -n 300 /var/log/juicefs.log
+
+
       - name: Setup tmate session
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
