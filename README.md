@@ -44,7 +44,7 @@ JuiceFS consists of three parts:
 
 ![JuiceFS Architecture](docs/en/images/juicefs-arch-new.png)
 
-JuiceFS store the metadata of file system on compatible Metadate Engine. In-memory key-value data storages, like Redis, are particularly suitable for storing metadata; meanwhile, all the data will be stored in object storage through JuiceFS client. [Learn more](docs/en/introduction/architecture.md)
+JuiceFS store the metadata of file system on a compatible Metadata engine. In-memory key-value data storages, like Redis, are particularly suitable for storing metadata; meanwhile, all the data will be stored in object storage through JuiceFS client. [Learn more](docs/en/introduction/architecture.md)
 
 ![JuiceFS Storage Format](docs/en/images/juicefs-storage-format-new.png)
 
