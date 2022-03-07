@@ -390,12 +390,14 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 }
 
 func (n *jfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, options minio.ObjectOptions) (objs []minio.DeletedObject, errs []error) {
-	for _, object := range objects {
-		_, err := n.DeleteObject(ctx, bucket, object.ObjectName, options)
-		if err == nil {
-			objs = append(objs, minio.DeletedObject{ObjectName: object.ObjectName})
-		} else {
-			errs = append(errs, err)
+	objs = make([]minio.DeletedObject, len(objects))
+	errs = make([]error, len(objects))
+	for idx, object := range objects {
+		_, errs[idx] = n.DeleteObject(ctx, bucket, object.ObjectName, options)
+		if errs[idx] == nil {
+			objs[idx] = minio.DeletedObject{
+				ObjectName: object.ObjectName,
+			}
 		}
 	}
 	return
