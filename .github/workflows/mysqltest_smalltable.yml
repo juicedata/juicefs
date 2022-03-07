@@ -98,6 +98,7 @@ jobs:
           stat /tmp/jfs/mysql/
           echo "ccccc"
           sudo cat /var/log/syslog | grep 'juicefs'
+          echo "ddddd"
           sudo tail -n 300 /var/log/juicefs.log
 
 
