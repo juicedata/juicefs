@@ -47,7 +47,7 @@ The steps for decrypting the data are as follows:
 
 The security of RSA keys is critical when data at rest encryption is enabled. If the key is compromised, it may lead to data leakage. If the key is lost, then **all** encrypted data will be lost and cannot be recovered.
 
-When creating a new volume using `juicefs format`, static encryption can be enabled by specifying the RSA private key with the `-encrypt-rsa-key` parameter, which will be saved to Redis. When the private key is password-protected, the password can be specified using the environment variable `JFS_RSA_PASSPHRASE`.
+When creating a new volume using `juicefs format`, static encryption can be enabled by specifying the RSA private key with the `-encrypt-rsa-key` parameter, which will be saved on the Metadata service. When the private key is password-protected, the password must be specified using the environment variable `JFS_RSA_PASSPHRASE`.
 
 Usage:
 
@@ -55,6 +55,8 @@ Usage:
 
 ```shell
 $ openssl genrsa -out my-priv-key.pem -aes256 2048
+or
+$ openssl genpkey -algorithm RSA -out my-priv-key.pem -pkeyopt rsa_keygen_bits:2048 -aes-256-cbc
 ```
 
 2. Provide the key when formatting
