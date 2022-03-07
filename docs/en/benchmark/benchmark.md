@@ -13,7 +13,7 @@ JuiceFS provides a subcommand `bench` to run a few basic benchmarks to evaluate 
 
 ## Throughput
 
-Performed a sequential read/write benchmarks on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio). Here is the result:
+Performed sequential read/write benchmarks on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio). Here is the result:
 
 [![Sequential Read Write Benchmark](../images/sequential-read-write-benchmark.svg)](../images/sequential-read-write-benchmark.svg)
 
