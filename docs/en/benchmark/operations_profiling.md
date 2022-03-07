@@ -41,13 +41,13 @@ $ cat /jfs/.accesslog > /tmp/jfs-oplog
 $ juicefs profile /tmp/jfs-oplog
 ```
 
-> **Tip 1**: The replay could be paused anytime by <kbd>Enter/Return</kbd>, and continues by pressing it again.
+> **Tip 1**: The replay could be paused anytime by <kbd>Enter/Return</kbd>, and continued by pressing it again.
 >
 > **Tip 2**: Setting `--interval 0` will replay the whole log file as fast as possible, and show the result as if it was within one interval.
 
 ## Filter
 
-Sometimes we are only interested in a certain user or process, then we can filter others out by specifying its IDs, e.g:
+Sometimes we are only interested in a certain user or process, then we can filter others out by specifying IDs, e.g:
 
 ```bash
 $ juicefs profile /tmp/jfs-oplog --uid 12345
