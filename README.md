@@ -44,7 +44,7 @@ JuiceFS consists of three parts:
 
 ![JuiceFS Architecture](docs/en/images/juicefs-arch-new.png)
 
-JuiceFS can store the metadata of file system on Redis, which is a fast, open-source, in-memory key-value data storage, particularly suitable for storing metadata; meanwhile, all the data will be stored in object storage through JuiceFS client. [Learn more](docs/en/introduction/architecture.md)
+JuiceFS store the metadata of file system on compatible Metadate Engine. In-memory key-value data storages, like Redis, are particularly suitable for storing metadata; meanwhile, all the data will be stored in object storage through JuiceFS client. [Learn more](docs/en/introduction/architecture.md)
 
 ![JuiceFS Storage Format](docs/en/images/juicefs-storage-format-new.png)
 
@@ -58,8 +58,8 @@ When using JuiceFS, files will eventually be split into Chunks, Slices and Block
 
 Before you begin, make sure you have:
 
-1. Redis database for metadata storage
-2. Object storage for storing data blocks
+1. A compatible database for metadata storage
+2. An Object storage for storing data blocks
 3. [JuiceFS Client](https://juicefs.com/docs/community/installation) downloaded and installed
 
 Please refer to [Quick Start Guide](https://juicefs.com/docs/community/quick_start_guide) in the community doc (or doc in [this repo](docs/en/getting-started/for_local.md)) to start using JuiceFS right away!
@@ -219,7 +219,7 @@ JuiceFS supports many object storage. Please check out [this list](docs/en/refer
 
 ### Can I use Redis cluster?
 
-The simple answer is no. JuiceFS uses [Redis transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, which is not well supported by cluster mode. For this, sentinal or other Redis HA solution are needed.
+The simple answer is no. JuiceFS uses [Redis transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, which is not well supported by cluster mode. For this, sentinel or other Redis HA solutions are needed.
 
 See ["Redis Best Practices"](docs/en/administration/metadata/redis_best_practices.md) for more information.
 
