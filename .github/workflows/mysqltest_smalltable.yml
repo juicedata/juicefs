@@ -92,10 +92,11 @@ jobs:
       - name: Show Log
         if: always()
         run: |
+          echo "aaaaa"
           stat /tmp/jfs
-          echo "hhhhh"
-          stat /tmp/jfs/mysql/
           echo "bbbbb"
+          stat /tmp/jfs/mysql/
+          echo "ccccc"
           sudo cat /var/log/syslog | grep 'juicefs'
           sudo tail -n 300 /var/log/juicefs.log
 
