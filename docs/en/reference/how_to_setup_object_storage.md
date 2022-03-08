@@ -95,6 +95,7 @@ If you wish to use a storage type that is not listed, feel free to submit a requ
 | [Azure Blob Storage](#azure-blob-storage)                 | `wasb`     |
 | [Backblaze B2](#backblaze-b2)                             | `b2`       |
 | [IBM Cloud Object Storage](#ibm-cloud-object-storage)     | `ibmcos`   |
+| [Oracle Cloud Object Storage](#oracle-cloud-object-storage) | `s3`     |
 | [Scaleway Object Storage](#scaleway-object-storage)       | `scw`      |
 | [DigitalOcean Spaces](#digitalocean-spaces)               | `space`    |
 | [Wasabi](#wasabi)                                         | `wasabi`   |
@@ -273,6 +274,22 @@ IBM Cloud Object Storage provides [multiple endpoints](https://cloud.ibm.com/doc
 ```bash
 $ juicefs format \
     --storage ibmcos \
+    --bucket https://<bucket>.<endpoint> \
+    --access-key <API-key> \
+    --secret-key <instance-ID> \
+    ... \
+    myjfs
+```
+
+## Oracle Cloud Object Storage
+
+Oracle Cloud Object Storage supports s3 compatible access, [reference documentation](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm)
+
+The `endpoint` format for this object store is: `${namespace}.compat.objectstorage.${region}.oraclecloud.com`
+
+```bash
+$ juicefs format \
+    --storage s3 \
     --bucket https://<bucket>.<endpoint> \
     --access-key <API-key> \
     --secret-key <instance-ID> \

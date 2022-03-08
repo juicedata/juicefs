@@ -95,6 +95,7 @@ $ juicefs format \
 | [Azure Blob 存储](#azure-blob-存储)         | `wasb`       |
 | [Backblaze B2](#backblaze-b2)               | `b2`         |
 | [IBM 云对象存储](#ibm-云对象存储)           | `ibmcos`     |
+| [Oracle 云对象存储](#Oracle-云对象存储)               | `s3`  |
 | [Scaleway](#scaleway)                       | `scw`        |
 | [DigitalOcean Spaces](#digitalocean-spaces) | `space`      |
 | [Wasabi](#wasabi)                           | `wasabi`     |
@@ -274,6 +275,22 @@ IBM 云对象存储为每一个区域提供了 `公网` 和 `内网` 两种 [end
 ```bash
 $ juicefs format \
     --storage ibmcos \
+    --bucket https://<bucket>.<endpoint> \
+    --access-key <API-key> \
+    --secret-key <instance-ID> \
+    ... \
+    myjfs
+```
+
+## Oracle 云对象存储
+
+Oracle 云对象存储支持 s3 兼容的形式进行访问，[参考文档](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm)
+
+该对象存储的 `endpoint` 格式为:`${namespace}.compat.objectstorage.${region}.oraclecloud.com`
+
+```bash
+$ juicefs format \
+    --storage s3 \
     --bucket https://<bucket>.<endpoint> \
     --access-key <API-key> \
     --secret-key <instance-ID> \
