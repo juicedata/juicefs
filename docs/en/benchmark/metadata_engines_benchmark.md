@@ -13,11 +13,11 @@ Conclusion first:
 
 >**Note**:
 >
->1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability; more information can be found [here](https://redis.io/topics/persistence).
->2. Both Redis and MySQL store only one replica locally, while TiKV stores three replicas in three different hosts using Raft protocol.
+>1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability. More information can be found [here](https://redis.io/topics/persistence).
+>2. Both Redis and MySQL store only one replica locally, while TiKV stores three replicas on three different hosts using Raft protocol.
 
 
-Details are provided below. Please note all the tests are run with the same object storage (to save data), client and metadata hosts; only metadata engines differ.
+Details are provided below. Please note all the tests are run with the same object storage (to save data), clients and metadata hosts; only metadata engines differ.
 
 ## Environment
 
@@ -113,9 +113,9 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### Golang Benchmark
 
-- Shows time cost (us/op), smaller is better.
+- Shows time cost (us/op). Smaller is better.
 - Number in parentheses is the multiple of Redis-Always cost (`always` and `everysec` are candidates for Redis configuration `appendfsync`).
-- Because of metadata cache, the results of `Read` are all less than 1us, which are not comparable for now.
+- Because of enabling metadata cache, the results of `read` are all less than 1us, which are not comparable for now.
 
 |              | Redis-Always | Redis-Everysec | MySQL | TiKV |
 | ------------ | ------------ | -------------- | ----- | ---- |
@@ -158,7 +158,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### mdtest
 
-- Shows rate (ops/sec), bigger is better
+- Shows rate (ops/sec). Bigger is better.
 
 |                    | Redis-Always | Redis-Everysec | MySQL     | TiKV      |
 | ------------------ | ------------ | -------------- | --------- | --------- |
