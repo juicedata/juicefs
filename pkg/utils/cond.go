@@ -23,9 +23,8 @@ import (
 
 // Cond is similar to sync.Cond, but you can wait with a timeout.
 type Cond struct {
-	L       sync.Locker
-	signal  chan bool
-	waiters int
+	L      sync.Locker
+	signal chan bool
 }
 
 // Signal wakes up a waiter.
@@ -40,22 +39,20 @@ func (c *Cond) Signal() {
 // Broadcast wake up all the waiters.
 // It's required for the caller to hold L.
 func (c *Cond) Broadcast() {
-	n := c.waiters
-	c.L.Unlock()
-	for n > 0 {
-		c.signal <- true
-		n--
+	for {
+		select {
+		case c.signal <- true:
+		default:
+			return
+		}
 	}
-	c.L.Lock()
 }
 
 // Wait until Signal() or Broadcast() is called.
 func (c *Cond) Wait() {
-	c.waiters++
 	c.L.Unlock()
 	<-c.signal
 	c.L.Lock()
-	c.waiters--
 }
 
 var timerPool = sync.Pool{
@@ -67,32 +64,23 @@ var timerPool = sync.Pool{
 // WaitWithTimeout wait for a signal or a period of timeout eclipsed.
 // returns true in case of timeout else false
 func (c *Cond) WaitWithTimeout(d time.Duration) bool {
-	c.waiters++
 	c.L.Unlock()
 	t := timerPool.Get().(*time.Timer)
 	t.Reset(d)
 	defer func() {
 		t.Stop()
 		timerPool.Put(t)
+		c.L.Lock()
 	}()
 	select {
 	case <-c.signal:
-		c.L.Lock()
-		c.waiters--
 		return false
 	case <-t.C:
-		go func() {
-			<-c.signal
-			c.L.Lock()
-			c.waiters--
-			c.L.Unlock()
-		}()
-		c.L.Lock()
 		return true
 	}
 }
 
 // NewCond creates a Cond.
 func NewCond(lock sync.Locker) *Cond {
-	return &Cond{lock, make(chan bool), 0}
+	return &Cond{lock, make(chan bool, 1)}
 }
