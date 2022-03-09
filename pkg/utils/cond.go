@@ -40,11 +40,13 @@ func (c *Cond) Signal() {
 // Broadcast wake up all the waiters.
 // It's required for the caller to hold L.
 func (c *Cond) Broadcast() {
-	for c.waiters > 0 {
-		c.L.Unlock()
-		c.Signal()
-		c.L.Lock()
+	n := c.waiters
+	c.L.Unlock()
+	for n > 0 {
+		c.signal <- true
+		n--
 	}
+	c.L.Lock()
 }
 
 // Wait until Signal() or Broadcast() is called.
@@ -72,14 +74,20 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 	defer func() {
 		t.Stop()
 		timerPool.Put(t)
-		c.L.Lock()
-		c.waiters--
-
 	}()
 	select {
 	case <-c.signal:
+		c.L.Lock()
+		c.waiters--
 		return false
 	case <-t.C:
+		go func() {
+			<-c.signal
+			c.L.Lock()
+			c.waiters--
+			c.L.Unlock()
+		}()
+		c.L.Lock()
 		return true
 	}
 }
