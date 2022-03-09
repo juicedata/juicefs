@@ -291,8 +291,8 @@ The `endpoint` format for this object store is: `${namespace}.compat.objectstora
 $ juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
-    --access-key <API-key> \
-    --secret-key <instance-ID> \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
     ... \
     myjfs
 ```
