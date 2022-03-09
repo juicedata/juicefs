@@ -367,6 +367,15 @@ func mount(c *cli.Context) error {
 	installHandler(mp)
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
+	if c.IsSet("remote-access-log") {
+		var err error
+		vfs.RemoteLogAddr = c.String("remote-access-log")
+		if vfs.Conn, err = net.DialTimeout("tcp", vfs.RemoteLogAddr, 1*time.Second); err != nil {
+			logger.Errorf("Failed to connect to %s,error: %v", vfs.RemoteLogAddr, err)
+		} else {
+			logger.Infof("Access log is written to %s", vfs.RemoteLogAddr)
+		}
+	}
 	mount_main(v, c)
 	return metaCli.CloseSession()
 }

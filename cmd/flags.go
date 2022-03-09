@@ -185,6 +185,10 @@ func shareInfoFlags() []cli.Flag {
 			Name:  "no-usage-report",
 			Usage: "do not send usage report",
 		},
+		&cli.StringFlag{
+			Name:  "remote-access-log",
+			Usage: "write access log to tcp port",
+		},
 	}
 }
 

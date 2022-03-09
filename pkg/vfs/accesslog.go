@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -40,12 +41,40 @@ type logReader struct {
 }
 
 var (
-	readerLock sync.Mutex
-	readers    map[uint64]*logReader
+	readerLock    sync.Mutex
+	readers       map[uint64]*logReader
+	RemoteLogAddr string
+	Conn          net.Conn
+	retrying      bool
 )
 
 func init() {
 	readers = make(map[uint64]*logReader)
+}
+
+func retryConn() {
+	retrying = true
+	go func(addr string) {
+		for range time.NewTicker(5 * time.Minute).C {
+			var err error
+			if Conn, err = net.DialTimeout("tcp", addr, 1*time.Second); err != nil {
+				logger.Errorf("Failed to connect to %s,error: %v", addr, err)
+			} else {
+				retrying = false
+				logger.Infof("Access log is written to %s", addr)
+				return
+			}
+		}
+	}(RemoteLogAddr)
+}
+
+func writeToRemote(line []byte) {
+	_ = Conn.SetDeadline(time.Now().Add(1 * time.Second))
+	if _, err := Conn.Write(line); err != nil {
+		Conn = nil
+		retryConn()
+		logger.Errorf("Write access-log to tcp error: %s", err)
+	}
 }
 
 func logit(ctx Context, format string, args ...interface{}) {
@@ -65,11 +94,18 @@ func logit(ctx Context, format string, args ...interface{}) {
 		logger.Infof("slow operation: %s", cmd)
 	}
 	line := []byte(fmt.Sprintf("%s [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd))
-
 	for _, r := range readers {
 		select {
 		case r.buffer <- line:
 		default:
+		}
+	}
+	if RemoteLogAddr != "" {
+		if Conn == nil && !retrying {
+			retryConn()
+		}
+		if Conn != nil {
+			writeToRemote(line)
 		}
 	}
 }
