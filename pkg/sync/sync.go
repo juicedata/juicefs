@@ -585,7 +585,7 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 	if err != nil {
 		logger.Fatal(err)
 	}
-	if config.Exclude != nil {
+	if config.Exclude != nil || config.Include != nil {
 		srckeys = filter(srckeys, config.Include, config.Exclude)
 		dstkeys = filter(dstkeys, config.Include, config.Exclude)
 	}

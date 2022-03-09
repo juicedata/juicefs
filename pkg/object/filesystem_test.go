@@ -44,7 +44,7 @@ func testKeysEqual(objs []Object, expectedKeys []string) error {
 }
 
 func TestDisk2(t *testing.T) {
-	s, _ := newDisk("/tmp/abc/", "", "")
+	s, _ := newDisk("/tmp/abc", "", "")
 	testFileSystem(t, s)
 }
 

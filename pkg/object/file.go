@@ -360,17 +360,13 @@ func newDisk(root, accesskey, secretkey string) (ObjectStorage, error) {
 	if runtime.GOOS == "windows" && strings.HasPrefix(root, "/") {
 		root = root[1:]
 	}
-	if strings.HasSuffix(root, dirSuffix) {
-		logger.Debugf("Ensure directory %s", root)
-		if err := os.MkdirAll(root, 0755); err != nil {
-			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
-		}
-	} else {
-		dir := path.Dir(root)
-		logger.Debugf("Ensure directory %s", dir)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
-		}
+	// root must end with dirSuffix
+	if !strings.HasSuffix(root, dirSuffix) {
+		root = root + dirSuffix
+	}
+	logger.Debugf("Ensure directory %s", root)
+	if err := os.MkdirAll(root, 0755); err != nil {
+		return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
 	}
 	return &filestore{root: root}, nil
 }

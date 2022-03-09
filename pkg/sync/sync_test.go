@@ -18,6 +18,7 @@ package sync
 import (
 	"bytes"
 	"math"
+	"os"
 	"reflect"
 	"testing"
 
@@ -84,6 +85,21 @@ func deepEqualWithOutMtime(a, b object.Object) bool {
 
 // nolint:errcheck
 func TestSync(t *testing.T) {
+	const (
+		dirA = "/tmp/a"
+		dirB = "/tmp/b"
+		dirC = "/tmp/c"
+		dirD = "/tmp/d"
+	)
+
+	// cleanup
+	defer func() {
+		_ = os.RemoveAll(dirA)
+		_ = os.RemoveAll(dirB)
+		_ = os.RemoveAll(dirC)
+		_ = os.RemoveAll(dirD)
+	}()
+
 	config := &Config{
 		Start:     "",
 		End:       "",
@@ -99,12 +115,12 @@ func TestSync(t *testing.T) {
 		Quiet:     true,
 	}
 
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	a, _ := object.CreateStorage("file", dirA, "", "")
 	a.Put("a", bytes.NewReader([]byte("a")))
 	a.Put("ab", bytes.NewReader([]byte("ab")))
 	a.Put("abc", bytes.NewReader([]byte("abc")))
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	b, _ := object.CreateStorage("file", dirB, "", "")
 	b.Put("ba", bytes.NewReader([]byte("ba")))
 
 	// Copy "a" from a to b
@@ -157,5 +173,23 @@ func TestSync(t *testing.T) {
 	// Forcibly copy {"a", "ba"} from a to b.
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
+	}
+
+	c, _ := object.CreateStorage("file", dirC, "", "")
+	c.Put("ab", bytes.NewReader([]byte("ab")))
+	c.Put("ba", bytes.NewReader([]byte("ba")))
+	c.Put("xxx", bytes.NewReader([]byte("xxx")))
+
+	d, _ := object.CreateStorage("file", dirD, "", "")
+	d.Put("ba", bytes.NewReader([]byte("ba")))
+
+	//just copy  ab
+	config.Exclude = nil
+	config.ForceUpdate = false
+	if err := Sync(c, d, config); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+	if c := copied.Current(); c != 1 {
+		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 }
