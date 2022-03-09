@@ -95,6 +95,7 @@ $ juicefs format \
 | [Azure Blob 存储](#azure-blob-存储)         | `wasb`       |
 | [Backblaze B2](#backblaze-b2)               | `b2`         |
 | [IBM 云对象存储](#ibm-云对象存储)           | `ibmcos`     |
+| [Oracle 云对象存储](#oracle-云对象存储)     | `s3`         |
 | [Scaleway](#scaleway)                       | `scw`        |
 | [DigitalOcean Spaces](#digitalocean-spaces) | `space`      |
 | [Wasabi](#wasabi)                           | `wasabi`     |
@@ -277,6 +278,22 @@ $ juicefs format \
     --bucket https://<bucket>.<endpoint> \
     --access-key <API-key> \
     --secret-key <instance-ID> \
+    ... \
+    myjfs
+```
+
+## Oracle 云对象存储
+
+Oracle 云对象存储支持 S3 兼容的形式进行访问，详细请参考[官方文档](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm)。
+
+该对象存储的 `endpoint` 格式为：`${namespace}.compat.objectstorage.${region}.oraclecloud.com`，例如：
+
+```bash
+$ juicefs format \
+    --storage s3 \
+    --bucket https://<bucket>.<endpoint> \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
     ... \
     myjfs
 ```
