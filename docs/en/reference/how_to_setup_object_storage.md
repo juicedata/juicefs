@@ -88,41 +88,41 @@ $ juicefs format \
 
 If you wish to use a storage type that is not listed, feel free to submit a requirement [issue](https://github.com/juicedata/juicefs/issues).
 
-| Name                                                      | Value      |
-| --------------------------------------------------------- | ---------- |
-| [Amazon S3](#amazon-s3)                                   | `s3`       |
-| [Google Cloud Storage](#google-cloud-storage)             | `gs`       |
-| [Azure Blob Storage](#azure-blob-storage)                 | `wasb`     |
-| [Backblaze B2](#backblaze-b2)                             | `b2`       |
-| [IBM Cloud Object Storage](#ibm-cloud-object-storage)     | `ibmcos`   |
-| [Oracle Cloud Object Storage](#oracle-cloud-object-storage) | `s3`     |
-| [Scaleway Object Storage](#scaleway-object-storage)       | `scw`      |
-| [DigitalOcean Spaces](#digitalocean-spaces)               | `space`    |
-| [Wasabi](#wasabi)                                         | `wasabi`   |
-| [Storj DCS](#storj-dcs)                                   | `s3`       |
-| [Vultr Object Storage](#vultr-object-storage)             | `s3`       |
-| [Alibaba Cloud OSS](#alibaba-cloud-oss)                   | `oss`      |
-| [Tencent Cloud COS](#tencent-cloud-cos)                   | `cos`      |
-| [Huawei Cloud OBS](#huawei-cloud-obs)                     | `obs`      |
-| [Baidu Object Storage](#baidu-object-storage)             | `bos`      |
-| [Kingsoft KS3](#kingsoft-ks3)                             | `ks3`      |
-| [NetEase Object Storage](#netease-object-storage)         | `nos`      |
-| [QingStor](#qingstor)                                     | `qingstor` |
-| [Qiniu Object Storage](#qiniu-object-storage)             | `qiniu`    |
-| [Sina Cloud Storage](#sina-cloud-storage)                 | `scs`      |
-| [CTYun OOS](#ctyun-oos)                                   | `oos`      |
-| [ECloud Object Storage](#ecloud-object-storage)           | `eos`      |
-| [UCloud US3](#ucloud-us3)                                 | `ufile`    |
-| [Ceph RADOS](#ceph-rados)                                 | `ceph`     |
-| [Ceph RGW](#ceph-rgw)                                     | `s3`       |
-| [Swift](#swift)                                           | `swift`    |
-| [MinIO](#minio)                                           | `minio`    |
-| [WebDAV](#webdav)                                         | `webdav`   |
-| [HDFS](#hdfs)                                             | `hdfs`     |
-| [Apache Ozone](#apache-ozone)                             | `s3`       |
-| [Redis](#redis)                                           | `redis`    |
-| [TiKV](#tikv)                                             | `tikv`     |
-| [Local disk](#local-disk)                                 | `file`     |
+| Name                                                        | Value      |
+| ---------------------------------------------------------   | ---------- |
+| [Amazon S3](#amazon-s3)                                     | `s3`       |
+| [Google Cloud Storage](#google-cloud-storage)               | `gs`       |
+| [Azure Blob Storage](#azure-blob-storage)                   | `wasb`     |
+| [Backblaze B2](#backblaze-b2)                               | `b2`       |
+| [IBM Cloud Object Storage](#ibm-cloud-object-storage)       | `ibmcos`   |
+| [Oracle Cloud Object Storage](#oracle-cloud-object-storage) | `s3`       |
+| [Scaleway Object Storage](#scaleway-object-storage)         | `scw`      |
+| [DigitalOcean Spaces](#digitalocean-spaces)                 | `space`    |
+| [Wasabi](#wasabi)                                           | `wasabi`   |
+| [Storj DCS](#storj-dcs)                                     | `s3`       |
+| [Vultr Object Storage](#vultr-object-storage)               | `s3`       |
+| [Alibaba Cloud OSS](#alibaba-cloud-oss)                     | `oss`      |
+| [Tencent Cloud COS](#tencent-cloud-cos)                     | `cos`      |
+| [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
+| [Baidu Object Storage](#baidu-object-storage)               | `bos`      |
+| [Kingsoft KS3](#kingsoft-ks3)                               | `ks3`      |
+| [NetEase Object Storage](#netease-object-storage)           | `nos`      |
+| [QingStor](#qingstor)                                       | `qingstor` |
+| [Qiniu Object Storage](#qiniu-object-storage)               | `qiniu`    |
+| [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
+| [CTYun OOS](#ctyun-oos)                                     | `oos`      |
+| [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
+| [UCloud US3](#ucloud-us3)                                   | `ufile`    |
+| [Ceph RADOS](#ceph-rados)                                   | `ceph`     |
+| [Ceph RGW](#ceph-rgw)                                       | `s3`       |
+| [Swift](#swift)                                             | `swift`    |
+| [MinIO](#minio)                                             | `minio`    |
+| [WebDAV](#webdav)                                           | `webdav`   |
+| [HDFS](#hdfs)                                               | `hdfs`     |
+| [Apache Ozone](#apache-ozone)                               | `s3`       |
+| [Redis](#redis)                                             | `redis`    |
+| [TiKV](#tikv)                                               | `tikv`     |
+| [Local disk](#local-disk)                                   | `file`     |
 
 ## Amazon S3
 
@@ -283,9 +283,9 @@ $ juicefs format \
 
 ## Oracle Cloud Object Storage
 
-Oracle Cloud Object Storage supports s3 compatible access, [reference documentation](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm)
+Oracle Cloud Object Storage supports S3 compatible access, for more information please refer to [official documentation](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm).
 
-The `endpoint` format for this object store is: `${namespace}.compat.objectstorage.${region}.oraclecloud.com`
+The `endpoint` format for this object store is: `${namespace}.compat.objectstorage.${region}.oraclecloud.com`, for example:
 
 ```bash
 $ juicefs format \
