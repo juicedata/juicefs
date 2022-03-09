@@ -292,8 +292,8 @@ Oracle 云对象存储支持 S3 兼容的形式进行访问，详细请参考[�
 $ juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
-    --access-key <API-key> \
-    --secret-key <instance-ID> \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
     ... \
     myjfs
 ```
