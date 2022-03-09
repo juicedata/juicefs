@@ -18,21 +18,28 @@ package utils
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 // Cond is similar to sync.Cond, but you can wait with a timeout.
 type Cond struct {
-	L       sync.Locker
-	signal  chan bool
-	waiters int
+	signal unsafe.Pointer
+	L      sync.Locker
+}
+
+func (c *Cond) getChan() chan bool {
+	p := atomic.LoadPointer(&c.signal)
+	return *(*chan bool)(p)
 }
 
 // Signal wakes up a waiter.
 // It's allowed but not required for the caller to hold L.
 func (c *Cond) Signal() {
+	ch := c.getChan()
 	select {
-	case c.signal <- true:
+	case ch <- true:
 	default:
 	}
 }
@@ -40,22 +47,16 @@ func (c *Cond) Signal() {
 // Broadcast wake up all the waiters.
 // It's required for the caller to hold L.
 func (c *Cond) Broadcast() {
-	n := c.waiters
-	c.L.Unlock()
-	for n > 0 {
-		c.signal <- true
-		n--
-	}
-	c.L.Lock()
+	newCh := make(chan bool)
+	old := atomic.SwapPointer(&c.signal, unsafe.Pointer(&newCh))
+	close(*(*chan bool)(old))
 }
 
 // Wait until Signal() or Broadcast() is called.
 func (c *Cond) Wait() {
-	c.waiters++
 	c.L.Unlock()
-	<-c.signal
+	<-c.getChan()
 	c.L.Lock()
-	c.waiters--
 }
 
 var timerPool = sync.Pool{
@@ -67,32 +68,25 @@ var timerPool = sync.Pool{
 // WaitWithTimeout wait for a signal or a period of timeout eclipsed.
 // returns true in case of timeout else false
 func (c *Cond) WaitWithTimeout(d time.Duration) bool {
-	c.waiters++
 	c.L.Unlock()
 	t := timerPool.Get().(*time.Timer)
 	t.Reset(d)
 	defer func() {
 		t.Stop()
 		timerPool.Put(t)
-	}()
-	select {
-	case <-c.signal:
 		c.L.Lock()
-		c.waiters--
+	}()
+	ch := c.getChan()
+	select {
+	case <-ch:
 		return false
 	case <-t.C:
-		go func() {
-			<-c.signal
-			c.L.Lock()
-			c.waiters--
-			c.L.Unlock()
-		}()
-		c.L.Lock()
 		return true
 	}
 }
 
 // NewCond creates a Cond.
 func NewCond(lock sync.Locker) *Cond {
-	return &Cond{lock, make(chan bool), 0}
+	ch := make(chan bool)
+	return &Cond{unsafe.Pointer(&ch), lock}
 }
