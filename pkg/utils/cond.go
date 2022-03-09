@@ -18,20 +18,28 @@ package utils
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 // Cond is similar to sync.Cond, but you can wait with a timeout.
 type Cond struct {
+	signal unsafe.Pointer
 	L      sync.Locker
-	signal chan bool
+}
+
+func (c *Cond) getChan() chan bool {
+	p := atomic.LoadPointer(&c.signal)
+	return *(*chan bool)(p)
 }
 
 // Signal wakes up a waiter.
 // It's allowed but not required for the caller to hold L.
 func (c *Cond) Signal() {
+	ch := c.getChan()
 	select {
-	case c.signal <- true:
+	case ch <- true:
 	default:
 	}
 }
@@ -39,19 +47,15 @@ func (c *Cond) Signal() {
 // Broadcast wake up all the waiters.
 // It's required for the caller to hold L.
 func (c *Cond) Broadcast() {
-	for {
-		select {
-		case c.signal <- true:
-		default:
-			return
-		}
-	}
+	newCh := make(chan bool)
+	old := atomic.SwapPointer(&c.signal, unsafe.Pointer(&newCh))
+	close(*(*chan bool)(old))
 }
 
 // Wait until Signal() or Broadcast() is called.
 func (c *Cond) Wait() {
 	c.L.Unlock()
-	<-c.signal
+	<-c.getChan()
 	c.L.Lock()
 }
 
@@ -72,8 +76,9 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 		timerPool.Put(t)
 		c.L.Lock()
 	}()
+	ch := c.getChan()
 	select {
-	case <-c.signal:
+	case <-ch:
 		return false
 	case <-t.C:
 		return true
@@ -82,5 +87,6 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 
 // NewCond creates a Cond.
 func NewCond(lock sync.Locker) *Cond {
-	return &Cond{lock, make(chan bool, 1)}
+	ch := make(chan bool)
+	return &Cond{unsafe.Pointer(&ch), lock}
 }
