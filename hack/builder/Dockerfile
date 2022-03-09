@@ -1,4 +1,4 @@
-FROM goreng/golang-cross:v1.15.7
+FROM ghcr.io/gythialy/golang-cross:v1.17.8
 
 ARG APT_MIRROR
 RUN sed -i -e "s/deb.debian.org/${APT_MIRROR:-deb.debian.org}/g" \
