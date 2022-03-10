@@ -396,6 +396,9 @@ func format(c *cli.Context) error {
 			} else {
 				logger.Warnf("List storage %s failed: %s", blob, err)
 			}
+			if err = blob.Put("juicefs_uuid", strings.NewReader(format.UUID)); err != nil {
+				logger.Warnf("Put uuid object: %s", err)
+			}
 		}
 	}
 
