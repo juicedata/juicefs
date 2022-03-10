@@ -555,7 +555,7 @@ delete extraneous objects from destination (default: false)
 exclude keys containing PATTERN (POSIX regular expressions)
 
 `--include PATTERN`<br />
-Need to be used with `--exclude PATTERN`. Synchronize only the set of objects remaining after excluding objects containing `exclude PATTERN` (POSIX regular expressions) from the set of objects containing `include PATTERN` (POSIX regular expressions).
+Need to be used with `--exclude PATTERN`.Don't exclude the files match with PATTERN
 
 `--manager value`<br />
 manager address

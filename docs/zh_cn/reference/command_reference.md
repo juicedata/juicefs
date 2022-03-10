@@ -553,7 +553,7 @@ juicefs sync [command options] SRC DST
 跳过包含 PATTERN (POSIX正则表达式) 的对象名
 
 `--include PATTERN`<br />
-需要配合`--exclude PATTERN`使用，仅同步包含 `include PATTERN` (POSIX正则表达式) 的对象集合中排除包含`exclude PATTERN` (POSIX正则表达式)的对象后的剩余对象集合
+需要配合`--exclude PATTERN`使用，使得匹配的内容不会被排除而仍然会被拷贝。
 
 `--manager value`<br />
 管理者地址
