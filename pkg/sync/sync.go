@@ -686,20 +686,46 @@ func filter(keys <-chan object.Object, include, exclude []string) <-chan object.
 	inc := compileExp(include)
 	exc := compileExp(exclude)
 	r := make(chan object.Object)
+
+	var includeBeforeExclude bool
+	for _, arg := range os.Args {
+		if arg == "--include" || arg == "-include" {
+			includeBeforeExclude = true
+			break
+		} else if arg == "--exclude" || arg == "-exclude" {
+			break
+		}
+	}
+
 	go func() {
 		for o := range keys {
 			if o == nil {
 				break
 			}
-			if findAny(o.Key(), exc) {
-				logger.Debugf("exclude %s", o.Key())
-				continue
+			// Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
+			if includeBeforeExclude {
+				if len(inc) > 0 && findAny(o.Key(), inc) {
+					logger.Debugf("%s is included", o.Key())
+					r <- o
+					continue
+				}
+				if len(exc) > 0 && findAny(o.Key(), exc) {
+					logger.Debugf("exclude %s", o.Key())
+					continue
+				}
+				r <- o
+			} else {
+				if len(exc) > 0 && findAny(o.Key(), exc) {
+					logger.Debugf("exclude %s", o.Key())
+					continue
+				}
+				if len(inc) > 0 && findAny(o.Key(), inc) {
+					logger.Debugf("%s is included", o.Key())
+					r <- o
+					continue
+				}
+				r <- o
 			}
-			if len(inc) > 0 && !findAny(o.Key(), inc) {
-				logger.Debugf("%s is not included", o.Key())
-				continue
-			}
-			r <- o
 		}
 		close(r)
 	}()

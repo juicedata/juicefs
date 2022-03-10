@@ -18,6 +18,7 @@ package sync
 import (
 	"bytes"
 	"math"
+	"os"
 	"reflect"
 	"testing"
 
@@ -83,7 +84,11 @@ func deepEqualWithOutMtime(a, b object.Object) bool {
 }
 
 // nolint:errcheck
-func TestSync(t *testing.T) {
+func TestSyncExcludeBeforeInclude(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
 	config := &Config{
 		Start:     "",
 		End:       "",
@@ -98,7 +103,7 @@ func TestSync(t *testing.T) {
 		Verbose:   false,
 		Quiet:     true,
 	}
-
+	os.Args = append(os.Args, "--exclude", "--include")
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
 	a.Put("a", bytes.NewReader([]byte("a")))
 	a.Put("ab", bytes.NewReader([]byte("ab")))
@@ -157,5 +162,48 @@ func TestSync(t *testing.T) {
 	// Forcibly copy {"a", "ba"} from a to b.
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
+	}
+}
+
+// nolint:errcheck
+func TestSyncIncludeBeforeExclude(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
+	config := &Config{
+		Start:     "",
+		End:       "",
+		Threads:   50,
+		Update:    true,
+		Perms:     true,
+		Dry:       false,
+		DeleteSrc: false,
+		DeleteDst: false,
+		Exclude:   []string{"ab.*"},
+		Include:   []string{"[a|b].*", "c1"},
+		Verbose:   false,
+		Quiet:     true,
+	}
+	os.Args = append(os.Args, "--include", "--exclude")
+
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	a.Put("a1", bytes.NewReader([]byte("a1")))
+	a.Put("b1", bytes.NewReader([]byte("b1")))
+	a.Put("ab1", bytes.NewReader([]byte("ab1")))
+	a.Put("ab2", bytes.NewReader([]byte("ab2")))
+	a.Put("c1", bytes.NewReader([]byte("c1")))
+	a.Put("c2", bytes.NewReader([]byte("c2")))
+
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	b.Put("a1", bytes.NewReader([]byte("a1")))
+
+	// Now a: {"a1", "b1", "ab1","ab2","c1","c2","d1"}, b: {"a1"}
+	// Copy : "b1", "ab1","ab2","c1",","c2"
+	if err := Sync(a, b, config); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+	if c := copied.Current(); c != 5 {
+		t.Fatalf("should copy 5 keys, but got %d", c)
 	}
 }

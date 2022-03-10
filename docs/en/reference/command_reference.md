@@ -512,6 +512,10 @@ The format of both the source and destination paths is `[NAME://][ACCESS_KEY:SEC
 - `BUCKET[.ENDPOINT]`: The access address of the data storage service, the format may be different for different storage types, please refer to [document](how_to_setup_object_storage.md#supported-object-storage).
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit the synchronization to only data in certain paths.
 
+:::note
+If you want to express the concept of a folder in `SRC` or `DST`, please make sure that the path ends with "/" or "\", otherwise it will be considered as the prefix of the object name.
+:::
+
 #### Options
 
 `--start KEY, -s KEY`<br />
@@ -551,7 +555,11 @@ delete extraneous objects from destination (default: false)
 exclude keys containing PATTERN (POSIX regular expressions)
 
 `--include PATTERN`<br />
-only include keys containing PATTERN (POSIX regular expressions)
+need to be used with `--exclude PATTERN`. Don't exclude files matching PATTERN (POSIX regular expressions)
+
+:::tip
+The order in which `--exclude` and `--include` are set will affect the result. Each object will be matched according to the order in which the two parameters appear. Once the pattern of a parameter is matched, the behavior of the object is the type of the parameter, and the matching of the parameters that appear later will not be attempted. If the object is not matched by any of the parameters, the default behavior of the object is include
+:::
 
 `--manager value`<br />
 manager address
