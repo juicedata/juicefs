@@ -1646,7 +1646,7 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) error {
 
 	if !fail {
 		if err := r.rdb.HDel(ctx, sessionInfos, ssid).Err(); err != nil {
-			logger.Warnf("HDel %s %s: %s", sessionInfos, ssid)
+			logger.Warnf("HDel %s %s: %s", sessionInfos, ssid, err)
 			fail = true
 		}
 	}
