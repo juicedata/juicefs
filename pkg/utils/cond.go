@@ -54,8 +54,9 @@ func (c *Cond) Broadcast() {
 
 // Wait until Signal() or Broadcast() is called.
 func (c *Cond) Wait() {
+	ch := c.getChan()
 	c.L.Unlock()
-	<-c.getChan()
+	<-ch
 	c.L.Lock()
 }
 
@@ -68,6 +69,7 @@ var timerPool = sync.Pool{
 // WaitWithTimeout wait for a signal or a period of timeout eclipsed.
 // returns true in case of timeout else false
 func (c *Cond) WaitWithTimeout(d time.Duration) bool {
+	ch := c.getChan()
 	c.L.Unlock()
 	t := timerPool.Get().(*time.Timer)
 	t.Reset(d)
@@ -76,7 +78,6 @@ func (c *Cond) WaitWithTimeout(d time.Duration) bool {
 		timerPool.Put(t)
 		c.L.Lock()
 	}()
-	ch := c.getChan()
 	select {
 	case <-ch:
 		return false
