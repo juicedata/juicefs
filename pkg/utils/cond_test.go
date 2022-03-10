@@ -33,9 +33,8 @@ func TestCond(t *testing.T) {
 		m.Lock()
 		wg.Done()
 		l.Wait()
-		m.Unlock()
-
 		l.Signal()
+		m.Unlock()
 		done <- true
 	}()
 	wg.Wait()
