@@ -19,6 +19,7 @@ package fs
 import (
 	"compress/gzip"
 	"context"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"io"
 	"net/http"
 	"os"
@@ -127,7 +128,7 @@ func (hfs *webdavFS) Rename(ctx context.Context, oldName, newName string) error 
 }
 
 func (hfs *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	fi, err := hfs.fs.Stat(hfs.ctx, name)
+	fi, err := hfs.fs.Stat(hfs.ctx, utils.EncodeUserInput(name))
 	return fi, econv(err)
 }
 
@@ -200,9 +201,9 @@ func StartHTTPServer(fs *FileSystem, addr string, gzipEnabled bool, disallowList
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
-				logger.Errorf("WEBDAV [%s]: %s, ERROR: %s", r.Method, r.URL, err)
+				logger.Errorf("WEBDAV [%s]: %s, ERROR: %s", r.Method, r.URL.String(), err)
 			} else {
-				logger.Debugf("WEBDAV [%s]: %s", r.Method, r.URL)
+				logger.Debugf("WEBDAV [%s]: %s", r.Method, r.URL.String())
 			}
 		},
 	}
