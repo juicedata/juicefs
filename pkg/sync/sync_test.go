@@ -103,7 +103,7 @@ func TestSyncExcludeBeforeInclude(t *testing.T) {
 		Verbose:   false,
 		Quiet:     true,
 	}
-	os.Args = append(os.Args, "--exclude", "--include")
+	os.Args = append([]string{}, "--exclude", "--include")
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
 	a.Put("a", bytes.NewReader([]byte("a")))
 	a.Put("ab", bytes.NewReader([]byte("ab")))
@@ -185,8 +185,7 @@ func TestSyncIncludeBeforeExclude(t *testing.T) {
 		Verbose:   false,
 		Quiet:     true,
 	}
-	os.Args = append(os.Args, "--include", "--exclude")
-
+	os.Args = append([]string{}, "--include", "--exclude")
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
 	a.Put("a1", bytes.NewReader([]byte("a1")))
 	a.Put("b1", bytes.NewReader([]byte("b1")))
