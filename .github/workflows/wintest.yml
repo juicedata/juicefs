@@ -83,11 +83,9 @@ jobs:
           echo "11111"
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
           echo "22222"
-          iwr -useb get.scoop.sh
+          iwr -useb 'https://raw.githubusercontent.com/scoopinstaller/install/master/install.ps1' -outfile 'install.ps1'
+          .\install.ps1 -RunAsAdmin
           echo "33333"
-          iwr -useb get.scoop.sh
-          echo "55555"
-          iwr -useb get.scoop.sh | iex -RunAsAdmin
           scoop
           scoop install curl
           scoop install redis
