@@ -83,7 +83,7 @@ jobs:
           echo "11111"
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
           echo "22222"
-          Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')
+          iwr -useb get.scoop.sh
           echo "33333"
           iwr -useb get.scoop.sh
           echo "55555"
