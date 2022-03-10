@@ -510,6 +510,10 @@ juicefs sync [command options] SRC DST
 - `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，具体请参考[文档](how_to_setup_object_storage.md#支持的存储服务)。
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
+:::tip
+如果想要在`SRC`或者`DST`中表达文件夹的概念时，请确保路径是以"/"或者"\"结尾的，否则将会被认为是对象名的前缀。
+:::
+
 #### 选项
 
 `--start KEY, -s KEY`<br />
@@ -549,7 +553,7 @@ juicefs sync [command options] SRC DST
 跳过包含 PATTERN (POSIX正则表达式) 的对象名
 
 `--include PATTERN`<br />
-仅同步包含 PATTERN (POSIX正则表达式) 的对象名
+需要配合`--exclude PATTERN`使用，仅同步包含 `include PATTERN` (POSIX正则表达式) 的对象集合中排除包含`exclude PATTERN` (POSIX正则表达式)的对象后的剩余对象集合
 
 `--manager value`<br />
 管理者地址
