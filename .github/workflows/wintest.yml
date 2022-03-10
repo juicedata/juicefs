@@ -79,8 +79,12 @@ jobs:
       - name: Install Scoop Redis and MinIO
         run: |
           dir "C:\Program Files (x86)\WinFsp"
-          iwr -useb get.scoop.sh | iex
           echo $env:USERNAME
+          echo "11111"
+          Set-ExecutionPolicy RemoteSigned -scope CurrentUser
+          echo "22222"
+          iwr -useb get.scoop.sh | iex
+          echo "33333"
           scoop
           scoop install curl
           scoop install redis
