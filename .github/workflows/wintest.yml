@@ -83,7 +83,7 @@ jobs:
           echo "11111"
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
           echo "22222"
-          iwr -useb get.scoop.sh | iex
+          iwr -useb get.scoop.sh | iex -RunAsAdmin
           echo "33333"
           scoop
           scoop install curl
