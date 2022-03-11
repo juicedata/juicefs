@@ -303,26 +303,26 @@ func format(c *cli.Context) error {
 		}
 		return string(pem)
 	}
-
 	var format *meta.Format
 	var create bool
 	if format, _ = m.Load(false); format == nil {
 		create = true
 		format = &meta.Format{
-			Name:        name,
-			UUID:        uuid.New().String(),
-			Storage:     c.String("storage"),
-			Bucket:      c.String("bucket"),
-			AccessKey:   c.String("access-key"),
-			SecretKey:   c.String("secret-key"),
-			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
-			Shards:      c.Int("shards"),
-			Capacity:    c.Uint64("capacity") << 30,
-			Inodes:      c.Uint64("inodes"),
-			BlockSize:   fixObjectSize(c.Int("block-size")),
-			Compression: c.String("compress"),
-			TrashDays:   c.Int("trash-days"),
-			MetaVersion: 1,
+			Name:         name,
+			UUID:         uuid.New().String(),
+			Storage:      c.String("storage"),
+			Bucket:       c.String("bucket"),
+			AccessKey:    c.String("access-key"),
+			SecretKey:    c.String("secret-key"),
+			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
+			KeyEncrypted: true,
+			Shards:       c.Int("shards"),
+			Capacity:     c.Uint64("capacity") << 30,
+			Inodes:       c.Uint64("inodes"),
+			BlockSize:    fixObjectSize(c.Int("block-size")),
+			Compression:  c.String("compress"),
+			TrashDays:    c.Int("trash-days"),
+			MetaVersion:  1,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -337,6 +337,9 @@ func format(c *cli.Context) error {
 			return nil
 		}
 		format.Name = name
+		if err := format.Decrypt(); err != nil {
+			logger.Fatalf("format decrypt: %s", err)
+		}
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
@@ -402,6 +405,9 @@ func format(c *cli.Context) error {
 		}
 	}
 
+	if err = format.Encrypt(); err != nil {
+		logger.Fatalf("format encrypt: %s", err)
+	}
 	if err = m.Init(*format, c.Bool("force")); err != nil {
 		logger.Fatalf("format: %s", err)
 	}
