@@ -406,78 +406,80 @@ func (m *kvMeta) doRefreshSession() {
 	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 }
 
-func (m *kvMeta) doCleanStaleSession(sid uint64) {
+func (m *kvMeta) doCleanStaleSession(sid uint64) error {
+	var fail bool
 	// release locks
-	flocks, err := m.scanValues(m.fmtKey("F"), -1, nil)
-	if err != nil {
-		logger.Warnf("scan flock for stale session %d: %s", sid, err)
-		return
-	}
-	for k, v := range flocks {
-		ls := unmarshalFlock(v)
-		for o := range ls {
-			if o.sid == sid {
-				err = m.txn(func(tx kvTxn) error {
-					v := tx.get([]byte(k))
-					ls := unmarshalFlock(v)
-					delete(ls, o)
-					if len(ls) > 0 {
-						tx.set([]byte(k), marshalFlock(ls))
-					} else {
-						tx.dels([]byte(k))
+	if flocks, err := m.scanValues(m.fmtKey("F"), -1, nil); err == nil {
+		for k, v := range flocks {
+			ls := unmarshalFlock(v)
+			for o := range ls {
+				if o.sid == sid {
+					if err = m.txn(func(tx kvTxn) error {
+						v := tx.get([]byte(k))
+						ls := unmarshalFlock(v)
+						delete(ls, o)
+						if len(ls) > 0 {
+							tx.set([]byte(k), marshalFlock(ls))
+						} else {
+							tx.dels([]byte(k))
+						}
+						return nil
+					}); err != nil {
+						logger.Warnf("Delete flock with sid %d: %s", sid, err)
+						fail = true
 					}
-					return nil
-				})
-				if err != nil {
-					logger.Warnf("remove flock for stale session %d: %s", sid, err)
-					return
 				}
 			}
 		}
-	}
-	plocks, err := m.scanValues(m.fmtKey("P"), -1, nil)
-	if err != nil {
-		logger.Warnf("scan plock for stale session %d: %s", sid, err)
-		return
-	}
-	for k, v := range plocks {
-		ls := unmarshalPlock(v)
-		for o := range ls {
-			if o.sid == sid {
-				err = m.txn(func(tx kvTxn) error {
-					v := tx.get([]byte(k))
-					ls := unmarshalPlock(v)
-					delete(ls, o)
-					if len(ls) > 0 {
-						tx.set([]byte(k), marshalPlock(ls))
-					} else {
-						tx.dels([]byte(k))
-					}
-					return nil
-				})
-				if err != nil {
-					logger.Warnf("remove plock for stale session %d: %s", sid, err)
-					return
-				}
-			}
-		}
+	} else {
+		logger.Warnf("Scan flock with sid %d: %s", sid, err)
+		fail = true
 	}
 
-	keys, err := m.scanKeys(m.fmtKey("SS", sid))
-	if err != nil {
-		logger.Warnf("scan stale session %d: %s", sid, err)
-		return
-	}
-	for _, key := range keys {
-		inode := m.decodeInode(key[10:]) // "SS" + sid
-		if e := m.doDeleteSustainedInode(sid, inode); e != nil {
-			logger.Errorf("Failed to delete inode %d: %s", inode, err)
-			err = e
+	if plocks, err := m.scanValues(m.fmtKey("P"), -1, nil); err == nil {
+		for k, v := range plocks {
+			ls := unmarshalPlock(v)
+			for o := range ls {
+				if o.sid == sid {
+					if err = m.txn(func(tx kvTxn) error {
+						v := tx.get([]byte(k))
+						ls := unmarshalPlock(v)
+						delete(ls, o)
+						if len(ls) > 0 {
+							tx.set([]byte(k), marshalPlock(ls))
+						} else {
+							tx.dels([]byte(k))
+						}
+						return nil
+					}); err != nil {
+						logger.Warnf("Delete plock with sid %d: %s", sid, err)
+						fail = true
+					}
+				}
+			}
 		}
+	} else {
+		logger.Warnf("Scan plock with sid %d: %s", sid, err)
+		fail = true
 	}
-	if err == nil {
-		err = m.deleteKeys(m.sessionKey(sid), m.sessionInfoKey(sid))
-		logger.Infof("cleanup session %d: %s", sid, err)
+
+	if keys, err := m.scanKeys(m.fmtKey("SS", sid)); err == nil {
+		for _, key := range keys {
+			inode := m.decodeInode(key[10:]) // "SS" + sid
+			if err = m.doDeleteSustainedInode(sid, inode); err != nil {
+				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
+				fail = true
+			}
+		}
+	} else {
+		logger.Warnf("Scan sustained with sid %d: %s", sid, err)
+		fail = true
+	}
+
+	if fail {
+		return fmt.Errorf("failed to clean up sid %d", sid)
+	} else {
+		return m.deleteKeys(m.sessionKey(sid), m.sessionInfoKey(sid))
 	}
 }
 
