@@ -186,7 +186,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	}
 
 	chunkConf := getChunkConf(c, format)
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

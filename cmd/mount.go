@@ -266,7 +266,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 }
 
 func newStore(format *meta.Format, chunkConf *chunk.Config, registerer prometheus.Registerer) (object.ObjectStorage, chunk.ChunkStore) {
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

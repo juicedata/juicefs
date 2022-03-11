@@ -289,7 +289,10 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 	return h
 }
 
-func createStorage(format *meta.Format) (object.ObjectStorage, error) {
+func createStorage(format meta.Format) (object.ObjectStorage, error) {
+	if err := format.Decrypt(); err != nil {
+		return nil, fmt.Errorf("format decrypt: %s", err)
+	}
 	var blob object.ObjectStorage
 	var err error
 	if format.Shards > 1 {
@@ -394,7 +397,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		if jConf.Bucket != "" {
 			format.Bucket = jConf.Bucket
 		}
-		blob, err := createStorage(format)
+		blob, err := createStorage(*format)
 		if err != nil {
 			logger.Fatalf("object storage: %s", err)
 		}

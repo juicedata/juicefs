@@ -326,7 +326,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			return fmt.Errorf("json: %s", err)
 		}
 		if force {
-			old.SecretKey = "removed"
+			old.RemoveSecret()
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
 			format.UUID = old.UUID
@@ -334,14 +334,16 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			old.Bucket = format.Bucket
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.EncryptKey = format.EncryptKey
+			old.KeyEncrypted = format.KeyEncrypted
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
 			old.MinClientVersion = format.MinClientVersion
 			old.MaxClientVersion = format.MaxClientVersion
 			if format != old {
-				old.SecretKey = ""
-				format.SecretKey = ""
+				old.RemoveSecret()
+				format.RemoveSecret()
 				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
 			}
 		}
