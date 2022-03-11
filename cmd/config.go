@@ -36,6 +36,8 @@ func cmdConfig() *cli.Command {
 		Usage:     "Change configuration of a volume",
 		ArgsUsage: "META-URL",
 		Description: `
+Only flags explicitly specified are changed.
+
 Examples:
 # Show the current configurations
 $ juicefs config redis://localhost
@@ -158,12 +160,11 @@ func config(ctx *cli.Context) error {
 				format.AccessKey = new
 				storage = true
 			}
-		case "secret-key":
-			if new := ctx.String(flag); new != format.SecretKey {
-				msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
-				format.SecretKey = new
-				storage = true
-			}
+		case "secret-key": // always update
+			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
+			format.SecretKey = ctx.String(flag)
+			format.KeyEncrypted = false
+			storage = true
 		case "trash-days":
 			if new := ctx.Int(flag); new != format.TrashDays {
 				if new < 0 {
@@ -200,7 +201,7 @@ func config(ctx *cli.Context) error {
 
 	if !ctx.Bool("force") {
 		if storage {
-			blob, err := createStorage(format)
+			blob, err := createStorage(*format)
 			if err != nil {
 				return err
 			}
@@ -235,6 +236,9 @@ func config(ctx *cli.Context) error {
 		}
 	}
 
+	if err = format.Encrypt(); err != nil {
+		logger.Fatalf("Format encrypt: %s", err)
+	}
 	if err = m.Init(*format, false); err == nil {
 		fmt.Println(msg.String()[:msg.Len()-1])
 	}

@@ -169,7 +169,10 @@ func fixObjectSize(s int) int {
 	return s
 }
 
-func createStorage(format *meta.Format) (object.ObjectStorage, error) {
+func createStorage(format meta.Format) (object.ObjectStorage, error) {
+	if err := format.Decrypt(); err != nil {
+		return nil, fmt.Errorf("format decrypt: %s", err)
+	}
 	object.UserAgent = "JuiceFS-" + version.Version()
 	var blob object.ObjectStorage
 	var err error
@@ -308,21 +311,20 @@ func format(c *cli.Context) error {
 	if format, _ = m.Load(false); format == nil {
 		create = true
 		format = &meta.Format{
-			Name:         name,
-			UUID:         uuid.New().String(),
-			Storage:      c.String("storage"),
-			Bucket:       c.String("bucket"),
-			AccessKey:    c.String("access-key"),
-			SecretKey:    c.String("secret-key"),
-			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
-			KeyEncrypted: true,
-			Shards:       c.Int("shards"),
-			Capacity:     c.Uint64("capacity") << 30,
-			Inodes:       c.Uint64("inodes"),
-			BlockSize:    fixObjectSize(c.Int("block-size")),
-			Compression:  c.String("compress"),
-			TrashDays:    c.Int("trash-days"),
-			MetaVersion:  1,
+			Name:        name,
+			UUID:        uuid.New().String(),
+			Storage:     c.String("storage"),
+			Bucket:      c.String("bucket"),
+			AccessKey:   c.String("access-key"),
+			SecretKey:   c.String("secret-key"),
+			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
+			Shards:      c.Int("shards"),
+			Capacity:    c.Uint64("capacity") << 30,
+			Inodes:      c.Uint64("inodes"),
+			BlockSize:   fixObjectSize(c.Int("block-size")),
+			Compression: c.String("compress"),
+			TrashDays:   c.Int("trash-days"),
+			MetaVersion: 1,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -337,9 +339,6 @@ func format(c *cli.Context) error {
 			return nil
 		}
 		format.Name = name
-		if err := format.Decrypt(); err != nil {
-			logger.Fatalf("format decrypt: %s", err)
-		}
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
@@ -352,6 +351,7 @@ func format(c *cli.Context) error {
 				format.AccessKey = c.String(flag)
 			case "secret-key":
 				format.SecretKey = c.String(flag)
+				format.KeyEncrypted = false
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
@@ -363,7 +363,7 @@ func format(c *cli.Context) error {
 			case "storage":
 				format.Storage = c.String(flag)
 			case "encrypt-rsa-key":
-				format.EncryptKey = loadEncrypt(c.String(flag))
+				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
 		}
 	}
@@ -375,7 +375,7 @@ func format(c *cli.Context) error {
 		}
 	}
 
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
@@ -406,7 +406,7 @@ func format(c *cli.Context) error {
 	}
 
 	if err = format.Encrypt(); err != nil {
-		logger.Fatalf("format encrypt: %s", err)
+		logger.Fatalf("Format encrypt: %s", err)
 	}
 	if err = m.Init(*format, c.Bool("force")); err != nil {
 		logger.Fatalf("format: %s", err)
