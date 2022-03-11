@@ -709,13 +709,13 @@ func filter(keys <-chan object.Object, include, exclude []string) <-chan object.
 					r <- o
 					continue
 				}
-				if len(exc) > 0 && findAny(o.Key(), exc) {
+				if findAny(o.Key(), exc) {
 					logger.Debugf("exclude %s", o.Key())
 					continue
 				}
 				r <- o
 			} else {
-				if len(exc) > 0 && findAny(o.Key(), exc) {
+				if findAny(o.Key(), exc) {
 					logger.Debugf("exclude %s", o.Key())
 					continue
 				}
