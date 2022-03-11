@@ -127,7 +127,7 @@ func (hfs *webdavFS) Rename(ctx context.Context, oldName, newName string) error 
 }
 
 func (hfs *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	fi, err := hfs.fs.Stat(hfs.ctx, encodeUserInput(name))
+	fi, err := hfs.fs.Stat(hfs.ctx, removeNewLine(name))
 	return fi, econv(err)
 }
 
@@ -217,6 +217,6 @@ func StartHTTPServer(fs *FileSystem, addr string, gzipEnabled bool, disallowList
 	}
 }
 
-func encodeUserInput(input string) string {
+func removeNewLine(input string) string {
 	return strings.Replace(strings.Replace(input, "\n", "", -1), "\r", "", -1)
 }
