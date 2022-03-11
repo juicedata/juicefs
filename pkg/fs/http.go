@@ -19,7 +19,6 @@ package fs
 import (
 	"compress/gzip"
 	"context"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"io"
 	"net/http"
 	"os"
@@ -128,7 +127,7 @@ func (hfs *webdavFS) Rename(ctx context.Context, oldName, newName string) error 
 }
 
 func (hfs *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	fi, err := hfs.fs.Stat(hfs.ctx, utils.EncodeUserInput(name))
+	fi, err := hfs.fs.Stat(hfs.ctx, encodeUserInput(name))
 	return fi, econv(err)
 }
 
@@ -201,9 +200,9 @@ func StartHTTPServer(fs *FileSystem, addr string, gzipEnabled bool, disallowList
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
-				logger.Errorf("WEBDAV [%s]: %s, ERROR: %s", r.Method, r.URL.String(), err)
+				logger.Errorf("WEBDAV [%s]: %s, ERROR: %s", r.Method, r.URL, err)
 			} else {
-				logger.Debugf("WEBDAV [%s]: %s", r.Method, r.URL.String())
+				logger.Debugf("WEBDAV [%s]: %s", r.Method, r.URL)
 			}
 		},
 	}
@@ -216,4 +215,8 @@ func StartHTTPServer(fs *FileSystem, addr string, gzipEnabled bool, disallowList
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		logger.Fatalf("Error with WebDAV server: %v", err)
 	}
+}
+
+func encodeUserInput(input string) string {
+	return strings.Replace(strings.Replace(input, "\n", "", -1), "\r", "", -1)
 }

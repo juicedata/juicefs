@@ -99,7 +99,3 @@ func GuessMimeType(key string) string {
 	}
 	return mimeType
 }
-
-func EncodeUserInput(input string) string {
-	return strings.Replace(strings.Replace(input, "\n", "", -1), "\r", "", -1)
-}
