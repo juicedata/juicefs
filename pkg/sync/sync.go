@@ -22,7 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"regexp"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -586,8 +586,9 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 		logger.Fatal(err)
 	}
 	if config.Exclude != nil {
-		srckeys = filter(srckeys, config.Include, config.Exclude)
-		dstkeys = filter(dstkeys, config.Include, config.Exclude)
+		rules := initRules()
+		srckeys = filter(srckeys, rules)
+		dstkeys = filter(dstkeys, rules)
 	}
 
 	defer close(tasks)
@@ -661,75 +662,80 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 	}
 }
 
-func compileExp(patterns []string) []*regexp.Regexp {
-	var rs []*regexp.Regexp
-	for _, p := range patterns {
-		r, err := regexp.CompilePOSIX(p)
-		if err != nil {
-			logger.Fatalf("invalid regular expression `%s`: %s", p, err)
-		}
-		rs = append(rs, r)
-	}
-	return rs
+type rule struct {
+	pattern string
+	include bool
 }
 
-func findAny(s string, ps []*regexp.Regexp) bool {
-	for _, p := range ps {
-		if p.FindString(s) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func filter(keys <-chan object.Object, include, exclude []string) <-chan object.Object {
-	inc := compileExp(include)
-	exc := compileExp(exclude)
-	r := make(chan object.Object)
-
-	var includeBeforeExclude bool
-	for _, arg := range os.Args {
+func initRules() (rules []rule) {
+	for idx, arg := range os.Args[:len(os.Args)-1] {
 		if arg == "--include" || arg == "-include" {
-			includeBeforeExclude = true
-			break
+			rules = append(rules, rule{pattern: os.Args[idx+1], include: true})
 		} else if arg == "--exclude" || arg == "-exclude" {
-			break
+			rules = append(rules, rule{pattern: os.Args[idx+1], include: false})
 		}
 	}
+	return
+}
 
+func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
+	r := make(chan object.Object)
 	go func() {
 		for o := range keys {
 			if o == nil {
 				break
 			}
-			// Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
-			if includeBeforeExclude {
-				if len(inc) > 0 && findAny(o.Key(), inc) {
-					logger.Debugf("%s is included", o.Key())
-					r <- o
-					continue
-				}
-				if findAny(o.Key(), exc) {
-					logger.Debugf("exclude %s", o.Key())
-					continue
-				}
-				r <- o
-			} else {
-				if findAny(o.Key(), exc) {
-					logger.Debugf("exclude %s", o.Key())
-					continue
-				}
-				if len(inc) > 0 && findAny(o.Key(), inc) {
-					logger.Debugf("%s is included", o.Key())
-					r <- o
-					continue
-				}
-				r <- o
-			}
+			matchObject(r, rules, o)
 		}
 		close(r)
 	}()
 	return r
+}
+
+func alignPatternAndKey(pattern, key string) (p, k string) {
+	var pIdxPair, kIdxPair []int
+	for idx, i := range pattern {
+		if string(i) == "/" {
+			pIdxPair = append(pIdxPair, idx)
+		}
+	}
+	for idx, i := range key {
+		if string(i) == "/" {
+			kIdxPair = append(kIdxPair, idx)
+		}
+	}
+
+	if len(pIdxPair) < len(kIdxPair) {
+		k = key[:kIdxPair[len(pIdxPair)]]
+		p = pattern
+	} else if len(pIdxPair) > len(kIdxPair) {
+		p = pattern[:pIdxPair[len(kIdxPair)]]
+		k = key
+	} else {
+		k, p = key, pattern
+	}
+	return
+}
+
+// Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
+func matchObject(r chan object.Object, rules []rule, o object.Object) {
+	for _, rule := range rules {
+		p, k := alignPatternAndKey(rule.pattern, o.Key())
+		match, err := filepath.Match(p, k)
+		if err != nil {
+			logger.Fatalf("pattern error : %v", err)
+		}
+		if match {
+			if rule.include {
+				break
+			} else {
+				logger.Debugf("exclude %s", o.Key())
+				return
+			}
+		}
+	}
+	r <- o
+	logger.Debugf("%s is included", o.Key())
 }
 
 // Sync syncs all the keys between to object storage
