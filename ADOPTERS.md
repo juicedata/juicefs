@@ -16,7 +16,7 @@ For users of JuiceFS:
 | [National Supercomputing Center in JiNan](https://www.nsccjn.cn/)                       | Production  | DevOps                 |
 | [UniSound](https://www.unisound.com)                                                    | Production  | AI                     |
 | [NetEase Games](http://www.neteasegames.com)                                            | Production  | Big Data, File Sharing |
-| [YIMIAN](https://yimian.io)                                                             | Production  | Big Data               |
+| [Yimian](https://www.yimian.io)                                                         | Production  | Big Data               |
 | [Dingdong Fresh](https://www.100.me)                                                    | Testing     | Big Data               |
 | [SF-Express](https://www.sf-express.com)                                                | Testing     | Big Data, File Sharing |
 | [BIGO](https://bigo.tv)                                                                 | Testing     | AI                     |
