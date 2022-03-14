@@ -38,7 +38,8 @@ func cmdDestroy() *cli.Command {
 		ArgsUsage: "META-URL UUID",
 		Description: `
 Destroy the target volume, removing all objects in the data storage and all entries in its metadata engine.
-BE CAREFUL! This operation cannot be undone.
+
+WARNING: BE CAREFUL! This operation cannot be undone.
 
 Examples:
 $ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892

@@ -2566,12 +2566,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting:   &m.fmt,
+		Setting:   m.fmt,
 		Counters:  counters,
 		Sustained: sessions,
 		DelFiles:  dels,
 	}
-
+	if dm.Setting.SecretKey != "" {
+		dm.Setting.SecretKey = "removed"
+		logger.Warnf("Secret key is removed for the sake of safety")
+	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
