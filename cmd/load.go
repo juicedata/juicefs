@@ -64,7 +64,7 @@ func load(ctx *cli.Context) error {
 	}
 	if format, err := m.Load(true); err == nil {
 		if format.SecretKey == "removed" {
-			logger.Infof("Secret key was removed; please correct it with `config` command")
+			logger.Warnf("Secret key was removed; please correct it with `config` command")
 		}
 	} else {
 		return err

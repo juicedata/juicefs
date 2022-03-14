@@ -2883,7 +2883,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 	if dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
-		logger.Infof("Secret key is removed for the sake of safety")
+		logger.Warnf("Secret key is removed for the sake of safety")
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
