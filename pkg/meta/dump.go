@@ -165,7 +165,7 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 }
 
 type DumpedMeta struct {
-	Setting   *Format
+	Setting   Format
 	Counters  *DumpedCounters
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile

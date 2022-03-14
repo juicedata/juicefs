@@ -33,6 +33,7 @@ func cmdLoad() *cli.Command {
 		ArgsUsage: "META-URL [FILE]",
 		Description: `
 Load metadata into an empty metadata engine.
+
 WARNING: Do NOT use new engine and the old one at the same time, otherwise it will probably break
 consistency of the volume.
 
@@ -59,6 +60,13 @@ func load(ctx *cli.Context) error {
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	if err := m.LoadMeta(fp); err != nil {
+		return err
+	}
+	if format, err := m.Load(true); err == nil {
+		if format.SecretKey == "removed" {
+			logger.Infof("Secret key was removed; please correct it with `config` command")
+		}
+	} else {
 		return err
 	}
 	logger.Infof("Load metadata from %s succeed", ctx.Args().Get(1))

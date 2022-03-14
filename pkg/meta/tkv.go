@@ -2217,7 +2217,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting: &m.fmt,
+		Setting: m.fmt,
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
@@ -2228,6 +2228,10 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
+	}
+	if dm.Setting.SecretKey != "" {
+		dm.Setting.SecretKey = "removed"
+		logger.Infof("Secret key is removed for the sake of safety")
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
