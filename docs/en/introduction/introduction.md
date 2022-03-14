@@ -22,7 +22,7 @@ JuiceFS provides rich APIs for various forms of data management, analysis, archi
 4. **Cloud-Native**: It is easy to use JuiceFS in Kubernetes via [CSI Driver](../deployment/how_to_use_on_kubernetes.md).
 5. **Distributed**: Each file system can be mounted on thousands of servers at the same time with high-performance concurrent reads and writes and shared data.
 6. **Strong Consistency**: Any committed changes in files will be visible on all servers immediately.
-7. **Outstanding Performance**: The latency can be down to a few milliseconds, and the throughput can be naerly unlimited depending on object storage scale (see [performance test results](../benchmark/benchmark.md)).
+7. **Outstanding Performance**: The latency can be down to a few milliseconds, and the throughput can be nearly unlimited depending on object storage scale (see [performance test results](../benchmark/benchmark.md)).
 8. **Data Security**: JuiceFS supports encryption in transit and encryption at rest (view [Details](../security/encrypt.md)).
 9. **File Lock**: JuiceFS supports BSD lock (flock) and POSIX lock (fcntl).
 10. **Data Compression**: JuiceFS supports [LZ4](https://lz4.github.io/lz4) and [Zstandard](https://facebook.github.io/zstd) compression algorithms to save storage space.
