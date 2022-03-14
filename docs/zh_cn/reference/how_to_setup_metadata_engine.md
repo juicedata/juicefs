@@ -274,6 +274,34 @@ sudo juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，只有数据库所在的主机可以访问它。对于多台服务器共享同一文件系统的情况，需要使用 Redis 或 MySQL 等数据库。
 :::
 
+## BadgerDB
+
+[BadgerDB](https://github.com/dgraph-io/badger) 是一个 Go 语言开发的嵌入式、持久化的单机 Key-Value 数据库，它的数据库文件存储在本地你指定的目录中。
+
+使用 BadgerDB 作为 JuiceFS 元数据存储引擎时，使用 `badger://` 协议头指定数据库路径。
+
+### 创建文件系统
+
+无需提前创建 BadgerDB 数据库，直接创建文件系统即可：
+
+```shell
+juicefs format badger://$HOME/badger-data myjfs
+```
+
+上述命令在当前用户的 `home` 目录创建 `badger-data` 作为数据库目录，并以此作为 JuiceFS 的元数据存储。
+
+### 挂载文件系统
+
+挂载文件系统时需要指定数据库路径：
+
+```shell
+juicefs mount -d badger://$HOME/badger-data /mnt/jfs
+```
+
+:::note 注意
+由于 BadgerDB 是单机数据库，在不做特殊共享设置的情况下，只能供本机使用，不支持多主机共享挂载。
+:::
+
 ## TiKV
 
 [TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCAP](https://pingcap.com) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects) 毕业。
