@@ -263,16 +263,28 @@ func TestInitRules(t *testing.T) {
 			wantRules: []rule{{pattern: "a", include: false}, {pattern: "b", include: true}},
 		},
 		{
-			args:      []string{"--include", "a", "--exclude", "b"},
+			args:      []string{"--include", "a", "--test", "t", "--exclude", "b"},
 			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: false}},
+		},
+		{
+			args:      []string{"--include", "a", "--test", "t", "--exclude"},
+			wantRules: []rule{{pattern: "a", include: true}},
 		},
 		{
 			args:      []string{"--include", "a", "--exclude", "b", "--include", "c", "--exclude", "d"},
 			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: false}, {pattern: "c", include: true}, {pattern: "d", include: false}},
 		},
 		{
-			args:      []string{"--include", "a", "--include", "b", "--exclude", "c", "--exclude", "d"},
+			args:      []string{"--include", "a", "--include", "b", "--test", "--exclude", "c", "--exclude", "d"},
 			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+		},
+		{
+			args:      []string{"--include=a", "--include=b", "--exclude=c", "--exclude=d", "--test=aaa"},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+		},
+		{
+			args:      []string{"-include=a", "--test", "t", "--include=b", "--exclude=c", "-exclude="},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}},
 		},
 	}
 	for _, tt := range tests {

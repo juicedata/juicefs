@@ -668,11 +668,20 @@ type rule struct {
 }
 
 func initRules() (rules []rule) {
-	for idx, arg := range os.Args[:len(os.Args)-1] {
-		if arg == "--include" || arg == "-include" {
+	l := len(os.Args)
+	for idx, arg := range os.Args {
+		if l-1 > idx && arg == "--include" || arg == "-include" {
 			rules = append(rules, rule{pattern: os.Args[idx+1], include: true})
-		} else if arg == "--exclude" || arg == "-exclude" {
+		} else if l-1 > idx && arg == "--exclude" || arg == "-exclude" {
 			rules = append(rules, rule{pattern: os.Args[idx+1], include: false})
+		} else if strings.HasPrefix(arg, "--include=") || strings.HasPrefix(arg, "-include=") {
+			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
+				rules = append(rules, rule{pattern: s[1], include: true})
+			}
+		} else if strings.HasPrefix(arg, "--exclude=") || strings.HasPrefix(arg, "-exclude=") {
+			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
+				rules = append(rules, rule{pattern: s[1], include: false})
+			}
 		}
 	}
 	return
@@ -735,7 +744,6 @@ func matchObject(r chan object.Object, rules []rule, o object.Object) {
 		}
 	}
 	r <- o
-	logger.Debugf("%s is included", o.Key())
 }
 
 // Sync syncs all the keys between to object storage
