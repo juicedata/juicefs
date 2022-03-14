@@ -257,7 +257,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			return fmt.Errorf("json: %s", err)
 		}
 		if force {
-			old.SecretKey = "removed"
+			old.RemoveSecret()
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
 			format.UUID = old.UUID
@@ -265,14 +265,16 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			old.Bucket = format.Bucket
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.EncryptKey = format.EncryptKey
+			old.KeyEncrypted = format.KeyEncrypted
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
 			old.MinClientVersion = format.MinClientVersion
 			old.MaxClientVersion = format.MaxClientVersion
 			if format != old {
-				old.SecretKey = ""
-				format.SecretKey = ""
+				old.RemoveSecret()
+				format.RemoveSecret()
 				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
 			}
 		}
@@ -1591,37 +1593,43 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	return 0
 }
 
-func (m *dbMeta) doCleanStaleSession(sid uint64) {
+func (m *dbMeta) doCleanStaleSession(sid uint64) error {
+	var fail bool
 	// release locks
-	_, _ = m.db.Delete(flock{Sid: sid})
-	_, _ = m.db.Delete(plock{Sid: sid})
+	if _, err := m.db.Delete(flock{Sid: sid}); err != nil {
+		logger.Warnf("Delete flock with sid %d: %d", sid, err)
+		fail = true
+	}
+	if _, err := m.db.Delete(plock{Sid: sid}); err != nil {
+		logger.Warnf("Delete plock with sid %d: %d", sid, err)
+		fail = true
+	}
 
 	var s = sustained{Sid: sid}
-	rows, err := m.db.Rows(&s)
-	if err != nil {
-		logger.Warnf("scan stale session %d: %s", sid, err)
-		return
+	if rows, err := m.db.Rows(&s); err == nil {
+		var inodes []Ino
+		for rows.Next() {
+			if rows.Scan(&s) == nil {
+				inodes = append(inodes, s.Inode)
+			}
+		}
+		_ = rows.Close()
+		for _, inode := range inodes {
+			if err = m.doDeleteSustainedInode(sid, inode); err != nil {
+				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
+				fail = true
+			}
+		}
+	} else {
+		logger.Warnf("Scan sustained with sid %d: %s", sid, err)
+		fail = true
 	}
 
-	var inodes []Ino
-	for rows.Next() {
-		if rows.Scan(&s) == nil {
-			inodes = append(inodes, s.Inode)
-		}
-	}
-	_ = rows.Close()
-
-	done := true
-	for _, inode := range inodes {
-		if err := m.doDeleteSustainedInode(sid, inode); err != nil {
-			logger.Errorf("Failed to delete inode %d: %s", inode, err)
-			done = false
-		}
-	}
-	if done {
-		_ = m.txn(func(ses *xorm.Session) error {
-			_, err = ses.Delete(&session{Sid: sid})
-			logger.Infof("cleanup session %d: %s", sid, err)
+	if fail {
+		return fmt.Errorf("failed to clean up sid %d", sid)
+	} else {
+		return m.txn(func(ses *xorm.Session) error {
+			_, err := ses.Delete(&session{Sid: sid})
 			return err
 		})
 	}

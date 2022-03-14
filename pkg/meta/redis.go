@@ -187,7 +187,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			logger.Fatalf("existing format is broken: %s", err)
 		}
 		if force {
-			old.SecretKey = "removed"
+			old.RemoveSecret()
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
 			format.UUID = old.UUID
@@ -195,14 +195,16 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			old.Bucket = format.Bucket
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.EncryptKey = format.EncryptKey
+			old.KeyEncrypted = format.KeyEncrypted
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
 			old.MinClientVersion = format.MinClientVersion
 			old.MaxClientVersion = format.MaxClientVersion
 			if format != old {
-				old.SecretKey = ""
-				format.SecretKey = ""
+				old.RemoveSecret()
+				format.RemoveSecret()
 				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
 			}
 		}
@@ -1593,47 +1595,67 @@ func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 	return 0
 }
 
-func (r *redisMeta) doCleanStaleSession(sid uint64) {
+func (r *redisMeta) doCleanStaleSession(sid uint64) error {
+	var fail bool
 	// release locks
 	var ctx = Background
-	key := r.lockedKey(sid)
-	inodes, err := r.rdb.SMembers(ctx, key).Result()
-	if err != nil {
-		logger.Warnf("SMembers %s: %s", key, err)
-		return
-	}
 	ssid := strconv.FormatInt(int64(sid), 10)
-	for _, k := range inodes {
-		owners, _ := r.rdb.HKeys(ctx, k).Result()
-		for _, o := range owners {
-			if strings.Split(o, "_")[0] == ssid {
-				err = r.rdb.HDel(ctx, k, o).Err()
-				logger.Infof("cleanup lock on %s from session %d: %s", k, sid, err)
+	key := r.lockedKey(sid)
+	if inodes, err := r.rdb.SMembers(ctx, key).Result(); err == nil {
+		for _, k := range inodes {
+			owners, err := r.rdb.HKeys(ctx, k).Result()
+			if err != nil {
+				logger.Warnf("HKeys %s: %s", k, err)
+				fail = true
+				continue
+			}
+			var fields []string
+			for _, o := range owners {
+				if strings.Split(o, "_")[0] == ssid {
+					fields = append(fields, o)
+				}
+			}
+			if len(fields) > 0 {
+				if err = r.rdb.HDel(ctx, k, fields...).Err(); err != nil {
+					logger.Warnf("HDel %s %s: %s", k, fields, err)
+					fail = true
+					continue
+				}
+			}
+			if err = r.rdb.SRem(ctx, key, k).Err(); err != nil {
+				logger.Warnf("SRem %s %s: %s", key, k, err)
+				fail = true
 			}
 		}
-		r.rdb.SRem(ctx, key, k)
+	} else {
+		logger.Warnf("SMembers %s: %s", key, err)
+		fail = true
 	}
 
 	key = r.sustained(sid)
-	inodes, err = r.rdb.SMembers(ctx, key).Result()
-	if err != nil {
+	if inodes, err := r.rdb.SMembers(ctx, key).Result(); err == nil {
+		for _, sinode := range inodes {
+			inode, _ := strconv.ParseInt(sinode, 10, 0)
+			if err = r.doDeleteSustainedInode(sid, Ino(inode)); err != nil {
+				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
+				fail = true
+			}
+		}
+	} else {
 		logger.Warnf("SMembers %s: %s", key, err)
-		return
+		fail = true
 	}
-	done := true
-	for _, sinode := range inodes {
-		inode, _ := strconv.ParseInt(sinode, 10, 0)
-		if err := r.doDeleteSustainedInode(sid, Ino(inode)); err != nil {
-			logger.Errorf("Failed to delete inode %d: %s", inode, err)
-			done = false
-		} else {
-			r.rdb.SRem(ctx, key, sinode)
+
+	if !fail {
+		if err := r.rdb.HDel(ctx, sessionInfos, ssid).Err(); err != nil {
+			logger.Warnf("HDel %s %s: %s", sessionInfos, ssid, err)
+			fail = true
 		}
 	}
-	if done {
-		r.rdb.HDel(ctx, sessionInfos, ssid)
-		r.rdb.ZRem(ctx, allSessions, ssid)
-		logger.Infof("cleanup session %d", sid)
+	if fail {
+		return fmt.Errorf("failed to clean up sid %d", sid)
+	} else {
+		return r.rdb.ZRem(ctx, allSessions, ssid).Err()
 	}
 }
 
