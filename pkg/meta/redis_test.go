@@ -20,6 +20,7 @@ package meta
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"runtime"
 	"strconv"
 	"sync"
@@ -1140,8 +1141,23 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, parent, "f"); st != 0 {
 		t.Fatalf("unlink d/f: %s", st)
 	}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("getattr f(%d): %s, attr %+v", inode, st, attr)
+	}
+	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("mkdir d2: %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "d2"); st != 0 {
+		t.Fatalf("rmdir d2: %s", st)
+	}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("getattr d2(%d): %s, attr %+v", inode, st, attr)
+	}
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)
+	}
+	if st := m.Lookup(ctx, TrashInode+1, fmt.Sprintf("1-%d-d", parent), &inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("lookup subTrash/d: %s, attr %+v", st, attr)
 	}
 	if st := m.Rename(ctx, 1, "f2", TrashInode, "td", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename f2 -> td: %s", st)
@@ -1166,7 +1182,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 6 {
+	if len(entries) != 7 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	ctx2 := NewContext(1000, 1, []uint32{1})
