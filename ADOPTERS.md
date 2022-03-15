@@ -17,7 +17,7 @@ For users of JuiceFS:
 | [UniSound](https://www.unisound.com)                                                    | Production  | AI                     |
 | [NetEase Games](http://www.neteasegames.com)                                            | Production  | Big Data, File Sharing |
 | [Yimian](https://www.yimian.io)                                                         | Production  | Big Data               |
-| [Volcano Engine](https://www.volcengine.com/)                                           | Testing     | File Sharing           |
+| [Volcano Engine](https://www.volcengine.com)                                            | Testing     | File Sharing           |
 | [Dingdong Fresh](https://www.100.me)                                                    | Testing     | Big Data               |
 | [SF-Express](https://www.sf-express.com)                                                | Testing     | Big Data, File Sharing |
 | [BIGO](https://bigo.tv)                                                                 | Testing     | AI                     |
