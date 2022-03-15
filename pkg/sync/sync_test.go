@@ -300,24 +300,24 @@ func TestInitRules(t *testing.T) {
 func TestAlignPatternAndKey(t *testing.T) {
 	tests := []struct {
 		pattern string
-		k       string
-		wantP   string
-		wantK   string
+		key     string
+		wantKey string
 	}{
-		{pattern: "a*", k: "a1", wantP: "a*", wantK: "a1"},
-		{pattern: "a*/b*", k: "a1/b1", wantP: "a*/b*", wantK: "a1/b1"},
-		{pattern: "/a*", k: "/a1", wantP: "/a*", wantK: "/a1"},
-		{pattern: "a*/b?", k: "a1/b1/c2/d1", wantP: "a*/b?", wantK: "a1/b1"},
-		{pattern: "a*/b?/", k: "a1/", wantP: "a*/b?", wantK: "a1/"},
+		{pattern: "a*", key: "a1", wantKey: "a1"},
+		{pattern: "a*/b*", key: "a1/b1", wantKey: "a1/b1"},
+		{pattern: "/a*", key: "/a1", wantKey: "/a1"},
+		{pattern: "a*/b?", key: "a1/b1/c2/d1", wantKey: "a1/b1"},
+		{pattern: "a*/b?/", key: "a1/", wantKey: "a1/"},
+		{pattern: "a*/b?/c.txt", key: "a1/b1", wantKey: "a1/b1"},
+		{pattern: "a*/b?/", key: "a1/b1/", wantKey: "a1/b1/"},
+		{pattern: "a*/b?/", key: "a1/b1/c.txt", wantKey: "a1/b1/"},
+		{pattern: "a*/b*/", key: "a1/b1/c1/d.txt/", wantKey: "a1/b1/"},
 	}
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			gotP, gotK := alignPatternAndKey(tt.pattern, tt.k)
-			if gotP != tt.wantP {
-				t.Errorf("alignPatternAndKey() gotP = %v, want %v", gotP, tt.wantP)
-			}
-			if gotK != tt.wantK {
-				t.Errorf("alignPatternAndKey() gotK = %v, want %v", gotK, tt.wantK)
+			gotKey := alignPatternAndKey(tt.pattern, tt.key)
+			if gotKey != tt.wantKey {
+				t.Errorf("alignPatternAndKey() gotKey = %v, want %v", gotKey, tt.wantKey)
 			}
 		})
 	}

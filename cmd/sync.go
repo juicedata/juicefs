@@ -46,13 +46,26 @@ func cmdSync() *cli.Command {
 This tool spawns multiple threads to concurrently syncs objects of two data storages.
 SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX].
 
+INCLUDE/EXCLUDE PATTERN RULES
+	The include/exclude rules each specify a pattern that is matched against the names of the files that are going to be transferred.  These patterns can take several forms:
+
+	o  if the pattern ends with a / then it will only match a directory, not a file, link, or device.
+	o  rsync chooses between doing a simple string match and wildcard matching by checking if the pattern contains one of these three wildcard characters: '*', '?', and '[' .
+	o  a '*' matches any non-empty path component (it stops at slashes).
+	o  a '?' matches any character except a slash (/).
+	o  a '[' introduces a character class, such as [a-z] or [[:alpha:]].
+	o  in a wildcard pattern, a backslash can be used to escape a wildcard character, but it is matched literally when no wildcards are present.
+
 Examples:
 # Sync object from OSS to S3
 $ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
 
 # Sync objects from S3 to JuiceFS
 $ juicefs mount -d redis://localhost /mnt/jfs
-$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com /mnt/jfs
+$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+$ juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+$ juicefs sync --include='a1.txt' --exclude='a[1-9]' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+$ juicefs sync --include='a1.txt' --exclude='a*' --include='b1.txt' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
 
 Supported storage systems: https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage`,
 		Flags: []cli.Flag{
@@ -111,11 +124,11 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			},
 			&cli.StringSliceFlag{
 				Name:  "exclude",
-				Usage: "exclude keys containing `PATTERN` (POSIX regular expressions)",
+				Usage: "exclude files containing PATTERN",
 			},
 			&cli.StringSliceFlag{
 				Name:  "include",
-				Usage: "only include keys containing `PATTERN` (POSIX regular expressions)",
+				Usage: "need to be used with `--exclude PATTERN`. Don't exclude files matching PATTERN",
 			},
 			&cli.StringFlag{
 				Name:  "manager",

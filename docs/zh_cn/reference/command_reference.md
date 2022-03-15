@@ -511,7 +511,7 @@ juicefs sync [command options] SRC DST
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
 :::tip
-如果想要在 `SRC` 或者 `DST` 中表达文件夹的概念时，请确保路径是以"/"或者"\"结尾的，否则将会被认为是对象名的前缀。
+如果想要在 `SRC` 或者 `DST` 中表达文件夹的概念时，请确保路径是以 "/" 或者 "\" 结尾的，否则将会被认为是对象名的前缀。
 :::
 
 #### 选项
@@ -550,16 +550,14 @@ juicefs sync [command options] SRC DST
 删除目标存储下的不相关对象 (默认: false)
 
 `--exclude PATTERN`<br />
-跳过包含 PATTERN (POSIX正则表达式) 的对象名
+排除匹配 PATTERN 的文件
 
 `--include PATTERN`<br />
-需要与`--exclude` 配合使用。不排除匹配 PATTERN  (POSIX正则表达式) 的文件
-
+需要与`--exclude` 配合使用。不排除匹配 PATTERN 的文件
 
 :::tip
-`--exclude` 与 `--include`的设置顺序将会影响运行结果。每个对象将按照这两个参数出现的先后顺序依次匹配，一旦匹配某个参数的 PATTERN ，那么该对象的行为就是这个参数的类型，不再尝试后出现的参数的匹配。如果该个对象没有被任何一个参数匹配到，那么该对象的默认行为 include
+`--exclude` 与 `--include` 的设置顺序将会影响运行结果。每个对象将按照这两个参数出现的先后顺序依次匹配，一旦匹配某个参数的 PATTERN ，那么该对象的行为就是这个参数的类型，不再尝试后出现的参数的匹配。如果该个对象没有被任何一个参数匹配到，那么该对象的默认行为 include 。 `--include` 与 `--exclude` 参数的设计参考了 `rsync` ，但是目前我们不支持 `rsync` 中的 `**` 与 `***` 这两条匹配规则。
 :::
-
 
 `--manager value`<br />
 管理者地址

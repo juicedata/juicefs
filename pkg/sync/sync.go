@@ -22,7 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -670,9 +670,9 @@ type rule struct {
 func initRules() (rules []rule) {
 	l := len(os.Args)
 	for idx, arg := range os.Args {
-		if l-1 > idx && arg == "--include" || arg == "-include" {
+		if l-1 > idx && (arg == "--include" || arg == "-include") {
 			rules = append(rules, rule{pattern: os.Args[idx+1], include: true})
-		} else if l-1 > idx && arg == "--exclude" || arg == "-exclude" {
+		} else if l-1 > idx && (arg == "--exclude" || arg == "-exclude") {
 			rules = append(rules, rule{pattern: os.Args[idx+1], include: false})
 		} else if strings.HasPrefix(arg, "--include=") || strings.HasPrefix(arg, "-include=") {
 			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
@@ -694,14 +694,16 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 			if o == nil {
 				break
 			}
-			matchObject(r, rules, o)
+			if includeObject(rules, o) {
+				r <- o
+			}
 		}
 		close(r)
 	}()
 	return r
 }
 
-func alignPatternAndKey(pattern, key string) (p, k string) {
+func alignPatternAndKey(pattern, key string) (k string) {
 	var pIdxPair, kIdxPair []int
 	for idx, i := range pattern {
 		if string(i) == "/" {
@@ -715,35 +717,37 @@ func alignPatternAndKey(pattern, key string) (p, k string) {
 	}
 
 	if len(pIdxPair) < len(kIdxPair) {
-		k = key[:kIdxPair[len(pIdxPair)]]
-		p = pattern
-	} else if len(pIdxPair) > len(kIdxPair) {
-		p = pattern[:pIdxPair[len(kIdxPair)]]
-		k = key
+		if strings.HasSuffix(pattern, "/") {
+			k = key[:kIdxPair[len(pIdxPair)-1]+1]
+		} else {
+			k = key[:kIdxPair[len(pIdxPair)]]
+		}
+	} else if len(pIdxPair) == len(kIdxPair) && strings.HasSuffix(pattern, "/") && !strings.HasSuffix(key, "/") {
+		k = key[:kIdxPair[len(pIdxPair)-1]+1]
 	} else {
-		k, p = key, pattern
+		k = key
 	}
 	return
 }
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
-func matchObject(r chan object.Object, rules []rule, o object.Object) {
+func includeObject(rules []rule, o object.Object) bool {
 	for _, rule := range rules {
-		p, k := alignPatternAndKey(rule.pattern, o.Key())
-		match, err := filepath.Match(p, k)
+		k := alignPatternAndKey(rule.pattern, o.Key())
+		match, err := path.Match(rule.pattern, k)
 		if err != nil {
 			logger.Fatalf("pattern error : %v", err)
 		}
 		if match {
 			if rule.include {
-				break
+				return true
 			} else {
 				logger.Debugf("exclude %s", o.Key())
-				return
+				return false
 			}
 		}
 	}
-	r <- o
+	return true
 }
 
 // Sync syncs all the keys between to object storage

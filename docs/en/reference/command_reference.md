@@ -513,7 +513,7 @@ The format of both the source and destination paths is `[NAME://][ACCESS_KEY:SEC
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit the synchronization to only data in certain paths.
 
 :::note
-If you want to express the concept of a folder in `SRC` or `DST`, please make sure that the path ends with "/" or "\", otherwise it will be considered as the prefix of the object name.
+If you want to express the concept of a folder in `SRC` or `DST`, please make sure that the path ends with "/" or "\" , otherwise it will be considered as the prefix of the object name.
 :::
 
 #### Options
@@ -552,13 +552,13 @@ delete objects from source after synced (default: false)
 delete extraneous objects from destination (default: false)
 
 `--exclude PATTERN`<br />
-exclude keys containing PATTERN (POSIX regular expressions)
+exclude files containing PATTERN
 
 `--include PATTERN`<br />
-need to be used with `--exclude PATTERN`. Don't exclude files matching PATTERN (POSIX regular expressions)
+need to be used with `--exclude PATTERN`. Don't exclude files matching PATTERN
 
 :::tip
-The order in which `--exclude` and `--include` are set will affect the result. Each object will be matched according to the order in which the two parameters appear. Once the pattern of a parameter is matched, the behavior of the object is the type of the parameter, and the matching of the parameters that appear later will not be attempted. If the object is not matched by any of the parameters, the default behavior of the object is include
+The order in which `--exclude` and `--include` are set will affect the result. Each object will be matched in the order in which the two parameters appear. Once the PATTERN of a parameter is matched, the behavior of the object is the type of the parameter, and the matching of the parameters that appear later will not be attempted. If the object is not matched by any of the parameters, the default behavior of the object is include . `--include` and `--exclude` parameters are designed with reference to `rsync`, but currently we do not support the two matching rules of `**` and `***` in `rsync`.
 :::
 
 `--manager value`<br />
