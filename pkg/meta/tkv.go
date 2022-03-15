@@ -1012,7 +1012,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 
 		tx.set(m.entryKey(parent, name), m.packEntry(_type, ino))
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if parent != TrashInode {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		tx.set(m.inodeKey(ino), m.marshal(attr))
 		if _type == TypeSymlink {
 			tx.set(m.symKey(ino), []byte(path))
@@ -1088,7 +1090,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
 		tx.dels(m.entryKey(parent, name))
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if !isTrash(parent) {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		if attr.Nlink > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			if trash > 0 {
@@ -1179,7 +1183,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if !isTrash(parent) {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		tx.dels(m.entryKey(parent, name))
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
