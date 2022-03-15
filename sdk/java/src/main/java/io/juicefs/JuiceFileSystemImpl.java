@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -322,6 +322,8 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("readahead", Integer.valueOf(getConf(conf, "max-readahead", "0")));
     obj.put("pushGateway", getConf(conf, "push-gateway", ""));
     obj.put("pushInterval", Integer.valueOf(getConf(conf, "push-interval", "10")));
+    obj.put("graphite", getConf(conf, "graphite", ""));
+    obj.put("graphiteInterval", Integer.valueOf(getConf(conf, "graphite-interval", "10")));
     obj.put("pushAuth", getConf(conf, "push-auth", ""));
     obj.put("fastResolve", Boolean.valueOf(getConf(conf, "fast-resolve", "true")));
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
