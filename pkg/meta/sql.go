@@ -1028,8 +1028,10 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if err = mustInsert(s, &edge{parent, name, ino, _type}, &n); err != nil {
 			return err
 		}
-		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return err
+		if parent != TrashInode {
+			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
+				return err
+			}
 		}
 		if _type == TypeSymlink {
 			if err = mustInsert(s, &symlink{Inode: ino, Target: path}); err != nil {
@@ -1117,11 +1119,13 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
-		if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return err
+		if !isTrash(parent) {
+			if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
+				return err
+			}
 		}
 		if n.Nlink > 0 {
-			if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
+			if _, err := s.Cols("nlink", "ctime", "parent").Update(&n, &node{Inode: e.Inode}); err != nil {
 				return err
 			}
 			if trash > 0 {
@@ -1244,7 +1248,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return err
 		}
 		if trash > 0 {
-			if _, err = s.Cols("nlink", "ctime").Update(&n, &node{Inode: n.Inode}); err != nil {
+			if _, err = s.Cols("ctime", "parent").Update(&n, &node{Inode: n.Inode}); err != nil {
 				return err
 			}
 			if err = mustInsert(s, &edge{trash, fmt.Sprintf("%d-%d-%s", parent, e.Inode, e.Name), e.Inode, e.Type}); err != nil {
@@ -1258,7 +1262,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 				return err
 			}
 		}
-		_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
+		if !isTrash(parent) {
+			_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
+		}
 		return err
 	})
 	if err == nil && trash == 0 {
