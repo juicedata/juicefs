@@ -278,7 +278,7 @@ Since SQLite is a single-file database, usually only the host where the database
 
 ## BadgerDB
 
-[BadgerDB](https://github.com/dgraph-io/badger) is an embedded, persistent, stand-alone Key-Value database developed in pure Go, its database files are stored locally in a directory you specify.
+[BadgerDB](https://github.com/dgraph-io/badger) is an embedded, persistent, and standalone Key-Value database developed in pure Go. The database files are stored locally in the specified directory.
 
 When using BadgerDB as the JuiceFS metadata storage engine, use `badger://` to specify the database path.
 
