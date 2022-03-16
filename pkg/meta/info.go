@@ -100,7 +100,7 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 				logger.Warnf("Failed to parse Redis server version %q: %s", ver, err)
 			} else {
 				if ver.olderThan(oldestSupportedVer) {
-					logger.Warnf("Redis version should not be older than %s", oldestSupportedVer)
+					logger.Fatalf("Redis version should not be older than %s", oldestSupportedVer)
 				}
 			}
 		}
