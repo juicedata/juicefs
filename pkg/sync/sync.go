@@ -696,6 +696,8 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 			}
 			if includeObject(rules, o) {
 				r <- o
+			} else {
+				logger.Debugf("exclude %s", o.Key())
 			}
 		}
 		close(r)
@@ -739,12 +741,7 @@ func includeObject(rules []rule, o object.Object) bool {
 			logger.Fatalf("pattern error : %v", err)
 		}
 		if match {
-			if rule.include {
-				return true
-			} else {
-				logger.Debugf("exclude %s", o.Key())
-				return false
-			}
+			return rule.include
 		}
 	}
 	return true
