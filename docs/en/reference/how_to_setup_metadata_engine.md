@@ -290,7 +290,7 @@ You only need to create a file system for use, and there is no need to create a 
 juicefs format badger://$HOME/badger-data myjfs
 ```
 
-This command creates `badger-data` as a database directory in the `home` directory of the current user and uses it as a metadata storage for JuiceFS.
+This command creates `badger-data` as a database directory in the `home` directory of the current user, which is used as metadata storage for JuiceFS.
 
 ### Mount a file system
 
