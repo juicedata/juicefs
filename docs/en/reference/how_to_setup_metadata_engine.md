@@ -284,7 +284,7 @@ When using BadgerDB as the JuiceFS metadata storage engine, use `badger://` to s
 
 ### Create a file system
 
-There is no need to create the BadgerDB database in advance, just create the file system.
+You only need to create a file system for use, and there is no need to create a BadgerDB database in advance. 
 
 ```shell
 juicefs format badger://$HOME/badger-data myjfs
