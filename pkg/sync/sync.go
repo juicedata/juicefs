@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -586,7 +587,7 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 		logger.Fatal(err)
 	}
 	if config.Exclude != nil {
-		rules := initRules()
+		rules := initRules(src, dst)
 		srckeys = filter(srckeys, rules)
 		dstkeys = filter(dstkeys, rules)
 	}
@@ -667,27 +668,32 @@ type rule struct {
 	include bool
 }
 
-func initRules() (rules []rule) {
+func initRules(src, dst object.ObjectStorage) (rules []*rule) {
 	l := len(os.Args)
 	for idx, arg := range os.Args {
 		if l-1 > idx && (arg == "--include" || arg == "-include") {
-			rules = append(rules, rule{pattern: os.Args[idx+1], include: true})
+			rules = append(rules, &rule{pattern: os.Args[idx+1], include: true})
 		} else if l-1 > idx && (arg == "--exclude" || arg == "-exclude") {
-			rules = append(rules, rule{pattern: os.Args[idx+1], include: false})
+			rules = append(rules, &rule{pattern: os.Args[idx+1], include: false})
 		} else if strings.HasPrefix(arg, "--include=") || strings.HasPrefix(arg, "-include=") {
 			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
-				rules = append(rules, rule{pattern: s[1], include: true})
+				rules = append(rules, &rule{pattern: s[1], include: true})
 			}
 		} else if strings.HasPrefix(arg, "--exclude=") || strings.HasPrefix(arg, "-exclude=") {
 			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
-				rules = append(rules, rule{pattern: s[1], include: false})
+				rules = append(rules, &rule{pattern: s[1], include: false})
 			}
+		}
+	}
+	if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
+		for _, r := range rules {
+			r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
 		}
 	}
 	return
 }
 
-func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
+func filter(keys <-chan object.Object, rules []*rule) <-chan object.Object {
 	r := make(chan object.Object)
 	go func() {
 		for o := range keys {
@@ -733,7 +739,7 @@ func alignPatternAndKey(pattern, key string) (k string) {
 }
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
-func includeObject(rules []rule, o object.Object) bool {
+func includeObject(rules []*rule, o object.Object) bool {
 	for _, rule := range rules {
 		k := alignPatternAndKey(rule.pattern, o.Key())
 		match, err := path.Match(rule.pattern, k)

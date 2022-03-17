@@ -252,45 +252,47 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 func TestInitRules(t *testing.T) {
 	tests := []struct {
 		args      []string
-		wantRules []rule
+		wantRules []*rule
 	}{
 		{
 			args:      []string{"--include", "a"},
-			wantRules: []rule{{pattern: "a", include: true}},
+			wantRules: []*rule{{pattern: "a", include: true}},
 		},
 		{
 			args:      []string{"--exclude", "a", "--include", "b"},
-			wantRules: []rule{{pattern: "a", include: false}, {pattern: "b", include: true}},
+			wantRules: []*rule{{pattern: "a", include: false}, {pattern: "b", include: true}},
 		},
 		{
 			args:      []string{"--include", "a", "--test", "t", "--exclude", "b"},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: false}},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: false}},
 		},
 		{
 			args:      []string{"--include", "a", "--test", "t", "--exclude"},
-			wantRules: []rule{{pattern: "a", include: true}},
+			wantRules: []*rule{{pattern: "a", include: true}},
 		},
 		{
 			args:      []string{"--include", "a", "--exclude", "b", "--include", "c", "--exclude", "d"},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: false}, {pattern: "c", include: true}, {pattern: "d", include: false}},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: false}, {pattern: "c", include: true}, {pattern: "d", include: false}},
 		},
 		{
 			args:      []string{"--include", "a", "--include", "b", "--test", "--exclude", "c", "--exclude", "d"},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
 		},
 		{
 			args:      []string{"--include=a", "--include=b", "--exclude=c", "--exclude=d", "--test=aaa"},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
 		},
 		{
 			args:      []string{"-include=a", "--test", "t", "--include=b", "--exclude=c", "-exclude="},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}},
 		},
 	}
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
 			os.Args = tt.args
-			if gotRules := initRules(); !reflect.DeepEqual(gotRules, tt.wantRules) {
+			if gotRules := initRules(a, b); !reflect.DeepEqual(gotRules, tt.wantRules) {
 				t.Errorf("initRules() = %v, want %v", gotRules, tt.wantRules)
 			}
 		})
