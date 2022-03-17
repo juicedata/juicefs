@@ -23,25 +23,25 @@ import (
 )
 
 func TestSQLiteClient(t *testing.T) {
-	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), &Config{MaxDeletes: 1})
-	if err != nil || m.Name() != "sqlite3" {
-		t.Fatalf("create meta: %s", err)
+	m := NewClient("sqlite3://"+path.Join(t.TempDir(), "jfs-unit-test.db"), nil)
+	if m.Name() != "sqlite3" {
+		t.Fatalf("Invalid meta name: %s", m.Name())
 	}
 	testMeta(t, m)
 }
 
 func TestMySQLClient(t *testing.T) {
-	m, err := newSQLMeta("mysql", "root:@/dev", &Config{MaxDeletes: 1})
-	if err != nil || m.Name() != "mysql" {
-		t.Fatalf("create meta: %s", err)
+	m := NewClient("mysql://root:@/dev", nil)
+	if m.Name() != "mysql" {
+		t.Fatalf("Invalid meta name: %s", m.Name())
 	}
 	testMeta(t, m)
 }
 
 func TestPostgreSQLClient(t *testing.T) {
-	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{MaxDeletes: 1})
-	if err != nil || m.Name() != "postgres" {
-		t.Fatalf("create meta: %s", err)
+	m := NewClient("postgres://localhost:5432/test?sslmode=disable", nil)
+	if m.Name() != "postgres" {
+		t.Fatalf("Invalid meta name: %s", m.Name())
 	}
 	testMeta(t, m)
 }
