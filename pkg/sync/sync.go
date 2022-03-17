@@ -711,31 +711,17 @@ func filter(keys <-chan object.Object, rules []*rule) <-chan object.Object {
 	return r
 }
 
-func alignPatternAndKey(pattern, key string) (k string) {
-	var pIdxPair, kIdxPair []int
-	for idx, i := range pattern {
-		if string(i) == "/" {
-			pIdxPair = append(pIdxPair, idx)
-		}
-	}
-	for idx, i := range key {
-		if string(i) == "/" {
-			kIdxPair = append(kIdxPair, idx)
-		}
-	}
-
-	if len(pIdxPair) < len(kIdxPair) {
-		if strings.HasSuffix(pattern, "/") {
-			k = key[:kIdxPair[len(pIdxPair)-1]+1]
-		} else {
-			k = key[:kIdxPair[len(pIdxPair)]]
-		}
-	} else if len(pIdxPair) == len(kIdxPair) && strings.HasSuffix(pattern, "/") && !strings.HasSuffix(key, "/") {
-		k = key[:kIdxPair[len(pIdxPair)-1]+1]
+func alignPatternAndKey(pattern, key string) string {
+	sep := "/"
+	l := strings.Count(pattern, sep) + 1
+	ps := strings.Split(key, sep)
+	if len(ps) < l {
+		return key
+	} else if strings.HasSuffix(pattern, sep) {
+		return strings.Join(ps[:l-1], sep) + sep
 	} else {
-		k = key
+		return strings.Join(ps[:l], sep)
 	}
-	return
 }
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options

@@ -50,11 +50,12 @@ Include/exclude pattern rules:
 The include/exclude rules each specify a pattern that is matched against the names of the files that are going to be transferred.  These patterns can take several forms:
 
 - if the pattern ends with a / then it will only match a directory, not a file, link, or device.
-- rsync chooses between doing a simple string match and wildcard matching by checking if the pattern contains one of these three wildcard characters: '*', '?', and '[' .
+- it chooses between doing a simple string match and wildcard matching by checking if the pattern contains one of these three wildcard characters: '*', '?', and '[' .
 - a '*' matches any non-empty path component (it stops at slashes).
 - a '?' matches any character except a slash (/).
 - a '[' introduces a character class, such as [a-z] or [[:alpha:]].
 - in a wildcard pattern, a backslash can be used to escape a wildcard character, but it is matched literally when no wildcards are present.
+- it's worth mention that we do a prefix match of pattern, i.e. implies recursive
 
 Examples:
 # Sync object from OSS to S3
