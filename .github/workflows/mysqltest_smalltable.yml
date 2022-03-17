@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -79,6 +79,7 @@ jobs:
           echo "threads=80" >>/tmp/config.cfg
           echo "report-interval=10" >>/tmp/config.cfg
           echo "db-driver=mysql" >>/tmp/config.cfg
+
 
       - name: Small Size Table Test
         run: |
