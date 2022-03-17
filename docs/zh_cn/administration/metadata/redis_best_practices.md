@@ -11,7 +11,7 @@ slug: /redis_best_practices
 强烈建议使用云平台提供的 Redis 托管服务，详情查看「[推荐的 Redis 托管服务](#推荐的-redis-托管服务)」。
 :::
 
-对于自主维护的 Redis 数据库，建议了解以下几个方面：
+对于自主维护的 Redis 数据库，JuiceFS 要求其版本至少为 4.0+，并推荐使用较新的「[官方稳定版本](https://redis.io/download)」。另外，在部署 Redis 前还建议您提前了解以下几个方面：
 
 :::note 注意
 本文部分内容来自 Redis 官网，若有不一致的表述，请以 Redis 官方文档为准。

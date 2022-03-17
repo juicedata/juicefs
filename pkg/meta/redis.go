@@ -1049,7 +1049,9 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, r.entryKey(parent), name, r.packEntry(_type, ino))
-			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			if parent != TrashInode {
+				pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			}
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(attr), 0)
 			if _type == TypeSymlink {
 				pipe.Set(ctx, r.symKey(ino), path, 0)
@@ -1143,7 +1145,9 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, r.entryKey(parent), name)
-			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			if !isTrash(parent) {
+				pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			}
 			if attr.Nlink > 0 {
 				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 				if trash > 0 {
@@ -1262,7 +1266,9 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, r.entryKey(parent), name)
-			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			if !isTrash(parent) {
+				pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			}
 			if trash > 0 {
 				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 				pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
