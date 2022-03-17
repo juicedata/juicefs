@@ -43,7 +43,8 @@ func Test_exposeMetrics(t *testing.T) {
 	Convey("Test_exposeMetrics", t, func() {
 		Convey("Test_exposeMetrics", func() {
 			addr := "redis://127.0.0.1:6379/10"
-			client := meta.NewClient(addr, nil)
+			var conf = meta.Config{MaxDeletes: 1}
+			client := meta.NewClient(addr, &conf)
 			var appCtx *cli.Context
 			stringPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "String", func(_ *cli.Context, arg string) string {
 				switch arg {

@@ -25,25 +25,25 @@ import (
 
 func TestMemKVClient(t *testing.T) {
 	_ = os.Remove(settingPath)
-	m := NewClient("memkv://jfs-unit-test", nil)
-	if m.Name() != "memkv" {
-		t.Fatalf("Invalid meta name: %s", m.Name())
+	m, err := newKVMeta("memkv", "jfs-unit-test", &Config{MaxDeletes: 1})
+	if err != nil || m.Name() != "memkv" {
+		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
 }
 
 func TestTiKVClient(t *testing.T) {
-	m := NewClient("tikv://127.0.0.1:2379/jfs-unit-test", nil)
-	if m.Name() != "tikv" {
-		t.Fatalf("Invalid meta name: %s", m.Name())
+	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", &Config{MaxDeletes: 1})
+	if err != nil || m.Name() != "tikv" {
+		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
 }
 
 func TestBadgerClient(t *testing.T) {
-	m := NewClient("badger://badger-data", nil)
-	if m.Name() != "badger" {
-		t.Fatalf("Invalid meta name: %s", m.Name())
+	m, err := newKVMeta("badger", "badger", &Config{MaxDeletes: 1})
+	if err != nil || m.Name() != "badger" {
+		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
 }

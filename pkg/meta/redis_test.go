@@ -32,9 +32,14 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
-	m := NewClient("redis://127.0.0.1:6379/10", nil)
-	if m.Name() != "redis" {
-		t.Fatalf("Invalid meta name: %s", m.Name())
+	var conf = Config{MaxDeletes: 1}
+	_, err := newRedisMeta("http", "127.0.0.1:6379/10", &conf)
+	if err == nil {
+		t.Fatal("meta created with invalid url")
+	}
+	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", &conf)
+	if err != nil || m.Name() != "redis" {
+		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
 }

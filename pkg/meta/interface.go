@@ -385,10 +385,6 @@ func NewClient(uri string, conf *Config) Meta {
 	if !ok {
 		logger.Fatalf("Invalid meta driver: %s", driver)
 	}
-	if conf == nil {
-		logger.Warnf("No config provided, using default")
-		conf = &Config{MaxDeletes: 1, Heartbeat: time.Minute}
-	}
 	m, err := f(driver, uri[p+3:], conf)
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)
