@@ -65,9 +65,10 @@ var (
 	handlers = make(map[uintptr]*wrapper)
 	activefs = make(map[string][]*wrapper)
 	logger   = utils.GetLogger("juicefs")
+	bOnce    sync.Once
 	bridges  []*Bridge
+	pOnce    sync.Once
 	pushers  []*push.Pusher
-	once     sync.Once
 )
 
 const (
@@ -308,64 +309,62 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	return object.WithPrefix(blob, format.Name+"/"), nil
 }
 
-func pushMetrics(graphite, pushGatewayAddr, pushAuth string, graphiteInterVal, pushGatewayInterVal int, registry *prometheus.Registry, commonLabels map[string]string) {
-	if graphite != "" {
-		bridge, err := NewBridge(&Config{
-			URL:           graphite,
-			Gatherer:      registry,
-			UseTags:       true,
-			Timeout:       2 * time.Second,
-			ErrorHandling: ContinueOnError,
-			Logger:        logger,
-			CommonLabels:  commonLabels,
-		})
-		if err != nil {
-			logger.Warnf("NewBridge error:%s", err)
-		}
-		bridges = append(bridges, bridge)
+func push2Gateway(pushGatewayAddr, pushAuth string, pushGatewayInterVal int, registry *prometheus.Registry, commonLabels map[string]string) {
+	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
+	for k, v := range commonLabels {
+		pusher.Grouping(k, v)
 	}
-
-	if pushGatewayAddr != "" {
-		pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
-		for k, v := range commonLabels {
-			pusher.Grouping(k, v)
+	if pushAuth != "" {
+		if strings.Contains(pushAuth, ":") {
+			parts := strings.Split(pushAuth, ":")
+			pusher.BasicAuth(parts[0], parts[1])
 		}
-		if pushAuth != "" {
-			if strings.Contains(pushAuth, ":") {
-				parts := strings.Split(pushAuth, ":")
-				pusher.BasicAuth(parts[0], parts[1])
-			}
-		}
-		pushers = append(pushers, pusher)
 	}
+	pushers = append(pushers, pusher)
 
-	once.Do(func() {
-		gInterval, pInterval := time.Second*10, time.Second*10
-		if graphiteInterVal > 0 {
-			gInterval = time.Second * time.Duration(graphiteInterVal)
-		}
+	pOnce.Do(func() {
+		pInterval := time.Second * 10
 		if pushGatewayInterVal > 0 {
 			pInterval = time.Second * time.Duration(pushGatewayInterVal)
 		}
 		go func() {
-			for range time.NewTicker(gInterval).C {
-				for _, brg := range bridges {
-					go func(brg *Bridge) {
-						if err := brg.Push(); err != nil {
-							logger.Warnf("error pushing to Graphite: %s", err)
-						}
-					}(brg)
+			for range time.NewTicker(pInterval).C {
+				for _, pusher := range pushers {
+					if err := pusher.Push(); err != nil {
+						logger.Warnf("error pushing to PushGateway: %s", err)
+					}
 				}
 			}
 		}()
+	})
+}
+
+func push2Graphite(graphite string, graphiteInterVal int, registry *prometheus.Registry, commonLabels map[string]string) {
+	if bridge, err := NewBridge(&Config{
+		URL:           graphite,
+		Gatherer:      registry,
+		UseTags:       true,
+		Timeout:       2 * time.Second,
+		ErrorHandling: ContinueOnError,
+		Logger:        logger,
+		CommonLabels:  commonLabels,
+	}); err != nil {
+		logger.Warnf("NewBridge error:%s", err)
+	} else {
+		bridges = append(bridges, bridge)
+	}
+
+	bOnce.Do(func() {
+		gInterval := time.Second * 10
+		if graphiteInterVal > 0 {
+			gInterval = time.Second * time.Duration(graphiteInterVal)
+		}
 		go func() {
-			for range time.NewTicker(pInterval).C {
-				for _, pusher := range pushers {
-					go func(pusher *push.Pusher) {
-						if err := pusher.Push(); err != nil {
-							logger.Warnf("error pushing to PushGateway: %s", err)
-						}
-					}(pusher)
+			for range time.NewTicker(gInterval).C {
+				for _, brg := range bridges {
+					if err := brg.Push(); err != nil {
+						logger.Warnf("error pushing to Graphite: %s", err)
+					}
 				}
 			}
 		}()
@@ -428,7 +427,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
 			registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 			registerer.MustRegister(prometheus.NewGoCollector())
-			pushMetrics(jConf.Graphite, jConf.PushGateway, jConf.PushAuth, jConf.GraphiteInterval, jConf.PushInterval, registry, commonLabels)
+			if jConf.Graphite != "" {
+				push2Graphite(jConf.Graphite, jConf.GraphiteInterval, registry, commonLabels)
+			}
+			if jConf.PushGateway != "" {
+				push2Gateway(jConf.PushGateway, jConf.PushAuth, jConf.PushInterval, registry, commonLabels)
+			}
 			meta.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(m, registerer)
