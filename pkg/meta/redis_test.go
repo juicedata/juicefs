@@ -1095,7 +1095,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	case *redisMeta:
 		s, err = m.getSession(strconv.FormatUint(sid, 10), true)
 	case *dbMeta:
-		s, err = m.getSession(&session{Sid: sid}, true)
+		s, err = m.getSession(&session2{Sid: sid}, true)
 	case *kvMeta:
 		s, err = m.getSession(sid, true)
 	}

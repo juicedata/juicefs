@@ -257,7 +257,9 @@ func (r *redisMeta) doLoad() ([]byte, error) {
 }
 
 func (r *redisMeta) doNewSession(sinfo []byte) error {
-	err := r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.FormatUint(r.sid, 10)}).Err()
+	err := r.rdb.ZAdd(Background, allSessions, &redis.Z{
+		Score:  float64(r.expireTime()),
+		Member: strconv.FormatUint(r.sid, 10)}).Err()
 	if err != nil {
 		return fmt.Errorf("set session ID %d: %s", r.sid, err)
 	}
@@ -386,7 +388,7 @@ func (r *redisMeta) GetSession(sid uint64) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.Heartbeat = time.Unix(int64(score), 0)
+	s.Expire = time.Unix(int64(score), 0)
 	return s, nil
 }
 
@@ -402,7 +404,7 @@ func (r *redisMeta) ListSessions() ([]*Session, error) {
 			logger.Errorf("get session: %s", err)
 			continue
 		}
-		s.Heartbeat = time.Unix(int64(k.Score), 0)
+		s.Expire = time.Unix(int64(k.Score), 0)
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
@@ -1702,9 +1704,10 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) error {
 	}
 }
 
-func (r *redisMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
-	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: int64(limit)}
-	vals, err := r.rdb.ZRangeByScore(Background, allSessions, rng).Result()
+func (r *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
+	vals, err := r.rdb.ZRangeByScore(Background, allSessions, &redis.ZRangeBy{
+		Max:   strconv.FormatInt(time.Now().Unix(), 10),
+		Count: int64(limit)}).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -1716,7 +1719,9 @@ func (r *redisMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
 }
 
 func (r *redisMeta) doRefreshSession() {
-	r.rdb.ZAdd(Background, allSessions, &redis.Z{Score: float64(time.Now().Unix()), Member: strconv.Itoa(int(r.sid))})
+	r.rdb.ZAdd(Background, allSessions, &redis.Z{
+		Score:  float64(r.expireTime()),
+		Member: strconv.FormatUint(r.sid, 10)})
 }
 
 func (r *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
