@@ -233,6 +233,7 @@ type javaConf struct {
 	NoBGJob         bool    `json:"noBGJob"`
 	OpenCache       float64 `json:"openCache"`
 	BackupMeta      int64   `json:"backupMeta"`
+	Heartbeat       int     `json:"heartbeat"`
 	CacheDir        string  `json:"cacheDir"`
 	CacheSize       int64   `json:"cacheSize"`
 	FreeSpace       string  `json:"freeSpace"`
@@ -343,6 +344,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			ReadOnly:   jConf.ReadOnly,
 			NoBGJob:    jConf.NoBGJob,
 			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
+			Heartbeat:  time.Second * time.Duration(jConf.Heartbeat),
 			MaxDeletes: jConf.MaxDeletes,
 		}
 		m := meta.NewClient(jConf.MetaURL, metaConf)

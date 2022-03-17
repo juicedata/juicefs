@@ -193,7 +193,7 @@ func (m *baseMeta) NewSession() error {
 
 func (m *baseMeta) refreshSession() {
 	for {
-		utils.SleepWithJitter(time.Minute)
+		utils.SleepWithJitter(m.conf.Heartbeat)
 		m.Lock()
 		if m.umounting {
 			m.Unlock()
@@ -216,7 +216,7 @@ func (m *baseMeta) refreshSession() {
 }
 
 func (m *baseMeta) CleanStaleSessions() {
-	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute*-5).Unix(), 1000)
+	sids, err := m.en.doFindStaleSessions(time.Now().Add(-5*m.conf.Heartbeat).Unix(), 1000)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
