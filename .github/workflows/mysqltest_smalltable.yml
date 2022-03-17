@@ -81,6 +81,7 @@ jobs:
           echo "db-driver=mysql" >>/tmp/config.cfg
 
 
+
       - name: Small Size Table Test
         run: |
           sudo mysql -uroot -proot  -e "use mysql;set global max_prepared_stmt_count = 100000;"
