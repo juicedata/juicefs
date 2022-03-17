@@ -100,6 +100,9 @@ func newBaseMeta(conf *Config) baseMeta {
 	if conf.Retries == 0 {
 		conf.Retries = 30
 	}
+	if conf.Heartbeat == 0 {
+		conf.Heartbeat = 12 * time.Second
+	}
 	return baseMeta{
 		conf:         conf,
 		root:         1,
