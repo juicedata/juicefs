@@ -173,7 +173,7 @@ This failure happens probably because some programs are reading or writing files
 The following command may result in file corruption and loss, so be careful to use it!
 :::
 
-Once you have ensured data security, add the option `--force` or `-f` to the unmount command to force the file system unmounted.
+You can add the option `--force` or `-f` to force the file system unmounted if you are clear about the consequence of the operation.
 
 ```shell
 juicefs umount --force mnt
