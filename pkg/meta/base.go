@@ -100,13 +100,19 @@ func newBaseMeta(conf *Config) baseMeta {
 	if conf.Retries == 0 {
 		conf.Retries = 30
 	}
+
+	deleteChan := conf.MaxDeletes
+	//  keep a chan to delete file in cache
+	if conf.MaxDeletes <= 0 {
+		deleteChan = 1
+	}
 	return baseMeta{
 		conf:         conf,
 		root:         1,
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, conf.MaxDeletes),
+		deleting:     make(chan int, deleteChan),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -816,9 +822,6 @@ func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 }
 
 func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
-	if m.conf.MaxDeletes == 0 {
-		return
-	}
 	m.deleting <- 1
 	defer func() { <-m.deleting }()
 	err := m.newMsg(DeleteChunk, chunkid, size)

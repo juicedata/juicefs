@@ -295,6 +295,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
+		MaxDeletes:     c.Int("max-deletes"),
 	}
 
 	if chunkConf.CacheDir != "memory" {

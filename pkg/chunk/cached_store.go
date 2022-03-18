@@ -289,9 +289,12 @@ func (c *rChunk) Remove() error {
 		delete(c.store.pendingKeys, key)
 		c.store.pendingMutex.Unlock()
 		c.store.bcache.remove(key)
-		if e := c.delete(i); e != nil {
-			err = e
+		if c.store.conf.MaxDeletes >= 1 {
+			if e := c.delete(i); e != nil {
+				err = e
+			}
 		}
+		c.store.bcache.remove(key)
 	}
 	return err
 }
@@ -654,6 +657,7 @@ type Config struct {
 	BufferSize     int
 	Readahead      int
 	Prefetch       int
+	MaxDeletes     int
 }
 
 type cachedStore struct {
