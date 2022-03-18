@@ -42,8 +42,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/prometheus/client_golang/prometheus/push"
-
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -54,6 +52,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/sirupsen/logrus"
 )
 

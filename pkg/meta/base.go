@@ -101,7 +101,6 @@ func newBaseMeta(conf *Config) baseMeta {
 	}
 	if conf.Heartbeat == 0 {
 		conf.Heartbeat = 12 * time.Second
-
 	}
 	return baseMeta{
 		conf:         conf,
