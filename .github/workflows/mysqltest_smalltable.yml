@@ -107,7 +107,7 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Mysql Log
+      - name: Log
         if: ${{ failure() }}
         run: |
           echo "mysql log"
