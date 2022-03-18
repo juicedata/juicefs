@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -323,6 +323,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("pushGateway", getConf(conf, "push-gateway", ""));
     obj.put("pushInterval", Integer.valueOf(getConf(conf, "push-interval", "10")));
     obj.put("pushAuth", getConf(conf, "push-auth", ""));
+    obj.put("pushGraphite", getConf(conf, "push-graphite", ""));
     obj.put("fastResolve", Boolean.valueOf(getConf(conf, "fast-resolve", "true")));
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
@@ -500,16 +501,16 @@ public class JuiceFileSystemImpl extends FileSystem {
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
     String resource = "libjfs.so.gz";
-    String name = "libjfs.4.so";
+    String name = "libjfs.5.so";
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
     if (os.toLowerCase().contains("windows")) {
       resource = "libjfs.dll.gz";
-      name = "libjfs3.dll";
+      name = "libjfs5.dll";
       dir = new File(System.getProperty("java.io.tmpdir"));
     } else if (os.toLowerCase().contains("mac")) {
       resource = "libjfs.dylib.gz";
-      name = "libjfs.dylib";
+      name = "libjfs5.dylib";
     }
     File libFile = new File(dir, name);
 

@@ -143,9 +143,9 @@ For more information about Prometheus Operator, please check [official document]
 
 ### Hadoop
 
-The [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and then letting Prometheus scrape the metrics from Pushgateway.
+The [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and [Graphite](http://graphiteapp.org/)
 
-Please enable metrics reporting with the following configuration:
+Report metrics to Pushgateway:
 
 ```xml
 <property>
@@ -154,7 +154,7 @@ Please enable metrics reporting with the following configuration:
 </property>
 ```
 
-At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds. For all configurations supported by JuiceFS Hadoop Java SDK, please refer to [documentation](../deployment/hadoop_java_sdk.md#client-configurations).
+At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds.
 
 :::info
 According to the suggestion of [Pushgateway official document](https://github.com/prometheus/pushgateway/blob/master/README.md#configure-the-pushgateway-as-a-target-to-scrape), Prometheus's [scrape configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) needs to set `honor_labels: true`.
@@ -175,6 +175,19 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 :::
 
 For more information about Pushgateway, please check [official document](https://github.com/prometheus/pushgateway/blob/master/README.md).
+
+Report metrics to Graphite:
+
+```xml
+<property>
+  <name>juicefs.push-graphite</name>
+  <value>host:port</value>
+</property>
+```
+
+At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds.
+
+For all configurations supported by JuiceFS Hadoop Java SDK, please refer to [documentation](../deployment/hadoop_java_sdk.md#client-configurations).
 
 ### Use Consul as registration center
 
