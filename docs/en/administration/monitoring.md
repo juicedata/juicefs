@@ -180,12 +180,12 @@ Report metrics to Graphite:
 
 ```xml
 <property>
-  <name>juicefs.graphite</name>
+  <name>juicefs.push-graphite</name>
   <value>host:port</value>
 </property>
 ```
 
-At the same time, the frequency of reporting metrics can be modified through the `juicefs.graphite-interval` configuration. The default is to report once every 10 seconds.
+At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds.
 
 For all configurations supported by JuiceFS Hadoop Java SDK, please refer to [documentation](../deployment/hadoop_java_sdk.md#client-configurations).
 

@@ -228,39 +228,38 @@ func freeHandle(fd int) {
 }
 
 type javaConf struct {
-	MetaURL          string  `json:"meta"`
-	Bucket           string  `json:"bucket"`
-	ReadOnly         bool    `json:"readOnly"`
-	NoBGJob          bool    `json:"noBGJob"`
-	OpenCache        float64 `json:"openCache"`
-	BackupMeta       int64   `json:"backupMeta"`
-	CacheDir         string  `json:"cacheDir"`
-	CacheSize        int64   `json:"cacheSize"`
-	FreeSpace        string  `json:"freeSpace"`
-	AutoCreate       bool    `json:"autoCreate"`
-	CacheFullBlock   bool    `json:"cacheFullBlock"`
-	Writeback        bool    `json:"writeback"`
-	MemorySize       int     `json:"memorySize"`
-	Prefetch         int     `json:"prefetch"`
-	Readahead        int     `json:"readahead"`
-	UploadLimit      int     `json:"uploadLimit"`
-	DownloadLimit    int     `json:"downloadLimit"`
-	MaxUploads       int     `json:"maxUploads"`
-	MaxDeletes       int     `json:"maxDeletes"`
-	GetTimeout       int     `json:"getTimeout"`
-	PutTimeout       int     `json:"putTimeout"`
-	FastResolve      bool    `json:"fastResolve"`
-	AttrTimeout      float64 `json:"attrTimeout"`
-	EntryTimeout     float64 `json:"entryTimeout"`
-	DirEntryTimeout  float64 `json:"dirEntryTimeout"`
-	Debug            bool    `json:"debug"`
-	NoUsageReport    bool    `json:"noUsageReport"`
-	AccessLog        string  `json:"accessLog"`
-	PushGateway      string  `json:"pushGateway"`
-	PushInterval     int     `json:"pushInterval"`
-	PushAuth         string  `json:"pushAuth"`
-	Graphite         string  `json:"graphite"`
-	GraphiteInterval int     `json:"graphiteInterval"`
+	MetaURL         string  `json:"meta"`
+	Bucket          string  `json:"bucket"`
+	ReadOnly        bool    `json:"readOnly"`
+	NoBGJob         bool    `json:"noBGJob"`
+	OpenCache       float64 `json:"openCache"`
+	BackupMeta      int64   `json:"backupMeta"`
+	CacheDir        string  `json:"cacheDir"`
+	CacheSize       int64   `json:"cacheSize"`
+	FreeSpace       string  `json:"freeSpace"`
+	AutoCreate      bool    `json:"autoCreate"`
+	CacheFullBlock  bool    `json:"cacheFullBlock"`
+	Writeback       bool    `json:"writeback"`
+	MemorySize      int     `json:"memorySize"`
+	Prefetch        int     `json:"prefetch"`
+	Readahead       int     `json:"readahead"`
+	UploadLimit     int     `json:"uploadLimit"`
+	DownloadLimit   int     `json:"downloadLimit"`
+	MaxUploads      int     `json:"maxUploads"`
+	MaxDeletes      int     `json:"maxDeletes"`
+	GetTimeout      int     `json:"getTimeout"`
+	PutTimeout      int     `json:"putTimeout"`
+	FastResolve     bool    `json:"fastResolve"`
+	AttrTimeout     float64 `json:"attrTimeout"`
+	EntryTimeout    float64 `json:"entryTimeout"`
+	DirEntryTimeout float64 `json:"dirEntryTimeout"`
+	Debug           bool    `json:"debug"`
+	NoUsageReport   bool    `json:"noUsageReport"`
+	AccessLog       string  `json:"accessLog"`
+	PushGateway     string  `json:"pushGateway"`
+	PushInterval    int     `json:"pushInterval"`
+	PushAuth        string  `json:"pushAuth"`
+	PushGraphite    string  `json:"pushGraphite"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) uintptr {
@@ -309,7 +308,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	return object.WithPrefix(blob, format.Name+"/"), nil
 }
 
-func push2Gateway(pushGatewayAddr, pushAuth string, pushGatewayInterVal int, registry *prometheus.Registry, commonLabels map[string]string) {
+func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
 	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
 	for k, v := range commonLabels {
 		pusher.Grouping(k, v)
@@ -323,12 +322,8 @@ func push2Gateway(pushGatewayAddr, pushAuth string, pushGatewayInterVal int, reg
 	pushers = append(pushers, pusher)
 
 	pOnce.Do(func() {
-		pInterval := time.Second * 10
-		if pushGatewayInterVal > 0 {
-			pInterval = time.Second * time.Duration(pushGatewayInterVal)
-		}
 		go func() {
-			for range time.NewTicker(pInterval).C {
+			for range time.NewTicker(pushInterVal).C {
 				for _, pusher := range pushers {
 					if err := pusher.Push(); err != nil {
 						logger.Warnf("error pushing to PushGateway: %s", err)
@@ -339,7 +334,7 @@ func push2Gateway(pushGatewayAddr, pushAuth string, pushGatewayInterVal int, reg
 	})
 }
 
-func push2Graphite(graphite string, graphiteInterVal int, registry *prometheus.Registry, commonLabels map[string]string) {
+func push2Graphite(graphite string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
 	if bridge, err := NewBridge(&Config{
 		URL:           graphite,
 		Gatherer:      registry,
@@ -355,12 +350,8 @@ func push2Graphite(graphite string, graphiteInterVal int, registry *prometheus.R
 	}
 
 	bOnce.Do(func() {
-		gInterval := time.Second * 10
-		if graphiteInterVal > 0 {
-			gInterval = time.Second * time.Duration(graphiteInterVal)
-		}
 		go func() {
-			for range time.NewTicker(gInterval).C {
+			for range time.NewTicker(pushInterVal).C {
 				for _, brg := range bridges {
 					if err := brg.Push(); err != nil {
 						logger.Warnf("error pushing to Graphite: %s", err)
@@ -416,7 +407,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			logger.Fatalf("load setting: %s", err)
 		}
 		var registerer prometheus.Registerer
-		if jConf.PushGateway != "" || jConf.Graphite != "" {
+		if jConf.PushGateway != "" || jConf.PushGraphite != "" {
 			commonLabels := prometheus.Labels{"vol_name": name, "mp": "sdk-" + strconv.Itoa(os.Getpid())}
 			if h, err := os.Hostname(); err == nil {
 				commonLabels["instance"] = h
@@ -427,11 +418,16 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
 			registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 			registerer.MustRegister(prometheus.NewGoCollector())
-			if jConf.Graphite != "" {
-				push2Graphite(jConf.Graphite, jConf.GraphiteInterval, registry, commonLabels)
+
+			var interval time.Duration
+			if jConf.PushInterval > 0 {
+				interval = time.Second * time.Duration(jConf.PushInterval)
+			}
+			if jConf.PushGraphite != "" {
+				push2Graphite(jConf.PushGraphite, interval, registry, commonLabels)
 			}
 			if jConf.PushGateway != "" {
-				push2Gateway(jConf.PushGateway, jConf.PushAuth, jConf.PushInterval, registry, commonLabels)
+				push2Gateway(jConf.PushGateway, jConf.PushAuth, interval, registry, commonLabels)
 			}
 			meta.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)

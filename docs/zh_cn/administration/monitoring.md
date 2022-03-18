@@ -154,7 +154,7 @@ spec:
 </property>
 ```
 
-同时可以通过 `juicefs.push-interval` 配置修改 Pushgateway 上报指标的频率，默认为 10 秒上报一次。
+同时可以通过 `juicefs.push-interval` 配置修改上报指标的频率，默认为 10 秒上报一次。
 
 :::info 说明
 根据 [Pushgateway 官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md#configure-the-pushgateway-as-a-target-to-scrape)的建议，Prometheus 的[抓取配置](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config)中需要设置 `honor_labels: true`。
@@ -180,12 +180,12 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 
 ```xml
 <property>
-  <name>juicefs.graphite</name>
+  <name>juicefs.push-graphite</name>
   <value>host:port</value>
 </property>
 ```
 
-同时可以通过 `juicefs.graphite-interval` 配置修改上报指标的频率，默认为 10 秒上报一次。
+同时可以通过 `juicefs.push-interval` 配置修改上报指标的频率，默认为 10 秒上报一次。
 
 JuiceFS Hadoop Java SDK 支持的所有配置参数请参考[文档](../deployment/hadoop_java_sdk.md#客户端配置参数)。
 
