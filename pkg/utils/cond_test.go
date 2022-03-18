@@ -33,9 +33,8 @@ func TestCond(t *testing.T) {
 		m.Lock()
 		wg.Done()
 		l.Wait()
-		m.Unlock()
-
 		l.Signal()
+		m.Unlock()
 		done <- true
 	}()
 	wg.Wait()
@@ -92,7 +91,7 @@ func TestCond(t *testing.T) {
 				t.Fatalf("cond should not timeout")
 			}
 		case <-deadline.C:
-			t.Fatalf("not all goroutines wakeup in 500 ms")
+			t.Fatalf("not all goroutines wakeup in 500 ms; i %d", i)
 		}
 	}
 }

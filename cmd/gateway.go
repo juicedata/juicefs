@@ -22,6 +22,7 @@ package main
 import (
 	_ "net/http/pprof"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -53,6 +54,11 @@ func cmdGateway() *cli.Command {
 		&cli.BoolFlag{
 			Name:  "keep-etag",
 			Usage: "keep the ETag for uploaded objects",
+		},
+		&cli.StringFlag{
+			Name:  "umask",
+			Value: "022",
+			Usage: "umask for new file in octal",
 		},
 	}
 
@@ -157,7 +163,13 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	addr := c.Args().Get(0)
 	removePassword(addr)
 	m, store, conf := initForSvc(c, "s3gateway", addr)
-	return jfsgateway.NewJFSGateway(conf, m, store, c.Bool("multi-buckets"), c.Bool("keep-etag"))
+
+	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
+	if err != nil {
+		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
+	}
+
+	return jfsgateway.NewJFSGateway(conf, m, store, &jfsgateway.Config{MultiBucket: c.Bool("multi-buckets"), KeepEtag: c.Bool("keep-etag"), Mode: uint16(0777 &^ umask)})
 }
 
 func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
@@ -174,7 +186,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	}
 
 	chunkConf := getChunkConf(c, format)
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

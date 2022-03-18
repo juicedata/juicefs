@@ -326,7 +326,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			return fmt.Errorf("json: %s", err)
 		}
 		if force {
-			old.SecretKey = "removed"
+			old.RemoveSecret()
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
 			format.UUID = old.UUID
@@ -334,14 +334,16 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			old.Bucket = format.Bucket
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.EncryptKey = format.EncryptKey
+			old.KeyEncrypted = format.KeyEncrypted
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
 			old.MinClientVersion = format.MinClientVersion
 			old.MaxClientVersion = format.MaxClientVersion
 			if format != old {
-				old.SecretKey = ""
-				format.SecretKey = ""
+				old.RemoveSecret()
+				format.RemoveSecret()
 				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
 			}
 		}
@@ -406,78 +408,80 @@ func (m *kvMeta) doRefreshSession() {
 	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
 }
 
-func (m *kvMeta) doCleanStaleSession(sid uint64) {
+func (m *kvMeta) doCleanStaleSession(sid uint64) error {
+	var fail bool
 	// release locks
-	flocks, err := m.scanValues(m.fmtKey("F"), -1, nil)
-	if err != nil {
-		logger.Warnf("scan flock for stale session %d: %s", sid, err)
-		return
-	}
-	for k, v := range flocks {
-		ls := unmarshalFlock(v)
-		for o := range ls {
-			if o.sid == sid {
-				err = m.txn(func(tx kvTxn) error {
-					v := tx.get([]byte(k))
-					ls := unmarshalFlock(v)
-					delete(ls, o)
-					if len(ls) > 0 {
-						tx.set([]byte(k), marshalFlock(ls))
-					} else {
-						tx.dels([]byte(k))
+	if flocks, err := m.scanValues(m.fmtKey("F"), -1, nil); err == nil {
+		for k, v := range flocks {
+			ls := unmarshalFlock(v)
+			for o := range ls {
+				if o.sid == sid {
+					if err = m.txn(func(tx kvTxn) error {
+						v := tx.get([]byte(k))
+						ls := unmarshalFlock(v)
+						delete(ls, o)
+						if len(ls) > 0 {
+							tx.set([]byte(k), marshalFlock(ls))
+						} else {
+							tx.dels([]byte(k))
+						}
+						return nil
+					}); err != nil {
+						logger.Warnf("Delete flock with sid %d: %s", sid, err)
+						fail = true
 					}
-					return nil
-				})
-				if err != nil {
-					logger.Warnf("remove flock for stale session %d: %s", sid, err)
-					return
 				}
 			}
 		}
-	}
-	plocks, err := m.scanValues(m.fmtKey("P"), -1, nil)
-	if err != nil {
-		logger.Warnf("scan plock for stale session %d: %s", sid, err)
-		return
-	}
-	for k, v := range plocks {
-		ls := unmarshalPlock(v)
-		for o := range ls {
-			if o.sid == sid {
-				err = m.txn(func(tx kvTxn) error {
-					v := tx.get([]byte(k))
-					ls := unmarshalPlock(v)
-					delete(ls, o)
-					if len(ls) > 0 {
-						tx.set([]byte(k), marshalPlock(ls))
-					} else {
-						tx.dels([]byte(k))
-					}
-					return nil
-				})
-				if err != nil {
-					logger.Warnf("remove plock for stale session %d: %s", sid, err)
-					return
-				}
-			}
-		}
+	} else {
+		logger.Warnf("Scan flock with sid %d: %s", sid, err)
+		fail = true
 	}
 
-	keys, err := m.scanKeys(m.fmtKey("SS", sid))
-	if err != nil {
-		logger.Warnf("scan stale session %d: %s", sid, err)
-		return
-	}
-	for _, key := range keys {
-		inode := m.decodeInode(key[10:]) // "SS" + sid
-		if e := m.doDeleteSustainedInode(sid, inode); e != nil {
-			logger.Errorf("Failed to delete inode %d: %s", inode, err)
-			err = e
+	if plocks, err := m.scanValues(m.fmtKey("P"), -1, nil); err == nil {
+		for k, v := range plocks {
+			ls := unmarshalPlock(v)
+			for o := range ls {
+				if o.sid == sid {
+					if err = m.txn(func(tx kvTxn) error {
+						v := tx.get([]byte(k))
+						ls := unmarshalPlock(v)
+						delete(ls, o)
+						if len(ls) > 0 {
+							tx.set([]byte(k), marshalPlock(ls))
+						} else {
+							tx.dels([]byte(k))
+						}
+						return nil
+					}); err != nil {
+						logger.Warnf("Delete plock with sid %d: %s", sid, err)
+						fail = true
+					}
+				}
+			}
 		}
+	} else {
+		logger.Warnf("Scan plock with sid %d: %s", sid, err)
+		fail = true
 	}
-	if err == nil {
-		err = m.deleteKeys(m.sessionKey(sid), m.sessionInfoKey(sid))
-		logger.Infof("cleanup session %d: %s", sid, err)
+
+	if keys, err := m.scanKeys(m.fmtKey("SS", sid)); err == nil {
+		for _, key := range keys {
+			inode := m.decodeInode(key[10:]) // "SS" + sid
+			if err = m.doDeleteSustainedInode(sid, inode); err != nil {
+				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
+				fail = true
+			}
+		}
+	} else {
+		logger.Warnf("Scan sustained with sid %d: %s", sid, err)
+		fail = true
+	}
+
+	if fail {
+		return fmt.Errorf("failed to clean up sid %d", sid)
+	} else {
+		return m.deleteKeys(m.sessionKey(sid), m.sessionInfoKey(sid))
 	}
 }
 
@@ -874,7 +878,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := t.Length
 		newSpace = align4K(length) - align4K(t.Length)
-		if m.checkQuota(newSpace, 0) {
+		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		t.Length = length
@@ -1008,7 +1012,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 
 		tx.set(m.entryKey(parent, name), m.packEntry(_type, ino))
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if parent != TrashInode {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		tx.set(m.inodeKey(ino), m.marshal(attr))
 		if _type == TypeSymlink {
 			tx.set(m.symKey(ino), []byte(path))
@@ -1084,7 +1090,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
 		tx.dels(m.entryKey(parent, name))
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if !isTrash(parent) {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		if attr.Nlink > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			if trash > 0 {
@@ -1175,7 +1183,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if !isTrash(parent) {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		tx.dels(m.entryKey(parent, name))
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
@@ -2213,7 +2223,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting: &m.fmt,
+		Setting: m.fmt,
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
@@ -2224,6 +2234,10 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
+	}
+	if dm.Setting.SecretKey != "" {
+		dm.Setting.SecretKey = "removed"
+		logger.Warnf("Secret key is removed for the sake of safety")
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {

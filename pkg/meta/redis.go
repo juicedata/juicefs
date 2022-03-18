@@ -36,6 +36,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -187,7 +188,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			logger.Fatalf("existing format is broken: %s", err)
 		}
 		if force {
-			old.SecretKey = "removed"
+			old.RemoveSecret()
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
 			format.UUID = old.UUID
@@ -195,14 +196,16 @@ func (r *redisMeta) Init(format Format, force bool) error {
 			old.Bucket = format.Bucket
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.EncryptKey = format.EncryptKey
+			old.KeyEncrypted = format.KeyEncrypted
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
 			old.MinClientVersion = format.MinClientVersion
 			old.MaxClientVersion = format.MaxClientVersion
 			if format != old {
-				old.SecretKey = ""
-				format.SecretKey = ""
+				old.RemoveSecret()
+				format.RemoveSecret()
 				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
 			}
 		}
@@ -463,6 +466,11 @@ func (r *redisMeta) parseEntry(buf []byte) (uint8, Ino) {
 	return buf[0], Ino(binary.BigEndian.Uint64(buf[1:]))
 }
 
+func (m *redisMeta) updateStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.usedSpace, space)
+	atomic.AddInt64(&m.usedInodes, inodes)
+}
+
 func (r *redisMeta) handleLuaResult(op string, res interface{}, err error, returnedIno *int64, returnedAttr *string) syscall.Errno {
 	if err != nil {
 		msg := err.Error()
@@ -684,7 +692,8 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		defer f.Unlock()
 	}
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
-	return errno(r.txn(ctx, func(tx *redis.Tx) error {
+	var newSpace int64
+	err := r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -700,7 +709,7 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			}
 			return nil
 		}
-		newSpace := align4K(length) - align4K(t.Length)
+		newSpace = align4K(length) - align4K(t.Length)
 		if newSpace > 0 && r.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
@@ -767,7 +776,11 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			}
 		}
 		return err
-	}, r.inodeKey(inode)))
+	}, r.inodeKey(inode))
+	if err == nil {
+		r.updateStats(newSpace, 0)
+	}
+	return errno(err)
 }
 
 func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
@@ -793,7 +806,8 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		defer f.Unlock()
 	}
 	defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
-	return errno(r.txn(ctx, func(tx *redis.Tx) error {
+	var newSpace int64
+	err := r.txn(ctx, func(tx *redis.Tx) error {
 		var t Attr
 		a, err := tx.Get(ctx, r.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -814,7 +828,8 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		}
 
 		old := t.Length
-		if length > old && r.checkQuota(align4K(length)-align4K(old), 0) {
+		newSpace = align4K(length) - align4K(old)
+		if newSpace > 0 && r.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		t.Length = length
@@ -845,7 +860,11 @@ func (r *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 			return nil
 		})
 		return err
-	}, r.inodeKey(inode)))
+	}, r.inodeKey(inode))
+	if err == nil {
+		r.updateStats(newSpace, 0)
+	}
+	return errno(err)
 }
 
 func (r *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
@@ -966,7 +985,7 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		*inode = ino
 	}
 
-	return errno(r.txn(ctx, func(tx *redis.Tx) error {
+	err = r.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
 		a, err := tx.Get(ctx, r.inodeKey(parent)).Bytes()
 		if err != nil {
@@ -1030,7 +1049,9 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, r.entryKey(parent), name, r.packEntry(_type, ino))
-			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			if parent != TrashInode {
+				pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			}
 			pipe.Set(ctx, r.inodeKey(ino), r.marshal(attr), 0)
 			if _type == TypeSymlink {
 				pipe.Set(ctx, r.symKey(ino), path, 0)
@@ -1040,7 +1061,11 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return nil
 		})
 		return err
-	}, r.inodeKey(parent), r.entryKey(parent)))
+	}, r.inodeKey(parent), r.entryKey(parent))
+	if err == nil {
+		r.updateStats(align4K(0), 1)
+	}
+	return errno(err)
 }
 
 func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
@@ -1071,6 +1096,7 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 	}
 	var opened bool
 	var attr Attr
+	var newSpace, newInode int64
 	err = r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil {
@@ -1119,7 +1145,9 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, r.entryKey(parent), name)
-			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			if !isTrash(parent) {
+				pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			}
 			if attr.Nlink > 0 {
 				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 				if trash > 0 {
@@ -1134,7 +1162,8 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 					} else {
 						pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(inode, attr.Length)})
 						pipe.Del(ctx, r.inodeKey(inode))
-						pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
+						newSpace, newInode = -align4K(attr.Length), -1
+						pipe.IncrBy(ctx, usedSpace, newSpace)
 						pipe.Decr(ctx, totalInodes)
 					}
 				case TypeSymlink:
@@ -1142,7 +1171,8 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 					fallthrough
 				default:
 					pipe.Del(ctx, r.inodeKey(inode))
-					pipe.IncrBy(ctx, usedSpace, -align4K(0))
+					newSpace, newInode = -align4K(0), -1
+					pipe.IncrBy(ctx, usedSpace, newSpace)
 					pipe.Decr(ctx, totalInodes)
 				}
 				pipe.Del(ctx, r.xattrKey(inode))
@@ -1152,8 +1182,11 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 
 		return err
 	}, keys...)
-	if err == nil && _type == TypeFile && attr.Nlink == 0 {
-		r.fileDeleted(opened, inode, attr.Length)
+	if err == nil && trash == 0 {
+		if _type == TypeFile && attr.Nlink == 0 {
+			r.fileDeleted(opened, inode, attr.Length)
+		}
+		r.updateStats(newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -1183,7 +1216,7 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 	if trash > 0 {
 		keys = append(keys, r.entryKey(trash))
 	}
-	return errno(r.txn(ctx, func(tx *redis.Tx) error {
+	err = r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil {
 			return redis.Nil
@@ -1233,7 +1266,9 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, r.entryKey(parent), name)
-			pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			if !isTrash(parent) {
+				pipe.Set(ctx, r.inodeKey(parent), r.marshal(&pattr), 0)
+			}
 			if trash > 0 {
 				pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
 				pipe.HSet(ctx, r.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
@@ -1246,7 +1281,11 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			return nil
 		})
 		return err
-	}, keys...))
+	}, keys...)
+	if err == nil && trash == 0 {
+		r.updateStats(-align4K(0), -1)
+	}
+	return errno(err)
 }
 
 func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -1298,6 +1337,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			keys = append(keys, r.entryKey(dino))
 		}
 	}
+	var newSpace, newInode int64
 	err = r.txn(ctx, func(tx *redis.Tx) error {
 		rs, _ := tx.MGet(ctx, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
@@ -1432,7 +1472,8 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							} else {
 								pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(now.Unix()), Member: r.toDelete(dino, tattr.Length)})
 								pipe.Del(ctx, r.inodeKey(dino))
-								pipe.IncrBy(ctx, usedSpace, -align4K(tattr.Length))
+								newSpace, newInode = -align4K(tattr.Length), -1
+								pipe.IncrBy(ctx, usedSpace, newSpace)
 								pipe.Decr(ctx, totalInodes)
 							}
 						} else {
@@ -1440,7 +1481,8 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 								pipe.Del(ctx, r.symKey(dino))
 							}
 							pipe.Del(ctx, r.inodeKey(dino))
-							pipe.IncrBy(ctx, usedSpace, -align4K(0))
+							newSpace, newInode = -align4K(0), -1
+							pipe.IncrBy(ctx, usedSpace, newSpace)
 							pipe.Decr(ctx, totalInodes)
 						}
 						pipe.Del(ctx, r.xattrKey(dino))
@@ -1457,8 +1499,11 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		})
 		return err
 	}, keys...)
-	if err == nil && !exchange && dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
-		r.fileDeleted(opened, dino, tattr.Length)
+	if err == nil && !exchange && trash == 0 {
+		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
+			r.fileDeleted(opened, dino, tattr.Length)
+		}
+		r.updateStats(newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -1593,47 +1638,67 @@ func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 	return 0
 }
 
-func (r *redisMeta) doCleanStaleSession(sid uint64) {
+func (r *redisMeta) doCleanStaleSession(sid uint64) error {
+	var fail bool
 	// release locks
 	var ctx = Background
-	key := r.lockedKey(sid)
-	inodes, err := r.rdb.SMembers(ctx, key).Result()
-	if err != nil {
-		logger.Warnf("SMembers %s: %s", key, err)
-		return
-	}
 	ssid := strconv.FormatInt(int64(sid), 10)
-	for _, k := range inodes {
-		owners, _ := r.rdb.HKeys(ctx, k).Result()
-		for _, o := range owners {
-			if strings.Split(o, "_")[0] == ssid {
-				err = r.rdb.HDel(ctx, k, o).Err()
-				logger.Infof("cleanup lock on %s from session %d: %s", k, sid, err)
+	key := r.lockedKey(sid)
+	if inodes, err := r.rdb.SMembers(ctx, key).Result(); err == nil {
+		for _, k := range inodes {
+			owners, err := r.rdb.HKeys(ctx, k).Result()
+			if err != nil {
+				logger.Warnf("HKeys %s: %s", k, err)
+				fail = true
+				continue
+			}
+			var fields []string
+			for _, o := range owners {
+				if strings.Split(o, "_")[0] == ssid {
+					fields = append(fields, o)
+				}
+			}
+			if len(fields) > 0 {
+				if err = r.rdb.HDel(ctx, k, fields...).Err(); err != nil {
+					logger.Warnf("HDel %s %s: %s", k, fields, err)
+					fail = true
+					continue
+				}
+			}
+			if err = r.rdb.SRem(ctx, key, k).Err(); err != nil {
+				logger.Warnf("SRem %s %s: %s", key, k, err)
+				fail = true
 			}
 		}
-		r.rdb.SRem(ctx, key, k)
+	} else {
+		logger.Warnf("SMembers %s: %s", key, err)
+		fail = true
 	}
 
 	key = r.sustained(sid)
-	inodes, err = r.rdb.SMembers(ctx, key).Result()
-	if err != nil {
+	if inodes, err := r.rdb.SMembers(ctx, key).Result(); err == nil {
+		for _, sinode := range inodes {
+			inode, _ := strconv.ParseInt(sinode, 10, 0)
+			if err = r.doDeleteSustainedInode(sid, Ino(inode)); err != nil {
+				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
+				fail = true
+			}
+		}
+	} else {
 		logger.Warnf("SMembers %s: %s", key, err)
-		return
+		fail = true
 	}
-	done := true
-	for _, sinode := range inodes {
-		inode, _ := strconv.ParseInt(sinode, 10, 0)
-		if err := r.doDeleteSustainedInode(sid, Ino(inode)); err != nil {
-			logger.Errorf("Failed to delete inode %d: %s", inode, err)
-			done = false
-		} else {
-			r.rdb.SRem(ctx, key, sinode)
+
+	if !fail {
+		if err := r.rdb.HDel(ctx, sessionInfos, ssid).Err(); err != nil {
+			logger.Warnf("HDel %s %s: %s", sessionInfos, ssid, err)
+			fail = true
 		}
 	}
-	if done {
-		r.rdb.HDel(ctx, sessionInfos, ssid)
-		r.rdb.ZRem(ctx, allSessions, ssid)
-		logger.Infof("cleanup session %d", sid)
+	if fail {
+		return fmt.Errorf("failed to clean up sid %d", sid)
+	} else {
+		return r.rdb.ZRem(ctx, allSessions, ssid).Err()
 	}
 }
 
@@ -1665,15 +1730,18 @@ func (r *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		return err
 	}
 	r.parseAttr(a, &attr)
+	var newSpace int64
 	_, err = r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.ZAdd(ctx, delfiles, &redis.Z{Score: float64(time.Now().Unix()), Member: r.toDelete(inode, attr.Length)})
 		pipe.Del(ctx, r.inodeKey(inode))
-		pipe.IncrBy(ctx, usedSpace, -align4K(attr.Length))
+		newSpace = -align4K(attr.Length)
+		pipe.IncrBy(ctx, usedSpace, newSpace)
 		pipe.Decr(ctx, totalInodes)
 		pipe.SRem(ctx, r.sustained(sid), strconv.Itoa(int(inode)))
 		return nil
 	})
 	if err == nil {
+		r.updateStats(newSpace, -1)
 		go r.doDeleteFileData(inode, attr.Length)
 	}
 	return err
@@ -1711,6 +1779,7 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		defer f.Unlock()
 	}
 	defer func() { r.of.InvalidateChunk(inode, indx) }()
+	var newSpace int64
 	var needCompact bool
 	err := r.txn(ctx, func(tx *redis.Tx) error {
 		var attr Attr
@@ -1723,12 +1792,11 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return syscall.EPERM
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
-		var added int64
 		if newleng > attr.Length {
-			added = align4K(newleng) - align4K(attr.Length)
+			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if r.checkQuota(added, 0) {
+		if r.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -1743,8 +1811,8 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			// most of chunk are used by single inode, so use that as the default (1 == not exists)
 			// pipe.Incr(ctx, r.sliceKey(slice.Chunkid, slice.Size))
 			pipe.Set(ctx, r.inodeKey(inode), r.marshal(&attr), 0)
-			if added > 0 {
-				pipe.IncrBy(ctx, usedSpace, added)
+			if newSpace > 0 {
+				pipe.IncrBy(ctx, usedSpace, newSpace)
 			}
 			return nil
 		})
@@ -1753,8 +1821,11 @@ func (r *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		}
 		return err
 	}, r.inodeKey(inode))
-	if err == nil && needCompact {
-		go r.compactChunk(inode, indx, false)
+	if err == nil {
+		if needCompact {
+			go r.compactChunk(inode, indx, false)
+		}
+		r.updateStats(newSpace, 0)
 	}
 	return errno(err)
 }
@@ -1766,8 +1837,9 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		f.Lock()
 		defer f.Unlock()
 	}
+	var newSpace int64
 	defer func() { r.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
-	return errno(r.txn(ctx, func(tx *redis.Tx) error {
+	err := r.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, r.inodeKey(fin), r.inodeKey(fout)).Result()
 		if err != nil {
 			return err
@@ -1794,12 +1866,11 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		}
 
 		newleng := offOut + size
-		var added int64
 		if newleng > attr.Length {
-			added = align4K(newleng) - align4K(attr.Length)
+			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if r.checkQuota(added, 0) {
+		if r.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -1864,8 +1935,8 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 				coff += ChunkSize
 			}
 			pipe.Set(ctx, r.inodeKey(fout), r.marshal(&attr), 0)
-			if added > 0 {
-				pipe.IncrBy(ctx, usedSpace, added)
+			if newSpace > 0 {
+				pipe.IncrBy(ctx, usedSpace, newSpace)
 			}
 			return nil
 		})
@@ -1873,7 +1944,11 @@ func (r *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			*copied = size
 		}
 		return err
-	}, r.inodeKey(fout), r.inodeKey(fin)))
+	}, r.inodeKey(fout), r.inodeKey(fin))
+	if err == nil {
+		r.updateStats(newSpace, 0)
+	}
+	return errno(err)
 }
 
 // For now only deleted files
@@ -2847,7 +2922,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := &DumpedMeta{
-		Setting: &m.fmt,
+		Setting: m.fmt,
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
@@ -2858,6 +2933,10 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
+	}
+	if dm.Setting.SecretKey != "" {
+		dm.Setting.SecretKey = "removed"
+		logger.Warnf("Secret key is removed for the sake of safety")
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {

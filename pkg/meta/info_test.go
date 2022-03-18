@@ -249,7 +249,7 @@ func TestParseRedisInfo(t *testing.T) {
 	})
 	t.Run("Test fields that may emit warnings", func(t *testing.T) {
 		input := `# Server
-	redis_version:2.1.0
+	redis_version:4.1.0
 
 		# Cluster
 	cluster_enabled:1`

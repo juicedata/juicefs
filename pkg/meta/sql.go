@@ -257,7 +257,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			return fmt.Errorf("json: %s", err)
 		}
 		if force {
-			old.SecretKey = "removed"
+			old.RemoveSecret()
 			logger.Warnf("Existing volume will be overwrited: %+v", old)
 		} else {
 			format.UUID = old.UUID
@@ -265,14 +265,16 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			old.Bucket = format.Bucket
 			old.AccessKey = format.AccessKey
 			old.SecretKey = format.SecretKey
+			old.EncryptKey = format.EncryptKey
+			old.KeyEncrypted = format.KeyEncrypted
 			old.Capacity = format.Capacity
 			old.Inodes = format.Inodes
 			old.TrashDays = format.TrashDays
 			old.MinClientVersion = format.MinClientVersion
 			old.MaxClientVersion = format.MaxClientVersion
 			if format != old {
-				old.SecretKey = ""
-				format.SecretKey = ""
+				old.RemoveSecret()
+				format.RemoveSecret()
 				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
 			}
 		}
@@ -884,7 +886,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := n.Length
 		newSpace = align4K(length) - align4K(n.Length)
-		if m.checkQuota(newSpace, 0) {
+		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
@@ -1026,8 +1028,10 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if err = mustInsert(s, &edge{parent, name, ino, _type}, &n); err != nil {
 			return err
 		}
-		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return err
+		if parent != TrashInode {
+			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
+				return err
+			}
 		}
 		if _type == TypeSymlink {
 			if err = mustInsert(s, &symlink{Inode: ino, Target: path}); err != nil {
@@ -1115,11 +1119,13 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
-		if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return err
+		if !isTrash(parent) {
+			if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
+				return err
+			}
 		}
 		if n.Nlink > 0 {
-			if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
+			if _, err := s.Cols("nlink", "ctime", "parent").Update(&n, &node{Inode: e.Inode}); err != nil {
 				return err
 			}
 			if trash > 0 {
@@ -1242,7 +1248,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return err
 		}
 		if trash > 0 {
-			if _, err = s.Cols("nlink", "ctime").Update(&n, &node{Inode: n.Inode}); err != nil {
+			if _, err = s.Cols("ctime", "parent").Update(&n, &node{Inode: n.Inode}); err != nil {
 				return err
 			}
 			if err = mustInsert(s, &edge{trash, fmt.Sprintf("%d-%d-%s", parent, e.Inode, e.Name), e.Inode, e.Type}); err != nil {
@@ -1256,7 +1262,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 				return err
 			}
 		}
-		_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
+		if !isTrash(parent) {
+			_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
+		}
 		return err
 	})
 	if err == nil && trash == 0 {
@@ -1591,37 +1599,43 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	return 0
 }
 
-func (m *dbMeta) doCleanStaleSession(sid uint64) {
+func (m *dbMeta) doCleanStaleSession(sid uint64) error {
+	var fail bool
 	// release locks
-	_, _ = m.db.Delete(flock{Sid: sid})
-	_, _ = m.db.Delete(plock{Sid: sid})
+	if _, err := m.db.Delete(flock{Sid: sid}); err != nil {
+		logger.Warnf("Delete flock with sid %d: %d", sid, err)
+		fail = true
+	}
+	if _, err := m.db.Delete(plock{Sid: sid}); err != nil {
+		logger.Warnf("Delete plock with sid %d: %d", sid, err)
+		fail = true
+	}
 
 	var s = sustained{Sid: sid}
-	rows, err := m.db.Rows(&s)
-	if err != nil {
-		logger.Warnf("scan stale session %d: %s", sid, err)
-		return
+	if rows, err := m.db.Rows(&s); err == nil {
+		var inodes []Ino
+		for rows.Next() {
+			if rows.Scan(&s) == nil {
+				inodes = append(inodes, s.Inode)
+			}
+		}
+		_ = rows.Close()
+		for _, inode := range inodes {
+			if err = m.doDeleteSustainedInode(sid, inode); err != nil {
+				logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
+				fail = true
+			}
+		}
+	} else {
+		logger.Warnf("Scan sustained with sid %d: %s", sid, err)
+		fail = true
 	}
 
-	var inodes []Ino
-	for rows.Next() {
-		if rows.Scan(&s) == nil {
-			inodes = append(inodes, s.Inode)
-		}
-	}
-	_ = rows.Close()
-
-	done := true
-	for _, inode := range inodes {
-		if err := m.doDeleteSustainedInode(sid, inode); err != nil {
-			logger.Errorf("Failed to delete inode %d: %s", inode, err)
-			done = false
-		}
-	}
-	if done {
-		_ = m.txn(func(ses *xorm.Session) error {
-			_, err = ses.Delete(&session{Sid: sid})
-			logger.Infof("cleanup session %d: %s", sid, err)
+	if fail {
+		return fmt.Errorf("failed to clean up sid %d", sid)
+	} else {
+		return m.txn(func(ses *xorm.Session) error {
+			_, err := ses.Delete(&session{Sid: sid})
 			return err
 		})
 	}
@@ -2558,12 +2572,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting:   &m.fmt,
+		Setting:   m.fmt,
 		Counters:  counters,
 		Sustained: sessions,
 		DelFiles:  dels,
 	}
-
+	if dm.Setting.SecretKey != "" {
+		dm.Setting.SecretKey = "removed"
+		logger.Warnf("Secret key is removed for the sake of safety")
+	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err

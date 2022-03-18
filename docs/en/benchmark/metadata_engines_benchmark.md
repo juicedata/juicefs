@@ -7,17 +7,17 @@ slug: /metadata_engines_benchmark
 
 Conclusion first:
 
-- For pure metadata operations, MySQL costs about 2 ~ 4x times of Redis; TiKV has similar performance to MySQL, and in most cases it costs a bit less
-- For small I/O (~100 KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis; TiKV performs similarly to MySQL
-- For large I/O (~4 MiB) workloads, total time costs with different metadata engines show no obvious difference (object storage becomes the bottleneck)
+- For pure metadata operations, MySQL costs about 2 ~ 4x times of Redis; TiKV has similar performance to MySQL, and in most cases it costs a bit less.
+- For small I/O (~100 KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis; TiKV performs similarly to MySQL.
+- For large I/O (~4 MiB) workloads, total time costs with different metadata engines show no significant difference (object storage becomes the bottleneck).
 
 >**Note**:
 >
->1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability; more information can be found [here](https://redis.io/topics/persistence)
->2. Both Redis and MySQL store only one replica locally, while TiKV stores three replicas in three different hosts using Raft protocol
+>1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability. More information can be found [here](https://redis.io/topics/persistence).
+>2. Both Redis and MySQL store only one replica locally, while TiKV stores three replicas on three different hosts using Raft protocol.
 
 
-Details are provided below. Please note all the tests are run with the same object storage (to save data), client and metadata hosts; only metadata engines differ.
+Details are provided below. Please note all the tests are run with the same object storage (to save data), clients and metadata hosts; only metadata engines differ.
 
 ## Environment
 
@@ -113,9 +113,9 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### Golang Benchmark
 
-- Shows time cost (us/op), smaller is better
-- Number in parentheses is the multiple of Redis-Always cost (`always` and `everysec` are candidates for Redis configuration `appendfsync`)
-- Because of metadata cache, the results of `Read` are all less than 1us, which are not comparable for now
+- Shows time cost (us/op). Smaller is better.
+- Number in parentheses is the multiple of Redis-Always cost (`always` and `everysec` are candidates for Redis configuration `appendfsync`).
+- Because of enabling metadata cache, the results of `read` are all less than 1us, which are not comparable for now.
 
 |              | Redis-Always | Redis-Everysec | MySQL | TiKV |
 | ------------ | ------------ | -------------- | ----- | ---- |
@@ -158,7 +158,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### mdtest
 
-- Shows rate (ops/sec), bigger is better
+- Shows rate (ops/sec). Bigger is better.
 
 |                    | Redis-Always | Redis-Everysec | MySQL     | TiKV      |
 | ------------------ | ------------ | -------------- | --------- | --------- |

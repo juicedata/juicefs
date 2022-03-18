@@ -34,6 +34,7 @@ func cmdStatus() *cli.Command {
 		Description: `
 It shows basic setting of the target volume, and a list of active sessions (including mount, SDK,
 S3-gateway and WebDAV) that are connected with the metadata engine.
+
 NOTE: Read-only session is not listed since it cannot register itself in the metadata.
 
 Examples:

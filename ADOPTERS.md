@@ -14,8 +14,11 @@ For users of JuiceFS:
 | [Gene Way](http://www.geneway.cn)                                                       | Production  | File Sharing           |
 | [SAIC Motor](https://www.saicmotor.com/english/index.shtml)                             | Production  | AI                     |
 | [National Supercomputing Center in JiNan](https://www.nsccjn.cn/)                       | Production  | DevOps                 |
+| [UniSound](https://www.unisound.com)                                                    | Production  | AI                     |
+| [NetEase Games](http://www.neteasegames.com)                                            | Production  | Big Data, File Sharing |
+| [Yimian](https://www.yimian.io)                                                         | Production  | Big Data               |
+| [Volcano Engine](https://www.volcengine.com)                                            | Testing     | File Sharing           |
 | [Dingdong Fresh](https://www.100.me)                                                    | Testing     | Big Data               |
-| [UniSound](https://www.unisound.com)                                                    | Testing     | AI                     |
 | [SF-Express](https://www.sf-express.com)                                                | Testing     | Big Data, File Sharing |
 | [BIGO](https://bigo.tv)                                                                 | Testing     | AI                     |
 | [Inner Mongolia MENGSHANG Consumer Finance Co., Ltd.](https://www.mengshangxiaofei.com) | Testing     | File Sharing           |

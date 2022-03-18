@@ -64,5 +64,5 @@ release:
 		juicedata/golang-cross:latest release --rm-dist
 
 test:
-	JFS_PAGE_STACK=1 go test -v -cover ./pkg/... -coverprofile=cov1.out
-	sudo JFS_PAGE_STACK=1 JFS_GC_SKIPPEDTIME=1 `which go` test -v -cover ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
+	go test -v -cover ./pkg/... -coverprofile=cov1.out
+	sudo JFS_GC_SKIPPEDTIME=1 `which go` test -v -cover ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
