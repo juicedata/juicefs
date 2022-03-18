@@ -18,6 +18,7 @@ package sync
 import (
 	"bytes"
 	"math"
+	"os"
 	"reflect"
 	"testing"
 
@@ -84,6 +85,10 @@ func deepEqualWithOutMtime(a, b object.Object) bool {
 
 // nolint:errcheck
 func TestSync(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
 	config := &Config{
 		Start:     "",
 		End:       "",
@@ -93,21 +98,24 @@ func TestSync(t *testing.T) {
 		Dry:       false,
 		DeleteSrc: false,
 		DeleteDst: false,
-		Exclude:   []string{"ab.*"},
-		Include:   []string{"[a|b].*"},
+		Exclude:   []string{"c*"},
+		Include:   []string{"a[1-9]", "a*"},
 		Verbose:   false,
 		Quiet:     true,
 	}
-
+	os.Args = []string{"--include", "a[1-9]", "--exclude", "a*", "--exclude", "c*"}
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
-	a.Put("a", bytes.NewReader([]byte("a")))
-	a.Put("ab", bytes.NewReader([]byte("ab")))
+	a.Put("a1", bytes.NewReader([]byte("a1")))
+	a.Put("a2", bytes.NewReader([]byte("a2")))
 	a.Put("abc", bytes.NewReader([]byte("abc")))
+	a.Put("c1", bytes.NewReader([]byte("c1")))
+	a.Put("c2", bytes.NewReader([]byte("c2")))
 
 	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
-	b.Put("ba", bytes.NewReader([]byte("ba")))
+	b.Put("a1", bytes.NewReader([]byte("a1")))
+	b.Put("ba", bytes.NewReader([]byte("a1")))
 
-	// Copy "a" from a to b
+	// Copy a2
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -115,16 +123,25 @@ func TestSync(t *testing.T) {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 
-	// Now a: {"a", "ab", "abc"}, b: {"a", "ba"}
+	if err := Sync(a, b, config); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+	// No copy occured
+	if c := copied.Current(); c != 0 {
+		t.Fatalf("should copy 0 keys, but got %d", c)
+	}
+
+	// Now a: {"a1", "a2", "abc","c1","c2"}, b: {"a1", "ba"}
 	// Copy "ba" from b to a
+	os.Args = []string{}
+	config.Exclude = nil
 	if err := Sync(b, a, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 	if c := copied.Current(); c != 1 {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
-
-	// Now aRes: {"","a", "ab", "abc", "ba"}, bRes: {"","a", "ba"}
+	// Now a: {"a1", "a2", "abc","c1","c2","ba"}, b: {"a1", "ba"}
 	aRes, _ := a.ListAll("", "")
 	bRes, _ := b.ListAll("", "")
 
@@ -140,22 +157,170 @@ func TestSync(t *testing.T) {
 		t.FailNow()
 	}
 
-	if !deepEqualWithOutMtime(aObjs[len(aObjs)-1], bObjs[len(bObjs)-1]) {
+	if !deepEqualWithOutMtime(aObjs[4], bObjs[len(bObjs)-1]) {
 		t.FailNow()
 	}
-
-	if err := Sync(a, b, config); err != nil {
-		t.Fatalf("sync: %s", err)
-	}
-	// No copy occured
-	if c := copied.Current(); c != 0 {
-		t.Fatalf("should copy 0 keys, but got %d", c)
-	}
-
 	// Test --force-update option
 	config.ForceUpdate = true
-	// Forcibly copy {"a", "ba"} from a to b.
+	// Forcibly copy {"a1", "a2", "abc","c1","c2","ba"} from a to b.
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
+	}
+}
+
+// nolint:errcheck
+func TestSyncIncludeAndExclude(t *testing.T) {
+	config := &Config{
+		Start:     "",
+		End:       "",
+		Threads:   50,
+		Update:    true,
+		Perms:     true,
+		Dry:       false,
+		DeleteSrc: false,
+		DeleteDst: false,
+		Verbose:   false,
+		Quiet:     true,
+		Exclude:   []string{"1"},
+	}
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+
+	simple := []string{"a1/z1/z2", "a2", "ab1", "ab2", "b1", "b2", "c1", "c2"}
+	testCases := []struct {
+		srcKey, args, want []string
+	}{
+		{
+			srcKey: simple,
+			args:   []string{"--include", "xx*", "--include", "xxx*"},
+			want:   []string{"a1/", "a1/z1/", "a1/z1/z2", "a2", "ab1", "ab2", "b1", "b2", "c1", "c2"},
+		},
+		{
+			srcKey: simple,
+			args:   []string{"--exclude", "a*", "--exclude", "c*"},
+			want:   []string{"b1", "b2"},
+		},
+		{
+			srcKey: simple,
+			args:   []string{"--exclude", "a[1-2]", "--include", "a*"},
+			want:   []string{"ab1", "ab2", "b1", "b2", "c1", "c2"},
+		},
+		{
+			srcKey: simple,
+			args:   []string{"--exclude", "ab?", "--include", "a*"},
+			want:   []string{"a1/", "a1/z1/", "a1/z1/z2", "a2", "b1", "b2", "c1", "c2"},
+		},
+		{
+			srcKey: simple,
+			args:   []string{"--include", "a*", "--exclude", "c*"},
+			want:   []string{"a1/", "a1/z1/", "a1/z1/z2", "a2", "ab1", "ab2", "b1", "b2"},
+		},
+		{
+			srcKey: simple,
+			args:   []string{"--exclude", "a*", "--exclude", "c*"},
+			want:   []string{"b1", "b2"},
+		},
+		{
+			srcKey: []string{"a1/b1/c1", "a1/b1/c2", "a1/b2/c1", "a1/b2/c2", "a2/b1/c2", "a3/b2/c2", "a4"},
+			args:   []string{"--exclude", "a*/b[1-2]/c1", "--exclude", "a4"},
+			want:   []string{"a1/", "a1/b1/", "a1/b1/c2", "a1/b2/", "a1/b2/c2", "a2/", "a2/b1/", "a2/b1/c2", "a3/", "a3/b2/", "a3/b2/c2"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		_ = os.RemoveAll("/tmp/a/")
+		_ = os.RemoveAll("/tmp/b/")
+		os.Args = testCase.args
+		for _, k := range testCase.srcKey {
+			a.Put(k, bytes.NewReader([]byte(k)))
+		}
+		if err := Sync(a, b, config); err != nil {
+			t.Fatalf("sync: %s", err)
+		}
+
+		bRes, _ := b.ListAll("", "")
+		var bKeys []string
+		for obj := range bRes {
+			bKeys = append(bKeys, obj.Key())
+		}
+		if !reflect.DeepEqual(bKeys[1:], testCase.want) {
+			t.Errorf("sync args  %v, want %v, but get %v", os.Args, testCase.want, bKeys)
+		}
+	}
+}
+
+func TestInitRules(t *testing.T) {
+	tests := []struct {
+		args      []string
+		wantRules []*rule
+	}{
+		{
+			args:      []string{"--include", "a"},
+			wantRules: []*rule{{pattern: "a", include: true}},
+		},
+		{
+			args:      []string{"--exclude", "a", "--include", "b"},
+			wantRules: []*rule{{pattern: "a", include: false}, {pattern: "b", include: true}},
+		},
+		{
+			args:      []string{"--include", "a", "--test", "t", "--exclude", "b"},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: false}},
+		},
+		{
+			args:      []string{"--include", "a", "--test", "t", "--exclude"},
+			wantRules: []*rule{{pattern: "a", include: true}},
+		},
+		{
+			args:      []string{"--include", "a", "--exclude", "b", "--include", "c", "--exclude", "d"},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: false}, {pattern: "c", include: true}, {pattern: "d", include: false}},
+		},
+		{
+			args:      []string{"--include", "a", "--include", "b", "--test", "--exclude", "c", "--exclude", "d"},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+		},
+		{
+			args:      []string{"--include=a", "--include=b", "--exclude=c", "--exclude=d", "--test=aaa"},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+		},
+		{
+			args:      []string{"-include=a", "--test", "t", "--include=b", "--exclude=c", "-exclude="},
+			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}},
+		},
+	}
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			os.Args = tt.args
+			if gotRules := initRules(a, b); !reflect.DeepEqual(gotRules, tt.wantRules) {
+				t.Errorf("initRules() = %v, want %v", gotRules, tt.wantRules)
+			}
+		})
+	}
+}
+
+func TestAlignPatternAndKey(t *testing.T) {
+	tests := []struct {
+		pattern string
+		key     string
+		wantKey string
+	}{
+		{pattern: "a*", key: "a1", wantKey: "a1"},
+		{pattern: "a*/b*", key: "a1/b1", wantKey: "a1/b1"},
+		{pattern: "/a*", key: "/a1", wantKey: "/a1"},
+		{pattern: "a*/b?", key: "a1/b1/c2/d1", wantKey: "a1/b1"},
+		{pattern: "a*/b?/", key: "a1/", wantKey: "a1/"},
+		{pattern: "a*/b?/c.txt", key: "a1/b1", wantKey: "a1/b1"},
+		{pattern: "a*/b?/", key: "a1/b1/", wantKey: "a1/b1/"},
+		{pattern: "a*/b?/", key: "a1/b1/c.txt", wantKey: "a1/b1/"},
+		{pattern: "a*/b*/", key: "a1/b1/c1/d.txt/", wantKey: "a1/b1/"},
+	}
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			gotKey := alignPatternAndKey(tt.pattern, tt.key)
+			if gotKey != tt.wantKey {
+				t.Errorf("alignPatternAndKey() gotKey = %v, want %v", gotKey, tt.wantKey)
+			}
+		})
 	}
 }
