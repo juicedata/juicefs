@@ -33,6 +33,16 @@ builds:
       - darwin
     goarch:
       - amd64
+  - id: juicefs-darwin-arm64
+    env:
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
+    main: ./cmd
+    goos:
+      - darwin
+    goarch:
+      - arm64
   - id: juicefs-linux-amd64
     env:
       - CC=/usr/bin/musl-gcc
