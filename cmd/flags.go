@@ -151,7 +151,7 @@ func clientFlags() []cli.Flag {
 		&cli.DurationFlag{
 			Name:  "heartbeat",
 			Value: 12 * time.Second,
-			Usage: "interval to refresh this client; it's recommended that all clients use the same heartbeat value",
+			Usage: "interval to send heartbeat; it's recommended that all clients use the same heartbeat value",
 		},
 		&cli.BoolFlag{
 			Name:  "read-only",
