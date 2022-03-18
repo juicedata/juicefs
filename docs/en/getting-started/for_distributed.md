@@ -9,7 +9,7 @@ The previous document ["JuiceFS Quick Start Guide for Standalone Mode "](for_loc
 
 However, the real-time availability of the files is not guaranteed if the file system is shared by the above approach. Since SQLite is a single file database that cannot be accessed by multiple computers at the same time, a database that supports network access is needed, such as Redis, PostgreSQL, MySQL, etc., which allows a file system to be mounted and read by multiple computers in a distributed environment.
 
-In this document, a multi-user "cloud database" is used to replace the single-user "SQLite" database used in the previous document, aiming to perform the distributed file system that can be mounted on any computer on the network for reading and writing.
+In this document, a multi-user "cloud database" is used to replace the single-user "SQLite" database used in the previous document, aiming to implement a distributed file system that can be mounted on any computer on the network for reading and writing.
 
 ## Network Database
 
