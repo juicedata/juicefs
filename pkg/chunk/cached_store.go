@@ -294,7 +294,6 @@ func (c *rChunk) Remove() error {
 				err = e
 			}
 		}
-		c.store.bcache.remove(key)
 	}
 	return err
 }
