@@ -15,7 +15,7 @@ In this document, a multi-user "cloud database" is used to replace the single-us
 
 The meaning of "Network Database" here refers to the database that allows multiple users to access it simultaneously through the network. From this perspective, the database can be simply divided into:
 
-1. **Standalone Database**: which is single file and usually only accessible by a single machine, such as SQLite, Microsoft Access, etc.
+1. **Standalone Database**: which is a single-file database and is usually only accessed locally, such as SQLite, Microsoft Access, etc.
 2. **Network Database**: which usually has complex multi-file structures, provides network-based access interfaces and supports simultaneous access by multiple users, such as Redis, PostgreSQL, etc.
 
 JuiceFS currently supports the following network-based databases.
