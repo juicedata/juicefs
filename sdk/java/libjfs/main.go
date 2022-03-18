@@ -29,6 +29,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus/push"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -52,8 +53,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/push"
-
 	"github.com/sirupsen/logrus"
 )
 
@@ -66,8 +65,10 @@ var (
 	handlers = make(map[uintptr]*wrapper)
 	activefs = make(map[string][]*wrapper)
 	logger   = utils.GetLogger("juicefs")
+	bOnce    sync.Once
+	bridges  []*Bridge
+	pOnce    sync.Once
 	pushers  []*push.Pusher
-	once     sync.Once
 )
 
 const (
@@ -233,6 +234,7 @@ type javaConf struct {
 	NoBGJob         bool    `json:"noBGJob"`
 	OpenCache       float64 `json:"openCache"`
 	BackupMeta      int64   `json:"backupMeta"`
+	Heartbeat       int     `json:"heartbeat"`
 	CacheDir        string  `json:"cacheDir"`
 	CacheSize       int64   `json:"cacheSize"`
 	FreeSpace       string  `json:"freeSpace"`
@@ -258,6 +260,7 @@ type javaConf struct {
 	PushGateway     string  `json:"pushGateway"`
 	PushInterval    int     `json:"pushInterval"`
 	PushAuth        string  `json:"pushAuth"`
+	PushGraphite    string  `json:"pushGraphite"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) uintptr {
@@ -306,6 +309,60 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	return object.WithPrefix(blob, format.Name+"/"), nil
 }
 
+func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
+	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
+	for k, v := range commonLabels {
+		pusher.Grouping(k, v)
+	}
+	if pushAuth != "" {
+		if strings.Contains(pushAuth, ":") {
+			parts := strings.Split(pushAuth, ":")
+			pusher.BasicAuth(parts[0], parts[1])
+		}
+	}
+	pushers = append(pushers, pusher)
+
+	pOnce.Do(func() {
+		go func() {
+			for range time.NewTicker(pushInterVal).C {
+				for _, pusher := range pushers {
+					if err := pusher.Push(); err != nil {
+						logger.Warnf("error pushing to PushGateway: %s", err)
+					}
+				}
+			}
+		}()
+	})
+}
+
+func push2Graphite(graphite string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
+	if bridge, err := NewBridge(&Config{
+		URL:           graphite,
+		Gatherer:      registry,
+		UseTags:       true,
+		Timeout:       2 * time.Second,
+		ErrorHandling: ContinueOnError,
+		Logger:        logger,
+		CommonLabels:  commonLabels,
+	}); err != nil {
+		logger.Warnf("NewBridge error:%s", err)
+	} else {
+		bridges = append(bridges, bridge)
+	}
+
+	bOnce.Do(func() {
+		go func() {
+			for range time.NewTicker(pushInterVal).C {
+				for _, brg := range bridges {
+					if err := brg.Push(); err != nil {
+						logger.Warnf("error pushing to Graphite: %s", err)
+					}
+				}
+			}
+		}()
+	})
+}
+
 //export jfs_init
 func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintptr {
 	name := C.GoString(cname)
@@ -343,6 +400,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			ReadOnly:   jConf.ReadOnly,
 			NoBGJob:    jConf.NoBGJob,
 			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
+			Heartbeat:  time.Second * time.Duration(jConf.Heartbeat),
 			MaxDeletes: jConf.MaxDeletes,
 		}
 		m := meta.NewClient(jConf.MetaURL, metaConf)
@@ -350,48 +408,32 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
 		}
-		registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
-		registerer := prometheus.WrapRegistererWithPrefix("juicefs_", registry)
-		if jConf.PushGateway != "" {
-			registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-			registerer.MustRegister(prometheus.NewGoCollector())
-			pusher := push.New(jConf.PushGateway, "juicefs").
-				Gatherer(registry).
-				Grouping("vol_name", name).
-				Grouping("mp", "sdk-"+strconv.Itoa(os.Getpid()))
+		var registerer prometheus.Registerer
+		if jConf.PushGateway != "" || jConf.PushGraphite != "" {
+			commonLabels := prometheus.Labels{"vol_name": name, "mp": "sdk-" + strconv.Itoa(os.Getpid())}
 			if h, err := os.Hostname(); err == nil {
-				pusher.Grouping("instance", h)
+				commonLabels["instance"] = h
 			} else {
 				logger.Warnf("cannot get hostname: %s", err)
 			}
-			if strings.Contains(jConf.PushAuth, ":") {
-				parts := strings.Split(jConf.PushAuth, ":")
-				pusher.BasicAuth(parts[0], parts[1])
-			}
-			pushers = append(pushers, pusher)
+			registry := prometheus.NewRegistry()
+			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
+			registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+			registerer.MustRegister(prometheus.NewGoCollector())
 
-			interval := time.Second * 10
+			var interval time.Duration
 			if jConf.PushInterval > 0 {
 				interval = time.Second * time.Duration(jConf.PushInterval)
 			}
-			once.Do(func() {
-				go func() {
-					for {
-						time.Sleep(interval)
-						for _, p := range pushers {
-							if err := p.Push(); err != nil {
-								logger.Warnf("push metrics to %s: %s", jConf.PushGateway, err)
-							}
-						}
-					}
-				}()
-			})
-
+			if jConf.PushGraphite != "" {
+				push2Graphite(jConf.PushGraphite, interval, registry, commonLabels)
+			}
+			if jConf.PushGateway != "" {
+				push2Gateway(jConf.PushGateway, jConf.PushAuth, interval, registry, commonLabels)
+			}
 			meta.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(m, registerer)
-		} else {
-			registerer = nil
 		}
 
 		if jConf.Bucket != "" {
@@ -582,9 +624,14 @@ func jfs_term(pid int, h uintptr) int {
 			}
 		}
 	}
+	for _, bridge := range bridges {
+		if err := bridge.Push(); err != nil {
+			logger.Warnf("error pushing to Graphite: %s", err)
+		}
+	}
 	for _, pusher := range pushers {
 		if err := pusher.Push(); err != nil {
-			logger.Warnf("push metrics: %s", err)
+			logger.Warnf("error pushing to PushGatway: %s", err)
 		}
 	}
 	return 0

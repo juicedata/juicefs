@@ -148,7 +148,11 @@ func clientFlags() []cli.Flag {
 			Value: time.Hour,
 			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
 		},
-
+		&cli.DurationFlag{
+			Name:  "heartbeat",
+			Value: 12 * time.Second,
+			Usage: "interval to send heartbeat; it's recommended that all clients use the same heartbeat value",
+		},
 		&cli.BoolFlag{
 			Name:  "read-only",
 			Usage: "allow lookup/read operations only",
