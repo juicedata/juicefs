@@ -46,6 +46,7 @@ juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
 .PHONY: snapshot release test
 snapshot:
 	docker run --rm --privileged \
+		-e REVISIONDATE=$(REVISIONDATE) \
 		-e PRIVATE_KEY=${PRIVATE_KEY} \
 		-v ~/go/pkg/mod:/go/pkg/mod \
 		-v `pwd`:/go/src/github.com/juicedata/juicefs \
