@@ -6,17 +6,17 @@ slug: /mdtest
 # Benchmark with mdtest
 
 :::tip
-JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [trash](../security/trash.md) for details.
+Trash is enabled in JuiceFS v1.0+ by default. As a result, temporary files are created and deleted in the file system during the benchmark, and these files will be eventually dumped into a directory named `.trash`. To avoid storage space being occupied by `.trash`, you can run command `juicefs config META-URL --trash-days 0` to disable Trash before benchmark. See [trash](../security/trash.md) for details.
 :::
 
 ## Testing Approach
 
-Performed a metadata test on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [mdtest](https://github.com/hpc/ior).
+Perform a metadata test on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) with [mdtest](https://github.com/hpc/ior).
 
 ## Testing Tool
 
-The following tests were performed by mdtest 3.4.
-Arguments of mdtest are adjusted to ensure the command can be finished in 5 minutes.
+The following tests are performed with `mdtest` 3.4.
+The arguments of `mdtest` are tuned to ensure that the command will finish within 5 minutes.
 
 ```
 ./mdtest -d /s3fs/mdtest -b 6 -I 8 -z 2
@@ -26,7 +26,7 @@ Arguments of mdtest are adjusted to ensure the command can be finished in 5 minu
 
 ## Testing Environment
 
-In the following test results, all mdtest tests based on the c5.large EC2 instance (2 CPU, 4G RAM), Ubuntu 18.04 LTS (Kernel 5.4.0) system, JuiceFS use Redis (version 4.0.9) running on a c5.large EC2 instance in the same available zone to store metadata.
+All the following tests are performed using `mdtest` on a c5.large EC2 instances (2 CPU, 4G RAM) with Ubuntu 18.04 LTS (Kernel 5.4.0) operating system. The Redis (version 4.0.9) which JuiceFS uses runs on a c5.large EC2 instance in the same available zone to store metadata.
 
 JuiceFS mount command:
 
