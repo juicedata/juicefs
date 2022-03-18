@@ -9,11 +9,11 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
-    - cron:  '30 20 * * *'
+    - cron:  '30 * * * *'
 
 jobs:
   mysqltestsmalltable:
@@ -39,6 +39,17 @@ jobs:
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
           -p 6379:6379  redis redis-server --appendonly yes
+          mkdir /tmp/jfs/mysql
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: slackapi/slack-github-action@v1.18.0
+        with:
+          channel-id: 'C038B6PK4RE'
+          slack-message: "mysqlsmalltable failed,action!"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
 
       - name: Juicefs Format
         run: |
