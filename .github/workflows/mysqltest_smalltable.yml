@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -72,6 +72,7 @@ jobs:
           mysql -uroot -proot  -e "show variables like 'log_error';"
           mysql -uroot -proot -e "set global log_error_verbosity=3;"
           mysql -uroot -proot  -e "show variables like 'log_error_verbosity';"
+          mkdir /tmp/hello/hello
 
 
       - name: Install Sysbench
@@ -116,6 +117,6 @@ jobs:
           tail -n 1000 /var/log/juicefs.log
 
 
-      - name: Setup tmate session
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: lhotari/action-upterm@v1
