@@ -12,6 +12,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+  workflow_dispatch:
 
 jobs:
   pjdfstest:
