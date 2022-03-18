@@ -7,6 +7,12 @@ slug: /cache_management
 
 For a file system driven by a combination of object storage and database, the cache is an important medium for efficient interaction between the local client and the remote service. Read and write data can be loaded into the cache in advance or asynchronously, and then the client interacts with the remote service in the background to perform asynchronous uploads or prefetching of data. The use of caching technology can significantly reduce the latency of storage operations and increase data throughput compared to interacting with remote services directly.
 
+## JuiceFS Read Cache mechanism
+
+When reading files in JuiceFS, there are multiple levels of caches to provide better performance for frequently accessed data. Read requests will try the in-memory page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn, and will read from the object storage only when the corresponding data is not found in the cache, and will write to all levels of caches asynchronously to ensure the performance of the next access.
+
+![](../images/juicefs-cache.png)
+
 JuiceFS provides various caching mechanisms including metadata caching, data read/write caching, etc.
 
 ## Data Consistency
@@ -33,13 +39,17 @@ JuiceFS caches attributes, file entries, and directory entries in kernel for 1 s
 
 ### Metadata Cache in Client
 
-> **Note**: This feature requires JuiceFS >= 0.15.2.
+:::note
+This feature requires JuiceFS >= 0.15.2.
+:::
 
 When a JuiceFS client `open()` a file, its file attributes are automatically cached in client memory. If the [`--open-cache`](../reference/command_reference.md#juicefs-mount) option is set to a value greater than 0 when mounting the file system, subsequent `getattr()` and `open()` operations will return the result from the in-memory cache immediately, as long as the cache has not timed out.
 
 When a file is read by `read()`, the chunk and slice information of the file is automatically cached in client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately.
 
-> **Hint**: You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to know what chunk and slice are.
+:::tip Hint
+You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to know what chunk and slice are.
+:::
 
 By default, for any file whose metadata has been cached in memory and not accessed by any process for more than 1 hour, all its metadata cache will be automatically deleted.
 
@@ -49,7 +59,9 @@ Data cache is also provided in JuiceFS to improve performance, including page ca
 
 ### Data Cache in Kernel
 
-> **Note**: This feature requires JuiceFS >= 0.15.2.
+:::note
+This feature requires JuiceFS >= 0.15.2.
+:::
 
 For files that have already been read, the kernel automatically caches their contents. Then if the file is opened again, and it's not changed (i.e., mtime has not been updated), it can be read directly from the kernel cache for the best performance.
 
@@ -61,7 +73,9 @@ JuiceFS clients currently do not have kernel write caching enabled by default, s
 
 The JuiceFS client automatically prefetch data into the cache based on the read pattern, thus improving sequential read performance. By default, 1 block is prefetch locally concurrently with the read data. The local cache can be set on any local file system based on HDD, SSD or memory.
 
-> **Hint**: You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to learn what a block is.
+:::tip Hint
+You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to learn what a block is.
+:::
 
 The local cache can be adjusted at [mount file system](../reference/command_reference.md#juicefs-mount) with the following options.
 
@@ -94,7 +108,9 @@ The asynchronous upload feature is disabled by default and can be enabled with t
 
 When writing a large number of small files in a short period of time, it is recommended to mount the file system with the `--writeback` parameter to improve write performance, and consider re-mounting without the option after the write is complete to make subsequent writes more reliable. It is also recommended to enable `--writeback` for scenarios that require a lot of random writes, such as incremental backups of MySQL.
 
-> **Warning**: When asynchronous upload is enabled, i.e. `--writeback` is specified when mounting the file system, do not delete the contents in `<cache-dir>/<UUID>/rawstaging` directory, as this will result in data loss.
+:::caution
+When asynchronous upload is enabled, i.e. `--writeback` is specified when mounting the file system, do not delete the contents in `<cache-dir>/<UUID>/rawstaging` directory, as this will result in data loss.
+:::
 
 When the cache disk is too full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache feature is turned off).
 
