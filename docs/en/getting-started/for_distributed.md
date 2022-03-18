@@ -67,7 +67,7 @@ redis://<username>:<password>@<Database-IP-or-URL>:6379/1
 ```
 
 :::tip
-Redis versions prior to 6.0 do not have username, so omit the `<username>` part in the URL, e.g. `redis://:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1` (please note that the colon in front of the password is a separator and needs to be preserved).
+Redis versions lower than 6.0 do not take username, so omit the `<username>` part in the URL, e.g. `redis://:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1` (please note that the colon in front of the password is a separator and needs to be preserved).
 :::
 
 ### 4. Creating a file system
