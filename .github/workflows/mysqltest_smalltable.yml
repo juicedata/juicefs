@@ -40,6 +40,17 @@ jobs:
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
           -p 6379:6379  redis redis-server --appendonly yes
+          make /tmp/jfs/mysql
+          
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: slackapi/slack-github-action@v1.18.0
+        with:
+          channel-id: 'C038B6PK4RE'
+          slack-message: "mysqlsmalltable failed,action!"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}                
+
 
       - name: Juicefs Format
         run: |
