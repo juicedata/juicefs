@@ -55,7 +55,7 @@ The include/exclude rules each specify a pattern that is matched against the nam
 - a '?' matches any character except a slash (/).
 - a '[' introduces a character class, such as [a-z] or [[:alpha:]].
 - in a wildcard pattern, a backslash can be used to escape a wildcard character, but it is matched literally when no wildcards are present.
-- it's worth mention that we do a prefix match of pattern, i.e. implies recursive
+- it does a prefix match of pattern, i.e. always recursive
 
 Examples:
 # Sync object from OSS to S3
