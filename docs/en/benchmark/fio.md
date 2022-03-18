@@ -6,16 +6,16 @@ slug: /fio
 # Benchmark with fio
 
 :::tip
-JuiceFS v1.0+ has Trash enabled by default, the benchmark will create and delete temporary files in the file system, these files will eventually be dumped to the Trash folder `.trash`, it will take up storage space, to avoid this, you can disable the Trash before the benchmark `juicefs config META-URL --trash-days 0` and refer to [trash](../security/trash.md) for details.
+Trash is enabled in JuiceFS v1.0+ by default. As a result, temporary files are created and deleted in the file system during the benchmark, and these files will be eventually dumped into a directory named `.trash`. To avoid storage space being occupied by `.trash`, you can run command `juicefs config META-URL --trash-days 0` to disable Trash before benchmark. See [trash](../security/trash.md) for details.
 :::
 
 ## Testing Approach
 
-Performed a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio).
+Perform a sequential read/write benchmark on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) with [fio](https://github.com/axboe/fio).
 
 ## Testing Tool
 
-The following tests were performed by fio 3.1.
+The following tests are performed with `fio` 3.1.
 
 Sequential read test (numjobs: 1):
 
@@ -51,7 +51,7 @@ fio --name=big-file-multi-write --directory=/jfs --rw=write --refill_buffers --b
 
 ## Testing Environment
 
-In the following test results, all fio tests based on the c5d.18xlarge EC2 instance (72 CPU, 144G RAM), Ubuntu 18.04 LTS (Kernel 5.4.0) system, JuiceFS use the local Redis instance (version 4.0.9) to store metadata.
+All the following tests are all performed using `fio` on a c5d.18xlarge EC2 instance (72 CPU, 144G RAM) with Ubuntu 18.04 LTS (Kernel 5.4.0) operating system. JuiceFS uses a local Redis instance (version 4.0.9) to store metadata.
 
 JuiceFS mount command:
 
