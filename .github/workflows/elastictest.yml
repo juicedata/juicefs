@@ -1,6 +1,5 @@
 name: "elastictest"
 
-
 on:
   push:
     branches:
@@ -15,6 +14,8 @@ on:
       - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
+    
+  workflow_dispatch:
 
 jobs:
   elastictest:
