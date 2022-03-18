@@ -167,7 +167,7 @@ If the command fails to unmount the file system after execution, it will prompt 
 exit status 1
 ```
 
-This failure happens probrobly because some programs are reading and writing files in the file system when the unmount command is executed. To ensure data security, you should first troubleshoot which programs are interacting with files on the file system (e.g. via the command `lsof`) and try to terminate the interaction between them before re-executing the unmount command.
+This failure happens probably because some programs are reading or writing files in the file system when executing `unmount` command. To avoid data loss, you should first determine which processes are accessing files in the file system (e.g. via the command `lsof`) and try to release the files before re-executing the `unmount` command.
 
 :::caution
 The following command may result in file corruption and loss, so be careful to use it!
