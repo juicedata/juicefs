@@ -55,6 +55,7 @@ snapshot:
 
 release:
 	docker run --rm --privileged \
+		-e REVISIONDATE=$(REVISIONDATE) \
 		-e PRIVATE_KEY=${PRIVATE_KEY} \
 		--env-file .release-env \
 		-v ~/go/pkg/mod:/go/pkg/mod \

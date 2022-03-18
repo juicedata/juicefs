@@ -2,6 +2,7 @@ project_name: juicefs
 env:
   - GO111MODULE=on
   - CGO_ENABLED=1
+  - REVISIONDATE={{ .Env.REVISIONDATE }}
 before:
   hooks:
     - go mod download
