@@ -262,7 +262,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		Heartbeat:  c.Duration("heartbeat"),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
-		MaxDeletes: c.Int("max-deletes"),
 	}
 }
 
@@ -284,6 +283,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
+		MaxDeletes:    c.Int("max-deletes"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
 		BufferSize:    c.Int("buffer-size") << 20,
@@ -296,7 +296,6 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
-		MaxDeletes:     c.Int("max-deletes"),
 	}
 
 	if chunkConf.CacheDir != "memory" {

@@ -18,13 +18,14 @@ package vfs
 
 import (
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
 	"log"
 	"reflect"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -63,6 +64,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 			BlockSize:  format.BlockSize * 1024,
 			Compress:   format.Compression,
 			MaxUpload:  2,
+			MaxDeletes: 1,
 			BufferSize: 30 << 20,
 			CacheSize:  10,
 			CacheDir:   "memory",

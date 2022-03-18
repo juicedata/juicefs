@@ -80,7 +80,6 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
-	deleting     chan int
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 	newSpace     int64
@@ -100,11 +99,6 @@ func newBaseMeta(conf *Config) baseMeta {
 	if conf.Retries == 0 {
 		conf.Retries = 30
 	}
-	deleteChan := conf.MaxDeletes
-	//  keep a chan to delete file in cache
-	if conf.MaxDeletes <= 0 {
-		deleteChan = 1
-
 	if conf.Heartbeat == 0 {
 		conf.Heartbeat = 12 * time.Second
 
@@ -115,7 +109,6 @@ func newBaseMeta(conf *Config) baseMeta {
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, deleteChan),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -829,8 +822,6 @@ func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 }
 
 func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
-	m.deleting <- 1
-	defer func() { <-m.deleting }()
 	err := m.newMsg(DeleteChunk, chunkid, size)
 	if err != nil {
 		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)

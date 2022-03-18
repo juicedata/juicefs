@@ -29,7 +29,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus/push"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -42,6 +41,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/prometheus/client_golang/prometheus/push"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
@@ -395,13 +396,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		}
 
 		metaConf := &meta.Config{
-			Retries:    10,
-			Strict:     true,
-			ReadOnly:   jConf.ReadOnly,
-			NoBGJob:    jConf.NoBGJob,
-			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
-			Heartbeat:  time.Second * time.Duration(jConf.Heartbeat),
-			MaxDeletes: jConf.MaxDeletes,
+			Retries:   10,
+			Strict:    true,
+			ReadOnly:  jConf.ReadOnly,
+			NoBGJob:   jConf.NoBGJob,
+			OpenCache: time.Duration(jConf.OpenCache * 1e9),
+			Heartbeat: time.Second * time.Duration(jConf.Heartbeat),
 		}
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
@@ -459,6 +459,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			AutoCreate:     jConf.AutoCreate,
 			CacheFullBlock: jConf.CacheFullBlock,
 			MaxUpload:      jConf.MaxUploads,
+			MaxDeletes:     jConf.MaxDeletes,
 			UploadLimit:    int64(jConf.UploadLimit) * 1e6 / 8,
 			DownloadLimit:  int64(jConf.DownloadLimit) * 1e6 / 8,
 			Prefetch:       jConf.Prefetch,
