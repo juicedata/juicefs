@@ -63,6 +63,6 @@ jobs:
           make pjdfstest
           sudo prove -rv tests/
 
-      - name: Setup tmate session
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: lhotari/action-upterm@v1

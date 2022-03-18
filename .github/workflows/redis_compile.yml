@@ -54,6 +54,6 @@ jobs:
           make test
           stat /tmp/jfs
 
-      - name: Setup tmate session
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: lhotari/action-upterm@v1
