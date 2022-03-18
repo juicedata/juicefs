@@ -121,6 +121,12 @@ type session struct {
 	Info      []byte `xorm:"blob"`
 }
 
+type session2 struct {
+	Sid    uint64 `xorm:"pk"`
+	Expire int64  `xorm:"notnull"`
+	Info   []byte `xorm:"blob"`
+}
+
 type sustained struct {
 	Sid   uint64 `xorm:"unique(sustained) notnull"`
 	Inode Ino    `xorm:"unique(sustained) notnull"`
@@ -234,8 +240,8 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
 		logger.Fatalf("create table chunk, chunk_ref: %s", err)
 	}
-	if err := m.db.Sync2(new(session), new(sustained), new(delfile)); err != nil {
-		logger.Fatalf("create table session, sustaind, delfile: %s", err)
+	if err := m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
+		logger.Fatalf("create table session2, sustaind, delfile: %s", err)
 	}
 	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("create table flock, plock: %s", err)
@@ -333,7 +339,7 @@ func (m *dbMeta) Reset() error {
 	return m.db.DropTables(&setting{}, &counter{},
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &chunkRef{},
-		&session{}, &sustained{}, &delfile{},
+		&session{}, &session2{}, &sustained{}, &delfile{},
 		&flock{}, &plock{})
 }
 
@@ -344,10 +350,9 @@ func (m *dbMeta) doLoad() ([]byte, error) {
 }
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
-	// old client has no info field
-	err := m.db.Sync2(new(session))
+	err := m.db.Sync2(new(session2))
 	if err != nil {
-		return fmt.Errorf("update table session: %s", err)
+		return fmt.Errorf("update table session2: %s", err)
 	}
 	// update the owner from uint64 to int64
 	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
@@ -359,7 +364,7 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 
 	for {
 		if err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session{m.sid, time.Now().Unix(), sinfo})
+			return mustInsert(s, &session2{m.sid, m.expireTime(), sinfo})
 		}); err == nil {
 			break
 		}
@@ -380,7 +385,7 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 	return nil
 }
 
-func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
+func (m *dbMeta) getSession(row *session2, detail bool) (*Session, error) {
 	var s Session
 	if row.Info == nil { // legacy client has no info
 		row.Info = []byte("{}")
@@ -389,7 +394,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
 	}
 	s.Sid = row.Sid
-	s.Heartbeat = time.Unix(row.Heartbeat, 0)
+	s.Expire = time.Unix(row.Expire, 0)
 	if detail {
 		var (
 			srows []sustained
@@ -424,7 +429,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 }
 
 func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
-	row := session{Sid: sid}
+	row := session2{Sid: sid}
 	ok, err := m.db.Get(&row)
 	if err != nil {
 		return nil, err
@@ -436,7 +441,7 @@ func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
 }
 
 func (m *dbMeta) ListSessions() ([]*Session, error) {
-	var rows []session
+	var rows []session2
 	err := m.db.Find(&rows)
 	if err != nil {
 		return nil, err
@@ -1635,15 +1640,15 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
 		return m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Delete(&session{Sid: sid})
+			_, err := ses.Delete(&session2{Sid: sid})
 			return err
 		})
 	}
 }
 
-func (m *dbMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
-	var s session
-	rows, err := m.db.Where("Heartbeat < ?", ts).Limit(limit, 0).Rows(&s)
+func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
+	var s session2
+	rows, err := m.db.Where("Expire < ?", time.Now().Unix()).Limit(limit, 0).Rows(&s)
 	if err != nil {
 		return nil, err
 	}
@@ -1659,7 +1664,7 @@ func (m *dbMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
 
 func (m *dbMeta) doRefreshSession() {
 	_ = m.txn(func(ses *xorm.Session) error {
-		n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
+		n, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
 		if err == nil && n == 0 {
 			err = fmt.Errorf("no session found matching sid: %d", m.sid)
 		}
@@ -2723,8 +2728,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
 		return fmt.Errorf("create table chunk, chunk_ref: %s", err)
 	}
-	if err = m.db.Sync2(new(session), new(sustained), new(delfile)); err != nil {
-		return fmt.Errorf("create table session, sustaind, delfile: %s", err)
+	if err = m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
+		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)
 	}
 	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)

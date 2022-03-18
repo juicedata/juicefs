@@ -22,7 +22,8 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"regexp"
+	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -586,8 +587,9 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 		logger.Fatal(err)
 	}
 	if config.Exclude != nil {
-		srckeys = filter(srckeys, config.Include, config.Exclude)
-		dstkeys = filter(dstkeys, config.Include, config.Exclude)
+		rules := initRules(src, dst)
+		srckeys = filter(srckeys, rules)
+		dstkeys = filter(dstkeys, rules)
 	}
 
 	defer close(tasks)
@@ -661,49 +663,80 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 	}
 }
 
-func compileExp(patterns []string) []*regexp.Regexp {
-	var rs []*regexp.Regexp
-	for _, p := range patterns {
-		r, err := regexp.CompilePOSIX(p)
-		if err != nil {
-			logger.Fatalf("invalid regular expression `%s`: %s", p, err)
-		}
-		rs = append(rs, r)
-	}
-	return rs
+type rule struct {
+	pattern string
+	include bool
 }
 
-func findAny(s string, ps []*regexp.Regexp) bool {
-	for _, p := range ps {
-		if p.FindString(s) != "" {
-			return true
+func initRules(src, dst object.ObjectStorage) (rules []*rule) {
+	l := len(os.Args)
+	for idx, arg := range os.Args {
+		if l-1 > idx && (arg == "--include" || arg == "-include") {
+			rules = append(rules, &rule{pattern: os.Args[idx+1], include: true})
+		} else if l-1 > idx && (arg == "--exclude" || arg == "-exclude") {
+			rules = append(rules, &rule{pattern: os.Args[idx+1], include: false})
+		} else if strings.HasPrefix(arg, "--include=") || strings.HasPrefix(arg, "-include=") {
+			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
+				rules = append(rules, &rule{pattern: s[1], include: true})
+			}
+		} else if strings.HasPrefix(arg, "--exclude=") || strings.HasPrefix(arg, "-exclude=") {
+			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
+				rules = append(rules, &rule{pattern: s[1], include: false})
+			}
 		}
 	}
-	return false
+	if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
+		for _, r := range rules {
+			r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
+		}
+	}
+	return
 }
 
-func filter(keys <-chan object.Object, include, exclude []string) <-chan object.Object {
-	inc := compileExp(include)
-	exc := compileExp(exclude)
+func filter(keys <-chan object.Object, rules []*rule) <-chan object.Object {
 	r := make(chan object.Object)
 	go func() {
 		for o := range keys {
 			if o == nil {
 				break
 			}
-			if findAny(o.Key(), exc) {
+			if includeObject(rules, o) {
+				r <- o
+			} else {
 				logger.Debugf("exclude %s", o.Key())
-				continue
 			}
-			if len(inc) > 0 && !findAny(o.Key(), inc) {
-				logger.Debugf("%s is not included", o.Key())
-				continue
-			}
-			r <- o
 		}
 		close(r)
 	}()
 	return r
+}
+
+func alignPatternAndKey(pattern, key string) string {
+	sep := "/"
+	l := strings.Count(pattern, sep) + 1
+	ps := strings.Split(key, sep)
+	if len(ps) < l {
+		return key
+	} else if strings.HasSuffix(pattern, sep) {
+		return strings.Join(ps[:l-1], sep) + sep
+	} else {
+		return strings.Join(ps[:l], sep)
+	}
+}
+
+// Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
+func includeObject(rules []*rule, o object.Object) bool {
+	for _, rule := range rules {
+		k := alignPatternAndKey(rule.pattern, o.Key())
+		match, err := path.Match(rule.pattern, k)
+		if err != nil {
+			logger.Fatalf("pattern error : %v", err)
+		}
+		if match {
+			return rule.include
+		}
+	}
+	return true
 }
 
 // Sync syncs all the keys between to object storage

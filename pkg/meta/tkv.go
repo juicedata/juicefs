@@ -167,7 +167,7 @@ All keys:
   Fiiiiiiii          Flocks
   Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
-  SHssssssss         session heartbeat
+  SEssssssss         session expire time
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
 */
@@ -205,11 +205,11 @@ func (m *kvMeta) plockKey(inode Ino) []byte {
 }
 
 func (m *kvMeta) sessionKey(sid uint64) []byte {
-	return m.fmtKey("SH", sid)
+	return m.fmtKey("SE", sid)
 }
 
 func (m *kvMeta) parseSid(key string) uint64 {
-	buf := []byte(key[2:]) // "SH"
+	buf := []byte(key[2:]) // "SE"
 	if len(buf) != 8 {
 		panic("invalid sid value")
 	}
@@ -393,7 +393,7 @@ func (m *kvMeta) doLoad() ([]byte, error) {
 }
 
 func (m *kvMeta) doNewSession(sinfo []byte) error {
-	if err := m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix())); err != nil {
+	if err := m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime())); err != nil {
 		return fmt.Errorf("set session ID %d: %s", m.sid, err)
 	}
 	if err := m.setValue(m.sessionInfoKey(m.sid), sinfo); err != nil {
@@ -405,7 +405,7 @@ func (m *kvMeta) doNewSession(sinfo []byte) error {
 }
 
 func (m *kvMeta) doRefreshSession() {
-	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
+	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime()))
 }
 
 func (m *kvMeta) doCleanStaleSession(sid uint64) error {
@@ -485,9 +485,9 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	}
 }
 
-func (m *kvMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
-	vals, err := m.scanValues(m.fmtKey("SH"), limit, func(k, v []byte) bool {
-		return m.parseInt64(v) < ts
+func (m *kvMeta) doFindStaleSessions(limit int) ([]uint64, error) {
+	vals, err := m.scanValues(m.fmtKey("SE"), limit, func(k, v []byte) bool {
+		return m.parseInt64(v) < time.Now().Unix()
 	})
 	if err != nil {
 		return nil, err
@@ -564,12 +564,12 @@ func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.Heartbeat = time.Unix(m.parseInt64(value), 0)
+	s.Expire = time.Unix(m.parseInt64(value), 0)
 	return s, nil
 }
 
 func (m *kvMeta) ListSessions() ([]*Session, error) {
-	vals, err := m.scanValues(m.fmtKey("SH"), -1, nil)
+	vals, err := m.scanValues(m.fmtKey("SE"), -1, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -580,7 +580,7 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 			logger.Errorf("get session: %s", err)
 			continue
 		}
-		s.Heartbeat = time.Unix(m.parseInt64(v), 0)
+		s.Expire = time.Unix(m.parseInt64(v), 0)
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
