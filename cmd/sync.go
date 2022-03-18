@@ -45,6 +45,7 @@ func cmdSync() *cli.Command {
 		Description: `
 This tool spawns multiple threads to concurrently syncs objects of two data storages.
 SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX].
+Another thing to note is that we don't sync empty directories.
 
 Include/exclude pattern rules:
 The include/exclude rules each specify a pattern that is matched against the names of the files that are going to be transferred.  These patterns can take several forms:
@@ -131,11 +132,11 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			},
 			&cli.StringSliceFlag{
 				Name:  "exclude",
-				Usage: "exclude files containing PATTERN",
+				Usage: "exclude Key matching PATTERN",
 			},
 			&cli.StringSliceFlag{
 				Name:  "include",
-				Usage: "need to be used with `--exclude PATTERN`. Don't exclude files matching PATTERN",
+				Usage: "don't exclude Key matching PATTERN",
 			},
 			&cli.StringFlag{
 				Name:  "manager",

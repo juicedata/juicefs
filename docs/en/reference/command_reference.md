@@ -513,7 +513,7 @@ The format of both the source and destination paths is `[NAME://][ACCESS_KEY:SEC
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit the synchronization to only data in certain paths.
 
 :::note
-If you want to express the concept of a folder in `SRC` or `DST`, please make sure that the path ends with "/" or "\" , otherwise it will be considered as the prefix of the object name.
+If you want to express the concept of a folder in `SRC` or `DST`, please make sure that the path ends with "/" or "\" , otherwise it will be considered as the prefix of the object name. Another thing to note is that we don't sync empty directories.
 :::
 
 #### Options
@@ -552,7 +552,7 @@ delete objects from source after synced (default: false)
 delete extraneous objects from destination (default: false)
 
 `--exclude PATTERN`<br />
-exclude Key containing PATTERN
+exclude Key matching PATTERN
 
 `--include PATTERN`<br />
 don't exclude Key matching PATTERN. Need to be used with `--exclude PATTERN`.
