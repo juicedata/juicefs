@@ -513,7 +513,7 @@ The format of both the source and destination paths is `[NAME://][ACCESS_KEY:SEC
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit the synchronization to only data in certain paths.
 
 :::note
-If you want to express the concept of a folder in `SRC` or `DST`, please make sure that the path ends with "/" or "\" , otherwise it will be considered as the prefix of the object name. Another thing to note is that we don't sync empty directories.
+If you want to express the concept of a folder in `SRC` or `DST`, please make sure that the path ends with "/" or "\" , otherwise it will be considered as the prefix of the object name.
 :::
 
 #### Options
