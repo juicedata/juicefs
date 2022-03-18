@@ -1,4 +1,4 @@
-name: "mysqltest"
+name: "mysqltestlocal"
 
 on:
   push:
@@ -13,11 +13,11 @@ on:
     paths-ignore:
       - 'docs/**'
   schedule:
-    - cron:  '30 20 * * *'
+    - cron:  '50 * * * *'
   workflow_dispatch:
 
 jobs:
-  mysqltestsmalltable:
+  mysqltestsmalltablelocal:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -33,39 +33,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build linux target
-        run: make juicefs
-
-      - name: Run Redis
+      - name: Data Dir
         run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
-
-      - name: Juicefs Format
-        run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
-
-      - name: Juicefs Mount
-        run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
-
-
-      - name: Change Data Dir
-        run: |
-          sudo service mysql stop
-          sudo sed  -i "s?.*datadir.*?datadir=/tmp/jfs/mysql?" /etc/mysql/mysql.conf.d/mysqld.cnf
-          sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf
-          sudo mkdir /tmp/jfs/mysql
-          sudo chmod 777 /var/lib/mysql/
-          sudo cp -a -r /var/lib/mysql/* /tmp/jfs/mysql/
-          sudo chmod 777 /tmp/jfs/mysql/
-          sudo chown -R mysql:mysql /tmp/jfs/mysql/
-          sudo chmod 777 /etc/apparmor.d/tunables/alias
-          sudo echo "alias /var/lib/mysql/ -> /tmp/jfs/mysql/," >>/etc/apparmor.d/tunables/alias
-          sudo service apparmor restart
           sudo service mysql start
           sudo service mysql status
           sudo mysql -uroot -proot  -e "select @@datadir;"
+
 
       - name: Install Sysbench
         run: |
@@ -89,7 +62,3 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=64 --time=300 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
-
-      - name: Setup tmate session
-        if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3

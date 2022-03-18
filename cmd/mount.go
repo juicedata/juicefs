@@ -259,6 +259,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		ReadOnly:   readOnly,
 		NoBGJob:    c.Bool("no-bgjob"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
+		Heartbeat:  c.Duration("heartbeat"),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 		MaxDeletes: c.Int("max-deletes"),

@@ -33,7 +33,7 @@ const (
 	usedSpace    = "usedSpace"
 	totalInodes  = "totalInodes"
 	delfiles     = "delfiles"
-	allSessions  = "sessions"
+	allSessions  = "allSessions"
 	sessionInfos = "sessionInfos"
 	sliceRefs    = "sliceRef"
 )

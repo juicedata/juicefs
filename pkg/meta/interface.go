@@ -223,8 +223,8 @@ type Plock struct {
 
 // Session contains detailed information of a client session
 type Session struct {
-	Sid       uint64
-	Heartbeat time.Time
+	Sid    uint64
+	Expire time.Time
 	SessionInfo
 	Sustained []Ino   `json:",omitempty"`
 	Flocks    []Flock `json:",omitempty"`
