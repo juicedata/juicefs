@@ -821,14 +821,12 @@ func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 }
 
 func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
-	err := m.newMsg(DeleteChunk, chunkid, size)
-	if err != nil {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
-	} else {
-		err := m.en.doDeleteSlice(chunkid, size)
-		if err != nil {
+	if err := m.newMsg(DeleteChunk, chunkid, size); err == nil {
+		if err = m.en.doDeleteSlice(chunkid, size); err != nil {
 			logger.Errorf("delete slice %d: %s", chunkid, err)
 		}
+	} else if !strings.Contains(err.Error(), "skip deleting") {
+		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	}
 }
 

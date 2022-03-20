@@ -292,7 +292,7 @@ func (c *rChunk) Remove() error {
 	}
 
 	if c.store.conf.MaxDeletes == 0 {
-		return nil
+		return errors.New("skip deleting objects because MaxDeletes is 0")
 	}
 	var err error
 	c.store.currentDelete <- struct{}{}
