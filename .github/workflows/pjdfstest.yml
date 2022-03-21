@@ -53,15 +53,7 @@ jobs:
 
       - name: Pjdfstest
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libtap-harness-archive-perl
-          cd /tmp/jfs/
-          git clone https://github.com/sanwan/pjdfstest.git
-          cd pjdfstest
-          autoreconf -ifs
-          ./configure
-          make pjdfstest
-          sudo prove -rv tests/
+          exit 1
 
       - name: Send Slack Notification
         if: ${{ failure() }}
