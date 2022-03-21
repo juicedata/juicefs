@@ -280,7 +280,6 @@ func (c *rChunk) Remove() error {
 	}
 
 	lastIndx := (c.length - 1) / c.store.conf.BlockSize
-	var err error
 	for i := 0; i <= lastIndx; i++ {
 		// there could be multiple clients try to remove the same chunk in the same time,
 		// any of them should succeed if any blocks is removed
@@ -289,10 +288,20 @@ func (c *rChunk) Remove() error {
 		delete(c.store.pendingKeys, key)
 		c.store.pendingMutex.Unlock()
 		c.store.bcache.remove(key)
+
+	}
+
+	if c.store.conf.MaxDeletes == 0 {
+		return errors.New("skip deleting objects because MaxDeletes is 0")
+	}
+	var err error
+	c.store.currentDelete <- struct{}{}
+	for i := 0; i <= lastIndx; i++ {
 		if e := c.delete(i); e != nil {
 			err = e
 		}
 	}
+	<-c.store.currentDelete
 	return err
 }
 
@@ -642,6 +651,7 @@ type Config struct {
 	AutoCreate     bool
 	Compress       string
 	MaxUpload      int
+	MaxDeletes     int
 	UploadLimit    int64 // bytes per second
 	DownloadLimit  int64 // bytes per second
 	Writeback      bool
@@ -663,6 +673,7 @@ type cachedStore struct {
 	conf          Config
 	group         *Controller
 	currentUpload chan bool
+	currentDelete chan struct{}
 	pendingKeys   map[string]time.Time
 	pendingMutex  sync.Mutex
 	compressor    compress.Compressor
@@ -758,6 +769,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 		storage:       storage,
 		conf:          config,
 		currentUpload: make(chan bool, config.MaxUpload),
+		currentDelete: make(chan struct{}, config.MaxDeletes),
 		compressor:    compressor,
 		seekable:      compressor.CompressBound(0) == 0,
 		pendingKeys:   make(map[string]time.Time),

@@ -32,7 +32,7 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
-	var conf = Config{MaxDeletes: 1}
+	var conf = Config{}
 	_, err := newRedisMeta("http", "127.0.0.1:6379/10", &conf)
 	if err == nil {
 		t.Fatal("meta created with invalid url")

@@ -57,9 +57,8 @@ func fsck(ctx *cli.Context) error {
 	}
 
 	chunkConf := chunk.Config{
-		BlockSize: format.BlockSize * 1024,
-		Compress:  format.Compression,
-
+		BlockSize:  format.BlockSize * 1024,
+		Compress:   format.Compression,
 		GetTimeout: time.Second * 60,
 		PutTimeout: time.Second * 60,
 		MaxUpload:  20,

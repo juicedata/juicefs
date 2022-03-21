@@ -98,16 +98,6 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
 
-
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: slackapi/slack-github-action@v1.18.0
-        with:
-          channel-id: 'C038B6PK4RE'
-          slack-message: "mysqlsmalltable failed,action!"
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-
       - name: Log
         if: ${{ failure() }}
         run: |
@@ -116,7 +106,15 @@ jobs:
           echo "juicefs log"
           tail -n 1000 /var/log/juicefs.log
 
-
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        id: slack
+        uses: slackapi/slack-github-action@v1.18.0
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack-message: "PR Check: ${{ job.status }}\nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
 
       - name: Setup upterm session
         if: ${{ failure() }}
