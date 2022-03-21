@@ -88,11 +88,15 @@ func init() {
 // newRedisMeta return a meta store using Redis.
 func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	uri := driver + "://" + addr
-	var query string
+	var query queryMap
 	if p := strings.Index(uri, "?"); p > 0 && p+1 < len(uri) {
-		query = uri[p+1:]
-		uri = uri[:p]
-		logger.Debugf("query string: %s", query)
+		if q, err := url.ParseQuery(uri[p+1:]); err == nil {
+			logger.Debugf("parsed query parameters: %v", q)
+			query = queryMap{q}
+			uri = uri[:p]
+		} else {
+			return nil, fmt.Errorf("parse query %s: %s", uri[p+1:], err)
+		}
 	}
 	opt, err := redis.ParseURL(uri)
 	if err != nil {
@@ -128,14 +132,13 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.DB = opt.DB
 		fopt.TLSConfig = opt.TLSConfig
 		fopt.MaxRetries = conf.Retries
-		fopt.MinRetryBackoff = time.Millisecond * 100
-		fopt.MaxRetryBackoff = time.Minute * 1
-		fopt.ReadTimeout = time.Second * 30
-		fopt.WriteTimeout = time.Second * 5
-		if conf.ReadOnly && query != "" {
-			v, _ := url.ParseQuery(query)
+		fopt.MinRetryBackoff = query.duration("min-retry-backoff", time.Millisecond*20)
+		fopt.MaxRetryBackoff = query.duration("max-retry-backoff", time.Second*10)
+		fopt.ReadTimeout = query.duration("read-timeout", time.Second*30)
+		fopt.WriteTimeout = query.duration("write-timeout", time.Second*5)
+		if conf.ReadOnly {
 			// NOTE: RouteByLatency and RouteRandomly are not supported since they require cluster client
-			fopt.SlaveOnly = v.Get("route-read") == "replica"
+			fopt.SlaveOnly = query.Get("route-read") == "replica"
 		}
 		rdb = redis.NewFailoverClient(&fopt)
 	} else {
@@ -146,10 +149,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			opt.Password = os.Getenv("META_PASSWORD")
 		}
 		opt.MaxRetries = conf.Retries
-		opt.MinRetryBackoff = time.Millisecond * 100
-		opt.MaxRetryBackoff = time.Minute * 1
-		opt.ReadTimeout = time.Second * 30
-		opt.WriteTimeout = time.Second * 5
+		opt.MinRetryBackoff = query.duration("min-retry-backoff", time.Millisecond*100)
+		opt.MaxRetryBackoff = query.duration("max-retry-backoff", time.Minute)
+		opt.ReadTimeout = query.duration("read-timeout", time.Second*30)
+		opt.WriteTimeout = query.duration("write-timeout", time.Second*5)
 		rdb = redis.NewClient(opt)
 	}
 
