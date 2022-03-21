@@ -92,6 +92,9 @@ type ObjectStorage interface {
 	CompleteUpload(key string, uploadID string, parts []*Part) error
 	// ListUploads lists existing multipart uploads.
 	ListUploads(marker string) ([]*PendingPart, string, error)
-	// Link create and read symbolic links
-	Link
+
+	// Symlink create a symbolic link
+	Symlink(oldName, newName string) error
+	// Readlink read a symbolic link
+	Readlink(name string) (string, error)
 }

@@ -36,11 +36,6 @@ type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error
 }
 
-type Link interface {
-	Symlink(oldName, newName string) error
-	Readlink(name string) (string, error)
-}
-
 type File interface {
 	Object
 	Owner() string
