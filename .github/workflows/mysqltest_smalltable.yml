@@ -14,7 +14,7 @@ on:
     paths-ignore:
       - 'docs/**'
   schedule:
-    - cron:  '30 20 * * *'
+    - cron:  '50 * * * *'
 
 jobs:
   mysqltestsmalltable:
@@ -39,17 +39,7 @@ jobs:
       - name: Run Redis
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
-
-
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: slackapi/slack-github-action@v1.18.0
-        with:
-          channel-id: 'C038B6PK4RE'
-          slack-message: "mysqlsmalltable failed,action!"
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}                
+          -p 6379:6379  redis redis-server --appendonly yes             
 
 
       - name: Juicefs Format
@@ -100,6 +90,17 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=64 --time=300 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
+
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: slackapi/slack-github-action@v1.18.0
+        with:
+          channel-id: 'C038B6PK4RE'
+          slack-message: "sanwan mysqlsmalltable failed,action!"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}   
+
 
       - name: Setup tmate session
         if: ${{ failure() }}
