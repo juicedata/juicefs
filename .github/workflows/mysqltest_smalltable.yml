@@ -40,8 +40,8 @@ jobs:
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
           -p 6379:6379  redis redis-server --appendonly yes
-          make /tmp/jfs/mysql
-          
+
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: slackapi/slack-github-action@v1.18.0
