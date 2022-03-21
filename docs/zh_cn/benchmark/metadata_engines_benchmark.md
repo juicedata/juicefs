@@ -54,7 +54,7 @@ Amazon S3
 - 版本: 8.0.25
 - `/var/lib/mysql` 目录被绑定挂载到 `/data/mysql`
 
-### TiKV
+#### TiKV
 
 - 版本: 5.1.0
 - 配置:

@@ -55,7 +55,7 @@ Amazon S3
 - Version: 8.0.25
 - `/var/lib/mysql` is bind mounted on `/data/mysql`
 
-### TiKV
+#### TiKV
 
 - Version: 5.1.0
 - Configuration:
@@ -185,4 +185,3 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 |                 | Redis-Always | Redis-Everysec | MySQL     | TiKV      |
 | --------------- | ------------ | -------------- | --------- | --------- |
 | Write bandwidth | 350 MiB/s    | 360 MiB/s      | 360 MiB/s | 358 MiB/s |
-
