@@ -143,7 +143,9 @@ For more information about Prometheus Operator, please check [official document]
 
 ### Hadoop
 
-The [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and [Graphite](http://graphiteapp.org/)
+The [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and [Graphite](https://graphiteapp.org).
+
+#### Pushgateway
 
 Report metrics to Pushgateway:
 
@@ -175,6 +177,8 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 :::
 
 For more information about Pushgateway, please check [official document](https://github.com/prometheus/pushgateway/blob/master/README.md).
+
+#### Graphite
 
 Report metrics to Graphite:
 
