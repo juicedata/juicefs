@@ -159,7 +159,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 #### Other Configurations
 
 | Configuration             | Default Value | Description                                                                                                                                                                 |
-|---------------------------| ------------- |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|---------------------------|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `juicefs.bucket`          |               | Specify a different endpoint for object storage                                                                                                                             |
 | `juicefs.debug`           | `false`       | Whether enable debug log                                                                                                                                                    |
 | `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files.           |
@@ -169,8 +169,8 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.umask`           | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`.                                                             |
 | `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                     |
 | `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
-| `juicefs.push-graphite`    |               | [Graphite](http://graphiteapp.org/) address, format is `<host>:<port>`.                                                                                                     |
-| `juicefs.push-interval`   | 10            | Metric push interval (in seconds)                                                                                                   |
+| `juicefs.push-graphite`   |               | [Graphite](https://graphiteapp.org) address, format is `<host>:<port>`.                                                                                                     |
+| `juicefs.push-interval`   | 10            | Metric push interval (in seconds)                                                                                                                                           |
 | `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
 | `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
 
