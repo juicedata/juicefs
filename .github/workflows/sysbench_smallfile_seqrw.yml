@@ -102,6 +102,16 @@ jobs:
           sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqwr --time=600  cleanup
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        id: slack
+        uses: slackapi/slack-github-action@v1.18.0
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack-message: "PR Check: ${{ job.status }}\nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
+        
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
