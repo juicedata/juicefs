@@ -9,7 +9,7 @@ For a file system driven by a combination of object storage and database, the ca
 
 ## JuiceFS Read Cache mechanism
 
-When reading files in JuiceFS, there are multiple levels of caches to provide better performance for frequently accessed data. Read requests will try the in-memory page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn, and will read from the object storage only when the corresponding data is not found in the cache, and will write to all levels of caches asynchronously to ensure the performance of the next access.
+When reading files in JuiceFS, there are multiple levels of caches to provide better performance for frequently accessed data. Read requests will try the kernel page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn, and will read from the object storage only when the corresponding data is not found in the cache, and will write to all levels of caches asynchronously to ensure the performance of the next access.
 
 ![](../images/juicefs-cache.png)
 
