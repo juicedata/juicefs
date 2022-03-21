@@ -15,7 +15,6 @@ on:
   schedule:
     - cron:  '50 * * * *'
 
-
 jobs:
   mysqltestsmalltable:
     runs-on: ubuntu-latest
