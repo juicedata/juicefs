@@ -77,7 +77,7 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 	startTime := time.Now()
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, err := store.List("", marker, maxResults)
+	objs, err := store.List(prefix, marker, maxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
