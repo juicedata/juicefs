@@ -82,10 +82,10 @@ func (q *qiniu) Head(key string) (Object, error) {
 
 	mtime := time.Unix(0, r.PutTime*100)
 	return &obj{
-		key:   key,
-		size:  r.Fsize,
-		mtime: mtime,
-		isDir: strings.HasSuffix(key, "/"),
+		key,
+		r.Fsize,
+		mtime,
+		strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -152,11 +152,7 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		entry := entries[i]
 		mtime := entry.PutTime / 10000000
-		objs[i] = &obj{
-			key:   entry.Key,
-			size:  entry.Fsize,
-			mtime: time.Unix(mtime, 0),
-			isDir: strings.HasSuffix(entry.Key, "/")}
+		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/")}
 	}
 	return objs, nil
 }

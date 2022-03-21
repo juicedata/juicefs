@@ -80,11 +80,7 @@ func (s *speedy) List(prefix, marker string, limit int64) ([]Object, error) {
 		if strings.HasSuffix(item.Key, "/.speedycloud_dir_flag") {
 			continue
 		}
-		objs = append(objs, &obj{
-			key:   item.Key,
-			size:  item.Size,
-			mtime: item.LastModified,
-			isDir: strings.HasSuffix(item.Key, "/")})
+		objs = append(objs, &obj{item.Key, item.Size, item.LastModified, strings.HasSuffix(item.Key, "/")})
 	}
 	return objs, nil
 }

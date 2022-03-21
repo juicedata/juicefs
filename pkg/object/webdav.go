@@ -51,10 +51,10 @@ func (w *webdav) Head(key string) (Object, error) {
 		return nil, err
 	}
 	return &obj{
-		key:   key,
-		size:  info.Size,
-		mtime: info.ModTime,
-		isDir: strings.HasSuffix(key, "/"),
+		key,
+		info.Size,
+		info.ModTime,
+		strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -158,10 +158,10 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 				continue
 			}
 			o := &obj{
-				key:   key,
-				size:  info.Size,
-				mtime: info.ModTime,
-				isDir: info.IsDir,
+				key,
+				info.Size,
+				info.ModTime,
+				info.IsDir,
 			}
 			listed <- o
 		}

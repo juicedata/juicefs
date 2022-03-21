@@ -54,10 +54,10 @@ func (b *wasb) Head(key string) (Object, error) {
 	}
 
 	return &obj{
-		key:   blob.Name,
-		size:  blob.Properties.ContentLength,
-		mtime: time.Time(blob.Properties.LastModified),
-		isDir: strings.HasSuffix(blob.Name, "/"),
+		blob.Name,
+		blob.Properties.ContentLength,
+		time.Time(blob.Properties.LastModified),
+		strings.HasSuffix(blob.Name, "/"),
 	}, nil
 }
 
@@ -112,10 +112,10 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]Object, error) {
 		blob := resp.Blobs[i]
 		mtime := time.Time(blob.Properties.LastModified)
 		objs[i] = &obj{
-			key:   blob.Name,
-			size:  blob.Properties.ContentLength,
-			mtime: mtime,
-			isDir: strings.HasSuffix(blob.Name, "/"),
+			blob.Name,
+			blob.Properties.ContentLength,
+			mtime,
+			strings.HasSuffix(blob.Name, "/"),
 		}
 	}
 	return objs, nil

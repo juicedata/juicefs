@@ -81,10 +81,10 @@ func (o *ossClient) Head(key string) (Object, error) {
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
 	size, _ := strconv.ParseInt(contentLength, 10, 64)
 	return &obj{
-		key:   key,
-		size:  size,
-		mtime: mtime,
-		isDir: strings.HasSuffix(key, "/"),
+		key,
+		size,
+		mtime,
+		strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -138,11 +138,7 @@ func (o *ossClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := result.Objects[i]
-		objs[i] = &obj{
-			key:   o.Key,
-			size:  o.Size,
-			mtime: o.LastModified,
-			isDir: strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }

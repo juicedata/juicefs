@@ -170,10 +170,10 @@ func (s *RestfulStorage) Head(key string) (Object, error) {
 	}
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
 	return &obj{
-		key:   key,
-		size:  resp.ContentLength,
-		mtime: mtime,
-		isDir: strings.HasSuffix(key, "/"),
+		key,
+		resp.ContentLength,
+		mtime,
+		strings.HasSuffix(key, "/"),
 	}, nil
 }
 

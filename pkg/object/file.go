@@ -83,10 +83,10 @@ func (d *filestore) Head(key string) (Object, error) {
 		size = 0
 	}
 	return &obj{
-		key:   key,
-		size:  size,
-		mtime: fi.ModTime(),
-		isDir: fi.IsDir(),
+		key,
+		size,
+		fi.ModTime(),
+		fi.IsDir(),
 	}, nil
 }
 
@@ -339,10 +339,10 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 			}
 			f := &file{
 				obj{
-					key:   key,
-					size:  info.Size(),
-					mtime: info.ModTime(),
-					isDir: info.IsDir(),
+					key,
+					info.Size(),
+					info.ModTime(),
+					info.IsDir(),
 				},
 				owner,
 				group,

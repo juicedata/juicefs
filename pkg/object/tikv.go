@@ -71,10 +71,10 @@ func (t *tikv) Put(key string, in io.Reader) error {
 func (t *tikv) Head(key string) (Object, error) {
 	data, err := t.c.Get(context.TODO(), []byte(key))
 	return &obj{
-		key:   key,
-		size:  int64(len(data)),
-		mtime: time.Now(),
-		isDir: strings.HasSuffix(key, "/"),
+		key,
+		int64(len(data)),
+		time.Now(),
+		strings.HasSuffix(key, "/"),
 	}, err
 }
 

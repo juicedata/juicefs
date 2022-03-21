@@ -62,10 +62,10 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 	hinfo := info.(*hdfs.FileInfo)
 	f := &file{
 		obj{
-			key:   key,
-			size:  info.Size(),
-			mtime: info.ModTime(),
-			isDir: info.IsDir(),
+			key,
+			info.Size(),
+			info.ModTime(),
+			info.IsDir(),
 		},
 		hinfo.Owner(),
 		hinfo.OwnerGroup(),
@@ -262,10 +262,10 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 			hinfo := info.(*hdfs.FileInfo)
 			f := &file{
 				obj{
-					key:   key,
-					size:  info.Size(),
-					mtime: info.ModTime(),
-					isDir: info.IsDir(),
+					key,
+					info.Size(),
+					info.ModTime(),
+					info.IsDir(),
 				},
 				hinfo.Owner(),
 				hinfo.OwnerGroup(),
