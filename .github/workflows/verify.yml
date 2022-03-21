@@ -13,6 +13,7 @@ on:
     - '**.yml'
     - '**.go'
     - 'Makefile'
+  workflow_dispatch:
 
 jobs:
   lint:

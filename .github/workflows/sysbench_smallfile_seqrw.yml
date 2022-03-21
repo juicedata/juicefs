@@ -14,6 +14,7 @@ on:
       - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
+  workflow_dispatch:
 
 jobs:
   sysbenchsmallfileseqrw:
@@ -101,6 +102,6 @@ jobs:
           sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqwr --time=600  cleanup
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
-      - name: Setup tmate session
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: lhotari/action-upterm@v1

@@ -1,6 +1,5 @@
 name: "elastictest"
 
-
 on:
   push:
     branches:
@@ -15,6 +14,8 @@ on:
       - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
+
+  workflow_dispatch:
 
 jobs:
   elastictest:
@@ -72,6 +73,6 @@ jobs:
           esrally race --track=geopoint --target-hosts=127.0.0.1:9200 --pipeline=benchmark-only --report-file=/tmp/report.md
           cat /tmp/report.md
 
-      - name: Setup tmate session
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: lhotari/action-upterm@v1

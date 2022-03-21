@@ -14,6 +14,7 @@ on:
       - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
+  workflow_dispatch:
 
 jobs:
   mysqltestsmalltable:
@@ -89,6 +90,6 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
 
-      - name: Setup tmate session
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: lhotari/action-upterm@v1

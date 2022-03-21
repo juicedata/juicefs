@@ -14,6 +14,7 @@ on:
       - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
+  workflow_dispatch:
 
 jobs:
   ltpfs:
@@ -69,6 +70,6 @@ jobs:
           sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fcntl-locktests
           sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
 
-      - name: Setup tmate session
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: lhotari/action-upterm@v1
