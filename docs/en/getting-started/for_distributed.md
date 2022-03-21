@@ -5,37 +5,37 @@ sidebar_position: 3
 
 # JuiceFS Quick Start Guide for Distributed Mode
 
-The previous document ["JuiceFS Quick Start Guide for Standalone Mode "](for_local.md) created a file system that can be mounted on any host by using a combination of an "object store" and a "SQLite" database. Thanks to the feature that the object store is accessible by any computer with privileges on the network, we can access the same JuiceFS file system on different computers by simply copying the SQLite database file to any computer that wants to access the store.
+The previous document ["JuiceFS Quick Start Guide for Standalone Mode "](for_local.md) introduces how to create a file system that can be mounted on any host by using an "object storage" and a "SQLite" database. Thanks to the feature that the object storage is accessible by any computer with privileges on the network, we can also access the same JuiceFS file system on different computers by simply copying the SQLite database file to any computer that needs to access the storage.
 
-Obviously, it is feasible to share the file system by copying the SQLite database between computers, but the real-time availability of the files is not guaranteed. Since SQLite is a single file database that cannot be accessed by multiple computers at the same time, we need to use a database that supports network access, such as Redis, PostgreSQL, MySQL, etc., in order to allow a file system to be mounted and read by multiple computers in a distributed environment.
+However, the real-time availability of the files is not guaranteed if the file system is shared by the above approach. Since SQLite is a single file database that cannot be accessed by multiple computers at the same time, a database that supports network access is needed, such as Redis, PostgreSQL, MySQL, etc., which allows a file system to be mounted and read by multiple computers in a distributed environment.
 
-In this document, based on the previous document, we further replace the database from a single-user "SQLite" to a multi-user "cloud database", thus realizing a distributed file system that can be mounted on any computer on the network for reading and writing.
+In this document, a multi-user "cloud database" is used to replace the single-user "SQLite" database used in the previous document, aiming to implement a distributed file system that can be mounted on any computer on the network for reading and writing.
 
 ## Network Database
 
-The meaning of "Network Database" here refers to a database that allows multiple users to access it simultaneously over the network. From this perspective, the database can be simply divided into:
+The meaning of "Network Database" here refers to the database that allows multiple users to access it simultaneously through the network. From this perspective, the database can be simply divided into:
 
-1. **Standalone Database**: such databases are single file and usually only accessible on a single machine, such as SQLite, Microsoft Access, etc.
-2. **Network Database**: such databases are usually complex multi-file structures that provide network-based access interfaces and support simultaneous multi-user access, such as Redis, PostgreSQL, etc.
+1. **Standalone Database**: which is a single-file database and is usually only accessed locally, such as SQLite, Microsoft Access, etc.
+2. **Network Database**: which usually has complex multi-file structures, provides network-based access interfaces and supports simultaneous access by multiple users, such as Redis, PostgreSQL, etc.
 
 JuiceFS currently supports the following network-based databases.
 
 - **Key-Value Database**: Redis, TiKV
 - **Relational Database**: PostgreSQL, MySQL, MariaDB
 
-Different databases have different performance and stability, for example, Redis is an in-memory key-value database with excellent performance but relatively weak reliability, and PostgreSQL is a relational database with less performance than in-memory, but it is more reliable.
+Different databases have different performance and stability. For example, Redis is an in-memory key-value database with an excellent performance but a relatively weak reliability, while PostgreSQL is a relational database which is more reliable but has a less excellent performance than the in-memory database.
 
-We will write a special document about database selection.
+The document that specifically introduces how to select database will come soon.
 
 ## Cloud Database
 
-Cloud computing platforms usually have a wide variety of cloud database offerings, such as Amazon RDS for various relational database versions and Amazon ElastiCache for Redis-compatible in-memory database products. A multi-copy, highly available database cluster can be created with a simple initial setup.
+Cloud computing platforms usually offer a wide variety of cloud database, such as Amazon RDS for various relational database versions and Amazon ElastiCache for Redis-compatible in-memory database products, which allows to create a multi-copy and highly available database cluster by a simple initial setup.
 
-Of course, you can build your own database on the server if you wish.
+Of course, you can also build your own database on the server.
 
-For simplicity, here is an example of the Amazon ElastiCache for Redis. For a network database, the most basic information is the following 2 items.
+For simplicity, we take Amazon ElastiCache for Redis as an example. The most basic information of a network database consists of the following 2 items.
 
-1. **Database Address**: the access address of the database, the cloud platform may provide different links for internal and external networks.
+1. **Database Address**: the access address of the database; the cloud platform may provide different links for internal and external networks.
 2. **Username and Password**: authentication information used to access the database.
 
 ## Hands-on Practice
@@ -46,7 +46,7 @@ Install the JuiceFS client on all computers that need to mount the file system, 
 
 ### 2. Preparing Object Storage
 
-Here is a pseudo-sample with Amazon S3 as an example, you can switch to other object storage, refer to [JuiceFS Supported Storage](../reference/how_to_setup_object_storage.md#supported-object-storage) for details.
+Here is a pseudo sample with Amazon S3 as an example. You can also switch to other object storage (refer to [JuiceFS Supported Storage](../reference/how_to_setup_object_storage.md#supported-object-storage) for details).
 
 - **Bucket Endpoint**: `https://myjfs.s3.us-west-1.amazonaws.com`
 - **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
@@ -54,7 +54,7 @@ Here is a pseudo-sample with Amazon S3 as an example, you can switch to other ob
 
 ### 3. Preparing Database
 
-The following is a pseudo-sample of the Amazon ElastiCache for Redis as an example, you can switch to other types of databases, refer to [JuiceFS Supported Databases](../reference/how_to_setup_metadata_engine.md) for details.
+Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../reference/how_to_setup_metadata_engine.md) for details).
 
 - **Database Address**: `myjfs-sh-abc.apse1.cache.amazonaws.com:6379`
 - **Database Username**: `tom`
@@ -67,12 +67,12 @@ redis://<username>:<password>@<Database-IP-or-URL>:6379/1
 ```
 
 :::tip
-Redis versions prior to 6.0 do not have username, omit the `<username>` part of the URL, e.g. `redis://:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1` (please note that the colon in front of the password is a separator and needs to be preserved).
+Redis versions lower than 6.0 do not take username, so omit the `<username>` part in the URL, e.g. `redis://:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1` (please note that the colon in front of the password is a separator and needs to be preserved).
 :::
 
 ### 4. Creating a file system
 
-The following command creates a file system that supports cross-network, multi-machine simultaneous mounts, and shared reads and writes using a combination of "Object Storage" and "Redis" database.
+The following command creates a file system that supports cross-network, multi-machine simultaneous mounts, and shared reads and writes using an object storage and a Redis database.
 
 ```shell
 juicefs format \
@@ -100,7 +100,7 @@ Once a file system is created, the relevant information including name, object s
 
 ### 5. Mounting the file system
 
-Since the "data" and "metadata" of this file system are stored in cloud services, it can be mounted on any computer with a JuiceFS client installed for shared reads and writes at the same time. For example:
+Since the "data" and "metadata" of this file system are stored in cloud services, the file system can be mounted on any computer with a JuiceFS client installed for shared reads and writes at the same time. For example:
 
 ```shell
 juicefs mount redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 mnt
@@ -108,13 +108,13 @@ juicefs mount redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379
 
 #### Strong data consistency guarantee
 
-JuiceFS provides a "close-to-open" consistency guarantee, which means that when two or more clients read and write the same file at the same time, the changes made by client A may not be immediately visible to client B. However, once the file is closed by client A, any client re-opened it afterwards is guaranteed to see the latest data, no matter it is on the same node with A or not.
+JuiceFS guarantees a "close-to-open" consistency, which means that when two or more clients read and write the same file at the same time, the changes made by client A may not be immediately visible to client B. Other client is guaranteed to see the latest data when they re-opens the file only if client A closes the file, no matter whether the file is on the same node with A or not.
 
 #### Increase cache size to improve performance
 
-Since Object Storage is a network-based storage service, it will inevitably encounter access latency. To solve this problem, JuiceFS provides and enables caching mechanism by default, i.e. allocating a part of local storage as a buffer layer between data and object storage, and caching data to local storage asynchronously when reading files, please refer to ["Cache"](../administration/cache_management.md) for more details.
+Since object storage is a network-based storage service, it will inevitably encounter access latency. To solve this problem, JuiceFS provides and enables caching mechanism by default, i.e. allocating a part of local storage as a buffer layer between data and object storage, and caching data asynchronously to local storage when reading files. Please refer to ["Cache"](../administration/cache_management.md) for more details.
 
-By default, JuiceFS will set 100GiB cache in `$HOME/.juicefs/cache` or `/var/jfsCache` directory. Setting a larger cache space on a faster SSD can effectively improve JuiceFS's read and write performance.
+JuiceFS will set 100GiB cache in `$HOME/.juicefs/cache` or `/var/jfsCache` directory by default. Setting a larger cache space on a faster SSD can effectively improve read and write performance of JuiceFS even more .
 
 You can use `--cache-dir` to adjust the location of the cache directory and `--cache-size` to adjust the size of the cache space, e.g.:
 
@@ -147,12 +147,12 @@ redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1    /mnt/myj
 ```
 
 :::note
-By default, CentOS 6 does not mount the network file system at boot time, you need to run the command to enable automatic mounting support for the network file system: `sudo chkconfig --add netfs`
+By default, CentOS 6 does not mount the network file system during boot, you need to run the command `sudo chkconfig --add netfs` to enable automatically mounting.
 :::
 
 ### 6. Unmounting the file system
 
-You can unmount the JuiceFS file system (assuming the mount point path is `mnt`) with the `juicefs umount` command.
+You can unmount the JuiceFS file system (assuming the mount point path is `mnt`) by the command `juicefs umount`.
 
 ```shell
 juicefs umount mnt
@@ -160,20 +160,20 @@ juicefs umount mnt
 
 #### Unmounting failure
 
-If the command fails to unmount the file system after execution, the prompt is `Device or resource busy`.
+If the command fails to unmount the file system after execution, it will prompt `Device or resource busy`.
 
 ```shell
 2021-05-09 22:42:55.757097 I | fusermount: failed to unmount mnt: Device or resource busy
 exit status 1
 ```
 
-This may happen because some programs are reading and writing files in the file system. To ensure data security, you should first troubleshoot which programs are interacting with files on the file system (e.g. via the `lsof` command) and try to end the interaction between them before re-executing the unmount command.
+This failure happens probably because some programs are reading or writing files in the file system when executing `unmount` command. To avoid data loss, you should first determine which processes are accessing files in the file system (e.g. via the command `lsof`) and try to release the files before re-executing the `unmount` command.
 
 :::caution
-The following commands may result in file corruption and loss, so be careful!
+The following command may result in file corruption and loss, so be careful to use it!
 :::
 
-While you can ensure data security, you can add the `--force` or `-f` parameter to the unmount command to force the file system to be unmounted.
+You can add the option `--force` or `-f` to force the file system unmounted if you are clear about the consequence of the operation.
 
 ```shell
 juicefs umount --force mnt
