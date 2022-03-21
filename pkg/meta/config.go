@@ -37,9 +37,9 @@ type Config struct {
 	ReadOnly    bool
 	NoBGJob     bool // disable background jobs like clean-up, backup, etc.
 	OpenCache   time.Duration
+	Heartbeat   time.Duration
 	MountPoint  string
 	Subdir      string
-	MaxDeletes  int
 }
 
 type Format struct {

@@ -121,6 +121,12 @@ type session struct {
 	Info      []byte `xorm:"blob"`
 }
 
+type session2 struct {
+	Sid    uint64 `xorm:"pk"`
+	Expire int64  `xorm:"notnull"`
+	Info   []byte `xorm:"blob"`
+}
+
 type sustained struct {
 	Sid   uint64 `xorm:"unique(sustained) notnull"`
 	Inode Ino    `xorm:"unique(sustained) notnull"`
@@ -234,8 +240,8 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
 		logger.Fatalf("create table chunk, chunk_ref: %s", err)
 	}
-	if err := m.db.Sync2(new(session), new(sustained), new(delfile)); err != nil {
-		logger.Fatalf("create table session, sustaind, delfile: %s", err)
+	if err := m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
+		logger.Fatalf("create table session2, sustaind, delfile: %s", err)
 	}
 	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("create table flock, plock: %s", err)
@@ -333,7 +339,7 @@ func (m *dbMeta) Reset() error {
 	return m.db.DropTables(&setting{}, &counter{},
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &chunkRef{},
-		&session{}, &sustained{}, &delfile{},
+		&session{}, &session2{}, &sustained{}, &delfile{},
 		&flock{}, &plock{})
 }
 
@@ -344,10 +350,9 @@ func (m *dbMeta) doLoad() ([]byte, error) {
 }
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
-	// old client has no info field
-	err := m.db.Sync2(new(session))
+	err := m.db.Sync2(new(session2))
 	if err != nil {
-		return fmt.Errorf("update table session: %s", err)
+		return fmt.Errorf("update table session2: %s", err)
 	}
 	// update the owner from uint64 to int64
 	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
@@ -359,7 +364,7 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 
 	for {
 		if err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session{m.sid, time.Now().Unix(), sinfo})
+			return mustInsert(s, &session2{m.sid, m.expireTime(), sinfo})
 		}); err == nil {
 			break
 		}
@@ -380,7 +385,7 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 	return nil
 }
 
-func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
+func (m *dbMeta) getSession(row *session2, detail bool) (*Session, error) {
 	var s Session
 	if row.Info == nil { // legacy client has no info
 		row.Info = []byte("{}")
@@ -389,7 +394,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
 	}
 	s.Sid = row.Sid
-	s.Heartbeat = time.Unix(row.Heartbeat, 0)
+	s.Expire = time.Unix(row.Expire, 0)
 	if detail {
 		var (
 			srows []sustained
@@ -424,7 +429,7 @@ func (m *dbMeta) getSession(row *session, detail bool) (*Session, error) {
 }
 
 func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
-	row := session{Sid: sid}
+	row := session2{Sid: sid}
 	ok, err := m.db.Get(&row)
 	if err != nil {
 		return nil, err
@@ -436,7 +441,7 @@ func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
 }
 
 func (m *dbMeta) ListSessions() ([]*Session, error) {
-	var rows []session
+	var rows []session2
 	err := m.db.Find(&rows)
 	if err != nil {
 		return nil, err
@@ -886,7 +891,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := n.Length
 		newSpace = align4K(length) - align4K(n.Length)
-		if m.checkQuota(newSpace, 0) {
+		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
@@ -1028,8 +1033,10 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if err = mustInsert(s, &edge{parent, name, ino, _type}, &n); err != nil {
 			return err
 		}
-		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return err
+		if parent != TrashInode {
+			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
+				return err
+			}
 		}
 		if _type == TypeSymlink {
 			if err = mustInsert(s, &symlink{Inode: ino, Target: path}); err != nil {
@@ -1117,11 +1124,13 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
-		if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
-			return err
+		if !isTrash(parent) {
+			if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
+				return err
+			}
 		}
 		if n.Nlink > 0 {
-			if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
+			if _, err := s.Cols("nlink", "ctime", "parent").Update(&n, &node{Inode: e.Inode}); err != nil {
 				return err
 			}
 			if trash > 0 {
@@ -1244,7 +1253,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			return err
 		}
 		if trash > 0 {
-			if _, err = s.Cols("nlink", "ctime").Update(&n, &node{Inode: n.Inode}); err != nil {
+			if _, err = s.Cols("ctime", "parent").Update(&n, &node{Inode: n.Inode}); err != nil {
 				return err
 			}
 			if err = mustInsert(s, &edge{trash, fmt.Sprintf("%d-%d-%s", parent, e.Inode, e.Name), e.Inode, e.Type}); err != nil {
@@ -1258,7 +1267,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 				return err
 			}
 		}
-		_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
+		if !isTrash(parent) {
+			_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
+		}
 		return err
 	})
 	if err == nil && trash == 0 {
@@ -1629,15 +1640,15 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
 		return m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Delete(&session{Sid: sid})
+			_, err := ses.Delete(&session2{Sid: sid})
 			return err
 		})
 	}
 }
 
-func (m *dbMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
-	var s session
-	rows, err := m.db.Where("Heartbeat < ?", ts).Limit(limit, 0).Rows(&s)
+func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
+	var s session2
+	rows, err := m.db.Where("Expire < ?", time.Now().Unix()).Limit(limit, 0).Rows(&s)
 	if err != nil {
 		return nil, err
 	}
@@ -1653,7 +1664,7 @@ func (m *dbMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
 
 func (m *dbMeta) doRefreshSession() {
 	_ = m.txn(func(ses *xorm.Session) error {
-		n, err := ses.Cols("Heartbeat").Update(&session{Heartbeat: time.Now().Unix()}, &session{Sid: m.sid})
+		n, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
 		if err == nil && n == 0 {
 			err = fmt.Errorf("no session found matching sid: %d", m.sid)
 		}
@@ -2566,12 +2577,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting:   &m.fmt,
+		Setting:   m.fmt,
 		Counters:  counters,
 		Sustained: sessions,
 		DelFiles:  dels,
 	}
-
+	if dm.Setting.SecretKey != "" {
+		dm.Setting.SecretKey = "removed"
+		logger.Warnf("Secret key is removed for the sake of safety")
+	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
@@ -2714,8 +2728,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
 		return fmt.Errorf("create table chunk, chunk_ref: %s", err)
 	}
-	if err = m.db.Sync2(new(session), new(sustained), new(delfile)); err != nil {
-		return fmt.Errorf("create table session, sustaind, delfile: %s", err)
+	if err = m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
+		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)
 	}
 	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)

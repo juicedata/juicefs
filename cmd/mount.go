@@ -259,9 +259,9 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		ReadOnly:   readOnly,
 		NoBGJob:    c.Bool("no-bgjob"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
+		Heartbeat:  c.Duration("heartbeat"),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
-		MaxDeletes: c.Int("max-deletes"),
 	}
 }
 
@@ -283,6 +283,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
+		MaxDeletes:    c.Int("max-deletes"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
 		BufferSize:    c.Int("buffer-size") << 20,

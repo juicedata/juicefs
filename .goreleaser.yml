@@ -2,6 +2,7 @@ project_name: juicefs
 env:
   - GO111MODULE=on
   - CGO_ENABLED=1
+  - REVISIONDATE={{ .Env.REVISIONDATE }}
 before:
   hooks:
     - go mod download
@@ -13,7 +14,7 @@ builds:
     env:
       - CC=x86_64-w64-mingw32-gcc
       - CXX=x86_64-w64-mingw32-g++
-    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}}
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
     flags:
       - -buildmode
       - exe
@@ -26,16 +27,26 @@ builds:
     env:
       - CC=o64-clang
       - CXX=o64-clang++
-    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}}
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
     main: ./cmd
     goos:
       - darwin
     goarch:
       - amd64
+  - id: juicefs-darwin-arm64
+    env:
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
+    main: ./cmd
+    goos:
+      - darwin
+    goarch:
+      - arm64
   - id: juicefs-linux-amd64
     env:
       - CC=/usr/bin/musl-gcc
-    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}} -linkmode external -extldflags '-static'
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}} -linkmode external -extldflags '-static'
     main: ./cmd
     goos:
       - linux
@@ -44,7 +55,7 @@ builds:
   - id: juicefs-linux-arm64
     env:
       - CC=aarch64-linux-gnu-gcc
-    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.CommitDate}}
+    ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
     main: ./cmd
     goos:
       - linux

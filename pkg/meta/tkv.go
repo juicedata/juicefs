@@ -167,7 +167,7 @@ All keys:
   Fiiiiiiii          Flocks
   Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
-  SHssssssss         session heartbeat
+  SEssssssss         session expire time
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
 */
@@ -205,11 +205,11 @@ func (m *kvMeta) plockKey(inode Ino) []byte {
 }
 
 func (m *kvMeta) sessionKey(sid uint64) []byte {
-	return m.fmtKey("SH", sid)
+	return m.fmtKey("SE", sid)
 }
 
 func (m *kvMeta) parseSid(key string) uint64 {
-	buf := []byte(key[2:]) // "SH"
+	buf := []byte(key[2:]) // "SE"
 	if len(buf) != 8 {
 		panic("invalid sid value")
 	}
@@ -393,7 +393,7 @@ func (m *kvMeta) doLoad() ([]byte, error) {
 }
 
 func (m *kvMeta) doNewSession(sinfo []byte) error {
-	if err := m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix())); err != nil {
+	if err := m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime())); err != nil {
 		return fmt.Errorf("set session ID %d: %s", m.sid, err)
 	}
 	if err := m.setValue(m.sessionInfoKey(m.sid), sinfo); err != nil {
@@ -405,7 +405,7 @@ func (m *kvMeta) doNewSession(sinfo []byte) error {
 }
 
 func (m *kvMeta) doRefreshSession() {
-	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(time.Now().Unix()))
+	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime()))
 }
 
 func (m *kvMeta) doCleanStaleSession(sid uint64) error {
@@ -485,9 +485,9 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	}
 }
 
-func (m *kvMeta) doFindStaleSessions(ts int64, limit int) ([]uint64, error) {
-	vals, err := m.scanValues(m.fmtKey("SH"), limit, func(k, v []byte) bool {
-		return m.parseInt64(v) < ts
+func (m *kvMeta) doFindStaleSessions(limit int) ([]uint64, error) {
+	vals, err := m.scanValues(m.fmtKey("SE"), limit, func(k, v []byte) bool {
+		return m.parseInt64(v) < time.Now().Unix()
 	})
 	if err != nil {
 		return nil, err
@@ -564,12 +564,12 @@ func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.Heartbeat = time.Unix(m.parseInt64(value), 0)
+	s.Expire = time.Unix(m.parseInt64(value), 0)
 	return s, nil
 }
 
 func (m *kvMeta) ListSessions() ([]*Session, error) {
-	vals, err := m.scanValues(m.fmtKey("SH"), -1, nil)
+	vals, err := m.scanValues(m.fmtKey("SE"), -1, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -580,7 +580,7 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 			logger.Errorf("get session: %s", err)
 			continue
 		}
-		s.Heartbeat = time.Unix(m.parseInt64(v), 0)
+		s.Expire = time.Unix(m.parseInt64(v), 0)
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
@@ -878,7 +878,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := t.Length
 		newSpace = align4K(length) - align4K(t.Length)
-		if m.checkQuota(newSpace, 0) {
+		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		t.Length = length
@@ -1012,7 +1012,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 
 		tx.set(m.entryKey(parent, name), m.packEntry(_type, ino))
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if parent != TrashInode {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		tx.set(m.inodeKey(ino), m.marshal(attr))
 		if _type == TypeSymlink {
 			tx.set(m.symKey(ino), []byte(path))
@@ -1088,7 +1090,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
 		tx.dels(m.entryKey(parent, name))
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if !isTrash(parent) {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		if attr.Nlink > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			if trash > 0 {
@@ -1179,7 +1183,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
-		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		if !isTrash(parent) {
+			tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		}
 		tx.dels(m.entryKey(parent, name))
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
@@ -2217,7 +2223,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting: &m.fmt,
+		Setting: m.fmt,
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
@@ -2228,6 +2234,10 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
+	}
+	if dm.Setting.SecretKey != "" {
+		dm.Setting.SecretKey = "removed"
+		logger.Warnf("Secret key is removed for the sake of safety")
 	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {

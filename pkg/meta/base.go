@@ -47,7 +47,7 @@ type engine interface {
 
 	doNewSession(sinfo []byte) error
 	doRefreshSession()
-	doFindStaleSessions(ts int64, limit int) ([]uint64, error) // limit < 0 means all
+	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
 
 	doDeleteSustainedInode(sid uint64, inode Ino) error
@@ -80,7 +80,6 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
-	deleting     chan int
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 	newSpace     int64
@@ -100,13 +99,15 @@ func newBaseMeta(conf *Config) baseMeta {
 	if conf.Retries == 0 {
 		conf.Retries = 30
 	}
+	if conf.Heartbeat == 0 {
+		conf.Heartbeat = 12 * time.Second
+	}
 	return baseMeta{
 		conf:         conf,
 		root:         1,
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, conf.MaxDeletes),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -191,9 +192,13 @@ func (m *baseMeta) NewSession() error {
 	return nil
 }
 
+func (m *baseMeta) expireTime() int64 {
+	return time.Now().Add(5 * m.conf.Heartbeat).Unix()
+}
+
 func (m *baseMeta) refreshSession() {
 	for {
-		utils.SleepWithJitter(time.Minute)
+		utils.SleepWithJitter(m.conf.Heartbeat)
 		m.Lock()
 		if m.umounting {
 			m.Unlock()
@@ -207,7 +212,7 @@ func (m *baseMeta) refreshSession() {
 		if m.conf.NoBGJob {
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), 60); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64(m.conf.Heartbeat/time.Second)); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
 		} else if ok {
 			go m.CleanStaleSessions()
@@ -216,7 +221,7 @@ func (m *baseMeta) refreshSession() {
 }
 
 func (m *baseMeta) CleanStaleSessions() {
-	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute*-5).Unix(), 1000)
+	sids, err := m.en.doFindStaleSessions(1000)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
@@ -816,19 +821,12 @@ func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 }
 
 func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
-	if m.conf.MaxDeletes == 0 {
-		return
-	}
-	m.deleting <- 1
-	defer func() { <-m.deleting }()
-	err := m.newMsg(DeleteChunk, chunkid, size)
-	if err != nil {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
-	} else {
-		err := m.en.doDeleteSlice(chunkid, size)
-		if err != nil {
+	if err := m.newMsg(DeleteChunk, chunkid, size); err == nil {
+		if err = m.en.doDeleteSlice(chunkid, size); err != nil {
 			logger.Errorf("delete slice %d: %s", chunkid, err)
 		}
+	} else if !strings.Contains(err.Error(), "skip deleting") {
+		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	}
 }
 

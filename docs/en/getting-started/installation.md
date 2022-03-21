@@ -160,10 +160,10 @@ For users in China, in order to speed up the acquisition of Go modules, it is re
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
-- [Go](https://golang.org) 1.16+
+- [Go](https://golang.org) 1.17+
 - GCC 5.4+
 
-1. Cloning source code
+1. Clone source code
 
    ```shell
    git clone https://github.com/juicedata/juicefs.git
@@ -197,7 +197,7 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 ### Compiling on Windows
 
-Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.16+ and GCC 5.4+.
+Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.17+ and GCC 5.4+.
 
 Since GCC does not have a native Windows client, the version provided by a third party, either [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) or [Cygwin](https://www.cygwin.com/) is needed. Here is an example of using MinGW-w64.
 
@@ -243,7 +243,7 @@ Compiling a specific version of the client for Windows is essentially the same a
 
 - [mingw-w64](https://www.mingw-w64.org/downloads/)
 
-Just install the latest version provided by the Linux distribution package manager. For instance, Ubuntu 20.04+ can be installed as follows.
+The latest version can be installed from software repositories on many Linux distributions. Take an example of Ubuntu 20.04+: `mingw-w64` can be installed as follows.
 
 ```shell
 sudo apt install mingw-w64
@@ -290,7 +290,7 @@ For the file system that has been mounted using the old version of JuiceFS clien
 
 ## Uninstall
 
-The JuiceFS client only has one binary file, so it can be easily deleted once you find the location of the program. For example, to delete the client that is installed on the Linux system following this document, you only need to execute the following command to uninstall the client.
+The JuiceFS client has only one binary file, so it can be easily deleted once you find the location of the program. For example, to uninstall the client that is installed on the Linux system as described above, you only need to execute the following command:
 
 ```shell
 sudo rm /usr/local/bin/juicefs

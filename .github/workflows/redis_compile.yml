@@ -14,7 +14,7 @@ on:
       - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
-
+  workflow_dispatch:
 
 jobs:
   rediscompile:
@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.16.x'
+          go-version: '1.17.x'
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -54,6 +54,6 @@ jobs:
           make test
           stat /tmp/jfs
 
-      - name: Setup tmate session
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: lhotari/action-upterm@v1

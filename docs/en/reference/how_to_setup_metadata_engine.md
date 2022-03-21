@@ -276,6 +276,34 @@ sudo juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for stand-alone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 :::
 
+## BadgerDB
+
+[BadgerDB](https://github.com/dgraph-io/badger) is an embedded, persistent, and standalone Key-Value database developed in pure Go. The database files are stored locally in the specified directory.
+
+When using BadgerDB as the JuiceFS metadata storage engine, use `badger://` to specify the database path.
+
+### Create a file system
+
+You only need to create a file system for use, and there is no need to create a BadgerDB database in advance. 
+
+```shell
+juicefs format badger://$HOME/badger-data myjfs
+```
+
+This command creates `badger-data` as a database directory in the `home` directory of the current user, which is used as metadata storage for JuiceFS.
+
+### Mount a file system
+
+The database path needs to be specified when mounting the file system.
+
+```shell
+juicefs mount -d badger://$HOME/badger-data /mnt/jfs
+```
+
+:::note
+Since BadgerDB is a standalone database, it can only be used locally and does not support multi-host shared mounts. In addition, only one process access is allowed in BadgerDB, and `gc`, `fsck` operations cannot be performed when the file system is mounted.
+:::
+
 ## TiKV
 
 [TiKV](https://github.com/tikv/tikv) is a distributed transactional key-value database. It is originally developed by [PingCAP](https://pingcap.com) as the storage layer for their flagship product [TiDB](https://github.com/pingcap/tidb). Now TiKV is an independent open source project, and is also a granduated project of [CNCF](https://www.cncf.io/projects).
