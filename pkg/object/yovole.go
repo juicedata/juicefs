@@ -118,7 +118,11 @@ func (u *yovole) List(prefix, marker string, limit int64) ([]Object, error) {
 	}
 	objs := make([]Object, 0)
 	for _, item := range out.ObjectSummaries {
-		objs = append(objs, &obj{item.Key, item.Size, time.Unix(item.LastModified, 0), strings.HasSuffix(item.Key, "/")})
+		objs = append(objs, &obj{
+			key:   item.Key,
+			size:  item.Size,
+			mtime: time.Unix(item.LastModified, 0),
+			isDir: strings.HasSuffix(item.Key, "/")})
 	}
 	return objs, nil
 }

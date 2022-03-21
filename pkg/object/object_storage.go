@@ -35,6 +35,12 @@ var UserAgent = "JuiceFS"
 type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error
 }
+
+type Link interface {
+	Symlink(oldName, newName string) error
+	Readlink(name string) (string, error)
+}
+
 type File interface {
 	Object
 	Owner() string
@@ -69,7 +75,11 @@ func MarshalObject(o Object) map[string]interface{} {
 
 func UnmarshalObject(m map[string]interface{}) Object {
 	mtime := time.Unix(0, int64(m["mtime"].(float64)))
-	o := obj{m["key"].(string), int64(m["size"].(float64)), mtime, m["isdir"].(bool)}
+	o := obj{
+		key:   m["key"].(string),
+		size:  int64(m["size"].(float64)),
+		mtime: mtime,
+		isDir: m["isdir"].(bool)}
 	if _, ok := m["mode"]; ok {
 		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64))}
 		return &f
@@ -119,6 +129,14 @@ func (s DefaultObjectStorage) List(prefix, marker string, limit int64) ([]Object
 
 func (s DefaultObjectStorage) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
+}
+
+func (s DefaultObjectStorage) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s DefaultObjectStorage) Readlink(name string) (string, error) {
+	return "", notSupported
 }
 
 type Creator func(bucket, accessKey, secretKey string) (ObjectStorage, error)

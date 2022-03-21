@@ -140,10 +140,10 @@ func (c *mss) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, len(out.Contents))
 	for i, item := range out.Contents {
 		objs[i] = &obj{
-			item.Key,
-			item.Size,
-			item.LastModified,
-			strings.HasSuffix(item.Key, "/"),
+			key:   item.Key,
+			size:  item.Size,
+			mtime: item.LastModified,
+			isDir: strings.HasSuffix(item.Key, "/"),
 		}
 	}
 	return objs, nil

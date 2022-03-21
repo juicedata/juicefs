@@ -96,10 +96,10 @@ func (g *gs) Head(key string) (Object, error) {
 	}
 
 	return &obj{
-		key,
-		attrs.Size,
-		attrs.Updated,
-		strings.HasSuffix(key, "/"),
+		key:   key,
+		size:  attrs.Size,
+		mtime: attrs.Updated,
+		isDir: strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -151,7 +151,11 @@ func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		item := entries[i]
-		objs[i] = &obj{item.Name, item.Size, item.Updated, strings.HasSuffix(item.Name, "/")}
+		objs[i] = &obj{
+			key:   item.Name,
+			size:  item.Size,
+			mtime: item.Updated,
+			isDir: strings.HasSuffix(item.Name, "/")}
 	}
 	return objs, nil
 }

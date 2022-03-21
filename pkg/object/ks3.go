@@ -40,6 +40,14 @@ type ks3 struct {
 	ses    *session.Session
 }
 
+func (s *ks3) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s *ks3) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 func (s *ks3) String() string {
 	return fmt.Sprintf("ks3://%s/", s.bucket)
 }
@@ -63,10 +71,10 @@ func (s *ks3) Head(key string) (Object, error) {
 	}
 
 	return &obj{
-		key,
-		*r.ContentLength,
-		*r.LastModified,
-		strings.HasSuffix(key, "/"),
+		key:   key,
+		size:  *r.ContentLength,
+		mtime: *r.LastModified,
+		isDir: strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -144,7 +152,11 @@ func (s *ks3) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &obj{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
+		objs[i] = &obj{
+			key:   *o.Key,
+			size:  *o.Size,
+			mtime: *o.LastModified,
+			isDir: strings.HasSuffix(*o.Key, "/")}
 	}
 	return objs, nil
 }

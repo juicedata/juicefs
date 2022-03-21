@@ -41,6 +41,22 @@ type filestore struct {
 	root string
 }
 
+func (d *filestore) Symlink(oldName, newName string) error {
+	p := d.path(newName)
+	if _, err := os.Stat(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0755)); err != nil {
+			return err
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return os.Symlink(oldName, p)
+}
+
+func (d *filestore) Readlink(name string) (string, error) {
+	return os.Readlink(d.path(name))
+}
+
 func (d *filestore) String() string {
 	if runtime.GOOS == "windows" {
 		return "file:///" + d.root
@@ -67,10 +83,10 @@ func (d *filestore) Head(key string) (Object, error) {
 		size = 0
 	}
 	return &obj{
-		key,
-		size,
-		fi.ModTime(),
-		fi.IsDir(),
+		key:   key,
+		size:  size,
+		mtime: fi.ModTime(),
+		isDir: fi.IsDir(),
 	}, nil
 }
 
@@ -316,12 +332,18 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				return nil
 			}
 			owner, group := getOwnerGroup(info)
+			var lInfo os.FileInfo
+			if lInfo, err = os.Lstat(path); err != nil {
+				logger.Errorf("get symlink stat failed: %s (%s)", path, err)
+				return err
+			}
 			f := &file{
 				obj{
-					key,
-					info.Size(),
-					info.ModTime(),
-					info.IsDir(),
+					key:       key,
+					size:      info.Size(),
+					mtime:     info.ModTime(),
+					isDir:     info.IsDir(),
+					isSymlink: lInfo.Mode()&os.ModeSymlink != 0,
 				},
 				owner,
 				group,

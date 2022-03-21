@@ -60,10 +60,10 @@ func (c *b2client) Head(key string) (Object, error) {
 		return nil, err
 	}
 	return &obj{
-		f.Name,
-		f.ContentLength,
-		time.Unix(f.UploadTimestamp/1000, 0),
-		strings.HasSuffix(f.Name, "/"),
+		key:   f.Name,
+		size:  f.ContentLength,
+		mtime: time.Unix(f.UploadTimestamp/1000, 0),
+		isDir: strings.HasSuffix(f.Name, "/"),
 	}, nil
 }
 
@@ -124,10 +124,10 @@ func (c *b2client) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		f := resp.Files[i]
 		objs[i] = &obj{
-			f.Name,
-			f.ContentLength,
-			time.Unix(f.UploadTimestamp/1000, 0),
-			strings.HasSuffix(f.Name, "/"),
+			key:   f.Name,
+			size:  f.ContentLength,
+			mtime: time.Unix(f.UploadTimestamp/1000, 0),
+			isDir: strings.HasSuffix(f.Name, "/"),
 		}
 	}
 	c.nextMarker = resp.NextFileName

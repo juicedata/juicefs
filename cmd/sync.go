@@ -137,6 +137,11 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 				Name:  "include",
 				Usage: "don't exclude Key matching PATTERN",
 			},
+			&cli.BoolFlag{
+				Name:    "links",
+				Aliases: []string{"l"},
+				Usage:   "copy symlinks as symlinks",
+			},
 			&cli.StringFlag{
 				Name:  "manager",
 				Usage: "manager address",

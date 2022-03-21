@@ -67,6 +67,14 @@ type sftpStore struct {
 	pool   []*conn
 }
 
+func (f *sftpStore) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (f *sftpStore) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 // Open a new connection to the SFTP server.
 func (f *sftpStore) sftpConnection() (c *conn, err error) {
 	c = &conn{
@@ -315,7 +323,11 @@ func sortFIsByName(fis []os.FileInfo) {
 func fileInfo(key string, fi os.FileInfo) Object {
 	owner, group := getOwnerGroup(fi)
 	f := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir()},
+		obj{
+			key:   key,
+			size:  fi.Size(),
+			mtime: fi.ModTime(),
+			isDir: fi.IsDir()},
 		owner,
 		group,
 		fi.Mode(),

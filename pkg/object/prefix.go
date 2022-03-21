@@ -32,6 +32,13 @@ type withPrefix struct {
 func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
 }
+func (s *withPrefix) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s *withPrefix) Readlink(name string) (string, error) {
+	return "", notSupported
+}
 
 func (p *withPrefix) String() string {
 	return fmt.Sprintf("%s%s", p.os, p.prefix)

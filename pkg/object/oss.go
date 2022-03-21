@@ -47,6 +47,14 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s/", o.bucket.BucketName)
 }
 
+func (s *ossClient) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s *ossClient) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 func (o *ossClient) Create() error {
 	err := o.bucket.Client.CreateBucket(o.bucket.BucketName)
 	if err != nil && isExists(err) {
@@ -81,10 +89,10 @@ func (o *ossClient) Head(key string) (Object, error) {
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
 	size, _ := strconv.ParseInt(contentLength, 10, 64)
 	return &obj{
-		key,
-		size,
-		mtime,
-		strings.HasSuffix(key, "/"),
+		key:   key,
+		size:  size,
+		mtime: mtime,
+		isDir: strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -138,7 +146,11 @@ func (o *ossClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := result.Objects[i]
-		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{
+			key:   o.Key,
+			size:  o.Size,
+			mtime: o.LastModified,
+			isDir: strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }

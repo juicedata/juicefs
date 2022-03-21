@@ -17,6 +17,7 @@ package sync
 
 import (
 	"bytes"
+	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
@@ -322,5 +323,60 @@ func TestAlignPatternAndKey(t *testing.T) {
 				t.Errorf("alignPatternAndKey() gotKey = %v, want %v", gotKey, tt.wantKey)
 			}
 		})
+	}
+}
+
+func TestSyncLink(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
+
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	a.Put("a1", bytes.NewReader([]byte("test")))
+	a.Put("d1/a.txt", bytes.NewReader([]byte("test")))
+	a.Symlink("/tmp/a/a1", "l1")
+	a.Symlink("./../a1", "d1/l2")
+	a.Symlink("./../notExist", "l3")
+
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+
+	if err := Sync(a, b, &Config{
+		Threads: 50,
+		Update:  true,
+		Perms:   true,
+		Links:   true,
+		Quiet:   true,
+	}); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+
+	l1, err := b.Readlink("l1")
+	if err != nil || l1 != "/tmp/a/a1" {
+		t.Fatalf("readlink: %s", err)
+	}
+	content, err := b.Get("l1", 0, -1)
+	if err != nil {
+		t.Fatalf("get content failed: %s", err)
+	}
+	if c, err := ioutil.ReadAll(content); err != nil || string(c) != "test" {
+		t.Fatalf("read content failed: err %s content %s", err, string(c))
+	}
+
+	l2, err := b.Readlink("d1/l2")
+	if err != nil || l2 != "./../a1" {
+		t.Fatalf("readlink: %s", err)
+	}
+	content, err = b.Get("d1/l2", 0, -1)
+	if err != nil {
+		t.Fatalf("content failed: %s", err)
+	}
+	if c, err := ioutil.ReadAll(content); err != nil || string(c) != "test" {
+		t.Fatalf("read content failed: err %s content %s", err, string(c))
+	}
+
+	l3, err := b.Readlink("l3")
+	if err != nil || l3 != "./../notExist" {
+		t.Fatalf("readlink: %s", err)
 	}
 }

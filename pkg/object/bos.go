@@ -59,10 +59,10 @@ func (q *bosclient) Head(key string) (Object, error) {
 	}
 	mtime, _ := time.Parse(time.RFC1123, r.LastModified)
 	return &obj{
-		key,
-		r.ContentLength,
-		mtime,
-		strings.HasSuffix(key, "/"),
+		key:   key,
+		size:  r.ContentLength,
+		mtime: mtime,
+		isDir: strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -118,7 +118,11 @@ func (q *bosclient) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		k := out.Contents[i]
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
-		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/")}
+		objs[i] = &obj{
+			key:   k.Key,
+			size:  int64(k.Size),
+			mtime: mod,
+			isDir: strings.HasSuffix(k.Key, "/")}
 	}
 	return objs, nil
 }

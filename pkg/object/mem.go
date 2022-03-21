@@ -61,10 +61,10 @@ func (m *memStore) Head(key string) (Object, error) {
 	}
 	f := &file{
 		obj{
-			key,
-			int64(len(o.data)),
-			o.mtime,
-			strings.HasSuffix(key, "/"),
+			key:   key,
+			size:  int64(len(o.data)),
+			mtime: o.mtime,
+			isDir: strings.HasSuffix(key, "/"),
 		},
 		o.owner,
 		o.group,
@@ -135,10 +135,10 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]Object, error) {
 			o := m.objects[k]
 			f := &file{
 				obj{
-					k,
-					int64(len(o.data)),
-					o.mtime,
-					strings.HasSuffix(k, "/"),
+					key:   k,
+					size:  int64(len(o.data)),
+					mtime: o.mtime,
+					isDir: strings.HasSuffix(k, "/"),
 				},
 				o.owner,
 				o.group,

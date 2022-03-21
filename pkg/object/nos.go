@@ -59,10 +59,10 @@ func (s *nos) Head(key string) (Object, error) {
 	}
 	mtime, _ := time.Parse(time.RFC1123, lastModified)
 	return &obj{
-		key,
-		r.ContentLength,
-		mtime,
-		strings.HasSuffix(key, "/"),
+		key:   key,
+		size:  r.ContentLength,
+		mtime: mtime,
+		isDir: strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -143,7 +143,11 @@ func (s *nos) List(prefix, marker string, limit int64) ([]Object, error) {
 		if err == nil {
 			mtime = mtime.Add(-8 * time.Hour)
 		}
-		objs[i] = &obj{o.Key, o.Size, mtime, strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{
+			key:   o.Key,
+			size:  o.Size,
+			mtime: mtime,
+			isDir: strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }

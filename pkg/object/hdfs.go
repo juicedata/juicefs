@@ -45,6 +45,14 @@ type hdfsclient struct {
 	c    *hdfs.Client
 }
 
+func (h *hdfsclient) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (h *hdfsclient) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 func (h *hdfsclient) String() string {
 	return fmt.Sprintf("hdfs://%s/", h.addr)
 }
@@ -62,10 +70,10 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 	hinfo := info.(*hdfs.FileInfo)
 	f := &file{
 		obj{
-			key,
-			info.Size(),
-			info.ModTime(),
-			info.IsDir(),
+			key:   key,
+			size:  info.Size(),
+			mtime: info.ModTime(),
+			isDir: info.IsDir(),
 		},
 		hinfo.Owner(),
 		hinfo.OwnerGroup(),
@@ -261,10 +269,10 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 			hinfo := info.(*hdfs.FileInfo)
 			f := &file{
 				obj{
-					key,
-					info.Size(),
-					info.ModTime(),
-					info.IsDir(),
+					key:   key,
+					size:  info.Size(),
+					mtime: info.ModTime(),
+					isDir: info.IsDir(),
 				},
 				hinfo.Owner(),
 				hinfo.OwnerGroup(),

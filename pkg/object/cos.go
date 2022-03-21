@@ -40,6 +40,14 @@ type COS struct {
 	endpoint string
 }
 
+func (s *COS) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s *COS) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 func (c *COS) String() string {
 	return fmt.Sprintf("cos://%s/", strings.Split(c.endpoint, ".")[0])
 }
@@ -70,7 +78,11 @@ func (c *COS) Head(key string) (Object, error) {
 		mtime, _ = time.Parse(time.RFC1123, val[0])
 	}
 
-	return &obj{key, size, mtime, strings.HasSuffix(key, "/")}, nil
+	return &obj{
+		key:   key,
+		size:  size,
+		mtime: mtime,
+		isDir: strings.HasSuffix(key, "/")}, nil
 }
 
 func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -136,7 +148,11 @@ func (c *COS) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		t, _ := time.Parse(time.RFC3339, o.LastModified)
-		objs[i] = &obj{o.Key, int64(o.Size), t, strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{
+			key:   o.Key,
+			size:  int64(o.Size),
+			mtime: t,
+			isDir: strings.HasSuffix(o.Key, "/")}
 	}
 	return objs, nil
 }

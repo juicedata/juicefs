@@ -38,6 +38,14 @@ type scsClient struct {
 	marker string
 }
 
+func (s *scsClient) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s *scsClient) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 func (s *scsClient) String() string {
 	return fmt.Sprintf("scs://%s/", s.bucket)
 }

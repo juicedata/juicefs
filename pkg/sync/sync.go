@@ -513,7 +513,15 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				logger.Infof("Will copy %s (%d bytes)", obj.Key(), obj.Size())
 				break
 			}
-			err := copyData(src, dst, key, obj.Size())
+			var err error
+			if config.Links && obj.IsSymlink() {
+				err = copyLink(src, dst, key)
+				if err != nil {
+					logger.Errorf("copy link failed: %s", err)
+				}
+			} else {
+				err = copyData(src, dst, key, obj.Size())
+			}
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
 				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
@@ -536,6 +544,14 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 		}
 		handled.Increment()
+	}
+}
+
+func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
+	if p, err := src.Readlink(key); err != nil {
+		return err
+	} else {
+		return dst.Symlink(p, key)
 	}
 }
 

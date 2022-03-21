@@ -38,6 +38,14 @@ type qingstor struct {
 	bucket *qs.Bucket
 }
 
+func (s *qingstor) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s *qingstor) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 func (q *qingstor) String() string {
 	return fmt.Sprintf("qingstor://%s/", *q.bucket.Properties.BucketName)
 }
@@ -57,10 +65,10 @@ func (q *qingstor) Head(key string) (Object, error) {
 	}
 
 	return &obj{
-		key,
-		*r.ContentLength,
-		*r.LastModified,
-		strings.HasSuffix(key, "/"),
+		key:   key,
+		size:  *r.ContentLength,
+		mtime: *r.LastModified,
+		isDir: strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -177,10 +185,10 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		k := out.Keys[i]
 		objs[i] = &obj{
-			*k.Key,
-			*k.Size,
-			time.Unix(int64(*k.Modified), 0),
-			strings.HasSuffix(*k.Key, "/"),
+			key:   *k.Key,
+			size:  *k.Size,
+			mtime: time.Unix(int64(*k.Modified), 0),
+			isDir: strings.HasSuffix(*k.Key, "/"),
 		}
 	}
 	return objs, nil

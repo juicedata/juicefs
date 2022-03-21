@@ -39,6 +39,14 @@ type ibmcos struct {
 	s3     *s3.S3
 }
 
+func (s *ibmcos) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s *ibmcos) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 func (s *ibmcos) String() string {
 	return fmt.Sprintf("ibmcos://%s/", s.bucket)
 }
@@ -112,10 +120,10 @@ func (s *ibmcos) Head(key string) (Object, error) {
 		return nil, err
 	}
 	return &obj{
-		key,
-		*r.ContentLength,
-		*r.LastModified,
-		strings.HasSuffix(key, "/"),
+		key:   key,
+		size:  *r.ContentLength,
+		mtime: *r.LastModified,
+		isDir: strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -143,7 +151,11 @@ func (s *ibmcos) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &obj{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
+		objs[i] = &obj{
+			key:   *o.Key,
+			size:  *o.Size,
+			mtime: *o.LastModified,
+			isDir: strings.HasSuffix(*o.Key, "/")}
 	}
 	return objs, nil
 }

@@ -56,6 +56,14 @@ type s3client struct {
 	ses    *session.Session
 }
 
+func (s *s3client) Symlink(oldName, newName string) error {
+	return notSupported
+}
+
+func (s *s3client) Readlink(name string) (string, error) {
+	return "", notSupported
+}
+
 func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }
@@ -86,10 +94,10 @@ func (s *s3client) Head(key string) (Object, error) {
 		return nil, err
 	}
 	return &obj{
-		key,
-		*r.ContentLength,
-		*r.LastModified,
-		strings.HasSuffix(key, "/"),
+		key:   key,
+		size:  *r.ContentLength,
+		mtime: *r.LastModified,
+		isDir: strings.HasSuffix(key, "/"),
 	}, nil
 }
 
@@ -177,10 +185,10 @@ func (s *s3client) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		objs[i] = &obj{
-			*o.Key,
-			*o.Size,
-			*o.LastModified,
-			strings.HasSuffix(*o.Key, "/"),
+			key:   *o.Key,
+			size:  *o.Size,
+			mtime: *o.LastModified,
+			isDir: strings.HasSuffix(*o.Key, "/"),
 		}
 	}
 	return objs, nil
