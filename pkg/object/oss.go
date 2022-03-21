@@ -47,14 +47,6 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s/", o.bucket.BucketName)
 }
 
-func (s *ossClient) Symlink(oldName, newName string) error {
-	return notSupported
-}
-
-func (s *ossClient) Readlink(name string) (string, error) {
-	return "", notSupported
-}
-
 func (o *ossClient) Create() error {
 	err := o.bucket.Client.CreateBucket(o.bucket.BucketName)
 	if err != nil && isExists(err) {

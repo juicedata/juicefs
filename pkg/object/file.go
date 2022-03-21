@@ -339,15 +339,15 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 			}
 			f := &file{
 				obj{
-					key:       key,
-					size:      info.Size(),
-					mtime:     info.ModTime(),
-					isDir:     info.IsDir(),
-					isSymlink: lInfo.Mode()&os.ModeSymlink != 0,
+					key:   key,
+					size:  info.Size(),
+					mtime: info.ModTime(),
+					isDir: info.IsDir(),
 				},
 				owner,
 				group,
 				info.Mode(),
+				lInfo.Mode()&os.ModeSymlink != 0,
 			}
 			if info.IsDir() {
 				f.size = 0

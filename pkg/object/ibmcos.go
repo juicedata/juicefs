@@ -39,14 +39,6 @@ type ibmcos struct {
 	s3     *s3.S3
 }
 
-func (s *ibmcos) Symlink(oldName, newName string) error {
-	return notSupported
-}
-
-func (s *ibmcos) Readlink(name string) (string, error) {
-	return "", notSupported
-}
-
 func (s *ibmcos) String() string {
 	return fmt.Sprintf("ibmcos://%s/", s.bucket)
 }

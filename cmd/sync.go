@@ -251,6 +251,10 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	}
 	name := strings.ToLower(u.Scheme)
 	endpoint := u.Host
+	if conf.Links && name != "file" {
+		logger.Warnf("storage %s does not support symlink, ignore it", uri)
+		conf.Links = false
+	}
 
 	isS3PathTypeUrl := isS3PathType(endpoint)
 

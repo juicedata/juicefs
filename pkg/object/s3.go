@@ -56,14 +56,6 @@ type s3client struct {
 	ses    *session.Session
 }
 
-func (s *s3client) Symlink(oldName, newName string) error {
-	return notSupported
-}
-
-func (s *s3client) Readlink(name string) (string, error) {
-	return "", notSupported
-}
-
 func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }

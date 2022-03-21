@@ -69,6 +69,7 @@ func (m *memStore) Head(key string) (Object, error) {
 		o.owner,
 		o.group,
 		o.mode,
+		false,
 	}
 	return f, nil
 }
@@ -143,6 +144,7 @@ func (m *memStore) List(prefix, marker string, limit int64) ([]Object, error) {
 				o.owner,
 				o.group,
 				o.mode,
+				false,
 			}
 			objs = append(objs, f)
 		}

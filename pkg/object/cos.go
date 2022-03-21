@@ -40,14 +40,6 @@ type COS struct {
 	endpoint string
 }
 
-func (s *COS) Symlink(oldName, newName string) error {
-	return notSupported
-}
-
-func (s *COS) Readlink(name string) (string, error) {
-	return "", notSupported
-}
-
 func (c *COS) String() string {
 	return fmt.Sprintf("cos://%s/", strings.Split(c.endpoint, ".")[0])
 }

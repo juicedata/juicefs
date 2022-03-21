@@ -548,10 +548,11 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 }
 
 func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
-	if p, err := src.Readlink(key); err != nil {
+	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
 		return err
 	} else {
-		return dst.Symlink(p, key)
+		// TODO: use relative path based on option
+		return dst.(object.SupportSymlink).Symlink(p, key)
 	}
 }
 

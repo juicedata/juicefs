@@ -40,14 +40,6 @@ type ks3 struct {
 	ses    *session.Session
 }
 
-func (s *ks3) Symlink(oldName, newName string) error {
-	return notSupported
-}
-
-func (s *ks3) Readlink(name string) (string, error) {
-	return "", notSupported
-}
-
 func (s *ks3) String() string {
 	return fmt.Sprintf("ks3://%s/", s.bucket)
 }

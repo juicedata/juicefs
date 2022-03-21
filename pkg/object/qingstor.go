@@ -38,14 +38,6 @@ type qingstor struct {
 	bucket *qs.Bucket
 }
 
-func (s *qingstor) Symlink(oldName, newName string) error {
-	return notSupported
-}
-
-func (s *qingstor) Readlink(name string) (string, error) {
-	return "", notSupported
-}
-
 func (q *qingstor) String() string {
 	return fmt.Sprintf("qingstor://%s/", *q.bucket.Properties.BucketName)
 }

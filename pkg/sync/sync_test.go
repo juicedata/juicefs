@@ -339,11 +339,13 @@ func TestSyncLink(t *testing.T) {
 	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
 	a.Put("a1", bytes.NewReader([]byte("test")))
 	a.Put("d1/a.txt", bytes.NewReader([]byte("test")))
-	a.Symlink("/tmp/a/a1", "l1")
-	a.Symlink("./../a1", "d1/l2")
-	a.Symlink("./../notExist", "l3")
+	as := a.(object.SupportSymlink)
+	as.Symlink("/tmp/a/a1", "l1")
+	as.Symlink("./../a1", "d1/l2")
+	as.Symlink("./../notExist", "l3")
 
 	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	bs := b.(object.SupportSymlink)
 
 	if err := Sync(a, b, &Config{
 		Threads: 50,
@@ -355,7 +357,7 @@ func TestSyncLink(t *testing.T) {
 		t.Fatalf("sync: %s", err)
 	}
 
-	l1, err := b.Readlink("l1")
+	l1, err := bs.Readlink("l1")
 	if err != nil || l1 != "/tmp/a/a1" {
 		t.Fatalf("readlink: %s", err)
 	}
@@ -367,7 +369,7 @@ func TestSyncLink(t *testing.T) {
 		t.Fatalf("read content failed: err %s content %s", err, string(c))
 	}
 
-	l2, err := b.Readlink("d1/l2")
+	l2, err := bs.Readlink("d1/l2")
 	if err != nil || l2 != "./../a1" {
 		t.Fatalf("readlink: %s", err)
 	}
@@ -379,7 +381,7 @@ func TestSyncLink(t *testing.T) {
 		t.Fatalf("read content failed: err %s content %s", err, string(c))
 	}
 
-	l3, err := b.Readlink("l3")
+	l3, err := bs.Readlink("l3")
 	if err != nil || l3 != "./../notExist" {
 		t.Fatalf("readlink: %s", err)
 	}

@@ -43,13 +43,6 @@ type obsClient struct {
 	c      *obs.ObsClient
 }
 
-func (s *obsClient) Symlink(oldName, newName string) error {
-	return notSupported
-}
-
-func (s *obsClient) Readlink(name string) (string, error) {
-	return "", notSupported
-}
 func (s *obsClient) String() string {
 	return fmt.Sprintf("obs://%s/", s.bucket)
 }

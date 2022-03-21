@@ -68,11 +68,21 @@ type sftpStore struct {
 }
 
 func (f *sftpStore) Symlink(oldName, newName string) error {
-	return notSupported
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return err
+	}
+	defer f.putSftpConnection(&c, err)
+	return c.sftpClient.Symlink(newName, oldName)
 }
 
 func (f *sftpStore) Readlink(name string) (string, error) {
-	return "", notSupported
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return "", err
+	}
+	defer f.putSftpConnection(&c, err)
+	return c.sftpClient.ReadLink(name)
 }
 
 // Open a new connection to the SFTP server.
@@ -331,6 +341,7 @@ func fileInfo(key string, fi os.FileInfo) Object {
 		owner,
 		group,
 		fi.Mode(),
+		!fi.Mode().IsDir() && !fi.Mode().IsRegular(),
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {

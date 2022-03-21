@@ -36,23 +36,33 @@ type MtimeChanger interface {
 	Chtimes(path string, mtime time.Time) error
 }
 
+type SupportSymlink interface {
+	// Symlink create a symbolic link
+	Symlink(oldName, newName string) error
+	// Readlink read a symbolic link
+	Readlink(name string) (string, error)
+}
+
 type File interface {
 	Object
 	Owner() string
 	Group() string
 	Mode() os.FileMode
+	IsSymlink() bool
 }
 
 type file struct {
 	obj
-	owner string
-	group string
-	mode  os.FileMode
+	owner     string
+	group     string
+	mode      os.FileMode
+	isSymlink bool
 }
 
 func (f *file) Owner() string     { return f.owner }
 func (f *file) Group() string     { return f.group }
 func (f *file) Mode() os.FileMode { return f.mode }
+func (f *file) IsSymlink() bool   { return f.isSymlink }
 
 func MarshalObject(o Object) map[string]interface{} {
 	m := make(map[string]interface{})
@@ -76,7 +86,7 @@ func UnmarshalObject(m map[string]interface{}) Object {
 		mtime: mtime,
 		isDir: m["isdir"].(bool)}
 	if _, ok := m["mode"]; ok {
-		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64))}
+		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), false}
 		return &f
 	}
 	return &o
@@ -124,14 +134,6 @@ func (s DefaultObjectStorage) List(prefix, marker string, limit int64) ([]Object
 
 func (s DefaultObjectStorage) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
-}
-
-func (s DefaultObjectStorage) Symlink(oldName, newName string) error {
-	return notSupported
-}
-
-func (s DefaultObjectStorage) Readlink(name string) (string, error) {
-	return "", notSupported
 }
 
 type Creator func(bucket, accessKey, secretKey string) (ObjectStorage, error)
