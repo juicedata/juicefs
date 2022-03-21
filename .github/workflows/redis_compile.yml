@@ -54,6 +54,17 @@ jobs:
           make test
           stat /tmp/jfs
 
+      - name: Send Slack Notification
+        id: slack
+        uses: slackapi/slack-github-action@v1.18.0
+        with:
+          channel-id: 'C031VHP348P'
+          slack-message: "You have a Failure Test : ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
+
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
+
+  
