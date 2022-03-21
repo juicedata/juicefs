@@ -55,6 +55,7 @@ jobs:
           stat /tmp/jfs
 
       - name: Send Slack Notification
+        if: ${{ failure() }}
         id: slack
         uses: slackapi/slack-github-action@v1.18.0
         with:
@@ -64,7 +65,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
 
       - name: Setup upterm session
-        if: ${{ failure() }}
+        if: ${{ steps.slack.outcome == "success" }}
         uses: lhotari/action-upterm@v1
 
   
