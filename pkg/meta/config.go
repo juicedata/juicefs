@@ -40,7 +40,6 @@ type Config struct {
 	Heartbeat   time.Duration
 	MountPoint  string
 	Subdir      string
-	MaxDeletes  int
 }
 
 type Format struct {
