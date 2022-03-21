@@ -171,6 +171,10 @@ func TestSync(t *testing.T) {
 
 // nolint:errcheck
 func TestSyncIncludeAndExclude(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
 	config := &Config{
 		Start:     "",
 		End:       "",
