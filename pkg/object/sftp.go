@@ -73,7 +73,7 @@ func (f *sftpStore) Symlink(oldName, newName string) error {
 		return err
 	}
 	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.Symlink(newName, oldName)
+	return c.sftpClient.Symlink(oldName, newName)
 }
 
 func (f *sftpStore) Readlink(name string) (string, error) {
