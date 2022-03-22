@@ -109,6 +109,11 @@ var (
 	})
 )
 
+type pendingItem struct {
+	key   string
+	fpath string
+}
+
 // chunk for read only
 type rChunk struct {
 	id     uint64
@@ -464,51 +469,25 @@ func (c *wChunk) syncUpload(key string, block *Page) {
 }
 
 func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
+	select {
+	case c.store.currentUpload <- true:
+	default:
+		// release the memory and leave it to background uploader
+		block.Release()
+		c.store.pendingMutex.Lock()
+		c.store.pendingKeys[key] = time.Now()
+		c.store.pendingMutex.Unlock()
+		select {
+		case c.store.pendingCh <- pendingItem{key, stagingPath}:
+		default:
+		}
+		return
+	}
 	blockSize := len(block.Data)
 	defer c.store.bcache.uploaded(key, blockSize)
 	defer func() {
 		<-c.store.currentUpload
 	}()
-	select {
-	case c.store.currentUpload <- true:
-	default:
-		// release the memory and wait
-		block.Release()
-		c.store.pendingMutex.Lock()
-		c.store.pendingKeys[key] = time.Now()
-		c.store.pendingMutex.Unlock()
-		defer func() {
-			c.store.pendingMutex.Lock()
-			delete(c.store.pendingKeys, key)
-			c.store.pendingMutex.Unlock()
-		}()
-
-		logger.Debugf("wait to upload %s", key)
-		c.store.currentUpload <- true
-
-		// load from disk
-		f, err := os.Open(stagingPath)
-		if err != nil {
-			c.store.pendingMutex.Lock()
-			_, ok := c.store.pendingKeys[key]
-			c.store.pendingMutex.Unlock()
-			if ok {
-				logger.Errorf("read stagging file %s: %s", stagingPath, err)
-			} else {
-				logger.Debugf("%s is not needed, drop it", key)
-			}
-			return
-		}
-
-		block = NewOffPage(blockSize)
-		_, err = io.ReadFull(f, block.Data)
-		_ = f.Close()
-		if err != nil {
-			logger.Errorf("read stagging file %s: %s", stagingPath, err)
-			block.Release()
-			return
-		}
-	}
 	bufSize := c.store.compressor.CompressBound(blockSize)
 	var buf *Page
 	if bufSize > blockSize {
@@ -572,7 +551,7 @@ func (c *wChunk) upload(indx int) {
 			} else {
 				c.errors <- nil
 				if c.store.conf.UploadDelay == 0 {
-					go c.asyncUpload(key, block, stagingPath)
+					c.asyncUpload(key, block, stagingPath)
 				} else {
 					block.Release()
 					c.store.pendingMutex.Lock()
@@ -674,6 +653,7 @@ type cachedStore struct {
 	group         *Controller
 	currentUpload chan bool
 	currentDelete chan struct{}
+	pendingCh     chan pendingItem
 	pendingKeys   map[string]time.Time
 	pendingMutex  sync.Mutex
 	compressor    compress.Compressor
@@ -772,6 +752,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 		currentDelete: make(chan struct{}, config.MaxDeletes),
 		compressor:    compressor,
 		seekable:      compressor.CompressBound(0) == 0,
+		pendingCh:     make(chan pendingItem, 100*config.MaxUpload),
 		pendingKeys:   make(map[string]time.Time),
 		group:         &Controller{},
 	}
@@ -782,7 +763,9 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 	if config.DownloadLimit > 0 {
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
-	store.bcache = newCacheManager(&config, store.uploadStagingFile)
+	store.bcache = newCacheManager(&config, func(key, fpath string) {
+		store.pendingCh <- pendingItem{key, fpath}
+	})
 	if config.CacheSize == 0 {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
 	}
@@ -796,15 +779,20 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 		_ = store.load(key, p, true, true)
 	})
 	initMetrics(store, registerer)
-	if store.conf.CacheDir != "memory" && store.conf.Writeback && store.conf.UploadDelay > 0 {
-		logger.Infof("delay uploading by %s", store.conf.UploadDelay)
+	if store.conf.CacheDir != "memory" && store.conf.Writeback {
+		for i := 0; i < store.conf.MaxUpload; i++ {
+			go store.uploader()
+		}
+		interval := time.Minute
+		if d := store.conf.UploadDelay; d > 0 {
+			logger.Infof("delay uploading by %s", d)
+			if d < time.Minute {
+				interval = d
+			}
+		}
 		go func() {
 			for {
-				if store.conf.UploadDelay > time.Minute {
-					time.Sleep(time.Minute)
-				} else {
-					time.Sleep(store.conf.UploadDelay)
-				}
+				time.Sleep(interval)
 				store.uploadDelayedStaging()
 			}
 		}()
@@ -863,79 +851,86 @@ func parseObjOrigSize(key string) int {
 
 func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	store.currentUpload <- true
-	go func() {
-		defer func() {
-			<-store.currentUpload
-		}()
-
-		f, err := os.Open(stagingPath)
-		if err != nil {
-			logger.Errorf("open %s: %s", stagingPath, err)
-			return
-		}
-		blockSize := parseObjOrigSize(key)
-		block := NewOffPage(blockSize)
-		_, err = io.ReadFull(f, block.Data)
-		_ = f.Close()
-		if err != nil {
-			block.Release()
-			logger.Errorf("read %s: %s", stagingPath, err)
-			return
-		}
-		buf := NewOffPage(store.compressor.CompressBound(blockSize))
-		defer buf.Release()
-		n, err := store.compressor.Compress(buf.Data, block.Data)
-		block.Release()
-		if err != nil {
-			logger.Errorf("compress chunk %s: %s", stagingPath, err)
-			return
-		}
-		compressed := buf.Data[:n]
-		try := 0
-		for {
-			if store.upLimit != nil {
-				store.upLimit.Wait(int64(len(compressed)))
-			}
-			st := time.Now()
-			err := store.storage.Put(key, bytes.NewReader(compressed))
-			used := time.Since(st)
-			logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
-			if used > SlowRequest {
-				logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
-			}
-			objectDataBytes.WithLabelValues("PUT").Add(float64(len(compressed)))
-			objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
-			if err == nil {
-				break
-			} else {
-				objectReqErrors.Add(1)
-			}
-			logger.Warnf("upload %s: %s (try %d)", key, err, try)
-			try++
-			time.Sleep(time.Second * time.Duration(try*try))
-		}
-		store.bcache.uploaded(key, blockSize)
-		store.pendingMutex.Lock()
-		delete(store.pendingKeys, key)
-		store.pendingMutex.Unlock()
-		if err = os.Remove(stagingPath); err == nil {
-			stageBlocks.Sub(1)
-			stageBlockBytes.Sub(float64(blockSize))
-		}
+	defer func() {
+		<-store.currentUpload
 	}()
+
+	f, err := os.Open(stagingPath)
+	if err != nil {
+		logger.Errorf("open %s: %s", stagingPath, err)
+		return
+	}
+	blockSize := parseObjOrigSize(key)
+	block := NewOffPage(blockSize)
+	_, err = io.ReadFull(f, block.Data)
+	_ = f.Close()
+	if err != nil {
+		block.Release()
+		logger.Errorf("read %s: %s", stagingPath, err)
+		return
+	}
+	buf := NewOffPage(store.compressor.CompressBound(blockSize))
+	defer buf.Release()
+	n, err := store.compressor.Compress(buf.Data, block.Data)
+	block.Release()
+	if err != nil {
+		logger.Errorf("compress chunk %s: %s", stagingPath, err)
+		return
+	}
+	compressed := buf.Data[:n]
+	try := 0
+	for {
+		if store.upLimit != nil {
+			store.upLimit.Wait(int64(len(compressed)))
+		}
+		st := time.Now()
+		err := store.storage.Put(key, bytes.NewReader(compressed))
+		used := time.Since(st)
+		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
+		if used > SlowRequest {
+			logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
+		}
+		objectDataBytes.WithLabelValues("PUT").Add(float64(len(compressed)))
+		objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
+		if err == nil {
+			break
+		} else {
+			objectReqErrors.Add(1)
+		}
+		logger.Warnf("upload %s: %s (try %d)", key, err, try)
+		try++
+		time.Sleep(time.Second * time.Duration(try*try))
+	}
+	store.bcache.uploaded(key, blockSize)
+	store.pendingMutex.Lock()
+	delete(store.pendingKeys, key)
+	store.pendingMutex.Unlock()
+	if err = os.Remove(stagingPath); err == nil {
+		stageBlocks.Sub(1)
+		stageBlockBytes.Sub(float64(blockSize))
+	}
 }
 
 func (store *cachedStore) uploadDelayedStaging() {
-	store.pendingMutex.Lock()
 	cutoff := time.Now().Add(-store.conf.UploadDelay)
+	store.pendingMutex.Lock()
 	for key, added := range store.pendingKeys {
-		store.pendingMutex.Unlock()
 		if added.Before(cutoff) {
-			store.uploadStagingFile(key, store.bcache.stagePath(key))
+			select {
+			case store.pendingCh <- pendingItem{key, store.bcache.stagePath(key)}:
+			default:
+				store.pendingMutex.Unlock()
+				return
+			}
 		}
-		store.pendingMutex.Lock()
 	}
 	store.pendingMutex.Unlock()
+}
+
+func (store *cachedStore) uploader() {
+	for it := range store.pendingCh {
+		store.uploadStagingFile(it.key, it.fpath)
+	}
 }
 
 func (store *cachedStore) NewReader(chunkid uint64, length int) Reader {
