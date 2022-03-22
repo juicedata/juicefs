@@ -18,6 +18,7 @@ package object
 
 import (
 	"container/heap"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -72,6 +73,8 @@ const maxResults = 10000
 func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) {
 	if ch, err := store.ListAll(prefix, marker); err == nil {
 		return ch, nil
+	} else if !errors.Is(err, notSupported) {
+		return nil, err
 	}
 
 	startTime := time.Now()

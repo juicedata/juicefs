@@ -18,6 +18,7 @@ package sync
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -108,6 +109,8 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 			close(out)
 		}()
 		return out, nil
+	} else if !errors.Is(err, utils.ENOTSUP) {
+		return nil, err
 	}
 
 	marker := start
