@@ -289,11 +289,7 @@ func (c *rChunk) Remove() error {
 		// there could be multiple clients try to remove the same chunk in the same time,
 		// any of them should succeed if any blocks is removed
 		key := c.key(i)
-		c.store.pendingMutex.Lock()
-		delete(c.store.pendingKeys, key)
-		c.store.pendingMutex.Unlock()
-		c.store.bcache.remove(key)
-
+		c.store.removeStaging(key)
 	}
 
 	if c.store.conf.MaxDeletes == 0 {
@@ -474,13 +470,7 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 	default:
 		// release the memory and leave it to background uploader
 		block.Release()
-		c.store.pendingMutex.Lock()
-		c.store.pendingKeys[key] = time.Now()
-		c.store.pendingMutex.Unlock()
-		select {
-		case c.store.pendingCh <- pendingItem{key, stagingPath}:
-		default:
-		}
+		c.store.addDelayedStaging(key, stagingPath, time.Now())
 		return
 	}
 	blockSize := len(block.Data)
@@ -551,12 +541,10 @@ func (c *wChunk) upload(indx int) {
 			} else {
 				c.errors <- nil
 				if c.store.conf.UploadDelay == 0 {
-					c.asyncUpload(key, block, stagingPath)
+					go c.asyncUpload(key, block, stagingPath)
 				} else {
 					block.Release()
-					c.store.pendingMutex.Lock()
-					c.store.pendingKeys[key] = time.Now()
-					c.store.pendingMutex.Unlock()
+					c.store.addDelayedStaging(key, stagingPath, time.Now())
 				}
 			}
 		} else {
@@ -764,7 +752,10 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
 	store.bcache = newCacheManager(&config, func(key, fpath string) {
-		store.pendingCh <- pendingItem{key, fpath}
+		fi, err := os.Stat(fpath)
+		if err == nil {
+			store.addDelayedStaging(key, fpath, fi.ModTime())
+		}
 	})
 	if config.CacheSize == 0 {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
@@ -793,7 +784,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 		go func() {
 			for {
 				time.Sleep(interval)
-				store.uploadDelayedStaging()
+				store.scanDelayedStaging()
 			}
 		}()
 	}
@@ -857,7 +848,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 
 	f, err := os.Open(stagingPath)
 	if err != nil {
-		logger.Errorf("open %s: %s", stagingPath, err)
+		store.pendingMutex.Lock()
+		_, ok := store.pendingKeys[key]
+		store.pendingMutex.Unlock()
+		if ok {
+			logger.Errorf("open %s: %s", stagingPath, err)
+		}
 		return
 	}
 	blockSize := parseObjOrigSize(key)
@@ -902,29 +898,43 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		time.Sleep(time.Second * time.Duration(try*try))
 	}
 	store.bcache.uploaded(key, blockSize)
-	store.pendingMutex.Lock()
-	delete(store.pendingKeys, key)
-	store.pendingMutex.Unlock()
+	store.removeStaging(key)
 	if err = os.Remove(stagingPath); err == nil {
 		stageBlocks.Sub(1)
 		stageBlockBytes.Sub(float64(blockSize))
 	}
 }
 
-func (store *cachedStore) uploadDelayedStaging() {
-	cutoff := time.Now().Add(-store.conf.UploadDelay)
+func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.Time) {
 	store.pendingMutex.Lock()
-	for key, added := range store.pendingKeys {
-		if added.Before(cutoff) {
-			select {
-			case store.pendingCh <- pendingItem{key, store.bcache.stagePath(key)}:
-			default:
-				store.pendingMutex.Unlock()
-				return
-			}
+	store.pendingKeys[key] = added
+	store.pendingMutex.Unlock()
+	if time.Since(added) > store.conf.UploadDelay {
+		select {
+		case store.pendingCh <- pendingItem{key, stagingPath}:
+		default:
 		}
 	}
+}
+
+func (store *cachedStore) removeStaging(key string) {
+	store.pendingMutex.Lock()
+	delete(store.pendingKeys, key)
 	store.pendingMutex.Unlock()
+	store.bcache.remove(key)
+}
+
+func (store *cachedStore) scanDelayedStaging() {
+	cutoff := time.Now().Add(-store.conf.UploadDelay)
+	store.pendingMutex.Lock()
+	defer store.pendingMutex.Unlock()
+	for key, added := range store.pendingKeys {
+		store.pendingMutex.Unlock()
+		if added.Before(cutoff) {
+			store.pendingCh <- pendingItem{key, store.bcache.stagePath(key)}
+		}
+		store.pendingMutex.Lock()
+	}
 }
 
 func (store *cachedStore) uploader() {
