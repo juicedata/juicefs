@@ -346,20 +346,22 @@ func TestSyncLink(t *testing.T) {
 
 	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
 	bs := b.(object.SupportSymlink)
+	bs.Symlink("/tmp/b/a1", "l1")
 
 	if err := Sync(a, b, &Config{
-		Threads: 50,
-		Update:  true,
-		Perms:   true,
-		Links:   true,
-		Quiet:   true,
+		Threads:     50,
+		Update:      true,
+		Perms:       true,
+		Links:       true,
+		Quiet:       true,
+		ForceUpdate: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 
 	l1, err := bs.Readlink("l1")
 	if err != nil || l1 != "/tmp/a/a1" {
-		t.Fatalf("readlink: %s", err)
+		t.Fatalf("readlink: %s content: %s", err, l1)
 	}
 	content, err := b.Get("l1", 0, -1)
 	if err != nil {

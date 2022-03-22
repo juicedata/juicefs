@@ -264,18 +264,6 @@ func readDirSorted(dirname string) ([]os.DirEntry, error) {
 	for i, e := range entries {
 		if e.IsDir() {
 			entries[i] = &mEntry{e, e.Name() + dirSuffix, nil}
-		} else if !e.Type().IsRegular() {
-			// follow symlink
-			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
-			if err != nil {
-				logger.Warnf("skip broken symlink %s: %s", filepath.Join(dirname, e.Name()), err)
-				continue
-			}
-			name := e.Name()
-			if fi.IsDir() {
-				name = e.Name() + dirSuffix
-			}
-			entries[i] = &mEntry{e, name, fi}
 		}
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
@@ -301,13 +289,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 			if runtime.GOOS == "windows" {
 				path = strings.Replace(path, "\\", "/", -1)
 			}
-
 			if err != nil {
-				// skip broken symbolic link
-				if fi, err1 := os.Lstat(path); err1 == nil && fi.Mode()&os.ModeSymlink != 0 {
-					logger.Warnf("skip unreachable symlink: %s (%s)", path, err)
-					return nil
-				}
 				if os.IsNotExist(err) {
 					logger.Warnf("skip not exist file or directory: %s", path)
 					return nil
@@ -332,11 +314,6 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				return nil
 			}
 			owner, group := getOwnerGroup(info)
-			var lInfo os.FileInfo
-			if lInfo, err = os.Lstat(path); err != nil {
-				logger.Errorf("get symlink stat failed: %s (%s)", path, err)
-				return err
-			}
 			f := &file{
 				obj{
 					key,
@@ -347,7 +324,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				owner,
 				group,
 				info.Mode(),
-				lInfo.Mode()&os.ModeSymlink != 0,
+				info.Mode()&os.ModeSymlink != 0,
 			}
 			if info.IsDir() {
 				f.size = 0

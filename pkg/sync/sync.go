@@ -551,6 +551,10 @@ func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) er
 	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
 		return err
 	} else {
+		if err := dst.Delete(key); err != nil {
+			logger.Debugf("Deleted %s from %s ", key, dst)
+			return err
+		}
 		// TODO: use relative path based on option
 		return dst.(object.SupportSymlink).Symlink(p, key)
 	}
