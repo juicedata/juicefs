@@ -67,24 +67,6 @@ type sftpStore struct {
 	pool   []*conn
 }
 
-func (f *sftpStore) Symlink(oldName, newName string) error {
-	c, err := f.getSftpConnection()
-	if err != nil {
-		return err
-	}
-	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.Symlink(oldName, newName)
-}
-
-func (f *sftpStore) Readlink(name string) (string, error) {
-	c, err := f.getSftpConnection()
-	if err != nil {
-		return "", err
-	}
-	defer f.putSftpConnection(&c, err)
-	return c.sftpClient.ReadLink(name)
-}
-
 // Open a new connection to the SFTP server.
 func (f *sftpStore) sftpConnection() (c *conn, err error) {
 	c = &conn{

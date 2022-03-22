@@ -48,7 +48,6 @@ type File interface {
 	Owner() string
 	Group() string
 	Mode() os.FileMode
-	IsSymlink() bool
 }
 
 type file struct {
@@ -74,6 +73,7 @@ func MarshalObject(o Object) map[string]interface{} {
 		m["mode"] = f.Mode()
 		m["owner"] = f.Owner()
 		m["group"] = f.Group()
+		m["isSymlink"] = f.IsSymlink()
 	}
 	return m
 }
@@ -86,7 +86,7 @@ func UnmarshalObject(m map[string]interface{}) Object {
 		mtime: mtime,
 		isDir: m["isdir"].(bool)}
 	if _, ok := m["mode"]; ok {
-		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), false}
+		f := file{o, m["owner"].(string), m["group"].(string), os.FileMode(m["mode"].(float64)), m["isSymlink"].(bool)}
 		return &f
 	}
 	return &o
