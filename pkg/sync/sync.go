@@ -515,13 +515,15 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 			var err error
 			if config.Links && obj.IsSymlink() {
-				err = copyLink(src, dst, key)
-				if err != nil {
-					logger.Errorf("copy link failed: %s", err)
+				if err = copyLink(src, dst, key); err == nil {
+					copied.Increment()
+					break
 				}
+				logger.Errorf("copy link failed: %s", err)
 			} else {
 				err = copyData(src, dst, key, obj.Size())
 			}
+
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
 				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
