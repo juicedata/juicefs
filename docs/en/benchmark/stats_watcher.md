@@ -3,13 +3,13 @@ sidebar_label: Performance Statistics Watcher
 sidebar_position: 4
 slug: /stats_watcher
 ---
-# JuiceFS Performance Statistics Watcher
+# JuiceFS Performance Statistics Monitor
 
-JuiceFS pre-defined a lot of monitoring items to show internal performance statistics when the system is running. These items are [exposed](../administration/monitoring.md) by Prometheus API. However, when diagnosing performace issues, users may want a real-time monitorig tool to know what is actually going on within a certain time. Thus, the `stats` command is developed to display selected items every second, similar to the Linux tool `dstat`. The output is like:
+JuiceFS exposes a lot of [Promethues metrics](../administration/monitoring.md) for monitoring system internal performance. However, when diagnosing performance issues in practice, users may need a more real-time monitoring tool to know what is actually going on within a certain time range. Thus, we provide a command `stats` to print metrics every second, just like what the Linux command `dstat` does. The output is like:
 
 ![stats_watcher](../images/juicefs_stats_watcher.png)
 
-By default, this command will monitor the JuiceFS process corresponding to the specified mount point, showing the following items:
+By default, this command will print the following metrics of the JuiceFS process corresponding to the given mount point.
 
 #### usage
 
@@ -19,12 +19,12 @@ By default, this command will monitor the JuiceFS process corresponding to the s
 
 #### fuse
 
-- ops/lat: number of operations handled by FUSE per second, and the average latency (in milliseconds) of them
-- read/write: read/write bandwidth handled by FUSE
+- ops/lat: operations processed by FUSE per second, and their average latency (in milliseconds)
+- read/write: read/write bandwidth usage of FUSE
 
 #### meta
 
-- ops/lat: number of metadata operations and the average latency (in milliseconds) of them. Please note operations returned directly in cache are not counted, so that the result is closer to real performance of metadata engines
+- ops/lat: metadata operations processed per second, and their average latency (in milliseconds). Please note that, operations returned directly from cache are not counted in, in order to show a more accurate latency of clients actually interacting with metadata engine.
 
 #### blockcache
 
@@ -34,4 +34,4 @@ By default, this command will monitor the JuiceFS process corresponding to the s
 
 - get/put: Get/Put bandwidth between client and object storage
 
-Moreover, users can acquire verbose statistics (like read/write ops and the average latency) by setting `--verbosity 1`, or customize displayed items by changing `--schema`. For more information, please check `juicefs stats -h`.
+Moreover, users can acquire verbose statistics (like read/write ops and the average latency) by setting `--verbosity 1`, or customize displayed metrics by changing `--schema`. For more information, please check `juicefs stats -h`.
