@@ -100,6 +100,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err = m.NewSession(); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
+	defer m.CloseSession()
 	ses, err := m.ListSessions()
 	if err != nil || len(ses) != 1 {
 		t.Fatalf("list sessions %+v: %s", ses, err)
@@ -476,7 +477,11 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20 || iavail != 97 {
-		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+		time.Sleep(time.Millisecond * 100)
+		_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
+		if totalspace != 1<<20 || iavail != 97 {
+			t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+		}
 	}
 	var summary Summary
 	if st := GetSummary(m, ctx, parent, &summary, false); st != 0 {
