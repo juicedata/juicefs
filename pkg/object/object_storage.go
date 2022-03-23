@@ -53,9 +53,6 @@ func (f *file) Group() string     { return f.group }
 func (f *file) Mode() os.FileMode { return f.mode }
 
 func MarshalObject(o Object) map[string]interface{} {
-	if o == nil {
-		return nil
-	}
 	m := make(map[string]interface{})
 	m["key"] = o.Key()
 	m["size"] = o.Size()
