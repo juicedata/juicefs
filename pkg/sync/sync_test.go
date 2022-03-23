@@ -426,3 +426,33 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 		t.Fatalf("should not copy broken link")
 	}
 }
+
+func TestSingleLink(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
+	_ = os.Symlink("/tmp/aa", "/tmp/a")
+	a, _ := object.CreateStorage("file", "/tmp/a", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b", "", "")
+	if err := Sync(a, b, &Config{
+		Threads:     50,
+		Update:      true,
+		Perms:       true,
+		Links:       true,
+		Quiet:       true,
+		ForceUpdate: true,
+	}); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+	readlink, _ := os.Readlink("/tmp/a")
+	readlink2, err := os.Readlink("/tmp/b")
+	if err != nil {
+		t.Fatalf("sync err: %v", err)
+	}
+
+	if readlink != readlink2 || readlink != "/tmp/aa" {
+		t.Fatalf("sync link failed")
+	}
+
+}

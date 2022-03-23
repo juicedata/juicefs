@@ -233,7 +233,8 @@ func Walk(root string, walkFn WalkFunc) error {
 		isSymlink := lstat.Mode()&os.ModeSymlink != 0
 		info, err = os.Stat(root)
 		if err != nil {
-			err = walkFn(root, nil, isSymlink, err)
+			// root is a broken link
+			err = walkFn(root, lstat, isSymlink, nil)
 		} else {
 			err = walk(root, info, isSymlink, walkFn)
 		}
@@ -281,7 +282,6 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 			// follow symlink
 			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
 			if err != nil {
-				logger.Warnf("skip broken symlink %s: %s", filepath.Join(dirname, e.Name()), err)
 				mEntries[i] = &mEntry{e, e.Name(), nil, true}
 				continue
 			}
