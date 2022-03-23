@@ -113,7 +113,7 @@ Other PostgreSQL-compatible databases (such as CockroachDB) can also be used as 
 
 ### Create a file system
 
-When using PostgreSQL as the metadata storage engine, the following format is usually used to access the database:
+When using PostgreSQL as the metadata storage engine, you need to create a database manually before create the file system, following format is usually used to access the database:
 
 ```shell
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
@@ -133,7 +133,7 @@ $ juicefs format --storage s3 \
 A more secure approach would be to pass the database password through the environment variable `META_PASSWORD`:
 
 ```shell
-$ export META_PASSWORD=password
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "postgres://user@192.168.1.6:5432/juicefs" \
@@ -149,7 +149,7 @@ sudo juicefs mount -d "postgres://user:mypassword@192.168.1.6:5432/juicefs" /mnt
 Passing password with the `META_PASSWORD` environment variable is also supported when mounting a file system.
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
@@ -172,7 +172,7 @@ Additional parameters can be appended to the metadata URL, [click here to view](
 
 ### Create a file system
 
-When using MySQL as the metadata storage engine, the following format is usually used to access the database:
+When using MySQL as the metadata storage engine, you need to create a database manually before create the file system, the following format is usually used to access the database:
 
 ```shell
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
@@ -194,7 +194,7 @@ $ juicefs format --storage s3 \
 A more secure approach would be to pass the database password through the environment variable `META_PASSWORD`:
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "mysql://user@(192.168.1.6:3306)/juicefs" \
@@ -210,7 +210,7 @@ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/
 Passing password with the `META_PASSWORD` environment variable is also supported when mounting a file system.
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
@@ -236,7 +236,7 @@ $ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mn
 Passing passwords through environment variables is also exactly the same:
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "mysql://user@(192.168.1.6:3306)/juicefs" \
