@@ -470,7 +470,7 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 	default:
 		// release the memory and leave it to background uploader
 		block.Release()
-		c.store.addDelayedStaging(key, stagingPath, time.Now())
+		c.store.addDelayedStaging(key, stagingPath, time.Now(), true)
 		return
 	}
 	blockSize := len(block.Data)
@@ -541,10 +541,10 @@ func (c *wChunk) upload(indx int) {
 			} else {
 				c.errors <- nil
 				if c.store.conf.UploadDelay == 0 {
-					go c.asyncUpload(key, block, stagingPath)
+					c.asyncUpload(key, block, stagingPath)
 				} else {
 					block.Release()
-					c.store.addDelayedStaging(key, stagingPath, time.Now())
+					c.store.addDelayedStaging(key, stagingPath, time.Now(), false)
 				}
 			}
 		} else {
@@ -751,10 +751,13 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 	if config.DownloadLimit > 0 {
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
-	store.bcache = newCacheManager(&config, func(key, fpath string) {
-		fi, err := os.Stat(fpath)
-		if err == nil {
-			store.addDelayedStaging(key, fpath, fi.ModTime())
+	store.bcache = newCacheManager(&config, func(key, fpath string, force bool) bool {
+		if force {
+			return store.addDelayedStaging(key, fpath, time.Time{}, true)
+		} else if fi, err := os.Stat(fpath); err == nil {
+			return store.addDelayedStaging(key, fpath, fi.ModTime(), false)
+		} else {
+			return false
 		}
 	})
 	if config.CacheSize == 0 {
@@ -905,16 +908,18 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 }
 
-func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.Time) {
+func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.Time, force bool) bool {
 	store.pendingMutex.Lock()
 	store.pendingKeys[key] = added
 	store.pendingMutex.Unlock()
-	if time.Since(added) > store.conf.UploadDelay {
+	if force || time.Since(added) > store.conf.UploadDelay {
 		select {
 		case store.pendingCh <- pendingItem{key, stagingPath}:
+			return true
 		default:
 		}
 	}
+	return false
 }
 
 func (store *cachedStore) removeStaging(key string) {
