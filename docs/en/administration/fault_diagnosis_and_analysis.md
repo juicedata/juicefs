@@ -90,10 +90,11 @@ $ cat /jfs/.accesslog
 
 ### Kubernetes CSI driver
 
-Just view the `.accesslog` file in the root directory of the JuiceFS file system mount point in the pod, for example (assuming the root directory of the mount point in the pod is `/jfs`):
+[Get mount pod](https://juicefs.com/docs/csi/troubleshooting/#get-mount-pod), just view the `.accesslog` file in the root directory of the JuiceFS file system mount point in mount pod, 
+mount point in mount pod is `/jfs/<pv_volumeHandle>`, for example (assuming PV volumeHandle is `pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`):
 
 ```bash
-kubectl exec juicefs-app -- cat /jfs/.accesslog
+kubectl -n kube-system exec juicefs-chaos-k8s-002-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373 -- cat /jfs/pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373/.accesslog
 ````
 
 ### S3 Gateway
