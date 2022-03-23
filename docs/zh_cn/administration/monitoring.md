@@ -143,9 +143,11 @@ spec:
 
 ### Hadoop
 
-[JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) 支持把监控指标上报到 [Pushgateway](https://github.com/prometheus/pushgateway) 或者 [Graphite](http://graphiteapp.org/)
+[JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) 支持把监控指标上报到 [Pushgateway](https://github.com/prometheus/pushgateway) 或者 [Graphite](https://graphiteapp.org)。
 
-启用指标上报到 Pushgateway ：
+#### Pushgateway
+
+启用指标上报到 Pushgateway：
 
 ```xml
 <property>
@@ -176,7 +178,9 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 
 有关 Pushgateway 的更多信息，请查看[官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md)。
 
-启用指标上报到 Graphite ：
+#### Graphite
+
+启用指标上报到 Graphite：
 
 ```xml
 <property>

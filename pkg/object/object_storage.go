@@ -18,7 +18,6 @@ package object
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -83,7 +82,7 @@ type FileSystem interface {
 	Chown(path string, owner, group string) error
 }
 
-var notSupported = errors.New("not supported")
+var notSupported = utils.ENOTSUP
 
 type DefaultObjectStorage struct{}
 
