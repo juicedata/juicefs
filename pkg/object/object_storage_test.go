@@ -487,11 +487,16 @@ func TestMarsharl(t *testing.T) {
 		t.Skip()
 	}
 	s, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
-	_ = s.Put("hello", bytes.NewReader([]byte("world")))
+	if err := s.Put("hello", bytes.NewReader([]byte("world"))); err != nil {
+		t.Fatalf("PUT failed: %s", err)
+	}
 	fs := s.(FileSystem)
 	_ = fs.Chown("hello", "user", "group")
 	_ = fs.Chmod("hello", 0764)
-	o, _ := s.Head("hello")
+	o, err := s.Head("hello")
+	if err != nil {
+		t.Fatalf("HEAD failed: %s", err)
+	}
 
 	m := MarshalObject(o)
 	d, _ := json.Marshal(m)
