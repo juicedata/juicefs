@@ -2333,15 +2333,18 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				r.deleteSlice(s.chunkid, s.size)
 			}
 		}
-		if r.rdb.LLen(ctx, r.chunkKey(inode, indx)).Val() > 5 {
-			go func() {
-				// wait for the current compaction to finish
-				time.Sleep(time.Millisecond * 10)
-				r.compactChunk(inode, indx, force)
-			}()
-		}
 	} else {
 		logger.Warnf("compact %s: %s", key, errno)
+	}
+
+	if force {
+		r.compactChunk(inode, indx, force)
+	} else {
+		go func() {
+			// wait for the current compaction to finish
+			time.Sleep(time.Millisecond * 10)
+			r.compactChunk(inode, indx, force)
+		}()
 	}
 }
 

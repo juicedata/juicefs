@@ -18,6 +18,7 @@ package sync
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -108,6 +109,8 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 			close(out)
 		}()
 		return out, nil
+	} else if !errors.Is(err, utils.ENOTSUP) {
+		return nil, err
 	}
 
 	marker := start
@@ -513,7 +516,18 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				logger.Infof("Will copy %s (%d bytes)", obj.Key(), obj.Size())
 				break
 			}
-			err := copyData(src, dst, key, obj.Size())
+			var err error
+			if config.Links && obj.IsSymlink() {
+				if err = copyLink(src, dst, key); err == nil {
+					copied.Increment()
+					handled.Increment()
+					break
+				}
+				logger.Errorf("copy link failed: %s", err)
+			} else {
+				err = copyData(src, dst, key, obj.Size())
+			}
+
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
 				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
@@ -536,6 +550,19 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 		}
 		handled.Increment()
+	}
+}
+
+func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
+	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
+		return err
+	} else {
+		if err := dst.Delete(key); err != nil {
+			logger.Debugf("Deleted %s from %s ", key, dst)
+			return err
+		}
+		// TODO: use relative path based on option
+		return dst.(object.SupportSymlink).Symlink(p, key)
 	}
 }
 

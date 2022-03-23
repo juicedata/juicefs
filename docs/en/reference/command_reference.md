@@ -561,6 +561,9 @@ don't exclude Key matching PATTERN. Need to be used with `--exclude PATTERN`.
 The order in which `--exclude` and `--include` are set will affect the result. Each object will be matched in the order in which the two parameters appear. Once the PATTERN of a parameter is matched, the behavior of the object is the type of the parameter, and the matching of the parameters that appear later will not be attempted. If the object is not matched by any of the parameters, the default behavior of the object is include . `--include` and `--exclude` parameters are designed with reference to `rsync`, but currently we do not support the two matching rules of `**` and `***` in `rsync`.
 :::
 
+`--links, -l`<br />
+copy symlinks as symlinks (default: false)
+
 `--manager value`<br />
 manager address
 
