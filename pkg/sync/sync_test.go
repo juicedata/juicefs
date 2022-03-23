@@ -17,6 +17,7 @@ package sync
 
 import (
 	"bytes"
+	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
@@ -170,6 +171,10 @@ func TestSync(t *testing.T) {
 
 // nolint:errcheck
 func TestSyncIncludeAndExclude(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
 	config := &Config{
 		Start:     "",
 		End:       "",
@@ -323,4 +328,131 @@ func TestAlignPatternAndKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSyncLink(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
+
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	a.Put("a1", bytes.NewReader([]byte("test")))
+	as := a.(object.SupportSymlink)
+	as.Symlink("/tmp/a/a1", "l1")
+	as.Symlink("./../a1", "d1/l2")
+	as.Symlink("./../notExist", "l3")
+
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	bs := b.(object.SupportSymlink)
+	bs.Symlink("/tmp/b/a1", "l1")
+
+	if err := Sync(a, b, &Config{
+		Threads:     50,
+		Update:      true,
+		Perms:       true,
+		Links:       true,
+		Quiet:       true,
+		ForceUpdate: true,
+	}); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+
+	l1, err := bs.Readlink("l1")
+	if err != nil || l1 != "/tmp/a/a1" {
+		t.Fatalf("readlink: %s content: %s", err, l1)
+	}
+	content, err := b.Get("l1", 0, -1)
+	if err != nil {
+		t.Fatalf("get content failed: %s", err)
+	}
+	if c, err := ioutil.ReadAll(content); err != nil || string(c) != "test" {
+		t.Fatalf("read content failed: err %s content %s", err, string(c))
+	}
+
+	l2, err := bs.Readlink("d1/l2")
+	if err != nil || l2 != "./../a1" {
+		t.Fatalf("readlink: %s", err)
+	}
+	content, err = b.Get("d1/l2", 0, -1)
+	if err != nil {
+		t.Fatalf("content failed: %s", err)
+	}
+	if c, err := ioutil.ReadAll(content); err != nil || string(c) != "test" {
+		t.Fatalf("read content failed: err %s content %s", err, string(c))
+	}
+
+	l3, err := bs.Readlink("l3")
+	if err != nil || l3 != "./../notExist" {
+		t.Fatalf("readlink: %s", err)
+	}
+}
+
+func TestSyncLinkWithOutFollow(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
+
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	a.Put("a1", bytes.NewReader([]byte("test")))
+	as := a.(object.SupportSymlink)
+	as.Symlink("/tmp/a/a1", "l1")
+	as.Symlink("./../notExist", "l3")
+
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+
+	if err := Sync(a, b, &Config{
+		Threads:     50,
+		Update:      true,
+		Perms:       true,
+		Quiet:       true,
+		ForceUpdate: true,
+	}); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+	content, err := b.Get("l1", 0, -1)
+	if err != nil {
+		t.Fatalf("get content error: %s", err)
+	}
+	if c, err := ioutil.ReadAll(content); err != nil || string(c) != "test" {
+		t.Fatalf("read content error: %s", err)
+	}
+
+	if lstat, err := os.Lstat("/tmp/b/l1"); err != nil && lstat.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("should follow link")
+	}
+	if _, err := os.Stat("/tmp/b/l3"); !os.IsNotExist(err) {
+		t.Fatalf("should not copy broken link")
+	}
+}
+
+func TestSingleLink(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
+	_ = os.Symlink("/tmp/aa", "/tmp/a")
+	a, _ := object.CreateStorage("file", "/tmp/a", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b", "", "")
+	if err := Sync(a, b, &Config{
+		Threads:     50,
+		Update:      true,
+		Perms:       true,
+		Links:       true,
+		Quiet:       true,
+		ForceUpdate: true,
+	}); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+	readlink, _ := os.Readlink("/tmp/a")
+	readlink2, err := os.Readlink("/tmp/b")
+	if err != nil {
+		t.Fatalf("sync err: %v", err)
+	}
+
+	if readlink != readlink2 || readlink != "/tmp/aa" {
+		t.Fatalf("sync link failed")
+	}
+
 }

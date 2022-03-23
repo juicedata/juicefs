@@ -26,6 +26,7 @@ type Object interface {
 	Size() int64
 	Mtime() time.Time
 	IsDir() bool
+	IsSymlink() bool
 }
 
 type obj struct {
@@ -39,6 +40,7 @@ func (o *obj) Key() string      { return o.key }
 func (o *obj) Size() int64      { return o.size }
 func (o *obj) Mtime() time.Time { return o.mtime }
 func (o *obj) IsDir() bool      { return o.isDir }
+func (o *obj) IsSymlink() bool  { return false }
 
 type MultipartUpload struct {
 	MinPartSize int
