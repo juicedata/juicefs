@@ -24,7 +24,8 @@ import (
 	"context"
 	"time"
 
-	etcd "go.etcd.io/etcd/clientv3"
+	"github.com/pkg/errors"
+	etcd "go.etcd.io/etcd/client/v3"
 )
 
 type etcdTxn struct {
@@ -169,7 +170,7 @@ func (c *etcdClient) name() string {
 }
 
 func (c *etcdClient) shouldRetry(err error) bool {
-	return false
+	return errors.Is(err, conflicted)
 }
 
 func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
@@ -218,9 +219,10 @@ func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
 	if resp.Succeeded {
 		return nil
 	}
-	// Try again
-	return
+	return conflicted
 }
+
+var conflicted = errors.New("conflicted transaction")
 
 func (c *etcdClient) reset(prefix []byte) error {
 	_, err := c.kv.Delete(context.Background(), string(prefix), etcd.WithPrefix())
