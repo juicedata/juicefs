@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 
 	gowebdav "github.com/emersion/go-webdav"
@@ -104,7 +105,18 @@ func (w *webdav) isNotExist(key string) bool {
 	return false
 }
 
+func (w *webdav) path(key string) string {
+	if strings.HasSuffix(w.endpoint.Path, dirSuffix) {
+		return filepath.Join(w.endpoint.Path, key)
+	}
+	return w.endpoint.Path + key
+}
+
 func (w *webdav) Put(key string, in io.Reader) error {
+	p := w.path(key)
+	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(w.endpoint.Path, dirSuffix) {
+		return w.mkdirs(p)
+	}
 	var buf = bytes.NewBuffer(nil)
 	in = io.TeeReader(in, buf)
 	out, err := w.c.Create(key)
@@ -149,6 +161,10 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 	}
 	infos, err := w.c.Readdir(walkRoot, true)
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			close(listed)
+			return listed, nil
+		}
 		return nil, err
 	}
 	go func() {
@@ -185,6 +201,19 @@ func newWebDAV(endpoint, user, passwd string) (ObjectStorage, error) {
 	c, err := gowebdav.NewClient(httpClient, uri.String())
 	if err != nil {
 		return nil, fmt.Errorf("create client for %s: %s", uri, err)
+	}
+
+	if strings.HasSuffix(uri.Path, dirSuffix) {
+		logger.Debugf("Ensure directory %s", uri.Path)
+		if err := c.Mkdir(uri.Path); err != nil {
+			return nil, fmt.Errorf("Creating directory %s failed: %q", uri.Path, err)
+		}
+	} else {
+		dir := filepath.Dir(uri.Path)
+		logger.Debugf("Ensure directory %s", dir)
+		if err := c.Mkdir(dir); err != nil {
+			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
+		}
 	}
 	return &webdav{endpoint: uri, c: c}, nil
 }
