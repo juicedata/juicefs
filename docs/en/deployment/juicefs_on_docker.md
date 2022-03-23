@@ -5,11 +5,11 @@ slug: /juicefs_on_docker
 ---
 # Use JuiceFS on Docker
 
-There are  three ways to use JuiceFS on Docker:
+There are three ways to use JuiceFS with Docker:
 
-## 1. Volume Mapping
+## 1. Volume Mapping {#volume-mapping}
 
-This method is to map the directories in the JuiceFS mount point to the Docker container. For example, the JuiceFS storage is mounted in the `/mnt/jfs` directory. When creating a container, you can map JuiceFS storage to the Docker container as follows:
+Volume mapping maps the directories in the JuiceFS mount point to the Docker container. For example, assuming a JuiceFS file system is mounted to the `/mnt/jfs` directory, you can map this file system when creating a docker container as follows:
 
 ```shell
 $ sudo docker run -d --name nginx \
@@ -18,13 +18,13 @@ $ sudo docker run -d --name nginx \
   nginx
 ```
 
-By default, only the user who mounts the JuiceFS storage has the access permissions for the storage. When you need to map the JuiceFS storage to a Docker container, if you are not using the root identity to mount the JuiceFS storage, you need to turn on the FUSE `user_allow_other` first, and then re-mount the JuiceFS with `-o allow_other` option.
+By default, only the user who mounts the JuiceFS file system has access permissions. To make a file system mappable for docker containers created by others, you need to enable FUSE option `user_allow_other` first, and then re-mount the file system with option `-o allow_other`.
 
-> **Note**: JuiceFS storage mounted with root user identity or `sudo` will automatically add the `allow_other` option, no manual setting is required.
+> **Note**: JuiceFS file system mounted with root privilege has already enabled the `allow_other` option. Thus, you don't need to set it manually.
 
-### FUSE Setting
+### FUSE Settings
 
-By default, the `allow_other` option is only allowed to be used by the root user. In order to allow other users to use this mount option, the FUSE configuration file needs to be modified.
+By default, the `allow_other` option is only available for users with root privilege. In order to allow other users to use this mount option, the FUSE configuration file needs to be modified.
 
 ### Change the configuration file
 
@@ -34,7 +34,7 @@ Edit the configuration file of FUSE, usually `/etc/fuse.conf`:
 $ sudo nano /etc/fuse.conf
 ```
 
-Delete the `# ` symbol in front of `user_allow_other` in the configuration file, and modify it as follows:
+First, uncomment the line `# user_allow_other` by deleting the`#` symbol. Your configuration file should look like the following after the modification.
 
 ```conf
 # /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
@@ -49,7 +49,7 @@ user_allow_other
 
 #### Re-mount JuiceFS
 
-After the `allow_other` of FUSE is enabled, you need to re-mount the JuiceFS file systemd with the `allow_other` option, for example:
+Run the following command to re-mount the JuiceFS file system with `allow_other` option.
 
 ```sh
 $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
@@ -57,7 +57,7 @@ $ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 
 ## 2. Docker Volume Plugin
 
-We can also use [volume plugin](https://docs.docker.com/engine/extend/) to access JuiceFS.
+[Volume plugin](https://docs.docker.com/engine/extend/) is another option to access JuiceFS.
 
 ```sh
 $ docker plugin install juicedata/juicefs
@@ -71,13 +71,13 @@ $ docker volume create -d juicedata/juicefs:latest -o name={{VOLUME_NAME}} -o me
 $ docker run -it -v jfsvolume:/opt busybox ls /opt
 ```
 
-Replace above `{{VOLUME_NAME}}`, `{{META_URL}}`, `{{ACCESS_KEY}}`, `{{SECRET_KEY}}` to your own volume setting. For more details about JuiceFS volume plugin, refer [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) repository.
+Replace `{{VOLUME_NAME}}`, `{{META_URL}}`, `{{ACCESS_KEY}}` and `{{SECRET_KEY}}` to fit your situation. For more details about JuiceFS volume plugin, please refer to [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) repository.
 
 ## 3. Mount JuiceFS in a Container
 
-This method is to mount and use the JuiceFS storage directly in the Docker container. Compared with the first method, directly mounting JuiceFS in the container can reduce the chance of file misoperation. It also makes container management clearer and more intuitive.
+In this section, we introduce a way to mount and use JuiceFS file system directly in a Docker container. Compared with [volume mapping](#volume-mapping), directly mounting reduces the chance of misoperating files. It also makes container management clearer and more intuitive.
 
-Since the file system mounting in the container needs to copy the JuiceFS client to the container, the process of downloading or copying the JuiceFS client and mounting the file system needs to be written into the Dockerfile, and then rebuilt the image. For example, you can refer to the following Dockerfile to package the JuiceFS client into the Alpine image.
+To mount a JuiceFS file system in a Docker container, the JuiceFS client executable needs to be copied into the image. Usually, this could be done by writing the commands that download or copy the executable and mount the file system into your Dockerfile, and rebuild the image. You can refer to the following Dockerfile as an example which packs the JuiceFS client into the Alpine image.
 
 ```dockerfile
 FROM alpine:latest
@@ -96,7 +96,7 @@ RUN apk add --no-cache curl && \
 ENTRYPOINT ["/usr/bin/juicefs", "mount"]
 ```
 
-In addition, since the use of FUSE in the container requires corresponding permissions, when creating the container, you need to specify the `--privileged=true` option, for example:
+In addition, using FUSE in a container requires specific permissions. You need to specify the `--privileged=true` option on creating. For example:
 
 ```shell
 $ sudo docker run -d --name nginx \
