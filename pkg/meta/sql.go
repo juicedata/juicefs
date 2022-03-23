@@ -2123,11 +2123,16 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else {
 		logger.Warnf("compact %d %d: %s", inode, indx, err)
 	}
-	go func() {
-		// wait for the current compaction to finish
-		time.Sleep(time.Millisecond * 10)
+
+	if force {
 		m.compactChunk(inode, indx, force)
-	}()
+	} else {
+		go func() {
+			// wait for the current compaction to finish
+			time.Sleep(time.Millisecond * 10)
+			m.compactChunk(inode, indx, force)
+		}()
+	}
 }
 
 func dup(b []byte) []byte {
