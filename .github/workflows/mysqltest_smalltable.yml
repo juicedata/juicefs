@@ -92,6 +92,15 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
 
 
+      - name: Log
+        if: ${{ failure() }}
+        run: |
+          echo "mysql log"
+          tail -n 1000 /var/log/mysql/error.log
+          echo "juicefs log"
+          tail -n 1000 /var/log/juicefs.log
+
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: slackapi/slack-github-action@v1.18.0
