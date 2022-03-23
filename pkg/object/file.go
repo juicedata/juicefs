@@ -289,6 +289,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 			if runtime.GOOS == "windows" {
 				path = strings.Replace(path, "\\", "/", -1)
 			}
+
 			if err != nil {
 				if os.IsNotExist(err) {
 					logger.Warnf("skip not exist file or directory: %s", path)
@@ -296,7 +297,14 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				listed <- nil
 				logger.Errorf("list %s: %s", path, err)
-				return err
+				return nil
+			}
+
+			isSymLink := info.Mode()&os.ModeSymlink != 0
+			if isSymLink {
+				if oInfo, err := os.Stat(path); err == nil {
+					info = oInfo
+				}
 			}
 
 			if !strings.HasPrefix(path, d.root) {
@@ -324,7 +332,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				owner,
 				group,
 				info.Mode(),
-				info.Mode()&os.ModeSymlink != 0,
+				isSymLink,
 			}
 			if info.IsDir() {
 				f.size = 0
