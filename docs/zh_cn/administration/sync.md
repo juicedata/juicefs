@@ -169,7 +169,7 @@ JuiceFS Sync 默认启用 10 个线程执行同步任务，可以根据需要设
 在配置多机并发同步任务时，需要提前配置好 `Manager` 主机对 `Worker` 主机的 SSH 免密登陆，确保客户端和任务能够成功分发到 `Worker`。
 
 :::note 注意
-`Manager` 会将 JuiceFS 客户端分发到 `Worker` 主机，为了避免客户端的兼容性问题，请确保 `Manager` 和 `Worker` 使用相同类型和架构的操作系统。
+`Manager` 会将 JuiceFS 客户端程序分发到 `Worker` 主机，为了避免客户端的兼容性问题，请确保 `Manager` 和 `Worker` 使用相同类型和架构的操作系统。
 :::
 
 例如，将 [对象存储 A](#bucketA) 同步到 [对象存储 B](#bucketB)，采用多主机并行同步：
