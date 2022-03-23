@@ -517,6 +517,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err == nil {
 					copied.Increment()
+					handled.Increment()
 					break
 				}
 				logger.Errorf("copy link failed: %s", err)
