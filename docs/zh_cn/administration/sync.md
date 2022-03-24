@@ -154,6 +154,13 @@ JuiceFS Sync 默认启用 10 个线程执行同步任务，可以根据需要设
 
 另外，如果需要限制同步任务占用的带宽，可以设置 `--bwlimit` 选项，单位 `Mbps`，默认值为 `0` 即不限制。
 
+### 拷贝符号链接
+JuiceFS sync 在**本地目录之间**同步时，支持通过设置 `--links` 选项开启遇到符号链时同步其自身而不是其指向的对象的功能。同步后的符号链接指向的路径为源符号链接中存储的原始路径，无论该路径在同步前后是否可达都不会被转换。
+
+另外需要注意的几个细节
+1. 符号链接自身的 `mtime` 不会被拷贝。
+2. `--checkNew` 和 `--perms` 选项的行为在遇到符号链接时会被忽略。
+
 ### 多机并发同步
 
 本质上在两个对象存储之间同步数据就是从一端拉取数据再推送到另一端，如下图所示，同步的效率取决于客户端与云之间的带宽。
@@ -175,7 +182,7 @@ JuiceFS Sync 默认启用 10 个线程执行同步任务，可以根据需要设
 例如，将 [对象存储 A](#bucketA) 同步到 [对象存储 B](#bucketB)，采用多主机并行同步：
 
 ```shell
-juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com 
+juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
 当前主机与两个 Worker 主机 `bob@192.168.1.20` 和 `tom@192.168.8.10` 将共同分担两个对象存储之间的数据同步任务。
