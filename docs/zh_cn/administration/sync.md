@@ -4,7 +4,7 @@ sidebar_label: 数据同步
 
 # 使用 JuiceFS Sync 跨云迁移和同步数据
 
-JuiceFS 的 Sync 子命令是功能完整的数据同步实用工具，可以在所有 [JuiceFS 支持的对象存储](../reference/how_to_setup_object_storage.md)之间多线程并发同步或迁移数据，既支持在“对象存储”与“JuiceFS”之间迁移数据，也支持在“对象存储”与“对象存储”之间跨云跨区迁移数据。同时支持全量同步、增量同步、条件模式匹配等高级功能。
+JuiceFS 的 `sync` 子命令是功能完整的数据同步实用工具，可以在所有 [JuiceFS 支持的对象存储](../reference/how_to_setup_object_storage.md)之间多线程并发同步或迁移数据，既支持在「对象存储」与「JuiceFS」之间迁移数据，也支持在「对象存储」与「对象存储」之间跨云跨区迁移数据。同时支持全量同步、增量同步、条件模式匹配等高级功能。
 
 ## 基本用法
 
@@ -22,9 +22,9 @@ juicefs sync [command options] SRC DST
 
 其中：
 
-- `SRC` 代表数据源地址及路径，
+- `SRC` 代表数据源地址及路径
 - `DST` 代表目标地址及路径
-- `[command options]` 可选的同步选项，详情查看[命令参考](../reference/command_reference.md#juicefs-sync)。
+- `[command options]` 代表可选的同步选项，详情查看[命令参考](../reference/command_reference.md#juicefs-sync)。
 
 地址格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`
 
@@ -35,7 +35,7 @@ juicefs sync [command options] SRC DST
 - `BUCKET[.ENDPOINT]` 是对象存储的访问地址
 - `PREFIX` 是可选的，限定要同步的目录名前缀。
 
-以下是一个 AWS S3 对象存储的地址范例：
+以下是一个 Amazon S3 对象存储的地址范例：
 
 ```
 s3://ABCDEFG:HIJKLMN@myjfs.s3.us-west-1.amazonaws.com
@@ -46,11 +46,11 @@ s3://ABCDEFG:HIJKLMN@myjfs.s3.us-west-1.amazonaws.com
 这里假设有以下存储资源：
 
 1. **对象存储 A** <span id="bucketA" />
-   - Bucket Name: aaa
+   - Bucket 名：aaa
    - Endpoint：`https://aaa.s3.us-west-1.amazonaws.com`
 
 2. **对象存储 B** <span id="bucketB" />
-   - Bucket Name: bbb
+   - Bucket 名：bbb
    - Endpoint：`https://bbb.oss-cn-hangzhou.aliyuncs.com`
 
 3. **JuiceFS 文件系统** <span id="bucketC" />
@@ -105,19 +105,23 @@ juicefs sync --update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies
 
 ### 模式匹配
 
-JuiceFS Sync 支持通过正则表达式匹配要包含的或排除的文件/目录，规则如下：
+JuiceFS `sync` 支持通过特殊语法匹配要包含的或排除的文件／目录，模式规则如下：
 
-- 以 `/` 结尾的名称会被识别为目录，否则会被视为文件、链接或设备；
-- 名称中包含 `*`、`?` 或 `[` 通配符时会按正则表达式匹配，否则按照常规字符串匹配；
+- 以 `/` 结尾的模式会仅匹配目录，否则会匹配文件、链接或设备；
+- 包含 `*`、`?` 或 `[` 字符时会以通配符模式匹配，否则按照常规字符串匹配；
 - `*` 匹配任意非空路径组件，在 `/` 处停止匹配；
 - `?` 匹配除 `/` 外的任意字符；
-- `[` 匹配一组字符集合，例如 [a-z] 或 [[:alpha:]]；
-- 在通配符模式中，反斜杠可以用来转义通配符，但在没有通配符的情况下，会按字面意思匹配。
-- 始终递归匹配模式前缀
+- `[` 匹配一组字符集合，例如 `[a-z]` 或 `[[:alpha:]]`；
+- 在通配符模式中，反斜杠可以用来转义通配符，但在没有通配符的情况下，会按字面意思匹配；
+- 始终以模式作为前缀递归匹配。
 
-#### 排除文件/目录
+#### 排除文件／目录
 
 使用 `--exclude` 选项设置要排除的目录或文件。例如，将 [JuiceFS 文件系统](#bucketC) 完整同步到[对象存储 A](#bucketA)，但不同步隐藏的文件和文件夹：
+
+:::note 备注
+在 Linux 系统中所有以 `.` 开始的名称均被视为隐藏文件
+:::
 
 ```shell
 # 挂载 JuiceFS
@@ -126,40 +130,37 @@ sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync --exclude '.*' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
-:::note 备注
-在 Linux 系统中所有以 `.` 开始的名称均被视为隐藏文件
-:::
-
-可以重复该选项匹配更多规则，例如，排除所有隐藏文件、pic/ 目录 和 4.png 文件：
+可以重复该选项匹配更多规则，例如，排除所有隐藏文件、`pic/` 目录 和 `4.png` 文件：
 
 ```shell
 juicefs sync --exclude '.*' --exclude 'pic/' --exclude '4.png' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
 ```
 
-#### 包含文件/目录
+#### 包含文件／目录
 
-使用 `--include` 选项设置要包含的（不被排除）目录或文件，例如，只同步 `pic/` 和 `4.png` 两个文件，其他文件都排除：
+使用 `--include` 选项设置要包含（不被排除）的目录或文件，例如，只同步 `pic/` 和 `4.png` 两个文件，其他文件都排除：
 
 ```shell
-juicefs sync --include 'pic/' --include='4.png' --exclude '*' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
+juicefs sync --include 'pic/' --include '4.png' --exclude '*' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
 ```
 
 :::info 注意
-在使用包含/排除规则时，位置在前的选项优先级更高。`--include` 应该排在前面，如果先设置 `--exclude '*'` 排除了所有文件，那么后面的 `--include 'pic/' --include='4.png'` 包含规则就不会生效。
+在使用包含／排除规则时，位置在前的选项优先级更高。`--include` 应该排在前面，如果先设置 `--exclude '*'` 排除了所有文件，那么后面的 `--include 'pic/' --include '4.png'` 包含规则就不会生效。
 :::
 
 ### 多线程和带宽限制
 
-JuiceFS Sync 默认启用 10 个线程执行同步任务，可以根据需要设置 `--thread` 选项调大或减少线程数。
+JuiceFS `sync` 默认启用 10 个线程执行同步任务，可以根据需要设置 `--thread` 选项调大或减少线程数。
 
 另外，如果需要限制同步任务占用的带宽，可以设置 `--bwlimit` 选项，单位 `Mbps`，默认值为 `0` 即不限制。
 
 ### 拷贝符号链接
-JuiceFS sync 在**本地目录之间**同步时，支持通过设置 `--links` 选项开启遇到符号链时同步其自身而不是其指向的对象的功能。同步后的符号链接指向的路径为源符号链接中存储的原始路径，无论该路径在同步前后是否可达都不会被转换。
+
+JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links` 选项开启遇到符号链时同步其自身而不是其指向的对象的功能。同步后的符号链接指向的路径为源符号链接中存储的原始路径，无论该路径在同步前后是否可达都不会被转换。
 
 另外需要注意的几个细节
-1. 符号链接自身的 `mtime` 不会被拷贝。
-2. `--checkNew` 和 `--perms` 选项的行为在遇到符号链接时会被忽略。
+1. 符号链接自身的 `mtime` 不会被拷贝；
+2. `--check-new` 和 `--perms` 选项的行为在遇到符号链接时会被忽略。
 
 ### 多机并发同步
 
@@ -171,12 +172,12 @@ JuiceFS sync 在**本地目录之间**同步时，支持通过设置 `--links` �
 
 ![](../images/juicefs-sync-worker.png)
 
-`Manager` 作为主控执行 Sync 命令，通过 `--worker` 参数定义多个 `Worker` 主机，JuiceFS 会根据 `Worker` 的总数量，动态拆分同步的工作量并分发给各个主机同时执行。即把原本在一台主机上处理的同步任务量拆分成多份，分发到多台主机上同时处理，单位时间内能处理的数据量更大，总带宽也成倍增加。
+Manager 作为主控执行 `sync` 命令，通过 `--worker` 参数定义多个 Worker 主机，JuiceFS 会根据 Worker 的总数量，动态拆分同步的工作量并分发给各个主机同时执行。即把原本在一台主机上处理的同步任务量拆分成多份，分发到多台主机上同时处理，单位时间内能处理的数据量更大，总带宽也成倍增加。
 
-在配置多机并发同步任务时，需要提前配置好 `Manager` 主机对 `Worker` 主机的 SSH 免密登陆，确保客户端和任务能够成功分发到 `Worker`。
+在配置多机并发同步任务时，需要提前配置好 Manager 主机到 Worker 主机的 SSH 免密登陆，确保客户端和任务能够成功分发到 Worker。
 
 :::note 注意
-`Manager` 会将 JuiceFS 客户端程序分发到 `Worker` 主机，为了避免客户端的兼容性问题，请确保 `Manager` 和 `Worker` 使用相同类型和架构的操作系统。
+Manager 会将 JuiceFS 客户端程序分发到 Worker 主机，为了避免客户端的兼容性问题，请确保 Manager 和 Worker 使用相同类型和架构的操作系统。
 :::
 
 例如，将 [对象存储 A](#bucketA) 同步到 [对象存储 B](#bucketB)，采用多主机并行同步：
@@ -188,7 +189,7 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 当前主机与两个 Worker 主机 `bob@192.168.1.20` 和 `tom@192.168.8.10` 将共同分担两个对象存储之间的数据同步任务。
 
 :::tip 提示
-如果 Worker 主机不是默认的 22 号端口，请在 Manager 主机通过 `.ssh/config` 配置文件设置 Worker 主机的端口号。
+如果 Worker 主机的 SSH 服务不是默认的 22 号端口，请在 Manager 主机通过 `.ssh/config` 配置文件设置 Worker 主机的 SSH 服务端口号。
 :::
 
 ## 场景应用
@@ -208,7 +209,7 @@ sudo juicefs sync --update /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazo
 
 ### 建立 JuiceFS 数据副本
 
-与面向文件本身的容灾备份不同，建立 JuiceFS 数据副本的目的是为 JuiceFS 的数据存储建立一个内容和结构完全相同的镜像，当使用中的对象存储发生了故障，可以通过修改配置切换到数据副本继续工作。
+与面向文件本身的容灾备份不同，建立 JuiceFS 数据副本的目的是为 JuiceFS 的数据存储建立一个内容和结构完全相同的镜像，当使用中的对象存储发生了故障，可以通过修改配置切换到数据副本继续工作。需要注意这里仅复制了 JuiceFS 文件系统的数据，并没有复制元数据，元数据引擎的数据备份依然需要。
 
 这需要直接操作 JucieFS 底层的对象存储，将它与目标对象存储之间进行同步。例如，要把 [对象存储 B](#bucketB) 作为 [JuiceFS 文件系统](#bucketC) 的数据副本：
 
