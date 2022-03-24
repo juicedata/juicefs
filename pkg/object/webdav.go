@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"path/filepath"
 	"strings"
 
 	gowebdav "github.com/emersion/go-webdav"
@@ -106,10 +105,7 @@ func (w *webdav) isNotExist(key string) bool {
 }
 
 func (w *webdav) path(key string) string {
-	if strings.HasSuffix(w.endpoint.Path, dirSuffix) {
-		return filepath.Join(w.endpoint.Path, key)
-	}
-	return w.endpoint.Path + key
+	return "/" + key
 }
 
 func (w *webdav) Put(key string, in io.Reader) error {
