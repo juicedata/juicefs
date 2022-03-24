@@ -34,6 +34,7 @@ type Config struct {
 	Dirs        bool
 	Exclude     []string
 	Include     []string
+	Links       bool
 	Manager     string
 	Workers     []string
 	BWLimit     int
@@ -58,6 +59,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		DeleteDst:   c.Bool("delete-dst"),
 		Exclude:     c.StringSlice("exclude"),
 		Include:     c.StringSlice("include"),
+		Links:       c.Bool("links"),
 		Workers:     c.StringSlice("worker"),
 		Manager:     c.String("manager"),
 		BWLimit:     c.Int("bwlimit"),

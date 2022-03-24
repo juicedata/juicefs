@@ -319,6 +319,7 @@ func fileInfo(key string, fi os.FileInfo) Object {
 		owner,
 		group,
 		fi.Mode(),
+		!fi.Mode().IsDir() && !fi.Mode().IsRegular(),
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {

@@ -111,7 +111,7 @@ KeyDB 的数据复制是异步的，使用 `Active Active` "双活"功能可能�
 
 ### 创建文件系统
 
-使用 PostgreSQL 作为元数据引擎时，需要使用如下的格式来指定参数：
+使用 PostgreSQL 作为元数据引擎时，需要提前手动创建数据库，使用如下的格式来指定参数：
 
 ```shell
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
@@ -131,7 +131,7 @@ $ juicefs format --storage s3 \
 更安全的做法是可以通过环境变量 `META_PASSWORD` 传递数据库密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "postgres://user@192.168.1.6:5432/juicefs" \
@@ -147,7 +147,7 @@ sudo juicefs mount -d "postgres://user:mypassword@192.168.1.6:5432/juicefs" /mnt
 挂载文件系统也支持用 `META_PASSWORD` 环境变量传递密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
@@ -170,7 +170,7 @@ $ juicefs format --storage s3 \
 
 ### 创建文件系统
 
-使用 MySQL 作为元数据存储引擎时，通常使用以下格式访问数据库：
+使用 MySQL 作为元数据存储引擎时，需要提前手动创建数据库，通常使用以下格式访问数据库：
 
 ```shell
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
@@ -192,7 +192,7 @@ $ juicefs format --storage s3 \
 更安全的做法是可以通过环境变量 `META_PASSWORD` 传递数据库密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "mysql://user@(192.168.1.6:3306)/juicefs" \
@@ -208,7 +208,7 @@ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/
 挂载文件系统也支持用 `META_PASSWORD` 环境变量传递密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
@@ -218,7 +218,7 @@ $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 
 [MariaDB](https://mariadb.org) 是 MySQL 的一个开源分支，由 MySQL 原始开发者维护并保持开源。
 
-MariaDB 与 MySQL 高度兼容，在使用上也没有任何差别，创建和挂载文件系统时，保持与 MySQL 相同的语法。
+MariaDB 与 MySQL 高度兼容，在使用上也没有任何差别，同样需要提前创建数据库，创建和挂载文件系统时，保持与 MySQL 相同的语法。
 
 例如：
 
@@ -234,7 +234,7 @@ $ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mn
 通过环境变量传递密码的方式也完全一致：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "mysql://user@(192.168.1.6:3306)/juicefs" \

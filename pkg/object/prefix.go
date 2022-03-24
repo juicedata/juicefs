@@ -33,6 +33,20 @@ func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
 }
 
+func (s *withPrefix) Symlink(oldName, newName string) error {
+	if w, ok := s.os.(SupportSymlink); ok {
+		return w.Symlink(oldName, newName)
+	}
+	return notSupported
+}
+
+func (s *withPrefix) Readlink(name string) (string, error) {
+	if w, ok := s.os.(SupportSymlink); ok {
+		return w.Readlink(name)
+	}
+	return "", notSupported
+}
+
 func (p *withPrefix) String() string {
 	return fmt.Sprintf("%s%s", p.os, p.prefix)
 }
