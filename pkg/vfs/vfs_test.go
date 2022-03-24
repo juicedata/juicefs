@@ -73,8 +73,6 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": mp, "vol_name": format.Name}, registry))
-	registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	registerer.MustRegister(prometheus.NewGoCollector())
 	store := chunk.NewCachedStore(blob, *conf.Chunk, registry)
 	return NewVFS(conf, m, store, registerer, registry), blob
 }

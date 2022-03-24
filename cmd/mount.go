@@ -31,6 +31,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 
@@ -117,7 +118,7 @@ func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer
 			EnableOpenMetrics: true,
 		},
 	))
-	registerer.MustRegister(prometheus.NewBuildInfoCollector())
+	registerer.MustRegister(collectors.NewBuildInfoCollector())
 
 	// If not set metrics addr,the port will be auto set
 	if !c.IsSet("metrics") {
@@ -161,8 +162,8 @@ func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry)
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": mp, "vol_name": name}, registry))
-	registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	registerer.MustRegister(prometheus.NewGoCollector())
+	registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	registerer.MustRegister(collectors.NewGoCollector())
 	return registerer, registry
 }
 
