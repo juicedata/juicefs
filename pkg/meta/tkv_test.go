@@ -51,7 +51,7 @@ func TestBadgerClient(t *testing.T) {
 func TestEtcdClient(t *testing.T) {
 	m, err := newKVMeta("etcd", "http://localhost:2379", &Config{})
 	if err != nil {
-		t.Skipf("create meta: %s", err)
+		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
 }
@@ -188,7 +188,7 @@ func TestBadgerKV(t *testing.T) {
 func TestEtcd(t *testing.T) {
 	c, err := newEtcdClient("http://localhost:2379/jfs")
 	if err != nil {
-		t.Skip(err)
+		t.Fatal(err)
 	}
 	testTKV(t, c)
 }
