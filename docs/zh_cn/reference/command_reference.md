@@ -559,6 +559,9 @@ juicefs sync [command options] SRC DST
 `--exclude` 与 `--include` 的设置顺序将会影响运行结果。每个对象将按照这两个参数出现的先后顺序依次匹配，一旦匹配某个参数的 PATTERN ，那么该对象的行为就是这个参数的类型，不再尝试后出现的参数的匹配。如果该个对象没有被任何一个参数匹配到，那么该对象的默认行为 include 。 `--include` 与 `--exclude` 参数的设计参考了 `rsync` ，但是目前我们不支持 `rsync` 中的 `**` 与 `***` 这两条匹配规则。
 :::
 
+`--links, -l`<br />
+将符号链接复制为符号链接 (默认: false)
+
 `--manager value`<br />
 管理者地址
 

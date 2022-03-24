@@ -70,6 +70,7 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 		hinfo.Owner(),
 		hinfo.OwnerGroup(),
 		info.Mode(),
+		false,
 	}
 	if f.owner == superuser {
 		f.owner = "root"
@@ -269,6 +270,7 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 				hinfo.Owner(),
 				hinfo.OwnerGroup(),
 				info.Mode(),
+				false,
 			}
 			if f.owner == superuser {
 				f.owner = "root"

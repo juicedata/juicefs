@@ -113,7 +113,7 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			},
 			&cli.BoolFlag{
 				Name:  "dirs",
-				Usage: "sync directories or holders",
+				Usage: "sync empty directories as well",
 			},
 			&cli.BoolFlag{
 				Name:  "dry",
@@ -136,6 +136,11 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			&cli.StringSliceFlag{
 				Name:  "include",
 				Usage: "don't exclude Key matching PATTERN",
+			},
+			&cli.BoolFlag{
+				Name:    "links",
+				Aliases: []string{"l"},
+				Usage:   "copy symlinks as symlinks",
 			},
 			&cli.StringFlag{
 				Name:  "manager",
@@ -246,6 +251,10 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	}
 	name := strings.ToLower(u.Scheme)
 	endpoint := u.Host
+	if conf.Links && name != "file" {
+		logger.Warnf("storage %s does not support symlink, ignore it", uri)
+		conf.Links = false
+	}
 
 	isS3PathTypeUrl := isS3PathType(endpoint)
 

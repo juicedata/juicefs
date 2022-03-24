@@ -4,7 +4,7 @@ sidebar_label: 数据同步
 
 # 使用 JuiceFS Sync 跨云迁移和同步数据
 
-JuiceFS 的 `sync` 子命令是功能完整的数据同步实用工具，可以在所有 [JuiceFS 支持的对象存储](../reference/how_to_setup_object_storage.md)之间多线程并发同步或迁移数据，既支持在「对象存储」与「JuiceFS」之间迁移数据，也支持在「对象存储」与「对象存储」之间跨云跨区迁移数据。同时支持全量同步、增量同步、条件模式匹配等高级功能。
+JuiceFS 的 `sync` 子命令是功能完整的数据同步实用工具，可以在所有 [JuiceFS 支持的对象存储](../reference/how_to_setup_object_storage.md)之间多线程并发同步或迁移数据，既支持在「对象存储」与「JuiceFS」之间迁移数据，也支持在「对象存储」与「对象存储」之间跨云跨区迁移数据。与 rsync 类似，除了对象存储也支持同步本地目录、通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供全量同步、增量同步、条件模式匹配等高级功能。
 
 ## 基本用法
 
@@ -15,10 +15,6 @@ juicefs sync [command options] SRC DST
 ```
 
 即把 `SRC` 同步到 `DST`，既可以同步目录，也可以同步文件。
-
-:::tip 注意
-目录的末尾需要带`/`，否则会被视为文件，例如：`movies/` 会被识别为目录，`hello.jpg` 为一个文件对象。
-:::
 
 其中：
 
@@ -40,6 +36,20 @@ juicefs sync [command options] SRC DST
 ```
 s3://ABCDEFG:HIJKLMN@myjfs.s3.us-west-1.amazonaws.com
 ```
+
+特别地，`SRC` 和 `DST` 如果以 `/` 结尾将被视为目录，例如：`movies/`。没有以 `/` 结尾则会被视为「前缀」，将按照前缀匹配的规则进行匹配，例如，当前目录下有 `test` 和 `text` 两个目录，使用以下命令可以将它们同步到目标路径 `~/mnt/`：
+
+```shell
+juicefs sync ./te ~/mnt/te
+```
+
+使用这种方式，`sync` 命令会以 `te` 前缀匹配当前路径下所有包含该前缀的目录或文件，即 `test` 和 `text`。而目标路径 `~/mnt/te` 中的 `te` 也是前缀，它会替换所有同步过来的目录和文件的前缀，在此示例中是将 `te` 替换为 `te`，即保持前缀不变。如果调整目标路径的前缀，例如将目标前缀改为 `ab`：
+
+```shell
+juicefs sync ./te ~/mnt/ab
+```
+
+目标路径中同步来的 `test` 目录名会变成 `abst`，`text` 会变成 `abxt`。
 
 ### 资源清单
 
@@ -92,20 +102,22 @@ juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:H
 
 ## 高级用法
 
-### 增量同步
+### 增量同步与全量同步
 
-如需在两个对象存储之间仅同步变化的文件，可以在命令中指定 `--update` 或 `-u` 选项。例如，将 [对象存储 A](#bucketA) 的 `movies` 目录中发生了变化的部分同步到 [JuiceFS 文件系统](#bucketC)：
+sync 命令默认以增量同步方式工作，即先对比源路径与目标路径之间的差异，然后仅同步有差异的部分。可以使用 `--update` 或 `-u` 选项更新文件的 `mtime`。
+
+如需全量同步，即不论目标路径上是否存在相同的文件都重新同步，可以使用 `--force-update` 或 `-f`。例如，将 [对象存储 A](#bucketA) 的 `movies` 目录全量同步到 [JuiceFS 文件系统](#bucketC)：
 
 ```shell
 # 挂载 JuiceFS
 sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
-# 执行同步
-juicefs sync --update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
+# 执行全量同步
+juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
 ### 模式匹配
 
-JuiceFS `sync` 支持通过特殊语法匹配要包含的或排除的文件／目录，模式规则如下：
+`sync` 命令的模式匹配功能跟 rsync 类似，可以通过规则排除或包含某类文件，并通过多个规则的组合实现任意集合的同步，规则如下：
 
 - 以 `/` 结尾的模式会仅匹配目录，否则会匹配文件、链接或设备；
 - 包含 `*`、`?` 或 `[` 字符时会以通配符模式匹配，否则按照常规字符串匹配；
@@ -154,11 +166,18 @@ JuiceFS `sync` 默认启用 10 个线程执行同步任务，可以根据需要�
 
 另外，如果需要限制同步任务占用的带宽，可以设置 `--bwlimit` 选项，单位 `Mbps`，默认值为 `0` 即不限制。
 
+### 目录结构与文件权限
+
+默认情况下，sync 命令只同步文件对象以及包含文件对象的目录，空目录不会被同步。如需同步空目录，可以使用 `--dirs` 选项。
+
+另外，在 local、sftp、hdfs 等文件系统之间同步时，如需保持文件权限，可以使用 `--perms` 选项。
+
 ### 拷贝符号链接
 
 JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links` 选项开启遇到符号链时同步其自身而不是其指向的对象的功能。同步后的符号链接指向的路径为源符号链接中存储的原始路径，无论该路径在同步前后是否可达都不会被转换。
 
 另外需要注意的几个细节
+
 1. 符号链接自身的 `mtime` 不会被拷贝；
 2. `--check-new` 和 `--perms` 选项的行为在遇到符号链接时会被忽略。
 
@@ -201,8 +220,8 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 ```shell
 # 挂载 JuiceFS
 sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
-# 执行增量同步
-sudo juicefs sync --update /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
+# 执行同步
+sudo juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
 同步以后，在 [对象存储 A](#bucketA) 中可以直接看到所有的文件。
