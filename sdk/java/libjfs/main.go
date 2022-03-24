@@ -52,6 +52,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/sirupsen/logrus"
 )
@@ -417,8 +418,8 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			}
 			registry := prometheus.NewRegistry()
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
-			registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-			registerer.MustRegister(prometheus.NewGoCollector())
+			registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+			registerer.MustRegister(collectors.NewGoCollector())
 
 			var interval time.Duration
 			if jConf.PushInterval > 0 {
