@@ -88,15 +88,17 @@ juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:H
 
 ## 高级用法
 
-### 增量同步
+### 增量同步与全量同步
 
-如需在两个对象存储之间仅同步变化的文件，可以在命令中指定 `--update` 或 `-u` 选项。例如，将 [对象存储 A](#bucketA) 的 `movies` 目录中发生了变化的部分同步到 [JuiceFS 文件系统](#bucketC)：
+sync 命令默认以增量同步方式工作，即先对比源路径与目标路径之间的差异，然后仅同步有差异的部分。可以使用 `--update` 或 `-u` 选项更新文件的 `mtime`。
+
+如需全量同步，即不论目标路径上是否存在相同的文件都重新同步，可以使用 `--force-update` 或 `-f`。例如，将 [对象存储 A](#bucketA) 的 `movies` 目录全量同步到 [JuiceFS 文件系统](#bucketC)：
 
 ```shell
 # 挂载 JuiceFS
 sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
-# 执行同步
-juicefs sync --update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
+# 执行全量同步
+juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
 ### 模式匹配
@@ -218,8 +220,8 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 ```shell
 # 挂载 JuiceFS
 sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
-# 执行增量同步
-sudo juicefs sync --update /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
+# 执行同步
+sudo juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
 同步以后，在 [对象存储 A](#bucketA) 中可以直接看到所有的文件。
