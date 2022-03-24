@@ -618,7 +618,7 @@ type timeoutError interface {
 	Timeout() bool
 }
 
-func shouldRetry(err error, retryOnFailure bool) bool {
+func (r *redisMeta) shouldRetry(err error, retryOnFailure bool) bool {
 	switch err {
 	case redis.TxFailedErr:
 		return true
@@ -633,7 +633,9 @@ func shouldRetry(err error, retryOnFailure bool) bool {
 	}
 
 	s := err.Error()
-	if s == "ERR max number of clients reached" {
+	if s == "ERR max number of clients reached" ||
+		strings.Contains(s, "Conn is in a bad state") ||
+		strings.Contains(s, "EXECABORT") {
 		return true
 	}
 	ps := strings.SplitN(s, " ", 3)
@@ -678,8 +680,9 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	var retryOnFailture = false
 	for i := 0; i < 50; i++ {
 		err = r.rdb.Watch(ctx, txf, keys...)
-		if shouldRetry(err, retryOnFailture) {
+		if r.shouldRetry(err, retryOnFailture) {
 			txRestart.Add(1)
+			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		}
