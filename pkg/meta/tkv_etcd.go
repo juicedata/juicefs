@@ -22,6 +22,9 @@ package meta
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -29,8 +32,9 @@ import (
 )
 
 type etcdTxn struct {
+	ctx      context.Context
 	kv       etcd.KV
-	observed map[string]int
+	observed map[string]int64
 	buffer   map[string][]byte
 }
 
@@ -39,21 +43,26 @@ func (tx *etcdTxn) get(key []byte) []byte {
 	if v, ok := tx.buffer[k]; ok {
 		return v
 	}
-	resp, err := tx.kv.Get(context.Background(), string(key), etcd.WithLimit(1), etcd.WithSerializable())
+	resp, err := tx.kv.Get(tx.ctx, k, etcd.WithLimit(1), etcd.WithSerializable())
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("get %v: %s", k, err))
 	}
 	if resp.Count == 0 {
 		tx.observed[k] = 0
 		return nil
 	}
+	if resp.Count > 1 {
+		panic(fmt.Errorf("expect 1 keys but got %d", resp.Count))
+	}
 	for _, pair := range resp.Kvs {
 		if bytes.Equal(pair.Key, key) {
-			tx.observed[k] = int(pair.ModRevision)
+			tx.observed[k] = pair.ModRevision
 			return pair.Value
+		} else {
+			panic(fmt.Errorf("expect key %v, but got %v", k, string(pair.Key)))
 		}
 	}
-	panic("not found")
+	panic("unreachable")
 }
 
 func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
@@ -66,39 +75,46 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 }
 
 func (tx *etcdTxn) scanRange(begin_, end_ []byte) map[string][]byte {
-	resp, err := tx.kv.Get(context.Background(), string(begin_), etcd.WithRange(string(end_)))
+	return tx.scanRange0(begin_, end_, nil)
+}
+
+func (tx *etcdTxn) scanRange0(begin_, end_ []byte, filter func(k, v []byte) bool) map[string][]byte {
+	resp, err := tx.kv.Get(tx.ctx, string(begin_), etcd.WithRange(string(end_)))
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("get range [%v-%v): %s", string(begin_), string(end_), err))
 	}
 	ret := make(map[string][]byte)
 	for _, kv := range resp.Kvs {
-		tx.observed[string(kv.Key)] = int(kv.ModRevision)
-		ret[string(kv.Key)] = kv.Value
+		if filter == nil || filter(kv.Key, kv.Value) {
+			k := string(kv.Key)
+			tx.observed[k] = kv.ModRevision
+			ret[k] = kv.Value
+		}
 	}
 	return ret
 }
 
 func (tx *etcdTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
-	resp, err := tx.kv.Get(context.Background(), string(prefix), etcd.WithPrefix(),
+	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(),
 		etcd.WithSort(etcd.SortByKey, etcd.SortAscend))
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("get prefix %v: %s", string(prefix), err))
 	}
 	for _, kv := range resp.Kvs {
-		tx.observed[string(kv.Key)] = int(kv.ModRevision)
+		tx.observed[string(kv.Key)] = kv.ModRevision
 		handler(kv.Key, kv.Value)
 	}
 }
 
-func (tx *etcdTxn) scanKeys(prefix_ []byte) [][]byte {
-	resp, err := tx.kv.Get(context.Background(), string(prefix_), etcd.WithPrefix(), etcd.WithKeysOnly(),
+func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
+	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithKeysOnly(),
 		etcd.WithSort(etcd.SortByKey, etcd.SortAscend))
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("get prefix %v with keys only: %s", string(prefix), err))
 	}
 	var keys [][]byte
 	for _, kv := range resp.Kvs {
-		tx.observed[string(kv.Key)] = int(kv.ModRevision)
+		tx.observed[string(kv.Key)] = kv.ModRevision
 		keys = append(keys, kv.Key)
 	}
 	return keys
@@ -108,13 +124,8 @@ func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte)
 	if limit == 0 {
 		return nil
 	}
-
-	res := tx.scanRange(prefix, nextKey(prefix))
-	for k, v := range res {
-		if filter != nil && !filter([]byte(k), v) {
-			delete(res, k)
-		}
-	}
+	// TODO: use Limit option if filter is nil
+	res := tx.scanRange0(prefix, nextKey(prefix), filter)
 	if n := len(res) - limit; limit > 0 && n > 0 {
 		for k := range res {
 			delete(res, k)
@@ -127,9 +138,9 @@ func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte)
 }
 
 func (tx *etcdTxn) exist(prefix []byte) bool {
-	resp, err := tx.kv.Get(context.Background(), string(prefix), etcd.WithPrefix(), etcd.WithCountOnly())
+	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithCountOnly())
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("get prefix %v with count only: %s", string(prefix), err))
 	}
 	return resp.Count > 0
 }
@@ -174,9 +185,11 @@ func (c *etcdClient) shouldRetry(err error) bool {
 }
 
 func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
+	ctx := context.Background()
 	tx := &etcdTxn{
+		ctx,
 		c.kv,
-		make(map[string]int),
+		make(map[string]int64),
 		make(map[string][]byte),
 	}
 	start := time.Now()
@@ -211,8 +224,10 @@ func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
 		}
 		ops = append(ops, op)
 	}
-	resp, err := c.kv.Txn(context.Background()).If(conds...).Then(ops...).Commit()
-	logger.Infof("txt with %d cond %d op took %s", len(conds), len(ops), time.Since(start))
+	resp, err := c.kv.Txn(ctx).If(conds...).Then(ops...).Commit()
+	if time.Since(start) > time.Millisecond*10 {
+		logger.Debugf("txn with %d conds and %d ops took %s", len(conds), len(ops), time.Since(start))
+	}
 	if err != nil {
 		return err
 	}
@@ -234,11 +249,23 @@ func (c *etcdClient) close() error {
 }
 
 func newEtcdClient(addr string) (tkvClient, error) {
-	c, err := etcd.NewFromURL(addr)
+	u, err := url.Parse(addr)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %s", addr, err)
+	}
+	passwd, _ := u.User.Password()
+	logger.Infof("user: %s, pass: %s", u.User.Username(), passwd)
+	conf := etcd.Config{
+		Endpoints: strings.Split(u.Host, ","),
+		// Username:  u.User.Username(),
+		// Password:  passwd,
+	}
+	c, err := etcd.New(conf)
 	if err != nil {
 		return nil, err
 	}
-	return &etcdClient{c, etcd.NewKV(c)}, err
+	var prefix string = u.Path + "\xFD"
+	return withPrefix(&etcdClient{c, etcd.NewKV(c)}, []byte(prefix)), nil
 }
 
 func init() {
