@@ -88,10 +88,9 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-### Kubernetes CSI driver
+### Kubernetes CSI Driver
 
-[Get mount pod](https://juicefs.com/docs/csi/troubleshooting/#get-mount-pod), just view the `.accesslog` file in the root directory of the JuiceFS file system mount point in mount pod, 
-mount point in mount pod is `/jfs/<pv_volumeHandle>`, for example (assuming PV volumeHandle is `pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`):
+Please refer to [CSI Driver documentation](https://juicefs.com/docs/csi/troubleshooting) and according to the version of JuiceFS CSI Driver you are using to find the mount pod or CSI driver pod, just view the `.accesslog` file in the root directory of the JuiceFS file system mount point in the pod. The mount point path in the pod is `/jfs/<pv_volumeHandle>`, assuming the name of the mount pod is `juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`, `<pv_volumeHandle>` is `pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`, you can use the following command to view:
 
 ```bash
 kubectl -n kube-system exec juicefs-chaos-k8s-002-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373 -- cat /jfs/pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373/.accesslog

@@ -90,11 +90,10 @@ $ cat /jfs/.accesslog
 
 ### Kubernetes CSI 驱动
 
-[找到 mount pod](https://juicefs.com/docs/zh/csi/troubleshooting#%E6%89%BE%E5%88%B0-mount-pod)，在 mount pod 内的 JuiceFS 文件系统挂载点根目录查看 `.accesslog` 文件即可，
-mount pod 内挂载点为 `/jfs/<pv_volumeHandle>`，例如（假设 PV volumeHandle 为 `pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`）：
+请参考 [CSI 驱动文档](https://juicefs.com/docs/zh/csi/troubleshooting)及根据你使用的 JuiceFS CSI 驱动版本来找到 mount pod 或者 CSI 驱动 pod，在 pod 内的 JuiceFS 文件系统挂载点根目录查看 `.accesslog` 文件即可。Pod 内的挂载点路径为 `/jfs/<pv_volumeHandle>`，假设 mount pod 的名称叫 `juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`，`<pv_volumeHandle>` 为 `pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`，可以使用如下命令查看：
 
 ```bash
-kubectl -n kube-system exec juicefs-chaos-k8s-002-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373 -- cat /jfs/pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373/.accesslog
+kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373 -- cat /jfs/pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373/.accesslog
 ```
 
 ### S3 网关
