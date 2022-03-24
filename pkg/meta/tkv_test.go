@@ -50,8 +50,8 @@ func TestBadgerClient(t *testing.T) {
 
 func TestEtcdClient(t *testing.T) {
 	m, err := newKVMeta("etcd", "http://localhost:2379", &Config{})
-	if err != nil || m.Name() != "etcd" {
-		t.Fatalf("create meta: %s", err)
+	if err != nil {
+		t.Skipf("create meta: %s", err)
 	}
 	testMeta(t, m)
 }
@@ -94,7 +94,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	var ks [][]byte
 	txn(func(kt kvTxn) { ks = kt.gets([]byte("k1"), []byte("k2")) })
 	if ks[0] != nil || string(ks[1]) != "value" {
-		t.Fatalf("gets k1,k2: %+v", ks)
+		t.Fatalf("gets k1,k2: %+v != %+v", ks, [][]byte{nil, []byte("value")})
 	}
 
 	var keys [][]byte
@@ -186,11 +186,10 @@ func TestBadgerKV(t *testing.T) {
 }
 
 func TestEtcd(t *testing.T) {
-	c, err := newEtcdClient("http://localhost:2380")
+	c, err := newEtcdClient("http://localhost:2379/jfs")
 	if err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
-	c = withPrefix(c, []byte("jfs"))
 	testTKV(t, c)
 }
 

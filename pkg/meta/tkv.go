@@ -606,7 +606,7 @@ func (m *kvMeta) txn(f func(tx kvTxn) error) error {
 	for i := 0; i < 50; i++ {
 		if err = m.client.txn(f); m.shouldRetry(err) {
 			txRestart.Add(1)
-			logger.Debugf("conflicted transaction, restart it (tried %d): %s", i+1, err)
+			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		}

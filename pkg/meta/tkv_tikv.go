@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
+	"github.com/tikv/client-go/v2/txnkv"
 )
 
 func init() {
@@ -60,11 +61,11 @@ func newTikvClient(addr string) (tkvClient, error) {
 		addr = addr[:p]
 	}
 	pds := strings.Split(addr, ",")
-	client, err := tikv.NewTxnClient(pds)
+	client, err := txnkv.NewClient(pds)
 	if err != nil {
 		return nil, err
 	}
-	return withPrefix(&tikvClient{client}, append([]byte(prefix), 0xFD)), nil
+	return withPrefix(&tikvClient{client.KVStore}, append([]byte(prefix), 0xFD)), nil
 }
 
 type tikvTxn struct {

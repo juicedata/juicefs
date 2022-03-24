@@ -43,7 +43,8 @@ func (tx *etcdTxn) get(key []byte) []byte {
 	if v, ok := tx.buffer[k]; ok {
 		return v
 	}
-	resp, err := tx.kv.Get(tx.ctx, k, etcd.WithLimit(1), etcd.WithSerializable())
+	resp, err := tx.kv.Get(tx.ctx, k, etcd.WithLimit(1),
+		etcd.WithSerializable())
 	if err != nil {
 		panic(fmt.Errorf("get %v: %s", k, err))
 	}
@@ -79,7 +80,10 @@ func (tx *etcdTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 }
 
 func (tx *etcdTxn) scanRange0(begin_, end_ []byte, filter func(k, v []byte) bool) map[string][]byte {
-	resp, err := tx.kv.Get(tx.ctx, string(begin_), etcd.WithRange(string(end_)))
+	resp, err := tx.kv.Get(tx.ctx,
+		string(begin_),
+		etcd.WithRange(string(end_)),
+		etcd.WithSerializable())
 	if err != nil {
 		panic(fmt.Errorf("get range [%v-%v): %s", string(begin_), string(end_), err))
 	}
@@ -95,8 +99,11 @@ func (tx *etcdTxn) scanRange0(begin_, end_ []byte, filter func(k, v []byte) bool
 }
 
 func (tx *etcdTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
-	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(),
-		etcd.WithSort(etcd.SortByKey, etcd.SortAscend))
+	resp, err := tx.kv.Get(tx.ctx,
+		string(prefix),
+		etcd.WithPrefix(),
+		etcd.WithSort(etcd.SortByKey, etcd.SortAscend),
+		etcd.WithSerializable())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %v: %s", string(prefix), err))
 	}
@@ -107,8 +114,12 @@ func (tx *etcdTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
 }
 
 func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
-	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithKeysOnly(),
-		etcd.WithSort(etcd.SortByKey, etcd.SortAscend))
+	resp, err := tx.kv.Get(tx.ctx,
+		string(prefix),
+		etcd.WithPrefix(),
+		etcd.WithKeysOnly(),
+		etcd.WithSort(etcd.SortByKey, etcd.SortAscend),
+		etcd.WithSerializable())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %v with keys only: %s", string(prefix), err))
 	}
@@ -138,7 +149,8 @@ func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte)
 }
 
 func (tx *etcdTxn) exist(prefix []byte) bool {
-	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithCountOnly())
+	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(),
+		etcd.WithCountOnly(), etcd.WithSerializable())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %v with count only: %s", string(prefix), err))
 	}
@@ -249,16 +261,18 @@ func (c *etcdClient) close() error {
 }
 
 func newEtcdClient(addr string) (tkvClient, error) {
+	if !strings.Contains(addr, "://") {
+		addr = "http://" + addr
+	}
 	u, err := url.Parse(addr)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", addr, err)
 	}
 	passwd, _ := u.User.Password()
-	logger.Infof("user: %s, pass: %s", u.User.Username(), passwd)
 	conf := etcd.Config{
 		Endpoints: strings.Split(u.Host, ","),
-		// Username:  u.User.Username(),
-		// Password:  passwd,
+		Username:  u.User.Username(),
+		Password:  passwd,
 	}
 	c, err := etcd.New(conf)
 	if err != nil {
