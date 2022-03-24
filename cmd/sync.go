@@ -114,7 +114,7 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			},
 			&cli.BoolFlag{
 				Name:  "dirs",
-				Usage: "sync empty directories as well",
+				Usage: "sync directories or holders",
 			},
 			&cli.BoolFlag{
 				Name:  "dry",

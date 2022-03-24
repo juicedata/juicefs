@@ -538,7 +538,7 @@ always update existing file (default: false)
 preserve permissions (default: false)
 
 `--dirs`<br />
-sync empty directories as well (default: false)
+Sync directories or holders (default: false)
 
 `--dry`<br />
 don't copy file (default: false)
