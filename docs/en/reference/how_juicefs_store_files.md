@@ -5,16 +5,14 @@ slug: /how_juicefs_store_files
 ---
 # How JuiceFS Stores Files
 
-The file system acts as a medium for interaction between the user and the hard drive, which allows files to be stored on the hard drive properly. As you know, Windows commonly used file systems are FAT32, NTFS, Linux commonly used file systems are Ext4, XFS, Btrfs, etc., each file system has its own unique way of organizing and managing files, which determines the file system Features such as storage capacity and performance.
+The file system acts as a medium for interaction between user and hard drive, which allows files to be stored on the hard drive properly. As you know, the file systems FAT32 and NTFS are commonly used on Windows, while Ext4, XFS and Btrfs are commonly used on Linux. Each file system has its own unique way of organizing and managing files, which determines the file system features such as storage capacity and performance.
 
-As a file system, JuiceFS is no exception. Its strong consistency and high performance are inseparable from its unique file management mode.
+The strong consistency and high performance of JuiceFS is ascribed to its unique file management mode. Unlike the traditional file system that can only use local disks to store data and corresponding metadata, JuiceFS formats data first and store the data in object storage (cloud storage) with the corresponding metadata being stored in databases such as Redis.
 
-Unlike the traditional file system that can only use local disks to store data and corresponding metadata, JuiceFS will format the data and store it in object storage (cloud storage), and store the metadata corresponding to the data in databases such as Redis. .
-
-Any file stored in JuiceFS will be split into fixed-size **"Chunk"**, and the default upper limit is 64 MiB. Each Chunk is composed of one or more **"Slice"**. The length of the slice is not fixed, depending on the way the file is written. Each slice will be further split into fixed-size **"Block"**, which is 4 MiB by default. Finally, these blocks will be stored in the object storage. At the same time, JuiceFS will store each file and its Chunks, Slices, Blocks and other metadata information in metadata engines.
+Each file stored in JuiceFS is split into size-fixed **"Chunk"** s (64 MiB by default). Each Chunk is composed of one or more **"Slice"** (s), and the length of the slice varies depending on how the file is written. Each slice is composed of size-fixed **"Block"** s, which is 4 MiB by default. These blocks will be stored in object storage in the end; at the same time, the metadata information of the file and its Chunks, Slices, and Blocks will be stored in metadata engines via JuiceFS.
 
 ![](../images/juicefs-storage-format-new.png)
 
-Using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you will find that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform. There is a chunks directory and a bunch of digitally numbered directories and files in the bucket. Don't panic, this is the secret of the high-performance operation of the JuiceFS file system!
+While using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you may notice that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform; instead, there are only a directory of chunks and a bunch of directories and files named by numbers in the bucket. Don't panic! That's exactly what makes JuiceFS a high-performance file system.
 
 ![How JuiceFS stores your files](../images/how-juicefs-stores-files-new.png)
