@@ -202,19 +202,6 @@ func newWebDAV(endpoint, user, passwd string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create client for %s: %s", uri, err)
 	}
-
-	if strings.HasSuffix(uri.Path, dirSuffix) {
-		logger.Debugf("Ensure directory %s", uri.Path)
-		if err := c.Mkdir(uri.Path); err != nil {
-			return nil, fmt.Errorf("Creating directory %s failed: %q", uri.Path, err)
-		}
-	} else {
-		dir := filepath.Dir(uri.Path)
-		logger.Debugf("Ensure directory %s", dir)
-		if err := c.Mkdir(dir); err != nil {
-			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
-		}
-	}
 	return &webdav{endpoint: uri, c: c}, nil
 }
 
