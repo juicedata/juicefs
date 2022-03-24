@@ -565,7 +565,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
 		})
 		if m.shouldRetry(err) {
 			txRestart.Add(1)
-			logger.Debugf("conflicted transaction, restart it (tried %d): %s", i+1, err)
+			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		}
