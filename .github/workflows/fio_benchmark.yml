@@ -1,0 +1,69 @@
+name: "fio-benchmark"
+
+on:
+  schedule:
+    - cron:  '0 0 * * *'
+  workflow_dispatch:
+
+env:
+  META_URL: redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/3
+  MINIO_URL: http://172.27.0.2:9005/juicefs-fio-benchmark
+  MOUNT_POINT: /tmp/juicefs-fio-benchmark
+
+jobs:
+  mysqltestsmalltable:
+    runs-on: [self-hosted, daily-build]
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17.x'
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Juicefs Format
+        run: |
+          UUID=$(juicefs status $META_URL | grep UUID | cut -d '"' -f 4)
+          echo UUID is: $(UUID)
+          if $UUID
+          then 
+            sudo juicefs destroy $META_URL $UUID
+          fi
+          sudo juicefs format --storage minio --bucket  $MINIO_URL --access-key minio_admin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  $META_URL jfs-fio-benchmark
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d $META_URL $MOUNT_POINT --no-usage-report &
+
+      - name: Fio Benchmark 
+        run: |
+          fio --name=sequential-read --directory=$MOUNT_POINT --rw=read --refill_buffers --bs=4M --size=1G
+
+      - name: Clean  
+        run: |
+          UUID=$(juicefs status $META_URL | grep UUID | cut -d '"' -f 4)
+          echo UUID is: $(UUID)
+          if $UUID
+          then 
+            sudo juicefs destroy $META_URL $UUID
+          fi
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        id: slack
+        uses: slackapi/slack-github-action@v1.18.0
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack-message: "@${{ github.event.pull_request.user.login}} PR Check: ${{ job.status }}\n${{ github.event.pull_request.title }}\nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
