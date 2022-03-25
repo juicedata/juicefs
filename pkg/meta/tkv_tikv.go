@@ -21,6 +21,8 @@ package meta
 
 import (
 	"context"
+	"github.com/tikv/client-go/v2/config"
+	"net/url"
 	"strings"
 
 	plog "github.com/pingcap/log"
@@ -54,18 +56,19 @@ func newTikvClient(addr string) (tkvClient, error) {
 	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
 	plog.ReplaceGlobals(l, prop)
 
-	p := strings.Index(addr, "/")
-	var prefix string
-	if p > 0 {
-		prefix = addr[p+1:]
-		addr = addr[:p]
-	}
-	pds := strings.Split(addr, ",")
-	client, err := txnkv.NewClient(pds)
+	tUrl, err := url.Parse("tikv://" + addr)
 	if err != nil {
 		return nil, err
 	}
-	return withPrefix(&tikvClient{client.KVStore}, append([]byte(prefix), 0xFD)), nil
+	config.UpdateGlobal(func(conf *config.Config) {
+		conf.Security = config.NewSecurity(tUrl.Query().Get("cluster-ssl-ca"), tUrl.Query().Get("cluster-ssl-cert"),
+			tUrl.Query().Get("cluster-ssl-key"), strings.Split(tUrl.Query().Get("cluster-verify-cn"), ","))
+	})
+	client, err := txnkv.NewClient(strings.Split(tUrl.Host, ","))
+	if err != nil {
+		return nil, err
+	}
+	return withPrefix(&tikvClient{client.KVStore}, append([]byte(strings.TrimLeft(tUrl.Path, "/")), 0xFD)), nil
 }
 
 type tikvTxn struct {
