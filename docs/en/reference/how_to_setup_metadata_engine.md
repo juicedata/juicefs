@@ -101,7 +101,7 @@ If you maintain the Redis database on your own, it is recommended to read [Redis
 Same as Redis, the Active Replication is asychronous, which may cause consistency issues. So use with caution!
 :::
 
-When being used as metadata storage engine in Juice, KeyDB is used exactly in the same way as Redis. So please refer to the [Redis](#redis) section for usage.
+When being used as metadata storage engine for Juice, KeyDB is used exactly in the same way as Redis. So please refer to the [Redis](#redis) section for usage.
 
 ## PostgreSQL
 
