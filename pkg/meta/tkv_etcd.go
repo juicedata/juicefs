@@ -22,6 +22,7 @@ package meta
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/url"
 	"strings"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/pkg/errors"
 	etcd "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/pkg/transport"
 )
 
 type etcdTxn struct {
@@ -290,6 +292,20 @@ func (c *etcdClient) close() error {
 	return c.client.Close()
 }
 
+func buildTlsConfig(u *url.URL) (*tls.Config, error) {
+	var tsinfo transport.TLSInfo
+	q := u.Query()
+	tsinfo.CAFile = q.Get("cacert")
+	tsinfo.CertFile = q.Get("cert")
+	tsinfo.KeyFile = q.Get("key")
+	tsinfo.ServerName = q.Get("server-name")
+	tsinfo.InsecureSkipVerify = q.Get("insecure-skip-verify") != ""
+	if tsinfo.CAFile != "" || tsinfo.CertFile != "" || tsinfo.KeyFile != "" || tsinfo.ServerName != "" {
+		return tsinfo.ClientConfig()
+	}
+	return nil, nil
+}
+
 func newEtcdClient(addr string) (tkvClient, error) {
 	if !strings.Contains(addr, "://") {
 		addr = "http://" + addr
@@ -304,6 +320,10 @@ func newEtcdClient(addr string) (tkvClient, error) {
 		Username:         u.User.Username(),
 		Password:         passwd,
 		AutoSyncInterval: time.Minute,
+	}
+	conf.TLS, err = buildTlsConfig(u)
+	if err != nil {
+		return nil, fmt.Errorf("build tls config from %s: %s", u.RawQuery, err)
 	}
 	c, err := etcd.New(conf)
 	if err != nil {
