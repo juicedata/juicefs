@@ -172,7 +172,7 @@ Additional parameters can be appended to the metadata URL. More details can be s
 
 ### Create a file system
 
-When using MySQL as the metadata storage engine, you need to create a database manually before create the file system similar to using the databases mentioned above. The command with the following format is usually used to access the database:
+When using MySQL as the metadata storage engine, you need to create a database manually before create the file system. The command with the following format is usually used to access the database:
 
 ```shell
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
