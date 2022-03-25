@@ -25,48 +25,49 @@ import (
 )
 
 type pwent struct {
-	id   int
+	id   uint32
 	name string
 }
 
 type mapping struct {
 	sync.Mutex
 	salt      string
-	usernames map[string]int
-	userIDs   map[int]string
-	groups    map[string]int
-	groupIDs  map[int]string
+	usernames map[string]uint32
+	userIDs   map[uint32]string
+	groups    map[string]uint32
+	groupIDs  map[uint32]string
 }
 
 func newMapping(salt string) *mapping {
 	m := &mapping{
 		salt:      salt,
-		usernames: make(map[string]int),
-		userIDs:   make(map[int]string),
-		groups:    make(map[string]int),
-		groupIDs:  make(map[int]string),
+		usernames: make(map[string]uint32),
+		userIDs:   make(map[uint32]string),
+		groups:    make(map[string]uint32),
+		groupIDs:  make(map[uint32]string),
 	}
 	m.update(genAllUids(), genAllGids())
 	return m
 }
 
-func (m *mapping) genGuid(name string) int {
+func (m *mapping) genGuid(name string) uint32 {
 	digest := md5.Sum([]byte(m.salt + name + m.salt))
 	a := binary.LittleEndian.Uint64(digest[0:8])
 	b := binary.LittleEndian.Uint64(digest[8:16])
-	return int(uint32(a ^ b))
+	return uint32(a ^ b)
 }
 
-func (m *mapping) lookupUser(name string) int {
+func (m *mapping) lookupUser(name string) uint32 {
 	m.Lock()
 	defer m.Unlock()
-	var id int
+	var id uint32
 	if id, ok := m.usernames[name]; ok {
 		return id
 	}
 	u, _ := user.Lookup(name)
 	if u != nil {
-		id, _ = strconv.Atoi(u.Uid)
+		id_, _ := strconv.ParseUint(u.Uid, 10, 32)
+		id = uint32(id_)
 	} else {
 		id = m.genGuid(name)
 	}
@@ -75,10 +76,10 @@ func (m *mapping) lookupUser(name string) int {
 	return id
 }
 
-func (m *mapping) lookupGroup(name string) int {
+func (m *mapping) lookupGroup(name string) uint32 {
 	m.Lock()
 	defer m.Unlock()
-	var id int
+	var id uint32
 	if id, ok := m.groups[name]; ok {
 		return id
 	}
@@ -86,22 +87,23 @@ func (m *mapping) lookupGroup(name string) int {
 	if g == nil {
 		id = m.genGuid(name)
 	} else {
-		id, _ = strconv.Atoi(g.Gid)
+		id_, _ := strconv.ParseUint(g.Gid, 10, 32)
+		id = uint32(id_)
 	}
 	m.groups[name] = id
 	m.groupIDs[id] = name
 	return 0
 }
 
-func (m *mapping) lookupUserID(id int) string {
+func (m *mapping) lookupUserID(id uint32) string {
 	m.Lock()
 	defer m.Unlock()
 	if name, ok := m.userIDs[id]; ok {
 		return name
 	}
-	u, _ := user.LookupId(strconv.Itoa(id))
+	u, _ := user.LookupId(strconv.Itoa(int(id)))
 	if u == nil {
-		u = &user.User{Username: strconv.Itoa(id)}
+		u = &user.User{Username: strconv.Itoa(int(id))}
 	}
 	name := u.Username
 	if len(name) > 49 {
@@ -112,15 +114,15 @@ func (m *mapping) lookupUserID(id int) string {
 	return name
 }
 
-func (m *mapping) lookupGroupID(id int) string {
+func (m *mapping) lookupGroupID(id uint32) string {
 	m.Lock()
 	defer m.Unlock()
 	if name, ok := m.groupIDs[id]; ok {
 		return name
 	}
-	g, _ := user.LookupGroupId(strconv.Itoa(id))
+	g, _ := user.LookupGroupId(strconv.Itoa(int(id)))
 	if g == nil {
-		g = &user.Group{Name: strconv.Itoa(id)}
+		g = &user.Group{Name: strconv.Itoa(int(id))}
 	}
 	name := g.Name
 	if len(name) > 49 {
