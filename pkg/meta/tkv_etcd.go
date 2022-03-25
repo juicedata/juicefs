@@ -67,10 +67,29 @@ func (tx *etcdTxn) get(key []byte) []byte {
 }
 
 func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
-	// TODO: batch
+	ops := make([]etcd.Op, len(keys))
+	for i, key := range keys {
+		ops[i] = etcd.OpGet(string(key), etcd.WithSerializable())
+	}
+	r, err := tx.kv.Do(tx.ctx, etcd.OpTxn(nil, ops, nil))
+	if err != nil {
+		panic(fmt.Errorf("batch get with %d keys: %s", len(keys), err))
+	}
+	rs := make(map[string][]byte)
+	for _, res := range r.Txn().Responses {
+		for _, p := range res.GetResponseRange().Kvs {
+			k := string(p.Key)
+			tx.observed[k] = p.ModRevision
+			rs[k] = p.Value
+		}
+	}
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
-		values[i] = tx.get(key)
+		k := string(key)
+		values[i] = rs[k]
+		if len(values[i]) == 0 {
+			tx.observed[k] = 0
+		}
 	}
 	return values
 }
@@ -270,9 +289,10 @@ func newEtcdClient(addr string) (tkvClient, error) {
 	}
 	passwd, _ := u.User.Password()
 	conf := etcd.Config{
-		Endpoints: strings.Split(u.Host, ","),
-		Username:  u.User.Username(),
-		Password:  passwd,
+		Endpoints:        strings.Split(u.Host, ","),
+		Username:         u.User.Username(),
+		Password:         passwd,
+		AutoSyncInterval: time.Minute,
 	}
 	c, err := etcd.New(conf)
 	if err != nil {
