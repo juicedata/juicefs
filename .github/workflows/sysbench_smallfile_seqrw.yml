@@ -108,7 +108,7 @@ jobs:
         uses: slackapi/slack-github-action@v1.18.0
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack-message: "@${{ github.event.pull_request.user.login}} PR Check: ${{ job.status }}\n${{ github.event.pull_request.title }}\nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
+          slack-message: "@${{ github.actor}} CI Check ${{ job.status }} on ${{ github.event_name }}\n${{ github.event.pull_request.title || github.event.head_commit.message }} \nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
         
