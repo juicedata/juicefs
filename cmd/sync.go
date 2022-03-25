@@ -143,7 +143,7 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 				Usage:   "copy symlinks as symlinks",
 			},
 			&cli.Int64Flag{
-				Name:  "limits",
+				Name:  "limit",
 				Usage: "limit the number of objects that will be processed",
 				Value: -1,
 			},

@@ -589,11 +589,11 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Con
 		logger.Debug("Ignore deleting dst directory ", dstobj.Key())
 		return false
 	}
-	if config.Limits != -1 {
-		if config.Limits == 0 {
+	if config.Limit != -1 {
+		if config.Limit == 0 {
 			return true
 		}
-		config.Limits--
+		config.Limit--
 	}
 	tasks <- &withSize{dstobj, markDeleteDst}
 	handled.IncrTotal(1)
@@ -637,11 +637,11 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
-		if config.Limits != -1 {
-			if config.Limits == 0 {
+		if config.Limit != -1 {
+			if config.Limit == 0 {
 				return
 			}
-			config.Limits--
+			config.Limit--
 		}
 		handled.IncrTotal(1)
 

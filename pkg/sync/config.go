@@ -35,7 +35,7 @@ type Config struct {
 	Exclude     []string
 	Include     []string
 	Links       bool
-	Limits      int64
+	Limit       int64
 	Manager     string
 	Workers     []string
 	BWLimit     int
@@ -65,7 +65,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Exclude:     c.StringSlice("exclude"),
 		Include:     c.StringSlice("include"),
 		Links:       c.Bool("links"),
-		Limits:      c.Int64("limits"),
+		Limit:       c.Int64("limit"),
 		Workers:     c.StringSlice("worker"),
 		Manager:     c.String("manager"),
 		BWLimit:     c.Int("bwlimit"),
