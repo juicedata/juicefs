@@ -558,6 +558,9 @@ don't exclude Key matching PATTERN, need to be used with `--exclude` option
 `--links, -l`<br />
 copy symlinks as symlinks (default: false)
 
+` --limit value`<br />
+limit the number of objects that will be processed (default: -1)
+
 `--manager value`<br />
 manager address
 
