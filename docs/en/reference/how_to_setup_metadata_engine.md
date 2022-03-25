@@ -155,7 +155,7 @@ $ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 
 ### Troubleshooting
 
-The JuiceFS client connects to PostgreSQL via SSL encryption by default. If an error `pq: SSL is not enabled on the server` is returned, it means that SSL is not enabled on the database. You can enable SSL encryption for PostgreSQL according to your own business scenario, or you can disable it by adding a parameter to the metadata URL Validation.
+The JuiceFS client connects to PostgreSQL via SSL encryption by default. If you encountered an error saying `pq: SSL is not enabled on the server`, you need to enable SSL encryption for PostgreSQL according to your own business scenario, or you can disable it by adding a parameter to the metadata URL Validation.
 
 ```shell
 $ juicefs format --storage s3 \
