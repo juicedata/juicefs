@@ -19,7 +19,7 @@ The metadata storage of JuiceFS uses a multi-engine design. In order to create a
 
 However, we found that many application scenarios do not absolutely rely on high performance based on the feedback from community users. For instance, sometimes users just want to find a convenient tool to migrate data on the cloud or mount the object storage locally to use in a small scale. Therefore, JuiceFS has successively opened up support for more databases such as MySQL/MariaDB and SQLite. The comparison of performance comparison can be found [here](../benchmark/metadata_engines_benchmark.md)).
 
-**A special attention needs to be paid** while using the JuiceFS file system - no matter which database you choose to store metadata, please **ensure the security of the metadata**! Once the metadata is damaged or lost, the corresponding data will accordingly be damaged or lost, and the entire file system can even be damaged in the worse cases.
+**A special attention needs to be paid** while using the JuiceFS file system - no matter which database you choose to store metadata, please **ensure the safety of the metadata**! Once the metadata is damaged or lost, the corresponding data will accordingly be damaged or lost, and the entire file system can even be damaged in the worse cases.
 
 :::caution
 No matter which database is used to store metadata, **it is important to ensure the security of metadata**. The corruption or loss of metadata will directly cause the damage of the corresponding data, or even the whole file system. For production environments, you should always choose a database with high availability, and at the same time, it is recommended to "[backup metadata](../administration/metadata_dump_load.md)" periodically.
