@@ -100,6 +100,7 @@ func TestSync(t *testing.T) {
 		Perms:     true,
 		Dry:       false,
 		DeleteSrc: false,
+		Limits:    -1,
 		DeleteDst: false,
 		Exclude:   []string{"c*"},
 		Include:   []string{"a[1-9]", "a*"},
@@ -187,6 +188,7 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 		DeleteSrc: false,
 		DeleteDst: false,
 		Verbose:   false,
+		Limits:    -1,
 		Quiet:     true,
 		Exclude:   []string{"1"},
 	}
@@ -355,6 +357,7 @@ func TestSyncLink(t *testing.T) {
 		Perms:       true,
 		Links:       true,
 		Quiet:       true,
+		Limits:      -1,
 		ForceUpdate: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
@@ -410,6 +413,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 		Perms:       true,
 		Quiet:       true,
 		ForceUpdate: true,
+		Limits:      -1,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
@@ -443,6 +447,7 @@ func TestSingleLink(t *testing.T) {
 		Perms:       true,
 		Links:       true,
 		Quiet:       true,
+		Limits:      -1,
 		ForceUpdate: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
