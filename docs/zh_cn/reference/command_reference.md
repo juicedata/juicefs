@@ -562,6 +562,9 @@ juicefs sync [command options] SRC DST
 `--links, -l`<br />
 将符号链接复制为符号链接 (默认: false)
 
+` --limits value`<br />
+限制将要处理的对象的数量 (默认: -1)
+
 `--manager value`<br />
 管理者地址
 

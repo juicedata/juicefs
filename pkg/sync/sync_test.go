@@ -17,10 +17,12 @@ package sync
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -454,5 +456,82 @@ func TestSingleLink(t *testing.T) {
 	if readlink != readlink2 || readlink != "/tmp/aa" {
 		t.Fatalf("sync link failed")
 	}
+}
 
+func TestLimits(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a/")
+		_ = os.RemoveAll("/tmp/b/")
+		_ = os.RemoveAll("/tmp/c/")
+	}()
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	c, _ := object.CreateStorage("file", "/tmp/c/", "", "")
+	put := func(storage object.ObjectStorage, keys []string) {
+		for _, key := range keys {
+			if key != "" {
+				_ = storage.Put(key, bytes.NewReader([]byte{}))
+			}
+		}
+	}
+	commonKeys := []string{"", "a1", "a2", "a3", "a4", "a5", "a6"}
+	put(a, commonKeys)
+	put(c, []string{"c1", "c2", "c3"})
+	type subConfig struct {
+		dst          object.ObjectStorage
+		limit        int64
+		deleteDst    bool
+		expectedKeys []string
+	}
+	testCases := []subConfig{
+		{b, 2, false, []string{"", "a1", "a2"}},
+		{b, -1, false, commonKeys},
+		{b, 0, false, commonKeys},
+		{c, 7, true, append(commonKeys, "c2", "c3")},
+	}
+	config := &Config{
+		Threads: 50,
+		Update:  true,
+		Perms:   true,
+	}
+	setConfig := func(config *Config, subC subConfig) {
+		config.Limits = subC.limit
+		config.DeleteDst = subC.deleteDst
+	}
+
+	for _, tcase := range testCases {
+		setConfig(config, tcase)
+		if err := Sync(a, tcase.dst, config); err != nil {
+			t.Fatalf("sync: %s", err)
+		}
+
+		all, err := tcase.dst.ListAll("", "")
+		if err != nil {
+			t.Fatalf("list all b: %s", err)
+		}
+
+		err = testKeysEqual(all, tcase.expectedKeys)
+		if err != nil {
+			t.Fatalf("testKeysEqual fail: %s", err)
+		}
+	}
+}
+
+func testKeysEqual(objsCh <-chan object.Object, expectedKeys []string) error {
+	var gottenKeys []string
+	for obj := range objsCh {
+		gottenKeys = append(gottenKeys, obj.Key())
+	}
+	if len(gottenKeys) != len(expectedKeys) {
+		return fmt.Errorf("expected {%s}, got {%s}", strings.Join(expectedKeys, ", "),
+			strings.Join(gottenKeys, ", "))
+	}
+
+	for idx, key := range gottenKeys {
+		if key != expectedKeys[idx] {
+			return fmt.Errorf("expected {%s}, got {%s}", strings.Join(expectedKeys, ", "),
+				strings.Join(gottenKeys, ", "))
+		}
+	}
+	return nil
 }

@@ -142,6 +142,11 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 				Aliases: []string{"l"},
 				Usage:   "copy symlinks as symlinks",
 			},
+			&cli.Int64Flag{
+				Name:  "limits",
+				Usage: "limit the number of objects that will be processed",
+				Value: -1,
+			},
 			&cli.StringFlag{
 				Name:  "manager",
 				Usage: "manager address",

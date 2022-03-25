@@ -564,6 +564,9 @@ The order in which `--exclude` and `--include` are set will affect the result. E
 `--links, -l`<br />
 copy symlinks as symlinks (default: false)
 
+` --limits value`<br />
+limit the number of objects that will be processed (default: -1)
+
 `--manager value`<br />
 manager address
 
