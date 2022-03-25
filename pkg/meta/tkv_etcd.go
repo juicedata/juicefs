@@ -66,7 +66,21 @@ func (tx *etcdTxn) get(key []byte) []byte {
 	panic("unreachable")
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
+	if len(keys) > 128 {
+		var rs = make([][]byte, 0, len(keys))
+		for i := 0; i < len(keys); i += 128 {
+			rs = append(rs, tx.gets(keys[i:min(i+128, len(keys))]...)...)
+		}
+		return rs
+	}
 	ops := make([]etcd.Op, len(keys))
 	for i, key := range keys {
 		ops[i] = etcd.OpGet(string(key), etcd.WithSerializable())
