@@ -11,14 +11,9 @@ env:
   MOUNT_POINT: /tmp/juicefs-fio-benchmark
 
 jobs:
-  mysqltestsmalltable:
+  fio-benchmark:
     runs-on: [self-hosted, daily-build]
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.17.x'
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -29,13 +24,11 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          UUID=$(juicefs status $META_URL | grep UUID | cut -d '"' -f 4)
-          echo UUID is: $(UUID)
-          if $UUID
-          then 
-            sudo juicefs destroy $META_URL $UUID
+          UUID=$(./juicefs status $META_URL | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            sudo ./juicefs destroy $META_URL $UUID
           fi
-          sudo juicefs format --storage minio --bucket  $MINIO_URL --access-key minio_admin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  $META_URL jfs-fio-benchmark
+          sudo ./juicefs format --storage minio --bucket  $MINIO_URL --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  $META_URL fio-benchmark
 
       - name: Juicefs Mount
         run: |
@@ -48,9 +41,7 @@ jobs:
       - name: Clean  
         run: |
           UUID=$(juicefs status $META_URL | grep UUID | cut -d '"' -f 4)
-          echo UUID is: $(UUID)
-          if $UUID
-          then 
+          if [ -n "$UUID" ];then
             sudo juicefs destroy $META_URL $UUID
           fi
 
@@ -63,7 +54,3 @@ jobs:
           slack-message: "@${{ github.event.pull_request.user.login}} PR Check: ${{ job.status }}\n${{ github.event.pull_request.title }}\nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
-
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
