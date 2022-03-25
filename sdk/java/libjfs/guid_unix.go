@@ -42,7 +42,7 @@ func genAllUids() []pwent {
 		}
 		name := C.GoString(p.pw_name)
 		if name != "root" {
-			uids = append(uids, pwent{int(p.pw_uid), name})
+			uids = append(uids, pwent{uint32(p.pw_uid), name})
 		}
 	}
 	return uids
@@ -61,7 +61,7 @@ func genAllGids() []pwent {
 		}
 		name := C.GoString(p.gr_name)
 		if name != "root" {
-			gids = append(gids, pwent{int(p.gr_gid), name})
+			gids = append(gids, pwent{uint32(p.gr_gid), name})
 		}
 	}
 	return gids

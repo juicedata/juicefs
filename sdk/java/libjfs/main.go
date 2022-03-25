@@ -52,6 +52,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/sirupsen/logrus"
 )
@@ -185,7 +186,7 @@ func (w *wrapper) lookupGids(groups string) []uint32 {
 func (w *wrapper) uid2name(uid uint32) string {
 	name := w.superuser
 	if uid > 0 {
-		name = w.m.lookupUserID(int(uid))
+		name = w.m.lookupUserID(uid)
 	}
 	return name
 }
@@ -193,7 +194,7 @@ func (w *wrapper) uid2name(uid uint32) string {
 func (w *wrapper) gid2name(gid uint32) string {
 	group := w.supergroup
 	if gid > 0 {
-		group = w.m.lookupGroupID(int(gid))
+		group = w.m.lookupGroupID(gid)
 	}
 	return group
 }
@@ -417,8 +418,8 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			}
 			registry := prometheus.NewRegistry()
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
-			registerer.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-			registerer.MustRegister(prometheus.NewGoCollector())
+			registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+			registerer.MustRegister(collectors.NewGoCollector())
 
 			var interval time.Duration
 			if jConf.PushInterval > 0 {
@@ -538,8 +539,8 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 				continue
 			}
 			username := strings.TrimSpace(fields[0])
-			uid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
-			uids = append(uids, pwent{uid, username})
+			uid, _ := strconv.ParseUint(strings.TrimSpace(fields[1]), 10, 32)
+			uids = append(uids, pwent{uint32(uid), username})
 		}
 
 		var buffer bytes.Buffer
@@ -558,8 +559,8 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 				continue
 			}
 			gname := strings.TrimSpace(fields[0])
-			gid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
-			gids = append(gids, pwent{gid, gname})
+			gid, _ := strconv.ParseUint(strings.TrimSpace(fields[1]), 10, 32)
+			gids = append(gids, pwent{uint32(gid), gname})
 			if len(fields) > 2 {
 				for _, user := range strings.Split(fields[len(fields)-1], ",") {
 					if strings.TrimSpace(user) == w.user {

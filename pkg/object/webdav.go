@@ -104,7 +104,15 @@ func (w *webdav) isNotExist(key string) bool {
 	return false
 }
 
+func (w *webdav) path(key string) string {
+	return "/" + key
+}
+
 func (w *webdav) Put(key string, in io.Reader) error {
+	p := w.path(key)
+	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(w.endpoint.Path, dirSuffix) {
+		return w.mkdirs(p)
+	}
 	var buf = bytes.NewBuffer(nil)
 	in = io.TeeReader(in, buf)
 	out, err := w.c.Create(key)
@@ -149,6 +157,10 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 	}
 	infos, err := w.c.Readdir(walkRoot, true)
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			close(listed)
+			return listed, nil
+		}
 		return nil, err
 	}
 	go func() {

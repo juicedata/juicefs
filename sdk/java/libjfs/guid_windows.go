@@ -42,14 +42,14 @@ func genAllUids() []pwent {
 		name := fields[len(fields)-2]
 		sid := fields[len(fields)-1]
 		ps := strings.Split(sid, "-")
-		auth, _ := strconv.Atoi(ps[2])
+		auth, _ := strconv.ParseUint(ps[2], 10, 32)
 		count := len(ps) - 3
-		var subAuth int
+		var subAuth uint64
 		if count > 0 {
-			subAuth, _ = strconv.Atoi(ps[3])
+			subAuth, _ = strconv.ParseUint(ps[3], 10, 32)
 		}
-		rid, _ := strconv.Atoi(ps[len(ps)-1])
-		var uid int
+		rid, _ := strconv.ParseUint(ps[len(ps)-1], 10, 32)
+		var uid uint64
 		if auth == 5 {
 			if count == 1 {
 				// "SYSTEM" S-1-5-18                   <=> uid/gid: 18
@@ -72,7 +72,7 @@ func genAllUids() []pwent {
 			uid = 0x60000*subAuth + rid
 		}
 		if uid > 0 {
-			uids = append(uids, pwent{uid, name})
+			uids = append(uids, pwent{uint32(uid), name})
 			logger.Tracef("found account %s -> %d (%s)", name, uid, sid)
 		}
 	}
@@ -101,14 +101,14 @@ func genAllGids() []pwent {
 		name := strings.TrimSpace(line[nameIndex : sidIndex-1])
 		sid := strings.TrimSpace(line[sidIndex:])
 		ps := strings.Split(sid, "-")
-		auth, _ := strconv.Atoi(ps[2])
+		auth, _ := strconv.ParseUint(ps[2], 10, 32)
 		count := len(ps) - 3
-		var subAuth int
+		var subAuth uint64
 		if count > 0 {
-			subAuth, _ = strconv.Atoi(ps[3])
+			subAuth, _ = strconv.ParseUint(ps[3], 10, 32)
 		}
-		rid, _ := strconv.Atoi(ps[len(ps)-1])
-		var gid int
+		rid, _ := strconv.ParseUint(ps[len(ps)-1], 10, 32)
+		var gid uint64
 		if auth == 5 {
 			if count == 1 {
 				// "SYSTEM" S-1-5-18                   <=> uid/gid: 18
@@ -131,7 +131,7 @@ func genAllGids() []pwent {
 			gid = 0x60000*subAuth + rid
 		}
 		if gid > 0 {
-			gids = append(gids, pwent{gid, name})
+			gids = append(gids, pwent{uint32(gid), name})
 			logger.Tracef("found group %s -> %d (%s)", name, gid, sid)
 		}
 	}
