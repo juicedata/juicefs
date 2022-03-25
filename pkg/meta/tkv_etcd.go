@@ -95,10 +95,6 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 }
 
 func (tx *etcdTxn) scanRange(begin_, end_ []byte) map[string][]byte {
-	return tx.scanRange0(begin_, end_, nil)
-}
-
-func (tx *etcdTxn) scanRange0(begin_, end_ []byte, filter func(k, v []byte) bool) map[string][]byte {
 	resp, err := tx.kv.Get(tx.ctx,
 		string(begin_),
 		etcd.WithRange(string(end_)),
@@ -108,11 +104,9 @@ func (tx *etcdTxn) scanRange0(begin_, end_ []byte, filter func(k, v []byte) bool
 	}
 	ret := make(map[string][]byte)
 	for _, kv := range resp.Kvs {
-		if filter == nil || filter(kv.Key, kv.Value) {
-			k := string(kv.Key)
-			tx.observed[k] = kv.ModRevision
-			ret[k] = kv.Value
-		}
+		k := string(kv.Key)
+		tx.observed[k] = kv.ModRevision
+		ret[k] = kv.Value
 	}
 	return ret
 }
@@ -121,7 +115,6 @@ func (tx *etcdTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
 	resp, err := tx.kv.Get(tx.ctx,
 		string(prefix),
 		etcd.WithPrefix(),
-		etcd.WithSort(etcd.SortByKey, etcd.SortAscend),
 		etcd.WithSerializable())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %v: %s", string(prefix), err))
@@ -137,7 +130,6 @@ func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
 		string(prefix),
 		etcd.WithPrefix(),
 		etcd.WithKeysOnly(),
-		etcd.WithSort(etcd.SortByKey, etcd.SortAscend),
 		etcd.WithSerializable())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %v with keys only: %s", string(prefix), err))
@@ -154,17 +146,22 @@ func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte)
 	if limit == 0 {
 		return nil
 	}
-	// TODO: use Limit option if filter is nil
-	res := tx.scanRange0(prefix, nextKey(prefix), filter)
-	if n := len(res) - limit; limit > 0 && n > 0 {
-		for k := range res {
-			delete(res, k)
-			if n--; n == 0 {
+	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithSerializable())
+	if err != nil {
+		panic(fmt.Errorf("get prefix %s: %s", string(prefix), err))
+	}
+	ret := make(map[string][]byte)
+	for _, kv := range resp.Kvs {
+		if filter == nil || filter(kv.Key, kv.Value) {
+			k := string(kv.Key)
+			tx.observed[k] = kv.ModRevision
+			ret[k] = kv.Value
+			if limit > 0 && len(ret) >= limit {
 				break
 			}
 		}
 	}
-	return res
+	return ret
 }
 
 func (tx *etcdTxn) exist(prefix []byte) bool {
