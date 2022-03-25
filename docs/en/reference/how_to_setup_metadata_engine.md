@@ -308,7 +308,7 @@ Since BadgerDB is a standalone database, it can only be used locally and does no
 
 [TiKV](https://github.com/tikv/tikv) is a distributed transactional Key-Value database. It is originally developed by [PingCAP](https://pingcap.com) as the storage layer for their flagship product [TiDB](https://github.com/pingcap/tidb). Now TiKV is an independent open source project, and is also a granduated project of [CNCF](https://www.cncf.io/projects).
 
-By using the official tool `TiUP`, you can easily build a local playground for testing (refer [here](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/) for details). Production environment generally requires at least three hosts to store three data replica (refer to the [official document](https://tikv.org/docs/5.1/deploy/install/install/) for all deployment steps).
+By using the official tool `TiUP`, you can easily build a local playground for testing (refer [here](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/) for details). Production environment generally requires at least three hosts to store three data replicas (refer to the [official document](https://tikv.org/docs/5.1/deploy/install/install/) for all deployment steps).
 
 ### Create a file system
 
