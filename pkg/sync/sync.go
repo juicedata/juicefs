@@ -584,13 +584,20 @@ func (o *withFSize) Size() int64 {
 	return o.nsize
 }
 
-func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, dirs bool) {
-	if !dirs && dstobj.IsDir() {
+func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
+	if !config.Dirs && dstobj.IsDir() {
 		logger.Debug("Ignore deleting dst directory ", dstobj.Key())
-		return
+		return false
+	}
+	if config.Limit != -1 {
+		if config.Limit == 0 {
+			return true
+		}
+		config.Limit--
 	}
 	tasks <- &withSize{dstobj, markDeleteDst}
 	handled.IncrTotal(1)
+	return false
 }
 
 func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) {
@@ -630,11 +637,19 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
+		if config.Limit != -1 {
+			if config.Limit == 0 {
+				return
+			}
+			config.Limit--
+		}
 		handled.IncrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if config.DeleteDst {
-				deleteFromDst(tasks, dstobj, config.Dirs)
+				if deleteFromDst(tasks, dstobj, config) {
+					return
+				}
 			}
 			dstobj = nil
 		}
@@ -648,7 +663,9 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 					break
 				}
 				if config.DeleteDst {
-					deleteFromDst(tasks, dstobj, config.Dirs)
+					if deleteFromDst(tasks, dstobj, config) {
+						return
+					}
 				}
 				dstobj = nil
 			}
@@ -680,11 +697,15 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 	}
 	if config.DeleteDst {
 		if dstobj != nil {
-			deleteFromDst(tasks, dstobj, config.Dirs)
+			if deleteFromDst(tasks, dstobj, config) {
+				return
+			}
 		}
 		for dstobj = range dstkeys {
 			if dstobj != nil {
-				deleteFromDst(tasks, dstobj, config.Dirs)
+				if deleteFromDst(tasks, dstobj, config) {
+					return
+				}
 			}
 		}
 	}
