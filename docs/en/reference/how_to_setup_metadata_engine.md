@@ -71,7 +71,7 @@ $ juicefs format --storage s3 \
 ```
 
 :::note
-You can also use the standard URL format when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` which preserves the `:` and `@` separators between the username and password.
+You can also use the standard URL syntax when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` which preserves the `:` and `@` separators between the username and password.
 :::
 
 ### Mount a file system
