@@ -143,6 +143,10 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Usage: "number of days after which removed files will be permanently deleted",
 			},
 			&cli.BoolFlag{
+				Name:  "hash-object-prefix",
+				Usage: "give each object a hashed prefix",
+			},
+			&cli.BoolFlag{
 				Name:  "force",
 				Usage: "overwrite existing format",
 			},
@@ -312,20 +316,21 @@ func format(c *cli.Context) error {
 	if format, _ = m.Load(false); format == nil {
 		create = true
 		format = &meta.Format{
-			Name:        name,
-			UUID:        uuid.New().String(),
-			Storage:     c.String("storage"),
-			Bucket:      c.String("bucket"),
-			AccessKey:   c.String("access-key"),
-			SecretKey:   c.String("secret-key"),
-			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
-			Shards:      c.Int("shards"),
-			Capacity:    c.Uint64("capacity") << 30,
-			Inodes:      c.Uint64("inodes"),
-			BlockSize:   fixObjectSize(c.Int("block-size")),
-			Compression: c.String("compress"),
-			TrashDays:   c.Int("trash-days"),
-			MetaVersion: 1,
+			Name:             name,
+			UUID:             uuid.New().String(),
+			Storage:          c.String("storage"),
+			Bucket:           c.String("bucket"),
+			AccessKey:        c.String("access-key"),
+			SecretKey:        c.String("secret-key"),
+			EncryptKey:       loadEncrypt(c.String("encrypt-rsa-key")),
+			Shards:           c.Int("shards"),
+			HashObjectPrefix: c.Bool("hash-object-prefix"),
+			Capacity:         c.Uint64("capacity") << 30,
+			Inodes:           c.Uint64("inodes"),
+			BlockSize:        fixObjectSize(c.Int("block-size")),
+			Compression:      c.String("compress"),
+			TrashDays:        c.Int("trash-days"),
+			MetaVersion:      1,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -361,6 +366,8 @@ func format(c *cli.Context) error {
 				format.Compression = c.String(flag)
 			case "shards":
 				format.Shards = c.Int(flag)
+			case "hash-object-prefix":
+				format.HashObjectPrefix = c.Bool(flag)
 			case "storage":
 				format.Storage = c.String(flag)
 			case "encrypt-rsa-key":

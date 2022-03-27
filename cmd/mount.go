@@ -278,8 +278,9 @@ func newStore(format *meta.Format, chunkConf *chunk.Config, registerer prometheu
 
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
-		BlockSize: format.BlockSize * 1024,
-		Compress:  format.Compression,
+		BlockSize:        format.BlockSize * 1024,
+		Compress:         format.Compression,
+		HashObjectPrefix: format.HashObjectPrefix,
 
 		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
