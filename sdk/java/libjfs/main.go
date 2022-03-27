@@ -450,25 +450,25 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			freeSpaceRatio, _ = strconv.ParseFloat(jConf.FreeSpace, 64)
 		}
 		chunkConf := chunk.Config{
-			BlockSize:      format.BlockSize * 1024,
-			Compress:       format.Compression,
-			CacheDir:       jConf.CacheDir,
-			CacheMode:      0644, // all user can read cache
-			CacheSize:      jConf.CacheSize,
-			FreeSpace:      float32(freeSpaceRatio),
-			AutoCreate:     jConf.AutoCreate,
-			CacheFullBlock: jConf.CacheFullBlock,
-			MaxUpload:      jConf.MaxUploads,
-			MaxDeletes:     jConf.MaxDeletes,
-			UploadLimit:    int64(jConf.UploadLimit) * 1e6 / 8,
-			DownloadLimit:  int64(jConf.DownloadLimit) * 1e6 / 8,
-			Prefetch:       jConf.Prefetch,
-			Writeback:      jConf.Writeback,
-			HashPrefix:     format.HashPrefix,
-			GetTimeout:     time.Second * time.Duration(jConf.GetTimeout),
-			PutTimeout:     time.Second * time.Duration(jConf.PutTimeout),
-			BufferSize:     jConf.MemorySize << 20,
-			Readahead:      jConf.Readahead << 20,
+			BlockSize:        format.BlockSize * 1024,
+			Compress:         format.Compression,
+			CacheDir:         jConf.CacheDir,
+			CacheMode:        0644, // all user can read cache
+			CacheSize:        jConf.CacheSize,
+			FreeSpace:        float32(freeSpaceRatio),
+			AutoCreate:       jConf.AutoCreate,
+			CacheFullBlock:   jConf.CacheFullBlock,
+			MaxUpload:        jConf.MaxUploads,
+			MaxDeletes:       jConf.MaxDeletes,
+			UploadLimit:      int64(jConf.UploadLimit) * 1e6 / 8,
+			DownloadLimit:    int64(jConf.DownloadLimit) * 1e6 / 8,
+			Prefetch:         jConf.Prefetch,
+			Writeback:        jConf.Writeback,
+			HashObjectPrefix: format.HashObjectPrefix,
+			GetTimeout:       time.Second * time.Duration(jConf.GetTimeout),
+			PutTimeout:       time.Second * time.Duration(jConf.PutTimeout),
+			BufferSize:       jConf.MemorySize << 20,
+			Readahead:        jConf.Readahead << 20,
 		}
 		if chunkConf.CacheDir != "memory" {
 			ds := utils.SplitDir(chunkConf.CacheDir)
