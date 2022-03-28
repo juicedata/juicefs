@@ -9,16 +9,16 @@ require (
 	github.com/Azure/azure-sdk-for-go v62.3.0+incompatible
 	github.com/DataDog/zstd v1.4.5
 	github.com/IBM/ibm-cos-sdk-go v1.8.0
-	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
+	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20191125093154-335c2b73bf6b
 	github.com/agiledragon/gomonkey/v2 v2.2.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.2+incompatible
 	github.com/aws/aws-sdk-go v1.43.26
-	github.com/baidubce/bce-sdk-go v0.9.47
+	github.com/baidubce/bce-sdk-go v0.9.111
 	github.com/billziss-gh/cgofuse v1.4.0
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/emersion/go-webdav v0.3.0
+	github.com/emersion/go-webdav v0.3.1
 	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/go-sql-driver/mysql v1.6.0
@@ -30,7 +30,7 @@ require (
 	github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8
 	github.com/hashicorp/consul/api v1.11.0
 	github.com/hashicorp/go-hclog v0.14.1
-	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.1+incompatible
+	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
