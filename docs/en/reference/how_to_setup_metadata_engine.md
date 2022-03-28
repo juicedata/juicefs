@@ -332,16 +332,16 @@ If you need to enable TLS, you can set the TLS configuration item by adding the 
 
 | name                 | value                                                                                                                                                       |
 |-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| cluster-ssl-ca    | CA root certificate, used to connect TiKV/PD with tls                                                                                                   |
-| cluster-ssl-cert  | certificate file path, used to connect TiKV/PD with tls                                                                                                 |
-| cluster-ssl-key   | private key file path, used to connect TiKV/PD with tls                                                                                                 |
-| cluster-verify-cn | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+| ca    | CA root certificate, used to connect TiKV/PD with tls                                                                                                   |
+| cert  | certificate file path, used to connect TiKV/PD with tls                                                                                                 |
+| key   | private key file path, used to connect TiKV/PD with tls                                                                                                 |
+| verify-cn | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
 
 example:
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?cluster-ssl-ca=/path/to/ca.pem&cluster-ssl-cert=/path/to/tikv-server.pem&cluster-ssl-key=/path/to/tikv-server-key.pem&cluster-verify-cn=CN1,CN2" \
+    "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
     pics
 ```
 
