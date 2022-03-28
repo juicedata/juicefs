@@ -205,7 +205,7 @@ func TestStoreDelayed(t *testing.T) {
 func TestStoreMultiBuckets(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "")
 	conf := defaultConf
-	conf.HashObjectPrefix = true
+	conf.HashPrefix = true
 	store := NewCachedStore(mem, conf, nil)
 	testStore(t, store)
 }

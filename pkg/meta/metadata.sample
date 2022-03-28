@@ -9,7 +9,7 @@
     "BlockSize": 4096,
     "Compression": "none",
     "Shards": 0,
-    "HashObjectPrefix": false,
+    "HashPrefix": false,
     "Capacity": 0,
     "Inodes": 0,
     "EncryptKey": "AQSttslKOSE/hQT/gmaMniCsdPF8JdPRfoYK6zFkdUOnifYwBA==",

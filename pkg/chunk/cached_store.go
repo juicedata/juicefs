@@ -134,7 +134,7 @@ func (c *rChunk) blockSize(indx int) int {
 }
 
 func (c *rChunk) key(indx int) string {
-	if c.store.conf.HashObjectPrefix {
+	if c.store.conf.HashPrefix {
 		return fmt.Sprintf("chunks/%02X/%v/%v_%v_%v", c.id%256, c.id/1000/1000, c.id, indx, c.blockSize(indx))
 	}
 	return fmt.Sprintf("chunks/%v/%v/%v_%v_%v", c.id/1000/1000, c.id/1000, c.id, indx, c.blockSize(indx))
@@ -611,26 +611,26 @@ func (c *wChunk) Abort() {
 
 // Config contains options for cachedStore
 type Config struct {
-	CacheDir         string
-	CacheMode        os.FileMode
-	CacheSize        int64
-	FreeSpace        float32
-	AutoCreate       bool
-	Compress         string
-	MaxUpload        int
-	MaxDeletes       int
-	UploadLimit      int64 // bytes per second
-	DownloadLimit    int64 // bytes per second
-	Writeback        bool
-	UploadDelay      time.Duration
-	HashObjectPrefix bool
-	BlockSize        int
-	GetTimeout       time.Duration
-	PutTimeout       time.Duration
-	CacheFullBlock   bool
-	BufferSize       int
-	Readahead        int
-	Prefetch         int
+	CacheDir       string
+	CacheMode      os.FileMode
+	CacheSize      int64
+	FreeSpace      float32
+	AutoCreate     bool
+	Compress       string
+	MaxUpload      int
+	MaxDeletes     int
+	UploadLimit    int64 // bytes per second
+	DownloadLimit  int64 // bytes per second
+	Writeback      bool
+	UploadDelay    time.Duration
+	HashPrefix     bool
+	BlockSize      int
+	GetTimeout     time.Duration
+	PutTimeout     time.Duration
+	CacheFullBlock bool
+	BufferSize     int
+	Readahead      int
+	Prefetch       int
 }
 
 type cachedStore struct {
