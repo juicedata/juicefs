@@ -21,11 +21,13 @@ package meta
 
 import (
 	"context"
+	"net/url"
 	"strings"
 
 	plog "github.com/pingcap/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/tikv/client-go/v2/config"
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
@@ -54,17 +56,23 @@ func newTikvClient(addr string) (tkvClient, error) {
 	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
 	plog.ReplaceGlobals(l, prop)
 
-	p := strings.Index(addr, "/")
-	var prefix string
-	if p > 0 {
-		prefix = addr[p+1:]
-		addr = addr[:p]
-	}
-	pds := strings.Split(addr, ",")
-	client, err := txnkv.NewClient(pds)
+	tUrl, err := url.Parse("tikv://" + addr)
 	if err != nil {
 		return nil, err
 	}
+	config.UpdateGlobal(func(conf *config.Config) {
+		q := tUrl.Query()
+		conf.Security = config.NewSecurity(
+			q.Get("ca"),
+			q.Get("cert"),
+			q.Get("key"),
+			strings.Split(q.Get("verify-cn"), ","))
+	})
+	client, err := txnkv.NewClient(strings.Split(tUrl.Host, ","))
+	if err != nil {
+		return nil, err
+	}
+	prefix := strings.TrimLeft(tUrl.Path, "/")
 	return withPrefix(&tikvClient{client.KVStore}, append([]byte(prefix), 0xFD)), nil
 }
 
