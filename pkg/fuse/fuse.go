@@ -446,6 +446,9 @@ func Serve(v *vfs.VFS, options string, xattrs bool) error {
 			opt.Options = append(opt.Options, n)
 		}
 	}
+	if conf.Meta.ReadOnly && !utils.StringContains(opt.Options, "ro") {
+		opt.Options = append(opt.Options, "ro")
+	}
 	opt.Options = append(opt.Options, "default_permissions")
 	if runtime.GOOS == "darwin" {
 		opt.Options = append(opt.Options, "fssubtype=juicefs")

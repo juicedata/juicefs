@@ -173,8 +173,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 }
 
 func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
-	readOnly := c.Bool("read-only")
-	metaConf := getMetaConf(c, mp, readOnly)
+	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	format, err := metaCli.Load(true)
 	if err != nil {
