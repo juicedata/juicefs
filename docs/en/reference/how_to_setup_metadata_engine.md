@@ -284,7 +284,7 @@ When using BadgerDB as the JuiceFS metadata storage engine, use `badger://` to s
 
 ### Create a file system
 
-You only need to create a file system for use, and there is no need to create a BadgerDB database in advance. 
+You only need to create a file system for use, and there is no need to create a BadgerDB database in advance.
 
 ```shell
 juicefs format badger://$HOME/badger-data myjfs
@@ -324,6 +324,24 @@ The `prefix` is a user-defined string, which can be used to distinguish multiple
 $ juicefs format --storage s3 \
     ...
     "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" \
+    pics
+```
+
+### Set up TLS
+If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the Meta-URL. Currently supported configuration items:
+
+| name                 | value                                                                                                                                                       |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ca    | CA root certificate, used to connect TiKV/PD with tls                                                                                                   |
+| cert  | certificate file path, used to connect TiKV/PD with tls                                                                                                 |
+| key   | private key file path, used to connect TiKV/PD with tls                                                                                                 |
+| verify-cn | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+
+example:
+```shell
+$ juicefs format --storage s3 \
+    ...
+    "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
     pics
 ```
 
