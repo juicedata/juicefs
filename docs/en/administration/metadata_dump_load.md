@@ -107,7 +107,9 @@ The backup frequency can be accurate to the second and the units supported are a
 - `m`: accurate to the minute, e.g. `30m`, `1h30m`.
 - `s`: accurate to the second, such as `50s`, `30m50s`, `1h30m50s`;
 
-It is worth mentioning that the time cost of backup will increase with the number of files in the filesystem, so when the number is too large (by default 10 million), JuiceFS will automatically skip backup and print the corresponding warning log. At this point you may mount a new client with bigger `--backup-meta` option to re-enable automatic backups.
+It is worth mentioning that the time cost of backup will increase with the number of files in the filesystem, so when the number is too large (by default 1 million) and the automatic backup frequency is the default value of 1 hour, JuiceFS will automatically skip backup and print the corresponding warning log. At this point you may mount a new client with bigger `--backup-meta` option to re-enable automatic backups.
+
+For reference, when using Redis as the metadata engine, backing up the metadata for one million files takes about 5 minutes and consumes about 2GB of memory.
 
 ### Automatic Backup Policy
 
