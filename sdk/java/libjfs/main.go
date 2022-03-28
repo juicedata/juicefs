@@ -464,7 +464,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			DownloadLimit:  int64(jConf.DownloadLimit) * 1e6 / 8,
 			Prefetch:       jConf.Prefetch,
 			Writeback:      jConf.Writeback,
-			Partitions:     format.Partitions,
+			HashPrefix:     format.HashPrefix,
 			GetTimeout:     time.Second * time.Duration(jConf.GetTimeout),
 			PutTimeout:     time.Second * time.Duration(jConf.PutTimeout),
 			BufferSize:     jConf.MemorySize << 20,
