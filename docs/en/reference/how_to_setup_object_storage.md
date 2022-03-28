@@ -84,7 +84,7 @@ $ juicefs format \
     myjfs
 ```
 
-## Supported Object Storage
+## Supported Object Storage {#supported-object-storage}
 
 If you wish to use a storage type that is not listed, feel free to submit a requirement [issue](https://github.com/juicedata/juicefs/issues).
 
