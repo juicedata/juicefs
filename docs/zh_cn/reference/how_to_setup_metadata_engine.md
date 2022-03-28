@@ -325,6 +325,24 @@ $ juicefs format --storage s3 \
     pics
 ```
 
+### 设置 TLS
+如果需要开启 TLS，可以通过在 Meta-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+
+| 配置项               | 值                                                                                                                        |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------|
+| cluster-ssl-ca    | CA 根证书，用于用 tls 连接 TiKV/PD                                                                                                |
+| cluster-ssl-cert  | 证书文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
+| cluster-ssl-key   | 私钥文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
+| cluster-verify-cn | 证书通用名称，用于验证调用者身份，[详情](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+
+例子：
+```shell
+$ juicefs format --storage s3 \
+    ...
+    "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?cluster-ssl-ca=/path/to/ca.pem&cluster-ssl-cert=/path/to/tikv-server.pem&cluster-ssl-key=/path/to/tikv-server-key.pem&cluster-verify-cn=CN1,CN2" \
+    pics
+```
+
 ### 挂载文件系统
 
 ```shell
