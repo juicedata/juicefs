@@ -121,7 +121,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 		opts := strings.Split(option, ",")
 		for _, opt := range opts {
 			opt = strings.TrimSpace(opt)
-			if opt == "" || stringContains(sysOptions, opt) {
+			if opt == "" || utils.StringContains(sysOptions, opt) {
 				continue
 			}
 			// Lower case option name is preferred, but if it's the same as flag name, we also accept it
@@ -154,15 +154,6 @@ func handleSysMountArgs(args []string) ([]string, error) {
 	newArgs = append(newArgs, args[1], args[2])
 	logger.Debug("Parsed mount args: ", strings.Join(newArgs, " "))
 	return newArgs, nil
-}
-
-func stringContains(s []string, e string) bool {
-	for _, item := range s {
-		if item == e {
-			return true
-		}
-	}
-	return false
 }
 
 func isFlag(flags []cli.Flag, option string) (bool, bool) {
@@ -227,7 +218,7 @@ func reorderOptions(app *cli.App, args []string) []string {
 				newArgs = append(newArgs, args[i])
 			}
 		} else {
-			if strings.HasPrefix(option, "-") && !stringContains(args, "--generate-bash-completion") {
+			if strings.HasPrefix(option, "-") && !utils.StringContains(args, "--generate-bash-completion") {
 				logger.Fatalf("unknown option: %s", option)
 			}
 			others = append(others, option)
