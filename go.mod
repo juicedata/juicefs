@@ -8,11 +8,11 @@ require (
 	github.com/Arvintian/scs-go-sdk v1.1.0
 	github.com/Azure/azure-sdk-for-go v11.1.1-beta+incompatible
 	github.com/DataDog/zstd v1.4.5
-	github.com/IBM/ibm-cos-sdk-go v1.6.0
+	github.com/IBM/ibm-cos-sdk-go v1.8.0
 	github.com/NetEase-Object-Storage/nos-golang-sdk v0.0.0-20171031020902-cc8892cb2b05
 	github.com/agiledragon/gomonkey/v2 v2.2.0
-	github.com/aliyun/aliyun-oss-go-sdk v2.1.0+incompatible
-	github.com/aws/aws-sdk-go v1.35.20
+	github.com/aliyun/aliyun-oss-go-sdk v2.2.2+incompatible
+	github.com/aws/aws-sdk-go v1.43.26
 	github.com/baidubce/bce-sdk-go v0.9.47
 	github.com/billziss-gh/cgofuse v1.4.0
 	github.com/ceph/go-ceph v0.4.0
@@ -35,7 +35,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juju/ratelimit v1.0.1
-	github.com/ks3sdklib/aws-sdk-go v1.0.12
+	github.com/ks3sdklib/aws-sdk-go v1.1.4
 	github.com/lib/pq v1.8.0
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-sqlite3 v2.0.1+incompatible
@@ -51,21 +51,21 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.26.0
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
-	github.com/qiniu/api.v7/v7 v7.8.0
+	github.com/qiniu/api.v7/v7 v7.8.2
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.7.0
 	github.com/smartystreets/goconvey v1.6.4
-	github.com/tencentyun/cos-go-sdk-v5 v0.7.8
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.34
 	github.com/tikv/client-go/v2 v2.0.0
 	github.com/upyun/go-sdk/v3 v3.0.2
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
-	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
+	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
-	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
+	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 	google.golang.org/api v0.30.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	xorm.io/xorm v1.0.7
@@ -93,6 +93,7 @@ require (
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/cheggaaa/pb v1.0.29 // indirect
+	github.com/clbanning/mxj v1.8.4 // indirect
 	github.com/coredns/coredns v1.4.0 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
@@ -125,6 +126,7 @@ require (
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/readahead v0.0.0-20161222183148-eaceba169032 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
+	github.com/gookit/color v1.3.6 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1 // indirect
 	github.com/gorilla/handlers v1.5.1 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
@@ -170,7 +172,7 @@ require (
 	github.com/minio/simdjson-go v0.2.1 // indirect
 	github.com/minio/sio v0.2.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/mitchellh/mapstructure v1.1.2 // indirect
+	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/montanaflynn/stats v0.5.0 // indirect
@@ -220,7 +222,7 @@ require (
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/text v0.3.6 // indirect
+	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
 	golang.org/x/tools v0.1.5 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
