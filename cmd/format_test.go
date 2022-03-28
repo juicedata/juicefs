@@ -72,4 +72,17 @@ func TestFormat(t *testing.T) {
 	if f.Name != testVolume {
 		t.Fatalf("volume name %s != expected %s", f.Name, testVolume)
 	}
+
+	if err = Main([]string{"", "format", testMeta, testVolume, "--capacity", "1", "--inodes", "1000"}); err != nil {
+		t.Fatalf("format error: %s", err)
+	}
+	if body, err = rdb.Get(context.Background(), "setting").Bytes(); err != nil {
+		t.Fatalf("get setting: %s", err)
+	}
+	if err = json.Unmarshal(body, &f); err != nil {
+		t.Fatalf("json unmarshal: %s", err)
+	}
+	if f.Capacity != 1<<30 || f.Inodes != 1000 {
+		t.Fatalf("unexpected volume: %+v", f)
+	}
 }

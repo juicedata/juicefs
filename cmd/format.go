@@ -343,9 +343,9 @@ func format(c *cli.Context) error {
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
-				format.Capacity = c.Uint64(flag)
+				format.Capacity = c.Uint64(flag) << 30
 			case "inodes":
-				format.Capacity = c.Uint64(flag)
+				format.Inodes = c.Uint64(flag)
 			case "bucket":
 				format.Bucket = c.String(flag)
 			case "access-key":
