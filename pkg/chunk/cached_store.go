@@ -474,7 +474,6 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 		return
 	}
 	blockSize := len(block.Data)
-	defer c.store.bcache.uploaded(key, blockSize)
 	defer func() {
 		<-c.store.currentUpload
 	}()
@@ -495,19 +494,24 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 	block.Release()
 
 	try := 0
-	for c.uploadError == nil {
+	for try <= 3 { // for async, c.uploadError is always nil
 		err = c.put(key, buf)
 		if err == nil {
 			break
 		}
-		logger.Warnf("upload %s: %s (tried %d)", key, err, try)
 		try++
-		time.Sleep(time.Second * time.Duration(try))
+		logger.Warnf("upload %s: %s (tried %d)", key, err, try)
+		time.Sleep(time.Second * time.Duration(try*try))
 	}
 	buf.Release()
-	if err = os.Remove(stagingPath); err == nil {
-		stageBlocks.Sub(1)
-		stageBlockBytes.Sub(float64(blockSize))
+	if err == nil {
+		c.store.bcache.uploaded(key, blockSize)
+		if os.Remove(stagingPath) == nil {
+			stageBlocks.Sub(1)
+			stageBlockBytes.Sub(float64(blockSize))
+		}
+	} else { // add to delay list and wait for later scanning
+		c.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
 	}
 }
 
@@ -878,7 +882,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 	compressed := buf.Data[:n]
 	try := 0
-	for {
+	for try <= 3 {
 		if store.upLimit != nil {
 			store.upLimit.Wait(int64(len(compressed)))
 		}
@@ -896,15 +900,17 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		} else {
 			objectReqErrors.Add(1)
 		}
-		logger.Warnf("upload %s: %s (try %d)", key, err, try)
 		try++
+		logger.Warnf("upload %s: %s (try %d)", key, err, try)
 		time.Sleep(time.Second * time.Duration(try*try))
 	}
-	store.bcache.uploaded(key, blockSize)
-	store.removeStaging(key)
-	if err = os.Remove(stagingPath); err == nil {
-		stageBlocks.Sub(1)
-		stageBlockBytes.Sub(float64(blockSize))
+	if err == nil {
+		store.bcache.uploaded(key, blockSize)
+		store.removeStaging(key)
+		if os.Remove(stagingPath) == nil {
+			stageBlocks.Sub(1)
+			stageBlockBytes.Sub(float64(blockSize))
+		}
 	}
 }
 
