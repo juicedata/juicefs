@@ -2143,6 +2143,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		case *memKV:
 			m.snap = c
 		default:
+			defer func() { m.snap = nil }()
 			m.snap = &memKV{items: btree.New(2), temp: &kvItem{}}
 			bar := progress.AddCountBar("Snapshot keys", 0)
 			if err = m.txn(func(tx kvTxn) error {
@@ -2275,7 +2276,6 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 	progress.Done()
-	m.snap = nil
 
 	return bw.Flush()
 }
