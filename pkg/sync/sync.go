@@ -792,6 +792,18 @@ func includeObject(rules []*rule, o object.Object) bool {
 
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, config *Config) error {
+	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
+		major, minor := utils.GetKernelVersion()
+		// copy_file_range() system call first appeared in Linux 4.5
+		if major > 4 || major == 4 && minor > 4 {
+			d1 := utils.GetDev(src.String())
+			d2 := utils.GetDev(dst.String())
+			if d1 != -1 && d1 == d2 {
+				object.TryCFR = true
+			}
+		}
+	}
+
 	var bufferSize = 10240
 	if config.Manager != "" {
 		bufferSize = 100

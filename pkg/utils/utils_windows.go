@@ -38,3 +38,5 @@ func GetFileInode(path string) (uint64, error) {
 }
 
 func GetKernelVersion() (major, minor int) { return }
+
+func GetDev(fpath string) int { return -1 }

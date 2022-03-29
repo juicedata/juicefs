@@ -31,18 +31,17 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const (
 	dirSuffix = "/"
 )
 
+var TryCFR bool // try copy_file_range
+
 type filestore struct {
 	DefaultObjectStorage
-	root   string
-	tryCFR bool // try copy_file_range
+	root string
 }
 
 func (d *filestore) Symlink(oldName, newName string) error {
@@ -154,11 +153,7 @@ func (d *filestore) Put(key string, in io.Reader) error {
 		}
 	}()
 
-	var try bool
-	if d.tryCFR {
-		_, try = in.(*os.File)
-	}
-	if try {
+	if TryCFR {
 		_, err = io.Copy(f, in)
 	} else {
 		buf := bufPool.Get().(*[]byte)
@@ -414,13 +409,7 @@ func newDisk(root, accesskey, secretkey string) (ObjectStorage, error) {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
 		}
 	}
-	var try bool
-	if accesskey == "try-copy-file-range" { // currently only `sync` command will set this
-		major, minor := utils.GetKernelVersion()
-		// copy_file_range() system call first appeared in Linux 4.5
-		try = major > 4 || major == 4 && minor > 4
-	}
-	return &filestore{root: root, tryCFR: try}, nil
+	return &filestore{root: root}, nil
 }
 
 func init() {
