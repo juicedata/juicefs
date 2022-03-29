@@ -796,8 +796,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		major, minor := utils.GetKernelVersion()
 		// copy_file_range() system call first appeared in Linux 4.5
 		if major > 4 || major == 4 && minor > 4 {
-			d1 := utils.GetDev(src.String())
-			d2 := utils.GetDev(dst.String())
+			d1 := utils.GetDev(src.String()[7:]) // remove prefix "file://"
+			d2 := utils.GetDev(dst.String()[7:])
 			if d1 != -1 && d1 == d2 {
 				object.TryCFR = true
 			}
