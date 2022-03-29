@@ -354,7 +354,10 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		_ = os.Remove(f.Name()) // will be deleted after Close()
 		defer f.Close()
 
-		if _, err = io.Copy(f, in); err != nil {
+		// in is not *os.File, use bufPool
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+		if _, err = io.CopyBuffer(struct{ io.Writer }{f}, in, *buf); err != nil {
 			return err
 		}
 		// upload
