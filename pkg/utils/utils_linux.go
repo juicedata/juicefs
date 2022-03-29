@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright 2021 Juicedata, Inc.
+ * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,26 +17,29 @@
 package utils
 
 import (
-	"os"
-
-	"golang.org/x/sys/windows"
+	"strconv"
+	"strings"
+	"syscall"
 )
 
-func GetFileInode(path string) (uint64, error) {
-	// FIXME support directory
-	fd, err := windows.Open(path, os.O_RDONLY, 0)
-	if err != nil {
-		return 0, err
+func GetKernelVersion() (major, minor int) {
+	var uname syscall.Utsname
+	if err := syscall.Uname(&uname); err == nil {
+		buf := make([]byte, 0, 65) // Utsname.Release [65]int8
+		for _, v := range uname.Release {
+			if v == 0x00 {
+				break
+			}
+			buf = append(buf, byte(v))
+		}
+		ps := strings.SplitN(string(buf), ".", 3)
+		if len(ps) < 2 {
+			return
+		}
+		if major, err = strconv.Atoi(ps[0]); err != nil {
+			return
+		}
+		minor, _ = strconv.Atoi(ps[1])
 	}
-	defer windows.Close(fd)
-	var data windows.ByHandleFileInformation
-	err = windows.GetFileInformationByHandle(fd, &data)
-	if err != nil {
-		return 0, err
-	}
-	return uint64(data.FileIndexHigh)<<32 + uint64(data.FileIndexLow), nil
+	return
 }
-
-func GetKernelVersion() (major, minor int) { return }
-
-func GetDev(fpath string) int { return -1 }
