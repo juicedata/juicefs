@@ -69,6 +69,7 @@ script:
   - git clone https://github.com/iustin/pyxattr.git
   - cd pyxattr
   - pip3 install pytest
+  - pip3 install pyxattr
   - TEST_DIR=/jfs/ python3 -m pytest tests
   - cd /home/travis/gopath/src/github.com/juicedata/juicefs
   - sudo DURATION=10 make -C fstests all
