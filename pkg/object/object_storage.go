@@ -19,6 +19,7 @@ package object
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -47,6 +48,10 @@ type File interface {
 	Owner() string
 	Group() string
 	Mode() os.FileMode
+}
+
+type onlyWriter struct {
+	io.Writer
 }
 
 type file struct {

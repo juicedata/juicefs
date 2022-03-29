@@ -152,7 +152,7 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	}()
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
-	_, err = io.CopyBuffer(f, in, *buf)
+	_, err = io.CopyBuffer(onlyWriter{f}, in, *buf)
 	if err != nil {
 		_ = f.Close()
 		return err
