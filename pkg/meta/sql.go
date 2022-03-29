@@ -2529,6 +2529,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 	if root == 1 {
+		defer func() { m.snap = nil }()
 		bar := progress.AddCountBar("Snapshot keys", 0)
 		if err = m.makeSnap(bar); err != nil {
 			return fmt.Errorf("Fetch all metadata from DB: %s", err)
@@ -2622,7 +2623,6 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 	progress.Done()
-	m.snap = nil
 
 	return bw.Flush()
 }
