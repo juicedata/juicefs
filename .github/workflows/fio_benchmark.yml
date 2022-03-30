@@ -97,6 +97,7 @@ jobs:
               sudo ./juicefs mount -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $mount_arg &
               if [[ "$name" =~ ^big-file-rand-read.* ]]; then
                 blocksize=$(echo $name | awk -F- '{print $NF}' | xargs)
+                echo blocksize is $blocksize
                 fio --name=big-file-rand-read-preload --directory=${{ steps.vars.outputs.MOUNT_POINT }} --rw=randread --refill_buffers --size=${default_size} --filename=randread.bin --bs=$block_size --pre_read=1
                 sudo sync && echo 3 > /proc/sys/vm/drop_caches
               fi
@@ -112,12 +113,12 @@ jobs:
           done
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use  test_result; LOAD DATA INFILE '/var/lib/mysql-files/result.csv' INTO TABLE fio_test FIELDS TERMINATED BY ',' IGNORE 1 ROWS;" 
 
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        id: slack
-        uses: slackapi/slack-github-action@v1.18.0
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack-message: "@${{ github.actor}} CI Check ${{ job.status }} on ${{ github.event_name }}\n${{ github.event.pull_request.title || github.event.head_commit.message }} \nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
+#      - name: Send Slack Notification
+#        if: ${{ failure() }}
+#        id: slack
+#        uses: slackapi/slack-github-action@v1.18.0
+#        with:
+#          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+#          slack-message: "@${{ github.actor}} CI Check ${{ job.status }} on ${{ github.event_name }}\n${{ github.event.pull_request.title || github.event.head_commit.message }} \nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
+#        env:
+#          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
