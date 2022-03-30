@@ -346,7 +346,7 @@ $ juicefs format --storage s3 \
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs" /mnt/jfs
+sudo juicefs mount -d "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" /mnt/jfs
 ```
 
 ## FoundationDB
