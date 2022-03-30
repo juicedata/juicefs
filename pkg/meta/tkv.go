@@ -1806,6 +1806,9 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 
+	if len(buf) > sliceBytes*100 {
+		buf = buf[:sliceBytes*100]
+	}
 	ss := readSliceBuf(buf)
 	skipped := skipSome(ss)
 	ss = ss[skipped:]

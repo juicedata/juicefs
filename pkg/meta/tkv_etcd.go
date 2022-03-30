@@ -45,8 +45,7 @@ func (tx *etcdTxn) get(key []byte) []byte {
 	if v, ok := tx.buffer[k]; ok {
 		return v
 	}
-	resp, err := tx.kv.Get(tx.ctx, k, etcd.WithLimit(1),
-		etcd.WithSerializable())
+	resp, err := tx.kv.Get(tx.ctx, k, etcd.WithLimit(1))
 	if err != nil {
 		panic(fmt.Errorf("get %v: %s", k, err))
 	}
@@ -85,7 +84,7 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 	}
 	ops := make([]etcd.Op, len(keys))
 	for i, key := range keys {
-		ops[i] = etcd.OpGet(string(key), etcd.WithSerializable())
+		ops[i] = etcd.OpGet(string(key))
 	}
 	r, err := tx.kv.Do(tx.ctx, etcd.OpTxn(nil, ops, nil))
 	if err != nil {
