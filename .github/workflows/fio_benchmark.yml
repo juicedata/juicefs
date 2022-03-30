@@ -100,7 +100,7 @@ jobs:
             if [ -n "$job" ]; then
               name=$(echo $job | awk -F: '{print $1}' | xargs)
               fio_arg=$(echo $job | awk -F: '{print $2}' | xargs)
-              mount_arg = $(echo $job | awk -F: '{print $3}' | xargs)
+              mount_arg=$(echo $job | awk -F: '{print $3}' | xargs)
               sudo ./juicefs mount -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $mount_arg &
               if [[ "$name" =~ ^big-file-rand-read.* ]]; then
                 blocksize=$(echo $name | awk -F- '{print $NF}' | xargs)
