@@ -110,7 +110,7 @@ jobs:
               fio --name=$name --directory=${{ steps.vars.outputs.MOUNT_POINT }} $fio_arg > result.log
               bw=$(tail -1 result.log | awk '{print $2}' | awk -F '=' '{print $2}' | cut -b 1,-3)
               echo $bw, $(date +"%Y-%m-%d %H:%M:%S"), ${{github.sha}}, https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}, $juicefs_version, $name, $ref_name | tee -a $csv_file
-              sudo ./juicefs unmount ${{ steps.vars.outputs.MOUNT_POINT }}
+              sudo ./juicefs umount ${{ steps.vars.outputs.MOUNT_POINT }}
             fi
           done
 
