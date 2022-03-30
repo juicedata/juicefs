@@ -38,7 +38,8 @@ jobs:
           fi
 
       - name: Format
-        sudo ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
+        run: |
+          sudo ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
 
       - name: Fio Benchmark 
         run: |
