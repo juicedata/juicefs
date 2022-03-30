@@ -7,7 +7,7 @@ on:
 
 jobs:
   fio-benchmark:
-    runs-on: [self-hosted, daily-build]
+    runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -17,8 +17,8 @@ jobs:
       - name: Set Variable
         id: vars
         run: |
-          echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/5
-          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-fio-benchmark
+          echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/6
+          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-fio-benchmark1
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-fio-benchmark
 
       - name: Build linux target
@@ -47,7 +47,62 @@ jobs:
 
       - name: Fio Benchmark 
         run: |
-          fio --name=sequential-read --directory=${{ steps.vars.outputs.MOUNT_POINT }} --rw=read --refill_buffers --bs=4M --size=1G
+          csv_file=/var/lib/mysql-files/result.csv
+          juicefs_version=$(./juicefs -V|cut -b 17-)
+          echo bandwidth, created_date, github_revision, workflow_url, juicefs_version, name, ref_name > $csv_file
+          default_size=100M
+          fio_jobs=(
+            "big-file-sequential-read:      --rw=read --refill_buffers --bs=256k --size=${default_size}", \
+            "big-file-sequential-write:     --rw=write --refill_buffers --bs=256k --size=${default_size}" \
+            "big-file-multi-read-1:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=1" \
+            "big-file-multi-read-2:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=2" \
+            "big-file-multi-read-4:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=4" \
+            "big-file-multi-read-8:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=8" \
+            "big-file-multi-read-16:        --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=16" \
+            "big-file-multi-write-1:        --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=1" \
+            "big-file-multi-write-2:        --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=2" \
+            "big-file-multi-write-4:        --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=4" \
+            "big-file-multi-write-8:        --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=8" \
+            "big-file-multi-write-16:       --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=16" \
+            "big-file-random-write-4k:      --rw=randwrite --refill_buffers --size=4G --bs=4k" \
+            "big-file-random-write-16k:     --rw=randwrite --refill_buffers --size=4G --bs=16k" \
+            "big-file-random-write-64k:     --rw=randwrite --refill_buffers --size=4G --bs=64k" \
+            "big-file-random-write-256k:    --rw=randwrite --refill_buffers --size=4G --bs=256k" \
+            "small-file-seq-read-4k:        --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000" \
+            "small-file-seq-read-16k:       --rw=read --file_service_type=sequential --bs=16k --filesize=16k --nrfiles=1000" \
+            "small-file-seq-read-64k:       --rw=read --file_service_type=sequential --bs=64k --filesize=64k --nrfiles=1000" \
+            "small-file-seq-read-128k:      --rw=read --file_service_type=sequential --bs=128k --filesize=128k --nrfiles=1000" \
+            "small-file-seq-read-256k:      --rw=read --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=1000" \
+            "small-file-seq-write-4k:       --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000" \
+            "small-file-seq-write-16k:      --rw=write --file_service_type=sequential --bs=16k --filesize=16k --nrfiles=1000" \
+            "small-file-seq-write-64k:      --rw=write --file_service_type=sequential --bs=64k --filesize=64k --nrfiles=1000" \
+            "small-file-seq-write-128k:     --rw=write --file_service_type=sequential --bs=128k --filesize=128k --nrfiles=1000" \
+            "small-file-seq-write-256k:     --rw=write --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=1000" \
+            "small-file-multi-read-1:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=1" \
+            "small-file-multi-read-2:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=2" \
+            "small-file-multi-read-4:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=4" \
+            "small-file-multi-read-8:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=8" \
+            "small-file-multi-read-16:      --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=16" \
+            "small-file-multi-write-1:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=1" \
+            "small-file-multi-write-2:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=2" \
+            "small-file-multi-write-4:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=4" \
+            "small-file-multi-write-8:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=8" \
+            "small-file-multi-write-16:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=16" \
+          )
+
+          for job in "${fio_jobs[@]}"
+          do
+            echo job is:, $job
+            if [ -n "$job"]; then
+              name=$(echo $job | awk -F: '{print $1}' | xargs)
+              argument=$(echo $job | awk -F: '{print $2}' | xargs)
+              fio --name=$name --directory=${{ steps.vars.outputs.MOUNT_POINT }} $argument > result.log
+              bw=$(tail -1 result.log | awk '{print $2}' | awk -F '=' '{print $2}' | cut -b 1,-3)
+              echo $bw, $(date +"%Y-%m-%d %H:%M:%S"), ${{github.sha}}, https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}, $juicefs_version, $name, $ref_name >> $csv_file
+            fi
+          done
+
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use  test_result; LOAD DATA INFILE '/var/lib/mysql-files/result.csv' INTO TABLE fio_test FIELDS TERMINATED BY ',' IGNORE 1 ROWS;" 
 
       - name: Clean After
         run: |
