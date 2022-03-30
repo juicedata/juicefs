@@ -278,8 +278,9 @@ func newStore(format *meta.Format, chunkConf *chunk.Config, registerer prometheu
 
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
-		BlockSize: format.BlockSize * 1024,
-		Compress:  format.Compression,
+		BlockSize:  format.BlockSize * 1024,
+		Compress:   format.Compression,
+		HashPrefix: format.HashPrefix,
 
 		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
@@ -328,13 +329,7 @@ func mount(c *cli.Context) error {
 	mp := c.Args().Get(1)
 
 	prepareMp(mp)
-	var readOnly = c.Bool("read-only")
-	for _, o := range strings.Split(c.String("o"), ",") {
-		if o == "ro" {
-			readOnly = true
-		}
-	}
-	metaConf := getMetaConf(c, mp, readOnly)
+	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
 	metaCli := meta.NewClient(addr, metaConf)
 	format := getFormat(c, metaCli)

@@ -74,6 +74,7 @@ $ juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-
 # SRC: a1/b1,a2/b2,aaa/b1,b1,b2  DST: empty   sync result: a1/b1,b2
 $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
 
+Details: https://juicefs.com/docs/community/administration/sync
 Supported storage systems: https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -135,12 +136,17 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			},
 			&cli.StringSliceFlag{
 				Name:  "include",
-				Usage: "don't exclude Key matching PATTERN",
+				Usage: "don't exclude Key matching PATTERN, need to be used with \"--exclude\" option",
 			},
 			&cli.BoolFlag{
 				Name:    "links",
 				Aliases: []string{"l"},
 				Usage:   "copy symlinks as symlinks",
+			},
+			&cli.Int64Flag{
+				Name:  "limit",
+				Usage: "limit the number of objects that will be processed",
+				Value: -1,
 			},
 			&cli.StringFlag{
 				Name:  "manager",

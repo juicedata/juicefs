@@ -35,6 +35,7 @@ type Config struct {
 	Exclude     []string
 	Include     []string
 	Links       bool
+	Limit       int64
 	Manager     string
 	Workers     []string
 	BWLimit     int
@@ -46,6 +47,10 @@ type Config struct {
 }
 
 func NewConfigFromCli(c *cli.Context) *Config {
+	if c.IsSet("limits") && c.Int64("limits") < 0 {
+		logger.Fatal("The limits parameter must be a non-negative integer")
+	}
+
 	return &Config{
 		Start:       c.String("start"),
 		End:         c.String("end"),
@@ -60,6 +65,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Exclude:     c.StringSlice("exclude"),
 		Include:     c.StringSlice("include"),
 		Links:       c.Bool("links"),
+		Limit:       c.Int64("limit"),
 		Workers:     c.StringSlice("worker"),
 		Manager:     c.String("manager"),
 		BWLimit:     c.Int("bwlimit"),

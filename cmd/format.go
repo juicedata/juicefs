@@ -143,6 +143,10 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Usage: "number of days after which removed files will be permanently deleted",
 			},
 			&cli.BoolFlag{
+				Name:  "hash-prefix",
+				Usage: "give each object a hashed prefix",
+			},
+			&cli.BoolFlag{
 				Name:  "force",
 				Usage: "overwrite existing format",
 			},
@@ -320,6 +324,7 @@ func format(c *cli.Context) error {
 			SecretKey:   c.String("secret-key"),
 			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
 			Shards:      c.Int("shards"),
+			HashPrefix:  c.Bool("hash-prefix"),
 			Capacity:    c.Uint64("capacity") << 30,
 			Inodes:      c.Uint64("inodes"),
 			BlockSize:   fixObjectSize(c.Int("block-size")),
@@ -343,9 +348,9 @@ func format(c *cli.Context) error {
 		for _, flag := range c.LocalFlagNames() {
 			switch flag {
 			case "capacity":
-				format.Capacity = c.Uint64(flag)
+				format.Capacity = c.Uint64(flag) << 30
 			case "inodes":
-				format.Capacity = c.Uint64(flag)
+				format.Inodes = c.Uint64(flag)
 			case "bucket":
 				format.Bucket = c.String(flag)
 			case "access-key":
@@ -361,6 +366,8 @@ func format(c *cli.Context) error {
 				format.Compression = c.String(flag)
 			case "shards":
 				format.Shards = c.Int(flag)
+			case "hash-prefix":
+				format.HashPrefix = c.Bool(flag)
 			case "storage":
 				format.Storage = c.String(flag)
 			case "encrypt-rsa-key":

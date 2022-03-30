@@ -37,6 +37,8 @@ const (
 	dirSuffix = "/"
 )
 
+var TryCFR bool // try copy_file_range
+
 type filestore struct {
 	DefaultObjectStorage
 	root string
@@ -150,9 +152,14 @@ func (d *filestore) Put(key string, in io.Reader) error {
 			_ = os.Remove(tmp)
 		}
 	}()
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
-	_, err = io.CopyBuffer(f, in, *buf)
+
+	if TryCFR {
+		_, err = io.Copy(f, in)
+	} else {
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+		_, err = io.CopyBuffer(onlyWriter{f}, in, *buf)
+	}
 	if err != nil {
 		_ = f.Close()
 		return err

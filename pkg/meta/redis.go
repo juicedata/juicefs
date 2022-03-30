@@ -2884,6 +2884,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 	if root == 1 {
+		defer func() { m.snap = nil }()
 		bar := progress.AddCountBar("Snapshot keys", m.rdb.DBSize(ctx).Val())
 		if err = m.makeSnap(bar); err != nil {
 			return errors.Errorf("Fetch all metadata from Redis: %s", err)
@@ -2983,7 +2984,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 	progress.Done()
-	m.snap = nil
 
 	return bw.Flush()
 }

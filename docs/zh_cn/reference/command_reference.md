@@ -510,9 +510,7 @@ juicefs sync [command options] SRC DST
 - `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，具体请参考[文档](how_to_setup_object_storage.md#支持的存储服务)。
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
-:::tip
-如果想要在 `SRC` 或者 `DST` 中表达文件夹的概念时，请确保路径是以 "/" 或者 "\" 结尾的，否则将会被认为是对象名的前缀。
-:::
+有关 `sync` 子命令的详细介绍，请参考[文档](../administration/sync.md)。
 
 #### 选项
 
@@ -553,14 +551,13 @@ juicefs sync [command options] SRC DST
 排除匹配 PATTERN 的 Key
 
 `--include PATTERN`<br />
-不排除匹配 PATTERN 的 Key, 需要与`--exclude` 配合使用。
-
-:::tip
-`--exclude` 与 `--include` 的设置顺序将会影响运行结果。每个对象将按照这两个参数出现的先后顺序依次匹配，一旦匹配某个参数的 PATTERN ，那么该对象的行为就是这个参数的类型，不再尝试后出现的参数的匹配。如果该个对象没有被任何一个参数匹配到，那么该对象的默认行为 include 。 `--include` 与 `--exclude` 参数的设计参考了 `rsync` ，但是目前我们不支持 `rsync` 中的 `**` 与 `***` 这两条匹配规则。
-:::
+不排除匹配 PATTERN 的 Key，需要与 `--exclude` 选项配合使用。
 
 `--links, -l`<br />
 将符号链接复制为符号链接 (默认: false)
+
+` --limit value`<br />
+限制将要处理的对象的数量 (默认: -1)
 
 `--manager value`<br />
 管理者地址
