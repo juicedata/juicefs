@@ -38,13 +38,16 @@ JuiceFS requires Redis 4.0+
 When using Redis as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
-redis://[<username>:<password>@]<host>[:6379]/1
+redis[s]://[<username>:<password>@]<host>[:<port>]/<db>
 ```
 
 Where `[]` enclosed are optional and the rest are mandatory.
 
-- `username` is introduced after Redis 6.0 and can be ignored if there is no username, but the `:` colon in front of the password needs to be kept, e.g. `redis://:password@host:6379/1`.
-- The default port number for the `redis://` protocol header is `6379`, which can be left blank if the default port number is not changed, e.g. `redis://:password@host/1`.
+- If the [TLS](https://redis.io/docs/manual/security/encryption) feature of Redis is enabled, the protocol header needs to use `rediss://`, otherwise use `redis://`.
+- `<username>` is introduced after Redis 6.0 and can be ignored if there is no username, but the `:` colon in front of the password needs to be kept, e.g. `redis://:<password>@<host>:6379/1`.
+- The default port number on which Redis listens is `6379`, which can be left blank if the default port number is not changed, e.g. `redis://:<password>@<host>/1`.
+- Redis supports multiple [logical databases](https://redis.io/commands/select), please replace `<db>` with the actual database number used.
+- If you need to connect to Redis Sentinel, the format of the metadata URL will be slightly different, please refer to the ["Redis Best Practices"](../administration/metadata/redis_best_practices.md#high-availability) document for details.
 
 For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 
