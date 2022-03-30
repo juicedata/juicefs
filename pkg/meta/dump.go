@@ -76,7 +76,7 @@ type DumpedSlice struct {
 }
 
 type DumpedChunk struct {
-	Index  uint32         `json:"index,omitempty"`
+	Index  uint32         `json:"index"`
 	Slices []*DumpedSlice `json:"slices"`
 }
 
