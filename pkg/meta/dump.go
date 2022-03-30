@@ -36,7 +36,7 @@ type DumpedCounters struct {
 	NextChunk         int64 `json:"nextChunk"`
 	NextSession       int64 `json:"nextSession"`
 	NextTrash         int64 `json:"nextTrash"`
-	NextCleanupSlices int64 `json:"nextCleanupSlices"` // deprecated, always 0
+	NextCleanupSlices int64 `json:"nextCleanupSlices,omitempty"` // deprecated, always 0
 }
 
 type DumpedDelFile struct {
@@ -59,9 +59,9 @@ type DumpedAttr struct {
 	Atime     int64  `json:"atime"`
 	Mtime     int64  `json:"mtime"`
 	Ctime     int64  `json:"ctime"`
-	Atimensec uint32 `json:"atimensec"`
-	Mtimensec uint32 `json:"mtimensec"`
-	Ctimensec uint32 `json:"ctimensec"`
+	Atimensec uint32 `json:"atimensec,omitempty"`
+	Mtimensec uint32 `json:"mtimensec,omitempty"`
+	Ctimensec uint32 `json:"ctimensec,omitempty"`
 	Nlink     uint32 `json:"nlink"`
 	Length    uint64 `json:"length"`
 	Rdev      uint32 `json:"rdev,omitempty"`
@@ -69,9 +69,9 @@ type DumpedAttr struct {
 
 type DumpedSlice struct {
 	Chunkid uint64 `json:"chunkid"`
-	Pos     uint32 `json:"pos"`
+	Pos     uint32 `json:"pos,omitempty"`
 	Size    uint32 `json:"size"`
-	Off     uint32 `json:"off"`
+	Off     uint32 `json:"off,omitempty"`
 	Len     uint32 `json:"len"`
 }
 
@@ -88,7 +88,7 @@ type DumpedXattr struct {
 type DumpedEntry struct {
 	Name    string                  `json:"-"`
 	Parent  Ino                     `json:"-"`
-	Attr    *DumpedAttr             `json:"attr"`
+	Attr    *DumpedAttr             `json:"attr,omitempty"`
 	Symlink string                  `json:"symlink,omitempty"`
 	Xattrs  []*DumpedXattr          `json:"xattrs,omitempty"`
 	Chunks  []*DumpedChunk          `json:"chunks,omitempty"`
@@ -264,6 +264,10 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress fun
 		for name, child := range e.Entries {
 			child.Name = name
 			child.Parent = inode
+			if child.Attr == nil {
+				logger.Warnf("ignore empty entry: %s/%s", inode, name)
+				continue
+			}
 			if typeFromString(child.Attr.Type) == TypeDirectory {
 				e.Attr.Nlink++
 			}
