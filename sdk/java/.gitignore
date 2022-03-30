@@ -1,3 +1,6 @@
+*.dll
+*.dylib
+*.so
 .classpath
 .project
 .settings/

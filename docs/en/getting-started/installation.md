@@ -14,16 +14,16 @@ The JuiceFS client has only one binary file, you can download the pre-compiled v
 
 You can download the latest version of the client at [GitHub](https://github.com/juicedata/juicefs/releases). Pre-compiled versions for different CPU architectures and operating systems are available in the download list of each client version. Please find the version suit your application the best, e.g.,
 
-| File Name                              | Description                                                     |
-| ------------------------------------   | ----------------------------                                    |
-| `juicefs-x.x.x-darwin-amd64.tar.gz`    | For macOS systems with Intel chips                              |
-| `juicefs-x.x.x-linux-amd64.tar.gz`     | For Linux distributions on x86 architecture                 |
-| `juicefs-x.x.x-linux-arm64.tar.gz`     | For Linux distributions on ARM architecture                 |
-| `juicefs-x.x.x-windows-amd64.tar.gz`   | For Windows on x86 architecture                             |
-| `juicefs-hadoop-x.x.x-linux-amd64.jar` | Hadoop Java SDK for Linux distributions on x86 architecture |
+| File Name                            | Description                                                                          |
+|--------------------------------------|--------------------------------------------------------------------------------------|
+| `juicefs-x.x.x-darwin-amd64.tar.gz`  | For macOS systems with Intel chips                                                   |
+| `juicefs-x.x.x-linux-amd64.tar.gz`   | For Linux distributions on x86 architecture                                          |
+| `juicefs-x.x.x-linux-arm64.tar.gz`   | For Linux distributions on ARM architecture                                          |
+| `juicefs-x.x.x-windows-amd64.tar.gz` | For Windows on x86 architecture                                                      |
+| `juicefs-hadoop-x.x.x-amd64.jar`     | Hadoop Java SDK on x86 architecture (supports both Linux, macOS and Windows systems) |
 
 :::tip
-For macOS on M1 series chips, you can use the `darwin-amd64` version of the client dependent on [Rosetta 2](https://support.apple.com/zh-cn/HT211861), or you can refer to [Manually Compiling](#manually-compiling) to compile the native version.
+For macOS on M1 series chips, you can use the `darwin-amd64` version of the client dependent on [Rosetta 2](https://support.apple.com/en-us/HT211861), or you can refer to [Manually Compiling](#manually-compiling) to compile the native version.
 :::
 
 ### Linux
