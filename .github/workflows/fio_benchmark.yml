@@ -96,8 +96,8 @@ jobs:
               sudo ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
               sudo ./juicefs mount -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $mount_arg &
               if [[ "$name" =~ ^big-file-rand-read.* ]]; then
-                blocksize=$(echo $name | awk -F- '{print $NF}' | xargs)
-                echo blocksize is $blocksize
+                block_size=$(echo $name | awk -F- '{print $NF}' | xargs)
+                echo block_size is $block_size
                 fio --name=big-file-rand-read-preload --directory=${{ steps.vars.outputs.MOUNT_POINT }} --rw=randread --refill_buffers --size=${default_size} --filename=randread.bin --bs=$block_size --pre_read=1
                 sudo sync && echo 3 > /proc/sys/vm/drop_caches
               fi
