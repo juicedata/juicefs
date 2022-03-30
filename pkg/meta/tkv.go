@@ -1426,9 +1426,13 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	}
 	prefix := len(m.entryKey(inode, ""))
 	for name, buf := range vals {
-		typ, inode := m.parseEntry(buf)
+		typ, ino := m.parseEntry(buf)
+		if len(name) == prefix {
+			logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, inode)
+			continue
+		}
 		*entries = append(*entries, &Entry{
-			Inode: inode,
+			Inode: ino,
 			Name:  []byte(name)[prefix:],
 			Attr:  &Attr{Typ: typ},
 		})
