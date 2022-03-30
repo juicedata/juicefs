@@ -49,7 +49,7 @@ func TestBadgerClient(t *testing.T) {
 }
 
 func TestEtcdClient(t *testing.T) {
-	m, err := newKVMeta("etcd", "localhost:2379", &Config{})
+	m, err := newKVMeta("etcd", "localhost:2389", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -186,7 +186,7 @@ func TestBadgerKV(t *testing.T) {
 }
 
 func TestEtcd(t *testing.T) {
-	c, err := newEtcdClient("localhost:2379/jfs")
+	c, err := newEtcdClient("localhost:2389/jfs")
 	if err != nil {
 		t.Fatal(err)
 	}
