@@ -257,7 +257,7 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 			// update atime
 			cache.keys[key] = cacheItem{it.size, uint32(time.Now().Unix())}
 		}
-	} else {
+	} else if cache.keys[key].atime > 0 {
 		cache.used -= int64(cache.keys[key].size + 4096)
 		delete(cache.keys, key)
 	}
