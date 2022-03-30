@@ -52,7 +52,7 @@ jobs:
           echo bandwidth, created_date, github_revision, workflow_url, juicefs_version, name, ref_name > $csv_file
           default_size=100M
           fio_jobs=(
-            "big-file-sequential-read:      --rw=read --refill_buffers --bs=256k --size=${default_size} ", \
+            "big-file-sequential-read:      --rw=read --refill_buffers --bs=256k --size=${default_size}" \
             "big-file-sequential-write:     --rw=write --refill_buffers --bs=256k --size=${default_size}" \
             "big-file-multi-read-1:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=1" \
             "big-file-multi-read-2:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=2" \
