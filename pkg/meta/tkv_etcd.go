@@ -101,6 +101,10 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
 		k := string(key)
+		if v, ok := tx.buffer[k]; ok {
+			values[i] = v
+			continue
+		}
 		values[i] = rs[k]
 		if len(values[i]) == 0 {
 			tx.observed[k] = 0
