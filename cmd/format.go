@@ -330,7 +330,7 @@ func format(c *cli.Context) error {
 			BlockSize:   fixObjectSize(c.Int("block-size")),
 			Compression: c.String("compress"),
 			TrashDays:   c.Int("trash-days"),
-			MetaVersion: 1,
+			MetaVersion: 2,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
