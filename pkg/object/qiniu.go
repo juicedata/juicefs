@@ -32,14 +32,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/qiniu/api.v7/v7/auth/qbox"
-	"github.com/qiniu/api.v7/v7/storage"
+	"github.com/qiniu/go-sdk/v7/auth"
+	"github.com/qiniu/go-sdk/v7/storage"
 )
 
 type qiniu struct {
 	s3client
 	bm     *storage.BucketManager
-	mac    *qbox.Mac
+	cred   *auth.Credentials
 	cfg    *storage.Config
 	marker string
 }
@@ -50,7 +50,7 @@ func (q *qiniu) String() string {
 
 func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 	deadline := time.Now().Add(time.Second * 3600).Unix()
-	url := storage.MakePrivateURL(q.mac, os.Getenv("QINIU_DOMAIN"), key, deadline)
+	url := storage.MakePrivateURL(q.cred, os.Getenv("QINIU_DOMAIN"), key, deadline)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (q *qiniu) Put(key string, in io.Reader) error {
 		return err
 	}
 	putPolicy := storage.PutPolicy{Scope: q.bucket + ":" + key}
-	upToken := putPolicy.UploadToken(q.mac)
+	upToken := putPolicy.UploadToken(q.cred)
 	formUploader := storage.NewFormUploader(q.cfg)
 	var ret storage.PutRet
 	return formUploader.Put(ctx, &ret, upToken, key, body, vlen, nil)
@@ -221,9 +221,9 @@ func newQiniu(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		zone.SrcUpHosts = []string{"free-qvm-z0-xs.qiniup.com"}
 	}
 	cfg.Zone = zone
-	mac := qbox.NewMac(accessKey, secretKey)
-	bucketManager := storage.NewBucketManager(mac, &cfg)
-	return &qiniu{s3client, bucketManager, mac, &cfg, ""}, nil
+	cred := auth.New(accessKey, secretKey)
+	bucketManager := storage.NewBucketManager(cred, &cfg)
+	return &qiniu{s3client, bucketManager, cred, &cfg, ""}, nil
 }
 
 func init() {
