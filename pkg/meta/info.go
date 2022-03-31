@@ -60,7 +60,6 @@ func (ver redisVersion) String() string {
 
 type redisInfo struct {
 	aofEnabled      bool
-	clusterEnabled  bool
 	maxMemoryPolicy string
 	redisVersion    string
 }
