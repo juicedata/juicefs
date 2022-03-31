@@ -81,7 +81,7 @@ jobs:
                 "color":"#CB2431",
                 "footer":"qa@juicedata",
                 "footer_icon":"https://s.juicefs.com/static/jfs/logo.svg",
-                "ts": ${{ steps.cleanAfter.outputs.timestamp }},
+                "ts": "${{ steps.cleanAfter.outputs.timestamp }}",
                 "mrkdwn_in":["text"],
                 "author_name":"${{ github.event.pull_request.user.login || github.event.sender.login || github.actor }}",
                 "author_link":"${{ github.event.pull_request.user.html_url || github.event.sender.html_url}}",
