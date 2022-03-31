@@ -399,15 +399,15 @@ func (c *wChunk) WriteAt(p []byte, off int64) (n int, err error) {
 	return n, nil
 }
 
-func (c *wChunk) put(key string, p *Page) error {
-	if c.store.upLimit != nil {
-		c.store.upLimit.Wait(int64(len(p.Data)))
+func (store *cachedStore) put(key string, p *Page) error {
+	if store.upLimit != nil {
+		store.upLimit.Wait(int64(len(p.Data)))
 	}
 	p.Acquire()
 	return utils.WithTimeout(func() error {
 		defer p.Release()
 		st := time.Now()
-		err := c.store.storage.Put(key, bytes.NewReader(p.Data))
+		err := store.storage.Put(key, bytes.NewReader(p.Data))
 		used := time.Since(st)
 		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
 		if used > SlowRequest {
@@ -419,7 +419,7 @@ func (c *wChunk) put(key string, p *Page) error {
 			objectReqErrors.Add(1)
 		}
 		return err
-	}, c.store.conf.PutTimeout)
+	}, store.conf.PutTimeout)
 }
 
 func (c *wChunk) syncUpload(key string, block *Page) {
@@ -452,7 +452,7 @@ func (c *wChunk) syncUpload(key string, block *Page) {
 
 	try := 0
 	for try <= 10 && c.uploadError == nil {
-		err = c.put(key, buf)
+		err = c.store.put(key, buf)
 		if err == nil {
 			c.errors <- nil
 			return
@@ -495,7 +495,7 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 
 	try := 0
 	for try <= 3 { // for async, c.uploadError is always nil
-		err = c.put(key, buf)
+		err = c.store.put(key, buf)
 		if err == nil {
 			break
 		}
@@ -880,25 +880,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Errorf("compress chunk %s: %s", stagingPath, err)
 		return
 	}
-	compressed := buf.Data[:n]
+	buf.Data = buf.Data[:n]
 	try := 0
 	for try <= 3 {
-		if store.upLimit != nil {
-			store.upLimit.Wait(int64(len(compressed)))
-		}
-		st := time.Now()
-		err := store.storage.Put(key, bytes.NewReader(compressed))
-		used := time.Since(st)
-		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
-		if used > SlowRequest {
-			logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
-		}
-		objectDataBytes.WithLabelValues("PUT").Add(float64(len(compressed)))
-		objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
+		err = store.put(key, buf)
 		if err == nil {
 			break
-		} else {
-			objectReqErrors.Add(1)
 		}
 		try++
 		logger.Warnf("upload %s: %s (try %d)", key, err, try)
