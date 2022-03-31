@@ -446,22 +446,28 @@ func (c *wChunk) syncUpload(key string, block *Page) {
 
 	c.store.currentUpload <- true
 	defer func() {
-		buf.Release()
 		<-c.store.currentUpload
 	}()
 
 	try := 0
-	for try <= 10 && c.uploadError == nil {
+	for try <= 10 {
+		if c.uploadError != nil {
+			err = c.uploadError
+			break
+		}
 		err = c.store.put(key, buf)
 		if err == nil {
-			c.errors <- nil
-			return
+			break
 		}
 		try++
 		logger.Warnf("upload %s: %s (try %d)", key, err, try)
 		time.Sleep(time.Second * time.Duration(try*try))
 	}
-	c.errors <- fmt.Errorf("upload block %s: %s (after %d tries)", key, err, try)
+	buf.Release()
+	if err != nil {
+		err = fmt.Errorf("upload block %s: %s (after %d tries)", key, err, try)
+	}
+	c.errors <- err
 }
 
 func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
@@ -473,13 +479,13 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 		c.store.addDelayedStaging(key, stagingPath, time.Now(), true)
 		return
 	}
-	blockSize := len(block.Data)
 	defer func() {
 		<-c.store.currentUpload
 	}()
-	bufSize := c.store.compressor.CompressBound(blockSize)
+	blen := len(block.Data)
+	bufSize := c.store.compressor.CompressBound(blen)
 	var buf *Page
-	if bufSize > blockSize {
+	if bufSize > blen {
 		buf = NewOffPage(bufSize)
 	} else {
 		buf = block
@@ -505,10 +511,10 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 	}
 	buf.Release()
 	if err == nil {
-		c.store.bcache.uploaded(key, blockSize)
+		c.store.bcache.uploaded(key, blen)
 		if os.Remove(stagingPath) == nil {
 			stageBlocks.Sub(1)
-			stageBlockBytes.Sub(float64(blockSize))
+			stageBlockBytes.Sub(float64(blen))
 		}
 	} else { // add to delay list and wait for later scanning
 		c.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
@@ -872,8 +878,16 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Errorf("read %s: %s", stagingPath, err)
 		return
 	}
-	buf := NewOffPage(store.compressor.CompressBound(blockSize))
-	defer buf.Release()
+
+	blen := blockSize
+	bufSize := store.compressor.CompressBound(blen)
+	var buf *Page
+	if bufSize > blen {
+		buf = NewOffPage(bufSize)
+	} else {
+		buf = block
+		buf.Acquire()
+	}
 	n, err := store.compressor.Compress(buf.Data, block.Data)
 	block.Release()
 	if err != nil {
@@ -881,6 +895,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		return
 	}
 	buf.Data = buf.Data[:n]
+
 	try := 0
 	for try <= 3 {
 		err = store.put(key, buf)
@@ -891,6 +906,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Warnf("upload %s: %s (try %d)", key, err, try)
 		time.Sleep(time.Second * time.Duration(try*try))
 	}
+	buf.Release()
 	if err == nil {
 		store.bcache.uploaded(key, blockSize)
 		store.removeStaging(key)
