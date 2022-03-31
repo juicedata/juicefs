@@ -76,7 +76,7 @@ jobs:
             {"attachments": [
                 {
                 "color":"#CB2431",
-                "footer":"juicedata",
+                "footer":"qa@juicedata",
                 "footer_icon":"https://s.juicefs.com/static/jfs/logo.svg",
                 "ts":"$(date +%s)",
                 "mrkdwn_in":["text"],
