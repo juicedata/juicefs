@@ -57,6 +57,7 @@ jobs:
           done
           
       - name: Clean After
+        id: cleanAfter
         run: |
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT }} ]; then
             ./juicefs_new umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
@@ -65,6 +66,8 @@ jobs:
           if [ -n "$UUID" ];then
             sudo ./juicefs_mew destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
           fi
+          timestamp=$(date +%s)
+          echo ::set-output name=timestamp::$timestamp
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -78,7 +81,7 @@ jobs:
                 "color":"#CB2431",
                 "footer":"qa@juicedata",
                 "footer_icon":"https://s.juicefs.com/static/jfs/logo.svg",
-                "ts":"$(date +%s)",
+                "ts": ${{ steps.cleanAfter.outputs.timestamp }},
                 "mrkdwn_in":["text"],
                 "author_name":"${{ github.event.pull_request.user.login || github.event.sender.login || github.actor }}",
                 "author_link":"${{ github.event.pull_request.user.html_url || github.event.sender.html_url}}",
