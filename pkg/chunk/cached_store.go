@@ -432,17 +432,17 @@ func (c *wChunk) syncUpload(key string, block *Page) {
 		buf = block
 		buf.Acquire()
 	}
+	if blen < c.store.conf.BlockSize {
+		// block will be freed after written into disk
+		c.store.bcache.cache(key, block, false)
+	}
 	n, err := c.store.compressor.Compress(buf.Data, block.Data)
+	block.Release()
 	if err != nil {
 		logger.Fatalf("compress chunk %v: %s", c.id, err)
 		return
 	}
 	buf.Data = buf.Data[:n]
-	if blen < c.store.conf.BlockSize {
-		// block will be freed after written into disk
-		c.store.bcache.cache(key, block, false)
-	}
-	block.Release()
 
 	c.store.currentUpload <- true
 	defer func() {
@@ -486,12 +486,12 @@ func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
 		buf.Acquire()
 	}
 	n, err := c.store.compressor.Compress(buf.Data, block.Data)
+	block.Release()
 	if err != nil {
 		logger.Fatalf("compress chunk %v: %s", c.id, err)
 		return
 	}
 	buf.Data = buf.Data[:n]
-	block.Release()
 
 	try := 0
 	for try <= 3 { // for async, c.uploadError is always nil
@@ -877,7 +877,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	n, err := store.compressor.Compress(buf.Data, block.Data)
 	block.Release()
 	if err != nil {
-		logger.Errorf("compress chunk %s: %s", stagingPath, err)
+		logger.Fatalf("compress chunk %s: %s", stagingPath, err)
 		return
 	}
 	buf.Data = buf.Data[:n]
