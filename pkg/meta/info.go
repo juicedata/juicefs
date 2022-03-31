@@ -83,11 +83,6 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 			if val == "0" {
 				logger.Warnf("AOF is not enabled, you may lose data if Redis is not shutdown properly.")
 			}
-		case "cluster_enabled":
-			info.clusterEnabled = val == "1"
-			if val != "0" {
-				logger.Warnf("Redis cluster is not supported, some operation may fail unexpected.")
-			}
 		case "maxmemory_policy":
 			info.maxMemoryPolicy = val
 			if val != "noeviction" {
