@@ -1,0 +1,75 @@
+name: "version-compatible-test"
+
+on:
+  schedule:
+    - cron:  '2 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  version-compatible-test:
+    runs-on: [self-hosted, daily-build, bench-01]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Set Variable
+        id: vars
+        run: |
+          echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/7
+          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-version-compatible
+          echo ::set-output name=MOUNT_POINT::/tmp/juicefs-version-compatible
+
+      - name: Build linux target
+        run: |
+          export GOPATH=/usr/local/go
+          export HOME=/root
+          make juicefs
+          mv juicefs juicefs_new
+
+      - name: Clean Before
+        run: |
+          if [ -d ${{ steps.vars.outputs.MOUNT_POINT }} ]; then
+            ./juicefs umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
+          fi
+          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            sudo ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+          fi
+
+      - name: Version Compatible Test
+        run: |    
+          urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}'))
+          for url in "${urls[@]}"; do 
+            echo download url is: $url
+            wget $url
+            tar -zxf $(basename $url)
+            mv juicefs juicefs_old
+            sudo ./juicefs_old format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
+            sudo ./juicefs_new format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
+            UUID=$(./juicefs_new status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+            if [ -n "$UUID" ];then
+              sudo ./juicefs_old destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+            fi
+          done
+          
+      - name: Clean After
+        run: |
+          if [ -d ${{ steps.vars.outputs.MOUNT_POINT }} ]; then
+            ./juicefs_new umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
+          fi
+          UUID=$(./juicefs_new status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            sudo ./juicefs_mew destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+          fi
+
+#      - name: Send Slack Notification
+#        if: ${{ failure() }}
+#        id: slack
+#        uses: slackapi/slack-github-action@v1.18.0
+#        with:
+#          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+#          slack-message: "@${{ github.actor}} CI Check ${{ job.status }} on ${{ github.event_name }}\n${{ github.event.pull_request.title || github.event.head_commit.message }} \nhttps://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
+#        env:
+#          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}  
