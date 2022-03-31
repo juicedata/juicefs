@@ -20,9 +20,9 @@
     "MaxClientVersion": ""
   },
   "Counters": {
-    "usedSpace": 115380224,
-    "usedInodes": 11,
-    "nextInodes": 30,
+    "usedSpace": 115392512,
+    "usedInodes": 14,
+    "nextInodes": 35,
     "nextChunk": 9,
     "nextSession": 0,
     "nextTrash": 1

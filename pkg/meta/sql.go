@@ -291,7 +291,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.fmt = format
+	m.fmt = &format
 	now := time.Now()
 	n := &node{
 		Type:   TypeDirectory,
@@ -2423,6 +2423,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		}
 
 		entry.Name = e.Name
+		entry.encodeSelf()
 		if e.Type == TypeDirectory {
 			err = m.dumpDir(e.Inode, entry, bw, depth+2, showProgress)
 		} else {
@@ -2592,6 +2593,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
 	}
+	dm.Setting.encodeSelf()
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
@@ -2745,6 +2747,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = dec.Decode(dm); err != nil {
 		return err
 	}
+	dm.Setting.decodeSelf()
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err

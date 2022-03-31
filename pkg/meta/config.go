@@ -63,6 +63,18 @@ type Format struct {
 	MaxClientVersion string
 }
 
+func formatIterateHelp(f *Format, h func(original string) string) {
+	iterate([]*string{&f.Name, &f.Bucket, &f.AccessKey, &f.SecretKey, &f.EncryptKey}, h)
+}
+
+func (f *Format) encodeSelf() {
+	formatIterateHelp(f, escape)
+}
+
+func (f *Format) decodeSelf() {
+	formatIterateHelp(f, parseStr)
+}
+
 func (f *Format) RemoveSecret() {
 	if f.SecretKey != "" {
 		f.SecretKey = "removed"

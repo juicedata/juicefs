@@ -354,7 +354,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 		logger.Fatalf("json: %s", err)
 	}
 
-	m.fmt = format
+	m.fmt = &format
 	ts := time.Now().Unix()
 	attr := &Attr{
 		Typ:    TypeDirectory,
@@ -2091,6 +2091,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			return err
 		}
 		entry.Name = name[10:]
+		entry.encodeSelf()
 		if typ == TypeDirectory {
 			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
 		} else {
@@ -2245,6 +2246,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
 	}
+	dm.Setting.encodeSelf()
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
@@ -2353,6 +2355,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	if err := dec.Decode(dm); err != nil {
 		return err
 	}
+	dm.Setting.decodeSelf()
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err

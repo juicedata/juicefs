@@ -95,6 +95,77 @@ type DumpedEntry struct {
 	Entries map[string]*DumpedEntry `json:"entries,omitempty"`
 }
 
+var CHARS = []byte("0123456789ABCDEF")
+
+func escape(original string) string {
+	var escValue = make([]byte, 0, len(original))
+	for _, c := range []byte(original) {
+		if c < 32 || c >= 127 || c == '%' || c == '"' || c == '\\' {
+			escValue = append(escValue, '%')
+			escValue = append(escValue, CHARS[(c>>4)&0xF])
+			escValue = append(escValue, CHARS[c&0xF])
+		} else {
+			escValue = append(escValue, c)
+		}
+	}
+	return string(escValue)
+}
+
+func parseHex(c byte) byte {
+	if c >= '0' && c <= '9' {
+		return c - '0'
+	} else if c >= 'A' && c <= 'F' {
+		return 10 + (c - 'A')
+	} else {
+		logger.Warningf("hex expected: %c", c)
+		return 0
+	}
+}
+
+func parseStr(s string) string {
+	var res []byte
+	p := []byte(s)
+	for i := 0; i < len(p); i++ {
+		var c byte
+		if p[i] == '%' {
+			h1 := parseHex(p[i+1])
+			h2 := parseHex(p[i+2])
+			c = h1*16 + h2
+			i += 2
+		} else {
+			c = p[i]
+		}
+		res = append(res, c)
+	}
+	return string(res)
+}
+
+func iterate(items []*string, h func(original string) string) {
+	for _, item := range items {
+		*item = h(*item)
+	}
+}
+
+func entryIterateHelp(de *DumpedEntry, h func(original string) string) {
+	l := len(de.Xattrs)*2 + 2
+	item := make([]*string, l)
+	for idx, dumpedXattr := range de.Xattrs {
+		item[idx*2] = &dumpedXattr.Name
+		item[idx*2+1] = &dumpedXattr.Value
+	}
+	item[l-2] = &de.Name
+	item[l-1] = &de.Symlink
+	iterate(item, h)
+}
+
+func (de *DumpedEntry) encodeSelf() {
+	entryIterateHelp(de, escape)
+}
+
+func (de *DumpedEntry) decodeSelf() {
+	entryIterateHelp(de, parseStr)
+}
+
 func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 	prefix := strings.Repeat(jsonIndent, depth)
 	fieldPrefix := prefix + jsonIndent
@@ -165,7 +236,7 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 }
 
 type DumpedMeta struct {
-	Setting   Format
+	Setting   *Format
 	Counters  *DumpedCounters
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile
@@ -229,6 +300,7 @@ func loadAttr(d *DumpedAttr) *Attr {
 }
 
 func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
+	e.decodeSelf()
 	typ := typeFromString(e.Attr.Type)
 	inode := e.Attr.Inode
 	if showProgress != nil {

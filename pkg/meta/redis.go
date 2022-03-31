@@ -237,7 +237,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	if err = r.rdb.Set(ctx, "setting", data, 0).Err(); err != nil {
 		return err
 	}
-	r.fmt = format
+	r.fmt = &format
 	if body != nil {
 		return nil
 	}
@@ -2726,6 +2726,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		}
 
 		entry.Name = name
+		entry.encodeSelf()
 		if typ == TypeDirectory {
 			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
 		} else {
@@ -2953,6 +2954,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
 	}
+	dm.Setting.encodeSelf()
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
@@ -3067,6 +3069,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	if err = dec.Decode(dm); err != nil {
 		return err
 	}
+	dm.Setting.decodeSelf()
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err

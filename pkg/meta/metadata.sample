@@ -20,9 +20,9 @@
     "MaxClientVersion": ""
   },
   "Counters": {
-    "usedSpace": 115380224,
-    "usedInodes": 11,
-    "nextInodes": 30,
+    "usedSpace": 115392512,
+    "usedInodes": 14,
+    "nextInodes": 35,
     "nextChunk": 9,
     "nextSession": 0,
     "nextTrash": 1
@@ -36,9 +36,20 @@
     }
   ],
   "FSTree": {
-    "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437879,"ctime":1638437879,"nlink":4,"length":0},
+    "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437879,"ctime":1638437879,"nlink":5,"length":0},
     "xattrs": [{"name":"lastBackup","value":"2021-11-23T18:29:54+08:00"}],
     "entries": {
+      "GBK%B9%FB%D6%AD%CA%FD%BE%DD%BF%C6%BC%BC%D3%D0%CF%DE%B9%AB%CB%BE%CE%C4%BC%FE": {
+        "attr": {"inode":34,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1648717321,"mtime":1648717321,"ctime":1648717321,"atimensec":401146000,"mtimensec":401146000,"ctimensec":401146000,"nlink":1,"length":0}
+      },
+      "UTF8%E6%9E%9C%E6%B1%81%E6%95%B0%E6%8D%AE%E7%A7%91%E6%8A%80%E6%9C%89%E9%99%90%E5%85%AC%E5%8F%B8%E6%96%87%E4%BB%B6": {
+        "attr": {"inode":33,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1648717211,"mtime":1648717211,"ctime":1648717211,"atimensec":36325000,"mtimensec":36325000,"ctimensec":36325000,"nlink":1,"length":0}
+      },
+      "UTF8%E6%9E%9C%E6%B1%81%E6%95%B0%E6%8D%AE%E7%A7%91%E6%8A%80%E6%9C%89%E9%99%90%E5%85%AC%E5%8F%B8%E7%9B%AE%E5%BD%95": {
+        "attr": {"inode":32,"type":"directory","mode":493,"uid":501,"gid":0,"atime":1648717173,"mtime":1648717173,"ctime":1648717173,"atimensec":605897000,"mtimensec":605897000,"ctimensec":605897000,"nlink":2,"length":0},
+        "entries": {
+        }
+      },
       "d": {
         "attr": {"inode":25,"type":"directory","mode":493,"uid":1,"gid":0,"atime":1637664458,"mtime":1637664458,"ctime":1637664458,"atimensec":862381000,"mtimensec":862381000,"ctimensec":862381000,"nlink":2,"length":0},
         "entries": {

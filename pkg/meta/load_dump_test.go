@@ -17,14 +17,28 @@
 package meta
 
 import (
+	"bytes"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 )
 
 const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
+
+func GbkToUtf8(s []byte) ([]byte, error) {
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewDecoder())
+	d, e := ioutil.ReadAll(reader)
+	if e != nil {
+		return nil, e
+	}
+	return d, nil
+}
 
 func testLoad(t *testing.T, uri, fname string) Meta {
 	m := NewClient(uri, &Config{Retries: 10, Strict: true})
@@ -44,8 +58,19 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
-	} else if len(entries) != 8 {
+	} else if len(entries) != 11 {
 		t.Fatalf("entries: %d", len(entries))
+	}
+	for _, entry := range entries {
+		fname := string(entry.Name)
+		if strings.HasPrefix(fname, "GBK") {
+			if utf8, err := GbkToUtf8(entry.Name); err != nil || string(utf8) != "GBK果汁数据科技有限公司文件" {
+				t.Fatalf("load GBK file error: %s", string(utf8))
+			}
+		}
+		if strings.HasPrefix(fname, "UTF8") && fname != "UTF8果汁数据科技有限公司目录" && fname != "UTF8果汁数据科技有限公司文件" {
+			t.Fatalf("load entries error: %s", fname)
+		}
 	}
 	attr := &Attr{}
 	if st := m.GetAttr(ctx, 2, attr); st != 0 {
