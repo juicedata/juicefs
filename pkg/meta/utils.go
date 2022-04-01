@@ -96,6 +96,13 @@ func errno(err error) syscall.Errno {
 	return syscall.EIO
 }
 
+func fromErrNo(errno syscall.Errno) error {
+	if errno == 0 {
+		return nil
+	}
+	return errno
+}
+
 func accessMode(attr *Attr, uid uint32, gids []uint32) uint8 {
 	if uid == 0 {
 		return 0x7

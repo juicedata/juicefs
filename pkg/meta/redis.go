@@ -193,7 +193,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		prefix:   prefix,
 	}
 	m.en = m
-	m.checkServerConfig()
+	if prefix == "" {
+		// FIXME: may block for 5 minutes in cluster mode
+		m.checkServerConfig()
+	}
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
 }
@@ -287,9 +290,9 @@ func (r *redisMeta) Init(format Format, force bool) error {
 
 func (r *redisMeta) Reset() error {
 	if r.prefix != "" {
-		return r.scan(Background, "*", func(keys []string) error {
+		return fromErrNo(r.scan(Background, "*", func(keys []string) error {
 			return r.rdb.Del(Background, keys...).Err()
-		})
+		}))
 	}
 	return r.rdb.FlushDB(Background).Err()
 }
@@ -2846,12 +2849,12 @@ func (m *redisMeta) makeSnap(bar *utils.Bar) error {
 	}
 
 	scanner := func(match string, handlerKey func(keys []string) error) error {
-		return m.scan(ctx, match, func(keys []string) error {
+		return fromErrNo(m.scan(ctx, match, func(keys []string) error {
 			if err := handlerKey(keys); err != nil {
 				return err
 			}
 			return nil
-		})
+		}))
 	}
 
 	for match, typ := range typeMap {
