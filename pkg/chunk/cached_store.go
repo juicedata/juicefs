@@ -433,6 +433,7 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 		buf = block
 		buf.Acquire()
 	}
+	defer buf.Release()
 	if sync && blen < store.conf.BlockSize {
 		// block will be freed after written into disk
 		store.bcache.cache(key, block, false)
@@ -444,9 +445,6 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 		return err
 	}
 	buf.Data = buf.Data[:n]
-	if sync { // async already take the slot
-		store.currentUpload <- true
-	}
 
 	try, max := 0, 3
 	if sync {
@@ -463,33 +461,10 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 		}
 		logger.Warnf("Upload %s: %s (try %d)", key, err, try+1)
 	}
-	<-store.currentUpload
-	buf.Release()
 	if err != nil && try >= max {
 		err = fmt.Errorf("(max tries) upload block %s: %s (after %d tries)", key, err, try)
 	}
 	return err
-}
-
-func (c *wChunk) tryUpload(key string, block *Page, stagingPath string) {
-	select {
-	case c.store.currentUpload <- true:
-	default:
-		// release the memory and leave it to background uploader
-		block.Release()
-		c.store.addDelayedStaging(key, stagingPath, time.Now(), true)
-		return
-	}
-	blen := len(block.Data)
-	if err := c.store.upload(key, block, nil); err == nil {
-		c.store.bcache.uploaded(key, blen)
-		if os.Remove(stagingPath) == nil {
-			stageBlocks.Sub(1)
-			stageBlockBytes.Sub(float64(blen))
-		}
-	} else { // add to delay list and wait for later scanning
-		c.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
-	}
 }
 
 func (c *wChunk) upload(indx int) {
@@ -518,19 +493,34 @@ func (c *wChunk) upload(indx int) {
 			stagingPath, err := c.store.bcache.stage(key, block.Data, c.store.shouldCache(blen))
 			if err != nil {
 				logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
-				c.errors <- c.store.upload(key, block, c)
 			} else {
 				c.errors <- nil
 				if c.store.conf.UploadDelay == 0 {
-					c.tryUpload(key, block, stagingPath)
-				} else {
-					block.Release()
-					c.store.addDelayedStaging(key, stagingPath, time.Now(), false)
+					select {
+					case c.store.currentUpload <- true:
+						defer func() { <-c.store.currentUpload }()
+						blen := len(block.Data)
+						if err := c.store.upload(key, block, nil); err == nil {
+							c.store.bcache.uploaded(key, blen)
+							if os.Remove(stagingPath) == nil {
+								stageBlocks.Sub(1)
+								stageBlockBytes.Sub(float64(blen))
+							}
+						} else { // add to delay list and wait for later scanning
+							c.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
+						}
+						return
+					default:
+					}
 				}
+				block.Release()
+				c.store.addDelayedStaging(key, stagingPath, time.Now(), c.store.conf.UploadDelay == 0)
+				return
 			}
-		} else {
-			c.errors <- c.store.upload(key, block, c)
 		}
+		c.store.currentUpload <- true
+		defer func() { <-c.store.currentUpload }()
+		c.errors <- c.store.upload(key, block, c)
 	}()
 }
 
@@ -826,18 +816,19 @@ func parseObjOrigSize(key string) int {
 
 func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	store.currentUpload <- true
+	defer func() {
+		<-store.currentUpload
+	}()
 
 	store.pendingMutex.Lock()
 	_, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
 	if !ok {
-		<-store.currentUpload
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
 	f, err := os.Open(stagingPath)
 	if err != nil {
-		<-store.currentUpload
 		logger.Errorf("Open staging file %s: %s", stagingPath, err)
 		return
 	}
@@ -846,7 +837,6 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	_, err = io.ReadFull(f, block.Data)
 	_ = f.Close()
 	if err != nil {
-		<-store.currentUpload
 		block.Release()
 		logger.Errorf("Read staging file %s: %s", stagingPath, err)
 		return
