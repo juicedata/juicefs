@@ -476,18 +476,19 @@ func (c *wChunk) upload(indx int) {
 
 	go func() {
 		var block *Page
+		var off int
 		if len(pages) == 1 {
 			block = pages[0]
+			off = len(block.Data)
 		} else {
 			block = NewOffPage(blen)
-			var off int
 			for _, b := range pages {
 				off += copy(block.Data[off:], b.Data)
 				freePage(b)
 			}
-			if off != blen {
-				logger.Fatalf("block length does not match: %v != %v", off, blen)
-			}
+		}
+		if off != blen {
+			logger.Fatalf("block length does not match: %v != %v", off, blen)
 		}
 		if c.store.conf.Writeback {
 			stagingPath, err := c.store.bcache.stage(key, block.Data, c.store.shouldCache(blen))
@@ -499,8 +500,7 @@ func (c *wChunk) upload(indx int) {
 					select {
 					case c.store.currentUpload <- true:
 						defer func() { <-c.store.currentUpload }()
-						blen := len(block.Data)
-						if err := c.store.upload(key, block, nil); err == nil {
+						if err = c.store.upload(key, block, nil); err == nil {
 							c.store.bcache.uploaded(key, blen)
 							if os.Remove(stagingPath) == nil {
 								stageBlocks.Sub(1)
