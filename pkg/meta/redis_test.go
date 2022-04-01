@@ -46,6 +46,7 @@ func TestRedisCluster(t *testing.T) {
 	if err != nil {
 		t.Skipf("create meta: %s", err)
 	}
+
 	testMeta(t, m)
 }
 

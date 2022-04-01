@@ -2410,11 +2410,10 @@ func (r *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 
 func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 	var ctx = Background
-	var keys []string
 	var foundInodes = make(map[Ino]struct{})
 	cutoff := time.Now().Add(time.Hour * -1)
 
-	_ = r.scan(ctx, "d*", func(s []string) error {
+	_ = r.scan(ctx, "d*", func(keys []string) error {
 		for _, key := range keys {
 			ino, _ := strconv.Atoi(key[1:])
 			var entries []*Entry
@@ -2429,7 +2428,7 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 		}
 		return nil
 	})
-	_ = r.scan(ctx, "i*", func(s []string) error {
+	_ = r.scan(ctx, "i*", func(keys []string) error {
 		values, err := r.rdb.MGet(ctx, keys...).Result()
 		if err != nil {
 			logger.Warnf("mget inodes: %s", err)
@@ -2837,7 +2836,7 @@ func (m *redisMeta) makeSnap(bar *utils.Bar) error {
 		return nil
 	}
 
-	typeMap := map[string]func(keys []string) error{
+	typeMap := map[string]func([]string) error{
 		"c*": listType,
 		"i*": stringType,
 		"s*": stringType,
@@ -2845,7 +2844,7 @@ func (m *redisMeta) makeSnap(bar *utils.Bar) error {
 		"x*": hashType,
 	}
 
-	scanner := func(match string, handlerKey func(keys []string) error) error {
+	scanner := func(match string, handlerKey func([]string) error) error {
 		return fromErrNo(m.scan(ctx, match, func(keys []string) error {
 			if err := handlerKey(keys); err != nil {
 				return err
