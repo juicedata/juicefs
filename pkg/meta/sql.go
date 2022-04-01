@@ -1589,6 +1589,10 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		return errno(err)
 	}
 	for _, n := range nodes {
+		if n.Name == "" {
+			logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Inode, inode)
+			continue
+		}
 		entry := &Entry{
 			Inode: n.Inode,
 			Name:  []byte(n.Name),
