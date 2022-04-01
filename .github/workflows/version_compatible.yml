@@ -55,7 +55,12 @@ jobs:
               sudo ./juicefs_old destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
             fi
           done
-          
+
+      - name: Test with engine
+        uses: .github/actions/test-engine-action
+        with: 
+          meta-url: "${{ steps.vars.outputs.META_URL }}"
+
       - name: Clean After
         id: cleanAfter
         run: |
@@ -69,10 +74,9 @@ jobs:
           timestamp=$(date +%s)
           echo ::set-output name=timestamp::$timestamp
 
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          color: "#CB2431"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+#      - name: Send Slack Notification
+#        if: ${{ failure() }}
+#        uses: juicedata/slack-notify-action@main
+#        with:
+#          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+#          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
