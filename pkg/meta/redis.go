@@ -1577,9 +1577,13 @@ func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 		newEntries := make([]Entry, len(keys)/2)
 		newAttrs := make([]Attr, len(keys)/2)
 		for i := 0; i < len(keys); i += 2 {
-			typ, inode := r.parseEntry([]byte(keys[i+1]))
+			typ, ino := r.parseEntry([]byte(keys[i+1]))
+			if keys[i] == "" {
+				logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, inode)
+				continue
+			}
 			ent := &newEntries[i/2]
-			ent.Inode = inode
+			ent.Inode = ino
 			ent.Name = []byte(keys[i])
 			ent.Attr = &newAttrs[i/2]
 			ent.Attr.Typ = typ
