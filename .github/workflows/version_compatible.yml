@@ -39,6 +39,11 @@ jobs:
             sudo ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
           fi
 
+      - name: Test with engine
+        uses: ./.github/actions/test-engine-action
+        with: 
+          meta-url: "${{ steps.vars.outputs.META_URL }}"
+
       - name: Version Compatible Test
         run: |    
           urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}'))
@@ -56,10 +61,6 @@ jobs:
             fi
           done
 
-      - name: Test with engine
-        uses: ./.github/actions/test-engine-action
-        with: 
-          meta-url: "${{ steps.vars.outputs.META_URL }}"
 
       - name: Clean After
         id: cleanAfter
