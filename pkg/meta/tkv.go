@@ -2293,15 +2293,15 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 					continue
 				}
 				slices := make([]byte, 0, sliceBytes*len(c.Slices))
+				m.Lock()
 				for _, s := range c.Slices {
 					slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
-					m.Lock()
 					refs[string(m.sliceKey(s.Chunkid, s.Size))]++
-					m.Unlock()
 					if cs.NextChunk <= int64(s.Chunkid) {
 						cs.NextChunk = int64(s.Chunkid) + 1
 					}
 				}
+				m.Unlock()
 				tx.set(m.chunkKey(inode, c.Index), slices)
 			}
 		} else if attr.Typ == TypeDirectory {
@@ -2313,6 +2313,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 			attr.Length = uint64(len(e.Symlink))
 			tx.set(m.symKey(inode), []byte(e.Symlink))
 		}
+		m.Lock()
 		if inode > 1 && inode != TrashInode {
 			cs.UsedSpace += align4K(attr.Length)
 			cs.UsedInodes += 1
@@ -2326,6 +2327,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 				cs.NextTrash = int64(inode) - TrashInode
 			}
 		}
+		m.Unlock()
 
 		for _, x := range e.Xattrs {
 			tx.set(m.xattrKey(inode, x.Name), []byte(x.Value))
