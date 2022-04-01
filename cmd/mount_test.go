@@ -39,11 +39,18 @@ const testMeta = "redis://127.0.0.1:6379/10"
 const testMountPoint = "/tmp/jfs-unit-test"
 const testVolume = "test"
 
+// gomonkey may encounter the problem of insufficient permissions under mac, please solve it by viewing this link https://github.com/agiledragon/gomonkey/issues/70
 func Test_exposeMetrics(t *testing.T) {
 	Convey("Test_exposeMetrics", t, func() {
 		Convey("Test_exposeMetrics", func() {
 			addr := "redis://127.0.0.1:6379/10"
 			client := meta.NewClient(addr, &meta.Config{})
+			format := meta.Format{
+				Name:      "test",
+				BlockSize: 4096,
+				Capacity:  1 << 30,
+			}
+			_ = client.Init(format, true)
 			var appCtx *cli.Context
 			stringPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "String", func(_ *cli.Context, arg string) string {
 				switch arg {
