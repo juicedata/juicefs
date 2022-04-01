@@ -2653,19 +2653,19 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 				continue
 			}
 			slices := make([]byte, 0, sliceBytes*len(c.Slices))
+			m.Lock()
 			for _, s := range c.Slices {
 				slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
-				m.Lock()
 				if refs[s.Chunkid] == nil {
 					refs[s.Chunkid] = &chunkRef{s.Chunkid, s.Size, 1}
 				} else {
 					refs[s.Chunkid].Refs++
 				}
-				m.Unlock()
 				if cs.NextChunk <= int64(s.Chunkid) {
 					cs.NextChunk = int64(s.Chunkid) + 1
 				}
 			}
+			m.Unlock()
 			chunks = append(chunks, &chunk{inode, c.Index, slices})
 		}
 		if len(chunks) > 0 {
@@ -2689,6 +2689,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 		n.Length = uint64(len(e.Symlink))
 		beans = append(beans, &symlink{inode, e.Symlink})
 	}
+	m.Lock()
 	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(n.Length)
 		cs.UsedInodes += 1
@@ -2702,6 +2703,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			cs.NextTrash = int64(inode) - TrashInode
 		}
 	}
+	m.Unlock()
 
 	if len(e.Xattrs) > 0 {
 		xattrs := make([]*xattr, 0, len(e.Xattrs))
