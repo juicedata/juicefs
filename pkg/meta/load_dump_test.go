@@ -111,6 +111,7 @@ func TestLoadDump(t *testing.T) {
 		m := testLoad(t, sqluri, sampleFile)
 		testDump(t, m, 1, sampleFile, "sqlite3.dump")
 	})
+	
 	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
 		_ = testLoad(t, sqluri, sampleFile)
 		m := NewClient(sqluri, &Config{Retries: 10, Strict: true, Subdir: "d1"})
