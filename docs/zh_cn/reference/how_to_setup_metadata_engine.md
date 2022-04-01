@@ -36,13 +36,16 @@ JuiceFS 要求 Redis 4.0+ 版本
 使用 Redis 作为元数据存储引擎时，通常使用以下格式访问数据库：
 
 ```shell
-redis://[<username>:<password>@]<host>[:6379]/1
+redis[s]://[<username>:<password>@]<host>[:<port>]/<db>
 ```
 
 其中，`[]` 括起来的是可选项，其它部分为必选项。
 
-- `username` 是 Redis 6.0 之后引入的，如果没有用户名可以忽略，但密码前面的 `:` 冒号需要保留，如 `redis://:password@host:6379/1`。
-- `redis://` 协议头默认端口号为 `6379`，如果没有改变默认端口号可以不用填写，如 `redis://:password@host/1`。
+- 如果开启了 Redis 的 [TLS](https://redis.io/docs/manual/security/encryption) 特性，协议头需要使用 `rediss://`，否则使用 `redis://`。
+- `<username>` 是 Redis 6.0 之后引入的，如果没有用户名可以忽略，但密码前面的 `:` 冒号需要保留，如 `redis://:<password>@<host>:6379/1`。
+- Redis 监听的默认端口号为 `6379`，如果没有改变默认端口号可以不用填写，如 `redis://:<password>@<host>/1`，否则需要显式指定端口号。
+- Redis 支持多个[逻辑数据库](https://redis.io/commands/select)，请将 `<db>` 替换为实际使用的数据库编号。
+- 如果需要连接 Redis 哨兵（Sentinel），元数据 URL 的格式会稍有不同，具体请参考[「Redis 最佳实践」](../administration/metadata/redis_best_practices.md#数据可用性)文档。
 
 例如，创建名为 `pics` 的文件系统，使用 Redis 的 `1` 号数据库存储元数据：
 

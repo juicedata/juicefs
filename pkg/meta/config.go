@@ -140,6 +140,9 @@ func (f *Format) Decrypt() error {
 	if !f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" {
 		return nil
 	}
+	if f.SecretKey == "removed" {
+		return fmt.Errorf("secret key was removed; please correct it with `config` command")
+	}
 	key := md5.Sum([]byte(f.UUID))
 	block, err := aes.NewCipher(key[:])
 	if err != nil {

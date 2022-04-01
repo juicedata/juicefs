@@ -56,8 +56,8 @@ before_script:
   - sudo make -C fstests setup
   - chmod +x travis-setup-hdfs.sh
   - ./travis-setup-hdfs.sh
-  - for i in {2222,3306,5432,8020,9000,9007,2379,2389} ; do nc -z localhost $i;if [ $? != 0 ];then sleep 5; else continue; fi; nc -z localhost $i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
-  - nc -z localhost 2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
+  - for i in {2222,3306,5432,8020,9000,9007,2379,2389} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+  - sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 script:
   - sudo chmod 777 /var/jfsCache
   - make test
@@ -67,6 +67,14 @@ script:
   - git clone https://github.com/danjacques/gofslock.git
   - cd gofslock && git checkout cc7f001fe0e7df1710adc8f0cd9e9d6d21fdb3a9
   - go test -v ./fslock/...
+  - stat /jfs/
+  - pyenv global 3.7.1
+  - export PATH="/opt/python/3.7.1/bin:$PATH"
+  - git clone https://github.com/iustin/pyxattr.git
+  - cd pyxattr
+  - pip3 install pytest
+  - pip3 install pyxattr
+  - TEST_DIR=/jfs/ python3 -m pytest tests
   - cd /home/travis/gopath/src/github.com/juicedata/juicefs
   - sudo DURATION=10 make -C fstests all
   - make -C fstests flock

@@ -591,6 +591,9 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
+	if name == "" {
+		return syscall.ENOENT
+	}
 
 	defer timeit(time.Now())
 	if m.checkQuota(4<<10, 1) {
@@ -630,6 +633,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
+	}
+	if name == "" {
+		return syscall.ENOENT
 	}
 
 	defer timeit(time.Now())
@@ -695,6 +701,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	if m.conf.ReadOnly {
 		return syscall.EROFS
+	}
+	if nameDst == "" {
+		return syscall.ENOENT
 	}
 	switch flags {
 	case 0, RenameNoReplace, RenameExchange:

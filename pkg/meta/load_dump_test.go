@@ -17,14 +17,41 @@
 package meta
 
 import (
+	"bytes"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
+
+func TestEscape(t *testing.T) {
+	var cs []byte = []byte("hello 世界")
+	for i := 0; i < 256; i++ {
+		cs = append(cs, byte(i))
+	}
+	s := string(cs)
+	r := unescape(escape(s))
+	if r != s {
+		t.Fatalf("expected %v, but got %v", s, r)
+	}
+}
+
+func GbkToUtf8(s []byte) ([]byte, error) {
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewDecoder())
+	d, e := ioutil.ReadAll(reader)
+	if e != nil {
+		return nil, e
+	}
+	return d, nil
+}
 
 func testLoad(t *testing.T, uri, fname string) Meta {
 	m := NewClient(uri, &Config{Retries: 10, Strict: true})
@@ -44,8 +71,19 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
-	} else if len(entries) != 8 {
+	} else if len(entries) != 11 {
 		t.Fatalf("entries: %d", len(entries))
+	}
+	for _, entry := range entries {
+		fname := string(entry.Name)
+		if strings.HasPrefix(fname, "GBK") {
+			if utf8, err := GbkToUtf8(entry.Name); err != nil || string(utf8) != "GBK果汁数据科技有限公司文件" {
+				t.Fatalf("load GBK file error: %s", string(utf8))
+			}
+		}
+		if strings.HasPrefix(fname, "UTF8") && fname != "UTF8果汁数据科技有限公司目录" && fname != "UTF8果汁数据科技有限公司文件" {
+			t.Fatalf("load entries error: %s", fname)
+		}
 	}
 	attr := &Attr{}
 	if st := m.GetAttr(ctx, 2, attr); st != 0 {
@@ -65,11 +103,20 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("getattr: %s, %d", st, attr.Nlink)
 	}
 	var target []byte
-	if st := m.ReadLink(ctx, 5, &target); st != 0 || string(target) != "d1/f11" { // symlink
+
+	if st := m.ReadLink(ctx, 5, &target); st == 0 { // symlink
+		if utf8, err := GbkToUtf8(target); err != nil || string(utf8) != "GBK果汁数据科技有限公司文件" {
+			t.Fatalf("readlink: %s, %s", st, target)
+		}
+	} else {
 		t.Fatalf("readlink: %s, %s", st, target)
 	}
+
 	var value []byte
 	if st := m.GetXattr(ctx, 2, "k", &value); st != 0 || string(value) != "v" {
+		t.Fatalf("getxattr: %s %v", st, value)
+	}
+	if st := m.GetXattr(ctx, 3, "dk", &value); st != 0 || string(value) != "果汁" {
 		t.Fatalf("getxattr: %s %v", st, value)
 	}
 
