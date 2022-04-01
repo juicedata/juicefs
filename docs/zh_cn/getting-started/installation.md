@@ -14,13 +14,13 @@ JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本
 
 你可以在 [GitHub](https://github.com/juicedata/juicefs/releases) 找到最新版客户端下载地址，每个版本的下载列表中都提供了面向不同 CPU 架构和操作系统的预编译版本，请注意识别选择，例如：
 
-| 文件名                                 | 说明                                         |
-| ------------------------------------   | ----------------------------                 |
-| `juicefs-x.x.x-darwin-amd64.tar.gz`    | 面向 Intel 芯片的 macOS 系统                 |
-| `juicefs-x.x.x-linux-amd64.tar.gz`     | 面向 x86 架构 Linux 发行版                   |
-| `juicefs-x.x.x-linux-arm64.tar.gz`     | 面向 ARM 架构的 Linux 发行版                 |
-| `juicefs-x.x.x-windows-amd64.tar.gz`   | 面向 x86 架构的 Windows 系统                 |
-| `juicefs-hadoop-x.x.x-linux-amd64.jar` | 面向 x86 架构 Linux 发行版的 Hadoop Java SDK |
+| 文件名                               | 说明                            |
+|--------------------------------------|---------------------------------|
+| `juicefs-x.x.x-darwin-amd64.tar.gz`  | 面向 Intel 芯片的 macOS 系统    |
+| `juicefs-x.x.x-linux-amd64.tar.gz`   | 面向 x86 架构 Linux 发行版      |
+| `juicefs-x.x.x-linux-arm64.tar.gz`   | 面向 ARM 架构的 Linux 发行版    |
+| `juicefs-x.x.x-windows-amd64.tar.gz` | 面向 x86 架构的 Windows 系统    |
+| `juicefs-hadoop-x.x.x-amd64.jar`     | 面向 x86 架构的 Hadoop Java SDK（同时支持 Linux、macOS 及 Windows 系统） |
 
 :::tip 提示
 对于 M1 系列芯片的 macOS 系统，可以使用 `darwin-amd64` 版本客户端依赖 [Rosetta 2](https://support.apple.com/zh-cn/HT211861) 使用，也可以参考 [手动编译客户端](#手动编译客户端) 编译原生版本。
@@ -153,7 +153,7 @@ CMD [ "juicefs" ]
 另外，手动编译客户端可以让你优先体验到 JuiceFS 开发中的各种新功能，但这需要你具备一定的软件编译相关的基础知识。
 
 :::tip 提示
-对于中国地区用户，为了加快获取 Go 模块的速度，建议通过执行 `go env -w GOPROXY=https://goproxy.cn,direct`来将`GOPROXY`环境变量设置国内的镜像服务器。详情请参考：[Goproxy China](https://github.com/goproxy/goproxy.cn)。
+对于中国地区用户，为了加快获取 Go 模块的速度，建议通过执行 `go env -w GOPROXY=https://goproxy.cn,direct` 来将 `GOPROXY` 环境变量设置国内的镜像服务器。详情请参考：[Goproxy China](https://github.com/goproxy/goproxy.cn)。
 :::
 
 ### 类 Unix 客户端

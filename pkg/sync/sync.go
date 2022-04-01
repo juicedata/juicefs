@@ -623,7 +623,7 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 	if err != nil {
 		logger.Fatal(err)
 	}
-	if config.Exclude != nil {
+	if len(config.Exclude) > 0 {
 		rules := initRules(src, dst)
 		srckeys = filter(srckeys, rules)
 		dstkeys = filter(dstkeys, rules)
@@ -834,7 +834,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.Manager == "" {
 		go producer(tasks, src, dst, config)
-		if config.Workers != nil {
+		if len(config.Workers) > 0 {
 			addr, err := startManager(tasks)
 			if err != nil {
 				return err

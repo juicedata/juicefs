@@ -31,7 +31,13 @@ If you want to use JuiceFS in a distributed environment, when creating a file sy
 
 JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
 
-## Client compilation
+## Install and compile the client
+
+### Install the pre-compiled client
+
+Please refer to the ["Installation & Upgrade"](../getting-started/installation.md#install-the-pre-compiled-client) document to learn how to download the precompiled JuiceFS Hadoop Java SDK.
+
+### Compile the client manually
 
 :::note
 No matter which system environment the client is compiled for, the compiled JAR file has the same name and can only be deployed in the matching system environment. For example, when compiled in Linux, it can only be used in the Linux environment. In addition, since the compiled package depends on glibc, it is recommended to compile with a lower version system to ensure better compatibility.
@@ -46,7 +52,7 @@ Compilation depends on the following tools:
 - make
 - GCC 5.4+
 
-### Linux and macOS
+#### Linux and macOS
 
 Clone the repository:
 
@@ -57,7 +63,7 @@ $ git clone https://github.com/juicedata/juicefs.git
 Enter the directory and compile:
 
 :::note
-If Ceph RADOS is used to store data, you need to install `librados-dev` first and [build `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L22) with `-tags ceph`.
+If Ceph RADOS is used to store data, you need to install `librados-dev` first and [build `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L38-L39) with `-tags ceph`.
 :::
 
 ```shell
@@ -72,7 +78,7 @@ After the compilation, you can find the compiled `JAR` file in the `sdk/java/tar
 
 It is recommended to use a version that includes third-party dependencies.
 
-### Windows
+#### Windows
 
 The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org/), which needs to be installed first.
 
@@ -247,10 +253,10 @@ Add configuration parameters to `conf/flink-conf.yaml`. If you only use JuiceFS 
 ### Hudi
 
 :::note
-The latest version of Hudi (v0.10.0) does not yet support JuiceFS, you need to compile the latest master branch yourself.
+Hudi supports JuiceFS since v0.10.0, please make sure you are using the correct version.
 :::
 
-Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/next/jfs_hoodie) to learn how to configure JuiceFS.
+Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/jfs_hoodie) to learn how to configure JuiceFS.
 
 ### Restart Services
 

@@ -31,7 +31,13 @@ JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下�
 
 JuiceFS Hadoop Java SDK 最多需要额外使用 4 * [`juicefs.memory-size`](#io-配置) 的 off-heap 内存用来加速读写性能，默认情况下，最多需要额外 1.2GB 内存（取决于写入负载）。
 
-## 客户端编译
+## 安装与编译客户端
+
+### 安装预编译客户端
+
+请参考[「安装与升级」](../getting-started/installation.md#安装预编译客户端)文档了解如何下载预编译的 JuiceFS Hadoop Java SDK。
+
+### 手动编译客户端
 
 :::note 注意
 不论为哪个系统环境编译客户端，编译后的 JAR 文件都为相同的名称，且只能部署在匹配的系统环境中，例如在 Linux 中编译则只能用于 Linux 环境。另外，由于编译的包依赖 glibc，建议尽量使用低版本的系统进行编译，这样可以获得更好的兼容性。
@@ -46,7 +52,7 @@ JuiceFS Hadoop Java SDK 最多需要额外使用 4 * [`juicefs.memory-size`](#io
 - make
 - GCC 5.4+
 
-### Linux 和 macOS
+#### Linux 和 macOS
 
 克隆仓库：
 
@@ -57,7 +63,7 @@ $ git clone https://github.com/juicedata/juicefs.git
 进入目录，执行编译：
 
 :::note 注意
-如果使用 Ceph 的 RADOS 作为 JuiceFS 的存储引擎，需要先安装 `librados-dev` 包并且在[编译 `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L22) 时加上 `-tags ceph`。
+如果使用 Ceph 的 RADOS 作为 JuiceFS 的存储引擎，需要先安装 `librados-dev` 包并且在[编译 `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L38-L39) 时加上 `-tags ceph`。
 :::
 
 ```shell
@@ -65,14 +71,14 @@ $ cd juicefs/sdk/java
 $ make
 ```
 
-编译完成后，可以在  `sdk/java/target`  目录中找到编译好的 `JAR` 文件，包括两个版本：
+编译完成后，可以在 `sdk/java/target` 目录中找到编译好的 `JAR` 文件，包括两个版本：
 
 - 包含第三方依赖的包：`juicefs-hadoop-X.Y.Z.jar`
 - 不包含第三方依赖的包：`original-juicefs-hadoop-X.Y.Z.jar`
 
 建议使用包含第三方依赖的版本。
 
-### Windows
+#### Windows
 
 用于 Windows 环境的客户端需要在 Linux 或 macOS 系统上通过交叉编译的方式获得，编译依赖 [mingw-w64](https://www.mingw-w64.org/)，需要提前安装。
 
@@ -249,10 +255,10 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 ### Hudi
 
 :::note 注意
-目前最新版 Hudi（v0.10.0）还不支持 JuiceFS，你需要自行编译最新 master 分支。
+Hudi 自 v0.10.0 版本开始支持 JuiceFS，请确保使用正确的版本。
 :::
 
-请参考[「Hudi 官方文档」](https://hudi.apache.org/docs/next/jfs_hoodie)了解如何配置 JuiceFS。
+请参考[「Hudi 官方文档」](https://hudi.apache.org/docs/jfs_hoodie)了解如何配置 JuiceFS。
 
 ### 重启服务
 
