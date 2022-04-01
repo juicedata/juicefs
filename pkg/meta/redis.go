@@ -3002,15 +3002,15 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 				continue
 			}
 			slices := make([]string, 0, len(c.Slices))
+			m.Lock()
 			for _, s := range c.Slices {
 				slices = append(slices, string(marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)))
-				m.Lock()
 				refs[m.sliceKey(s.Chunkid, s.Size)]++
-				m.Unlock()
 				if cs.NextChunk < int64(s.Chunkid) {
 					cs.NextChunk = int64(s.Chunkid)
 				}
 			}
+			m.Unlock()
 			p.RPush(ctx, m.chunkKey(inode, c.Index), slices)
 		}
 	} else if attr.Typ == TypeDirectory {
@@ -3026,6 +3026,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		attr.Length = uint64(len(e.Symlink))
 		p.Set(ctx, m.symKey(inode), e.Symlink, 0)
 	}
+	m.Lock()
 	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(attr.Length)
 		cs.UsedInodes += 1
@@ -3039,6 +3040,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 			cs.NextTrash = int64(inode) - TrashInode
 		}
 	}
+	m.Unlock()
 
 	if len(e.Xattrs) > 0 {
 		xattrs := make(map[string]interface{})
