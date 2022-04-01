@@ -57,7 +57,7 @@ jobs:
           done
 
       - name: Test with engine
-        uses: .github/actions/test-engine-action
+        uses: ./.github/actions/test-engine-action
         with: 
           meta-url: "${{ steps.vars.outputs.META_URL }}"
 
