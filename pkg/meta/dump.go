@@ -139,33 +139,6 @@ func parseStr(s string) string {
 	}
 	return string(res)
 }
-
-func iterate(items []*string, h func(original string) string) {
-	for _, item := range items {
-		*item = h(*item)
-	}
-}
-
-func entryIterateHelp(de *DumpedEntry, h func(original string) string) {
-	l := len(de.Xattrs)*2 + 2
-	item := make([]*string, l)
-	for idx, dumpedXattr := range de.Xattrs {
-		item[idx*2] = &dumpedXattr.Name
-		item[idx*2+1] = &dumpedXattr.Value
-	}
-	item[l-2] = &de.Name
-	item[l-1] = &de.Symlink
-	iterate(item, h)
-}
-
-func (de *DumpedEntry) encodeSelf() {
-	entryIterateHelp(de, escape)
-}
-
-func (de *DumpedEntry) decodeSelf() {
-	entryIterateHelp(de, parseStr)
-}
-
 func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 	prefix := strings.Repeat(jsonIndent, depth)
 	fieldPrefix := prefix + jsonIndent
@@ -174,16 +147,19 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 			panic(err)
 		}
 	}
-	write(fmt.Sprintf("\n%s\"%s\": {", prefix, de.Name))
+	write(fmt.Sprintf("\n%s\"%s\": {", prefix, escape(de.Name)))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
 		return err
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Symlink) > 0 {
-		write(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, de.Symlink))
+		write(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, escape(de.Symlink)))
 	}
 	if len(de.Xattrs) > 0 {
+		for _, dumpedXattr := range de.Xattrs {
+			dumpedXattr.Value = escape(dumpedXattr.Value)
+		}
 		if data, err = json.Marshal(de.Xattrs); err != nil {
 			return err
 		}
@@ -219,13 +195,16 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 			panic(err)
 		}
 	}
-	write(fmt.Sprintf("\n%s\"%s\": {", prefix, de.Name))
+	write(fmt.Sprintf("\n%s\"%s\": {", prefix, escape(de.Name)))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
 		return err
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Xattrs) > 0 {
+		for _, dumpedXattr := range de.Xattrs {
+			dumpedXattr.Value = escape(dumpedXattr.Value)
+		}
 		if data, err = json.Marshal(de.Xattrs); err != nil {
 			return err
 		}
@@ -236,7 +215,7 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 }
 
 type DumpedMeta struct {
-	Setting   *Format
+	Setting   Format
 	Counters  *DumpedCounters
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile
@@ -300,7 +279,6 @@ func loadAttr(d *DumpedAttr) *Attr {
 }
 
 func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
-	e.decodeSelf()
 	typ := typeFromString(e.Attr.Type)
 	inode := e.Attr.Inode
 	if showProgress != nil {

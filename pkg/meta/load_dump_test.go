@@ -90,11 +90,20 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("getattr: %s, %d", st, attr.Nlink)
 	}
 	var target []byte
-	if st := m.ReadLink(ctx, 5, &target); st != 0 || string(target) != "d1/f11" { // symlink
+
+	if st := m.ReadLink(ctx, 5, &target); st == 0 { // symlink
+		if utf8, err := GbkToUtf8(target); err != nil || string(utf8) != "GBK果汁数据科技有限公司文件" {
+			t.Fatalf("readlink: %s, %s", st, target)
+		}
+	} else {
 		t.Fatalf("readlink: %s, %s", st, target)
 	}
+
 	var value []byte
 	if st := m.GetXattr(ctx, 2, "k", &value); st != 0 || string(value) != "v" {
+		t.Fatalf("getxattr: %s %v", st, value)
+	}
+	if st := m.GetXattr(ctx, 3, "dk", &value); st != 0 || string(value) != "果汁" {
 		t.Fatalf("getxattr: %s %v", st, value)
 	}
 

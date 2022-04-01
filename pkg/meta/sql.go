@@ -291,7 +291,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		return fmt.Errorf("json: %s", err)
 	}
 
-	m.fmt = &format
+	m.fmt = format
 	now := time.Now()
 	n := &node{
 		Type:   TypeDirectory,
@@ -2423,7 +2423,6 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		}
 
 		entry.Name = e.Name
-		entry.encodeSelf()
 		if e.Type == TypeDirectory {
 			err = m.dumpDir(e.Inode, entry, bw, depth+2, showProgress)
 		} else {
@@ -2593,7 +2592,6 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
 	}
-	dm.Setting.encodeSelf()
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
@@ -2631,7 +2629,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	logger.Debugf("Loading entry inode %d name %s", inode, parseStr(e.Name))
 	attr := e.Attr
 	n := &node{
 		Inode:  inode,
@@ -2680,7 +2678,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			for _, c := range e.Entries {
 				edges = append(edges, &edge{
 					Parent: inode,
-					Name:   c.Name,
+					Name:   parseStr(c.Name),
 					Inode:  c.Attr.Inode,
 					Type:   typeFromString(c.Attr.Type),
 				})
@@ -2688,8 +2686,9 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			beans = append(beans, edges)
 		}
 	} else if n.Type == TypeSymlink {
-		n.Length = uint64(len(e.Symlink))
-		beans = append(beans, &symlink{inode, e.Symlink})
+		symL := parseStr(e.Symlink)
+		n.Length = uint64(len(symL))
+		beans = append(beans, &symlink{inode, symL})
 	}
 	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(n.Length)
@@ -2708,7 +2707,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	if len(e.Xattrs) > 0 {
 		xattrs := make([]*xattr, 0, len(e.Xattrs))
 		for _, x := range e.Xattrs {
-			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(x.Value)})
+			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(parseStr(x.Value))})
 		}
 		beans = append(beans, xattrs)
 	}
@@ -2747,7 +2746,6 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = dec.Decode(dm); err != nil {
 		return err
 	}
-	dm.Setting.decodeSelf()
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err

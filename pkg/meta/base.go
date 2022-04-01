@@ -72,7 +72,7 @@ type engine interface {
 type baseMeta struct {
 	sync.Mutex
 	conf *Config
-	fmt  *Format
+	fmt  Format
 
 	root         Ino
 	subTrash     internalNode
@@ -158,7 +158,7 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 			return nil, fmt.Errorf("check version: %s", err)
 		}
 	}
-	return m.fmt, nil
+	return &m.fmt, nil
 }
 
 func (m *baseMeta) NewSession() error {

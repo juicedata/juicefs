@@ -237,7 +237,7 @@ func (r *redisMeta) Init(format Format, force bool) error {
 	if err = r.rdb.Set(ctx, "setting", data, 0).Err(); err != nil {
 		return err
 	}
-	r.fmt = &format
+	r.fmt = format
 	if body != nil {
 		return nil
 	}
@@ -2726,7 +2726,6 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		}
 
 		entry.Name = name
-		entry.encodeSelf()
 		if typ == TypeDirectory {
 			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
 		} else {
@@ -2954,7 +2953,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
 	}
-	dm.Setting.encodeSelf()
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
@@ -2992,7 +2990,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	logger.Debugf("Loading entry inode %d name %s", inode, parseStr(e.Name))
 	ctx := Background
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
@@ -3020,13 +3018,14 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		if len(e.Entries) > 0 {
 			dentries := make(map[string]interface{})
 			for _, c := range e.Entries {
-				dentries[c.Name] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
+				dentries[parseStr(c.Name)] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			}
 			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
 	} else if attr.Typ == TypeSymlink {
-		attr.Length = uint64(len(e.Symlink))
-		p.Set(ctx, m.symKey(inode), e.Symlink, 0)
+		symL := parseStr(e.Symlink)
+		attr.Length = uint64(len(symL))
+		p.Set(ctx, m.symKey(inode), symL, 0)
 	}
 	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(attr.Length)
@@ -3045,7 +3044,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 	if len(e.Xattrs) > 0 {
 		xattrs := make(map[string]interface{})
 		for _, x := range e.Xattrs {
-			xattrs[x.Name] = x.Value
+			xattrs[x.Name] = parseStr(x.Value)
 		}
 		p.HSet(ctx, m.xattrKey(inode), xattrs)
 	}
@@ -3069,7 +3068,6 @@ func (m *redisMeta) LoadMeta(r io.Reader) error {
 	if err = dec.Decode(dm); err != nil {
 		return err
 	}
-	dm.Setting.decodeSelf()
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err

@@ -354,7 +354,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 		logger.Fatalf("json: %s", err)
 	}
 
-	m.fmt = &format
+	m.fmt = format
 	ts := time.Now().Unix()
 	attr := &Attr{
 		Typ:    TypeDirectory,
@@ -2091,7 +2091,6 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			return err
 		}
 		entry.Name = name[10:]
-		entry.encodeSelf()
 		if typ == TypeDirectory {
 			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
 		} else {
@@ -2246,7 +2245,6 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
 	}
-	dm.Setting.encodeSelf()
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err
@@ -2284,7 +2282,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int64) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	logger.Debugf("Loading entry inode %d name %s", inode, parseStr(e.Name))
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
 	return m.txn(func(tx kvTxn) error {
@@ -2309,11 +2307,12 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 		} else if attr.Typ == TypeDirectory {
 			attr.Length = 4 << 10
 			for _, c := range e.Entries {
-				tx.set(m.entryKey(inode, c.Name), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode))
+				tx.set(m.entryKey(inode, parseStr(c.Name)), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode))
 			}
 		} else if attr.Typ == TypeSymlink {
-			attr.Length = uint64(len(e.Symlink))
-			tx.set(m.symKey(inode), []byte(e.Symlink))
+			symL := parseStr(e.Symlink)
+			attr.Length = uint64(len(symL))
+			tx.set(m.symKey(inode), []byte(symL))
 		}
 		if inode > 1 && inode != TrashInode {
 			cs.UsedSpace += align4K(attr.Length)
@@ -2330,7 +2329,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 		}
 
 		for _, x := range e.Xattrs {
-			tx.set(m.xattrKey(inode, x.Name), []byte(x.Value))
+			tx.set(m.xattrKey(inode, x.Name), []byte(parseStr(x.Value)))
 		}
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil
@@ -2355,7 +2354,6 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	if err := dec.Decode(dm); err != nil {
 		return err
 	}
-	dm.Setting.decodeSelf()
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
 		return err
