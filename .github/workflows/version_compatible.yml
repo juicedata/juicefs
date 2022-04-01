@@ -9,6 +9,8 @@ jobs:
   version-compatible-test:
     runs-on: [self-hosted, daily-build, bench-01]
     steps:
+      - uses: actions/checkout@v2
+
       - name: Checkout
         uses: actions/checkout@v2
         with:

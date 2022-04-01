@@ -9,6 +9,6 @@ runs:
   using: "composite"
   steps:
     - run: | 
-      echo Meta-Url ${{ inputs.meta-url }}
-      echo Meta-Url ${{ inputs.meta-url }}
+        echo Meta-Url ${{ inputs.meta-url }}
+        echo Meta-Url ${{ inputs.meta-url }}
       shell: bash
