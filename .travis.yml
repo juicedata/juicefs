@@ -49,8 +49,8 @@ before_script:
   - sudo chmod 777 /usr/local/maven-3.6.3/conf/settings.xml
   - sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/local/maven-3.6.3/conf/settings.xml
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
-  - ls -l /home/travis/.m2
   - ls -l /home/travis/.m2/etcd-v3.5.2-linux-amd64/
+  - /home/travis/.m2/etcd-v3.5.2-linux-amd64/etcd -h
   - /home/travis/.m2/etcd-v3.5.2-linux-amd64/etcd --unsafe-no-fsync --listen-client-urls http://localhost:2389 --advertise-client-urls http://localhost:2389 &
   - make
   - sudo make -C fstests setup
