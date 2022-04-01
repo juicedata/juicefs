@@ -98,47 +98,63 @@ type DumpedEntry struct {
 var CHARS = []byte("0123456789ABCDEF")
 
 func escape(original string) string {
+	// similar to url.Escape but backward compatible if no '%' in it
 	var escValue = make([]byte, 0, len(original))
-	for _, c := range []byte(original) {
+	for i := 0; i < len(original); i++ {
+		c := original[i]
 		if c < 32 || c >= 127 || c == '%' || c == '"' || c == '\\' {
+			if escValue == nil {
+				escValue = make([]byte, i, len(original))
+				for j := 0; j < i; j++ {
+					escValue[j] = original[j]
+				}
+			}
 			escValue = append(escValue, '%')
 			escValue = append(escValue, CHARS[(c>>4)&0xF])
 			escValue = append(escValue, CHARS[c&0xF])
-		} else {
+		} else if escValue != nil {
 			escValue = append(escValue, c)
 		}
+	}
+	if escValue == nil {
+		return original
 	}
 	return string(escValue)
 }
 
-func parseHex(c byte) byte {
+func parseHex(c byte) (byte, error) {
 	if c >= '0' && c <= '9' {
-		return c - '0'
+		return c - '0', nil
 	} else if c >= 'A' && c <= 'F' {
-		return 10 + (c - 'A')
+		return 10 + (c - 'A'), nil
 	} else {
-		logger.Warningf("hex expected: %c", c)
-		return 0
+		return 0, fmt.Errorf("hex expected: %c", c)
 	}
 }
 
-func parseStr(s string) string {
-	var res []byte
-	p := []byte(s)
-	for i := 0; i < len(p); i++ {
-		var c byte
-		if p[i] == '%' {
-			h1 := parseHex(p[i+1])
-			h2 := parseHex(p[i+2])
-			c = h1*16 + h2
-			i += 2
-		} else {
-			c = p[i]
-		}
-		res = append(res, c)
+func unescape(s string) string {
+	if !strings.ContainsRune(s, '%') {
+		return s
 	}
-	return string(res)
+
+	p := []byte(s)
+	n := 0
+	for i := 0; i < len(p); i++ {
+		c := p[i]
+		if c == '%' && i+2 < len(p) {
+			h, e1 := parseHex(p[i+1])
+			l, e2 := parseHex(p[i+2])
+			if e1 == nil && e2 == nil {
+				c = h*16 + l
+				i += 2
+			}
+		}
+		p[n] = c
+		n++
+	}
+	return string(p[:n])
 }
+
 func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 	prefix := strings.Repeat(jsonIndent, depth)
 	fieldPrefix := prefix + jsonIndent

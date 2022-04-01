@@ -18,18 +18,31 @@ package meta
 
 import (
 	"bytes"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
+
+func TestEscape(t *testing.T) {
+	var cs []byte = []byte("hello 世界")
+	for i := 0; i < 256; i++ {
+		cs = append(cs, byte(i))
+	}
+	s := string(cs)
+	r := unescape(escape(s))
+	if r != s {
+		t.Fatalf("expected %v, but got %v", s, r)
+	}
+}
 
 func GbkToUtf8(s []byte) ([]byte, error) {
 	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewDecoder())
