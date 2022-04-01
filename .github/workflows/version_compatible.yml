@@ -9,8 +9,6 @@ jobs:
   version-compatible-test:
     runs-on: [self-hosted, daily-build, bench-01]
     steps:
-      - uses: actions/checkout@v2
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -40,7 +38,8 @@ jobs:
           if [ -n "$UUID" ];then
             sudo ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
           fi
-
+          
+      - uses: actions/checkout@v2
       - name: Test with engine
         uses: ./.github/actions/test-engine-action
         with: 
