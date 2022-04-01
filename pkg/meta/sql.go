@@ -2633,7 +2633,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := e.Attr
 	n := &node{
 		Inode:  inode,
@@ -2682,7 +2682,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			for _, c := range e.Entries {
 				edges = append(edges, &edge{
 					Parent: inode,
-					Name:   c.Name,
+					Name:   unescape(c.Name),
 					Inode:  c.Attr.Inode,
 					Type:   typeFromString(c.Attr.Type),
 				})
@@ -2690,8 +2690,9 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			beans = append(beans, edges)
 		}
 	} else if n.Type == TypeSymlink {
-		n.Length = uint64(len(e.Symlink))
-		beans = append(beans, &symlink{inode, e.Symlink})
+		symL := unescape(e.Symlink)
+		n.Length = uint64(len(symL))
+		beans = append(beans, &symlink{inode, symL})
 	}
 	m.Lock()
 	if inode > 1 && inode != TrashInode {
@@ -2712,7 +2713,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	if len(e.Xattrs) > 0 {
 		xattrs := make([]*xattr, 0, len(e.Xattrs))
 		for _, x := range e.Xattrs {
-			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(x.Value)})
+			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(unescape(x.Value))})
 		}
 		beans = append(beans, xattrs)
 	}

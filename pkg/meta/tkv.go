@@ -2286,7 +2286,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int64) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
 	return m.txn(func(tx kvTxn) error {
@@ -2311,11 +2311,12 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 		} else if attr.Typ == TypeDirectory {
 			attr.Length = 4 << 10
 			for _, c := range e.Entries {
-				tx.set(m.entryKey(inode, c.Name), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode))
+				tx.set(m.entryKey(inode, unescape(c.Name)), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode))
 			}
 		} else if attr.Typ == TypeSymlink {
-			attr.Length = uint64(len(e.Symlink))
-			tx.set(m.symKey(inode), []byte(e.Symlink))
+			symL := unescape(e.Symlink)
+			attr.Length = uint64(len(symL))
+			tx.set(m.symKey(inode), []byte(symL))
 		}
 		m.Lock()
 		if inode > 1 && inode != TrashInode {
@@ -2334,7 +2335,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 		m.Unlock()
 
 		for _, x := range e.Xattrs {
-			tx.set(m.xattrKey(inode, x.Name), []byte(x.Value))
+			tx.set(m.xattrKey(inode, x.Name), []byte(unescape(x.Value)))
 		}
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil

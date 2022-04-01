@@ -2994,7 +2994,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	ctx := Background
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
@@ -3022,13 +3022,14 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		if len(e.Entries) > 0 {
 			dentries := make(map[string]interface{})
 			for _, c := range e.Entries {
-				dentries[c.Name] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
+				dentries[unescape(c.Name)] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			}
 			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
 	} else if attr.Typ == TypeSymlink {
-		attr.Length = uint64(len(e.Symlink))
-		p.Set(ctx, m.symKey(inode), e.Symlink, 0)
+		symL := unescape(e.Symlink)
+		attr.Length = uint64(len(symL))
+		p.Set(ctx, m.symKey(inode), symL, 0)
 	}
 	m.Lock()
 	if inode > 1 && inode != TrashInode {
@@ -3049,7 +3050,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 	if len(e.Xattrs) > 0 {
 		xattrs := make(map[string]interface{})
 		for _, x := range e.Xattrs {
-			xattrs[x.Name] = x.Value
+			xattrs[x.Name] = unescape(x.Value)
 		}
 		p.HSet(ctx, m.xattrKey(inode), xattrs)
 	}

@@ -95,6 +95,66 @@ type DumpedEntry struct {
 	Entries map[string]*DumpedEntry `json:"entries,omitempty"`
 }
 
+var CHARS = []byte("0123456789ABCDEF")
+
+func escape(original string) string {
+	// similar to url.Escape but backward compatible if no '%' in it
+	var escValue = make([]byte, 0, len(original))
+	for i := 0; i < len(original); i++ {
+		c := original[i]
+		if c < 32 || c >= 127 || c == '%' || c == '"' || c == '\\' {
+			if escValue == nil {
+				escValue = make([]byte, i, len(original))
+				for j := 0; j < i; j++ {
+					escValue[j] = original[j]
+				}
+			}
+			escValue = append(escValue, '%')
+			escValue = append(escValue, CHARS[(c>>4)&0xF])
+			escValue = append(escValue, CHARS[c&0xF])
+		} else if escValue != nil {
+			escValue = append(escValue, c)
+		}
+	}
+	if escValue == nil {
+		return original
+	}
+	return string(escValue)
+}
+
+func parseHex(c byte) (byte, error) {
+	if c >= '0' && c <= '9' {
+		return c - '0', nil
+	} else if c >= 'A' && c <= 'F' {
+		return 10 + (c - 'A'), nil
+	} else {
+		return 0, fmt.Errorf("hex expected: %c", c)
+	}
+}
+
+func unescape(s string) string {
+	if !strings.ContainsRune(s, '%') {
+		return s
+	}
+
+	p := []byte(s)
+	n := 0
+	for i := 0; i < len(p); i++ {
+		c := p[i]
+		if c == '%' && i+2 < len(p) {
+			h, e1 := parseHex(p[i+1])
+			l, e2 := parseHex(p[i+2])
+			if e1 == nil && e2 == nil {
+				c = h*16 + l
+				i += 2
+			}
+		}
+		p[n] = c
+		n++
+	}
+	return string(p[:n])
+}
+
 func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 	prefix := strings.Repeat(jsonIndent, depth)
 	fieldPrefix := prefix + jsonIndent
@@ -103,16 +163,19 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 			panic(err)
 		}
 	}
-	write(fmt.Sprintf("\n%s\"%s\": {", prefix, de.Name))
+	write(fmt.Sprintf("\n%s\"%s\": {", prefix, escape(de.Name)))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
 		return err
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Symlink) > 0 {
-		write(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, de.Symlink))
+		write(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, escape(de.Symlink)))
 	}
 	if len(de.Xattrs) > 0 {
+		for _, dumpedXattr := range de.Xattrs {
+			dumpedXattr.Value = escape(dumpedXattr.Value)
+		}
 		if data, err = json.Marshal(de.Xattrs); err != nil {
 			return err
 		}
@@ -148,13 +211,16 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 			panic(err)
 		}
 	}
-	write(fmt.Sprintf("\n%s\"%s\": {", prefix, de.Name))
+	write(fmt.Sprintf("\n%s\"%s\": {", prefix, escape(de.Name)))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
 		return err
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Xattrs) > 0 {
+		for _, dumpedXattr := range de.Xattrs {
+			dumpedXattr.Value = escape(dumpedXattr.Value)
+		}
 		if data, err = json.Marshal(de.Xattrs); err != nil {
 			return err
 		}
