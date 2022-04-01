@@ -118,7 +118,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	var prefix string
 	if strings.Contains(opt.Addr, ",") && strings.Index(opt.Addr, ",") < strings.Index(opt.Addr, ":") {
 		var fopt redis.FailoverOptions
-		ps := strings.Split(opt.Addr, ",")
+		ps := strings.Split(strings.ReplaceAll(strings.TrimLeft(opt.Addr, "["), "]", ""), ",")
 		fopt.MasterName = ps[0]
 		fopt.SentinelAddrs = ps[1:]
 		_, port, _ := net.SplitHostPort(fopt.SentinelAddrs[len(fopt.SentinelAddrs)-1])
@@ -160,7 +160,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 		if rdb == nil {
 			var copt redis.ClusterOptions
-			copt.Addrs = strings.Split(opt.Addr, ",")
+			copt.Addrs = strings.Split(strings.ReplaceAll(strings.TrimLeft(opt.Addr, "["), "]", ""), ",")
 			copt.MaxRedirects = 1
 			copt.Username = opt.Username
 			copt.Password = opt.Password
@@ -193,10 +193,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		prefix:   prefix,
 	}
 	m.en = m
-	if prefix == "" {
-		// FIXME: may block for 5 minutes in cluster mode
-		m.checkServerConfig()
-	}
+	m.checkServerConfig()
 	m.root, err = lookupSubdir(m, conf.Subdir)
 	return m, err
 }
