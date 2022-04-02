@@ -103,6 +103,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", uri, err)
 	}
+	if strings.Contains(opt.Addr, ",") {
+		// redis.ParseURL does not support multiple hosts
+		opt.Addr, _, _ = net.SplitHostPort(opt.Addr)
+	}
 	if opt.Password == "" {
 		opt.Password = os.Getenv("REDIS_PASSWORD")
 	}
@@ -110,16 +114,11 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		opt.Password = os.Getenv("META_PASSWORD")
 	}
 	opt.MaxRetries = conf.Retries
-	opt.MinRetryBackoff = query.duration("min-retry-backoff", time.Millisecond*100)
-	opt.MaxRetryBackoff = query.duration("max-retry-backoff", time.Minute)
-	opt.ReadTimeout = query.duration("read-timeout", time.Second*30)
-	opt.WriteTimeout = query.duration("write-timeout", time.Second*5)
 	var rdb redis.UniversalClient
 	var prefix string
-	logger.Infof("opts %+v", opt)
 	if strings.Contains(opt.Addr, ",") && strings.Index(opt.Addr, ",") < strings.Index(opt.Addr, ":") {
 		var fopt redis.FailoverOptions
-		ps := strings.Split(strings.ReplaceAll(strings.TrimLeft(opt.Addr, "["), "]", ""), ",")
+		ps := strings.Split(opt.Addr, ",")
 		fopt.MasterName = ps[0]
 		fopt.SentinelAddrs = ps[1:]
 		_, port, _ := net.SplitHostPort(fopt.SentinelAddrs[len(fopt.SentinelAddrs)-1])
@@ -161,7 +160,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 		if rdb == nil {
 			var copt redis.ClusterOptions
-			copt.Addrs = strings.Split(strings.ReplaceAll(strings.TrimLeft(opt.Addr, "["), "]", ""), ",")
+			copt.Addrs = strings.Split(opt.Addr, ",")
 			copt.MaxRedirects = 1
 			copt.Username = opt.Username
 			copt.Password = opt.Password
@@ -183,7 +182,6 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 					// route to primary
 				}
 			}
-			logger.Infof("copts %+v", copt)
 			rdb = redis.NewClusterClient(&copt)
 			prefix = fmt.Sprintf("{%d}", opt.DB)
 		}

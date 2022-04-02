@@ -44,9 +44,8 @@ func TestRedisCluster(t *testing.T) {
 	var conf = Config{}
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7002/2", &conf)
 	if err != nil {
-		t.Skipf("create meta: %s", err)
+		t.Fatalf("create meta: %s", err)
 	}
-
 	testMeta(t, m)
 }
 
