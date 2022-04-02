@@ -114,10 +114,7 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 }
 
 func (tx *etcdTxn) scanRange(begin_, end_ []byte) map[string][]byte {
-	resp, err := tx.kv.Get(tx.ctx,
-		string(begin_),
-		etcd.WithRange(string(end_)),
-		etcd.WithSerializable())
+	resp, err := tx.kv.Get(tx.ctx, string(begin_), etcd.WithRange(string(end_)))
 	if err != nil {
 		panic(fmt.Errorf("get range [%v-%v): %s", string(begin_), string(end_), err))
 	}
@@ -145,11 +142,7 @@ func (tx *etcdTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
 }
 
 func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
-	resp, err := tx.kv.Get(tx.ctx,
-		string(prefix),
-		etcd.WithPrefix(),
-		etcd.WithKeysOnly(),
-		etcd.WithSerializable())
+	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %v with keys only: %s", string(prefix), err))
 	}
@@ -165,7 +158,7 @@ func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte)
 	if limit == 0 {
 		return nil
 	}
-	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithSerializable())
+	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %s: %s", string(prefix), err))
 	}
@@ -184,8 +177,7 @@ func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte)
 }
 
 func (tx *etcdTxn) exist(prefix []byte) bool {
-	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(),
-		etcd.WithCountOnly(), etcd.WithSerializable())
+	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithCountOnly())
 	if err != nil {
 		panic(fmt.Errorf("get prefix %v with count only: %s", string(prefix), err))
 	}
