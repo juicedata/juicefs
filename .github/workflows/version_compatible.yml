@@ -58,48 +58,48 @@ jobs:
                   echo 'test is ' $test
                   IFS=',' read -a command_arr <<< "$test"
                   for command in "${command_arr[@]}"; do
-                      jfs_cmd=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $1}')
                       jfs_bin=$(echo $command | awk -F: '{print $2}'| xargs)
-                      echo "cmd is "  $jfs_cmd, 'jfs_bin is ' $jfs_bin
-                      case "$cmd" in
-                      "format") 
-                          sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
-                          echo "cmd is format" 
-                          ;;
-                      "mount") 
-                          sudo ./$jfs_bin mount ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
-                          echo "cmd is mount" 
-                          ;;
-                      "umount") 
-                          sudo ./$jfs_bin umount ${{ steps.vars.outputs.MOUNT_POINT }} 
-                          echo "cmd is mount" 
-                          ;;
-                      "destroy") 
-                          UUID=$(./$jfs_bin status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-                          if [ -n "$UUID" ];then
-                            sudo ./$jfs_bin destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-                          fi
-                          echo "cmd is destroy" 
-                          ;;
-                      "write") 
-                          filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                          size=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $3}')
-                          dd if=/dev/random of=${{ steps.vars.outputs.MOUNT_POINT }}/tempfile bs=4k count=$size
-                          md5_write="$filename:$(cat ${{ steps.vars.outputs.MOUNT_POINT }}/tempfile | md5)"
-                          echo "write: filename is: " $filename "md5_write is: "" $md5_write
-                          copy ${{steps.vars.outputs.MOUNT_POINT}}/tempfile $filename
-                          echo "cmd is write" 
-                          ;;
-                      "read") 
-                          filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                          read_md5=$(cat $filename | md5)
-                          written_filename=$(echo $md5_write | awk -F: '{print $1}')
-                          written_md5=$(echo $md5_write | awk -F: '{print $2}')
-                          echo "read: filename is: " $filename "read_md5 is: "" $read_md5, "written_filename is:", $written_filename, "written_md5 is:", $written_md5, 
-                          if [ "$filename" == "$wrtten_filename" && "$read_md5" != "$written_md5" ];then
-                            echo "FATAL: the md5 does not match for: ", $filename, "read_md5:", $read_md5, "written_md5:", $written_md5
-                          fi
-                          ;;
+                      jfs_cmd=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $1}')
+                      echo 'jfs_bin is ' $jfs_bin, "cmd is "  $jfs_cmd
+                      case "$jfs_cmd" in
+                        "format") 
+                            sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
+                            echo "cmd is format" 
+                            ;;
+                        "mount") 
+                            sudo ./$jfs_bin mount ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
+                            echo "cmd is mount" 
+                            ;;
+                        "umount") 
+                            sudo ./$jfs_bin umount ${{ steps.vars.outputs.MOUNT_POINT }} 
+                            echo "cmd is mount" 
+                            ;;
+                        "destroy") 
+                            UUID=$(./$jfs_bin status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+                            if [ -n "$UUID" ];then
+                              sudo ./$jfs_bin destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+                            fi
+                            echo "cmd is destroy" 
+                            ;;
+                        "write") 
+                            filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
+                            size=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $3}')
+                            dd if=/dev/random of=${{ steps.vars.outputs.MOUNT_POINT }}/tempfile bs=4k count=$size
+                            md5_write="$filename:$(cat ${{ steps.vars.outputs.MOUNT_POINT }}/tempfile | md5)"
+                            echo "write: filename is: " $filename "md5_write is: "" $md5_write
+                            copy ${{steps.vars.outputs.MOUNT_POINT}}/tempfile $filename
+                            echo "cmd is write" 
+                            ;;
+                        "read") 
+                            filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
+                            read_md5=$(cat $filename | md5)
+                            written_filename=$(echo $md5_write | awk -F: '{print $1}')
+                            written_md5=$(echo $md5_write | awk -F: '{print $2}')
+                            echo "read: filename is: " $filename "read_md5 is: "" $read_md5, "written_filename is:", $written_filename, "written_md5 is:", $written_md5, 
+                            if [ "$filename" == "$wrtten_filename" && "$read_md5" != "$written_md5" ];then
+                              echo "FATAL: the md5 does not match for: ", $filename, "read_md5:", $read_md5, "written_md5:", $written_md5
+                            fi
+                            ;;
                       esac
                   done
               done
