@@ -24,7 +24,10 @@ type prefixTxn struct {
 }
 
 func (tx *prefixTxn) realKey(key []byte) []byte {
-	return append(tx.prefix, key...)
+	k := make([]byte, len(tx.prefix)+len(key))
+	copy(k, tx.prefix)
+	copy(k[len(tx.prefix):], key)
+	return k
 }
 
 func (tx *prefixTxn) origKey(key []byte) []byte {
@@ -113,7 +116,7 @@ func (c *prefixClient) txn(f func(kvTxn) error) error {
 
 func (c *prefixClient) reset(prefix []byte) error {
 	if prefix != nil {
-		return fmt.Errorf("prefix must be nil")
+		return fmt.Errorf("prefix must be nil, but got %v", prefix)
 	}
 	return c.tkvClient.reset(c.prefix)
 }
