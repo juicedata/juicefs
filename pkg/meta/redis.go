@@ -114,18 +114,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		opt.Password = os.Getenv("META_PASSWORD")
 	}
 	opt.MaxRetries = conf.Retries
-	if opt.MinRetryBackoff == 0 {
-		opt.MinRetryBackoff = time.Millisecond * 20
-	}
-	if opt.MaxRetryBackoff == 0 {
-		opt.MaxRetryBackoff = time.Second * 10
-	}
-	if opt.ReadTimeout == 0 {
-		opt.ReadTimeout = time.Second * 30
-	}
-	if opt.WriteTimeout == 0 {
-		opt.WriteTimeout = time.Second * 5
-	}
+	opt.MinRetryBackoff = query.duration("min-retry-backoff", time.Millisecond*20)
+	opt.MaxRetryBackoff = query.duration("max-retry-backoff", time.Second*10)
+	opt.ReadTimeout = query.duration("read-timeout", time.Second*30)
+	opt.WriteTimeout = query.duration("write-timeout", time.Second*5)
 	var rdb redis.UniversalClient
 	var prefix string
 	if strings.Contains(opt.Addr, ",") && strings.Index(opt.Addr, ",") < strings.Index(opt.Addr, ":") {
