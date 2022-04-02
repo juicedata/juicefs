@@ -43,9 +43,8 @@ jobs:
         run: |
           tests=(
               "format:jfs_old, format:jfs_new, destroy:old", 
-              "format:jfs_old, mount:jfs_old, write_file1_20M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_read, destroy:old"
           )    
-          urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}'))
+          urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}')) | head -1
           for url in "${urls[@]}"; do 
               echo download url is: $url
               wget -q $url
