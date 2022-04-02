@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -64,19 +63,6 @@ var logger = utils.GetLogger("juicefs")
 
 type queryMap struct {
 	url.Values
-}
-
-func (qm *queryMap) duration(key string, d time.Duration) time.Duration {
-	val := qm.Get(key)
-	if val == "" {
-		return d
-	}
-	if dur, err := time.ParseDuration(val); err == nil {
-		return dur
-	} else {
-		logger.Warnf("Parse duration %s for key %s: %s", val, key, err)
-		return d
-	}
 }
 
 func errno(err error) syscall.Errno {
