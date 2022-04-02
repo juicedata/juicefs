@@ -116,6 +116,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	opt.WriteTimeout = query.duration("write-timeout", time.Second*5)
 	var rdb redis.UniversalClient
 	var prefix string
+	logger.Infof("opts %+v", opt)
 	if strings.Contains(opt.Addr, ",") && strings.Index(opt.Addr, ",") < strings.Index(opt.Addr, ":") {
 		var fopt redis.FailoverOptions
 		ps := strings.Split(strings.ReplaceAll(strings.TrimLeft(opt.Addr, "["), "]", ""), ",")
@@ -182,6 +183,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 					// route to primary
 				}
 			}
+			logger.Infof("copts %+v", copt)
 			rdb = redis.NewClusterClient(&copt)
 			prefix = fmt.Sprintf("{%d}", opt.DB)
 		}
