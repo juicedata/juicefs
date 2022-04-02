@@ -51,7 +51,7 @@ jobs:
               wget -q $url
               tar -zxf $(basename $url)
               rm $(basename $url)
-              mv juicefs jfs_old
+              cp juicefs jfs_old
               echo juicefs new version: $(./jfs_new -V)
               echo juicefs old version: $(./jfs_old -V)
               for test in "${tests[@]}"; do
