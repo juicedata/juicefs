@@ -448,7 +448,7 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 
 	try, max := 0, 3
 	if sync {
-		max = 10
+		max = store.conf.MaxRetries
 	}
 	for ; try < max; try++ {
 		time.Sleep(time.Second * time.Duration(try*try))
@@ -590,6 +590,7 @@ type Config struct {
 	Compress       string
 	MaxUpload      int
 	MaxDeletes     int
+	MaxRetries     int
 	UploadLimit    int64 // bytes per second
 	DownloadLimit  int64 // bytes per second
 	Writeback      bool
@@ -697,6 +698,9 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 	compressor := compress.NewCompressor(config.Compress)
 	if compressor == nil {
 		logger.Fatalf("unknown compress algorithm: %s", config.Compress)
+	}
+	if config.MaxRetries == 0 {
+		config.MaxRetries = 10
 	}
 	if config.GetTimeout == 0 {
 		config.GetTimeout = time.Second * 60

@@ -82,7 +82,7 @@ func clientFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:  "io-retries",
-			Value: 30,
+			Value: 10,
 			Usage: "number of retries after network failure",
 		},
 		&cli.IntFlag{

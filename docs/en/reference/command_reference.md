@@ -223,7 +223,7 @@ the max number of seconds to download an object (default: 60)
 the max number of seconds to upload an object (default: 60)
 
 `--io-retries value`<br />
-number of retries after network failure (default: 30)
+number of retries after network failure (default: 10)
 
 `--max-uploads value`<br />
 number of connections to upload (default: 20)
@@ -311,7 +311,7 @@ the max number of seconds to download an object (default: 60)
 the max number of seconds to upload an object (default: 60)
 
 `--io-retries value`<br />
-number of retries after network failure (default: 30)
+number of retries after network failure (default: 10)
 
 `--max-uploads value`<br />
 number of connections to upload (default: 20)
@@ -410,7 +410,7 @@ the max number of seconds to download an object (default: 60)
 the max number of seconds to upload an object (default: 60)
 
 `--io-retries value`<br />
-number of retries after network failure (default: 30)
+number of retries after network failure (default: 10)
 
 `--max-uploads value`<br />
 number of connections to upload (default: 20)
