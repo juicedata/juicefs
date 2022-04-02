@@ -31,12 +31,8 @@ import (
 )
 
 const (
-	usedSpace    = "usedSpace"
-	totalInodes  = "totalInodes"
-	delfiles     = "delfiles"
-	allSessions  = "allSessions"
-	sessionInfos = "sessionInfos"
-	sliceRefs    = "sliceRef"
+	usedSpace   = "usedSpace"
+	totalInodes = "totalInodes"
 )
 
 const (
