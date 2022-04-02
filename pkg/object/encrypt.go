@@ -71,7 +71,7 @@ func ParseRsaPrivateKeyFromPem(privPEM string, passphrase string) (*rsa.PrivateK
 	if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") &&
 		x509.IsEncryptedPEMBlock(block) {
 		if passphrase == "" {
-			return nil, fmt.Errorf("passphrase is required to private key,please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+			return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
 		}
 		var err error
 		// nolint:staticcheck
