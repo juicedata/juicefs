@@ -64,7 +64,7 @@ jobs:
                       case "$jfs_cmd" in
                         "format") 
                             echo "cmd is format" 
-                            sudo ./jfs_old format --storage minio --bucket  ${{steps.vars.outputs.MINIO_URL}} --access-key  minioadmin --secret-key ${{secrets.MINIO_SECRET_KEY}}  ${{steps.vars.outputs.META_URL}} juicefs-version-compatible
+                            sudo ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
                             echo "cmd is format" 
                             ;;
                         "mount") 
