@@ -399,15 +399,15 @@ func (c *wChunk) WriteAt(p []byte, off int64) (n int, err error) {
 	return n, nil
 }
 
-func (c *wChunk) put(key string, p *Page) error {
-	if c.store.upLimit != nil {
-		c.store.upLimit.Wait(int64(len(p.Data)))
+func (store *cachedStore) put(key string, p *Page) error {
+	if store.upLimit != nil {
+		store.upLimit.Wait(int64(len(p.Data)))
 	}
 	p.Acquire()
 	return utils.WithTimeout(func() error {
 		defer p.Release()
 		st := time.Now()
-		err := c.store.storage.Put(key, bytes.NewReader(p.Data))
+		err := store.storage.Put(key, bytes.NewReader(p.Data))
 		used := time.Since(st)
 		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
 		if used > SlowRequest {
@@ -419,12 +419,13 @@ func (c *wChunk) put(key string, p *Page) error {
 			objectReqErrors.Add(1)
 		}
 		return err
-	}, c.store.conf.PutTimeout)
+	}, store.conf.PutTimeout)
 }
 
-func (c *wChunk) syncUpload(key string, block *Page) {
+func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
+	sync := c != nil
 	blen := len(block.Data)
-	bufSize := c.store.compressor.CompressBound(blen)
+	bufSize := store.compressor.CompressBound(blen)
 	var buf *Page
 	if bufSize > blen {
 		buf = NewOffPage(bufSize)
@@ -432,87 +433,38 @@ func (c *wChunk) syncUpload(key string, block *Page) {
 		buf = block
 		buf.Acquire()
 	}
-	n, err := c.store.compressor.Compress(buf.Data, block.Data)
-	if err != nil {
-		logger.Fatalf("compress chunk %v: %s", c.id, err)
-		return
-	}
-	buf.Data = buf.Data[:n]
-	if blen < c.store.conf.BlockSize {
+	defer buf.Release()
+	if sync && blen < store.conf.BlockSize {
 		// block will be freed after written into disk
-		c.store.bcache.cache(key, block, false)
+		store.bcache.cache(key, block, false)
 	}
+	n, err := store.compressor.Compress(buf.Data, block.Data)
 	block.Release()
-
-	c.store.currentUpload <- true
-	defer func() {
-		buf.Release()
-		<-c.store.currentUpload
-	}()
-
-	try := 0
-	for try <= 10 && c.uploadError == nil {
-		err = c.put(key, buf)
-		if err == nil {
-			c.errors <- nil
-			return
-		}
-		try++
-		logger.Warnf("upload %s: %s (try %d)", key, err, try)
-		time.Sleep(time.Second * time.Duration(try*try))
-	}
-	c.errors <- fmt.Errorf("upload block %s: %s (after %d tries)", key, err, try)
-}
-
-func (c *wChunk) asyncUpload(key string, block *Page, stagingPath string) {
-	select {
-	case c.store.currentUpload <- true:
-	default:
-		// release the memory and leave it to background uploader
-		block.Release()
-		c.store.addDelayedStaging(key, stagingPath, time.Now(), true)
-		return
-	}
-	blockSize := len(block.Data)
-	defer func() {
-		<-c.store.currentUpload
-	}()
-	bufSize := c.store.compressor.CompressBound(blockSize)
-	var buf *Page
-	if bufSize > blockSize {
-		buf = NewOffPage(bufSize)
-	} else {
-		buf = block
-		buf.Acquire()
-	}
-	n, err := c.store.compressor.Compress(buf.Data, block.Data)
 	if err != nil {
-		logger.Fatalf("compress chunk %v: %s", c.id, err)
-		return
+		logger.Fatalf("Compress block key %s: %s", key, err)
+		return err
 	}
 	buf.Data = buf.Data[:n]
-	block.Release()
 
-	try := 0
-	for try <= 3 { // for async, c.uploadError is always nil
-		err = c.put(key, buf)
-		if err == nil {
+	try, max := 0, 3
+	if sync {
+		max = 10
+	}
+	for ; try < max; try++ {
+		time.Sleep(time.Second * time.Duration(try*try))
+		if c != nil && c.uploadError != nil {
+			err = fmt.Errorf("(cancelled) upload block %s: %s (after %d tries)", key, err, try)
 			break
 		}
-		try++
-		logger.Warnf("upload %s: %s (tried %d)", key, err, try)
-		time.Sleep(time.Second * time.Duration(try*try))
-	}
-	buf.Release()
-	if err == nil {
-		c.store.bcache.uploaded(key, blockSize)
-		if os.Remove(stagingPath) == nil {
-			stageBlocks.Sub(1)
-			stageBlockBytes.Sub(float64(blockSize))
+		if err = store.put(key, buf); err == nil {
+			break
 		}
-	} else { // add to delay list and wait for later scanning
-		c.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
+		logger.Warnf("Upload %s: %s (try %d)", key, err, try+1)
 	}
+	if err != nil && try >= max {
+		err = fmt.Errorf("(max tries) upload block %s: %s (after %d tries)", key, err, try)
+	}
+	return err
 }
 
 func (c *wChunk) upload(indx int) {
@@ -524,36 +476,51 @@ func (c *wChunk) upload(indx int) {
 
 	go func() {
 		var block *Page
+		var off int
 		if len(pages) == 1 {
 			block = pages[0]
+			off = len(block.Data)
 		} else {
 			block = NewOffPage(blen)
-			var off int
 			for _, b := range pages {
 				off += copy(block.Data[off:], b.Data)
 				freePage(b)
 			}
-			if off != blen {
-				logger.Fatalf("block length does not match: %v != %v", off, blen)
-			}
+		}
+		if off != blen {
+			logger.Fatalf("block length does not match: %v != %v", off, blen)
 		}
 		if c.store.conf.Writeback {
 			stagingPath, err := c.store.bcache.stage(key, block.Data, c.store.shouldCache(blen))
 			if err != nil {
 				logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
-				c.syncUpload(key, block)
 			} else {
 				c.errors <- nil
 				if c.store.conf.UploadDelay == 0 {
-					c.asyncUpload(key, block, stagingPath)
-				} else {
-					block.Release()
-					c.store.addDelayedStaging(key, stagingPath, time.Now(), false)
+					select {
+					case c.store.currentUpload <- true:
+						defer func() { <-c.store.currentUpload }()
+						if err = c.store.upload(key, block, nil); err == nil {
+							c.store.bcache.uploaded(key, blen)
+							if os.Remove(stagingPath) == nil {
+								stageBlocks.Sub(1)
+								stageBlockBytes.Sub(float64(blen))
+							}
+						} else { // add to delay list and wait for later scanning
+							c.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
+						}
+						return
+					default:
+					}
 				}
+				block.Release()
+				c.store.addDelayedStaging(key, stagingPath, time.Now(), c.store.conf.UploadDelay == 0)
+				return
 			}
-		} else {
-			c.syncUpload(key, block)
 		}
+		c.store.currentUpload <- true
+		defer func() { <-c.store.currentUpload }()
+		c.errors <- c.store.upload(key, block, c)
 	}()
 }
 
@@ -853,63 +820,34 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		<-store.currentUpload
 	}()
 
-	f, err := os.Open(stagingPath)
-	if err != nil {
-		store.pendingMutex.Lock()
-		_, ok := store.pendingKeys[key]
-		store.pendingMutex.Unlock()
-		if ok {
-			logger.Errorf("open %s: %s", stagingPath, err)
-		}
+	store.pendingMutex.Lock()
+	_, ok := store.pendingKeys[key]
+	store.pendingMutex.Unlock()
+	if !ok {
+		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
-	blockSize := parseObjOrigSize(key)
-	block := NewOffPage(blockSize)
+	f, err := os.Open(stagingPath)
+	if err != nil {
+		logger.Errorf("Open staging file %s: %s", stagingPath, err)
+		return
+	}
+	blen := parseObjOrigSize(key)
+	block := NewOffPage(blen)
 	_, err = io.ReadFull(f, block.Data)
 	_ = f.Close()
 	if err != nil {
 		block.Release()
-		logger.Errorf("read %s: %s", stagingPath, err)
+		logger.Errorf("Read staging file %s: %s", stagingPath, err)
 		return
 	}
-	buf := NewOffPage(store.compressor.CompressBound(blockSize))
-	defer buf.Release()
-	n, err := store.compressor.Compress(buf.Data, block.Data)
-	block.Release()
-	if err != nil {
-		logger.Errorf("compress chunk %s: %s", stagingPath, err)
-		return
-	}
-	compressed := buf.Data[:n]
-	try := 0
-	for try <= 3 {
-		if store.upLimit != nil {
-			store.upLimit.Wait(int64(len(compressed)))
-		}
-		st := time.Now()
-		err := store.storage.Put(key, bytes.NewReader(compressed))
-		used := time.Since(st)
-		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
-		if used > SlowRequest {
-			logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
-		}
-		objectDataBytes.WithLabelValues("PUT").Add(float64(len(compressed)))
-		objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
-		if err == nil {
-			break
-		} else {
-			objectReqErrors.Add(1)
-		}
-		try++
-		logger.Warnf("upload %s: %s (try %d)", key, err, try)
-		time.Sleep(time.Second * time.Duration(try*try))
-	}
-	if err == nil {
-		store.bcache.uploaded(key, blockSize)
+
+	if err = store.upload(key, block, nil); err == nil {
+		store.bcache.uploaded(key, blen)
 		store.removeStaging(key)
 		if os.Remove(stagingPath) == nil {
 			stageBlocks.Sub(1)
-			stageBlockBytes.Sub(float64(blockSize))
+			stageBlockBytes.Sub(float64(blen))
 		}
 	}
 }
