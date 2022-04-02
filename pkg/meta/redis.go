@@ -1626,9 +1626,13 @@ func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 		newEntries := make([]Entry, len(keys)/2)
 		newAttrs := make([]Attr, len(keys)/2)
 		for i := 0; i < len(keys); i += 2 {
-			typ, inode := r.parseEntry([]byte(keys[i+1]))
+			typ, ino := r.parseEntry([]byte(keys[i+1]))
+			if keys[i] == "" {
+				logger.Errorf("Corrupt entry with empty name: inode %d parent %d", ino, inode)
+				continue
+			}
 			ent := &newEntries[i/2]
-			ent.Inode = inode
+			ent.Inode = ino
 			ent.Name = []byte(keys[i])
 			ent.Attr = &newAttrs[i/2]
 			ent.Attr.Typ = typ
@@ -3002,7 +3006,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	ctx := Background
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
@@ -3014,15 +3018,15 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 				continue
 			}
 			slices := make([]string, 0, len(c.Slices))
+			m.Lock()
 			for _, s := range c.Slices {
 				slices = append(slices, string(marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)))
-				m.Lock()
 				refs[m.sliceKey(s.Chunkid, s.Size)]++
-				m.Unlock()
 				if cs.NextChunk < int64(s.Chunkid) {
 					cs.NextChunk = int64(s.Chunkid)
 				}
 			}
+			m.Unlock()
 			p.RPush(ctx, m.chunkKey(inode, c.Index), slices)
 		}
 	} else if attr.Typ == TypeDirectory {
@@ -3030,14 +3034,16 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		if len(e.Entries) > 0 {
 			dentries := make(map[string]interface{})
 			for _, c := range e.Entries {
-				dentries[c.Name] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
+				dentries[unescape(c.Name)] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			}
 			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
 	} else if attr.Typ == TypeSymlink {
-		attr.Length = uint64(len(e.Symlink))
-		p.Set(ctx, m.symKey(inode), e.Symlink, 0)
+		symL := unescape(e.Symlink)
+		attr.Length = uint64(len(symL))
+		p.Set(ctx, m.symKey(inode), symL, 0)
 	}
+	m.Lock()
 	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(attr.Length)
 		cs.UsedInodes += 1
@@ -3051,11 +3057,12 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 			cs.NextTrash = int64(inode) - TrashInode
 		}
 	}
+	m.Unlock()
 
 	if len(e.Xattrs) > 0 {
 		xattrs := make(map[string]interface{})
 		for _, x := range e.Xattrs {
-			xattrs[x.Name] = x.Value
+			xattrs[x.Name] = unescape(x.Value)
 		}
 		p.HSet(ctx, m.xattrKey(inode), xattrs)
 	}

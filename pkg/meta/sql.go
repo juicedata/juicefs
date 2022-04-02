@@ -1589,6 +1589,10 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		return errno(err)
 	}
 	for _, n := range nodes {
+		if n.Name == "" {
+			logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Inode, inode)
+			continue
+		}
 		entry := &Entry{
 			Inode: n.Inode,
 			Name:  []byte(n.Name),
@@ -2629,7 +2633,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, e.Name)
+	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := e.Attr
 	n := &node{
 		Inode:  inode,
@@ -2653,19 +2657,19 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 				continue
 			}
 			slices := make([]byte, 0, sliceBytes*len(c.Slices))
+			m.Lock()
 			for _, s := range c.Slices {
 				slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
-				m.Lock()
 				if refs[s.Chunkid] == nil {
 					refs[s.Chunkid] = &chunkRef{s.Chunkid, s.Size, 1}
 				} else {
 					refs[s.Chunkid].Refs++
 				}
-				m.Unlock()
 				if cs.NextChunk <= int64(s.Chunkid) {
 					cs.NextChunk = int64(s.Chunkid) + 1
 				}
 			}
+			m.Unlock()
 			chunks = append(chunks, &chunk{inode, c.Index, slices})
 		}
 		if len(chunks) > 0 {
@@ -2678,7 +2682,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			for _, c := range e.Entries {
 				edges = append(edges, &edge{
 					Parent: inode,
-					Name:   c.Name,
+					Name:   unescape(c.Name),
 					Inode:  c.Attr.Inode,
 					Type:   typeFromString(c.Attr.Type),
 				})
@@ -2686,9 +2690,11 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			beans = append(beans, edges)
 		}
 	} else if n.Type == TypeSymlink {
-		n.Length = uint64(len(e.Symlink))
-		beans = append(beans, &symlink{inode, e.Symlink})
+		symL := unescape(e.Symlink)
+		n.Length = uint64(len(symL))
+		beans = append(beans, &symlink{inode, symL})
 	}
+	m.Lock()
 	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(n.Length)
 		cs.UsedInodes += 1
@@ -2702,11 +2708,12 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			cs.NextTrash = int64(inode) - TrashInode
 		}
 	}
+	m.Unlock()
 
 	if len(e.Xattrs) > 0 {
 		xattrs := make([]*xattr, 0, len(e.Xattrs))
 		for _, x := range e.Xattrs {
-			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(x.Value)})
+			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(unescape(x.Value))})
 		}
 		beans = append(beans, xattrs)
 	}
