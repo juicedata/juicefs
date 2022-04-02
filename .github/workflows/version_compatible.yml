@@ -63,7 +63,7 @@ jobs:
                       echo 'jfs_bin is ' $jfs_bin, "cmd is "  $jfs_cmd
                       case "$jfs_cmd" in
                         "format") 
-                            echo "cmd is format" 
+                            echo "cmd is format: ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark" 
                             sudo ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
                             echo "cmd is format" 
                             ;;
