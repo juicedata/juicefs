@@ -127,7 +127,11 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
-	_, err := s.c.PutObject(params)
+	resp, err := s.c.PutObject(params)
+	hexMd5 := obs.Hex(sum)
+	if err == nil && resp.ETag != hexMd5 {
+		err = fmt.Errorf("unexpected ETag: %s != %s", resp.ETag, hexMd5)
+	}
 	return err
 }
 
@@ -198,7 +202,11 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: resp.ETag}, nil
+	hexMd5 := obs.Hex(sum[:])
+	if resp.ETag != hexMd5 {
+		return nil, fmt.Errorf("unexpected ETag: %s != %s", resp.ETag, hexMd5)
+	}
+	return &Part{Num: num, ETag: resp.ETag}, err
 }
 
 func (s *obsClient) AbortUpload(key string, uploadID string) {
