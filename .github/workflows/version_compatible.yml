@@ -53,9 +53,6 @@ jobs:
             test_arr=$(IFS=',' read -a arr <<< "$tests")
             for test in "${test_arr[@]}"; do 
               command=$(echo $test | awk -F: '{print $1}'| xargs | awk -F_ '{print $1}')
-              if [ command=='read' || command=='write' ]
-                
-              fi
               jfs_bin=$(echo $test | awk -F: '{print $2}'| xargs)
               case "$command" in
                 "format") echo "cmd is format" 
