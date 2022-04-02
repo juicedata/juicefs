@@ -38,7 +38,7 @@ jobs:
           urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}'))
           for url in "${urls[@]}"; do 
               echo download url is: $url
-              wget $url
+              wget -q $url
               tar -zxf $(basename $url)
               mv juicefs jfs_old
               echo juicefs new version: $(./jfs_new -V)
