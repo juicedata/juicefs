@@ -46,17 +46,15 @@ before_script:
   - docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
   - go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
   - nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
+  - # nohup /home/travis/.m2/etcd-v3.5.2-linux-amd64/etcd --unsafe-no-fsync --listen-client-urls http://127.0.0.1:2389 --advertise-client-urls http://127.0.0.1:2389 &
   - sudo chmod 777 /usr/local/maven-3.6.3/conf/settings.xml
   - sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/local/maven-3.6.3/conf/settings.xml
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
-  - ls -l /home/travis/.m2/etcd-v3.5.2-linux-amd64/
-  - /home/travis/.m2/etcd-v3.5.2-linux-amd64/etcd -h
-  - /home/travis/.m2/etcd-v3.5.2-linux-amd64/etcd --unsafe-no-fsync --listen-client-urls http://localhost:2389 --advertise-client-urls http://localhost:2389 &
   - make
   - sudo make -C fstests setup
   - chmod +x travis-setup-hdfs.sh
   - ./travis-setup-hdfs.sh
-  - for i in {2222,3306,5432,8020,9000,9007,2379,2389} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+  - for i in {2222,3306,5432,8020,9000,9007,2379} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
   - sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 script:
   - sudo chmod 777 /var/jfsCache
