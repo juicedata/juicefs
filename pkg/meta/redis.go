@@ -114,6 +114,18 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		opt.Password = os.Getenv("META_PASSWORD")
 	}
 	opt.MaxRetries = conf.Retries
+	if opt.MinRetryBackoff == 0 {
+		opt.MinRetryBackoff = time.Millisecond * 20
+	}
+	if opt.MaxRetryBackoff == 0 {
+		opt.MaxRetryBackoff = time.Second * 10
+	}
+	if opt.ReadTimeout == 0 {
+		opt.ReadTimeout = time.Second * 30
+	}
+	if opt.WriteTimeout == 0 {
+		opt.WriteTimeout = time.Second * 5
+	}
 	var rdb redis.UniversalClient
 	var prefix string
 	if strings.Contains(opt.Addr, ",") && strings.Index(opt.Addr, ",") < strings.Index(opt.Addr, ":") {
@@ -199,13 +211,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 }
 
 func (r *redisMeta) Shutdown() error {
-	switch c := r.rdb.(type) {
-	case *redis.Client:
-		return c.Close()
-	case *redis.ClusterClient:
-		return c.Close()
-	}
-	return nil
+	return r.rdb.Close()
 }
 
 func (m *redisMeta) doDeleteSlice(chunkid uint64, size uint32) error {
@@ -287,9 +293,9 @@ func (r *redisMeta) Init(format Format, force bool) error {
 
 func (r *redisMeta) Reset() error {
 	if r.prefix != "" {
-		return fromErrNo(r.scan(Background, "*", func(keys []string) error {
+		return r.scan(Background, "*", func(keys []string) error {
 			return r.rdb.Del(Background, keys...).Err()
-		}))
+		})
 	}
 	return r.rdb.FlushDB(Background).Err()
 }
@@ -751,15 +757,10 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	// TODO: enable retry for some of idempodent transactions
 	var retryOnFailture = false
 	for i := 0; i < 50; i++ {
-		switch c := r.rdb.(type) {
-		case *redis.Client:
-			err = c.Watch(ctx, txf, keys...)
-		case *redis.ClusterClient:
-			err = c.Watch(ctx, txf, keys...)
-		}
+		err = r.rdb.Watch(ctx, txf, keys...)
 		if r.shouldRetry(err, retryOnFailture) {
 			txRestart.Add(1)
-			logger.Errorf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		}
@@ -808,12 +809,12 @@ func (r *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			var cursor uint64
 			var keys []string
 			for {
-				keys, cursor, err = tx.Scan(ctx, cursor, fmt.Sprintf("%sc%d_*", r.prefix, inode), 10000).Result()
+				keys, cursor, err = tx.Scan(ctx, cursor, r.prefix+fmt.Sprintf("c%d_*", inode), 10000).Result()
 				if err != nil {
 					return err
 				}
 				for _, key := range keys {
-					indx, err := strconv.Atoi(strings.Split(key[len(r.prefix)+1:], "_")[1])
+					indx, err := strconv.Atoi(strings.Split(key[len(r.prefix):], "_")[1])
 					if err != nil {
 						logger.Errorf("parse %s: %s", key, err)
 						continue
@@ -2151,7 +2152,6 @@ func (r *redisMeta) cleanupZeroRef(key string) {
 
 func (r *redisMeta) cleanupLeakedChunks() {
 	var ctx = Background
-	var err error
 	_ = r.scan(ctx, "c*", func(ckeys []string) error {
 		var ikeys []string
 		var rs []*redis.IntCmd
@@ -2166,7 +2166,7 @@ func (r *redisMeta) cleanupLeakedChunks() {
 			rs = append(rs, p.Exists(ctx, r.inodeKey(Ino(ino))))
 		}
 		if len(rs) > 0 {
-			_, err = p.Exec(ctx)
+			_, err := p.Exec(ctx)
 			if err != nil {
 				logger.Errorf("check inodes: %s", err)
 				return err
@@ -2413,7 +2413,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 
 func (r *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	p := r.rdb.Pipeline()
-	return r.scan(ctx, "c*_*", func(keys []string) error {
+	return errno(r.scan(ctx, "c*_*", func(keys []string) error {
 		bar.IncrTotal(int64(len(keys)))
 		for _, key := range keys {
 			_ = p.LLen(ctx, key)
@@ -2437,7 +2437,7 @@ func (r *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 			bar.Increment()
 		}
 		return nil
-	})
+	}))
 }
 
 func (r *redisMeta) cleanupLeakedInodes(delete bool) {
@@ -2487,13 +2487,13 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 	})
 }
 
-func (r *redisMeta) scan(ctx context.Context, pattern string, f func([]string) error) syscall.Errno {
+func (r *redisMeta) scan(ctx context.Context, pattern string, f func([]string) error) error {
 	var rdb *redis.Client
 	if c, ok := r.rdb.(*redis.ClusterClient); ok {
 		var err error
 		rdb, err = c.MasterForKey(ctx, r.prefix)
 		if err != nil {
-			return errno(err)
+			return err
 		}
 	} else {
 		rdb = r.rdb.(*redis.Client)
@@ -2503,12 +2503,12 @@ func (r *redisMeta) scan(ctx context.Context, pattern string, f func([]string) e
 		keys, c, err := rdb.Scan(ctx, cursor, r.prefix+pattern, 10000).Result()
 		if err != nil {
 			logger.Warnf("scan %s: %s", pattern, err)
-			return errno(err)
+			return err
 		}
 		if len(keys) > 0 {
 			err = f(keys)
 			if err != nil {
-				return errno(err)
+				return err
 			}
 		}
 		if c == 0 {
@@ -2516,7 +2516,7 @@ func (r *redisMeta) scan(ctx context.Context, pattern string, f func([]string) e
 		}
 		cursor = c
 	}
-	return 0
+	return nil
 }
 
 func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
@@ -2528,7 +2528,7 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}
 
 	p := r.rdb.Pipeline()
-	return r.scan(ctx, "c*_*", func(keys []string) error {
+	return errno(r.scan(ctx, "c*_*", func(keys []string) error {
 		for _, key := range keys {
 			_ = p.LRange(ctx, key, 0, 100000000)
 		}
@@ -2552,7 +2552,7 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 			}
 		}
 		return nil
-	})
+	}))
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
@@ -2877,12 +2877,12 @@ func (m *redisMeta) makeSnap(bar *utils.Bar) error {
 	}
 
 	scanner := func(match string, handlerKey func([]string) error) error {
-		return fromErrNo(m.scan(ctx, match, func(keys []string) error {
+		return m.scan(ctx, match, func(keys []string) error {
 			if err := handlerKey(keys); err != nil {
 				return err
 			}
 			return nil
-		}))
+		})
 	}
 
 	for match, typ := range typeMap {
