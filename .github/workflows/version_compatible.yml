@@ -45,7 +45,7 @@ jobs:
               "format:jfs_old, format:jfs_new, destroy:old", 
               "format:jfs_old, format:jfs_new, destroy:old"
           )    
-          urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}')) | head -1
+          urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}') | head -1)  
           for url in "${urls[@]}"; do 
               echo download url is: $url
               wget -q $url
