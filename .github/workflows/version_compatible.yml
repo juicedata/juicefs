@@ -84,7 +84,7 @@ jobs:
                           read_md5=$(cat $filename | md5)
                           written_filename=$(echo $md5_write | awk -F: '{print $1}')
                           written_md5=$(echo $md5_write | awk -F: '{print $2}')
-                          if [ "$filename" == "$wrtten_filename" && "$read_md5" != "$written_md5"]
+                          if [ "$filename" == "$wrtten_filename" && "$read_md5" != "$written_md5" ];then
                             echo "FATAL: the md5 does not match for: ", $filename, "read_md5:", $read_md5, "written_md5:", $written_md5
                           fi
                           ;;
