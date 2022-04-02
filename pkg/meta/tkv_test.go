@@ -48,6 +48,14 @@ func TestBadgerClient(t *testing.T) {
 	testMeta(t, m)
 }
 
+func TestEtcdClient(t *testing.T) {
+	m, err := newKVMeta("etcd", "localhost:2379", &Config{})
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	testMeta(t, m)
+}
+
 func testTKV(t *testing.T, c tkvClient) {
 	txn := func(f func(kt kvTxn)) {
 		if err := c.txn(func(kt kvTxn) error {
@@ -86,7 +94,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	var ks [][]byte
 	txn(func(kt kvTxn) { ks = kt.gets([]byte("k1"), []byte("k2")) })
 	if ks[0] != nil || string(ks[1]) != "value" {
-		t.Fatalf("gets k1,k2: %+v", ks)
+		t.Fatalf("gets k1,k2: %+v != %+v", ks, [][]byte{nil, []byte("value")})
 	}
 
 	var keys [][]byte
@@ -154,10 +162,31 @@ func testTKV(t *testing.T, c tkvClient) {
 	if count != 1 {
 		t.Fatalf("counter should be 1, but got %d", count)
 	}
+
+	// key with zeros
+	k = []byte("k\x001")
+	txn(func(kt kvTxn) {
+		kt.set(k, v)
+	})
+	var v2 []byte
+	txn(func(kt kvTxn) {
+		v2 = kt.get(k)
+	})
+	if !bytes.Equal(v2, v) {
+		t.Fatalf("expect %v but got %v", v, v2)
+	}
 }
 
 func TestBadgerKV(t *testing.T) {
 	c, err := newBadgerClient("test_badger")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testTKV(t, c)
+}
+
+func TestEtcd(t *testing.T) {
+	c, err := newEtcdClient("localhost:2379/jfs")
 	if err != nil {
 		t.Fatal(err)
 	}
