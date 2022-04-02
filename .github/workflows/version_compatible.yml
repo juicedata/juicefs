@@ -32,60 +32,64 @@ jobs:
       - name: Version Compatible Test
         run: |
           tests=(
-            "format:jfs_old, format:jfs_new, destroy:old", 
-            "format:jfs_old, mount:jfs_old, write_file1_20M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_read, destroy:old"
+              "format:jfs_old, format:jfs_new, destroy:old", 
+              "format:jfs_old, mount:jfs_old, write_file1_20M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_read, destroy:old"
           )    
           urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}'))
           for url in "${urls[@]}"; do 
-            echo download url is: $url
-            wget $url
-            tar -zxf $(basename $url)
-            mv juicefs jfs_old
-            echo juicefs new version: $(./jfs_new -V)
-            echo juicefs old version: $(./jfs_old -V)
-            test_arr=$(IFS=',' read -a arr <<< "$tests")
-            for test in "${test_arr[@]}"; do 
-              command=$(echo $test | awk -F: '{print $1}'| xargs | awk -F_ '{print $1}')
-              jfs_bin=$(echo $test | awk -F: '{print $2}'| xargs)
-              case "$command" in
-                "format") 
-                  echo "cmd is format" 
-                  sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
-                  ;;
-                "mount") 
-                  echo "cmd is mount" 
-                  sudo ./$jfs_bin mount ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
-                  ;;
-                "umount") 
-                  echo "cmd is mount" 
-                  sudo ./$jfs_bin umount ${{ steps.vars.outputs.MOUNT_POINT }} 
-                  ;;
-                "destroy") 
-                  echo "cmd is destroy" 
-                  UUID=$(./$jfs_bin status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-                  if [ -n "$UUID" ];then
-                    sudo ./$jfs_bin destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-                  fi
-                  ;;
-                "write") 
-                  echo "cmd is write" 
-                  filename=$(echo $test | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                  size=$(echo $test | awk -F: '{print $1}'| xargs | awk -F_ '{print $3}')
-                  dd if=/dev/random of=/tmp/tempfile bs=4k count=$size
-                  md5_write="$filename:$(cat /tmp/tempfile | md5)"
-                  copy /tmp/tempfile $filename
-                  ;;
-                "read") 
-                  echo "cmd is read" 
-                  filename=$(echo $test | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                  read_md5=$(cat $filename | md5)
-                  written_filename=$(echo $md5_write | awk -F: '{print $1}')
-                  written_md5=$(echo $md5_write | awk -F: '{print $2}')
-                  if [ "$filename" == "$wrtten_filename" && "$read_md5" != "$written_md5"]
-                    echo "FATAL: the md5 does not match for: ", $filename, "read_md5:", $read_md5, "written_md5:", $written_md5
-                  ;;
-              esac
-            done
+              echo download url is: $url
+              #wget $url
+              #tar -zxf $(basename $url)
+              #mv juicefs jfs_old
+              #echo juicefs new version: $(./jfs_new -V)
+              #echo juicefs old version: $(./jfs_old -V)
+              for test in "${tests[@]}"; do
+                  echo 'test is ' $test
+                  IFS=',' read -a command_arr <<< "$test"
+                  for command in "${command_arr[@]}"; do
+                      jfs_cmd=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $1}')
+                      echo "cmd is ", $jfs_cmd
+                      jfs_bin=$(echo $command | awk -F: '{print $2}'| xargs)
+                      case "$cmd" in
+                      "format") 
+                          echo "cmd is format" 
+                          sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
+                          ;;
+                      "mount") 
+                          echo "cmd is mount" 
+                          sudo ./$jfs_bin mount ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
+                          ;;
+                      "umount") 
+                          echo "cmd is mount" 
+                          sudo ./$jfs_bin umount ${{ steps.vars.outputs.MOUNT_POINT }} 
+                          ;;
+                      "destroy") 
+                          echo "cmd is destroy" 
+                          UUID=$(./$jfs_bin status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+                          if [ -n "$UUID" ];then
+                            sudo ./$jfs_bin destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+                          fi
+                          ;;
+                      "write") 
+                          echo "cmd is write" 
+                          filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
+                          size=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $3}')
+                          dd if=/dev/random of=/tmp/tempfile bs=4k count=$size
+                          md5_write="$filename:$(cat /tmp/tempfile | md5)"
+                          copy /tmp/tempfile $filename
+                          ;;
+                      "read") 
+                          echo "cmd is read" 
+                          filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
+                          read_md5=$(cat $filename | md5)
+                          written_filename=$(echo $md5_write | awk -F: '{print $1}')
+                          written_md5=$(echo $md5_write | awk -F: '{print $2}')
+                          if [ "$filename" == "$wrtten_filename" && "$read_md5" != "$written_md5"]
+                          echo "FATAL: the md5 does not match for: ", $filename, "read_md5:", $read_md5, "written_md5:", $written_md5
+                          ;;
+                      esac
+                  done
+              done
           done
 
 #      - name: Send Slack Notification
