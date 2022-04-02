@@ -18,7 +18,7 @@ jobs:
         id: vars
         run: |
           echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/7
-          echo ::set-output name=STORAGE_URL::http://172.27.0.2:9005/juicefs-version-compatible
+          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-version-compatible
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-version-compatible
 
       - name: Build linux target
@@ -51,7 +51,7 @@ jobs:
               wget -q $url
               tar -zxf $(basename $url)
               rm $(basename $url)
-              cp juicefs jfs_old
+              mv juicefs jfs_old
               echo juicefs new version: $(./jfs_new -V)
               echo juicefs old version: $(./jfs_old -V)
               for test in "${tests[@]}"; do
@@ -63,8 +63,7 @@ jobs:
                       echo 'jfs_bin is ' $jfs_bin, "cmd is "  $jfs_cmd
                       case "$jfs_cmd" in
                         "format") 
-                            echo "cmd is format: ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark" 
-                            sudo ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
+                            sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
                             echo "cmd is format" 
                             ;;
                         "mount") 
