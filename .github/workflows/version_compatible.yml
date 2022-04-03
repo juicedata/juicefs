@@ -43,8 +43,8 @@ jobs:
       - name: Version Compatible Test
         run: |
           tests=(
-              "format:jfs_old, mount:jfs_old, write_file1_20M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_old, destroy:jfs_old",
-              "format:jfs_old, format:jfs_new,  destroy:jfs_old"
+              "format:jfs_old, format:jfs_new,  destroy:jfs_old",
+              "format:jfs_old, mount:jfs_old, write_file1_20M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_old, destroy:jfs_old"
           )    
           urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}' | head -5) )  
           for url in "${urls[@]}"; do 
