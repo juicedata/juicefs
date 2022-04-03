@@ -18,7 +18,7 @@ jobs:
         id: vars
         run: |
           echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/9
-          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-version-compatible-1
+          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-version-compatible-2
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-version-compatible
 
       - name: Build linux target
