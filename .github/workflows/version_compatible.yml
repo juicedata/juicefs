@@ -88,14 +88,14 @@ jobs:
                             filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
                             size=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $3}')
                             dd if=/dev/urandom of=${{ steps.vars.outputs.MOUNT_POINT }}/tempfile iflag=fullblock,count_bytes bs=4k count=$size
-                            md5_write="$filename:$(cat ${{ steps.vars.outputs.MOUNT_POINT }}/tempfile | md5)"
+                            md5_write="$filename:$(cat ${{ steps.vars.outputs.MOUNT_POINT }}/tempfile | md5sum)"
                             echo "write: filename is: " $filename "md5_write is: "" $md5_write
                             copy ${{steps.vars.outputs.MOUNT_POINT}}/tempfile $filename
                             echo "write finished" 
                             ;;
                         "read") 
                             filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                            read_md5=$(cat $filename | md5)
+                            read_md5=$(cat $filename | md5sum)
                             written_filename=$(echo $md5_write | awk -F: '{print $1}')
                             written_md5=$(echo $md5_write | awk -F: '{print $2}')
                             echo "read: filename is: " $filename "read_md5 is: "" $read_md5, "written_filename is:", $written_filename, "written_md5 is:", $written_md5, 
