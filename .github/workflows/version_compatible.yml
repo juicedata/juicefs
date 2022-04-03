@@ -89,7 +89,7 @@ jobs:
                             size=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $3}')
                             dd if=/dev/urandom of=${{ steps.vars.outputs.MOUNT_POINT }}/tempfile iflag=fullblock,count_bytes bs=4k count=$size
                             md5_write="$filename:$(cat ${{ steps.vars.outputs.MOUNT_POINT }}/tempfile | md5sum)"
-                            echo "write: filename is: " $filename "md5_write is: "" $md5_write
+                            echo "write: filename is: " $filename "md5_write is: " $md5_write
                             copy ${{steps.vars.outputs.MOUNT_POINT}}/tempfile $filename
                             echo "write finished" 
                             ;;
