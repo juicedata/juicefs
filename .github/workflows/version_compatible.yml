@@ -36,6 +36,7 @@ jobs:
           fi
           UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
           if [ -n "$UUID" ];then
+            echo UUID is: $UUID
             sudo ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
           fi
 
