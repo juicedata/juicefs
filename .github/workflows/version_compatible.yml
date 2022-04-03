@@ -65,15 +65,15 @@ jobs:
                       case "$jfs_cmd" in
                         "format") 
                             sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
-                            echo "cmd is format" 
+                            echo "format finished" 
                             ;;
                         "mount") 
-                            sudo ./$jfs_bin mount ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
-                            echo "cmd is mount" 
+                            sudo ./$jfs_bin mount -d ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
+                            echo "mount finished" 
                             ;;
                         "umount") 
                             sudo ./$jfs_bin umount ${{ steps.vars.outputs.MOUNT_POINT }} 
-                            echo "cmd is mount" 
+                            echo "umount finished" 
                             ;;
                         "destroy") 
                             UUID=$(./$jfs_bin status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
@@ -81,7 +81,7 @@ jobs:
                               echo UUID is $UUID
                               sudo ./$jfs_bin destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
                             fi
-                            echo "cmd is destroy" 
+                            echo "destroy finished" 
                             ;;
                         "write") 
                             filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
@@ -90,7 +90,7 @@ jobs:
                             md5_write="$filename:$(cat ${{ steps.vars.outputs.MOUNT_POINT }}/tempfile | md5)"
                             echo "write: filename is: " $filename "md5_write is: "" $md5_write
                             copy ${{steps.vars.outputs.MOUNT_POINT}}/tempfile $filename
-                            echo "cmd is write" 
+                            echo "write finished" 
                             ;;
                         "read") 
                             filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
@@ -101,6 +101,7 @@ jobs:
                             if [ "$filename" == "$wrtten_filename" && "$read_md5" != "$written_md5" ];then
                               echo "FATAL: the md5 does not match for: ", $filename, "read_md5:", $read_md5, "written_md5:", $written_md5
                             fi
+                            echo "read finished"
                             ;;
                       esac
                   done
