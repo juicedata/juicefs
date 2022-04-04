@@ -72,7 +72,7 @@ The detailed process of data encryption is as follows:
 - Before writing to an object storage, data blocks are compressed using LZ4 or ZStandard.
 - A random 256-bit symmetric key `S` and a random seed `N` are generated for each data block.
 - Each data block is encrypted into `encrypted_data` using AES-GCM algorithm with key `S` and seed `N`.
-- To avoid the symmetric key `S` from being transmitted in clear text over the network, the symmetric key `S` is encrypted with the RSA key `M` to obtain the ciphertext `K`.
+- To avoid the symmetric key `S` from being transmitted in clear text over the network, the symmetric key `S` is encrypted into the cipher text `K` with the RSA key `M`.
 - The encrypted data `encrypted_data`, the ciphertext `K`, and the random seed `N` are combined into an object and then written to the object storage.
 
 The steps for decrypting the data are as follows:
