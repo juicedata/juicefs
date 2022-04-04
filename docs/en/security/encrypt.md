@@ -19,7 +19,7 @@ juicefs format --storage s3
 ...
 ```
 
-In the case where serve and object storage run on the same VPC network, if encryption connection is not required, you can specific the header you need, e.g., `--bucket http://myjfs.s3.ap-southeast-1.amazonaws.com`.
+In the case where server and object storage run on the same VPC network, explicitly set the URL scheme to `http` if you don't need an encrypted connection, e.g., `--bucket http://myjfs.s3.ap-southeast-1.amazonaws.com`.
 
 
 ### Connect to database via TLS/SSL
