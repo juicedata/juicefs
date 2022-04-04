@@ -24,7 +24,7 @@ In the case where server and object storage run on the same VPC network, explici
 
 ### Connect to database via TLS/SSL
 
-For [all the supported metadata engines](../reference/how_to_setup_metadata_engine.md), as long as the database supports encryption and has been configured with encryption such as TLS/SSL, JuiceFS can connect the database through its encrytped channel. For instance, a Redis database configured with TLS can use `rediss://` for connection.
+For [all the supported metadata engines](../reference/how_to_setup_metadata_engine.md), as long as the database supports encryption and has been configured with encryption such as TLS/SSL, JuiceFS can connect to the database through its encrytped channel. For instance, a Redis database configured with TLS can use `redis://` for connecting.
 
 ```shell
 juicefs format --storage s3
