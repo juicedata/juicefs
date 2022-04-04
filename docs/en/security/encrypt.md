@@ -87,7 +87,7 @@ The steps for decrypting the data are as follows:
 ### Enable Data Encryption At Rest
 
 :::note
-Data Encryption At Rest must be enabled when creating file system. The file system that has areadly enabled Data Encryption At Rest does not need to enable it again. 
+Data Encryption At Rest must be enabled when creating file system. The file system that was created without Data Encryption At Rest enabled cannot enable it later.
 :::
 
 There are following steps to enable Data Encryption At Rest:
