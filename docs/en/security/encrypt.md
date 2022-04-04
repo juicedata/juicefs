@@ -111,7 +111,7 @@ The security of RSA private key is critical when Data Encryption At Rest encrypt
 
 #### Step 2: create an encrypted file system
 
-The option `--encrypt-rsa-key` is required to specify RSA private key when creating an encrypted file system. The provided private key content will be written to the metadata engine. Since passphrase is mandatory in the ase256-encrypted RSA private key, the environmental variable `JFS_RSA_PASSPHRASE` is required to specify the passphrase of the private key before creaging and mounting file system.
+The option `--encrypt-rsa-key` is required to specify RSA private key when creating an encrypted file system. The provided private key content will be written to the metadata engine. Since passphrase is mandatory in the ase256-encrypted RSA private key, the environment variable `JFS_RSA_PASSPHRASE` is required to specify the passphrase of the private key before creating and mounting file system.
 
 1. Set passphrase using environmental variable
 
