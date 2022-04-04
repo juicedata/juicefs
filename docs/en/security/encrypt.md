@@ -106,7 +106,7 @@ openssl genrsa -out my-priv-key.pem -aes256 2048
 Since the aes256 algorithm is in use, you will be prompted to enter a passphrase (at least 4 bits) to protect your private key. The passphrase can be considered as a password for encrypting the file of the RSA private key, which is also the last layer of security assurance for the RSA private key.
 
 :::caution
-The security of RSA private key is critical when Data Encryption At Rest encryption is enabled. Once the key is compromised, the data can confront security risk. If the key is lost, **all the encrypted data will be lost and cannot be recovered**!
+The security of RSA private key is crucial when Data Encryption At Rest encryption is enabled. The leak of the key will put the data into a serious security risk. If the key is lost, **all the encrypted data will be lost and cannot be recovered**!
 :::
 
 #### Step 2: create an encrypted file system
