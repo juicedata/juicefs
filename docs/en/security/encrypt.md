@@ -168,4 +168,4 @@ $ juicefs format --encrypt-rsa-key my-priv-key.pem META-URL NAME
 
 ### Performance
 
-TLS, HTTPS, and AES-256 are implemented very efficiently in modern CPUs. Therefore, enabling encryption does not have a significant impact on file system performance. Note that RSA algorithms are relatively slow, especially in the decryption process. Additionally, it is recommended to use 2048-bit RSA keys for storage encryption, and using 4096-bit keys may have a significant impact on reading performance.
+TLS, HTTPS, and AES-256 are implemented very efficiently in modern CPUs. Therefore, enabling encryption does not have a significant impact on file system performance. Because of the relatively low performance of RSA algorithm, it is recommended to use 2048-bit RSA keys for storage encryption, and using 4096-bit keys may have a significant impact on reading performance.
