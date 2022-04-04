@@ -131,7 +131,7 @@ The option `--encrypt-rsa-key` is required to specify RSA private key when creat
 
 There is no need to specify extra options while mounting an encrypted file system. However, the passphrase of the private key needs to be set before mounting using environment variable.
 
-1. Set passphrase using environmental variable
+1. Set passphrase using environment variable
 
     ```shell
     export JFS_RSA_PASSPHRASE=the-passwd-for-rsa
