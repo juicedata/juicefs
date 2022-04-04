@@ -56,7 +56,7 @@ The cached data on the client-side is **NOT** encrypted. Only the root user or o
 
 ### Encryption algorithm
 
-Data Encryption At Rest of JuiceFS combines symmetric encryption and asymmetric encryption, which requires user to create a global RSA private key `M` for the file system. Each object stored in the object store will have its own random symmetric key `S`. The stored data is encrypted with the symmetric key `S` for AES-GCM encryption, is encrypted with the global RSA private key `M`, and the RSA key is encrypted using a user-specified passphrase.
+Data Encryption At Rest of JuiceFS combines symmetric encryption and asymmetric encryption, which requires user to create a global RSA private key `M` for the file system. Each object stored in the object storage will have its own random symmetric key `S`. The stored data is encrypted using AES-GCM algorithm with the symmetric key `S`, while `S` is encrypted with the global RSA private key `M`. At last, the RSA key is encrypted using a user-specified passphrase.
 
 Symbol explanation:
 
