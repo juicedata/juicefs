@@ -11,7 +11,7 @@ Running JuiceFS generally involves the network connection between database and o
 
 ### Connect to objetc storage via HTTPS
 
-Public cloud object storage generally supports both HTTP and HTTPS. If no header is specified, JuiceFS uses HTTPS by default. For example, the client will identify the bucket in following command as `https://myjfs.s3.ap-southeast-1.amazonaws.com`.
+Public cloud object storage generally supports both HTTP and HTTPS. If no scheme is specified, JuiceFS uses HTTPS by default. For example, the client will identify the bucket in following command as `https://myjfs.s3.ap-southeast-1.amazonaws.com`.
 
 ```shell
 juicefs format --storage s3
