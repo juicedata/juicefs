@@ -45,7 +45,7 @@ JuiceFS clients always use HTTPS to upload data to the Object Storage Service, e
 
 ## Data Encryption At Rest
 
-JuiceFS supports Data Encryption At Rest. All data will be encrypted first before uploading to object storage. This allows JuiceFS to effectively prevent data leakage.
+JuiceFS supports Data Encryption At Rest. All data will be encrypted first before being uploaded to object storage. This allows JuiceFS to effectively prevent data leakage.
 
 Data Encryption At Rest of JuiceFS adopts industry-standard encryption methods (AES-GCM and RSA). User only needs to provide a private key or password while creating the file system, and the private key can be provided by setting the environmental variable `JFS_RSA_PASSPHRASE`. For use, mount point is totally transparent to the client, i.e., access to file system will not be affected by encryption and decrytion processes.
 
