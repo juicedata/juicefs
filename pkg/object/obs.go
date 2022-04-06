@@ -199,12 +199,11 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	sum := md5.Sum(body)
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	resp, err := s.c.UploadPart(params)
+	if err == nil && strings.Trim(resp.ETag, "\"") != obs.Hex(sum[:]) {
+		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum[:]))
+	}
 	if err != nil {
 		return nil, err
-	}
-	hexMd5 := obs.Hex(sum[:])
-	if resp.ETag != hexMd5 {
-		return nil, fmt.Errorf("unexpected ETag: %s != %s", resp.ETag, hexMd5)
 	}
 	return &Part{Num: num, ETag: resp.ETag}, err
 }
