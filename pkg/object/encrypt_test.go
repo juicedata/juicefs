@@ -52,8 +52,8 @@ func TestRSA(t *testing.T) {
 		t.Fail()
 	}
 	_, err = ParseRsaPrivateKeyFromPem(privPEM, "ab")
-	if err != x509.IncorrectPasswordError {
-		t.Errorf("parse without passphrase should return IncorrectPasswordError")
+	if err == nil {
+		t.Errorf("parse with incorrect passphrase should return fail")
 		t.Fail()
 	}
 

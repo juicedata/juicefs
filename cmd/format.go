@@ -212,7 +212,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
 		privKey, err := object.ParseRsaPrivateKeyFromPem(format.EncryptKey, passphrase)
 		if err != nil {
-			return nil, fmt.Errorf("load private key: %s", err)
+			return nil, fmt.Errorf("incorrect passphrase: %s", err)
 		}
 		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
 		blob = object.NewEncrypted(blob, encryptor)
