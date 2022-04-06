@@ -223,7 +223,7 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 上传一个对象的超时时间；单位为秒 (默认: 60)
 
 `--io-retries value`<br />
-网络异常时的重试次数 (默认: 30)
+网络异常时的重试次数 (默认: 10)
 
 `--max-uploads value`<br />
 上传对象的连接数 (默认: 20)
@@ -311,7 +311,7 @@ juicefs gateway [command options] META-URL ADDRESS
 上传一个对象的超时时间；单位为秒 (默认: 60)
 
 `--io-retries value`<br />
-网络异常时的重试次数 (默认: 30)
+网络异常时的重试次数 (默认: 10)
 
 `--max-uploads value`<br />
 上传对象的连接数 (默认: 20)
@@ -408,7 +408,7 @@ juicefs webdav [command options] META-URL ADDRESS
 上传一个对象的超时时间；单位为秒 (默认: 60)
 
 `--io-retries value`<br />
-网络异常时的重试次数 (默认: 30)
+网络异常时的重试次数 (默认: 10)
 
 `--max-uploads value`<br />
 上传对象的连接数 (默认: 20)

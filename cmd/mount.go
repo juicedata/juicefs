@@ -255,7 +255,7 @@ func prepareMp(mp string) {
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	return &meta.Config{
-		Retries:    10,
+		Retries:    c.Int("io-retries"),
 		Strict:     true,
 		ReadOnly:   readOnly,
 		NoBGJob:    c.Bool("no-bgjob"),
@@ -286,6 +286,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
 		MaxDeletes:    c.Int("max-deletes"),
+		MaxRetries:    c.Int("io-retries"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),
 		BufferSize:    c.Int("buffer-size") << 20,
