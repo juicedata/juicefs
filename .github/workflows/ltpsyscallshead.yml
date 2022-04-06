@@ -1,4 +1,4 @@
-name: "ltp"
+name: "ltp-syscalls-head"
 
 on:
   push:
