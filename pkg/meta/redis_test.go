@@ -33,12 +33,17 @@ import (
 
 func TestRedisClient(t *testing.T) {
 	var conf = Config{}
-	_, err := newRedisMeta("http", "127.0.0.1:6379/10", &conf)
-	if err == nil {
-		t.Fatal("meta created with invalid url")
-	}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", &conf)
 	if err != nil || m.Name() != "redis" {
+		t.Fatalf("create meta: %s", err)
+	}
+	testMeta(t, m)
+}
+
+func TestRedisCluster(t *testing.T) {
+	var conf = Config{}
+	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", &conf)
+	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
