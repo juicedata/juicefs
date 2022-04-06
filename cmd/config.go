@@ -71,6 +71,10 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 				Name:  "secret-key",
 				Usage: "secret key for object storage",
 			},
+			&cli.BoolFlag{
+				Name:  "encrypt-secret",
+				Usage: "encrypt the secret key if it was previously stored in plain format",
+			},
 			&cli.IntFlag{
 				Name:  "trash-days",
 				Usage: "number of days after which removed files will be permanently deleted",
@@ -126,6 +130,7 @@ func config(ctx *cli.Context) error {
 	}
 
 	var quota, storage, trash, clientVer bool
+	var encrypted bool
 	var msg strings.Builder
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
@@ -162,6 +167,7 @@ func config(ctx *cli.Context) error {
 			}
 		case "secret-key": // always update
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
+			encrypted = format.KeyEncrypted
 			format.SecretKey = ctx.String(flag)
 			format.KeyEncrypted = false
 			storage = true
@@ -236,8 +242,10 @@ func config(ctx *cli.Context) error {
 		}
 	}
 
-	if err = format.Encrypt(); err != nil {
-		logger.Fatalf("Format encrypt: %s", err)
+	if encrypted || ctx.Bool("encrypt-secret") {
+		if err = format.Encrypt(); err != nil {
+			logger.Fatalf("Format encrypt: %s", err)
+		}
 	}
 	if err = m.Init(*format, false); err == nil {
 		fmt.Println(msg.String()[:msg.Len()-1])
