@@ -99,13 +99,14 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			return nil, fmt.Errorf("parse query %s: %s", uri[p+1:], err)
 		}
 	}
+	u, err := url.Parse(uri)
+	if err != nil {
+		return nil, fmt.Errorf("url parse %s: %s", uri, err)
+	}
+	hosts := u.Host
 	opt, err := redis.ParseURL(uri)
 	if err != nil {
-		return nil, fmt.Errorf("parse %s: %s", uri, err)
-	}
-	if strings.Contains(opt.Addr, ",") {
-		// redis.ParseURL does not support multiple hosts
-		opt.Addr, _, _ = net.SplitHostPort(opt.Addr)
+		return nil, fmt.Errorf("redis parse %s: %s", uri, err)
 	}
 	if opt.Password == "" {
 		opt.Password = os.Getenv("REDIS_PASSWORD")
@@ -120,9 +121,9 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	opt.WriteTimeout = query.duration("write-timeout", time.Second*5)
 	var rdb redis.UniversalClient
 	var prefix string
-	if strings.Contains(opt.Addr, ",") && strings.Index(opt.Addr, ",") < strings.Index(opt.Addr, ":") {
+	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
 		var fopt redis.FailoverOptions
-		ps := strings.Split(opt.Addr, ",")
+		ps := strings.Split(hosts, ",")
 		fopt.MasterName = ps[0]
 		fopt.SentinelAddrs = ps[1:]
 		_, port, _ := net.SplitHostPort(fopt.SentinelAddrs[len(fopt.SentinelAddrs)-1])
@@ -153,18 +154,18 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 		rdb = redis.NewFailoverClient(&fopt)
 	} else {
-		if !strings.Contains(opt.Addr, ",") {
+		if !strings.Contains(hosts, ",") {
 			c := redis.NewClient(opt)
 			info, err := c.ClusterInfo(Background).Result()
 			if err != nil && strings.Contains(err.Error(), "cluster mode") || err == nil && strings.Contains(info, "cluster_state:") {
-				logger.Infof("redis %s is in cluster mode", opt.Addr)
+				logger.Infof("redis %s is in cluster mode", hosts)
 			} else {
 				rdb = c
 			}
 		}
 		if rdb == nil {
 			var copt redis.ClusterOptions
-			copt.Addrs = strings.Split(opt.Addr, ",")
+			copt.Addrs = strings.Split(hosts, ",")
 			copt.MaxRedirects = 1
 			copt.Username = opt.Username
 			copt.Password = opt.Password
