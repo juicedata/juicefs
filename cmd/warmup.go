@@ -193,6 +193,7 @@ func warmup(ctx *cli.Context) error {
 		bar.IncrBy(index)
 	}
 	progress.Done()
+	logger.Infof("Successfully warmed up %d paths", bar.Current())
 
 	return nil
 }
