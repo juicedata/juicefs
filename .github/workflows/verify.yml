@@ -24,6 +24,9 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         with:
           version: v1.29
+          skip-cache: true
+          skip-pkg-cache: true
+          skip-build-cache: true
   build:
     runs-on: ubuntu-latest
     steps:
@@ -32,6 +35,7 @@ jobs:
       with:
         go-version: '1.17.x'
       id: go
+
 
     - name: Check out code
       uses: actions/checkout@v2
