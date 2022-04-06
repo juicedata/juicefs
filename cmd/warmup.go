@@ -103,9 +103,15 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 
 func warmup(ctx *cli.Context) error {
 	setup(ctx, 0)
-	fname := ctx.String("file")
-	paths := ctx.Args().Slice()
-	if fname != "" {
+	var paths []string
+	for _, p := range ctx.Args().Slice() {
+		if abs, err := filepath.Abs(p); err == nil {
+			paths = append(paths, abs)
+		} else {
+			logger.Fatalf("Failed to get absolute path of %s: %s", p, err)
+		}
+	}
+	if fname := ctx.String("file"); fname != "" {
 		fd, err := os.Open(fname)
 		if err != nil {
 			logger.Fatalf("Failed to open file %s: %s", fname, err)
@@ -114,10 +120,14 @@ func warmup(ctx *cli.Context) error {
 		scanner := bufio.NewScanner(fd)
 		for scanner.Scan() {
 			if p := strings.TrimSpace(scanner.Text()); p != "" {
-				paths = append(paths, p)
+				if abs, e := filepath.Abs(p); e == nil {
+					paths = append(paths, abs)
+				} else {
+					logger.Warnf("Skipped path %s because it fails to get absolute path: %s", p, e)
+				}
 			}
 		}
-		if err := scanner.Err(); err != nil {
+		if err = scanner.Err(); err != nil {
 			logger.Fatalf("Reading file %s failed with error: %s", fname, err)
 		}
 	}
@@ -127,10 +137,7 @@ func warmup(ctx *cli.Context) error {
 	}
 
 	// find mount point
-	first, err := filepath.Abs(paths[0])
-	if err != nil {
-		logger.Fatalf("Failed to get abs of %s: %s", paths[0], err)
-	}
+	first := paths[0]
 	st, err := os.Stat(first)
 	if err != nil {
 		logger.Fatalf("Failed to stat path %s: %s", first, err)
