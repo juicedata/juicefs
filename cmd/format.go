@@ -312,7 +312,7 @@ func format(c *cli.Context) error {
 		return string(pem)
 	}
 	var format *meta.Format
-	var create, encrypt bool
+	var create, encrypted bool
 	if format, _ = m.Load(false); format == nil {
 		create = true
 		format = &meta.Format{
@@ -356,7 +356,7 @@ func format(c *cli.Context) error {
 			case "access-key":
 				format.AccessKey = c.String(flag)
 			case "secret-key":
-				encrypt = format.KeyEncrypted
+				encrypted = format.KeyEncrypted
 				format.SecretKey = c.String(flag)
 				format.KeyEncrypted = false
 			case "trash-days":
@@ -414,7 +414,7 @@ func format(c *cli.Context) error {
 		}
 	}
 
-	if create || encrypt {
+	if create || encrypted {
 		if err = format.Encrypt(); err != nil {
 			logger.Fatalf("Format encrypt: %s", err)
 		}
