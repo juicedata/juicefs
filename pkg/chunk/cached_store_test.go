@@ -96,6 +96,7 @@ var defaultConf = Config{
 	CacheSize:  1,
 	MaxUpload:  1,
 	MaxDeletes: 1,
+	MaxRetries: 10,
 	PutTimeout: time.Second,
 	GetTimeout: time.Second * 2,
 	AutoCreate: true,

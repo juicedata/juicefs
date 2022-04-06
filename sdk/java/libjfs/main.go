@@ -249,6 +249,7 @@ type javaConf struct {
 	DownloadLimit   int     `json:"downloadLimit"`
 	MaxUploads      int     `json:"maxUploads"`
 	MaxDeletes      int     `json:"maxDeletes"`
+	IORetries       int     `json:"ioRetries"`
 	GetTimeout      int     `json:"getTimeout"`
 	PutTimeout      int     `json:"putTimeout"`
 	FastResolve     bool    `json:"fastResolve"`
@@ -396,7 +397,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		}
 
 		metaConf := &meta.Config{
-			Retries:   10,
+			Retries:   jConf.IORetries,
 			Strict:    true,
 			ReadOnly:  jConf.ReadOnly,
 			NoBGJob:   jConf.NoBGJob,
@@ -460,6 +461,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			CacheFullBlock: jConf.CacheFullBlock,
 			MaxUpload:      jConf.MaxUploads,
 			MaxDeletes:     jConf.MaxDeletes,
+			MaxRetries:     jConf.IORetries,
 			UploadLimit:    int64(jConf.UploadLimit) * 1e6 / 8,
 			DownloadLimit:  int64(jConf.DownloadLimit) * 1e6 / 8,
 			Prefetch:       jConf.Prefetch,
