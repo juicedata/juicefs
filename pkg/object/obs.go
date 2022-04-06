@@ -51,6 +51,7 @@ func (s *obsClient) Create() error {
 	params := &obs.CreateBucketInput{}
 	params.Bucket = s.bucket
 	params.Location = s.region
+	params.AvailableZone = "3az"
 	_, err := s.c.CreateBucket(params)
 	if err != nil && isExists(err) {
 		err = nil
@@ -127,7 +128,10 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
-	_, err := s.c.PutObject(params)
+	resp, err := s.c.PutObject(params)
+	if err == nil && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
+		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
+	}
 	return err
 }
 
@@ -195,10 +199,13 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	sum := md5.Sum(body)
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	resp, err := s.c.UploadPart(params)
+	if err == nil && strings.Trim(resp.ETag, "\"") != obs.Hex(sum[:]) {
+		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum[:]))
+	}
 	if err != nil {
 		return nil, err
 	}
-	return &Part{Num: num, ETag: resp.ETag}, nil
+	return &Part{Num: num, ETag: resp.ETag}, err
 }
 
 func (s *obsClient) AbortUpload(key string, uploadID string) {
