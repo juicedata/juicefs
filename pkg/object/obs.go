@@ -51,6 +51,7 @@ func (s *obsClient) Create() error {
 	params := &obs.CreateBucketInput{}
 	params.Bucket = s.bucket
 	params.Location = s.region
+	params.AvailableZone = "3az"
 	_, err := s.c.CreateBucket(params)
 	if err != nil && isExists(err) {
 		err = nil
@@ -128,9 +129,8 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
 	resp, err := s.c.PutObject(params)
-	hexMd5 := obs.Hex(sum)
-	if err == nil && resp.ETag != hexMd5 {
-		err = fmt.Errorf("unexpected ETag: %s != %s", resp.ETag, hexMd5)
+	if err == nil && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
+		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
 	return err
 }
