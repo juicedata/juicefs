@@ -54,7 +54,7 @@ storageClasses:
 2. 依次执行以下三条命令，通过 Helm 部署 JuiceFS CSI Driver。
 
 ```shell
-$ helm repo add juicefs-csi-driver https://juicedata.github.io/juicefs-csi-driver/
+$ helm repo add juicefs-csi-driver https://juicedata.github.io/charts/
 $ helm repo update
 $ helm install juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver -n kube-system -f ./values.yaml
 ```
@@ -302,7 +302,7 @@ storageClasses:
 执行 Helm 命令进行部署：
 
 ```shell
-$ helm repo add juicefs-csi-driver https://juicedata.github.io/juicefs-csi-driver/
+$ helm repo add juicefs-csi-driver https://juicedata.github.io/charts/
 $ helm repo update
 $ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install -f ./jfs2.yaml
 ```
