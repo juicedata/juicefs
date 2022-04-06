@@ -19,6 +19,9 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -210,9 +213,22 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 
 	if format.EncryptKey != "" {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-		privKey, err := object.ParseRsaPrivateKeyFromPem(format.EncryptKey, passphrase)
+		block, _ := pem.Decode([]byte(format.EncryptKey))
+		if block == nil {
+			return nil, errors.New("failed to parse PEM block containing the key")
+		}
+		// nolint:staticcheck
+		if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
+			if passphrase == "" {
+				return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+			}
+		} else if passphrase != "" {
+			logger.Warningf("passphrase is not used, because private key is not encrypted")
+		}
+
+		privKey, err := object.ParseRsaPrivateKeyFromPem(block, passphrase)
 		if err != nil {
-			return nil, fmt.Errorf("load private key: %s", err)
+			return nil, fmt.Errorf("incorrect passphrase: %s", err)
 		}
 		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
 		blob = object.NewEncrypted(blob, encryptor)
