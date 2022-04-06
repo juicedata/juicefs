@@ -72,7 +72,7 @@ jobs:
           sudo chmod 777 runtest/syscallsmiddle
           sudo ./runltp -d /tmp/jfs -f syscallsmiddle -C result.log.failed -T result.log.tconf -l result.log
 
-       - name: Send Slack Notification
+      - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
