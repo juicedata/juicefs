@@ -210,6 +210,9 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 
 	if format.EncryptKey != "" {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
+		if passphrase == "" {
+			return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+		}
 		privKey, err := object.ParseRsaPrivateKeyFromPem(format.EncryptKey, passphrase)
 		if err != nil {
 			return nil, fmt.Errorf("incorrect passphrase: %s", err)
