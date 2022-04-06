@@ -60,7 +60,6 @@ func (ver redisVersion) String() string {
 
 type redisInfo struct {
 	aofEnabled      bool
-	clusterEnabled  bool
 	maxMemoryPolicy string
 	redisVersion    string
 }
@@ -82,11 +81,6 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 			info.aofEnabled = val == "1"
 			if val == "0" {
 				logger.Warnf("AOF is not enabled, you may lose data if Redis is not shutdown properly.")
-			}
-		case "cluster_enabled":
-			info.clusterEnabled = val == "1"
-			if val != "0" {
-				logger.Warnf("Redis cluster is not supported, some operation may fail unexpected.")
 			}
 		case "maxmemory_policy":
 			info.maxMemoryPolicy = val

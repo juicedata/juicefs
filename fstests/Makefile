@@ -17,6 +17,11 @@ fsx: healthcheck secfs.test/tools/bin/fsx
 
 setup:
 	redis-server &
+	cd node1 && redis-server redis.conf &
+	cd node2 && redis-server redis.conf &
+	cd node3 && redis-server redis.conf &
+	sleep 1
+	echo yes | redis-cli --cluster create 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003
 	mkdir -p /jfs
 	../juicefs format localhost unittest
 	../juicefs mount -d --no-usage-report --enable-xattr localhost /jfs
