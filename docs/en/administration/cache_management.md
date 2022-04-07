@@ -116,6 +116,56 @@ When the cache disk is too full, it will pause writing data and change to upload
 
 When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing, and should be used with caution for scenarios requiring high data reliability.
 
+## Cache Warm-up
+
+JuiceFS cache warm-up is an active caching means to improve the efficiency of file reading and writing by pre-caching locally the data used in high frequency.
+
+Use the `warmup` subcommand to warm up the cache.
+
+```shell
+juicefs warmup [command options] [PATH ...]
+```
+
+Command options:
+
+- `--file` or `-f`: file containing a list of paths
+- `--threads` or `-p`: number of concurrent workers (default: 50)
+- `--background` or `-b`: run in background
+
+:::tip
+Only files in the mounted file system can be warmed up, i.e. the path to be warmed up must be on the local mount point.
+:::
+
+### Warm Up A Directory
+
+For example, to cache the `dataset-1` directory in a filesystem mount point locally.
+
+```shell
+juicefs warmup /mnt/jfs/dataset-1
+```
+
+### Warm Up Multiple Directories
+
+When you need to warm up multiple directories at the same time, you can write all the paths to a text file. For example, create a text file named `warm.txt` with one path per line in the mount point.
+
+```
+/mnt/jfs/dataset-1
+/mnt/jfs/dataset-2
+/mnt/jfs/pics
+```
+
+Then perform the warm up command.
+
+```shell
+juicefs warmup warm.txt
+```
+
+### Cache Lifecycle
+
+JuiceFS allocates 100GB of cache space by default, but this does not mean that you have to use more than that capacity on disk. This value represents the maximum capacity that a JuiceFS client may use if the disk capacity allows. When the disk capacity is lower than this value, JuiceFS will ensure that the cache capacity is always less than 10% of the disk capacity.
+
+For example, if you set `--cache-dir` to a partition with a capacity of 50GB, the cache capacity of JuiceFS will always remain around 45GB, regardless of the `--cache-size` setting, which means that 10% of the remaining space in the partition will be reserved.
+
 ## Frequent Asked Questions
 
 ### Why 60 GiB disk spaces are occupied while I set cache size to 50 GiB?
