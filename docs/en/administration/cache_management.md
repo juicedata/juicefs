@@ -166,6 +166,8 @@ JuiceFS allocates 100GB of cache space by default, but this does not mean that y
 
 For example, if you set `--cache-dir` to a partition with a capacity of 50GB, the cache capacity of JuiceFS will always remain around 45GB, regardless of the `--cache-size` setting, which means that 10% of the remaining space in the partition will be reserved.
 
+When the cache is full, the JuiceFS client cleans the cache using LRU-like mode, i.e., it tries to clean the older and less-used cache.
+
 ## Frequent Asked Questions
 
 ### Why 60 GiB disk spaces are occupied while I set cache size to 50 GiB?
