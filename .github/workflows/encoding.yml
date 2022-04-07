@@ -1,0 +1,78 @@
+name: "encoding-test"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  encoding-test:
+    runs-on: [self-hosted, daily-build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Set Variable
+        id: vars
+        run: |
+          echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/9
+          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-version-compatible-2
+          echo ::set-output name=MOUNT_POINT::/tmp/juicefs-version-compatible
+
+      - name: Build linux target
+        run: |
+          export GOPATH=/usr/local/go
+          export HOME=/root
+          make juicefs
+          mv juicefs jfs_new
+          echo juicefs new version: $(./jfs_new -V)
+
+      - name: Init
+        run: |
+          if [ -d ${{ steps.vars.outputs.MOUNT_POINT }} ]; then
+            ./jfs_new umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
+          fi
+          UUID=$(./jfs_new status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            echo UUID is: $UUID
+            sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+          fi
+
+      - name: Encoding Test
+        run: |
+          ./juicefs format sqlite3://jfs1.db jfs1
+          ./juicefs mount sqlite3://jfs1.db jfs1 -d 
+          touch jfs1/中国.txt && echo "果汁数据JuiceData">jfs1/中国.txt
+          ./juicefs dump sqlite3://jfs1.db jfs1.backup
+          ./iconv -f UTF-8 -t GBK jfs1.backup > jfs1.backup_gbk
+          ./juicefs load sqlite3://jfs2.db jfs1.backup_gbk 
+          ./juicefs mount sqlite3://jfs2.db jfs2 -d
+          ./juicefs dump sqlite3://jfs2.db jfs2.backup
+          ./iconv -f GBK -t UTF-8 jfs2.backup > jfs2.backup_utf8
+          ./juicefs load sqlite3://jfs4.db jfs2.backup_utf8 
+          ./juicefs mount sqlite3://jfs4.db jfs4 -d
+          if [ -f "jfs1/中国.txt" ]; then 
+            cat jfs1/中国.txt | grep 果汁数据JuiceData
+          else
+            echo "encoding error for gbk"
+            exit 1
+          fi 
+
+      - name: Clean
+        if: always() 
+        run: |
+          if [ -d ${{ steps.vars.outputs.MOUNT_POINT }} ]; then
+            ./jfs_new umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
+          fi
+          UUID=$(./jfs_new status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            echo UUID is: $UUID
+            sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+          fi
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
