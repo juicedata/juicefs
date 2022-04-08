@@ -7,27 +7,27 @@ slug: /cache_management
 
 For a file system driven by a combination of object storage and database, the cache is an important medium for efficient interaction between the local client and the remote service. Read and write data can be loaded into the cache in advance or asynchronously, and then the client interacts with the remote service in the background to perform asynchronous uploads or prefetching of data. The use of caching technology can significantly reduce the latency of storage operations and increase data throughput compared to interacting with remote services directly.
 
-## JuiceFS Read Cache mechanism
-
-When reading files in JuiceFS, there are multiple levels of caches to provide better performance for frequently accessed data. Read requests will try the kernel page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn, and will read from the object storage only when the corresponding data is not found in the cache, and will write to all levels of caches asynchronously to ensure the performance of the next access.
-
-![](../images/juicefs-cache.png)
-
 JuiceFS provides various caching mechanisms including metadata caching, data read/write caching, etc.
 
-## Data Consistency
+## Data consistency
 
 JuiceFS provides a "close-to-open" consistency guarantee, which means that when two or more clients read and write the same file at the same time, the changes made by client A may not be immediately visible to client B. However, once the file is closed by client A, any client re-opened it afterwards is guaranteed to see the latest data, no matter it is on the same node with A or not.
 
 "Close-to-open" is the minimum consistency guarantee provided by JuiceFS, and in some cases it may not be necessary to reopen the file to access the latest written data. For example, multiple applications using the same JuiceFS client to access the same file (where file changes are immediately visible), or to view the latest data on different nodes with the `tail -f` command.
 
-## Metadata Cache
+## Read cache mechanism
+
+When reading files in JuiceFS, there are multiple levels of caches to provide better performance for frequently accessed data. Read requests will try the kernel page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn, and will read from the object storage only when the corresponding data is not found in the cache, and will write to all levels of caches asynchronously to ensure the performance of the next access.
+
+![](../images/juicefs-cache.png)
+
+## Metadata cache
 
 JuiceFS supports caching metadata in kernel and client memory (i.e. JuiceFS processes) to improve metadata access performance.
 
-### Metadata Cache in Kernel
+### Metadata cache in kernel
 
-Three kinds of metadata can be cached in kernel: **attributes (attribute)**, **file entries (entry)** and **directory entries (direntry)**. The cache timeout can be controlled by the following [mount parameter](../reference/command_reference.md#juicefs-mount):
+Three kinds of metadata can be cached in kernel: **attributes (attribute)**, **file entries (entry)** and **directory entries (direntry)**. The cache timeout can be controlled by the following [mount options](../reference/command_reference.md#juicefs-mount):
 
 ```
 --attr-cache value       attributes cache timeout in seconds (default: 1)
@@ -37,30 +37,30 @@ Three kinds of metadata can be cached in kernel: **attributes (attribute)**, **f
 
 JuiceFS caches attributes, file entries, and directory entries in kernel for 1 second by default to improve lookup and getattr performance. When clients on multiple nodes are using the same file system, the metadata cached in kernel will only be expired by time. That is, in an extreme case, it may happen that node A modifies the metadata of a file (e.g., `chown`) and accesses it through node B without immediately seeing the update. Of course, when the cache expires, all nodes will eventually be able to see the changes made by A.
 
-### Metadata Cache in Client
+### Metadata cache in client
 
 :::note
-This feature requires JuiceFS >= 0.15.2.
+This feature requires JuiceFS >= 0.15.2
 :::
 
 When a JuiceFS client `open()` a file, its file attributes are automatically cached in client memory. If the [`--open-cache`](../reference/command_reference.md#juicefs-mount) option is set to a value greater than 0 when mounting the file system, subsequent `getattr()` and `open()` operations will return the result from the in-memory cache immediately, as long as the cache has not timed out.
 
 When a file is read by `read()`, the chunk and slice information of the file is automatically cached in client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately.
 
-:::tip Hint
+:::tip
 You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to know what chunk and slice are.
 :::
 
 By default, for any file whose metadata has been cached in memory and not accessed by any process for more than 1 hour, all its metadata cache will be automatically deleted.
 
-## Data Cache
+## Data cache
 
 Data cache is also provided in JuiceFS to improve performance, including page cache in the kernel and local cache in client host.
 
-### Data Cache in Kernel
+### Data cache in kernel
 
 :::note
-This feature requires JuiceFS >= 0.15.2.
+This feature requires JuiceFS >= 0.15.2
 :::
 
 For files that have already been read, the kernel automatically caches their contents. Then if the file is opened again, and it's not changed (i.e., mtime has not been updated), it can be read directly from the kernel cache for the best performance.
@@ -69,7 +69,7 @@ Thanks to the kernel cache, repeated reads of the same file in JuiceFS can be ve
 
 JuiceFS clients currently do not have kernel write caching enabled by default, starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means that the `write()` system call can be done very quickly. You can set the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option at [mount file system](../reference/command_reference.md#juicefs-mount) to enable writeback-cache mode. It is recommended to enable this mount option when very small data (e.g. around 100 bytes) needs to be written frequently.
 
-### Read Cache in Client
+### Read cache in client
 
 The JuiceFS client automatically prefetch data into the cache based on the read pattern, thus improving sequential read performance. By default, 1 block is prefetch locally concurrently with the read data. The local cache can be set on any local file system based on HDD, SSD or memory.
 
@@ -90,11 +90,19 @@ Specifically, there are two ways if you want to store the local cache of JuiceFS
 
 The JuiceFS client writes data downloaded from the object store (including new uploads less than 1 block in size) to the cache directory as fast as possible, without compression or encryption. **Because JuiceFS generates unique names for all block objects written to the object store, and all block objects are not modified, there is no need to worry about invalidating the cached data when the file content is updated.**
 
-The cache is automatically purged when it reaches the maximum space used (i.e., the cache size is greater than or equal to `--cache-size`) or when the disk is going to be full (i.e., the disk free space ratio is less than `--free-space-ratio`), and the current rule is to prioritize purging infrequently accessed files based on access time.
-
 Data caching can effectively improve the performance of random reads. For applications like Elasticsearch, ClickHouse, etc. that require higher random read performance, it is recommended to set the cache path on a faster storage medium and allocate more cache space.
 
-### Write Cache in Client
+#### Cache life cycle
+
+When the cache usage space reaches the upper limit (that is, the cache size is greater than or equal to `--cache-size`) or the disk will be full (that is, the free disk space ratio is less than `--free-space-ratio`), the JuiceFS client will automatically clean the cache.
+
+JuiceFS allocates 100GiB of cache space by default, but this does not mean that you have to use more than that capacity on disk. This value represents the maximum capacity that a JuiceFS client may use if the disk capacity allows. When the remaining space on the disk is less than 100GiB, ensure that the remaining space is not less than 10% by default.
+
+For example, if you set `--cache-dir` to a partition with a capacity of 50GiB, then if `--cache-size` is set to 100GiB, the cache capacity of JuiceFS will always remain around 45GiB, which means that more than 10% of the partition is reserved for free space.
+
+When the cache is full, the JuiceFS client cleans the cache using LRU-like algorithm, i.e., it tries to clean the older and less-used cache.
+
+### Write cache in client
 
 When writing data, the JuiceFS client caches the data in memory until it is uploaded to the object storage when a chunk is written or when the operation is forced by `close()` or `fsync()`. When `fsync()` or `close()` is called, the client waits for data to be written to the object storage and notifies the metadata service before returning, thus ensuring data integrity.
 
@@ -116,7 +124,51 @@ When the cache disk is too full, it will pause writing data and change to upload
 
 When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing, and should be used with caution for scenarios requiring high data reliability.
 
-## Frequent Asked Questions
+## Cache warm-up
+
+JuiceFS cache warm-up is an active caching means to improve the efficiency of file reading and writing by pre-caching locally the data used in high frequency.
+
+Use the `warmup` subcommand to warm up the cache.
+
+```shell
+juicefs warmup [command options] [PATH ...]
+```
+
+Command options:
+
+- `--file` or `-f`: file containing a list of paths
+- `--threads` or `-p`: number of concurrent workers (default: 50)
+- `--background` or `-b`: run in background
+
+:::tip
+Only files in the mounted file system can be warmed up, i.e. the path to be warmed up must be on the local mount point.
+:::
+
+### Warm up a directory
+
+For example, to cache the `dataset-1` directory in a filesystem mount point locally.
+
+```shell
+juicefs warmup /mnt/jfs/dataset-1
+```
+
+### Warm up multiple directories or files
+
+When you need to warm up the cache of multiple directories or files at the same time, you can write all the paths to a text file. For example, create a text file named `warm.txt` with one path per line in the mount point.
+
+```
+/mnt/jfs/dataset-1
+/mnt/jfs/dataset-2
+/mnt/jfs/pics
+```
+
+Then perform the warm up command.
+
+```shell
+juicefs warmup -f warm.txt
+```
+
+## FAQ
 
 ### Why 60 GiB disk spaces are occupied while I set cache size to 50 GiB?
 
