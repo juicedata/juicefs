@@ -162,6 +162,9 @@ func newB2(endpoint, keyID, applicationKey string) (ObjectStorage, error) {
 			return nil, fmt.Errorf("create bucket %s: %s", name, err)
 		}
 	}
+	if bucket == nil {
+		return nil, fmt.Errorf("can't find bucket %s with provided Key ID", name)
+	}
 	return &b2client{bucket: bucket}, nil
 }
 
