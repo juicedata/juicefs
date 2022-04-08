@@ -8,7 +8,7 @@ slug: /fuse_mount_options
 This is a guide that lists important FUSE mount options. These mount options are specified by `-o` option when execute [`juicefs mount`](../reference/command_reference.md#juicefs-mount) command (use comma to separate multiple options). For example:
 
 ```bash
-$ juicefs mount -d -o allow_other,writeback_cache localhost ~/jfs
+juicefs mount -d -o allow_other,writeback_cache localhost ~/jfs
 ```
 
 ## debug
@@ -21,6 +21,8 @@ This option overrides the security measure restricting file access to the user m
 
 ## writeback_cache
 
-> **Note**: This mount option requires at least version 3.15 Linux kernel.
+:::note
+This mount option requires at least version 3.15 Linux kernel
+:::
 
 FUSE supports ["writeback-cache mode"](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means the `write()` syscall can often complete very fast. It's recommended enable this mount option when write very small data (e.g. 100 bytes) frequently.
