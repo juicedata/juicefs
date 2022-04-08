@@ -169,6 +169,78 @@ juicefs warmup /mnt/jfs/dataset-1
 juicefs warmup -f warm.txt
 ```
 
+## 缓存位置
+
+默认情况下，JuiceFS 客户端会将缓存设置在 `/var/jfsCache` 目录，需要注意的是该目录要求管理员权限，普通用户需要有权使用 `sudo` 才能设置成功，例如：
+
+```shell
+sudo juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
+```
+
+另外，可以在挂载文件系统时通过 `--cache-dir` 选项设置在当前系统可以访问的任何存储路径上。对于没有访问 `/var` 目录权限的普通用户，可以把缓存设置在用户的 HOME 目录中，例如：
+
+```shell
+juicefs juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+```
+
+:::tip 提示
+将缓存设置在速度更快的 SSD 磁盘可以有效提升性能。
+:::
+
+### 内存盘
+
+如果对文件的读性能有更高要求，可以把缓存设置在内存盘上。对于 Linux 系统，通过 `df` 命令查看 `tmpfs` 类型的文件系统：
+
+```shell
+$ df -Th | grep tmpfs
+文件系统         类型      容量   已用  可用   已用% 挂载点
+tmpfs          tmpfs     362M  2.0M  360M    1% /run
+tmpfs          tmpfs     3.8G     0  3.8G    0% /dev/shm
+tmpfs          tmpfs     5.0M  4.0K  5.0M    1% /run/lock
+```
+
+其中 `/dev/shm` 是典型的内存盘，可以作为 JuiceFS 的缓存路径使用，它的容量一般是内存的一半，可以根据需要手动调整容量，例如，将缓存盘的容量调整为 32GB：
+
+```shell
+sudo mount -o size=32000M -o remount /dev/shm
+```
+
+然后使用该路径作为缓存，挂载文件系统：
+
+```shell
+juicefs mount --cache-dir /dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+```
+
+:::caution 注意
+内存盘是易失性存储，存入的数据会在系统重启时丢失，请勿使用内存盘存储需要长期保存的数据！
+:::
+
+### 共享目录
+
+SMB、NFS 等共享目录也可以用作 JuiceFS 的缓存，对于局域网有多个设备挂载了相同 JuiceFS 文件系统的情况，将局域网中的共享目录作为缓存路径，可以有效缓解多个设备重复预热缓存的带宽压力。
+
+以 SMB/CIFS 共享为例，使用 `cifs-utils` 包提供的工具挂载局域网中的共享目录：
+
+```shell
+sudo mount.cifs //192.168.1.18/public /mnt/jfscache
+```
+
+将共享目录作为 JuiceFS 缓存：
+
+```shell
+sudo juicefs mount --cache-dir /mnt/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+```
+
+### 多缓存目录
+
+JuiceFS 支持同时设置多个缓存目录，从而解决缓存空间不足的问题，使用 `:` 分割多个路径，例如：
+
+```shell
+sudo juicefs mount --cache-dir ~/jfscache,/mnt/jfscache,/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+```
+
+设置了多个缓存路径时，客户端会随机向各个缓存路径中写入数据。
+
 ## 常见问题
 
 ### 为什么我设置了缓存容量为 50 GiB，但实际占用了 60 GiB 的空间？
