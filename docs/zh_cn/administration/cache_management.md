@@ -171,7 +171,13 @@ juicefs warmup -f warm.txt
 
 ## 缓存位置
 
-默认情况下，JuiceFS 客户端会将缓存设置在 `/var/jfsCache` 目录，需要注意的是该目录要求管理员权限，普通用户需要有权使用 `sudo` 才能设置成功，例如：
+取决于操作系统，JuiceFS 的默认缓存路径如下：
+
+- **Linux**: `/var/jfsCache`
+- **macOS**: `$HOME/.juicefs/cache`
+- **Windows**: `$HOME/.juicefs/cache`
+
+对于 Linux 系统，要注意默认缓存路径要求管理员权限，普通用户需要有权使用 `sudo` 才能设置成功，例如：
 
 ```shell
 sudo juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
@@ -239,7 +245,7 @@ JuiceFS 支持同时设置多个缓存目录，从而解决缓存空间不足的
 sudo juicefs mount --cache-dir ~/jfscache,/mnt/jfscache,/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-设置了多个缓存路径时，客户端会随机向各个缓存路径中写入数据。
+设置了多个缓存路径时，客户端会采用 hash 策略向各个缓存路径中写入数据。
 
 ## 常见问题
 

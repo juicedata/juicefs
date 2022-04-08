@@ -170,7 +170,13 @@ juicefs warmup -f warm.txt
 
 ## Cache Directory
 
-By default, the JuiceFS client will set the cache in the `/var/jfsCache` directory. It should be noted that this directory requires administrator privileges and normal users need to have the right to use `sudo` to set it successfully, e.g.
+Depending on the operating system, the default cache path for JuiceFS is as follows.
+
+- **Linux**: `/var/jfsCache`
+- **macOS**: `$HOME/.juicefs/cache`
+- **Windows**: `$HOME/.juicefs/cache`
+
+For Linux, note that the default cache path requires administrator privileges and that normal users need to have the right to use `sudo` to set it up successfully, e.g.
 
 ```shell
 sudo juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
@@ -237,7 +243,7 @@ JuiceFS supports setting multiple cache directories at the same time, thus solvi
 sudo juicefs mount --cache-dir ~/jfscache,/mnt/jfscache,/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-When multiple cache paths are set, the client will randomly write data to each cache path.
+When multiple cache paths are set, the client will write data to each cache path using hash policy.
 
 ## FAQ
 
