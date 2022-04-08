@@ -162,9 +162,9 @@ juicefs warmup warm.txt
 
 ### Cache Lifecycle
 
-JuiceFS allocates 100GB of cache space by default, but this does not mean that you have to use more than that capacity on disk. This value represents the maximum capacity that a JuiceFS client may use if the disk capacity allows. When the disk capacity is lower than this value, JuiceFS will ensure that the cache capacity is always less than 10% of the disk capacity.
+JuiceFS allocates 100GiB of cache space by default, but this does not mean that you have to use more than that capacity on disk. This value represents the maximum capacity that a JuiceFS client may use if the disk capacity allows. When the remaining space on the disk is less than 100 GiB, ensure that the remaining space is not less than 10%.
 
-For example, if you set `--cache-dir` to a partition with a capacity of 50GB, the cache capacity of JuiceFS will always remain around 45GB, regardless of the `--cache-size` setting, which means that 10% of the remaining space in the partition will be reserved.
+For example, if you set `--cache-dir` to a partition with a capacity of 50GiB, the cache capacity of JuiceFS will always remain around 45GiB, regardless of the `--cache-size` setting, which means that more than 10% of the partition is reserved for free space.
 
 When the cache is full, the JuiceFS client cleans the cache using LRU-like mode, i.e., it tries to clean the older and less-used cache.
 
