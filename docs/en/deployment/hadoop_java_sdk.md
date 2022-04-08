@@ -258,6 +258,26 @@ Hudi supports JuiceFS since v0.10.0, please make sure you are using the correct 
 
 Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/jfs_hoodie) to learn how to configure JuiceFS.
 
+### Kafka Connect
+
+It is possible to use Kafka Connect and HDFS Sink Connector（[HDFS 2](https://docs.confluent.io/kafka-connect-hdfs/current/overview.html) and [HDFS 3](https://docs.confluent.io/kafka-connect-hdfs3-sink/current/overview.html)）to store data on JuiceFS.
+
+First you need to add JuiceFS SDK to `classpath` in Kafka Connect, e.g., `/usr/share/java/confluentinc-kafka-connect-hdfs/lib`. 
+
+While creating a Connect Sink task, configuration needs to be set up as follows:
+
+- Specify `hadoop.conf.dir` as the directory that contains the configuration file `core-site.xml`. If it is not running in Hadoop environment, you can create a seperate directory such as `/usr/local/juicefs/hadoop`, and then add the Juicefs-related configurations to `core-site.xml`.
+
+- Specific `store.url` as the path `jfs://` 
+
+For example,
+
+```ini
+# Other configuration items are omitted. 
+hadoop.conf.dir=/path/to/hadoop-conf
+store.url=jfs://path/to/store
+```
+
 ### Restart Services
 
 When the following components need to access JuiceFS, they should be restarted.
