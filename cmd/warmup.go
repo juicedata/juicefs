@@ -18,9 +18,12 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -86,6 +89,10 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 	wb.Put16(uint16(threads))
 	wb.Put8(back)
 	if _, err := cf.Write(wb.Bytes()); err != nil {
+		// macFUSE will kill the mount process after `daemon_timeout`
+		if runtime.GOOS == "darwin" && errors.Is(err, syscall.ENOTCONN) {
+			logger.Errorf("Target mount point has exited. If it's not intentional, please try warmup again with `--background`")
+		}
 		logger.Fatalf("Write message: %s", err)
 	}
 	if background {
@@ -193,7 +200,9 @@ func warmup(ctx *cli.Context) error {
 		bar.IncrBy(index)
 	}
 	progress.Done()
-	logger.Infof("Successfully warmed up %d paths", bar.Current())
+	if !background {
+		logger.Infof("Successfully warmed up %d paths", bar.Current())
+	}
 
 	return nil
 }
