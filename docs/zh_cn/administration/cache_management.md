@@ -217,10 +217,6 @@ sudo mount -o size=32000M -o remount /dev/shm
 juicefs mount --cache-dir /dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-:::caution 注意
-内存盘是易失性存储，存入的数据会在系统重启时丢失，请勿使用内存盘存储需要长期保存的数据！
-:::
-
 ### 共享目录
 
 SMB、NFS 等共享目录也可以用作 JuiceFS 的缓存，对于局域网有多个设备挂载了相同 JuiceFS 文件系统的情况，将局域网中的共享目录作为缓存路径，可以有效缓解多个设备重复预热缓存的带宽压力。
@@ -242,7 +238,7 @@ sudo juicefs mount --cache-dir /mnt/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 JuiceFS 支持同时设置多个缓存目录，从而解决缓存空间不足的问题，使用 `:` 分割多个路径，例如：
 
 ```shell
-sudo juicefs mount --cache-dir ~/jfscache,/mnt/jfscache,/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
 设置了多个缓存路径时，客户端会采用 hash 策略向各个缓存路径中写入数据。
