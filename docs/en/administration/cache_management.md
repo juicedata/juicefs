@@ -168,31 +168,31 @@ Then perform the warm up command.
 juicefs warmup -f warm.txt
 ```
 
-## Cache Directory
+## Cache directory
 
-Depending on the operating system, the default cache path for JuiceFS is as follows.
+Depending on the operating system, the default cache path for JuiceFS is as follows:
 
 - **Linux**: `/var/jfsCache`
 - **macOS**: `$HOME/.juicefs/cache`
-- **Windows**: `$HOME/.juicefs/cache`
+- **Windows**: `%USERPROFILE%\.juicefs\cache`
 
-For Linux, note that the default cache path requires administrator privileges and that normal users need to have the right to use `sudo` to set it up successfully, e.g.
+For Linux, note that the default cache path requires administrator privileges and that normal users need to have the right to use `sudo` to set it up successfully, e.g.:
 
 ```shell
 sudo juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-Alternatively, the `--cache-dir` option can be set on any storage path accessible to the current system when mounting the filesystem. For normal users who do not have access to the `/var` directory, the cache can be set in the user's HOME directory, e.g.
+Alternatively, the `--cache-dir` option can be set on any storage path accessible to the current system when mounting the filesystem. For normal users who do not have access to the `/var` directory, the cache can be set in the user's `HOME` directory, e.g.:
 
 ```shell
-juicefs juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
 :::tip
 Setting the cache on a faster SSD disk can improve performance.
 :::
 
-### Ramdisk
+### RAM disk
 
 If you have higher requirements for file read performance, you can set the cache to the RAM disk. For Linux systems, the `tmpfs` type file system can be viewed with the `df` command.
 
@@ -215,7 +215,7 @@ Then, using that path as a cache, mount the filesystem.
 juicefs mount --cache-dir /dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-### Shared Folders
+### Shared folders
 
 Shared directories created via SMB or NFS can also be used as cache for JuiceFS. For the case where multiple devices on the LAN mount the same JuiceFS file system, using shared directories on the LAN as cache paths can effectively relieve the bandwidth pressure of duplicate caches for multiple devices.
 
@@ -225,21 +225,27 @@ Using SMB/CIFS as an example, mount the shared directories on the LAN using the 
 sudo mount.cifs //192.168.1.18/public /mnt/jfscache
 ```
 
-Using shared directories as JuiceFS caches.
+Using shared directories as JuiceFS caches:
 
 ```shell
 sudo juicefs mount --cache-dir /mnt/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-### Multiple Cache Directory
+### Multiple cache directories
 
 JuiceFS supports setting multiple cache directories at the same time, thus solving the problem of insufficient cache space by splitting multiple paths using `:`, e.g.
 
 ```shell
-sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+sudo juicefs mount --cache-dir '~/jfscache:/mnt/jfscache:/dev/shm/jfscache' redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-When multiple cache paths are set, the client will write data to each cache path using hash policy.
+When multiple cache paths are set, the client will write data evenly to each cache path using hash policy.
+
+:::note
+When multiple cache directories are set, the `--cache-size` option represents the total size of data in all cache directories. It is recommended that the available space of different cache directories be consistent, otherwise, a cache directory may be full up.
+
+For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space of 1GiB, `/data2` has a free space of 2GiB, `--cache-size` is 3GiB, `--free-space-ratio` is 0.1. Because the cache's write strategy is to write evenly, and the free space of `/data1` is smaller, it may fill up the `/data1` directory.
+:::
 
 ## FAQ
 

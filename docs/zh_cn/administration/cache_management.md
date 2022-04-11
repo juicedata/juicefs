@@ -173,9 +173,9 @@ juicefs warmup -f warm.txt
 
 取决于操作系统，JuiceFS 的默认缓存路径如下：
 
-- **Linux**: `/var/jfsCache`
-- **macOS**: `$HOME/.juicefs/cache`
-- **Windows**: `$HOME/.juicefs/cache`
+- **Linux**：`/var/jfsCache`
+- **macOS**：`$HOME/.juicefs/cache`
+- **Windows**：`%USERPROFILE%\.juicefs\cache`
 
 对于 Linux 系统，要注意默认缓存路径要求管理员权限，普通用户需要有权使用 `sudo` 才能设置成功，例如：
 
@@ -183,10 +183,10 @@ juicefs warmup -f warm.txt
 sudo juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-另外，可以在挂载文件系统时通过 `--cache-dir` 选项设置在当前系统可以访问的任何存储路径上。对于没有访问 `/var` 目录权限的普通用户，可以把缓存设置在用户的 HOME 目录中，例如：
+另外，可以在挂载文件系统时通过 `--cache-dir` 选项设置在当前系统可以访问的任何存储路径上。对于没有访问 `/var` 目录权限的普通用户，可以把缓存设置在用户的 `HOME` 目录中，例如：
 
 ```shell
-juicefs juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
 :::tip 提示
@@ -238,10 +238,16 @@ sudo juicefs mount --cache-dir /mnt/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 JuiceFS 支持同时设置多个缓存目录，从而解决缓存空间不足的问题，使用 `:` 分割多个路径，例如：
 
 ```shell
-sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
+sudo juicefs mount --cache-dir '~/jfscache:/mnt/jfscache:/dev/shm/jfscache' redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-设置了多个缓存路径时，客户端会采用 hash 策略向各个缓存路径中写入数据。
+设置了多个缓存路径时，客户端会采用 hash 策略向各个缓存路径中均匀地写入数据。
+
+:::note 注意
+当设置了多个缓存目录时，`--cache-size` 选项表示所有缓存目录中的数据总大小。建议不同缓存目录的可用空间保持一致，否则可能造成写满某个缓存目录的情况。
+
+例如 `--cache-dir` 为 `/data1:/data2`，其中 `/data1` 的可用空间为 1GiB，`/data2` 的可用空间为 2GiB，`--cache-size` 为 3GiB，`--free-space-ratio` 为 0.1。因为缓存的写入策略是均匀写入，且 `/data1` 的可用空间更小，因此有可能会写满 `/data1` 目录。
+:::
 
 ## 常见问题
 
