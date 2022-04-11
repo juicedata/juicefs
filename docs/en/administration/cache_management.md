@@ -236,15 +236,15 @@ sudo juicefs mount --cache-dir /mnt/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 JuiceFS supports setting multiple cache directories at the same time, thus solving the problem of insufficient cache space by splitting multiple paths using `:`, e.g.
 
 ```shell
-sudo juicefs mount --cache-dir '~/jfscache:/mnt/jfscache:/dev/shm/jfscache' redis://127.0.0.1:6379/1 /mnt/myjfs
+sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
 When multiple cache paths are set, the client will write data evenly to each cache path using hash policy.
 
 :::note
-When multiple cache directories are set, the `--cache-size` option represents the total size of data in all cache directories. It is recommended that the available space of different cache directories be consistent, otherwise, a cache directory may be full up.
+When multiple cache directories are set, the `--cache-size` option represents the total size of data in all cache directories. It is recommended that the available space of different cache directories be consistent, otherwise, the space of a cache directory may not be fully utilized.
 
-For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space of 1GiB, `/data2` has a free space of 2GiB, `--cache-size` is 3GiB, `--free-space-ratio` is 0.1. Because the cache's write strategy is to write evenly, and the free space of `/data1` is smaller, it may fill up the `/data1` directory.
+For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space of 1GiB, `/data2` has a free space of 2GiB, `--cache-size` is 3GiB, `--free-space-ratio` is 0.1. Because the cache's write strategy is to write evenly, the maximum space allocated to each cache directory is `3GiB / 2 = 1.5GiB`, resulting in a maximum of 1.5GiB cache space in the `/data2` directory instead of `2GiB * 0.9 = 1.8GiB`.
 :::
 
 ## FAQ

@@ -238,15 +238,15 @@ sudo juicefs mount --cache-dir /mnt/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 JuiceFS 支持同时设置多个缓存目录，从而解决缓存空间不足的问题，使用 `:` 分割多个路径，例如：
 
 ```shell
-sudo juicefs mount --cache-dir '~/jfscache:/mnt/jfscache:/dev/shm/jfscache' redis://127.0.0.1:6379/1 /mnt/myjfs
+sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
 设置了多个缓存路径时，客户端会采用 hash 策略向各个缓存路径中均匀地写入数据。
 
 :::note 注意
-当设置了多个缓存目录时，`--cache-size` 选项表示所有缓存目录中的数据总大小。建议不同缓存目录的可用空间保持一致，否则可能造成写满某个缓存目录的情况。
+当设置了多个缓存目录时，`--cache-size` 选项表示所有缓存目录中的数据总大小。建议不同缓存目录的可用空间保持一致，否则可能造成不能充分利用某个缓存目录空间的情况。
 
-例如 `--cache-dir` 为 `/data1:/data2`，其中 `/data1` 的可用空间为 1GiB，`/data2` 的可用空间为 2GiB，`--cache-size` 为 3GiB，`--free-space-ratio` 为 0.1。因为缓存的写入策略是均匀写入，且 `/data1` 的可用空间更小，因此有可能会写满 `/data1` 目录。
+例如 `--cache-dir` 为 `/data1:/data2`，其中 `/data1` 的可用空间为 1GiB，`/data2` 的可用空间为 2GiB，`--cache-size` 为 3GiB，`--free-space-ratio` 为 0.1。因为缓存的写入策略是均匀写入，所以分配给每个缓存目录的最大空间是 `3GiB / 2 = 1.5GiB`，会造成 `/data2` 目录的缓存空间最大为 1.5GiB，而不是 `2GiB * 0.9 = 1.8GiB`。
 :::
 
 ## 常见问题
