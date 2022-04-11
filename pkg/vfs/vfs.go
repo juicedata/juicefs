@@ -571,7 +571,9 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		h.data = append(h.data, h.pending...)
 		h.pending = h.pending[:0]
 		if rb.Left() == size {
-			h.data = append(h.data, v.handleInternalMsg(ctx, cmd, rb)...)
+			go func() {
+				h.data = append(h.data, v.handleInternalMsg(ctx, cmd, rb)...)
+			}()
 		} else {
 			logger.Warnf("broken message: %d %d < %d", cmd, size, rb.Left())
 			h.data = append(h.data, uint8(syscall.EIO&0xff))
