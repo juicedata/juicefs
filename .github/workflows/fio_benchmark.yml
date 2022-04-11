@@ -29,6 +29,7 @@ jobs:
 
       - name: Clean Before
         run: |
+          rm /var/jfsCache/ -rf
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT }} ]; then
             ./juicefs umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
           fi
