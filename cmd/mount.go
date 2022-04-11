@@ -180,16 +180,28 @@ func getFormat(c *cli.Context, metaCli meta.Meta) *meta.Format {
 
 func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 	if runtime.GOOS != "windows" {
-		d := c.String("cache-dir")
-		if d != "memory" && !strings.HasPrefix(d, "/") {
-			ad, err := filepath.Abs(d)
-			if err != nil {
-				logger.Fatalf("cache-dir should be absolute path in daemon mode")
-			} else {
-				for i, a := range os.Args {
-					if a == d || a == "--cache-dir="+d {
-						os.Args[i] = a[:len(a)-len(d)] + ad
+		if cd := c.String("cache-dir"); cd != "memory" {
+			ds := utils.SplitDir(cd)
+			for i, d := range ds {
+				if strings.HasPrefix(d, "/") {
+					continue
+				} else if strings.HasPrefix(d, "~/") {
+					if h, err := os.UserHomeDir(); err == nil {
+						ds[i] = filepath.Join(h, d[1:])
+					} else {
+						logger.Fatalf("Expand user home dir of %s: %s", d, err)
 					}
+				} else {
+					if ad, err := filepath.Abs(d); err == nil {
+						ds[i] = ad
+					} else {
+						logger.Fatalf("Find absolute path of %s: %s", d, err)
+					}
+				}
+			}
+			for i, a := range os.Args {
+				if a == cd || a == "--cache-dir="+cd {
+					os.Args[i] = a[:len(a)-len(cd)] + strings.Join(ds, string(os.PathListSeparator))
 				}
 			}
 		}
