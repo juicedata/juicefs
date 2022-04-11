@@ -18,11 +18,13 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -106,11 +108,14 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-
 		data := make([]byte, 4)
-		n, err := f.Read(data)
-		if err != nil {
-			logger.Fatalf("read size: %d %s", n, err)
+		var n int
+		for n, err = f.Read(data); err != nil; n, err = f.Read(data) {
+			if err == io.EOF {
+				time.Sleep(time.Millisecond * 300)
+			} else {
+				logger.Fatalf("Read message: %d %s", n, err)
+			}
 		}
 		if n == 1 && data[0] == byte(syscall.EINVAL&0xff) {
 			logger.Fatalf("info is not supported, please upgrade and mount again")

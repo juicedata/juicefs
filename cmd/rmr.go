@@ -18,10 +18,12 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -91,9 +93,12 @@ func rmr(ctx *cli.Context) error {
 			logger.Fatalf("write message: %s", err)
 		}
 		var errs = make([]byte, 1)
-		n, err := f.Read(errs)
-		if err != nil || n != 1 {
-			logger.Fatalf("read message: %d %s", n, err)
+		for n, err := f.Read(errs); err != nil || n != 1; n, err = f.Read(errs) {
+			if err == io.EOF {
+				time.Sleep(time.Millisecond * 300)
+			} else {
+				logger.Fatalf("Read message: %d %s", n, err)
+			}
 		}
 		if errs[0] != 0 {
 			errno := syscall.Errno(errs[0])

@@ -96,10 +96,11 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 	}
 	var errs = make([]byte, 1)
 	for n, err := cf.Read(errs); err != nil || n != 1; n, err = cf.Read(errs) {
-		if err != io.EOF {
+		if err == io.EOF {
+			time.Sleep(time.Millisecond * 300)
+		} else {
 			logger.Fatalf("Read message: %d %s", n, err)
 		}
-		time.Sleep(time.Millisecond * 300)
 	}
 	if errs[0] != 0 {
 		logger.Fatalf("Warm up failed: %d", errs[0])
