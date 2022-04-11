@@ -106,12 +106,8 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-
 		data := make([]byte, 4)
-		n, err := f.Read(data)
-		if err != nil {
-			logger.Fatalf("read size: %d %s", n, err)
-		}
+		n := readControl(f, data)
 		if n == 1 && data[0] == byte(syscall.EINVAL&0xff) {
 			logger.Fatalf("info is not supported, please upgrade and mount again")
 		}

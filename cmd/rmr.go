@@ -91,10 +91,7 @@ func rmr(ctx *cli.Context) error {
 			logger.Fatalf("write message: %s", err)
 		}
 		var errs = make([]byte, 1)
-		n, err := f.Read(errs)
-		if err != nil || n != 1 {
-			logger.Fatalf("read message: %d %s", n, err)
-		}
+		_ = readControl(f, errs)
 		if errs[0] != 0 {
 			errno := syscall.Errno(errs[0])
 			if runtime.GOOS == "windows" {
