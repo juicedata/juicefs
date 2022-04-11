@@ -73,6 +73,18 @@ $ juicefs warmup -f /tmp/filelist`,
 
 const batchMax = 10240
 
+func readControl(cf *os.File, resp []byte) int {
+	for {
+		if n, err := cf.Read(resp); err == nil {
+			return n
+		} else if err == io.EOF {
+			time.Sleep(time.Millisecond * 300)
+		} else {
+			logger.Fatalf("Read message: %d %s", n, err)
+		}
+	}
+}
+
 // send fill-cache command to controller file
 func sendCommand(cf *os.File, batch []string, count int, threads uint, background bool) {
 	paths := strings.Join(batch[:count], "\n")
@@ -95,13 +107,7 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 		return
 	}
 	var errs = make([]byte, 1)
-	for n, err := cf.Read(errs); err != nil || n != 1; n, err = cf.Read(errs) {
-		if err == io.EOF {
-			time.Sleep(time.Millisecond * 300)
-		} else {
-			logger.Fatalf("Read message: %d %s", n, err)
-		}
-	}
+	_ = readControl(cf, errs) // 0 < n <= 1
 	if errs[0] != 0 {
 		logger.Fatalf("Warm up failed: %d", errs[0])
 	}
