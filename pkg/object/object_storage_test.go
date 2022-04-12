@@ -465,6 +465,17 @@ func TestYovole(t *testing.T) {
 	testStorage(t, s)
 }
 
+func TestTiKV(t *testing.T) {
+	if os.Getenv("TIKV_ADDR") == "" {
+		t.SkipNow()
+	}
+	s, err := newTiKV(os.Getenv("TIKV_ADDR"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testStorage(t, s)
+}
+
 func TestWebDAV(t *testing.T) {
 	if os.Getenv("WEBDAV_TEST_BUCKET") == "" {
 		t.SkipNow()
