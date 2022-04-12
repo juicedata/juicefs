@@ -83,7 +83,24 @@ func (t *tikv) Delete(key string) error {
 }
 
 func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
-	return nil, errors.New("not supported")
+	if marker == "" {
+		marker = prefix
+	}
+	if limit > int64(rawkv.MaxRawKVScanLimit) {
+		limit = int64(rawkv.MaxRawKVScanLimit)
+	}
+	// TODO: key only
+	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), nil, int(limit))
+	if err != nil {
+		return nil, err
+	}
+	var objs []Object = make([]Object, len(keys))
+	mtime := time.Now()
+	for i, k := range keys {
+		// FIXME: mtime
+		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, false}
+	}
+	return objs, nil
 }
 
 func newTiKV(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
