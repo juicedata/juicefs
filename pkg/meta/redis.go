@@ -1083,16 +1083,14 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 	if st := r.checkTrash(parent, &trash); st != 0 {
 		return st
 	}
-	if trash > 0 {
-		keys = append(keys, r.entryKey(trash))
-	} else {
+	if trash == 0 {
 		defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	}
 	var opened bool
 	var attr Attr
 	var newSpace, newInode int64
 	err := r.txn(ctx, func(tx *redis.Tx) error {
-		buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
+		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
 		if err == redis.Nil && r.conf.CaseInsensi {
 			if e := r.resolveCase(ctx, parent, name); e != nil {
 				name = string(e.Name)
@@ -1200,11 +1198,8 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 	if st := r.checkTrash(parent, &trash); st != 0 {
 		return st
 	}
-	if trash > 0 {
-		keys = append(keys, r.entryKey(trash))
-	}
 	err := r.txn(ctx, func(tx *redis.Tx) error {
-		buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
+		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
 		if err == redis.Nil && r.conf.CaseInsensi {
 			if e := r.resolveCase(ctx, parent, name); e != nil {
 				name = string(e.Name)
@@ -1213,7 +1208,7 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			}
 		}
 		if err != nil {
-			return errno(err)
+			return err
 		}
 		typ, inode = r.parseEntry(buf)
 		if typ != TypeDirectory {
@@ -1292,12 +1287,6 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	var trash, dino Ino
 	var dtyp uint8
 	var tattr Attr
-	if st := r.checkTrash(parentDst, &trash); st != 0 {
-		return st
-	}
-	if trash > 0 {
-		keys = append(keys, r.entryKey(trash))
-	}
 	var newSpace, newInode int64
 	err := r.txn(ctx, func(tx *redis.Tx) error {
 		buf, err := tx.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
@@ -1309,7 +1298,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 		}
 		if err != nil {
-			return errno(err)
+			return err
 		}
 		typ, ino := r.parseEntry(buf)
 		if parentSrc == parentDst && nameSrc == nameDst {
@@ -1329,7 +1318,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 		}
 		if err != nil && err != redis.Nil {
-			return errno(err)
+			return err
 		}
 		if err == nil {
 			if flags == RenameNoReplace {
@@ -1339,6 +1328,11 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			keys = append(keys, r.inodeKey(dino))
 			if dtyp == TypeDirectory {
 				keys = append(keys, r.entryKey(dino))
+			}
+			if !exchange {
+				if st := r.checkTrash(parentDst, &trash); st != 0 {
+					return st
+				}
 			}
 		}
 		if err := tx.Watch(ctx, keys...).Err(); err != nil {
