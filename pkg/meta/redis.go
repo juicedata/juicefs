@@ -1222,24 +1222,16 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 		if err = tx.Watch(ctx, r.inodeKey(inode), r.entryKey(inode)).Err(); err != nil {
 			return err
 		}
-		p := tx.Pipeline()
-		p.Get(ctx, r.inodeKey(parent))
-		p.Get(ctx, r.inodeKey(inode))
-		p.HLen(ctx, r.entryKey(inode))
-		rs, err := p.Exec(ctx)
-		if err != nil {
-			return err
+
+		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
+		if rs[0] == nil {
+			return redis.Nil
 		}
 		var pattr, attr Attr
-		if buf, err := rs[0].(*redis.StringCmd).Bytes(); err != nil {
-			return err
-		} else {
-			r.parseAttr([]byte(buf), &pattr)
-			if pattr.Typ != TypeDirectory {
-				return syscall.ENOTDIR
-			}
+		r.parseAttr([]byte(rs[0].(string)), &pattr)
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
 		}
-
 		now := time.Now()
 		pattr.Nlink--
 		pattr.Mtime = now.Unix()
@@ -1247,18 +1239,15 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
 
-		cnt, err := rs[2].(*redis.IntCmd).Result()
+		cnt, err := tx.HLen(ctx, r.entryKey(inode)).Result()
 		if err != nil {
 			return err
-		} else if cnt > 0 {
+		}
+		if cnt > 0 {
 			return syscall.ENOTEMPTY
 		}
 		if rs[1] != nil {
-			if buf, err := rs[1].(*redis.StringCmd).Result(); err != nil {
-				return err
-			} else {
-				r.parseAttr([]byte(buf), &attr)
-			}
+			r.parseAttr([]byte(rs[1].(string)), &attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
@@ -1311,14 +1300,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	}
 	var newSpace, newInode int64
 	err := r.txn(ctx, func(tx *redis.Tx) error {
-		p := tx.Pipeline()
-		p.HGet(ctx, r.entryKey(parentSrc), nameSrc)
-		p.HGet(ctx, r.entryKey(parentDst), nameDst)
-		rs, err := p.Exec(ctx)
-		if err != nil && err != redis.Nil {
-			return err
-		}
-		buf, err := rs[0].(*redis.StringCmd).Bytes()
+		buf, err := tx.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
 		if err == redis.Nil && r.conf.CaseInsensi {
 			if e := r.resolveCase(ctx, parentSrc, nameSrc); e != nil {
 				nameSrc = string(e.Name)
@@ -1327,7 +1309,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 		}
 		if err != nil {
-			return err
+			return errno(err)
 		}
 		typ, ino := r.parseEntry(buf)
 		if parentSrc == parentDst && nameSrc == nameDst {
@@ -1337,7 +1319,8 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return nil
 		}
 		keys = []string{r.inodeKey(ino)}
-		dbuf, err := rs[1].(*redis.StringCmd).Bytes()
+
+		dbuf, err := tx.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
 		if err == redis.Nil && r.conf.CaseInsensi {
 			if e := r.resolveCase(ctx, parentDst, nameDst); e != nil {
 				nameDst = string(e.Name)
@@ -1346,7 +1329,7 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 		}
 		if err != nil && err != redis.Nil {
-			return err
+			return errno(err)
 		}
 		if err == nil {
 			if flags == RenameNoReplace {
@@ -1361,55 +1344,35 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if err := tx.Watch(ctx, keys...).Err(); err != nil {
 			return err
 		}
-		p = tx.Pipeline()
-		p.Get(ctx, r.inodeKey(parentSrc))
-		p.Get(ctx, r.inodeKey(parentDst))
-		p.Get(ctx, r.inodeKey(ino))
+
+		keys := []string{r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)}
 		if dino > 0 {
-			p.Get(ctx, r.inodeKey(dino))
-			if dtyp == TypeDirectory {
-				p.HLen(ctx, r.entryKey(dino))
-			}
+			keys = append(keys, r.inodeKey(dino))
 		}
-		rs, err = p.Exec(ctx)
-		if err != nil {
-			return err
+		rs, _ := tx.MGet(ctx, keys...).Result()
+		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
+			return redis.Nil
 		}
 		var sattr, dattr, iattr Attr
-		if buf, err := rs[0].(*redis.StringCmd).Bytes(); err != nil {
-			return err
-		} else {
-			r.parseAttr(buf, &sattr)
-			if sattr.Typ != TypeDirectory {
-				return syscall.ENOTDIR
-			}
+		r.parseAttr([]byte(rs[0].(string)), &sattr)
+		if sattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
 		}
-		if buf, err := rs[1].(*redis.StringCmd).Bytes(); err != nil {
-			return err
-		} else {
-			r.parseAttr(buf, &dattr)
-			if dattr.Typ != TypeDirectory {
-				return syscall.ENOTDIR
-			}
+		r.parseAttr([]byte(rs[1].(string)), &dattr)
+		if dattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
 		}
-		if buf, err := rs[2].(*redis.StringCmd).Bytes(); err != nil {
-			return err
-		} else {
-			r.parseAttr(buf, &iattr)
-		}
+		r.parseAttr([]byte(rs[2].(string)), &iattr)
 
 		now := time.Now()
 		tattr = Attr{}
 		opened = false
 		if dino > 0 {
-			if a, err := rs[3].(*redis.StringCmd).Bytes(); err == redis.Nil {
+			if rs[3] == nil {
 				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
 				trash = 0
-			} else if err != nil {
-				return err
-			} else {
-				r.parseAttr(a, &tattr)
 			}
+			r.parseAttr([]byte(rs[3].(string)), &tattr)
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
@@ -1420,9 +1383,11 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				}
 			} else {
 				if dtyp == TypeDirectory {
-					if cnt, err := rs[4].(*redis.IntCmd).Result(); err != nil {
+					cnt, err := tx.HLen(ctx, r.entryKey(dino)).Result()
+					if err != nil {
 						return err
-					} else if cnt != 0 {
+					}
+					if cnt != 0 {
 						return syscall.ENOTEMPTY
 					}
 					dattr.Nlink--
