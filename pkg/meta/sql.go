@@ -54,7 +54,7 @@ type counter struct {
 
 type edge struct {
 	Parent Ino    `xorm:"unique(edge) notnull"`
-	Name   []byte `xorm:"unique(edge) varbinary(1024) notnull"`
+	Name   []byte `xorm:"unique(edge) varbinary(2048) notnull"`
 	Inode  Ino    `xorm:"notnull"`
 	Type   uint8  `xorm:"notnull"`
 }
@@ -77,7 +77,7 @@ type node struct {
 
 type namedNode struct {
 	node `xorm:"extends"`
-	Name []byte `xorm:"varbinary(1024)"`
+	Name []byte `xorm:"varbinary(2048)"`
 }
 
 type chunk struct {
@@ -92,7 +92,7 @@ type chunkRef struct {
 }
 type symlink struct {
 	Inode  Ino    `xorm:"pk"`
-	Target []byte `xorm:"varbinary(1024) notnull"`
+	Target []byte `xorm:"blob notnull"`
 }
 
 type xattr struct {
