@@ -72,7 +72,7 @@ Similar to the command of creating a file system, the following information is a
 
 1. **[command options]**: used to specify file system-related options, e.g. `-d` enables background mounts.
 2. **META-URL**: used to set up the metadata storage, usually a URL or file path of a database.
-3. **MOUNTPOINT**: the name of the file system.
+3. **MOUNTPOINT**: used to specific a mount point of the file system.
 
 :::tip
 The mount point (MOUNTPOINT) on Windows systems should use a disk letter that is not yet occupied, e.g. `Z:`, `Y:`.
@@ -166,7 +166,7 @@ You can mount the file system once it is created.
 juicefs mount sqlite3://myjfs.db mnt
 ```
 
-As you can see, the mount command is exactly the same as using the local storage because JuiceFS has already written the metadata about the object storage to the `myjfs.db` database, so there is no need to provide it again when mounting.
+As you can see, the mount command is exactly the same as using the local storage because JuiceFS has already written the metadata of the object storage to the `myjfs.db` database, so there is no need to provide it again when mounting.
 
 Compared with using local disks, the combination of SQLite and object storage is more practical. From an application perspective, this approach is equivalent to plugging an object storage with almost unlimited capacity into your local computer, allowing you to use cloud storage as a local disk.
 
