@@ -57,16 +57,51 @@ jobs:
           sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 8919F6BD2B48D754
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive  apt-get install -y  clickhouse-server clickhouse-client
-          sudo service clickhouse-server start
           sudo service clickhouse-server status
 
 
       - name: Change Datadir
         run: |
-          sudo chmod 777 /data/jfs/
+          sudo chmod 777 /etc/clickhouse-server/config.xml
+          sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/jfs/</path>?" /etc/clickhouse-server/config.xml
+          cat /etc/clickhouse-server/config.xml
+          sudo chmod 777 /var/lib/clickhouse/
+          sudo cp -r /var/lib/clickhouse/* /data/jfs/
+          sudo chmod -R /data/jfs/*
+          ls -l /data/jfs/
+          sudo service clickhouse-server start
+          sudo service clickhouse-server status
 
 
-      - name: Esrally Test
+      - name: Gernerate Data
+        run: |
+          git clone git@github.com:vadimtk/ssb-dbgen.git
+          cd ssb-dbgen
+          make
+          ./dbgen -s 10 -T c
+          ./dbgen -s 10 -T l
+          ./dbgen -s 10 -T p
+          ./dbgen -s 10 -T s
+          ./dbgen -s 100 -T d
+          ls -lrth
+          pwd
+
+
+      - name: Create Table
+        run: |
+          echo "hello"
+
+
+      - name: Import Data
+        run: |
+          echo "hello"
+          clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
+          clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
+          clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
+          clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
+
+
+      - name: ClickHouse Test
         run: |
           sudo pip3 install esrally
 
