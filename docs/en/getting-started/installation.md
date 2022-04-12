@@ -177,10 +177,10 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 3. Switching the branch
 
-   The source code uses the `main` branch by default, and you can switch to any official release, for example to `v0.17.4`.
+   The source code uses the `main` branch by default, and you can switch to any official release, for example to the latest release `v1.0.0-beta2`(release on March 2022).
 
    ```shell
-   git checkout v0.17.4
+   git checkout v1.0.0-beta2
    ```
 
    :::caution
