@@ -2317,7 +2317,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 		} else if attr.Typ == TypeDirectory {
 			attr.Length = 4 << 10
 			for _, c := range e.Entries {
-				tx.set(m.entryKey(inode, unescape(c.Name)), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode))
+				tx.set(m.entryKey(inode, string(unescape(c.Name))), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode))
 			}
 		} else if attr.Typ == TypeSymlink {
 			symL := unescape(e.Symlink)

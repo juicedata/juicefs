@@ -132,9 +132,9 @@ func parseHex(c byte) (byte, error) {
 	}
 }
 
-func unescape(s string) string {
+func unescape(s string) []byte {
 	if !strings.ContainsRune(s, '%') {
-		return s
+		return []byte(s)
 	}
 
 	p := []byte(s)
@@ -152,7 +152,7 @@ func unescape(s string) string {
 		p[n] = c
 		n++
 	}
-	return string(p[:n])
+	return p[:n]
 }
 
 func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
