@@ -63,10 +63,10 @@ jobs:
         run: |
           sudo chmod 777 /etc/clickhouse-server/
           sudo chmod 777 /etc/clickhouse-server/config.xml
-          sudo cp /etc/clickhouse-server/config.xml /tmp/
-          echo "11111"
-          cat /tmp/config.xml
-          echo "22222"
+          #sudo cp /etc/clickhouse-server/config.xml /tmp/
+          #echo "11111"
+          #cat /tmp/config.xml
+          #echo "22222"
           sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/data/jfs/</path>?" /etc/clickhouse-server/config.xml
           sudo cat /etc/clickhouse-server/config.xml
           sudo chmod 777 /var/lib/clickhouse/
@@ -81,7 +81,7 @@ jobs:
       - name: Gernerate Data
         run: |
           cd /data/jfs/
-          git clone git@github.com:vadimtk/ssb-dbgen.git
+          git clone https://github.com/vadimtk/ssb-dbgen.git
           cd ssb-dbgen
           make
           ./dbgen -s 10 -T c
@@ -100,11 +100,13 @@ jobs:
 
       - name: Import Data
         run: |
-          echo "hello"
+          cd /data/jfs/ssb-dbgen/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
           clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
           clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
+          ls -lah /data/jfs/
+          sudo du -sh /data/jfs/
 
 
       - name: ClickHouse Test
