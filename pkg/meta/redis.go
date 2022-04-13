@@ -352,9 +352,10 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 
 func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	var changed bool
+	name = m.prefix + name
 	err := m.txn(Background, func(tx *redis.Tx) error {
 		changed = false
-		old, err := tx.Get(Background, m.prefix+name).Int64()
+		old, err := tx.Get(Background, name).Int64()
 		if err != nil && err != redis.Nil {
 			return err
 		}
@@ -741,6 +742,11 @@ func (r *redisMeta) shouldRetry(err error, retryOnFailure bool) bool {
 func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) error {
 	if r.conf.ReadOnly {
 		return syscall.EROFS
+	}
+	for _, k := range keys {
+		if !strings.HasPrefix(k, r.prefix) {
+			panic(fmt.Sprintf("Invalid key %s not starts with prefix %s", k, r.prefix))
+		}
 	}
 	var err error
 	var khash = fnv.New32()
