@@ -610,6 +610,9 @@ func (m *kvMeta) txn(f func(tx kvTxn) error) error {
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		}
+		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
+			err = nil
+		}
 		return err
 	}
 	logger.Warnf("Already tried 50 times, returning: %s", err)
