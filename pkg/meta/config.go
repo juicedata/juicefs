@@ -63,6 +63,39 @@ type Format struct {
 	MaxClientVersion string
 }
 
+func (f *Format) update(old *Format, force bool) error {
+	if force {
+		old.RemoveSecret()
+		logger.Warnf("Existing volume will be overwrited: %+v", old)
+	} else {
+		var field string
+		switch {
+		case f.Name != old.Name:
+			field = "volume name"
+		case f.Storage != old.Storage:
+			field = "storage"
+		case f.BlockSize != old.BlockSize:
+			field = "block size"
+		case f.Compression != old.Compression:
+			field = "compression"
+		case f.Shards != old.Shards:
+			field = "shards"
+		case f.HashPrefix != old.HashPrefix:
+			field = "hash prefix"
+		case f.MetaVersion != old.MetaVersion:
+			field = "meta version"
+		}
+		if field == "" {
+			f.UUID = old.UUID
+		} else {
+			old.RemoveSecret()
+			f.RemoveSecret()
+			return fmt.Errorf("cannot update format field: %s", field)
+		}
+	}
+	return nil
+}
+
 func (f *Format) RemoveSecret() {
 	if f.SecretKey != "" {
 		f.SecretKey = "removed"
