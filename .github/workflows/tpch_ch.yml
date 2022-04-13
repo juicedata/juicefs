@@ -84,6 +84,7 @@ jobs:
           git clone https://github.com/vadimtk/ssb-dbgen.git
           cd ssb-dbgen
           make
+          echo "33333"
           ./dbgen -s 10 -T c -q
           ./dbgen -s 10 -T l -q
           ./dbgen -s 10 -T p -q
