@@ -1598,6 +1598,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   public void removeXAttr(Path path, String name) throws IOException {
     int r = lib.jfs_removeXattr(Thread.currentThread().getId(), handle, normalizePath(path), name);
+    if (r == ENOATTR || r == ENODATA) {
+      throw new IOException("No matching attributes found for remove operation");
+    }
     if (r < 0)
       throw error(r, path);
   }
