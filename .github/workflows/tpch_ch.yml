@@ -63,18 +63,24 @@ jobs:
         run: |
           sudo chmod 777 /etc/clickhouse-server/
           sudo chmod 777 /etc/clickhouse-server/config.xml
-          sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/jfs/</path>?" /etc/clickhouse-server/config.xml
+          sudo cp /etc/clickhouse-server/config.xml /tmp/
+          echo "11111"
+          cat /tmp/config.xml
+          echo "22222"
+          sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/data/jfs/</path>?" /etc/clickhouse-server/config.xml
           sudo cat /etc/clickhouse-server/config.xml
           sudo chmod 777 /var/lib/clickhouse/
-          sudo cp -r /var/lib/clickhouse/* /data/jfs/
-          sudo chmod -R /data/jfs/*
-          ls -l /data/jfs/
+          #sudo cp -r /var/lib/clickhouse/* /data/jfs/
+          #sudo chmod -R /data/jfs/*
+          ls -lah /data/jfs/
           sudo service clickhouse-server start
           sudo service clickhouse-server status
+          ls -lah /data/jfs/
 
 
       - name: Gernerate Data
         run: |
+          cd /data/jfs/
           git clone git@github.com:vadimtk/ssb-dbgen.git
           cd ssb-dbgen
           make
