@@ -68,29 +68,27 @@ func (f *Format) update(old *Format, force bool) error {
 		old.RemoveSecret()
 		logger.Warnf("Existing volume will be overwrited: %+v", old)
 	} else {
-		var field string
+		var args []interface{}
 		switch {
 		case f.Name != old.Name:
-			field = "volume name"
+			args = []interface{}{"name", old.Name, f.Name}
 		case f.Storage != old.Storage:
-			field = "storage"
+			args = []interface{}{"storage", old.Storage, f.Storage}
 		case f.BlockSize != old.BlockSize:
-			field = "block size"
+			args = []interface{}{"block size", old.BlockSize, f.BlockSize}
 		case f.Compression != old.Compression:
-			field = "compression"
+			args = []interface{}{"compression", old.Compression, f.Compression}
 		case f.Shards != old.Shards:
-			field = "shards"
+			args = []interface{}{"shards", old.Shards, f.Shards}
 		case f.HashPrefix != old.HashPrefix:
-			field = "hash prefix"
+			args = []interface{}{"hash prefix", old.HashPrefix, f.HashPrefix}
 		case f.MetaVersion != old.MetaVersion:
-			field = "meta version"
+			args = []interface{}{"meta version", old.MetaVersion, f.MetaVersion}
 		}
-		if field == "" {
+		if args == nil {
 			f.UUID = old.UUID
 		} else {
-			old.RemoveSecret()
-			f.RemoveSecret()
-			return fmt.Errorf("cannot update format field: %s", field)
+			return fmt.Errorf("cannot update volume %s from %v to %v", args...)
 		}
 	}
 	return nil
