@@ -438,6 +438,9 @@ func format(c *cli.Context) error {
 		}
 	}
 	if err = m.Init(*format, c.Bool("force")); err != nil {
+		if create {
+			_ = blob.Delete("juicefs_uuid")
+		}
 		logger.Fatalf("format: %s", err)
 	}
 	format.RemoveSecret()
