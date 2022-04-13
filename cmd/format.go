@@ -327,9 +327,9 @@ func format(c *cli.Context) error {
 		}
 		return string(pem)
 	}
-	var format *meta.Format
 	var create, encrypted bool
-	if format, _ = m.Load(false); format == nil {
+	format, err := m.Load(false)
+	if err.Error() == "database is not formatted" {
 		create = true
 		format = &meta.Format{
 			Name:        name,
@@ -356,6 +356,8 @@ func format(c *cli.Context) error {
 			format.SecretKey = os.Getenv("SECRET_KEY")
 			_ = os.Unsetenv("SECRET_KEY")
 		}
+	} else if err != nil {
+		logger.Fatalf("Load metadata: %s", err)
 	} else {
 		if c.Bool("no-update") {
 			return nil
