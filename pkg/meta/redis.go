@@ -619,6 +619,9 @@ type timeoutError interface {
 }
 
 func (r *redisMeta) shouldRetry(err error, retryOnFailure bool) bool {
+	if _, ok := err.(syscall.Errno); ok {
+		return false
+	}
 	switch err {
 	case redis.TxFailedErr:
 		return true
@@ -685,6 +688,9 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
+		}
+		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
+			err = nil
 		}
 		return err
 	}
