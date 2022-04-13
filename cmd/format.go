@@ -327,36 +327,9 @@ func format(c *cli.Context) error {
 		}
 		return string(pem)
 	}
-	var format *meta.Format
 	var create, encrypted bool
-	if format, _ = m.Load(false); format == nil {
-		create = true
-		format = &meta.Format{
-			Name:        name,
-			UUID:        uuid.New().String(),
-			Storage:     c.String("storage"),
-			Bucket:      c.String("bucket"),
-			AccessKey:   c.String("access-key"),
-			SecretKey:   c.String("secret-key"),
-			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
-			Shards:      c.Int("shards"),
-			HashPrefix:  c.Bool("hash-prefix"),
-			Capacity:    c.Uint64("capacity") << 30,
-			Inodes:      c.Uint64("inodes"),
-			BlockSize:   fixObjectSize(c.Int("block-size")),
-			Compression: c.String("compress"),
-			TrashDays:   c.Int("trash-days"),
-			MetaVersion: 1,
-		}
-		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
-			format.AccessKey = os.Getenv("ACCESS_KEY")
-			_ = os.Unsetenv("ACCESS_KEY")
-		}
-		if format.SecretKey == "" && os.Getenv("SECRET_KEY") != "" {
-			format.SecretKey = os.Getenv("SECRET_KEY")
-			_ = os.Unsetenv("SECRET_KEY")
-		}
-	} else {
+	format, err := m.Load(false)
+	if err == nil {
 		if c.Bool("no-update") {
 			return nil
 		}
@@ -391,6 +364,35 @@ func format(c *cli.Context) error {
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
 		}
+	} else if err.Error() == "database is not formatted" {
+		create = true
+		format = &meta.Format{
+			Name:        name,
+			UUID:        uuid.New().String(),
+			Storage:     c.String("storage"),
+			Bucket:      c.String("bucket"),
+			AccessKey:   c.String("access-key"),
+			SecretKey:   c.String("secret-key"),
+			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
+			Shards:      c.Int("shards"),
+			HashPrefix:  c.Bool("hash-prefix"),
+			Capacity:    c.Uint64("capacity") << 30,
+			Inodes:      c.Uint64("inodes"),
+			BlockSize:   fixObjectSize(c.Int("block-size")),
+			Compression: c.String("compress"),
+			TrashDays:   c.Int("trash-days"),
+			MetaVersion: 1,
+		}
+		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
+			format.AccessKey = os.Getenv("ACCESS_KEY")
+			_ = os.Unsetenv("ACCESS_KEY")
+		}
+		if format.SecretKey == "" && os.Getenv("SECRET_KEY") != "" {
+			format.SecretKey = os.Getenv("SECRET_KEY")
+			_ = os.Unsetenv("SECRET_KEY")
+		}
+	} else {
+		logger.Fatalf("Load metadata: %s", err)
 	}
 	if format.Storage == "file" {
 		if p, err := filepath.Abs(format.Bucket); err == nil {
@@ -436,6 +438,9 @@ func format(c *cli.Context) error {
 		}
 	}
 	if err = m.Init(*format, c.Bool("force")); err != nil {
+		if create {
+			_ = blob.Delete("juicefs_uuid")
+		}
 		logger.Fatalf("format: %s", err)
 	}
 	format.RemoveSecret()

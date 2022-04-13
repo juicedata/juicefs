@@ -344,6 +344,11 @@ func (m *dbMeta) Reset() error {
 }
 
 func (m *dbMeta) doLoad() ([]byte, error) {
+	if ok, err := m.db.IsTableExist(&setting{}); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, nil
+	}
 	s := setting{Name: "format"}
 	_, err := m.db.Get(&s)
 	return []byte(s.Value), err
