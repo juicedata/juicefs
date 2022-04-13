@@ -61,6 +61,7 @@ jobs:
 
       - name: Change Datadir
         run: |
+          sudo chmod 777 /etc/clickhouse-server/
           sudo chmod 777 /etc/clickhouse-server/config.xml
           sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/jfs/</path>?" /etc/clickhouse-server/config.xml
           sudo cat /etc/clickhouse-server/config.xml
