@@ -690,6 +690,9 @@ type timeoutError interface {
 }
 
 func (r *redisMeta) shouldRetry(err error, retryOnFailure bool) bool {
+	if _, ok := err.(syscall.Errno); ok {
+		return false
+	}
 	switch err {
 	case redis.TxFailedErr:
 		return true
@@ -756,6 +759,9 @@ func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
+		}
+		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
+			err = nil
 		}
 		return err
 	}
@@ -1148,35 +1154,37 @@ func (r *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 }
 
 func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
-	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
-	if err == redis.Nil && r.conf.CaseInsensi {
-		if e := r.resolveCase(ctx, parent, name); e != nil {
-			name = string(e.Name)
-			buf = r.packEntry(e.Attr.Typ, e.Inode)
-			err = nil
-		}
-	}
-	if err != nil {
-		return errno(err)
-	}
-	_type, inode := r.parseEntry(buf)
-	if _type == TypeDirectory {
-		return syscall.EPERM
-	}
-	keys := []string{r.entryKey(parent), r.inodeKey(parent), r.inodeKey(inode)}
-	var trash Ino
+	var _type uint8
+	var trash, inode Ino
+	keys := []string{r.entryKey(parent), r.inodeKey(parent)}
 	if st := r.checkTrash(parent, &trash); st != 0 {
 		return st
 	}
-	if trash > 0 {
-		keys = append(keys, r.entryKey(trash))
-	} else {
+	if trash == 0 {
 		defer func() { r.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	}
 	var opened bool
 	var attr Attr
 	var newSpace, newInode int64
-	err = r.txn(ctx, func(tx *redis.Tx) error {
+	err := r.txn(ctx, func(tx *redis.Tx) error {
+		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
+		if err == redis.Nil && r.conf.CaseInsensi {
+			if e := r.resolveCase(ctx, parent, name); e != nil {
+				name = string(e.Name)
+				buf = r.packEntry(e.Attr.Typ, e.Inode)
+				err = nil
+			}
+		}
+		if err != nil {
+			return err
+		}
+		_type, inode = r.parseEntry(buf)
+		if _type == TypeDirectory {
+			return syscall.EPERM
+		}
+		if err := tx.Watch(ctx, r.inodeKey(inode)).Err(); err != nil {
+			return err
+		}
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil {
 			return redis.Nil
@@ -1212,16 +1220,6 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 			trash = 0
 		}
-
-		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
-		if err != nil {
-			return err
-		}
-		_type2, inode2 := r.parseEntry(buf)
-		if _type2 != _type || inode2 != inode {
-			return syscall.EAGAIN
-		}
-
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, r.entryKey(parent), name)
 			if !isTrash(parent) {
@@ -1271,31 +1269,32 @@ func (r *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 }
 
 func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
-	buf, err := r.rdb.HGet(ctx, r.entryKey(parent), name).Bytes()
-	if err == redis.Nil && r.conf.CaseInsensi {
-		if e := r.resolveCase(ctx, parent, name); e != nil {
-			name = string(e.Name)
-			buf = r.packEntry(e.Attr.Typ, e.Inode)
-			err = nil
-		}
-	}
-	if err != nil {
-		return errno(err)
-	}
-	typ, inode := r.parseEntry(buf)
-	if typ != TypeDirectory {
-		return syscall.ENOTDIR
-	}
-
-	keys := []string{r.inodeKey(parent), r.entryKey(parent), r.inodeKey(inode), r.entryKey(inode)}
-	var trash Ino
+	var typ uint8
+	var trash, inode Ino
+	keys := []string{r.inodeKey(parent), r.entryKey(parent)}
 	if st := r.checkTrash(parent, &trash); st != 0 {
 		return st
 	}
-	if trash > 0 {
-		keys = append(keys, r.entryKey(trash))
-	}
-	err = r.txn(ctx, func(tx *redis.Tx) error {
+	err := r.txn(ctx, func(tx *redis.Tx) error {
+		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
+		if err == redis.Nil && r.conf.CaseInsensi {
+			if e := r.resolveCase(ctx, parent, name); e != nil {
+				name = string(e.Name)
+				buf = r.packEntry(e.Attr.Typ, e.Inode)
+				err = nil
+			}
+		}
+		if err != nil {
+			return err
+		}
+		typ, inode = r.parseEntry(buf)
+		if typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if err = tx.Watch(ctx, r.inodeKey(inode), r.entryKey(inode)).Err(); err != nil {
+			return err
+		}
+
 		rs, _ := tx.MGet(ctx, r.inodeKey(parent), r.inodeKey(inode)).Result()
 		if rs[0] == nil {
 			return redis.Nil
@@ -1311,15 +1310,6 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 		pattr.Mtimensec = uint32(now.Nanosecond())
 		pattr.Ctime = now.Unix()
 		pattr.Ctimensec = uint32(now.Nanosecond())
-
-		buf, err := tx.HGet(ctx, r.entryKey(parent), name).Bytes()
-		if err != nil {
-			return err
-		}
-		typ, inode = r.parseEntry(buf)
-		if typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
 
 		cnt, err := tx.HLen(ctx, r.entryKey(inode)).Result()
 		if err != nil {
@@ -1369,56 +1359,68 @@ func (r *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 
 func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	exchange := flags == RenameExchange
-	buf, err := r.rdb.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
-	if err == redis.Nil && r.conf.CaseInsensi {
-		if e := r.resolveCase(ctx, parentSrc, nameSrc); e != nil {
-			nameSrc = string(e.Name)
-			buf = r.packEntry(e.Attr.Typ, e.Inode)
-			err = nil
-		}
-	}
-	if err != nil {
-		return errno(err)
-	}
-	typ, ino := r.parseEntry(buf)
-	if parentSrc == parentDst && nameSrc == nameDst {
-		if inode != nil {
-			*inode = ino
-		}
-		return 0
-	}
-	buf, err = r.rdb.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
-	if err == redis.Nil && r.conf.CaseInsensi {
-		if e := r.resolveCase(ctx, parentDst, nameDst); e != nil {
-			nameDst = string(e.Name)
-			buf = r.packEntry(e.Attr.Typ, e.Inode)
-			err = nil
-		}
-	}
-	if err != nil && err != redis.Nil {
-		return errno(err)
-	}
-	keys := []string{r.entryKey(parentSrc), r.inodeKey(parentSrc), r.inodeKey(ino), r.entryKey(parentDst), r.inodeKey(parentDst)}
+	keys := []string{r.entryKey(parentSrc), r.inodeKey(parentSrc), r.entryKey(parentDst), r.inodeKey(parentDst)}
 	var opened bool
 	var trash, dino Ino
 	var dtyp uint8
 	var tattr Attr
-	if err == nil {
-		if st := r.checkTrash(parentDst, &trash); st != 0 {
-			return st
-		}
-		if trash > 0 {
-			keys = append(keys, r.entryKey(trash))
-		}
-		dtyp, dino = r.parseEntry(buf)
-		keys = append(keys, r.inodeKey(dino))
-		if dtyp == TypeDirectory {
-			keys = append(keys, r.entryKey(dino))
-		}
-	}
 	var newSpace, newInode int64
-	err = r.txn(ctx, func(tx *redis.Tx) error {
-		rs, _ := tx.MGet(ctx, r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)).Result()
+	err := r.txn(ctx, func(tx *redis.Tx) error {
+		buf, err := tx.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
+		if err == redis.Nil && r.conf.CaseInsensi {
+			if e := r.resolveCase(ctx, parentSrc, nameSrc); e != nil {
+				nameSrc = string(e.Name)
+				buf = r.packEntry(e.Attr.Typ, e.Inode)
+				err = nil
+			}
+		}
+		if err != nil {
+			return err
+		}
+		typ, ino := r.parseEntry(buf)
+		if parentSrc == parentDst && nameSrc == nameDst {
+			if inode != nil {
+				*inode = ino
+			}
+			return nil
+		}
+		keys = []string{r.inodeKey(ino)}
+
+		dbuf, err := tx.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
+		if err == redis.Nil && r.conf.CaseInsensi {
+			if e := r.resolveCase(ctx, parentDst, nameDst); e != nil {
+				nameDst = string(e.Name)
+				buf = r.packEntry(e.Attr.Typ, e.Inode)
+				err = nil
+			}
+		}
+		if err != nil && err != redis.Nil {
+			return err
+		}
+		if err == nil {
+			if flags == RenameNoReplace {
+				return syscall.EEXIST
+			}
+			dtyp, dino = r.parseEntry(dbuf)
+			keys = append(keys, r.inodeKey(dino))
+			if dtyp == TypeDirectory {
+				keys = append(keys, r.entryKey(dino))
+			}
+			if !exchange {
+				if st := r.checkTrash(parentDst, &trash); st != 0 {
+					return st
+				}
+			}
+		}
+		if err := tx.Watch(ctx, keys...).Err(); err != nil {
+			return err
+		}
+
+		keys := []string{r.inodeKey(parentSrc), r.inodeKey(parentDst), r.inodeKey(ino)}
+		if dino > 0 {
+			keys = append(keys, r.inodeKey(dino))
+		}
+		rs, _ := tx.MGet(ctx, keys...).Result()
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return redis.Nil
 		}
@@ -1433,29 +1435,15 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 		r.parseAttr([]byte(rs[2].(string)), &iattr)
 
-		dbuf, err := tx.HGet(ctx, r.entryKey(parentDst), nameDst).Bytes()
-		if err != nil && err != redis.Nil {
-			return err
-		}
 		now := time.Now()
 		tattr = Attr{}
 		opened = false
-		if err == nil {
-			if flags == RenameNoReplace {
-				return syscall.EEXIST
-			}
-			dtyp1, dino1 := r.parseEntry(dbuf)
-			if dino1 != dino || dtyp1 != dtyp {
-				return syscall.EAGAIN
-			}
-			a, err := tx.Get(ctx, r.inodeKey(dino)).Bytes()
-			if err == redis.Nil {
+		if dino > 0 {
+			if rs[3] == nil {
 				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
 				trash = 0
-			} else if err != nil {
-				return err
 			}
-			r.parseAttr(a, &tattr)
+			r.parseAttr([]byte(rs[3].(string)), &tattr)
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
@@ -1497,14 +1485,6 @@ func (r *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				return syscall.ENOENT
 			}
 			dino, dtyp = 0, 0
-		}
-		buf, err := tx.HGet(ctx, r.entryKey(parentSrc), nameSrc).Bytes()
-		if err != nil {
-			return err
-		}
-		typ1, ino1 := r.parseEntry(buf)
-		if ino1 != ino || typ1 != typ {
-			return syscall.EAGAIN
 		}
 		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
 			return syscall.EACCES
