@@ -66,7 +66,7 @@ type Format struct {
 func (f *Format) update(old *Format, force bool) error {
 	if force {
 		old.RemoveSecret()
-		logger.Warnf("Existing volume will be overwrited: %+v", old)
+		logger.Warnf("Existing volume will be overwrited: %+v", *old)
 	} else {
 		var args []interface{}
 		switch {
