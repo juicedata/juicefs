@@ -33,13 +33,13 @@ const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
 
 func TestEscape(t *testing.T) {
-	var cs []byte = []byte("hello 世界")
+	var cs = []byte("hello 世界")
 	for i := 0; i < 256; i++ {
 		cs = append(cs, byte(i))
 	}
 	s := string(cs)
 	r := unescape(escape(s))
-	if r != s {
+	if bytes.Compare(r, cs) != 0 {
 		t.Fatalf("expected %v, but got %v", s, r)
 	}
 }

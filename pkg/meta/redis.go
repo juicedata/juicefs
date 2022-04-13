@@ -3041,7 +3041,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		if len(e.Entries) > 0 {
 			dentries := make(map[string]interface{})
 			for _, c := range e.Entries {
-				dentries[unescape(c.Name)] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
+				dentries[string(unescape(c.Name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			}
 			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
