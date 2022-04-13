@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strings"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -67,6 +69,52 @@ func (r *redisStore) Put(key string, in io.Reader) error {
 
 func (r *redisStore) Delete(key string) error {
 	return r.rdb.Del(c, key).Err()
+}
+
+func (t *redisStore) List(prefix, marker string, limit int64) ([]Object, error) {
+	if marker == "" {
+		marker = prefix
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	var keyList []string
+	var cursor uint64
+	for {
+		keys, c, err := t.rdb.Scan(context.TODO(), cursor, marker+"*", limit).Result()
+		if err != nil {
+			logger.Warnf("scan %s: %s", marker, err)
+			return nil, err
+		}
+		if len(keys) > 0 {
+			keyList = append(keyList, keys...)
+		}
+		if c == 0 {
+			break
+		}
+		cursor = c
+	}
+	var objs = make([]Object, len(keyList))
+	mtime := time.Now()
+	for i, k := range keyList {
+		data, err := t.rdb.Get(c, k).Bytes()
+		if err != nil {
+			return nil, err
+		}
+		// FIXME: mtime
+		objs[i] = &obj{k, int64(len(data)), mtime, false}
+	}
+	return objs, nil
+}
+
+func (t *redisStore) Head(key string) (Object, error) {
+	data, err := t.rdb.Get(context.TODO(), key).Bytes()
+	return &obj{
+		key,
+		int64(len(data)),
+		time.Now(),
+		strings.HasSuffix(key, "/"),
+	}, err
 }
 
 func newRedis(url, user, passwd string) (ObjectStorage, error) {
