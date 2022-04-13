@@ -54,7 +54,7 @@ type counter struct {
 
 type edge struct {
 	Parent Ino    `xorm:"unique(edge) notnull"`
-	Name   []byte `xorm:"unique(edge) varbinary(2048) notnull"`
+	Name   []byte `xorm:"unique(edge) varbinary(255) notnull"`
 	Inode  Ino    `xorm:"notnull"`
 	Type   uint8  `xorm:"notnull"`
 }
@@ -77,7 +77,7 @@ type node struct {
 
 type namedNode struct {
 	node `xorm:"extends"`
-	Name []byte `xorm:"varbinary(2048)"`
+	Name []byte `xorm:"varbinary(255)"`
 }
 
 type chunk struct {
@@ -92,7 +92,7 @@ type chunkRef struct {
 }
 type symlink struct {
 	Inode  Ino    `xorm:"pk"`
-	Target []byte `xorm:"blob notnull"`
+	Target []byte `xorm:"varbinary(4096) notnull"`
 }
 
 type xattr struct {
@@ -2384,7 +2384,8 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	if err := tree.writeJsonWithOutEntry(bw, depth); err != nil {
 		return err
 	}
-	sort.Slice(edges, func(i, j int) bool { return string(edges[i].Name) < string(edges[j].Name) })
+
+	sort.Slice(edges, func(i, j int) bool { return bytes.Compare(edges[i].Name, edges[j].Name) == -1 })
 
 	for idx, e := range edges {
 		var entry *DumpedEntry
@@ -2657,7 +2658,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			for _, c := range e.Entries {
 				edges = append(edges, &edge{
 					Parent: inode,
-					Name:   []byte(unescape(c.Name)),
+					Name:   unescape(c.Name),
 					Inode:  c.Attr.Inode,
 					Type:   typeFromString(c.Attr.Type),
 				})
@@ -2667,7 +2668,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	} else if n.Type == TypeSymlink {
 		symL := unescape(e.Symlink)
 		n.Length = uint64(len(symL))
-		beans = append(beans, &symlink{inode, []byte(symL)})
+		beans = append(beans, &symlink{inode, symL})
 	}
 	m.Lock()
 	if inode > 1 && inode != TrashInode {
@@ -2688,7 +2689,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	if len(e.Xattrs) > 0 {
 		xattrs := make([]*xattr, 0, len(e.Xattrs))
 		for _, x := range e.Xattrs {
-			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(unescape(x.Value))})
+			xattrs = append(xattrs, &xattr{inode, x.Name, unescape(x.Value)})
 		}
 		beans = append(beans, xattrs)
 	}
