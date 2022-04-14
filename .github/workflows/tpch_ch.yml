@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -71,6 +71,8 @@ jobs:
           sudo service clickhouse-server start
           sudo service clickhouse-server status
           ls -lah /data/jfs/
+          echo "66666"
+          sudo ls -lh /var/lib/clickhouse/
 
 
       - name: Generate Data
