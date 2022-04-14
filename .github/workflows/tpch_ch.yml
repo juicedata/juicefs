@@ -86,19 +86,19 @@ jobs:
           make
           echo "33333"
           echo "111"
-          ./dbgen -s 10 -T c -q
+          #./dbgen -s 10 -T c -q
           echo "222"
           ./dbgen -s 10 -T l -q
           echo "333"
           ls -lrth
-          ./dbgen -s 10 -T p -q
+          #./dbgen -s 10 -T p -q
           echo "444"
           ls -lrth
-          ./dbgen -s 10 -T s -q
+          #./dbgen -s 10 -T s -q
           echo "555"
           #./dbgen -s 10 -T d -q
           git clone https://github.com/sanwan/actionfile.git
-          cp actionfile/date.tbl ../
+          cp actionfile/*.tbl ../
           ls -lrth
           pwd
 
