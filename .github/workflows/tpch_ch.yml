@@ -158,6 +158,8 @@ jobs:
           time clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
           ls -lah /data/jfs/
           sudo du -sh /data/jfs/
+          echo "88888"
+          sudo ls -lh /var/lib/clickhouse/
 
 
       - name: ClickHouse Test
