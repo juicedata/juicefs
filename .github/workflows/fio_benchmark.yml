@@ -18,7 +18,7 @@ jobs:
         id: vars
         run: |
           echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/6
-          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-fio-benchmark1
+          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-fio-benchmark
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-fio-benchmark
 
       - name: Build linux target
@@ -37,6 +37,8 @@ jobs:
           if [ -n "$UUID" ];then
             sudo ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
           fi
+          bucket_name=$(echo ${{ steps.vars.outputs.MINIO_URL}} | awk -F/ '{print $4}')
+          mc rb  myminio/$bucket_name --force --dangerous
 
       - name: Format
         run: |
