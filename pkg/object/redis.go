@@ -79,13 +79,13 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	var cursor uint64
 	for {
 		// FIXME: this will be really slow for many objects
-		keys, c, err := t.rdb.Scan(context.TODO(), cursor, "*", 1000).Result()
+		keys, c, err := t.rdb.Scan(context.TODO(), cursor, prefix+"*", 1000).Result()
 		if err != nil {
 			logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
 			return nil, err
 		}
 		for _, key := range keys {
-			if key > marker && strings.HasPrefix(key, prefix) {
+			if key > marker {
 				keyList = append(keyList, key)
 			}
 		}

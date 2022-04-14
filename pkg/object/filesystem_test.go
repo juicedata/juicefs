@@ -64,6 +64,11 @@ func TestHDFS2(t *testing.T) {
 	testFileSystem(t, dfs)
 }
 
+func TestRedis2(t *testing.T) {
+	s, _ := newRedis(os.Getenv("REDIS_ADDR"), "", "")
+	testFileSystem(t, s)
+}
+
 func testFileSystem(t *testing.T, s ObjectStorage) {
 	keys := []string{
 		"x/",
