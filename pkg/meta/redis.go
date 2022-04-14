@@ -498,6 +498,10 @@ func (r *redisMeta) delfiles() string {
 	return r.prefix + "delfiles"
 }
 
+func (r *redisMeta) delSlices(ts int64) string {
+	return fmt.Sprintf("%sdelSlices%d", r.prefix, ts)
+}
+
 func (r *redisMeta) allSessions() string {
 	return r.prefix + "allSessions"
 }
@@ -2260,6 +2264,47 @@ func (r *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	_ = r.rdb.ZRem(ctx, r.delfiles(), tracking)
 }
 
+func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+	var count int
+	p := r.rdb.Pipeline()
+	err := r.scan(Background, "delSlices*", func(keys []string) error {
+		var todo []string
+		for _, key := range keys {
+			if ts, e := strconv.ParseInt(key[len(r.prefix)+9:], 10, 64); e != nil {
+				logger.Warnf("Invalid key %s", key)
+				continue
+			} else if ts < edge {
+				todo = append(todo, key)
+			}
+		}
+		if todo == nil {
+			return nil
+		}
+		for _, key := range todo {
+			_ = p.LRange(Background, key, 0, -1)
+		}
+		cmds, e := p.Exec(Background)
+		if e != nil {
+			return fmt.Errorf("LRANGE delSlices: %s", e)
+		}
+		last := len(todo)
+		for i, cmd := range cmds {
+			vals := cmd.(*redis.StringSliceCmd).Val()
+			for _, v := range vals {
+				for rb := utils.FromBuffer([]byte(v)); rb.HasMore(); count++ {
+					r.deleteSlice(rb.Get64(), rb.Get32())
+				}
+			}
+			if count >= limit {
+				last = i + 1
+				break
+			}
+		}
+		return r.rdb.Del(Background, todo[:last]...).Err()
+	})
+	return count, err
+}
+
 func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// avoid too many or duplicated compaction
 	if !force {
@@ -2352,9 +2397,22 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if errno == 0 {
 		r.of.InvalidateChunk(inode, indx)
 		r.cleanupZeroRef(r.sliceKey(chunkid, size))
+		var buf []byte
 		for i, s := range ss {
 			if rs[i].Err() == nil && rs[i].Val() < 0 {
-				r.deleteSlice(s.chunkid, s.size)
+				if r.fmt.TrashDays > 0 { // delay
+					buf = append(buf, r.encodeDelayedSlice(s.chunkid, s.size)...)
+				} else {
+					r.deleteSlice(s.chunkid, s.size)
+				}
+			}
+		}
+		if buf != nil {
+			now := time.Now().Unix()
+			now -= now % 60
+			if e := r.rdb.RPush(ctx, r.delSlices(now), buf).Err(); e != nil {
+				// leaked, has to be removed by gc
+				logger.Warnf("Add delayed slices %d: %s", now, e)
 			}
 		}
 	} else {
@@ -2490,14 +2548,14 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}
 
 	p := r.rdb.Pipeline()
-	return errno(r.scan(ctx, "c*_*", func(keys []string) error {
+	err := r.scan(ctx, "c*_*", func(keys []string) error {
 		for _, key := range keys {
 			_ = p.LRange(ctx, key, 0, 100000000)
 		}
 		cmds, err := p.Exec(ctx)
 		if err != nil {
 			logger.Warnf("list slices: %s", err)
-			return errno(err)
+			return err
 		}
 		for _, cmd := range cmds {
 			key := cmd.(*redis.StringSliceCmd).Args()[1].(string)
@@ -2514,7 +2572,33 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 			}
 		}
 		return nil
-	}))
+	})
+	if err != nil {
+		return errno(err)
+	}
+
+	err = r.scan(ctx, "delSlices*", func(keys []string) error {
+		for _, key := range keys {
+			_ = p.LRange(ctx, key, 0, -1)
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("LRANGE delSlices: %s", err)
+		}
+		for _, cmd := range cmds {
+			vals := cmd.(*redis.StringSliceCmd).Val()
+			for _, v := range vals {
+				for rb := utils.FromBuffer([]byte(v)); rb.HasMore(); {
+					slices[0] = append(slices[0], Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
+					if showProgress != nil {
+						showProgress()
+					}
+				}
+			}
+		}
+		return nil
+	})
+	return errno(err)
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {

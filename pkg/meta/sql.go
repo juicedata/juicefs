@@ -1991,6 +1991,10 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	_, _ = m.db.Delete(delfile{Inode: inode})
 }
 
+func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+	return 0, nil
+}
+
 func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if !force {
 		// avoid too many or duplicated compaction
