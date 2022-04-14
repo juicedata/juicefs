@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
+      - 'release-**'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -64,10 +64,9 @@ jobs:
           sudo chmod 777 /etc/clickhouse-server/
           sudo chmod 777 /etc/clickhouse-server/config.xml
           sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/data/jfs/</path>?" /etc/clickhouse-server/config.xml
-          sudo cat /etc/clickhouse-server/config.xml
           sudo chmod 777 /var/lib/clickhouse/
-          #sudo cp -r /var/lib/clickhouse/* /data/jfs/
-          #sudo chmod -R /data/jfs/*
+          sudo ls -lh /var/lib/clickhouse/
+          echo "datadata"
           ls -lah /data/jfs/
           sudo service clickhouse-server start
           sudo service clickhouse-server status
