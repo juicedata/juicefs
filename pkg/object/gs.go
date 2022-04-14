@@ -181,21 +181,15 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, err
 	}
-	logger.Infof("Pid: %v", getProjectID())
-	if serviceAccount, err := client.ServiceAccount(ctx, getProjectID()); err == nil {
-		logger.Infof("GCS client created with ServiceAccount: %v", serviceAccount)
-	} else {
-		logger.Infof("GCS client created without ServiceAccount")
-	}
 
 	credential, err := google.FindDefaultCredentials(ctx)
-	content := map[string]interface{}{}
-
-	json.Unmarshal(credential.JSON, &content)
-	if content["client_email"] != nil {
-		logger.Infof("GCS client email: %v", content["client_email"])
+	credentialContent := map[string]interface{}{}
+	json.Unmarshal(credential.JSON, &credentialContent)
+	logger.Infof("credentialContent: %v", credentialContent)
+	if credentialContent["client_email"] != nil {
+		logger.Infof("GCS client credentail client_email: %v, type: %v", credentialContent["client_email"], credentialContent["type"])
 	} else {
-		logger.Infof("WARNING: no service account credential. User account credential?")
+		logger.Warnf("GCS client credentail has no service account email, type: %v", credentialContent["type"])
 	}
 
 	return &gs{client: client, bucket: bucket, region: region}, nil
