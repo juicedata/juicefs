@@ -822,6 +822,25 @@ $ juicefs format \
     myjfs
 ```
 
+### 设置 TLS
+如果需要开启 TLS，可以通过在 Bucket-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+
+| 配置项               | 值                                                                                                                        |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------|
+| ca    | CA 根证书，用于用 tls 连接 TiKV/PD                                                                                                |
+| cert  | 证书文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
+| key   | 私钥文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
+| verify-cn | 证书通用名称，用于验证调用者身份，[详情](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+
+例子：
+```bash
+$ juicefs format \
+    --storage tikv \
+    --bucket "<host>:<port>,<host>:<port>,<host>:<port>?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
+    ... \
+    myjfs
+```
+
 ## 本地磁盘
 
 在创建 JuiceFS 文件系统时，如果没有指定任何存储类型，会默认使用本地磁盘作为数据存储，root 用户默认存储路径为 `/var/jfs`，普通用户默认存储路径为 `~/.juicefs/local`。
