@@ -98,9 +98,13 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	now := time.Now()
 	for _, key := range keyList {
 		data, err := t.rdb.Get(c, key).Bytes()
-		if err != nil && err != redis.Nil {
+		if err != nil {
+			if err == redis.Nil {
+				continue
+			}
 			return nil, err
 		}
+
 		// FIXME: mtime
 		objs <- &obj{key, int64(len(data)), now, strings.HasSuffix(key, "/")}
 	}
