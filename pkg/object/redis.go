@@ -98,7 +98,7 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	now := time.Now()
 	for _, key := range keyList {
 		data, err := t.rdb.Get(c, key).Bytes()
-		if err != nil {
+		if err != nil && err != redis.Nil {
 			return nil, err
 		}
 		// FIXME: mtime
