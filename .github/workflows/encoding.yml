@@ -111,9 +111,10 @@ jobs:
           fi
           
           cp `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ${{steps.vars.outputs.MOUNT_POINT2}}/temp_file
-          attr_get=$(getfattr -e text -n $attr_key `printf "/tmp/juicefs-encoding-test2/$filename"` | grep "$attr_key" | awk -F= '{print $2}' |  sed 's/^.\(.*\).$/\1/' | sed 's/\\\\/\\/g' | sed 's/\\"/"/g' )
+          attr_get=$(getfattr -e text -n $attr_key `printf "/tmp/juicefs-encoding-test2/$filename"` | grep "$attr_key" | awk -F= '{print $2}' |  sed 's/^.\(.*\).$/\1/' | sed 's/\\\\/\\/g' )
+          attr_value_set=$(echo $attr_value_set | sed 's/\\\\/\\/g')
           if [ "$attr_get" != "$attr_value_set" ]; then
-            echo "set and get attr error":, $attr_get, "is not equal to " $attr_value_set
+            echo "Fatal: attr get: ":, $attr_get, " is not equal to attr set:" $attr_value_set
             exit 1
           fi
             
