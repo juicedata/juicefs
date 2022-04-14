@@ -233,6 +233,12 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
 		blob = object.NewEncrypted(blob, encryptor)
 	}
+	if format.CacheStore != "" {
+		blob, err = object.NewCachedStore(blob, format.CacheStore)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return blob, nil
 }
 

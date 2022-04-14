@@ -167,6 +167,10 @@ func clientFlags() []cli.Flag {
 			Usage: "open files cache timeout in seconds (0 means disable this feature)",
 		},
 		&cli.StringFlag{
+			Name:  "cache-store",
+			Usage: "A memcached URL to cache hot data (memcached://127.0.0.1:11211)",
+		},
+		&cli.StringFlag{
 			Name:  "subdir",
 			Usage: "mount a sub-directory as root",
 		},
