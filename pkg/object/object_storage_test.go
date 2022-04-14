@@ -18,10 +18,12 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"github.com/go-redis/redis/v8"
 	"io/ioutil"
 	"math"
 	"os"
@@ -474,6 +476,20 @@ func TestTiKV(t *testing.T) {
 		t.Fatal(err)
 	}
 	testStorage(t, s)
+}
+func TestRedis(t *testing.T) {
+	if os.Getenv("REDIS_ADDR") == "" {
+		t.SkipNow()
+	}
+	s, err := newRedis(os.Getenv("REDIS_ADDR"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testStorage(t, s)
+
+	opt, _ := redis.ParseURL(os.Getenv("REDIS_ADDR"))
+	rdb := redis.NewClient(opt)
+	_ = rdb.FlushDB(context.Background())
 }
 
 func TestWebDAV(t *testing.T) {
