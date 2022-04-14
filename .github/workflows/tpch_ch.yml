@@ -63,10 +63,6 @@ jobs:
         run: |
           sudo chmod 777 /etc/clickhouse-server/
           sudo chmod 777 /etc/clickhouse-server/config.xml
-          #sudo cp /etc/clickhouse-server/config.xml /tmp/
-          #echo "11111"
-          #cat /tmp/config.xml
-          #echo "22222"
           sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/data/jfs/</path>?" /etc/clickhouse-server/config.xml
           sudo cat /etc/clickhouse-server/config.xml
           sudo chmod 777 /var/lib/clickhouse/
@@ -78,7 +74,7 @@ jobs:
           ls -lah /data/jfs/
 
 
-      - name: Gernerate Data
+      - name: Generate Data
         run: |
           cd /data/jfs/
           git clone https://github.com/vadimtk/ssb-dbgen.git
@@ -88,6 +84,7 @@ jobs:
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
           ls -lrth
+          sudo du -sh /data/jfs/
 
       - name: Create Table
         run: |
@@ -152,11 +149,12 @@ jobs:
 
       - name: Import Data
         run: |
+          sudo du -sh /data/jfs/
           cd /data/jfs/ssb-dbgen/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
           clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
-          clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
+          time clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
           ls -lah /data/jfs/
           sudo du -sh /data/jfs/
 
@@ -164,7 +162,7 @@ jobs:
       - name: ClickHouse Test
         run: |
           clickhouse-client --query "SET max_memory_usage = 20000000000;"
-          clickhouse-client --query "CREATE TABLE lineorder_flat
+          time clickhouse-client --query "CREATE TABLE lineorder_flat
                                      ENGINE = MergeTree
                                      PARTITION BY toYear(LO_ORDERDATE)
                                      ORDER BY (LO_ORDERDATE, LO_ORDERKEY) AS
@@ -212,15 +210,15 @@ jobs:
                                      INNER JOIN supplier AS s ON s.S_SUPPKEY = l.LO_SUPPKEY
                                      INNER JOIN part AS p ON p.P_PARTKEY = l.LO_PARTKEY;"
           echo "Q1.1"
-          clickhouse-client --query "SELECT sum(LO_EXTENDEDPRICE * LO_DISCOUNT) AS revenue
+          time clickhouse-client --query "SELECT sum(LO_EXTENDEDPRICE * LO_DISCOUNT) AS revenue
                                      FROM lineorder_flat
                                      WHERE toYear(LO_ORDERDATE) = 1993 AND LO_DISCOUNT BETWEEN 1 AND 3 AND LO_QUANTITY < 25;"
           echo "Q1.2"
-          clickhouse-client --query "SELECT sum(LO_EXTENDEDPRICE * LO_DISCOUNT) AS revenue
+          time clickhouse-client --query "SELECT sum(LO_EXTENDEDPRICE * LO_DISCOUNT) AS revenue
                                      FROM lineorder_flat
                                      WHERE toYYYYMM(LO_ORDERDATE) = 199401 AND LO_DISCOUNT BETWEEN 4 AND 6 AND LO_QUANTITY BETWEEN 26 AND 35;"
           echo "Q2.1"
-          clickhouse-client --query "SELECT
+          time clickhouse-client --query "SELECT
                                          sum(LO_REVENUE),
                                          toYear(LO_ORDERDATE) AS year,
                                          P_BRAND
@@ -233,7 +231,7 @@ jobs:
                                          year,
                                          P_BRAND;"
           echo "Q3.1"
-          clickhouse-client --query "SELECT
+          time clickhouse-client --query "SELECT
                                          C_NATION,
                                          S_NATION,
                                          toYear(LO_ORDERDATE) AS year,
@@ -248,7 +246,7 @@ jobs:
                                          year ASC,
                                          revenue DESC;"
           echo "Q4.1"
-          clickhouse-client --query "SELECT
+          time clickhouse-client --query "SELECT
                                          toYear(LO_ORDERDATE) AS year,
                                          C_NATION,
                                          sum(LO_REVENUE - LO_SUPPLYCOST) AS profit
