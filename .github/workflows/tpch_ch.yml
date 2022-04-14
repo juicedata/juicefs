@@ -98,7 +98,7 @@ jobs:
           echo "555"
           #./dbgen -s 10 -T d -q
           git clone https://github.com/sanwan/actionfile.git
-          cp actionfile/*.tbl ../
+          cp actionfile/*.tbl .
           ls -lrth
           pwd
 
