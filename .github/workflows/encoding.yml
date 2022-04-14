@@ -64,13 +64,13 @@ jobs:
 
       - name: Encoding Test
         run: |
-          filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd"
-          dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd"
+          filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           attr_key=user.k
-          attr_value_set="attr_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd"
-          data_write="data_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd"
-          soft_link="softlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd"
-          hard_link="hardlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd"
+          attr_value_set="attr_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          data_write="data_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          soft_link="softlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          hard_link="hardlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
 
           ./jfs_new format ${{steps.vars.outputs.META_URL}} myjfs
           ./jfs_new mount --enable-xattr ${{steps.vars.outputs.META_URL}}  ${{steps.vars.outputs.MOUNT_POINT}} -d 
