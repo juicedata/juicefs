@@ -150,6 +150,10 @@ jobs:
 
       - name: Import Data
         run: |
+          ls -lah /data/jfs/
+          echo "99999"
+          sudo ls -lh /var/lib/clickhouse/
+          echo "66666"
           sudo du -sh /data/jfs/
           cd /data/jfs/ssb-dbgen/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
@@ -160,6 +164,7 @@ jobs:
           sudo du -sh /data/jfs/
           echo "88888"
           sudo ls -lh /var/lib/clickhouse/
+          sudo du -sh /var/lib/clickhouse/
 
 
       - name: ClickHouse Test
