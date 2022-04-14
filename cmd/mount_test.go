@@ -106,7 +106,7 @@ func mountTemp(t *testing.T, bucket *string) {
 	ResetHttp()
 
 	go func() {
-		if err := Main([]string{"", "mount", "--enable-xattr", testMeta, testMountPoint}); err != nil {
+		if err := Main([]string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--no-usage-report"}); err != nil {
 			t.Errorf("mount failed: %s", err)
 		}
 	}()
