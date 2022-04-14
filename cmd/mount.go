@@ -320,6 +320,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
+	format.CacheStore = c.String("cache-store")
 	return chunkConf
 }
 

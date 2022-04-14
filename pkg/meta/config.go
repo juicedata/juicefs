@@ -47,6 +47,7 @@ type Format struct {
 	UUID             string
 	Storage          string
 	Bucket           string
+	CacheStore  string `json:",omitempty"`
 	AccessKey        string
 	SecretKey        string `json:",omitempty"`
 	BlockSize        int
