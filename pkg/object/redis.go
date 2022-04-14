@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sort"
 	"strings"
 	"time"
 
@@ -71,38 +72,37 @@ func (r *redisStore) Delete(key string) error {
 	return r.rdb.Del(c, key).Err()
 }
 
-func (t *redisStore) List(prefix, marker string, limit int64) ([]Object, error) {
-	if marker == "" {
-		marker = prefix
-	}
-	if limit > 1000 {
-		limit = 1000
-	}
+func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
+	var objs = make(chan Object, 1000)
+	defer close(objs)
 	var keyList []string
 	var cursor uint64
 	for {
-		keys, c, err := t.rdb.Scan(context.TODO(), cursor, marker+"*", limit).Result()
+		// FIXME: this will be really slow for many objects
+		keys, c, err := t.rdb.Scan(context.TODO(), cursor, "*", 1000).Result()
 		if err != nil {
-			logger.Warnf("scan %s: %s", marker, err)
+			logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
 			return nil, err
 		}
-		if len(keys) > 0 {
-			keyList = append(keyList, keys...)
+		for _, key := range keys {
+			if key > marker && strings.HasPrefix(key, prefix) {
+				keyList = append(keyList, key)
+			}
 		}
 		if c == 0 {
 			break
 		}
 		cursor = c
 	}
-	var objs = make([]Object, len(keyList))
-	mtime := time.Now()
-	for i, k := range keyList {
-		data, err := t.rdb.Get(c, k).Bytes()
+	sort.Strings(keyList)
+	now := time.Now()
+	for _, key := range keyList {
+		data, err := t.rdb.Get(c, key).Bytes()
 		if err != nil {
 			return nil, err
 		}
 		// FIXME: mtime
-		objs[i] = &obj{k, int64(len(data)), mtime, false}
+		objs <- &obj{key, int64(len(data)), now, strings.HasSuffix(key, "/")}
 	}
 	return objs, nil
 }

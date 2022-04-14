@@ -21,11 +21,12 @@ package object
 
 import (
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/ncw/swift"
 	"io"
 	"net/url"
 	"strings"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/ncw/swift"
 )
 
 type swiftOSS struct {
@@ -66,31 +67,6 @@ func (s *swiftOSS) Put(key string, in io.Reader) error {
 
 func (s *swiftOSS) Delete(key string) error {
 	return s.conn.ObjectDelete(s.container, key)
-}
-
-func (s *swiftOSS) List(prefix, marker string, limit int64) ([]Object, error) {
-	if limit > 1000 {
-		limit = 1000
-	}
-	objects, err := s.conn.Objects(s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Limit: int(limit)})
-	if err != nil {
-		return nil, err
-	}
-	var objs = make([]Object, len(objects))
-	for i, o := range objects {
-		objs[i] = &obj{o.Name, o.Bytes, o.LastModified, false}
-	}
-	return objs, nil
-}
-
-func (s *swiftOSS) Head(key string) (Object, error) {
-	object, _, err := s.conn.Object(s.container, key)
-	return &obj{
-		key,
-		object.Bytes,
-		object.LastModified,
-		strings.HasSuffix(key, "/"),
-	}, err
 }
 
 func newSwiftOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
