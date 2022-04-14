@@ -824,6 +824,25 @@ $ juicefs format \
     myjfs
 ```
 
+### Set up TLS
+If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the Bucket-URL. Currently supported configuration items:
+
+| name                 | value                                                                                                                                                       |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ca    | CA root certificate, used to connect TiKV/PD with tls                                                                                                   |
+| cert  | certificate file path, used to connect TiKV/PD with tls                                                                                                 |
+| key   | private key file path, used to connect TiKV/PD with tls                                                                                                 |
+| verify-cn | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+
+example:
+```bash
+$ juicefs format \
+    --storage tikv \
+    --bucket "<host>:<port>,<host>:<port>,<host>:<port>?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
+    ... \
+    myjfs
+```
+
 ## Local disk
 
 When creating JuiceFS storage, if no storage type is specified, the local disk will be used to store data by default. The default storage path for root user is `/var/jfs`, and `~/.juicefs/local` is for ordinary users.

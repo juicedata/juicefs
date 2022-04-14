@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"strings"
 	"time"
 
@@ -120,7 +121,11 @@ func newTiKV(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
 	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
 	plog.ReplaceGlobals(l, prop)
 
-	pds := strings.Split(endpoint, ",")
+	tUrl, err := url.Parse("tikv://" + endpoint)
+	if err != nil {
+		return nil, err
+	}
+	pds := strings.Split(tUrl.Host, ",")
 	for i, pd := range pds {
 		pd = strings.TrimSpace(pd)
 		if !strings.Contains(pd, ":") {
@@ -128,11 +133,18 @@ func newTiKV(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
 		}
 		pds[i] = pd
 	}
-	c, err := rawkv.NewClient(context.TODO(), pds, config.DefaultConfig().Security)
+
+	q := tUrl.Query()
+	c, err := rawkv.NewClient(context.TODO(), pds, config.NewSecurity(
+		q.Get("ca"),
+		q.Get("cert"),
+		q.Get("key"),
+		strings.Split(q.Get("verify-cn"), ",")))
+
 	if err != nil {
 		return nil, err
 	}
-	return &tikv{c: c, addr: endpoint}, nil
+	return &tikv{c: c, addr: tUrl.Host}, nil
 }
 
 func init() {
