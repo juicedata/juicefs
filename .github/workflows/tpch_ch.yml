@@ -64,15 +64,9 @@ jobs:
           sudo chmod 777 /etc/clickhouse-server/
           sudo chmod 777 /etc/clickhouse-server/config.xml
           sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/data/jfs/</path>?" /etc/clickhouse-server/config.xml
-          sudo chmod 777 /var/lib/clickhouse/
-          sudo ls -lh /var/lib/clickhouse/
-          echo "datadata"
-          ls -lah /data/jfs/
           sudo service clickhouse-server start
           sudo service clickhouse-server status
           ls -lah /data/jfs/
-          echo "66666"
-          sudo ls -lh /var/lib/clickhouse/
 
 
       - name: Generate Data
@@ -150,21 +144,12 @@ jobs:
 
       - name: Import Data
         run: |
-          ls -lah /data/jfs/
-          echo "99999"
-          sudo ls -lh /var/lib/clickhouse/
-          echo "66666"
-          sudo du -sh /data/jfs/
           cd /data/jfs/ssb-dbgen/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
           clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
           time clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
-          ls -lah /data/jfs/
           sudo du -sh /data/jfs/
-          echo "88888"
-          sudo ls -lh /var/lib/clickhouse/
-          sudo du -sh /var/lib/clickhouse/
 
 
       - name: ClickHouse Test
@@ -266,6 +251,7 @@ jobs:
                                      ORDER BY
                                          year ASC,
                                          C_NATION ASC;"
+
 
       - name: Send Slack Notification
         if: ${{ failure() }}
