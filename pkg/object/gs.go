@@ -54,16 +54,7 @@ func (g *gs) Create() error {
 		return nil
 	}
 
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if projectID == "" {
-		projectID, _ = metadata.ProjectID()
-	}
-	if projectID == "" {
-		cred, err := google.FindDefaultCredentials(context.Background())
-		if err == nil {
-			projectID = cred.ProjectID
-		}
-	}
+	projectID := getProjectID()
 	if projectID == "" {
 		return errors.New("GOOGLE_CLOUD_PROJECT environment variable must be set")
 	}
@@ -156,6 +147,20 @@ func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
+func getProjectID() string {
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if projectID == "" {
+		projectID, _ = metadata.ProjectID()
+	}
+	if projectID == "" {
+		cred, err := google.FindDefaultCredentials(context.Background())
+		if err == nil {
+			projectID = cred.ProjectID
+		}
+	}
+	return projectID
+}
+
 func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("gs://%s", endpoint)
@@ -174,6 +179,11 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if serviceAccount, err := client.ServiceAccount(ctx, getProjectID()); err == nil {
+		logger.Infof("GCS client created with ServiceAccount: %v", serviceAccount)
+	} else {
+		logger.Infof("GCS client created without ServiceAccount")
 	}
 	return &gs{client: client, bucket: bucket, region: region}, nil
 }
