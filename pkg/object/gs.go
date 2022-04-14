@@ -21,6 +21,7 @@ package object
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -180,11 +181,23 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, err
 	}
+	logger.Infof("Pid: %v", getProjectID())
 	if serviceAccount, err := client.ServiceAccount(ctx, getProjectID()); err == nil {
 		logger.Infof("GCS client created with ServiceAccount: %v", serviceAccount)
 	} else {
 		logger.Infof("GCS client created without ServiceAccount")
 	}
+
+	credential, err := google.FindDefaultCredentials(ctx)
+	content := map[string]interface{}{}
+
+	json.Unmarshal(credential.JSON, &content)
+	if content["client_email"] != nil {
+		logger.Infof("GCS client email: %v", content["client_email"])
+	} else {
+		logger.Infof("WARNING: no service account credential. User account credential?")
+	}
+
 	return &gs{client: client, bucket: bucket, region: region}, nil
 }
 
