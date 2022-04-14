@@ -2112,6 +2112,7 @@ func (r *redisMeta) cleanupZeroRef(key string) {
 
 func (r *redisMeta) cleanupLeakedChunks() {
 	var ctx = Background
+	prefix := len(r.prefix)
 	_ = r.scan(ctx, "c*", func(ckeys []string) error {
 		var ikeys []string
 		var rs []*redis.IntCmd
@@ -2121,7 +2122,7 @@ func (r *redisMeta) cleanupLeakedChunks() {
 			if len(ps) != 2 {
 				continue
 			}
-			ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
+			ino, _ := strconv.ParseInt(ps[0][prefix+1:], 10, 0)
 			ikeys = append(ikeys, k)
 			rs = append(rs, p.Exists(ctx, r.inodeKey(Ino(ino))))
 		}
@@ -2136,7 +2137,7 @@ func (r *redisMeta) cleanupLeakedChunks() {
 					key := ikeys[i]
 					logger.Infof("found leaked chunk %s", key)
 					ps := strings.Split(key, "_")
-					ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
+					ino, _ := strconv.ParseInt(ps[0][prefix+1:], 10, 0)
 					indx, _ := strconv.Atoi(ps[1])
 					_ = r.deleteChunk(Ino(ino), uint32(indx))
 				}
@@ -2388,7 +2389,7 @@ func (r *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 			if cnt > 1 {
 				var inode uint64
 				var indx uint32
-				n, err := fmt.Sscanf(keys[i], "c%d_%d", &inode, &indx)
+				n, err := fmt.Sscanf(keys[i], r.prefix+"c%d_%d", &inode, &indx)
 				if err == nil && n == 2 {
 					logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, cnt)
 					r.compactChunk(Ino(inode), indx, true)
@@ -2404,10 +2405,11 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 	var ctx = Background
 	var foundInodes = make(map[Ino]struct{})
 	cutoff := time.Now().Add(time.Hour * -1)
+	prefix := len(r.prefix)
 
 	_ = r.scan(ctx, "d*", func(keys []string) error {
 		for _, key := range keys {
-			ino, _ := strconv.Atoi(key[1:])
+			ino, _ := strconv.Atoi(key[prefix+1:])
 			var entries []*Entry
 			eno := r.Readdir(ctx, Ino(ino), 0, &entries)
 			if eno != syscall.ENOENT && eno != 0 {
@@ -2432,7 +2434,7 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 			}
 			var attr Attr
 			r.parseAttr([]byte(v.(string)), &attr)
-			ino, _ := strconv.Atoi(keys[i][1:])
+			ino, _ := strconv.Atoi(keys[i][prefix+1:])
 			if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
 				logger.Infof("found dangling inode: %s %+v", keys[i], attr)
 				if delete {
