@@ -3001,7 +3001,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
 	p := m.rdb.Pipeline()
-	batch := 200000
+	batch := 10000
 	if attr.Typ == TypeFile {
 		attr.Length = e.Attr.Length
 		for _, c := range e.Chunks {
