@@ -54,7 +54,7 @@ type counter struct {
 
 type edge struct {
 	Parent Ino    `xorm:"unique(edge) notnull"`
-	Name   string `xorm:"unique(edge) notnull"`
+	Name   []byte `xorm:"unique(edge) varbinary(255) notnull"`
 	Inode  Ino    `xorm:"notnull"`
 	Type   uint8  `xorm:"notnull"`
 }
@@ -77,7 +77,7 @@ type node struct {
 
 type namedNode struct {
 	node `xorm:"extends"`
-	Name string
+	Name []byte `xorm:"varbinary(255)"`
 }
 
 type chunk struct {
@@ -92,7 +92,7 @@ type chunkRef struct {
 }
 type symlink struct {
 	Inode  Ino    `xorm:"pk"`
-	Target string `xorm:"varchar(4096) notnull"`
+	Target []byte `xorm:"varbinary(4096) notnull"`
 }
 
 type xattr struct {
@@ -208,25 +208,6 @@ func (m *dbMeta) doDeleteSlice(chunkid uint64, size uint32) error {
 	})
 }
 
-func (m *dbMeta) updateCollate() {
-	if r, err := m.db.Query("show create table jfs_edge"); err != nil {
-		logger.Fatalf("show table jfs_edge: %s", err.Error())
-	} else {
-		createTable := string(r[0]["Create Table"])
-		// the default collate is case-insensitive
-		if !strings.Contains(createTable, "SET utf8mb4 COLLATE utf8mb4_bin") {
-			_, err := m.db.Exec("alter table jfs_edge modify name varchar (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
-			if err != nil && strings.Contains(err.Error(), "Error 1071: Specified key was too long; max key length is 767 bytes") {
-				// MySQL 5.6 supports key length up to 767 bytes, so reduce the length of name to 190 chars
-				_, err = m.db.Exec("alter table jfs_edge modify name varchar (190) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
-			}
-			if err != nil {
-				logger.Fatalf("update collate: %s", err)
-			}
-		}
-	}
-}
-
 func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.db.Sync2(new(setting), new(counter)); err != nil {
 		logger.Fatalf("create table setting, counter: %s", err)
@@ -246,9 +227,6 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
 		logger.Fatalf("create table flock, plock: %s", err)
 	}
-	if m.db.DriverName() == "mysql" {
-		m.updateCollate()
-	}
 
 	var s = setting{Name: "format"}
 	ok, err := m.db.Get(&s)
@@ -262,27 +240,8 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
-		if force {
-			old.RemoveSecret()
-			logger.Warnf("Existing volume will be overwrited: %+v", old)
-		} else {
-			format.UUID = old.UUID
-			// these can be safely updated.
-			old.Bucket = format.Bucket
-			old.AccessKey = format.AccessKey
-			old.SecretKey = format.SecretKey
-			old.EncryptKey = format.EncryptKey
-			old.KeyEncrypted = format.KeyEncrypted
-			old.Capacity = format.Capacity
-			old.Inodes = format.Inodes
-			old.TrashDays = format.TrashDays
-			old.MinClientVersion = format.MinClientVersion
-			old.MaxClientVersion = format.MaxClientVersion
-			if format != old {
-				old.RemoveSecret()
-				format.RemoveSecret()
-				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
-			}
+		if err = format.update(&old, force); err != nil {
+			return err
 		}
 	}
 
@@ -344,6 +303,11 @@ func (m *dbMeta) Reset() error {
 }
 
 func (m *dbMeta) doLoad() ([]byte, error) {
+	if ok, err := m.db.IsTableExist(&setting{}); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, nil
+	}
 	s := setting{Name: "format"}
 	_, err := m.db.Get(&s)
 	return []byte(s.Value), err
@@ -357,9 +321,6 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 	// update the owner from uint64 to int64
 	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("update table flock, plock: %s", err)
-	}
-	if m.db.DriverName() == "mysql" {
-		m.updateCollate()
 	}
 
 	for {
@@ -627,7 +588,7 @@ func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	if attr != nil {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
 	}
-	nn := namedNode{node: node{Parent: parent}, Name: name}
+	nn := namedNode{node: node{Parent: parent}, Name: []byte(name)}
 	exist, err := dbSession.Select("*").Get(&nn)
 	if err != nil {
 		return errno(err)
@@ -985,7 +946,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		var e = edge{Parent: parent, Name: name}
+		var e = edge{Parent: parent, Name: []byte(name)}
 		ok, err = s.Get(&e)
 		if err != nil {
 			return err
@@ -1033,7 +994,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 
-		if err = mustInsert(s, &edge{parent, name, ino, _type}, &n); err != nil {
+		if err = mustInsert(s, &edge{parent, []byte(name), ino, _type}, &n); err != nil {
 			return err
 		}
 		if parent != TrashInode {
@@ -1042,7 +1003,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 		if _type == TypeSymlink {
-			if err = mustInsert(s, &symlink{Inode: ino, Target: path}); err != nil {
+			if err = mustInsert(s, &symlink{Inode: ino, Target: []byte(path)}); err != nil {
 				return err
 			}
 		}
@@ -1075,7 +1036,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		var e = edge{Parent: parent, Name: name}
+		var e = edge{Parent: parent, Name: []byte(name)}
 		ok, err = s.Get(&e)
 		if err != nil {
 			return err
@@ -1083,7 +1044,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if !ok && m.conf.CaseInsensi {
 			if ee := m.resolveCase(ctx, parent, name); ee != nil {
 				ok = true
-				e.Name = string(ee.Name)
+				e.Name = ee.Name
 				e.Inode = ee.Inode
 				e.Type = ee.Attr.Typ
 			}
@@ -1137,7 +1098,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				return err
 			}
 			if trash > 0 {
-				if err = mustInsert(s, &edge{trash, fmt.Sprintf("%d-%d-%s", parent, e.Inode, e.Name), e.Inode, e.Type}); err != nil {
+				if err = mustInsert(s, &edge{trash, []byte(fmt.Sprintf("%d-%d-%s", parent, e.Inode, string(e.Name))), e.Inode, e.Type}); err != nil {
 					return err
 				}
 			}
@@ -1203,7 +1164,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		var e = edge{Parent: parent, Name: name}
+		var e = edge{Parent: parent, Name: []byte(name)}
 		ok, err = s.Get(&e)
 		if err != nil {
 			return err
@@ -1212,7 +1173,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if ee := m.resolveCase(ctx, parent, name); ee != nil {
 				ok = true
 				e.Inode = ee.Inode
-				e.Name = string(ee.Name)
+				e.Name = ee.Name
 				e.Type = ee.Attr.Typ
 			}
 		}
@@ -1259,7 +1220,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if _, err = s.Cols("ctime", "parent").Update(&n, &node{Inode: n.Inode}); err != nil {
 				return err
 			}
-			if err = mustInsert(s, &edge{trash, fmt.Sprintf("%d-%d-%s", parent, e.Inode, e.Name), e.Inode, e.Type}); err != nil {
+			if err = mustInsert(s, &edge{trash, []byte(fmt.Sprintf("%d-%d-%s", parent, e.Inode, string(e.Name))), e.Inode, e.Type}); err != nil {
 				return err
 			}
 		} else {
@@ -1292,7 +1253,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dn node
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
-		var se = edge{Parent: parentSrc, Name: nameSrc}
+		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
 		ok, err := s.Get(&se)
 		if err != nil {
 			return err
@@ -1302,13 +1263,13 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				ok = true
 				se.Inode = e.Inode
 				se.Type = e.Attr.Typ
-				se.Name = string(e.Name)
+				se.Name = e.Name
 			}
 		}
 		if !ok {
 			return syscall.ENOENT
 		}
-		if parentSrc == parentDst && se.Name == nameDst {
+		if parentSrc == parentDst && string(se.Name) == nameDst {
 			if inode != nil {
 				*inode = se.Inode
 			}
@@ -1345,7 +1306,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return syscall.ENOENT
 		}
 
-		var de = edge{Parent: parentDst, Name: nameDst}
+		var de = edge{Parent: parentDst, Name: []byte(nameDst)}
 		ok, err = s.Get(&de)
 		if err != nil {
 			return err
@@ -1355,7 +1316,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				ok = true
 				de.Inode = e.Inode
 				de.Type = e.Attr.Typ
-				de.Name = string(e.Name)
+				de.Name = e.Name
 			}
 		}
 		now := time.Now().UnixNano() / 1e3
@@ -1456,7 +1417,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return err
 					}
 					name := fmt.Sprintf("%d-%d-%s", parentDst, dino, de.Name)
-					if err = mustInsert(s, &edge{trash, name, dino, de.Type}); err != nil {
+					if err = mustInsert(s, &edge{trash, []byte(name), dino, de.Type}); err != nil {
 						return err
 					}
 				} else if de.Type != TypeDirectory && dn.Nlink > 0 {
@@ -1539,7 +1500,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		var e = edge{Parent: parent, Name: name}
+		var e = edge{Parent: parent, Name: []byte(name)}
 		ok, err = s.Get(&e)
 		if err != nil {
 			return err
@@ -1566,7 +1527,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		n.Nlink++
 		n.Ctime = now
 
-		if err = mustInsert(s, &edge{Parent: parent, Name: name, Inode: inode, Type: n.Type}); err != nil {
+		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: inode, Type: n.Type}); err != nil {
 			return err
 		}
 		if _, err := s.Cols("mtime", "ctime").Update(&pn, &node{Inode: parent}); err != nil {
@@ -1592,13 +1553,13 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		return errno(err)
 	}
 	for _, n := range nodes {
-		if n.Name == "" {
+		if len(n.Name) == 0 {
 			logger.Errorf("Corrupt entry with empty name: inode %d parent %d", n.Inode, inode)
 			continue
 		}
 		entry := &Entry{
 			Inode: n.Inode,
-			Name:  []byte(n.Name),
+			Name:  n.Name,
 			Attr:  &Attr{},
 		}
 		if plus != 0 {
@@ -2336,7 +2297,7 @@ func (m *dbMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 			if !ok {
 				logger.Warnf("no link target for inode %d", inode)
 			}
-			e.Symlink = l.Target
+			e.Symlink = string(l.Target)
 		}
 		return nil
 	})
@@ -2385,7 +2346,7 @@ func (m *dbMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
 			logger.Warnf("no link target for inode %d", inode)
 			l = &symlink{}
 		}
-		e.Symlink = l.Target
+		e.Symlink = string(l.Target)
 	}
 	return e
 }
@@ -2412,7 +2373,8 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	if err := tree.writeJsonWithOutEntry(bw, depth); err != nil {
 		return err
 	}
-	sort.Slice(edges, func(i, j int) bool { return edges[i].Name < edges[j].Name })
+
+	sort.Slice(edges, func(i, j int) bool { return bytes.Compare(edges[i].Name, edges[j].Name) == -1 })
 
 	for idx, e := range edges {
 		var entry *DumpedEntry
@@ -2429,7 +2391,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			continue
 		}
 
-		entry.Name = e.Name
+		entry.Name = string(e.Name)
 		if e.Type == TypeDirectory {
 			err = m.dumpDir(e.Inode, entry, bw, depth+2, showProgress)
 		} else {
@@ -2716,7 +2678,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	if len(e.Xattrs) > 0 {
 		xattrs := make([]*xattr, 0, len(e.Xattrs))
 		for _, x := range e.Xattrs {
-			xattrs = append(xattrs, &xattr{inode, x.Name, []byte(unescape(x.Value))})
+			xattrs = append(xattrs, &xattr{inode, x.Name, unescape(x.Value)})
 		}
 		beans = append(beans, xattrs)
 	}

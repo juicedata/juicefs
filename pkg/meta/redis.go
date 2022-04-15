@@ -227,27 +227,8 @@ func (r *redisMeta) Init(format Format, force bool) error {
 		if err != nil {
 			logger.Fatalf("existing format is broken: %s", err)
 		}
-		if force {
-			old.RemoveSecret()
-			logger.Warnf("Existing volume will be overwrited: %+v", old)
-		} else {
-			format.UUID = old.UUID
-			// these can be safely updated.
-			old.Bucket = format.Bucket
-			old.AccessKey = format.AccessKey
-			old.SecretKey = format.SecretKey
-			old.EncryptKey = format.EncryptKey
-			old.KeyEncrypted = format.KeyEncrypted
-			old.Capacity = format.Capacity
-			old.Inodes = format.Inodes
-			old.TrashDays = format.TrashDays
-			old.MinClientVersion = format.MinClientVersion
-			old.MaxClientVersion = format.MaxClientVersion
-			if format != old {
-				old.RemoveSecret()
-				format.RemoveSecret()
-				return fmt.Errorf("cannot update format from %+v to %+v", old, format)
-			}
+		if err = format.update(&old, force); err != nil {
+			return err
 		}
 	}
 
@@ -352,9 +333,10 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 
 func (m *redisMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	var changed bool
+	name = m.prefix + name
 	err := m.txn(Background, func(tx *redis.Tx) error {
 		changed = false
-		old, err := tx.Get(Background, m.prefix+name).Int64()
+		old, err := tx.Get(Background, name).Int64()
 		if err != nil && err != redis.Nil {
 			return err
 		}
@@ -741,6 +723,11 @@ func (r *redisMeta) shouldRetry(err error, retryOnFailure bool) bool {
 func (r *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) error {
 	if r.conf.ReadOnly {
 		return syscall.EROFS
+	}
+	for _, k := range keys {
+		if !strings.HasPrefix(k, r.prefix) {
+			panic(fmt.Sprintf("Invalid key %s not starts with prefix %s", k, r.prefix))
+		}
 	}
 	var err error
 	var khash = fnv.New32()
@@ -2125,6 +2112,7 @@ func (r *redisMeta) cleanupZeroRef(key string) {
 
 func (r *redisMeta) cleanupLeakedChunks() {
 	var ctx = Background
+	prefix := len(r.prefix)
 	_ = r.scan(ctx, "c*", func(ckeys []string) error {
 		var ikeys []string
 		var rs []*redis.IntCmd
@@ -2134,7 +2122,7 @@ func (r *redisMeta) cleanupLeakedChunks() {
 			if len(ps) != 2 {
 				continue
 			}
-			ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
+			ino, _ := strconv.ParseInt(ps[0][prefix+1:], 10, 0)
 			ikeys = append(ikeys, k)
 			rs = append(rs, p.Exists(ctx, r.inodeKey(Ino(ino))))
 		}
@@ -2149,7 +2137,7 @@ func (r *redisMeta) cleanupLeakedChunks() {
 					key := ikeys[i]
 					logger.Infof("found leaked chunk %s", key)
 					ps := strings.Split(key, "_")
-					ino, _ := strconv.ParseInt(ps[0][1:], 10, 0)
+					ino, _ := strconv.ParseInt(ps[0][prefix+1:], 10, 0)
 					indx, _ := strconv.Atoi(ps[1])
 					_ = r.deleteChunk(Ino(ino), uint32(indx))
 				}
@@ -2401,7 +2389,7 @@ func (r *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 			if cnt > 1 {
 				var inode uint64
 				var indx uint32
-				n, err := fmt.Sscanf(keys[i], "c%d_%d", &inode, &indx)
+				n, err := fmt.Sscanf(keys[i], r.prefix+"c%d_%d", &inode, &indx)
 				if err == nil && n == 2 {
 					logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, cnt)
 					r.compactChunk(Ino(inode), indx, true)
@@ -2417,10 +2405,11 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 	var ctx = Background
 	var foundInodes = make(map[Ino]struct{})
 	cutoff := time.Now().Add(time.Hour * -1)
+	prefix := len(r.prefix)
 
 	_ = r.scan(ctx, "d*", func(keys []string) error {
 		for _, key := range keys {
-			ino, _ := strconv.Atoi(key[1:])
+			ino, _ := strconv.Atoi(key[prefix+1:])
 			var entries []*Entry
 			eno := r.Readdir(ctx, Ino(ino), 0, &entries)
 			if eno != syscall.ENOENT && eno != 0 {
@@ -2445,7 +2434,7 @@ func (r *redisMeta) cleanupLeakedInodes(delete bool) {
 			}
 			var attr Attr
 			r.parseAttr([]byte(v.(string)), &attr)
-			ino, _ := strconv.Atoi(keys[i][1:])
+			ino, _ := strconv.Atoi(keys[i][prefix+1:])
 			if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
 				logger.Infof("found dangling inode: %s %+v", keys[i], attr)
 				if delete {
@@ -3035,7 +3024,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		if len(e.Entries) > 0 {
 			dentries := make(map[string]interface{})
 			for _, c := range e.Entries {
-				dentries[unescape(c.Name)] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
+				dentries[string(unescape(c.Name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			}
 			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
