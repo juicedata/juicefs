@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"io"
 	"io/ioutil"
 	"sort"
@@ -73,13 +74,14 @@ func (r *redisStore) Delete(key string) error {
 }
 
 func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
-	var objs = make(chan Object, 1000)
+	batch := 1000
+	var objs = make(chan Object, batch)
 	defer close(objs)
 	var keyList []string
 	var cursor uint64
 	for {
 		// FIXME: this will be really slow for many objects
-		keys, c, err := t.rdb.Scan(context.TODO(), cursor, prefix+"*", 1000).Result()
+		keys, c, err := t.rdb.Scan(context.TODO(), cursor, prefix+"*", int64(batch)).Result()
 		if err != nil {
 			logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
 			return nil, err
@@ -96,30 +98,39 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	}
 
 	sort.Strings(keyList)
-	p := t.rdb.Pipeline()
-	for _, key := range keyList {
-		p.Get(c, key)
-	}
-	cmds, err := p.Exec(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-	for idx, cmd := range cmds {
-		if stringCmd, ok := cmd.(*redis.StringCmd); ok {
-			result, err := stringCmd.Bytes()
-			if err != nil {
-				if err == redis.Nil {
-					continue
-				}
-				return nil, err
-			}
-			// FIXME: mtime
-			objs <- &obj{keyList[idx], int64(len(result)), now, strings.HasSuffix(keyList[idx], "/")}
+	err := utils.SliceSplitWithMapFunc(keyList, batch, func(subSlice []string) error {
+		p := t.rdb.Pipeline()
+		for _, key := range subSlice {
+			p.StrLen(c, key)
 		}
-	}
-	return objs, nil
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		now := time.Now()
+		for idx, cmd := range cmds {
+			if intCmd, ok := cmd.(*redis.IntCmd); ok {
+				size, err := intCmd.Result()
+				if err != nil {
+					return err
+				}
+				if size == 0 {
+					exist, err := t.rdb.Exists(context.TODO(), subSlice[idx]).Result()
+					if err != nil {
+						return err
+					}
+					if exist == 0 {
+						continue
+					}
+				}
+				// FIXME: mtime
+				objs <- &obj{subSlice[idx], size, now, strings.HasSuffix(subSlice[idx], "/")}
+			}
+		}
+		return nil
+	})
+	return objs, err
 }
 
 func (t *redisStore) Head(key string) (Object, error) {
