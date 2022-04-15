@@ -308,32 +308,6 @@ func TestInitRules(t *testing.T) {
 	}
 }
 
-func TestAlignPatternAndKey(t *testing.T) {
-	tests := []struct {
-		pattern string
-		key     string
-		wantKey string
-	}{
-		{pattern: "a*", key: "a1", wantKey: "a1"},
-		{pattern: "a*/b*", key: "a1/b1", wantKey: "a1/b1"},
-		{pattern: "/a*", key: "/a1", wantKey: "/a1"},
-		{pattern: "a*/b?", key: "a1/b1/c2/d1", wantKey: "a1/b1"},
-		{pattern: "a*/b?/", key: "a1/", wantKey: "a1/"},
-		{pattern: "a*/b?/c.txt", key: "a1/b1", wantKey: "a1/b1"},
-		{pattern: "a*/b?/", key: "a1/b1/", wantKey: "a1/b1/"},
-		{pattern: "a*/b?/", key: "a1/b1/c.txt", wantKey: "a1/b1/"},
-		{pattern: "a*/b*/", key: "a1/b1/c1/d.txt/", wantKey: "a1/b1/"},
-	}
-	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			gotKey := alignPatternAndKey(tt.pattern, tt.key)
-			if gotKey != tt.wantKey {
-				t.Errorf("alignPatternAndKey() gotKey = %v, want %v", gotKey, tt.wantKey)
-			}
-		})
-	}
-}
-
 func TestSyncLink(t *testing.T) {
 	defer func() {
 		_ = os.RemoveAll("/tmp/a")
@@ -539,4 +513,58 @@ func testKeysEqual(objsCh <-chan object.Object, expectedKeys []string) error {
 		}
 	}
 	return nil
+}
+
+func Test_slidingWindowForPath(t *testing.T) {
+	type tcase struct {
+		pattern string
+		key     string
+		want    []string
+	}
+	tests := []tcase{
+		{pattern: "a*", key: "a1", want: []string{"a1"}},
+		{pattern: "/a*", key: "a1", want: []string{"a1"}},
+		{pattern: "a*/", key: "a1", want: []string{"a1"}},
+		{pattern: "a*/b*", key: "a1", want: []string{"a1"}},
+		{pattern: "a*", key: "a1/b1", want: []string{"a1", "b1"}},
+		{pattern: "/a*", key: "a1/b1", want: []string{"a1/b1"}},
+		{pattern: "a*/", key: "a1/b1", want: []string{"a1/b1"}},
+		{pattern: "a*/b*", key: "a1/b1", want: []string{"a1/b1"}},
+		{pattern: "a*/b*", key: "a1/b1/c1/d1", want: []string{"a1/b1", "b1/c1", "c1/d1"}},
+	}
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			if got := slidingWindowForPath(tt.pattern, tt.key); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("slidingWindowForPath() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func Test_includeObject(t *testing.T) {
+	type tcase struct {
+		rules []*rule
+		key   string
+		want  bool
+	}
+	tests := []tcase{
+		{rules: []*rule{{pattern: "a*", include: false}}, key: "a1", want: false},
+		{rules: []*rule{{pattern: "a*/b*", include: false}}, key: "a1/b1", want: false},
+		{rules: []*rule{{pattern: "/a*", include: false}}, key: "/a1", want: false},
+		{rules: []*rule{{pattern: "a*/b?", include: false}}, key: "a1/b1/c2/d1", want: false},
+		{rules: []*rule{{pattern: "a*/b?/", include: false}}, key: "a1/", want: true},
+		{rules: []*rule{{pattern: "a*/b?/c.txt", include: false}}, key: "a1/b1", want: true},
+		{rules: []*rule{{pattern: "a*/b?/", include: false}}, key: "a1/b1/", want: false},
+		{rules: []*rule{{pattern: "a*/b?/", include: false}}, key: "a1/b1/c.txt", want: true},
+		{rules: []*rule{{pattern: "a*/b*/", include: false}}, key: "a1/b1/c1/d.txt/", want: true},
+		{rules: []*rule{{pattern: "/a*/b*", include: false}}, key: "/a1/b1/c1/d.txt/", want: false},
+		{rules: []*rule{{pattern: "a*/b*/c", include: false}}, key: "a1/b1/c1/d.txt/", want: true},
+		{rules: []*rule{{pattern: "a", include: false}}, key: "a/b/c/d/", want: false},
+	}
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			if got := includeObject(tt.rules, tt.key); got != tt.want {
+				t.Errorf("includeObject() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
