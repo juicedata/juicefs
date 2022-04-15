@@ -232,7 +232,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Format:     format,
 		Version:    version.Version(),
 		Chunk:      chunkConf,
-		BackupMeta: c.Duration("backup-meta"),
+		BackupMeta: duration(c.String("backup-meta")),
 	}
 }
 
@@ -272,7 +272,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		ReadOnly:   readOnly,
 		NoBGJob:    c.Bool("no-bgjob"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
-		Heartbeat:  c.Duration("heartbeat"),
+		Heartbeat:  duration(c.String("heartbeat")),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 	}
@@ -355,7 +355,7 @@ func mount(c *cli.Context) error {
 	}
 
 	chunkConf := getChunkConf(c, format)
-	chunkConf.UploadDelay = c.Duration("upload-delay")
+	chunkConf.UploadDelay = duration(c.String("upload-delay"))
 
 	blob, store := newStore(format, chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
