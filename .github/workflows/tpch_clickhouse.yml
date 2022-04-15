@@ -1,4 +1,4 @@
-name: "tpchch"
+name: "tpch_clickhouse"
 
 on:
   push:
