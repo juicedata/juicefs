@@ -184,8 +184,11 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 
 	credential, err := google.FindDefaultCredentials(ctx)
 	credentialContent := map[string]interface{}{}
-	json.Unmarshal(credential.JSON, &credentialContent)
-	logger.Infof("GCS client credentail client_email: \"%v\", type: \"%v\"", credentialContent["client_email"], credentialContent["type"])
+	if err := json.Unmarshal(credential.JSON, &credentialContent); err == nil {
+		logger.Infof("GCS client credentail client_email: \"%v\", type: \"%v\"", credentialContent["client_email"], credentialContent["type"])
+	} else {
+		logger.Errorf("google.FindDefaultCredentials json unmarshal error: %v", err)
+	}
 
 	return &gs{client: client, bucket: bucket, region: region}, nil
 }
