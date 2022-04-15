@@ -182,16 +182,17 @@ func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		return nil, err
 	}
 
+	// The block below only logs the GCS client's credential service account's email and type, added for providing extra useful logging information to end users.
 	credential, err := google.FindDefaultCredentials(ctx)
 	if err == nil {
 		credentialContent := map[string]interface{}{}
 		if err := json.Unmarshal(credential.JSON, &credentialContent); err == nil {
-			logger.Infof("GCS client credentail client_email: \"%v\", type: \"%v\"", credentialContent["client_email"], credentialContent["type"])
+			logger.Infof("GCS client credentail's client_email: \"%v\", type: \"%v\"", credentialContent["client_email"], credentialContent["type"])
 		} else {
 			logger.Errorf("GCS client credential's json unmarshal error: %v", err)
 		}
 	} else {
-		logger.Errorf("GCS client fetches default credential error: %v", err)
+		logger.Errorf("GCS client fetching default credential failed with error: %v", err)
 	}
 
 	return &gs{client: client, bucket: bucket, region: region}, nil
