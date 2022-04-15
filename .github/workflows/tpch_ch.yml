@@ -253,6 +253,7 @@ jobs:
                                          C_NATION ASC;"
 
 
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
