@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"io"
 	"io/ioutil"
 	"sort"
@@ -98,14 +97,21 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	}
 
 	sort.Strings(keyList)
-	err := utils.SliceSplitWithMapFunc(keyList, batch, func(subSlice []string) error {
+
+	lKeyList := len(keyList)
+	for start := 0; start < lKeyList; start += batch {
+		end := start + batch
+		if end > lKeyList {
+			end = lKeyList
+		}
+
 		p := t.rdb.Pipeline()
-		for _, key := range subSlice {
+		for _, key := range keyList[start:end] {
 			p.StrLen(c, key)
 		}
 		cmds, err := p.Exec(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		now := time.Now()
@@ -113,24 +119,23 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 			if intCmd, ok := cmd.(*redis.IntCmd); ok {
 				size, err := intCmd.Result()
 				if err != nil {
-					return err
+					return nil, err
 				}
 				if size == 0 {
-					exist, err := t.rdb.Exists(context.TODO(), subSlice[idx]).Result()
+					exist, err := t.rdb.Exists(context.TODO(), keyList[start:end][idx]).Result()
 					if err != nil {
-						return err
+						return nil, err
 					}
 					if exist == 0 {
 						continue
 					}
 				}
 				// FIXME: mtime
-				objs <- &obj{subSlice[idx], size, now, strings.HasSuffix(subSlice[idx], "/")}
+				objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/")}
 			}
 		}
-		return nil
-	})
-	return objs, err
+	}
+	return objs, nil
 }
 
 func (t *redisStore) Head(key string) (Object, error) {
