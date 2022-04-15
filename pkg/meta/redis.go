@@ -3022,24 +3022,17 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		}
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
-		eLen := len(e.Entries)
-		if eLen > 0 {
-			keys := make([]string, 0, eLen)
-			for key := range e.Entries {
-				keys = append(keys, key)
-			}
-			for start := 0; start < eLen; start += batch {
-				end := start + batch
-				if end > eLen {
-					end = eLen
-				}
-				dentries := make(map[string]interface{}, batch)
-				for _, k := range keys[start:end] {
-					entry := e.Entries[k]
-					dentries[string(unescape(k))] = m.packEntry(typeFromString(entry.Attr.Type), entry.Attr.Inode)
-				}
+		dentries := make(map[string]interface{}, batch)
+		for k := range e.Entries {
+			entry := e.Entries[k]
+			dentries[string(unescape(k))] = m.packEntry(typeFromString(entry.Attr.Type), entry.Attr.Inode)
+			if len(dentries) >= batch {
 				p.HSet(ctx, m.entryKey(inode), dentries)
+				dentries = make(map[string]interface{}, batch)
 			}
+		}
+		if len(dentries) > 0 {
+			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
 	} else if attr.Typ == TypeSymlink {
 		symL := unescape(e.Symlink)
