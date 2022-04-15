@@ -94,19 +94,30 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 		}
 		cursor = c
 	}
-	sort.Strings(keyList)
-	now := time.Now()
-	for _, key := range keyList {
-		data, err := t.rdb.Get(c, key).Bytes()
-		if err != nil {
-			if err == redis.Nil {
-				continue
-			}
-			return nil, err
-		}
 
-		// FIXME: mtime
-		objs <- &obj{key, int64(len(data)), now, strings.HasSuffix(key, "/")}
+	sort.Strings(keyList)
+	p := t.rdb.Pipeline()
+	for _, key := range keyList {
+		p.Get(c, key)
+	}
+	cmds, err := p.Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	for idx, cmd := range cmds {
+		if stringCmd, ok := cmd.(*redis.StringCmd); ok {
+			result, err := stringCmd.Bytes()
+			if err != nil {
+				if err == redis.Nil {
+					continue
+				}
+				return nil, err
+			}
+			// FIXME: mtime
+			objs <- &obj{keyList[idx], int64(len(result)), now, strings.HasSuffix(keyList[idx], "/")}
+		}
 	}
 	return objs, nil
 }
