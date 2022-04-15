@@ -108,21 +108,3 @@ func StringContains(s []string, e string) bool {
 	}
 	return false
 }
-
-func SliceSplitWithMapFunc(srcSlice []string, batch int, f func(subSlice []string) error) error {
-	l := len(srcSlice)
-	for i := 1; i <= l/batch+1; i++ {
-		low := batch * (i - 1)
-		if low >= l {
-			return nil
-		}
-		high := batch * i
-		if high > l {
-			high = l
-		}
-		if err := f(srcSlice[low:high]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
