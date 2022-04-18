@@ -73,19 +73,20 @@ func (r *redisStore) Delete(key string) error {
 }
 
 func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
-	var objs = make(chan Object, 1000)
+	batch := 1000
+	var objs = make(chan Object, batch)
 	defer close(objs)
 	var keyList []string
 	var cursor uint64
 	for {
 		// FIXME: this will be really slow for many objects
-		keys, c, err := t.rdb.Scan(context.TODO(), cursor, "*", 1000).Result()
+		keys, c, err := t.rdb.Scan(context.TODO(), cursor, prefix+"*", int64(batch)).Result()
 		if err != nil {
 			logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
 			return nil, err
 		}
 		for _, key := range keys {
-			if key > marker && strings.HasPrefix(key, prefix) {
+			if key > marker {
 				keyList = append(keyList, key)
 			}
 		}
@@ -94,19 +95,45 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 		}
 		cursor = c
 	}
+
 	sort.Strings(keyList)
-	now := time.Now()
-	for _, key := range keyList {
-		data, err := t.rdb.Get(c, key).Bytes()
+
+	lKeyList := len(keyList)
+	for start := 0; start < lKeyList; start += batch {
+		end := start + batch
+		if end > lKeyList {
+			end = lKeyList
+		}
+
+		p := t.rdb.Pipeline()
+		for _, key := range keyList[start:end] {
+			p.StrLen(c, key)
+		}
+		cmds, err := p.Exec(ctx)
 		if err != nil {
-			if err == redis.Nil {
-				continue
-			}
 			return nil, err
 		}
 
-		// FIXME: mtime
-		objs <- &obj{key, int64(len(data)), now, strings.HasSuffix(key, "/")}
+		now := time.Now()
+		for idx, cmd := range cmds {
+			if intCmd, ok := cmd.(*redis.IntCmd); ok {
+				size, err := intCmd.Result()
+				if err != nil {
+					return nil, err
+				}
+				if size == 0 {
+					exist, err := t.rdb.Exists(context.TODO(), keyList[start:end][idx]).Result()
+					if err != nil {
+						return nil, err
+					}
+					if exist == 0 {
+						continue
+					}
+				}
+				// FIXME: mtime
+				objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/")}
+			}
+		}
 	}
 	return objs, nil
 }
