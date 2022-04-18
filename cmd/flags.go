@@ -20,6 +20,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -120,9 +121,10 @@ func clientFlags() []cli.Flag {
 			Name:  "writeback",
 			Usage: "upload objects in background",
 		},
-		&cli.DurationFlag{
+		&cli.StringFlag{
 			Name:  "upload-delay",
-			Usage: "delayed duration for uploading objects (\"s\", \"m\", \"h\")",
+			Value: "0",
+			Usage: "delayed duration (in seconds) for uploading objects",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
@@ -143,15 +145,15 @@ func clientFlags() []cli.Flag {
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
 		},
-		&cli.DurationFlag{
+		&cli.StringFlag{
 			Name:  "backup-meta",
-			Value: time.Hour,
-			Usage: "interval to automatically backup metadata in the object storage (0 means disable backup)",
+			Value: "3600",
+			Usage: "interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)",
 		},
-		&cli.DurationFlag{
+		&cli.StringFlag{
 			Name:  "heartbeat",
-			Value: 12 * time.Second,
-			Usage: "interval to send heartbeat; it's recommended that all clients use the same heartbeat value",
+			Value: "12",
+			Usage: "interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value",
 		},
 		&cli.BoolFlag{
 			Name:  "read-only",
@@ -218,4 +220,14 @@ func expandFlags(compoundFlags [][]cli.Flag) []cli.Flag {
 		flags = append(flags, flag...)
 	}
 	return flags
+}
+
+func duration(s string) time.Duration {
+	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return time.Second * time.Duration(v)
+	}
+	if v, err := time.ParseDuration(s); err == nil {
+		return v
+	}
+	return 0
 }

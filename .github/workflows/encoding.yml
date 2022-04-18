@@ -1,6 +1,21 @@
 name: "encoding-test"
 
 on:
+  push:
+    branches: 
+      - main
+      - release-**
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: 
+      - main
+      - release-**
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch:
 
 jobs:
@@ -15,9 +30,12 @@ jobs:
       - name: Set Variable
         id: vars
         run: |
-          echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/9
-          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-version-compatible-2
-          echo ::set-output name=MOUNT_POINT::/tmp/juicefs-version-compatible
+          echo ::set-output name=META_URL::sqlite3:///tmp/encoding-test.db
+          echo ::set-output name=META_URL2::sqlite3:///tmp/encoding-test2.db
+          echo ::set-output name=MOUNT_POINT::/tmp/juicefs-encoding-test
+          echo ::set-output name=MOUNT_POINT2::/tmp/juicefs-encoding-test2
+          echo ::set-output name=BUCKET::/var/jfs/
+          echo ::set-output name=NAME::encoding-test
 
       - name: Build linux target
         run: |
@@ -37,27 +55,74 @@ jobs:
             echo UUID is: $UUID
             sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
           fi
+          if [ -d ${{ steps.vars.outputs.MOUNT_POINT2 }} ]; then
+            ./jfs_new umount ${{ steps.vars.outputs.MOUNT_POINT2 }} || true
+          fi
+          UUID=$(./jfs_new status ${{ steps.vars.outputs.META_URL2 }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            echo UUID is: $UUID
+            sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL2 }} $UUID
+          fi
+          if [ -f ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
+            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -f
+          fi
 
       - name: Encoding Test
         run: |
-          ./juicefs format sqlite3://jfs1.db jfs1
-          ./juicefs mount sqlite3://jfs1.db jfs1 -d 
-          touch jfs1/中国.txt && echo "果汁数据JuiceData">jfs1/中国.txt
-          ./juicefs dump sqlite3://jfs1.db jfs1.backup
-          ./iconv -f UTF-8 -t GBK jfs1.backup > jfs1.backup_gbk
-          ./juicefs load sqlite3://jfs2.db jfs1.backup_gbk 
-          ./juicefs mount sqlite3://jfs2.db jfs2 -d
-          ./juicefs dump sqlite3://jfs2.db jfs2.backup
-          ./iconv -f GBK -t UTF-8 jfs2.backup > jfs2.backup_utf8
-          ./juicefs load sqlite3://jfs4.db jfs2.backup_utf8 
-          ./juicefs mount sqlite3://jfs4.db jfs4 -d
-          if [ -f "jfs1/中国.txt" ]; then 
-            cat jfs1/中国.txt | grep 果汁数据JuiceData
-          else
-            echo "encoding error for gbk"
-            exit 1
-          fi 
+          filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          attr_key=user.k
+          attr_value_set="attr_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          data_write="data_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          soft_link="softlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          hard_link="hardlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
 
+          ./jfs_new format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL}} ${{steps.vars.outputs.NAME}}
+          ./jfs_new mount --enable-xattr ${{steps.vars.outputs.META_URL}}  ${{steps.vars.outputs.MOUNT_POINT}} -d 
+          echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT}}/$filename"`
+          mkdir `printf "${{steps.vars.outputs.MOUNT_POINT}}/$dirname"`
+          setfattr -n $attr_key -v  $attr_value_set `printf "/tmp/juicefs-encoding-test/$filename"`
+          ln -s `printf "${{steps.vars.outputs.MOUNT_POINT}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT}}/$soft_link"`
+          ln `printf "${{steps.vars.outputs.MOUNT_POINT}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT}}/$hard_link"`
+          ./jfs_new dump ${{steps.vars.outputs.META_URL}}  backup.dump
+
+          ./jfs_new load ${{steps.vars.outputs.META_URL2}}  backup.dump
+          ./jfs_new mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
+
+          if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ]; then 
+            echo "Fatal: file does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$filename
+            exit 1
+          fi
+
+          data_read=$(cat `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"`)
+          if [ "$data_write" != "$data_read" ]; then
+            echo "Fatal: data read is not the same as data write:", $data_write, "data read:", $data_read
+            exit 1
+          fi
+
+          if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$soft_link"` ]; then 
+            echo "Fatal: soft link does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$soft_link
+            exit 1
+          fi
+
+          if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$hard_link"` ]; then 
+            echo "Fatal: hard link does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$hard_link
+            exit 1
+          fi
+          
+          if [ ! -d `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$dirname"` ]; then 
+            echo "Fatal: directory does not exist", ${{steps.vars.outputs.MOUNT_POINT2}}/$dirname
+            exit 1
+          fi
+          
+          cp `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ${{steps.vars.outputs.MOUNT_POINT2}}/temp_file
+          attr_get=$(getfattr -e text -n $attr_key `printf "/tmp/juicefs-encoding-test2/$filename"` | grep "$attr_key" | awk -F= '{print $2}' |  sed 's/^.\(.*\).$/\1/' | sed 's/\\\\/\\/g' )
+          attr_value_set=$(echo $attr_value_set | sed 's/\\\\/\\/g')
+          if [ "$attr_get" != "$attr_value_set" ]; then
+            echo "Fatal: attr get: ":, $attr_get, " is not equal to attr set:" $attr_value_set
+            exit 1
+          fi
+            
       - name: Clean
         if: always() 
         run: |
@@ -68,6 +133,14 @@ jobs:
           if [ -n "$UUID" ];then
             echo UUID is: $UUID
             sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+          fi
+          if [ -d ${{ steps.vars.outputs.MOUNT_POINT2 }} ]; then
+            ./jfs_new umount ${{ steps.vars.outputs.MOUNT_POINT2 }} || true
+          fi
+          UUID=$(./jfs_new status ${{ steps.vars.outputs.META_URL2 }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            echo UUID is: $UUID
+            sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL2 }} $UUID
           fi
 
       - name: Send Slack Notification

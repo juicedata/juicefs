@@ -448,7 +448,7 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 
 	try, max := 0, 3
 	if sync {
-		max = store.conf.MaxRetries
+		max = store.conf.MaxRetries + 1
 	}
 	for ; try < max; try++ {
 		time.Sleep(time.Second * time.Duration(try*try))
@@ -833,7 +833,14 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 	f, err := os.Open(stagingPath)
 	if err != nil {
-		logger.Errorf("Open staging file %s: %s", stagingPath, err)
+		store.pendingMutex.Lock()
+		_, ok = store.pendingKeys[key]
+		store.pendingMutex.Unlock()
+		if ok {
+			logger.Errorf("Open staging file %s: %s", stagingPath, err)
+		} else {
+			logger.Debugf("Key %s is not needed, drop it", key)
+		}
 		return
 	}
 	blen := parseObjOrigSize(key)
