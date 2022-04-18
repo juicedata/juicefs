@@ -115,6 +115,9 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		opt.Password = os.Getenv("META_PASSWORD")
 	}
 	opt.MaxRetries = conf.Retries
+	if opt.MaxRetries == 0 {
+		opt.MaxRetries = -1 // Redis use -1 to disable retries
+	}
 	opt.MinRetryBackoff = query.duration("min-retry-backoff", time.Millisecond*20)
 	opt.MaxRetryBackoff = query.duration("max-retry-backoff", time.Second*10)
 	opt.ReadTimeout = query.duration("read-timeout", time.Second*30)
