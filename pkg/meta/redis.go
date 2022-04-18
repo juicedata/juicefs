@@ -2250,6 +2250,7 @@ func (r *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 
 func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	ctx := Background
+	stop := fmt.Errorf("reach limit")
 	var count int
 	err := r.hscan(ctx, r.delSlices(), func(keys []string) error {
 		var todo []string
@@ -2257,7 +2258,6 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			ps := strings.Split(key, "_")
 			if ts, e := strconv.ParseInt(ps[0], 10, 64); e != nil {
 				logger.Warnf("Invalid key %s", key)
-				continue
 			} else if ts < edge {
 				todo = append(todo, key)
 			}
@@ -2265,25 +2265,53 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 		if todo == nil {
 			return nil
 		}
-		last := len(todo)
-		values, e := r.rdb.HMGet(ctx, r.delSlices(), todo...).Result()
-		if e != nil {
-			return fmt.Errorf("HMGET delSlices %d: %s", last, e)
+		values, err := r.rdb.HMGet(ctx, r.delSlices(), todo...).Result()
+		if err != nil {
+			return fmt.Errorf("HMGET delSlices: %s", err)
 		}
 		for i, v := range values {
 			if v == nil {
 				continue
 			}
-			for rb := utils.FromBuffer([]byte(v.(string))); rb.HasMore(); count++ {
-				r.deleteSlice(rb.Get64(), rb.Get32())
+			buf := []byte(v.(string))
+			if len(buf)%12 != 0 {
+				logger.Errorf("Invalid value for delSlices %s: %v", todo[i], buf)
+				continue
+			}
+			ss := make([]*slice, 0, len(buf)/12)
+			for rb := utils.FromBuffer(buf); rb.HasMore(); {
+				ss = append(ss, &slice{chunkid: rb.Get64(), size: rb.Get32()})
+			}
+
+			rs := make([]*redis.IntCmd, len(ss))
+			if err = r.txn(ctx, func(tx *redis.Tx) error {
+				_, e := tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+					for i, s := range ss {
+						rs[i] = pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1)
+					}
+					pipe.HDel(ctx, r.delSlices(), todo[i])
+					return nil
+				})
+				return e
+			}); err != nil {
+				logger.Warnf("Cleanup delSlices %s: %s", todo[i], err)
+				continue
+			}
+			for i, s := range ss {
+				if rs[i].Err() == nil && rs[i].Val() < 0 {
+					r.deleteSlice(s.chunkid, s.size)
+					count++
+				}
 			}
 			if count >= limit {
-				last = i + 1
-				break
+				return stop
 			}
 		}
-		return r.rdb.Del(ctx, todo[:last]...).Err()
+		return nil
 	})
+	if err == stop {
+		err = nil
+	}
 	return count, err
 }
 
@@ -2332,7 +2360,14 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		}
 		return
 	}
-	var rs []*redis.IntCmd
+	var buf []byte         // trash enabled: track delayed slices
+	var rs []*redis.IntCmd // trash disabled: check reference of slices
+	trash := r.toTrash(0)
+	if trash {
+		for _, s := range ss {
+			buf = append(buf, r.encodeDelayedSlice(s.chunkid, s.size)...)
+		}
+	}
 	key := r.chunkKey(inode, indx)
 	errno := errno(r.txn(ctx, func(tx *redis.Tx) error {
 		rs = nil
@@ -2356,8 +2391,12 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				pipe.LPush(ctx, key, vals[i-1])
 			}
 			pipe.HSet(ctx, r.sliceRefs(), r.sliceKey(chunkid, size), "0") // create the key to tracking it
-			for _, s := range ss {
-				rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1))
+			if trash {
+				pipe.HSet(ctx, r.delSlices(), fmt.Sprintf("%d_%d", time.Now().Unix(), chunkid), buf)
+			} else {
+				for _, s := range ss {
+					rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1))
+				}
 			}
 			return nil
 		})
@@ -2379,20 +2418,11 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if errno == 0 {
 		r.of.InvalidateChunk(inode, indx)
 		r.cleanupZeroRef(r.sliceKey(chunkid, size))
-		var buf []byte
-		for i, s := range ss {
-			if rs[i].Err() == nil && rs[i].Val() < 0 {
-				if r.fmt.TrashDays > 0 { // delay
-					buf = append(buf, r.encodeDelayedSlice(s.chunkid, s.size)...)
-				} else {
+		if !trash {
+			for i, s := range ss {
+				if rs[i].Err() == nil && rs[i].Val() < 0 {
 					r.deleteSlice(s.chunkid, s.size)
 				}
-			}
-		}
-		if buf != nil {
-			if e := r.rdb.HSet(ctx, r.delSlices(), fmt.Sprintf("%d_%d", time.Now().Unix(), chunkid), buf).Err(); e != nil {
-				// leaked, has to be removed by gc
-				logger.Warnf("Add delayed slices for chunkid %d: %s", chunkid, e)
 			}
 		}
 	} else {
