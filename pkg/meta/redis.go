@@ -3001,6 +3001,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
 	p := m.rdb.Pipeline()
+	batch := 10000
 	if attr.Typ == TypeFile {
 		attr.Length = e.Attr.Length
 		for _, c := range e.Chunks {
@@ -3021,11 +3022,16 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		}
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
-		if len(e.Entries) > 0 {
-			dentries := make(map[string]interface{})
-			for _, c := range e.Entries {
-				dentries[string(unescape(c.Name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
+		dentries := make(map[string]interface{}, batch)
+		for k := range e.Entries {
+			entry := e.Entries[k]
+			dentries[string(unescape(k))] = m.packEntry(typeFromString(entry.Attr.Type), entry.Attr.Inode)
+			if len(dentries) >= batch {
+				p.HSet(ctx, m.entryKey(inode), dentries)
+				dentries = make(map[string]interface{}, batch)
 			}
+		}
+		if len(dentries) > 0 {
 			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
 	} else if attr.Typ == TypeSymlink {
