@@ -2253,48 +2253,37 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	stop := fmt.Errorf("reach limit")
 	var count int
 	err := r.hscan(ctx, r.delSlices(), func(keys []string) error {
-		var todo []string
-		for _, key := range keys {
+		for i := 0; i < len(keys); i += 2 {
+			key := keys[i]
 			ps := strings.Split(key, "_")
 			if ts, e := strconv.ParseInt(ps[0], 10, 64); e != nil {
 				logger.Warnf("Invalid key %s", key)
-			} else if ts < edge {
-				todo = append(todo, key)
-			}
-		}
-		if todo == nil {
-			return nil
-		}
-		values, err := r.rdb.HMGet(ctx, r.delSlices(), todo...).Result()
-		if err != nil {
-			return fmt.Errorf("HMGET delSlices: %s", err)
-		}
-		for i, v := range values {
-			if v == nil {
+				continue
+			} else if ts >= edge {
 				continue
 			}
-			buf := []byte(v.(string))
-			if len(buf)%12 != 0 {
-				logger.Errorf("Invalid value for delSlices %s: %v", todo[i], buf)
+
+			buf := []byte(keys[i+1])
+			if len(buf) == 0 || len(buf)%12 != 0 {
+				logger.Errorf("Invalid value for delSlices %s: %v", key, buf)
 				continue
 			}
 			ss := make([]*slice, 0, len(buf)/12)
 			for rb := utils.FromBuffer(buf); rb.HasMore(); {
 				ss = append(ss, &slice{chunkid: rb.Get64(), size: rb.Get32()})
 			}
-
 			rs := make([]*redis.IntCmd, len(ss))
-			if err = r.txn(ctx, func(tx *redis.Tx) error {
+			if err := r.txn(ctx, func(tx *redis.Tx) error {
 				_, e := tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 					for i, s := range ss {
 						rs[i] = pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1)
 					}
-					pipe.HDel(ctx, r.delSlices(), todo[i])
+					pipe.HDel(ctx, r.delSlices(), key)
 					return nil
 				})
 				return e
 			}, r.delSlices()); err != nil {
-				logger.Warnf("Cleanup delSlices %s: %s", todo[i], err)
+				logger.Warnf("Cleanup delSlices %s: %s", key, err)
 				continue
 			}
 			for i, s := range ss {
