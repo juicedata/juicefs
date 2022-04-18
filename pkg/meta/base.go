@@ -965,7 +965,7 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 
 func (m *baseMeta) cleanupDelayedSlices() {
 	now := time.Now()
-	edge := now.Unix() - int64(24*m.fmt.TrashDays+1)*3600
+	edge := now.Unix() - int64(m.fmt.TrashDays)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
 	if count, err := m.en.doCleanupDelayedSlices(edge, 3e5); err == nil {
 		if count > 0 {

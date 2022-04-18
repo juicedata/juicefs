@@ -2293,7 +2293,7 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 					return nil
 				})
 				return e
-			}); err != nil {
+			}, r.delSlices()); err != nil {
 				logger.Warnf("Cleanup delSlices %s: %s", todo[i], err)
 				continue
 			}
