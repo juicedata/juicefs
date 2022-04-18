@@ -98,7 +98,7 @@ func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
 	mtime := time.Now()
 	for i, k := range keys {
 		// FIXME: mtime
-		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, false}
+		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/")}
 	}
 	return objs, nil
 }

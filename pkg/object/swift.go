@@ -69,8 +69,8 @@ func (s *swiftOSS) Delete(key string) error {
 }
 
 func (s *swiftOSS) List(prefix, marker string, limit int64) ([]Object, error) {
-	if limit > 1000 {
-		limit = 1000
+	if limit > 10000 {
+		limit = 10000
 	}
 	objects, err := s.conn.Objects(s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Limit: int(limit)})
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *swiftOSS) List(prefix, marker string, limit int64) ([]Object, error) {
 	}
 	var objs = make([]Object, len(objects))
 	for i, o := range objects {
-		objs[i] = &obj{o.Name, o.Bytes, o.LastModified, false}
+		objs[i] = &obj{o.Name, o.Bytes, o.LastModified, strings.HasSuffix(o.Name, "/")}
 	}
 	return objs, nil
 }
