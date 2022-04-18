@@ -448,7 +448,7 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 
 	try, max := 0, 3
 	if sync {
-		max = store.conf.MaxRetries
+		max = store.conf.MaxRetries + 1
 	}
 	for ; try < max; try++ {
 		time.Sleep(time.Second * time.Duration(try*try))
