@@ -7,6 +7,7 @@ on:
 
 jobs:
   fio-benchmark:
+    if: github.repository == 'juicedata/juicefs'
     runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - name: Checkout
