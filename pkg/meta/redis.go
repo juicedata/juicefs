@@ -3072,12 +3072,22 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 
 func (m *redisMeta) LoadMeta(r io.Reader) error {
 	ctx := Background
-	dbsize, err := m.rdb.DBSize(ctx).Result()
-	if err != nil {
-		return err
-	}
-	if dbsize > 0 {
-		return fmt.Errorf("Database %s is not empty", m.Name())
+	var err error
+	if _, ok := m.rdb.(*redis.ClusterClient); ok {
+		err = m.scan(ctx, "*", func(s []string) error {
+			return fmt.Errorf("found key with same prefix: %s", s)
+		})
+		if err != nil {
+			return err
+		}
+	} else {
+		dbsize, err := m.rdb.DBSize(ctx).Result()
+		if err != nil {
+			return err
+		}
+		if dbsize > 0 {
+			return fmt.Errorf("Database %s is not empty", m.Name())
+		}
 	}
 
 	dec := json.NewDecoder(r)
