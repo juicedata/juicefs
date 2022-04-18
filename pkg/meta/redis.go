@@ -1607,14 +1607,7 @@ func (r *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 }
 
 func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
-	var keys []string
-	var cursor uint64
-	var err error
-	for {
-		keys, cursor, err = r.rdb.HScan(ctx, r.entryKey(inode), cursor, "*", 10000).Result()
-		if err != nil {
-			return errno(err)
-		}
+	err := r.hscan(ctx, r.entryKey(inode), func(keys []string) error {
 		newEntries := make([]Entry, len(keys)/2)
 		newAttrs := make([]Attr, len(keys)/2)
 		for i := 0; i < len(keys); i += 2 {
@@ -1630,9 +1623,10 @@ func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 			ent.Attr.Typ = typ
 			*entries = append(*entries, ent)
 		}
-		if cursor == 0 {
-			break
-		}
+		return nil
+	})
+	if err != nil {
+		return errno(err)
 	}
 
 	if plus != 0 {
@@ -2055,44 +2049,31 @@ func (r *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 }
 
 func (r *redisMeta) doCleanupSlices() {
-	var ctx = Background
-	var ckeys []string
-	var cursor uint64
-	var err error
-	for {
-		ckeys, cursor, err = r.rdb.HScan(ctx, r.sliceRefs(), cursor, "*", 1000).Result()
+	_ = r.hscan(Background, r.sliceRefs(), func(ckeys []string) error {
+		values, err := r.rdb.HMGet(Background, r.sliceRefs(), ckeys...).Result()
 		if err != nil {
-			logger.Errorf("scan slices: %s", err)
-			break
+			logger.Warnf("HMGET sliceRefs: %s", err)
+			return err
 		}
-		if len(ckeys) > 0 {
-			values, err := r.rdb.HMGet(ctx, r.sliceRefs(), ckeys...).Result()
-			if err != nil {
-				logger.Warnf("mget slices: %s", err)
-				break
+		for i, v := range values {
+			if v == nil {
+				continue
 			}
-			for i, v := range values {
-				if v == nil {
-					continue
-				}
-				if strings.HasPrefix(v.(string), "-") { // < 0
-					ps := strings.Split(ckeys[i], "_")
-					if len(ps) == 2 {
-						chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
-						size, _ := strconv.ParseUint(ps[1], 10, 32)
-						if chunkid > 0 && size > 0 {
-							r.deleteSlice(chunkid, uint32(size))
-						}
+			if strings.HasPrefix(v.(string), "-") { // < 0
+				ps := strings.Split(ckeys[i], "_")
+				if len(ps) == 2 {
+					chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
+					size, _ := strconv.ParseUint(ps[1], 10, 32)
+					if chunkid > 0 && size > 0 {
+						r.deleteSlice(chunkid, uint32(size))
 					}
-				} else if v == "0" {
-					r.cleanupZeroRef(ckeys[i])
 				}
+			} else if v == "0" {
+				r.cleanupZeroRef(ckeys[i])
 			}
 		}
-		if cursor == 0 {
-			break
-		}
-	}
+		return nil
+	})
 }
 
 func (r *redisMeta) cleanupZeroRef(key string) {
@@ -2473,6 +2454,27 @@ func (r *redisMeta) scan(ctx context.Context, pattern string, f func([]string) e
 		if len(keys) > 0 {
 			err = f(keys)
 			if err != nil {
+				return err
+			}
+		}
+		if c == 0 {
+			break
+		}
+		cursor = c
+	}
+	return nil
+}
+
+func (r *redisMeta) hscan(ctx context.Context, key string, f func([]string) error) error {
+	var cursor uint64
+	for {
+		keys, c, err := r.rdb.HScan(ctx, key, cursor, "*", 10000).Result()
+		if err != nil {
+			logger.Warnf("HSCAN %s: %s", key, err)
+			return err
+		}
+		if len(keys) > 0 {
+			if err = f(keys); err != nil {
 				return err
 			}
 		}
