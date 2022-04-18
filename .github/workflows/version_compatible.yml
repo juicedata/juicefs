@@ -20,6 +20,7 @@ on:
 
 jobs:
   version-compatible-test:
+    if: github.repository == 'juicedata/juicefs'
     runs-on: [self-hosted, daily-build]
     steps:
       - name: Checkout
