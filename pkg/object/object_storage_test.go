@@ -481,15 +481,16 @@ func TestRedis(t *testing.T) {
 	if os.Getenv("REDIS_ADDR") == "" {
 		t.SkipNow()
 	}
+
+	opt, _ := redis.ParseURL(os.Getenv("REDIS_ADDR"))
+	rdb := redis.NewClient(opt)
+	_ = rdb.FlushDB(context.Background())
+
 	s, err := newRedis(os.Getenv("REDIS_ADDR"), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	testStorage(t, s)
-
-	opt, _ := redis.ParseURL(os.Getenv("REDIS_ADDR"))
-	rdb := redis.NewClient(opt)
-	_ = rdb.FlushDB(context.Background())
 }
 
 func TestWebDAV(t *testing.T) {
