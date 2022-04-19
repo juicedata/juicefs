@@ -35,7 +35,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const testMeta = "redis://127.0.0.1:6379/10"
+const testMeta = "redis://127.0.0.1:6379/11"
 const testMountPoint = "/tmp/jfs-unit-test"
 const testVolume = "test"
 
@@ -43,7 +43,7 @@ const testVolume = "test"
 func Test_exposeMetrics(t *testing.T) {
 	Convey("Test_exposeMetrics", t, func() {
 		Convey("Test_exposeMetrics", func() {
-			addr := "redis://127.0.0.1:6379/10"
+			addr := "redis://127.0.0.1:6379/12"
 			client := meta.NewClient(addr, &meta.Config{})
 			format := meta.Format{
 				Name:      "test",
