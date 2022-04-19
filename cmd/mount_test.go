@@ -92,17 +92,13 @@ func resetTestMeta() *redis.Client { // using Redis
 	return rdb
 }
 
-func mountTemp(t *testing.T, bucket *string, trash bool) {
+func mountTemp(t *testing.T, bucket *string) {
 	_ = resetTestMeta()
 	testDir := t.TempDir()
 	if bucket != nil {
 		*bucket = testDir
 	}
-	args := []string{"", "format", "--bucket", testDir, testMeta, testVolume}
-	if !trash {
-		args = append(args, "--trash-days=0")
-	}
-	if err := Main(args); err != nil {
+	if err := Main([]string{"", "format", "--bucket", testDir, testMeta, testVolume}); err != nil {
 		t.Fatalf("format failed: %s", err)
 	}
 
@@ -124,7 +120,7 @@ func umountTemp(t *testing.T) {
 }
 
 func TestMount(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil)
 	defer umountTemp(t)
 
 	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("test"), 0644); err != nil {
@@ -133,7 +129,7 @@ func TestMount(t *testing.T) {
 }
 
 func TestUmount(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil)
 	umountTemp(t)
 
 	inode, err := utils.GetFileInode(testMountPoint)
