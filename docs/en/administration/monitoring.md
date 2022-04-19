@@ -1,9 +1,9 @@
 ---
-sidebar_label: Monitoring
+sidebar_label: Monitoring and Data Visualization
 sidebar_position: 6
 ---
 
-# Monitoring
+# Monitoring and Data Visualization
 
 JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system (the default API address is `http://localhost:9567/metrics`), which can be used to collect JuiceFS monitoring metrics. Once the monitoring metrics are collected, they can be quickly displayed via the [Grafana](https://grafana.com) dashboard template provided by JuiceFS.
 
