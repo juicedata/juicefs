@@ -2604,7 +2604,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	return bw.Flush()
 }
 
-func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef, beans *safeBeanSlice) {
+func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef, beansCh chan interface{}) {
 	inode := e.Attr.Inode
 	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := e.Attr
@@ -2641,24 +2641,24 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 				}
 			}
 			m.Unlock()
-			beans.add(&chunk{inode, c.Index, slices})
+			beansCh <- &chunk{inode, c.Index, slices}
 		}
 	} else if n.Type == TypeDirectory {
 		n.Length = 4 << 10
 		if len(e.Entries) > 0 {
 			for _, c := range e.Entries {
-				beans.add(&edge{
+				beansCh <- &edge{
 					Parent: inode,
 					Name:   unescape(c.Name),
 					Inode:  c.Attr.Inode,
 					Type:   typeFromString(c.Attr.Type),
-				})
+				}
 			}
 		}
 	} else if n.Type == TypeSymlink {
 		symL := unescape(e.Symlink)
 		n.Length = uint64(len(symL))
-		beans.add(&symlink{inode, symL})
+		beansCh <- &symlink{inode, symL}
 	}
 	m.Lock()
 	if inode > 1 && inode != TrashInode {
@@ -2678,21 +2678,10 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 
 	if len(e.Xattrs) > 0 {
 		for _, x := range e.Xattrs {
-			beans.add(&xattr{inode, x.Name, unescape(x.Value)})
+			beansCh <- &xattr{inode, x.Name, unescape(x.Value)}
 		}
 	}
-	beans.add(n)
-}
-
-type safeBeanSlice struct {
-	sync.Mutex
-	elems []interface{}
-}
-
-func (s *safeBeanSlice) add(elems ...interface{}) {
-	s.Lock()
-	defer s.Unlock()
-	s.elems = append(s.elems, elems...)
+	beansCh <- n
 }
 
 func (m *dbMeta) LoadMeta(r io.Reader) error {
@@ -2731,10 +2720,10 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 
 	progress := utils.NewProgress(false, false)
-	bar := progress.AddCountBar("Collected entries", 1) // with root
+	cbar := progress.AddCountBar("Collected entries", 1) // with root
 	showProgress := func(totalIncr, currentIncr int64) {
-		bar.IncrTotal(totalIncr)
-		bar.IncrInt64(currentIncr)
+		cbar.IncrTotal(totalIncr)
+		cbar.IncrInt64(currentIncr)
 	}
 	dm.FSTree.Attr.Inode = 1
 	entries := make(map[Ino]*DumpedEntry)
@@ -2742,92 +2731,108 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	if dm.Trash != nil {
-		bar.IncrTotal(1)
+		cbar.IncrTotal(1)
 		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
 			return err
 		}
 	}
-	bar.Done()
+	cbar.Done()
 
 	counters := &DumpedCounters{
 		NextInode: 2,
 		NextChunk: 1,
 	}
 	refs := make(map[uint64]*chunkRef)
-	bar = progress.AddCountBar("Loaded entries", int64(len(entries)))
-	beans := &safeBeanSlice{}
-	pool := make(chan struct{}, 100)
-	var wg sync.WaitGroup
-	for _, entry := range entries {
-		pool <- struct{}{}
-		wg.Add(1)
-		go func(entry *DumpedEntry, beans *safeBeanSlice) {
-			defer func() {
-				bar.Increment()
-				wg.Done()
-				<-pool
-			}()
-			// TODO: use pipeline to save memory
-			m.loadEntry(entry, counters, refs, beans)
-		}(entry, beans)
-	}
-	wg.Wait()
-	bar.Done()
-
-	beans.add(&setting{"format", string(format)})
-	beans.add(
-		&counter{"usedSpace", counters.UsedSpace},
-		&counter{"totalInodes", counters.UsedInodes},
-		&counter{"nextInode", counters.NextInode},
-		&counter{"nextChunk", counters.NextChunk},
-		&counter{"nextSession", counters.NextSession},
-		&counter{"nextTrash", counters.NextTrash},
-		&counter{"nextCleanupSlices", 0})
-	if len(dm.DelFiles) > 0 {
-		for _, d := range dm.DelFiles {
-			beans.add(&delfile{d.Inode, d.Length, d.Expire})
+	beansCh := make(chan interface{}, 1000)
+	lbar := progress.AddCountBar("Loaded entries", int64(len(entries)))
+	go func() {
+		defer close(beansCh)
+		pool := make(chan struct{}, 100)
+		var wg sync.WaitGroup
+		for _, entry := range entries {
+			pool <- struct{}{}
+			wg.Add(1)
+			go func(entry *DumpedEntry) {
+				defer func() {
+					lbar.Increment()
+					wg.Done()
+					<-pool
+				}()
+				m.loadEntry(entry, counters, refs, beansCh)
+			}(entry)
 		}
-	}
-	if len(refs) > 0 {
-		for _, v := range refs {
-			beans.add(v)
-		}
-	}
-
-	bar = progress.AddCountBar("Insert records", int64(len(beans.elems)))
-	maxNum := 100
-	insertPool := make(chan struct{}, maxNum)
-	errCh := make(chan error, 100)
-	done := make(chan struct{}, 1)
-	batch := 100
-	for start, end, size := 0, 0, len(beans.elems); end < size; start = end {
-		end = start + batch
-		if end > size {
-			end = size
-		}
-		insertPool <- struct{}{}
-		wg.Add(1)
-		go func(start, end int) {
-			s := m.db.NewSession()
-			defer func() {
-				s.Close()
-				wg.Done()
-				<-insertPool
-			}()
-			n, err := s.Insert(beans.elems[start:end]...)
-			if err != nil {
-				errCh <- err
-				return
-			} else if d := end - start - int(n); d > 0 {
-				errCh <- fmt.Errorf("%d records not inserted: %+v", d, beans.elems[start:end])
-				return
+		wg.Wait()
+		beansCh <- &setting{"format", string(format)}
+		beansCh <- &counter{"usedSpace", counters.UsedSpace}
+		beansCh <- &counter{"totalInodes", counters.UsedInodes}
+		beansCh <- &counter{"nextInode", counters.NextInode}
+		beansCh <- &counter{"nextChunk", counters.NextChunk}
+		beansCh <- &counter{"nextSession", counters.NextSession}
+		beansCh <- &counter{"nextTrash", counters.NextTrash}
+		beansCh <- &counter{"nextCleanupSlices", 0}
+		if len(dm.DelFiles) > 0 {
+			for _, d := range dm.DelFiles {
+				beansCh <- &delfile{d.Inode, d.Length, d.Expire}
 			}
-			bar.IncrInt64(n)
-		}(start, end)
+		}
+		if len(refs) > 0 {
+			for _, v := range refs {
+				beansCh <- v
+			}
+		}
+	}()
+
+	batch := 50
+	insertPool := make(chan struct{}, 100)
+	errCh := make(chan error, 500)
+	done := make(chan struct{}, 1)
+	var iWg sync.WaitGroup
+	beanBuffer := make([]interface{}, 0, batch)
+
+	for bean := range beansCh {
+		beanBuffer = append(beanBuffer, bean)
+		if len(beanBuffer) >= batch {
+			beanBufferBk := beanBuffer
+			iWg.Add(1)
+			insertPool <- struct{}{}
+			s := m.db.NewSession()
+			go func() {
+				defer func() {
+					s.Close()
+					iWg.Done()
+					<-insertPool
+				}()
+
+				select {
+				case err = <-errCh:
+					return
+				default:
+				}
+
+				n, err := s.Insert(beanBufferBk...)
+				if err != nil {
+					fmt.Println(err)
+					errCh <- err
+				} else if d := len(beanBufferBk) - int(n); d > 0 {
+					fmt.Println(fmt.Errorf("%d records not inserted: %+v", d, beanBufferBk))
+					errCh <- fmt.Errorf("%d records not inserted: %+v", d, beanBufferBk)
+				}
+			}()
+			beanBuffer = make([]interface{}, 0, batch)
+		}
+	}
+	if len(beanBuffer) > 0 {
+		s := m.db.NewSession()
+		n, err := s.Insert(beanBuffer...)
+		if err != nil {
+			errCh <- err
+		} else if d := len(beanBuffer) - int(n); d > 0 {
+			errCh <- fmt.Errorf("%d records not inserted: %+v", d, beanBuffer)
+		}
 	}
 
 	go func() {
-		wg.Wait()
+		iWg.Wait()
 		close(done)
 	}()
 
@@ -2837,7 +2842,6 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	case <-done:
 	}
 
-	bar.Done()
 	progress.Done()
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
