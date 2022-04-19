@@ -2049,18 +2049,11 @@ func (r *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 }
 
 func (r *redisMeta) doCleanupSlices() {
-	_ = r.hscan(Background, r.sliceRefs(), func(ckeys []string) error {
-		values, err := r.rdb.HMGet(Background, r.sliceRefs(), ckeys...).Result()
-		if err != nil {
-			logger.Warnf("HMGET sliceRefs: %s", err)
-			return err
-		}
-		for i, v := range values {
-			if v == nil {
-				continue
-			}
-			if strings.HasPrefix(v.(string), "-") { // < 0
-				ps := strings.Split(ckeys[i], "_")
+	_ = r.hscan(Background, r.sliceRefs(), func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			key, val := keys[i], keys[i+1]
+			if strings.HasPrefix(val, "-") { // < 0
+				ps := strings.Split(key, "_")
 				if len(ps) == 2 {
 					chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
 					size, _ := strconv.ParseUint(ps[1], 10, 32)
@@ -2068,8 +2061,8 @@ func (r *redisMeta) doCleanupSlices() {
 						r.deleteSlice(chunkid, uint32(size))
 					}
 				}
-			} else if v == "0" {
-				r.cleanupZeroRef(ckeys[i])
+			} else if val == "0" {
+				r.cleanupZeroRef(key)
 			}
 		}
 		return nil
