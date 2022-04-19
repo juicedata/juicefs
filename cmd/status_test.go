@@ -38,7 +38,7 @@ func TestStatus(t *testing.T) {
 			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
 			defer patches.Reset()
 
-			mountTemp(t, nil)
+			mountTemp(t, nil, true)
 			defer umountTemp(t)
 
 			if err = Main([]string{"", "status", testMeta}); err != nil {

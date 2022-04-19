@@ -22,7 +22,7 @@ import (
 )
 
 func TestBench(t *testing.T) {
-	mountTemp(t, nil)
+	mountTemp(t, nil, false)
 	defer umountTemp(t)
 
 	os.Setenv("SKIP_DROP_CACHES", "true")
