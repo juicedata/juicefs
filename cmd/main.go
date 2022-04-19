@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -73,11 +72,7 @@ func Main(args []string) error {
 
 	// Called via mount or fstab.
 	if strings.HasSuffix(args[0], "/mount.juicefs") {
-		if newArgs, err := handleSysMountArgs(args); err != nil {
-			log.Fatal(err)
-		} else {
-			args = newArgs
-		}
+		args = handleSysMountArgs(args)
 	}
 
 	return app.Run(reorderOptions(app, args))
@@ -87,11 +82,11 @@ func Main(args []string) error {
 func main() {
 	err := Main(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 }
 
-func handleSysMountArgs(args []string) ([]string, error) {
+func handleSysMountArgs(args []string) []string {
 	optionToCmdFlag := map[string]string{
 		"attrcacheto":     "attr-cache",
 		"entrycacheto":    "entry-cache",
@@ -153,7 +148,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 	}
 	newArgs = append(newArgs, args[1], args[2])
 	logger.Debug("Parsed mount args: ", strings.Join(newArgs, " "))
-	return newArgs, nil
+	return newArgs
 }
 
 func isFlag(flags []cli.Flag, option string) (bool, bool) {
