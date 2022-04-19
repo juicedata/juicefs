@@ -2254,13 +2254,21 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 				err = ENOATTR
 			}
 		default:
-			n, err = s.Insert(&x)
-			if err != nil || n == 0 {
-				if m.db.DriverName() == "postgres" {
-					// cleanup failed session
-					_ = s.Rollback()
+			if m.db.DriverName() == "postgres" {
+				var r sql.Result
+				r, err = s.Exec("INSERT INTO jfs_xattr(inode, name, value) VALUES(?, ?, ?) "+
+					"ON CONFLICT (inode, name) DO UPDATE SET value=? ", inode, name, value, value)
+				if err == nil {
+					n, err = r.RowsAffected()
 				}
-				_, err = s.Update(&x, &xattr{inode, name, nil})
+			} else {
+				n, err = s.Insert(&x)
+				if err != nil || n == 0 {
+					n, err = s.Update(&x, &xattr{inode, name, nil})
+				}
+			}
+			if err == nil && n == 0 {
+				err = errors.New("not inserted or updated")
 			}
 		}
 		return err
