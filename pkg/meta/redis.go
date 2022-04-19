@@ -115,6 +115,9 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		opt.Password = os.Getenv("META_PASSWORD")
 	}
 	opt.MaxRetries = conf.Retries
+	if opt.MaxRetries == 0 {
+		opt.MaxRetries = -1 // Redis use -1 to disable retries
+	}
 	opt.MinRetryBackoff = query.duration("min-retry-backoff", time.Millisecond*20)
 	opt.MaxRetryBackoff = query.duration("max-retry-backoff", time.Second*10)
 	opt.ReadTimeout = query.duration("read-timeout", time.Second*30)
@@ -1604,14 +1607,7 @@ func (r *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 }
 
 func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
-	var keys []string
-	var cursor uint64
-	var err error
-	for {
-		keys, cursor, err = r.rdb.HScan(ctx, r.entryKey(inode), cursor, "*", 10000).Result()
-		if err != nil {
-			return errno(err)
-		}
+	err := r.hscan(ctx, r.entryKey(inode), func(keys []string) error {
 		newEntries := make([]Entry, len(keys)/2)
 		newAttrs := make([]Attr, len(keys)/2)
 		for i := 0; i < len(keys); i += 2 {
@@ -1627,9 +1623,10 @@ func (r *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 			ent.Attr.Typ = typ
 			*entries = append(*entries, ent)
 		}
-		if cursor == 0 {
-			break
-		}
+		return nil
+	})
+	if err != nil {
+		return errno(err)
 	}
 
 	if plus != 0 {
@@ -2052,44 +2049,31 @@ func (r *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 }
 
 func (r *redisMeta) doCleanupSlices() {
-	var ctx = Background
-	var ckeys []string
-	var cursor uint64
-	var err error
-	for {
-		ckeys, cursor, err = r.rdb.HScan(ctx, r.sliceRefs(), cursor, "*", 1000).Result()
+	_ = r.hscan(Background, r.sliceRefs(), func(ckeys []string) error {
+		values, err := r.rdb.HMGet(Background, r.sliceRefs(), ckeys...).Result()
 		if err != nil {
-			logger.Errorf("scan slices: %s", err)
-			break
+			logger.Warnf("HMGET sliceRefs: %s", err)
+			return err
 		}
-		if len(ckeys) > 0 {
-			values, err := r.rdb.HMGet(ctx, r.sliceRefs(), ckeys...).Result()
-			if err != nil {
-				logger.Warnf("mget slices: %s", err)
-				break
+		for i, v := range values {
+			if v == nil {
+				continue
 			}
-			for i, v := range values {
-				if v == nil {
-					continue
-				}
-				if strings.HasPrefix(v.(string), "-") { // < 0
-					ps := strings.Split(ckeys[i], "_")
-					if len(ps) == 2 {
-						chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
-						size, _ := strconv.ParseUint(ps[1], 10, 32)
-						if chunkid > 0 && size > 0 {
-							r.deleteSlice(chunkid, uint32(size))
-						}
+			if strings.HasPrefix(v.(string), "-") { // < 0
+				ps := strings.Split(ckeys[i], "_")
+				if len(ps) == 2 {
+					chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
+					size, _ := strconv.ParseUint(ps[1], 10, 32)
+					if chunkid > 0 && size > 0 {
+						r.deleteSlice(chunkid, uint32(size))
 					}
-				} else if v == "0" {
-					r.cleanupZeroRef(ckeys[i])
 				}
+			} else if v == "0" {
+				r.cleanupZeroRef(ckeys[i])
 			}
 		}
-		if cursor == 0 {
-			break
-		}
-	}
+		return nil
+	})
 }
 
 func (r *redisMeta) cleanupZeroRef(key string) {
@@ -2470,6 +2454,27 @@ func (r *redisMeta) scan(ctx context.Context, pattern string, f func([]string) e
 		if len(keys) > 0 {
 			err = f(keys)
 			if err != nil {
+				return err
+			}
+		}
+		if c == 0 {
+			break
+		}
+		cursor = c
+	}
+	return nil
+}
+
+func (r *redisMeta) hscan(ctx context.Context, key string, f func([]string) error) error {
+	var cursor uint64
+	for {
+		keys, c, err := r.rdb.HScan(ctx, key, cursor, "*", 10000).Result()
+		if err != nil {
+			logger.Warnf("HSCAN %s: %s", key, err)
+			return err
+		}
+		if len(keys) > 0 {
+			if err = f(keys); err != nil {
 				return err
 			}
 		}
@@ -3001,6 +3006,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parent
 	p := m.rdb.Pipeline()
+	batch := 10000
 	if attr.Typ == TypeFile {
 		attr.Length = e.Attr.Length
 		for _, c := range e.Chunks {
@@ -3021,11 +3027,16 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 		}
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
-		if len(e.Entries) > 0 {
-			dentries := make(map[string]interface{})
-			for _, c := range e.Entries {
-				dentries[string(unescape(c.Name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
+		dentries := make(map[string]interface{}, batch)
+		for k := range e.Entries {
+			entry := e.Entries[k]
+			dentries[string(unescape(k))] = m.packEntry(typeFromString(entry.Attr.Type), entry.Attr.Inode)
+			if len(dentries) >= batch {
+				p.HSet(ctx, m.entryKey(inode), dentries)
+				dentries = make(map[string]interface{}, batch)
 			}
+		}
+		if len(dentries) > 0 {
 			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
 	} else if attr.Typ == TypeSymlink {
@@ -3063,12 +3074,22 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[strin
 
 func (m *redisMeta) LoadMeta(r io.Reader) error {
 	ctx := Background
-	dbsize, err := m.rdb.DBSize(ctx).Result()
-	if err != nil {
-		return err
-	}
-	if dbsize > 0 {
-		return fmt.Errorf("Database %s is not empty", m.Name())
+	var err error
+	if _, ok := m.rdb.(*redis.ClusterClient); ok {
+		err = m.scan(ctx, "*", func(s []string) error {
+			return fmt.Errorf("found key with same prefix: %s", s)
+		})
+		if err != nil {
+			return err
+		}
+	} else {
+		dbsize, err := m.rdb.DBSize(ctx).Result()
+		if err != nil {
+			return err
+		}
+		if dbsize > 0 {
+			return fmt.Errorf("Database %s is not empty", m.Name())
+		}
 	}
 
 	dec := json.NewDecoder(r)

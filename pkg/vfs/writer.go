@@ -343,7 +343,7 @@ func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 	f.flushwaiting++
 
 	var err syscall.Errno
-	var wait = time.Second * time.Duration((f.w.maxRetries+1)*(f.w.maxRetries+1)/2)
+	var wait = time.Second * time.Duration((f.w.maxRetries+2)*(f.w.maxRetries+2)/2)
 	if wait < time.Minute*5 {
 		wait = time.Minute * 5
 	}

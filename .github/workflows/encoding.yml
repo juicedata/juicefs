@@ -34,6 +34,8 @@ jobs:
           echo ::set-output name=META_URL2::sqlite3:///tmp/encoding-test2.db
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-encoding-test
           echo ::set-output name=MOUNT_POINT2::/tmp/juicefs-encoding-test2
+          echo ::set-output name=BUCKET::/var/jfs/
+          echo ::set-output name=NAME::encoding-test
 
       - name: Build linux target
         run: |
@@ -61,6 +63,9 @@ jobs:
             echo UUID is: $UUID
             sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL2 }} $UUID
           fi
+          if [ -f ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
+            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -f
+          fi
 
       - name: Encoding Test
         run: |
@@ -72,7 +77,7 @@ jobs:
           soft_link="softlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           hard_link="hardlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
 
-          ./jfs_new format ${{steps.vars.outputs.META_URL}} myjfs
+          ./jfs_new format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL}} ${{steps.vars.outputs.NAME}}
           ./jfs_new mount --enable-xattr ${{steps.vars.outputs.META_URL}}  ${{steps.vars.outputs.MOUNT_POINT}} -d 
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT}}/$filename"`
           mkdir `printf "${{steps.vars.outputs.MOUNT_POINT}}/$dirname"`

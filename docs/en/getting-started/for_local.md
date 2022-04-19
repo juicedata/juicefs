@@ -114,7 +114,7 @@ The above exercise only helps you to have a quick experience with JuiceFS locall
 
 ### Object Storage
 
-Object Storage is a web storage service based on the HTTP protocol that offers simple APIs for access. It has a flat structure, and is easy to scale and relatively inexpensive, particularly suitable for for storing large amounts of unstructured data. Almost all mainstream cloud computing platforms provide object storage services, such as Amazon S3, Alibaba Cloud OSS, and Backblaze B2.
+Object Storage is a web storage service based on the HTTP protocol that offers simple APIs for access. It has a flat structure, and is easy to scale and relatively inexpensive, particularly suitable for storing large amounts of unstructured data. Almost all mainstream cloud computing platforms provide object storage services, such as Amazon S3, Alibaba Cloud OSS, and Backblaze B2.
 
 JuiceFS supports almost all object storage services, see [JuiceFS supported storage medias](../reference/how_to_setup_object_storage.md).
 

@@ -39,4 +39,3 @@ $ cat /jfs/.accesslog
 ```
 
 The last number in each line is the time (in seconds) the current operation takes. You can use this directly to debug and analyze performance issues, or try `./juicefs profile /jfs` to monitor real time statistics. Please run `./juicefs profile -h` or refer [here](../benchmark/operations_profiling.md) to learn more about this subcommand.
-a
