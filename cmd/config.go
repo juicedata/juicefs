@@ -121,7 +121,7 @@ func config(ctx *cli.Context) error {
 
 	format, err := m.Load(false)
 	if err != nil {
-		return err
+		logger.Fatalf("Load setting: %s", err)
 	}
 	if len(ctx.LocalFlagNames()) == 0 {
 		format.RemoveSecret()
@@ -174,7 +174,7 @@ func config(ctx *cli.Context) error {
 		case "trash-days":
 			if new := ctx.Int(flag); new != format.TrashDays {
 				if new < 0 {
-					return fmt.Errorf("Invalid trash days: %d", new)
+					logger.Fatalf("Invalid trash days: %d", new)
 				}
 				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.TrashDays, new))
 				format.TrashDays = new
@@ -183,7 +183,7 @@ func config(ctx *cli.Context) error {
 		case "min-client-version":
 			if new := ctx.String(flag); new != format.MinClientVersion {
 				if version.Parse(new) == nil {
-					return fmt.Errorf("Invalid version string: %s", new)
+					logger.Fatalf("Invalid version string: %s", new)
 				}
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MinClientVersion, new))
 				format.MinClientVersion = new
@@ -192,7 +192,7 @@ func config(ctx *cli.Context) error {
 		case "max-client-version":
 			if new := ctx.String(flag); new != format.MaxClientVersion {
 				if version.Parse(new) == nil {
-					return fmt.Errorf("Invalid version string: %s", new)
+					logger.Fatalf("Invalid version string: %s", new)
 				}
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MaxClientVersion, new))
 				format.MaxClientVersion = new
@@ -201,7 +201,7 @@ func config(ctx *cli.Context) error {
 		}
 	}
 	if msg.Len() == 0 {
-		fmt.Println("Nothing changed.")
+		logger.Infof("Nothing changed")
 		return nil
 	}
 
@@ -209,10 +209,10 @@ func config(ctx *cli.Context) error {
 		if storage {
 			blob, err := createStorage(*format)
 			if err != nil {
-				return err
+				logger.Fatalf("Create storage: %s", err)
 			}
 			if err = test(blob); err != nil {
-				return err
+				logger.Fatalf("Test storage: %s", err)
 			}
 		}
 		if quota {
@@ -224,20 +224,23 @@ func config(ctx *cli.Context) error {
 				warn("New quota is too small (used / quota): %d / %d bytes, %d / %d inodes.",
 					usedSpace, format.Capacity, iused, format.Inodes)
 				if !userConfirmed() {
-					return fmt.Errorf("Aborted.")
+					logger.Infof("Aborted")
+					return nil
 				}
 			}
 		}
 		if trash && format.TrashDays == 0 {
 			warn("The current trash will be emptied and future removed files will purged immediately.")
 			if !userConfirmed() {
-				return fmt.Errorf("Aborted.")
+				logger.Infof("Aborted")
+				return nil
 			}
 		}
 		if clientVer && format.CheckVersion() != nil {
 			warn("Clients with the same version of this will be rejected after modification.")
 			if !userConfirmed() {
-				return fmt.Errorf("Aborted.")
+				logger.Infof("Aborted")
+				return nil
 			}
 		}
 	}
@@ -249,6 +252,8 @@ func config(ctx *cli.Context) error {
 	}
 	if err = m.Init(*format, false); err == nil {
 		fmt.Println(msg.String()[:msg.Len()-1])
+	} else {
+		logger.Fatalf("Update metadata: %s", err)
 	}
-	return err
+	return nil
 }

@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -73,7 +72,7 @@ func rmr(ctx *cli.Context) error {
 		name := filepath.Base(p)
 		inode, err := utils.GetFileInode(d)
 		if err != nil {
-			return fmt.Errorf("lookup inode for %s: %s", d, err)
+			logger.Fatalf("lookup inode for %s: %s", d, err)
 		}
 		f := openController(d)
 		if f == nil {

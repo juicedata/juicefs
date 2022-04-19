@@ -301,7 +301,7 @@ func bench(ctx *cli.Context) error {
 	setup(ctx, 1)
 	/* --- Pre-check --- */
 	if ctx.Uint("block-size") == 0 || ctx.Uint("threads") == 0 {
-		return os.ErrInvalid
+		logger.Fatalf("Invalid argument")
 	}
 	tmpdir, err := filepath.Abs(ctx.Args().First())
 	if err != nil {
@@ -311,7 +311,7 @@ func bench(ctx *cli.Context) error {
 	bm := newBenchmark(tmpdir, int(ctx.Uint("block-size")), int(ctx.Uint("big-file-size")),
 		int(ctx.Uint("small-file-size")), int(ctx.Uint("small-file-count")), int(ctx.Uint("threads")))
 	if bm.big == nil && bm.small == nil {
-		return os.ErrInvalid
+		logger.Fatalf("Nothing to run")
 	}
 	var purgeArgs []string
 	if os.Getuid() != 0 {

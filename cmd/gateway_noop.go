@@ -19,8 +19,6 @@
 package main
 
 import (
-	"errors"
-
 	"github.com/urfave/cli/v2"
 )
 
@@ -31,7 +29,8 @@ func cmdGateway() *cli.Command {
 		Usage:       "Start an S3-compatible gateway (not included)",
 		Description: `This feature is not included. If you want it, recompile juicefs without "nogateway" flag`,
 		Action: func(*cli.Context) error {
-			return errors.New("not supported")
+			logger.Fatalf("Not supported")
+			return nil
 		},
 	}
 }

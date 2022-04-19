@@ -53,21 +53,21 @@ func load(ctx *cli.Context) error {
 		var err error
 		fp, err = os.Open(ctx.Args().Get(1))
 		if err != nil {
-			return err
+			logger.Fatalf("Open file %s: %s", ctx.Args().Get(1), err)
 		}
 		defer fp.Close()
 	}
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	if err := m.LoadMeta(fp); err != nil {
-		return err
+		logger.Fatalf("Load metadata: %s", err)
 	}
 	if format, err := m.Load(true); err == nil {
 		if format.SecretKey == "removed" {
 			logger.Warnf("Secret key was removed; please correct it with `config` command")
 		}
 	} else {
-		return err
+		logger.Fatalf("Load setting: %s", err)
 	}
 	logger.Infof("Load metadata from %s succeed", ctx.Args().Get(1))
 	return nil
