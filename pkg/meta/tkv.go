@@ -167,6 +167,7 @@ All keys:
   Fiiiiiiii          Flocks
   Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
+  Lttttttttcccc      delayed slices
   SEssssssss         session expire time
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
@@ -186,6 +187,10 @@ func (m *kvMeta) chunkKey(inode Ino, indx uint32) []byte {
 
 func (m *kvMeta) sliceKey(chunkid uint64, size uint32) []byte {
 	return m.fmtKey("K", chunkid, size)
+}
+
+func (m *kvMeta) delSliceKey(ts int64, chunkid uint64) []byte {
+	return m.fmtKey("L", uint64(ts), chunkid)
 }
 
 func (m *kvMeta) symKey(inode Ino) []byte {
@@ -1772,7 +1777,47 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 }
 
 func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
-	return 0, nil
+	// delayed slices: Lttttttttcccc
+	klen := 1 + 8 + 4
+	result, err := m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
+		if len(k) != klen {
+			return false
+		}
+		return m.parseInt64(k[1:9]) < edge
+	})
+	if err != nil {
+		logger.Warnf("Scan delayed slices: %s", err)
+		return 0, err
+	}
+	var count int
+	for key, value := range result {
+		ss := m.decodeDelayedSlices(value)
+		if ss == nil {
+			logger.Errorf("Invalid value for delayed slices %s: %v", key, value)
+			continue
+		}
+		rs := make([]int64, len(ss))
+		if err = m.txn(func(tx kvTxn) error {
+			for i, s := range ss {
+				rs[i] = tx.incrBy(m.sliceKey(s.Chunkid, s.Size), -1)
+			}
+			tx.dels([]byte(key))
+			return nil
+		}); err != nil {
+			logger.Warnf("Cleanup delayed slices %s: %s", key, err)
+			continue
+		}
+		for i, s := range ss {
+			if rs[i] < 0 {
+				m.deleteSlice(s.Chunkid, s.Size)
+				count++
+			}
+		}
+		if count >= limit {
+			break
+		}
+	}
+	return count, nil
 }
 
 func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
@@ -1822,6 +1867,13 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		}
 		return
 	}
+	var dsbuf []byte
+	trash := m.toTrash(0)
+	if trash {
+		for _, s := range ss {
+			dsbuf = append(dsbuf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+		}
+	}
 	err = m.txn(func(tx kvTxn) error {
 		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
@@ -1833,8 +1885,12 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		tx.set(m.chunkKey(inode, indx), buf2)
 		// create the key to tracking it
 		tx.set(m.sliceKey(chunkid, size), make([]byte, 8))
-		for _, s := range ss {
-			tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+		if trash {
+			tx.set(m.delSliceKey(time.Now().Unix(), chunkid), dsbuf)
+		} else {
+			for _, s := range ss {
+				tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+			}
 		}
 		return nil
 	})
@@ -1858,13 +1914,15 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
 		m.cleanupZeroRef(chunkid, size)
-		var refs int64
-		for _, s := range ss {
-			if m.client.txn(func(tx kvTxn) error {
-				refs = tx.incrBy(m.sliceKey(s.chunkid, s.size), 0)
-				return nil
-			}) == nil && refs < 0 {
-				m.deleteSlice(s.chunkid, s.size)
+		if !trash {
+			var refs int64
+			for _, s := range ss {
+				if m.client.txn(func(tx kvTxn) error {
+					refs = tx.incrBy(m.sliceKey(s.chunkid, s.size), 0)
+					return nil
+				}) == nil && refs < 0 {
+					m.deleteSlice(s.chunkid, s.size)
+				}
 			}
 		}
 	} else {
@@ -1929,6 +1987,25 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 				}
 			}
 		}
+	}
+
+	// delayed slices: Lttttttttcccc
+	klen = 1 + 8 + 4
+	result, err = m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
+		return len(k) == klen
+	})
+	if err != nil {
+		logger.Warnf("Scan delayed slices: %s", err)
+		return errno(err)
+	}
+	for _, value := range result {
+		ss := m.decodeDelayedSlices(value)
+		if showProgress != nil {
+			for range ss {
+				showProgress()
+			}
+		}
+		slices[0] = append(slices[0], ss...)
 	}
 	return 0
 }
