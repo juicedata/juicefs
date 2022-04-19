@@ -2598,15 +2598,8 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}
 
 	err = r.hscan(ctx, r.delSlices(), func(keys []string) error {
-		vals, err := r.rdb.HMGet(ctx, r.delSlices(), keys...).Result()
-		if err != nil {
-			return fmt.Errorf("HMGET delSlices: %s", err)
-		}
-		for _, v := range vals {
-			if v == nil {
-				continue
-			}
-			for rb := utils.FromBuffer([]byte(v.(string))); rb.HasMore(); {
+		for i := 0; i < len(keys); i += 2 {
+			for rb := utils.FromBuffer([]byte(keys[i+1])); rb.HasMore(); {
 				slices[0] = append(slices[0], Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
 				if showProgress != nil {
 					showProgress()
