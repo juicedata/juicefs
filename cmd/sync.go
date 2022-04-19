@@ -330,14 +330,11 @@ func doSync(c *cli.Context) error {
 	}
 	src, err := createSyncStorage(srcURL, config)
 	if err != nil {
-		logger.Fatalf("Create source storage: %s", err)
+		return err
 	}
 	dst, err := createSyncStorage(dstURL, config)
 	if err != nil {
-		logger.Fatalf("Create destination storage: %s", err)
+		return err
 	}
-	if err = sync.Sync(src, dst, config); err != nil {
-		logger.Fatalf("Do sync: %s", err)
-	}
-	return nil
+	return sync.Sync(src, dst, config)
 }

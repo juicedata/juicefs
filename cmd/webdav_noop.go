@@ -20,6 +20,8 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -30,8 +32,7 @@ func cmdWebDav() *cli.Command {
 		Usage:       "Start a WebDAV server (not included)",
 		Description: `This feature is not included. If you want it, recompile juicefs without "nowebdav" flag`,
 		Action: func(*cli.Context) error {
-			logger.Fatalf("Not supported")
-			return nil
+			return errors.New("not supported")
 		},
 	}
 }

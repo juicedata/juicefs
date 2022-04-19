@@ -61,17 +61,17 @@ func dump(ctx *cli.Context) error {
 		var err error
 		fp, err = os.OpenFile(ctx.Args().Get(1), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
-			logger.Fatalf("Open file %s: %s", ctx.Args().Get(1), err)
+			return err
 		}
 		defer fp.Close()
 	}
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
 	if _, err := m.Load(true); err != nil {
-		logger.Fatalf("Load setting: %s", err)
+		return err
 	}
 	if err := m.DumpMeta(fp, 1); err != nil {
-		logger.Fatalf("Dump metadata: %s", err)
+		return err
 	}
 	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))
 	return nil

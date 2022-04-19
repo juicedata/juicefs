@@ -91,8 +91,5 @@ func umount(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().Get(0)
 	force := ctx.Bool("force")
-	if err := doUmount(mp, force); err != nil {
-		logger.Fatalf("Do umount: %s", err)
-	}
-	return nil
+	return doUmount(mp, force)
 }
