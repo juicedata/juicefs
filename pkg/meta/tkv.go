@@ -1789,6 +1789,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 		logger.Warnf("Scan delayed slices: %s", err)
 		return 0, err
 	}
+
 	var count int
 	for key, value := range result {
 		ss := m.decodeDelayedSlices(value)

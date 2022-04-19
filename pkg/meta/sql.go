@@ -2005,40 +2005,45 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	var count int
+	var result []delslices
 	for rows.Next() {
 		if rows.Scan(&ds) == nil {
-			ss := m.decodeDelayedSlices(ds.Slices)
-			if ss == nil {
-				logger.Errorf("Invalid value for delayed slices %d: %v", ds.Chunkid, ds.Slices)
-				continue
-			}
-			if err = m.txn(func(ses *xorm.Session) error {
-				for _, s := range ss {
-					if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Chunkid, s.Size); e != nil {
-						return e
-					}
-				}
-				_, e := ses.Delete(&delslices{Chunkid: ds.Chunkid})
-				return e
-			}); err != nil {
-				logger.Warnf("Cleanup delayed slices %d: %s", ds.Chunkid, err)
-				continue
-			}
-			for _, s := range ss {
-				var ref = chunkRef{Chunkid: s.Chunkid}
-				ok, e := m.db.Get(&ref)
-				if e == nil && ok && ref.Refs <= 0 {
-					m.deleteSlice(s.Chunkid, s.Size)
-					count++
-				}
-			}
-			if count >= limit {
-				break
-			}
+			result = append(result, ds)
 		}
 	}
 	_ = rows.Close()
+
+	var count int
+	for _, ds := range result {
+		ss := m.decodeDelayedSlices(ds.Slices)
+		if ss == nil {
+			logger.Errorf("Invalid value for delayed slices %d: %v", ds.Chunkid, ds.Slices)
+			continue
+		}
+		if err = m.txn(func(ses *xorm.Session) error {
+			for _, s := range ss {
+				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Chunkid, s.Size); e != nil {
+					return e
+				}
+			}
+			_, e := ses.Delete(&delslices{Chunkid: ds.Chunkid})
+			return e
+		}); err != nil {
+			logger.Warnf("Cleanup delayed slices %d: %s", ds.Chunkid, err)
+			continue
+		}
+		for _, s := range ss {
+			var ref = chunkRef{Chunkid: s.Chunkid}
+			ok, e := m.db.Get(&ref)
+			if e == nil && ok && ref.Refs <= 0 {
+				m.deleteSlice(s.Chunkid, s.Size)
+				count++
+			}
+		}
+		if count >= limit {
+			break
+		}
+	}
 	return count, nil
 }
 
