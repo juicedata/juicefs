@@ -26,7 +26,7 @@ The arguments of `mdtest` are tuned to ensure that the command will finish withi
 
 ## Testing Environment
 
-All the following tests are performed using `mdtest` on a c5.large EC2 instances (2 CPU, 4G RAM) with Ubuntu 18.04 LTS (Kernel 5.4.0) operating system. The Redis (version 4.0.9) which JuiceFS uses runs on a c5.large EC2 instance in the same available zone to store metadata.
+All the following tests are performed using `mdtest` on a c5.large EC2 instance (2 CPU, 4G RAM) with Ubuntu 18.04 LTS (Kernel 5.4.0) operating system. The Redis (version 4.0.9) which JuiceFS uses runs on a c5.large EC2 instance in the same available zone to store metadata.
 
 JuiceFS mount command:
 
