@@ -23,7 +23,7 @@ import (
 )
 
 func TestFsck(t *testing.T) {
-	mountTemp(t, nil)
+	mountTemp(t, nil, true)
 	defer umountTemp(t)
 
 	for i := 0; i < 10; i++ {

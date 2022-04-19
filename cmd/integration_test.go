@@ -18,11 +18,12 @@ package main
 
 import (
 	"context"
-	"github.com/go-redis/redis/v8"
 	"os"
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 const gatewayMeta = "redis://127.0.0.1:6379/11"
@@ -73,7 +74,7 @@ func startWebdav(t *testing.T) {
 }
 
 func TestIntegration(t *testing.T) {
-	mountTemp(t, nil)
+	mountTemp(t, nil, true)
 	defer umountTemp(t)
 	startGateway(t)
 	startWebdav(t)
