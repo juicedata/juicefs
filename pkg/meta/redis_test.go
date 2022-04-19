@@ -69,7 +69,8 @@ func testMeta(t *testing.T, m Meta) {
 	testStickyBit(t, m)
 	testLocks(t, m)
 	testConcurrentWrite(t, m)
-	testCompaction(t, m)
+	testCompaction(t, m, false)
+	testCompaction(t, m, true)
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
 	base.conf.CaseInsensi = true
@@ -809,8 +810,12 @@ type compactor interface {
 	compactChunk(inode Ino, indx uint32, force bool)
 }
 
-func testCompaction(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+func testCompaction(t *testing.T, m Meta, trash bool) {
+	if trash {
+		_ = m.Init(Format{Name: "test", TrashDays: 1}, false)
+	} else {
+		_ = m.Init(Format{Name: "test"}, false)
+	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
@@ -898,8 +903,27 @@ func testCompaction(t *testing.T, m Meta) {
 	l.Lock()
 	deletes := len(deleted)
 	l.Unlock()
+	if trash {
+		if deletes > 5 {
+			t.Fatalf("deleted chunks %d is greater than 5", deletes)
+		}
+		if len(slices[0]) < 30 {
+			t.Fatalf("list delayed slices %d is less than 30", len(slices[0]))
+		}
+		switch m := m.(type) {
+		case *redisMeta:
+			m.doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
+		case *dbMeta:
+			m.doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
+		case *kvMeta:
+			m.doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
+		}
+		l.Lock()
+		deletes = len(deleted)
+		l.Unlock()
+	}
 	if deletes < 30 {
-		t.Fatalf("deleted chunks %d is less then 30", deletes)
+		t.Fatalf("deleted chunks %d is less than 30", deletes)
 	}
 }
 
