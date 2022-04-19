@@ -2604,7 +2604,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	return bw.Flush()
 }
 
-func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef, beansCh chan interface{}) {
+func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef, beansCh chan interface{}, bar *utils.Bar) {
 	inode := e.Attr.Inode
 	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := e.Attr
@@ -2623,6 +2623,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	} // Length not set
 	if n.Type == TypeFile {
 		n.Length = attr.Length
+		bar.IncrTotal(int64(len(e.Chunks)))
 		for _, c := range e.Chunks {
 			if len(c.Slices) == 0 {
 				continue
@@ -2646,6 +2647,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	} else if n.Type == TypeDirectory {
 		n.Length = 4 << 10
 		if len(e.Entries) > 0 {
+			bar.IncrTotal(int64(len(e.Entries)))
 			for _, c := range e.Entries {
 				beansCh <- &edge{
 					Parent: inode,
@@ -2658,6 +2660,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	} else if n.Type == TypeSymlink {
 		symL := unescape(e.Symlink)
 		n.Length = uint64(len(symL))
+		bar.IncrTotal(1)
 		beansCh <- &symlink{inode, symL}
 	}
 	m.Lock()
@@ -2677,6 +2680,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	m.Unlock()
 
 	if len(e.Xattrs) > 0 {
+		bar.IncrTotal(int64(len(e.Xattrs)))
 		for _, x := range e.Xattrs {
 			beansCh <- &xattr{inode, x.Name, unescape(x.Value)}
 		}
@@ -2744,7 +2748,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 	refs := make(map[uint64]*chunkRef)
 	beansCh := make(chan interface{}, 1000)
-	lbar := progress.AddCountBar("Loaded entries", int64(len(entries)))
+	lbar := progress.AddCountBar("Loaded records", int64(len(entries)))
 	go func() {
 		defer close(beansCh)
 		pool := make(chan struct{}, 100)
@@ -2754,14 +2758,14 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 			wg.Add(1)
 			go func(entry *DumpedEntry) {
 				defer func() {
-					lbar.Increment()
 					wg.Done()
 					<-pool
 				}()
-				m.loadEntry(entry, counters, refs, beansCh)
+				m.loadEntry(entry, counters, refs, beansCh, lbar)
 			}(entry)
 		}
 		wg.Wait()
+		lbar.IncrTotal(8)
 		beansCh <- &setting{"format", string(format)}
 		beansCh <- &counter{"usedSpace", counters.UsedSpace}
 		beansCh <- &counter{"totalInodes", counters.UsedInodes}
@@ -2771,11 +2775,13 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		beansCh <- &counter{"nextTrash", counters.NextTrash}
 		beansCh <- &counter{"nextCleanupSlices", 0}
 		if len(dm.DelFiles) > 0 {
+			lbar.IncrTotal(int64(len(dm.DelFiles)))
 			for _, d := range dm.DelFiles {
 				beansCh <- &delfile{d.Inode, d.Length, d.Expire}
 			}
 		}
 		if len(refs) > 0 {
+			lbar.IncrTotal(int64(len(refs)))
 			for _, v := range refs {
 				beansCh <- v
 			}
@@ -2817,6 +2823,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 					fmt.Println(fmt.Errorf("%d records not inserted: %+v", d, beanBufferBk))
 					errCh <- fmt.Errorf("%d records not inserted: %+v", d, beanBufferBk)
 				}
+				lbar.IncrInt64(n)
 			}()
 			beanBuffer = make([]interface{}, 0, batch)
 		}
@@ -2829,6 +2836,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		} else if d := len(beanBuffer) - int(n); d > 0 {
 			errCh <- fmt.Errorf("%d records not inserted: %+v", d, beanBuffer)
 		}
+		lbar.IncrInt64(n)
 	}
 
 	go func() {
