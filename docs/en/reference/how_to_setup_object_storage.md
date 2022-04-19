@@ -56,7 +56,7 @@ Some cloud computing platforms also distinguish between internal and public netw
 
 JuiceFS also provides flexible support for this object storage service that distinguishes between internal and public addresses. For scenarios where the same file system is shared, the object storage is accessed through internal Endpoint on the servers that meet the criteria, and other computers are accessed through public Endpoint, which can be used as follows:
 
-- **When creating a file system**: It is recommended to use internal Endpoint address for `-bucket` 
+- **When creating a file system**: It is recommended to use internal Endpoint address for `--bucket` 
 - **When mounting a file system**: For clients that do not satisfy the internal line, you can specify a public Endpoint address to `-bucket`.
 
 Creating a file system using an internal Endpoint ensures better performance and lower latency, and for clients that cannot be accessed through an internal address, you can specify a public Endpoint to mount with the option `--bucket`.
