@@ -228,3 +228,9 @@ See ["Redis Best Practices"](docs/en/administration/metadata/redis_best_practice
 See ["Comparison with Others"](docs/en/comparison) for more information.
 
 For more FAQs, please see the [full list](docs/en/faq.md).
+
+
+
+## Stargazers over time
+
+[![Stargazers over time](https://starchart.cc/juicedata/juicefs.svg)](https://starchart.cc/juicedata/juicefs)
