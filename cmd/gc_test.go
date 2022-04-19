@@ -65,7 +65,7 @@ func getFileCount(dir string) int {
 
 func TestGc(t *testing.T) {
 	var bucket string
-	mountTemp(t, &bucket)
+	mountTemp(t, &bucket, false)
 	defer umountTemp(t)
 
 	if err := writeSmallBlocks(testMountPoint); err != nil {
