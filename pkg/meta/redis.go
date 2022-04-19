@@ -2262,21 +2262,17 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			} else if ts >= edge {
 				continue
 			}
-
 			buf := []byte(keys[i+1])
-			if len(buf) == 0 || len(buf)%12 != 0 {
+			ss := r.decodeDelayedSlices(buf)
+			if ss == nil {
 				logger.Errorf("Invalid value for delSlices %s: %v", key, buf)
 				continue
-			}
-			ss := make([]*slice, 0, len(buf)/12)
-			for rb := utils.FromBuffer(buf); rb.HasMore(); {
-				ss = append(ss, &slice{chunkid: rb.Get64(), size: rb.Get32()})
 			}
 			rs := make([]*redis.IntCmd, len(ss))
 			if err := r.txn(ctx, func(tx *redis.Tx) error {
 				_, e := tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 					for i, s := range ss {
-						rs[i] = pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1)
+						rs[i] = pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Chunkid, s.Size), -1)
 					}
 					pipe.HDel(ctx, r.delSlices(), key)
 					return nil
@@ -2288,7 +2284,7 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			}
 			for i, s := range ss {
 				if rs[i].Err() == nil && rs[i].Val() < 0 {
-					r.deleteSlice(s.chunkid, s.size)
+					r.deleteSlice(s.Chunkid, s.Size)
 					count++
 				}
 			}
@@ -2599,12 +2595,13 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 
 	err = r.hscan(ctx, r.delSlices(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
-			for rb := utils.FromBuffer([]byte(keys[i+1])); rb.HasMore(); {
-				slices[0] = append(slices[0], Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
-				if showProgress != nil {
+			ss := r.decodeDelayedSlices([]byte(keys[i+1]))
+			if showProgress != nil {
+				for range ss {
 					showProgress()
 				}
 			}
+			slices[0] = append(slices[0], ss...)
 		}
 		return nil
 	})
