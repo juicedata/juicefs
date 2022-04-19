@@ -27,7 +27,7 @@ import (
 )
 
 func TestWarmup(t *testing.T) {
-	mountTemp(t, nil)
+	mountTemp(t, nil, true)
 	defer umountTemp(t)
 
 	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("test"), 0644); err != nil {
