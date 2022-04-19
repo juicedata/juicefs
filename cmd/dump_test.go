@@ -25,7 +25,7 @@ import (
 )
 
 func TestDumpAndLoad(t *testing.T) {
-	metaUrl := "redis://127.0.0.1:6379/10"
+	metaUrl := "redis://127.0.0.1:6379/15"
 	opt, err := redis.ParseURL(metaUrl)
 	if err != nil {
 		t.Fatalf("ParseURL: %v", err)
