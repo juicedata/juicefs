@@ -2604,7 +2604,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	return bw.Flush()
 }
 
-func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef) error {
+func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef, beans *safeBeanSlice) {
 	inode := e.Attr.Inode
 	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := e.Attr
@@ -2621,10 +2621,8 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 		Rdev:   attr.Rdev,
 		Parent: e.Parent,
 	} // Length not set
-	var beans []interface{}
 	if n.Type == TypeFile {
 		n.Length = attr.Length
-		chunks := make([]*chunk, 0, len(e.Chunks))
 		for _, c := range e.Chunks {
 			if len(c.Slices) == 0 {
 				continue
@@ -2643,29 +2641,24 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 				}
 			}
 			m.Unlock()
-			chunks = append(chunks, &chunk{inode, c.Index, slices})
-		}
-		if len(chunks) > 0 {
-			beans = append(beans, chunks)
+			beans.add(&chunk{inode, c.Index, slices})
 		}
 	} else if n.Type == TypeDirectory {
 		n.Length = 4 << 10
 		if len(e.Entries) > 0 {
-			edges := make([]*edge, 0, len(e.Entries))
 			for _, c := range e.Entries {
-				edges = append(edges, &edge{
+				beans.add(&edge{
 					Parent: inode,
 					Name:   unescape(c.Name),
 					Inode:  c.Attr.Inode,
 					Type:   typeFromString(c.Attr.Type),
 				})
 			}
-			beans = append(beans, edges)
 		}
 	} else if n.Type == TypeSymlink {
 		symL := unescape(e.Symlink)
 		n.Length = uint64(len(symL))
-		beans = append(beans, &symlink{inode, symL})
+		beans.add(&symlink{inode, symL})
 	}
 	m.Lock()
 	if inode > 1 && inode != TrashInode {
@@ -2684,16 +2677,22 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	m.Unlock()
 
 	if len(e.Xattrs) > 0 {
-		xattrs := make([]*xattr, 0, len(e.Xattrs))
 		for _, x := range e.Xattrs {
-			xattrs = append(xattrs, &xattr{inode, x.Name, unescape(x.Value)})
+			beans.add(&xattr{inode, x.Name, unescape(x.Value)})
 		}
-		beans = append(beans, xattrs)
 	}
-	beans = append(beans, n)
-	s := m.db.NewSession()
-	defer s.Close()
-	return mustInsert(s, beans...)
+	beans.add(n)
+}
+
+type safeBeanSlice struct {
+	sync.Mutex
+	elems []interface{}
+}
+
+func (s *safeBeanSlice) add(elems ...interface{}) {
+	s.Lock()
+	defer s.Unlock()
+	s.elems = append(s.elems, elems...)
 }
 
 func (m *dbMeta) LoadMeta(r io.Reader) error {
@@ -2720,6 +2719,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
 
+	logger.Infoln("Reading file ...")
 	dec := json.NewDecoder(r)
 	dm := &DumpedMeta{}
 	if err = dec.Decode(dm); err != nil {
@@ -2755,29 +2755,75 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 	refs := make(map[uint64]*chunkRef)
 	bar = progress.AddCountBar("Loaded entries", int64(len(entries)))
-	maxNum := 100
-	pool := make(chan struct{}, maxNum)
-	errCh := make(chan error, 100)
-	done := make(chan struct{}, 1)
+	beans := &safeBeanSlice{}
+	pool := make(chan struct{}, 100)
 	var wg sync.WaitGroup
 	for _, entry := range entries {
-		select {
-		case err = <-errCh:
-			return err
-		default:
-		}
 		pool <- struct{}{}
 		wg.Add(1)
-		go func(entry *DumpedEntry) {
+		go func(entry *DumpedEntry, beans *safeBeanSlice) {
 			defer func() {
 				bar.Increment()
 				wg.Done()
 				<-pool
 			}()
-			if err = m.loadEntry(entry, counters, refs); err != nil {
+			// TODO: use pipeline to save memory
+			m.loadEntry(entry, counters, refs, beans)
+		}(entry, beans)
+	}
+	wg.Wait()
+	bar.Done()
+
+	beans.add(&setting{"format", string(format)})
+	beans.add(
+		&counter{"usedSpace", counters.UsedSpace},
+		&counter{"totalInodes", counters.UsedInodes},
+		&counter{"nextInode", counters.NextInode},
+		&counter{"nextChunk", counters.NextChunk},
+		&counter{"nextSession", counters.NextSession},
+		&counter{"nextTrash", counters.NextTrash},
+		&counter{"nextCleanupSlices", 0})
+	if len(dm.DelFiles) > 0 {
+		for _, d := range dm.DelFiles {
+			beans.add(&delfile{d.Inode, d.Length, d.Expire})
+		}
+	}
+	if len(refs) > 0 {
+		for _, v := range refs {
+			beans.add(v)
+		}
+	}
+
+	bar = progress.AddCountBar("Insert records", int64(len(beans.elems)))
+	maxNum := 100
+	insertPool := make(chan struct{}, maxNum)
+	errCh := make(chan error, 100)
+	done := make(chan struct{}, 1)
+	batch := 100
+	for start, end, size := 0, 0, len(beans.elems); end < size; start = end {
+		end = start + batch
+		if end > size {
+			end = size
+		}
+		insertPool <- struct{}{}
+		wg.Add(1)
+		go func(start, end int) {
+			s := m.db.NewSession()
+			defer func() {
+				s.Close()
+				wg.Done()
+				<-insertPool
+			}()
+			n, err := s.Insert(beans.elems[start:end]...)
+			if err != nil {
 				errCh <- err
+				return
+			} else if d := end - start - int(n); d > 0 {
+				errCh <- fmt.Errorf("%d records not inserted: %+v", d, beans.elems[start:end])
+				return
 			}
-		}(entry)
+			bar.IncrInt64(n)
+		}(start, end)
 	}
 
 	go func() {
@@ -2790,36 +2836,11 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	case <-done:
 	}
+
+	bar.Done()
 	progress.Done()
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
+	return nil
 
-	beans := make([]interface{}, 0, 4) // setting, counter, delfile, chunkRef
-	beans = append(beans, &setting{"format", string(format)})
-	cs := make([]*counter, 0, 7)
-	cs = append(cs, &counter{"usedSpace", counters.UsedSpace})
-	cs = append(cs, &counter{"totalInodes", counters.UsedInodes})
-	cs = append(cs, &counter{"nextInode", counters.NextInode})
-	cs = append(cs, &counter{"nextChunk", counters.NextChunk})
-	cs = append(cs, &counter{"nextSession", counters.NextSession})
-	cs = append(cs, &counter{"nextTrash", counters.NextTrash})
-	cs = append(cs, &counter{"nextCleanupSlices", 0})
-	beans = append(beans, cs)
-	if len(dm.DelFiles) > 0 {
-		dels := make([]*delfile, 0, len(dm.DelFiles))
-		for _, d := range dm.DelFiles {
-			dels = append(dels, &delfile{d.Inode, d.Length, d.Expire})
-		}
-		beans = append(beans, dels)
-	}
-	if len(refs) > 0 {
-		cks := make([]*chunkRef, 0, len(refs))
-		for _, v := range refs {
-			cks = append(cks, v)
-		}
-		beans = append(beans, cks)
-	}
-	s := m.db.NewSession()
-	defer s.Close()
-	return mustInsert(s, beans...)
 }
