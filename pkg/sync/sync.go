@@ -765,11 +765,16 @@ func filter(keys <-chan object.Object, rules []*rule) <-chan object.Object {
 func slidingWindowForPath(pattern, key string) []string {
 	var result []string
 	split := strings.Split(key, "/")
+
 	size := strings.Count(pattern, "/") + 1
-	if size > len(split) {
+	if strings.HasPrefix(pattern, "/") || size > len(split) {
 		return []string{key}
 	}
+
 	for start := 0; start+size <= len(split); start++ {
+		if strings.HasSuffix(pattern, "/") {
+			result = append(result, strings.Join(split[start:start+size-1], "/")+"/")
+		}
 		result = append(result, strings.Join(split[start:start+size], "/"))
 	}
 	return result
