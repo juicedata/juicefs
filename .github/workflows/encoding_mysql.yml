@@ -18,7 +18,7 @@ on:
 
 jobs:
   mysql-encoding-test:
-    runs-on: [self-hosted, daily-build]
+    runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
