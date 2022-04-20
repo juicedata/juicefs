@@ -2245,7 +2245,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 					showProgress()
 				}
 			}
-			slices[0] = append(slices[0], ss...)
+			slices[1] = append(slices[1], ss...)
 		}
 	}
 	_ = rows2.Close()

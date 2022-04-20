@@ -2006,7 +2006,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 				showProgress()
 			}
 		}
-		slices[0] = append(slices[0], ss...)
+		slices[1] = append(slices[1], ss...)
 	}
 	return 0
 }

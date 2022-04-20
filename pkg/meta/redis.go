@@ -2605,7 +2605,7 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 					showProgress()
 				}
 			}
-			slices[0] = append(slices[0], ss...)
+			slices[1] = append(slices[1], ss...)
 		}
 		return nil
 	})

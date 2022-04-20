@@ -908,8 +908,8 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		if deletes > 10 {
 			t.Fatalf("deleted chunks %d is greater than 10", deletes)
 		}
-		if len(slices[0]) < 200 {
-			t.Fatalf("list delayed slices %d is less than 200", len(slices[0]))
+		if len(slices[1]) < 200 {
+			t.Fatalf("list delayed slices %d is less than 200", len(slices[1]))
 		}
 		switch m := m.(type) {
 		case *redisMeta:
