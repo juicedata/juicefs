@@ -2629,7 +2629,6 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 				continue
 			}
 			slices := make([]byte, 0, sliceBytes*len(c.Slices))
-			m.Lock()
 			for _, s := range c.Slices {
 				slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
 				if refs[s.Chunkid] == nil {
@@ -2641,7 +2640,6 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 					cs.NextChunk = int64(s.Chunkid) + 1
 				}
 			}
-			m.Unlock()
 			beansCh <- &chunk{inode, c.Index, slices}
 		}
 	} else if n.Type == TypeDirectory {
@@ -2663,7 +2661,6 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 		bar.IncrTotal(1)
 		beansCh <- &symlink{inode, symL}
 	}
-	m.Lock()
 	if inode > 1 && inode != TrashInode {
 		cs.UsedSpace += align4K(n.Length)
 		cs.UsedInodes += 1
@@ -2677,7 +2674,6 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			cs.NextTrash = int64(inode) - TrashInode
 		}
 	}
-	m.Unlock()
 
 	if len(e.Xattrs) > 0 {
 		bar.IncrTotal(int64(len(e.Xattrs)))
@@ -2751,20 +2747,9 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	lbar := progress.AddCountBar("Loaded records", int64(len(entries)))
 	go func() {
 		defer close(beansCh)
-		pool := make(chan struct{}, 100)
-		var wg sync.WaitGroup
 		for _, entry := range entries {
-			pool <- struct{}{}
-			wg.Add(1)
-			go func(entry *DumpedEntry) {
-				defer func() {
-					wg.Done()
-					<-pool
-				}()
-				m.loadEntry(entry, counters, refs, beansCh, lbar)
-			}(entry)
+			m.loadEntry(entry, counters, refs, beansCh, lbar)
 		}
-		wg.Wait()
 		lbar.IncrTotal(8)
 		beansCh <- &setting{"format", string(format)}
 		beansCh <- &counter{"usedSpace", counters.UsedSpace}
@@ -2792,20 +2777,20 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	insertPool := make(chan struct{}, 100)
 	errCh := make(chan error, 500)
 	done := make(chan struct{}, 1)
-	var iWg sync.WaitGroup
+	var wg sync.WaitGroup
 	beanBuffer := make([]interface{}, 0, batch)
 
 	for bean := range beansCh {
 		beanBuffer = append(beanBuffer, bean)
 		if len(beanBuffer) >= batch {
 			beanBufferBk := beanBuffer
-			iWg.Add(1)
+			wg.Add(1)
 			insertPool <- struct{}{}
 			s := m.db.NewSession()
 			go func() {
 				defer func() {
 					s.Close()
-					iWg.Done()
+					wg.Done()
 					<-insertPool
 				}()
 
@@ -2840,7 +2825,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 
 	go func() {
-		iWg.Wait()
+		wg.Wait()
 		close(done)
 	}()
 
