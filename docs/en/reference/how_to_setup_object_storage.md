@@ -347,7 +347,7 @@ For users in Tokyo (ap-northeast-1) region, please refer to [this document](http
 
 Please refer to [this document](https://docs.storj.io/api-reference/s3-compatible-gateway) to learn how to create access key and secret key.
 
-Storj DCS is an S3-compatible storage, useing `s3` for option `--storage`. The setting format of the option `--bucket` is `https://gateway.<region>.storjshare.io/<bucket>`, and please replace `<region>` with the corresponding region code you need. There are currently three avaliable regions: `us1`, `ap1` and `eu1`. For example:
+Storj DCS is an S3-compatible storage, using `s3` for option `--storage`. The setting format of the option `--bucket` is `https://gateway.<region>.storjshare.io/<bucket>`, and please replace `<region>` with the corresponding region code you need. There are currently three available regions: `us1`, `ap1` and `eu1`. For example:
 
 ```shell
 $ juicefs format \
