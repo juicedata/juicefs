@@ -402,6 +402,11 @@ func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
 }
 
 func (m *dbMeta) ListSessions() ([]*Session, error) {
+	if ok, err := m.db.IsTableExist(&session2{}); err != nil {
+		return nil, err
+	} else if !ok {
+		return []*Session{}, nil
+	}
 	var rows []session2
 	err := m.db.Find(&rows)
 	if err != nil {
