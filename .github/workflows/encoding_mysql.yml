@@ -139,6 +139,7 @@ jobs:
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
+          ln -s `printf "${{steps.vars.outputs.MOUNT_POINT}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
 
           ./juicefs_old umount  ${{steps.vars.outputs.MOUNT_POINT1}} --force
           juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.MOUNT_POINT1}} -d
@@ -264,7 +265,7 @@ jobs:
             echo "Fatal: attr get: ":, $attr_get, " is not equal to attr set:" $attr_value_set
             exit 1
           fi          
-                      
+
       - name: Clean
         if: always() 
         run: |
