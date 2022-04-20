@@ -50,11 +50,6 @@ jobs:
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT1 }} ]; then
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT1 }} || true
           fi
-          UUID=$(juicefs status ${{ steps.vars.outputs.META_URL1 }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            echo UUID is: $UUID
-            sudo juicefs destroy --force ${{ steps.vars.outputs.META_URL1 }} $UUID
-          fi
           db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ 'print $4')
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database $db_name; create database $db_name;" 
 
@@ -62,11 +57,6 @@ jobs:
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT2 }} || true
           fi
           
-          UUID=$(juicefs status ${{ steps.vars.outputs.META_URL2 }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            echo UUID is: $UUID
-            sudo juicefs destroy --force ${{ steps.vars.outputs.META_URL2 }} $UUID
-          fi
           db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ 'print $4')
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database $db_name; create database $db_name;" 
 
@@ -259,19 +249,16 @@ jobs:
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT1 }} ]; then
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT1 }} || true
           fi
-          UUID=$(juicefs status ${{ steps.vars.outputs.META_URL1 }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            echo UUID is: $UUID
-            sudo juicefs destroy --force ${{ steps.vars.outputs.META_URL1 }} $UUID
-          fi
+          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ 'print $4')
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database $db_name; create database $db_name;" 
+
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT2 }} ]; then
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT2 }} || true
           fi
-          UUID=$(juicefs status ${{ steps.vars.outputs.META_URL2 }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            echo UUID is: $UUID
-            sudo juicefs destroy --force ${{ steps.vars.outputs.META_URL2 }} $UUID
-          fi
+          
+          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ 'print $4')
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database $db_name; create database $db_name;" 
+
           if [ -f ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -f
           fi
