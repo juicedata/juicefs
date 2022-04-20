@@ -50,14 +50,14 @@ jobs:
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT1 }} ]; then
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT1 }} || true
           fi
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ 'print $4')
+          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database $db_name; create database $db_name;" 
 
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT2 }} ]; then
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT2 }} || true
           fi
           
-          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ 'print $4')
+          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ '{print $4}')
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database $db_name; create database $db_name;" 
 
           if [ -f ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
@@ -124,7 +124,7 @@ jobs:
           ./juicefs_old format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
           ./juicefs_old mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d 
 
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ 'print $4')
+          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_edge modify name varbinary(255) not null;" 
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_symlink modify target varbinary(4096) not null;" 
 
@@ -178,7 +178,7 @@ jobs:
           ./juicefs_old format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
           ./juicefs_old mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d 
 
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ 'print $4')
+          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_edge modify name varbinary(255) not null;" 
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_symlink modify target varbinary(4096) not null;" 
 
@@ -249,16 +249,11 @@ jobs:
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT1 }} ]; then
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT1 }} || true
           fi
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ 'print $4')
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database $db_name; create database $db_name;" 
-
+    
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT2 }} ]; then
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT2 }} || true
           fi
-          
-          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ 'print $4')
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database $db_name; create database $db_name;" 
-
+         
           if [ -f ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -f
           fi
