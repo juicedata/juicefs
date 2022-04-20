@@ -498,7 +498,13 @@ func (m *baseMeta) decodeDelayedSlices(buf []byte) []Slice {
 	}
 	ss := make([]Slice, 0, len(buf)/12)
 	for rb := utils.FromBuffer(buf); rb.HasMore(); {
-		ss = append(ss, Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
+		chunkid := rb.Get64()
+		size := rb.Get32()
+		if size == 0 {
+			logger.Warnf("Invalid size 0 for chunkid %d", chunkid)
+			continue
+		}
+		ss = append(ss, Slice{Chunkid: chunkid, Size: size})
 	}
 	return ss
 }
