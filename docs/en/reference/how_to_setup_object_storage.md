@@ -35,7 +35,7 @@ When executing the command `format` or `mount`, you can set some special paramet
 
 In general, object storages are authenticated with `Access Key ID` and `Access Key Secret`. For JuiceFS file system, they are provided by options `--access-key` and `--secret-key` (or AK, SK for short).
 
-In addition to explicitly specifying the options `--access-key` and `--secret-key` when creating a filesystem, it is more secure to pass key information via the `ACCESS_KEY` and `SECRET_KEY` environment variables, e.g.
+It is more secure to pass credentials via environment variables `ACCESS_KEY` and `SECRET_KEY` instead of explicitly specifying the options `--access-key` and `--secret-key` in the command line when creating a filesystem, e.g.,
 
 ```shell
 $ export ACCESS_KEY=abcdefghijklmn
