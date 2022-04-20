@@ -111,67 +111,6 @@ jobs:
             exit 1
           fi
 
-      - name: Test mount with old client and alter db to binary online
-        run: |
-          db_name=$(basename ${{steps.vars.outputs.META_URL1}})
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
-          db_name=$(basename ${{steps.vars.outputs.META_URL2}})
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
-          if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
-            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
-          fi
-
-          filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
-          dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
-          attr_key=user.k
-          attr_value_set="attr_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
-          data_write="data_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
-          soft_link="softlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
-
-          ./juicefs_old format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
-          ./juicefs_old mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d 
-
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_edge modify name varbinary(255) not null;" 
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_symlink modify target varbinary(4096) not null;" 
-
-          echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
-          mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
-          setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
-          ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
-          ./juicefs_old dump ${{steps.vars.outputs.META_URL1}}  backup.dump
-
-          ./juicefs_old load ${{steps.vars.outputs.META_URL2}}  backup.dump
-          ./juicefs_old mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
-
-          if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ]; then 
-            echo "Fatal: file does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$filename
-            exit 1
-          fi
-
-          data_read=$(cat `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"`)
-          if [ "$data_write" != "$data_read" ]; then
-            echo "Fatal: data read is not the same as data write:", $data_write, "data read:", $data_read
-            exit 1
-          fi
-          
-          if [ ! -d `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$dirname"` ]; then 
-            echo "Fatal: directory does not exist", ${{steps.vars.outputs.MOUNT_POINT2}}/$dirname
-            exit 1
-          fi
-          
-          if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$soft_link"` ]; then 
-            echo "Fatal: soft link does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$soft_link
-            exit 1
-          fi
-          
-          attr_get=$(getfattr -e text -n $attr_key `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` | grep "$attr_key" | awk -F= '{print $2}' |  sed 's/^.\(.*\).$/\1/' | sed 's/\\\\/\\/g' )
-          attr_value_set=$(echo $attr_value_set | sed 's/\\\\/\\/g')
-          if [ "$attr_get" != "$attr_value_set" ]; then
-            echo "Fatal: attr get: ":, $attr_get, " is not equal to attr set:" $attr_value_set
-            exit 1
-          fi          
-
       - name: Test remount with new client after alter db to binary
         run: |
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
@@ -265,7 +204,67 @@ jobs:
             echo "Fatal: data read is not the same as data write:", $data_write, "data read:", $data_read
             exit 1
           fi         
-            
+
+      - name: Test mount with old client and alter db to binary online
+        run: |
+          db_name=$(basename ${{steps.vars.outputs.META_URL1}})
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
+          db_name=$(basename ${{steps.vars.outputs.META_URL2}})
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
+          if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
+            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
+          fi
+
+          filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          attr_key=user.k
+          attr_value_set="attr_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          data_write="data_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          soft_link="softlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+
+          ./juicefs_old format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
+          ./juicefs_old mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d 
+
+          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_edge modify name varbinary(255) not null;" 
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_symlink modify target varbinary(4096) not null;" 
+
+          echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
+          mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
+          setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
+          ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
+          ./juicefs_old dump ${{steps.vars.outputs.META_URL1}}  backup.dump
+          ./juicefs_old load ${{steps.vars.outputs.META_URL2}}  backup.dump
+          ./juicefs_old mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
+
+          if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ]; then 
+            echo "Fatal: file does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$filename
+            exit 1
+          fi
+
+          data_read=$(cat `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"`)
+          if [ "$data_write" != "$data_read" ]; then
+            echo "Fatal: data read is not the same as data write:", $data_write, "data read:", $data_read
+            exit 1
+          fi
+          
+          if [ ! -d `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$dirname"` ]; then 
+            echo "Fatal: directory does not exist", ${{steps.vars.outputs.MOUNT_POINT2}}/$dirname
+            exit 1
+          fi
+          
+          if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$soft_link"` ]; then 
+            echo "Fatal: soft link does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$soft_link
+            exit 1
+          fi
+          
+          attr_get=$(getfattr -e text -n $attr_key `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` | grep "$attr_key" | awk -F= '{print $2}' |  sed 's/^.\(.*\).$/\1/' | sed 's/\\\\/\\/g' )
+          attr_value_set=$(echo $attr_value_set | sed 's/\\\\/\\/g')
+          if [ "$attr_get" != "$attr_value_set" ]; then
+            echo "Fatal: attr get: ":, $attr_get, " is not equal to attr set:" $attr_value_set
+            exit 1
+          fi          
+                      
       - name: Clean
         if: always() 
         run: |
