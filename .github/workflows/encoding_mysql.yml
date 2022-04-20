@@ -77,7 +77,7 @@ jobs:
           juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d 
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
-          setfattr -n $attr_key -v  $attr_value_set `printf "/tmp/juicefs-encoding-test/$filename"`
+          setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
           juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
 
@@ -130,7 +130,7 @@ jobs:
 
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
-          setfattr -n $attr_key -v  $attr_value_set `printf "/tmp/juicefs-encoding-test/$filename"`
+          setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
           ./juicefs_old dump ${{steps.vars.outputs.META_URL1}}  backup.dump
 
@@ -184,7 +184,7 @@ jobs:
 
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
-          setfattr -n $attr_key -v  $attr_value_set `printf "/tmp/juicefs-encoding-test/$filename"`
+          setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
 
           ./juicefs_old umount  ${{steps.vars.outputs.MOUNT_POINT1}} --force
           juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.MOUNT_POINT1}} -d
