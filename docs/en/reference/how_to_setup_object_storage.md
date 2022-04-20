@@ -377,7 +377,7 @@ Please find the access and secret keys for object storage [in the customer porta
 
 ## Alibaba Cloud OSS
 
-Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. If you already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assigned it to VM instance, you could omit the options `--access-key` and `--secret-key`.
+Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. If you have already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assigned it to a VM instance, you could omit the options `--access-key` and `--secret-key`.
 
 Alibaba Cloud also supports using [Security Token Service (STS)](https://www.alibabacloud.com/help/doc-detail/100624.htm) to authorize temporary access to OSS. If you wanna use STS, you should omit the options `--access-key` and `--secret-key` and set environment variables `ALICLOUD_ACCESS_KEY_ID`, `ALICLOUD_ACCESS_KEY_SECRET` and `SECURITY_TOKEN`instead, for example:
 
