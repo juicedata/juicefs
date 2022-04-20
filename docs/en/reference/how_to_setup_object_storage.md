@@ -50,7 +50,7 @@ Public clouds typically allow users to create IAM (Identity and Access Managemen
 
 ## Internal and Public Endpoint
 
-Typically, object storage services provide a unified URL for access, but the cloud platform will provide both internal and public communication lines. For example, the platform cloud services that meet the criteria will automatically resolve through the internal line to access the object storage, which not only has lower latency but also has an internal communication for free.
+Typically, object storage services provide a unified URL for access, but the cloud platform usually provides both internal and external endpoints. For example, the platform cloud services that meet the criteria will automatically resolve requests to the internal endpoint of the object storage. This offers you a lower latency, and internal network traffic is free.
 
 Some cloud computing platforms also distinguish between internal and public networks, but instead of providing a unified access URL, they provide separate internal Endpoint and public Endpoint addresses.
 
