@@ -267,7 +267,7 @@ $ juicefs format \
 
 ## IBM Cloud Object Storage
 
-When creating JuiceFS file system using using IBM Cloud Object Storage, you first need to create an [API key](https://cloud.ibm.com/docs/account?topic=account-manapikey) and an [instance ID](https://cloud.ibm.com/docs/key-protect?topic=key-protect-retrieve-instance-ID). The "API key" and "instance ID" are the equivalent of access key and secret key, respectively.
+When creating JuiceFS file system using IBM Cloud Object Storage, you first need to create an [API key](https://cloud.ibm.com/docs/account?topic=account-manapikey) and an [instance ID](https://cloud.ibm.com/docs/key-protect?topic=key-protect-retrieve-instance-ID). The "API key" and "instance ID" are the equivalent of access key and secret key, respectively.
 
 IBM Cloud Object Storage provides [multiple endpoints](https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-endpoints) for each region, depending on your network (e.g. public or private). Thus, please choose an appropriate endpoint. For example:
 
