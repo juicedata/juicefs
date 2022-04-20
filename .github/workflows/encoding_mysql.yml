@@ -139,7 +139,7 @@ jobs:
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
-          ln -s `printf "${{steps.vars.outputs.MOUNT_POINT}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
+          ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
 
           ./juicefs_old umount  ${{steps.vars.outputs.MOUNT_POINT1}} --force
           juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.MOUNT_POINT1}} -d
@@ -278,7 +278,7 @@ jobs:
           fi
          
           if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
-            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -f
+            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
           fi
 
 #      - name: Send Slack Notification
