@@ -28,8 +28,8 @@ jobs:
       - name: Set Variable
         id: vars
         run: |
-          echo ::set-output name=META_URL1::"mysql://root:${{secrets.MYSQL_PASSWORD}}@(172.27.0.1)/mysql_encoding1"
-          echo ::set-output name=META_URL2::"mysql://root:${{secrets.MYSQL_PASSWORD}}@(172.27.0.1)/mysql_encoding2"
+          echo ::set-output name=META_URL1::mysql://root:${{secrets.MYSQL_PASSWORD}}@\(172.27.0.1\)/mysql_encoding1
+          echo ::set-output name=META_URL2::mysql://root:${{secrets.MYSQL_PASSWORD}}@\(172.27.0.1\)/mysql_encoding2
           echo ::set-output name=MOUNT_POINT1::/tmp/juicefs-mysql-encoding-test1
           echo ::set-output name=MOUNT_POINT2::/tmp/juicefs-mysql-encoding-test2
           echo ::set-output name=BUCKET::/var/jfs/
@@ -276,9 +276,9 @@ jobs:
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -f
           fi
 
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+#      - name: Send Slack Notification
+#        if: ${{ failure() }}
+#        uses: juicedata/slack-notify-action@main
+#        with:
+#          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+#          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
