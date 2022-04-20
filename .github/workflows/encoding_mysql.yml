@@ -235,6 +235,11 @@ jobs:
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
           ./juicefs_old dump ${{steps.vars.outputs.META_URL1}}  backup.dump
+          
+          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ '{print $4}')
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_edge modify name varbinary(255) not null;" 
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_symlink modify target varbinary(4096) not null;" 
+
           ./juicefs_old load ${{steps.vars.outputs.META_URL2}}  backup.dump
           ./juicefs_old mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
