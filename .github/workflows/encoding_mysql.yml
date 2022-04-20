@@ -206,7 +206,7 @@ jobs:
             exit 1
           fi         
 
-      - name: Test mount with old client and alter db to binary online
+      - name: Test dump with old client and load with new client
         run: |
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
@@ -235,13 +235,9 @@ jobs:
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
           ./juicefs_old dump ${{steps.vars.outputs.META_URL1}}  backup.dump
-          
-          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ '{print $4}')
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_edge modify name varbinary(255) not null;" 
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use $db_name; alter table jfs_symlink modify target varbinary(4096) not null;" 
 
-          ./juicefs_old load ${{steps.vars.outputs.META_URL2}}  backup.dump
-          ./juicefs_old mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
+          ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
+          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
           if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ]; then 
             echo "Fatal: file does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$filename
@@ -286,9 +282,9 @@ jobs:
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
           fi
 
-#      - name: Send Slack Notification
-#        if: ${{ failure() }}
-#        uses: juicedata/slack-notify-action@main
-#        with:
-#          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-#          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
