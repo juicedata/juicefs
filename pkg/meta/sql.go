@@ -2743,7 +2743,10 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		NextChunk: 1,
 	}
 	refs := make(map[uint64]*chunkRef)
-	beansCh := make(chan interface{}, 1000)
+
+	batch := 100
+	poolSize := 100
+	beansCh := make(chan interface{}, batch*poolSize)
 	lbar := progress.AddCountBar("Loaded records", int64(len(entries)))
 	go func() {
 		defer close(beansCh)
@@ -2773,9 +2776,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		}
 	}()
 
-	batch := 50
-	insertPool := make(chan struct{}, 100)
-	errCh := make(chan error, 500)
+	pool := make(chan struct{}, poolSize)
+	errCh := make(chan error, batch*poolSize)
 	done := make(chan struct{}, 1)
 	var wg sync.WaitGroup
 	beanBuffer := make([]interface{}, 0, batch)
@@ -2785,13 +2787,13 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		if len(beanBuffer) >= batch {
 			beanBufferBk := beanBuffer
 			wg.Add(1)
-			insertPool <- struct{}{}
+			pool <- struct{}{}
 			s := m.db.NewSession()
 			go func() {
 				defer func() {
 					s.Close()
 					wg.Done()
-					<-insertPool
+					<-pool
 				}()
 
 				select {
