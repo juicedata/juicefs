@@ -55,17 +55,15 @@ jobs:
             juicefs umount ${{ steps.vars.outputs.MOUNT_POINT2 }} || true
           fi
 
+      - name: Test mysql gbk support with new client
+        run: |
+          db_name=$(basename ${{steps.vars.outputs.META_URL1}})
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
+          db_name=$(basename ${{steps.vars.outputs.META_URL2}})
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
           if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
           fi
-
-      - name: Test mysql gbk support with new client
-        run: |
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
-
-          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ '{print $4}')
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
 
           filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
@@ -115,11 +113,13 @@ jobs:
 
       - name: Test mount with old client and alter db to binary online
         run: |
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
+          db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
-
-          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ '{print $4}')
+          db_name=$(basename ${{steps.vars.outputs.META_URL2}})
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
+          if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
+            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
+          fi
 
           filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
@@ -174,11 +174,13 @@ jobs:
 
       - name: Test remount with new client after alter db to binary
         run: |
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
+          db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
-
-          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ '{print $4}')
+          db_name=$(basename ${{steps.vars.outputs.META_URL2}})
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
+          if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
+            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
+          fi
 
           filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           filename2="file2_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
@@ -238,11 +240,13 @@ jobs:
 
       - name: Test mount old meta using new client without db change
         run: |
-          db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
+          db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
-
-          db_name=$(echo "${{steps.vars.outputs.META_URL2}}" | awk -F/ '{print $4}')
+          db_name=$(basename ${{steps.vars.outputs.META_URL2}})
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
+          if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
+            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
+          fi
 
           filename="file1"
           data_write="data1"
