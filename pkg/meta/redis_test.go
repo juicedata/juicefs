@@ -904,11 +904,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	deletes := len(deleted)
 	l.Unlock()
 	if trash {
-		if deletes > 5 {
+		if deletes > 5 { // caused by wasted compaction
 			t.Fatalf("deleted chunks %d is greater than 5", deletes)
 		}
-		if len(slices[0]) < 30 {
-			t.Fatalf("list delayed slices %d is less than 30", len(slices[0]))
+		if len(slices[0]) < 200 {
+			t.Fatalf("list delayed slices %d is less than 200", len(slices[0]))
 		}
 		switch m := m.(type) {
 		case *redisMeta:
@@ -922,8 +922,8 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		deletes = len(deleted)
 		l.Unlock()
 	}
-	if deletes < 30 {
-		t.Fatalf("deleted chunks %d is less than 30", deletes)
+	if deletes < 200 {
+		t.Fatalf("deleted chunks %d is less than 200", deletes)
 	}
 }
 

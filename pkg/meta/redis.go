@@ -2256,7 +2256,11 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 		for i := 0; i < len(keys); i += 2 {
 			key := keys[i]
 			ps := strings.Split(key, "_")
-			if ts, e := strconv.ParseInt(ps[0], 10, 64); e != nil {
+			if len(ps) != 2 {
+				logger.Warnf("Invalid key %s", key)
+				continue
+			}
+			if ts, e := strconv.ParseInt(ps[1], 10, 64); e != nil {
 				logger.Warnf("Invalid key %s", key)
 				continue
 			} else if ts >= edge {
@@ -2377,7 +2381,7 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 			pipe.HSet(ctx, r.sliceRefs(), r.sliceKey(chunkid, size), "0") // create the key to tracking it
 			if trash {
-				pipe.HSet(ctx, r.delSlices(), fmt.Sprintf("%d_%d", time.Now().Unix(), chunkid), buf)
+				pipe.HSet(ctx, r.delSlices(), fmt.Sprintf("%d_%d", chunkid, time.Now().Unix()), buf)
 			} else {
 				for _, s := range ss {
 					rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1))

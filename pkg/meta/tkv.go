@@ -167,7 +167,7 @@ All keys:
   Fiiiiiiii          Flocks
   Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
-  Lttttttttcccc      delayed slices
+  Lcccccccctttttttt  delayed slices
   SEssssssss         session expire time
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
@@ -1777,13 +1777,13 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 }
 
 func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
-	// delayed slices: Lttttttttcccc
-	klen := 1 + 8 + 4
+	// delayed slices: Lcccccccctttttttt
+	klen := 1 + 8 + 8
 	result, err := m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
 		if len(k) != klen {
 			return false
 		}
-		return m.parseInt64(k[1:9]) < edge
+		return m.parseInt64(k[9:]) < edge
 	})
 	if err != nil {
 		logger.Warnf("Scan delayed slices: %s", err)
@@ -1990,8 +1990,8 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		}
 	}
 
-	// delayed slices: Lttttttttcccc
-	klen = 1 + 8 + 4
+	// delayed slices: Lcccccccctttttttt
+	klen = 1 + 8 + 8
 	result, err = m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
 		return len(k) == klen
 	})
