@@ -30,7 +30,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -41,6 +40,8 @@ import (
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
 )
+
+const MaxFieldsCountOfTable = 13 // node table
 
 type setting struct {
 	Name  string `xorm:"pk"`
@@ -2744,9 +2745,16 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 	refs := make(map[uint64]*chunkRef)
 
-	batch := 100
-	poolSize := 100
-	beansCh := make(chan interface{}, batch*poolSize)
+	var batchSize int
+	switch m.db.DriverName() {
+	case "sqlite3":
+		batchSize = 999 / MaxFieldsCountOfTable
+	case "mysql":
+		batchSize = 65535 / MaxFieldsCountOfTable
+	case "postgres":
+		batchSize = 1000
+	}
+	beansCh := make(chan interface{}, batchSize*2)
 	lbar := progress.AddCountBar("Loaded records", int64(len(entries)))
 	go func() {
 		defer close(beansCh)
@@ -2776,65 +2784,75 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		}
 	}()
 
-	pool := make(chan struct{}, poolSize)
-	errCh := make(chan error, batch*poolSize)
-	done := make(chan struct{}, 1)
-	var wg sync.WaitGroup
-	beanBuffer := make([]interface{}, 0, batch)
+	chunkBatch := make([]interface{}, 0, batchSize)
+	edgeBatch := make([]interface{}, 0, batchSize)
+	xattrBatch := make([]interface{}, 0, batchSize)
+	nodeBatch := make([]interface{}, 0, batchSize)
+	chunkRefBatch := make([]interface{}, 0, batchSize)
 
-	for bean := range beansCh {
-		beanBuffer = append(beanBuffer, bean)
-		if len(beanBuffer) >= batch {
-			beanBufferBk := beanBuffer
-			wg.Add(1)
-			pool <- struct{}{}
-			s := m.db.NewSession()
-			go func() {
-				defer func() {
-					s.Close()
-					wg.Done()
-					<-pool
-				}()
-
-				select {
-				case err = <-errCh:
-					return
-				default:
-				}
-
-				n, err := s.Insert(beanBufferBk...)
-				if err != nil {
-					fmt.Println(err)
-					errCh <- err
-				} else if d := len(beanBufferBk) - int(n); d > 0 {
-					fmt.Println(fmt.Errorf("%d records not inserted: %+v", d, beanBufferBk))
-					errCh <- fmt.Errorf("%d records not inserted: %+v", d, beanBufferBk)
-				}
-				lbar.IncrInt64(n)
-			}()
-			beanBuffer = make([]interface{}, 0, batch)
-		}
-	}
-	if len(beanBuffer) > 0 {
-		s := m.db.NewSession()
-		n, err := s.Insert(beanBuffer...)
+	insertBatch := func(beanSlice []interface{}) error {
+		var n int64
+		err := m.txn(func(s *xorm.Session) error {
+			var err error
+			if n, err = s.Insert(beanSlice); err != nil {
+				return err
+			}
+			return nil
+		})
 		if err != nil {
-			errCh <- err
-		} else if d := len(beanBuffer) - int(n); d > 0 {
-			errCh <- fmt.Errorf("%d records not inserted: %+v", d, beanBuffer)
+			return err
+		} else if d := len(beanSlice) - int(n); d > 0 {
+			return fmt.Errorf("%d records not inserted: %+v", d, beanSlice)
 		}
 		lbar.IncrInt64(n)
+		return nil
 	}
 
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
+	addToBatch := func(batch *[]interface{}, bean interface{}) error {
+		*batch = append(*batch, bean)
+		if len(*batch) >= batchSize {
+			if err := insertBatch(*batch); err != nil {
+				return err
+			}
+			*batch = (*batch)[:0]
+		}
+		return nil
+	}
 
-	select {
-	case err = <-errCh:
-		return err
-	case <-done:
+	for bean := range beansCh {
+		switch bean.(type) {
+		case *chunk:
+			if err := addToBatch(&chunkBatch, bean); err != nil {
+				return err
+			}
+		case *edge:
+			if err := addToBatch(&edgeBatch, bean); err != nil {
+				return err
+			}
+		case *xattr:
+			if err := addToBatch(&xattrBatch, bean); err != nil {
+				return err
+			}
+		case *node:
+			if err := addToBatch(&nodeBatch, bean); err != nil {
+				return err
+			}
+		case *chunkRef:
+			if err := addToBatch(&chunkRefBatch, bean); err != nil {
+				return err
+			}
+		default:
+			if err := insertBatch([]interface{}{bean}); err != nil {
+				return err
+			}
+		}
+	}
+	for _, one := range [][]interface{}{chunkBatch, edgeBatch, xattrBatch, nodeBatch, chunkRefBatch} {
+		if len(one) > 0 {
+			if err := insertBatch(one); err != nil {
+				return err
+			}
+		}
 	}
 
 	progress.Done()
