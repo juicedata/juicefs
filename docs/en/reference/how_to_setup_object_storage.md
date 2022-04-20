@@ -187,7 +187,7 @@ The format of the option `--bucket` for all S3 compatible object storage service
 
 ## Google Cloud Storage
 
-Google Cloud uses [IAM](https://cloud.google.com/iam/docs/overview) to manage the access rights of resources. Through authorizing [service accounts](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud), you can have a fine control of the access rights of cloud servers and object storage.
+Google Cloud uses [IAM](https://cloud.google.com/iam/docs/overview) to manage permissions for accessing resources. Through authorizing [service accounts](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud), you can have a fine-grained control of the access rights of cloud servers and object storage.
 
 For cloud servers and object storage that belong to the same service account, as long as the account grants access to the relevant resources, there is no need to provide authentication information when creating a JuiceFS file system, and the cloud platform will automatically complete authentication.
 
