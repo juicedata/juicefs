@@ -61,7 +61,7 @@ jobs:
           mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "drop database if exists $db_name; create database $db_name;" 
 
           if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
-            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -f
+            rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
           fi
 
       - name: Test mysql gbk support with new client
