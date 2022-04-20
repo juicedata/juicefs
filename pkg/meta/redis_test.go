@@ -70,6 +70,7 @@ func testMeta(t *testing.T, m Meta) {
 	testLocks(t, m)
 	testConcurrentWrite(t, m)
 	testCompaction(t, m, false)
+	time.Sleep(time.Second)
 	testCompaction(t, m, true)
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
@@ -904,8 +905,8 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	deletes := len(deleted)
 	l.Unlock()
 	if trash {
-		if deletes > 5 { // caused by wasted compaction
-			t.Fatalf("deleted chunks %d is greater than 5", deletes)
+		if deletes > 10 {
+			t.Fatalf("deleted chunks %d is greater than 10", deletes)
 		}
 		if len(slices[0]) < 200 {
 			t.Fatalf("list delayed slices %d is less than 200", len(slices[0]))

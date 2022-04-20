@@ -2007,6 +2007,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	}
 	var result []delslices
 	for rows.Next() {
+		ds.Slices = nil
 		if rows.Scan(&ds) == nil {
 			result = append(result, ds)
 		}
@@ -2119,7 +2120,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return err
 		}
 		if trash {
-			if err = mustInsert(ses, delslices{chunkid, time.Now().Unix(), buf}); err != nil {
+			if err = mustInsert(ses, &delslices{chunkid, time.Now().Unix(), buf}); err != nil {
 				return err
 			}
 		} else {
@@ -2236,6 +2237,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return errno(err)
 	}
 	for rows2.Next() {
+		ds.Slices = nil
 		if rows2.Scan(&ds) == nil {
 			ss := m.decodeDelayedSlices(ds.Slices)
 			if showProgress != nil {
