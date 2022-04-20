@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  encoding-test:
+  mysql-encoding-test:
     runs-on: [self-hosted, daily-build]
     steps:
       - name: Checkout
@@ -40,8 +40,8 @@ jobs:
           export GOPATH=/usr/local/go
           export HOME=/root
           make juicefs
-          wget https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz 
-          tar zxf https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz 
+          wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz 
+          tar -zxf https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz 
           mv juicefs juicefs_old
  
       - name: Init
