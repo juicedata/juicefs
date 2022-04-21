@@ -501,6 +501,10 @@ func (r *redisMeta) delfiles() string {
 	return r.prefix + "delfiles"
 }
 
+func (r *redisMeta) delSlices() string {
+	return r.prefix + "delSlices"
+}
+
 func (r *redisMeta) allSessions() string {
 	return r.prefix + "allSessions"
 }
@@ -2237,6 +2241,70 @@ func (r *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	_ = r.rdb.ZRem(ctx, r.delfiles(), tracking)
 }
 
+func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+	ctx := Background
+	stop := fmt.Errorf("reach limit")
+	var count int
+	var ss []Slice
+	var rs []*redis.IntCmd
+	err := r.hscan(ctx, r.delSlices(), func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			key := keys[i]
+			ps := strings.Split(key, "_")
+			if len(ps) != 2 {
+				logger.Warnf("Invalid key %s", key)
+				continue
+			}
+			if ts, e := strconv.ParseInt(ps[1], 10, 64); e != nil {
+				logger.Warnf("Invalid key %s", key)
+				continue
+			} else if ts >= edge {
+				continue
+			}
+
+			if err := r.txn(ctx, func(tx *redis.Tx) error {
+				val, e := tx.HGet(ctx, r.delSlices(), key).Result()
+				if e == redis.Nil {
+					return nil
+				} else if e != nil {
+					return e
+				}
+				ss, rs = ss[:0], rs[:0]
+				buf := []byte(val)
+				r.decodeDelayedSlices(buf, &ss)
+				if len(ss) == 0 {
+					return fmt.Errorf("invalid value for delSlices %s: %v", key, buf)
+				}
+				_, e = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+					for _, s := range ss {
+						rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Chunkid, s.Size), -1))
+					}
+					pipe.HDel(ctx, r.delSlices(), key)
+					return nil
+				})
+				return e
+			}, r.delSlices()); err != nil {
+				logger.Warnf("Cleanup delSlices %s: %s", key, err)
+				continue
+			}
+			for i, s := range ss {
+				if rs[i].Err() == nil && rs[i].Val() < 0 {
+					r.deleteSlice(s.Chunkid, s.Size)
+					count++
+				}
+			}
+			if count >= limit {
+				return stop
+			}
+		}
+		return nil
+	})
+	if err == stop {
+		err = nil
+	}
+	return count, err
+}
+
 func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// avoid too many or duplicated compaction
 	if !force {
@@ -2282,7 +2350,14 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		}
 		return
 	}
-	var rs []*redis.IntCmd
+	var buf []byte         // trash enabled: track delayed slices
+	var rs []*redis.IntCmd // trash disabled: check reference of slices
+	trash := r.toTrash(0)
+	if trash {
+		for _, s := range ss {
+			buf = append(buf, r.encodeDelayedSlice(s.chunkid, s.size)...)
+		}
+	}
 	key := r.chunkKey(inode, indx)
 	errno := errno(r.txn(ctx, func(tx *redis.Tx) error {
 		rs = nil
@@ -2306,8 +2381,12 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				pipe.LPush(ctx, key, vals[i-1])
 			}
 			pipe.HSet(ctx, r.sliceRefs(), r.sliceKey(chunkid, size), "0") // create the key to tracking it
-			for _, s := range ss {
-				rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1))
+			if trash {
+				pipe.HSet(ctx, r.delSlices(), fmt.Sprintf("%d_%d", chunkid, time.Now().Unix()), buf)
+			} else {
+				for _, s := range ss {
+					rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1))
+				}
 			}
 			return nil
 		})
@@ -2329,9 +2408,11 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if errno == 0 {
 		r.of.InvalidateChunk(inode, indx)
 		r.cleanupZeroRef(r.sliceKey(chunkid, size))
-		for i, s := range ss {
-			if rs[i].Err() == nil && rs[i].Val() < 0 {
-				r.deleteSlice(s.chunkid, s.size)
+		if !trash {
+			for i, s := range ss {
+				if rs[i].Err() == nil && rs[i].Val() < 0 {
+					r.deleteSlice(s.chunkid, s.size)
+				}
 			}
 		}
 	} else {
@@ -2488,14 +2569,14 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}
 
 	p := r.rdb.Pipeline()
-	return errno(r.scan(ctx, "c*_*", func(keys []string) error {
+	err := r.scan(ctx, "c*_*", func(keys []string) error {
 		for _, key := range keys {
 			_ = p.LRange(ctx, key, 0, 100000000)
 		}
 		cmds, err := p.Exec(ctx)
 		if err != nil {
 			logger.Warnf("list slices: %s", err)
-			return errno(err)
+			return err
 		}
 		for _, cmd := range cmds {
 			key := cmd.(*redis.StringSliceCmd).Args()[1].(string)
@@ -2512,7 +2593,30 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 			}
 		}
 		return nil
-	}))
+	})
+	if err != nil {
+		return errno(err)
+	}
+
+	var ss []Slice
+	err = r.hscan(ctx, r.delSlices(), func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			ss = ss[:0]
+			r.decodeDelayedSlices([]byte(keys[i+1]), &ss)
+			if showProgress != nil {
+				for range ss {
+					showProgress()
+				}
+			}
+			for _, s := range ss {
+				if s.Chunkid > 0 {
+					slices[1] = append(slices[1], s)
+				}
+			}
+		}
+		return nil
+	})
+	return errno(err)
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
