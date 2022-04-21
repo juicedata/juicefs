@@ -47,6 +47,7 @@ jobs:
         run: |
           sudo /etc/init.d/mysql start
           sudo chmod 777 /var
+          sudo apt install attr
 
       - name: Test mysql gbk support with new client
         run: |
