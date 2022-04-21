@@ -228,8 +228,8 @@ jobs:
           mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
-          ./juicefs_old dump ${{steps.vars.outputs.META_URL1}}  backup.dump
-
+ 
+          ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
           ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
           ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
