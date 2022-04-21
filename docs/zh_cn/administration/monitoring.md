@@ -22,7 +22,7 @@ JuiceFS 通过 [Prometheus](https://prometheus.io) 类型的 API 对外提供数
 
 ### Ⅱ. 添加 API 到 Prometheus Server
 
-编辑 Prometheus 的配置文件，添加一个新 job 并指向 JuiceFS 的 API 地址，例如：
+编辑 Prometheus 的[配置文件](https://prometheus.io/docs/prometheus/latest/configuration/configuration)，添加一个新 job 并指向 JuiceFS 的 API 地址，例如：
 
 ```yaml {20-22}
 global:
@@ -43,7 +43,7 @@ scrape_configs:
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
-      
+
   - job_name: "juicefs"
     static_configs:
       - targets: ["localhost:9567"]
@@ -66,12 +66,9 @@ scrape_configs:
 
 ![](../images/grafana-data-source.jpg)
 
-然后，使用 [grafana_template.json](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json) 创建一个 Dashboard。
-
-进入新建的 Dashboard 即可看到文件系统的可视化图表了。
+然后，使用 [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json) 创建一个仪表盘。进入新建的仪表盘即可看到文件系统的可视化图表了：
 
 ![](../images/grafana-dashboard.jpg)
-
 
 ## 收集监控指标
 
@@ -277,7 +274,7 @@ $ juicefs mount --consul 1.2.3.4:8500 ...
 
 每个 instance 的 meta 都包含了 `hostname` 与 `mountpoint` 两个维度，其中 `mountpoint` 为 `s3gateway` 代表该实例为 S3 网关。
 
-## 展示监控指标
+## 可视化监控指标
 
 ### Grafana 仪表盘模板
 

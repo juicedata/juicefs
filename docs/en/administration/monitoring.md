@@ -7,21 +7,22 @@ sidebar_position: 6
 
 As a distributed file system hosting massive data storage, we need to have the ability to visualize the status changes of the entire system in terms of capacity, files, CPU load, disk IO, cache, etc. JuiceFS provides real-time status data to the outside world through a Prometheus-based API. Just add it to your own Prometheus Server to scrapes and stores time series data, and then easily visualize and monitor the JucieFS file system with tools like Grafana.
 
-## Get Started
+## Get started
 
 It is assumed here that you build Prometheus Server, Grafana and JuiceFS clients all running on the same host.
-- **Prometheus Server**: scrapes and stores the time series data of various metrics. For installation, please refer to the [official documentation](https://prometheus.io/docs/introduction/first_steps/) 
-- **Grafana**: loading and visualizing the time series data from Prometheus. For installation, please refer to the [official documentation](https://grafana.com/docs/grafana/latest/installation/)
+
+- **Prometheus Server**: Scrapes and stores the time series data of various metrics. For installation, please refer to the [official documentation](https://prometheus.io/docs/introduction/first_steps/).
+- **Grafana**: Loading and visualizing the time series data from Prometheus. For installation, please refer to the [official documentation](https://grafana.com/docs/grafana/latest/installation/).
 
 ### Ⅰ. Access to real-time data
 
-JuiceFS outputs metrics data via an API of type [Prometheus](https://prometheus.io). After the file system is mounted, the live monitoring data output from the client is available by default address `http://localhost:9567/metrics` .
+JuiceFS outputs metrics data via an API of type [Prometheus](https://prometheus.io). After the file system is mounted, the live monitoring data output from the client is available by default address `http://localhost:9567/metrics`.
 
 ![](../images/prometheus-client-data.jpg)
 
 ### Ⅱ. Add API to Prometheus Server
 
-Edit the configuration file of Prometheus, add a new job and point to the API address of JuiceFS, e.g.
+Edit the [configuration file](https://prometheus.io/docs/prometheus/latest/configuration/configuration) of Prometheus, add a new job and point to the API address of JuiceFS, e.g.
 
 ```yaml {20-22}
 global:
@@ -42,13 +43,13 @@ scrape_configs:
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
-      
+
   - job_name: "juicefs"
     static_configs:
       - targets: ["localhost:9567"]
 ```
 
-Assuming a configuration file named `prometheus.yml`, load this configuration to start the service.
+Assuming a configuration file named `prometheus.yml`, load this configuration to start the service:
 
 ```shell
 ./prometheus --config.file=prometheus.yml
@@ -56,7 +57,7 @@ Assuming a configuration file named `prometheus.yml`, load this configuration to
 
 Visit `http://localhost:9090` to see the Prometheus interface.
 
-### Ⅲ. Visualize Prometheus data by Grafana 
+### Ⅲ. Visualize Prometheus data by Grafana
 
 As shown in the figure below, create a new Data Source.
 
@@ -65,9 +66,7 @@ As shown in the figure below, create a new Data Source.
 
 ![](../images/grafana-data-source.jpg)
 
-Then, create a Dashboard using [grafana_template.json](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json).
-
-Visit the Dashboard to see a visual graph of the file system.
+Then, create a dashboard using [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json). Visit the dashboard to see a visual graph of the file system:
 
 ![](../images/grafana-dashboard.jpg)
 
@@ -275,7 +274,7 @@ For each instance registered to Consul, its `serviceName` is `juicefs`, and the 
 
 The meta of each instance contains two aspects: `hostname` and `mountpoint`. When `mountpoint` is `s3gateway`, which means that the instance is an S3 gateway.
 
-## Display monitoring metrics
+## Visualize monitoring metrics
 
 ### Grafana dashboard template
 
