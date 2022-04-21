@@ -68,6 +68,7 @@ jobs:
               "format:jfs_old, format:jfs_new, destroy:jfs_new",
               "format:jfs_old, config:jfs_new, destroy:jfs_old",
               "format:jfs_old, config:jfs_new, destroy:jfs_new",
+              "format:jfs_old, config:jfs_new, status:jfs_new",
               "format:jfs_new, config_encrypt:jfs_new, destroy:jfs_new",
               "format:jfs_old, config_encrypt:jfs_new, destroy:jfs_new",
               "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new",
@@ -162,6 +163,10 @@ jobs:
                             filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
                             sudo ./$jfs_bin load ${{ steps.vars.outputs.META_URL }} $filename
                             echo "load finished"
+                            ;;
+                        "status")
+                            sudo ./$jfs_bin status ${{ steps.vars.outputs.META_URL }} 
+                            echo "status finished"
                             ;;
                       esac
                   done
