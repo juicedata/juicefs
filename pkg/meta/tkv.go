@@ -2006,7 +2006,11 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 				showProgress()
 			}
 		}
-		slices[1] = append(slices[1], ss...)
+		for _, s := range ss {
+			if s.Chunkid > 0 {
+				slices[1] = append(slices[1], s)
+			}
+		}
 	}
 	return 0
 }

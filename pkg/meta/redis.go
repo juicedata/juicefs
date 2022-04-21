@@ -2605,7 +2605,11 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 					showProgress()
 				}
 			}
-			slices[1] = append(slices[1], ss...)
+			for _, s := range ss {
+				if s.Chunkid > 0 {
+					slices[1] = append(slices[1], s)
+				}
+			}
 		}
 		return nil
 	})

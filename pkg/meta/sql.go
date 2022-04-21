@@ -2237,7 +2237,9 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return errno(err)
 	}
 	for rows2.Next() {
-		ds.Slices = nil
+		if len(ds.Slices) > 0 {
+			ds.Slices = ds.Slices[:0]
+		}
 		if rows2.Scan(&ds) == nil {
 			ss := m.decodeDelayedSlices(ds.Slices)
 			if showProgress != nil {
@@ -2245,7 +2247,11 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 					showProgress()
 				}
 			}
-			slices[1] = append(slices[1], ss...)
+			for _, s := range ss {
+				if s.Chunkid > 0 {
+					slices[1] = append(slices[1], s)
+				}
+			}
 		}
 	}
 	_ = rows2.Close()
