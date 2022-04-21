@@ -1786,6 +1786,8 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 
 	klen := 1 + 8 + 8
 	var count int
+	var ss []Slice
+	var rs []int64
 	for _, key := range keys {
 		if len(key) != klen {
 			continue
@@ -1794,19 +1796,18 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			continue
 		}
 
-		var ss []Slice
-		var rs []int64
 		if err = m.txn(func(tx kvTxn) error {
 			buf := tx.get(key)
 			if len(buf) == 0 {
 				return nil
 			}
-			if ss = m.decodeDelayedSlices(buf); ss == nil {
+			ss, rs = ss[:0], rs[:0]
+			m.decodeDelayedSlices(buf, &ss)
+			if len(ss) == 0 {
 				return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
 			}
-			rs = make([]int64, len(ss))
-			for i, s := range ss {
-				rs[i] = tx.incrBy(m.sliceKey(s.Chunkid, s.Size), -1)
+			for _, s := range ss {
+				rs = append(rs, tx.incrBy(m.sliceKey(s.Chunkid, s.Size), -1))
 			}
 			tx.dels(key)
 			return nil
@@ -2005,8 +2006,10 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		logger.Warnf("Scan delayed slices: %s", err)
 		return errno(err)
 	}
+	var ss []Slice
 	for _, value := range result {
-		ss := m.decodeDelayedSlices(value)
+		ss = ss[:0]
+		m.decodeDelayedSlices(value, &ss)
 		if showProgress != nil {
 			for range ss {
 				showProgress()

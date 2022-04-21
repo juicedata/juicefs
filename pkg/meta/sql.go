@@ -2007,9 +2007,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	}
 	var result []delslices
 	for rows.Next() {
-		if len(ds.Slices) > 0 {
-			ds.Slices = ds.Slices[:0]
-		}
+		ds.Slices = ds.Slices[:0]
 		if rows.Scan(&ds) == nil {
 			result = append(result, ds)
 		}
@@ -2017,8 +2015,8 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	_ = rows.Close()
 
 	var count int
+	var ss []Slice
 	for _, ds := range result {
-		var ss []Slice
 		if err = m.txn(func(ses *xorm.Session) error {
 			ds := delslices{Chunkid: ds.Chunkid}
 			if ok, e := ses.Get(&ds); e != nil {
@@ -2026,7 +2024,9 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			} else if !ok {
 				return nil
 			}
-			if ss = m.decodeDelayedSlices(ds.Slices); ss == nil {
+			ss = ss[:0]
+			m.decodeDelayedSlices(ds.Slices, &ss)
+			if len(ss) == 0 {
 				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Chunkid, ds.Slices)
 			}
 			for _, s := range ss {
@@ -2248,12 +2248,12 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	if err != nil {
 		return errno(err)
 	}
+	var ss []Slice
 	for rows2.Next() {
-		if len(ds.Slices) > 0 {
-			ds.Slices = ds.Slices[:0]
-		}
+		ds.Slices = ds.Slices[:0]
 		if rows2.Scan(&ds) == nil {
-			ss := m.decodeDelayedSlices(ds.Slices)
+			ss = ss[:0]
+			m.decodeDelayedSlices(ds.Slices, &ss)
 			if showProgress != nil {
 				for range ss {
 					showProgress()

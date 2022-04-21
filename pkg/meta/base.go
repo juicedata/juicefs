@@ -492,15 +492,13 @@ func (m *baseMeta) encodeDelayedSlice(chunkid uint64, size uint32) []byte {
 	return w.Bytes()
 }
 
-func (m *baseMeta) decodeDelayedSlices(buf []byte) []Slice {
+func (m *baseMeta) decodeDelayedSlices(buf []byte, ss *[]Slice) {
 	if len(buf) == 0 || len(buf)%12 != 0 {
-		return nil
+		return
 	}
-	ss := make([]Slice, 0, len(buf)/12)
 	for rb := utils.FromBuffer(buf); rb.HasMore(); {
-		ss = append(ss, Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
+		*ss = append(*ss, Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
 	}
-	return ss
 }
 
 func clearSUGID(ctx Context, cur *Attr, set *Attr) {
