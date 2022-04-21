@@ -1631,7 +1631,6 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	}
 	var sids []uint64
 	for rows.Next() {
-		s.Info = nil
 		if rows.Scan(&s) == nil {
 			sids = append(sids, s.Sid)
 		}
@@ -2198,7 +2197,6 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	defer rows.Close()
 	*names = nil
 	for rows.Next() {
-		x.Value = nil
 		err = rows.Scan(&x)
 		if err != nil {
 			return errno(err)
