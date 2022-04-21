@@ -37,11 +37,11 @@ jobs:
 
       - name: Build linux target
         run: |
-          make juicefs
           url=https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz
           wget -q $url 
           tar -zxf $(basename $url)
           mv juicefs juicefs_old
+          make juicefs
 
       - name: Init 
         run: |
@@ -64,16 +64,16 @@ jobs:
           data_write="data_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           soft_link="softlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
 
-          juicefs format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
-          juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d 
+          ./juicefs format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
+          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d 
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           mkdir `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$dirname"`
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
-          juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
+          ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
 
-          juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
-          juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
+          ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
+          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
           if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ]; then 
             echo "Fatal: file does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$filename
@@ -134,7 +134,7 @@ jobs:
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
 
           ./juicefs_old umount  ${{steps.vars.outputs.MOUNT_POINT1}} --force
-          juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.MOUNT_POINT1}} -d
+          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.MOUNT_POINT1}} -d
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename2"`
 
           if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` ]; then 
@@ -184,7 +184,7 @@ jobs:
           data_write="data1"
 
           ./juicefs_old format --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
-          juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.MOUNT_POINT1}} -d
+          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.MOUNT_POINT1}} -d
           echo $data_write > `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
 
           if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` ]; then 
@@ -228,8 +228,8 @@ jobs:
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
           ./juicefs_old dump ${{steps.vars.outputs.META_URL1}}  backup.dump
 
-          juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
-          juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
+          ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
+          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
           if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ]; then 
             echo "Fatal: file does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$filename
