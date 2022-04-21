@@ -1778,31 +1778,37 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 
 func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	// delayed slices: Lcccccccctttttttt
-	klen := 1 + 8 + 8
-	result, err := m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
-		if len(k) != klen {
-			return false
-		}
-		return m.parseInt64(k[9:]) < edge
-	})
+	keys, err := m.scanKeys(m.fmtKey("L"))
 	if err != nil {
 		logger.Warnf("Scan delayed slices: %s", err)
 		return 0, err
 	}
 
+	klen := 1 + 8 + 8
 	var count int
-	for key, value := range result {
-		ss := m.decodeDelayedSlices(value)
-		if ss == nil {
-			logger.Errorf("Invalid value for delayed slices %s: %v", key, value)
+	for _, key := range keys {
+		if len(key) != klen {
 			continue
 		}
-		rs := make([]int64, len(ss))
+		if m.parseInt64(key[9:]) >= edge {
+			continue
+		}
+
+		var ss []Slice
+		var rs []int64
 		if err = m.txn(func(tx kvTxn) error {
+			buf := tx.get(key)
+			if len(buf) == 0 {
+				return nil
+			}
+			if ss = m.decodeDelayedSlices(buf); ss == nil {
+				return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
+			}
+			rs = make([]int64, len(ss))
 			for i, s := range ss {
 				rs[i] = tx.incrBy(m.sliceKey(s.Chunkid, s.Size), -1)
 			}
-			tx.dels([]byte(key))
+			tx.dels(key)
 			return nil
 		}); err != nil {
 			logger.Warnf("Cleanup delayed slices %s: %s", key, err)

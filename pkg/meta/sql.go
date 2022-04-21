@@ -2007,7 +2007,9 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	}
 	var result []delslices
 	for rows.Next() {
-		ds.Slices = nil
+		if len(ds.Slices) > 0 {
+			ds.Slices = ds.Slices[:0]
+		}
 		if rows.Scan(&ds) == nil {
 			result = append(result, ds)
 		}
@@ -2016,12 +2018,17 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 
 	var count int
 	for _, ds := range result {
-		ss := m.decodeDelayedSlices(ds.Slices)
-		if ss == nil {
-			logger.Errorf("Invalid value for delayed slices %d: %v", ds.Chunkid, ds.Slices)
-			continue
-		}
+		var ss []Slice
 		if err = m.txn(func(ses *xorm.Session) error {
+			ds := delslices{Chunkid: ds.Chunkid}
+			if ok, e := ses.Get(&ds); e != nil {
+				return e
+			} else if !ok {
+				return nil
+			}
+			if ss = m.decodeDelayedSlices(ds.Slices); ss == nil {
+				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Chunkid, ds.Slices)
+			}
 			for _, s := range ss {
 				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Chunkid, s.Size); e != nil {
 					return e

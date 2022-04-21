@@ -2276,7 +2276,6 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				} else if e != nil {
 					return e
 				}
-
 				buf := []byte(val)
 				if ss = r.decodeDelayedSlices(buf); ss == nil {
 					return fmt.Errorf("invalid value for delSlices %s: %v", key, buf)
