@@ -186,6 +186,14 @@ func (tx *etcdTxn) exist(prefix []byte) bool {
 
 func (tx *etcdTxn) set(key, value []byte) {
 	tx.buffer[string(key)] = value
+	if len(tx.buffer) >= 128 {
+		err := tx.commmit()
+		if err != nil {
+			panic(err)
+		}
+		tx.observed = make(map[string]int64)
+		tx.buffer = make(map[string][]byte)
+	}
 }
 
 func (tx *etcdTxn) append(key []byte, value []byte) []byte {
@@ -210,6 +218,35 @@ func (tx *etcdTxn) dels(keys ...[]byte) {
 	}
 }
 
+func (tx *etcdTxn) commmit() error {
+	start := time.Now()
+	var conds []etcd.Cmp
+	var ops []etcd.Op
+	for k, v := range tx.observed {
+		conds = append(conds, etcd.Compare(etcd.ModRevision(k), "=", v))
+	}
+	for k, v := range tx.buffer {
+		var op etcd.Op
+		if v == nil {
+			op = etcd.OpDelete(string(k))
+		} else {
+			op = etcd.OpPut(string(k), string(v))
+		}
+		ops = append(ops, op)
+	}
+	resp, err := tx.kv.Txn(tx.ctx).If(conds...).Then(ops...).Commit()
+	if time.Since(start) > time.Millisecond*10 {
+		logger.Debugf("txn with %d conds and %d ops took %s", len(conds), len(ops), time.Since(start))
+	}
+	if err != nil {
+		return err
+	}
+	if resp.Succeeded {
+		return nil
+	}
+	return conflicted
+}
+
 type etcdClient struct {
 	client *etcd.Client
 	kv     etcd.KV
@@ -231,7 +268,6 @@ func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
 		make(map[string]int64),
 		make(map[string][]byte),
 	}
-	start := time.Now()
 	defer func() {
 		if r := recover(); r != nil {
 			fe, ok := r.(error)
@@ -249,31 +285,7 @@ func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
 	if len(tx.buffer) == 0 {
 		return nil // read only
 	}
-	var conds []etcd.Cmp
-	var ops []etcd.Op
-	for k, v := range tx.observed {
-		conds = append(conds, etcd.Compare(etcd.ModRevision(k), "=", v))
-	}
-	for k, v := range tx.buffer {
-		var op etcd.Op
-		if v == nil {
-			op = etcd.OpDelete(string(k))
-		} else {
-			op = etcd.OpPut(string(k), string(v))
-		}
-		ops = append(ops, op)
-	}
-	resp, err := c.kv.Txn(ctx).If(conds...).Then(ops...).Commit()
-	if time.Since(start) > time.Millisecond*10 {
-		logger.Debugf("txn with %d conds and %d ops took %s", len(conds), len(ops), time.Since(start))
-	}
-	if err != nil {
-		return err
-	}
-	if resp.Succeeded {
-		return nil
-	}
-	return conflicted
+	return tx.commmit()
 }
 
 var conflicted = errors.New("conflicted transaction")

@@ -214,11 +214,13 @@ func (c *badgerClient) txn(f func(kvTxn) error) (err error) {
 			}
 		}
 	}()
-	err = f(&badgerTxn{tx, c.client})
+	txn := &badgerTxn{tx, c.client}
+	err = f(txn)
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	// tx could be committed
+	return txn.t.Commit()
 }
 
 func (c *badgerClient) reset(prefix []byte) error {
