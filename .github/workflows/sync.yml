@@ -89,7 +89,7 @@ jobs:
             else
               mkdir data
             fi
-            ./juicefs sync ${{ steps.vars.outputs.MOUNT_POINT }} data/
+            ./juicefs sync ${{ steps.vars.outputs.MOUNT_POINT }} data/ --exclude '.accesslog'
             ./juicefs umount $meta
           done
           
