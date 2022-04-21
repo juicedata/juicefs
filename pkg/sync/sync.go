@@ -753,7 +753,7 @@ func filter(keys <-chan object.Object, rules []*rule) <-chan object.Object {
 			if o == nil {
 				break
 			}
-			if includeObject(rules, o) {
+			if includeObject(rules, o.Key()) {
 				r <- o
 			} else {
 				logger.Debugf("exclude %s", o.Key())
@@ -764,29 +764,37 @@ func filter(keys <-chan object.Object, rules []*rule) <-chan object.Object {
 	return r
 }
 
-func alignPatternAndKey(pattern, key string) string {
-	sep := "/"
-	l := strings.Count(pattern, sep) + 1
-	ps := strings.Split(key, sep)
-	if len(ps) < l {
-		return key
-	} else if strings.HasSuffix(pattern, sep) {
-		return strings.Join(ps[:l-1], sep) + sep
-	} else {
-		return strings.Join(ps[:l], sep)
+func slidingWindowForPath(pattern, key string) []string {
+	var result []string
+	split := strings.Split(key, "/")
+	size := strings.Count(pattern, "/") + 1
+	if size > len(split) {
+		return []string{key}
 	}
+	if strings.HasPrefix(pattern, "/") {
+		return []string{strings.Join(split[:size], "/")}
+	}
+	for start := 0; start+size <= len(split); start++ {
+		if strings.HasSuffix(pattern, "/") {
+			result = append(result, strings.Join(split[start:start+size-1], "/")+"/")
+		} else {
+			result = append(result, strings.Join(split[start:start+size], "/"))
+		}
+	}
+	return result
 }
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
-func includeObject(rules []*rule, o object.Object) bool {
+func includeObject(rules []*rule, key string) bool {
 	for _, rule := range rules {
-		k := alignPatternAndKey(rule.pattern, o.Key())
-		match, err := path.Match(rule.pattern, k)
-		if err != nil {
-			logger.Fatalf("pattern error : %v", err)
-		}
-		if match {
-			return rule.include
+		for _, k := range slidingWindowForPath(rule.pattern, key) {
+			match, err := path.Match(rule.pattern, k)
+			if err != nil {
+				logger.Fatalf("pattern error : %v", err)
+			}
+			if match {
+				return rule.include
+			}
 		}
 	}
 	return true
