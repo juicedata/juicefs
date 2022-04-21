@@ -911,14 +911,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		if len(slices[1]) < 200 {
 			t.Fatalf("list delayed slices %d is less than 200", len(slices[1]))
 		}
-		switch m := m.(type) {
-		case *redisMeta:
-			m.doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
-		case *dbMeta:
-			m.doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
-		case *kvMeta:
-			m.doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
-		}
+		m.(engine).doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
 		l.Lock()
 		deletes = len(deleted)
 		l.Unlock()

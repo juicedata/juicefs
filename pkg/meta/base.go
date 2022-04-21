@@ -979,10 +979,11 @@ func (m *baseMeta) cleanupDelayedSlices() {
 	edge := now.Unix() - int64(m.fmt.TrashDays)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
 	if count, err := m.en.doCleanupDelayedSlices(edge, 3e5); err == nil {
-		if count > 0 {
-			logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
+		msg := fmt.Sprintf("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
+		if count >= 3e5 {
+			logger.Warnf("%s (reached max limit, stop)", msg)
 		} else {
-			logger.Debugf("Cleanup delayed slices: nothing to delete")
+			logger.Debugf(msg)
 		}
 	} else {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)

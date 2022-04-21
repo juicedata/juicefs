@@ -2266,15 +2266,23 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			} else if ts >= edge {
 				continue
 			}
-			buf := []byte(keys[i+1])
-			ss := r.decodeDelayedSlices(buf)
-			if ss == nil {
-				logger.Errorf("Invalid value for delSlices %s: %v", key, buf)
-				continue
-			}
-			rs := make([]*redis.IntCmd, len(ss))
+
+			var ss []Slice
+			var rs []*redis.IntCmd
 			if err := r.txn(ctx, func(tx *redis.Tx) error {
-				_, e := tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+				val, e := tx.HGet(ctx, r.delSlices(), key).Result()
+				if e == redis.Nil {
+					return nil
+				} else if e != nil {
+					return e
+				}
+
+				buf := []byte(val)
+				if ss = r.decodeDelayedSlices(buf); ss == nil {
+					return fmt.Errorf("invalid value for delSlices %s: %v", key, buf)
+				}
+				rs = make([]*redis.IntCmd, len(ss))
+				_, e = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 					for i, s := range ss {
 						rs[i] = pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Chunkid, s.Size), -1)
 					}
