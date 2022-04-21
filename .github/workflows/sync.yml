@@ -58,7 +58,7 @@ jobs:
       - name: Build linux target
         run: |
           make juicefs 
-          
+
       - name: Init
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
@@ -90,7 +90,7 @@ jobs:
           done
           
       - name: Send Slack Notification
-        if: failure() && ${{github.event_name}} != 'workflow_dispatch' 
+        if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
