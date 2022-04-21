@@ -66,7 +66,7 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 		l.name,
 		os.Getpid(),
 		lvlStr,
-		e.Message,
+		strings.TrimRight(e.Message, "\n"),
 		path.Base(e.Caller.File),
 		e.Caller.Line)
 
