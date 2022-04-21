@@ -43,10 +43,10 @@ jobs:
           tar -zxf $(basename $url)
           mv juicefs juicefs_old
 
-      - init: Init 
+      - name: Init 
         run: |
           sudo /etc/init.d/mysql start
-          
+
       - name: Test mysql gbk support with new client
         run: |
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
