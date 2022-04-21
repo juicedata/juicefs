@@ -167,6 +167,7 @@ All keys:
   Fiiiiiiii          Flocks
   Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
+  Lcccccccctttttttt  delayed slices
   SEssssssss         session expire time
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
@@ -186,6 +187,10 @@ func (m *kvMeta) chunkKey(inode Ino, indx uint32) []byte {
 
 func (m *kvMeta) sliceKey(chunkid uint64, size uint32) []byte {
 	return m.fmtKey("K", chunkid, size)
+}
+
+func (m *kvMeta) delSliceKey(ts int64, chunkid uint64) []byte {
+	return m.fmtKey("L", uint64(ts), chunkid)
 }
 
 func (m *kvMeta) symKey(inode Ino) []byte {
@@ -1771,6 +1776,58 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 	_ = m.deleteKeys(m.delfileKey(inode, length))
 }
 
+func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+	// delayed slices: Lcccccccctttttttt
+	keys, err := m.scanKeys(m.fmtKey("L"))
+	if err != nil {
+		logger.Warnf("Scan delayed slices: %s", err)
+		return 0, err
+	}
+
+	klen := 1 + 8 + 8
+	var count int
+	var ss []Slice
+	var rs []int64
+	for _, key := range keys {
+		if len(key) != klen {
+			continue
+		}
+		if m.parseInt64(key[9:]) >= edge {
+			continue
+		}
+
+		if err = m.txn(func(tx kvTxn) error {
+			buf := tx.get(key)
+			if len(buf) == 0 {
+				return nil
+			}
+			ss, rs = ss[:0], rs[:0]
+			m.decodeDelayedSlices(buf, &ss)
+			if len(ss) == 0 {
+				return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
+			}
+			for _, s := range ss {
+				rs = append(rs, tx.incrBy(m.sliceKey(s.Chunkid, s.Size), -1))
+			}
+			tx.dels(key)
+			return nil
+		}); err != nil {
+			logger.Warnf("Cleanup delayed slices %s: %s", key, err)
+			continue
+		}
+		for i, s := range ss {
+			if rs[i] < 0 {
+				m.deleteSlice(s.Chunkid, s.Size)
+				count++
+			}
+		}
+		if count >= limit {
+			break
+		}
+	}
+	return count, nil
+}
+
 func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if !force {
 		// avoid too many or duplicated compaction
@@ -1818,6 +1875,13 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		}
 		return
 	}
+	var dsbuf []byte
+	trash := m.toTrash(0)
+	if trash {
+		for _, s := range ss {
+			dsbuf = append(dsbuf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+		}
+	}
 	err = m.txn(func(tx kvTxn) error {
 		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
@@ -1829,8 +1893,12 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		tx.set(m.chunkKey(inode, indx), buf2)
 		// create the key to tracking it
 		tx.set(m.sliceKey(chunkid, size), make([]byte, 8))
-		for _, s := range ss {
-			tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+		if trash {
+			tx.set(m.delSliceKey(time.Now().Unix(), chunkid), dsbuf)
+		} else {
+			for _, s := range ss {
+				tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+			}
 		}
 		return nil
 	})
@@ -1854,13 +1922,15 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
 		m.cleanupZeroRef(chunkid, size)
-		var refs int64
-		for _, s := range ss {
-			if m.client.txn(func(tx kvTxn) error {
-				refs = tx.incrBy(m.sliceKey(s.chunkid, s.size), 0)
-				return nil
-			}) == nil && refs < 0 {
-				m.deleteSlice(s.chunkid, s.size)
+		if !trash {
+			var refs int64
+			for _, s := range ss {
+				if m.client.txn(func(tx kvTxn) error {
+					refs = tx.incrBy(m.sliceKey(s.chunkid, s.size), 0)
+					return nil
+				}) == nil && refs < 0 {
+					m.deleteSlice(s.chunkid, s.size)
+				}
 			}
 		}
 	} else {
@@ -1923,6 +1993,31 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 				if showProgress != nil {
 					showProgress()
 				}
+			}
+		}
+	}
+
+	// delayed slices: Lcccccccctttttttt
+	klen = 1 + 8 + 8
+	result, err = m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
+		return len(k) == klen
+	})
+	if err != nil {
+		logger.Warnf("Scan delayed slices: %s", err)
+		return errno(err)
+	}
+	var ss []Slice
+	for _, value := range result {
+		ss = ss[:0]
+		m.decodeDelayedSlices(value, &ss)
+		if showProgress != nil {
+			for range ss {
+				showProgress()
+			}
+		}
+		for _, s := range ss {
+			if s.Chunkid > 0 {
+				slices[1] = append(slices[1], s)
 			}
 		}
 	}

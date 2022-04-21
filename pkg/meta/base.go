@@ -54,6 +54,7 @@ type engine interface {
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
+	doCleanupDelayedSlices(edge int64, limit int) (int, error)
 	doDeleteSlice(chunkid uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -484,6 +485,22 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	return w.Bytes()
 }
 
+func (m *baseMeta) encodeDelayedSlice(chunkid uint64, size uint32) []byte {
+	w := utils.NewBuffer(8 + 4)
+	w.Put64(chunkid)
+	w.Put32(size)
+	return w.Bytes()
+}
+
+func (m *baseMeta) decodeDelayedSlices(buf []byte, ss *[]Slice) {
+	if len(buf) == 0 || len(buf)%12 != 0 {
+		return
+	}
+	for rb := utils.FromBuffer(buf); rb.HasMore(); {
+		*ss = append(*ss, Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
+	}
+}
+
 func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	switch runtime.GOOS {
 	case "darwin":
@@ -888,6 +905,7 @@ func (m *baseMeta) cleanupTrash() {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
 			go m.doCleanupTrash(false)
+			go m.cleanupDelayedSlices()
 		}
 	}
 }
@@ -907,6 +925,8 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 	defer func() {
 		if count > 0 {
 			logger.Infof("cleanup trash: deleted %d files in %v", count, time.Since(now))
+		} else {
+			logger.Debugf("cleanup trash: nothing to delete")
 		}
 	}()
 
@@ -949,5 +969,21 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 		} else {
 			break
 		}
+	}
+}
+
+func (m *baseMeta) cleanupDelayedSlices() {
+	now := time.Now()
+	edge := now.Unix() - int64(m.fmt.TrashDays)*24*3600
+	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
+	if count, err := m.en.doCleanupDelayedSlices(edge, 3e5); err == nil {
+		msg := fmt.Sprintf("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
+		if count >= 3e5 {
+			logger.Warnf("%s (reached max limit, stop)", msg)
+		} else {
+			logger.Debugf(msg)
+		}
+	} else {
+		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
 	}
 }
