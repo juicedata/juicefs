@@ -39,6 +39,7 @@ S3FS 默认不限制缓存空间上限，对于较大的 Buket 可能导致缓�
 | 数据存储   | S3           | S3、其他对象存储、WebDAV、本地磁盘 |
 | 元数据存储 | 无           | 独立数据库                         |
 | 系统       | Linux、macOS | Linux、macOS、Windows            |
+| 访问接口    | POSIX-FUSE | POSIX-FUSE、HDFS API、S3 Gateway、CSI Driver |
 | POSIX 兼容 | 部分兼容     | 完全兼容                           |
 | 本地缓存   | ✓            | ✓                                |
 | 共享挂载   | ✓            | ✓                                  |
