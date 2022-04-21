@@ -46,7 +46,7 @@ jobs:
       - name: Init 
         run: |
           sudo /etc/init.d/mysql start
-          chmod 777 /var
+          sudo chmod 777 /var
 
       - name: Test mysql gbk support with new client
         run: |
