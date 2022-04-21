@@ -77,9 +77,9 @@ jobs:
           )
           for meta_url in "${meta_urls[@]}"; do
             db_name=$(basename $meta_url)
-            if [ "$meta_url" == mysql* ]; then
+            if [[ "$meta_url" == mysql* ]]; then
               mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
-            elif [ "$meta_url" == postgres* ]; then
+            elif [[ "$meta_url" == postgres* ]]; then
               psql -upostgres -ppostgres -e "drop database if exists $db_name; create database $db_name;" 
             fi
             ./juicefs load $meta_url ${{ steps.vars.outputs.DUMP_FILE }}
