@@ -29,7 +29,7 @@ $ juicefs format --storage s3 \
 
 ## Other options
 
-When executing the command `format` or `mount`, you can set some special parameters in the option `--bucket` using the form of URL parameters, such as `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true`, which is used to skip certificate verification for https requests.
+Some query string parameters are available for bucket URLs, which can be appended to the option `--bucket` of the commands `format` and `mount`. For example, to skip certificate verification for https requests, you can append `tls-insecure-skip-verify` parameter to a bucket URL like `https://myjuicefs.s3.us-east-2.amazonaws.com/?tls-insecure-skip-verify=true`
 
 ## Access Key and Secret Key
 
