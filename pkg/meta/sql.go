@@ -723,6 +723,15 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	return err
 }
 
+func scanChunk(rows *xorm.Rows, c *chunk) error {
+	// FIXME: there is a bug in xorm, which will fill existing slice with partial result
+	// see line 582 in session.go:582 of xorm
+	if len(c.Slices) > 0 {
+		c.Slices = c.Slices[:0]
+	}
+	return rows.Scan(c)
+}
+
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	f := m.of.find(inode)
@@ -764,7 +773,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 				return err
 			}
 			for rows.Next() {
-				if err = rows.Scan(&c); err != nil {
+				if err = scanChunk(rows, &c); err != nil {
 					_ = rows.Close()
 					return err
 				}
@@ -1622,6 +1631,7 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	}
 	var sids []uint64
 	for rows.Next() {
+		s.Info = nil
 		if rows.Scan(&s) == nil {
 			sids = append(sids, s.Sid)
 		}
@@ -1822,7 +1832,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 		chunks := make(map[uint32][]*slice)
 		for rows.Next() {
-			err = rows.Scan(&c)
+			err = scanChunk(rows, &c)
 			if err != nil {
 				_ = rows.Close()
 				return err
@@ -1976,7 +1986,7 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	}
 	var indexes []uint32
 	for rows.Next() {
-		if rows.Scan(&c) == nil {
+		if scanChunk(rows, &c) == nil {
 			indexes = append(indexes, c.Indx)
 		}
 	}
@@ -2117,7 +2127,7 @@ func (m *dbMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	}
 	var cs []chunk
 	for rows.Next() {
-		if rows.Scan(&c) == nil {
+		if scanChunk(rows, &c) == nil {
 			c.Slices = dup(c.Slices)
 			cs = append(cs, c)
 		}
@@ -2145,7 +2155,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	defer rows.Close()
 
 	for rows.Next() {
-		err = rows.Scan(&c)
+		err = scanChunk(rows, &c)
 		if err != nil {
 			return errno(err)
 		}
@@ -2188,6 +2198,7 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	defer rows.Close()
 	*names = nil
 	for rows.Next() {
+		x.Value = nil
 		err = rows.Scan(&x)
 		if err != nil {
 			return errno(err)
