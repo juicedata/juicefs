@@ -1,4 +1,4 @@
-name: "mysql-smalltable-test"
+name: "mysqltest"
 
 on:
   push:
@@ -107,7 +107,7 @@ jobs:
           tail -n 1000 /var/log/juicefs.log
 
       - name: Send Slack Notification
-        if: failure() && ${{github.event_name}} != 'workflow_dispatch' 
+        if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"

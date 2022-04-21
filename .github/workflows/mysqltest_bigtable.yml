@@ -1,4 +1,4 @@
-name: "mysqltest-bigtable-test"
+name: "mysqltest"
 
 on:
   push:
@@ -90,7 +90,7 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 cleanup
 
       - name: Send Slack Notification
-        if: failure() && ${{github.event_name}} != 'workflow_dispatch' 
+        if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
