@@ -81,7 +81,7 @@ jobs:
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure() && ${{github.event_name}} != 'workflow_dispatch' 
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
