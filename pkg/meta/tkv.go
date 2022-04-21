@@ -168,6 +168,7 @@ All keys:
   Piiiiiiii          POSIX locks
   Kccccccccnnnn      slice refs
   SEssssssss         session expire time
+  SHssssssss         session heartbeat // for legacy client
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
 */
@@ -208,8 +209,12 @@ func (m *kvMeta) sessionKey(sid uint64) []byte {
 	return m.fmtKey("SE", sid)
 }
 
+func (m *kvMeta) legacySessionKey(sid uint64) []byte {
+	return m.fmtKey("SH", sid)
+}
+
 func (m *kvMeta) parseSid(key string) uint64 {
-	buf := []byte(key[2:]) // "SE"
+	buf := []byte(key[2:]) // "SE" or "SH"
 	if len(buf) != 8 {
 		panic("invalid sid value")
 	}
@@ -462,7 +467,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		return m.deleteKeys(m.sessionKey(sid), m.sessionInfoKey(sid))
+		return m.deleteKeys(m.sessionKey(sid), m.legacySessionKey(sid), m.sessionInfoKey(sid))
 	}
 }
 
@@ -474,6 +479,22 @@ func (m *kvMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 		return nil, err
 	}
 	sids := make([]uint64, 0, len(vals))
+	for k := range vals {
+		sids = append(sids, m.parseSid(k))
+	}
+	limit -= len(sids)
+	if limit <= 0 {
+		return sids, nil
+	}
+
+	// check clients with version before 1.0-beta3 as well
+	vals, err = m.scanValues(m.fmtKey("SH"), limit, func(k, v []byte) bool {
+		return m.parseInt64(v) < time.Now().Add(time.Minute*-5).Unix()
+	})
+	if err != nil {
+		logger.Errorf("Scan stale legacy sessions: %s", err)
+		return sids, nil
+	}
 	for k := range vals {
 		sids = append(sids, m.parseSid(k))
 	}
@@ -534,7 +555,12 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 }
 
 func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
+	var legacy bool
 	value, err := m.get(m.sessionKey(sid))
+	if err == nil && value == nil {
+		legacy = true
+		value, err = m.get(m.legacySessionKey(sid))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -546,6 +572,9 @@ func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
 		return nil, err
 	}
 	s.Expire = time.Unix(m.parseInt64(value), 0)
+	if legacy {
+		s.Expire = s.Expire.Add(time.Minute * 5)
+	}
 	return s, nil
 }
 
@@ -562,6 +591,22 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 			continue
 		}
 		s.Expire = time.Unix(m.parseInt64(v), 0)
+		sessions = append(sessions, s)
+	}
+
+	// add clients with version before 1.0-beta3 as well
+	vals, err = m.scanValues(m.fmtKey("SH"), -1, nil)
+	if err != nil {
+		logger.Errorf("Scan legacy sessions: %s", err)
+		return sessions, nil
+	}
+	for k, v := range vals {
+		s, err := m.getSession(m.parseSid(k), false)
+		if err != nil {
+			logger.Errorf("Get legacy session: %s", err)
+			continue
+		}
+		s.Expire = time.Unix(m.parseInt64(v), 0).Add(time.Minute * 5)
 		sessions = append(sessions, s)
 	}
 	return sessions, nil

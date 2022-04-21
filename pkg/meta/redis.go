@@ -409,8 +409,16 @@ func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 }
 
 func (r *redisMeta) GetSession(sid uint64) (*Session, error) {
+	var legacy bool
 	key := strconv.FormatUint(sid, 10)
 	score, err := r.rdb.ZScore(Background, r.allSessions(), key).Result()
+	if err == redis.Nil {
+		legacy = true
+		score, err = r.rdb.ZScore(Background, legacySessions, key).Result()
+	}
+	if err == redis.Nil {
+		err = fmt.Errorf("session not found: %d", sid)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -419,6 +427,9 @@ func (r *redisMeta) GetSession(sid uint64) (*Session, error) {
 		return nil, err
 	}
 	s.Expire = time.Unix(int64(score), 0)
+	if legacy {
+		s.Expire = s.Expire.Add(time.Minute * 5)
+	}
 	return s, nil
 }
 
@@ -435,6 +446,22 @@ func (r *redisMeta) ListSessions() ([]*Session, error) {
 			continue
 		}
 		s.Expire = time.Unix(int64(k.Score), 0)
+		sessions = append(sessions, s)
+	}
+
+	// add clients with version before 1.0-beta3 as well
+	keys, err = r.rdb.ZRangeWithScores(Background, legacySessions, 0, -1).Result()
+	if err != nil {
+		logger.Errorf("Scan legacy sessions: %s", err)
+		return sessions, nil
+	}
+	for _, k := range keys {
+		s, err := r.getSession(k.Member.(string), false)
+		if err != nil {
+			logger.Errorf("Get legacy session: %s", err)
+			continue
+		}
+		s.Expire = time.Unix(int64(k.Score), 0).Add(time.Minute * 5)
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
@@ -1745,7 +1772,12 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) error {
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		return r.rdb.ZRem(ctx, r.allSessions(), ssid).Err()
+		if n, err := r.rdb.ZRem(ctx, r.allSessions(), ssid).Result(); err != nil {
+			return err
+		} else if n == 1 {
+			return nil
+		}
+		return r.rdb.ZRem(ctx, legacySessions, ssid).Err()
 	}
 }
 
@@ -1759,6 +1791,23 @@ func (r *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	sids := make([]uint64, len(vals))
 	for i, v := range vals {
 		sids[i], _ = strconv.ParseUint(v, 10, 64)
+	}
+	limit -= len(sids)
+	if limit <= 0 {
+		return sids, nil
+	}
+
+	// check clients with version before 1.0-beta3 as well
+	vals, err = r.rdb.ZRangeByScore(Background, legacySessions, &redis.ZRangeBy{
+		Max:   strconv.FormatInt(time.Now().Add(time.Minute*-5).Unix(), 10),
+		Count: int64(limit)}).Result()
+	if err != nil {
+		logger.Errorf("Scan stale legacy sessions: %s", err)
+		return sids, nil
+	}
+	for _, v := range vals {
+		sid, _ := strconv.ParseUint(v, 10, 64)
+		sids = append(sids, sid)
 	}
 	return sids, nil
 }

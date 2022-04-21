@@ -347,16 +347,27 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 	return nil
 }
 
-func (m *dbMeta) getSession(row *session2, detail bool) (*Session, error) {
+func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 	var s Session
-	if row.Info == nil { // legacy client has no info
-		row.Info = []byte("{}")
+	var info []byte
+	switch row := row.(type) {
+	case *session2:
+		s.Sid = row.Sid
+		s.Expire = time.Unix(row.Expire, 0)
+		info = row.Info
+	case *session:
+		s.Sid = row.Sid
+		s.Expire = time.Unix(row.Heartbeat, 0).Add(time.Minute * 5)
+		info = row.Info
+		if info == nil { // legacy client has no info
+			info = []byte("{}")
+		}
+	default:
+		return nil, fmt.Errorf("invalid type: %T", row)
 	}
-	if err := json.Unmarshal(row.Info, &s); err != nil {
+	if err := json.Unmarshal(info, &s); err != nil {
 		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
 	}
-	s.Sid = row.Sid
-	s.Expire = time.Unix(row.Expire, 0)
 	if detail {
 		var (
 			srows []sustained
@@ -392,14 +403,22 @@ func (m *dbMeta) getSession(row *session2, detail bool) (*Session, error) {
 
 func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
 	row := session2{Sid: sid}
-	ok, err := m.db.Get(&row)
-	if err != nil {
+	if ok, err := m.db.Get(&row); err != nil {
 		return nil, err
+	} else if ok {
+		return m.getSession(&row, true)
 	}
-	if !ok {
-		return nil, fmt.Errorf("session not found: %d", sid)
+	if ok, err := m.db.IsTableExist(&session{}); err != nil {
+		return nil, err
+	} else if ok {
+		row := session{Sid: sid}
+		if ok, err := m.db.Get(&row); err != nil {
+			return nil, err
+		} else if ok {
+			return m.getSession(&row, true)
+		}
 	}
-	return m.getSession(&row, true)
+	return nil, fmt.Errorf("session not found: %d", sid)
 }
 
 func (m *dbMeta) ListSessions() ([]*Session, error) {
@@ -416,6 +435,24 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 			continue
 		}
 		sessions = append(sessions, s)
+	}
+
+	if ok, err := m.db.IsTableExist(&session{}); err != nil {
+		logger.Errorf("Check legacy session table: %s", err)
+	} else if ok {
+		var lrows []session
+		if err = m.db.Find(&lrows); err != nil {
+			logger.Errorf("Scan legacy sessions: %s", err)
+			return sessions, nil
+		}
+		for i := range lrows {
+			s, err := m.getSession(&lrows[i], false)
+			if err != nil {
+				logger.Errorf("Get legacy session: %s", err)
+				continue
+			}
+			sessions = append(sessions, s)
+		}
 	}
 	return sessions, nil
 }
@@ -1617,10 +1654,16 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		return m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Delete(&session2{Sid: sid})
+		if n, err := m.db.Delete(&session2{Sid: sid}); err != nil {
 			return err
-		})
+		} else if n == 1 {
+			return nil
+		}
+		ok, err := m.db.IsTableExist(&session{})
+		if err == nil && ok {
+			_, err = m.db.Delete(&session{Sid: sid})
+		}
+		return err
 	}
 }
 
@@ -1637,6 +1680,27 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 		}
 	}
 	_ = rows.Close()
+	limit -= len(sids)
+	if limit <= 0 {
+		return sids, nil
+	}
+
+	if ok, err := m.db.IsTableExist(&session{}); err != nil {
+		logger.Errorf("Check legacy session table: %s", err)
+	} else if ok {
+		var ls session
+		rows, err = m.db.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Limit(limit, 0).Rows(&ls)
+		if err != nil {
+			logger.Errorf("Scan stale legacy sessions: %s", err)
+			return sids, nil
+		}
+		for rows.Next() {
+			if rows.Scan(&ls) == nil {
+				sids = append(sids, ls.Sid)
+			}
+		}
+		_ = rows.Close()
+	}
 	return sids, nil
 }
 
