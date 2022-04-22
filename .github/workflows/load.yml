@@ -73,12 +73,6 @@ jobs:
           sudo /etc/init.d/mysql start
           wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
           gzip -dk  meta_with_4M_Empty_files.json.gz
-      
-      - name: Prepare dump file
-        run: | 
-          ./juicefs format sqlite3://test.db myjfs
-          ./juicefs mount sqlite3://test.db myjfs -d
-          mddir 
 
       - name: Test
         run: |
