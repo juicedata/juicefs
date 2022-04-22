@@ -77,8 +77,8 @@ jobs:
       - name: Test
         run: |
           meta_urls=(
-            ${{ steps.vars.outputs.META_POSTGRES }}
             ${{ steps.vars.outputs.META_MYSQL }}
+            ${{ steps.vars.outputs.META_POSTGRES }}
             ${{ steps.vars.outputs.META_SQLITE }}
             ${{ steps.vars.outputs.META_REDIS }}
           )
