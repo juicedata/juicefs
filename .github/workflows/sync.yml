@@ -90,7 +90,7 @@ jobs:
               mkdir data
             fi
             echo "start sync..."
-            ./juicefs sync ${{ steps.vars.outputs.MOUNT_POINT }} data/ --exclude '.accesslog'
+            ./juicefs sync ${{steps.vars.outputs.MOUNT_POINT}}/ data/ --exclude '.accesslog'
             echo "finish sync..."
             ./juicefs umount $meta
           done
