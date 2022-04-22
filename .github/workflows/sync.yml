@@ -41,7 +41,7 @@ jobs:
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-sync-test
           echo ::set-output name=BUCKET::/var/jfs/
           echo ::set-output name=NAME::sync-test
-          echo ::set-output name=DUMP_FILE::meta_with_4M_Empty_files.json
+          echo ::set-output name=DUMP_FILE::.github/workflows/small_dump.json
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
@@ -84,7 +84,9 @@ jobs:
               export PGPASSWORD="postgres"
               psql -h localhost -U postgres  -c "drop database if exists $db_name; create database $db_name;" 
             fi
+            echo "start load..."
             ./juicefs load $meta_url ${{ steps.vars.outputs.DUMP_FILE }}
+            echo "finish load..."
             ./juicefs mount $meta_url ${{ steps.vars.outputs.MOUNT_POINT }} -d 
             if [ -d data/ ]; then
               rm data/.* -rf 

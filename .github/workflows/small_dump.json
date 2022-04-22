@@ -1,0 +1,53 @@
+{
+  "Setting": {
+    "Name": "test8",
+    "UUID": "0b1eeca0-97ba-4101-ad2a-82b507058419",
+    "Storage": "file",
+    "Bucket": "/var/jfs/",
+    "AccessKey": "",
+    "BlockSize": 4096,
+    "Compression": "none",
+    "Shards": 0,
+    "HashPrefix": false,
+    "Capacity": 0,
+    "Inodes": 0,
+    "KeyEncrypted": false,
+    "TrashDays": 1,
+    "MetaVersion": 1,
+    "MinClientVersion": "",
+    "MaxClientVersion": ""
+  },
+  "Counters": {
+    "usedSpace": 36864,
+    "usedInodes": 3,
+    "nextInodes": 102,
+    "nextChunk": 1001,
+    "nextSession": 1,
+    "nextTrash": 0
+  },
+  "Sustained": [],
+  "DelFiles": [],
+  "FSTree": {
+    "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1650425877,"mtime":1650540141,"ctime":1650540141,"atimensec":829504000,"mtimensec":236120000,"ctimensec":236120000,"nlink":2,"length":0},
+    "xattrs": [{"name":"lastBackup","value":"2022-04-21T18:37:49+08:00"}],
+    "entries": {
+      "README.md": {
+        "attr": {"inode":3,"type":"regular","mode":420,"uid":1001,"gid":121,"atime":1650426640,"mtime":1650540127,"ctime":1650540127,"atimensec":956109000,"mtimensec":683788000,"ctimensec":683788000,"nlink":1,"length":13666},
+        "chunks": [{"index":0,"slices":[{"chunkid":2,"size":13666,"len":13666}]}]
+      },
+      "README_CN.md": {
+        "attr": {"inode":4,"type":"regular","mode":420,"uid":1001,"gid":121,"atime":1650426640,"mtime":1650540141,"ctime":1650540141,"atimensec":956109000,"mtimensec":243460000,"ctimensec":243460000,"nlink":1,"length":12404},
+        "chunks": [{"index":0,"slices":[{"chunkid":3,"size":12404,"len":12404}]}]
+      },
+      "file_%B9%FB%D6%AD%CA%FD%BE%DD": {
+        "attr": {"inode":2,"type":"regular","mode":420,"uid":0,"gid":0,"atime":1650425909,"mtime":1650425909,"ctime":1650425909,"atimensec":200758000,"mtimensec":203975000,"ctimensec":203975000,"nlink":1,"length":4},
+        "chunks": [{"index":0,"slices":[{"chunkid":1,"size":4,"len":4}]}]
+      }
+    }
+  },
+  "Trash": {
+    "attr": {"inode":9223372032828243968,"type":"directory","mode":365,"uid":0,"gid":0,"atime":1650425877,"mtime":1650425877,"ctime":1650425877,"atimensec":829504000,"mtimensec":829504000,"ctimensec":829504000,"nlink":2,"length":0},
+    "entries": {
+    }
+  }
+}
