@@ -39,17 +39,20 @@ func TestWarmup(t *testing.T) {
 		t.Fatalf("load setting err: %s", err)
 	}
 	uuid := format.UUID
-	var cacheDir string
+	var cacheDir = "/var/jfsCache"
 	var filePath string
 	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
 	case "darwin", "windows":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
 		cacheDir = fmt.Sprintf("%s/.juicefs/cache", homeDir)
-	default:
-		cacheDir = "/var/jfsCache"
 	}
 
 	os.RemoveAll(fmt.Sprintf("%s/%s", cacheDir, uuid))
