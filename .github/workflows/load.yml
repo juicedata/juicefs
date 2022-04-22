@@ -1,0 +1,118 @@
+name: "load-test"
+
+on:
+  push:
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - name: Set Variable
+        id: vars
+        run: |
+          echo ::set-output name=META_MYSQL::"mysql://root:root@\(127.0.0.1\)/sync_test"
+          echo ::set-output name=META_REDIS::redis://127.0.0.1:6379/1
+          echo ::set-output name=META_SQLITE::sqlite3://sync-test.db
+          echo ::set-output name=META_POSTGRES::postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable
+          echo ::set-output name=MOUNT_POINT::/tmp/juicefs-sync-test
+          echo ::set-output name=BUCKET::/var/jfs/
+          echo ::set-output name=NAME::sync-test
+          echo ::set-output name=DUMP_FILE::meta_with_4M_Empty_files.json
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17.x'
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: |
+          make juicefs 
+
+      - name: Init
+        run: |
+          sudo chmod 777 /var
+          sudo /etc/init.d/mysql start
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
+
+      - name: Test
+        run: |
+          meta_urls=(
+            ${{ steps.vars.outputs.META_MYSQL }}
+            ${{ steps.vars.outputs.META_POSTGRES }}
+            ${{ steps.vars.outputs.META_SQLITE }}
+            ${{ steps.vars.outputs.META_REDIS }}
+          )
+          for meta_url in "${meta_urls[@]}"; do
+            echo meta_url is: $meta_url
+            db_name=$(basename $meta_url | awk -F? '{print $1}')
+            if [[ "$meta_url" == mysql* ]]; then
+              mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+            elif [[ "$meta_url" == postgres* ]]; then
+              export PGPASSWORD="postgres"
+              printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+            fi
+            echo "start load..."
+            ./juicefs load $meta_url ${{ steps.vars.outputs.DUMP_FILE }}
+            echo "finish load..."
+            ./juicefs mount $meta_url ${{ steps.vars.outputs.MOUNT_POINT }} -d 
+            if [ -d data/ ]; then
+              rm data/{*,.*} -rf 
+            else
+              mkdir data
+            fi
+            echo "start sync..."
+            ./juicefs sync ${{steps.vars.outputs.MOUNT_POINT}}/t1 data/t1 --exclude '.accesslog'
+            echo "finish sync..."
+            ./juicefs umount $meta_url
+          done
+          
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
