@@ -78,7 +78,7 @@ jobs:
               mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
             elif [[ "$meta_url" == postgres* ]]; then
               export PGPASSWORD="postgres"
-              psql -h localhost -U postgres  -c "drop database if exists $db_name; create database $db_name;" 
+              psql -h localhost -U postgres  -c "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name;" 
             fi
             echo "start load..."
             ./juicefs load $meta_url ${{ steps.vars.outputs.DUMP_FILE }}
