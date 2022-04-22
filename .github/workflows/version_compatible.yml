@@ -60,21 +60,21 @@ jobs:
       - name: Version Compatible Test
         run: |
           tests=(
-              "format:jfs_new, format:jfs_old, destroy:jfs_new",
-              "format:jfs_new, format:jfs_old, destroy:jfs_old",
-              "format:jfs_new, config:jfs_old, destroy:jfs_new",
-              "format:jfs_new, config:jfs_old, destroy:jfs_old",
-              "format:jfs_old, format:jfs_new, destroy:jfs_old",
-              "format:jfs_old, format:jfs_new, destroy:jfs_new",
-              "format:jfs_old, config:jfs_new, destroy:jfs_old",
-              "format:jfs_old, config:jfs_new, destroy:jfs_new",
-              "format:jfs_old, config:jfs_new, status:jfs_new",
-              "format:jfs_new, config_encrypt:jfs_new, destroy:jfs_new",
-              "format:jfs_old, config_encrypt:jfs_new, destroy:jfs_new",
-              "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new",
-              "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new",
-              "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new ",
-              "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, write_file2_10K:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, mount:jfs_new, read_file1:jfs_new, read_file2:jfs_new, umount:jfs_new, destroy:jfs_new ",
+              "format:jfs_new, format:jfs_old, destroy:jfs_new"
+              "format:jfs_new, format:jfs_old, destroy:jfs_old"
+              "format:jfs_new, config:jfs_old, destroy:jfs_new"
+              "format:jfs_new, config:jfs_old, destroy:jfs_old"
+              "format:jfs_old, format:jfs_new, destroy:jfs_old"
+              "format:jfs_old, format:jfs_new, destroy:jfs_new"
+              "format:jfs_old, config:jfs_new, destroy:jfs_old"
+              "format:jfs_old, config:jfs_new, destroy:jfs_new"
+              "format:jfs_old, config:jfs_new, status:jfs_new"
+              "format:jfs_new, config_encrypt:jfs_new, destroy:jfs_new"
+              "format:jfs_old, config_encrypt:jfs_new, destroy:jfs_new"
+              "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new"
+              "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new"
+              "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new "
+              "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, write_file2_10K:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, mount:jfs_new, read_file1:jfs_new, read_file2:jfs_new, umount:jfs_new, destroy:jfs_new "
           )    
           urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}' | head -${{ steps.vars.outputs.BACKWARD_VERSIONS }}))
           for url in "${urls[@]}"; do 
