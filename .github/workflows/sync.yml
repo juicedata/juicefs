@@ -68,8 +68,8 @@ jobs:
           meta_urls=(
             ${{ steps.vars.outputs.META_POSTGRES }}
             ${{ steps.vars.outputs.META_MYSQL }}
-            ${{ steps.vars.outputs.META_REDIS }}
             ${{ steps.vars.outputs.META_SQLITE }}
+            ${{ steps.vars.outputs.META_REDIS }}
           )
           for meta_url in "${meta_urls[@]}"; do
             echo meta_url is: $meta_url
