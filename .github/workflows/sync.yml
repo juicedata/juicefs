@@ -37,7 +37,7 @@ jobs:
           echo ::set-output name=META_MYSQL::"mysql://root:root@\(127.0.0.1\)/sync_test"
           echo ::set-output name=META_REDIS::redis://127.0.0.1:6379/1
           echo ::set-output name=META_SQLITE::sqlite3://sync-test.db
-          echo ::set-output name=META_POSTGRES::postgres://postgres:postgres@127.0.0.1:5432/sync_test
+          echo ::set-output name=META_POSTGRES::postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-sync-test
           echo ::set-output name=BUCKET::/var/jfs/
           echo ::set-output name=NAME::sync-test
@@ -73,12 +73,12 @@ jobs:
           )
           for meta_url in "${meta_urls[@]}"; do
             echo meta_url is: $meta_url
-            db_name=$(basename $meta_url)
+            db_name=$(basename $meta_url | awk -F? '{print $1}')
             if [[ "$meta_url" == mysql* ]]; then
               mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
             elif [[ "$meta_url" == postgres* ]]; then
               export PGPASSWORD="postgres"
-              psql -h localhost -U postgres  -c "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name;" 
+              printf '\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; ' |  psql -U postgres -h localhost
             fi
             echo "start load..."
             ./juicefs load $meta_url ${{ steps.vars.outputs.DUMP_FILE }}
