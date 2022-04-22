@@ -47,9 +47,6 @@ jobs:
         with:
           go-version: '1.17.x'
 
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -61,12 +58,11 @@ jobs:
 
       - name: Init
         run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
           sudo chmod 777 /var
           sudo /etc/init.d/mysql start
           wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
           gzip -dk  meta_with_4M_Empty_files.json.gz
+
       - name: Test
         run: |
           meta_urls=(
