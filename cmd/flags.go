@@ -56,6 +56,11 @@ func globalFlags() []cli.Flag {
 func clientFlags() []cli.Flag {
 	var defaultCacheDir = "/var/jfsCache"
 	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
 	case "darwin":
 		fallthrough
 	case "windows":

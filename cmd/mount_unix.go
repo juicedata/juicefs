@@ -96,6 +96,11 @@ func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 func mount_flags() []cli.Flag {
 	var defaultLogDir = "/var/log"
 	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
 	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {

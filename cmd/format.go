@@ -47,8 +47,13 @@ import (
 )
 
 func cmdFormat() *cli.Command {
-	var defaultBucket string
+	var defaultBucket = "/var/jfs"
 	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
 	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -57,8 +62,6 @@ func cmdFormat() *cli.Command {
 		defaultBucket = path.Join(homeDir, ".juicefs", "local")
 	case "windows":
 		defaultBucket = path.Join("C:/jfs/local")
-	default:
-		defaultBucket = "/var/jfs"
 	}
 	return &cli.Command{
 		Name:      "format",
