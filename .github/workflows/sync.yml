@@ -52,7 +52,7 @@ jobs:
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-sync-test
           echo ::set-output name=BUCKET::/var/jfs/
           echo ::set-output name=NAME::sync-test
-          echo ::set-output name=DUMP_FILE::.github/workflows/small_dump.json
+          echo ::set-output name=DUMP_FILE::meta_with_4M_Empty_files.json
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
