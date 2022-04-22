@@ -1,4 +1,4 @@
-name: "sync-test"
+name: "load-test"
 
 on:
   push:
@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  sync-test:
+  load-test:
     runs-on: ubuntu-latest
     services:
       postgres:
