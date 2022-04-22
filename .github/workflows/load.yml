@@ -105,7 +105,7 @@ jobs:
             echo "start sync..."
             ./juicefs sync ${{steps.vars.outputs.MOUNT_POINT}}/t1 data/t1 --exclude '.accesslog'
             echo "finish sync..."
-            ./juicefs umount $meta_url
+            ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT}}
           done
           
       - name: Send Slack Notification
