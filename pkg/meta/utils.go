@@ -32,8 +32,9 @@ import (
 )
 
 const (
-	usedSpace   = "usedSpace"
-	totalInodes = "totalInodes"
+	usedSpace      = "usedSpace"
+	totalInodes    = "totalInodes"
+	legacySessions = "sessions"
 )
 
 const (

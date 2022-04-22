@@ -409,8 +409,16 @@ func (r *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 }
 
 func (r *redisMeta) GetSession(sid uint64) (*Session, error) {
+	var legacy bool
 	key := strconv.FormatUint(sid, 10)
 	score, err := r.rdb.ZScore(Background, r.allSessions(), key).Result()
+	if err == redis.Nil {
+		legacy = true
+		score, err = r.rdb.ZScore(Background, legacySessions, key).Result()
+	}
+	if err == redis.Nil {
+		err = fmt.Errorf("session not found: %d", sid)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -419,6 +427,9 @@ func (r *redisMeta) GetSession(sid uint64) (*Session, error) {
 		return nil, err
 	}
 	s.Expire = time.Unix(int64(score), 0)
+	if legacy {
+		s.Expire = s.Expire.Add(time.Minute * 5)
+	}
 	return s, nil
 }
 
@@ -435,6 +446,22 @@ func (r *redisMeta) ListSessions() ([]*Session, error) {
 			continue
 		}
 		s.Expire = time.Unix(int64(k.Score), 0)
+		sessions = append(sessions, s)
+	}
+
+	// add clients with version before 1.0-beta3 as well
+	keys, err = r.rdb.ZRangeWithScores(Background, legacySessions, 0, -1).Result()
+	if err != nil {
+		logger.Errorf("Scan legacy sessions: %s", err)
+		return sessions, nil
+	}
+	for _, k := range keys {
+		s, err := r.getSession(k.Member.(string), false)
+		if err != nil {
+			logger.Errorf("Get legacy session: %s", err)
+			continue
+		}
+		s.Expire = time.Unix(int64(k.Score), 0).Add(time.Minute * 5)
 		sessions = append(sessions, s)
 	}
 	return sessions, nil
@@ -499,6 +526,10 @@ func (r *redisMeta) totalInodesKey() string {
 
 func (r *redisMeta) delfiles() string {
 	return r.prefix + "delfiles"
+}
+
+func (r *redisMeta) delSlices() string {
+	return r.prefix + "delSlices"
 }
 
 func (r *redisMeta) allSessions() string {
@@ -1745,7 +1776,12 @@ func (r *redisMeta) doCleanStaleSession(sid uint64) error {
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		return r.rdb.ZRem(ctx, r.allSessions(), ssid).Err()
+		if n, err := r.rdb.ZRem(ctx, r.allSessions(), ssid).Result(); err != nil {
+			return err
+		} else if n == 1 {
+			return nil
+		}
+		return r.rdb.ZRem(ctx, legacySessions, ssid).Err()
 	}
 }
 
@@ -1759,6 +1795,23 @@ func (r *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	sids := make([]uint64, len(vals))
 	for i, v := range vals {
 		sids[i], _ = strconv.ParseUint(v, 10, 64)
+	}
+	limit -= len(sids)
+	if limit <= 0 {
+		return sids, nil
+	}
+
+	// check clients with version before 1.0-beta3 as well
+	vals, err = r.rdb.ZRangeByScore(Background, legacySessions, &redis.ZRangeBy{
+		Max:   strconv.FormatInt(time.Now().Add(time.Minute*-5).Unix(), 10),
+		Count: int64(limit)}).Result()
+	if err != nil {
+		logger.Errorf("Scan stale legacy sessions: %s", err)
+		return sids, nil
+	}
+	for _, v := range vals {
+		sid, _ := strconv.ParseUint(v, 10, 64)
+		sids = append(sids, sid)
 	}
 	return sids, nil
 }
@@ -2237,6 +2290,70 @@ func (r *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	_ = r.rdb.ZRem(ctx, r.delfiles(), tracking)
 }
 
+func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+	ctx := Background
+	stop := fmt.Errorf("reach limit")
+	var count int
+	var ss []Slice
+	var rs []*redis.IntCmd
+	err := r.hscan(ctx, r.delSlices(), func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			key := keys[i]
+			ps := strings.Split(key, "_")
+			if len(ps) != 2 {
+				logger.Warnf("Invalid key %s", key)
+				continue
+			}
+			if ts, e := strconv.ParseInt(ps[1], 10, 64); e != nil {
+				logger.Warnf("Invalid key %s", key)
+				continue
+			} else if ts >= edge {
+				continue
+			}
+
+			if err := r.txn(ctx, func(tx *redis.Tx) error {
+				val, e := tx.HGet(ctx, r.delSlices(), key).Result()
+				if e == redis.Nil {
+					return nil
+				} else if e != nil {
+					return e
+				}
+				ss, rs = ss[:0], rs[:0]
+				buf := []byte(val)
+				r.decodeDelayedSlices(buf, &ss)
+				if len(ss) == 0 {
+					return fmt.Errorf("invalid value for delSlices %s: %v", key, buf)
+				}
+				_, e = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+					for _, s := range ss {
+						rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Chunkid, s.Size), -1))
+					}
+					pipe.HDel(ctx, r.delSlices(), key)
+					return nil
+				})
+				return e
+			}, r.delSlices()); err != nil {
+				logger.Warnf("Cleanup delSlices %s: %s", key, err)
+				continue
+			}
+			for i, s := range ss {
+				if rs[i].Err() == nil && rs[i].Val() < 0 {
+					r.deleteSlice(s.Chunkid, s.Size)
+					count++
+				}
+			}
+			if count >= limit {
+				return stop
+			}
+		}
+		return nil
+	})
+	if err == stop {
+		err = nil
+	}
+	return count, err
+}
+
 func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// avoid too many or duplicated compaction
 	if !force {
@@ -2282,7 +2399,14 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		}
 		return
 	}
-	var rs []*redis.IntCmd
+	var buf []byte         // trash enabled: track delayed slices
+	var rs []*redis.IntCmd // trash disabled: check reference of slices
+	trash := r.toTrash(0)
+	if trash {
+		for _, s := range ss {
+			buf = append(buf, r.encodeDelayedSlice(s.chunkid, s.size)...)
+		}
+	}
 	key := r.chunkKey(inode, indx)
 	errno := errno(r.txn(ctx, func(tx *redis.Tx) error {
 		rs = nil
@@ -2306,8 +2430,12 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				pipe.LPush(ctx, key, vals[i-1])
 			}
 			pipe.HSet(ctx, r.sliceRefs(), r.sliceKey(chunkid, size), "0") // create the key to tracking it
-			for _, s := range ss {
-				rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1))
+			if trash {
+				pipe.HSet(ctx, r.delSlices(), fmt.Sprintf("%d_%d", chunkid, time.Now().Unix()), buf)
+			} else {
+				for _, s := range ss {
+					rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.chunkid, s.size), -1))
+				}
 			}
 			return nil
 		})
@@ -2329,9 +2457,11 @@ func (r *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if errno == 0 {
 		r.of.InvalidateChunk(inode, indx)
 		r.cleanupZeroRef(r.sliceKey(chunkid, size))
-		for i, s := range ss {
-			if rs[i].Err() == nil && rs[i].Val() < 0 {
-				r.deleteSlice(s.chunkid, s.size)
+		if !trash {
+			for i, s := range ss {
+				if rs[i].Err() == nil && rs[i].Val() < 0 {
+					r.deleteSlice(s.chunkid, s.size)
+				}
 			}
 		}
 	} else {
@@ -2488,14 +2618,14 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}
 
 	p := r.rdb.Pipeline()
-	return errno(r.scan(ctx, "c*_*", func(keys []string) error {
+	err := r.scan(ctx, "c*_*", func(keys []string) error {
 		for _, key := range keys {
 			_ = p.LRange(ctx, key, 0, 100000000)
 		}
 		cmds, err := p.Exec(ctx)
 		if err != nil {
 			logger.Warnf("list slices: %s", err)
-			return errno(err)
+			return err
 		}
 		for _, cmd := range cmds {
 			key := cmd.(*redis.StringSliceCmd).Args()[1].(string)
@@ -2512,7 +2642,30 @@ func (r *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 			}
 		}
 		return nil
-	}))
+	})
+	if err != nil {
+		return errno(err)
+	}
+
+	var ss []Slice
+	err = r.hscan(ctx, r.delSlices(), func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			ss = ss[:0]
+			r.decodeDelayedSlices([]byte(keys[i+1]), &ss)
+			if showProgress != nil {
+				for range ss {
+					showProgress()
+				}
+			}
+			for _, s := range ss {
+				if s.Chunkid > 0 {
+					slices[1] = append(slices[1], s)
+				}
+			}
+		}
+		return nil
+	})
+	return errno(err)
 }
 
 func (r *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {

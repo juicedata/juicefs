@@ -86,11 +86,19 @@ type chunk struct {
 	Indx   uint32 `xorm:"unique(chunk) notnull"`
 	Slices []byte `xorm:"blob notnull"`
 }
+
 type chunkRef struct {
 	Chunkid uint64 `xorm:"pk"`
 	Size    uint32 `xorm:"notnull"`
 	Refs    int    `xorm:"notnull"`
 }
+
+type delslices struct {
+	Chunkid uint64 `xorm:"pk"`
+	Deleted int64  `xorm:"notnull"` // timestamp
+	Slices  []byte `xorm:"blob notnull"`
+}
+
 type symlink struct {
 	Inode  Ino    `xorm:"pk"`
 	Target []byte `xorm:"varbinary(4096) notnull"`
@@ -219,8 +227,8 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.db.Sync2(new(node), new(symlink), new(xattr)); err != nil {
 		logger.Fatalf("create table node, symlink, xattr: %s", err)
 	}
-	if err := m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
-		logger.Fatalf("create table chunk, chunk_ref: %s", err)
+	if err := m.db.Sync2(new(chunk), new(chunkRef), new(delslices)); err != nil {
+		logger.Fatalf("create table chunk, chunk_ref, delslices: %s", err)
 	}
 	if err := m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
 		logger.Fatalf("create table session2, sustaind, delfile: %s", err)
@@ -298,7 +306,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 func (m *dbMeta) Reset() error {
 	return m.db.DropTables(&setting{}, &counter{},
 		&node{}, &edge{}, &symlink{}, &xattr{},
-		&chunk{}, &chunkRef{},
+		&chunk{}, &chunkRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
 		&flock{}, &plock{})
 }
@@ -315,9 +323,9 @@ func (m *dbMeta) doLoad() ([]byte, error) {
 }
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
-	err := m.db.Sync2(new(session2))
+	err := m.db.Sync2(new(session2), new(delslices))
 	if err != nil {
-		return fmt.Errorf("update table session2: %s", err)
+		return fmt.Errorf("update table session2, delslices: %s", err)
 	}
 	// update the owner from uint64 to int64
 	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
@@ -347,16 +355,27 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 	return nil
 }
 
-func (m *dbMeta) getSession(row *session2, detail bool) (*Session, error) {
+func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 	var s Session
-	if row.Info == nil { // legacy client has no info
-		row.Info = []byte("{}")
+	var info []byte
+	switch row := row.(type) {
+	case *session2:
+		s.Sid = row.Sid
+		s.Expire = time.Unix(row.Expire, 0)
+		info = row.Info
+	case *session:
+		s.Sid = row.Sid
+		s.Expire = time.Unix(row.Heartbeat, 0).Add(time.Minute * 5)
+		info = row.Info
+		if info == nil { // legacy client has no info
+			info = []byte("{}")
+		}
+	default:
+		return nil, fmt.Errorf("invalid type: %T", row)
 	}
-	if err := json.Unmarshal(row.Info, &s); err != nil {
+	if err := json.Unmarshal(info, &s); err != nil {
 		return nil, fmt.Errorf("corrupted session info; json error: %s", err)
 	}
-	s.Sid = row.Sid
-	s.Expire = time.Unix(row.Expire, 0)
 	if detail {
 		var (
 			srows []sustained
@@ -392,14 +411,22 @@ func (m *dbMeta) getSession(row *session2, detail bool) (*Session, error) {
 
 func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
 	row := session2{Sid: sid}
-	ok, err := m.db.Get(&row)
-	if err != nil {
+	if ok, err := m.db.Get(&row); err != nil {
 		return nil, err
+	} else if ok {
+		return m.getSession(&row, true)
 	}
-	if !ok {
-		return nil, fmt.Errorf("session not found: %d", sid)
+	if ok, err := m.db.IsTableExist(&session{}); err != nil {
+		return nil, err
+	} else if ok {
+		row := session{Sid: sid}
+		if ok, err := m.db.Get(&row); err != nil {
+			return nil, err
+		} else if ok {
+			return m.getSession(&row, true)
+		}
 	}
-	return m.getSession(&row, true)
+	return nil, fmt.Errorf("session not found: %d", sid)
 }
 
 func (m *dbMeta) ListSessions() ([]*Session, error) {
@@ -416,6 +443,24 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 			continue
 		}
 		sessions = append(sessions, s)
+	}
+
+	if ok, err := m.db.IsTableExist(&session{}); err != nil {
+		logger.Errorf("Check legacy session table: %s", err)
+	} else if ok {
+		var lrows []session
+		if err = m.db.Find(&lrows); err != nil {
+			logger.Errorf("Scan legacy sessions: %s", err)
+			return sessions, nil
+		}
+		for i := range lrows {
+			s, err := m.getSession(&lrows[i], false)
+			if err != nil {
+				logger.Errorf("Get legacy session: %s", err)
+				continue
+			}
+			sessions = append(sessions, s)
+		}
 	}
 	return sessions, nil
 }
@@ -1617,10 +1662,16 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 	if fail {
 		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		return m.txn(func(ses *xorm.Session) error {
-			_, err := ses.Delete(&session2{Sid: sid})
+		if n, err := m.db.Delete(&session2{Sid: sid}); err != nil {
 			return err
-		})
+		} else if n == 1 {
+			return nil
+		}
+		ok, err := m.db.IsTableExist(&session{})
+		if err == nil && ok {
+			_, err = m.db.Delete(&session{Sid: sid})
+		}
+		return err
 	}
 }
 
@@ -1637,6 +1688,27 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 		}
 	}
 	_ = rows.Close()
+	limit -= len(sids)
+	if limit <= 0 {
+		return sids, nil
+	}
+
+	if ok, err := m.db.IsTableExist(&session{}); err != nil {
+		logger.Errorf("Check legacy session table: %s", err)
+	} else if ok {
+		var ls session
+		rows, err = m.db.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Limit(limit, 0).Rows(&ls)
+		if err != nil {
+			logger.Errorf("Scan stale legacy sessions: %s", err)
+			return sids, nil
+		}
+		for rows.Next() {
+			if rows.Scan(&ls) == nil {
+				sids = append(sids, ls.Sid)
+			}
+		}
+		_ = rows.Close()
+	}
 	return sids, nil
 }
 
@@ -2001,6 +2073,62 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	_, _ = m.db.Delete(delfile{Inode: inode})
 }
 
+func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+	var ds delslices
+	rows, err := m.db.Where("deleted < ?", edge).Limit(limit, 0).Rows(&ds)
+	if err != nil {
+		return 0, err
+	}
+	var result []delslices
+	for rows.Next() {
+		ds.Slices = ds.Slices[:0]
+		if rows.Scan(&ds) == nil {
+			result = append(result, ds)
+		}
+	}
+	_ = rows.Close()
+
+	var count int
+	var ss []Slice
+	for _, ds := range result {
+		if err = m.txn(func(ses *xorm.Session) error {
+			ds := delslices{Chunkid: ds.Chunkid}
+			if ok, e := ses.Get(&ds); e != nil {
+				return e
+			} else if !ok {
+				return nil
+			}
+			ss = ss[:0]
+			m.decodeDelayedSlices(ds.Slices, &ss)
+			if len(ss) == 0 {
+				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Chunkid, ds.Slices)
+			}
+			for _, s := range ss {
+				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Chunkid, s.Size); e != nil {
+					return e
+				}
+			}
+			_, e := ses.Delete(&delslices{Chunkid: ds.Chunkid})
+			return e
+		}); err != nil {
+			logger.Warnf("Cleanup delayed slices %d: %s", ds.Chunkid, err)
+			continue
+		}
+		for _, s := range ss {
+			var ref = chunkRef{Chunkid: s.Chunkid}
+			ok, e := m.db.Get(&ref)
+			if e == nil && ok && ref.Refs <= 0 {
+				m.deleteSlice(s.Chunkid, s.Size)
+				count++
+			}
+		}
+		if count >= limit {
+			break
+		}
+	}
+	return count, nil
+}
+
 func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if !force {
 		// avoid too many or duplicated compaction
@@ -2046,6 +2174,13 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		}
 		return
 	}
+	var buf []byte
+	trash := m.toTrash(0)
+	if trash {
+		for _, s := range ss {
+			buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+		}
+	}
 	err = m.txn(func(ses *xorm.Session) error {
 		var c2 = chunk{Inode: inode}
 		_, err := ses.Where("indx=?", indx).Get(&c2)
@@ -2065,9 +2200,15 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		if err = mustInsert(ses, chunkRef{chunkid, size, 1}); err != nil {
 			return err
 		}
-		for _, s := range ss {
-			if _, err := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
+		if trash {
+			if err = mustInsert(ses, &delslices{chunkid, time.Now().Unix(), buf}); err != nil {
 				return err
+			}
+		} else {
+			for _, s := range ss {
+				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.chunkid, s.size); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -2091,11 +2232,13 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.deleteSlice(chunkid, size)
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
-		for _, s := range ss {
-			var ref = chunkRef{Chunkid: s.chunkid}
-			ok, err := m.db.Get(&ref)
-			if err == nil && ok && ref.Refs <= 0 {
-				m.deleteSlice(s.chunkid, s.size)
+		if !trash {
+			for _, s := range ss {
+				var ref = chunkRef{Chunkid: s.chunkid}
+				ok, err := m.db.Get(&ref)
+				if err == nil && ok && ref.Refs <= 0 {
+					m.deleteSlice(s.chunkid, s.size)
+				}
 			}
 		}
 	} else {
@@ -2153,7 +2296,6 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return errno(err)
 	}
 	defer rows.Close()
-
 	for rows.Next() {
 		err = scanChunk(rows, &c)
 		if err != nil {
@@ -2169,6 +2311,36 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			}
 		}
 	}
+
+	if ok, err := m.db.IsTableExist(&delslices{}); err != nil {
+		return errno(err)
+	} else if !ok {
+		return 0
+	}
+	var ds delslices
+	rows2, err := m.db.Rows(&ds)
+	if err != nil {
+		return errno(err)
+	}
+	var ss []Slice
+	for rows2.Next() {
+		ds.Slices = ds.Slices[:0]
+		if rows2.Scan(&ds) == nil {
+			ss = ss[:0]
+			m.decodeDelayedSlices(ds.Slices, &ss)
+			if showProgress != nil {
+				for range ss {
+					showProgress()
+				}
+			}
+			for _, s := range ss {
+				if s.Chunkid > 0 {
+					slices[1] = append(slices[1], s)
+				}
+			}
+		}
+	}
+	_ = rows2.Close()
 	return 0
 }
 
@@ -2708,8 +2880,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.db.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
 		return fmt.Errorf("create table node, edge, symlink, xattr: %s", err)
 	}
-	if err = m.db.Sync2(new(chunk), new(chunkRef)); err != nil {
-		return fmt.Errorf("create table chunk, chunk_ref: %s", err)
+	if err = m.db.Sync2(new(chunk), new(chunkRef), new(delslices)); err != nil {
+		return fmt.Errorf("create table chunk, chunk_ref, delslices: %s", err)
 	}
 	if err = m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
 		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)

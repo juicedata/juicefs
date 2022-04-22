@@ -69,7 +69,9 @@ func testMeta(t *testing.T, m Meta) {
 	testStickyBit(t, m)
 	testLocks(t, m)
 	testConcurrentWrite(t, m)
-	testCompaction(t, m)
+	testCompaction(t, m, false)
+	time.Sleep(time.Second)
+	testCompaction(t, m, true)
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
 	base.conf.CaseInsensi = true
@@ -809,8 +811,12 @@ type compactor interface {
 	compactChunk(inode Ino, indx uint32, force bool)
 }
 
-func testCompaction(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+func testCompaction(t *testing.T, m Meta, trash bool) {
+	if trash {
+		_ = m.Init(Format{Name: "test", TrashDays: 1}, false)
+	} else {
+		_ = m.Init(Format{Name: "test"}, false)
+	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
@@ -898,8 +904,20 @@ func testCompaction(t *testing.T, m Meta) {
 	l.Lock()
 	deletes := len(deleted)
 	l.Unlock()
-	if deletes < 30 {
-		t.Fatalf("deleted chunks %d is less then 30", deletes)
+	if trash {
+		if deletes > 10 {
+			t.Fatalf("deleted chunks %d is greater than 10", deletes)
+		}
+		if len(slices[1]) < 200 {
+			t.Fatalf("list delayed slices %d is less than 200", len(slices[1]))
+		}
+		m.(engine).doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
+		l.Lock()
+		deletes = len(deleted)
+		l.Unlock()
+	}
+	if deletes < 200 {
+		t.Fatalf("deleted chunks %d is less than 200", deletes)
 	}
 }
 
@@ -1110,7 +1128,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	case *redisMeta:
 		s, err = m.getSession(strconv.FormatUint(sid, 10), true)
 	case *dbMeta:
-		s, err = m.getSession(&session2{Sid: sid}, true)
+		s, err = m.getSession(&session2{Sid: sid, Info: []byte("{}")}, true)
 	case *kvMeta:
 		s, err = m.getSession(sid, true)
 	}
