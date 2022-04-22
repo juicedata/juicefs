@@ -70,10 +70,10 @@ jobs:
       - name: Test
         run: |
           meta_urls=(
+            ${{ steps.vars.outputs.META_POSTGRES }}
             ${{ steps.vars.outputs.META_MYSQL }}
             ${{ steps.vars.outputs.META_REDIS }}
             ${{ steps.vars.outputs.META_SQLITE }}
-            ${{ steps.vars.outputs.META_POSTGRES }}
           )
           for meta_url in "${meta_urls[@]}"; do
             echo meta_url is: $meta_url
@@ -81,16 +81,19 @@ jobs:
             if [[ "$meta_url" == mysql* ]]; then
               mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
             elif [[ "$meta_url" == postgres* ]]; then
-              psql -upostgres -ppostgres -e "drop database if exists $db_name; create database $db_name;" 
+              export PGPASSWORD="postgres"
+              psql -h localhost -U postgres  -c "drop database if exists $db_name; create database $db_name;" 
             fi
             ./juicefs load $meta_url ${{ steps.vars.outputs.DUMP_FILE }}
-            ./juicefs mount $meta_url ${{ steps.vars.outputs.MOUNT_POINT }}
+            ./juicefs mount $meta_url ${{ steps.vars.outputs.MOUNT_POINT }} -d 
             if [ -d data/ ]; then
               rm data/.* -rf 
             else
               mkdir data
             fi
+            echo "start sync..."
             ./juicefs sync ${{ steps.vars.outputs.MOUNT_POINT }} data/ --exclude '.accesslog'
+            echo "finish sync..."
             ./juicefs umount $meta
           done
           
