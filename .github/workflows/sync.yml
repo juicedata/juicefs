@@ -75,16 +75,17 @@ jobs:
             diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
           done < .github/workflows/resources/sync-options.txt
           while IFS= read -r option; do
+            mount_point=/tmp/sync-test
             printf 'option is %s\n' "$option" 
             ./juicefs format $meta_url sync-test
-            ./juicefs mount $meta_url ${{ steps.vars.outputs.MOUNT_POINT }} -d
-            ./juicefs sync source_dir/ ${{ steps.vars.outputs.MOUNT_POINT }} 
+            ./juicefs mount $meta_url $mount_point -d
+            ./juicefs sync source_dir/ $mount_point
             test -d jfs_sync_dir && rm jfs_sync_dir/ -rf 
             mkdir jfs_sync_dir
-            ./juicefs sync  ${{ steps.vars.outputs.MOUNT_POINT }}/ jfs_sync_dir/ $option --exclude ".accesslog" --exclude ".trash"
+            ./juicefs sync  $mount_point/ jfs_sync_dir/ $option --exclude ".accesslog" --exclude ".trash"
             test -d rsync_dir && rm rsync_dir/ -rf 
             mkdir rsync_dir
-            rsync -a ${{ steps.vars.outputs.MOUNT_POINT }}/ rsync_dir/ $option --exclude ".accesslog" --exclude ".trash"
+            rsync -a $mount_point/ rsync_dir/ $option --exclude ".accesslog" --exclude ".trash"
             echo "sync option is $option \n" >>result.txt 
             diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
           done < .github/workflows/resources/sync-options.txt
