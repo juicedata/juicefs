@@ -98,7 +98,7 @@ jobs:
             echo "finish load..."
             ./juicefs mount $meta_url ${{ steps.vars.outputs.MOUNT_POINT }} -d 
             if [ -d data/ ]; then
-              rm data/{*,.*} -rf 
+              rm data/{*,.*} -rf || true
             else
               mkdir data
             fi
