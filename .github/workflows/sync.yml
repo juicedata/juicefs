@@ -75,7 +75,7 @@ jobs:
             diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
           done < .github/workflows/resources/sync-options.txt
           while IFS= read -r option; do
-            mount_point=/tmp/sync-test
+            mount_point=/tmp/sync-test/
             printf 'option is %s\n' "$option" 
             ./juicefs format $meta_url sync-test
             ./juicefs mount $meta_url $mount_point -d
