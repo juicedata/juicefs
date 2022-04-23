@@ -1,0 +1,7 @@
+--include '.*'
+--exclude '.*'
+--exclude '.*' --exclude 'docs/' --exclude '*.png' 
+--include 'docs/' --include '*.png' --exclude '*'
+--exclude '*' --include 'docs/' --include '*.png'
+--include '.github' --include '*.png' --exclude '.*'
+--exclude '.*' --include '.github' --include '*.png'

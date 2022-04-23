@@ -3,12 +3,14 @@ name: "sync-test"
 on:
   push:
     branches:
+      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
+      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -17,14 +19,24 @@ on:
 jobs:
   sync-test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
           go-version: '1.17.x'
-
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -32,19 +44,62 @@ jobs:
           fetch-depth: 1
 
       - name: Build linux target
-        run: sudo make juicefs
+        run: make juicefs
 
-      - name: Init
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
-          sudo chmod 777 /var
-          sudo /etc/init.d/mysql start 
+      - name: Checkout source code for sync test
+        uses: actions/checkout@v2
+        with:
+          repository: juicedata/juicefs
+          path: juicefs-source
 
-      - name: Test
+      - name: Checkout source code for test
+        uses: actions/checkout@v2
+        with:
+          repository: juicedata/juicefs
+          path: source-dir
+
+      - name: Test Sync
         run: |
-          juicefs format redis://127.0.0.1:6379/1 myjfs
-          juicefs mount redis://127.0.0.1:6379/1 myjfs
+          sudo chmod 777 /var/ 
+          meta_url=redis://127.0.0.1/1
+          sudo /etc/init.d/mysql start
+          wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz
+          tar -xzf juicefs-1.0.0-beta2-linux-amd64.tar.gz
+
+          while IFS= read -r option; do
+            printf 'option is %s\n' "$option" 
+            test -d jfs_sync_dir && rm jfs_sync_dir/{*,.*} -rf || true
+            ./juicefs sync  source-dir/ jfs_sync_dir/ $option
+            test -d rsync_dir && rm rsync_dir/{*,.*} -rf || true
+            rsync -a source-dir/ rsync_dir/ $option
+            diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
+          done < .github/workflows/resources/sync-options.txt
+          while IFS= read -r option; do
+            printf 'option is %s\n' "$option" 
+            ./juicefs format $meta_url sync-test
+            ./juicefs mount $meta_url ${{ steps.vars.outputs.MOUNT_POINT }} -d
+            ./juicefs sync source_dir/ ${{ steps.vars.outputs.MOUNT_POINT }} 
+            test -d jfs_sync_dir && rm jfs_sync_dir/ -rf 
+            mkdir jfs_sync_dir
+            ./juicefs sync  ${{ steps.vars.outputs.MOUNT_POINT }}/ jfs_sync_dir/ $option --exclude ".accesslog" --exclude ".trash"
+            test -d rsync_dir && rm rsync_dir/ -rf 
+            mkdir rsync_dir
+            rsync -a ${{ steps.vars.outputs.MOUNT_POINT }}/ rsync_dir/ $option --exclude ".accesslog" --exclude ".trash"
+            echo "sync option is $option \n" >>result.txt 
+            diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
+          done < .github/workflows/resources/sync-options.txt
+          if [[ -z $(grep '[^[:space:]]' result.txt) ]] ; then
+            exit 0
+          else
+            printf "Fatal: diff file is not empty, please check result.txt in the artifact"
+            exit 0
+          fi 
+      - name: Save test reuslt
+        if: ${{always()}}
+        uses: actions/upload-artifact@v2
+        with: 
+          name: result.txt
+          path: result.txt
 
       - name: Send Slack Notification
         if: ${{ failure() }}
