@@ -544,7 +544,11 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		return false
 	}
 	// TODO: add other retryable errors here
-	msg := err.Error()
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "too many connections") || strings.Contains(msg, "too many clients") {
+		logger.Warnf("transaction failed: %s, will retry it. please increase the max number of connections in your database, or use a connection pool.", msg)
+		return true
+	}
 	switch m.db.DriverName() {
 	case "sqlite3":
 		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
