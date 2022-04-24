@@ -565,6 +565,9 @@ func Test_includeObject(t *testing.T) {
 		{rules: []*rule{{pattern: "/a*/b*", include: false}}, key: "/a1/b1/c1/d.txt/", want: false},
 		{rules: []*rule{{pattern: "a*/b*/c", include: false}}, key: "a1/b1/c1/d.txt/", want: true},
 		{rules: []*rule{{pattern: "a", include: false}}, key: "a/b/c/d/", want: false},
+		{rules: []*rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "a/pkg/c/a.go", want: false},
+		{rules: []*rule{{pattern: "a", include: false}, {pattern: "pkg", include: true}}, key: "a/pkg/c/a.go", want: false},
+		{rules: []*rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "", want: true},
 	}
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {

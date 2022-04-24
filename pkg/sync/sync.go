@@ -786,14 +786,20 @@ func slidingWindowForPath(pattern, key string) []string {
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
 func includeObject(rules []*rule, key string) bool {
-	for _, rule := range rules {
-		for _, k := range slidingWindowForPath(rule.pattern, key) {
-			match, err := path.Match(rule.pattern, k)
-			if err != nil {
-				logger.Fatalf("pattern error : %v", err)
-			}
-			if match {
-				return rule.include
+	parts := strings.Split(key, "/")
+	for idx := range parts {
+		key = strings.Join(parts[:idx+1], "/")
+		if key != "" {
+			for _, rule := range rules {
+				for _, k := range slidingWindowForPath(rule.pattern, key) {
+					match, err := path.Match(rule.pattern, k)
+					if err != nil {
+						logger.Fatalf("pattern error : %v", err)
+					}
+					if match {
+						return rule.include
+					}
+				}
 			}
 		}
 	}
