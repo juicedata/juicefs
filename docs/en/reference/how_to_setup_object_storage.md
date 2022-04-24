@@ -86,7 +86,7 @@ $ juicefs format \
 
 ## Supported Object Storage {#supported-object-storage}
 
-If you wish to use a storage class that is not listed, feel free to submit a requirement [issue](https://github.com/juicedata/juicefs/issues).
+If you wish to use a storage system that is not listed, feel free to submit a requirement [issue](https://github.com/juicedata/juicefs/issues).
 
 | Name                                                        | Value      |
 | ---------------------------------------------------------   | ---------- |
