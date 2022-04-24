@@ -9,7 +9,7 @@ There are many commands to help you manage your file system. This page provides 
 
 ## Overview
 
-If you run `juicefs` by itself, it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information of it.
+If you run `juicefs` by itself, it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information of it, e.g., `juicefs format -h`.
 
 ```bash
 $ juicefs -h
@@ -56,11 +56,11 @@ COPYRIGHT:
 ```
 
 :::note
-If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is placed in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience. You can refer to [Installation & Upgrade](../getting-started/installation.md) for more information.
+If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience. You can refer to [Installation & Upgrade](../getting-started/installation.md) for more information.
 :::
 
 :::note
-If the command option is of boolean type, such as `--debug`, there is no need to set any value, just add `--debug` to the command to enable the function, and vice versa to disable it.
+If the command option is of boolean type, such as `--debug`, there is no need to set any value, just add `--debug` to the command to enable the function; this function is disabled if `--debug` is not added.
 :::
 
 ## Auto Completion
@@ -83,7 +83,7 @@ Zsh:
 source hack/autocomplete/zsh_autocomplete
 ```
 
-Please note the auto-completion is only enabled for the current session. If you want it for all new sessions, add the `source` command to `.bashrc` or `.zshrc`:
+Please note the auto-completion is only enabled for the current session. If you want to apply it for all new sessions, add the `source` command to `.bashrc` or `.zshrc`:
 
 ```bash
 echo "source path/to/bash_autocomplete" >> ~/.bashrc
@@ -214,7 +214,7 @@ dir entry cache timeout in seconds (default: 1)
 enable extended attributes (xattr) (default: false)
 
 `--bucket value`<br />
-customized endpoint to access object store
+customized endpoint to access object storage
 
 `--get-timeout value`<br />
 the max number of seconds to download an object (default: 60)
@@ -256,7 +256,7 @@ size of cached objects in MiB (default: 102400)
 min free space (ratio) (default: 0.1)
 
 `--cache-partial-only`<br />
-cache only random/small read (default: false)
+cache random/small read only (default: false)
 
 `--read-only`<br />
 allow lookup/read operations only (default: false)
@@ -282,13 +282,13 @@ juicefs umount [command options] MOUNTPOINT
 #### Options
 
 `-f, --force`<br />
-unmount a busy mount point by force (default: false)
+force unmount a busy mount point (default: false)
 
 ### juicefs gateway
 
 #### Description
 
-S3-compatible gateway.
+Start an S3-compatible gateway.
 
 #### Synopsis
 
@@ -302,7 +302,7 @@ juicefs gateway [command options] META-URL ADDRESS
 #### Options
 
 `--bucket value`<br />
-customized endpoint to access object store
+customized endpoint to access an object storage
 
 `--get-timeout value`<br />
 the max number of seconds to download an object (default: 60)
@@ -344,7 +344,7 @@ size of cached objects in MiB (default: 102400)
 min free space (ratio) (default: 0.1)
 
 `--cache-partial-only`<br />
-cache only random/small read (default: false)
+cache random/small read only (default: false)
 
 `--read-only`<br />
 allow lookup/read operations only (default: false)
@@ -380,14 +380,14 @@ disable MinIO startup information (default: false)
 use top level of directories as buckets (default: false)
 
 `--keep-etag`<br />
-Save the ETag for uploaded objects (default: false)
+save the ETag for uploaded objects (default: false)
 
 
 ### juicefs webdav
 
 #### Description
 
-Start a WebDAV server
+Start a WebDAV server.
 
 #### Synopsis
 
@@ -401,7 +401,7 @@ juicefs webdav [command options] META-URL ADDRESS
 #### Options
 
 `--bucket value`<br />
-customized endpoint to access object store
+customized endpoint to access an object storage
 
 `--get-timeout value`<br />
 the max number of seconds to download an object (default: 60)
@@ -446,7 +446,7 @@ size of cached objects in MiB (default: 102400)
 min free space (ratio) (default: 0.1)
 
 `--cache-partial-only`<br />
-cache only random/small read (default: false)
+cache random/small read only (default: false)
 
 `--read-only`<br />
 allow lookup/read operations only (default: false)
@@ -505,12 +505,12 @@ juicefs sync [command options] SRC DST
 - **SRC**: source path
 - **DST**: destination path
 
-The format of both the source and destination paths is `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`, among the path:
+The format of both source and destination paths is `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`, in which:
 
-- `NAME`: JuiceFS supported data storage types (e.g. `s3`, `oss`), please refer to [document](how_to_setup_object_storage.md#supported-object-storage).
-- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, please refer to [document](how_to_setup_object_storage.md#access-key-and-secret-key).
-- `BUCKET[.ENDPOINT]`: The access address of the data storage service, the format may be different for different storage types, please refer to [document](how_to_setup_object_storage.md#supported-object-storage).
-- `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit the synchronization to only data in certain paths.
+- `NAME`: JuiceFS supported data storage types (e.g. `s3`, `oss`) (please refer to [this document](how_to_setup_object_storage.md#supported-object-storage)).
+- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage (please refer to [this document](how_to_setup_object_storage.md#access-key-and-secret-key)).
+- `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and please refer to [the document](how_to_setup_object_storage.md#supported-object-storage).
+- `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit synchronization of data only in certain paths.
 
 For a detailed introduction to the `sync` subcommand, please refer to the [documentation](../administration/sync.md).
 
@@ -615,7 +615,7 @@ get summary of directories recursively (NOTE: it may take a long time for huge t
 
 #### Description
 
-Run benchmark, include read/write/stat big and small files.
+Run benchmark, including read/write/stat for big and small files.
 
 #### Synopsis
 
@@ -644,7 +644,7 @@ number of concurrent threads (default: 1)
 
 #### Description
 
-Collect any leaked objects.
+Collect leaked objects.
 
 #### Synopsis
 
@@ -655,13 +655,13 @@ juicefs gc [command options] META-URL
 #### Options
 
 `--delete`<br />
-deleted leaked objects (default: false)
+delete leaked objects (default: false)
 
 `--compact`<br />
 compact all chunks with more than 1 slices (default: false).
 
 `--threads value`<br />
-number threads to delete leaked objects (default: 10)
+number of threads to delete leaked objects (default: 10)
 
 ### juicefs fsck
 
@@ -690,13 +690,13 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 #### Options
 
 `--uid value, -u value`<br />
-track only specified UIDs(separated by comma ,)
+only track specified UIDs (separated by comma ,)
 
 `--gid value, -g value`<br />
-track only specified GIDs(separated by comma ,)
+only track specified GIDs(separated by comma ,)
 
 `--pid value, -p value`<br />
-track only specified PIDs(separated by comma ,)
+only track specified PIDs(separated by comma ,)
 
 `--interval value`<br />
 flush interval in seconds; set it to 0 when replaying a log file to get an immediate result (default: 2)
@@ -705,7 +705,7 @@ flush interval in seconds; set it to 0 when replaying a log file to get an immed
 
 #### Description
 
-Show runtime statistics
+Show runtime statistics.
 
 #### Synopsis
 
@@ -731,7 +731,7 @@ disable colors (default: false)
 
 #### Description
 
-Show status of JuiceFS
+Show status of JuiceFS.
 
 #### Synopsis
 
@@ -748,7 +748,7 @@ show detailed information (sustained inodes, locks) of the specified session (si
 
 #### Description
 
-Build cache for target directories/files
+Build cache for target directories/files.
 
 #### Synopsis
 
@@ -771,7 +771,7 @@ run in background (default: false)
 
 #### Description
 
-Dump metadata into a JSON file
+Dump metadata into a JSON file.
 
 #### Synopsis
 
@@ -790,7 +790,7 @@ only dump a sub-directory.
 
 #### Description
 
-Load metadata from a previously dumped JSON file
+Load metadata from a previously dumped JSON file.
 
 #### Synopsis
 
@@ -804,7 +804,7 @@ When the FILE is not provided, STDIN will be used instead.
 
 #### Description
 
-Change config of a volume
+Change config of a volume.
 
 #### Synopsis
 
@@ -815,10 +815,10 @@ juicefs config [command options] META-URL
 #### Options
 
 `--capacity value`<br />
-the limit for space in GiB
+limit for space in GiB
 
 `--inodes value`<br />
-the limit for number of inodes
+limit for number of inodes
 
 `--bucket value`<br />
 a bucket URL to store data
