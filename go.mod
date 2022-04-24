@@ -50,6 +50,7 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.26.0
+	github.com/pyroscope-io/client v0.2.1
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
 	github.com/qiniu/go-sdk/v7 v7.11.1
 	github.com/satori/go.uuid v1.2.0
