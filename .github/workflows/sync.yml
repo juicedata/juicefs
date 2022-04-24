@@ -67,7 +67,7 @@ jobs:
           ./juicefs format $meta_url sync-test
           ./juicefs mount $meta_url $mount_point -d
           ./juicefs sync jfs_source/ $mount_point
-          for source_dir in "$mount_point" "jfs_source/" ; do 
+          for source_dir in "jfs_source/" ; do 
             while IFS=, read -r jfs_option rsync_option status; do
               echo $jfs_option, $rsync_option, $status
               status=$(echo $status| xargs)
