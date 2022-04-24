@@ -362,8 +362,8 @@ func setPasswordFromEnv(uri string) (string, error) {
 	if len(s) == 2 && s[1] != "" {
 		return uri, nil
 	}
-	info := url.UserPassword("", os.Getenv("META_PASSWORD")) // escape only password
-	return uri[:dIndex] + fmt.Sprintf("%s:%s", s[0], info.String()[1:]) + uri[atIndex:], nil
+	pwd := url.UserPassword("", os.Getenv("META_PASSWORD")) // escape only password
+	return uri[:dIndex] + s[0] + pwd.String() + uri[atIndex:], nil
 }
 
 // NewClient creates a Meta client for given uri.
