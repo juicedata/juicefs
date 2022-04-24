@@ -18,6 +18,7 @@
 | [网易游戏](https://game.163.com)                 | Production | 大数据，共享文件存储                                                                |
 | [一面数据](https://www.yimian.com.cn)            | Production | 大数据                                                                              |
 | [携程旅行](https://www.ctrip.com)                 | Production | 大数据，共享文件存储                                                                 |
+| [vivo](https://www.vivo.com)                    | Production | AI, 共享文件存储                                                                   |
 | [火山引擎](https://www.volcengine.com)           | Testing    | 共享文件存储                                                                        |
 | [叮咚买菜](https://www.100.me)                   | Testing    | 大数据                                                                              |
 | [顺丰速运](https://www.sf-express.com)           | Testing    | 大数据，共享文件存储                                                                |
