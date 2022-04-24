@@ -69,7 +69,7 @@ jobs:
           ./juicefs sync jfs_source/ $mount_point
           for source_dir in "jfs_source/" ; do 
             while IFS=, read -r jfs_option rsync_option status; do
-              echo $jfs_option, $rsync_option, $status
+              printf '\n%s, %s, %s\n' "$jfs_option" "$rsync_option" "$status"
               status=$(echo $status| xargs)
               if [ "$status" = "disable" ]; then 
                 continue
@@ -84,8 +84,8 @@ jobs:
               test -d rsync_dir/ && rm rsync_dir/ -rf 
               mkdir rsync_dir
               rsync -a $source_dir rsync_dir/ $rsync_option
-              printf '\ndiff between juicefs sync and rsync:\njuicefs sync %s %s %s\nrsync %s %s %s\n' "$source_dir", "jfs_sync_dir/", "$jfs_option" \
-                "$source_dir", "rsync_dir/", "$rsync_option" | tee -a result.txt || true
+              printf 'diff between juicefs sync and rsync:\njuicefs sync %s %s %s\nrsync %s %s %s\n' "$source_dir"  "jfs_sync_dir/" "$jfs_option" \
+                "$source_dir" "rsync_dir/"  "$rsync_option" | tee -a result.txt || true
               diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
             done < .github/workflows/resources/sync-options.txt
           done
