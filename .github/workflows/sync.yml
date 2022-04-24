@@ -56,47 +56,35 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: juicedata/juicefs
-          path: source-dir
+          path: jfs_source
 
       - name: Test Sync
         run: |
           sudo chmod 777 /var
           meta_url=redis://127.0.0.1/1
           test_result=true
-          while IFS=, read -r jfs_option rsync_option status; do
-            echo $jfs_option, $rsync_option, $status
-            status=$(echo $status| xargs)
-            if [ "$status" = "disable" ]; then 
-              continue
-            fi
-            test -d jfs_sync_dir/ && rm jfs_sync_dir/ -rf 
-            mkdir jfs_sync_dir/
-            ./juicefs sync  source-dir/ jfs_sync_dir/ $jfs_option
-            test -d rsync_dir/ && rm rsync_dir/ -rf 
-            mkdir rsync_dir
-            rsync -a source-dir/ rsync_dir/ $rsync_option
-            printf '\ndiff between juicefs sync and rsync:\njuicefs sync %s\nrsync %s\nsource dir is: source-dir' "$jfs_option" "$rsync_option"| tee -a result.txt || true
-            diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
-          done < .github/workflows/resources/sync-options.txt
-          while IFS=, read -r jfs_option rsync_option status; do
-            echo $jfs_option, $rsync_option, $status
-            status=$(echo $status| xargs)
-            if [ "$status" = "disable" ]; then 
-              continue
-            fi
-            mount_point=/tmp/sync-test/
-            ./juicefs format $meta_url sync-test
-            ./juicefs mount $meta_url $mount_point -d
-            ./juicefs sync source_dir/ $mount_point
-            test -d jfs_sync_dir && rm jfs_sync_dir/ -rf 
-            mkdir jfs_sync_dir
-            ./juicefs sync  $mount_point/ jfs_sync_dir/ $jfs_option --exclude ".accesslog" --exclude ".trash"
-            test -d rsync_dir && rm rsync_dir/ -rf 
-            mkdir rsync_dir
-            rsync -a $mount_point/ rsync_dir/ $rsync_option --exclude ".accesslog" --exclude ".trash"
-            printf '\ndiff between juicefs sync and rsync:\njuicefs sync %s\nrsync %s\nsource dir is: %s' "$jfs_option" "$rsync_option" $mount_point""| tee -a result.txt || true
-            diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
-          done < .github/workflows/resources/sync-options.txt
+          mount_point=/tmp/sync-test/
+          ./juicefs format $meta_url sync-test
+          ./juicefs mount $meta_url $mount_point -d
+          ./juicefs sync jfs_source/ $mount_point
+          for source_dir in "jfs_source/"  "$mount_point"; do 
+            while IFS=, read -r jfs_option rsync_option status; do
+              echo $jfs_option, $rsync_option, $status
+              status=$(echo $status| xargs)
+              if [ "$status" = "disable" ]; then 
+                continue
+              fi
+              test -d jfs_sync_dir/ && rm jfs_sync_dir/ -rf 
+              mkdir jfs_sync_dir/
+              ./juicefs sync  $source_dir jfs_sync_dir/ $jfs_option
+              test -d rsync_dir/ && rm rsync_dir/ -rf 
+              mkdir rsync_dir
+              rsync -a $source_dir rsync_dir/ $rsync_option
+              printf '\ndiff between juicefs sync and rsync:\njuicefs sync %s %s %s\nrsync %s %s %s' "$source_dir", "jfs_sync_dir/", "$jfs_option" \
+                "$source_dir", "rsync_dir/", "$rsync_option" | tee -a result.txt || true
+              diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
+            done < .github/workflows/resources/sync-options.txt
+          done
           if [ "$test_result" = true ]; then
             printf "Fatal: sync result is different between juicefs sync and rsync, please check result.txt in the artifact" 
             exit 1

@@ -4,4 +4,5 @@
 --dirs --include 'docs/' --include '*.png' --exclude '*', -r --include 'docs/' --include '*.png' --exclude '*', enable
 --dirs --exclude '*' --include 'docs/' --include '*.png', -r --exclude '*' --include 'docs/' --include '*.png', enable
 --dirs --include '.github' --include '*.png' --exclude '.*', -r --include '.github' --include '*.png' --exclude '.*', enable
+--dirs --include '.github' --include '*.png' --exclude '.*', -r --include '.github' --include '*.png' --exclude '.*', enable
 --dirs --exclude '.*' --include '.github' --include '*.png', -r --exclude '.*' --include '.github' --include '*.png', enable
