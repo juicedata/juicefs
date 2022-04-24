@@ -19,7 +19,6 @@ package meta
 import (
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"strings"
 	"syscall"
@@ -386,11 +385,7 @@ func NewClient(uri string, conf *Config) Meta {
 	if !ok {
 		logger.Fatalf("Invalid meta driver: %s", driver)
 	}
-	addr := uri[p+3:]
-	if q := strings.Index(addr, "@"); q > 0 {
-		addr = url.PathEscape(addr[:q]) + addr[q:]
-	}
-	m, err := f(driver, addr, conf)
+	m, err := f(driver, uri[p+3:], conf)
 	if err != nil {
 		logger.Fatalf("Meta is not available: %s", err)
 	}
