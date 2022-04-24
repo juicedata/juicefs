@@ -71,9 +71,13 @@ jobs:
 
       - name: Generate Data
         run: |
-          cd /data/jfs/
+          echo "11111"
+          pwd
+          echo "22222"
           git clone https://github.com/vadimtk/ssb-dbgen.git
           cd ssb-dbgen
+          echo "33333"
+          pwd
           make
           ./dbgen -s 10 -T l -q
           git clone https://github.com/sanwan/actionfile.git
