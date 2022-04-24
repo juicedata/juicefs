@@ -3218,8 +3218,8 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	ctx := Background
 	if _, ok := m.rdb.(*redis.ClusterClient); ok {
-		err = m.scan(ctx, "*", func(s []string) error {
-			return fmt.Errorf("found key with same prefix: %s", s)
+		err = m.scan(ctx, "*", func(keys []string) error {
+			return fmt.Errorf("found key with same prefix: %s", keys[0])
 		})
 		if err != nil {
 			return err
