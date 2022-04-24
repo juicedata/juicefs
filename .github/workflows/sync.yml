@@ -65,39 +65,39 @@ jobs:
           sudo /etc/init.d/mysql start
           wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz
           tar -xzf juicefs-1.0.0-beta2-linux-amd64.tar.gz
-
-          while IFS= read -r option; do
-            printf 'option is %s\n' "$option" 
+          test_result=true
+          while IFS=; read -r jfs_option rsync_option status; do
+            if [ "$status" = "disable" ]; then 
+              continue
+            fi
             test -d jfs_sync_dir/ && rm jfs_sync_dir/ -rf 
             mkdir jfs_sync_dir/
-            ./juicefs sync  source-dir/ jfs_sync_dir/ $option
-            test -d rsync_dir/ && rm rsync_dir/ -rf || true
+            ./juicefs sync  source-dir/ jfs_sync_dir/ $jfs_option
+            test -d rsync_dir/ && rm rsync_dir/ -rf 
             mkdir rsync_dir
-            rsync -a source-dir/ rsync_dir/ $option
-            printf '\mdiff between jfssync and rsync with the same option : %s\n' "$option" | tee -a result.txt || true
-            diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
+            rsync -a source-dir/ rsync_dir/ $rsync_option
+            printf '\mdiff between juicefs sync and rsync:\n juicefs sync %s\nrsync %s\n' "$jfs_option" "$rsync_option"| tee -a result.txt || true
+            diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
           done < .github/workflows/resources/sync-options.txt
-          while IFS= read -r option; do
+          while IFS=; read -r jfs_option rsync_option status; do
+            if [ "$status" = "disable" ]; then 
+              continue
+            fi
             mount_point=/tmp/sync-test/
-            printf 'option is %s\n' "$option" 
             ./juicefs format $meta_url sync-test
             ./juicefs mount $meta_url $mount_point -d
             ./juicefs sync source_dir/ $mount_point
             test -d jfs_sync_dir && rm jfs_sync_dir/ -rf 
             mkdir jfs_sync_dir
-            ./juicefs sync  $mount_point/ jfs_sync_dir/ $option --exclude ".accesslog" --exclude ".trash"
+            ./juicefs sync  $mount_point/ jfs_sync_dir/ $jfs_option --exclude ".accesslog" --exclude ".trash"
             test -d rsync_dir && rm rsync_dir/ -rf 
             mkdir rsync_dir
-            rsync -a $mount_point/ rsync_dir/ $option --exclude ".accesslog" --exclude ".trash"
-            echo "sync option is $option \n" >>result.txt 
-            printf '\ndiff between jfssync and rsync with the same option : %s\n' "$option" | tee -a result.txt || true
-            diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
+            rsync -a $mount_point/ rsync_dir/ $rsync_option --exclude ".accesslog" --exclude ".trash"
+            printf '\mdiff between juicefs sync and rsync:\n juicefs sync %s\nrsync %s\n' "$jfs_option" "$rsync_option"| tee -a result.txt || true
+            diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
           done < .github/workflows/resources/sync-options.txt
-          if [[ -z $(grep '[^[:space:]]' result.txt) ]] ; then
-            exit 0
-          else
-            printf "Fatal: diff file is not empty, please check result.txt in the artifact"
-            exit 0
+          if [ "$test_result" = true ]; then
+            printf "Fatal: sync result is different between juicefs sync and rsync, please check result.txt in the artifact" 
           fi 
       - name: Save test reuslt
         if: ${{always()}}
