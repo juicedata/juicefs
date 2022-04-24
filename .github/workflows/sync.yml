@@ -68,10 +68,13 @@ jobs:
 
           while IFS= read -r option; do
             printf 'option is %s\n' "$option" 
-            test -d jfs_sync_dir && rm jfs_sync_dir/{*,.*} -rf || true
+            test -d jfs_sync_dir/ && rm jfs_sync_dir/ -rf 
+            mkdir jfs_sync_dir/
             ./juicefs sync  source-dir/ jfs_sync_dir/ $option
-            test -d rsync_dir && rm rsync_dir/{*,.*} -rf || true
+            test -d rsync_dir/ && rm rsync_dir/ -rf || true
+            mkdir rsync_dir
             rsync -a source-dir/ rsync_dir/ $option
+            printf '\mdiff between jfssync and rsync with the same option : %s\n' "$option" | tee -a result.txt || true
             diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
           done < .github/workflows/resources/sync-options.txt
           while IFS= read -r option; do
@@ -87,6 +90,7 @@ jobs:
             mkdir rsync_dir
             rsync -a $mount_point/ rsync_dir/ $option --exclude ".accesslog" --exclude ".trash"
             echo "sync option is $option \n" >>result.txt 
+            printf '\ndiff between jfssync and rsync with the same option : %s\n' "$option" | tee -a result.txt || true
             diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || true
           done < .github/workflows/resources/sync-options.txt
           if [[ -z $(grep '[^[:space:]]' result.txt) ]] ; then
