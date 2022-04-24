@@ -74,7 +74,6 @@ jobs:
           cd /data/jfs/
           git clone https://github.com/vadimtk/ssb-dbgen.git
           cd ssb-dbgen
-          pwd
           make
           ./dbgen -s 10 -T l -q
           git clone https://github.com/sanwan/actionfile.git
