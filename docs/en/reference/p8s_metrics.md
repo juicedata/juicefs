@@ -18,7 +18,7 @@ Please see the ["Monitoring"](../administration/monitoring.md) documentation to 
 | `mp`       | Mount point path |
 
 :::info
-When Prometheus scrapes a target, it attaches `instance` label automatically to the scraped time series which serve to identify the scraped target, its format is `<host>:<port>`. Refer to [official document](https://prometheus.io/docs/concepts/jobs_instances) for more information.
+When Prometheus scrapes a target, it attaches `instance` label automatically to the scraped time series which serve to identify the scraped target, and its format is `<host>:<port>`. Refer to [official document](https://prometheus.io/docs/concepts/jobs_instances) for more information.
 :::
 
 :::info
@@ -51,7 +51,7 @@ If the monitoring metrics are reported through [Prometheus Pushgateway](https://
 | Name                                              | Description                                | Unit   |
 | ----                                              | -----------                                | ----   |
 | `juicefs_transaction_durations_histogram_seconds` | Transactions latency distributions         | second |
-| `juicefs_transaction_restart`                     | Number of times a transaction is restarted |        |
+| `juicefs_transaction_restart`                     | Number of times a transaction restarted |        |
 
 ## FUSE
 
@@ -99,7 +99,7 @@ If the monitoring metrics are reported through [Prometheus Pushgateway](https://
 
 | Name     | Description                                                    |
 | ----     | -----------                                                    |
-| `method` | Request method to object storage (e.g. GET, PUT, HEAD, DELETE) |
+| `method` | Method to request object storage (e.g. GET, PUT, HEAD, DELETE) |
 
 ### Metrics
 
