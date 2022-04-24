@@ -67,7 +67,7 @@ jobs:
           ./juicefs format $meta_url sync-test
           ./juicefs mount $meta_url $mount_point -d
           ./juicefs sync jfs_source/ $mount_point
-          for source_dir in "jfs_source/"  "$mount_point"; do 
+          for source_dir in "$mount_point" "jfs_source/" ; do 
             while IFS=, read -r jfs_option rsync_option status; do
               echo $jfs_option, $rsync_option, $status
               status=$(echo $status| xargs)
@@ -75,7 +75,8 @@ jobs:
                 continue
               fi
               if [ "$source_dir" = "$mount_point" ]; then 
-                jfs_option="$jfs_option --exclude '.accesslog'"
+                jfs_option="$jfs_option --exclude '.accesslog'" 
+                echo jfs_option is: $jfs_options
               fi
               test -d jfs_sync_dir/ && rm jfs_sync_dir/ -rf 
               mkdir jfs_sync_dir/
