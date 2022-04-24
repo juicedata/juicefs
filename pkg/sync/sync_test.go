@@ -81,6 +81,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 		t.Fatalf("result wrong: %s", keys)
 	}
 }
+
 func deepEqualWithOutMtime(a, b object.Object) bool {
 	return a.IsDir() == b.IsDir() && a.Key() == b.Key() && a.Size() == b.Size() &&
 		math.Abs(a.Mtime().Sub(b.Mtime()).Seconds()) < 1
@@ -258,53 +259,48 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 	}
 }
 
-func TestInitRules(t *testing.T) {
+func TestParseRules(t *testing.T) {
 	tests := []struct {
 		args      []string
-		wantRules []*rule
+		wantRules []rule
 	}{
 		{
 			args:      []string{"--include", "a"},
-			wantRules: []*rule{{pattern: "a", include: true}},
+			wantRules: []rule{{pattern: "a", include: true}},
 		},
 		{
 			args:      []string{"--exclude", "a", "--include", "b"},
-			wantRules: []*rule{{pattern: "a", include: false}, {pattern: "b", include: true}},
+			wantRules: []rule{{pattern: "a", include: false}, {pattern: "b", include: true}},
 		},
 		{
 			args:      []string{"--include", "a", "--test", "t", "--exclude", "b"},
-			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: false}},
 		},
 		{
 			args:      []string{"--include", "a", "--test", "t", "--exclude"},
-			wantRules: []*rule{{pattern: "a", include: true}},
+			wantRules: []rule{{pattern: "a", include: true}},
 		},
 		{
 			args:      []string{"--include", "a", "--exclude", "b", "--include", "c", "--exclude", "d"},
-			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: false}, {pattern: "c", include: true}, {pattern: "d", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: false}, {pattern: "c", include: true}, {pattern: "d", include: false}},
 		},
 		{
 			args:      []string{"--include", "a", "--include", "b", "--test", "--exclude", "c", "--exclude", "d"},
-			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
 		},
 		{
 			args:      []string{"--include=a", "--include=b", "--exclude=c", "--exclude=d", "--test=aaa"},
-			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
 		},
 		{
 			args:      []string{"-include=a", "--test", "t", "--include=b", "--exclude=c", "-exclude="},
-			wantRules: []*rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}},
 		},
 	}
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
 	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			os.Args = tt.args
-			if gotRules := initRules(a, b); !reflect.DeepEqual(gotRules, tt.wantRules) {
-				t.Errorf("initRules() = %v, want %v", gotRules, tt.wantRules)
-			}
-		})
+		if gotRules := parseIncludeRules(tt.args); !reflect.DeepEqual(gotRules, tt.wantRules) {
+			t.Errorf("got %+v, want %+v", gotRules, tt.wantRules)
+		}
 	}
 }
 
@@ -515,65 +511,61 @@ func testKeysEqual(objsCh <-chan object.Object, expectedKeys []string) error {
 	return nil
 }
 
-func Test_slidingWindowForPath(t *testing.T) {
+func TestSuffixForPath(t *testing.T) {
 	type tcase struct {
 		pattern string
 		key     string
-		want    []string
+		want    string
 	}
 	tests := []tcase{
-		{pattern: "a*", key: "a1", want: []string{"a1"}},
-		{pattern: "/a*", key: "a1", want: []string{"a1"}},
-		{pattern: "a*/", key: "a1", want: []string{"a1"}},
-		{pattern: "a*/b*", key: "a1", want: []string{"a1"}},
-		{pattern: "a*", key: "a1/b1", want: []string{"a1", "b1"}},
-		{pattern: "/a*", key: "a1/b1", want: []string{"a1/b1"}},
-		{pattern: "/a*", key: "/a1/b1", want: []string{"/a1"}},
-		{pattern: "/a*/b*/c*", key: "/a1/b1", want: []string{"/a1/b1"}},
-		{pattern: "/a", key: "a1/b1/c1/d1", want: []string{"a1/b1"}},
-		{pattern: "a*/", key: "a1/b1", want: []string{"a1/"}},
-		{pattern: "a*/b*", key: "a1/b1", want: []string{"a1/b1"}},
-		{pattern: "a*/b*", key: "a1/b1/c1/d1", want: []string{"a1/b1", "b1/c1", "c1/d1"}},
+		{pattern: "a*", key: "a1", want: "a1"},
+		{pattern: "/a*", key: "a1", want: "a1"},
+		{pattern: "a*/", key: "a1", want: "a1"},
+		{pattern: "a*/b*", key: "a1", want: "a1"},
+		{pattern: "a*", key: "a1/b1", want: "b1"},
+		{pattern: "/a*", key: "a1/b1", want: "a1/b1"},
+		{pattern: "/a*", key: "/a1/b1", want: "/a1/b1"},
+		{pattern: "/a*/b*/c*", key: "/a1/b1", want: "/a1/b1"},
+		{pattern: "/a", key: "a1/b1/c1/d1", want: "a1/b1/c1/d1"},
+		{pattern: "a*/", key: "a1/b1", want: "a1/"},
+		{pattern: "a*/b*", key: "a1/b1", want: "a1/b1"},
+		{pattern: "a*/b*", key: "a1/b1/c1/d1", want: "c1/d1"},
 	}
 	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			if got := slidingWindowForPath(tt.pattern, tt.key); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("slidingWindowForPath() = %v, want %v", got, tt.want)
-			}
-		})
+		if got := suffixForPattern(tt.key, tt.pattern); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("slidingWindowForPath() = %v, want %v", got, tt.want)
+		}
 	}
 }
-func Test_includeObject(t *testing.T) {
+func TestMatchObjects(t *testing.T) {
 	type tcase struct {
-		rules []*rule
+		rules []rule
 		key   string
 		want  bool
 	}
 	tests := []tcase{
-		{rules: []*rule{{pattern: "a*", include: false}}, key: "a1", want: false},
-		{rules: []*rule{{pattern: "a*/b*", include: false}}, key: "a1/b1", want: false},
-		{rules: []*rule{{pattern: "/a*", include: false}}, key: "/a1", want: false},
-		{rules: []*rule{{pattern: "/a", include: false}}, key: "/a1", want: true},
-		{rules: []*rule{{pattern: "/a/b/c", include: false}}, key: "/a1", want: true},
-		{rules: []*rule{{pattern: "a*/b?", include: false}}, key: "a1/b1/c2/d1", want: false},
-		{rules: []*rule{{pattern: "a*/b?/", include: false}}, key: "a1/", want: true},
-		{rules: []*rule{{pattern: "a*/b?/c.txt", include: false}}, key: "a1/b1", want: true},
-		{rules: []*rule{{pattern: "a*/b?/", include: false}}, key: "a1/b1/", want: false},
-		{rules: []*rule{{pattern: "a*/b?/", include: false}}, key: "a1/b1/c.txt", want: false},
-		{rules: []*rule{{pattern: "a*/", include: false}}, key: "a1/b1", want: false},
-		{rules: []*rule{{pattern: "a*/b*/", include: false}}, key: "a1/b1/c1/d.txt/", want: false},
-		{rules: []*rule{{pattern: "/a*/b*", include: false}}, key: "/a1/b1/c1/d.txt/", want: false},
-		{rules: []*rule{{pattern: "a*/b*/c", include: false}}, key: "a1/b1/c1/d.txt/", want: true},
-		{rules: []*rule{{pattern: "a", include: false}}, key: "a/b/c/d/", want: false},
-		{rules: []*rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "a/pkg/c/a.go", want: false},
-		{rules: []*rule{{pattern: "a", include: false}, {pattern: "pkg", include: true}}, key: "a/pkg/c/a.go", want: false},
-		{rules: []*rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "", want: true},
+		{rules: []rule{{pattern: "a*", include: false}}, key: "a1", want: false},
+		{rules: []rule{{pattern: "a*/b*", include: false}}, key: "a1/b1", want: false},
+		{rules: []rule{{pattern: "/a*", include: false}}, key: "/a1", want: false},
+		{rules: []rule{{pattern: "/a", include: false}}, key: "/a1", want: true},
+		{rules: []rule{{pattern: "/a/b/c", include: false}}, key: "/a1", want: true},
+		{rules: []rule{{pattern: "a*/b?", include: false}}, key: "a1/b1/c2/d1", want: false},
+		{rules: []rule{{pattern: "a*/b?/", include: false}}, key: "a1/", want: true},
+		{rules: []rule{{pattern: "a*/b?/c.txt", include: false}}, key: "a1/b1", want: true},
+		{rules: []rule{{pattern: "a*/b?/", include: false}}, key: "a1/b1/", want: false},
+		{rules: []rule{{pattern: "a*/b?/", include: false}}, key: "a1/b1/c.txt", want: false},
+		{rules: []rule{{pattern: "a*/", include: false}}, key: "a1/b1", want: false},
+		{rules: []rule{{pattern: "a*/b*/", include: false}}, key: "a1/b1/c1/d.txt/", want: false},
+		{rules: []rule{{pattern: "/a*/b*", include: false}}, key: "/a1/b1/c1/d.txt/", want: false},
+		{rules: []rule{{pattern: "a*/b*/c", include: false}}, key: "a1/b1/c1/d.txt/", want: true},
+		{rules: []rule{{pattern: "a", include: false}}, key: "a/b/c/d/", want: false},
+		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "a/pkg/c/a.go", want: false},
+		{rules: []rule{{pattern: "a", include: false}, {pattern: "pkg", include: true}}, key: "a/pkg/c/a.go", want: false},
+		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "", want: true},
 	}
 	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			if got := includeObject(tt.rules, tt.key); got != tt.want {
-				t.Errorf("includeObject() = %v, want %v", got, tt.want)
-			}
-		})
+		if got := matchKey(tt.rules, tt.key); got != tt.want {
+			t.Errorf("includeObject() = %v, want %v", got, tt.want)
+		}
 	}
 }

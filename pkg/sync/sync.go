@@ -626,7 +626,12 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 		logger.Fatal(err)
 	}
 	if len(config.Exclude) > 0 {
-		rules := initRules(src, dst)
+		rules := parseIncludeRules(os.Args)
+		if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
+			for _, r := range rules {
+				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
+			}
+		}
 		srckeys = filter(srckeys, rules)
 		dstkeys = filter(dstkeys, rules)
 	}
@@ -721,39 +726,31 @@ type rule struct {
 	include bool
 }
 
-func initRules(src, dst object.ObjectStorage) (rules []*rule) {
-	l := len(os.Args)
-	for idx, arg := range os.Args {
-		if l-1 > idx && (arg == "--include" || arg == "-include") {
-			rules = append(rules, &rule{pattern: os.Args[idx+1], include: true})
-		} else if l-1 > idx && (arg == "--exclude" || arg == "-exclude") {
-			rules = append(rules, &rule{pattern: os.Args[idx+1], include: false})
-		} else if strings.HasPrefix(arg, "--include=") || strings.HasPrefix(arg, "-include=") {
-			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
-				rules = append(rules, &rule{pattern: s[1], include: true})
-			}
-		} else if strings.HasPrefix(arg, "--exclude=") || strings.HasPrefix(arg, "-exclude=") {
-			if s := strings.Split(arg, "="); len(s) == 2 && s[1] != "" {
-				rules = append(rules, &rule{pattern: s[1], include: false})
-			}
+func parseIncludeRules(args []string) (rules []rule) {
+	l := len(args)
+	for i, a := range args {
+		if strings.HasPrefix(a, "--") {
+			a = a[1:]
 		}
-	}
-	if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
-		for _, r := range rules {
-			r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
+		if l-1 > i && (a == "-include" || a == "-exclude") {
+			rules = append(rules, rule{pattern: args[i+1], include: a == "-include"})
+		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
+			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
+				rules = append(rules, rule{pattern: s[1], include: strings.HasPrefix(a, "-include=")})
+			}
 		}
 	}
 	return
 }
 
-func filter(keys <-chan object.Object, rules []*rule) <-chan object.Object {
+func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 	r := make(chan object.Object)
 	go func() {
 		for o := range keys {
 			if o == nil {
 				break
 			}
-			if includeObject(rules, o.Key()) {
+			if matchKey(rules, o.Key()) {
 				r <- o
 			} else {
 				logger.Debugf("exclude %s", o.Key())
@@ -764,42 +761,35 @@ func filter(keys <-chan object.Object, rules []*rule) <-chan object.Object {
 	return r
 }
 
-func slidingWindowForPath(pattern, key string) []string {
-	var result []string
-	split := strings.Split(key, "/")
-	size := strings.Count(pattern, "/") + 1
-	if size > len(split) {
-		return []string{key}
+func suffixForPattern(path, pattern string) string {
+	parts := strings.Split(path, "/")
+	n := strings.Count(pattern, "/") + 1
+	if n > len(parts) || strings.HasPrefix(pattern, "/") {
+		return path
 	}
-	if strings.HasPrefix(pattern, "/") {
-		return []string{strings.Join(split[:size], "/")}
+	suffix := strings.Join(parts[len(parts)-n:], "/")
+	if strings.HasSuffix(pattern, "/") {
+		suffix = strings.TrimRightFunc(suffix, func(c rune) bool { return c != rune('/') })
 	}
-	for start := 0; start+size <= len(split); start++ {
-		if strings.HasSuffix(pattern, "/") {
-			result = append(result, strings.Join(split[start:start+size-1], "/")+"/")
-		} else {
-			result = append(result, strings.Join(split[start:start+size], "/"))
-		}
-	}
-	return result
+	return suffix
 }
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
-func includeObject(rules []*rule, key string) bool {
+func matchKey(rules []rule, key string) bool {
 	parts := strings.Split(key, "/")
-	for idx := range parts {
-		key = strings.Join(parts[:idx+1], "/")
-		if key != "" {
-			for _, rule := range rules {
-				for _, k := range slidingWindowForPath(rule.pattern, key) {
-					match, err := path.Match(rule.pattern, k)
-					if err != nil {
-						logger.Fatalf("pattern error : %v", err)
-					}
-					if match {
-						return rule.include
-					}
-				}
+	for i := range parts {
+		prefix := strings.Join(parts[:i+1], "/")
+		if prefix == "" {
+			continue
+		}
+		for _, rule := range rules {
+			suffix := suffixForPattern(prefix, rule.pattern)
+			ok, err := path.Match(rule.pattern, suffix)
+			if err != nil {
+				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
+			}
+			if ok {
+				return rule.include
 			}
 		}
 	}
