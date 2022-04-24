@@ -1,4 +1,4 @@
-name: "tpch_clickhouse"
+name: "tpch_clickhouse_local"
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  tpchch:
+  tpchch_local:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -71,13 +71,9 @@ jobs:
 
       - name: Generate Data
         run: |
-          echo "11111"
-          pwd
-          echo "22222"
+          cd /data/jfs/
           git clone https://github.com/vadimtk/ssb-dbgen.git
           cd ssb-dbgen
-          echo "33333"
-          pwd
           make
           ./dbgen -s 10 -T l -q
           git clone https://github.com/sanwan/actionfile.git
