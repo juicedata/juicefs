@@ -1,4 +1,4 @@
-name: "tpch_clickhouse"
+name: "tpch_clickhouse_local"
 
 on:
   push:
@@ -13,12 +13,12 @@ on:
     paths-ignore:
       - 'docs/**'
   schedule:
-    - cron:  '30 20 * * *'
+    - cron:  '50 * * * *'
 
   workflow_dispatch:
 
 jobs:
-  tpchch:
+  tpchch_local:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -71,7 +71,7 @@ jobs:
 
       - name: Generate Data
         run: |
-          cd /data/jfs/
+          cd /home/runner/work/
           git clone https://github.com/vadimtk/ssb-dbgen.git
           cd ssb-dbgen
           make
@@ -79,7 +79,7 @@ jobs:
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
           ls -lrth
-          sudo du -sh /data/jfs/
+          sudo du -sh /home/runner/work/ssb-dbgen/
 
       - name: Create Table
         run: |
@@ -144,7 +144,7 @@ jobs:
 
       - name: Import Data
         run: |
-          cd /data/jfs/ssb-dbgen/
+          cd /home/runner/work/ssb-dbgen/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
           clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
