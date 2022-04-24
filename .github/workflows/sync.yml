@@ -75,7 +75,7 @@ jobs:
             test -d rsync_dir/ && rm rsync_dir/ -rf 
             mkdir rsync_dir
             rsync -a source-dir/ rsync_dir/ $rsync_option
-            printf '\ndiff between juicefs sync and rsync:\n juicefs sync %s\nrsync %s\n' "$jfs_option" "$rsync_option"| tee -a result.txt || true
+            printf '\ndiff between juicefs sync and rsync:\njuicefs sync %s\nrsync %s\nsource dir is: source-dir' "$jfs_option" "$rsync_option"| tee -a result.txt || true
             diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
           done < .github/workflows/resources/sync-options.txt
           while IFS=, read -r jfs_option rsync_option status; do
@@ -94,7 +94,7 @@ jobs:
             test -d rsync_dir && rm rsync_dir/ -rf 
             mkdir rsync_dir
             rsync -a $mount_point/ rsync_dir/ $rsync_option --exclude ".accesslog" --exclude ".trash"
-            printf '\ndiff between juicefs sync and rsync:\n juicefs sync %s\nrsync %s\n' "$jfs_option" "$rsync_option"| tee -a result.txt || true
+            printf '\ndiff between juicefs sync and rsync:\njuicefs sync %s\nrsync %s\nsource dir is: %s' "$jfs_option" "$rsync_option" $mount_point""| tee -a result.txt || true
             diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
           done < .github/workflows/resources/sync-options.txt
           if [ "$test_result" = true ]; then
