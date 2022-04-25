@@ -143,12 +143,27 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 
 func testLoadDump(t *testing.T, name, addr string) {
 	t.Run("Metadata Engine: "+name, func(t *testing.T) {
+		if name == "memkv" {
+			_ = os.Remove(settingPath)
+		}
 		m := testLoad(t, addr, sampleFile)
 		testDump(t, m, 1, sampleFile, "test.dump")
 	})
 	t.Run("Metadata Engine: "+name+"; --SubDir d1 ", func(t *testing.T) {
-		_ = testLoad(t, addr, sampleFile)
-		m := NewClient(addr, &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		if name == "memkv" {
+			_ = os.Remove(settingPath)
+		}
+		m := testLoad(t, addr, sampleFile)
+		if name == "memkv" {
+			if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
+				var err error
+				if kvm.root, err = lookupSubdir(kvm, "d1"); err != nil {
+					t.Fatalf("lookup subdir d1: %s", err)
+				}
+			}
+		} else {
+			m = NewClient(addr, &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		}
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
 		testDump(t, m, 0, sampleFile, "test.dump")
 	})
@@ -160,8 +175,27 @@ func TestLoadDump(t *testing.T) {
 	testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
 	testLoadDump(t, "mysql", "mysql://root:@/dev")
 	testLoadDump(t, "postgres", "postgres://localhost:5432/test?sslmode=disable")
-	testLoadDump(t, "tkv", "memkv://user:pass@test/jfs")
 	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-testdb"))
 	testLoadDump(t, "etcd", "etcd://127.0.0.1:2379/jfs-load-dump")
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
+}
+
+func TestLoadDump_MemKV(t *testing.T) {
+	t.Run("Metadata Engine: memkv", func(t *testing.T) {
+		_ = os.Remove(settingPath)
+		m := testLoad(t, "memkv://test/jfs", sampleFile)
+		testDump(t, m, 1, sampleFile, "test.dump")
+	})
+	t.Run("Metadata Engine: memkv; --SubDir d1 ", func(t *testing.T) {
+		_ = os.Remove(settingPath)
+		m := testLoad(t, "memkv://user:pass@test/jfs", sampleFile)
+		if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
+			var err error
+			if kvm.root, err = lookupSubdir(kvm, "d1"); err != nil {
+				t.Fatalf("lookup subdir d1: %s", err)
+			}
+		}
+		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
+		testDump(t, m, 0, sampleFile, "test.dump")
+	})
 }
