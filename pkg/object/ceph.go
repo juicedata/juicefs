@@ -169,9 +169,9 @@ func (c *ceph) Delete(key string) error {
 func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
 	var objs = make(chan Object, 1000)
 	err := c.do(func(ctx *rados.IOContext) error {
-		defer close(objs)
 		iter, err := ctx.Iter()
 		if err != nil {
+			close(objs)
 			return err
 		}
 		defer iter.Close()
@@ -188,13 +188,22 @@ func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
 		// the keys are not ordered, sort them first
 		sort.Strings(keys)
 		// TODO: parallel
-		for _, key := range keys {
-			st, err := ctx.Stat(key)
-			if err != nil {
-				continue // FIXME
+		go func() {
+			defer close(objs)
+			for _, key := range keys {
+				st, err := ctx.Stat(key)
+				if err != nil {
+					if errors.Is(err, rados.ErrNotFound) {
+						logger.Warnf("Skip non-existent key: %s", key)
+						continue
+					}
+					objs <- nil
+					logger.Errorf("Stat key %s: %s", key, err)
+					return
+				}
+				objs <- &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/")}
 			}
-			objs <- &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/")}
-		}
+		}()
 		return nil
 	})
 	return objs, err
