@@ -35,7 +35,7 @@ $ juicefs status META-URL
 
 ## Usage
 
-The `.trash` directory is automatically created under root `/`.
+The `.trash` directory is automatically created under JuiceFS root `/`, which can be accessed as the mount point.
 
 ### Tree Structure
 
@@ -59,4 +59,4 @@ It is not permitted to create files within the trash. Deleting or purging a file
 
 It is suggested to ask root user to recover files, since root is allowed to move them out of trash with a single `mv` command, and causes no data copy. Other users, however, can only recover a file by reading its content and write it to another new file.
 
-JuiceFS client will check the trash every hour and purge old entries. At least one active client is required to make it happen. Like recovering, only root user is allowed to purge entries manually.
+JuiceFS client will check the trash every hour and purge old entries. At least one active client is required to make it happen. Like recovering, only root user is allowed to manually purge entries by `rm` command.
