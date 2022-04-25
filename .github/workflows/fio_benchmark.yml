@@ -125,6 +125,8 @@ jobs:
           if [ -n "$UUID" ];then
             sudo ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
           fi
+          bucket_name=$(echo ${{ steps.vars.outputs.MINIO_URL}} | awk -F/ '{print $4}')
+          mc rb  myminio/$bucket_name --force --dangerous || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}
