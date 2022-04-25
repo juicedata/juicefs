@@ -387,6 +387,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		n := getInternalNode(ino)
 		if n != nil {
 			entry = &meta.Entry{Inode: ino, Attr: n.attr}
+			entry.Attr.Length = uint64(len(h.data))
 			return
 		}
 	}
@@ -911,6 +912,10 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 		registry: registry,
 	}
 
+	n := getInternalNode(configInode)
+	v.Conf.Format.RemoveSecret()
+	data, _ := json.MarshalIndent(v.Conf, "", " ")
+	n.attr.Length = uint64(len(data))
 	if conf.Meta.Subdir != "" { // don't show trash directory
 		internalNodes = internalNodes[:len(internalNodes)-1]
 	}
