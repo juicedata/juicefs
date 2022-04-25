@@ -9,7 +9,7 @@ JuiceFS ensures POSIX compatibility with the help of pjdfstest and LTP.
 
 ## Pjdfstest
 
- [Pjdfstest](https://github.com/pjd/pjdfstest) is a test suite that helps exercise POSIX system calls. JuiceFS passed all of its latest 8813 tests:
+ [Pjdfstest](https://github.com/pjd/pjdfstest) is a test suite that helps to test POSIX system calls. JuiceFS passed all of its latest 8813 tests:
 
 ```
 All tests successful.
@@ -22,12 +22,12 @@ Files=235, Tests=8813, 233 wallclock secs ( 2.77 usr  0.38 sys +  2.57 cusr  3.9
 Result: PASS
 ```
 
-Besides the things covered by pjdfstest, JuiceFS provides:
+Besides the features covered by pjdfstest, JuiceFS provides:
 
-- Close-to-open consistency. Once a file is closed, the following open and read are guaranteed see the data written before close. Within same mount point, read can see all data written before it immediately.
-- Rename and all other metadata operations are atomic guaranteed by transaction of metadata engines.
+- Close-to-open consistency. Once a file is closed, it is guaranteed to view the written data in the following open and read. Within the same mount point, all the written data can be read immediately.
+- Rename and all other metadata operations are atomic, which are guaranteed by transaction of metadata engines.
 - Open files remain accessible after unlink from same mount point.
-- Mmap is supported (tested with FSx).
+- Mmap (tested with FSx).
 - Fallocate with punch hole support.
 - Extended attributes (xattr).
 - BSD locks (flock).
@@ -41,7 +41,7 @@ Besides the things covered by pjdfstest, JuiceFS provides:
 >
 > The LTP testsuite contains a collection of tools for testing the Linux kernel and related features. Our goal is to improve the Linux kernel and system libraries by bringing test automation to the testing effort.
 
-JuiceFS passed most of its file system related tests.
+JuiceFS passed most of the file system related tests.
 
 ### Test Environment
 
@@ -98,17 +98,17 @@ Kernel Version: 5.4.0-1029-aws
 Machine Architecture: x86_64
 ```
 
-Reasons for the skipped and failed tests:
+Here are causes of the skipped and failed tests:
 
-- fcntl17, fcntl17_64: automatically detect deadlock when trying to add POSIX locks. JuiceFS doesn't support it yet
-- getxattr05: need ACL, which is not supported yet
-- ioctl_loop05, ioctl_ns07, setxattr03: need `ioctl`, which is not supported yet
-- lseek11: handle SEEK_DATA and SEEK_HOLE flags properly in `lseek`. JuiceFS uses kernel general function, which doesn't support these two flags
-- open14, openat03: handle O_TMPFILE flag in `open`. JuiceFS can do nothing with it since it's not supported by FUSE
+- fcntl17, fcntl17_64: it requires file system to automatically detect deadlock when trying to add POSIX locks. JuiceFS doesn't support it yet.
+- getxattr05: need ACL, which is not supported yet.
+- ioctl_loop05, ioctl_ns07, setxattr03: need `ioctl`, which is not supported yet.
+- lseek11: require `lseek` to handle SEEK_DATA and SEEK_HOLE flags. JuiceFS however uses kernel general function, which doesn't support these two flags.
+- open14, openat03: need `open` to handle O_TMPFILE flag. JuiceFS can do nothing with it since it's not supported by FUSE.
 
 ### Appendix
 
-Deleted cases in `fs` and `syscalls`:
+Here are deleted cases in `fs` and `syscalls`:
 
 ```bash
 # fs --> fs-jfs
