@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -61,7 +61,7 @@ jobs:
           echo "mysql-user=root" >>/tmp/config.cfg
           echo "mysql-password=root" >>/tmp/config.cfg
           echo "mysql-db=test" >>/tmp/config.cfg
-          echo "threads=64" >>/tmp/config.cfg
+          echo "threads=48" >>/tmp/config.cfg
           echo "report-interval=10" >>/tmp/config.cfg
           echo "db-driver=mysql" >>/tmp/config.cfg
 
