@@ -3301,12 +3301,12 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	logger.Infof("Loaded counters: %+v", *counters)
 	p.Set(ctx, m.setting(), format, 0)
 	cs := make(map[string]interface{})
-	cs[usedSpace] = counters.UsedSpace
-	cs[totalInodes] = counters.UsedInodes
-	cs["nextinode"] = counters.NextInode
-	cs["nextchunk"] = counters.NextChunk
-	cs["nextsession"] = counters.NextSession
-	cs["nextTrash"] = counters.NextTrash
+	cs[m.prefix+usedSpace] = counters.UsedSpace
+	cs[m.prefix+totalInodes] = counters.UsedInodes
+	cs[m.prefix+"nextinode"] = counters.NextInode
+	cs[m.prefix+"nextchunk"] = counters.NextChunk
+	cs[m.prefix+"nextsession"] = counters.NextSession
+	cs[m.prefix+"nextTrash"] = counters.NextTrash
 	p.MSet(ctx, cs)
 	if len(dm.DelFiles) > 0 {
 		zs := make([]*redis.Z, 0, len(dm.DelFiles))
