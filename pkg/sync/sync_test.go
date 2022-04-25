@@ -527,13 +527,13 @@ func TestSuffixForPath(t *testing.T) {
 		{pattern: "/a*", key: "/a1/b1", want: "/a1/b1"},
 		{pattern: "/a*/b*/c*", key: "/a1/b1", want: "/a1/b1"},
 		{pattern: "/a", key: "a1/b1/c1/d1", want: "a1/b1/c1/d1"},
-		{pattern: "a*/", key: "a1/b1", want: "a1/"},
+		{pattern: "a*/", key: "a1/b1", want: "a1/b1"},
 		{pattern: "a*/b*", key: "a1/b1", want: "a1/b1"},
 		{pattern: "a*/b*", key: "a1/b1/c1/d1", want: "c1/d1"},
 	}
 	for _, tt := range tests {
 		if got := suffixForPattern(tt.key, tt.pattern); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("suffixForPattern() = %v, want %v", got, tt.want)
+			t.Errorf("suffixForPattern(%s, %s) = %v, want %v", tt.key, tt.pattern, got, tt.want)
 		}
 	}
 }
@@ -563,10 +563,11 @@ func TestMatchObjects(t *testing.T) {
 		{rules: []rule{{pattern: "a", include: false}, {pattern: "pkg", include: true}}, key: "a/pkg/c/a.go", want: false},
 		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "", want: true},
 		{rules: []rule{{pattern: "a", include: true}, {pattern: "b/", include: false}, {pattern: "c", include: true}}, key: "a/b/c", want: false},
+		{rules: []rule{{pattern: "a/", include: true}, {pattern: "a", include: false}}, key: "a/b", want: true},
 	}
-	for _, tt := range tests {
-		if got := matchKey(tt.rules, tt.key); got != tt.want {
-			t.Errorf("matchKey() = %v, want %v", got, tt.want)
+	for _, c := range tests {
+		if got := matchKey(c.rules, c.key); got != c.want {
+			t.Errorf("matchKey(%+v, %s) = %v, want %v", c.rules, c.key, got, c.want)
 		}
 	}
 }
