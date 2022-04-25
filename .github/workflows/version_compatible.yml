@@ -153,9 +153,9 @@ jobs:
                         "config")
                             encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
                             if [ -n "$encrypt" ]; then
-                              sudo ./$jfs_bin config ${{steps.vars.outputs.META_URL}} --secret-key ${{secrets.MINIO_SECRET_KEY}} --encrypt-secret
+                              sudo ./$jfs_bin config ${{steps.vars.outputs.META_URL}} --secret-key minioadmin --encrypt-secret
                             else
-                              sudo ./$jfs_bin config ${{steps.vars.outputs.META_URL}} --secret-key ${{secrets.MINIO_SECRET_KEY}}
+                              sudo ./$jfs_bin config ${{steps.vars.outputs.META_URL}} --secret-key minioadmin
                             fi
                             echo "config finished"
                             ;;
