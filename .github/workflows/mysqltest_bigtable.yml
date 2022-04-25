@@ -96,11 +96,11 @@ jobs:
 
       - name: Big Size Table Test
         run: |
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 prepare
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=4000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=4000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=4000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=4000000 cleanup
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=2500000 prepare
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=2500000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=2500000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=2500000 run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=2500000 cleanup
 
       - name: Df
         if: always()
