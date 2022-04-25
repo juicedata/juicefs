@@ -332,16 +332,23 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	defer func() {
 		<-concurrent
 	}()
-	in, err := src.Get(key, 0, -1)
-	if err != nil {
-		if _, e := src.Head(key); e != nil {
-			logger.Debugf("Head src %s: %s", key, err)
-			copied.IncrInt64(-1)
-			copiedBytes.IncrInt64(size * (-1))
-			return nil
+	var in io.ReadCloser
+	var err error
+	if size == 0 {
+		in = io.NopCloser(bytes.NewReader(nil))
+	} else {
+		in, err = src.Get(key, 0, -1)
+		if err != nil {
+			if _, e := src.Head(key); e != nil {
+				logger.Debugf("Head src %s: %s", key, err)
+				copied.IncrInt64(-1)
+				copiedBytes.IncrInt64(size * (-1))
+				return nil
+			}
+			return err
 		}
-		return err
 	}
+
 	defer in.Close()
 
 	if size <= maxBlock ||
