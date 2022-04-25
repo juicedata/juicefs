@@ -1,0 +1,14 @@
+--dirs --include .* , -r --include .* , enable                                                                                                                                              
+--dirs --exclude .* , -r --exclude .*  , enable                                                         
+--dirs --exclude .* --exclude docs/ --exclude *.png , -r --exclude .* --exclude docs/ --exclude *.png , enable
+--dirs --include docs/ --include *.png --exclude * , -r --include docs/ --include *.png --exclude * , enable 
+--dirs --exclude * --include docs/ --include *.png , -r --exclude * --include docs/ --include *.png , enable
+--dirs --include .github --include *.png --exclude .* , -r --include .github --include *.png --exclude .* , enable
+--dirs --include .github --include *.png --exclude .* , -r --include .github --include *.png --exclude .* , enable
+--dirs --exclude .* --include .github --include *.png , -r --exclude .* --include .github --include *.png , enable
+--dirs --include [a-f]*.go --exclude *.go ,-r --include [a-f]*.go --exclude *.go ,enable            
+--dirs --include *_test.go --exclude *.go ,-r --include *_test.go --exclude *.go ,enable            
+--dirs --include cmd/ --exclude *.go ,-r --include cmd/ --exclude *.go ,enable                       
+--dirs --include pk*/chu*/ --exclude *.go ,-r --include pk*/chu*/ --exclude *.go ,enable            
+--dirs --include chu*/ --exclude pk*/ --exclude *.go ,-r --include chu*/ --exclude pk*/  --exclude *.go ,enable
+--dirs --include chun?/ --exclude pk*/ --exclude *.go ,-r --include chun?/ --exclude pk*/  --exclude *.go ,enable
