@@ -789,7 +789,11 @@ func matchKey(rules []rule, key string) bool {
 				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
 			}
 			if ok {
-				return rule.include
+				if rule.include {
+					break // try next level
+				} else {
+					return false
+				}
 			}
 		}
 	}
