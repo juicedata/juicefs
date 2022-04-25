@@ -143,27 +143,10 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 
 func testLoadDump(t *testing.T, name, addr string) {
 	t.Run("Metadata Engine: "+name, func(t *testing.T) {
-		if name == "memkv" {
-			_ = os.Remove(settingPath)
-		}
 		m := testLoad(t, addr, sampleFile)
 		testDump(t, m, 1, sampleFile, "test.dump")
-	})
-	t.Run("Metadata Engine: "+name+"; --SubDir d1 ", func(t *testing.T) {
-		if name == "memkv" {
-			_ = os.Remove(settingPath)
-		}
-		m := testLoad(t, addr, sampleFile)
-		if name == "memkv" {
-			if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
-				var err error
-				if kvm.root, err = lookupSubdir(kvm, "d1"); err != nil {
-					t.Fatalf("lookup subdir d1: %s", err)
-				}
-			}
-		} else {
-			m = NewClient(addr, &Config{Retries: 10, Strict: true, Subdir: "d1"})
-		}
+		m.Shutdown()
+		m = NewClient(addr, &Config{Retries: 10, Strict: true, Subdir: "d1"})
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
 		testDump(t, m, 0, sampleFile, "test.dump")
 	})
@@ -175,7 +158,7 @@ func TestLoadDump(t *testing.T) {
 	testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
 	testLoadDump(t, "mysql", "mysql://root:@/dev")
 	testLoadDump(t, "postgres", "postgres://localhost:5432/test?sslmode=disable")
-	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-testdb"))
+	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-duimp-testdb"))
 	testLoadDump(t, "etcd", "etcd://127.0.0.1:2379/jfs-load-dump")
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
