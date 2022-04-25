@@ -79,14 +79,12 @@ jobs:
               fi
               test -d rsync_dir/ && rm rsync_dir/ -rf 
               mkdir rsync_dir
-              set -x
               set -o noglob
               rsync -a $source_dir rsync_dir/ $rsync_option
               test -d jfs_sync_dir/ && rm jfs_sync_dir/ -rf 
               mkdir jfs_sync_dir/
               ./juicefs sync $source_dir jfs_sync_dir/ $jfs_option
               set -u noglob
-              set +x
               printf 'diff between juicefs sync and rsync:\njuicefs sync %s %s %s\nrsync %s %s %s\n' "$source_dir"  "jfs_sync_dir/" "$jfs_option" \
                 "$source_dir" "rsync_dir/"  "$rsync_option" | tee -a result.txt || true
               diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
