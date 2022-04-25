@@ -57,7 +57,7 @@ Some cloud computing platforms also distinguish between internal and public netw
 JuiceFS also provides flexible support for this object storage service that distinguishes between internal and public addresses. For scenarios where the same file system is shared, the object storage is accessed through internal Endpoint on the servers that meet the criteria, and other computers are accessed through public Endpoint, which can be used as follows:
 
 - **When creating a file system**: It is recommended to use internal Endpoint address for `--bucket` 
-- **When mounting a file system**: For clients that do not satisfy the internal line, you can specify a public Endpoint address to `-bucket`.
+- **When mounting a file system**: For clients that do not satisfy the internal line, you can specify a public Endpoint address to `--bucket`.
 
 Creating a file system using an internal Endpoint ensures better performance and lower latency, and for clients that cannot be accessed through an internal address, you can specify a public Endpoint to mount with the option `--bucket`.
 
@@ -191,7 +191,7 @@ Google Cloud uses [IAM](https://cloud.google.com/iam/docs/overview) to manage pe
 
 For cloud servers and object storage that belong to the same service account, as long as the account grants access to the relevant resources, there is no need to provide authentication information when creating a JuiceFS file system, and the cloud platform will automatically complete authentication.
 
-For cases where you want to access the object storage from outside the Google Cloud Platform, for example to create a JuiceFS file system on your local computer using Google Cloud Storage, you need to configure authentication information. Since Google Cloud Storage does not use `Access Key ID` and `Access Key Secret`, but rather the `JSON key file` of the service account to authenticate the identity.
+For cases where you want to access the object storage from outside the Google Cloud Platform, for example, to create a JuiceFS file system on your local computer using Google Cloud Storage, you need to configure authentication information. Since Google Cloud Storage does not use `Access Key ID` and `Access Key Secret`, but rather the `JSON key file` of the service account to authenticate the identity.
 
 Please refer to "[Authentication as a service account](https://cloud.google.com/docs/authentication/production)" to create `JSON key file` for the service account and download it to the local computer, and define the path to the key file via the environment variable `GOOGLE_APPLICATION_ CREDENTIALS`, e.g.
 
@@ -745,7 +745,7 @@ Currently, JuiceFS only supports path-style MinIO URI addresses, e.g., `http://1
 that facilitates collaborative editing and management of documents stored on the WWW server among users.
 From JuiceFS v0.15+, JuiceFS can use a storage that speaks WebDAV as a data storage.
 
-You need set `--storage` to `webdav`, and `--bucket` to the endpoint of WebDAV. If basic authorization is enable, username and password should be provided as `--access-key` and `--secret-key`, for example:
+You need to set `--storage` to `webdav`, and `--bucket` to the endpoint of WebDAV. If basic authorization is enabled, username and password should be provided as `--access-key` and `--secret-key`, for example:
 
 ```bash
 $ juicefs format \
@@ -794,7 +794,7 @@ $ juicefs format \
 
 ## Redis
 
-[Redis](https://redis.io) can be used as both metadata storage for JuiceFS and as data storage, but when using Redis as a data storage, it is recommended not to store large-scaled data.
+[Redis](https://redis.io) can be used as both metadata storage for JuiceFS and as data storage, but when using Redis as a data storage, it is recommended not to store large-scale data.
 
 The `--bucket` option format is `redis://<host>:<port>/<db>`. The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
