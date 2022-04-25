@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -28,10 +28,14 @@ jobs:
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
+      - name: Df
+        run: df -lh
+
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
+
 
       - name: Build linux target
         run: |
@@ -69,6 +73,10 @@ jobs:
           sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
           sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fcntl-locktests
           sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
+
+      - name: Df
+        if: always()
+        run: df -lh
 
       - name: Send Slack Notification
         if: ${{ failure() }}

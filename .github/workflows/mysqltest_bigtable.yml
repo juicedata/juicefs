@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -27,6 +27,9 @@ jobs:
 
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
+
+      - name: Df
+        run: df -lh
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -88,6 +91,10 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=5000000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=5000000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 cleanup
+
+      - name: Df
+        if: always()
+        run: df -lh
 
       - name: Send Slack Notification
         if: ${{ failure() }}

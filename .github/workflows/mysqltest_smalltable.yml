@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -28,10 +28,14 @@ jobs:
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
+      - name: Df
+        run: df -lh
+
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
+
 
       - name: Build linux target
         run: make juicefs
@@ -97,6 +101,10 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=64 --time=300 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
+
+      - name: Df
+        if: always()
+        run: df -lh
 
       - name: Log
         if: ${{ failure() }}
