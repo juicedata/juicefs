@@ -193,6 +193,10 @@ func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
 			for _, key := range keys {
 				st, err := ctx.Stat(key)
 				if err != nil {
+					if errors.Is(err, rados.ErrNotFound) {
+						logger.Warnf("Skip non-existent key: %s", key)
+						continue
+					}
 					objs <- nil
 					logger.Errorf("Stat key %s: %s", key, err)
 					return
