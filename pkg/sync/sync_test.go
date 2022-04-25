@@ -533,7 +533,7 @@ func TestSuffixForPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		if got := suffixForPattern(tt.key, tt.pattern); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("slidingWindowForPath() = %v, want %v", got, tt.want)
+			t.Errorf("suffixForPattern() = %v, want %v", got, tt.want)
 		}
 	}
 }
@@ -562,10 +562,11 @@ func TestMatchObjects(t *testing.T) {
 		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "a/pkg/c/a.go", want: false},
 		{rules: []rule{{pattern: "a", include: false}, {pattern: "pkg", include: true}}, key: "a/pkg/c/a.go", want: false},
 		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "", want: true},
+		{rules: []rule{{pattern: "a", include: true}, {pattern: "b/", include: false}, {pattern: "c", include: true}}, key: "a/b/c", want: false},
 	}
 	for _, tt := range tests {
 		if got := matchKey(tt.rules, tt.key); got != tt.want {
-			t.Errorf("includeObject() = %v, want %v", got, tt.want)
+			t.Errorf("matchKey() = %v, want %v", got, tt.want)
 		}
 	}
 }
