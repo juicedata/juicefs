@@ -769,28 +769,34 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 }
 
 func suffixForPattern(path, pattern string) string {
-	parts := strings.Split(path, "/")
-	n := strings.Count(pattern, "/") + 1
-	if n > len(parts) || strings.HasPrefix(pattern, "/") {
+	if strings.HasPrefix(pattern, "/") ||
+		strings.HasSuffix(pattern, "/") && !strings.HasSuffix(path, "/") {
 		return path
 	}
-	suffix := strings.Join(parts[len(parts)-n:], "/")
-	if strings.HasSuffix(pattern, "/") {
-		suffix = strings.TrimRightFunc(suffix, func(c rune) bool { return c != rune('/') })
+	n := strings.Count(strings.Trim(pattern, "/"), "/")
+	m := strings.Count(strings.Trim(path, "/"), "/")
+	if n >= m {
+		return path
 	}
-	return suffix
+	parts := strings.Split(path, "/")
+	n = len(strings.Split(pattern, "/"))
+	return strings.Join(parts[len(parts)-n:], "/")
 }
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
 func matchKey(rules []rule, key string) bool {
 	parts := strings.Split(key, "/")
 	for i := range parts {
-		prefix := strings.Join(parts[:i+1], "/")
-		if prefix == "" {
+		if parts[i] == "" {
 			continue
 		}
+		prefix := strings.Join(parts[:i+1], "/")
 		for _, rule := range rules {
-			suffix := suffixForPattern(prefix, rule.pattern)
+			var s string
+			if i < len(parts)-1 && strings.HasSuffix(rule.pattern, "/") {
+				s = "/"
+			}
+			suffix := suffixForPattern(prefix+s, rule.pattern)
 			ok, err := path.Match(rule.pattern, suffix)
 			if err != nil {
 				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
