@@ -75,7 +75,6 @@ func (r *redisStore) Delete(key string) error {
 func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	batch := 1000
 	var objs = make(chan Object, batch)
-	defer close(objs)
 	var keyList []string
 	var cursor uint64
 	for {
@@ -98,43 +97,49 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 
 	sort.Strings(keyList)
 
-	lKeyList := len(keyList)
-	for start := 0; start < lKeyList; start += batch {
-		end := start + batch
-		if end > lKeyList {
-			end = lKeyList
-		}
+	go func() {
+		defer close(objs)
+		lKeyList := len(keyList)
+		for start := 0; start < lKeyList; start += batch {
+			end := start + batch
+			if end > lKeyList {
+				end = lKeyList
+			}
 
-		p := t.rdb.Pipeline()
-		for _, key := range keyList[start:end] {
-			p.StrLen(c, key)
-		}
-		cmds, err := p.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+			p := t.rdb.Pipeline()
+			for _, key := range keyList[start:end] {
+				p.StrLen(c, key)
+			}
+			cmds, err := p.Exec(ctx)
+			if err != nil {
+				objs <- nil
+				return
+			}
 
-		now := time.Now()
-		for idx, cmd := range cmds {
-			if intCmd, ok := cmd.(*redis.IntCmd); ok {
-				size, err := intCmd.Result()
-				if err != nil {
-					return nil, err
-				}
-				if size == 0 {
-					exist, err := t.rdb.Exists(context.TODO(), keyList[start:end][idx]).Result()
+			now := time.Now()
+			for idx, cmd := range cmds {
+				if intCmd, ok := cmd.(*redis.IntCmd); ok {
+					size, err := intCmd.Result()
 					if err != nil {
-						return nil, err
+						objs <- nil
+						return
 					}
-					if exist == 0 {
-						continue
+					if size == 0 {
+						exist, err := t.rdb.Exists(context.TODO(), keyList[start:end][idx]).Result()
+						if err != nil {
+							objs <- nil
+							return
+						}
+						if exist == 0 {
+							continue
+						}
 					}
+					// FIXME: mtime
+					objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/")}
 				}
-				// FIXME: mtime
-				objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/")}
 			}
 		}
-	}
+	}()
 	return objs, nil
 }
 
