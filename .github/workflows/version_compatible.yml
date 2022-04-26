@@ -98,6 +98,8 @@ jobs:
               fi
               for test in "${tests[@]}"; do
                   echo 'test is ' $test
+                  echo 'new version is:' $(./jfs_new -V) 
+                  echo 'old version is:' $(./jfs_old -V) 
                   IFS=',' read -a command_arr <<< "$test"
                   for command in "${command_arr[@]}"; do
                       jfs_bin=$(echo $command | awk -F: '{print $2}'| xargs)
