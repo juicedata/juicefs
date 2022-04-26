@@ -1,16 +1,16 @@
 # 版本更新
 
 :::tip 提示
-所有历史版本请查看 [GitHub releases](https://github.com/juicedata/juicefs/releases) 页面
+所有历史版本请查看 [GitHub Releases](https://github.com/juicedata/juicefs/releases) 页面
 :::
 
-## 升级到 JuiceFS v1.0-beta3
+## 升级到 JuiceFS v1.0.0 Beta3
 
-JuiceFS 的客户端只有一个二进制文件，升级时只需要将用新版替换旧版即可。
-
-需要注意的是，JuiceFS v1.0-beta3 变更了 SQL 类元数据引擎的表结构，对于已经创建的文件系统，应该先升级 SQL 表结构，然后再升级客户端。
+JuiceFS 的客户端只有一个二进制文件，升级时只需要将用新版替换旧版即可。同时有以下几点需要注意。
 
 ### 调整 SQL 表结构
+
+需要注意的是，JuiceFS v1.0.0 Beta3 变更了 SQL 类元数据引擎的表结构，对于已经创建的文件系统，应该先升级 SQL 表结构，然后再升级客户端。
 
 #### MySQL/MariaDB
 
@@ -72,4 +72,4 @@ alter table jfs_symlink_dg_tmp
 
 ### 会话管理格式变更
 
-JuiceFS v1.0-beta3 使用了新的会话管理格式，历史版本客户端通过 `juicefs status` 或者 `juicefs destroy` 将无法看到 v1.0-beta3 客户端产生的会话，新版客户端可以看到所有会话。
+JuiceFS v1.0.0 Beta3 使用了新的会话管理格式，历史版本客户端通过 `juicefs status` 或者 `juicefs destroy` 将无法看到 v1.0.0 Beta3 客户端产生的会话，新版客户端可以看到所有会话。
