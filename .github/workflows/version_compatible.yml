@@ -3,6 +3,7 @@ name: "version-compatible-test"
 on:
   push:
     branches: 
+      - main
       - release-**
     paths-ignore:
       - 'docs/**'
@@ -10,52 +11,57 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches: 
+      - main
       - release-**
     paths-ignore:
       - 'docs/**'
       - '**.md'
-  schedule:
-    - cron:  '0 0 * * *'
   workflow_dispatch:
 
 jobs:
   version-compatible-test:
-    if: github.repository == 'juicedata/juicefs'
-    runs-on: [self-hosted, daily-build]
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
     steps:
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
 
+      - name: Setup minio
+        run: |
+          docker run -d -p 9000:9000 --name minio \
+                     -e "MINIO_ACCESS_KEY=minioadmin" \
+                     -e "MINIO_SECRET_KEY=minioadmin" \
+                     -v /tmp/data:/data \
+                     -v /tmp/config:/root/.minio \
+                     minio/minio server /data       
+
       - name: Set Variable
         id: vars
         run: |
-          echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/9
-          echo ::set-output name=MINIO_URL::http://172.27.0.2:9005/juicefs-version-compatible
+          echo ::set-output name=META_URL::redis://127.0.0.1/1
+          echo ::set-output name=MINIO_URL::http://127.0.0.1:9000/juicefs-version-compatible
           echo ::set-output name=MOUNT_POINT::/tmp/juicefs-version-compatible
           echo ::set-output name=BACKWARD_VERSIONS::5
 
-
       - name: Build linux target
         run: |
-          export GOPATH=/usr/local/go
-          export HOME=/root
           make juicefs
           mv juicefs jfs_new
           echo juicefs new version: $(./jfs_new -V)
-      - name: Init
-        run: |
-          if [ -f ${{ steps.vars.outputs.MOUNT_POINT }}/.stats  ]; then
-            ./jfs_new umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
-          fi
-          UUID=$(./jfs_new status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            echo UUID is: $UUID
-            sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-          fi
-          bucket_name=$(echo ${{ steps.vars.outputs.MINIO_URL}} | awk -F/ '{print $4}')
-          mc rb  myminio/$bucket_name --force --dangerous || true
 
       - name: Version Compatible Test
         run: |
@@ -73,8 +79,8 @@ jobs:
               "format:jfs_old, config_encrypt:jfs_new, destroy:jfs_new"
               "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new"
               "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new"
-              "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new "
-              "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, write_file2_10K:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, mount:jfs_new, read_file1:jfs_new, read_file2:jfs_new, umount:jfs_new, destroy:jfs_new "
+              "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, config:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new "
+              "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, write_file2_10K:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, config:jfs_new, mount:jfs_new, read_file1:jfs_new, read_file2:jfs_new, umount:jfs_new, destroy:jfs_new "
           )    
           urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}' | head -${{ steps.vars.outputs.BACKWARD_VERSIONS }}))
           for url in "${urls[@]}"; do 
@@ -92,6 +98,8 @@ jobs:
               fi
               for test in "${tests[@]}"; do
                   echo 'test is ' $test
+                  echo 'new version is:' $(./jfs_new -V) 
+                  echo 'old version is:' $(./jfs_old -V) 
                   IFS=',' read -a command_arr <<< "$test"
                   for command in "${command_arr[@]}"; do
                       jfs_bin=$(echo $command | awk -F: '{print $2}'| xargs)
@@ -99,7 +107,7 @@ jobs:
                       echo 'jfs_bin is ' $jfs_bin, "cmd is "  $jfs_cmd
                       case "$jfs_cmd" in
                         "format") 
-                            sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
+                            sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key minioadmin  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
                             echo "format finished" 
                             ;;
                         "mount") 
@@ -172,18 +180,6 @@ jobs:
                   done
               done
           done
-
-      - name: Clean
-        if: always() 
-        run: |
-          if [ -f ${{steps.vars.outputs.MOUNT_POINT}}/.stats ]; then
-            ./jfs_new umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
-          fi
-          UUID=$(./jfs_new status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            echo UUID is: $UUID
-            sudo ./jfs_new destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-          fi
 
       - name: Send Slack Notification
         if: ${{ failure() }}
