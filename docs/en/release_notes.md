@@ -13,7 +13,7 @@ Please note that JuiceFS v1.0.0 Beta3 changed the table schema of the SQL class 
 ### Modify SQL table schema
 
 :::note
-Table schema upgrades are not mandatory and are only required if you need to use non-UTF-8 characters.
+Table schema upgrades are not mandatory and are only required if you need to use non-UTF-8 characters. In addition, metadatabase performance may degrade when upgrading SQL table schemas, affecting running services.
 :::
 
 #### MySQL/MariaDB
