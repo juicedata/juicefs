@@ -8,9 +8,13 @@
 
 JuiceFS 的客户端只有一个二进制文件，升级时只需要将用新版替换旧版即可。同时有以下几点需要注意。
 
-### 调整 SQL 表结构
+需要注意的是，JuiceFS v1.0.0 Beta3 变更了 SQL 类元数据引擎的表结构用以支持非 UTF-8 字符，对于已经创建的文件系统或者正在运行的文件系统，要在升级完所有客户端后再做表结构变更。
 
-需要注意的是，JuiceFS v1.0.0 Beta3 变更了 SQL 类元数据引擎的表结构，对于已经创建的文件系统，应该先升级 SQL 表结构，然后再升级客户端。
+### 调整 SQL 表结构以支持非 UTF-8 字符
+
+:::note 注意
+表结构升级不是强制要求，只有当你需要使用非 UTF-8 字符时才需要升级。
+:::
 
 #### MySQL/MariaDB
 
@@ -32,43 +36,7 @@ alter table jfs_symlink
 
 #### SQLite
 
-```sql
-create table jfs_edge_dg_tmp
-(
-    parent INTEGER not null,
-    name   blob    not null,
-    inode  INTEGER not null,
-    type   INTEGER not null
-);
-
-insert into jfs_edge_dg_tmp(parent, name, inode, type)
-select parent, name, inode, type
-from jfs_edge;
-
-drop table jfs_edge;
-
-alter table jfs_edge_dg_tmp
-    rename to jfs_edge;
-
-create unique index UQE_jfs_edge_edge
-    on jfs_edge (parent, name);
-
-create table jfs_symlink_dg_tmp
-(
-    inode  INTEGER not null
-        primary key,
-    target blob    not null
-);
-
-insert into jfs_symlink_dg_tmp(inode, target)
-select inode, target
-from jfs_symlink;
-
-drop table jfs_symlink;
-
-alter table jfs_symlink_dg_tmp
-    rename to jfs_symlink;
-```
+由于 SQLite 不支持修改字段，可以通过 dump 和 load 命令进行迁移，详情参考：[JuiceFS 元数据备份和恢复](administration/metadata_dump_load.md)。
 
 ### 会话管理格式变更
 

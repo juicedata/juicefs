@@ -8,9 +8,13 @@ For all versions, please see [GitHub Releases](https://github.com/juicedata/juic
 
 JuiceFS client has only one binary file, so when upgrading, you only need to replace the old version with the new one. At the same time, the following points should be noted.
 
+Please note that JuiceFS v1.0.0 Beta3 changed the table schema of the SQL class metadata engine. For file systems that have been created or are running, make table schema changes after upgrading all clients.
+
 ### Modify SQL table schema
 
-Please note that JuiceFS v1.0.0 Beta3 changed the table schema of the SQL class metadata engine. For the file system already created, you should upgrade the SQL table schema first, and then upgrade the client.
+:::note
+Table schema upgrades are not mandatory and are only required if you need to use non-UTF-8 characters.
+:::
 
 #### MySQL/MariaDB
 
@@ -32,43 +36,7 @@ alter table jfs_symlink
 
 #### SQLite
 
-```sql
-create table jfs_edge_dg_tmp
-(
-    parent INTEGER not null,
-    name   blob    not null,
-    inode  INTEGER not null,
-    type   INTEGER not null
-);
-
-insert into jfs_edge_dg_tmp(parent, name, inode, type)
-select parent, name, inode, type
-from jfs_edge;
-
-drop table jfs_edge;
-
-alter table jfs_edge_dg_tmp
-    rename to jfs_edge;
-
-create unique index UQE_jfs_edge_edge
-    on jfs_edge (parent, name);
-
-create table jfs_symlink_dg_tmp
-(
-    inode  INTEGER not null
-        primary key,
-    target blob    not null
-);
-
-insert into jfs_symlink_dg_tmp(inode, target)
-select inode, target
-from jfs_symlink;
-
-drop table jfs_symlink;
-
-alter table jfs_symlink_dg_tmp
-    rename to jfs_symlink;
-```
+Since SQLite does not support modifying columns, you can migrate them by `dump` and `load` commands, refer to: [JuiceFS Metadata Backup and Recovery](administration/metadata_dump_load.md) for details.
 
 ### New session management format
 
