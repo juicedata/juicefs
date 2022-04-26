@@ -6,11 +6,11 @@ For all versions, please see [GitHub Releases](https://github.com/juicedata/juic
 
 ## Upgrade to JuiceFS v1.0.0 Beta3
 
-JuiceFS client has only one binary file, so when upgrading, you only need to replace the old version with the new one. At the same time, the following points should be noted.
+JuiceFS client has only one binary file, so when upgrading, you only need to replace the old version with the new one. 
 
-Please note that JuiceFS v1.0.0 Beta3 changed the table schema of the SQL class metadata engine. For file systems that have been created or are running, make table schema changes after upgrading all clients.
+### SQL: Update table schema to support encoding other than UTF-8
 
-### Modify SQL table schema
+JuiceFS v1.0.0 Beta3 changed the table schema to support encoding other than UTF-8. For existing file systems, we need to upgrade the table schema to support that. It's recommanded to upgrade all clients first, then update the table schema.
 
 :::note
 Table schema upgrades are not mandatory and are only required if you need to use non-UTF-8 characters. In addition, metadatabase performance may degrade when upgrading SQL table schemas, affecting running services.
