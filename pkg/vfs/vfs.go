@@ -375,6 +375,11 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		}
 		h := v.newHandle(ino)
 		fh = h.fh
+		n := getInternalNode(ino)
+		if n == nil {
+			return
+		}
+		entry = &meta.Entry{Inode: ino, Attr: n.attr}
 		switch ino {
 		case logInode:
 			openAccessLog(fh)
@@ -383,13 +388,9 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		case configInode:
 			v.Conf.Format.RemoveSecret()
 			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
-		}
-		n := getInternalNode(ino)
-		if n != nil {
-			entry = &meta.Entry{Inode: ino, Attr: n.attr}
 			entry.Attr.Length = uint64(len(h.data))
-			return
 		}
+		return
 	}
 	defer func() {
 		if entry != nil {
