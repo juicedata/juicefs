@@ -73,6 +73,10 @@ func clientFlags() []cli.Flag {
 	}
 	return []cli.Flag{
 		&cli.StringFlag{
+			Name:  "storage",
+			Usage: "customized storage type (e.g. s3, gcs, oss, cos) to access object store",
+		},
+		&cli.StringFlag{
 			Name:  "bucket",
 			Usage: "customized endpoint to access object store",
 		},
