@@ -107,7 +107,7 @@ jobs:
         run: |
           df -lh
           echo "11111"
-          sudo du -sh /data/jfs/.trash
+          sudo du -sh /tmp/jfs/.trash
 
       - name: Log
         if: ${{ failure() }}

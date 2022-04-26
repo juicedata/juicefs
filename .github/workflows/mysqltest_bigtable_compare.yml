@@ -92,7 +92,11 @@ jobs:
           echo "db-driver=mysql" >>/tmp/config.cfg
 
       - name: Df
-        run: df -lh
+        if: always()
+        run: |
+          df -lh
+          echo "11111"
+          sudo du -sh /tmp/jfs/.trash
 
       - name: Big Size Table Test
         run: |
@@ -107,7 +111,7 @@ jobs:
         run: |
           df -lh
           echo "11111"
-          sudo du -sh /data/jfs/.trash
+          sudo du -sh /tmp/jfs/.trash
 
       - name: Send Slack Notification
         if: ${{ failure() }}
