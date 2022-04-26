@@ -3,12 +3,14 @@ name: "sync-test"
 on:
   push:
     branches:
+      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
+      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -17,14 +19,24 @@ on:
 jobs:
   sync-test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
           go-version: '1.17.x'
-
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -32,19 +44,52 @@ jobs:
           fetch-depth: 1
 
       - name: Build linux target
-        run: sudo make juicefs
+        run: make juicefs
 
-      - name: Init
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
-          sudo chmod 777 /var
-          sudo /etc/init.d/mysql start 
+      - name: Checkout source code for sync test
+        uses: actions/checkout@v2
+        with:
+          repository: juicedata/juicefs
+          path: juicefs-source
 
-      - name: Test
+      - name: Checkout source code for test
+        uses: actions/checkout@v2
+        with:
+          repository: juicedata/juicefs
+          path: jfs_source
+
+      - name: Test Sync
         run: |
-          juicefs format redis://127.0.0.1:6379/1 myjfs
-          juicefs mount redis://127.0.0.1:6379/1 myjfs
+          meta_url=redis://127.0.0.1/1
+          mount_point=/tmp/sync-test/
+          ./juicefs format $meta_url sync-test
+          ./juicefs mount $meta_url $mount_point -d
+          ./juicefs sync jfs_source/ $mount_point
+          for source_dir in "$mount_point" "jfs_source/" ; do 
+            while IFS=, read -r jfs_option rsync_option status; do
+              printf '\n%s, %s, %s\n' "$jfs_option" "$rsync_option" "$status"
+              status=$(echo $status| xargs)
+              if [[ -z "$status" || "$status" = "disable" ]]; then 
+                continue
+              fi
+              if [ "$source_dir" = "$mount_point" ]; then 
+                jfs_option="--exclude .accesslog --exclude .stats --exclude .config $jfs_option " 
+                rsync_option="--exclude .accesslog --exclude .stats --exclude .config $rsync_option " 
+              fi
+              test -d rsync_dir/ && rm rsync_dir/ -rf 
+              mkdir rsync_dir
+              set -o noglob
+              rsync -a $source_dir rsync_dir/ $rsync_option
+              test -d jfs_sync_dir/ && rm jfs_sync_dir/ -rf 
+              mkdir jfs_sync_dir/
+              ./juicefs sync $source_dir jfs_sync_dir/ $jfs_option
+              set -u noglob
+              printf ’juicefs sync %s %s %s\n‘ "$source_dir"  "jfs_sync_dir/" "$jfs_option" 
+              printf ’rsync %s %s %s\n‘ "$source_dir" "rsync_dir/"  "$rsync_option" 
+              printf ‘diff between juicefs sync and rsync:\n’
+              diff -ur jfs_sync_dir rsync_dir
+            done < .github/workflows/resources/sync-options.txt
+          done
 
       - name: Send Slack Notification
         if: ${{ failure() }}
