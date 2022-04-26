@@ -74,8 +74,8 @@ jobs:
                 continue
               fi
               if [ "$source_dir" = "$mount_point" ]; then 
-                jfs_option="--exclude .accesslog --exclude .stats $jfs_option " 
-                rsync_option="--exclude .accesslog --exclude .stats $rsync_option " 
+                jfs_option="--exclude .accesslog --exclude .stats --exclude .config $jfs_option " 
+                rsync_option="--exclude .accesslog --exclude .stats --exclude .config $rsync_option " 
               fi
               test -d rsync_dir/ && rm rsync_dir/ -rf 
               mkdir rsync_dir
