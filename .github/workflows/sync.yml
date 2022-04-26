@@ -61,7 +61,6 @@ jobs:
       - name: Test Sync
         run: |
           meta_url=redis://127.0.0.1/1
-          test_result=true
           mount_point=/tmp/sync-test/
           ./juicefs format $meta_url sync-test
           ./juicefs mount $meta_url $mount_point -d
@@ -85,21 +84,12 @@ jobs:
               mkdir jfs_sync_dir/
               ./juicefs sync $source_dir jfs_sync_dir/ $jfs_option
               set -u noglob
-              printf 'diff between juicefs sync and rsync:\njuicefs sync %s %s %s\nrsync %s %s %s\n' "$source_dir"  "jfs_sync_dir/" "$jfs_option" \
-                "$source_dir" "rsync_dir/"  "$rsync_option" | tee -a result.txt || true
-              diff -ur jfs_sync_dir rsync_dir 2>&1 | tee -a result.txt || if [[ $? == 1 ]]; then  test_result=false; fi
+              printf 'juicefs sync %s %s %s\n‘ "$source_dir"  "jfs_sync_dir/" "$jfs_option" 
+              printf 'rsync %s %s %s\n' "$source_dir" "rsync_dir/"  "$rsync_option" 
+              printf 'diff between juicefs sync and rsync:\n'
+              diff -ur jfs_sync_dir rsync_dir
             done < .github/workflows/resources/sync-options.txt
           done
-          if [ "$test_result" = true ]; then
-            printf "Fatal: sync result is different between juicefs sync and rsync, please check result.txt in the artifact" 
-            exit 1
-          fi 
-      - name: Save test reuslt
-        if: ${{always()}}
-        uses: actions/upload-artifact@v2
-        with: 
-          name: result.txt
-          path: result.txt
 
       - name: Send Slack Notification
         if: ${{ failure() }}
