@@ -54,6 +54,7 @@ type counter struct {
 }
 
 type edge struct {
+	Id     int64  `xorm:"pk bigserial"`
 	Parent Ino    `xorm:"unique(edge) notnull"`
 	Name   []byte `xorm:"unique(edge) varbinary(255) notnull"`
 	Inode  Ino    `xorm:"notnull"`
@@ -82,6 +83,7 @@ type namedNode struct {
 }
 
 type chunk struct {
+	Id     int64  `xorm:"pk bigserial"`
 	Inode  Ino    `xorm:"unique(chunk) notnull"`
 	Indx   uint32 `xorm:"unique(chunk) notnull"`
 	Slices []byte `xorm:"blob notnull"`
@@ -105,12 +107,14 @@ type symlink struct {
 }
 
 type xattr struct {
+	Id    int64  `xorm:"pk bigserial"`
 	Inode Ino    `xorm:"unique(name) notnull"`
 	Name  string `xorm:"unique(name) notnull"`
 	Value []byte `xorm:"blob notnull"`
 }
 
 type flock struct {
+	Id    int64  `xorm:"pk bigserial"`
 	Inode Ino    `xorm:"notnull unique(flock)"`
 	Sid   uint64 `xorm:"notnull unique(flock)"`
 	Owner int64  `xorm:"notnull unique(flock)"`
@@ -118,6 +122,7 @@ type flock struct {
 }
 
 type plock struct {
+	Id      int64  `xorm:"pk bigserial"`
 	Inode   Ino    `xorm:"notnull unique(plock)"`
 	Sid     uint64 `xorm:"notnull unique(plock)"`
 	Owner   int64  `xorm:"notnull unique(plock)"`
@@ -137,6 +142,7 @@ type session2 struct {
 }
 
 type sustained struct {
+	Id    int64  `xorm:"pk bigserial"`
 	Sid   uint64 `xorm:"unique(sustained) notnull"`
 	Inode Ino    `xorm:"unique(sustained) notnull"`
 }
@@ -152,6 +158,7 @@ type dbMeta struct {
 	db   *xorm.Engine
 	snap *dbSnap
 }
+
 type dbSnap struct {
 	node    map[Ino]*node
 	symlink map[Ino]*symlink
@@ -767,7 +774,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	}
 	if err == nil {
 		if n, _ := r.RowsAffected(); n == 0 {
-			err = mustInsert(s, &chunk{inode, indx, buf})
+			err = mustInsert(s, &chunk{Inode: inode, Indx: indx, Slices: buf})
 		}
 	}
 	return err
@@ -1053,7 +1060,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			}
 		}
 
-		if err = mustInsert(s, &edge{parent, []byte(name), ino, _type}, &n); err != nil {
+		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: _type}, &n); err != nil {
 			return err
 		}
 		if parent != TrashInode {
@@ -1157,7 +1164,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				return err
 			}
 			if trash > 0 {
-				if err = mustInsert(s, &edge{trash, []byte(fmt.Sprintf("%d-%d-%s", parent, e.Inode, string(e.Name))), e.Inode, e.Type}); err != nil {
+				if err = mustInsert(s, &edge{Parent: trash, Name: []byte(fmt.Sprintf("%d-%d-%s", parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); err != nil {
 					return err
 				}
 			}
@@ -1165,7 +1172,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			switch e.Type {
 			case TypeFile:
 				if opened {
-					if err = mustInsert(s, sustained{m.sid, e.Inode}); err != nil {
+					if err = mustInsert(s, sustained{Sid: m.sid, Inode: e.Inode}); err != nil {
 						return err
 					}
 					if _, err := s.Cols("nlink", "ctime").Update(&n, &node{Inode: e.Inode}); err != nil {
@@ -1279,7 +1286,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if _, err = s.Cols("ctime", "parent").Update(&n, &node{Inode: n.Inode}); err != nil {
 				return err
 			}
-			if err = mustInsert(s, &edge{trash, []byte(fmt.Sprintf("%d-%d-%s", parent, e.Inode, string(e.Name))), e.Inode, e.Type}); err != nil {
+			if err = mustInsert(s, &edge{Parent: trash, Name: []byte(fmt.Sprintf("%d-%d-%s", parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); err != nil {
 				return err
 			}
 		} else {
@@ -1476,7 +1483,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return err
 					}
 					name := fmt.Sprintf("%d-%d-%s", parentDst, dino, de.Name)
-					if err = mustInsert(s, &edge{trash, []byte(name), dino, de.Type}); err != nil {
+					if err = mustInsert(s, &edge{Parent: trash, Name: []byte(name), Inode: dino, Type: de.Type}); err != nil {
 						return err
 					}
 				} else if de.Type != TypeDirectory && dn.Nlink > 0 {
@@ -1489,7 +1496,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 							if _, err := s.Cols("nlink", "ctime").Update(&dn, &node{Inode: dino}); err != nil {
 								return err
 							}
-							if err = mustInsert(s, sustained{m.sid, dino}); err != nil {
+							if err = mustInsert(s, sustained{Sid: m.sid, Inode: dino}); err != nil {
 								return err
 							}
 						} else {
@@ -1520,7 +1527,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					return err
 				}
 			}
-			if err = mustInsert(s, &edge{parentDst, de.Name, se.Inode, se.Type}); err != nil {
+			if err = mustInsert(s, &edge{Parent: parentDst, Name: de.Name, Inode: se.Inode, Type: se.Type}); err != nil {
 				return err
 			}
 		}
@@ -1743,7 +1750,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		if err = mustInsert(s, &delfile{inode, n.Length, time.Now().Unix()}); err != nil {
 			return err
 		}
-		_, err = s.Delete(&sustained{sid, inode})
+		_, err = s.Delete(&sustained{Sid: sid, Inode: inode})
 		if err != nil {
 			return err
 		}
@@ -1831,7 +1838,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 				return err
 			}
 		} else {
-			if err = mustInsert(s, &chunk{inode, indx, buf}); err != nil {
+			if err = mustInsert(s, &chunk{Inode: inode, Indx: indx, Slices: buf}); err != nil {
 				return err
 			}
 		}
@@ -2386,7 +2393,7 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 
 func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
-		var x = xattr{inode, name, value}
+		var x = xattr{Inode: inode, Name: name, Value: value}
 		var err error
 		var n int64
 		switch flags {
@@ -2396,7 +2403,7 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 				err = syscall.EEXIST
 			}
 		case XattrReplace:
-			n, err = s.Update(&x, &xattr{inode, name, nil})
+			n, err = s.Update(&x, &xattr{Inode: inode, Name: name})
 			if err == nil && n == 0 {
 				err = ENOATTR
 			}
@@ -2411,7 +2418,7 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 			} else {
 				n, err = s.Insert(&x)
 				if err != nil || n == 0 {
-					n, err = s.Update(&x, &xattr{inode, name, nil})
+					n, err = s.Update(&x, &xattr{Inode: inode, Name: name})
 				}
 			}
 			if err == nil && n == 0 {
@@ -2826,7 +2833,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 					cs.NextChunk = int64(s.Chunkid) + 1
 				}
 			}
-			beansCh <- &chunk{inode, c.Index, slices}
+			beansCh <- &chunk{Inode: inode, Indx: c.Index, Slices: slices}
 		}
 	} else if n.Type == TypeDirectory {
 		n.Length = 4 << 10
@@ -2864,7 +2871,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	if len(e.Xattrs) > 0 {
 		bar.IncrTotal(int64(len(e.Xattrs)))
 		for _, x := range e.Xattrs {
-			beansCh <- &xattr{inode, x.Name, unescape(x.Value)}
+			beansCh <- &xattr{Inode: inode, Name: x.Name, Value: unescape(x.Value)}
 		}
 	}
 	beansCh <- n
