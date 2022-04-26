@@ -175,6 +175,9 @@ func getFormat(c *cli.Context, metaCli meta.Meta) *meta.Format {
 	if c.IsSet("bucket") {
 		format.Bucket = c.String("bucket")
 	}
+	if c.IsSet("storage") {
+		format.Storage = c.String("storage")
+	}
 	return format
 }
 
