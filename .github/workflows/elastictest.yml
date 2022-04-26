@@ -85,7 +85,10 @@ jobs:
 
       - name: Df
         if: always()
-        run: df -lh
+        run: |
+          df -lh
+          echo "11111"
+          sudo du -sh /data/jfs/.trash
 
       - name: Send Slack Notification
         if: ${{ failure() }}

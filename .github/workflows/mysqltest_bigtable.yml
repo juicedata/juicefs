@@ -53,7 +53,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+          sudo ./juicefs format redis://127.0.0.1:6379/1 --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
@@ -96,15 +96,18 @@ jobs:
 
       - name: Big Size Table Test
         run: |
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=2500000 prepare
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=1000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=1000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=1000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=2000000 cleanup
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000  prepare
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=5000000  run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=5000000  run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=5000000  run
+          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000  cleanup
 
       - name: Df
         if: always()
-        run: df -lh
+        run: |
+          df -lh
+          echo "11111"
+          sudo du -sh /data/jfs/.trash
 
       - name: Send Slack Notification
         if: ${{ failure() }}
