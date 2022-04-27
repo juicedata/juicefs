@@ -47,3 +47,4 @@ runs:
         echo "start sync..."
         ./juicefs sync $mount_point/t1 data/t1 --exclude '.accesslog'
         echo "finish sync..." 
+      shell: bash
