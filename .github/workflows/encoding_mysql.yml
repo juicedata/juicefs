@@ -243,7 +243,10 @@ jobs:
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
  
-          ./juicefs_old dump ${{steps.vars.outputs.META_URL1}}  backup.dump
+          ./juicefs_old umount ${{steps.vars.outputs.MOUNT_POINT1}}
+          # upgrade table schema
+          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d
+          ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
           ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
           ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
@@ -275,7 +278,7 @@ jobs:
             exit 1
           fi          
 
-          ./juicefs_old umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
       - name: Send Slack Notification
         if: ${{ failure() }}
