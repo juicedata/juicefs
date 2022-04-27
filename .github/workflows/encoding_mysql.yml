@@ -219,7 +219,7 @@ jobs:
           data_write="data_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           soft_link="softlink_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
 
-          ./juicefs_old format --trash-day 0 --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
+          ./juicefs_old format --trash-days 0 --bucket ${{ steps.vars.outputs.BUCKET}} ${{steps.vars.outputs.META_URL1}} ${{steps.vars.outputs.NAME}}
           ./juicefs_old mount --no-usage-report --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d 
 
           db_name=$(echo "${{steps.vars.outputs.META_URL1}}" | awk -F/ '{print $4}')
