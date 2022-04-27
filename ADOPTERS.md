@@ -19,6 +19,7 @@ For users of JuiceFS:
 | [Yimian](https://www.yimian.io)                                                         | Production  | Big Data               |
 | [Trip.com](https://us.trip.com/)                                                        | Production  | Big Data, File Sharing |
 | [vivo](https://www.vivo.com)                                                            | Production  | AI, File Sharing       |
+| [Horizon Robotics](https://horizon.ai)                                                  | Production  | AI                     |
 | [Volcano Engine](https://www.volcengine.com)                                            | Testing     | File Sharing           |
 | [Dingdong Fresh](https://www.100.me)                                                    | Testing     | Big Data               |
 | [SF-Express](https://www.sf-express.com)                                                | Testing     | Big Data, File Sharing |
