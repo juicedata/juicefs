@@ -30,7 +30,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -268,7 +267,6 @@ func setup(c *cli.Context, n int) {
 		}
 		tags["pid"] = strconv.Itoa(os.Getpid())
 		tags["version"] = version.Version()
-		tags["start"] = time.Now().Format(time.RFC3339)
 
 		if _, err := pyroscope.Start(pyroscope.Config{
 			ApplicationName: appName,
