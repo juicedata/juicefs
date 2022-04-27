@@ -2322,6 +2322,9 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			}
 		}
 	}
+	if m.fmt.TrashDays == 0 {
+		return 0
+	}
 
 	if ok, err := m.db.IsTableExist(&delslices{}); err != nil {
 		return errno(err)

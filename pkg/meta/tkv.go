@@ -2041,6 +2041,9 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			}
 		}
 	}
+	if m.fmt.TrashDays == 0 {
+		return 0
+	}
 
 	// delayed slices: Lcccccccctttttttt
 	klen = 1 + 8 + 8

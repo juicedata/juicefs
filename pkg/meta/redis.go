@@ -2643,7 +2643,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		}
 		return nil
 	})
-	if err != nil {
+	if err != nil || m.fmt.TrashDays == 0 {
 		return errno(err)
 	}
 
