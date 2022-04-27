@@ -2,13 +2,9 @@
 
 set -e
 
-echo "commit range"
-echo "$TRAVIS_COMMIT_RANGE"
 if [ x"${TRAVIS_COMMIT_RANGE}" == x ] ; then
-  echo "11111"
   CHANGED_FILES=`git diff --name-only HEAD~1`
 else
-  echo "22222"
   CHANGED_FILES=`git diff --name-only $TRAVIS_COMMIT_RANGE`
 fi
 echo $CHANGED_FILES

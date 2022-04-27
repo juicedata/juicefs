@@ -11,7 +11,7 @@ services:
   - postgresql
   - docker
 git:
-  depth: 3
+  depth: 500
 env:
   - MINIO_TEST_BUCKET=127.0.0.1:9000/testbucket  MINIO_ACCESS_KEY=testUser  MINIO_SECRET_KEY=testUserPassword DISPLAY_PROGRESSBAR=false HDFS_ADDR=localhost:8020 SFTP_HOST=localhost:2222:/upload/ SFTP_USER=root SFTP_PASS=password WEBDAV_TEST_BUCKET=127.0.0.1:9007 TIKV_ADDR=127.0.0.1 REDIS_ADDR=redis://127.0.0.1:6379/13
 go:
@@ -34,12 +34,6 @@ before_install:
   - if [ $SKIP_TEST == true ]; then exit 0; fi
 install: true
 before_script:
-  - git branch -a
-  - echo "33333"
-  - git status
-  - echo "55555"
-  - git log  >gitlog
-  - cat gitlog
   - export GO111MODULE=on
   - sudo mysql -e "create database dev;"
   - psql -c 'create database test;' -U postgres
