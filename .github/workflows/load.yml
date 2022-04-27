@@ -39,6 +39,7 @@ jobs:
           fetch-depth: 1
       - name: Init
         run: |
+          sudo chmod 777 /var
           wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
           gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
@@ -90,6 +91,7 @@ jobs:
           fetch-depth: 1
       - name: Init
         run: |
+          sudo chmod 777 /var
           wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
           gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
@@ -108,6 +110,7 @@ jobs:
           fetch-depth: 1
       - name: Init
         run: |
+          sudo chmod 777 /var
           wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
           gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
