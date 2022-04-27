@@ -21,6 +21,7 @@ runs:
     - name: Build linux target
       run: |
         make juicefs 
+      shell: bash
 
     - name: Test
       run: |
