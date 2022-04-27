@@ -43,7 +43,7 @@ jobs:
 
       - name: Format
         run: |
-          sudo ./juicefs format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
+          sudo ./juicefs format --trash-days 0 --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
 
       - name: Fio Benchmark 
         run: |
@@ -101,7 +101,7 @@ jobs:
               name=$(echo $job | awk -F: '{print $1}' | xargs)
               fio_arg=$(echo $job | awk -F: '{print $2}' | xargs)
               mount_arg=$(echo $job | awk -F: '{print $3}' | xargs)
-              sudo ./juicefs mount -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $mount_arg &
+              sudo ./juicefs mount --no-usage-report -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $mount_arg &
               if [[ "$name" =~ ^big-file-rand-read.* ]]; then
                 block_size=$(echo $name | awk -F- '{print $NF}' | xargs)
                 echo block_size is $block_size

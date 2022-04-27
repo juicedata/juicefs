@@ -107,11 +107,11 @@ jobs:
                       echo 'jfs_bin is ' $jfs_bin, "cmd is "  $jfs_cmd
                       case "$jfs_cmd" in
                         "format") 
-                            sudo ./$jfs_bin format --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key minioadmin  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
+                            sudo ./$jfs_bin format --trash-days 0 --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key minioadmin --secret-key minioadmin  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
                             echo "format finished" 
                             ;;
                         "mount") 
-                            sudo ./$jfs_bin mount -d ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
+                            sudo ./$jfs_bin mount --no-usage-report -d ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
                             echo "mount finished" 
                             ;;
                         "umount") 
