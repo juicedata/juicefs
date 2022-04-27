@@ -1,0 +1,51 @@
+name: 'Load Action'
+description: 'Juicefs load action'
+inputs:
+  meta_url:  
+    description: 'meta url'
+    required: true
+    default: ''
+  load_file:  
+    description: 'path of the file to load'
+    required: true
+    default: ''
+  
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.17.x'
+
+    - name: Build linux target
+      run: |
+        make juicefs 
+      shell: bash
+
+    - name: Test
+      run: |
+        mount_point=/tmp/juicefs-sync-test
+        meta_url=${{inputs.meta_url}}
+        load_file=${{inputs.load_file}}
+        echo meta_url is: $meta_url
+        db_name=$(basename $meta_url | awk -F? '{print $1}')
+        if [[ "$meta_url" == mysql* ]]; then
+          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+        elif [[ "$meta_url" == postgres* ]]; then
+          export PGPASSWORD="postgres"
+          printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+        fi
+        echo "start load..."
+        ./juicefs load $meta_url $load_file
+        echo "finish load..."
+        ./juicefs mount $meta_url $mount_point -d 
+        if [ -d data/ ]; then
+          rm data/{*,.*} -rf || true
+        else
+          mkdir data
+        fi
+        echo "start sync..."
+        ./juicefs sync $mount_point/t1 data/t1 --exclude '.accesslog'
+        echo "finish sync..." 
+      shell: bash
