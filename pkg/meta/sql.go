@@ -334,6 +334,10 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 	if err != nil {
 		return fmt.Errorf("update table session2, delslices: %s", err)
 	}
+	// add primary key
+	if err = m.db.Sync2(new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
+		return fmt.Errorf("update table edge, chunk, xattr, sustained: %s", err)
+	}
 	// update the owner from uint64 to int64
 	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("update table flock, plock: %s", err)
@@ -2321,6 +2325,9 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 				}
 			}
 		}
+	}
+	if m.fmt.TrashDays == 0 {
+		return 0
 	}
 
 	if ok, err := m.db.IsTableExist(&delslices{}); err != nil {
