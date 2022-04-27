@@ -1,0 +1,121 @@
+name: "load-test"
+
+on:
+  push:
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  schedule:
+    - cron:  '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  load-to-pg:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: Init
+        run: |
+          sudo chmod 777 /var
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
+      - name: Load
+        uses: ./.github/actions/load
+        with:
+          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
+          load_file: "meta_with_4M_Empty_files.json"            
+          
+  load-to-mysql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: Init
+        run: |
+          sudo chmod 777 /var
+          sudo /etc/init.d/mysql start
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
+      - name: Load
+        uses: ./.github/actions/load
+        with:
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test" 
+          load_file: "meta_with_4M_Empty_files.json"      
+            
+  load-to-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: Init
+        run: |
+          sudo chmod 777 /var
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
+      - name: Load
+        uses: ./.github/actions/load
+        with:
+          meta_url: redis://127.0.0.1:6379/1 
+          load_file: "meta_with_4M_Empty_files.json"      
+
+  load-to-sqlite3:
+    runs-on: ubuntu-latest   
+    steps:
+      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: Init
+        run: |
+          sudo chmod 777 /var
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
+      - name: Load
+        uses: ./.github/actions/load
+        with:
+          meta_url: sqlite3://sync-test.db
+          load_file: "meta_with_4M_Empty_files.json"      
+    
