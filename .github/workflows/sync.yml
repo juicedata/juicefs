@@ -62,8 +62,8 @@ jobs:
         run: |
           meta_url=redis://127.0.0.1/1
           mount_point=/tmp/sync-test/
-          ./juicefs format $meta_url sync-test
-          ./juicefs mount $meta_url $mount_point -d
+          ./juicefs format --trash-days 0 $meta_url sync-test
+          ./juicefs mount --no-usage-report $meta_url $mount_point -d
           ./juicefs sync jfs_source/ $mount_point
           for source_dir in "$mount_point" "jfs_source/" ; do 
             while IFS=, read -r jfs_option rsync_option status; do
