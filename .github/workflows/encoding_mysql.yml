@@ -53,6 +53,8 @@ jobs:
 
       - name: Test mysql gbk support with new client
         run: |
+          stat ${{steps.vars.outputs.MOUNT_POINT1}} && [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
+          stat ${{steps.vars.outputs.MOUNT_POINT2}} && [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
           db_name=$(basename ${{steps.vars.outputs.META_URL2}})
@@ -107,8 +109,12 @@ jobs:
             exit 1
           fi
 
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
       - name: Test remount with new client after alter db to binary
         run: |
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
           db_name=$(basename ${{steps.vars.outputs.META_URL2}})
@@ -174,8 +180,11 @@ jobs:
             exit 1
           fi                   
 
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
       - name: Test mount old meta using new client without db change
         run: |
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
           db_name=$(basename ${{steps.vars.outputs.META_URL2}})
@@ -202,8 +211,11 @@ jobs:
             exit 1
           fi         
 
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
       - name: Test dump with old client and load with new client
         run: |
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
           db_name=$(basename ${{steps.vars.outputs.META_URL2}})
@@ -231,6 +243,9 @@ jobs:
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
  
+          ./juicefs_old umount ${{steps.vars.outputs.MOUNT_POINT1}}
+          # upgrade table schema
+          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d
           ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
           ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
           ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
@@ -263,6 +278,8 @@ jobs:
             exit 1
           fi          
 
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
