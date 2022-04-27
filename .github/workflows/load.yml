@@ -65,7 +65,7 @@ jobs:
       - name: Load
         uses: ./.github/actions/load
         with:
-          meta_url: "mysql://root:root@\(127.0.0.1\)/sync_test" 
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test" 
           load_file: "meta_with_4M_Empty_files.json"      
             
   load-to-redis:
