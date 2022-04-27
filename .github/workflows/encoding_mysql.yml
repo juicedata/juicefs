@@ -107,8 +107,12 @@ jobs:
             exit 1
           fi
 
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}}
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}}
       - name: Test remount with new client after alter db to binary
         run: |
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] || juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || exit 1
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] || juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || exit 1
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
           db_name=$(basename ${{steps.vars.outputs.META_URL2}})
@@ -174,8 +178,11 @@ jobs:
             exit 1
           fi                   
 
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}}
       - name: Test mount old meta using new client without db change
         run: |
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] || juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || exit 1
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] || juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || exit 1
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
           db_name=$(basename ${{steps.vars.outputs.META_URL2}})
@@ -202,8 +209,11 @@ jobs:
             exit 1
           fi         
 
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}}
       - name: Test dump with old client and load with new client
         run: |
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] || juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || exit 1
+          [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] || juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || exit 1
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
           mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
           db_name=$(basename ${{steps.vars.outputs.META_URL2}})
@@ -263,6 +273,8 @@ jobs:
             exit 1
           fi          
 
+          ./juicefs_old umount ${{steps.vars.outputs.MOUNT_POINT1}}
+          ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}}
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
