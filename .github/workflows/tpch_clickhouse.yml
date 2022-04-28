@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
+      - 'release-**'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -72,7 +72,7 @@ jobs:
       - name: Generate Data
         run: |
           cd /data/jfs/
-          git clone https://github.com/vadimtk/ssb-dbgen.git
+          git clone https://github.com/sanwan/ssb-dbgen.git
           cd ssb-dbgen
           make
           ./dbgen -s 10 -T l -q
