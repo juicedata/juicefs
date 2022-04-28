@@ -73,8 +73,8 @@ jobs:
                 continue
               fi
               if [ "$source_dir" = "$mount_point" ]; then 
-                jfs_option="--exclude .accesslog --exclude .stats --exclude .config $jfs_option " 
-                rsync_option="--exclude .accesslog --exclude .stats --exclude .config $rsync_option " 
+                jfs_option="--exclude .stats --exclude .config $jfs_option " 
+                rsync_option="--exclude .stats --exclude .config $rsync_option " 
               fi
               test -d rsync_dir/ && rm rsync_dir/ -rf 
               mkdir rsync_dir
@@ -89,6 +89,7 @@ jobs:
               printf ‘diff between juicefs sync and rsync:\n’
               diff -ur jfs_sync_dir rsync_dir
             done < .github/workflows/resources/sync-options.txt
+
           done
 
       - name: Send Slack Notification
