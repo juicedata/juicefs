@@ -1,4 +1,4 @@
-name: "tpch_clickhouse"
+name: "tpch_clickhouse_mode"
 
 on:
   push:
@@ -13,12 +13,12 @@ on:
     paths-ignore:
       - 'docs/**'
   schedule:
-    - cron:  '30 20 * * *'
+    - cron:  '30 * * * *'
 
   workflow_dispatch:
 
 jobs:
-  tpchch:
+  tpchchmode:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
