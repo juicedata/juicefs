@@ -18,7 +18,7 @@ on:
 
 jobs:
   longtime:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
