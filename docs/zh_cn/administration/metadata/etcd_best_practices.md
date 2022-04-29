@@ -16,11 +16,11 @@ etcd 默认设置了 2GB 的[存储配额](https://etcd.io/docs/v3.5/op-guide/ma
 --auto-compaction-mode revision --auto-compaction-retention 1000000
 ```
 
-当数据量达到配额导致无法写入时，可以通过手动压缩（`etcdctl compact`）和整理碎片（`etcdctl defrag`）的方式来减少容量。强烈建议对 etcd 集群的节点逐个进行这些操作，否则可能会导致整个 etcd 集群不可用。
+当数据量达到配额导致无法写入时，可以通过手动压缩（`etcdctl compact`）和整理碎片（`etcdctl defrag`）的方式来减少容量。**强烈建议对 etcd 集群的节点逐个进行这些操作，否则可能会导致整个 etcd 集群不可用。**
 
 ## 性能
 
-etcd 提供强一致的读写访问，并且所有操作都会涉及到多机事务以及磁盘的数据持久化，建议使用高性能的 SSD 来部署，否则会影响到文件系统的性能。更多硬件配置建议请参考[官方文档](https://etcd.io/docs/v3.5/op-guide/hardware)。
+etcd 提供强一致的读写访问，并且所有操作都会涉及到多机事务以及磁盘的数据持久化。**建议使用高性能的 SSD 来部署**，否则会影响到文件系统的性能。更多硬件配置建议请参考[官方文档](https://etcd.io/docs/v3.5/op-guide/hardware)。
 
 如果 etcd 集群都有掉电保护，或者其它能够保证不会导致所有节点同时宕机的措施，也可以通过 `--unsafe-no-fsync` 选项关闭数据同步落盘，以降低访问时延提高文件系统的性能。**此时如果有两个节点同时宕机，会有数据丢失风险。**
 
