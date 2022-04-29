@@ -52,6 +52,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
@@ -564,7 +565,13 @@ public class JuiceFileSystemImpl extends FileSystem {
           reader.close();
           tmp.setLastModified(soTime);
           tmp.setReadable(true, false);
-          Files.move(tmp.toPath(), libFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+          try {
+            File org = new File(dir, name);
+            Files.move(tmp.toPath(), org.toPath(), StandardCopyOption.ATOMIC_MOVE);
+            libFile = org;
+          } catch (AccessDeniedException ade) {
+            Files.move(tmp.toPath(), libFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+          }
         }
       }
     }
