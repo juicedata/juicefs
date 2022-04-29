@@ -71,6 +71,8 @@ jobs:
           cd pyxattr
           pip3 install pytest
           pip3 install pyxattr
+          TEST_DIR=/tmp/ python3 -m pytest tests
+          echo "11111"
           TEST_DIR=/jfs/ python3 -m pytest tests
 
 
