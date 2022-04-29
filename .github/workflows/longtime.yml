@@ -49,7 +49,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --no-usage-report &
 
       - name: Python
         run: |
@@ -64,6 +64,25 @@ jobs:
           go test -v ./fslock/...
           stat /jfs/
 
+
+      - name: Python Test2
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.7.1'
+          architecture: 'x64'
+        run: |
+          python -V
+          cd /tmp/
+          git clone https://github.com/iustin/pyxattr.git
+          cd pyxattr
+          pip3 install pytest
+          pip3 install pyxattr
+          ls -lah
+          echo "33333"
+          stat /jfs/
+          TEST_DIR=/jfs/ python3 -m pytest tests
+
+
       - name: Pyxattr Test
         run: |
           pwd
@@ -71,8 +90,11 @@ jobs:
           cd pyxattr
           pip3 install pytest
           pip3 install pyxattr
+          ls -lah
+          echo "22222"
           TEST_DIR=/tmp/ python3 -m pytest tests
           echo "11111"
+          stat /jfs/
           TEST_DIR=/jfs/ python3 -m pytest tests
 
 
