@@ -7,8 +7,8 @@ slug: /metadata_engines_benchmark
 
 首先展示结论：
 
-- 对于纯元数据操作，MySQL 耗时约为 Redis 的 2～4 倍；TiKV 性能与 MySQL 接近，大部分场景下略优于 MySQL
-- 对于小 IO（～100 KiB）压力，使用 MySQL 引擎的操作总耗时大约是使用 Redis 引擎总耗时的 1～3 倍；TiKV 耗时与 MySQL 接近
+- 对于纯元数据操作，MySQL 耗时约为 Redis 的 2～4 倍；TiKV 性能与 MySQL 接近，大部分场景下略优于 MySQL；etcd 的耗时约为 TiKV 的 1.5 倍
+- 对于小 IO（～100 KiB）压力，使用 MySQL 引擎的操作总耗时大约是使用 Redis 引擎总耗时的 1～3 倍；TiKV 和 etcd 的耗时与 MySQL 接近
 - 对于大 IO（～4 MiB）压力，使用不同元数据引擎的总耗时未见明显差异（此时对象存储成为瓶颈）
 
 > **注意**：
