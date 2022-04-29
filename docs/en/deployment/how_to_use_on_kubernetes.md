@@ -25,7 +25,7 @@ Helm is the package manager for Kubernetes, and Charts are packages managed by H
 
 Installing with Helm requires Helm **3.1.0** or higher. To learn more about how to install Helm, please refer to ["Helm Installation Guide"](https://github.com/helm/helm#install).
 
-1. Prepare a configuration file for setting the basic information of the storage class, for example `values.yaml`. Complete the following configuration information and paste it into `values.yaml`. Specifically, the `backend` field is JuiceFS file system related information, you can refer to [JuiceFS Quick Start Guide](../getting-started/for_local.md) for more details. If you are using a JuiceFS volume that has been created in advance, you only need to fill the two fields `name` and `metaurl`. The `mountPod` part can be used to set the resource allocations of CPU and memory for the Pod using this driver. Fields not in use can be deleted, or you can leave their values blank.
+1. Prepare a configuration file for setting the basic information of the storage class, for example `values.yaml`. Complete the following configuration information and paste it into `values.yaml`. Specifically, the `backend` field is JuiceFS file system related information, and you can refer to [JuiceFS Quick Start Guide](../getting-started/for_local.md) for more details. If you are using a JuiceFS volume that has been created in advance, you only need to fill the two fields `name` and `metaurl`. The `mountPod` part can be used to set the resource allocations of CPU and memory for the Pod using this driver. Fields not in use can be deleted, or you can leave their values blank.
 
 ```yaml
 storageClasses:
@@ -106,7 +106,7 @@ juicefs-sc   csi.juicefs.com   Retain          Immediate           false        
 
 #### Install with kubectl
 
-Since Kubernetes deprecates some old APIs during the version bumping process, you need to select the applicable deployment file fit for the version of Kubernetes you are using:
+Since Kubernetes deprecates some old APIs during the version bumping process, you need to select the applicable deployment file that works for the version of Kubernetes you are using:
 
 **Kubernetes v1.18 and above**
 
@@ -187,7 +187,7 @@ parameters:
   csi.storage.k8s.io/provisioner-secret-namespace: kube-system
 ```
 
-Then deploy the storage class by `kubectl apply`:
+Then deploy the storage class with `kubectl apply`:
 
 ```shell
 $ kubectl apply -f ./juicefs-sc.yaml
@@ -195,7 +195,7 @@ $ kubectl apply -f ./juicefs-sc.yaml
 
 ### Use JuiceFS as PersistentVolume
 
-JuiceFS CSI Driver supports both static and dynamic PersistentVolume. You can either manually assign the PersistentVolume previously created to Pods, or dynamically create volumes by using PersistentVolumeClaim when Pods are deployed.
+JuiceFS CSI Driver supports both static and dynamic PersistentVolume. You can either manually assign the PersistentVolume created previously to Pods, or dynamically create volumes by using PersistentVolumeClaim when Pods are deployed.
 
 For example, you can use the following configuration to create a configuration file named `development.yaml`, which creates a PersistentVolume for the Nginx container by using PersistentVolumeClaim and mounts it to the directory `/config` of the container:
 
@@ -283,7 +283,7 @@ For more details about JuiceFS CSI Driver please refer to [project homepage](htt
 
 ### Create more JuiceFS storage classes
 
-You can repeat the previous steps to create as many number of storage classes as needed by using JuiceFS CSI Driver. Don't forget to modify the name of the storage class and the configuration information of the JuiceFS file system to avoid conflicts with the previously created storage classes. For example, when using Helm, you can create a configuration file named `jfs2.yaml`:
+You can repeat the previous steps to create as many storage classes as needed by using JuiceFS CSI Driver. Don't forget to modify the name of the storage class and the configuration information of the JuiceFS file system to avoid conflicts with the previously created storage classes. For example, when using Helm, you can create a configuration file named `jfs2.yaml`:
 
 ```yaml
 storageClasses:
@@ -367,4 +367,4 @@ spec:
             privileged: true
 ```
 
-> ⚠️ **Risk Warning**: With the privileged mode being enabled by `privileged: true`, the container has access to all devices of the host, that is, it has full control of the host's kernel. Improper uses will bring serious safety hazards. Please conduct a sufficient safety assessment before using this method.
+> ⚠️ **Risk Warning**: With the privileged mode being enabled by `privileged: true`, the container has access to all devices of the host, that is, it has full control of the host's kernel. Improper uses will bring serious safety hazards. Please conduct a thorough safety assessment before using it.
