@@ -76,6 +76,7 @@ jobs:
         run: |
           pwd
           echo "11111"
+          sudo apt-get install -y libacl1-dev
           sudo DURATION=10 make -C fstests all
           echo "22222"
           make -C fstests flock
