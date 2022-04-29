@@ -70,7 +70,7 @@ jobs:
         with:
           python-version: '3.7.1'
           architecture: 'x64'
-        run: |
+      - run: |
           python -V
           cd /tmp/
           git clone https://github.com/iustin/pyxattr.git
