@@ -49,7 +49,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs --no-usage-report &
 
       - name: Python
         run: |
@@ -58,9 +58,11 @@ jobs:
 
       - name: Fslock Test
         run: |
-          cd /tmp/jfs/
+          cd /jfs/
           git clone https://github.com/danjacques/gofslock.git
           cd gofslock && git checkout cc7f001fe0e7df1710adc8f0cd9e9d6d21fdb3a9
+          go test -v ./fslock/...
+          stat /jfs/
 
       - name: Pyxattr Test
         run: |
@@ -69,7 +71,7 @@ jobs:
           cd pyxattr
           pip3 install pytest
           pip3 install pyxattr
-          TEST_DIR=/tmp/jfs/ python3 -m pytest tests
+          TEST_DIR=/jfs/ python3 -m pytest tests
 
 
       - name: Send Slack Notification
