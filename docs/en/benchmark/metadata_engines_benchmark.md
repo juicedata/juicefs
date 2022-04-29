@@ -7,8 +7,8 @@ slug: /metadata_engines_benchmark
 
 Conclusion first:
 
-- For pure metadata operations, MySQL costs about 2 ~ 4x times of Redis; TiKV has similar performance to MySQL, and in most cases it costs a bit less.
-- For small I/O (~100 KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis; TiKV performs similarly to MySQL.
+- For pure metadata operations, MySQL costs about 2 ~ 4x times of Redis; TiKV has similar performance to MySQL, and in most cases it costs a bit less; etcd costs about 1.5x times of TiKV.
+- For small I/O (~100 KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis; TiKV and etcd performs similarly to MySQL.
 - For large I/O (~4 MiB) workloads, total time costs with different metadata engines show no significant difference (object storage becomes the bottleneck).
 
 >**Note**:
