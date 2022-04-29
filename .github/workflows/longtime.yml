@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  ltpfs:
+  longtime:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -56,8 +56,16 @@ jobs:
           python -V
           python3 -V
 
+      - name: Fslock Test
+        run: |
+          cd /tmp/jfs/
+          git clone https://github.com/danjacques/gofslock.git
+          cd gofslock && git checkout cc7f001fe0e7df1710adc8f0cd9e9d6d21fdb3a9
+
       - name: Pyxattr Test
-      - run: |
+        run: |
+          pwd
+          cd /tmp/jfs/
           git clone https://github.com/iustin/pyxattr.git
           cd pyxattr
           pip3 install pytest
