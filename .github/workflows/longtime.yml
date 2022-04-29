@@ -65,7 +65,6 @@ jobs:
       - name: Pyxattr Test
         run: |
           pwd
-          cd /tmp/jfs/
           git clone https://github.com/iustin/pyxattr.git
           cd pyxattr
           pip3 install pytest
