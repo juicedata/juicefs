@@ -72,11 +72,13 @@ jobs:
           TEST_DIR=/jfs/ python3 -m pytest tests
 
 
-      - name: Fsracer Test
+      - name: Fstests
         run: |
           pwd
           echo "11111"
-          sudo DURATION=10 make -C fstests fsracer
+          sudo DURATION=10 make -C fstests all
+          echo "22222"
+          make -C fstests flock
 
 
       - name: Send Slack Notification
