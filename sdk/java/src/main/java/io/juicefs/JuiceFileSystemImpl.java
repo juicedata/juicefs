@@ -52,6 +52,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -562,16 +564,7 @@ public class JuiceFileSystemImpl extends FileSystem {
           reader.close();
           tmp.setLastModified(soTime);
           tmp.setReadable(true, false);
-          new File(dir, name).delete();
-          if (tmp.renameTo(new File(dir, name))) {
-            // updated libjfs.so
-            libFile = new File(dir, name);
-          } else {
-            libFile.delete();
-            if (!tmp.renameTo(libFile)) {
-              throw new IOException("Can't update " + libFile);
-            }
-          }
+          Files.move(tmp.toPath(), libFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
         }
       }
     }
