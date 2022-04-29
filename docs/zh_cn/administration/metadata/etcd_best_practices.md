@@ -1,22 +1,28 @@
-# ETCD 最佳实践
+---
+sidebar_label: etcd
+sidebar_position: 3
+slug: /etcd_best_practices
+---
+# etcd 最佳实践
 
-由于 ETCD 自身的产品定位，在小规模文件时，采用它作为 JuiceFS 元数据存储引擎较为合适。当文件规模较大时，可以将元数据从 ETCD 导出，再导入其他存储引擎。
+## 数据规模
 
-:::tip 建议1
-ETCD 默认配置的存储配额为2GB，在不压缩的情况下，可以存储200多万的文件，修改--quota-backend-bytes参数，即可扩大配额，官方建议的最大容量为8GB。
-:::
+etcd 默认有 2GB 的数据量限制，大概能够支撑两百万文件，可以通过 `--quota-backend-bytes` 参数进行调整，建议不要超过 8GB。
 
+默认情况下，etcd 会保留所有数据的修改历史，直到数据量超过存储限制导致无法提供服务，建议加上如下参数启用自动数据合并：
 
-:::tip 建议2
-ETCD 默认会保留数据的多个版本，建议修改--auto-compaction-retention参数，可以显著减少数据量。
-:::
+```
+   --auto-compaction-mode revision --auto-compaction-retention 1000000
+```
 
+当数据量达到限制时导致无法写入时，可以通过手动压缩（etcdctl compact）和整理碎片（etcdctl defrag）的方式来减少容量。在做这些操作时，强烈建议对 etcd 集群的节点逐个进行，否则可能会导致整个 etcd 集群不可用。
 
-:::tip 建议3
-当数据达到配额限制时，可以通过手动压缩（etcdctl compact）和整理碎片（etcdctl defrag）的方式，减少容量占用。在做手动操作时，强烈建议对 ETCD 集群的单台机器逐一进行，而不是对整个集群操作，可能会导致整个 ETCD 集群部分时间不可用。
-:::
+## 性能
 
+etcd 提供强一致的读写访问，并且所有操作都会涉及到多机事务以及磁盘的数据持久化，建议使用高性能的 SSD 来部署，否则会影响到文件系统的性能。
 
-:::note 注意
-本文部分内容来自 ETCD 官网，若有不一致的表述，请以 ETCD 官方文档为准。
-:::
+如果 etcd 集群都有掉电保护，或者其他能够保证不会导致所有节点同时宕机的措施，也可以通过 `--unsafe-no-fsync` 参数关闭数据同步落盘，以降低访问时延提高文件系统的性能。此时如果有两个节点同时宕机，会有数据丢失风险。
+
+## Kubernetes
+
+建议在 Kubernetes 环境中搭建独立的 etcd 服务给 JuiceFS 使用，而不是使用集群中默认的 etcd 服务，避免当文件系统访问压力高时影响 Kubernetes 集群的稳定性。
