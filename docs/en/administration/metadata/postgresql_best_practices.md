@@ -23,7 +23,7 @@ Although it is easy and convenient to set the database password directly in the 
 Environment variable names can be freely defined, e.g.
 
 ```shell
-export $PG_PASSWD=mypassword
+export PG_PASSWD=mypassword
 ```
 
 Passing the database password in the metadata URL via environment variables.
@@ -31,6 +31,9 @@ Passing the database password in the metadata URL via environment variables.
 ```shell
 juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
+## Authentication methods
+
+Authentication with PostgreSQL is currently possible with "md5" method.
 
 ## Backup periodically
 
