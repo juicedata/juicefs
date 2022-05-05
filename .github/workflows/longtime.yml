@@ -80,6 +80,7 @@ jobs:
           sudo DURATION=10 make -C fstests all
           echo "22222"
           make -C fstests flock
+          echo "33333"
 
 
       - name: Send Slack Notification
