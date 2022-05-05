@@ -12,8 +12,7 @@ on:
       - 'release-**'
     paths-ignore:
       - 'docs/**'
-  schedule:
-    - cron:  '50 * * * *'
+
   workflow_dispatch:
 
 jobs:
