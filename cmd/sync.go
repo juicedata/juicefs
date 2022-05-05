@@ -234,8 +234,8 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				parts := strings.Split(user, ":")
 				user = parts[0]
 				pass = parts[1]
-			} else if os.Getenv("SSH_PRIVATE_KEY_PATH") == "" {
-				fmt.Print("Enter Password: ")
+			} else if os.Getenv("SSH_PRIVATE_KEY_PATH") == "" && os.Getenv("SSH_AUTH_SOCK") == "" {
+				fmt.Printf("%s's password: ", uri)
 				bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 				if err != nil {
 					logger.Fatalf("Read password: %s", err.Error())
