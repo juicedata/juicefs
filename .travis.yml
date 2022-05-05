@@ -65,7 +65,6 @@ script:
   - cat cov2.out >> coverage.txt
   - cd /home/travis/gopath/src/github.com/juicedata/juicefs
   - sudo DURATION=10 make -C fstests fsracer
-  - make -C fstests flock
   - make -C sdk/java/libjfs
   - cd sdk/java
   - sudo `which mvn` compile -B --quiet || sudo `which mvn` compile -B --quiet
