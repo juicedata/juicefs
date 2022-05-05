@@ -63,13 +63,12 @@ jobs:
 
       - name: Pyxattr Test
         run: |
-          pwd
           git clone https://github.com/iustin/pyxattr.git
           cd pyxattr
           pip3 install pytest
           pip3 install pyxattr
           stat /jfs/
-          #TEST_DIR=/jfs/ python3 -m pytest tests
+          TEST_DIR=/jfs/ python3 -m pytest tests
 
 
       - name: Fstests
@@ -79,21 +78,7 @@ jobs:
           sudo apt-get install -y attr
           sudo DURATION=60 make -C fstests fsx
           sudo make -C fstests xattrs
-          make -C fstests flock
-
-
-      - name: Hdfs Test
-        run: |
-          chmod +x travis-setup-hdfs.sh
-          ./travis-setup-hdfs.sh
-          make -C sdk/java/libjfs
-          cd sdk/java
-          echo "11111"
-          sudo `which mvn` compile -B --quiet || sudo `which mvn` compile -B --quiet
-          echo "22222"
-          #sudo `which mvn` test -B
-          echo "33333"
-          sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet
+          sudo make -C fstests flock
 
 
       - name: Send Slack Notification
