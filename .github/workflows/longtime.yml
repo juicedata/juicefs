@@ -81,14 +81,18 @@ jobs:
           sudo make -C fstests xattrs
           make -C fstests flock
 
+
       - name: Hdfs Test
         run: |
           chmod +x travis-setup-hdfs.sh
           ./travis-setup-hdfs.sh
           make -C sdk/java/libjfs
           cd sdk/java
+          echo "11111"
           sudo `which mvn` compile -B --quiet || sudo `which mvn` compile -B --quiet
+          echo "22222"
           sudo `which mvn` test -B
+          echo "33333"
           sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet
 
 
