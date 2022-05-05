@@ -128,7 +128,7 @@ jobs:
                   sudo sync && echo 3 > /proc/sys/vm/drop_caches
                 fi
                 fio --name=$name --directory=${{ steps.vars.outputs.MOUNT_POINT }} $fio_arg > result.log
-                bw=$(tail -1 result.log | awk '{print $2}' | awk -F '=' '{print $2}' | sed 's/.iB.*//g'
+                bw=$(tail -1 result.log | awk '{print $2}' | awk -F '=' '{print $2}' | sed 's/.iB.*//g')
                 echo $bw, $(date +"%Y-%m-%d %H:%M:%S"), ${{github.sha}}, https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}, $juicefs_version, $name, ${{ github.ref_name }}, $default_size, redis, minio | tee -a $csv_file
                 
                 ./juicefs umount -f ${{ steps.vars.outputs.MOUNT_POINT }}
