@@ -78,9 +78,12 @@ jobs:
           echo "11111"
           sudo apt-get install -y libacl1-dev
           sudo apt-get install -y attr
-          sudo DURATION=10 make -C fstests fsracer
+          echo "55555"
           sudo DURATION=10 make -C fstests fsx
+          echo "66666"
           sudo DURATION=10 make -C fstests xattrs
+          echo "77777"
+          #sudo DURATION=10 make -C fstests fsracer
           echo "22222"
           make -C fstests flock
           echo "33333"
