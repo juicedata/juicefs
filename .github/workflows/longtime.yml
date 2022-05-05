@@ -83,7 +83,7 @@ jobs:
           echo "66666"
           sudo DURATION=10 make -C fstests xattrs
           echo "77777"
-          sudo DURATION=10 make -C fstests fsracer
+          DURATION=10 make -C fstests fsracer
           echo "22222"
           make -C fstests flock
           echo "33333"
