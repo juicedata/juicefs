@@ -77,6 +77,8 @@ jobs:
           pwd
           echo "11111"
           sudo apt-get install -y libacl1-dev
+          sudo apt-get install -y attr
+          sudo DURATION=10 make -C fstests fsracer
           sudo DURATION=10 make -C fstests fsx
           sudo DURATION=10 make -C fstests xattrs
           echo "22222"
