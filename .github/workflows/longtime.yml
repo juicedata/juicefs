@@ -69,7 +69,7 @@ jobs:
           pip3 install pytest
           pip3 install pyxattr
           stat /jfs/
-          TEST_DIR=/jfs/ python3 -m pytest tests
+          #TEST_DIR=/jfs/ python3 -m pytest tests
 
 
       - name: Fstests
@@ -77,7 +77,8 @@ jobs:
           pwd
           echo "11111"
           sudo apt-get install -y libacl1-dev
-          sudo DURATION=10 make -C fstests all
+          sudo DURATION=10 make -C fstests fsx
+          sudo DURATION=10 make -C fstests xattrs
           echo "22222"
           make -C fstests flock
           echo "33333"
