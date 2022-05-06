@@ -6,25 +6,22 @@ slug: /installation
 
 # Installation & Upgrade
 
-JuiceFS has good cross-platform capability and supports running on all kinds of operating systems of almost all major architectures, including and not limited to Linux, macOS, Windows, BSD, etc.
+JuiceFS has good cross-platform capability and supports running on all kinds of operating systems of almost all major architectures, including and not limited to Linux, macOS, Windows, etc.
 
 The JuiceFS client has only one binary file, you can download the pre-compiled version to unzip it and use it directly, or you can compile it manually with the source code.
 
-## Install The Pre-compiled Client
+## Install the pre-compiled client
 
 You can download the latest version of the client at [GitHub](https://github.com/juicedata/juicefs/releases). Pre-compiled versions for different CPU architectures and operating systems are available in the download list of each client version. Please find the version suit your application the best, e.g.,
 
 | File Name                            | Description                                                                          |
 |--------------------------------------|--------------------------------------------------------------------------------------|
 | `juicefs-x.x.x-darwin-amd64.tar.gz`  | For macOS systems with Intel chips                                                   |
+| `juicefs-x.x.x-darwin-arm64.tar.gz`  | For macOS systems with M1 series chips                                               |
 | `juicefs-x.x.x-linux-amd64.tar.gz`   | For Linux distributions on x86 architecture                                          |
 | `juicefs-x.x.x-linux-arm64.tar.gz`   | For Linux distributions on ARM architecture                                          |
 | `juicefs-x.x.x-windows-amd64.tar.gz` | For Windows on x86 architecture                                                      |
 | `juicefs-hadoop-x.x.x-amd64.jar`     | Hadoop Java SDK on x86 architecture (supports both Linux, macOS and Windows systems) |
-
-:::tip
-For macOS on M1 series chips, you can use the `darwin-amd64` version of the client dependent on [Rosetta 2](https://support.apple.com/en-us/HT211861), or you can refer to [Manually Compiling](#manually-compiling) to compile the native version.
-:::
 
 ### Linux
 
@@ -67,7 +64,7 @@ There are two ways to use JuiceFS on Windows systems.
 1. [Using pre-compiled Windows client](#pre-compiled-windows-client)
 2. [Using Linux client in WSL](#using-the-linux-client-in-wsl)
 
-#### Pre-compiled Windows Client
+#### Pre-compiled Windows client
 
 The Windows client of JuiceFS is also a standalone binary. Once downloaded and unpacked, you can run it right away.
 
@@ -110,7 +107,7 @@ brew tap juicedata/homebrew-tap
 brew install juicefs
 ```
 
-#### Pre-compiled Binary
+#### Pre-compiled binary
 
 You can also download the binary with the filename of `darwin-amd64`, unzip it and install the program to any executable path on your system using the `install` command, e.g.
 
@@ -146,7 +143,7 @@ RUN set -x && \
 CMD [ "juicefs" ]
 ```
 
-## Manually Compiling
+## Manually compiling
 
 If there is no pre-compiled client versions that are suitable for your operating system, such as FreeBSD or macOS on the M1 chip, then you can manually compile the JuiceFS client.
 
@@ -156,7 +153,7 @@ One of the advantages of manually compiling client is that you have priority acc
 For users in China, in order to speed up the acquisition of Go modules, it is recommended to set the `GOPROXY` environment variable to the domestic mirror server by executing `go env -w GOPROXY=https://goproxy.cn,direct`. For details, please refer to: [Goproxy China](https://github.com/goproxy/goproxy.cn).
 :::
 
-### Unix-like Client
+### Unix-like client
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
