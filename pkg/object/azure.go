@@ -24,6 +24,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"io"
 	"log"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -126,6 +127,10 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 	baseURLs := []string{"blob.core.windows.net", "blob.core.chinacloudapi.cn"}
 	endpoint := ""
 	for _, baseURL := range baseURLs {
+		if _, err := net.LookupIP(fmt.Sprintf("%s.%s", accountName, baseURL)); err != nil {
+			logger.Debugf("Attempt to resolve domain name %s failed: %s", baseURL, err)
+			continue
+		}
 		client, err := azblob.NewContainerClientWithSharedKey(fmt.Sprintf("%s://%s.%s/%s", scheme, accountName, baseURL, containerName), credential, nil)
 		if err != nil {
 			return "", err
