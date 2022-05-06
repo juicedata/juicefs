@@ -42,6 +42,9 @@ func (b *wasb) String() string {
 
 func (b *wasb) Create() error {
 	_, err := b.container.Create(ctx, nil)
+	if strings.Contains(err.Error(), string(azblob.StorageErrorCodeContainerAlreadyExists)) {
+		return nil
+	}
 	return err
 }
 
@@ -125,7 +128,7 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 	for _, baseURL := range baseURLs {
 		client, err := azblob.NewContainerClientWithSharedKey(fmt.Sprintf("%s://%s.%s/%s", scheme, accountName, baseURL, containerName), credential, nil)
 		if err != nil {
-			log.Fatalf("Failed to create client: %v", err)
+			return "", err
 		}
 		if _, err = client.GetProperties(ctx, nil); err != nil {
 			logger.Debugf("Try to get containers properties at %s failed: %s", baseURL, err)
@@ -178,7 +181,7 @@ func newWabs(endpoint, accountName, accountKey string) (ObjectStorage, error) {
 	}
 	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		return nil, err
 	}
 
 	if scheme == "" {
