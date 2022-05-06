@@ -53,6 +53,7 @@ jobs:
 
       - name: Test mysql gbk support with new client
         run: |
+          sudo chmod -R 777 /var/log/
           stat ${{steps.vars.outputs.MOUNT_POINT1}} && [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
           stat ${{steps.vars.outputs.MOUNT_POINT2}} && [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
@@ -113,6 +114,7 @@ jobs:
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
       - name: Test remount with new client after alter db to binary
         run: |
+          sudo chmod -R 777 /var/log/
           [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
           [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
@@ -183,6 +185,7 @@ jobs:
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
       - name: Test mount old meta using new client without db change
         run: |
+          sudo chmod -R 777 /var/log/
           [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
           [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
@@ -214,6 +217,7 @@ jobs:
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
       - name: Test dump with old client and load with new client
         run: |
+          sudo chmod -R 777 /var/log/
           [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT1}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
           [ `stat -c %i ${{steps.vars.outputs.MOUNT_POINT2}}` == 1 ] && ./juicefs umount -f ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           db_name=$(basename ${{steps.vars.outputs.META_URL1}})
@@ -280,6 +284,7 @@ jobs:
 
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
+          
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
