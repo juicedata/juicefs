@@ -18,18 +18,18 @@ package main
 
 import (
 	"fmt"
+	"github.com/erikdubbelboer/gspt"
+	"github.com/google/gops/agent"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/pyroscope-io/client/pyroscope"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
-
-	"github.com/erikdubbelboer/gspt"
-	"github.com/google/gops/agent"
-	"github.com/sirupsen/logrus"
-
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicefs/pkg/version"
-	"github.com/urfave/cli/v2"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -254,6 +254,30 @@ func setup(c *cli.Context, n int) {
 				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
 			}
 		}()
+	}
+
+	if c.IsSet("pyroscope") {
+		tags := make(map[string]string)
+		appName := fmt.Sprintf("juicefs.%s", c.Command.Name)
+		if c.Command.Name == "mount" {
+			tags["mountpoint"] = c.Args().Get(1)
+		}
+		if hostname, err := os.Hostname(); err == nil {
+			tags["hostname"] = hostname
+		}
+		tags["pid"] = strconv.Itoa(os.Getpid())
+		tags["version"] = version.Version()
+
+		if _, err := pyroscope.Start(pyroscope.Config{
+			ApplicationName: appName,
+			ServerAddress:   c.String("pyroscope"),
+			Logger:          logger,
+			Tags:            tags,
+			AuthToken:       os.Getenv("PYROSCOPE_AUTH_TOKEN"),
+			ProfileTypes:    pyroscope.DefaultProfileTypes,
+		}); err != nil {
+			logger.Errorf("start pyroscope agent: %v", err)
+		}
 	}
 }
 
