@@ -73,7 +73,6 @@ jobs:
 
       - name: Fstests
         run: |
-          pwd
           sudo apt-get install -y libacl1-dev
           sudo apt-get install -y attr
           sudo DURATION=60 make -C fstests fsx
