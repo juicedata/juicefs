@@ -1,15 +1,15 @@
-name: "longtime"
+name: " integrationtests"
 
 on:
   push:
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  longtime:
+  integrationtests:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
