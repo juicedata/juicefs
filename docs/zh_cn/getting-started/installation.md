@@ -6,7 +6,7 @@ slug: /installation
 
 # 安装与升级
 
-JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类操作系统上运行，包括且不限于 Linux、macOS、Windows、BSD 等。
+JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类操作系统上运行，包括且不限于 Linux、macOS、Windows 等。
 
 JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本直接解压使用，也可以用源代码手动编译。
 
@@ -14,17 +14,14 @@ JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本
 
 你可以在 [GitHub](https://github.com/juicedata/juicefs/releases) 找到最新版客户端下载地址，每个版本的下载列表中都提供了面向不同 CPU 架构和操作系统的预编译版本，请注意识别选择，例如：
 
-| 文件名                               | 说明                            |
-|--------------------------------------|---------------------------------|
-| `juicefs-x.x.x-darwin-amd64.tar.gz`  | 面向 Intel 芯片的 macOS 系统    |
-| `juicefs-x.x.x-linux-amd64.tar.gz`   | 面向 x86 架构 Linux 发行版      |
-| `juicefs-x.x.x-linux-arm64.tar.gz`   | 面向 ARM 架构的 Linux 发行版    |
-| `juicefs-x.x.x-windows-amd64.tar.gz` | 面向 x86 架构的 Windows 系统    |
+| 文件名                               | 说明                                                                     |
+|--------------------------------------|--------------------------------------------------------------------------|
+| `juicefs-x.x.x-darwin-amd64.tar.gz`  | 面向 Intel 芯片的 macOS 系统                                             |
+| `juicefs-x.x.x-darwin-arm64.tar.gz`  | 面向 M1 系列芯片的 macOS 系统                                            |
+| `juicefs-x.x.x-linux-amd64.tar.gz`   | 面向 x86 架构 Linux 发行版                                               |
+| `juicefs-x.x.x-linux-arm64.tar.gz`   | 面向 ARM 架构的 Linux 发行版                                             |
+| `juicefs-x.x.x-windows-amd64.tar.gz` | 面向 x86 架构的 Windows 系统                                             |
 | `juicefs-hadoop-x.x.x-amd64.jar`     | 面向 x86 架构的 Hadoop Java SDK（同时支持 Linux、macOS 及 Windows 系统） |
-
-:::tip 提示
-对于 M1 系列芯片的 macOS 系统，可以使用 `darwin-amd64` 版本客户端依赖 [Rosetta 2](https://support.apple.com/zh-cn/HT211861) 使用，也可以参考 [手动编译客户端](#手动编译客户端) 编译原生版本。
-:::
 
 ### Linux 发行版
 
