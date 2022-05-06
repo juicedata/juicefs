@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	inodeBatch   = 100
-	chunkIDBatch = 1000
+	inodeBatch    = 100
+	chunkIDBatch  = 1000
+	minUpdateTime = time.Millisecond * 10
 )
 
 type engine interface {

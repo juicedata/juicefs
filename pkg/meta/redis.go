@@ -1132,14 +1132,21 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return syscall.EEXIST
 		}
 
+		var updateParent bool
 		now := time.Now()
-		if _type == TypeDirectory {
-			pattr.Nlink++
+		if parent != TrashInode {
+			if _type == TypeDirectory {
+				pattr.Nlink++
+				updateParent = true
+			}
+			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+				pattr.Mtime = now.Unix()
+				pattr.Mtimensec = uint32(now.Nanosecond())
+				pattr.Ctime = now.Unix()
+				pattr.Ctimensec = uint32(now.Nanosecond())
+				updateParent = true
+			}
 		}
-		pattr.Mtime = now.Unix()
-		pattr.Mtimensec = uint32(now.Nanosecond())
-		pattr.Ctime = now.Unix()
-		pattr.Ctimensec = uint32(now.Nanosecond())
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
 		attr.Mtime = now.Unix()
@@ -1155,7 +1162,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(_type, ino))
-			if parent != TrashInode {
+			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
@@ -1215,11 +1222,15 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		var updateParent bool
 		now := time.Now()
-		pattr.Mtime = now.Unix()
-		pattr.Mtimensec = uint32(now.Nanosecond())
-		pattr.Ctime = now.Unix()
-		pattr.Ctimensec = uint32(now.Nanosecond())
+		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+			pattr.Mtime = now.Unix()
+			pattr.Mtimensec = uint32(now.Nanosecond())
+			pattr.Ctime = now.Unix()
+			pattr.Ctimensec = uint32(now.Nanosecond())
+			updateParent = true
+		}
 		attr = Attr{}
 		opened = false
 		if rs[1] != nil {
@@ -1243,7 +1254,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, m.entryKey(parent), name)
-			if !isTrash(parent) {
+			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			if attr.Nlink > 0 {
@@ -1456,6 +1467,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
 
+		var supdate, dupdate bool
 		now := time.Now()
 		tattr = Attr{}
 		opened = false
@@ -1472,6 +1484,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				if dtyp == TypeDirectory && parentSrc != parentDst {
 					dattr.Nlink--
 					sattr.Nlink++
+					supdate, dupdate = true, true
 				}
 			} else {
 				if dtyp == TypeDirectory {
@@ -1483,6 +1496,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						return syscall.ENOTEMPTY
 					}
 					dattr.Nlink--
+					dupdate = true
 					if trash > 0 {
 						tattr.Parent = trash
 					}
@@ -1511,21 +1525,28 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return syscall.EACCES
 		}
 
-		sattr.Mtime = now.Unix()
-		sattr.Mtimensec = uint32(now.Nanosecond())
-		sattr.Ctime = now.Unix()
-		sattr.Ctimensec = uint32(now.Nanosecond())
-		dattr.Mtime = now.Unix()
-		dattr.Mtimensec = uint32(now.Nanosecond())
-		dattr.Ctime = now.Unix()
-		dattr.Ctimensec = uint32(now.Nanosecond())
-		iattr.Parent = parentDst
-		iattr.Ctime = now.Unix()
-		iattr.Ctimensec = uint32(now.Nanosecond())
 		if typ == TypeDirectory && parentSrc != parentDst {
 			sattr.Nlink--
 			dattr.Nlink++
+			supdate, dupdate = true, true
 		}
+		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
+			sattr.Mtime = now.Unix()
+			sattr.Mtimensec = uint32(now.Nanosecond())
+			sattr.Ctime = now.Unix()
+			sattr.Ctimensec = uint32(now.Nanosecond())
+			supdate = true
+		}
+		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= minUpdateTime {
+			dattr.Mtime = now.Unix()
+			dattr.Mtimensec = uint32(now.Nanosecond())
+			dattr.Ctime = now.Unix()
+			dattr.Ctimensec = uint32(now.Nanosecond())
+			dupdate = true
+		}
+		iattr.Parent = parentDst
+		iattr.Ctime = now.Unix()
+		iattr.Ctimensec = uint32(now.Nanosecond())
 		if inode != nil {
 			*inode = ino
 		}
@@ -1569,12 +1590,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					}
 				}
 			}
-			if parentDst != parentSrc && !isTrash(parentSrc) {
+			if parentDst != parentSrc && !isTrash(parentSrc) && supdate {
 				pipe.Set(ctx, m.inodeKey(parentSrc), m.marshal(&sattr), 0)
 			}
 			pipe.Set(ctx, m.inodeKey(ino), m.marshal(&iattr), 0)
 			pipe.HSet(ctx, m.entryKey(parentDst), nameDst, buf)
-			pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
+			if dupdate {
+				pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
+			}
 			return nil
 		})
 		return err
@@ -1602,11 +1625,15 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		var updateParent bool
 		now := time.Now()
-		pattr.Mtime = now.Unix()
-		pattr.Mtimensec = uint32(now.Nanosecond())
-		pattr.Ctime = now.Unix()
-		pattr.Ctimensec = uint32(now.Nanosecond())
+		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+			pattr.Mtime = now.Unix()
+			pattr.Mtimensec = uint32(now.Nanosecond())
+			pattr.Ctime = now.Unix()
+			pattr.Ctimensec = uint32(now.Nanosecond())
+			updateParent = true
+		}
 		m.parseAttr([]byte(rs[1].(string)), &iattr)
 		if iattr.Typ == TypeDirectory {
 			return syscall.EPERM
@@ -1626,7 +1653,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.entryKey(parent), name, m.packEntry(iattr.Typ, inode))
-			pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
+			if updateParent {
+				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
+			}
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&iattr), 0)
 			return nil
 		})

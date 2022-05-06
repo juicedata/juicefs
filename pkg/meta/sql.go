@@ -1048,12 +1048,19 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.EEXIST
 		}
 
+		var updateParent bool
 		now := time.Now().UnixNano() / 1e3
-		if _type == TypeDirectory {
-			pn.Nlink++
+		if parent != TrashInode {
+			if _type == TypeDirectory {
+				pn.Nlink++
+				updateParent = true
+			}
+			if updateParent || time.Duration(now-pn.Mtime)*1e3 >= minUpdateTime {
+				pn.Mtime = now
+				pn.Ctime = now
+				updateParent = true
+			}
 		}
-		pn.Mtime = now
-		pn.Ctime = now
 		n.Atime = now
 		n.Mtime = now
 		n.Ctime = now
@@ -1067,7 +1074,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: _type}, &n); err != nil {
 			return err
 		}
-		if parent != TrashInode {
+		if updateParent {
 			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
 				return err
 			}
@@ -1152,13 +1159,17 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 		defer func() { m.of.InvalidateChunk(e.Inode, 0xFFFFFFFE) }()
 
-		pn.Mtime = now
-		pn.Ctime = now
+		var updateParent bool
+		if !isTrash(parent) && time.Duration(now-pn.Mtime)*1e3 >= minUpdateTime {
+			pn.Mtime = now
+			pn.Ctime = now
+			updateParent = true
+		}
 
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
-		if !isTrash(parent) {
+		if updateParent {
 			if _, err = s.Cols("mtime", "ctime").Update(&pn, &node{Inode: pn.Inode}); err != nil {
 				return err
 			}
@@ -1389,6 +1400,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				de.Name = e.Name
 			}
 		}
+		var supdate, dupdate bool
 		now := time.Now().UnixNano() / 1e3
 		opened = false
 		dn = node{Inode: de.Inode}
@@ -1411,6 +1423,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				if de.Type == TypeDirectory && parentSrc != parentDst {
 					dpn.Nlink--
 					spn.Nlink++
+					supdate, dupdate = true, true
 				}
 			} else {
 				if de.Type == TypeDirectory {
@@ -1422,6 +1435,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return syscall.ENOTEMPTY
 					}
 					dpn.Nlink--
+					dupdate = true
 					if trash > 0 {
 						dn.Parent = trash
 					}
@@ -1450,16 +1464,23 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return syscall.EACCES
 		}
 
-		spn.Mtime = now
-		spn.Ctime = now
-		dpn.Mtime = now
-		dpn.Ctime = now
-		sn.Parent = parentDst
-		sn.Ctime = now
 		if se.Type == TypeDirectory && parentSrc != parentDst {
 			spn.Nlink--
 			dpn.Nlink++
+			supdate, dupdate = true, true
 		}
+		if supdate || time.Duration(now-spn.Mtime)*1e3 >= minUpdateTime {
+			spn.Mtime = now
+			spn.Ctime = now
+			supdate = true
+		}
+		if dupdate || time.Duration(now-dpn.Mtime)*1e3 >= minUpdateTime {
+			dpn.Mtime = now
+			dpn.Ctime = now
+			dupdate = true
+		}
+		sn.Parent = parentDst
+		sn.Ctime = now
 		if inode != nil {
 			*inode = sn.Inode
 		}
@@ -1535,7 +1556,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				return err
 			}
 		}
-		if parentDst != parentSrc && !isTrash(parentSrc) {
+		if parentDst != parentSrc && !isTrash(parentSrc) && supdate {
 			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&spn, &node{Inode: parentSrc}); err != nil {
 				return err
 			}
@@ -1543,8 +1564,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if _, err := s.Cols("ctime", "parent").Update(&sn, &node{Inode: sn.Inode}); err != nil {
 			return err
 		}
-		if _, err := s.Cols("nlink", "mtime", "ctime").Update(&dpn, &node{Inode: parentDst}); err != nil {
-			return err
+		if dupdate {
+			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&dpn, &node{Inode: parentDst}); err != nil {
+				return err
+			}
 		}
 		return err
 	})
@@ -1591,17 +1614,23 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return syscall.EPERM
 		}
 
+		var updateParent bool
 		now := time.Now().UnixNano() / 1e3
-		pn.Mtime = now
-		pn.Ctime = now
+		if time.Duration(now-pn.Mtime)*1e3 >= minUpdateTime {
+			pn.Mtime = now
+			pn.Ctime = now
+			updateParent = true
+		}
 		n.Nlink++
 		n.Ctime = now
 
 		if err = mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: inode, Type: n.Type}); err != nil {
 			return err
 		}
-		if _, err := s.Cols("mtime", "ctime").Update(&pn, &node{Inode: parent}); err != nil {
-			return err
+		if updateParent {
+			if _, err := s.Cols("mtime", "ctime").Update(&pn, &node{Inode: parent}); err != nil {
+				return err
+			}
 		}
 		if _, err := s.Cols("nlink", "ctime").Update(&n, node{Inode: inode}); err != nil {
 			return err
