@@ -42,7 +42,8 @@ jobs:
       - name: Fio Benchmark 
         run: |
           default_size=1G
-          warning_value=90
+          disk_warning_value=90
+          decrease_ratio=0.8
           fio_jobs=(
             "big-file-sequential-read:      --rw=read --refill_buffers --bs=256k --size=${default_size}" \
             "big-file-sequential-write:     --rw=write --refill_buffers --bs=256k --size=${default_size}" \
@@ -85,25 +86,33 @@ jobs:
             "small-file-multi-write-8:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=8" \
             "small-file-multi-write-16:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=16" \
           )
+          csv_file=/var/lib/mysql-files/result.csv
+          test -f $csv_file  && rm $csv_file -f
           urls=("juicefs")
           urls+=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}' | head -${{ steps.vars.outputs.BACKWARD_VERSIONS }}))          
           for url in "${urls[@]}"; do
-            csv_file=/var/lib/mysql-files/result.csv
-            test -f $csv_file  && rm $csv_file -f
             if [[ $url == http* ]]; then  
-              rm juicefs 
               echo download url is: $url
               wget -q $url
-              tar -zxf $(basename $url)
+              bin_name=$(echo $(basename $url) | sed 's/.tar.gz//g')
+              mkdir jfs || true
+              tar -zxf $(basename $url) -C jfs
+              mv jfs/juicefs $bin_name
               rm $(basename $url)
+              rm jfs -rf
             fi
-            juicefs_version=$(./juicefs -V|cut -b 17-)
-            echo juicefs version: $(./juicefs -V)
-            for job in "${fio_jobs[@]}"
-            do
-              echo job is:, $job
+          done
+
+          fail=false
+          for job in "${fio_jobs[@]}"; do
+            echo job is:: $job
+            bw_list=()
+            for url in "${urls[@]}"; do
+              echo url is: $url
+              bin_name=$(echo $(basename $url) | sed 's/.tar.gz//g') 
+              juicefs_version=$(./$bin_name -V|cut -b 17-)
+              echo juicefs version: $(./$bin_name -V)
               if [ -n "$job" ]; then
-                set -x
                 name=$(echo $job | awk -F: '{print $1}' | xargs)
                 fio_arg=$(echo $job | awk -F: '{print $2}' | xargs)
                 mount_arg=$(echo $job | awk -F: '{print $3}' | xargs)
@@ -112,39 +121,75 @@ jobs:
                 rm /var/jfsCache/ -rf
                 while true; do
                   used=$(df -h /mnt/minio/data1  | awk 'NR>1 {gsub(/%/,""); print $5}') 
-                  if [ $used -gt $warning_value ]; then
+                  if [ $used -gt $disk_warning_value ]; then
                     printf "disk used %s%%, sleep 10s\n" "$used"
                     sleep 10s
                   else
                     break
                   fi
                 done
-                ./juicefs format --trash-days 0 --storage minio --bucket  $minio_url --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
-                ./juicefs mount -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $mount_arg &
+                rev=$(./$bin_name -V | awk -F- '{print $1}' | awk -F ' ' '{print $3}')
+                if [[ "$rev" < "1.0.0" ]]; then
+                  trash_day=""
+                else
+                  trash_day="--trash-days 0"
+                fi
+                ./$bin_name format $trash_day --storage minio --bucket  $minio_url --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
+                ./$bin_name mount -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $mount_arg &
                 if [[ "$name" =~ ^big-file-rand-read.* ]]; then
                   block_size=$(echo $name | awk -F- '{print $NF}' | xargs)
                   echo block_size is $block_size
                   fio --name=big-file-rand-read-preload --directory=${{ steps.vars.outputs.MOUNT_POINT }} --rw=randread --refill_buffers --size=${default_size} --filename=randread.bin --bs=$block_size --pre_read=1
                   sudo sync && echo 3 > /proc/sys/vm/drop_caches
                 fi
+
+                echo "start fio"
                 fio --name=$name --directory=${{ steps.vars.outputs.MOUNT_POINT }} $fio_arg > result.log
-                bw=$(tail -1 result.log | awk '{print $2}' | awk -F '=' '{print $2}' | cut -b 1,-3)
-                echo $bw, $(date +"%Y-%m-%d %H:%M:%S"), ${{github.sha}}, https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}, $juicefs_version, $name, ${{ github.ref_name }}, $default_size, redis, minio | tee -a $csv_file
-                
-                ./juicefs umount -f ${{ steps.vars.outputs.MOUNT_POINT }}
+                echo "finish fio"
+
+                bw_str=$(tail -1 result.log | awk '{print $2}' | awk -F '=' '{print $2}' )
+                bw=$(echo $bw_str | sed 's/.iB.*//g') 
+                if [[ $bw_str == *KiB* ]]; then
+                  bw=$(echo "scale=2; $bw/1024.0" | bc -l)
+                elif [[ $bw_str == *GiB* ]]; then
+                  bw=$(echo "scale=2; $bw*1024.0" | bc -l)
+                fi
+                bw_list+=($bw)
+
+                echo $name, $bw, $juicefs_version, $default_size, ${{ github.ref_name }}, $(date +"%Y-%m-%d %H:%M:%S"), ${{github.sha}}, https://github.com/${{github.repository}}/actions/runs/${{github.run_id}},  redis, minio | tee -a $csv_file
+              
+                ./$bin_name umount -f ${{ steps.vars.outputs.MOUNT_POINT }}
                 UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
                 if [ -n "$UUID" ];then
                   sudo ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
                 fi
                 mc rb  myminio/$name --force --dangerous || printf "Warining; remove bucket failed: %s, exit code: %s" "myminio/$name" "$?"
-                set +x
               fi
             done
-            mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use  test_result; LOAD DATA INFILE '/var/lib/mysql-files/result.csv' INTO TABLE fio_test FIELDS TERMINATED BY ',' (bandwidth, created_date, github_revision, workflow_url, juicefs_version, name, ref_name, size, meta_engine, storage); " 
+            
+            new=${bw_list[0]}
+            old=$(expr ${bw_list[1]}*$decrease_ratio | bc)
+            echo new is $new, old is $old
+            if (( $(echo "$new < $old" |bc -l) )); then
+              printf "Fatal: bandwidth decreased too much: new is: %s, old is: %s\n" ${bw_list[0]} ${bw_list[1]} 
+              fail=true
+            fi
           done
-          
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use  test_result; LOAD DATA INFILE '/var/lib/mysql-files/result.csv' INTO TABLE fio_test FIELDS TERMINATED BY ',' (name, bandwidth,  juicefs_version, size, ref_name, created_date, github_revision, workflow_url, meta_engine, storage); " 
+          if $fail; then
+            echo "Fatal: fio bandwidth decreased by 20% compared with last version, please check the result file"
+            exit 1
+          fi
+
+      - name: Save test reuslt
+        if: ${{always()}}
+        uses: actions/upload-artifact@v2
+        with: 
+          name: result.csv
+          path: /var/lib/mysql-files/result.csv
 
       - name: Clean After
+        if: ${{always()}}
         run: |
           if [ -d ${{ steps.vars.outputs.MOUNT_POINT }} ]; then
             ./juicefs umount ${{ steps.vars.outputs.MOUNT_POINT }} || true
