@@ -172,3 +172,20 @@ $ go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.p
 ```
 
 关于 pprof 的更多信息，请查看[官方文档](https://github.com/google/pprof/blob/master/doc/README.md)。
+
+### 使用 Pyroscope 进行性能剖析
+
+[pyroscope](https://github.com/pyroscope-io/pyroscope) 是一个开源的持续性能剖析平台。它能够帮你： 
++ 找出源代码中的性能问题和瓶颈 
++ 解决 CPU 利用率高的问题 
++ 理解应用程序的调用树（call tree） 
++ 追踪随一段时间内变化的情况
+
+JuiceFS 支持使用 `--pyroscope` 参数传入 pyroscope 服务端地址，指标以每隔 10s 的频率推送到服务端。
+如果服务端开启了权限校验，校验信息 API Key 可以通过环境变量 `PYROSCOPE_AUTH_TOKEN` 传入
+
+```bash
+$ export PYROSCOPE_AUTH_TOKEN=xxxxxxxxxxxxxxxx
+$ juicefs mount --pyroscope http://localhost:4040 redis://localhost /mnt/jfs
+$ juicefs dump --pyroscope http://localhost:4040 redis://localhost dump.json
+```

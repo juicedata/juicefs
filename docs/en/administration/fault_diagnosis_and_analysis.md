@@ -172,3 +172,21 @@ $ go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.p
 ```
 
 For more information about pprof, please see the [official documentation](https://github.com/google/pprof/blob/master/doc/README.md).
+
+### Profiling with the Pyroscope
+
+[pyroscope](https://github.com/pyroscope-io/pyroscope) Pyroscope is an open source continuous profiling platform. It will help you:
+
++ Find performance issues and bottlenecks in your code
++ Resolve issues with high CPU utilization
++ Understand the call tree of your application
++ Track changes over time
+
+JuiceFS supports using the `--pyroscope` parameter to pass in the pyroscope server address, and metrics are pushed to the server every 10s.
+If permission verification is enabled on the server, the verification information API Key can be passed in through the environment variable `PYROSCOPE_AUTH_TOKEN`
+
+```bash
+$ export PYROSCOPE_AUTH_TOKEN=xxxxxxxxxxxxxxxx
+$ juicefs mount --pyroscope http://localhost:4040 redis://localhost /mnt/jfs
+$ juicefs dump --pyroscope http://localhost:4040 redis://localhost dump.json
+```
