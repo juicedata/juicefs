@@ -53,11 +53,7 @@ func (tx *prefixTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	}
 	return m
 }
-func (tx *prefixTxn) scan(prefix []byte, handler func(key, value []byte)) {
-	tx.kvTxn.scan(tx.realKey(prefix), func(key, value []byte) {
-		handler(tx.origKey(key), value)
-	})
-}
+
 func (tx *prefixTxn) scanKeys(prefix []byte) [][]byte {
 	keys := tx.kvTxn.scanKeys(tx.realKey(prefix))
 	for i, k := range keys {
@@ -111,6 +107,15 @@ type prefixClient struct {
 func (c *prefixClient) txn(f func(kvTxn) error) error {
 	return c.tkvClient.txn(func(tx kvTxn) error {
 		return f(&prefixTxn{tx, c.prefix})
+	})
+}
+
+func (c *prefixClient) scan(prefix []byte, handler func(key, value []byte)) error {
+	k := make([]byte, len(c.prefix)+len(prefix))
+	copy(k, c.prefix)
+	copy(k[len(c.prefix):], prefix)
+	return c.tkvClient.scan(k, func(key, value []byte) {
+		handler(key[len(c.prefix):], value)
 	})
 }
 
