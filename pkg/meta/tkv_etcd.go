@@ -127,6 +127,20 @@ func (tx *etcdTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	return ret
 }
 
+func (tx *etcdTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
+	resp, err := tx.kv.Get(tx.ctx,
+		string(prefix),
+		etcd.WithPrefix(),
+		etcd.WithSerializable())
+	if err != nil {
+		panic(fmt.Errorf("get prefix %v: %s", string(prefix), err))
+	}
+	for _, kv := range resp.Kvs {
+		tx.observed[string(kv.Key)] = kv.ModRevision
+		handler(kv.Key, kv.Value)
+	}
+}
+
 func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
 	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
@@ -275,40 +289,6 @@ func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
 }
 
 var conflicted = errors.New("conflicted transaction")
-
-func (c *etcdClient) scan(prefix []byte, handler func(key []byte, value []byte)) error {
-	var start = prefix
-	var end = string(nextKey(prefix))
-	resp, err := c.client.Get(context.Background(), "anything")
-	if err != nil {
-		return err
-	}
-	currentRev := resp.Header.Revision
-	var following bool
-	for {
-		resp, err := c.client.Get(context.Background(),
-			string(start),
-			etcd.WithRange(end),
-			etcd.WithLimit(1024),
-			etcd.WithMaxModRev(currentRev),
-			etcd.WithSerializable())
-		if err != nil {
-			return fmt.Errorf("get start %v: %s", string(start), err)
-		}
-		if following && len(resp.Kvs) > 0 {
-			resp.Kvs = resp.Kvs[1:]
-		}
-		if len(resp.Kvs) == 0 {
-			break
-		}
-		for _, kv := range resp.Kvs {
-			handler(kv.Key, kv.Value)
-		}
-		start = resp.Kvs[len(resp.Kvs)-1].Key
-		following = true
-	}
-	return nil
-}
 
 func (c *etcdClient) reset(prefix []byte) error {
 	_, err := c.kv.Delete(context.Background(), string(prefix), etcd.WithPrefix())

@@ -43,6 +43,7 @@ type kvTxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
 	scanRange(begin, end []byte) map[string][]byte
+	scan(prefix []byte, handler func(key, value []byte))
 	scanKeys(prefix []byte) [][]byte
 	scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
@@ -55,7 +56,6 @@ type kvTxn interface {
 type tkvClient interface {
 	name() string
 	txn(f func(kvTxn) error) error
-	scan(prefix []byte, handler func(key, value []byte)) error
 	reset(prefix []byte) error
 	close() error
 	shouldRetry(err error) bool
@@ -2309,26 +2309,26 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			defer func() { m.snap = nil }()
 			m.snap = &memKV{items: btree.New(2), temp: &kvItem{}}
 			bar := progress.AddCountBar("Snapshot keys", 0)
-			bUsed, _ := m.get(m.counterKey(usedSpace))
-			bInodes, _ := m.get(m.counterKey(totalInodes))
-			used := parseCounter(bUsed)
-			inodeTotal := parseCounter(bInodes)
-			var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
-			if inodeTotal > 0 {
-				guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
-			}
-			bar.SetCurrent(0) // Reset
-			bar.SetTotal(guessKeyTotal)
-			threshold := 0.1
-			err := m.client.scan(nil, func(key, value []byte) {
-				m.snap.set(string(key), value)
-				if bar.Current() > int64(math.Ceil(float64(guessKeyTotal)*(1-threshold))) {
-					guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
-					bar.SetTotal(guessKeyTotal)
+			if err = m.txn(func(tx kvTxn) error {
+				used := parseCounter(tx.get(m.counterKey(usedSpace)))
+				inodeTotal := parseCounter(tx.get(m.counterKey(totalInodes)))
+				var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
+				if inodeTotal > 0 {
+					guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
 				}
-				bar.Increment()
-			})
-			if err != nil {
+				bar.SetCurrent(0) // Reset
+				bar.SetTotal(guessKeyTotal)
+				threshold := 0.1
+				tx.scan(nil, func(key, value []byte) {
+					m.snap.set(string(key), value)
+					if bar.Current() > int64(math.Ceil(float64(guessKeyTotal)*(1-threshold))) {
+						guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
+						bar.SetTotal(guessKeyTotal)
+					}
+					bar.Increment()
+				})
+				return nil
+			}); err != nil {
 				return err
 			}
 			bar.Done()
