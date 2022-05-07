@@ -69,12 +69,15 @@ jobs:
           pip install Pillow
 
 
-      - name: AI Test
+
+      - name: Prepare Data
+        if: steps.Cache-Images.outputs.cache-hit != 'true'
         run: |
           stat /jfs/
           cd /jfs/
-          git clone https://github.com/potterhsu/SVHNClassifier
+          git clone https://github.com/sanwan/SVHNClassifier
           cd SVHNClassifier
+          git checkout 783f8ac
           mkdir data
           cd data
           wget -O train.tar.gz -nv http://ufldl.stanford.edu/housenumbers/train.tar.gz
@@ -94,16 +97,13 @@ jobs:
           du -sh
           cd ..
           time python convert_to_tfrecords.py --data_dir ./data >img.log
+          echo "55555"
+          time python train.py --data_dir ./data --train_logdir ./logs/train
           sudo chmod 777 /var/jfsCache/
           cd /var/jfsCache/
-          du -sh
-
-
-
-      - name: Fstests
-        run: |
-          echo "222"
-
+          sudo du -sh
+          df -lh
+          echo "66666"
 
 
       - name: Send Slack Notification
