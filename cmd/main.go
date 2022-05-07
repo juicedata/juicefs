@@ -18,6 +18,12 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"strconv"
+	"strings"
+
 	"github.com/erikdubbelboer/gspt"
 	"github.com/google/gops/agent"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -25,11 +31,6 @@ import (
 	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
-	"strconv"
-	"strings"
 )
 
 var logger = utils.GetLogger("juicefs")
