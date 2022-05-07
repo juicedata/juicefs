@@ -66,6 +66,7 @@ jobs:
           conda install tensorflow=1.12.0
           sudo apt-get install libhdf5-dev
           pip install h5py
+          pip install Pillow
 
 
       - name: AI Test
@@ -89,8 +90,12 @@ jobs:
           rm train.tar.gz
           rm test.tar.gz
           rm extra.tar.gz
+          ls -lah
+          du -sh
           cd ..
           time python convert_to_tfrecords.py --data_dir ./data >img.log
+          sudo chmod 777 /var/jfsCache/
+          cd /var/jfsCache/
 
 
 
