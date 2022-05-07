@@ -98,22 +98,6 @@ func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	return ret
 }
 
-func (tx *memTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
-	tx.store.Lock()
-	defer tx.store.Unlock()
-	begin := string(prefix)
-	end := string(nextKey(prefix))
-	tx.store.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
-		it := i.(*kvItem)
-		if it.key >= end {
-			return false
-		}
-		tx.observed[it.key] = it.ver
-		handler([]byte(it.key), it.value)
-		return true
-	})
-}
-
 func nextKey(key []byte) []byte {
 	if len(key) == 0 {
 		return nil
@@ -286,6 +270,22 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 	return nil
 }
 
+func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) error {
+	c.Lock()
+	defer c.Unlock()
+	begin := string(prefix)
+	end := string(nextKey(prefix))
+	c.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
+		it := i.(*kvItem)
+		if it.key >= end {
+			return false
+		}
+		handler([]byte(it.key), it.value)
+		return true
+	})
+	return nil
+}
+
 func (c *memKV) reset(prefix []byte) error {
 	if len(prefix) == 0 {
 		c.Lock()
@@ -295,10 +295,9 @@ func (c *memKV) reset(prefix []byte) error {
 		return nil
 	}
 	return c.txn(func(kt kvTxn) error {
-		kt.scan(prefix, func(key, value []byte) {
+		return c.scan(prefix, func(key, value []byte) {
 			kt.dels(key)
 		})
-		return nil
 	})
 }
 
