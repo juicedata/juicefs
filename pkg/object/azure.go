@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"io"
-	"log"
 	"net"
 	"net/url"
 	"os"
@@ -43,7 +42,7 @@ func (b *wasb) String() string {
 
 func (b *wasb) Create() error {
 	_, err := b.container.Create(ctx, nil)
-	if strings.Contains(err.Error(), string(azblob.StorageErrorCodeContainerAlreadyExists)) {
+	if err != nil && strings.Contains(err.Error(), string(azblob.StorageErrorCodeContainerAlreadyExists)) {
 		return nil
 	}
 	return err
@@ -120,8 +119,6 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]Object, error) {
 	}
 	return objs, nil
 }
-
-// TODO: support multipart upload
 
 func autoWasbEndpoint(containerName, accountName, scheme string, credential *azblob.SharedKeyCredential) (string, error) {
 	baseURLs := []string{"blob.core.windows.net", "blob.core.chinacloudapi.cn"}
@@ -204,7 +201,7 @@ func newWabs(endpoint, accountName, accountKey string) (ObjectStorage, error) {
 
 	client, err := azblob.NewContainerClientWithSharedKey(fmt.Sprintf("%s://%s.%s/%s", scheme, accountName, domain, containerName), credential, nil)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		return nil, err
 	}
 
 	return &wasb{container: &client, cName: containerName}, nil
