@@ -104,6 +104,7 @@ jobs:
           done
 
           fail=false
+          mkdir fio || true
           for job in "${fio_jobs[@]}"; do
             echo job is:: $job
             bw_list=()
@@ -144,10 +145,10 @@ jobs:
                 fi
 
                 echo "start fio"
-                fio --name=$name --directory=${{ steps.vars.outputs.MOUNT_POINT }} $fio_arg > result.log
+                fio --name=$name --directory=${{ steps.vars.outputs.MOUNT_POINT }} $fio_arg > fio/$name-$juicefs_version.log
                 echo "finish fio"
 
-                bw_str=$(tail -1 result.log | awk '{print $2}' | awk -F '=' '{print $2}' )
+                bw_str=$(tail -1 fio/$name-$juicefs_version.log | awk '{print $2}' | awk -F '=' '{print $2}' )
                 bw=$(echo $bw_str | sed 's/.iB.*//g') 
                 if [[ $bw_str == *KiB* ]]; then
                   bw=$(echo "scale=2; $bw/1024.0" | bc -l)
@@ -187,6 +188,13 @@ jobs:
         with: 
           name: result.csv
           path: /var/lib/mysql-files/result.csv
+      
+      - name: Save fio logs
+        if: ${{always()}}
+        uses: actions/upload-artifact@v2
+        with: 
+          name: fio-logs
+          path: fio/
 
       - name: Clean After
         if: ${{always()}}
