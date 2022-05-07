@@ -131,10 +131,10 @@ jobs:
                   fi
                 done
 
-                ./$bin_name --help | grep "trash-days" && trash_day="--trash-days 0"
-                ./$bin_name --help | grep "pyroscope" && pyroscope="--pyroscope ${{steps.vars.outputs.PYROSCOPE_URL}}"
+                ./$bin_name --help | grep "trash-days" && trash_day="--trash-days 0" || trash_day=""
+                ./$bin_name --help | grep "pyroscope" && pyroscope="--pyroscope ${{steps.vars.outputs.PYROSCOPE_URL}}" || pyroscope=""
                 ./$bin_name format $trash_day --storage minio --bucket  $minio_url --access-key minioadmin --secret-key ${{ secrets.MINIO_SECRET_KEY }}  ${{ steps.vars.outputs.META_URL }} fio-benchmark
-                ./$bin_name mount -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $pyroscope  $mount_arg &
+                ./$bin_name mount -d ${{ steps.vars.outputs.META_URL }} ${{ steps.vars.outputs.MOUNT_POINT }} --no-usage-report $pyroscope  $mount_arg
                 if [[ "$name" =~ ^big-file-rand-read.* ]]; then
                   block_size=$(echo $name | awk -F- '{print $NF}' | xargs)
                   echo block_size is $block_size
