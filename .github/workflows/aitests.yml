@@ -56,6 +56,9 @@ jobs:
         uses: s-weigand/setup-conda@v1
         with:
           python-version: 2.7
+
+
+      - name: Test Conda
         run: |
           conda --version
           python --version
