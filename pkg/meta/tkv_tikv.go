@@ -31,6 +31,7 @@ import (
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
+	"github.com/tikv/client-go/v2/txnkv/txnutil"
 )
 
 func init() {
@@ -136,20 +137,6 @@ func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 	return tx.scanRange0(begin, end, -1, nil)
 }
 
-func (tx *tikvTxn) scan(prefix []byte, handler func(key, value []byte)) {
-	it, err := tx.Iter(prefix, nextKey(prefix))
-	if err != nil {
-		panic(err)
-	}
-	defer it.Close()
-	for it.Valid() {
-		handler(it.Key(), it.Value())
-		if err = it.Next(); err != nil {
-			panic(err)
-		}
-	}
-}
-
 func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 	it, err := tx.Iter(prefix, nextKey(prefix))
 	if err != nil {
@@ -245,6 +232,29 @@ func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 		err = tx.Commit(context.Background())
 	}
 	return err
+}
+
+func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte)) error {
+	ts, err := c.client.CurrentTimestamp("global")
+	if err != nil {
+		return err
+	}
+	snap := c.client.GetSnapshot(ts)
+	snap.SetScanBatchSize(10240)
+	snap.SetNotFillCache(true)
+	snap.SetPriority(txnutil.PriorityLow)
+	it, err := snap.Iter(prefix, nextKey(prefix))
+	if err != nil {
+		return err
+	}
+	defer it.Close()
+	for it.Valid() {
+		handler(it.Key(), it.Value())
+		if err = it.Next(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *tikvClient) reset(prefix []byte) error {
