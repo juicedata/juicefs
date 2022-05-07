@@ -96,6 +96,7 @@ jobs:
           time python convert_to_tfrecords.py --data_dir ./data >img.log
           sudo chmod 777 /var/jfsCache/
           cd /var/jfsCache/
+          du -sh
 
 
 
