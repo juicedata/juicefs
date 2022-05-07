@@ -76,18 +76,21 @@ jobs:
           cd SVHNClassifier
           mkdir data
           cd data
-          wget -O train.tar.gz http://ufldl.stanford.edu/housenumbers/train.tar.gz
-          wget -O test.tar.gz http://ufldl.stanford.edu/housenumbers/test.tar.gz
-          wget -O extra.tar.gz http://ufldl.stanford.edu/housenumbers/extra.tar.gz
+          wget -O train.tar.gz -nv http://ufldl.stanford.edu/housenumbers/train.tar.gz
+          wget -O test.tar.gz -nv http://ufldl.stanford.edu/housenumbers/test.tar.gz
+          wget -O extra.tar.gz -nv http://ufldl.stanford.edu/housenumbers/extra.tar.gz
           ls -lah
           echo "11111"
-          time tar -zxvf train.tar.gz
+          time tar -zxf train.tar.gz
           echo "22222"
-          time tar -zxvf test.tar.gz
+          time tar -zxf test.tar.gz
           echo "33333"
-          time tar -zxvf extra.tar.gz
+          time tar -zxf extra.tar.gz
+          rm train.tar.gz
+          rm test.tar.gz
+          rm extra.tar.gz
           cd ..
-          time python convert_to_tfrecords.py --data_dir ./data
+          time python convert_to_tfrecords.py --data_dir ./data >img.log
 
 
 
