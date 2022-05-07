@@ -21,12 +21,13 @@ package object
 
 import (
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"io"
 	"net"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 )
 
 type wasb struct {
