@@ -68,7 +68,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Create(); err != nil {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
 	}
-
+	if err := s.Create(); err != nil {
+		t.Fatalf("err should be nil when creating a bucket with the same name")
+	}
 	s = WithPrefix(s, "unit-test/")
 	defer s.Delete("test")
 	k := "large"

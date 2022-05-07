@@ -4,7 +4,15 @@ on:
   schedule:
     - cron:  '0 0 * * *'
   workflow_dispatch:
-
+    inputs:
+      size:
+        description: 'file size to read/write by fio'
+        required: true
+        default: '1G'
+      nrfiles:
+        description: 'number of files to read/write by fio'
+        required: true
+        default: 10000
 jobs:
   fio-benchmark:
     if: github.repository == 'juicedata/juicefs'
@@ -43,50 +51,51 @@ jobs:
       - name: Fio Benchmark 
         run: |
           export PYROSCOPE_AUTH_TOKEN="${{ secrets.PYROSCOPE_AUTH_TOKEN }}"  
-          default_size=1G
+          size=${{ github.event.inputs.size }}
+          nrfiles=${{ github.event.inputs.nrfiles }}
           disk_warning_value=90
           decrease_ratio=0.8
           fio_jobs=(
-            "big-file-sequential-read:      --rw=read --refill_buffers --bs=256k --size=${default_size}" \
-            "big-file-sequential-write:     --rw=write --refill_buffers --bs=256k --size=${default_size}" \
-            "big-file-multi-read-1:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=1" \
-            "big-file-multi-read-2:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=2" \
-            "big-file-multi-read-4:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=4" \
-            "big-file-multi-read-8:         --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=8" \
-            "big-file-multi-read-16:        --rw=read --refill_buffers --bs=256k --size=${default_size} --numjobs=16" \
-            "big-file-multi-write-1:        --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=1" \
-            "big-file-multi-write-2:        --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=2" \
-            "big-file-multi-write-4:        --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=4" \
-            "big-file-multi-write-8:        --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=8" \
-            "big-file-multi-write-16:       --rw=write --refill_buffers --bs=256k --size=${default_size} --numjobs=16" \
-            "big-file-rand-read-4k:         --rw=randread --refill_buffers --size=${default_size} --filename=randread.bin --bs=4k" \
-            "big-file-rand-read-16k:        --rw=randread --refill_buffers --size=${default_size} --filename=randread.bin --bs=16k" \
-            "big-file-rand-read-64k:        --rw=randread --refill_buffers --size=${default_size} --filename=randread.bin --bs=64k" \
-            "big-file-rand-read-256k:       --rw=randread --refill_buffers --size=${default_size} --filename=randread.bin --bs=256k" \
-            "big-file-random-write-4k:      --rw=randwrite --refill_buffers --size=${default_size} --bs=4k" \
-            "big-file-random-write-16k:     --rw=randwrite --refill_buffers --size=${default_size} --bs=16k" \
-            "big-file-random-write-64k:     --rw=randwrite --refill_buffers --size=${default_size} --bs=64k" \
-            "big-file-random-write-256k:    --rw=randwrite --refill_buffers --size=${default_size} --bs=256k" \
-            "small-file-seq-read-4k:        --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000  :--cache-size=0" \
-            "small-file-seq-read-16k:       --rw=read --file_service_type=sequential --bs=16k --filesize=16k --nrfiles=1000 :--cache-size=0" \
-            "small-file-seq-read-64k:       --rw=read --file_service_type=sequential --bs=64k --filesize=64k --nrfiles=1000 :--cache-size=0" \
-            "small-file-seq-read-128k:      --rw=read --file_service_type=sequential --bs=128k --filesize=128k --nrfiles=1000 :--cache-size=0" \
-            "small-file-seq-read-256k:      --rw=read --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=1000 :--cache-size=0" \
-            "small-file-seq-write-4k:       --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 :--writeback" \
-            "small-file-seq-write-16k:      --rw=write --file_service_type=sequential --bs=16k --filesize=16k --nrfiles=1000 :--writeback" \
-            "small-file-seq-write-64k:      --rw=write --file_service_type=sequential --bs=64k --filesize=64k --nrfiles=1000 :--writeback" \
-            "small-file-seq-write-128k:     --rw=write --file_service_type=sequential --bs=128k --filesize=128k --nrfiles=1000 :--writeback" \
-            "small-file-seq-write-256k:     --rw=write --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=1000 :--writeback" \
-            "small-file-multi-read-1:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=1" \
-            "small-file-multi-read-2:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=2" \
-            "small-file-multi-read-4:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=4" \
-            "small-file-multi-read-8:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=8" \
-            "small-file-multi-read-16:      --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=16" \
-            "small-file-multi-write-1:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=1" \
-            "small-file-multi-write-2:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=2" \
-            "small-file-multi-write-4:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=4" \
-            "small-file-multi-write-8:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=8" \
-            "small-file-multi-write-16:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=1000 --numjobs=16" \
+            "big-file-sequential-read:      --rw=read --refill_buffers --bs=256k --size=${size}" \
+            "big-file-sequential-write:     --rw=write --refill_buffers --bs=256k --size=${size}" \
+            "big-file-multi-read-1:         --rw=read --refill_buffers --bs=256k --size=${size} --numjobs=1" \
+            "big-file-multi-read-2:         --rw=read --refill_buffers --bs=256k --size=${size} --numjobs=2" \
+            "big-file-multi-read-4:         --rw=read --refill_buffers --bs=256k --size=${size} --numjobs=4" \
+            "big-file-multi-read-8:         --rw=read --refill_buffers --bs=256k --size=${size} --numjobs=8" \
+            "big-file-multi-read-16:        --rw=read --refill_buffers --bs=256k --size=${size} --numjobs=16" \
+            "big-file-multi-write-1:        --rw=write --refill_buffers --bs=256k --size=${size} --numjobs=1" \
+            "big-file-multi-write-2:        --rw=write --refill_buffers --bs=256k --size=${size} --numjobs=2" \
+            "big-file-multi-write-4:        --rw=write --refill_buffers --bs=256k --size=${size} --numjobs=4" \
+            "big-file-multi-write-8:        --rw=write --refill_buffers --bs=256k --size=${size} --numjobs=8" \
+            "big-file-multi-write-16:       --rw=write --refill_buffers --bs=256k --size=${size} --numjobs=16" \
+            "big-file-rand-read-4k:         --rw=randread --refill_buffers --size=${size} --filename=randread.bin --bs=4k" \
+            "big-file-rand-read-16k:        --rw=randread --refill_buffers --size=${size} --filename=randread.bin --bs=16k" \
+            "big-file-rand-read-64k:        --rw=randread --refill_buffers --size=${size} --filename=randread.bin --bs=64k" \
+            "big-file-rand-read-256k:       --rw=randread --refill_buffers --size=${size} --filename=randread.bin --bs=256k" \
+            "big-file-random-write-4k:      --rw=randwrite --refill_buffers --size=${size} --bs=4k" \
+            "big-file-random-write-16k:     --rw=randwrite --refill_buffers --size=${size} --bs=16k" \
+            "big-file-random-write-64k:     --rw=randwrite --refill_buffers --size=${size} --bs=64k" \
+            "big-file-random-write-256k:    --rw=randwrite --refill_buffers --size=${size} --bs=256k" \
+            "small-file-seq-read-4k:        --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles}  :--cache-size=0" \
+            "small-file-seq-read-16k:       --rw=read --file_service_type=sequential --bs=16k --filesize=16k --nrfiles=${nrfiles} :--cache-size=0" \
+            "small-file-seq-read-64k:       --rw=read --file_service_type=sequential --bs=64k --filesize=64k --nrfiles=${nrfiles} :--cache-size=0" \
+            "small-file-seq-read-128k:      --rw=read --file_service_type=sequential --bs=128k --filesize=128k --nrfiles=${nrfiles} :--cache-size=0" \
+            "small-file-seq-read-256k:      --rw=read --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=${nrfiles} :--cache-size=0" \
+            "small-file-seq-write-4k:       --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} :--writeback" \
+            "small-file-seq-write-16k:      --rw=write --file_service_type=sequential --bs=16k --filesize=16k --nrfiles=${nrfiles} :--writeback" \
+            "small-file-seq-write-64k:      --rw=write --file_service_type=sequential --bs=64k --filesize=64k --nrfiles=${nrfiles} :--writeback" \
+            "small-file-seq-write-128k:     --rw=write --file_service_type=sequential --bs=128k --filesize=128k --nrfiles=${nrfiles} :--writeback" \
+            "small-file-seq-write-256k:     --rw=write --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=${nrfiles} :--writeback" \
+            "small-file-multi-read-1:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=1" \
+            "small-file-multi-read-2:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=2" \
+            "small-file-multi-read-4:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=4" \
+            "small-file-multi-read-8:       --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=8" \
+            "small-file-multi-read-16:      --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=16" \
+            "small-file-multi-write-1:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=1" \
+            "small-file-multi-write-2:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=2" \
+            "small-file-multi-write-4:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=4" \
+            "small-file-multi-write-8:      --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=8" \
+            "small-file-multi-write-16:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=${nrfiles} --numjobs=16" \
           )
           csv_file=/var/lib/mysql-files/result.csv
           test -f $csv_file  && rm $csv_file -f
@@ -106,6 +115,7 @@ jobs:
           done
 
           fail=false
+          mkdir fio || true
           for job in "${fio_jobs[@]}"; do
             echo job is:: $job
             bw_list=()
@@ -138,15 +148,15 @@ jobs:
                 if [[ "$name" =~ ^big-file-rand-read.* ]]; then
                   block_size=$(echo $name | awk -F- '{print $NF}' | xargs)
                   echo block_size is $block_size
-                  fio --name=big-file-rand-read-preload --directory=${{ steps.vars.outputs.MOUNT_POINT }} --rw=randread --refill_buffers --size=${default_size} --filename=randread.bin --bs=$block_size --pre_read=1
+                  fio --name=big-file-rand-read-preload --directory=${{ steps.vars.outputs.MOUNT_POINT }} --rw=randread --refill_buffers --size=${size} --filename=randread.bin --bs=$block_size --pre_read=1
                   sudo sync && echo 3 > /proc/sys/vm/drop_caches
                 fi
 
                 echo "start fio"
-                fio --name=$name --directory=${{ steps.vars.outputs.MOUNT_POINT }} $fio_arg > result.log
+                fio --name=$name --directory=${{ steps.vars.outputs.MOUNT_POINT }} $fio_arg > fio/$name-$juicefs_version.log
                 echo "finish fio"
 
-                bw_str=$(tail -1 result.log | awk '{print $2}' | awk -F '=' '{print $2}' )
+                bw_str=$(tail -1 fio/$name-$juicefs_version.log | awk '{print $2}' | awk -F '=' '{print $2}' )
                 bw=$(echo $bw_str | sed 's/.iB.*//g') 
                 if [[ $bw_str == *KiB* ]]; then
                   bw=$(echo "scale=2; $bw/1024.0" | bc -l)
@@ -155,7 +165,7 @@ jobs:
                 fi
                 bw_list+=($bw)
 
-                echo $name, $bw, $juicefs_version, $default_size, ${{ github.ref_name }}, $(date +"%Y-%m-%d %H:%M:%S"), ${{github.sha}}, https://github.com/${{github.repository}}/actions/runs/${{github.run_id}},  redis, minio | tee -a $csv_file
+                echo $name, $bw, $juicefs_version, $size, $nrfiles, ${{ github.ref_name }}, $(date +"%Y-%m-%d %H:%M:%S"), ${{github.sha}}, https://github.com/${{github.repository}}/actions/runs/${{github.run_id}},  redis, minio | tee -a $csv_file
               
                 ./$bin_name umount -f ${{ steps.vars.outputs.MOUNT_POINT }}
                 UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
@@ -174,7 +184,7 @@ jobs:
               fail=true
             fi
           done
-          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use  test_result; LOAD DATA INFILE '/var/lib/mysql-files/result.csv' INTO TABLE fio_test FIELDS TERMINATED BY ',' (name, bandwidth,  juicefs_version, size, ref_name, created_date, github_revision, workflow_url, meta_engine, storage); " 
+          mysql -h 172.27.0.1 -u root -p${{secrets.MYSQL_PASSWORD}} -e "use  test_result; LOAD DATA INFILE '/var/lib/mysql-files/result.csv' INTO TABLE fio_test FIELDS TERMINATED BY ',' (name, bandwidth,  juicefs_version, size, nrfiles, ref_name, created_date, github_revision, workflow_url, meta_engine, storage); " 
           if $fail; then
             echo "Fatal: fio bandwidth decreased by 20% compared with last version, please check the result file"
             exit 1
@@ -186,6 +196,13 @@ jobs:
         with: 
           name: result.csv
           path: /var/lib/mysql-files/result.csv
+      
+      - name: Save fio logs
+        if: ${{always()}}
+        uses: actions/upload-artifact@v2
+        with: 
+          name: fio-logs
+          path: fio/
 
       - name: Clean After
         if: ${{always()}}
