@@ -43,7 +43,7 @@ jobs:
       - name: Fio Benchmark 
         run: |
           export PYROSCOPE_AUTH_TOKEN="${{ secrets.PYROSCOPE_AUTH_TOKEN }}"  
-          default_size=1G
+          default_size=10M
           disk_warning_value=90
           decrease_ratio=0.8
           fio_jobs=(
