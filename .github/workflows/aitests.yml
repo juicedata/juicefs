@@ -50,6 +50,7 @@ jobs:
       - name: Juicefs Mount
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          python --version
 
 
       - name: SetUp Conda
@@ -58,16 +59,35 @@ jobs:
           python-version: 2.7
 
 
-      - name: Test Conda
+      - name: Install Dependency
         run: |
           conda --version
           python --version
+          conda install tensorflow=1.12.0
+          sudo apt-get install libhdf5-dev
+          pip install h5py
 
 
-
-      - name: Pyxattr Test
+      - name: AI Test
         run: |
-          echo "111"
+          stat /jfs/
+          cd /jfs/
+          git clone https://github.com/potterhsu/SVHNClassifier
+          cd SVHNClassifier
+          mkdir data
+          cd data
+          wget -O train.tar.gz http://ufldl.stanford.edu/housenumbers/train.tar.gz
+          wget -O test.tar.gz http://ufldl.stanford.edu/housenumbers/test.tar.gz
+          wget -O extra.tar.gz http://ufldl.stanford.edu/housenumbers/extra.tar.gz
+          ls -lah
+          echo "11111"
+          time tar -zxvf train.tar.gz
+          echo "22222"
+          time tar -zxvf test.tar.gz
+          echo "33333"
+          time tar -zxvf extra.tar.gz
+          cd ..
+          time python convert_to_tfrecords.py --data_dir ./data
 
 
 
