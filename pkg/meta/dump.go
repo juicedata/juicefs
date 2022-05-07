@@ -186,11 +186,7 @@ func lengthOfUtf8Prefix(data []byte) int {
 			i++
 			length++
 			continue
-		} else if num := preNum(data[i]); num > 2 {
-			// 110X_XXXX 10XX_XXXX
-			// 1110_XXXX 10XX_XXXX 10XX_XXXX
-			// 1111_0XXX 10XX_XXXX 10XX_XXXX 10XX_XXXX
-			// 1111_10XX 10XX_XXXX 10XX_XXXX 10XX_XXXX 10XX_XXXX
+		} else if num := preNum(data[i]); num > 2 && len(data)-i >= num {
 			// 1111_110X 10XX_XXXX 10XX_XXXX 10XX_XXXX 10XX_XXXX 10XX_XXXX
 			i++
 			for j := 0; j < num-1; j++ {
