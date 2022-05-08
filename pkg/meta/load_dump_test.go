@@ -37,8 +37,8 @@ func TestEscape(t *testing.T) {
 		value            []rune
 		gbkStart, gbkEnd int
 	}{
-		{value: []rune("果汁数据科技有限公司"), gbkStart: 0, gbkEnd: 0},
-		{value: []rune("果汁数据科技有限公司"), gbkStart: 0, gbkEnd: 1},
+		{value: []rune("%1F果汁数据科技有限公司%2B"), gbkStart: 0, gbkEnd: 0},
+		{value: []rune("果汁数据科技有限公司%1F"), gbkStart: 0, gbkEnd: 1},
 		{value: []rune("果汁数据科技有限公司"), gbkStart: 1, gbkEnd: 2},
 		{value: []rune("果汁数据科技有限公司"), gbkStart: 1, gbkEnd: 4},
 		{value: []rune("果汁数据科技有限公司"), gbkStart: 5, gbkEnd: 10},

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -100,27 +101,32 @@ var CHARS = []byte("0123456789ABCDEF")
 func escape(original string) string {
 	// similar to url.Escape but backward compatible if no '%' in it
 	var escValue = make([]byte, 0, len(original))
-	for i := 0; i < len(original); i++ {
-		if l := lengthOfUtf8Prefix([]byte(original[i:])); l > 0 {
-			escValue = append(escValue, original[i:i+l]...)
-			i += l
-			if i >= len(original) {
-				return string(escValue)
-			}
-		}
-		c := original[i]
-		if c < 32 || c >= 127 || c == '%' || c == '"' || c == '\\' {
+	for i, r := range original {
+		if r == utf8.RuneError || r < 32 || r == '%' || r == '"' || r == '\\' {
 			if escValue == nil {
-				escValue = make([]byte, i, len(original))
+				escValue = make([]byte, i, len(original)*2)
 				for j := 0; j < i; j++ {
 					escValue[j] = original[j]
 				}
+			}
+			c := byte(r)
+			if r == utf8.RuneError {
+				c = original[i]
 			}
 			escValue = append(escValue, '%')
 			escValue = append(escValue, CHARS[(c>>4)&0xF])
 			escValue = append(escValue, CHARS[c&0xF])
 		} else if escValue != nil {
-			escValue = append(escValue, c)
+			// TODO: use utf8.AppendRune() in Go 1.18
+			if r < utf8.RuneSelf {
+				escValue = append(escValue, byte(r))
+			} else {
+				n := utf8.RuneLen(r)
+				for j := 0; j < n; j++ {
+					escValue = append(escValue, 0)
+				}
+				utf8.EncodeRune(escValue[len(escValue)-n:], r)
+			}
 		}
 	}
 	if escValue == nil {
@@ -160,47 +166,6 @@ func unescape(s string) []byte {
 		n++
 	}
 	return p[:n]
-}
-
-func lengthOfUtf8Prefix(data []byte) int {
-	// preNum how many 1bits are there before the first 0bit in 8bit
-	preNum := func(data byte) int {
-		var mask byte = 0x80
-		var num = 0
-		for i := 0; i < 8; i++ {
-			if (data & mask) == mask {
-				num++
-				mask = mask >> 1
-			} else {
-				break
-			}
-		}
-		return num
-	}
-
-	var length int
-	i := 0
-	for i < len(data) {
-		if (data[i] & 0x80) == 0x00 {
-			// 0XXX_XXXX
-			i++
-			length++
-			continue
-		} else if num := preNum(data[i]); num > 2 && len(data)-i >= num {
-			// 1111_110X 10XX_XXXX 10XX_XXXX 10XX_XXXX 10XX_XXXX 10XX_XXXX
-			i++
-			for j := 0; j < num-1; j++ {
-				if (data[i] & 0xc0) != 0x80 {
-					return length
-				}
-				i++
-			}
-			length += num
-		} else {
-			return length
-		}
-	}
-	return length
 }
 
 func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
