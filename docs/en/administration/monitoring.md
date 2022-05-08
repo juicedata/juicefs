@@ -5,7 +5,7 @@ sidebar_position: 6
 
 # Monitoring and Data Visualization
 
-As a distributed file system hosting massive data storage, we need to have the ability to visualize the status changes of the entire system in terms of capacity, files, CPU load, disk IO, cache, etc. JuiceFS provides real-time status data to the outside world through a Prometheus-based API. Just add it to your own Prometheus Server to scrapes and stores time series data, and then easily visualize and monitor the JucieFS file system with tools like Grafana.
+As a distributed file system hosting massive data storage, we need to have the ability to visualize the status changes of the entire system in terms of capacity, files, CPU load, disk IO, cache, etc. JuiceFS provides real-time status data to the outside world through a Prometheus-based API. Just add it to your own Prometheus Server to scrape and store time series data, and then easily visualize and monitor the JucieFS file system with tools like Grafana.
 
 ## Get started
 

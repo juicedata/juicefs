@@ -250,7 +250,7 @@ Please see the ["Monitoring"](../administration/monitoring.md) documentation to 
 
 ## Use a full-featured S3 gateway
 
-If you need to use some advanced features of the MinIO S3 gateway, you can pull [the gateway branch of this repository](https://github.com/juicedata/minio/tree/gateway) and compile MinIO yourself. This branch is developed based on the [MinIO RELEASE.2022-03-05T06-32-39Z](https://github.com/minio/minio/tree/RELEASE.2022-03-05T06-32-39Z) version and add JuiceFS gateway support, which supports full functionality of MinIO gateways such as [multi-user management](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html) while using JuiceFS as a backend.
+If you need to use some advanced features of the MinIO S3 gateway, you can pull [the gateway branch of this repository](https://github.com/juicedata/minio/tree/gateway) and compile MinIO yourself. This branch is developed based on the [MinIO RELEASE.2022-03-05T06-32-39Z](https://github.com/minio/minio/tree/RELEASE.2022-03-05T06-32-39Z) version and adds JuiceFS gateway support, which supports full functionality of MinIO gateways such as [multi-user management](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html) while using JuiceFS as a backend.
 
 ### Compile
 
