@@ -75,7 +75,7 @@ jobs:
           cd /jfs/
           git clone https://github.com/sanwan/SVHNClassifier
           cd SVHNClassifier
-          git checkout 1a8c6f1
+          git checkout c06b126
           mkdir data
           cd data
           wget -O train.tar.gz -nv http://ufldl.stanford.edu/housenumbers/train.tar.gz
