@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -100,20 +101,24 @@ var CHARS = []byte("0123456789ABCDEF")
 func escape(original string) string {
 	// similar to url.Escape but backward compatible if no '%' in it
 	var escValue = make([]byte, 0, len(original))
-	for i := 0; i < len(original); i++ {
-		c := original[i]
-		if c < 32 || c >= 127 || c == '%' || c == '"' || c == '\\' {
+	for i, r := range original {
+		if r == utf8.RuneError || r < 32 || r == '%' || r == '"' || r == '\\' {
 			if escValue == nil {
-				escValue = make([]byte, i, len(original))
+				escValue = make([]byte, i, len(original)*2)
 				for j := 0; j < i; j++ {
 					escValue[j] = original[j]
 				}
+			}
+			c := byte(r)
+			if r == utf8.RuneError {
+				c = original[i]
 			}
 			escValue = append(escValue, '%')
 			escValue = append(escValue, CHARS[(c>>4)&0xF])
 			escValue = append(escValue, CHARS[c&0xF])
 		} else if escValue != nil {
-			escValue = append(escValue, c)
+			n := utf8.RuneLen(r)
+			escValue = append(escValue, original[i:i+n]...)
 		}
 	}
 	if escValue == nil {

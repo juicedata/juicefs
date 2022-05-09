@@ -39,13 +39,13 @@
     "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437879,"ctime":1638437879,"nlink":5,"length":0},
     "xattrs": [{"name":"lastBackup","value":"2021-11-23T18:29:54+08:00"}],
     "entries": {
-      "GBK%B9%FB%D6%AD%CA%FD%BE%DD%BF%C6%BC%BC%D3%D0%CF%DE%B9%AB%CB%BE%CE%C4%BC%FE": {
+      "GBK%B9%FB֭%CA%FD%BEݿƼ%BC%D3%D0%CF޹%AB˾%CEļ%FE": {
         "attr": {"inode":34,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1648717321,"mtime":1648717321,"ctime":1648717321,"atimensec":401146000,"mtimensec":401146000,"ctimensec":401146000,"nlink":1,"length":0}
       },
-      "UTF8%E6%9E%9C%E6%B1%81%E6%95%B0%E6%8D%AE%E7%A7%91%E6%8A%80%E6%9C%89%E9%99%90%E5%85%AC%E5%8F%B8%E6%96%87%E4%BB%B6": {
+      "UTF8果汁数据科技有限公司文件": {
         "attr": {"inode":33,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1648717211,"mtime":1648717211,"ctime":1648717211,"atimensec":36325000,"mtimensec":36325000,"ctimensec":36325000,"nlink":1,"length":0}
       },
-      "UTF8%E6%9E%9C%E6%B1%81%E6%95%B0%E6%8D%AE%E7%A7%91%E6%8A%80%E6%9C%89%E9%99%90%E5%85%AC%E5%8F%B8%E7%9B%AE%E5%BD%95": {
+      "UTF8果汁数据科技有限公司目录": {
         "attr": {"inode":32,"type":"directory","mode":493,"uid":501,"gid":0,"atime":1648717173,"mtime":1648717173,"ctime":1648717173,"atimensec":605897000,"mtimensec":605897000,"ctimensec":605897000,"nlink":2,"length":0},
         "entries": {
         }
@@ -57,7 +57,7 @@
       },
       "d1": {
         "attr": {"inode":3,"type":"directory","mode":493,"uid":501,"gid":20,"atime":1623746591,"mtime":1623746610,"ctime":1623746610,"atimensec":959224000,"mtimensec":959224000,"ctimensec":959224000,"nlink":2,"length":0},
-        "xattrs": [{"name":"dk","value":"%E6%9E%9C%E6%B1%81"}],
+        "xattrs": [{"name":"dk","value":"果汁"}],
         "entries": {
           "big": {
             "attr": {"inode":6,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1637150857,"mtime":1637150858,"ctime":1637150878,"atimensec":961503000,"mtimensec":961503000,"ctimensec":961503000,"nlink":1,"length":104857600},
@@ -83,7 +83,7 @@
       },
       "s1": {
         "attr": {"inode":5,"type":"symlink","mode":420,"uid":501,"gid":20,"atime":1623746645,"mtime":1623746645,"ctime":1623746645,"atimensec":984144000,"mtimensec":984144000,"ctimensec":984144000,"nlink":1,"length":0},
-        "symlink": "GBK%B9%FB%D6%AD%CA%FD%BE%DD%BF%C6%BC%BC%D3%D0%CF%DE%B9%AB%CB%BE%CE%C4%BC%FE"
+        "symlink": "GBK%B9%FB֭%CA%FD%BEݿƼ%BC%D3%D0%CF޹%AB˾%CEļ%FE"
       },
       "sd": {
         "attr": {"inode":26,"type":"symlink","mode":420,"uid":1,"gid":0,"atime":1637664458,"mtime":1637664458,"ctime":1637664458,"atimensec":873647000,"mtimensec":873647000,"ctimensec":873647000,"nlink":1,"length":0},
