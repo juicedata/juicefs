@@ -33,15 +33,49 @@ const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
 
 func TestEscape(t *testing.T) {
-	var cs = []byte("hello 世界")
-	for i := 0; i < 256; i++ {
-		cs = append(cs, byte(i))
+	cases := []struct {
+		value            []rune
+		gbkStart, gbkEnd int
+	}{
+		{value: []rune("%1F果汁数据科技有限公司%2B"), gbkStart: 0, gbkEnd: 0},
+		{value: []rune("果汁数据科技有限公司%1F"), gbkStart: 0, gbkEnd: 1},
+		{value: []rune("果汁数据科技有限公司"), gbkStart: 1, gbkEnd: 2},
+		{value: []rune("果汁数据科技有限公司"), gbkStart: 1, gbkEnd: 4},
+		{value: []rune("果汁数据科技有限公司"), gbkStart: 5, gbkEnd: 10},
+		{value: []rune("果汁数据科技有限公司"), gbkStart: 0, gbkEnd: 10},
+		{value: []rune("GBK果汁数据科技有限公司文件"), gbkStart: 0, gbkEnd: 15},
+		{value: []rune("%果汁数据科%技有限公司%"), gbkStart: 1, gbkEnd: 4},
+		{value: []rune("\"果汁数据科\"技有限公司%"), gbkStart: 1, gbkEnd: 4},
+		{value: []rune("\\果汁数\\据科技有限公司"), gbkStart: 1, gbkEnd: 4},
 	}
-	s := string(cs)
-	r := unescape(escape(s))
-	if bytes.Compare(r, cs) != 0 {
-		t.Fatalf("expected %v, but got %v", s, r)
+	for _, c := range cases {
+		var v []byte
+		prefix := c.value[:c.gbkStart]
+		middle := c.value[c.gbkStart:c.gbkEnd]
+		suffix := c.value[c.gbkEnd:]
+		gbk, err := Utf8ToGbk([]byte(string(middle)))
+		if err != nil {
+			t.Fatalf("Utf8ToGbk error: %v", err)
+		}
+		v = append(v, []byte(string(prefix))...)
+		v = append(v, gbk...)
+		v = append(v, []byte(string(suffix))...)
+		s := escape(string(v))
+		t.Log("escape value: ", s)
+		r := unescape(s)
+		if bytes.Compare(r, v) != 0 {
+			t.Fatalf("expected %v, but got %v", v, r)
+		}
 	}
+}
+
+func Utf8ToGbk(s []byte) ([]byte, error) {
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewEncoder())
+	d, e := ioutil.ReadAll(reader)
+	if e != nil {
+		return nil, e
+	}
+	return d, nil
 }
 
 func GbkToUtf8(s []byte) ([]byte, error) {
