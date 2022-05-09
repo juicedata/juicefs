@@ -231,6 +231,6 @@ For more FAQs, please see the [full list](docs/en/faq.md).
 
 
 
-## Stargazers over time
+## Star history over time
 
-[![Stargazers over time](https://starchart.cc/juicedata/juicefs.svg)](https://starchart.cc/juicedata/juicefs)
+[![Star history over time](https://api.star-history.com/svg?repos=juicedata/juicefs&type=Date)](https://star-history.com/#juicedata/juicefs&Date)
