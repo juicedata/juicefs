@@ -175,15 +175,16 @@ For more information about pprof, please see the [official documentation](https:
 
 ### Profiling with the Pyroscope
 
-[pyroscope](https://github.com/pyroscope-io/pyroscope) Pyroscope is an open source continuous profiling platform. It will help you:
+![Pyroscope](../images/pyroscope.png)
+
+[Pyroscope](https://github.com/pyroscope-io/pyroscope) is an open source continuous profiling platform. It will help you:
 
 + Find performance issues and bottlenecks in your code
 + Resolve issues with high CPU utilization
 + Understand the call tree of your application
 + Track changes over time
 
-JuiceFS supports using the `--pyroscope` parameter to pass in the pyroscope server address, and metrics are pushed to the server every 10s.
-If permission verification is enabled on the server, the verification information API Key can be passed in through the environment variable `PYROSCOPE_AUTH_TOKEN`
+JuiceFS supports using the `--pyroscope` option to pass in the pyroscope server address, and metrics are pushed to the server every 10 seconds. If permission verification is enabled on the server, the verification information API Key can be passed in through the environment variable `PYROSCOPE_AUTH_TOKEN`:
 
 ```bash
 $ export PYROSCOPE_AUTH_TOKEN=xxxxxxxxxxxxxxxx
