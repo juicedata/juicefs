@@ -92,15 +92,14 @@ jobs:
           du -sh
           cd ..
           time python convert_to_tfrecords.py --data_dir ./data >img.log
-
-
-      - name: Train
-        run: |
           sudo chmod 777 /var/jfsCache/
           cd /var/jfsCache/
           sudo du -sh
           df -lh
-          echo "11111"
+
+
+      - name: Train
+        run: |
           cd /jfs/SVHNClassifier/
           time python train.py --data_dir ./data --train_logdir ./logs/train
           cd /var/jfsCache/
@@ -109,6 +108,7 @@ jobs:
 
       - name: Evaluate
         run: |
+          cd /jfs/SVHNClassifier/
           time python eval.py --data_dir ./data --checkpoint_dir ./logs/train --eval_logdir ./logs/eval
 
 
