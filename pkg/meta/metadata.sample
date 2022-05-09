@@ -39,7 +39,7 @@
     "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437879,"ctime":1638437879,"nlink":5,"length":0},
     "xattrs": [{"name":"lastBackup","value":"2021-11-23T18:29:54+08:00"}],
     "entries": {
-      "GBK%B9%FB%D6%AD%CA%FD%BE%DD%BF%C6%BC%BC%D3%D0%CF%DE%B9%AB%CB%BE%CE%C4%BC%FE": {
+      "GBK%B9%FB֭%CA%FD%BEݿƼ%BC%D3%D0%CF޹%AB˾%CEļ%FE": {
         "attr": {"inode":34,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1648717321,"mtime":1648717321,"ctime":1648717321,"atimensec":401146000,"mtimensec":401146000,"ctimensec":401146000,"nlink":1,"length":0}
       },
       "UTF8果汁数据科技有限公司文件": {
@@ -83,7 +83,7 @@
       },
       "s1": {
         "attr": {"inode":5,"type":"symlink","mode":420,"uid":501,"gid":20,"atime":1623746645,"mtime":1623746645,"ctime":1623746645,"atimensec":984144000,"mtimensec":984144000,"ctimensec":984144000,"nlink":1,"length":0},
-        "symlink": "GBK%B9%FB%D6%AD%CA%FD%BE%DD%BF%C6%BC%BC%D3%D0%CF%DE%B9%AB%CB%BE%CE%C4%BC%FE"
+        "symlink": "GBK%B9%FB֭%CA%FD%BEݿƼ%BC%D3%D0%CF޹%AB˾%CEļ%FE"
       },
       "sd": {
         "attr": {"inode":26,"type":"symlink","mode":420,"uid":1,"gid":0,"atime":1637664458,"mtime":1637664458,"ctime":1637664458,"atimensec":873647000,"mtimensec":873647000,"ctimensec":873647000,"nlink":1,"length":0},
