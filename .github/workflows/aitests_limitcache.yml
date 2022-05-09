@@ -1,4 +1,4 @@
-name: "aitests"
+name: "aitests_limitcache"
 
 on:
   push:
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  aitests:
+  aitestslimitcache:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -49,11 +49,11 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report &
           python --version
 
 
-      - name: Set up Conda
+      - name: SetUp Conda
         uses: s-weigand/setup-conda@v1
         with:
           python-version: 2.7
@@ -67,6 +67,7 @@ jobs:
           sudo apt-get install libhdf5-dev
           pip install h5py
           pip install pillow
+
 
 
       - name: Prepare Data
@@ -94,7 +95,7 @@ jobs:
           time python convert_to_tfrecords.py --data_dir ./data >img.log
 
 
-      - name: Train
+      - name: AI Train
         run: |
           sudo chmod 777 /var/jfsCache/
           cd /var/jfsCache/
@@ -107,6 +108,7 @@ jobs:
           sudo du -sh
           df -lh
 
+
       - name: Evaluate
         run: |
           time python eval.py --data_dir ./data --checkpoint_dir ./logs/train --eval_logdir ./logs/eval
@@ -117,7 +119,7 @@ jobs:
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
         if: ${{ failure() }}

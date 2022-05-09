@@ -1,4 +1,4 @@
-name: "aitestscompare"
+name: "aitests_writeback"
 
 on:
   push:
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  aitestscompare:
+  aitestswriteback:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -49,7 +49,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --writeback --no-usage-report &
           python --version
 
 
@@ -76,17 +76,15 @@ jobs:
           cd /jfs/
           git clone https://github.com/sanwan/SVHNClassifier
           cd SVHNClassifier
+          git checkout 783f8ac
           mkdir data
           cd data
           wget -O train.tar.gz -nv http://ufldl.stanford.edu/housenumbers/train.tar.gz
           wget -O test.tar.gz -nv http://ufldl.stanford.edu/housenumbers/test.tar.gz
           wget -O extra.tar.gz -nv http://ufldl.stanford.edu/housenumbers/extra.tar.gz
           ls -lah
-          echo "11111"
           time tar -zxf train.tar.gz
-          echo "22222"
           time tar -zxf test.tar.gz
-          echo "33333"
           time tar -zxf extra.tar.gz
           rm train.tar.gz
           rm test.tar.gz
@@ -95,19 +93,25 @@ jobs:
           du -sh
           cd ..
           time python convert_to_tfrecords.py --data_dir ./data >img.log
-          echo "55555"
 
 
       - name: AI Train
         run: |
-          cd /jfs/SVHNClassifier/
-          time python train.py --data_dir ./data --train_logdir ./logs/train
           sudo chmod 777 /var/jfsCache/
           cd /var/jfsCache/
           sudo du -sh
           df -lh
-          echo "66666"
+          echo "11111"
+          cd /jfs/SVHNClassifier/
+          time python train.py --data_dir ./data --train_logdir ./logs/train
+          cd /var/jfsCache/
+          sudo du -sh
+          df -lh
 
+
+      - name: Evaluate
+        run: |
+          time python eval.py --data_dir ./data --checkpoint_dir ./logs/train --eval_logdir ./logs/eval
 
 
       - name: Send Slack Notification
