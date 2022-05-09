@@ -117,16 +117,8 @@ func escape(original string) string {
 			escValue = append(escValue, CHARS[(c>>4)&0xF])
 			escValue = append(escValue, CHARS[c&0xF])
 		} else if escValue != nil {
-			// TODO: use utf8.AppendRune() in Go 1.18
-			if r < utf8.RuneSelf {
-				escValue = append(escValue, byte(r))
-			} else {
-				n := utf8.RuneLen(r)
-				for j := 0; j < n; j++ {
-					escValue = append(escValue, 0)
-				}
-				utf8.EncodeRune(escValue[len(escValue)-n:], r)
-			}
+			n := utf8.RuneLen(r)
+			escValue = append(escValue, original[i:i+n]...)
 		}
 	}
 	if escValue == nil {
