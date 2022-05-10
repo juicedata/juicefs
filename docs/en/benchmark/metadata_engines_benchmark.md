@@ -14,7 +14,7 @@ Conclusion first:
 
 :::note
 1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability. More information can be found [here](https://redis.io/docs/manual/persistence).
-2. Both Redis and MySQL store only one replica locally, while TiKV stores three replicas on three different hosts using Raft protocol.
+2. Both Redis and MySQL store only one replica locally, while TiKV and etcd stores three replicas on three different hosts using Raft protocol.
 :::
 
 Details are provided below. Please note all the tests are run with the same object storage (to save data), clients and metadata hosts, only metadata engines differ.

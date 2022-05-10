@@ -14,7 +14,7 @@ slug: /metadata_engines_benchmark
 
 :::note 注意
 1. Redis 可以通过将 `appendfsync` 配置项由 `always` 改为 `everysec`，牺牲少量可靠性来换取一定的性能提升。更多信息可参见[这里](https://redis.io/docs/manual/persistence)。
-2. 测试中 Redis 和 MySQL 数据均仅在本地存储单副本，TiKV 数据会在三个节点间通过 Raft 协议存储三副本
+2. 测试中 Redis 和 MySQL 数据均仅在本地存储单副本，TiKV 和 etcd 数据会在三个节点间通过 Raft 协议存储三副本。
 :::
 
 以下提供了测试的具体细节。这些测试都运行在相同的对象存储（用来存放数据）、客户端和元数据节点上，只有元数据引擎不同。
