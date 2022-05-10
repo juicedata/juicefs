@@ -1,0 +1,127 @@
+name: "aitests"
+
+on:
+  push:
+    branches:
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
+  schedule:
+    - cron:  '30 18 * * *'
+  workflow_dispatch:
+
+
+jobs:
+  aitests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: |
+          make juicefs
+
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format  --trash-days 0 redis://127.0.0.1:6379/1 pics
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          python --version
+
+
+      - name: Set up Conda
+        uses: s-weigand/setup-conda@v1
+        with:
+          python-version: 2.7
+
+
+      - name: Install Dependency
+        run: |
+          conda --version
+          python --version
+          conda install tensorflow=1.12.0
+          sudo apt-get install libhdf5-dev
+          pip install h5py
+          pip install pillow
+
+
+      - name: Prepare Data
+        run: |
+          stat /jfs/
+          cd /jfs/
+          git clone https://github.com/sanwan/SVHNClassifier
+          cd SVHNClassifier
+          git checkout c06b126
+          mkdir data
+          cd data
+          wget -O train.tar.gz -nv http://ufldl.stanford.edu/housenumbers/train.tar.gz
+          wget -O test.tar.gz -nv http://ufldl.stanford.edu/housenumbers/test.tar.gz
+          wget -O extra.tar.gz -nv http://ufldl.stanford.edu/housenumbers/extra.tar.gz
+          ls -lah
+          time tar -zxf train.tar.gz
+          time tar -zxf test.tar.gz
+          time tar -zxf extra.tar.gz
+          rm train.tar.gz
+          rm test.tar.gz
+          rm extra.tar.gz
+          ls -lah
+          du -sh
+          cd ..
+          time python convert_to_tfrecords.py --data_dir ./data >img.log
+          sudo chmod 777 /var/jfsCache/
+          cd /var/jfsCache/
+          sudo du -sh
+          df -lh
+
+
+      - name: Train
+        run: |
+          cd /jfs/SVHNClassifier/
+          time python train.py --data_dir ./data --train_logdir ./logs/train
+          cd /var/jfsCache/
+          sudo du -sh
+          df -lh
+
+      - name: Evaluate
+        run: |
+          cd /jfs/SVHNClassifier/
+          time python eval.py --data_dir ./data --checkpoint_dir ./logs/train --eval_logdir ./logs/eval
+          cd /var/jfsCache/
+          sudo du -sh
+          df -lh
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
