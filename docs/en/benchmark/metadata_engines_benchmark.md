@@ -3,27 +3,27 @@ sidebar_label: Metadata Engines Benchmark
 sidebar_position: 6
 slug: /metadata_engines_benchmark
 ---
+
 # Metadata Engines Benchmark
 
 Conclusion first:
 
-- For pure metadata operations, MySQL costs about 2 ~ 4x times of Redis; TiKV has similar performance to MySQL, and in most cases it costs a bit less; etcd costs about 1.5x times of TiKV.
-- For small I/O (~100 KiB) workloads, total time costs with MySQL are about 1 ~ 3x of those with Redis; TiKV and etcd performs similarly to MySQL.
+- For pure metadata operations, MySQL costs about 2~4x times of Redis; TiKV has similar performance to MySQL, and in most cases it costs a bit less; etcd costs about 1.5x times of TiKV.
+- For small I/O (~100 KiB) workloads, total time costs with MySQL are about 1~3x of those with Redis; TiKV and etcd performs similarly to MySQL.
 - For large I/O (~4 MiB) workloads, total time costs with different metadata engines show no significant difference (object storage becomes the bottleneck).
 
->**Note**:
->
->1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability. More information can be found [here](https://redis.io/topics/persistence).
->2. Both Redis and MySQL store only one replica locally, while TiKV stores three replicas on three different hosts using Raft protocol.
+:::note
+1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability. More information can be found [here](https://redis.io/docs/manual/persistence).
+2. Both Redis and MySQL store only one replica locally, while TiKV and etcd stores three replicas on three different hosts using Raft protocol.
+:::
 
-
-Details are provided below. Please note all the tests are run with the same object storage (to save data), clients and metadata hosts; only metadata engines differ.
+Details are provided below. Please note all the tests are run with the same object storage (to save data), clients and metadata hosts, only metadata engines differ.
 
 ## Environment
 
 ### JuiceFS Version
 
-juicefs version 1.0.0-dev+2022-04-07.50fc234e
+1.0.0-dev+2022-04-07.50fc234e
 
 ### Object Storage
 
@@ -34,21 +34,21 @@ Amazon S3
 - Amazon c5.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network
 - Ubuntu 18.04.4 LTS
 
-### Meta Hosts
+### Metadata Hosts
 
 - Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD (local storage for metadata engines)
 - Ubuntu 20.04.1 LTS
 - SSD is formated as ext4 and mounted on `/data`
 
-### Meta Engines
+### Metadata Engines
 
 #### Redis
 
 - Version: [6.2.6](https://download.redis.io/releases/redis-6.2.6.tar.gz)
 - Configuration:
-  - appendonly: yes
-  - appendfsync: always or everysec
-  - dir: `/data/redis`
+  - `appendonly`: `yes`
+  - `appendfsync`: `always` or `everysec`
+  - `dir`: `/data/redis`
 
 #### MySQL
 
@@ -59,13 +59,14 @@ Amazon S3
 
 - Version: 5.4.0
 - Configuration:
-  - deploy_dir: `/data/tikv-deploy`
-  - data_dir: `/data/tikv-data`
+  - `deploy_dir`: `/data/tikv-deploy`
+  - `data_dir`: `/data/tikv-data`
 
 #### etcd
 
 - Version: 3.5.2
-- data-dir: `/data/etcd`
+- Configuration:
+  - `data-dir`: `/data/etcd`
 
 ## Tools
 
@@ -73,14 +74,14 @@ All the following tests are run for each metadata engine.
 
 ### Golang Benchmark
 
-Simple benchmarks within the source code:  `pkg/meta/benchmarks_test.go`.
+Simple benchmarks within the source code: [`pkg/meta/benchmarks_test.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/benchmarks_test.go)
 
 ### JuiceFS Bench
 
 JuiceFS provides a basic benchmark command:
 
 ```bash
-$ ./juicefs bench /mnt/jfs -p 4
+./juicefs bench /mnt/jfs -p 4
 ```
 
 ### mdtest
@@ -111,7 +112,7 @@ $ mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-
 - Version: fio-3.1
 
 ```bash
-$ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --size=4G --numjobs=4 --end_fsync=1 --group_reporting
+fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --size=4G --numjobs=4 --end_fsync=1 --group_reporting
 ```
 
 ## Results
