@@ -3,6 +3,7 @@ sidebar_label: 元数据引擎性能测试
 sidebar_position: 6
 slug: /metadata_engines_benchmark
 ---
+
 # 元数据引擎性能对比测试
 
 首先展示结论：
@@ -11,18 +12,18 @@ slug: /metadata_engines_benchmark
 - 对于小 IO（～100 KiB）压力，使用 MySQL 引擎的操作总耗时大约是使用 Redis 引擎总耗时的 1～3 倍；TiKV 和 etcd 的耗时与 MySQL 接近
 - 对于大 IO（～4 MiB）压力，使用不同元数据引擎的总耗时未见明显差异（此时对象存储成为瓶颈）
 
-> **注意**：
->
-> 1. Redis 可以通过将 `appendfsync` 配置项由 `always` 改为 `everysec`，牺牲少量可靠性来换取一定的性能提升；更多信息可参见[这里](https://redis.io/topics/persistence)
-> 2. 测试中 Redis 和 MySQL 数据均仅在本地存储单副本，TiKV 数据会在三个节点间通过 Raft 协议存储三副本
+:::note 注意
+1. Redis 可以通过将 `appendfsync` 配置项由 `always` 改为 `everysec`，牺牲少量可靠性来换取一定的性能提升。更多信息可参见[这里](https://redis.io/docs/manual/persistence)。
+2. 测试中 Redis 和 MySQL 数据均仅在本地存储单副本，TiKV 和 etcd 数据会在三个节点间通过 Raft 协议存储三副本。
+:::
 
-以下提供了测试的具体细节。这些测试都运行在相同的对象存储（用来存放数据），客户端和元数据节点上；只有元数据引擎不同。
+以下提供了测试的具体细节。这些测试都运行在相同的对象存储（用来存放数据）、客户端和元数据节点上，只有元数据引擎不同。
 
 ## 测试环境
 
 ### JuiceFS 版本
 
-juicefs version 1.0.0-dev+2022-04-07.50fc234e
+1.0.0-dev+2022-04-07.50fc234e
 
 ### 对象存储
 
@@ -30,12 +31,12 @@ Amazon S3
 
 ### 客户端节点
 
-- Amazon c5.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network
+- Amazon c5.xlarge：4 vCPUs，8 GiB 内存，最高 10 Gigabit 网络
 - Ubuntu 18.04.4 LTS
 
 ### 元数据节点
 
-- Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD（为元数据引擎提供本地存储）
+- Amazon c5d.xlarge：4 vCPUs，8 GiB 内存，最高 10 Gigabit 网络, 100 GB SSD（为元数据引擎提供本地存储）
 - Ubuntu 20.04.1 LTS
 - SSD 数据盘被格式化为 ext4 文件系统并挂载到 `/data` 目录
 
@@ -43,28 +44,29 @@ Amazon S3
 
 #### Redis
 
-- 版本: [6.2.6](https://download.redis.io/releases/redis-6.2.6.tar.gz)
-- 配置:
-  - appendonly: yes
-  - appendfsync: 分别测试了 always 和 everysec
-  - dir: `/data/redis`
+- 版本：[6.2.6](https://download.redis.io/releases/redis-6.2.6.tar.gz)
+- 配置：
+  - `appendonly`：`yes`
+  - `appendfsync`：分别测试了 `always` 和 `everysec`
+  - `dir`：`/data/redis`
 
 #### MySQL
 
-- 版本: 8.0.25
+- 版本：8.0.25
 - `/var/lib/mysql` 目录被绑定挂载到 `/data/mysql`
 
 #### TiKV
 
-- 版本: 5.4.0
-- 配置:
-  - deploy_dir: `/data/tikv-deploy`
-  - data_dir: `/data/tikv-data`
+- 版本：5.4.0
+- 配置：
+  - `deploy_dir`：`/data/tikv-deploy`
+  - `data_dir`：`/data/tikv-data`
 
 #### etcd
 
-- 版本: 3.5.2
-- data-dir: `/data/etcd`
+- 版本：3.5.2
+- 配置：
+  - `data-dir`：`/data/etcd`
 
 ## 测试工具
 
@@ -72,21 +74,21 @@ Amazon S3
 
 ### Golang Benchmark
 
-在源码中提供了简单的元数据基准测试: `pkg/meta/benchmarks_test.go`。
+在源码中提供了简单的元数据基准测试：[`pkg/meta/benchmarks_test.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/benchmarks_test.go)
 
 ### JuiceFS Bench
 
 JuiceFS 提供了一个基础的性能测试命令：
 
 ```bash
-$ ./juicefs bench /mnt/jfs -p 4
+./juicefs bench /mnt/jfs -p 4
 ```
 
 ### mdtest
 
-- 版本: mdtest-3.4.0+dev
+- 版本：mdtest-3.4.0+dev
 
-在3个客户端节点上并发执行测试：
+在 3 个客户端节点上并发执行测试：
 
 ```bash
 $ cat myhost
@@ -107,10 +109,10 @@ $ mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-
 
 ### fio
 
-- 版本: fio-3.1
+- 版本：fio-3.1
 
 ```bash
-$ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --size=4G --numjobs=4 --end_fsync=1 --group_reporting
+fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --size=4G --numjobs=4 --end_fsync=1 --group_reporting
 ```
 
 ## 测试结果
