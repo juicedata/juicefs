@@ -110,7 +110,9 @@ jobs:
         run: |
           cd /jfs/SVHNClassifier/
           time python eval.py --data_dir ./data --checkpoint_dir ./logs/train --eval_logdir ./logs/eval
-
+          cd /var/jfsCache/
+          sudo du -sh
+          df -lh
 
       - name: Send Slack Notification
         if: ${{ failure() }}
