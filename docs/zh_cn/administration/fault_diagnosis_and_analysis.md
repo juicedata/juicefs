@@ -6,9 +6,15 @@ slug: /fault_diagnosis_and_analysis
 
 # JuiceFS 故障诊断和分析
 
-## 错误日志
+## 客户端日志
 
-当 JuiceFS 通过 `-d` 选项在后台运行时，日志会输出到系统日志和 `/var/log/juicefs.log`（v0.15+，参见 [`--log` 选项](../reference/command_reference.md#juicefs-mount)）。取决于你使用的操作系统，你可以通过不同的命令获取日志：
+JuiceFS 客户端在运行过程中会输出日志用于故障诊断，日志等级从低到高分别是：DEBUG、INFO、WARNING、ERROR、FATAL，默认只输出 INFO 级别以上的日志。如果需要输出 DEBUG 级别的日志，需要在运行 JuiceFS 客户端时显式开启，如加上 `--debug` 选项。
+
+不同 JuiceFS 客户端获取日志的方式不同，以下分别介绍。
+
+### 挂载点
+
+当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.md#juicefs-mount)（表示后台运行），日志会输出到系统日志和 `/var/log/juicefs.log`（需要 v0.15 及以上版本客户端，参见 [`--log` 选项](../reference/command_reference.md#juicefs-mount)）。取决于你使用的操作系统，你可以通过不同的命令获取日志：
 
 ```bash
 # macOS
@@ -20,11 +26,11 @@ $ cat /var/log/syslog | grep 'juicefs'
 # CentOS based system
 $ cat /var/log/messages | grep 'juicefs'
 
-# v0.15+
+# All system (require v0.15+ JuiceFS)
 $ tail -n 100 /var/log/juicefs.log
 ```
 
-日志等级有 4 种。你可以使用 `grep` 命令过滤显示不同等级的日志信息，从而进行性能统计和故障追踪。
+你可以使用 `grep` 命令过滤显示不同等级的日志信息，从而进行性能统计和故障追踪，例如：
 
 ```bash
 $ cat /var/log/syslog | grep 'juicefs' | grep '<INFO>'
@@ -33,9 +39,47 @@ $ cat /var/log/syslog | grep 'juicefs' | grep '<ERROR>'
 $ cat /var/log/syslog | grep 'juicefs' | grep '<FATAL>'
 ```
 
+### Kubernetes CSI 驱动
+
+根据你使用的 JuiceFS CSI 驱动版本会有不同的获取日志的方式，具体请参考 [CSI 驱动文档](https://juicefs.com/docs/zh/csi/troubleshooting)。
+
+### S3 网关
+
+S3 网关仅支持在前台运行，因此客户端日志会直接输出到终端。如果你是在 Kubernetes 中部署 S3 网关，需要查看对应 pod 的日志。
+
+### Hadoop Java SDK
+
+使用 JuiceFS Hadoop Java SDK 的应用进程（如 Spark executor）的日志中会包含 JuiceFS 客户端日志，因为和应用自身产生的日志混杂在一起，需要通过特定关键词来过滤筛选（如 `juicefs`，注意这里忽略了大小写）。
+
+
 ## 访问日志
 
-JuiceFS 的根目录中有一个名为 `.accesslog` 的虚拟文件，它记录了文件系统上的所有操作及其花费的时间，例如：
+每个 JuiceFS 客户端都有一个访问日志，其中详细记录了文件系统上的所有操作，如操作类型、用户 ID、用户组 ID、文件 inode 及其花费的时间。访问日志可以有多种用途，如性能分析、审计、故障诊断。
+
+### 访问日志格式
+
+访问日志的示例格式如下：
+
+```
+2021.01.15 08:26:11.003330 [uid:0,gid:0,pid:4403] write (17669,8666,4993160): OK <0.000010>
+```
+
+其中每一列的含义为：
+
+- `2021.01.15 08:26:11.003330`：当前操作的时间
+- `[uid:0,gid:0,pid:4403]`：当前操作的用户 ID、用户组 ID、进程 ID
+- `write`：操作类型
+- `(17669,8666,4993160)`：当前操作类型的输入参数，如示例中的 `write` 操作的输入参数分别为写入文件的 inode、写入数据的大小、写入文件的偏移。不同操作类型的参数不同，具体请参考 [`vfs.go`](https://github.com/juicedata/juicefs/blob/main/pkg/vfs/vfs.go) 文件。
+- `OK`：当前操作是否成功，如果不成功会输出具体的失败信息。
+- `<0.000010>`：当前操作花费的时间（以秒为单位）
+
+你可以通过访问日志调试和分析性能问题，或者尝试使用 `juicefs profile <mount-point>` 查看实时统计信息。运行 `juicefs profile -h` 或[点此](../benchmark/operations_profiling.md)了解该子命令的更多信息。
+
+不同 JuiceFS 客户端获取访问日志的方式不同，以下分别介绍。
+
+### 挂载点
+
+在 JuiceFS 文件系统挂载点的根目录中有一个名为 `.accesslog` 的虚拟文件，通过 `cat` 命令可以查看其中的内容（命令不会退出），例如（假设挂载点根目录为 `/jfs`）：
 
 ```bash
 $ cat /jfs/.accesslog
@@ -44,7 +88,22 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-每行的最后一个数字是当前操作花费的时间（以秒为单位）。 您可以用它调试和分析性能问题，或者尝试使用 `juicefs profile /jfs` 查看实时统计信息。运行 `juicefs profile -h` 或[点此](../benchmark/operations_profiling.md)了解该命令的更多信息。
+### Kubernetes CSI 驱动
+
+请参考 [CSI 驱动文档](https://juicefs.com/docs/zh/csi/troubleshooting)及根据你使用的 JuiceFS CSI 驱动版本来找到 mount pod 或者 CSI 驱动 pod，在 pod 内的 JuiceFS 文件系统挂载点根目录查看 `.accesslog` 文件即可。Pod 内的挂载点路径为 `/jfs/<pv_volumeHandle>`，假设 mount pod 的名称叫 `juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`，`<pv_volumeHandle>` 为 `pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`，可以使用如下命令查看：
+
+```bash
+kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373 -- cat /jfs/pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373/.accesslog
+```
+
+### S3 网关
+
+需要在启动 S3 网关时新增 [`--access-log` 选项](../reference/command_reference.md#juicefs-gateway)，指定访问日志输出的路径，默认 S3 网关不输出访问日志。
+
+### Hadoop Java SDK
+
+需要在 JuiceFS Hadoop Java SDK 的[客户端配置](../deployment/hadoop_java_sdk.md#其它配置)中新增 `juicefs.access-log` 配置项，指定访问日志输出的路径，默认不输出访问日志。
+
 
 ## 运行时信息
 
@@ -113,3 +172,22 @@ $ go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.p
 ```
 
 关于 pprof 的更多信息，请查看[官方文档](https://github.com/google/pprof/blob/master/doc/README.md)。
+
+### 使用 Pyroscope 进行性能剖析
+
+![Pyroscope](../images/pyroscope.png)
+
+[Pyroscope](https://github.com/pyroscope-io/pyroscope) 是一个开源的持续性能剖析平台。它能够帮你：
+
++ 找出源代码中的性能问题和瓶颈
++ 解决 CPU 利用率高的问题
++ 理解应用程序的调用树（call tree）
++ 追踪随一段时间内变化的情况
+
+JuiceFS 支持使用 `--pyroscope` 选项传入 Pyroscope 服务端地址，指标以每隔 10 秒的频率推送到服务端。如果服务端开启了权限校验，校验信息 API Key 可以通过环境变量 `PYROSCOPE_AUTH_TOKEN` 传入：
+
+```bash
+$ export PYROSCOPE_AUTH_TOKEN=xxxxxxxxxxxxxxxx
+$ juicefs mount --pyroscope http://localhost:4040 redis://localhost /mnt/jfs
+$ juicefs dump --pyroscope http://localhost:4040 redis://localhost dump.json
+```

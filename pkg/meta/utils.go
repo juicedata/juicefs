@@ -19,23 +19,22 @@ package meta
 import (
 	"bytes"
 	"fmt"
+	"net/url"
 	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const (
-	usedSpace    = "usedSpace"
-	totalInodes  = "totalInodes"
-	delfiles     = "delfiles"
-	allSessions  = "sessions"
-	sessionInfos = "sessionInfos"
-	sliceRefs    = "sliceRef"
+	usedSpace      = "usedSpace"
+	totalInodes    = "totalInodes"
+	legacySessions = "sessions"
 )
 
 const (
@@ -59,6 +58,23 @@ type freeID struct {
 }
 
 var logger = utils.GetLogger("juicefs")
+
+type queryMap struct {
+	url.Values
+}
+
+func (qm *queryMap) duration(key string, d time.Duration) time.Duration {
+	val := qm.Get(key)
+	if val == "" {
+		return d
+	}
+	if dur, err := time.ParseDuration(val); err == nil {
+		return dur
+	} else {
+		logger.Warnf("Parse duration %s for key %s: %s", val, key, err)
+		return d
+	}
+}
 
 func errno(err error) syscall.Errno {
 	if err == nil {
@@ -106,13 +122,18 @@ func lookupSubdir(m Meta, subdir string) (Ino, error) {
 		ps := strings.SplitN(subdir, "/", 2)
 		if ps[0] != "" {
 			var attr Attr
-			r := m.Lookup(Background, root, ps[0], &root, &attr)
+			var inode Ino
+			r := m.Lookup(Background, root, ps[0], &inode, &attr)
+			if r == syscall.ENOENT {
+				r = m.Mkdir(Background, root, ps[0], 0777, 0, 0, &inode, &attr)
+			}
 			if r != 0 {
 				return 0, fmt.Errorf("lookup subdir %s: %s", ps[0], r)
 			}
 			if attr.Typ != TypeDirectory {
 				return 0, fmt.Errorf("%s is not a redirectory", ps[0])
 			}
+			root = inode
 		}
 		if len(ps) == 1 {
 			break

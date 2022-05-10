@@ -11,7 +11,7 @@ slug: /redis_best_practices
 强烈建议使用云平台提供的 Redis 托管服务，详情查看「[推荐的 Redis 托管服务](#推荐的-redis-托管服务)」。
 :::
 
-对于自主维护的 Redis 数据库，建议了解以下几个方面：
+对于自主维护的 Redis 数据库，JuiceFS 要求其版本至少为 4.0+，并推荐使用较新的「[官方稳定版本](https://redis.io/download)」。另外，在部署 Redis 前还建议您提前了解以下几个方面。
 
 :::note 注意
 本文部分内容来自 Redis 官网，若有不一致的表述，请以 Redis 官方文档为准。
@@ -41,10 +41,10 @@ used_memory_dataset_perc: 70.12%
 ## 数据可用性
 
 :::caution 注意
-JuiceFS 使用 「[Redis 事务](https://redis.io/topics/transactions)」保证元数据操作的原子性。但由于 Redis Cluster 集群模式不支持事务（Transactions），因此 Redis 集群不可用作 JuiceFS 元数据存储。如有 Redis 高可用需求，请使用 Sentinel 哨兵模式。
+JuiceFS 使用 「[Redis 事务](https://redis.io/docs/manual/transactions)」保证元数据操作的原子性。但由于 Redis Cluster 集群模式不支持事务（Transactions），因此 Redis 集群不可用作 JuiceFS 元数据存储。如有 Redis 高可用需求，请使用 Sentinel 哨兵模式。
 :::
 
-[Redis 哨兵](https://redis.io/topics/sentinel) 是 Redis 官方的高可用解决方案，它提供以下功能：
+[Redis 哨兵](https://redis.io/docs/manual/sentinel) 是 Redis 官方的高可用解决方案，它提供以下功能：
 
 - **监控**，哨兵会不断检查您的 master 实例和 replica 实例是否按预期工作。
 - **通知**，当受监控的 Redis 实例出现问题时，哨兵可以通过 API 通知系统管理员或其他计算机程序。
@@ -53,7 +53,7 @@ JuiceFS 使用 「[Redis 事务](https://redis.io/topics/transactions)」保证�
 
 **Redis 2.8 开始提供稳定版本的 Redis 哨兵**。Redis 2.6 提供的第一版 Redis 哨兵已被弃用，不建议使用。
 
-在使用 Redis 哨兵之前，您需要了解一些[基础知识](https://redis.io/topics/sentinel#fundamental-things-to-know-about-sentinel-before-deploying)：
+在使用 Redis 哨兵之前，您需要了解一些[基础知识](https://redis.io/docs/manual/sentinel#fundamental-things-to-know-about-sentinel-before-deploying)：
 
 1. 您至少需要三个哨兵实例才能进行稳健的部署。
 2. 这三个哨兵实例应放置在彼此独立的计算机或虚拟机中。例如，分别位于不同的可用区域上的不同物理服务器或虚拟机上。
@@ -61,7 +61,7 @@ JuiceFS 使用 「[Redis 事务](https://redis.io/topics/transactions)」保证�
 4. 如果您不在开发环境中经常进行测试，就无法确保 HA 的设置是安全的。在条件允许的情况，如果能够在生产环境中进行验证则更好。错误的配置往往都是在你难以预期和响应的时间出现（比如，凌晨 3 点你的 master 节点悄然罢工）。
 5. **哨兵、Docker 或其他形式的网络地址转换或端口映射应谨慎混用**：Docker 执行端口重映射，会破坏其他哨兵进程的哨兵自动发现以及 master 的 replicas 列表。
 
-更多信息请阅读[官方文档](https://redis.io/topics/sentinel)。
+更多信息请阅读[官方文档](https://redis.io/docs/manual/sentinel)。
 
 部署了 Redis 服务器和哨兵以后，`META-URL` 可以指定为 `redis[s]://[[USER]:PASSWORD@]MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`，例如：
 
@@ -73,9 +73,15 @@ juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 对于 JuiceFS v0.16 及以上版本，URL 中提供的密码会用于连接 Redis 服务器，哨兵的密码需要用环境变量 `SENTINEL_PASSWORD` 指定。对于更早的版本，URL 中的密码会同时用于连接 Redis 服务器和哨兵，也可以通过环境变量 `SENTINEL_PASSWORD` 和 `REDIS_PASSWORD` 来覆盖。
 :::
 
+:::tip 提示
+自 JuiceFS v1.0.0 版本开始，支持在挂载文件系统时仅连接 Redis 的副本节点，以降低 Redis 主节点的负载。为了开启这个特性，必须以只读模式挂载 JuiceFS 文件系统（即设置 `--read-only` 挂载选项），并通过 Redis 哨兵连接元数据引擎，最后需要在元数据 URL 末尾加上 `?route-read=replica`，例如：`redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2?route-read=replica`。
+
+需要注意由于 Redis 主节点的数据是异步复制到副本节点，因此有可能读到的元数据不是最新的。
+:::
+
 ## 数据持久性
 
-Redis 提供了不同范围的[持久性](https://redis.io/topics/persistence)选项：
+Redis 提供了不同范围的[持久性](https://redis.io/docs/manual/persistence)选项：
 
 - **RDB**：以指定的时间间隔生成当前数据集的快照。
 - **AOF**：记录服务器收到的每一个写操作，在服务器启动时重建原始数据集。命令使用与 Redis 协议本身相同的格式以追加写（append-only）的方式记录。当日志变得太大时，Redis 能够在后台重写日志。
@@ -93,7 +99,7 @@ Redis 提供了不同范围的[持久性](https://redis.io/topics/persistence)�
 
 Redis 对数据备份非常友好，因为您可以在数据库运行时复制 RDB 文件，RDB 一旦生成就永远不会被修改，当它被生成时，它使用一个临时名称，并且只有在新快照完成时才使用 `rename` 原子地重命名到其最终目的地。您还可以复制 AOF 文件以创建备份。
 
-更多信息请阅读[官方文档](https://redis.io/topics/persistence)。
+更多信息请阅读[官方文档](https://redis.io/docs/manual/persistence)。
 
 ## 备份 Redis 数据
 
@@ -109,7 +115,7 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 - 每次 cron 脚本运行时，请务必调用 `find` 命令以确保删除太旧的快照：例如，您可以保留最近 48 小时的每小时快照，以及一至两个月的每日快照。要确保使用数据和时间信息来命名快照。
 - 确保每天至少一次将 RDB 快照从运行 Redis 的实例传输至 _数据中心以外_ 或至少传输至 _物理机以外_ 。
 
-更多信息请阅读[官方文档](https://redis.io/topics/persistence)。
+更多信息请阅读[官方文档](https://redis.io/docs/manual/persistence)。
 
 ## 恢复 Redis 数据
 
@@ -128,7 +134,7 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 [Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis) 是为云构建的完全托管的、与 Redis 兼容的内存数据存储。它提供[自动故障切换](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html)、[自动备份](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/backups-automatic.html)等功能以确保可用性和持久性。
 
 :::info 说明
-Amazon ElastiCache for Redis 有两种类型：禁用集群模式和启用集群模式。因为 JuiceFS 使用[事务](https://redis.io/topics/transactions)来保证元数据操作的原子性，所以不能使用「启用集群模式」类型。
+Amazon ElastiCache for Redis 有两种类型：禁用集群模式和启用集群模式。因为 JuiceFS 使用[事务](https://redis.io/docs/manual/transactions)来保证元数据操作的原子性，所以不能使用「启用集群模式」类型。
 :::
 
 ### Google Cloud Memorystore for Redis
@@ -144,7 +150,7 @@ Amazon ElastiCache for Redis 有两种类型：禁用集群模式和启用集群
 [阿里云 ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis) 是一种兼容原生 Redis 协议的数据库服务。它支持混合内存和硬盘以实现数据持久性。云数据库 Redis 版提供高可用的热备架构，可扩展以满足高性能、低延迟的读写操作需求。
 
 :::info 说明
-ApsaraDB for Redis 支持 3 种类型的[架构](https://www.alibabacloud.com/help/doc-detail/86132.htm)：标准、集群和读写分离。因为 JuiceFS 使用[事务](https://redis.io/topics/transactions)来保证元数据操作的原子性，所以不能使用集群类型架构。
+ApsaraDB for Redis 支持 3 种类型的[架构](https://www.alibabacloud.com/help/doc-detail/86132.htm)：标准、集群和读写分离。因为 JuiceFS 使用[事务](https://redis.io/docs/manual/transactions)来保证元数据操作的原子性，所以不能使用集群类型架构。
 :::
 
 ### 腾讯云 TencentDB for Redis
@@ -152,5 +158,5 @@ ApsaraDB for Redis 支持 3 种类型的[架构](https://www.alibabacloud.com/he
 [腾讯云 TencentDB for Redis](https://intl.cloud.tencent.com/product/crs) 是一种兼容 Redis 协议的缓存和存储服务。丰富多样的数据结构选项，帮助您开发不同类型的业务场景，提供主从热备份、容灾自动切换、数据备份、故障转移、实例监控、在线等一整套数据库服务缩放和数据回滚。
 
 :::info 说明
-TencentDB for Redis 支持两种类型的[架构](https://intl.cloud.tencent.com/document/product/239/3205)：标准和集群。因为 JuiceFS 使用[事务](https://redis.io/topics/transactions)来保证元数据操作的原子性，所以不能使用集群类型架构。
+TencentDB for Redis 支持两种类型的[架构](https://intl.cloud.tencent.com/document/product/239/3205)：标准和集群。因为 JuiceFS 使用[事务](https://redis.io/docs/manual/transactions)来保证元数据操作的原子性，所以不能使用集群类型架构。
 :::

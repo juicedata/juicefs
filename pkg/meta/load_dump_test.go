@@ -17,14 +17,75 @@
 package meta
 
 import (
+	"bytes"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 const sampleFile = "metadata.sample"
 const subSampleFile = "metadata-sub.sample"
+
+func TestEscape(t *testing.T) {
+	cases := []struct {
+		value            []rune
+		gbkStart, gbkEnd int
+	}{
+		{value: []rune("%1F果汁数据科技有限公司%2B"), gbkStart: 0, gbkEnd: 0},
+		{value: []rune("果汁数据科技有限公司%1F"), gbkStart: 0, gbkEnd: 1},
+		{value: []rune("果汁数据科技有限公司"), gbkStart: 1, gbkEnd: 2},
+		{value: []rune("果汁数据科技有限公司"), gbkStart: 1, gbkEnd: 4},
+		{value: []rune("果汁数据科技有限公司"), gbkStart: 5, gbkEnd: 10},
+		{value: []rune("果汁数据科技有限公司"), gbkStart: 0, gbkEnd: 10},
+		{value: []rune("GBK果汁数据科技有限公司文件"), gbkStart: 0, gbkEnd: 15},
+		{value: []rune("%果汁数据科%技有限公司%"), gbkStart: 1, gbkEnd: 4},
+		{value: []rune("\"果汁数据科\"技有限公司%"), gbkStart: 1, gbkEnd: 4},
+		{value: []rune("\\果汁数\\据科技有限公司"), gbkStart: 1, gbkEnd: 4},
+	}
+	for _, c := range cases {
+		var v []byte
+		prefix := c.value[:c.gbkStart]
+		middle := c.value[c.gbkStart:c.gbkEnd]
+		suffix := c.value[c.gbkEnd:]
+		gbk, err := Utf8ToGbk([]byte(string(middle)))
+		if err != nil {
+			t.Fatalf("Utf8ToGbk error: %v", err)
+		}
+		v = append(v, []byte(string(prefix))...)
+		v = append(v, gbk...)
+		v = append(v, []byte(string(suffix))...)
+		s := escape(string(v))
+		t.Log("escape value: ", s)
+		r := unescape(s)
+		if bytes.Compare(r, v) != 0 {
+			t.Fatalf("expected %v, but got %v", v, r)
+		}
+	}
+}
+
+func Utf8ToGbk(s []byte) ([]byte, error) {
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewEncoder())
+	d, e := ioutil.ReadAll(reader)
+	if e != nil {
+		return nil, e
+	}
+	return d, nil
+}
+
+func GbkToUtf8(s []byte) ([]byte, error) {
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewDecoder())
+	d, e := ioutil.ReadAll(reader)
+	if e != nil {
+		return nil, e
+	}
+	return d, nil
+}
 
 func testLoad(t *testing.T, uri, fname string) Meta {
 	m := NewClient(uri, &Config{Retries: 10, Strict: true})
@@ -44,8 +105,19 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
-	} else if len(entries) != 8 {
+	} else if len(entries) != 11 {
 		t.Fatalf("entries: %d", len(entries))
+	}
+	for _, entry := range entries {
+		fname := string(entry.Name)
+		if strings.HasPrefix(fname, "GBK") {
+			if utf8, err := GbkToUtf8(entry.Name); err != nil || string(utf8) != "GBK果汁数据科技有限公司文件" {
+				t.Fatalf("load GBK file error: %s", string(utf8))
+			}
+		}
+		if strings.HasPrefix(fname, "UTF8") && fname != "UTF8果汁数据科技有限公司目录" && fname != "UTF8果汁数据科技有限公司文件" {
+			t.Fatalf("load entries error: %s", fname)
+		}
 	}
 	attr := &Attr{}
 	if st := m.GetAttr(ctx, 2, attr); st != 0 {
@@ -65,11 +137,20 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("getattr: %s, %d", st, attr.Nlink)
 	}
 	var target []byte
-	if st := m.ReadLink(ctx, 5, &target); st != 0 || string(target) != "d1/f11" { // symlink
+
+	if st := m.ReadLink(ctx, 5, &target); st == 0 { // symlink
+		if utf8, err := GbkToUtf8(target); err != nil || string(utf8) != "GBK果汁数据科技有限公司文件" {
+			t.Fatalf("readlink: %s, %s", st, target)
+		}
+	} else {
 		t.Fatalf("readlink: %s, %s", st, target)
 	}
+
 	var value []byte
 	if st := m.GetXattr(ctx, 2, "k", &value); st != 0 || string(value) != "v" {
+		t.Fatalf("getxattr: %s %v", st, value)
+	}
+	if st := m.GetXattr(ctx, 3, "dk", &value); st != 0 || string(value) != "果汁" {
 		t.Fatalf("getxattr: %s %v", st, value)
 	}
 
@@ -82,6 +163,9 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 		t.Fatalf("open file %s: %s", result, err)
 	}
 	defer fp.Close()
+	if _, err = m.Load(true); err != nil {
+		t.Fatalf("load setting: %s", err)
+	}
 	if err = m.DumpMeta(fp, root); err != nil {
 		t.Fatalf("dump meta: %s", err)
 	}
@@ -91,45 +175,44 @@ func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 	}
 }
 
+func testLoadDump(t *testing.T, name, addr string) {
+	t.Run("Metadata Engine: "+name, func(t *testing.T) {
+		m := testLoad(t, addr, sampleFile)
+		testDump(t, m, 1, sampleFile, "test.dump")
+		m.Shutdown()
+		m = NewClient(addr, &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
+		testDump(t, m, 0, sampleFile, "test.dump")
+	})
+}
+
 func TestLoadDump(t *testing.T) {
-	t.Run("Metadata Engine: Redis", func(t *testing.T) {
-		m := testLoad(t, "redis://127.0.0.1/10", sampleFile)
-		testDump(t, m, 1, sampleFile, "redis.dump")
-	})
-	t.Run("Metadata Engine: Redis; --SubDir d1 ", func(t *testing.T) {
-		_ = testLoad(t, "redis://127.0.0.1/10", sampleFile)
-		m := NewClient("redis://127.0.0.1/10", &Config{Retries: 10, Strict: true, Subdir: "d1"})
-		testDump(t, m, 1, subSampleFile, "redis_subdir.dump")
-		testDump(t, m, 0, sampleFile, "redis.dump")
-	})
+	testLoadDump(t, "redis", "redis://127.0.0.1/10")
+	testLoadDump(t, "redis cluster", "redis://127.0.0.1:7001/10")
+	testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
+	testLoadDump(t, "mysql", "mysql://root:@/dev")
+	testLoadDump(t, "postgres", "postgres://localhost:5432/test?sslmode=disable")
+	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-duimp-testdb"))
+	testLoadDump(t, "etcd", "etcd://127.0.0.1:2379/jfs-load-dump")
+	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
+}
 
-	sqluri := "sqlite3://" + path.Join(t.TempDir(), "jfs-load-dump-test.db")
-	t.Run("Metadata Engine: SQLite", func(t *testing.T) {
-		m := testLoad(t, sqluri, sampleFile)
-		testDump(t, m, 1, sampleFile, "sqlite3.dump")
-	})
-	t.Run("Metadata Engine: SQLite --SubDir d1", func(t *testing.T) {
-		_ = testLoad(t, sqluri, sampleFile)
-		m := NewClient(sqluri, &Config{Retries: 10, Strict: true, Subdir: "d1"})
-		testDump(t, m, 1, subSampleFile, "sqlite3_subdir.dump")
-		testDump(t, m, 0, sampleFile, "sqlite3.dump")
-	})
-
-	t.Run("Metadata Engine: TKV", func(t *testing.T) {
+func TestLoadDump_MemKV(t *testing.T) {
+	t.Run("Metadata Engine: memkv", func(t *testing.T) {
 		_ = os.Remove(settingPath)
 		m := testLoad(t, "memkv://test/jfs", sampleFile)
-		testDump(t, m, 1, sampleFile, "tkv.dump")
+		testDump(t, m, 1, sampleFile, "test.dump")
 	})
-	t.Run("Metadata Engine: TKV --SubDir d1 ", func(t *testing.T) {
+	t.Run("Metadata Engine: memkv; --SubDir d1 ", func(t *testing.T) {
 		_ = os.Remove(settingPath)
-		m := testLoad(t, "memkv://user:passwd@test/jfs", sampleFile)
+		m := testLoad(t, "memkv://user:pass@test/jfs", sampleFile)
 		if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
 			var err error
 			if kvm.root, err = lookupSubdir(kvm, "d1"); err != nil {
 				t.Fatalf("lookup subdir d1: %s", err)
 			}
 		}
-		testDump(t, m, 1, subSampleFile, "tkv_subdir.dump")
-		testDump(t, m, 0, sampleFile, "tkv.dump")
+		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
+		testDump(t, m, 0, sampleFile, "test.dump")
 	})
 }

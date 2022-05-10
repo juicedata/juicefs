@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 
@@ -25,11 +24,28 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func load(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-URL is needed")
+func cmdLoad() *cli.Command {
+	return &cli.Command{
+		Name:      "load",
+		Action:    load,
+		Category:  "ADMIN",
+		Usage:     "Load metadata from a previously dumped JSON file",
+		ArgsUsage: "META-URL [FILE]",
+		Description: `
+Load metadata into an empty metadata engine.
+
+WARNING: Do NOT use new engine and the old one at the same time, otherwise it will probably break
+consistency of the volume.
+
+Examples:
+$ juicefs load meta-dump redis://localhost/1
+
+Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
+}
+
+func load(ctx *cli.Context) error {
+	setup(ctx, 1)
 	var fp io.ReadCloser
 	if ctx.Args().Len() == 1 {
 		fp = os.Stdin
@@ -46,15 +62,13 @@ func load(ctx *cli.Context) error {
 	if err := m.LoadMeta(fp); err != nil {
 		return err
 	}
+	if format, err := m.Load(true); err == nil {
+		if format.SecretKey == "removed" {
+			logger.Warnf("Secret key was removed; please correct it with `config` command")
+		}
+	} else {
+		return err
+	}
 	logger.Infof("Load metadata from %s succeed", ctx.Args().Get(1))
 	return nil
-}
-
-func loadFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "load",
-		Usage:     "load metadata from a previously dumped JSON file",
-		ArgsUsage: "META-URL [FILE]",
-		Action:    load,
-	}
 }

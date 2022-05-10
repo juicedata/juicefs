@@ -18,49 +18,22 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/erikdubbelboer/gspt"
 	"github.com/google/gops/agent"
-	"github.com/sirupsen/logrus"
-
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/pyroscope-io/client/pyroscope"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
 var logger = utils.GetLogger("juicefs")
-
-func globalFlags() []cli.Flag {
-	return []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "verbose",
-			Aliases: []string{"debug", "v"},
-			Usage:   "enable debug log",
-		},
-		&cli.BoolFlag{
-			Name:    "quiet",
-			Aliases: []string{"q"},
-			Usage:   "only warning and errors",
-		},
-		&cli.BoolFlag{
-			Name:  "trace",
-			Usage: "enable trace log",
-		},
-		&cli.BoolFlag{
-			Name:  "no-agent",
-			Usage: "Disable pprof (:6060) and gops (:6070) agent",
-		},
-		&cli.BoolFlag{
-			Name:  "no-color",
-			Usage: "disable colors",
-		},
-	}
-}
 
 func Main(args []string) error {
 	cli.VersionFlag = &cli.BoolFlag{
@@ -72,38 +45,35 @@ func Main(args []string) error {
 		Usage:                "A POSIX file system built on Redis and object storage.",
 		Version:              version.Version(),
 		Copyright:            "Apache License 2.0",
+		HideHelpCommand:      true,
 		EnableBashCompletion: true,
 		Flags:                globalFlags(),
 		Commands: []*cli.Command{
-			formatFlags(),
-			mountFlags(),
-			umountFlags(),
-			gatewayFlags(),
-			webDavFlags(),
-			syncFlags(),
-			rmrFlags(),
-			infoFlags(),
-			benchFlags(),
-			gcFlags(),
-			checkFlags(),
-			profileFlags(),
-			statsFlags(),
-			statusFlags(),
-			warmupFlags(),
-			dumpFlags(),
-			loadFlags(),
-			configFlags(),
-			destroyFlags(),
+			cmdFormat(),
+			cmdConfig(),
+			cmdDestroy(),
+			cmdGC(),
+			cmdFsck(),
+			cmdDump(),
+			cmdLoad(),
+			cmdStatus(),
+			cmdStats(),
+			cmdProfile(),
+			cmdInfo(),
+			cmdMount(),
+			cmdUmount(),
+			cmdGateway(),
+			cmdWebDav(),
+			cmdBench(),
+			cmdWarmup(),
+			cmdRmr(),
+			cmdSync(),
 		},
 	}
 
 	// Called via mount or fstab.
 	if strings.HasSuffix(args[0], "/mount.juicefs") {
-		if newArgs, err := handleSysMountArgs(args); err != nil {
-			log.Fatal(err)
-		} else {
-			args = newArgs
-		}
+		args = handleSysMountArgs(args)
 	}
 
 	return app.Run(reorderOptions(app, args))
@@ -113,11 +83,11 @@ func Main(args []string) error {
 func main() {
 	err := Main(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 }
 
-func handleSysMountArgs(args []string) ([]string, error) {
+func handleSysMountArgs(args []string) []string {
 	optionToCmdFlag := map[string]string{
 		"attrcacheto":     "attr-cache",
 		"entrycacheto":    "entry-cache",
@@ -128,7 +98,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
-	for _, f := range append(mountFlags().Flags, globalFlags()...) {
+	for _, f := range append(cmdMount().Flags, globalFlags()...) {
 		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
 			_, cmdFlagsLookup[names[0]] = f.(*cli.BoolFlag)
 		}
@@ -147,7 +117,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 		opts := strings.Split(option, ",")
 		for _, opt := range opts {
 			opt = strings.TrimSpace(opt)
-			if opt == "" || stringContains(sysOptions, opt) {
+			if opt == "" || utils.StringContains(sysOptions, opt) {
 				continue
 			}
 			// Lower case option name is preferred, but if it's the same as flag name, we also accept it
@@ -179,16 +149,7 @@ func handleSysMountArgs(args []string) ([]string, error) {
 	}
 	newArgs = append(newArgs, args[1], args[2])
 	logger.Debug("Parsed mount args: ", strings.Join(newArgs, " "))
-	return newArgs, nil
-}
-
-func stringContains(s []string, e string) bool {
-	for _, item := range s {
-		if item == e {
-			return true
-		}
-	}
-	return false
+	return newArgs
 }
 
 func isFlag(flags []cli.Flag, option string) (bool, bool) {
@@ -253,7 +214,7 @@ func reorderOptions(app *cli.App, args []string) []string {
 				newArgs = append(newArgs, args[i])
 			}
 		} else {
-			if strings.HasPrefix(option, "-") && !stringContains(args, "--generate-bash-completion") {
+			if strings.HasPrefix(option, "-") && !utils.StringContains(args, "--generate-bash-completion") {
 				logger.Fatalf("unknown option: %s", option)
 			}
 			others = append(others, option)
@@ -262,22 +223,14 @@ func reorderOptions(app *cli.App, args []string) []string {
 	return append(newArgs, others...)
 }
 
-func setupAgent(c *cli.Context) {
-	if !c.Bool("no-agent") {
-		go func() {
-			for port := 6060; port < 6100; port++ {
-				_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
-			}
-		}()
-		go func() {
-			for port := 6070; port < 6100; port++ {
-				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
-			}
-		}()
+// Check number of positional arguments, set logger level and setup agent if needed
+func setup(c *cli.Context, n int) {
+	if c.NArg() < n {
+		logger.Errorf("This command requires at least %d arguments", n)
+		fmt.Printf("USAGE:\n   juicefs %s [command options] %s\n", c.Command.Name, c.Command.ArgsUsage)
+		os.Exit(1)
 	}
-}
 
-func setLoggerLevel(c *cli.Context) {
 	if c.Bool("trace") {
 		utils.SetLogLevel(logrus.TraceLevel)
 	} else if c.Bool("verbose") {
@@ -290,7 +243,43 @@ func setLoggerLevel(c *cli.Context) {
 	if c.Bool("no-color") {
 		utils.DisableLogColor()
 	}
-	setupAgent(c)
+
+	if !c.Bool("no-agent") {
+		go func() {
+			for port := 6060; port < 6100; port++ {
+				_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+			}
+		}()
+		go func() {
+			for port := 6070; port < 6100; port++ {
+				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+			}
+		}()
+	}
+
+	if c.IsSet("pyroscope") {
+		tags := make(map[string]string)
+		appName := fmt.Sprintf("juicefs.%s", c.Command.Name)
+		if c.Command.Name == "mount" {
+			tags["mountpoint"] = c.Args().Get(1)
+		}
+		if hostname, err := os.Hostname(); err == nil {
+			tags["hostname"] = hostname
+		}
+		tags["pid"] = strconv.Itoa(os.Getpid())
+		tags["version"] = version.Version()
+
+		if _, err := pyroscope.Start(pyroscope.Config{
+			ApplicationName: appName,
+			ServerAddress:   c.String("pyroscope"),
+			Logger:          logger,
+			Tags:            tags,
+			AuthToken:       os.Getenv("PYROSCOPE_AUTH_TOKEN"),
+			ProfileTypes:    pyroscope.DefaultProfileTypes,
+		}); err != nil {
+			logger.Errorf("start pyroscope agent: %v", err)
+		}
+	}
 }
 
 func removePassword(uri string) {

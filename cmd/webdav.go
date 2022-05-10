@@ -25,8 +25,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func webDavFlags() *cli.Command {
-	flags := append(clientFlags(),
+func cmdWebDav() *cli.Command {
+	selfFlags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:  "gzip",
 			Usage: "compress served files via gzip",
@@ -35,58 +35,34 @@ func webDavFlags() *cli.Command {
 			Name:  "disallowList",
 			Usage: "disallow list a directory",
 		},
-		&cli.Float64Flag{
-			Name:  "attr-cache",
-			Value: 1.0,
-			Usage: "attributes cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "entry-cache",
-			Value: 0,
-			Usage: "file entry cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "dir-entry-cache",
-			Value: 1.0,
-			Usage: "dir entry cache timeout in seconds",
-		},
 		&cli.StringFlag{
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
 		},
-		&cli.StringFlag{
-			Name:  "metrics",
-			Value: "127.0.0.1:9567",
-			Usage: "address to export metrics",
-		},
-		&cli.StringFlag{
-			Name:  "consul",
-			Value: "127.0.0.1:8500",
-			Usage: "consul address to register",
-		},
-		&cli.BoolFlag{
-			Name:  "no-usage-report",
-			Usage: "do not send usage report",
-		},
-	)
+	}
+	compoundFlags := [][]cli.Flag{
+		clientFlags(),
+		selfFlags,
+		cacheFlags(0),
+		shareInfoFlags(),
+	}
+
 	return &cli.Command{
 		Name:      "webdav",
-		Usage:     "start a webdav server",
+		Action:    webdav,
+		Category:  "SERVICE",
+		Usage:     "Start a WebDAV server",
 		ArgsUsage: "META-URL ADDRESS",
-		Flags:     flags,
-		Action:    webdavSvc,
+		Description: `
+Examples:
+$ juicefs webdav redis://localhost localhost:9007`,
+		Flags: expandFlags(compoundFlags),
 	}
 }
 
-func webdavSvc(c *cli.Context) error {
-	setLoggerLevel(c)
-	if c.Args().Len() < 1 {
-		logger.Fatalf("meta url are required")
-	}
+func webdav(c *cli.Context) error {
+	setup(c, 2)
 	metaUrl := c.Args().Get(0)
-	if c.Args().Len() < 2 {
-		logger.Fatalf("listen address is required")
-	}
 	listenAddr := c.Args().Get(1)
 	m, store, conf := initForSvc(c, "webdav", metaUrl)
 	jfs, err := fs.NewFileSystem(conf, m, store)

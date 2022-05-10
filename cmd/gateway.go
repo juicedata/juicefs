@@ -20,19 +20,13 @@
 package main
 
 import (
-	"fmt"
 	_ "net/http/pprof"
 	"os"
-	"path/filepath"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/metric"
-	"github.com/juicedata/juicefs/pkg/usage"
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 
 	jfsgateway "github.com/juicedata/juicefs/pkg/gateway"
@@ -43,40 +37,11 @@ import (
 	"github.com/minio/minio/pkg/auth"
 )
 
-func gatewayFlags() *cli.Command {
-	flags := append(clientFlags(),
-		&cli.Float64Flag{
-			Name:  "attr-cache",
-			Value: 1.0,
-			Usage: "attributes cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "entry-cache",
-			Value: 0,
-			Usage: "file entry cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "dir-entry-cache",
-			Value: 1.0,
-			Usage: "dir entry cache timeout in seconds",
-		},
+func cmdGateway() *cli.Command {
+	selfFlags := []cli.Flag{
 		&cli.StringFlag{
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
-		},
-		&cli.StringFlag{
-			Name:  "metrics",
-			Value: "127.0.0.1:9567",
-			Usage: "address to export metrics",
-		},
-		&cli.StringFlag{
-			Name:  "consul",
-			Value: "127.0.0.1:8500",
-			Usage: "consul address to register",
-		},
-		&cli.BoolFlag{
-			Name:  "no-usage-report",
-			Usage: "do not send usage report",
 		},
 		&cli.BoolFlag{
 			Name:  "no-banner",
@@ -89,23 +54,44 @@ func gatewayFlags() *cli.Command {
 		&cli.BoolFlag{
 			Name:  "keep-etag",
 			Usage: "keep the ETag for uploaded objects",
-		})
+		},
+		&cli.StringFlag{
+			Name:  "umask",
+			Value: "022",
+			Usage: "umask for new file in octal",
+		},
+	}
+
+	compoundFlags := [][]cli.Flag{
+		clientFlags(),
+		cacheFlags(0),
+		selfFlags,
+		shareInfoFlags(),
+	}
+
 	return &cli.Command{
 		Name:      "gateway",
-		Usage:     "S3-compatible gateway",
-		ArgsUsage: "META-URL ADDRESS",
-		Flags:     flags,
 		Action:    gateway,
+		Category:  "SERVICE",
+		Usage:     "Start an S3-compatible gateway",
+		ArgsUsage: "META-URL ADDRESS",
+		Description: `
+It is implemented based on the MinIO S3 Gateway. Before starting the gateway, you need to set
+MINIO_ROOT_USER and MINIO_ROOT_PASSWORD environment variables, which are the access key and secret
+key used for accessing S3 APIs.
+
+Examples:
+$ export MINIO_ROOT_USER=admin
+$ export MINIO_ROOT_PASSWORD=12345678
+$ juicefs gateway redis://localhost localhost:9000
+
+Details: https://juicefs.com/docs/community/s3_gateway`,
+		Flags: expandFlags(compoundFlags),
 	}
 }
 
 func gateway(c *cli.Context) error {
-	setLoggerLevel(c)
-
-	if c.Args().Len() < 2 {
-		logger.Fatalf("Meta URL and listen address are required")
-	}
-
+	setup(c, 2)
 	ak := os.Getenv("MINIO_ROOT_USER")
 	if ak == "" {
 		ak = os.Getenv("MINIO_ACCESS_KEY")
@@ -177,97 +163,49 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	addr := c.Args().Get(0)
 	removePassword(addr)
 	m, store, conf := initForSvc(c, "s3gateway", addr)
-	return jfsgateway.NewJFSGateway(conf, m, store, c.Bool("multi-buckets"), c.Bool("keep-etag"))
+
+	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
+	if err != nil {
+		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
+	}
+
+	return jfsgateway.NewJFSGateway(conf, m, store, &jfsgateway.Config{MultiBucket: c.Bool("multi-buckets"), KeepEtag: c.Bool("keep-etag"), Mode: uint16(0777 &^ umask)})
 }
 
 func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
-	metaConf := &meta.Config{
-		Retries:    10,
-		Strict:     true,
-		ReadOnly:   c.Bool("read-only"),
-		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
-		MountPoint: mp,
-		Subdir:     c.String("subdir"),
-		MaxDeletes: c.Int("max-deletes"),
-	}
-	m := meta.NewClient(metaUrl, metaConf)
-	format, err := m.Load()
+	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
+	metaCli := meta.NewClient(metaUrl, metaConf)
+	format, err := metaCli.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	chunkConf := chunk.Config{
-		BlockSize: format.BlockSize * 1024,
-		Compress:  format.Compression,
+	registerer, registry := wrapRegister(mp, format.Name)
+	if !c.Bool("writeback") && c.IsSet("upload-delay") {
+		logger.Warnf("delayed upload only work in writeback mode")
+	}
 
-		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
-		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
-		MaxUpload:     c.Int("max-uploads"),
-		Writeback:     c.Bool("writeback"),
-		Prefetch:      c.Int("prefetch"),
-		BufferSize:    c.Int("buffer-size") << 20,
-		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
-		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
-
-		CacheDir:       c.String("cache-dir"),
-		CacheSize:      int64(c.Int("cache-size")),
-		FreeSpace:      float32(c.Float64("free-space-ratio")),
-		CacheMode:      os.FileMode(0600),
-		CacheFullBlock: !c.Bool("cache-partial-only"),
-		AutoCreate:     true,
-	}
-	if chunkConf.CacheDir != "memory" {
-		ds := utils.SplitDir(chunkConf.CacheDir)
-		for i := range ds {
-			ds[i] = filepath.Join(ds[i], format.UUID)
-		}
-		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
-	}
-	if c.IsSet("bucket") {
-		format.Bucket = c.String("bucket")
-	}
-	blob, err := createStorage(format)
+	chunkConf := getChunkConf(c, format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
 
-	store := chunk.NewCachedStore(blob, chunkConf)
-	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
-		chunkid := args[0].(uint64)
-		length := args[1].(uint32)
-		return store.Remove(chunkid, int(length))
-	})
-	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
-		slices := args[0].([]meta.Slice)
-		chunkid := args[1].(uint64)
-		return vfs.Compact(chunkConf, store, slices, chunkid)
-	})
-	err = m.NewSession()
+	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
+	registerMetaMsg(metaCli, store, chunkConf)
+
+	err = metaCli.NewSession()
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
 
-	conf := &vfs.Config{
-		AccessLog:       c.String("access-log"),
-		Meta:            metaConf,
-		Format:          format,
-		Version:         version.Version(),
-		Chunk:           &chunkConf,
-		AttrTimeout:     time.Millisecond * time.Duration(c.Float64("attr-cache")*1000),
-		EntryTimeout:    time.Millisecond * time.Duration(c.Float64("entry-cache")*1000),
-		DirEntryTimeout: time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000),
-		BackupMeta:      c.Duration("backup-meta"),
-	}
+	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
+	vfsConf.AccessLog = c.String("access-log")
+	vfsConf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
+	vfsConf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
+	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 
-	metricsAddr := exposeMetrics(m, c)
-	if c.IsSet("consul") {
-		metric.RegisterToConsul(c.String("consul"), metricsAddr, mp)
-	}
-	if !c.Bool("read-only") && conf.BackupMeta > 0 {
-		go vfs.Backup(m, blob, conf.BackupMeta)
-	}
-	if !c.Bool("no-usage-report") {
-		go usage.ReportUsage(m, fmt.Sprintf("%s %s", mp, version.Version()))
-	}
-	return m, store, conf
+	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
+
+	return metaCli, store, vfsConf
 }

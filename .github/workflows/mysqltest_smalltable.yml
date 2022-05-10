@@ -12,8 +12,8 @@ on:
       - 'release-**'
     paths-ignore:
       - 'docs/**'
-  schedule:
-    - cron:  '30 20 * * *'
+
+  workflow_dispatch:
 
 jobs:
   mysqltestsmalltable:
@@ -22,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.16.x'
+          go-version: '1.17.x'
 
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
@@ -40,9 +40,10 @@ jobs:
           sudo docker run -d --name redis -v redis-data:/data  \
           -p 6379:6379  redis redis-server --appendonly yes
 
+
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
@@ -65,6 +66,13 @@ jobs:
           sudo service mysql start
           sudo service mysql status
           sudo mysql -uroot -proot  -e "select @@datadir;"
+
+      - name: Change Parameters
+        run: |
+          mysql -uroot -proot  -e "show variables like 'log_error';"
+          mysql -uroot -proot -e "set global log_error_verbosity=3;"
+          mysql -uroot -proot  -e "show variables like 'log_error_verbosity';"
+
 
       - name: Install Sysbench
         run: |
@@ -89,6 +97,21 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
 
-      - name: Setup tmate session
+      - name: Log
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        run: |
+          echo "mysql log"
+          tail -n 1000 /var/log/mysql/error.log
+          echo "juicefs log"
+          tail -n 1000 /var/log/juicefs.log
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

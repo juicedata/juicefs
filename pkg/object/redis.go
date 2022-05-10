@@ -25,6 +25,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -67,6 +70,87 @@ func (r *redisStore) Put(key string, in io.Reader) error {
 
 func (r *redisStore) Delete(key string) error {
 	return r.rdb.Del(c, key).Err()
+}
+
+func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
+	batch := 1000
+	var objs = make(chan Object, batch)
+	var keyList []string
+	var cursor uint64
+	for {
+		// FIXME: this will be really slow for many objects
+		keys, c, err := t.rdb.Scan(context.TODO(), cursor, prefix+"*", int64(batch)).Result()
+		if err != nil {
+			logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
+			return nil, err
+		}
+		for _, key := range keys {
+			if key > marker {
+				keyList = append(keyList, key)
+			}
+		}
+		if c == 0 {
+			break
+		}
+		cursor = c
+	}
+
+	sort.Strings(keyList)
+
+	go func() {
+		defer close(objs)
+		lKeyList := len(keyList)
+		for start := 0; start < lKeyList; start += batch {
+			end := start + batch
+			if end > lKeyList {
+				end = lKeyList
+			}
+
+			p := t.rdb.Pipeline()
+			for _, key := range keyList[start:end] {
+				p.StrLen(c, key)
+			}
+			cmds, err := p.Exec(ctx)
+			if err != nil {
+				objs <- nil
+				return
+			}
+
+			now := time.Now()
+			for idx, cmd := range cmds {
+				if intCmd, ok := cmd.(*redis.IntCmd); ok {
+					size, err := intCmd.Result()
+					if err != nil {
+						objs <- nil
+						return
+					}
+					if size == 0 {
+						exist, err := t.rdb.Exists(context.TODO(), keyList[start:end][idx]).Result()
+						if err != nil {
+							objs <- nil
+							return
+						}
+						if exist == 0 {
+							continue
+						}
+					}
+					// FIXME: mtime
+					objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/")}
+				}
+			}
+		}
+	}()
+	return objs, nil
+}
+
+func (t *redisStore) Head(key string) (Object, error) {
+	data, err := t.rdb.Get(context.TODO(), key).Bytes()
+	return &obj{
+		key,
+		int64(len(data)),
+		time.Now(),
+		strings.HasSuffix(key, "/"),
+	}, err
 }
 
 func newRedis(url, user, passwd string) (ObjectStorage, error) {

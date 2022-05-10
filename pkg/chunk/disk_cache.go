@@ -62,10 +62,10 @@ type cacheStore struct {
 	keys     map[string]cacheItem
 	scanned  bool
 	full     bool
-	uploader func(key, path string)
+	uploader func(key, path string, force bool) bool
 }
 
-func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string)) *cacheStore {
+func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
 	if config.CacheMode == 0 {
 		config.CacheMode = 0600 // only owner can read/write cache
 	}
@@ -257,6 +257,9 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 			// update atime
 			cache.keys[key] = cacheItem{it.size, uint32(time.Now().Unix())}
 		}
+	} else if cache.keys[key].atime > 0 {
+		cache.used -= int64(cache.keys[key].size + 4096)
+		delete(cache.keys, key)
 	}
 	return f, err
 }
@@ -432,7 +435,11 @@ func (cache *cacheStore) uploadStaging() {
 		cnt++
 		if cnt > 1 {
 			cache.Unlock()
-			cache.uploader(lastKey, cache.stagePath(lastKey))
+			if !cache.uploader(lastKey, cache.stagePath(lastKey), true) {
+				logger.Warnf("Upload list is too full")
+				cache.Lock()
+				return
+			}
 			logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
 			cache.Lock()
 			// the size in keys should be updated
@@ -446,8 +453,9 @@ func (cache *cacheStore) uploadStaging() {
 	}
 	if cnt > 0 {
 		cache.Unlock()
-		cache.uploader(lastKey, cache.stagePath(lastKey))
-		logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
+		if cache.uploader(lastKey, cache.stagePath(lastKey), true) {
+			logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
+		}
 		cache.Lock()
 	}
 }
@@ -522,7 +530,7 @@ func (cache *cacheStore) scanStaging() {
 				if runtime.GOOS == "windows" {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
-				cache.uploader(key, path)
+				cache.uploader(key, path, false)
 				count++
 			}
 		}
@@ -593,7 +601,7 @@ type CacheManager interface {
 	usedMemory() int64
 }
 
-func newCacheManager(config *Config, uploader func(key, path string)) CacheManager {
+func newCacheManager(config *Config, uploader func(key, path string, force bool) bool) CacheManager {
 	if config.CacheDir == "memory" || config.CacheSize == 0 {
 		return newMemStore(config)
 	}

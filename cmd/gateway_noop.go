@@ -24,10 +24,12 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func gatewayFlags() *cli.Command {
+func cmdGateway() *cli.Command {
 	return &cli.Command{
-		Name:  "gateway",
-		Usage: "S3-compatible gateway (not included)",
+		Name:        "gateway",
+		Category:    "SERVICE",
+		Usage:       "Start an S3-compatible gateway (not included)",
+		Description: `This feature is not included. If you want it, recompile juicefs without "nogateway" flag`,
 		Action: func(*cli.Context) error {
 			return errors.New("not supported")
 		},

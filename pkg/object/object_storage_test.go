@@ -18,10 +18,12 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"github.com/go-redis/redis/v8"
 	"io/ioutil"
 	"math"
 	"os"
@@ -66,7 +68,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Create(); err != nil {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
 	}
-
+	if err := s.Create(); err != nil {
+		t.Fatalf("err should be nil when creating a bucket with the same name")
+	}
 	s = WithPrefix(s, "unit-test/")
 	defer s.Delete("test")
 	k := "large"
@@ -222,13 +226,13 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	// Copy empty objects
 	defer s.Delete("empty")
 	if err := s.Put("empty", bytes.NewReader([]byte{})); err != nil {
-		t.Fatalf("PUT empty object failed: %s", err.Error())
+		t.Logf("PUT empty object failed: %s", err.Error())
 	}
 
 	// Copy `/` suffixed object
 	defer s.Delete("slash/")
 	if err := s.Put("slash/", bytes.NewReader([]byte{})); err != nil {
-		t.Fatalf("PUT `/` suffixed object failed: %s", err.Error())
+		t.Logf("PUT `/` suffixed object failed: %s", err.Error())
 	}
 }
 
@@ -465,6 +469,43 @@ func TestYovole(t *testing.T) {
 	testStorage(t, s)
 }
 
+func TestTiKV(t *testing.T) {
+	if os.Getenv("TIKV_ADDR") == "" {
+		t.SkipNow()
+	}
+	s, err := newTiKV(os.Getenv("TIKV_ADDR"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testStorage(t, s)
+}
+func TestRedis(t *testing.T) {
+	if os.Getenv("REDIS_ADDR") == "" {
+		t.SkipNow()
+	}
+
+	opt, _ := redis.ParseURL(os.Getenv("REDIS_ADDR"))
+	rdb := redis.NewClient(opt)
+	_ = rdb.FlushDB(context.Background())
+
+	s, err := newRedis(os.Getenv("REDIS_ADDR"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testStorage(t, s)
+}
+
+func TestSwift(t *testing.T) {
+	if os.Getenv("SWIFT_ADDR") == "" {
+		t.SkipNow()
+	}
+	s, err := newSwiftOSS(os.Getenv("SWIFT_ADDR"), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testStorage(t, s)
+}
+
 func TestWebDAV(t *testing.T) {
 	if os.Getenv("WEBDAV_TEST_BUCKET") == "" {
 		t.SkipNow()
@@ -487,11 +528,16 @@ func TestMarsharl(t *testing.T) {
 		t.Skip()
 	}
 	s, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
-	_ = s.Put("hello", bytes.NewReader([]byte("world")))
+	if err := s.Put("hello", bytes.NewReader([]byte("world"))); err != nil {
+		t.Fatalf("PUT failed: %s", err)
+	}
 	fs := s.(FileSystem)
 	_ = fs.Chown("hello", "user", "group")
 	_ = fs.Chmod("hello", 0764)
-	o, _ := s.Head("hello")
+	o, err := s.Head("hello")
+	if err != nil {
+		t.Fatalf("HEAD failed: %s", err)
+	}
 
 	m := MarshalObject(o)
 	d, _ := json.Marshal(m)

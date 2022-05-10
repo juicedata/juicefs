@@ -16,7 +16,18 @@
 
 package meta
 
-import "time"
+import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/md5"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"io"
+	"time"
+
+	"github.com/juicedata/juicefs/pkg/version"
+)
 
 // Config for clients.
 type Config struct {
@@ -24,27 +35,63 @@ type Config struct {
 	Retries     int
 	CaseInsensi bool
 	ReadOnly    bool
+	NoBGJob     bool // disable background jobs like clean-up, backup, etc.
 	OpenCache   time.Duration
+	Heartbeat   time.Duration
 	MountPoint  string
 	Subdir      string
-	MaxDeletes  int
 }
 
 type Format struct {
-	Name        string
-	UUID        string
-	Storage     string
-	Bucket      string
-	AccessKey   string
-	SecretKey   string `json:",omitempty"`
-	BlockSize   int
-	Compression string
-	Shards      int
-	Partitions  int
-	Capacity    uint64
-	Inodes      uint64
-	EncryptKey  string `json:",omitempty"`
-	TrashDays   int
+	Name             string
+	UUID             string
+	Storage          string
+	Bucket           string
+	AccessKey        string
+	SecretKey        string `json:",omitempty"`
+	BlockSize        int
+	Compression      string
+	Shards           int
+	HashPrefix       bool
+	Capacity         uint64
+	Inodes           uint64
+	EncryptKey       string `json:",omitempty"`
+	KeyEncrypted     bool
+	TrashDays        int
+	MetaVersion      int
+	MinClientVersion string
+	MaxClientVersion string
+}
+
+func (f *Format) update(old *Format, force bool) error {
+	if force {
+		old.RemoveSecret()
+		logger.Warnf("Existing volume will be overwrited: %+v", *old)
+	} else {
+		var args []interface{}
+		switch {
+		case f.Name != old.Name:
+			args = []interface{}{"name", old.Name, f.Name}
+		case f.Storage != old.Storage:
+			args = []interface{}{"storage", old.Storage, f.Storage}
+		case f.BlockSize != old.BlockSize:
+			args = []interface{}{"block size", old.BlockSize, f.BlockSize}
+		case f.Compression != old.Compression:
+			args = []interface{}{"compression", old.Compression, f.Compression}
+		case f.Shards != old.Shards:
+			args = []interface{}{"shards", old.Shards, f.Shards}
+		case f.HashPrefix != old.HashPrefix:
+			args = []interface{}{"hash prefix", old.HashPrefix, f.HashPrefix}
+		case f.MetaVersion != old.MetaVersion:
+			args = []interface{}{"meta version", old.MetaVersion, f.MetaVersion}
+		}
+		if args == nil {
+			f.UUID = old.UUID
+		} else {
+			return fmt.Errorf("cannot update volume %s from %v to %v", args...)
+		}
+	}
+	return nil
 }
 
 func (f *Format) RemoveSecret() {
@@ -54,4 +101,111 @@ func (f *Format) RemoveSecret() {
 	if f.EncryptKey != "" {
 		f.EncryptKey = "removed"
 	}
+}
+
+func (f *Format) CheckVersion() error {
+	if f.MetaVersion > 1 {
+		return fmt.Errorf("incompatible metadata version: %d; please upgrade the client", f.MetaVersion)
+	}
+
+	if f.MinClientVersion != "" {
+		r, err := version.Compare(f.MinClientVersion)
+		if err == nil && r < 0 {
+			err = fmt.Errorf("allowed minimum version: %s; please upgrade the client", f.MinClientVersion)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if f.MaxClientVersion != "" {
+		r, err := version.Compare(f.MaxClientVersion)
+		if err == nil && r > 0 {
+			err = fmt.Errorf("allowed maximum version: %s; please use an older client", f.MaxClientVersion)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *Format) Encrypt() error {
+	if f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" {
+		return nil
+	}
+	key := md5.Sum([]byte(f.UUID))
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return fmt.Errorf("new cipher: %s", err)
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("new GCM: %s", err)
+	}
+	nonce := make([]byte, 12)
+	encrypt := func(k string) string {
+		ciphertext := aesgcm.Seal(nil, nonce, []byte(k), nil)
+		buf := make([]byte, 12+len(ciphertext))
+		copy(buf, nonce)
+		copy(buf[12:], ciphertext)
+		return base64.StdEncoding.EncodeToString(buf)
+	}
+
+	if f.SecretKey != "" {
+		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+			return fmt.Errorf("generate nonce for secret key: %s", err)
+		}
+		f.SecretKey = encrypt(f.SecretKey)
+	}
+	if f.EncryptKey != "" {
+		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+			return fmt.Errorf("generate nonce for encrypt key: %s", err)
+		}
+		f.EncryptKey = encrypt(f.EncryptKey)
+	}
+	f.KeyEncrypted = true
+	return nil
+}
+
+func (f *Format) Decrypt() error {
+	if !f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" {
+		return nil
+	}
+	if f.SecretKey == "removed" {
+		return fmt.Errorf("secret key was removed; please correct it with `config` command")
+	}
+	key := md5.Sum([]byte(f.UUID))
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return fmt.Errorf("new cipher: %s", err)
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("new GCM: %s", err)
+	}
+	decrypt := func(k *string) error {
+		buf, err := base64.StdEncoding.DecodeString(*k)
+		if err != nil {
+			return fmt.Errorf("decode key: %s", err)
+		}
+		plaintext, err := aesgcm.Open(nil, buf[:12], buf[12:], nil)
+		if err != nil {
+			return fmt.Errorf("open cipher: %s", err)
+		}
+		*k = string(plaintext)
+		return nil
+	}
+
+	if f.SecretKey != "" {
+		if err = decrypt(&f.SecretKey); err != nil {
+			return err
+		}
+	}
+	if f.EncryptKey != "" {
+		if err = decrypt(&f.EncryptKey); err != nil {
+			return err
+		}
+	}
+	f.KeyEncrypted = false
+	return nil
 }

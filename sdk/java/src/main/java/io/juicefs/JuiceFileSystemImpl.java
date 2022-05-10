@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -52,6 +52,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -300,10 +303,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     obj.put("bucket", getConf(conf, "bucket", ""));
     obj.put("readOnly", Boolean.valueOf(getConf(conf, "read-only", "false")));
+    obj.put("noBGJob", Boolean.valueOf(getConf(conf, "no-bgjob", "false")));
     obj.put("cacheDir", getConf(conf, "cache-dir", "memory"));
     obj.put("cacheSize", Integer.valueOf(getConf(conf, "cache-size", "100")));
     obj.put("openCache", Float.valueOf(getConf(conf, "open-cache", "0.0")));
     obj.put("backupMeta", Integer.valueOf(getConf(conf, "backup-meta", "3600")));
+    obj.put("heartbeat", Integer.valueOf(getConf(conf, "heartbeat", "12")));
     obj.put("attrTimeout", Float.valueOf(getConf(conf, "attr-cache", "0.0")));
     obj.put("entryTimeout", Float.valueOf(getConf(conf, "entry-cache", "0.0")));
     obj.put("dirEntryTimeout", Float.valueOf(getConf(conf, "dir-entry-cache", "0.0")));
@@ -314,6 +319,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("maxDeletes", Integer.valueOf(getConf(conf, "max-deletes", "2")));
     obj.put("uploadLimit", Integer.valueOf(getConf(conf, "upload-limit", "0")));
     obj.put("downloadLimit", Integer.valueOf(getConf(conf, "download-limit", "0")));
+    obj.put("ioRetries", Integer.valueOf(getConf(conf, "io-retries", "10")));
     obj.put("getTimeout", Integer.valueOf(getConf(conf, "get-timeout", getConf(conf, "object-timeout", "5"))));
     obj.put("putTimeout", Integer.valueOf(getConf(conf, "put-timeout", getConf(conf, "object-timeout", "60"))));
     obj.put("memorySize", Integer.valueOf(getConf(conf, "memory-size", "300")));
@@ -322,6 +328,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("pushGateway", getConf(conf, "push-gateway", ""));
     obj.put("pushInterval", Integer.valueOf(getConf(conf, "push-interval", "10")));
     obj.put("pushAuth", getConf(conf, "push-auth", ""));
+    obj.put("pushGraphite", getConf(conf, "push-graphite", ""));
     obj.put("fastResolve", Boolean.valueOf(getConf(conf, "fast-resolve", "true")));
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
@@ -498,18 +505,23 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
-    String name = "libjfs.4.so";
+    String resource = "libjfs.so.gz";
+    String name = "libjfs.5.so";
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
     if (os.toLowerCase().contains("windows")) {
-      name = "libjfs3.dll";
+      resource = "libjfs.dll.gz";
+      name = "libjfs5.dll";
       dir = new File(System.getProperty("java.io.tmpdir"));
+    } else if (os.toLowerCase().contains("mac")) {
+      resource = "libjfs.dylib.gz";
+      name = "libjfs5.dylib";
     }
     File libFile = new File(dir, name);
 
     URL res = null;
     String jarPath = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-    Enumeration<URL> resources = JuiceFileSystemImpl.class.getClassLoader().getResources("libjfs.so.gz");
+    Enumeration<URL> resources = JuiceFileSystemImpl.class.getClassLoader().getResources(resource);
     while (resources.hasMoreElements()) {
       res = resources.nextElement();
       if (URI.create(res.getPath()).getPath().startsWith(jarPath)) {
@@ -530,7 +542,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     long soTime = conn.getLastModified();
     if (res.getProtocol().equalsIgnoreCase("jar")) {
-      soTime = new JarFile(jarPath).getJarEntry("libjfs.so.gz")
+      soTime = new JarFile(jarPath).getJarEntry(resource)
               .getLastModifiedTime()
               .toMillis();
     }
@@ -553,15 +565,12 @@ public class JuiceFileSystemImpl extends FileSystem {
           reader.close();
           tmp.setLastModified(soTime);
           tmp.setReadable(true, false);
-          new File(dir, name).delete();
-          if (tmp.renameTo(new File(dir, name))) {
-            // updated libjfs.so
-            libFile = new File(dir, name);
-          } else {
-            libFile.delete();
-            if (!tmp.renameTo(libFile)) {
-              throw new IOException("Can't update " + libFile);
-            }
+          try {
+            File org = new File(dir, name);
+            Files.move(tmp.toPath(), org.toPath(), StandardCopyOption.ATOMIC_MOVE);
+            libFile = org;
+          } catch (AccessDeniedException ade) {
+            Files.move(tmp.toPath(), libFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
           }
         }
       }
@@ -1589,6 +1598,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   public void removeXAttr(Path path, String name) throws IOException {
     int r = lib.jfs_removeXattr(Thread.currentThread().getId(), handle, normalizePath(path), name);
+    if (r == ENOATTR || r == ENODATA) {
+      throw new IOException("No matching attributes found for remove operation");
+    }
     if (r < 0)
       throw error(r, path);
   }

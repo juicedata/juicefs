@@ -15,7 +15,7 @@ JuiceFS Hadoop Java SDK 同时兼容 Hadoop 2.x、Hadoop 3.x，以及 Hadoop 生
 
 ### 2. 用户权限
 
-JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下使用时，为了避免权限问题，请参考[文档](../administration/sync_accounts_between_multiple_hosts.md)将需要使用的 `用户` 和 `UID` 同步到所有 Hadoop 节点。也可以通过定义一个全局的用户和用户组文件给集群共享读取，[查看详情](#其他配置)。
+JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下使用时，为了避免权限问题，请参考[文档](../administration/sync_accounts_between_multiple_hosts.md)将需要使用的 `用户` 和 `UID` 同步到所有 Hadoop 节点。也可以通过定义一个全局的用户和用户组文件给集群共享读取，[查看详情](#其它配置)。
 
 ### 3. 文件系统
 
@@ -31,7 +31,13 @@ JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下�
 
 JuiceFS Hadoop Java SDK 最多需要额外使用 4 * [`juicefs.memory-size`](#io-配置) 的 off-heap 内存用来加速读写性能，默认情况下，最多需要额外 1.2GB 内存（取决于写入负载）。
 
-## 客户端编译
+## 安装与编译客户端
+
+### 安装预编译客户端
+
+请参考[「安装与升级」](../getting-started/installation.md#安装预编译客户端)文档了解如何下载预编译的 JuiceFS Hadoop Java SDK。
+
+### 手动编译客户端
 
 :::note 注意
 不论为哪个系统环境编译客户端，编译后的 JAR 文件都为相同的名称，且只能部署在匹配的系统环境中，例如在 Linux 中编译则只能用于 Linux 环境。另外，由于编译的包依赖 glibc，建议尽量使用低版本的系统进行编译，这样可以获得更好的兼容性。
@@ -46,7 +52,7 @@ JuiceFS Hadoop Java SDK 最多需要额外使用 4 * [`juicefs.memory-size`](#io
 - make
 - GCC 5.4+
 
-### Linux 和 macOS
+#### Linux 和 macOS
 
 克隆仓库：
 
@@ -57,7 +63,7 @@ $ git clone https://github.com/juicedata/juicefs.git
 进入目录，执行编译：
 
 :::note 注意
-如果使用 Ceph 的 RADOS 作为 JuiceFS 的存储引擎，需要先安装 `librados-dev` 包并且在[编译 `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L22) 时加上 `-tags ceph`。
+如果使用 Ceph 的 RADOS 作为 JuiceFS 的存储引擎，需要先安装 `librados-dev` 包并且在[编译 `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L38-L39) 时加上 `-tags ceph`。
 :::
 
 ```shell
@@ -65,14 +71,14 @@ $ cd juicefs/sdk/java
 $ make
 ```
 
-编译完成后，可以在  `sdk/java/target`  目录中找到编译好的 `JAR` 文件，包括两个版本：
+编译完成后，可以在 `sdk/java/target` 目录中找到编译好的 `JAR` 文件，包括两个版本：
 
 - 包含第三方依赖的包：`juicefs-hadoop-X.Y.Z.jar`
 - 不包含第三方依赖的包：`original-juicefs-hadoop-X.Y.Z.jar`
 
 建议使用包含第三方依赖的版本。
 
-### Windows
+#### Windows
 
 用于 Windows 环境的客户端需要在 Linux 或 macOS 系统上通过交叉编译的方式获得，编译依赖 [mingw-w64](https://www.mingw-w64.org/)，需要提前安装。
 
@@ -156,22 +162,25 @@ $ make win
 | `juicefs.upload-limit`   | 0      | 上传带宽限制，单位为 Mbps，默认不限制。 |
 | `juicefs.download-limit` | 0      | 下载带宽限制，单位为 Mbps，默认不限制。 |
 
-#### 其他配置
+#### 其它配置
 
-| 配置项                    | 默认值  | 描述                                                         |
-| ------------------------- | ------- | ------------------------------------------------------------ |
-| `juicefs.bucket`          |         | 为对象存储指定跟格式化时不同的访问地址                             |
-| `juicefs.debug`           | `false` | 是否开启 debug 日志                                          |
-| `juicefs.access-log`      |         | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。 |
-| `juicefs.superuser`       | `hdfs`  | 超级用户                                                     |
-| `juicefs.users`           | `null`  | 用户名以及 UID 列表文件的地址，比如 `jfs://name/etc/users`。文件格式为 `<username>:<UID>`，一行一个用户。 |
-| `juicefs.groups`          | `null`  | 用户组、GID 以及组成员列表文件的地址，比如 `jfs://name/etc/groups`。文件格式为 `<group-name>:<GID>:<username1>,<username2>`，一行一个用户组。 |
-| `juicefs.umask`           | `null`  | 创建文件和目录的 umask 值（如 `0022`），如果没有此配置，默认值是 `fs.permissions.umask-mode`。 |
-| `juicefs.push-gateway`    |         | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。 |
-| `juicefs.push-interval`   | 10      | 推送数据到 Prometheus 的时间间隔，单位为秒。                 |
-| `juicefs.push-auth`       |         | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。 |
-| `juicefs.fast-resolve`    | `true`  | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）            |
-| `juicefs.no-usage-report` | `false` | 是否上报数据。仅上版本号等使用量数据，不包含任何用户信息。   |
+| 配置项                    | 默认值      | 描述                                                                                                                                          |
+|---------------------------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| `juicefs.bucket`          |             | 为对象存储指定跟格式化时不同的访问地址                                                                                                        |
+| `juicefs.debug`           | `false`     | 是否开启 debug 日志                                                                                                                           |
+| `juicefs.access-log`      |             | 访问日志的路径。需要所有应用都有写权限，可以配置为 `/tmp/juicefs.access.log`。该文件会自动轮转，保留最近 7 个文件。                           |
+| `juicefs.superuser`       | `hdfs`      | 超级用户                                                                                                                                      |
+| `juicefs.users`           | `null`      | 用户名以及 UID 列表文件的地址，比如 `jfs://name/etc/users`。文件格式为 `<username>:<UID>`，一行一个用户。                                     |
+| `juicefs.groups`          | `null`      | 用户组、GID 以及组成员列表文件的地址，比如 `jfs://name/etc/groups`。文件格式为 `<group-name>:<GID>:<username1>,<username2>`，一行一个用户组。 |
+| `juicefs.umask`           | `null`      | 创建文件和目录的 umask 值（如 `0022`），如果没有此配置，默认值是 `fs.permissions.umask-mode`。                                                |
+| `juicefs.push-gateway`    |             | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 地址，格式为 `<host>:<port>`。                                            |
+| `juicefs.push-auth`       |             | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。                                     |
+| `juicefs.push-graphite`   |             | [Graphite](https://graphiteapp.org) 地址，格式为 `<host>:<port>`。                                                                            |
+| `juicefs.push-interval`   | 10          | 指标推送的时间间隔，单位为秒。                                                                                                                |
+| `juicefs.fast-resolve`    | `true`      | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）                                                                                             |
+| `juicefs.no-usage-report` | `false`     | 是否上报数据。仅上版本号等使用量数据，不包含任何用户信息。                                                                                    |
+| `juicefs.block.size`      | `134217728` | 单位为字节，同 HDFS 的 `dfs.blocksize`，默认 128 MB                                                                                           |
+| `juicefs.file.checksum`   | `false`     | DistCp 使用 `-update` 参数时，是否计算文件 Checksum                                                                                           |
 
 #### 多文件系统配置
 
@@ -246,10 +255,29 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 ### Hudi
 
 :::note 注意
-目前最新版 Hudi（v0.10.0）还不支持 JuiceFS，你需要自行编译最新 master 分支。
+Hudi 自 v0.10.0 版本开始支持 JuiceFS，请确保使用正确的版本。
 :::
 
-请参考[「Hudi 官方文档」](https://hudi.apache.org/docs/next/jfs_hoodie)了解如何配置 JuiceFS。
+请参考[「Hudi 官方文档」](https://hudi.apache.org/docs/jfs_hoodie)了解如何配置 JuiceFS。
+
+### Kafka Connect
+
+可以使用 Kafka Connect 和 HDFS Sink Connector（[HDFS 2](https://docs.confluent.io/kafka-connect-hdfs/current/overview.html), [HDFS 3](https://docs.confluent.io/kafka-connect-hdfs3-sink/current/overview.html)）将数据落盘存储到 JuiceFS。
+
+首先需要将 JuiceFS 的 SDK 添加到 Kafka Connect 的 `classpath` 内，如 `/usr/share/java/confluentinc-kafka-connect-hdfs/lib`.
+
+在新建 Connect Sink 任务时，做如下配置：
+
+- 指定 `hadoop.conf.dir` 为包含 `core-site.xml` 配置文件的目录，若没有运行在 Hadoop 环境，可创建一个单独目录，如 `/usr/local/juicefs/hadoop`，然后将与 JuiceFS 相关的配置添加到 `core-site.xml`
+- 指定 `store.url` 为 `jfs://` 的路径
+
+举例：
+
+```ini
+# 省略其他配置项...
+hadoop.conf.dir=/path/to/hadoop-conf
+store.url=jfs://path/to/store
+```
 
 ### 重启服务
 
@@ -298,6 +326,22 @@ CREATE TABLE IF NOT EXISTS person
 ## 监控指标收集
 
 请查看[「监控」](../administration/monitoring.md)文档了解如何收集及展示 JuiceFS 监控指标
+
+## 从 HDFS 迁移数据到 JuiceFS
+
+从 HDFS 迁移数据到 JuiceFS，一般是使用 DistCp 来拷贝数据，它支持数据校验 (Checksum) 来保证数据的正确性。
+
+DistCp 是使用 HDFS 的 `getFileChecksum()` 接口来获得文件的校验码，然后对比拷贝后的文件的校验码来确保数据是一样的。
+
+Hadoop 默认使用的 Checksum 算法是 MD5-MD5-CRC32, 严重依赖 HDFS 的实现细节。它是根据文件目前的分块形式，使用 MD5-CRC32 算法汇总每一个数据块的 Checksum（把每一个 64K 的 block 的 CRC32 校验码汇总，再算一个 MD5），然后再用 MD5 计算校验码。如果 HDFS 集群的分块大小不同，就没法用这个算法进行比较。
+
+为了兼容 HDFS，JuiceFS 也实现了该 MD5-MD5-CRC32 算法，它会将文件的数据读一遍，用同样的算法计算得到一个 checksum，用于比较。
+
+因为 JuiceFS 是基于对象存储实现的，后者已经通过多种 Checksum 机制保证了数据完整性，JuiceFS 默认没有启用上面的 Checksum 算法，需要通过 `juicefs.file.checksum` 配置来启用。
+
+因为该算法依赖于相同的分块大小，需要通过 `juicefs.block.size` 配置将分块大小设置为跟 HDFS 一样（默认值是 `dfs.blocksize`，它的默认值是 128MB）。
+
+另外，HDFS 里支持给每一个文件设置不同的分块大小，而 JuiceFS 不支持，如果启用 Checksum 校验的话会导致拷贝部分文件失败（因为分块大小不同），JuiceFS Hadoop Java SDK 对 DistCp 打了一个热补丁（需要 tools.jar）来跳过这些分块不同的文件（不做比较，而不是抛异常）。
 
 ## 基准测试
 

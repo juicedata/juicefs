@@ -34,7 +34,7 @@ To install JuiceFS CSI Driver, you first need to create an application template.
 Click in the workspace to enter the application management, select "App Repositories", click the create button to add JuiceFS CSI Repository, fill in:
 
 - Repository name: juicefs-csi-driver
-- Index URL: https://juicedata.github.io/juicefs-csi-driver/
+- Index URL: https://juicedata.github.io/charts/
 
 ![](../images/kubesphere_app_shop_en.png)
 

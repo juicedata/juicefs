@@ -36,7 +36,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func checkMountpoint(name, mp string) {
+func checkMountpoint(name, mp, logPath string) {
 	for i := 0; i < 20; i++ {
 		time.Sleep(time.Millisecond * 500)
 		st, err := os.Stat(mp)
@@ -50,16 +50,17 @@ func checkMountpoint(name, mp string) {
 		_ = os.Stdout.Sync()
 	}
 	_, _ = os.Stdout.WriteString("\n")
-	logger.Fatalf("fail to mount after 10 seconds, please check the log (/var/log/juicefs.log) or re-mount in foreground")
+	logger.Fatalf("fail to mount after 10 seconds, please check the log (%s) or re-mount in foreground", logPath)
 }
 
 func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 	var attrs godaemon.DaemonAttr
+	logfile := c.String("log")
 	attrs.OnExit = func(stage int) error {
 		if stage != 0 {
 			return nil
 		}
-		checkMountpoint(name, mp)
+		checkMountpoint(name, mp, logfile)
 		return nil
 	}
 
@@ -77,7 +78,6 @@ func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 			}
 		}
 		var err error
-		logfile := c.String("log")
 		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			logger.Errorf("open log file %s: %s", logfile, err)
@@ -96,6 +96,11 @@ func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 func mount_flags() []cli.Flag {
 	var defaultLogDir = "/var/log"
 	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
 	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -104,7 +109,7 @@ func mount_flags() []cli.Flag {
 		}
 		defaultLogDir = path.Join(homeDir, ".juicefs")
 	}
-	return []cli.Flag{
+	selfFlags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "d",
 			Aliases: []string{"background"},
@@ -123,26 +128,12 @@ func mount_flags() []cli.Flag {
 			Name:  "o",
 			Usage: "other FUSE options",
 		},
-		&cli.Float64Flag{
-			Name:  "attr-cache",
-			Value: 1.0,
-			Usage: "attributes cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "entry-cache",
-			Value: 1.0,
-			Usage: "file entry cache timeout in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "dir-entry-cache",
-			Value: 1.0,
-			Usage: "dir entry cache timeout in seconds",
-		},
 		&cli.BoolFlag{
 			Name:  "enable-xattr",
 			Usage: "enable extended attributes (xattr)",
 		},
 	}
+	return append(selfFlags, cacheFlags(1.0)...)
 }
 
 func disableUpdatedb() {
@@ -183,7 +174,7 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
-	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Mountpoint)
+	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Meta.MountPoint)
 	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)

@@ -35,8 +35,11 @@ var (
 	})
 )
 
-func InitMetrics() {
-	prometheus.MustRegister(txDist)
-	prometheus.MustRegister(txRestart)
-	prometheus.MustRegister(opDist)
+func InitMetrics(registerer prometheus.Registerer) {
+	if registerer == nil {
+		return
+	}
+	registerer.MustRegister(txDist)
+	registerer.MustRegister(txRestart)
+	registerer.MustRegister(opDist)
 }

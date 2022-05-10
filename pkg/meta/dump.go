@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -36,7 +37,7 @@ type DumpedCounters struct {
 	NextChunk         int64 `json:"nextChunk"`
 	NextSession       int64 `json:"nextSession"`
 	NextTrash         int64 `json:"nextTrash"`
-	NextCleanupSlices int64 `json:"nextCleanupSlices"` // deprecated, always 0
+	NextCleanupSlices int64 `json:"nextCleanupSlices,omitempty"` // deprecated, always 0
 }
 
 type DumpedDelFile struct {
@@ -59,9 +60,9 @@ type DumpedAttr struct {
 	Atime     int64  `json:"atime"`
 	Mtime     int64  `json:"mtime"`
 	Ctime     int64  `json:"ctime"`
-	Atimensec uint32 `json:"atimensec"`
-	Mtimensec uint32 `json:"mtimensec"`
-	Ctimensec uint32 `json:"ctimensec"`
+	Atimensec uint32 `json:"atimensec,omitempty"`
+	Mtimensec uint32 `json:"mtimensec,omitempty"`
+	Ctimensec uint32 `json:"ctimensec,omitempty"`
 	Nlink     uint32 `json:"nlink"`
 	Length    uint64 `json:"length"`
 	Rdev      uint32 `json:"rdev,omitempty"`
@@ -69,9 +70,9 @@ type DumpedAttr struct {
 
 type DumpedSlice struct {
 	Chunkid uint64 `json:"chunkid"`
-	Pos     uint32 `json:"pos"`
+	Pos     uint32 `json:"pos,omitempty"`
 	Size    uint32 `json:"size"`
-	Off     uint32 `json:"off"`
+	Off     uint32 `json:"off,omitempty"`
 	Len     uint32 `json:"len"`
 }
 
@@ -88,11 +89,75 @@ type DumpedXattr struct {
 type DumpedEntry struct {
 	Name    string                  `json:"-"`
 	Parent  Ino                     `json:"-"`
-	Attr    *DumpedAttr             `json:"attr"`
+	Attr    *DumpedAttr             `json:"attr,omitempty"`
 	Symlink string                  `json:"symlink,omitempty"`
 	Xattrs  []*DumpedXattr          `json:"xattrs,omitempty"`
 	Chunks  []*DumpedChunk          `json:"chunks,omitempty"`
 	Entries map[string]*DumpedEntry `json:"entries,omitempty"`
+}
+
+var CHARS = []byte("0123456789ABCDEF")
+
+func escape(original string) string {
+	// similar to url.Escape but backward compatible if no '%' in it
+	var escValue = make([]byte, 0, len(original))
+	for i, r := range original {
+		if r == utf8.RuneError || r < 32 || r == '%' || r == '"' || r == '\\' {
+			if escValue == nil {
+				escValue = make([]byte, i, len(original)*2)
+				for j := 0; j < i; j++ {
+					escValue[j] = original[j]
+				}
+			}
+			c := byte(r)
+			if r == utf8.RuneError {
+				c = original[i]
+			}
+			escValue = append(escValue, '%')
+			escValue = append(escValue, CHARS[(c>>4)&0xF])
+			escValue = append(escValue, CHARS[c&0xF])
+		} else if escValue != nil {
+			n := utf8.RuneLen(r)
+			escValue = append(escValue, original[i:i+n]...)
+		}
+	}
+	if escValue == nil {
+		return original
+	}
+	return string(escValue)
+}
+
+func parseHex(c byte) (byte, error) {
+	if c >= '0' && c <= '9' {
+		return c - '0', nil
+	} else if c >= 'A' && c <= 'F' {
+		return 10 + (c - 'A'), nil
+	} else {
+		return 0, fmt.Errorf("hex expected: %c", c)
+	}
+}
+
+func unescape(s string) []byte {
+	if !strings.ContainsRune(s, '%') {
+		return []byte(s)
+	}
+
+	p := []byte(s)
+	n := 0
+	for i := 0; i < len(p); i++ {
+		c := p[i]
+		if c == '%' && i+2 < len(p) {
+			h, e1 := parseHex(p[i+1])
+			l, e2 := parseHex(p[i+2])
+			if e1 == nil && e2 == nil {
+				c = h*16 + l
+				i += 2
+			}
+		}
+		p[n] = c
+		n++
+	}
+	return p[:n]
 }
 
 func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
@@ -103,16 +168,19 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 			panic(err)
 		}
 	}
-	write(fmt.Sprintf("\n%s\"%s\": {", prefix, de.Name))
+	write(fmt.Sprintf("\n%s\"%s\": {", prefix, escape(de.Name)))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
 		return err
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Symlink) > 0 {
-		write(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, de.Symlink))
+		write(fmt.Sprintf(",\n%s\"symlink\": \"%s\"", fieldPrefix, escape(de.Symlink)))
 	}
 	if len(de.Xattrs) > 0 {
+		for _, dumpedXattr := range de.Xattrs {
+			dumpedXattr.Value = escape(dumpedXattr.Value)
+		}
 		if data, err = json.Marshal(de.Xattrs); err != nil {
 			return err
 		}
@@ -148,13 +216,16 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 			panic(err)
 		}
 	}
-	write(fmt.Sprintf("\n%s\"%s\": {", prefix, de.Name))
+	write(fmt.Sprintf("\n%s\"%s\": {", prefix, escape(de.Name)))
 	data, err := json.Marshal(de.Attr)
 	if err != nil {
 		return err
 	}
 	write(fmt.Sprintf("\n%s\"attr\": %s", fieldPrefix, data))
 	if len(de.Xattrs) > 0 {
+		for _, dumpedXattr := range de.Xattrs {
+			dumpedXattr.Value = escape(dumpedXattr.Value)
+		}
 		if data, err = json.Marshal(de.Xattrs); err != nil {
 			return err
 		}
@@ -165,7 +236,7 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 }
 
 type DumpedMeta struct {
-	Setting   *Format
+	Setting   Format
 	Counters  *DumpedCounters
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile
@@ -264,6 +335,10 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress fun
 		for name, child := range e.Entries {
 			child.Name = name
 			child.Parent = inode
+			if child.Attr == nil {
+				logger.Warnf("ignore empty entry: %s/%s", inode, name)
+				continue
+			}
 			if typeFromString(child.Attr.Type) == TypeDirectory {
 				e.Attr.Nlink++
 			}

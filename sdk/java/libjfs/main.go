@@ -52,8 +52,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/push"
-
 	"github.com/sirupsen/logrus"
 )
 
@@ -66,7 +66,10 @@ var (
 	handlers = make(map[uintptr]*wrapper)
 	activefs = make(map[string][]*wrapper)
 	logger   = utils.GetLogger("juicefs")
-	pusher   *push.Pusher
+	bOnce    sync.Once
+	bridges  []*Bridge
+	pOnce    sync.Once
+	pushers  []*push.Pusher
 )
 
 const (
@@ -183,7 +186,7 @@ func (w *wrapper) lookupGids(groups string) []uint32 {
 func (w *wrapper) uid2name(uid uint32) string {
 	name := w.superuser
 	if uid > 0 {
-		name = w.m.lookupUserID(int(uid))
+		name = w.m.lookupUserID(uid)
 	}
 	return name
 }
@@ -191,7 +194,7 @@ func (w *wrapper) uid2name(uid uint32) string {
 func (w *wrapper) gid2name(gid uint32) string {
 	group := w.supergroup
 	if gid > 0 {
-		group = w.m.lookupGroupID(int(gid))
+		group = w.m.lookupGroupID(gid)
 	}
 	return group
 }
@@ -229,8 +232,10 @@ type javaConf struct {
 	MetaURL         string  `json:"meta"`
 	Bucket          string  `json:"bucket"`
 	ReadOnly        bool    `json:"readOnly"`
+	NoBGJob         bool    `json:"noBGJob"`
 	OpenCache       float64 `json:"openCache"`
 	BackupMeta      int64   `json:"backupMeta"`
+	Heartbeat       int     `json:"heartbeat"`
 	CacheDir        string  `json:"cacheDir"`
 	CacheSize       int64   `json:"cacheSize"`
 	FreeSpace       string  `json:"freeSpace"`
@@ -244,6 +249,7 @@ type javaConf struct {
 	DownloadLimit   int     `json:"downloadLimit"`
 	MaxUploads      int     `json:"maxUploads"`
 	MaxDeletes      int     `json:"maxDeletes"`
+	IORetries       int     `json:"ioRetries"`
 	GetTimeout      int     `json:"getTimeout"`
 	PutTimeout      int     `json:"putTimeout"`
 	FastResolve     bool    `json:"fastResolve"`
@@ -256,6 +262,7 @@ type javaConf struct {
 	PushGateway     string  `json:"pushGateway"`
 	PushInterval    int     `json:"pushInterval"`
 	PushAuth        string  `json:"pushAuth"`
+	PushGraphite    string  `json:"pushGraphite"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) uintptr {
@@ -287,7 +294,10 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 	return h
 }
 
-func createStorage(format *meta.Format) (object.ObjectStorage, error) {
+func createStorage(format meta.Format) (object.ObjectStorage, error) {
+	if err := format.Decrypt(); err != nil {
+		return nil, fmt.Errorf("format decrypt: %s", err)
+	}
 	var blob object.ObjectStorage
 	var err error
 	if format.Shards > 1 {
@@ -299,6 +309,60 @@ func createStorage(format *meta.Format) (object.ObjectStorage, error) {
 		return nil, err
 	}
 	return object.WithPrefix(blob, format.Name+"/"), nil
+}
+
+func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
+	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
+	for k, v := range commonLabels {
+		pusher.Grouping(k, v)
+	}
+	if pushAuth != "" {
+		if strings.Contains(pushAuth, ":") {
+			parts := strings.Split(pushAuth, ":")
+			pusher.BasicAuth(parts[0], parts[1])
+		}
+	}
+	pushers = append(pushers, pusher)
+
+	pOnce.Do(func() {
+		go func() {
+			for range time.NewTicker(pushInterVal).C {
+				for _, pusher := range pushers {
+					if err := pusher.Push(); err != nil {
+						logger.Warnf("error pushing to PushGateway: %s", err)
+					}
+				}
+			}
+		}()
+	})
+}
+
+func push2Graphite(graphite string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
+	if bridge, err := NewBridge(&Config{
+		URL:           graphite,
+		Gatherer:      registry,
+		UseTags:       true,
+		Timeout:       2 * time.Second,
+		ErrorHandling: ContinueOnError,
+		Logger:        logger,
+		CommonLabels:  commonLabels,
+	}); err != nil {
+		logger.Warnf("NewBridge error:%s", err)
+	} else {
+		bridges = append(bridges, bridge)
+	}
+
+	bOnce.Do(func() {
+		go func() {
+			for range time.NewTicker(pushInterVal).C {
+				for _, brg := range bridges {
+					if err := brg.Push(); err != nil {
+						logger.Warnf("error pushing to Graphite: %s", err)
+					}
+				}
+			}
+		}()
+	})
 }
 
 //export jfs_init
@@ -332,58 +396,51 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			utils.SetLogLevel(logrus.WarnLevel)
 		}
 
-		addr := jConf.MetaURL
-		m := meta.NewClient(addr, &meta.Config{
-			Retries:    10,
-			Strict:     true,
-			ReadOnly:   jConf.ReadOnly,
-			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
-			MaxDeletes: jConf.MaxDeletes,
-		})
-		format, err := m.Load()
+		metaConf := &meta.Config{
+			Retries:   jConf.IORetries,
+			Strict:    true,
+			ReadOnly:  jConf.ReadOnly,
+			NoBGJob:   jConf.NoBGJob,
+			OpenCache: time.Duration(jConf.OpenCache * 1e9),
+			Heartbeat: time.Second * time.Duration(jConf.Heartbeat),
+		}
+		m := meta.NewClient(jConf.MetaURL, metaConf)
+		format, err := m.Load(true)
 		if err != nil {
 			logger.Fatalf("load setting: %s", err)
 		}
-
-		if jConf.PushGateway != "" && pusher == nil {
-			registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
-			prometheus.DefaultGatherer = registry
-			prometheus.DefaultRegisterer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
-			prometheus.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-			prometheus.MustRegister(prometheus.NewGoCollector())
-			// TODO: support multiple volumes
-			pusher = push.New(jConf.PushGateway, "juicefs").Gatherer(prometheus.DefaultGatherer)
-			pusher = pusher.Grouping("vol_name", format.Name).Grouping("mp", "sdk-"+strconv.Itoa(os.Getpid()))
+		var registerer prometheus.Registerer
+		if jConf.PushGateway != "" || jConf.PushGraphite != "" {
+			commonLabels := prometheus.Labels{"vol_name": name, "mp": "sdk-" + strconv.Itoa(os.Getpid())}
 			if h, err := os.Hostname(); err == nil {
-				pusher = pusher.Grouping("instance", h)
+				commonLabels["instance"] = h
 			} else {
 				logger.Warnf("cannot get hostname: %s", err)
 			}
-			if strings.Contains(jConf.PushAuth, ":") {
-				parts := strings.Split(jConf.PushAuth, ":")
-				pusher = pusher.BasicAuth(parts[0], parts[1])
-			}
-			interval := time.Second * 10
+			registry := prometheus.NewRegistry()
+			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
+			registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+			registerer.MustRegister(collectors.NewGoCollector())
+
+			var interval time.Duration
 			if jConf.PushInterval > 0 {
 				interval = time.Second * time.Duration(jConf.PushInterval)
 			}
-			go func() {
-				for {
-					time.Sleep(interval)
-					if err := pusher.Push(); err != nil {
-						logger.Warnf("push metrics to %s: %s", jConf.PushGateway, err)
-					}
-				}
-			}()
-			meta.InitMetrics()
-			vfs.InitMetrics()
-			go metric.UpdateMetrics(m)
+			if jConf.PushGraphite != "" {
+				push2Graphite(jConf.PushGraphite, interval, registry, commonLabels)
+			}
+			if jConf.PushGateway != "" {
+				push2Gateway(jConf.PushGateway, jConf.PushAuth, interval, registry, commonLabels)
+			}
+			meta.InitMetrics(registerer)
+			vfs.InitMetrics(registerer)
+			go metric.UpdateMetrics(m, registerer)
 		}
 
 		if jConf.Bucket != "" {
 			format.Bucket = jConf.Bucket
 		}
-		blob, err := createStorage(format)
+		blob, err := createStorage(*format)
 		if err != nil {
 			logger.Fatalf("object storage: %s", err)
 		}
@@ -403,11 +460,13 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			AutoCreate:     jConf.AutoCreate,
 			CacheFullBlock: jConf.CacheFullBlock,
 			MaxUpload:      jConf.MaxUploads,
+			MaxDeletes:     jConf.MaxDeletes,
+			MaxRetries:     jConf.IORetries,
 			UploadLimit:    int64(jConf.UploadLimit) * 1e6 / 8,
 			DownloadLimit:  int64(jConf.DownloadLimit) * 1e6 / 8,
 			Prefetch:       jConf.Prefetch,
 			Writeback:      jConf.Writeback,
-			Partitions:     format.Partitions,
+			HashPrefix:     format.HashPrefix,
 			GetTimeout:     time.Second * time.Duration(jConf.GetTimeout),
 			PutTimeout:     time.Second * time.Duration(jConf.PutTimeout),
 			BufferSize:     jConf.MemorySize << 20,
@@ -420,7 +479,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			}
 			chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 		}
-		store := chunk.NewCachedStore(blob, chunkConf)
+		store := chunk.NewCachedStore(blob, chunkConf, registerer)
 		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
 			chunkid := args[0].(uint64)
 			length := args[1].(uint32)
@@ -437,9 +496,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		}
 
 		conf := &vfs.Config{
-			Meta: &meta.Config{
-				Retries: 10,
-			},
+			Meta:            metaConf,
 			Format:          format,
 			Chunk:           &chunkConf,
 			AttrTimeout:     time.Millisecond * time.Duration(jConf.AttrTimeout*1000),
@@ -449,7 +506,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			FastResolve:     jConf.FastResolve,
 			BackupMeta:      time.Second * time.Duration(jConf.BackupMeta),
 		}
-		if !jConf.ReadOnly && conf.BackupMeta > 0 {
+		if !jConf.ReadOnly && !jConf.NoBGJob && conf.BackupMeta > 0 {
 			go vfs.Backup(m, blob, conf.BackupMeta)
 		}
 		if !jConf.NoUsageReport {
@@ -484,8 +541,8 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 				continue
 			}
 			username := strings.TrimSpace(fields[0])
-			uid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
-			uids = append(uids, pwent{uid, username})
+			uid, _ := strconv.ParseUint(strings.TrimSpace(fields[1]), 10, 32)
+			uids = append(uids, pwent{uint32(uid), username})
 		}
 
 		var buffer bytes.Buffer
@@ -504,8 +561,8 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 				continue
 			}
 			gname := strings.TrimSpace(fields[0])
-			gid, _ := strconv.Atoi(strings.TrimSpace(fields[1]))
-			gids = append(gids, pwent{gid, gname})
+			gid, _ := strconv.ParseUint(strings.TrimSpace(fields[1]), 10, 32)
+			gids = append(gids, pwent{uint32(gid), gname})
 			if len(fields) > 2 {
 				for _, user := range strings.Split(fields[len(fields)-1], ",") {
 					if strings.TrimSpace(user) == w.user {
@@ -570,9 +627,14 @@ func jfs_term(pid int, h uintptr) int {
 			}
 		}
 	}
-	if pusher != nil {
+	for _, bridge := range bridges {
+		if err := bridge.Push(); err != nil {
+			logger.Warnf("error pushing to Graphite: %s", err)
+		}
+	}
+	for _, pusher := range pushers {
 		if err := pusher.Push(); err != nil {
-			logger.Warnf("push metrics: %s", err)
+			logger.Warnf("error pushing to PushGatway: %s", err)
 		}
 	}
 	return 0

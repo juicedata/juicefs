@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const awsDefaultRegion = "us-east-1"
@@ -128,11 +129,13 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		body = bytes.NewReader(data)
 	}
 	checksum := generateChecksum(body)
+	mimeType := utils.GuessMimeType(key)
 	params := &s3.PutObjectInput{
-		Bucket:   &s.bucket,
-		Key:      &key,
-		Body:     body,
-		Metadata: map[string]*string{checksumAlgr: &checksum},
+		Bucket:      &s.bucket,
+		Key:         &key,
+		Body:        body,
+		ContentType: &mimeType,
+		Metadata:    map[string]*string{checksumAlgr: &checksum},
 	}
 	_, err := s.s3.PutObject(params)
 	return err
@@ -379,8 +382,8 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 				if vpcCompile.MatchString(uri.Host) {
 					bucketName = hostParts[0]
 					ep = hostParts[1]
-					if len(vpcCompile.FindStringSubmatch(uri.Host)) == 2 {
-						region = vpcCompile.FindStringSubmatch(uri.Host)[1]
+					if submatch := vpcCompile.FindStringSubmatch(uri.Host); len(submatch) == 2 {
+						region = submatch[1]
 					}
 				} else {
 					// standard s3
@@ -395,6 +398,12 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 				// compatible s3
 				bucketName = hostParts[0]
 				ep = hostParts[1]
+				oracleCompile := regexp.MustCompile(`.*\\.compat\\.objectstorage\\.(.*)\\.oraclecloud\\.com`)
+				if oracleCompile.MatchString(ep) {
+					if submatch := oracleCompile.FindStringSubmatch(ep); len(submatch) == 2 {
+						region = submatch[1]
+					}
+				}
 			}
 		}
 	}

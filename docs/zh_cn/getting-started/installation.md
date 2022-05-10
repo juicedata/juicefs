@@ -6,7 +6,7 @@ slug: /installation
 
 # 安装与升级
 
-JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类操作系统上运行，包括且不限于 Linux、macOS、Windows、BSD 等。
+JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类操作系统上运行，包括且不限于 Linux、macOS、Windows 等。
 
 JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本直接解压使用，也可以用源代码手动编译。
 
@@ -14,17 +14,14 @@ JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本
 
 你可以在 [GitHub](https://github.com/juicedata/juicefs/releases) 找到最新版客户端下载地址，每个版本的下载列表中都提供了面向不同 CPU 架构和操作系统的预编译版本，请注意识别选择，例如：
 
-| 文件名                                 | 说明                                         |
-| ------------------------------------   | ----------------------------                 |
-| `juicefs-x.x.x-darwin-amd64.tar.gz`    | 面向 Intel 芯片的 macOS 系统                 |
-| `juicefs-x.x.x-linux-amd64.tar.gz`     | 面向 x86 架构 Linux 发行版                   |
-| `juicefs-x.x.x-linux-arm64.tar.gz`     | 面向 ARM 架构的 Linux 发行版                 |
-| `juicefs-x.x.x-windows-amd64.tar.gz`   | 面向 x86 架构的 Windows 系统                 |
-| `juicefs-hadoop-x.x.x-linux-amd64.jar` | 面向 x86 架构 Linux 发行版的 Hadoop Java SDK |
-
-:::tip 提示
-对于 M1 系列芯片的 macOS 系统，可以使用 `darwin-amd64` 版本客户端依赖 [Rosetta 2](https://support.apple.com/zh-cn/HT211861) 使用，也可以参考 [手动编译客户端](#手动编译客户端) 编译原生版本。
-:::
+| 文件名                               | 说明                                                                     |
+|--------------------------------------|--------------------------------------------------------------------------|
+| `juicefs-x.x.x-darwin-amd64.tar.gz`  | 面向 Intel 芯片的 macOS 系统                                             |
+| `juicefs-x.x.x-darwin-arm64.tar.gz`  | 面向 M1 系列芯片的 macOS 系统                                            |
+| `juicefs-x.x.x-linux-amd64.tar.gz`   | 面向 x86 架构 Linux 发行版                                               |
+| `juicefs-x.x.x-linux-arm64.tar.gz`   | 面向 ARM 架构的 Linux 发行版                                             |
+| `juicefs-x.x.x-windows-amd64.tar.gz` | 面向 x86 架构的 Windows 系统                                             |
+| `juicefs-hadoop-x.x.x-amd64.jar`     | 面向 x86 架构的 Hadoop Java SDK（同时支持 Linux、macOS 及 Windows 系统） |
 
 ### Linux 发行版
 
@@ -152,16 +149,16 @@ CMD [ "juicefs" ]
 
 另外，手动编译客户端可以让你优先体验到 JuiceFS 开发中的各种新功能，但这需要你具备一定的软件编译相关的基础知识。
 
+:::tip 提示
+对于中国地区用户，为了加快获取 Go 模块的速度，建议通过执行 `go env -w GOPROXY=https://goproxy.cn,direct` 来将 `GOPROXY` 环境变量设置国内的镜像服务器。详情请参考：[Goproxy China](https://github.com/goproxy/goproxy.cn)。
+:::
+
 ### 类 Unix 客户端
 
 编译面向 Linux、macOS、BSD 等类 Unix 系统的客户端需要满足以下依赖：
 
-- [Go](https://golang.org) 1.16+
+- [Go](https://golang.org) 1.17+
 - GCC 5.4+
-
-:::tip 提示
-对于中国地区用户，为了加快获取 Go 模块的速度，建议通过 `GOPROXY` 环境变量设置国内的镜像服务器。例如：[Goproxy China](https://github.com/goproxy/goproxy.cn)。
-:::
 
 1. 克隆源码
 
@@ -177,10 +174,10 @@ CMD [ "juicefs" ]
 
 3. 切换分支
 
-   源代码默认使用 `main` 分支，你可以切换到任何正式发布的版本，比如切换到 `v0.17.4`：
+   源代码默认使用 `main` 分支，你可以切换到任何正式发布的版本，比如切换到最新发布的`v1.0.0-beta2`(2022年三月发布)：
 
    ```shell
-   git checkout v0.17.4
+   git checkout v1.0.0-beta2
    ```
 
    :::caution 注意
@@ -197,7 +194,7 @@ CMD [ "juicefs" ]
 
 ### 在 Windows 下编译
 
-在 Windows 系统中编译 JuiceFS 客户端，需要安装 [Go](https://golang.org) 1.16+ 和 GCC 5.4+。
+在 Windows 系统中编译 JuiceFS 客户端，需要安装 [Go](https://golang.org) 1.17+ 和 GCC 5.4+。
 
 由于 GCC 没有原生 Windows 客户端，因此需要使用第三方提供的版本，可以使用 [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) 或 [Cygwin](https://www.cygwin.com/)，这里以 MinGW-w64 为例介绍。
 

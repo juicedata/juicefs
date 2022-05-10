@@ -32,23 +32,6 @@ type badgerTxn struct {
 	c *badger.DB
 }
 
-func (tx *badgerTxn) scan(prefix []byte, handler func(key []byte, value []byte)) {
-	it := tx.t.NewIterator(badger.IteratorOptions{
-		Prefix:         prefix,
-		PrefetchValues: true,
-		PrefetchSize:   1024,
-	})
-	defer it.Close()
-	for it.Rewind(); it.Valid(); it.Next() {
-		item := it.Item()
-		value, err := item.ValueCopy(nil)
-		if err != nil {
-			panic(err)
-		}
-		handler(it.Item().Key(), value)
-	}
-}
-
 func (tx *badgerTxn) get(key []byte) []byte {
 	item, err := tx.t.Get(key)
 	if err == badger.ErrKeyNotFound {
@@ -214,11 +197,33 @@ func (c *badgerClient) txn(f func(kvTxn) error) (err error) {
 			}
 		}
 	}()
-	err = f(&badgerTxn{tx, c.client})
+	txn := &badgerTxn{tx, c.client}
+	err = f(txn)
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	// tx could be committed
+	return txn.t.Commit()
+}
+
+func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte)) error {
+	tx := c.client.NewTransaction(false)
+	defer tx.Discard()
+	it := tx.NewIterator(badger.IteratorOptions{
+		Prefix:         prefix,
+		PrefetchValues: true,
+		PrefetchSize:   10240,
+	})
+	defer it.Close()
+	for it.Rewind(); it.Valid(); it.Next() {
+		item := it.Item()
+		value, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		handler(it.Item().Key(), value)
+	}
+	return nil
 }
 
 func (c *badgerClient) reset(prefix []byte) error {

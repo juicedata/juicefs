@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	inodeBatch   = 100
-	chunkIDBatch = 1000
+	inodeBatch    = 100
+	chunkIDBatch  = 1000
+	minUpdateTime = time.Millisecond * 10
 )
 
 type engine interface {
@@ -47,13 +48,14 @@ type engine interface {
 
 	doNewSession(sinfo []byte) error
 	doRefreshSession()
-	doFindStaleSessions(ts int64, limit int) ([]uint64, error) // limit < 0 means all
-	doCleanStaleSession(sid uint64)
+	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
+	doCleanStaleSession(sid uint64) error
 
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
+	doCleanupDelayedSlices(edge int64, limit int) (int, error)
 	doDeleteSlice(chunkid uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -65,8 +67,8 @@ type engine interface {
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
-	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
-	SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
+	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
+	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 }
 
 type baseMeta struct {
@@ -80,7 +82,6 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
-	deleting     chan int
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 	newSpace     int64
@@ -98,7 +99,10 @@ type baseMeta struct {
 
 func newBaseMeta(conf *Config) baseMeta {
 	if conf.Retries == 0 {
-		conf.Retries = 30
+		conf.Retries = 10
+	}
+	if conf.Heartbeat == 0 {
+		conf.Heartbeat = 12 * time.Second
 	}
 	return baseMeta{
 		conf:         conf,
@@ -106,7 +110,6 @@ func newBaseMeta(conf *Config) baseMeta {
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
-		deleting:     make(chan int, conf.MaxDeletes),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -141,7 +144,7 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 	return fmt.Errorf("message %d is not supported", mid)
 }
 
-func (m *baseMeta) Load() (*Format, error) {
+func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
 		err = fmt.Errorf("database is not formatted")
@@ -151,6 +154,11 @@ func (m *baseMeta) Load() (*Format, error) {
 	}
 	if err = json.Unmarshal(body, &m.fmt); err != nil {
 		return nil, fmt.Errorf("json: %s", err)
+	}
+	if checkVersion {
+		if err = m.fmt.CheckVersion(); err != nil {
+			return nil, fmt.Errorf("check version: %s", err)
+		}
 	}
 	return &m.fmt, nil
 }
@@ -175,18 +183,24 @@ func (m *baseMeta) NewSession() error {
 	if err = m.en.doNewSession(data); err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	logger.Debugf("create session %d OK", m.sid)
+	logger.Infof("create session %d OK", m.sid)
 
 	go m.refreshSession()
-	go m.cleanupDeletedFiles()
-	go m.cleanupSlices()
-	go m.cleanupTrash()
+	if !m.conf.NoBGJob {
+		go m.cleanupDeletedFiles()
+		go m.cleanupSlices()
+		go m.cleanupTrash()
+	}
 	return nil
+}
+
+func (m *baseMeta) expireTime() int64 {
+	return time.Now().Add(5 * m.conf.Heartbeat).Unix()
 }
 
 func (m *baseMeta) refreshSession() {
 	for {
-		utils.SleepWithJitter(time.Minute)
+		utils.SleepWithJitter(m.conf.Heartbeat)
 		m.Lock()
 		if m.umounting {
 			m.Unlock()
@@ -194,10 +208,13 @@ func (m *baseMeta) refreshSession() {
 		}
 		m.en.doRefreshSession()
 		m.Unlock()
-		if _, err := m.Load(); err != nil {
+		if _, err := m.Load(false); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), 60); err != nil {
+		if m.conf.NoBGJob {
+			continue
+		}
+		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64(m.conf.Heartbeat/time.Second)); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
 		} else if ok {
 			go m.CleanStaleSessions()
@@ -206,13 +223,13 @@ func (m *baseMeta) refreshSession() {
 }
 
 func (m *baseMeta) CleanStaleSessions() {
-	sids, err := m.en.doFindStaleSessions(time.Now().Add(time.Minute*-5).Unix(), 1000)
+	sids, err := m.en.doFindStaleSessions(1000)
 	if err != nil {
 		logger.Warnf("scan stale sessions: %s", err)
 		return
 	}
 	for _, sid := range sids {
-		m.en.doCleanStaleSession(sid)
+		logger.Infof("clean up stale session %d: %s", sid, m.en.doCleanStaleSession(sid))
 	}
 }
 
@@ -223,7 +240,7 @@ func (m *baseMeta) CloseSession() error {
 	m.Lock()
 	m.umounting = true
 	m.Unlock()
-	m.en.doCleanStaleSession(m.sid)
+	logger.Infof("close session %d: %s", m.sid, m.en.doCleanStaleSession(m.sid))
 	return nil
 }
 
@@ -423,7 +440,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 }
 
 func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
-	if attr == nil {
+	if attr == nil || len(buf) == 0 {
 		return
 	}
 	rb := utils.FromBuffer(buf)
@@ -467,6 +484,22 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	w.Put64(uint64(attr.Parent))
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
+}
+
+func (m *baseMeta) encodeDelayedSlice(chunkid uint64, size uint32) []byte {
+	w := utils.NewBuffer(8 + 4)
+	w.Put64(chunkid)
+	w.Put32(size)
+	return w.Bytes()
+}
+
+func (m *baseMeta) decodeDelayedSlices(buf []byte, ss *[]Slice) {
+	if len(buf) == 0 || len(buf)%12 != 0 {
+		return
+	}
+	for rb := utils.FromBuffer(buf); rb.HasMore(); {
+		*ss = append(*ss, Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
+	}
 }
 
 func clearSUGID(ctx Context, cur *Attr, set *Attr) {
@@ -566,58 +599,47 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	return Ino(n), nil
 }
 
-func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno {
+func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
 	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if name == "" {
+		return syscall.ENOENT
+	}
+
 	defer timeit(time.Now())
-	return m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, "", inode, attr)
+	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
+	return m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
 }
 
 func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	if isTrash(parent) {
-		return syscall.EPERM
-	}
-	if parent == 1 && name == TrashName {
-		return syscall.EPERM
-	}
-	defer timeit(time.Now())
 	if attr == nil {
 		attr = &Attr{}
 	}
-	err := m.en.doMknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
-	if err == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
-		err = 0
+	eno := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
+	if eno == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
+		eno = 0
 	}
-	if err == 0 && inode != nil {
+	if eno == 0 && inode != nil {
 		m.of.Open(*inode, attr)
 	}
-	return err
+	return eno
 }
 
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	if isTrash(parent) {
-		return syscall.EPERM
-	}
-	if parent == 1 && name == TrashName {
-		return syscall.EPERM
-	}
-	defer timeit(time.Now())
-	return m.en.doMknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
+	return m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
-	if isTrash(parent) {
-		return syscall.EPERM
-	}
-	if parent == 1 && name == TrashName {
-		return syscall.EPERM
-	}
-	defer timeit(time.Now())
-	return m.en.doMknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
+	return m.Mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
@@ -627,6 +649,13 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if parent == 1 && name == TrashName {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if name == "" {
+		return syscall.ENOENT
+	}
+
 	defer timeit(time.Now())
 	parent = m.checkRoot(parent)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
@@ -655,9 +684,12 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	if parent == 1 && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+
 	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	return m.en.doUnlink(ctx, parent, name)
+	return m.en.doUnlink(ctx, m.checkRoot(parent), name)
 }
 
 func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -670,9 +702,12 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if parent == 1 && name == TrashName || parent == TrashInode || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+
 	defer timeit(time.Now())
-	parent = m.checkRoot(parent)
-	return m.en.doRmdir(ctx, parent, name)
+	return m.en.doRmdir(ctx, m.checkRoot(parent), name)
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -682,6 +717,12 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	if isTrash(parentDst) || isTrash(parentSrc) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if nameDst == "" {
+		return syscall.ENOENT
+	}
 	switch flags {
 	case 0, RenameNoReplace, RenameExchange:
 	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
@@ -689,10 +730,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	default:
 		return syscall.EINVAL
 	}
+
 	defer timeit(time.Now())
-	parentSrc = m.checkRoot(parentSrc)
-	parentDst = m.checkRoot(parentDst)
-	return m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, attr)
+	return m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
 }
 
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
@@ -773,6 +813,30 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	return m.en.doReaddir(ctx, inode, plus, entries)
 }
 
+func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if name == "" {
+		return syscall.EINVAL
+	}
+
+	defer timeit(time.Now())
+	return m.en.doSetXattr(ctx, m.checkRoot(inode), name, value, flags)
+}
+
+func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if name == "" {
+		return syscall.EINVAL
+	}
+
+	defer timeit(time.Now())
+	return m.en.doRemoveXattr(ctx, m.checkRoot(inode), name)
+}
+
 func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 	if opened {
 		m.Lock()
@@ -784,19 +848,12 @@ func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 }
 
 func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
-	if m.conf.MaxDeletes == 0 {
-		return
-	}
-	m.deleting <- 1
-	defer func() { <-m.deleting }()
-	err := m.newMsg(DeleteChunk, chunkid, size)
-	if err != nil {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
-	} else {
-		err := m.en.doDeleteSlice(chunkid, size)
-		if err != nil {
+	if err := m.newMsg(DeleteChunk, chunkid, size); err == nil {
+		if err = m.en.doDeleteSlice(chunkid, size); err != nil {
 			logger.Errorf("delete slice %d: %s", chunkid, err)
 		}
+	} else if !strings.Contains(err.Error(), "skip deleting") {
+		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
 	}
 }
 
@@ -849,6 +906,7 @@ func (m *baseMeta) cleanupTrash() {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
 			go m.doCleanupTrash(false)
+			go m.cleanupDelayedSlices()
 		}
 	}
 }
@@ -868,6 +926,8 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 	defer func() {
 		if count > 0 {
 			logger.Infof("cleanup trash: deleted %d files in %v", count, time.Since(now))
+		} else {
+			logger.Debugf("cleanup trash: nothing to delete")
 		}
 	}()
 
@@ -910,5 +970,21 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 		} else {
 			break
 		}
+	}
+}
+
+func (m *baseMeta) cleanupDelayedSlices() {
+	now := time.Now()
+	edge := now.Unix() - int64(m.fmt.TrashDays)*24*3600
+	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
+	if count, err := m.en.doCleanupDelayedSlices(edge, 3e5); err == nil {
+		msg := fmt.Sprintf("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
+		if count >= 3e5 {
+			logger.Warnf("%s (reached max limit, stop)", msg)
+		} else {
+			logger.Debugf(msg)
+		}
+	} else {
+		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
 	}
 }

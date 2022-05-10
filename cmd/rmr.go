@@ -29,12 +29,18 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func rmrFlags() *cli.Command {
+func cmdRmr() *cli.Command {
 	return &cli.Command{
 		Name:      "rmr",
-		Usage:     "remove directories recursively",
-		ArgsUsage: "PATH ...",
 		Action:    rmr,
+		Category:  "TOOL",
+		Usage:     "Remove directories recursively",
+		ArgsUsage: "PATH ...",
+		Description: `
+This command provides a faster way to remove huge directories in JuiceFS.
+
+Examples:
+$ juicefs rmr /mnt/jfs/foo`,
 	}
 }
 
@@ -51,12 +57,9 @@ func openController(path string) *os.File {
 }
 
 func rmr(ctx *cli.Context) error {
+	setup(ctx, 1)
 	if runtime.GOOS == "windows" {
 		logger.Infof("Windows is not supported")
-		return nil
-	}
-	if ctx.Args().Len() < 1 {
-		logger.Infof("PATH is needed")
 		return nil
 	}
 	for i := 0; i < ctx.Args().Len(); i++ {
@@ -88,10 +91,7 @@ func rmr(ctx *cli.Context) error {
 			logger.Fatalf("write message: %s", err)
 		}
 		var errs = make([]byte, 1)
-		n, err := f.Read(errs)
-		if err != nil || n != 1 {
-			logger.Fatalf("read message: %d %s", n, err)
-		}
+		_ = readControl(f, errs)
 		if errs[0] != 0 {
 			errno := syscall.Errno(errs[0])
 			if runtime.GOOS == "windows" {

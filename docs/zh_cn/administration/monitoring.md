@@ -1,11 +1,74 @@
 ---
-sidebar_label: 监控
+sidebar_label: 监控与数据可视化
 sidebar_position: 6
 ---
 
-# 监控
+# 监控与数据可视化
 
-JuiceFS 为每个文件系统提供一个 [Prometheus](https://prometheus.io) API（默认的 API 地址是 `http://localhost:9567/metrics`），这个 API 可以用于收集 JuiceFS 监控指标。当收集好监控指标以后，可以通过 JuiceFS 提供的 [Grafana](https://grafana.com) 仪表盘模板快速展示这些指标。
+作为承载海量数据存储的分布式文件系统，用户通常需要直观地了解整个系统的容量、文件数量、CPU 负载、磁盘 IO、缓存等指标的变化。JuiceFS 通过 Prometheus 兼容的 API 对外提供实时的状态数据，只需将其添加到用户自建的 Prometheus Server 建立时序数据，然后通过 Grafana 等工具即可轻松实现 JucieFS 文件系统的可视化监控。
+
+## 快速上手
+
+这里假设你搭建的 Prometheus Server、Grafana 与 JuiceFS 客户端都运行在相同的主机上。其中：
+
+- **Prometheus Server**：用于收集并保存各种指标的时序数据，安装方法请参考[官方文档](https://prometheus.io/docs/introduction/first_steps/)。
+- **Grafana**：用于从 Prometheus 读取并可视化展现时序数据，安装方法请参考[官方文档](https://grafana.com/docs/grafana/latest/installation/)。
+
+### Ⅰ. 获得实时数据
+
+JuiceFS 通过 [Prometheus](https://prometheus.io) 类型的 API 对外提供数据。文件系统挂载后，默认可以通过 `http://localhost:9567/metrics` 地址获得客户端输出的实时监控数据。
+
+![](../images/prometheus-client-data.jpg)
+
+### Ⅱ. 添加 API 到 Prometheus Server
+
+编辑 Prometheus 的[配置文件](https://prometheus.io/docs/prometheus/latest/configuration/configuration)，添加一个新 job 并指向 JuiceFS 的 API 地址，例如：
+
+```yaml {20-22}
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "juicefs"
+    static_configs:
+      - targets: ["localhost:9567"]
+```
+
+假设配置文件名为 `prometheus.yml`，加载该配置启动服务：
+
+```shell
+./prometheus --config.file=prometheus.yml
+```
+
+访问 `http://localhost:9090` 即可看到 Prometheus 的界面。
+
+### Ⅲ. 通过 Grafana 展现 Prometheus 的数据
+
+如下图所示，新建 Data Source：
+
+- **Name**: 为了便于识别，可以填写文件系统的名称。
+- **URL**: Prometheus 的数据接口，默认为 `http://localhost:9090`
+
+![](../images/grafana-data-source.jpg)
+
+然后，使用 [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json) 创建一个仪表盘。进入新建的仪表盘即可看到文件系统的可视化图表了：
+
+![](../images/grafana-dashboard.jpg)
 
 ## 收集监控指标
 
@@ -143,9 +206,11 @@ spec:
 
 ### Hadoop
 
-[JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) 支持把监控指标上报到 [Pushgateway](https://github.com/prometheus/pushgateway)，然后让 Prometheus 从 Pushgateway 抓取指标。
+[JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) 支持把监控指标上报到 [Pushgateway](https://github.com/prometheus/pushgateway) 或者 [Graphite](https://graphiteapp.org)。
 
-请用如下配置启用指标上报：
+#### Pushgateway
+
+启用指标上报到 Pushgateway：
 
 ```xml
 <property>
@@ -154,7 +219,7 @@ spec:
 </property>
 ```
 
-同时可以通过 `juicefs.push-interval` 配置修改上报指标的频率，默认为 10 秒上报一次。JuiceFS Hadoop Java SDK 支持的所有配置参数请参考[文档](../deployment/hadoop_java_sdk.md#客户端配置参数)。
+同时可以通过 `juicefs.push-interval` 配置修改上报指标的频率，默认为 10 秒上报一次。
 
 :::info 说明
 根据 [Pushgateway 官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md#configure-the-pushgateway-as-a-target-to-scrape)的建议，Prometheus 的[抓取配置](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config)中需要设置 `honor_labels: true`。
@@ -176,6 +241,21 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 
 有关 Pushgateway 的更多信息，请查看[官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md)。
 
+#### Graphite
+
+启用指标上报到 Graphite：
+
+```xml
+<property>
+  <name>juicefs.push-graphite</name>
+  <value>host:port</value>
+</property>
+```
+
+同时可以通过 `juicefs.push-interval` 配置修改上报指标的频率，默认为 10 秒上报一次。
+
+JuiceFS Hadoop Java SDK 支持的所有配置参数请参考[文档](../deployment/hadoop_java_sdk.md#客户端配置参数)。
+
 ### 使用 Consul 作为注册中心
 
 :::note 注意
@@ -194,7 +274,7 @@ $ juicefs mount --consul 1.2.3.4:8500 ...
 
 每个 instance 的 meta 都包含了 `hostname` 与 `mountpoint` 两个维度，其中 `mountpoint` 为 `s3gateway` 代表该实例为 S3 网关。
 
-## 展示监控指标
+## 可视化监控指标
 
 ### Grafana 仪表盘模板
 

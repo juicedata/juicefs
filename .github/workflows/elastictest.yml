@@ -1,6 +1,5 @@
 name: "elastictest"
 
-
 on:
   push:
     branches:
@@ -16,6 +15,8 @@ on:
   schedule:
     - cron:  '30 20 * * *'
 
+  workflow_dispatch:
+
 jobs:
   elastictest:
     runs-on: ubuntu-latest
@@ -23,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.16.x'
+          go-version: '1.17.x'
 
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
@@ -43,7 +44,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
@@ -72,6 +73,13 @@ jobs:
           esrally race --track=geopoint --target-hosts=127.0.0.1:9200 --pipeline=benchmark-only --report-file=/tmp/report.md
           cat /tmp/report.md
 
-      - name: Setup tmate session
+      - name: Send Slack Notification
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

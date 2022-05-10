@@ -122,6 +122,7 @@ func (m *dbMeta) Getlk(ctx Context, inode Ino, owner_ uint64, ltype *uint32, sta
 	var locks = make(map[key][]byte)
 	var l plock
 	for rows.Next() {
+		l.Records = nil
 		if rows.Scan(&l) == nil && !(l.Sid == m.sid && l.Owner == owner) {
 			locks[key{l.Sid, l.Owner}] = dup(l.Records)
 		}
@@ -196,6 +197,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 			var locks = make(map[key][]byte)
 			var l plock
 			for rows.Next() {
+				l.Records = nil
 				if rows.Scan(&l) == nil {
 					locks[key{l.Sid, l.Owner}] = dup(l.Records)
 				}

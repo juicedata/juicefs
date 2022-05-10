@@ -129,6 +129,7 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 ```
 
 其中：
+
 - `name`：JuiceFS 文件系统名称
 - `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../reference/how_to_setup_metadata_engine.md)。
 - `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../reference/how_to_setup_object_storage.md)。
@@ -248,3 +249,38 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 ## 监控
 
 请查看[「监控」](../administration/monitoring.md)文档了解如何收集及展示 JuiceFS 监控指标
+
+## 使用功能更完整的 S3 网关
+
+如果需要使用 MinIO S3 网关的一些高级功能，可以拉取[该仓库的 gateway 分支](https://github.com/juicedata/minio/tree/gateway)并自行编译 MinIO。该分支是基于 [MinIO RELEASE.2022-03-05T06-32-39Z](https://github.com/minio/minio/tree/RELEASE.2022-03-05T06-32-39Z) 版本开发，并添加了 JuiceFS 网关支持，支持在使用 JuiceFS 作为后端的同时使用 MinIO 网关的完整功能，比如[多用户管理](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html)。
+
+### 编译
+
+:::tip 提示
+该分支依赖较新版本的 JuiceFS，具体的 JuiceFS 版本请查看 [`go.mod`](https://github.com/juicedata/minio/blob/gateway/go.mod) 文件。
+
+与[手动编译 JuiceFS 客户端](../getting-started/installation.md#手动编译客户端)类似，你需要提前安装一些依赖才能正常编译 S3 网关。
+:::
+
+```shell
+$ git clone -b gateway git@github.com:juicedata/minio.git && cd minio
+
+# 将会生成 minio 二进制文件
+$ make build
+```
+
+### 使用
+
+该版本 MinIO 网关的使用方法与原生 MinIO 网关完全一致，原生功能的使用可以参考 MinIO 的[文档](https://docs.min.io/docs/minio-gateway-for-s3.html)，而 JuiceFS 自身的配置选项可以通过命令行传入。你可以使用 `minio gateway juicefs -h` 查看当前支持的所有选项。
+
+与使用 JuiceFS 集成的 S3 网关类似，可以通过以下命令启动网关服务：
+
+```shell
+$ export MINIO_ROOT_USER=admin
+$ export MINIO_ROOT_PASSWORD=12345678
+$ ./minio gateway juicefs --console-address ':59001' redis://localhost:6379
+```
+
+这里显式指定了 S3 网关控制台的端口号为 59001，如果不指定则会随机选择一个端口。根据命令行提示，在浏览器中打开 [http://127.0.0.1:59001](http://127.0.0.1:59001) 地址便可以访问控制台，如下图所示：
+
+![](../images/s3-gateway-console.png)

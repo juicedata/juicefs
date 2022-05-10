@@ -26,3 +26,19 @@ func TestRemoveSecret(t *testing.T) {
 		t.Fatalf("invalid format: %+v", format)
 	}
 }
+
+func TestEncrypt(t *testing.T) {
+	format := Format{Name: "test", SecretKey: "testSecret", EncryptKey: "testEncrypt"}
+	if err := format.Encrypt(); err != nil {
+		t.Fatalf("Format encrypt: %s", err)
+	}
+	if format.SecretKey == "testSecret" || format.EncryptKey == "testEncrypt" {
+		t.Fatalf("invalid format: %+v", format)
+	}
+	if err := format.Decrypt(); err != nil {
+		t.Fatalf("Format decrypt: %s", err)
+	}
+	if format.SecretKey != "testSecret" || format.EncryptKey != "testEncrypt" {
+		t.Fatalf("invalid format: %+v", format)
+	}
+}

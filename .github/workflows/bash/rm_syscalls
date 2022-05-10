@@ -147,3 +147,4 @@ kill11 kill11
 mkdir02 mkdir02
 setxattr03 setxattr03
 quotactl08 quotactl08
+statx04 statx04

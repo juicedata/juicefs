@@ -240,25 +240,8 @@ func TestParseRedisInfo(t *testing.T) {
 		if info.aofEnabled {
 			t.Fatalf("Expect %t, got %t", false, true)
 		}
-		if info.clusterEnabled {
-			t.Fatalf("Expect %t, got %t", false, true)
-		}
 		if info.maxMemoryPolicy != "allkeys-lru" {
 			t.Fatalf("Expect %s, got %s", "allkeys-lru", info.maxMemoryPolicy)
-		}
-	})
-	t.Run("Test fields that may emit warnings", func(t *testing.T) {
-		input := `# Server
-	redis_version:2.1.0
-
-		# Cluster
-	cluster_enabled:1`
-		info, err := checkRedisInfo(input)
-		if err != nil {
-			t.Fatalf("Failed to parse redis info: %s", err)
-		}
-		if !info.clusterEnabled {
-			t.Fatalf("Expect %t, got %t", true, false)
 		}
 	})
 }

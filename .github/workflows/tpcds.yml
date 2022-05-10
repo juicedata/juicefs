@@ -14,6 +14,7 @@ on:
       - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
+  workflow_dispatch:
 
 jobs:
   tpcds:
@@ -36,7 +37,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.16.x'
+          go-version: '1.17.x'
 
       - name: Set up Java
         uses: actions/setup-java@v2
@@ -131,7 +132,14 @@ jobs:
           --executor-cores 1 \
           --conf spark.sql.shuffle.partitions=10 \
           -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_run.scala
-
-      - name: Setup tmate session
+          
+      - name: Send Slack Notification
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

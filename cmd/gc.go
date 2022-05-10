@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -34,25 +33,41 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func gcFlags() *cli.Command {
+func cmdGC() *cli.Command {
 	return &cli.Command{
 		Name:      "gc",
-		Usage:     "collect any leaked objects",
-		ArgsUsage: "META-URL",
 		Action:    gc,
+		Category:  "ADMIN",
+		Usage:     "Garbage collector of objects in data storage",
+		ArgsUsage: "META-URL",
+		Description: `
+It scans all objects in data storage and slices in metadata, comparing them to see if there is any
+leaked object. It can also actively trigger compaction of slices.
+Use this command if you find that data storage takes more than expected.
+
+Examples:
+# Check only, no writable change
+$ juicefs gc redis://localhost
+
+# Trigger compaction of all slices
+$ juicefs gc redis://localhost --compact
+
+# Delete leaked objects
+$ juicefs gc redis://localhost --delete`,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "delete",
-				Usage: "deleted leaked objects",
-			},
 			&cli.BoolFlag{
 				Name:  "compact",
 				Usage: "compact small slices into bigger ones",
 			},
+			&cli.BoolFlag{
+				Name:  "delete",
+				Usage: "deleted leaked objects",
+			},
 			&cli.IntFlag{
-				Name:  "threads",
-				Value: 10,
-				Usage: "number threads to delete leaked objects",
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   10,
+				Usage:   "number threads to delete leaked objects",
 			},
 		},
 	}
@@ -64,38 +79,34 @@ type dChunk struct {
 }
 
 func gc(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-URL is needed")
-	}
+	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MaxDeletes: ctx.Int("threads"),
+		Retries: 10,
+		Strict:  true,
 	})
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
 
 	chunkConf := chunk.Config{
-		BlockSize: format.BlockSize * 1024,
-		Compress:  format.Compression,
-
+		BlockSize:  format.BlockSize * 1024,
+		Compress:   format.Compression,
 		GetTimeout: time.Second * 60,
 		PutTimeout: time.Second * 60,
 		MaxUpload:  20,
+		MaxDeletes: ctx.Int("threads"),
 		BufferSize: 300 << 20,
 		CacheDir:   "memory",
 	}
 
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	store := chunk.NewCachedStore(blob, chunkConf)
+	store := chunk.NewCachedStore(blob, chunkConf, nil)
 
 	// Scan all chunks first and do compaction if necessary
 	progress := utils.NewProgress(false, false)

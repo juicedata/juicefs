@@ -21,13 +21,17 @@ package meta
 
 import (
 	"context"
+	"net/url"
 	"strings"
 
 	plog "github.com/pingcap/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/tikv/client-go/v2/config"
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/tikv"
+	"github.com/tikv/client-go/v2/txnkv"
+	"github.com/tikv/client-go/v2/txnkv/txnutil"
 )
 
 func init() {
@@ -53,18 +57,24 @@ func newTikvClient(addr string) (tkvClient, error) {
 	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
 	plog.ReplaceGlobals(l, prop)
 
-	p := strings.Index(addr, "/")
-	var prefix string
-	if p > 0 {
-		prefix = addr[p+1:]
-		addr = addr[:p]
-	}
-	pds := strings.Split(addr, ",")
-	client, err := tikv.NewTxnClient(pds)
+	tUrl, err := url.Parse("tikv://" + addr)
 	if err != nil {
 		return nil, err
 	}
-	return withPrefix(&tikvClient{client}, append([]byte(prefix), 0xFD)), nil
+	config.UpdateGlobal(func(conf *config.Config) {
+		q := tUrl.Query()
+		conf.Security = config.NewSecurity(
+			q.Get("ca"),
+			q.Get("cert"),
+			q.Get("key"),
+			strings.Split(q.Get("verify-cn"), ","))
+	})
+	client, err := txnkv.NewClient(strings.Split(tUrl.Host, ","))
+	if err != nil {
+		return nil, err
+	}
+	prefix := strings.TrimLeft(tUrl.Path, "/")
+	return withPrefix(&tikvClient{client.KVStore}, append([]byte(prefix), 0xFD)), nil
 }
 
 type tikvTxn struct {
@@ -125,20 +135,6 @@ func (tx *tikvTxn) scanRange0(begin, end []byte, limit int, filter func(k, v []b
 
 func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 	return tx.scanRange0(begin, end, -1, nil)
-}
-
-func (tx *tikvTxn) scan(prefix []byte, handler func(key, value []byte)) {
-	it, err := tx.Iter(prefix, nextKey(prefix))
-	if err != nil {
-		panic(err)
-	}
-	defer it.Close()
-	for it.Valid() {
-		handler(it.Key(), it.Value())
-		if err = it.Next(); err != nil {
-			panic(err)
-		}
-	}
 }
 
 func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
@@ -236,6 +232,29 @@ func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 		err = tx.Commit(context.Background())
 	}
 	return err
+}
+
+func (c *tikvClient) scan(prefix []byte, handler func(key, value []byte)) error {
+	ts, err := c.client.CurrentTimestamp("global")
+	if err != nil {
+		return err
+	}
+	snap := c.client.GetSnapshot(ts)
+	snap.SetScanBatchSize(10240)
+	snap.SetNotFillCache(true)
+	snap.SetPriority(txnutil.PriorityLow)
+	it, err := snap.Iter(prefix, nextKey(prefix))
+	if err != nil {
+		return err
+	}
+	defer it.Close()
+	for it.Valid() {
+		handler(it.Key(), it.Value())
+		if err = it.Next(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *tikvClient) reset(prefix []byte) error {

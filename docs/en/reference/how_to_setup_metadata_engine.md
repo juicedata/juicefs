@@ -6,28 +6,28 @@ slug: /databases_for_metadata
 # How to Setup Metadata Engine
 
 :::tip Version Tips
-The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, older clients need to be upgraded to use it.
+The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, and not applied to old clients. Please [upgrade the clients](https://github.com/juicedata/juicefs/releases) before using it if you are using the old ones.
 :::
 
-By reading [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), you will understand that JuiceFS is designed to store data and metadata independently. Generally , the data is stored in the cloud storage based on object storage, and the metadata corresponding to the data is stored in an independent database. We call the database that supports storing metadata a "Metadata Storage Engine".
+As mentioned in [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), JuiceFS is designed to store data and metadata seperately. Generally, data is stored in the cloud storage based on object storage, and metadata corresponding to the data is stored in an independent database. The database that supports storing metadata is referred to "Metadata Storage Engine".
 
 ## Metadata Storage Engine
 
-Metadata is critical. The metadata records the detailed information of each file, such as the name, size, permissions, location, and so on. Especially for this kind of file system where data and metadata are stored separately, the read and write performance of metadata directly determines the actual performance of the file system. The engine that stores the metadata is the most fundamental determinant of performance and reliability.
+Metadata is crucially important to a file system as it contains all the detailed information of each file, such as name, size, permissions and location. Especially, for the file system where data and metadata are stored separately, the read and write performance of metadata directly determines the file system performance, and the engine that stores metadata is the most fundamental determinant of performance and reliability.
 
-The metadata storage of JuiceFS uses a multi-engine design. In order to create an ultra-high-performance cloud-native file system, JuiceFS first supports [Redis](https://redis.io) a key-value database running in memory, which makes JuiceFS ten times more powerful than Amazon [ EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) performance, [View test results](../benchmark/benchmark.md) .
+The metadata storage of JuiceFS uses a multi-engine design. In order to create an ultra-high-performance cloud-native file system, JuiceFS first supports [Redis](https://redis.io), an in-memory Key-Value database, which makes JuiceFS ten times more powerful than Amazon [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) performance. Test results can be seen [here](../benchmark/benchmark.md).
 
-Through active interaction with community users, we found that many application scenarios do not absolutely rely on high performance. Sometimes users just want to temporarily find a convenient tool to reliably migrate data on the cloud, or simply want to mount the object storage locally for a Small-scale use. Therefore, JuiceFS has successively opened up support for more databases such as MySQL/MariaDB and SQLite (some performance comparison are recorded [here](../benchmark/metadata_engines_benchmark.md)).
+However, based on the feedback from community users, we have noticed that a high-performance file system is not urgently required in many application scenarios. Sometimes users just want to find a convenient tool to migrate data on the cloud with high reliability, or to mount the object storage locally to use on a small scale. Therefore, JuiceFS has successively opened up support for more databases such as MySQL/MariaDB and SQLite. The comparison of performance can be found [here](../benchmark/metadata_engines_benchmark.md)).
 
-**But you need to pay special attention**, in the process of using the JuiceFS file system, no matter which database you choose to store metadata, please **make sure to ensure the security of the metadata**! Once the metadata is damaged or lost, it will directly cause the corresponding data to be completely damaged or lost, and in serious cases may directly cause the entire file system to be damaged.
+**A special attention needs to be paid** while using the JuiceFS file system - no matter which database you choose to store metadata, please **ensure the safety of the metadata**! Once the metadata is damaged or lost, the corresponding data will accordingly be damaged or lost, and the entire file system can even be damaged in the worse cases.
 
 :::caution
-No matter which database is used to store metadata, **it is important to ensure the security of metadata**. If metadata is corrupted or lost, the corresponding data will be completely corrupted or lost, or even the whole file system will be damaged. For production environments, you should always choose a database with high availability, and at the same time, it is recommended to periodically "[backup metadata](../administration/metadata_dump_load.md)" on a regular basis.
+No matter which database is used to store metadata, **it is important to ensure the safety of metadata**. The corruption or loss of metadata will directly cause the damage of the corresponding data, or even the whole file system. For production environments, you should always choose a database with high availability, and at the same time, it is recommended to "[backup metadata](../administration/metadata_dump_load.md)" periodically.
 :::
 
 ## Redis
 
-[Redis](https://redis.io/) is an open source (BSD license) memory-based key-value storage system, often used as a database, cache, and message broker.
+[Redis](https://redis.io/) is an open source (BSD license) memory-based Key-Value storage system, often used as a database, cache, and message broker.
 
 :::note
 JuiceFS requires Redis 4.0+
@@ -38,13 +38,16 @@ JuiceFS requires Redis 4.0+
 When using Redis as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
-redis://[<username>:<password>@]<host>[:6379]/1
+redis[s]://[<username>:<password>@]<host>[:<port>]/<db>
 ```
 
 Where `[]` enclosed are optional and the rest are mandatory.
 
-- `username` is introduced after Redis 6.0 and can be ignored if there is no username, but the `:` colon in front of the password needs to be kept, e.g. `redis://:password@host:6379/1`.
-- The default port number for the `redis://` protocol header is `6379`, which can be left blank if the default port number is not changed, e.g. `redis://:password@host/1`.
+- If the [TLS](https://redis.io/docs/manual/security/encryption) feature of Redis is enabled, the protocol header needs to use `rediss://`, otherwise use `redis://`.
+- `<username>` is introduced after Redis 6.0 and can be ignored if there is no username, but the `:` colon in front of the password needs to be kept, e.g. `redis://:<password>@<host>:6379/1`.
+- The default port number on which Redis listens is `6379`, which can be left blank if the default port number is not changed, e.g. `redis://:<password>@<host>/1`.
+- Redis supports multiple [logical databases](https://redis.io/commands/select), please replace `<db>` with the actual database number used.
+- If you need to connect to Redis Sentinel, the format of the metadata URL will be slightly different, please refer to the ["Redis Best Practices"](../administration/metadata/redis_best_practices.md#high-availability) document for details.
 
 For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 
@@ -71,7 +74,7 @@ $ juicefs format --storage s3 \
 ```
 
 :::note
-You can also use the standard URL format when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` preserves the `:` and `@` separators between the username and password.
+You can also use the standard URL syntax when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` which preserves the `:` and `@` separators between the username and password.
 :::
 
 ### Mount a file system
@@ -91,11 +94,21 @@ $ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 If you need to share the same file system on multiple servers, you must ensure that each server has access to the database where the metadata is stored.
 :::
 
-If you maintain your own Redis database, we recommend reading [Redis Best Practices](../administration/metadata/redis_best_practices.md).
+If you maintain the Redis database on your own, it is recommended to read [Redis Best Practices](../administration/metadata/redis_best_practices.md).
+
+## KeyDB
+
+[KeyDB](https://keydb.dev/) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the `Active Active` feature.
+
+:::note
+Same as Redis, the Active Replication is asychronous, which may cause consistency issues. So use with caution!
+:::
+
+When being used as metadata storage engine for Juice, KeyDB is used exactly in the same way as Redis. So please refer to the [Redis](#redis) section for usage.
 
 ## PostgreSQL
 
-[PostgreSQL](https://www.postgresql.org/) is a powerful open source relational database with a perfect ecosystem and rich application scenarios, and it is well suited as the metadata engine of JuiceFS.
+[PostgreSQL](https://www.postgresql.org/) is a powerful open source relational database with a perfect ecosystem and rich application scenarios, and it also works as the metadata engine of JuiceFS.
 
 Many cloud computing platforms offer hosted PostgreSQL database services, or you can deploy one yourself by following the [Usage Wizard](https://www.postgresqltutorial.com/postgresql-getting-started/).
 
@@ -103,7 +116,7 @@ Other PostgreSQL-compatible databases (such as CockroachDB) can also be used as 
 
 ### Create a file system
 
-When using PostgreSQL as the metadata storage engine, the following format is usually used to access the database:
+When using PostgreSQL as the metadata storage engine, you need to create a database manually before creating the file system by following the format below:
 
 ```shell
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
@@ -123,7 +136,7 @@ $ juicefs format --storage s3 \
 A more secure approach would be to pass the database password through the environment variable `META_PASSWORD`:
 
 ```shell
-$ export META_PASSWORD=password
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "postgres://user@192.168.1.6:5432/juicefs" \
@@ -139,13 +152,13 @@ sudo juicefs mount -d "postgres://user:mypassword@192.168.1.6:5432/juicefs" /mnt
 Passing password with the `META_PASSWORD` environment variable is also supported when mounting a file system.
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
 ### Troubleshooting
 
-The JuiceFS client connects to PostgreSQL via SSL encryption by default; if an error `pq: SSL is not enabled on the server` is returned, it means that SSL is not enabled on the database; you can enable SSL encryption for PostgreSQL according to your business scenario, or you can disable it by adding a parameter to the metadata URL Validation.
+The JuiceFS client connects to PostgreSQL via SSL encryption by default. If you encountered an error saying `pq: SSL is not enabled on the server`, you need to enable SSL encryption for PostgreSQL according to your own business scenario, or you can disable it by adding a parameter to the metadata URL Validation.
 
 ```shell
 $ juicefs format --storage s3 \
@@ -154,15 +167,15 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-Additional parameters can be appended to the metadata URL, [click here to view](https://pkg.go.dev/github.com/lib/pq#hdr-Connection_String_Parameters).
+Additional parameters can be appended to the metadata URL. More details can be seen [here](https://pkg.go.dev/github.com/lib/pq#hdr-Connection_String_Parameters).
 
 ## MySQL
 
-[MySQL](https://www.mysql.com/) is one of the most popular open source relational databases, and is often used as the preferred database for Web applications.
+[MySQL](https://www.mysql.com/) is one of the most popular open source relational databases, and is often preferred for web applications.
 
 ### Create a file system
 
-When using MySQL as the metadata storage engine, the following format is usually used to access the database:
+When using MySQL as the metadata storage engine, you need to create a database manually before create the file system. The command with the following format is usually used to access the database:
 
 ```shell
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
@@ -184,7 +197,7 @@ $ juicefs format --storage s3 \
 A more secure approach would be to pass the database password through the environment variable `META_PASSWORD`:
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "mysql://user@(192.168.1.6:3306)/juicefs" \
@@ -200,15 +213,15 @@ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/
 Passing password with the `META_PASSWORD` environment variable is also supported when mounting a file system.
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
-For more examples of MySQL database address format, [click here to view](https://github.com/Go-SQL-Driver/MySQL/#examples).
+For more examples of MySQL database address format, please refer to [here](https://github.com/Go-SQL-Driver/MySQL/#examples).
 
 ## MariaDB
 
-[MariaDB](https://mariadb.org) is an open source branch of MySQL, maintained by the original developers of MySQL and kept open source.
+[MariaDB](https://mariadb.org) is an open source branch of MySQL, maintained by the original developers of MySQL.
 
 Because MariaDB is highly compatible with MySQL, there is no difference in usage, the parameters and settings are exactly the same.
 
@@ -223,10 +236,10 @@ $ juicefs format --storage s3 \
 $ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
-Passing passwords through environment variables is also exactly the same:
+Passing passwords through environment variables is also the same:
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "mysql://user@(192.168.1.6:3306)/juicefs" \
@@ -237,9 +250,9 @@ $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 
 ## SQLite
 
-[SQLite](https://sqlite.org) is a widely used small, fast, single-file, reliable, and full-featured SQL database engine.
+[SQLite](https://sqlite.org) is a widely used small, fast, single-file, reliable and full-featured SQL database engine.
 
-The SQLite database has only one file, which is very flexible to create and use. When using it as the JuiceFS metadata storage engine, there is no need to create a database file in advance, and you can directly create a file system:
+The SQLite database has only one file, which is very flexible to create and use. When using SQLite as the JuiceFS metadata storage engine, there is no need to create a database file in advance, and you can directly create a file system:
 
 ```shell
 $ juicefs format --storage s3 \
@@ -248,7 +261,7 @@ $ juicefs format --storage s3 \
     pics
 ```
 
-Executing the above command will automatically create a database file named `my-jfs.db` in the current directory, **please take good care of this file**!
+Executing the above command will automatically create a database file named `my-jfs.db` in the current directory. **Please keep this file properly**!
 
 Mount the file system:
 
@@ -263,18 +276,46 @@ sudo juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 ```
 
 :::note
-Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for stand-alone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
+Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for standalone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
+:::
+
+## BadgerDB
+
+[BadgerDB](https://github.com/dgraph-io/badger) is an embedded, persistent, and standalone Key-Value database developed in pure Go. The database files are stored locally in the specified directory.
+
+When using BadgerDB as the JuiceFS metadata storage engine, use `badger://` to specify the database path.
+
+### Create a file system
+
+You only need to create a file system for use, and there is no need to create a BadgerDB database in advance.
+
+```shell
+juicefs format badger://$HOME/badger-data myjfs
+```
+
+This command creates `badger-data` as a database directory in the `home` directory of the current user, which is used as metadata storage for JuiceFS.
+
+### Mount a file system
+
+The database path needs to be specified when mounting the file system.
+
+```shell
+juicefs mount -d badger://$HOME/badger-data /mnt/jfs
+```
+
+:::note
+Since BadgerDB is a standalone database, it can only be used locally and does not support multi-host shared mounts. In addition, only one process is allowed to access BadgerDB at the same time, and `gc` and `fsck` operations cannot be performed when the file system is mounted.
 :::
 
 ## TiKV
 
-[TiKV](https://github.com/tikv/tikv) is a distributed transactional key-value database. It is originally developed by [PingCAP](https://pingcap.com) as the storage layer for their flagship product [TiDB](https://github.com/pingcap/tidb). Now TiKV is an independent open source project, and is also a granduated project of [CNCF](https://www.cncf.io/projects).
+[TiKV](https://github.com/tikv/tikv) is a distributed transactional Key-Value database. It is originally developed by [PingCAP](https://pingcap.com) as the storage layer for their flagship product [TiDB](https://github.com/pingcap/tidb). Now TiKV is an independent open source project, and is also a granduated project of [CNCF](https://www.cncf.io/projects).
 
-With the help of official tool `TiUP`, you can easily build a local playground for testing; refer [here](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/) for details. In production, usually at least three hosts are required to store three data replicas; refer to the [official document](https://tikv.org/docs/5.1/deploy/install/install/) for all steps.
+By using the official tool `TiUP`, you can easily build a local playground for testing (refer [here](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/) for details). Production environment generally requires at least three hosts to store three data replicas (refer to the [official document](https://tikv.org/docs/5.1/deploy/install/install/) for all deployment steps).
 
 ### Create a file system
 
-When using TiKV as the metadata storage engine, specify parameters as the following format:
+When using TiKV as the metadata storage engine, parameters needs to be specified as the following format:
 
 ```shell
 tikv://<pd_addr>[,<pd_addr>...]/<prefix>
@@ -289,10 +330,28 @@ $ juicefs format --storage s3 \
     pics
 ```
 
+### Set up TLS
+If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the Meta-URL. Currently supported configuration items:
+
+| name                 | value                                                                                                                                                       |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ca    | CA root certificate, used to connect TiKV/PD with tls                                                                                                   |
+| cert  | certificate file path, used to connect TiKV/PD with tls                                                                                                 |
+| key   | private key file path, used to connect TiKV/PD with tls                                                                                                 |
+| verify-cn | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+
+example:
+```shell
+$ juicefs format --storage s3 \
+    ...
+    "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
+    pics
+```
+
 ### Mount a file system
 
 ```shell
-sudo juicefs mount -d "tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs" /mnt/jfs
+sudo juicefs mount -d "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" /mnt/jfs
 ```
 
 ## FoundationDB

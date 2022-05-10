@@ -19,6 +19,7 @@ package meta
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 	"syscall"
@@ -223,8 +224,8 @@ type Plock struct {
 
 // Session contains detailed information of a client session
 type Session struct {
-	Sid       uint64
-	Heartbeat time.Time
+	Sid    uint64
+	Expire time.Time
 	SessionInfo
 	Sustained []Ino   `json:",omitempty"`
 	Flocks    []Flock `json:",omitempty"`
@@ -242,7 +243,7 @@ type Meta interface {
 	// Reset cleans up all metadata, VERY DANGEROUS!
 	Reset() error
 	// Load loads the existing setting of a formatted volume from meta service.
-	Load() (*Format, error)
+	Load(checkVersion bool) (*Format, error)
 	// NewSession creates a new client session.
 	NewSession() error
 	// CloseSession does cleanup and close the session.
@@ -277,7 +278,7 @@ type Meta interface {
 	// Symlink creates a symlink in a directory with given name.
 	Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno
 	// Mknod creates a node in a directory with given name, type and permissions.
-	Mknod(ctx Context, parent Ino, name string, _type uint8, mode uint16, cumask uint16, rdev uint32, inode *Ino, attr *Attr) syscall.Errno
+	Mknod(ctx Context, parent Ino, name string, _type uint8, mode uint16, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
 	// Mkdir creates a sub-directory with given name and mode.
 	Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno
 	// Unlink removes a file entry from a directory.
@@ -361,7 +362,8 @@ func setPasswordFromEnv(uri string) (string, error) {
 	if len(s) == 2 && s[1] != "" {
 		return uri, nil
 	}
-	return uri[:dIndex] + fmt.Sprintf("%s:%s", s[0], os.Getenv("META_PASSWORD")) + uri[atIndex:], nil
+	pwd := url.UserPassword("", os.Getenv("META_PASSWORD")) // escape only password
+	return uri[:dIndex] + s[0] + pwd.String() + uri[atIndex:], nil
 }
 
 // NewClient creates a Meta client for given uri.

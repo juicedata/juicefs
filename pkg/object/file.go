@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -36,9 +37,27 @@ const (
 	dirSuffix = "/"
 )
 
+var TryCFR bool // try copy_file_range
+
 type filestore struct {
 	DefaultObjectStorage
 	root string
+}
+
+func (d *filestore) Symlink(oldName, newName string) error {
+	p := d.path(newName)
+	if _, err := os.Stat(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0755)); err != nil {
+			return err
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return os.Symlink(oldName, p)
+}
+
+func (d *filestore) Readlink(name string) (string, error) {
+	return os.Readlink(d.path(name))
 }
 
 func (d *filestore) String() string {
@@ -133,9 +152,14 @@ func (d *filestore) Put(key string, in io.Reader) error {
 			_ = os.Remove(tmp)
 		}
 	}()
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
-	_, err = io.CopyBuffer(f, in, *buf)
+
+	if TryCFR {
+		_, err = io.Copy(f, in)
+	} else {
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+		_, err = io.CopyBuffer(onlyWriter{f}, in, *buf)
+	}
 	if err != nil {
 		_ = f.Close()
 		return err
@@ -166,8 +190,8 @@ func (d *filestore) Delete(key string) error {
 }
 
 // walk recursively descends path, calling w.
-func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
-	err := walkFn(path, info, nil)
+func walk(path string, info os.FileInfo, isSymlink bool, walkFn WalkFunc) error {
+	err := walkFn(path, info, isSymlink, nil)
 	if err != nil {
 		if info.IsDir() && err == filepath.SkipDir {
 			return nil
@@ -181,7 +205,7 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 
 	entries, err := readDirSorted(path)
 	if err != nil {
-		return walkFn(path, info, err)
+		return walkFn(path, info, isSymlink, err)
 	}
 
 	for _, e := range entries {
@@ -191,7 +215,7 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 		}
 		in, err := e.Info()
 		if err == nil {
-			err = walk(p, in, walkFn)
+			err = walk(p, in, e.isSymlink, walkFn)
 		}
 		if err != nil && err != filepath.SkipDir && !os.IsNotExist(err) {
 			return err
@@ -206,13 +230,23 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 // order, which makes the output deterministic but means that for very
 // large directories Walk can be inefficient.
 // Walk always follow symbolic links.
-func Walk(root string, walkFn filepath.WalkFunc) error {
-	info, err := os.Stat(root)
+func Walk(root string, walkFn WalkFunc) error {
+	var err error
+	var lstat, info os.FileInfo
+	lstat, err = os.Lstat(root)
 	if err != nil {
-		err = walkFn(root, nil, err)
+		err = walkFn(root, nil, false, err)
 	} else {
-		err = walk(root, info, walkFn)
+		isSymlink := lstat.Mode()&os.ModeSymlink != 0
+		info, err = os.Stat(root)
+		if err != nil {
+			// root is a broken link
+			err = walkFn(root, lstat, isSymlink, nil)
+		} else {
+			err = walk(root, info, isSymlink, walkFn)
+		}
 	}
+
 	if err == filepath.SkipDir {
 		return nil
 	}
@@ -221,8 +255,9 @@ func Walk(root string, walkFn filepath.WalkFunc) error {
 
 type mEntry struct {
 	os.DirEntry
-	name string
-	fi   os.FileInfo
+	name      string
+	fi        os.FileInfo
+	isSymlink bool
 }
 
 func (m *mEntry) Name() string {
@@ -238,37 +273,43 @@ func (m *mEntry) Info() (os.FileInfo, error) {
 
 // readDirSorted reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func readDirSorted(dirname string) ([]os.DirEntry, error) {
+func readDirSorted(dirname string) ([]*mEntry, error) {
 	f, err := os.Open(dirname)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 	entries, err := f.ReadDir(-1)
+	mEntries := make([]*mEntry, len(entries))
+
 	for i, e := range entries {
 		if e.IsDir() {
-			entries[i] = &mEntry{e, e.Name() + dirSuffix, nil}
+			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
 		} else if !e.Type().IsRegular() {
 			// follow symlink
 			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
 			if err != nil {
-				logger.Warnf("skip broken symlink %s: %s", filepath.Join(dirname, e.Name()), err)
+				mEntries[i] = &mEntry{e, e.Name(), nil, true}
 				continue
 			}
 			name := e.Name()
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
 			}
-			entries[i] = &mEntry{e, name, fi}
+			mEntries[i] = &mEntry{e, name, fi, true}
+		} else {
+			mEntries[i] = &mEntry{e, e.Name(), nil, false}
 		}
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	return entries, err
+	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
+	return mEntries, err
 }
 
 func (d *filestore) List(prefix, marker string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
+
+type WalkFunc func(path string, info fs.FileInfo, isSymlink bool, err error) error
 
 func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 	listed := make(chan Object, 10240)
@@ -281,24 +322,19 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 			walkRoot = path.Dir(d.root)
 		}
 
-		_ = Walk(walkRoot, func(path string, info os.FileInfo, err error) error {
+		_ = Walk(walkRoot, func(path string, info os.FileInfo, isSymlink bool, err error) error {
 			if runtime.GOOS == "windows" {
 				path = strings.Replace(path, "\\", "/", -1)
 			}
 
 			if err != nil {
-				// skip broken symbolic link
-				if fi, err1 := os.Lstat(path); err1 == nil && fi.Mode()&os.ModeSymlink != 0 {
-					logger.Warnf("skip unreachable symlink: %s (%s)", path, err)
-					return nil
-				}
 				if os.IsNotExist(err) {
 					logger.Warnf("skip not exist file or directory: %s", path)
 					return nil
 				}
 				listed <- nil
 				logger.Errorf("list %s: %s", path, err)
-				return err
+				return nil
 			}
 
 			if !strings.HasPrefix(path, d.root) {
@@ -326,6 +362,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				owner,
 				group,
 				info.Mode(),
+				isSymlink,
 			}
 			if info.IsDir() {
 				f.size = 0

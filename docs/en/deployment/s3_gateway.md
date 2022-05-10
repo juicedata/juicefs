@@ -61,6 +61,8 @@ The following examples are for using a third-party client to access the S3 gatew
 
 ### Using the AWS CLI
 
+Download and install the AWS CLI from [https://aws.amazon.com/cli](https://aws.amazon.com/cli), then configure:
+
 ```bash
 $ aws configure
 AWS Access Key ID [None]: admin
@@ -245,3 +247,38 @@ There are some differences between the various versions of Ingress. For more usa
 ## Monitoring
 
 Please see the ["Monitoring"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.
+
+## Use a full-featured S3 gateway
+
+If you need to use some advanced features of the MinIO S3 gateway, you can pull [the gateway branch of this repository](https://github.com/juicedata/minio/tree/gateway) and compile MinIO yourself. This branch is developed based on the [MinIO RELEASE.2022-03-05T06-32-39Z](https://github.com/minio/minio/tree/RELEASE.2022-03-05T06-32-39Z) version and adds JuiceFS gateway support, which supports full functionality of MinIO gateways such as [multi-user management](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html) while using JuiceFS as a backend.
+
+### Compile
+
+:::tip
+This branch relies on a newer version of JuiceFS. Please refer to the [`go.mod`](https://github.com/juicedata/minio/blob/gateway/go.mod) file for the specific JuiceFS version.
+
+Similar to [manually compile JuiceFS client](../getting-started/installation.md#manually-compiling), you need to install some dependencies in advance to compile S3 gateway normally.
+:::
+
+```shell
+$ git clone -b gateway git@github.com:juicedata/minio.git && cd minio
+
+# Will generate a binary named minio
+$ make build
+```
+
+### Usage
+
+The usage of this version of MinIO gateway is exactly the same as that of the native MinIO gateway. For the usage of native functions, please refer to MinIO's [document](https://docs.min.io/docs/minio-gateway-for-s3.html), while JuiceFS's own configuration options can be passed in via the command line. You can use `minio gateway juicefs -h` to see all currently supported options.
+
+Similar to the S3 gateway integrated with JuiceFS, the gateway service can be started with the following command:
+
+```shell
+$ export MINIO_ROOT_USER=admin
+$ export MINIO_ROOT_PASSWORD=12345678
+$ ./minio gateway juicefs --console-address ':59001' redis://localhost:6379
+```
+
+The port number of the S3 gateway console is explicitly specified here as 59001. If not specified, a port will be randomly selected. According to the command line prompt, open the [http://127.0.0.1:59001](http://127.0.0.1:59001) address in the browser to access the console, as shown in the following figure:
+
+![](../images/s3-gateway-console.png)

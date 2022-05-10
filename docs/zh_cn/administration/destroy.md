@@ -1,3 +1,6 @@
+---
+sidebar_label: 销毁文件系统
+---
 # 如何销毁文件系统
 
 JuiceFS 客户端提供了 `destroy` 命令用以彻底销毁一个文件系统，销毁操作将会产生以下结果：
@@ -18,7 +21,7 @@ juicefs destroy <METADATA URL> <UUID>
 
 JuiceFS 客户端的 `status` 命令可以查看一个文件系统的详细信息，只需指定文件系统的元数据引擎 URL 即可，例如：
 
-```shell {7}
+```shell {8}
 $ juicefs status redis://127.0.0.1:6379/1
 
 2022/01/26 21:41:37.577645 juicefs[31181] <INFO>: Meta address: redis://127.0.0.1:6379/1
@@ -48,7 +51,7 @@ $ juicefs status redis://127.0.0.1:6379/1
 销毁操作将导致文件系统关联的数据库记录和对象存储中的数据全部被清空，请务必先备份重要数据后再操作！
 :::
 
-```shell
+```shell {1}
 $ juicefs destroy redis://127.0.0.1:6379/1 eabb96d5-7228-461e-9240-fddbf2b576d8
 
 2022/01/26 21:52:17.488987 juicefs[31518] <INFO>: Meta address: redis://127.0.0.1:6379/1

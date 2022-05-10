@@ -2,26 +2,30 @@ name: "test jfs on windows"
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - 'release-**'
     paths-ignore:
       - 'docs/**'
+      - '**.md'
   pull_request:
     #The branches below must be a subset of the branches above
-    branches: [ main ]
+    branches:
+      - 'release-**'
     paths-ignore:
       - 'docs/**'
-
+      - '**.md'
+  workflow_dispatch:
 
 jobs:
   wintest:
-    runs-on: windows-latest
+    runs-on: windows-2019
     env:
       Actions_Allow_Unsecure_Commands: true
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.16.x'
+          go-version: '1.17.x'
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -76,7 +80,8 @@ jobs:
         run: |
           dir "C:\Program Files (x86)\WinFsp"
           Set-ExecutionPolicy RemoteSigned -scope CurrentUser
-          iwr -useb get.scoop.sh | iex
+          iwr -useb 'https://raw.githubusercontent.com/scoopinstaller/install/master/install.ps1' -outfile 'install.ps1'
+          .\install.ps1 -RunAsAdmin
           echo $env:USERNAME
           scoop
           scoop install curl

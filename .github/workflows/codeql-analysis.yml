@@ -21,6 +21,8 @@ on:
     #branches: [ main ]
   schedule:
     - cron: '28 20 * * 0'
+    
+  workflow_dispatch:
 
 jobs:
   analyze:
@@ -78,3 +80,10 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
+
+    - name: Send Slack Notification
+      if: ${{ failure() }}
+      uses: juicedata/slack-notify-action@main
+      with:
+        channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+        slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  

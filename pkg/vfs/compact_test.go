@@ -30,12 +30,13 @@ func TestCompact(t *testing.T) {
 		BlockSize:  256 * 1024,
 		Compress:   "lz4",
 		MaxUpload:  2,
+		MaxDeletes: 1,
 		BufferSize: 30 << 20,
 		CacheSize:  10,
 		CacheDir:   "memory",
 	}
 	blob, _ := object.CreateStorage("mem", "", "", "")
-	store := chunk.NewCachedStore(blob, cconf)
+	store := chunk.NewCachedStore(blob, cconf, nil)
 
 	// prepare the slices
 	var slices []meta.Slice

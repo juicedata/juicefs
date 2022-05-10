@@ -18,16 +18,72 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
+func cmdWarmup() *cli.Command {
+	return &cli.Command{
+		Name:      "warmup",
+		Action:    warmup,
+		Category:  "TOOL",
+		Usage:     "Build cache for target directories/files",
+		ArgsUsage: "[PATH ...]",
+		Description: `
+This command provides a faster way to actively build cache for the target files. It reads all objects
+of the files and then write them into local cache directory.
+
+Examples:
+# Warm all files in datadir
+$ juicefs warmup /mnt/jfs/datadir
+
+# Warm only three files in datadir
+$ cat /tmp/filelist
+/mnt/jfs/datadir/f1
+/mnt/jfs/datadir/f2
+/mnt/jfs/datadir/f3
+$ juicefs warmup -f /tmp/filelist`,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "file",
+				Aliases: []string{"f"},
+				Usage:   "file containing a list of paths",
+			},
+			&cli.UintFlag{
+				Name:    "threads",
+				Aliases: []string{"p"},
+				Value:   50,
+				Usage:   "number of concurrent workers",
+			},
+			&cli.BoolFlag{
+				Name:    "background",
+				Aliases: []string{"b"},
+				Usage:   "run in background",
+			},
+		},
+	}
+}
+
 const batchMax = 10240
+
+func readControl(cf *os.File, resp []byte) int {
+	for {
+		if n, err := cf.Read(resp); err == nil {
+			return n
+		} else if err == io.EOF {
+			time.Sleep(time.Millisecond * 300)
+		} else {
+			logger.Fatalf("Read message: %d %s", n, err)
+		}
+	}
+}
 
 // send fill-cache command to controller file
 func sendCommand(cf *os.File, batch []string, count int, threads uint, background bool) {
@@ -51,18 +107,23 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 		return
 	}
 	var errs = make([]byte, 1)
-	if n, err := cf.Read(errs); err != nil || n != 1 {
-		logger.Fatalf("Read message: %d %s", n, err)
-	}
+	_ = readControl(cf, errs) // 0 < n <= 1
 	if errs[0] != 0 {
 		logger.Fatalf("Warm up failed: %d", errs[0])
 	}
 }
 
 func warmup(ctx *cli.Context) error {
-	fname := ctx.String("file")
-	paths := ctx.Args().Slice()
-	if fname != "" {
+	setup(ctx, 0)
+	var paths []string
+	for _, p := range ctx.Args().Slice() {
+		if abs, err := filepath.Abs(p); err == nil {
+			paths = append(paths, abs)
+		} else {
+			logger.Fatalf("Failed to get absolute path of %s: %s", p, err)
+		}
+	}
+	if fname := ctx.String("file"); fname != "" {
 		fd, err := os.Open(fname)
 		if err != nil {
 			logger.Fatalf("Failed to open file %s: %s", fname, err)
@@ -71,10 +132,14 @@ func warmup(ctx *cli.Context) error {
 		scanner := bufio.NewScanner(fd)
 		for scanner.Scan() {
 			if p := strings.TrimSpace(scanner.Text()); p != "" {
-				paths = append(paths, p)
+				if abs, e := filepath.Abs(p); e == nil {
+					paths = append(paths, abs)
+				} else {
+					logger.Warnf("Skipped path %s because it fails to get absolute path: %s", p, e)
+				}
 			}
 		}
-		if err := scanner.Err(); err != nil {
+		if err = scanner.Err(); err != nil {
 			logger.Fatalf("Reading file %s failed with error: %s", fname, err)
 		}
 	}
@@ -84,10 +149,7 @@ func warmup(ctx *cli.Context) error {
 	}
 
 	// find mount point
-	first, err := filepath.Abs(paths[0])
-	if err != nil {
-		logger.Fatalf("Failed to get abs of %s: %s", paths[0], err)
-	}
+	first := paths[0]
 	st, err := os.Stat(first)
 	if err != nil {
 		logger.Fatalf("Failed to stat path %s: %s", first, err)
@@ -143,33 +205,9 @@ func warmup(ctx *cli.Context) error {
 		bar.IncrBy(index)
 	}
 	progress.Done()
+	if !background {
+		logger.Infof("Successfully warmed up %d paths", bar.Current())
+	}
 
 	return nil
-}
-
-func warmupFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "warmup",
-		Usage:     "build cache for target directories/files",
-		ArgsUsage: "[PATH ...]",
-		Action:    warmup,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "file",
-				Aliases: []string{"f"},
-				Usage:   "file containing a list of paths",
-			},
-			&cli.UintFlag{
-				Name:    "threads",
-				Aliases: []string{"p"},
-				Value:   50,
-				Usage:   "number of concurrent workers",
-			},
-			&cli.BoolFlag{
-				Name:    "background",
-				Aliases: []string{"b"},
-				Usage:   "run in background",
-			},
-		},
-	}
 }

@@ -31,31 +31,34 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func checkFlags() *cli.Command {
+func cmdFsck() *cli.Command {
 	return &cli.Command{
 		Name:      "fsck",
-		Usage:     "Check consistency of file system",
-		ArgsUsage: "META-URL",
 		Action:    fsck,
+		Category:  "ADMIN",
+		Usage:     "Check consistency of a volume",
+		ArgsUsage: "META-URL",
+		Description: `
+It scans all objects in data storage and slices in metadata, comparing them to see if there is any
+lost object or broken file.
+
+Examples:
+$ juicefs fsck redis://localhost`,
 	}
 }
 
 func fsck(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-URL is needed")
-	}
+	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
 
 	chunkConf := chunk.Config{
-		BlockSize: format.BlockSize * 1024,
-		Compress:  format.Compression,
-
+		BlockSize:  format.BlockSize * 1024,
+		Compress:   format.Compression,
 		GetTimeout: time.Second * 60,
 		PutTimeout: time.Second * 60,
 		MaxUpload:  20,
@@ -63,7 +66,7 @@ func fsck(ctx *cli.Context) error {
 		CacheDir:   "memory",
 	}
 
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

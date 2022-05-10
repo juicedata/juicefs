@@ -6,25 +6,22 @@ slug: /installation
 
 # Installation & Upgrade
 
-JuiceFS has good cross-platform capability and supports running on all kinds of operating systems of almost all major architectures, including and not limited to Linux, macOS, Windows, BSD, etc.
+JuiceFS has good cross-platform capability and supports running on all kinds of operating systems of almost all major architectures, including and not limited to Linux, macOS, Windows, etc.
 
 The JuiceFS client has only one binary file, you can download the pre-compiled version to unzip it and use it directly, or you can compile it manually with the source code.
 
-## Install The Pre-compiled Client
+## Install the pre-compiled client
 
-You can find the latest version of the client for download at [GitHub](https://github.com/juicedata/juicefs/releases). Pre-compiled versions for different CPU architectures and operating systems are available in the download list for each version, so please take care to identify your choice, e.g.
+You can download the latest version of the client at [GitHub](https://github.com/juicedata/juicefs/releases). Pre-compiled versions for different CPU architectures and operating systems are available in the download list of each client version. Please find the version suit your application the best, e.g.,
 
-| File Name                              | Description                                                     |
-| ------------------------------------   | ----------------------------                                    |
-| `juicefs-x.x.x-darwin-amd64.tar.gz`    | For macOS systems with Intel chips                              |
-| `juicefs-x.x.x-linux-amd64.tar.gz`     | For Linux distributions on the x86 architecture                 |
-| `juicefs-x.x.x-linux-arm64.tar.gz`     | For Linux distributions on the ARM architecture                 |
-| `juicefs-x.x.x-windows-amd64.tar.gz`   | For Windows on the x86 architecture                             |
-| `juicefs-hadoop-x.x.x-linux-amd64.jar` | Hadoop Java SDK for Linux distributions on the x86 architecture |
-
-:::tip
-For macOS on M1 series chips, you can use the `darwin-amd64` version of the client dependent on [Rosetta 2](https://support.apple.com/zh-cn/HT211861), or you can refer to [Manually Compiling](#manually-compiling) to compile the native version.
-:::
+| File Name                            | Description                                                                          |
+|--------------------------------------|--------------------------------------------------------------------------------------|
+| `juicefs-x.x.x-darwin-amd64.tar.gz`  | For macOS systems with Intel chips                                                   |
+| `juicefs-x.x.x-darwin-arm64.tar.gz`  | For macOS systems with M1 series chips                                               |
+| `juicefs-x.x.x-linux-amd64.tar.gz`   | For Linux distributions on x86 architecture                                          |
+| `juicefs-x.x.x-linux-arm64.tar.gz`   | For Linux distributions on ARM architecture                                          |
+| `juicefs-x.x.x-windows-amd64.tar.gz` | For Windows on x86 architecture                                                      |
+| `juicefs-hadoop-x.x.x-amd64.jar`     | Hadoop Java SDK on x86 architecture (supports both Linux, macOS and Windows systems) |
 
 ### Linux
 
@@ -54,51 +51,51 @@ For Linux systems with x86 architecture, download the file with the file name `l
    sudo install juicefs /usr/local/bin
    ```
 
-After completing the above 4 steps, execute the `juicefs` command in the terminal and the help message will be returned, then the client installation is successful.
+After completing the above 4 steps, execute the `juicefs` command in the terminal. A help message will be returned if the client installation is successful.
 
 :::info
-If the terminal prompts `command not found`, it may be that `/usr/local/bin` is not in your system's `PATH` environment variable. You can run `echo $PATH` to see which executable paths are set, select an appropriate path based on the return result, adjust and re-execute the installation command in step 4.
+If the terminal prompts `command not found`, it is probably because `/usr/local/bin` is not in your system's `PATH` environment variable. You can check which executable paths are set by running `echo $PATH`, then select an appropriate path based on the return result, adjust and re-execute the installation command following the above step 4.
 :::
 
 ### Windows
 
 There are two ways to use JuiceFS on Windows systems.
 
-1. [Using Pre-compiled Windows client](#pre-compiled-windows-client)
-2. [Using the Linux client in WSL](#using-the-linux-client-in-wsl)
+1. [Using pre-compiled Windows client](#pre-compiled-windows-client)
+2. [Using Linux client in WSL](#using-the-linux-client-in-wsl)
 
-#### Pre-compiled Windows Client
+#### Pre-compiled Windows client
 
-The Windows client of JuiceFS is also a standalone binary that can be downloaded and unpacked to run directly.
+The Windows client of JuiceFS is also a standalone binary. Once downloaded and unpacked, you can run it right away.
 
 1. Installing Dependencies
 
-   Since Windows does not natively support the FUSE interface, you first need to download and install [WinFsp](http://www.secfs.net/winfsp/) in order to implement FUSE support.
+   Since Windows does not natively support the FUSE interface, you need to download and install [WinFsp](http://www.secfs.net/winfsp/) first in order to implement FUSE support.
 
    :::tip
-   **[WinFsp](https://github.com/billziss-gh/winfsp)** is an open source Windows file system agent that provides a FUSE emulation layer that allows JuiceFS clients to mount file systems for use on Windows systems.
+   **[WinFsp](https://github.com/billziss-gh/winfsp)** is an open source Windows file system agent that provides a FUSE emulation layer that allows JuiceFS clients to mount file systems on Windows systems for use.
    :::
 
 2. Install the client
 
    Take Windows 10 system as an example, download the file with the filename `windows-amd64`, unzip it and get `juicefs.exe` which is the JuiceFS client binary.
 
-   To make it easier to use, you can create a folder named `juicefs` in the root directory of the `C:\` disk, and extract `juicefs.exe` to that folder. Then add `C:\juicefs` to the environment variables of your system, restart the system to let the settings take effect, and then you can run `juicefs` commands directly using the `Command Prompt` or `PowerShell` terminal that come with your system.
+   To make it easier to use, it is recommended to create a folder named `juicefs` in the root directory of the `C:\` disk, and extract `juicefs.exe` to that folder. Then add `C:\juicefs` to the environment variables of your system, and restart the system to let the settings take effect. Lastly, you can run `juicefs` commands directly using the `Command Prompt` or `PowerShell` terminal that comes with your system.
 
    ![Windows ENV path](../images/windows-path-en.png)
 
-#### Using the Linux client in WSL
+#### Using Linux client in WSL
 
-[WSL](https://docs.microsoft.com/en-us/windows/wsl/about) is the full name of Windows Subsystem for Linux, which is supported from Windows 10 version 2004 onwards or Windows 11. It allows you to run most of the command-line tools, utilities, and applications of GNU/Linux natively on a Windows system without incurring the overhead of a traditional virtual machine or dual-boot setup.
+[WSL](https://docs.microsoft.com/en-us/windows/wsl/about) is short for Windows Subsystem for Linux, which is supported from Windows 10 version 2004 onwards or Windows 11. It allows you to run most of the command-line tools, utilities, and applications of GNU/Linux natively on a Windows system without incurring the overhead of a traditional virtual machine or dual-boot setup.
 
 For details, see "[Using JuiceFS on WSL](../tutorials/juicefs_on_wsl.md)"
 
 ### macOS
 
-Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io/) first to implement support for FUSE.
+Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io/) first to implement the support for FUSE.
 
 :::tip
-[macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems, enabling JuiceFS clients to mount file systems for use on macOS systems.
+[macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems, enabling JuiceFS clients to mount file systems on macOS systems.
 :::
 
 #### Homebrew
@@ -110,7 +107,7 @@ brew tap juicedata/homebrew-tap
 brew install juicefs
 ```
 
-#### Pre-compiled Binary
+#### Pre-compiled binary
 
 You can also download the binary with the filename of `darwin-amd64`, unzip it and install the program to any executable path on your system using the `install` command, e.g.
 
@@ -120,7 +117,7 @@ sudo install juicefs /usr/local/bin
 
 ### Docker
 
-For cases where you want to use JuiceFS in a Docker container, here is a `Dockerfile` for building a JuiceFS client image, which can be used as a base to build a JuiceFS client image alone or packaged together with other applications.
+In cases one wants to use JuiceFS in a Docker container, a `Dockerfile` for building a JuiceFS client image is provided below, which can be used as a base to build a JuiceFS client image alone or packaged together with other applications.
 
 ```dockerfile
 FROM ubuntu:20.04
@@ -146,20 +143,24 @@ RUN set -x && \
 CMD [ "juicefs" ]
 ```
 
-## Manually Compiling
+## Manually compiling
 
-If the pre-compiled client does not have a version for you, such as FreeBSD or macOS on the M1 chip, then you can use manual compilation to compile the JuiceFS client for you.
+If there is no pre-compiled client versions that are suitable for your operating system, such as FreeBSD or macOS on the M1 chip, then you can manually compile the JuiceFS client.
 
-In addition, manually compiling the client will give you priority access to various new features in JuiceFS development, but it requires some basic knowledge of software compilation.
+One of the advantages of manually compiling client is that you have priority access to various new features in JuiceFS development, but it requires some basic knowledge of software compilation.
 
-### Unix-like Client
+:::tip
+For users in China, in order to speed up the acquisition of Go modules, it is recommended to set the `GOPROXY` environment variable to the domestic mirror server by executing `go env -w GOPROXY=https://goproxy.cn,direct`. For details, please refer to: [Goproxy China](https://github.com/goproxy/goproxy.cn).
+:::
+
+### Unix-like client
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
-- [Go](https://golang.org) 1.16+
+- [Go](https://golang.org) 1.17+
 - GCC 5.4+
 
-1. Cloning source code
+1. Clone source code
 
    ```shell
    git clone https://github.com/juicedata/juicefs.git
@@ -173,10 +174,10 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 3. Switching the branch
 
-   The source code uses the `main` branch by default, and you can switch to any official release, for example to `v0.17.4`.
+   The source code uses the `main` branch by default, and you can switch to any official release, for example to the latest release `v1.0.0-beta2`(release on March 2022).
 
    ```shell
-   git checkout v0.17.4
+   git checkout v1.0.0-beta2
    ```
 
    :::caution
@@ -193,9 +194,9 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 ### Compiling on Windows
 
-To compile the JuiceFS client on Windows, you need to install [Go](https://golang.org) 1.16+ and GCC 5.4+.
+Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.17+ and GCC 5.4+.
 
-Since GCC does not have a native Windows client, you need to use the version provided by a third party, either [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) or [Cygwin](https://www.cygwin.com/). Here is the example of MinGW-w64.
+Since GCC does not have a native Windows client, the version provided by a third party, either [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) or [Cygwin](https://www.cygwin.com/) is needed. Here is an example of using MinGW-w64.
 
 Download MinGW-w64 and add its `bin` directory to the system environment variables.
 
@@ -235,11 +236,11 @@ Download MinGW-w64 and add its `bin` directory to the system environment variabl
 
 ### Cross-compiling Windows clients on Linux
 
-Compiling a specific version of the client for Windows is essentially the same as [Unix-like Client](#unix-like-client) and can be done directly on a Linux system, but in addition to `go` and `gcc`, which must be installed, you also need to install:
+Compiling a specific version of the client for Windows is essentially the same as [Unix-like Client](#unix-like-client) and can be done directly on a Linux system. However, in addition to `go` and `gcc`, you also need to install:
 
 - [mingw-w64](https://www.mingw-w64.org/downloads/)
 
-Just install the latest version provided by the Linux distribution package manager, e.g. Ubuntu 20.04+ can be installed directly as follows.
+The latest version can be installed from software repositories on many Linux distributions. Take an example of Ubuntu 20.04+: `mingw-w64` can be installed as follows.
 
 ```shell
 sudo apt install mingw-w64
@@ -275,10 +276,10 @@ The compiled client is a binary file named `juicefs.exe`, located in the current
 
 ## Upgrade
 
-The JuiceFS client has only one binary file, so to upgrade the new version you only need to replace the old one with the new one.
+The JuiceFS client only has one binary file, so to upgrade the new version, you only need to replace the old one with the new one.
 
 - **Use pre-compiled client**: You can refer to the installation method of the corresponding system in this document, download the latest client, and overwrite the old one.
-- **Manually compile the client**: You can pull the latest source code and recompile it to overwrite the old version of the client.
+- **Manually compile client**: You can pull the latest source code and recompile it to overwrite the old version of the client.
 
 :::caution
 For the file system that has been mounted using the old version of JuiceFS client, you need to [unmount file system](for_distributed.md#6-unmounting-the-file-system), and then re-mount it with the new version of JuiceFS client.
@@ -286,16 +287,16 @@ For the file system that has been mounted using the old version of JuiceFS clien
 
 ## Uninstall
 
-The JuiceFS client has only one binary file, which can be deleted by simply finding the location of the program. For example, referring to the client installed on the Linux system in this document, execute the following command to uninstall the client.
+The JuiceFS client has only one binary file, so it can be easily deleted once you find the location of the program. For example, to uninstall the client that is installed on the Linux system as described above, you only need to execute the following command:
 
 ```shell
 sudo rm /usr/local/bin/juicefs
 ```
 
-You can also see where the program is located by using the `which` command.
+You can also check where the program is located by using `which` command.
 
 ```shell
 which juicefs
 ```
 
-The path returned by the command is the location where the JuiceFS client is installed on your system. For other operating systems uninstallation methods follow the same pattern.
+The path returned by the command is the location where the JuiceFS client is installed on your system. The uninstallation of the JuiceFS client on other operating systems follows the same way.

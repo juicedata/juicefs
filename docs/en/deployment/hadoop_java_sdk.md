@@ -31,7 +31,13 @@ If you want to use JuiceFS in a distributed environment, when creating a file sy
 
 JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
 
-## Client compilation
+## Install and compile the client
+
+### Install the pre-compiled client
+
+Please refer to the ["Installation & Upgrade"](../getting-started/installation.md#install-the-pre-compiled-client) document to learn how to download the precompiled JuiceFS Hadoop Java SDK.
+
+### Compile the client manually
 
 :::note
 No matter which system environment the client is compiled for, the compiled JAR file has the same name and can only be deployed in the matching system environment. For example, when compiled in Linux, it can only be used in the Linux environment. In addition, since the compiled package depends on glibc, it is recommended to compile with a lower version system to ensure better compatibility.
@@ -39,14 +45,14 @@ No matter which system environment the client is compiled for, the compiled JAR 
 
 Compilation depends on the following tools:
 
-- [Go](https://golang.org/) 1.16+
+- [Go](https://golang.org/) 1.17+
 - JDK 8+
 - [Maven](https://maven.apache.org/) 3.3+
 - git
 - make
 - GCC 5.4+
 
-### Linux and macOS
+#### Linux and macOS
 
 Clone the repository:
 
@@ -57,7 +63,7 @@ $ git clone https://github.com/juicedata/juicefs.git
 Enter the directory and compile:
 
 :::note
-If Ceph RADOS is used to store data, you need to install `librados-dev` first and [build `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L22) with `-tags ceph`.
+If Ceph RADOS is used to store data, you need to install `librados-dev` first and [build `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L38-L39) with `-tags ceph`.
 :::
 
 ```shell
@@ -72,7 +78,7 @@ After the compilation, you can find the compiled `JAR` file in the `sdk/java/tar
 
 It is recommended to use a version that includes third-party dependencies.
 
-### Windows
+#### Windows
 
 The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org/), which needs to be installed first.
 
@@ -158,20 +164,21 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 
 #### Other Configurations
 
-| Configuration             | Default Value | Description                                                  |
-| ------------------------- | ------------- | ------------------------------------------------------------ |
-| `juicefs.bucket`          |               | Specify a different endpoint for object storage              |
-| `juicefs.debug`           | `false`       | Whether enable debug log                                     |
-| `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files. |
-| `juicefs.superuser`       | `hdfs`        | The super user                                               |
-| `juicefs.users`           | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line. |
+| Configuration             | Default Value | Description                                                                                                                                                                 |
+|---------------------------|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `juicefs.bucket`          |               | Specify a different endpoint for object storage                                                                                                                             |
+| `juicefs.debug`           | `false`       | Whether enable debug log                                                                                                                                                    |
+| `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files.           |
+| `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                              |
+| `juicefs.users`           | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line.                                              |
 | `juicefs.groups`          | `null`        | The path of group name, GID and group members list file, e.g. `jfs://name/etc/groups`. The file format is `<group-name>:<GID>:<username1>,<username2>`, one group per line. |
-| `juicefs.umask`           | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`. |
-| `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`. |
-| `juicefs.push-interval`   | 10            | Prometheus push interval in seconds                          |
-| `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`. |
-| `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script |
-| `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected. |
+| `juicefs.umask`           | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`.                                                             |
+| `juicefs.push-gateway`    |               | [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) address, format is `<host>:<port>`.                                                                     |
+| `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
+| `juicefs.push-graphite`   |               | [Graphite](https://graphiteapp.org) address, format is `<host>:<port>`.                                                                                                     |
+| `juicefs.push-interval`   | 10            | Metric push interval (in seconds)                                                                                                                                           |
+| `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
+| `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
 
 #### Multiple file systems configuration
 
@@ -246,10 +253,30 @@ Add configuration parameters to `conf/flink-conf.yaml`. If you only use JuiceFS 
 ### Hudi
 
 :::note
-The latest version of Hudi (v0.10.0) does not yet support JuiceFS, you need to compile the latest master branch yourself.
+Hudi supports JuiceFS since v0.10.0, please make sure you are using the correct version.
 :::
 
-Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/next/jfs_hoodie) to learn how to configure JuiceFS.
+Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/jfs_hoodie) to learn how to configure JuiceFS.
+
+### Kafka Connect
+
+It is possible to use Kafka Connect and HDFS Sink Connector（[HDFS 2](https://docs.confluent.io/kafka-connect-hdfs/current/overview.html) and [HDFS 3](https://docs.confluent.io/kafka-connect-hdfs3-sink/current/overview.html)）to store data on JuiceFS.
+
+First you need to add JuiceFS SDK to `classpath` in Kafka Connect, e.g., `/usr/share/java/confluentinc-kafka-connect-hdfs/lib`. 
+
+While creating a Connect Sink task, configuration needs to be set up as follows:
+
+- Specify `hadoop.conf.dir` as the directory that contains the configuration file `core-site.xml`. If it is not running in Hadoop environment, you can create a seperate directory such as `/usr/local/juicefs/hadoop`, and then add the Juicefs-related configurations to `core-site.xml`.
+
+- Specific `store.url` as the path `jfs://` 
+
+For example,
+
+```ini
+# Other configuration items are omitted. 
+hadoop.conf.dir=/path/to/hadoop-conf
+store.url=jfs://path/to/store
+```
 
 ### Restart Services
 

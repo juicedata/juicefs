@@ -19,11 +19,11 @@ ifdef STATIC
 	export CC
 endif
 
-juicefs: Makefile cmd/*.go pkg/*/*.go
+juicefs: Makefile cmd/*.go pkg/*/*.go go.*
 	go build -ldflags="$(LDFLAGS)"  -o juicefs ./cmd
 
 juicefs.lite: Makefile cmd/*.go pkg/*/*.go
-	go build -tags nogateway,nowebdav,nocos,nobos,nohdfs,noibmcos,noobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs,noufile,nob2,nosqlite,nomysql,nopg,notikv,nobadger \
+	go build -tags nogateway,nowebdav,nocos,nobos,nohdfs,noibmcos,noobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs,noufile,nob2,nosqlite,nomysql,nopg,notikv,nobadger,noetcd \
 		-ldflags="$(LDFLAGS)" -o juicefs.lite ./cmd
 
 juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
@@ -46,6 +46,7 @@ juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
 .PHONY: snapshot release test
 snapshot:
 	docker run --rm --privileged \
+		-e REVISIONDATE=$(REVISIONDATE) \
 		-e PRIVATE_KEY=${PRIVATE_KEY} \
 		-v ~/go/pkg/mod:/go/pkg/mod \
 		-v `pwd`:/go/src/github.com/juicedata/juicefs \
@@ -55,6 +56,7 @@ snapshot:
 
 release:
 	docker run --rm --privileged \
+		-e REVISIONDATE=$(REVISIONDATE) \
 		-e PRIVATE_KEY=${PRIVATE_KEY} \
 		--env-file .release-env \
 		-v ~/go/pkg/mod:/go/pkg/mod \
@@ -64,6 +66,5 @@ release:
 		juicedata/golang-cross:latest release --rm-dist
 
 test:
-	JFS_PAGE_STACK=1 go test -v -cover ./pkg/... -coverprofile=cov1.out
-	sudo JFS_PAGE_STACK=1 JFS_GC_SKIPPEDTIME=1 `which go` test -v -cover ./cmd/... -coverprofile=cov2.out
-	sudo `which go` test ./integration/... -cover -coverprofile=cov3.out -coverpkg=./pkg/...,./cmd/...
+	go test -v -cover ./pkg/... -coverprofile=cov1.out
+	sudo JFS_GC_SKIPPEDTIME=1 `which go` test -v -cover ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...

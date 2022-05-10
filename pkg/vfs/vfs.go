@@ -45,7 +45,6 @@ type Config struct {
 	Format          *meta.Format
 	Chunk           *chunk.Config
 	Version         string
-	Mountpoint      string
 	AttrTimeout     time.Duration
 	DirEntryTimeout time.Duration
 	EntryTimeout    time.Duration
@@ -149,7 +148,7 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 	var inode Ino
 	var attr = &Attr{}
-	err = v.Meta.Mknod(ctx, parent, name, _type, mode&07777, cumask, rdev, &inode, attr)
+	err = v.Meta.Mknod(ctx, parent, name, _type, mode&07777, cumask, rdev, "", &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
@@ -376,20 +375,22 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		}
 		h := v.newHandle(ino)
 		fh = h.fh
+		n := getInternalNode(ino)
+		if n == nil {
+			return
+		}
+		entry = &meta.Entry{Inode: ino, Attr: n.attr}
 		switch ino {
 		case logInode:
 			openAccessLog(fh)
 		case statsInode:
-			h.data = collectMetrics()
+			h.data = collectMetrics(v.registry)
 		case configInode:
 			v.Conf.Format.RemoveSecret()
 			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
+			entry.Attr.Length = uint64(len(h.data))
 		}
-		n := getInternalNode(ino)
-		if n != nil {
-			entry = &meta.Entry{Inode: ino, Attr: n.attr}
-			return
-		}
+		return
 	}
 	defer func() {
 		if entry != nil {
@@ -572,7 +573,9 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		h.data = append(h.data, h.pending...)
 		h.pending = h.pending[:0]
 		if rb.Left() == size {
-			h.data = append(h.data, v.handleInternalMsg(ctx, cmd, rb)...)
+			go func() {
+				h.data = append(h.data, v.handleInternalMsg(ctx, cmd, rb)...)
+			}()
 		} else {
 			logger.Warnf("broken message: %d %d < %d", cmd, size, rb.Left())
 			h.data = append(h.data, uint8(syscall.EIO&0xff))
@@ -892,26 +895,40 @@ type VFS struct {
 	handlersGause  prometheus.GaugeFunc
 	usedBufferSize prometheus.GaugeFunc
 	storeCacheSize prometheus.GaugeFunc
+	registry       *prometheus.Registry
 }
 
-func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
+func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer prometheus.Registerer, registry *prometheus.Registry) *VFS {
 	reader := NewDataReader(conf, m, store)
 	writer := NewDataWriter(conf, m, store, reader)
 
 	v := &VFS{
-		Conf:    conf,
-		Meta:    m,
-		Store:   store,
-		reader:  reader,
-		writer:  writer,
-		handles: make(map[Ino][]*handle),
-		nextfh:  1,
+		Conf:     conf,
+		Meta:     m,
+		Store:    store,
+		reader:   reader,
+		writer:   writer,
+		handles:  make(map[Ino][]*handle),
+		nextfh:   1,
+		registry: registry,
 	}
 
+	n := getInternalNode(configInode)
+	v.Conf.Format.RemoveSecret()
+	data, _ := json.MarshalIndent(v.Conf, "", " ")
+	n.attr.Length = uint64(len(data))
 	if conf.Meta.Subdir != "" { // don't show trash directory
 		internalNodes = internalNodes[:len(internalNodes)-1]
 	}
 
+	initVFSMetrics(v, writer, registerer)
+	return v
+}
+
+func initVFSMetrics(v *VFS, writer DataWriter, registerer prometheus.Registerer) {
+	if registerer == nil {
+		return
+	}
 	v.handlersGause = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "fuse_open_handlers",
 		Help: "number of open files and directories.",
@@ -938,15 +955,17 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore) *VFS {
 		}
 		return 0.0
 	})
-	_ = prometheus.Register(v.handlersGause)
-	_ = prometheus.Register(v.usedBufferSize)
-	_ = prometheus.Register(v.storeCacheSize)
-	return v
+	_ = registerer.Register(v.handlersGause)
+	_ = registerer.Register(v.usedBufferSize)
+	_ = registerer.Register(v.storeCacheSize)
 }
 
-func InitMetrics() {
-	prometheus.MustRegister(readSizeHistogram)
-	prometheus.MustRegister(writtenSizeHistogram)
-	prometheus.MustRegister(opsDurationsHistogram)
-	prometheus.MustRegister(compactSizeHistogram)
+func InitMetrics(registerer prometheus.Registerer) {
+	if registerer == nil {
+		return
+	}
+	registerer.MustRegister(readSizeHistogram)
+	registerer.MustRegister(writtenSizeHistogram)
+	registerer.MustRegister(opsDurationsHistogram)
+	registerer.MustRegister(compactSizeHistogram)
 }

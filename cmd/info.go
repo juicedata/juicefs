@@ -29,12 +29,23 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func infoFlags() *cli.Command {
+func cmdInfo() *cli.Command {
 	return &cli.Command{
 		Name:      "info",
-		Usage:     "show internal information for paths or inodes",
-		ArgsUsage: "PATH or INODE",
 		Action:    info,
+		Category:  "INSPECTOR",
+		Usage:     "Show internal information of a path or inode",
+		ArgsUsage: "PATH/INODE",
+		Description: `
+It is used to inspect internal metadata values of the target file.
+
+Examples:
+$ Check a path
+$ juicefs info /mnt/jfs/foo
+
+# Check an inode
+$ cd /mnt/jfs
+$ juicefs info -i 100`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "inode",
@@ -51,12 +62,9 @@ func infoFlags() *cli.Command {
 }
 
 func info(ctx *cli.Context) error {
+	setup(ctx, 1)
 	if runtime.GOOS == "windows" {
 		logger.Infof("Windows is not supported")
-		return nil
-	}
-	if ctx.Args().Len() < 1 {
-		logger.Infof("DIR or FILE is needed")
 		return nil
 	}
 	var recursive uint8
@@ -98,12 +106,8 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-
 		data := make([]byte, 4)
-		n, err := f.Read(data)
-		if err != nil {
-			logger.Fatalf("read size: %d %s", n, err)
-		}
+		n := readControl(f, data)
 		if n == 1 && data[0] == byte(syscall.EINVAL&0xff) {
 			logger.Fatalf("info is not supported, please upgrade and mount again")
 		}

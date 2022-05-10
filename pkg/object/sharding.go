@@ -18,6 +18,7 @@ package object
 
 import (
 	"container/heap"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -72,12 +73,14 @@ const maxResults = 10000
 func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) {
 	if ch, err := store.ListAll(prefix, marker); err == nil {
 		return ch, nil
+	} else if !errors.Is(err, notSupported) {
+		return nil, err
 	}
 
 	startTime := time.Now()
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, err := store.List("", marker, maxResults)
+	objs, err := store.List(prefix, marker, maxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err

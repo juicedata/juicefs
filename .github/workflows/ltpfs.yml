@@ -14,6 +14,7 @@ on:
       - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
+  workflow_dispatch:
 
 jobs:
   ltpfs:
@@ -22,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.16.x'
+          go-version: '1.17.x'
 
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
@@ -45,7 +46,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
@@ -66,9 +67,16 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/fs
           sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
-          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest
+          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fcntl-locktests
           sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
 
-      - name: Setup tmate session
+      - name: Send Slack Notification
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

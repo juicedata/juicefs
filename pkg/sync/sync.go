@@ -18,11 +18,13 @@ package sync
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"regexp"
+	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -107,6 +109,8 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 			close(out)
 		}()
 		return out, nil
+	} else if !errors.Is(err, utils.ENOTSUP) {
+		return nil, err
 	}
 
 	marker := start
@@ -328,14 +332,23 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	defer func() {
 		<-concurrent
 	}()
-	in, err := src.Get(key, 0, -1)
-	if err != nil {
-		if _, e := src.Head(key); e != nil {
-			logger.Debugf("Head src %s: %s", key, err)
-			return nil
+	var in io.ReadCloser
+	var err error
+	if size == 0 {
+		in = io.NopCloser(bytes.NewReader(nil))
+	} else {
+		in, err = src.Get(key, 0, -1)
+		if err != nil {
+			if _, e := src.Head(key); e != nil {
+				logger.Debugf("Head src %s: %s", key, err)
+				copied.IncrInt64(-1)
+				copiedBytes.IncrInt64(size * (-1))
+				return nil
+			}
+			return err
 		}
-		return err
 	}
+
 	defer in.Close()
 
 	if size <= maxBlock ||
@@ -350,7 +363,10 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		_ = os.Remove(f.Name()) // will be deleted after Close()
 		defer f.Close()
 
-		if _, err = io.Copy(f, in); err != nil {
+		// in is not *os.File, use bufPool
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+		if _, err = io.CopyBuffer(struct{ io.Writer }{f}, in, *buf); err != nil {
 			return err
 		}
 		// upload
@@ -512,7 +528,18 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				logger.Infof("Will copy %s (%d bytes)", obj.Key(), obj.Size())
 				break
 			}
-			err := copyData(src, dst, key, obj.Size())
+			var err error
+			if config.Links && obj.IsSymlink() {
+				if err = copyLink(src, dst, key); err == nil {
+					copied.Increment()
+					handled.Increment()
+					break
+				}
+				logger.Errorf("copy link failed: %s", err)
+			} else {
+				err = copyData(src, dst, key, obj.Size())
+			}
+
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
 				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
@@ -538,6 +565,19 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 	}
 }
 
+func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
+	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
+		return err
+	} else {
+		if err := dst.Delete(key); err != nil {
+			logger.Debugf("Deleted %s from %s ", key, dst)
+			return err
+		}
+		// TODO: use relative path based on option
+		return dst.(object.SupportSymlink).Symlink(p, key)
+	}
+}
+
 type withSize struct {
 	object.Object
 	nsize int64
@@ -556,13 +596,20 @@ func (o *withFSize) Size() int64 {
 	return o.nsize
 }
 
-func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, dirs bool) {
-	if !dirs && dstobj.IsDir() {
+func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Config) bool {
+	if !config.Dirs && dstobj.IsDir() {
 		logger.Debug("Ignore deleting dst directory ", dstobj.Key())
-		return
+		return false
+	}
+	if config.Limit != -1 {
+		if config.Limit == 0 {
+			return true
+		}
+		config.Limit--
 	}
 	tasks <- &withSize{dstobj, markDeleteDst}
 	handled.IncrTotal(1)
+	return false
 }
 
 func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) {
@@ -585,9 +632,15 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 	if err != nil {
 		logger.Fatal(err)
 	}
-	if config.Exclude != nil {
-		srckeys = filter(srckeys, config.Include, config.Exclude)
-		dstkeys = filter(dstkeys, config.Include, config.Exclude)
+	if len(config.Exclude) > 0 {
+		rules := parseIncludeRules(os.Args)
+		if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
+			for _, r := range rules {
+				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
+			}
+		}
+		srckeys = filter(srckeys, rules)
+		dstkeys = filter(dstkeys, rules)
 	}
 
 	defer close(tasks)
@@ -601,11 +654,19 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
+		if config.Limit != -1 {
+			if config.Limit == 0 {
+				return
+			}
+			config.Limit--
+		}
 		handled.IncrTotal(1)
 
 		if dstobj != nil && obj.Key() > dstobj.Key() {
 			if config.DeleteDst {
-				deleteFromDst(tasks, dstobj, config.Dirs)
+				if deleteFromDst(tasks, dstobj, config) {
+					return
+				}
 			}
 			dstobj = nil
 		}
@@ -619,7 +680,9 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 					break
 				}
 				if config.DeleteDst {
-					deleteFromDst(tasks, dstobj, config.Dirs)
+					if deleteFromDst(tasks, dstobj, config) {
+						return
+					}
 				}
 				dstobj = nil
 			}
@@ -651,63 +714,119 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 	}
 	if config.DeleteDst {
 		if dstobj != nil {
-			deleteFromDst(tasks, dstobj, config.Dirs)
+			if deleteFromDst(tasks, dstobj, config) {
+				return
+			}
 		}
 		for dstobj = range dstkeys {
 			if dstobj != nil {
-				deleteFromDst(tasks, dstobj, config.Dirs)
+				if deleteFromDst(tasks, dstobj, config) {
+					return
+				}
 			}
 		}
 	}
 }
 
-func compileExp(patterns []string) []*regexp.Regexp {
-	var rs []*regexp.Regexp
-	for _, p := range patterns {
-		r, err := regexp.CompilePOSIX(p)
-		if err != nil {
-			logger.Fatalf("invalid regular expression `%s`: %s", p, err)
-		}
-		rs = append(rs, r)
-	}
-	return rs
+type rule struct {
+	pattern string
+	include bool
 }
 
-func findAny(s string, ps []*regexp.Regexp) bool {
-	for _, p := range ps {
-		if p.FindString(s) != "" {
-			return true
+func parseIncludeRules(args []string) (rules []rule) {
+	l := len(args)
+	for i, a := range args {
+		if strings.HasPrefix(a, "--") {
+			a = a[1:]
+		}
+		if l-1 > i && (a == "-include" || a == "-exclude") {
+			rules = append(rules, rule{pattern: args[i+1], include: a == "-include"})
+		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
+			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
+				rules = append(rules, rule{pattern: s[1], include: strings.HasPrefix(a, "-include=")})
+			}
 		}
 	}
-	return false
+	return
 }
 
-func filter(keys <-chan object.Object, include, exclude []string) <-chan object.Object {
-	inc := compileExp(include)
-	exc := compileExp(exclude)
+func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 	r := make(chan object.Object)
 	go func() {
 		for o := range keys {
 			if o == nil {
 				break
 			}
-			if findAny(o.Key(), exc) {
+			if matchKey(rules, o.Key()) {
+				r <- o
+			} else {
 				logger.Debugf("exclude %s", o.Key())
-				continue
 			}
-			if len(inc) > 0 && !findAny(o.Key(), inc) {
-				logger.Debugf("%s is not included", o.Key())
-				continue
-			}
-			r <- o
 		}
 		close(r)
 	}()
 	return r
 }
 
+func suffixForPattern(path, pattern string) string {
+	if strings.HasPrefix(pattern, "/") ||
+		strings.HasSuffix(pattern, "/") && !strings.HasSuffix(path, "/") {
+		return path
+	}
+	n := strings.Count(strings.Trim(pattern, "/"), "/")
+	m := strings.Count(strings.Trim(path, "/"), "/")
+	if n >= m {
+		return path
+	}
+	parts := strings.Split(path, "/")
+	n = len(strings.Split(pattern, "/"))
+	return strings.Join(parts[len(parts)-n:], "/")
+}
+
+// Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
+func matchKey(rules []rule, key string) bool {
+	parts := strings.Split(key, "/")
+	for i := range parts {
+		if parts[i] == "" {
+			continue
+		}
+		prefix := strings.Join(parts[:i+1], "/")
+		for _, rule := range rules {
+			var s string
+			if i < len(parts)-1 && strings.HasSuffix(rule.pattern, "/") {
+				s = "/"
+			}
+			suffix := suffixForPattern(prefix+s, rule.pattern)
+			ok, err := path.Match(rule.pattern, suffix)
+			if err != nil {
+				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
+			}
+			if ok {
+				if rule.include {
+					break // try next level
+				} else {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, config *Config) error {
+	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
+		major, minor := utils.GetKernelVersion()
+		// copy_file_range() system call first appeared in Linux 4.5
+		if major > 4 || major == 4 && minor > 4 {
+			d1 := utils.GetDev(src.String()[7:]) // remove prefix "file://"
+			d2 := utils.GetDev(dst.String()[7:])
+			if d1 != -1 && d1 == d2 {
+				object.TryCFR = true
+			}
+		}
+	}
+
 	var bufferSize = 10240
 	if config.Manager != "" {
 		bufferSize = 100
@@ -738,7 +857,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.Manager == "" {
 		go producer(tasks, src, dst, config)
-		if config.Workers != nil {
+		if len(config.Workers) > 0 {
 			addr, err := startManager(tasks)
 			if err != nil {
 				return err

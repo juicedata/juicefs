@@ -24,7 +24,10 @@ type prefixTxn struct {
 }
 
 func (tx *prefixTxn) realKey(key []byte) []byte {
-	return append(tx.prefix, key...)
+	k := make([]byte, len(tx.prefix)+len(key))
+	copy(k, tx.prefix)
+	copy(k[len(tx.prefix):], key)
+	return k
 }
 
 func (tx *prefixTxn) origKey(key []byte) []byte {
@@ -50,11 +53,7 @@ func (tx *prefixTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	}
 	return m
 }
-func (tx *prefixTxn) scan(prefix []byte, handler func(key, value []byte)) {
-	tx.kvTxn.scan(tx.realKey(prefix), func(key, value []byte) {
-		handler(tx.origKey(key), value)
-	})
-}
+
 func (tx *prefixTxn) scanKeys(prefix []byte) [][]byte {
 	keys := tx.kvTxn.scanKeys(tx.realKey(prefix))
 	for i, k := range keys {
@@ -111,9 +110,18 @@ func (c *prefixClient) txn(f func(kvTxn) error) error {
 	})
 }
 
+func (c *prefixClient) scan(prefix []byte, handler func(key, value []byte)) error {
+	k := make([]byte, len(c.prefix)+len(prefix))
+	copy(k, c.prefix)
+	copy(k[len(c.prefix):], prefix)
+	return c.tkvClient.scan(k, func(key, value []byte) {
+		handler(key[len(c.prefix):], value)
+	})
+}
+
 func (c *prefixClient) reset(prefix []byte) error {
 	if prefix != nil {
-		return fmt.Errorf("prefix must be nil")
+		return fmt.Errorf("prefix must be nil, but got %v", prefix)
 	}
 	return c.tkvClient.reset(c.prefix)
 }

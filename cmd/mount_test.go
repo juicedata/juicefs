@@ -31,21 +31,26 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/prometheus/client_golang/prometheus"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/urfave/cli/v2"
 )
 
-const testMeta = "redis://127.0.0.1:6379/10"
+const testMeta = "redis://127.0.0.1:6379/11"
 const testMountPoint = "/tmp/jfs-unit-test"
 const testVolume = "test"
 
+// gomonkey may encounter the problem of insufficient permissions under mac, please solve it by viewing this link https://github.com/agiledragon/gomonkey/issues/70
 func Test_exposeMetrics(t *testing.T) {
 	Convey("Test_exposeMetrics", t, func() {
 		Convey("Test_exposeMetrics", func() {
-			addr := "redis://127.0.0.1:6379/10"
-			var conf = meta.Config{MaxDeletes: 1}
-			client := meta.NewClient(addr, &conf)
+			addr := "redis://127.0.0.1:6379/12"
+			client := meta.NewClient(addr, &meta.Config{})
+			format := meta.Format{
+				Name:      "test",
+				BlockSize: 4096,
+				Capacity:  1 << 30,
+			}
+			_ = client.Init(format, true)
 			var appCtx *cli.Context
 			stringPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "String", func(_ *cli.Context, arg string) string {
 				switch arg {
@@ -62,8 +67,9 @@ func Test_exposeMetrics(t *testing.T) {
 			})
 			defer stringPatches.Reset()
 			defer isSetPatches.Reset()
-			ResetPrometheus()
-			metricsAddr := exposeMetrics(client, appCtx)
+			ResetHttp()
+			registerer, registry := wrapRegister("test", "test")
+			metricsAddr := exposeMetrics(appCtx, client, registerer, registry)
 
 			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
 			resp, err := http.Get(u.String())
@@ -75,9 +81,8 @@ func Test_exposeMetrics(t *testing.T) {
 	})
 }
 
-func ResetPrometheus() {
+func ResetHttp() {
 	http.DefaultServeMux = http.NewServeMux()
-	prometheus.DefaultRegisterer = prometheus.NewRegistry()
 }
 
 func resetTestMeta() *redis.Client { // using Redis
@@ -87,21 +92,25 @@ func resetTestMeta() *redis.Client { // using Redis
 	return rdb
 }
 
-func mountTemp(t *testing.T, bucket *string) {
+func mountTemp(t *testing.T, bucket *string, trash bool) {
 	_ = resetTestMeta()
 	testDir := t.TempDir()
 	if bucket != nil {
 		*bucket = testDir
 	}
-	if err := Main([]string{"", "format", "--bucket", testDir, testMeta, testVolume}); err != nil {
+	args := []string{"", "format", "--bucket", testDir, testMeta, testVolume}
+	if !trash {
+		args = append(args, "--trash-days=0")
+	}
+	if err := Main(args); err != nil {
 		t.Fatalf("format failed: %s", err)
 	}
 
 	// must do reset, otherwise will panic
-	ResetPrometheus()
+	ResetHttp()
 
 	go func() {
-		if err := Main([]string{"", "mount", testMeta, testMountPoint}); err != nil {
+		if err := Main([]string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--no-usage-report"}); err != nil {
 			t.Errorf("mount failed: %s", err)
 		}
 	}()
@@ -115,7 +124,7 @@ func umountTemp(t *testing.T) {
 }
 
 func TestMount(t *testing.T) {
-	mountTemp(t, nil)
+	mountTemp(t, nil, true)
 	defer umountTemp(t)
 
 	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("test"), 0644); err != nil {
@@ -124,7 +133,7 @@ func TestMount(t *testing.T) {
 }
 
 func TestUmount(t *testing.T) {
-	mountTemp(t, nil)
+	mountTemp(t, nil, true)
 	umountTemp(t)
 
 	inode, err := utils.GetFileInode(testMountPoint)

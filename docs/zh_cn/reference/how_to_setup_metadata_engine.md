@@ -36,13 +36,16 @@ JuiceFS 要求 Redis 4.0+ 版本
 使用 Redis 作为元数据存储引擎时，通常使用以下格式访问数据库：
 
 ```shell
-redis://[<username>:<password>@]<host>[:6379]/1
+redis[s]://[<username>:<password>@]<host>[:<port>]/<db>
 ```
 
 其中，`[]` 括起来的是可选项，其它部分为必选项。
 
-- `username` 是 Redis 6.0 之后引入的，如果没有用户名可以忽略，但密码前面的 `:` 冒号需要保留，如 `redis://:password@host:6379/1`。
-- `redis://` 协议头默认端口号为 `6379`，如果没有改变默认端口号可以不用填写，如 `redis://:password@host/1`。
+- 如果开启了 Redis 的 [TLS](https://redis.io/docs/manual/security/encryption) 特性，协议头需要使用 `rediss://`，否则使用 `redis://`。
+- `<username>` 是 Redis 6.0 之后引入的，如果没有用户名可以忽略，但密码前面的 `:` 冒号需要保留，如 `redis://:<password>@<host>:6379/1`。
+- Redis 监听的默认端口号为 `6379`，如果没有改变默认端口号可以不用填写，如 `redis://:<password>@<host>/1`，否则需要显式指定端口号。
+- Redis 支持多个[逻辑数据库](https://redis.io/commands/select)，请将 `<db>` 替换为实际使用的数据库编号。
+- 如果需要连接 Redis 哨兵（Sentinel），元数据 URL 的格式会稍有不同，具体请参考[「Redis 最佳实践」](../administration/metadata/redis_best_practices.md#数据可用性)文档。
 
 例如，创建名为 `pics` 的文件系统，使用 Redis 的 `1` 号数据库存储元数据：
 
@@ -91,6 +94,16 @@ $ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 
 如果你自己维护 Redis 数据库，建议阅读 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
 
+## KeyDB
+
+[KeyDB](https://keydb.dev/) 是 Redis 的开源分支，在开发上保持与 Redis 主线对齐。KeyDB 在 Redis 的基础上实现了多线程支持、更好的内存利用率和更大的吞吐量，另外还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 `Active Active` "双活"功能。
+
+:::note 注意
+KeyDB 的数据复制是异步的，使用 `Active Active` "双活"功能可能导致数据一致性问题，请务必充分验证、谨慎使用！
+:::
+
+在用于 JuiceFS 元数据存储时，KeyDB 与 Redis 的用法完全一致，这里不再赘述，请参考 [Redis](#redis) 部分使用。
+
 ## PostgreSQL
 
 [PostgreSQL](https://www.postgresql.org/) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，也可以用来作为 JuiceFS 的元数据引擎。
@@ -101,7 +114,7 @@ $ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 
 ### 创建文件系统
 
-使用 PostgreSQL 作为元数据引擎时，需要使用如下的格式来指定参数：
+使用 PostgreSQL 作为元数据引擎时，需要提前手动创建数据库，使用如下的格式来指定参数：
 
 ```shell
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
@@ -121,7 +134,7 @@ $ juicefs format --storage s3 \
 更安全的做法是可以通过环境变量 `META_PASSWORD` 传递数据库密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "postgres://user@192.168.1.6:5432/juicefs" \
@@ -137,7 +150,7 @@ sudo juicefs mount -d "postgres://user:mypassword@192.168.1.6:5432/juicefs" /mnt
 挂载文件系统也支持用 `META_PASSWORD` 环境变量传递密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
@@ -160,7 +173,7 @@ $ juicefs format --storage s3 \
 
 ### 创建文件系统
 
-使用 MySQL 作为元数据存储引擎时，通常使用以下格式访问数据库：
+使用 MySQL 作为元数据存储引擎时，需要提前手动创建数据库，通常使用以下格式访问数据库：
 
 ```shell
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
@@ -182,7 +195,7 @@ $ juicefs format --storage s3 \
 更安全的做法是可以通过环境变量 `META_PASSWORD` 传递数据库密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "mysql://user@(192.168.1.6:3306)/juicefs" \
@@ -198,7 +211,7 @@ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/
 挂载文件系统也支持用 `META_PASSWORD` 环境变量传递密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
@@ -208,7 +221,7 @@ $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 
 [MariaDB](https://mariadb.org) 是 MySQL 的一个开源分支，由 MySQL 原始开发者维护并保持开源。
 
-MariaDB 与 MySQL 高度兼容，在使用上也没有任何差别，创建和挂载文件系统时，保持与 MySQL 相同的语法。
+MariaDB 与 MySQL 高度兼容，在使用上也没有任何差别，同样需要提前创建数据库，创建和挂载文件系统时，保持与 MySQL 相同的语法。
 
 例如：
 
@@ -224,7 +237,7 @@ $ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mn
 通过环境变量传递密码的方式也完全一致：
 
 ```shell
-$ export META_PASSWORD=mypassword
+$ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
     "mysql://user@(192.168.1.6:3306)/juicefs" \
@@ -264,6 +277,34 @@ sudo juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，只有数据库所在的主机可以访问它。对于多台服务器共享同一文件系统的情况，需要使用 Redis 或 MySQL 等数据库。
 :::
 
+## BadgerDB
+
+[BadgerDB](https://github.com/dgraph-io/badger) 是一个 Go 语言开发的嵌入式、持久化的单机 Key-Value 数据库，它的数据库文件存储在本地你指定的目录中。
+
+使用 BadgerDB 作为 JuiceFS 元数据存储引擎时，使用 `badger://` 协议头指定数据库路径。
+
+### 创建文件系统
+
+无需提前创建 BadgerDB 数据库，直接创建文件系统即可：
+
+```shell
+juicefs format badger://$HOME/badger-data myjfs
+```
+
+上述命令在当前用户的 `home` 目录创建 `badger-data` 作为数据库目录，并以此作为 JuiceFS 的元数据存储。
+
+### 挂载文件系统
+
+挂载文件系统时需要指定数据库路径：
+
+```shell
+juicefs mount -d badger://$HOME/badger-data /mnt/jfs
+```
+
+:::note 注意
+由于 BadgerDB 是单机数据库，在不做特殊共享设置的情况下，只能供本机使用，不支持多主机共享挂载。另外，BadgerDB 只允许单进程访问，文件系统挂载时无法执行 `gc`、`fsck` 操作。
+:::
+
 ## TiKV
 
 [TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCAP](https://pingcap.com) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects) 毕业。
@@ -287,10 +328,28 @@ $ juicefs format --storage s3 \
     pics
 ```
 
+### 设置 TLS
+如果需要开启 TLS，可以通过在 Meta-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+
+| 配置项               | 值                                                                                                                        |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------|
+| ca    | CA 根证书，用于用 tls 连接 TiKV/PD                                                                                                |
+| cert  | 证书文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
+| key   | 私钥文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
+| verify-cn | 证书通用名称，用于验证调用者身份，[详情](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+
+例子：
+```shell
+$ juicefs format --storage s3 \
+    ...
+    "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
+    pics
+```
+
 ### 挂载文件系统
 
 ```shell
-sudo juicefs mount -d "tikv://192.168.1.6:6379,192.168.1.7:6379,192.168.1.8:6379/jfs" /mnt/jfs
+sudo juicefs mount -d "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" /mnt/jfs
 ```
 
 ## FoundationDB

@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"strings"
 	"time"
 
@@ -83,7 +84,24 @@ func (t *tikv) Delete(key string) error {
 }
 
 func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
-	return nil, errors.New("not supported")
+	if marker == "" {
+		marker = prefix
+	}
+	if limit > int64(rawkv.MaxRawKVScanLimit) {
+		limit = int64(rawkv.MaxRawKVScanLimit)
+	}
+	// TODO: key only
+	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), nil, int(limit))
+	if err != nil {
+		return nil, err
+	}
+	var objs []Object = make([]Object, len(keys))
+	mtime := time.Now()
+	for i, k := range keys {
+		// FIXME: mtime
+		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/")}
+	}
+	return objs, nil
 }
 
 func newTiKV(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
@@ -103,7 +121,11 @@ func newTiKV(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
 	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
 	plog.ReplaceGlobals(l, prop)
 
-	pds := strings.Split(endpoint, ",")
+	tUrl, err := url.Parse("tikv://" + endpoint)
+	if err != nil {
+		return nil, err
+	}
+	pds := strings.Split(tUrl.Host, ",")
 	for i, pd := range pds {
 		pd = strings.TrimSpace(pd)
 		if !strings.Contains(pd, ":") {
@@ -111,11 +133,18 @@ func newTiKV(endpoint, accesskey, secretkey string) (ObjectStorage, error) {
 		}
 		pds[i] = pd
 	}
-	c, err := rawkv.NewClient(context.TODO(), pds, config.DefaultConfig().Security)
+
+	q := tUrl.Query()
+	c, err := rawkv.NewClient(context.TODO(), pds, config.NewSecurity(
+		q.Get("ca"),
+		q.Get("cert"),
+		q.Get("key"),
+		strings.Split(q.Get("verify-cn"), ",")))
+
 	if err != nil {
 		return nil, err
 	}
-	return &tikv{c: c, addr: endpoint}, nil
+	return &tikv{c: c, addr: tUrl.Host}, nil
 }
 
 func init() {

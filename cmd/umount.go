@@ -27,12 +27,16 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func umountFlags() *cli.Command {
+func cmdUmount() *cli.Command {
 	return &cli.Command{
 		Name:      "umount",
-		Usage:     "unmount a volume",
-		ArgsUsage: "MOUNTPOINT",
 		Action:    umount,
+		Category:  "SERVICE",
+		Usage:     "Unmount a volume",
+		ArgsUsage: "MOUNTPOINT",
+		Description: `
+Examples:
+$ juicefs umount /mnt/jfs`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",
@@ -48,9 +52,9 @@ func doUmount(mp string, force bool) error {
 	switch runtime.GOOS {
 	case "darwin":
 		if force {
-			cmd = exec.Command("diskutil", "umount", "force", mp)
+			cmd = exec.Command("umount", "-f", mp)
 		} else {
-			cmd = exec.Command("diskutil", "umount", mp)
+			cmd = exec.Command("umount", mp)
 		}
 	case "linux":
 		if _, err := exec.LookPath("fusermount"); err == nil {
@@ -84,9 +88,7 @@ func doUmount(mp string, force bool) error {
 }
 
 func umount(ctx *cli.Context) error {
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("MOUNTPOINT is needed")
-	}
+	setup(ctx, 1)
 	mp := ctx.Args().Get(0)
 	force := ctx.Bool("force")
 	return doUmount(mp, force)

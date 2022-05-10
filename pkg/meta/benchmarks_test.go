@@ -231,7 +231,7 @@ func benchMknod(b *testing.B, m Meta) {
 	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := m.Mknod(ctx, parent, fmt.Sprintf("f%d", i), TypeFile, 0644, 022, 0, nil, nil); err != 0 {
+		if err := m.Mknod(ctx, parent, fmt.Sprintf("f%d", i), TypeFile, 0644, 022, 0, "", nil, nil); err != 0 {
 			b.Fatalf("mknod: %s", err)
 		}
 	}
@@ -576,8 +576,6 @@ func benchRead(b *testing.B, m Meta, n int) {
 }
 
 func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir, readdir
-	_ = m.Init(Format{Name: "benchmarkDir"}, true)
-	_ = m.NewSession()
 	b.Run("mkdir", func(b *testing.B) { benchMkdir(b, m) })
 	b.Run("mvdir", func(b *testing.B) { benchMvdir(b, m) })
 	b.Run("rmdir", func(b *testing.B) { benchRmdir(b, m) })
@@ -588,8 +586,6 @@ func benchmarkDir(b *testing.B, m Meta) { // mkdir, rename dir, rmdir, readdir
 }
 
 func benchmarkFile(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "benchmarkFile"}, true)
-	_ = m.NewSession()
 	b.Run("mknod", func(b *testing.B) { benchMknod(b, m) })
 	b.Run("create", func(b *testing.B) { benchCreate(b, m) })
 	b.Run("rename", func(b *testing.B) { benchRename(b, m) })
@@ -601,8 +597,6 @@ func benchmarkFile(b *testing.B, m Meta) {
 }
 
 func benchmarkXattr(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "benchmarkXattr"}, true)
-	_ = m.NewSession()
 	b.Run("setxattr", func(b *testing.B) { benchSetXattr(b, m) })
 	b.Run("getxattr", func(b *testing.B) { benchGetXattr(b, m) })
 	b.Run("removexattr", func(b *testing.B) { benchRemoveXattr(b, m) })
@@ -611,8 +605,6 @@ func benchmarkXattr(b *testing.B, m Meta) {
 }
 
 func benchmarkLink(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "benchmarkLink"}, true)
-	_ = m.NewSession()
 	b.Run("link", func(b *testing.B) { benchLink(b, m) })
 	b.Run("symlink", func(b *testing.B) { benchSymlink(b, m) })
 	// maybe meaningless since symlink would be cached
@@ -620,10 +612,8 @@ func benchmarkLink(b *testing.B, m Meta) {
 }
 
 func benchmarkData(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "benchmarkData"}, true)
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
 	m.OnMsg(CompactChunk, func(args ...interface{}) error { return nil })
-	_ = m.NewSession()
 	b.Run("newchunk", func(b *testing.B) { benchNewChunk(b, m) })
 	b.Run("write", func(b *testing.B) { benchWrite(b, m) })
 	b.Run("read_1", func(b *testing.B) { benchRead(b, m, 1) })
@@ -631,6 +621,8 @@ func benchmarkData(b *testing.B, m Meta) {
 }
 
 func benchmarkAll(b *testing.B, m Meta) {
+	_ = m.Init(Format{Name: "benchmarkAll"}, true)
+	_ = m.NewSession()
 	benchmarkDir(b, m)
 	benchmarkFile(b, m)
 	benchmarkXattr(b, m)

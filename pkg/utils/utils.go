@@ -18,8 +18,10 @@ package utils
 
 import (
 	"fmt"
+	"mime"
 	"net"
 	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -88,4 +90,21 @@ func RemovePassword(uri string) string {
 		return uri
 	}
 	return uri[:sp+3+cp] + ":****" + uri[p:]
+}
+
+func GuessMimeType(key string) string {
+	mimeType := mime.TypeByExtension(path.Ext(key))
+	if !strings.ContainsRune(mimeType, '/') {
+		mimeType = "application/octet-stream"
+	}
+	return mimeType
+}
+
+func StringContains(s []string, e string) bool {
+	for _, item := range s {
+		if item == e {
+			return true
+		}
+	}
+	return false
 }

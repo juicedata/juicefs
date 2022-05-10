@@ -53,9 +53,9 @@ Thanks to [Redis transaction](https://redis.io/topics/transactions), **most of m
 
 ### Consistency
 
-Alluxio loads metadata from the UFS as needed and it doesn't have information about UFS at startup. By default, Alluxio expects that all modifications to UFS occur through Alluxio. If changes are made to UFS directly, you need sync metadata between Alluxio and UFS either manually or periodically. As ["Atomic metadata operation"](#atomic-metadata-operation) section says, the two steps metadata operation may resulting in inconsistency.
+Alluxio loads metadata from the UFS as needed and it doesn't have information about UFS at startup. By default, Alluxio expects that all modifications to UFS occur through Alluxio. If changes are made to UFS directly, you need to sync metadata between Alluxio and UFS either manually or periodically. As ["Atomic metadata operation"](#atomic-metadata-operation) section says, the two steps of metadata operation may result in inconsistency.
 
-JuiceFS provides strong consistency, both metadata and data. **The metadata service of JuiceFS is the single source of truth, not a mirror of UFS.** The metadata service doesn't rely on object storage to obtain metadata. Object storage just be treated as an unlimited block storage. There isn't any inconsistency between JuiceFS and object storage.
+JuiceFS provides strong consistency, in both metadata and data. **The metadata service of JuiceFS is the single source of truth, not a mirror of UFS.** The metadata service doesn't rely on object storage to obtain metadata. Object storage just be treated as an unlimited block storage. There isn't any inconsistency between JuiceFS and object storage.
 
 ### Data compression
 

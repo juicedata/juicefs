@@ -39,21 +39,26 @@ func TestRSA(t *testing.T) {
 	ciphertext, _ := c1.Encrypt([]byte("hello"))
 
 	privPEM := ExportRsaPrivateKeyToPem(testkey, "abc")
-	key2, _ := ParseRsaPrivateKeyFromPem(privPEM, "abc")
+	block, _ := pem.Decode([]byte(privPEM))
+	if block == nil {
+		t.Fatalf("failed to parse PEM block containing the key")
+	}
+
+	key2, _ := ParseRsaPrivateKeyFromPem(block, "abc")
 	c2 := NewRSAEncryptor(key2)
 	plaintext, _ := c2.Decrypt(ciphertext)
 	if string(plaintext) != "hello" {
 		t.Fail()
 	}
 
-	_, err := ParseRsaPrivateKeyFromPem(privPEM, "")
+	_, err := ParseRsaPrivateKeyFromPem(block, "")
 	if err == nil {
 		t.Errorf("parse without passphrase should fail")
 		t.Fail()
 	}
-	_, err = ParseRsaPrivateKeyFromPem(privPEM, "ab")
-	if err != x509.IncorrectPasswordError {
-		t.Errorf("parse without passphrase should return IncorrectPasswordError")
+	_, err = ParseRsaPrivateKeyFromPem(block, "ab")
+	if err == nil {
+		t.Errorf("parse with incorrect passphrase should return fail")
 		t.Fail()
 	}
 

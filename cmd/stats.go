@@ -30,6 +30,43 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func cmdStats() *cli.Command {
+	return &cli.Command{
+		Name:      "stats",
+		Action:    stats,
+		Category:  "INSPECTOR",
+		Usage:     "Show real time performance statistics of JuiceFS",
+		ArgsUsage: "MOUNTPOINT",
+		Description: `
+This is a tool that reads Prometheus metrics and shows real time statistics of the target mount point.
+
+Examples:
+$ juicefs stats /mnt/jfs
+
+# More metrics
+$ juicefs stats /mnt/jfs -l 1
+
+Details: https://juicefs.com/docs/community/stats_watcher`,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "schema",
+				Value: "ufmco",
+				Usage: "schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
+			},
+			&cli.UintFlag{
+				Name:  "interval",
+				Value: 1,
+				Usage: "interval in seconds between each update",
+			},
+			&cli.UintFlag{
+				Name:    "verbosity",
+				Aliases: []string{"l"},
+				Usage:   "verbosity level, 0 or 1 is enough for most cases",
+			},
+		},
+	}
+}
+
 const (
 	BLACK = 30 + iota
 	RED
@@ -329,10 +366,7 @@ func readStats(path string) map[string]float64 {
 }
 
 func stats(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		logger.Fatalln("mount point must be provided")
-	}
+	setup(ctx, 1)
 	mp := ctx.Args().First()
 	inode, err := utils.GetFileInode(mp)
 	if err != nil {
@@ -371,30 +405,5 @@ func stats(ctx *cli.Context) error {
 		tick++
 		<-ticker.C
 		current = readStats(watcher.path)
-	}
-}
-
-func statsFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "stats",
-		Usage:     "show runtime statistics",
-		Action:    stats,
-		ArgsUsage: "MOUNTPOINT",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "schema",
-				Value: "ufmco",
-				Usage: "schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go)",
-			},
-			&cli.UintFlag{
-				Name:  "interval",
-				Value: 1,
-				Usage: "interval in seconds between each update",
-			},
-			&cli.UintFlag{
-				Name:  "verbosity",
-				Usage: "verbosity level, 0 or 1 is enough for most cases",
-			},
-		},
 	}
 }

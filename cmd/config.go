@@ -20,11 +20,80 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
+
+func cmdConfig() *cli.Command {
+	return &cli.Command{
+		Name:      "config",
+		Action:    config,
+		Category:  "ADMIN",
+		Usage:     "Change configuration of a volume",
+		ArgsUsage: "META-URL",
+		Description: `
+Only flags explicitly specified are changed.
+
+Examples:
+# Show the current configurations
+$ juicefs config redis://localhost
+
+# Change volume "quota"
+$ juicefs conifg redis://localhost --inode 10000000 --capacity 1048576
+
+# Change maximum days before files in trash are deleted
+$ juicefs conifg redis://localhost --trash-days 7
+
+# Limit client version that is allowed to connect
+$ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0`,
+		Flags: []cli.Flag{
+			&cli.Uint64Flag{
+				Name:  "capacity",
+				Usage: "hard quota of the volume limiting its usage of space in GiB",
+			},
+			&cli.Uint64Flag{
+				Name:  "inodes",
+				Usage: "hard quota of the volume limiting its number of inodes",
+			},
+			&cli.StringFlag{
+				Name:  "bucket",
+				Usage: "the bucket URL of object storage to store data",
+			},
+			&cli.StringFlag{
+				Name:  "access-key",
+				Usage: "access key for object storage",
+			},
+			&cli.StringFlag{
+				Name:  "secret-key",
+				Usage: "secret key for object storage",
+			},
+			&cli.BoolFlag{
+				Name:  "encrypt-secret",
+				Usage: "encrypt the secret key if it was previously stored in plain format",
+			},
+			&cli.IntFlag{
+				Name:  "trash-days",
+				Usage: "number of days after which removed files will be permanently deleted",
+			},
+			&cli.StringFlag{
+				Name:  "min-client-version",
+				Usage: "minimum client version allowed to connect",
+			},
+			&cli.StringFlag{
+				Name:  "max-client-version",
+				Usage: "maximum client version allowed to connect",
+			},
+			&cli.BoolFlag{
+				Name:  "force",
+				Usage: "skip sanity check and force update the configurations",
+			},
+		},
+	}
+}
 
 func warn(format string, a ...interface{}) {
 	fmt.Printf("\033[1;33mWARNING\033[0m: "+format+"\n", a...)
@@ -46,14 +115,11 @@ func userConfirmed() bool {
 }
 
 func config(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("META-URL is needed")
-	}
+	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 
-	format, err := m.Load()
+	format, err := m.Load(false)
 	if err != nil {
 		return err
 	}
@@ -63,7 +129,8 @@ func config(ctx *cli.Context) error {
 		return nil
 	}
 
-	var quota, storage, trash bool
+	var quota, storage, trash, clientVer bool
+	var encrypted bool
 	var msg strings.Builder
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
@@ -81,6 +148,13 @@ func config(ctx *cli.Context) error {
 			}
 		case "bucket":
 			if new := ctx.String(flag); new != format.Bucket {
+				if format.Storage == "file" {
+					if p, err := filepath.Abs(new); err == nil {
+						new = p + "/"
+					} else {
+						logger.Fatalf("Failed to get absolute path of %s: %s", new, err)
+					}
+				}
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Bucket, new))
 				format.Bucket = new
 				storage = true
@@ -91,17 +165,38 @@ func config(ctx *cli.Context) error {
 				format.AccessKey = new
 				storage = true
 			}
-		case "secret-key":
-			if new := ctx.String(flag); new != format.SecretKey {
-				msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
-				format.SecretKey = new
-				storage = true
-			}
+		case "secret-key": // always update
+			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
+			encrypted = format.KeyEncrypted
+			format.SecretKey = ctx.String(flag)
+			format.KeyEncrypted = false
+			storage = true
 		case "trash-days":
 			if new := ctx.Int(flag); new != format.TrashDays {
+				if new < 0 {
+					return fmt.Errorf("Invalid trash days: %d", new)
+				}
 				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.TrashDays, new))
 				format.TrashDays = new
 				trash = true
+			}
+		case "min-client-version":
+			if new := ctx.String(flag); new != format.MinClientVersion {
+				if version.Parse(new) == nil {
+					return fmt.Errorf("Invalid version string: %s", new)
+				}
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MinClientVersion, new))
+				format.MinClientVersion = new
+				clientVer = true
+			}
+		case "max-client-version":
+			if new := ctx.String(flag); new != format.MaxClientVersion {
+				if version.Parse(new) == nil {
+					return fmt.Errorf("Invalid version string: %s", new)
+				}
+				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MaxClientVersion, new))
+				format.MaxClientVersion = new
+				clientVer = true
 			}
 		}
 	}
@@ -112,7 +207,7 @@ func config(ctx *cli.Context) error {
 
 	if !ctx.Bool("force") {
 		if storage {
-			blob, err := createStorage(format)
+			blob, err := createStorage(*format)
 			if err != nil {
 				return err
 			}
@@ -139,49 +234,21 @@ func config(ctx *cli.Context) error {
 				return fmt.Errorf("Aborted.")
 			}
 		}
+		if clientVer && format.CheckVersion() != nil {
+			warn("Clients with the same version of this will be rejected after modification.")
+			if !userConfirmed() {
+				return fmt.Errorf("Aborted.")
+			}
+		}
 	}
 
+	if encrypted || ctx.Bool("encrypt-secret") {
+		if err = format.Encrypt(); err != nil {
+			logger.Fatalf("Format encrypt: %s", err)
+		}
+	}
 	if err = m.Init(*format, false); err == nil {
 		fmt.Println(msg.String()[:msg.Len()-1])
 	}
 	return err
-}
-
-func configFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "config",
-		Usage:     "change config of a volume",
-		ArgsUsage: "META-URL",
-		Action:    config,
-		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:  "capacity",
-				Usage: "the limit for space in GiB",
-			},
-			&cli.Uint64Flag{
-				Name:  "inodes",
-				Usage: "the limit for number of inodes",
-			},
-			&cli.StringFlag{
-				Name:  "bucket",
-				Usage: "A bucket URL to store data",
-			},
-			&cli.StringFlag{
-				Name:  "access-key",
-				Usage: "Access key for object storage",
-			},
-			&cli.StringFlag{
-				Name:  "secret-key",
-				Usage: "Secret key for object storage",
-			},
-			&cli.IntFlag{
-				Name:  "trash-days",
-				Usage: "number of days after which removed files will be permanently deleted",
-			},
-			&cli.BoolFlag{
-				Name:  "force",
-				Usage: "skip sanity check and force update the configurations",
-			},
-		},
-	}
 }

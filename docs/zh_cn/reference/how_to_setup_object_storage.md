@@ -95,6 +95,7 @@ $ juicefs format \
 | [Azure Blob 存储](#azure-blob-存储)         | `wasb`       |
 | [Backblaze B2](#backblaze-b2)               | `b2`         |
 | [IBM 云对象存储](#ibm-云对象存储)           | `ibmcos`     |
+| [Oracle 云对象存储](#oracle-云对象存储)     | `s3`         |
 | [Scaleway](#scaleway)                       | `scw`        |
 | [DigitalOcean Spaces](#digitalocean-spaces) | `space`      |
 | [Wasabi](#wasabi)                           | `wasabi`     |
@@ -277,6 +278,22 @@ $ juicefs format \
     --bucket https://<bucket>.<endpoint> \
     --access-key <API-key> \
     --secret-key <instance-ID> \
+    ... \
+    myjfs
+```
+
+## Oracle 云对象存储
+
+Oracle 云对象存储支持 S3 兼容的形式进行访问，详细请参考[官方文档](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm)。
+
+该对象存储的 `endpoint` 格式为：`${namespace}.compat.objectstorage.${region}.oraclecloud.com`，例如：
+
+```bash
+$ juicefs format \
+    --storage s3 \
+    --bucket https://<bucket>.<endpoint> \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
     ... \
     myjfs
 ```
@@ -621,7 +638,7 @@ $ sudo apt-get install librados-dev
 $ sudo yum install librados2-devel
 ```
 
-然后为 Ceph 编译 JuiceFS（要求 Go 1.16+ 和 GCC 5.4+）：
+然后为 Ceph 编译 JuiceFS（要求 Go 1.17+ 和 GCC 5.4+）：
 
 ```bash
 $ make juicefs.ceph
@@ -801,6 +818,25 @@ TiKV 既可以用作 JuiceFS 的元数据存储，也可以用于 JuiceFS 的数
 $ juicefs format \
     --storage tikv \
     --bucket "<host>:<port>,<host>:<port>,<host>:<port>" \
+    ... \
+    myjfs
+```
+
+### 设置 TLS
+如果需要开启 TLS，可以通过在 Bucket-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+
+| 配置项               | 值                                                                                                                        |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------|
+| ca    | CA 根证书，用于用 tls 连接 TiKV/PD                                                                                                |
+| cert  | 证书文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
+| key   | 私钥文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
+| verify-cn | 证书通用名称，用于验证调用者身份，[详情](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+
+例子：
+```bash
+$ juicefs format \
+    --storage tikv \
+    --bucket "<host>:<port>,<host>:<port>,<host>:<port>?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
     ... \
     myjfs
 ```

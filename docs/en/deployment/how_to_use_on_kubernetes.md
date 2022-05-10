@@ -54,7 +54,7 @@ On cloud platforms that support "role management", you can assign "service role"
 2. Execute the following three commands in sequence to deploy JuiceFS CSI Driver through Helm.
 
 ```shell
-$ helm repo add juicefs-csi-driver https://juicedata.github.io/juicefs-csi-driver/
+$ helm repo add juicefs-csi-driver https://juicedata.github.io/charts/
 $ helm repo update
 $ helm install juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver -n kube-system -f ./values.yaml
 ```
@@ -302,7 +302,7 @@ storageClasses:
 Execute the Helm command to deploy:
 
 ```shell
-$ helm repo add juicefs-csi-driver https://juicedata.github.io/juicefs-csi-driver/
+$ helm repo add juicefs-csi-driver https://juicedata.github.io/charts/
 $ helm repo update
 $ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install -f ./jfs2.yaml
 ```

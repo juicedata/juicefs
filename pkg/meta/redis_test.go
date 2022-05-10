@@ -20,6 +20,7 @@ package meta
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"runtime"
 	"strconv"
 	"sync"
@@ -31,13 +32,18 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
-	var conf = Config{MaxDeletes: 1}
-	_, err := newRedisMeta("http", "127.0.0.1:6379/10", &conf)
-	if err == nil {
-		t.Fatal("meta created with invalid url")
-	}
+	var conf = Config{}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", &conf)
 	if err != nil || m.Name() != "redis" {
+		t.Fatalf("create meta: %s", err)
+	}
+	testMeta(t, m)
+}
+
+func TestRedisCluster(t *testing.T) {
+	var conf = Config{}
+	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", &conf)
+	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
@@ -63,7 +69,9 @@ func testMeta(t *testing.T, m Meta) {
 	testStickyBit(t, m)
 	testLocks(t, m)
 	testConcurrentWrite(t, m)
-	testCompaction(t, m)
+	testCompaction(t, m, false)
+	time.Sleep(time.Second)
+	testCompaction(t, m, true)
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
 	base.conf.CaseInsensi = true
@@ -89,7 +97,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err := m.Init(Format{Name: "test2"}, false); err == nil { // not allowed
 		t.Fatalf("change name without --force is not allowed")
 	}
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		t.Fatalf("load failed after initialization: %s", err)
 	}
@@ -99,6 +107,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err = m.NewSession(); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
+	defer m.CloseSession()
 	ses, err := m.ListSessions()
 	if err != nil || len(ses) != 1 {
 		t.Fatalf("list sessions %+v: %s", ses, err)
@@ -172,10 +181,10 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rmdir(ctx, 1, "d"); st != syscall.ENOTEMPTY {
 		t.Fatalf("rmdir d: %s", st)
 	}
-	if st := m.Mknod(ctx, inode, "df", TypeFile, 0650, 022, 0, &dummyInode, nil); st != syscall.ENOTDIR {
+	if st := m.Mknod(ctx, inode, "df", TypeFile, 0650, 022, 0, "", &dummyInode, nil); st != syscall.ENOTDIR {
 		t.Fatalf("create fd: %s", st)
 	}
-	if st := m.Mknod(ctx, parent, "f", TypeFile, 0650, 022, 0, &inode, attr); st != syscall.EEXIST {
+	if st := m.Mknod(ctx, parent, "f", TypeFile, 0650, 022, 0, "", &inode, attr); st != syscall.EEXIST {
 		t.Fatalf("create f: %s", st)
 	}
 	if st := m.Lookup(ctx, parent, "f", &inode, attr); st != 0 {
@@ -312,7 +321,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	} else if attr.Parent != 1 {
 		t.Fatalf("after rename d4/d5 <-> d5 parent %d expect 1", attr.Parent)
 	}
-	if st := m.Mknod(ctx, parent2, "f6", TypeFile, 0650, 022, 0, &inode, attr); st != 0 {
+	if st := m.Mknod(ctx, parent2, "f6", TypeFile, 0650, 022, 0, "", &inode, attr); st != 0 {
 		t.Fatalf("create dir d4/f6: %s", st)
 	}
 	if st := m.Rename(ctx, 1, "d5", parent2, "f6", RenameExchange, &inode, attr); st != 0 {
@@ -475,7 +484,11 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20 || iavail != 97 {
-		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+		time.Sleep(time.Millisecond * 100)
+		_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
+		if totalspace != 1<<20 || iavail != 97 {
+			t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+		}
 	}
 	var summary Summary
 	if st := GetSummary(m, ctx, parent, &summary, false); st != 0 {
@@ -798,8 +811,12 @@ type compactor interface {
 	compactChunk(inode Ino, indx uint32, force bool)
 }
 
-func testCompaction(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+func testCompaction(t *testing.T, m Meta, trash bool) {
+	if trash {
+		_ = m.Init(Format{Name: "test", TrashDays: 1}, false)
+	} else {
+		_ = m.Init(Format{Name: "test"}, false)
+	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
@@ -887,8 +904,20 @@ func testCompaction(t *testing.T, m Meta) {
 	l.Lock()
 	deletes := len(deleted)
 	l.Unlock()
-	if deletes < 30 {
-		t.Fatalf("deleted chunks %d is less then 30", deletes)
+	if trash {
+		if deletes > 10 {
+			t.Fatalf("deleted chunks %d is greater than 10", deletes)
+		}
+		if len(slices[1]) < 200 {
+			t.Fatalf("list delayed slices %d is less than 200", len(slices[1]))
+		}
+		m.(engine).doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
+		l.Lock()
+		deletes = len(deleted)
+		l.Unlock()
+	}
+	if deletes < 200 {
+		t.Fatalf("deleted chunks %d is less than 200", deletes)
 	}
 }
 
@@ -1099,7 +1128,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	case *redisMeta:
 		s, err = m.getSession(strconv.FormatUint(sid, 10), true)
 	case *dbMeta:
-		s, err = m.getSession(&session{Sid: sid}, true)
+		s, err = m.getSession(&session2{Sid: sid, Info: []byte("{}")}, true)
 	case *kvMeta:
 		s, err = m.getSession(sid, true)
 	}
@@ -1140,8 +1169,23 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, parent, "f"); st != 0 {
 		t.Fatalf("unlink d/f: %s", st)
 	}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("getattr f(%d): %s, attr %+v", inode, st, attr)
+	}
+	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("mkdir d2: %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "d2"); st != 0 {
+		t.Fatalf("rmdir d2: %s", st)
+	}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("getattr d2(%d): %s, attr %+v", inode, st, attr)
+	}
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)
+	}
+	if st := m.Lookup(ctx, TrashInode+1, fmt.Sprintf("1-%d-d", parent), &inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("lookup subTrash/d: %s, attr %+v", st, attr)
 	}
 	if st := m.Rename(ctx, 1, "f2", TrashInode, "td", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename f2 -> td: %s", st)
@@ -1166,7 +1210,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 6 {
+	if len(entries) != 7 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	ctx2 := NewContext(1000, 1, []uint32{1})

@@ -18,11 +18,14 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/term"
 )
 
 // conn encapsulates an ssh client and corresponding sftp client
@@ -146,7 +149,7 @@ func (f *sftpStore) putSftpConnection(pc **conn, err error) {
 }
 
 func (f *sftpStore) String() string {
-	return fmt.Sprintf("%s@%s:%s/", f.config.User, f.host, f.root)
+	return fmt.Sprintf("%s@%s:%s", f.config.User, f.host, f.root)
 }
 
 // always preserve suffix `/` for directory key
@@ -154,16 +157,7 @@ func (f *sftpStore) path(key string) string {
 	if key == "" {
 		return f.root
 	}
-	var absPath string
-	if strings.HasSuffix(key, dirSuffix) {
-		absPath = filepath.Join(f.root, key) + dirSuffix
-	} else {
-		absPath = filepath.Join(f.root, key)
-	}
-	if runtime.GOOS == "windows" {
-		absPath = strings.Replace(absPath, "\\", "/", -1)
-	}
-	return absPath
+	return f.root + key
 }
 
 func (f *sftpStore) Head(key string) (Object, error) {
@@ -319,6 +313,7 @@ func fileInfo(key string, fi os.FileInfo) Object {
 		owner,
 		group,
 		fi.Mode(),
+		!fi.Mode().IsDir() && !fi.Mode().IsRegular(),
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {
@@ -413,6 +408,28 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	return listed, nil
 }
 
+func SshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+	if len(questions) == 0 {
+		fmt.Print(user, instruction)
+	} else {
+		answers = make([]string, len(questions))
+		for i, q := range questions {
+			fmt.Print(q)
+			var ans []byte
+			if echos[i] {
+				_, err = fmt.Scanln(&answers[i])
+			} else {
+				ans, err = term.ReadPassword(int(syscall.Stdin))
+				answers[i] = string(ans)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("read password: %s", err)
+			}
+		}
+	}
+	return answers, nil
+}
+
 func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	idx := strings.LastIndex(endpoint, ":")
 	host, port, err := net.SplitHostPort(endpoint[:idx])
@@ -427,19 +444,15 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 		root = strings.Replace(root, "\\", "/", -1)
 	}
 	// append suffix `/` removed by filepath.Clean()
-	// `.` is a directory, add `/`
-	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) || root == "." {
+	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) {
 		root = root + dirSuffix
 	}
 
-	config := &ssh.ClientConfig{
-		User:            user,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         time.Second * 3,
-	}
-
+	var auth []ssh.AuthMethod
 	if pass != "" {
-		config.Auth = append(config.Auth, ssh.Password(pass))
+		auth = append(auth, ssh.Password(pass))
+	} else {
+		auth = append(auth, ssh.KeyboardInteractive(SshInteractive))
 	}
 
 	if privateKeyPath := os.Getenv("SSH_PRIVATE_KEY_PATH"); privateKeyPath != "" {
@@ -447,15 +460,30 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("unable to read private key, error: %v", err)
 		}
-
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse private key, error: %v", err)
 		}
-
-		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
+		auth = append(auth, ssh.PublicKeys(signer))
 	}
 
+	socket := os.Getenv("SSH_AUTH_SOCK")
+	if socket != "" {
+		conn, err := net.Dial("unix", socket)
+		if err != nil {
+			logger.Errorf("Failed to open SSH_AUTH_SOCK: %v", err)
+		} else {
+			agent := agent.NewClient(conn)
+			auth = append(auth, ssh.PublicKeysCallback(agent.Signers))
+		}
+	}
+
+	config := &ssh.ClientConfig{
+		User:            user,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         time.Second * 3,
+		Auth:            auth,
+	}
 	f := &sftpStore{
 		host:   host,
 		port:   port,
@@ -465,7 +493,7 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 
 	c, err := f.getSftpConnection()
 	if err != nil {
-		logger.Errorf("getSftpConnection failed: %s", err)
+		logger.Errorf("connect to %s failed: %s", host, err)
 		return nil, err
 	}
 	defer f.putSftpConnection(&c, err)

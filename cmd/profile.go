@@ -32,6 +32,54 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func cmdProfile() *cli.Command {
+	return &cli.Command{
+		Name:      "profile",
+		Action:    profile,
+		Category:  "INSPECTOR",
+		Usage:     "Show profiling of operations completed in JuiceFS",
+		ArgsUsage: "MOUNTPOINT/LOGFILE",
+		Description: `
+This is a tool that analyzes access log of JuiceFS and shows an overview of recently completed operations.
+
+Examples:
+# Monitor real time operations
+$ juicefs profile /mnt/jfs
+
+# Replay an access log
+$ cat /mnt/jfs/.accesslog > /tmp/jfs.alog
+# Press Ctrl-C to stop the "cat" command after some time
+$ juicefs profile /tmp/jfs.alog
+
+# Analyze an access log and print the total statistics immediately
+$ juicefs profile /tmp/jfs.alog --interval 0
+
+Details: https://juicefs.com/docs/community/operations_profiling`,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "uid",
+				Aliases: []string{"u"},
+				Usage:   "track only specified UIDs(separated by comma ,)",
+			},
+			&cli.StringFlag{
+				Name:    "gid",
+				Aliases: []string{"g"},
+				Usage:   "track only specified GIDs(separated by comma ,)",
+			},
+			&cli.StringFlag{
+				Name:    "pid",
+				Aliases: []string{"p"},
+				Usage:   "track only specified PIDs(separated by comma ,)",
+			},
+			&cli.Int64Flag{
+				Name:  "interval",
+				Value: 2,
+				Usage: "flush interval in seconds; set it to 0 when replaying a log file to get an immediate result",
+			},
+		},
+	}
+}
+
 var findDigits = regexp.MustCompile(`\d+`)
 
 type profiler struct {
@@ -283,10 +331,7 @@ func (p *profiler) flusher() {
 }
 
 func profile(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 1 {
-		logger.Fatalln("Mount point or log file must be provided!")
-	}
+	setup(ctx, 1)
 	logPath := ctx.Args().First()
 	st, err := os.Stat(logPath)
 	if err != nil {
@@ -364,36 +409,5 @@ func profile(ctx *cli.Context) error {
 		if prof.replay {
 			prof.pause <- true // pause/continue
 		}
-	}
-}
-
-func profileFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "profile",
-		Usage:     "analyze access log",
-		Action:    profile,
-		ArgsUsage: "MOUNTPOINT/LOGFILE",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "uid",
-				Aliases: []string{"u"},
-				Usage:   "track only specified UIDs(separated by comma ,)",
-			},
-			&cli.StringFlag{
-				Name:    "gid",
-				Aliases: []string{"g"},
-				Usage:   "track only specified GIDs(separated by comma ,)",
-			},
-			&cli.StringFlag{
-				Name:    "pid",
-				Aliases: []string{"p"},
-				Usage:   "track only specified PIDs(separated by comma ,)",
-			},
-			&cli.Int64Flag{
-				Name:  "interval",
-				Value: 2,
-				Usage: "flush interval in seconds; set it to 0 when replaying a log file to get an immediate result",
-			},
-		},
 	}
 }

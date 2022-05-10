@@ -29,6 +29,31 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func cmdDestroy() *cli.Command {
+	return &cli.Command{
+		Name:      "destroy",
+		Action:    destroy,
+		Category:  "ADMIN",
+		Usage:     "Destroy an existing volume",
+		ArgsUsage: "META-URL UUID",
+		Description: `
+Destroy the target volume, removing all objects in the data storage and all entries in its metadata engine.
+
+WARNING: BE CAREFUL! This operation cannot be undone.
+
+Examples:
+$ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
+
+Details: https://juicefs.com/docs/community/administration/destroy`,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "force",
+				Usage: "skip sanity check and force destroy the volume",
+			},
+		},
+	}
+}
+
 func printSessions(ss [][3]string) string {
 	header := [3]string{"SID", "HostName", "MountPoint"}
 	var max [3]int
@@ -79,10 +104,7 @@ func printSessions(ss [][3]string) string {
 }
 
 func destroy(ctx *cli.Context) error {
-	setLoggerLevel(ctx)
-	if ctx.Args().Len() < 2 {
-		return fmt.Errorf("META-URL and UUID are required")
-	}
+	setup(ctx, 2)
 	uri := ctx.Args().Get(0)
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
@@ -90,14 +112,14 @@ func destroy(ctx *cli.Context) error {
 	removePassword(uri)
 	m := meta.NewClient(uri, &meta.Config{Retries: 10, Strict: true})
 
-	format, err := m.Load()
+	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
 	if uuid := ctx.Args().Get(1); uuid != format.UUID {
 		logger.Fatalf("UUID %s != expected %s", uuid, format.UUID)
 	}
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("create object storage: %s", err)
 	}
@@ -188,19 +210,4 @@ func destroy(ctx *cli.Context) error {
 
 	logger.Infof("The volume has been destroyed! You may need to delete cache directory manually.")
 	return nil
-}
-
-func destroyFlags() *cli.Command {
-	return &cli.Command{
-		Name:      "destroy",
-		Usage:     "destroy an existing volume",
-		ArgsUsage: "META-URL UUID",
-		Action:    destroy,
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "force",
-				Usage: "skip sanity check and force destroy the volume",
-			},
-		},
-	}
 }

@@ -1,11 +1,74 @@
 ---
-sidebar_label: Monitoring
+sidebar_label: Monitoring and Data Visualization
 sidebar_position: 6
 ---
 
-# Monitoring
+# Monitoring and Data Visualization
 
-JuiceFS provides a [Prometheus](https://prometheus.io) API for each file system (the default API address is `http://localhost:9567/metrics`), which can be used to collect JuiceFS monitoring metrics. Once the monitoring metrics are collected, they can be quickly displayed via the [Grafana](https://grafana.com) dashboard template provided by JuiceFS.
+As a distributed file system hosting massive data storage, we need to have the ability to visualize the status changes of the entire system in terms of capacity, files, CPU load, disk IO, cache, etc. JuiceFS provides real-time status data to the outside world through a Prometheus-based API. Just add it to your own Prometheus Server to scrape and store time series data, and then easily visualize and monitor the JucieFS file system with tools like Grafana.
+
+## Get started
+
+It is assumed here that you build Prometheus Server, Grafana and JuiceFS clients all running on the same host.
+
+- **Prometheus Server**: Scrapes and stores the time series data of various metrics. For installation, please refer to the [official documentation](https://prometheus.io/docs/introduction/first_steps/).
+- **Grafana**: Loading and visualizing the time series data from Prometheus. For installation, please refer to the [official documentation](https://grafana.com/docs/grafana/latest/installation/).
+
+### Ⅰ. Access to real-time data
+
+JuiceFS outputs metrics data via an API of type [Prometheus](https://prometheus.io). After the file system is mounted, the live monitoring data output from the client is available by default address `http://localhost:9567/metrics`.
+
+![](../images/prometheus-client-data.jpg)
+
+### Ⅱ. Add API to Prometheus Server
+
+Edit the [configuration file](https://prometheus.io/docs/prometheus/latest/configuration/configuration) of Prometheus, add a new job and point to the API address of JuiceFS, e.g.
+
+```yaml {20-22}
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "juicefs"
+    static_configs:
+      - targets: ["localhost:9567"]
+```
+
+Assuming a configuration file named `prometheus.yml`, load this configuration to start the service:
+
+```shell
+./prometheus --config.file=prometheus.yml
+```
+
+Visit `http://localhost:9090` to see the Prometheus interface.
+
+### Ⅲ. Visualize Prometheus data by Grafana
+
+As shown in the figure below, create a new Data Source.
+
+- **Name**: For identification purposes, you can fill in the name of the file system.
+- **URL**: Data interface for Prometheus, default is `http://localhost:9090`
+
+![](../images/grafana-data-source.jpg)
+
+Then, create a dashboard using [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json). Visit the dashboard to see a visual graph of the file system:
+
+![](../images/grafana-dashboard.jpg)
 
 ## Collecting monitoring metrics
 
@@ -143,9 +206,11 @@ For more information about Prometheus Operator, please check [official document]
 
 ### Hadoop
 
-The [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and then letting Prometheus scrape the metrics from Pushgateway.
+The [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and [Graphite](https://graphiteapp.org).
 
-Please enable metrics reporting with the following configuration:
+#### Pushgateway
+
+Report metrics to Pushgateway:
 
 ```xml
 <property>
@@ -154,7 +219,7 @@ Please enable metrics reporting with the following configuration:
 </property>
 ```
 
-At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds. For all configurations supported by JuiceFS Hadoop Java SDK, please refer to [documentation](../deployment/hadoop_java_sdk.md#client-configurations).
+At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds.
 
 :::info
 According to the suggestion of [Pushgateway official document](https://github.com/prometheus/pushgateway/blob/master/README.md#configure-the-pushgateway-as-a-target-to-scrape), Prometheus's [scrape configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) needs to set `honor_labels: true`.
@@ -176,6 +241,21 @@ $ curl -X PUT http://host:9091/api/v1/admin/wipe
 
 For more information about Pushgateway, please check [official document](https://github.com/prometheus/pushgateway/blob/master/README.md).
 
+#### Graphite
+
+Report metrics to Graphite:
+
+```xml
+<property>
+  <name>juicefs.push-graphite</name>
+  <value>host:port</value>
+</property>
+```
+
+At the same time, the frequency of reporting metrics can be modified through the `juicefs.push-interval` configuration. The default is to report once every 10 seconds.
+
+For all configurations supported by JuiceFS Hadoop Java SDK, please refer to [documentation](../deployment/hadoop_java_sdk.md#client-configurations).
+
 ### Use Consul as registration center
 
 :::note
@@ -194,7 +274,7 @@ For each instance registered to Consul, its `serviceName` is `juicefs`, and the 
 
 The meta of each instance contains two aspects: `hostname` and `mountpoint`. When `mountpoint` is `s3gateway`, which means that the instance is an S3 gateway.
 
-## Display monitoring metrics
+## Visualize monitoring metrics
 
 ### Grafana dashboard template
 
