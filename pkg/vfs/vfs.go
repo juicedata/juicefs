@@ -314,7 +314,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 		h.children = inodes
 		if ino == rootID && !v.Conf.HideInternal {
 			// add internal nodes
-			for _, node := range internalNodes {
+			for _, node := range internalNodes[1:] {
 				h.children = append(h.children, &meta.Entry{
 					Inode: node.inode,
 					Name:  []byte(node.name),
