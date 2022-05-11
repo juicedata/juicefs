@@ -23,12 +23,14 @@ package fuse
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -271,6 +273,91 @@ func PosixLock(t *testing.T, mp string) {
 		t.Fatalf("unlock: %s", err)
 	}
 }
+
+func FdLeak(t *testing.T, mnt string) {
+	t.Log("fdleak begin")
+	fn := mnt + "/file"
+
+	if err := ioutil.WriteFile(fn, []byte("hello world"), 0755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	for i := 0; i < 100; i++ {
+		if _, err := ioutil.ReadFile(fn); err != nil {
+			t.Fatalf("ReadFile: %v", err)
+		}
+	}
+
+	if runtime.GOOS == "linux" {
+		infos := listFds(0, "")
+		if len(infos) > 15 {
+			t.Errorf("found %d open file descriptors for 100x ReadFile: %v", len(infos), infos)
+		}
+	}
+	t.Log("fdleak end")
+}
+
+
+func listFds(pid int, prefix string) []string {
+	// We need /proc to get the list of fds for other processes. Only exists
+	// on Linux.
+	if runtime.GOOS != "linux" && pid > 0 {
+		return nil
+	}
+	// Both Linux and MacOS have /dev/fd
+	dir := "/dev/fd"
+	if pid > 0 {
+		dir = fmt.Sprintf("/proc/%d/fd", pid)
+	}
+	f, err := os.Open(dir)
+	if err != nil {
+		fmt.Printf("ListFds: %v\n", err)
+		return nil
+	}
+	defer f.Close()
+	// Note: Readdirnames filters "." and ".."
+	names, err := f.Readdirnames(0)
+	if err != nil {
+		log.Panic(err)
+	}
+	var out []string
+	var filtered []string
+	for _, n := range names {
+		fdPath := dir + "/" + n
+		fi, err := os.Lstat(fdPath)
+		if err != nil {
+			// fd was closed in the meantime
+			continue
+		}
+		if fi.Mode()&0400 > 0 {
+			n += "r"
+		}
+		if fi.Mode()&0200 > 0 {
+			n += "w"
+		}
+		target, err := os.Readlink(fdPath)
+		if err != nil {
+			// fd was closed in the meantime
+			continue
+		}
+		if strings.HasPrefix(target, "pipe:") || strings.HasPrefix(target, "anon_inode:[eventpoll]") {
+			// go-fuse creates pipes on demand for splice(), which
+			// creates spurious test failures. Ignore all pipes.
+			// Also get rid of the "eventpoll" fd that is always there and not
+			// interesting.
+			filtered = append(filtered, target)
+			continue
+		}
+		if prefix != "" && !strings.HasPrefix(target, prefix) {
+			filtered = append(filtered, target)
+			continue
+		}
+		out = append(out, n+"="+target)
+	}
+	out = append(out, fmt.Sprintf("(filtered: %s)", strings.Join(filtered, ", ")))
+	return out
+}
+
 
 func TestFUSE(t *testing.T) {
 	f, err := os.CreateTemp("", "meta")
