@@ -382,6 +382,7 @@ func TestFUSE(t *testing.T) {
 	posixtest.All["Xattrs"] = Xattrs
 	posixtest.All["Flock"] = Flock
 	posixtest.All["POSIXLock"] = PosixLock
+	posixtest.All["FdLeak"] = FdLeak
 	for c, f := range posixtest.All {
 		cleanup(mp)
 		t.Run(c, func(t *testing.T) {
