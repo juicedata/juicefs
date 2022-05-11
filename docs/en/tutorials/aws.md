@@ -21,7 +21,7 @@ Amazon EC2 Cloud Server is one of the most basic and widely used cloud services 
 
 For new users, you don't need to think too much about JuiceFS configuration requirements because a JuiceFS file system can be easily created and then mounted even with the least configured EC2 instances. Usually, you only need to consider hardware requirements.
 
-JuiceFS clients will occupy 1GB of disk as cache by default. When dealing with a large number of files, the client will cache the data on disk first and then upload it to an object storage asynchronously. Choosing a disk with higher IO and reserving and setting a larger cache will allow JuiceFS to have better performance.
+JuiceFS clients will occupy 1GB of disk space as cache by default. When dealing with a large number of files, the client will cache the data on disk first and then upload it to an object storage asynchronously. Choosing a disk with higher I/O and reserving and setting a larger cache will allow JuiceFS to have better performance.
 
 ### 2. Object Storage
 
