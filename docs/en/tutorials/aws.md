@@ -172,7 +172,7 @@ Seeing the output like the following means that the file system was created succ
 
 ### 4. Mount the file system
 
-The process of creating a file system will store the object storage including API keys into the database, so you do not need to input the bucket domain and the secret key of the object storage when mounting.
+The process of creating a file system will store the information of the object storage including API keys into the database, so you do not need to input the bucket domain and the secret key of the object storage when mounting.
 
 Use the `mount` subcommand of the JuiceFS client to mount the file system to the `/mnt/jfs` directory.
 
