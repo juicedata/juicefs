@@ -18,7 +18,7 @@
  *
  */
 
-package main
+package cmd
 
 import (
 	"github.com/juicedata/juicefs/pkg/fs"

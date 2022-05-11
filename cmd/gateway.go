@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	_ "net/http/pprof"
@@ -185,7 +185,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	}
 
 	chunkConf := getChunkConf(c, format)
-	blob, err := createStorage(*format)
+	blob, err := CreateStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

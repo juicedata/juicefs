@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"bytes"
@@ -180,7 +180,7 @@ func fixObjectSize(s int) int {
 	return s
 }
 
-func createStorage(format meta.Format) (object.ObjectStorage, error) {
+func CreateStorage(format meta.Format) (object.ObjectStorage, error) {
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
 	}
@@ -405,7 +405,7 @@ func format(c *cli.Context) error {
 		}
 	}
 
-	blob, err := createStorage(*format)
+	blob, err := CreateStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
