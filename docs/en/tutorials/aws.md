@@ -208,7 +208,7 @@ JuiceFS:mystor   fuse.juicefs      1.0P    64K  1.0P    1%    /mnt/jfs
 
 Once mounted, the file system can be used like a local disk, and the data stored in the directory `/mnt/jfs` is coordinated by the JuiceFS client and eventually stored in the S3 object storage.
 
-> **Multi-Host Sharing**: JuiceFS supports being mounted by multiple hosts at the same time, you can install the JuiceFS client on any cloud server on any platform. The files can be shared to read and write once mounting the file system using the database address `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1`, but you need to make sure that the host on which the file system is mounted has proper access to the database and the S3 being used.
+> **Multi-Host Sharing**: JuiceFS supports being mounted by multiple hosts at the same time, you can install the JuiceFS client on any cloud server on any platform. The files can be shared to read and write once mounting the file system using the database address `redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1`, but you need to make sure that the host which the file system is mounted on has privileges to access the database and the S3 being used.
 
 ### 5. Unmount JuiceFS
 
