@@ -33,7 +33,7 @@ Amazon S3 offers a range of storage classes for different use cases, mainly incl
 
 - Amazon S3 Standard: general-purpose storage for frequently accessed data
 - Amazon S3 Standard_IA: for data that is long-term stored but infrequently accessed
-- Amazon S3 Glacier: for archiving data for long term
+- Amazon S3 Glacier: for long-term data archiving
 
 Amazon S3 Standard classes is usually recommended for using JuiceFS because other classes may cost additional fee when retrieving data.
 
