@@ -125,7 +125,7 @@ COPYRIGHT:
    Apache License 2.0
 ```
 
-> **Tip**: If you execute the command `juicefs` and the terminal returns `command not found`, it may be because the `/usr/local/bin` directory is not in the system's executable path `PATH` . You can use the command `echo $PATH` to check the path and reinstall the client to the correct location. You can also add `/usr/local/bin` to the `PATH`.
+> **Tip**: If you execute the command `juicefs` and the terminal returns `command not found`, it may be because the `/usr/local/bin` directory is not in the system's executable path `$PATH` . You can use the command `echo $PATH` to check the path and reinstall the client to the correct location. You can also add `/usr/local/bin` to the `$PATH`.
 
 JuiceFS has good cross-platform compatibility and is supported on both Linux, Windows and macOS. If you need to know how to install it on other systems, please check the [official documentation](../getting-started/installation.md).
 
