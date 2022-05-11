@@ -479,6 +479,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		err = m.NewSession()
 		if err != nil {
 			logger.Errorf("new session: %s", err)
+			return nil
 		}
 
 		conf := &vfs.Config{
