@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package main
 
 import (
 	"crypto/md5"

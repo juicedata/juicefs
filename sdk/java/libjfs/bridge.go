@@ -15,7 +15,7 @@
 // server.
 
 //nolint
-package cmd
+package main
 
 import (
 	"bufio"

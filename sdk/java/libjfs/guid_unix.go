@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package cmd
+package main
 
 // #include <pwd.h>
 // #include <grp.h>

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package main
 
 // #cgo linux LDFLAGS: -ldl
 // #cgo linux CFLAGS: -Wno-discarded-qualifiers -D_GNU_SOURCE
