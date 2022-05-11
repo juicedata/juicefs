@@ -15,18 +15,19 @@
 // server.
 
 //nolint
-package main
+package cmd
 
 import (
 	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"io"
 	"net"
 	"sort"
 	"time"
+
+	"github.com/golang/protobuf/proto"
 
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"

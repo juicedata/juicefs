@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"fmt"
@@ -66,7 +66,7 @@ func fsck(ctx *cli.Context) error {
 		CacheDir:   "memory",
 	}
 
-	blob, err := createStorage(*format)
+	blob, err := CreateStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

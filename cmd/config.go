@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"bufio"
@@ -207,7 +207,7 @@ func config(ctx *cli.Context) error {
 
 	if !ctx.Bool("force") {
 		if storage {
-			blob, err := createStorage(*format)
+			blob, err := CreateStorage(*format)
 			if err != nil {
 				return err
 			}

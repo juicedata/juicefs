@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"fmt"
@@ -78,13 +78,6 @@ func Main(args []string) error {
 
 	return app.Run(reorderOptions(app, args))
 
-}
-
-func main() {
-	err := Main(os.Args)
-	if err != nil {
-		logger.Fatal(err)
-	}
 }
 
 func handleSysMountArgs(args []string) []string {

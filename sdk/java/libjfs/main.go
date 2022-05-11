@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 // #cgo linux LDFLAGS: -ldl
 // #cgo linux CFLAGS: -Wno-discarded-qualifiers -D_GNU_SOURCE
@@ -42,6 +42,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/juicedata/juicefs/cmd"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -294,23 +295,6 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 	return h
 }
 
-func createStorage(format meta.Format) (object.ObjectStorage, error) {
-	if err := format.Decrypt(); err != nil {
-		return nil, fmt.Errorf("format decrypt: %s", err)
-	}
-	var blob object.ObjectStorage
-	var err error
-	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.Shards)
-	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return object.WithPrefix(blob, format.Name+"/"), nil
-}
-
 func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, registry *prometheus.Registry, commonLabels map[string]string) {
 	pusher := push.New(pushGatewayAddr, "juicefs").Gatherer(registry)
 	for k, v := range commonLabels {
@@ -374,7 +358,8 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		var jConf javaConf
 		err := json.Unmarshal([]byte(C.GoString(jsonConf)), &jConf)
 		if err != nil {
-			logger.Fatalf("invalid json: %s", C.GoString(jsonConf))
+			logger.Errorf("invalid json: %s", C.GoString(jsonConf))
+			return nil
 		}
 		if jConf.Debug || os.Getenv("JUICEFS_DEBUG") != "" {
 			utils.SetLogLevel(logrus.DebugLevel)
@@ -407,7 +392,8 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
 		if err != nil {
-			logger.Fatalf("load setting: %s", err)
+			logger.Errorf("load setting: %s", err)
+			return nil
 		}
 		var registerer prometheus.Registerer
 		if jConf.PushGateway != "" || jConf.PushGraphite != "" {
@@ -440,7 +426,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		if jConf.Bucket != "" {
 			format.Bucket = jConf.Bucket
 		}
-		blob, err := createStorage(*format)
+		blob, err := cmd.CreateStorage(*format)
 		if err != nil {
 			logger.Fatalf("object storage: %s", err)
 		}
@@ -492,7 +478,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		})
 		err = m.NewSession()
 		if err != nil {
-			logger.Fatalf("new session: %s", err)
+			logger.Errorf("new session: %s", err)
 		}
 
 		conf := &vfs.Config{

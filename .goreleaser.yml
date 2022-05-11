@@ -18,7 +18,7 @@ builds:
     flags:
       - -buildmode
       - exe
-    main: ./cmd
+    main: .
     goos:
       - windows
     goarch:
@@ -28,7 +28,7 @@ builds:
       - CC=o64-clang
       - CXX=o64-clang++
     ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
-    main: ./cmd
+    main: .
     goos:
       - darwin
     goarch:
@@ -38,7 +38,7 @@ builds:
       - CC=oa64-clang
       - CXX=oa64-clang++
     ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
-    main: ./cmd
+    main: .
     goos:
       - darwin
     goarch:
@@ -47,7 +47,7 @@ builds:
     env:
       - CC=/usr/bin/musl-gcc
     ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}} -linkmode external -extldflags '-static'
-    main: ./cmd
+    main: .
     goos:
       - linux
     goarch:
@@ -56,7 +56,7 @@ builds:
     env:
       - CC=aarch64-linux-gnu-gcc
     ldflags: -s -w -X github.com/juicedata/juicefs/pkg/version.version={{.Version}} -X github.com/juicedata/juicefs/pkg/version.revision={{.ShortCommit}} -X github.com/juicedata/juicefs/pkg/version.revisionDate={{.Env.REVISIONDATE}}
-    main: ./cmd
+    main: .
     goos:
       - linux
     goarch:
