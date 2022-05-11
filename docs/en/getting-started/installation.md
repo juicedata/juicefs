@@ -231,7 +231,7 @@ Download MinGW-w64 and add its `bin` directory to the system environment variabl
 3. Compile client
 
    ```shell
-   go build -ldflags="-s -w" -o juicefs.exe ./cmd
+   go build -ldflags="-s -w" -o juicefs.exe .
    ```
 
 ### Cross-compiling Windows clients on Linux

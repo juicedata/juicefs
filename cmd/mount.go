@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"net"
@@ -282,7 +282,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 }
 
 func newStore(format *meta.Format, chunkConf *chunk.Config, registerer prometheus.Registerer) (object.ObjectStorage, chunk.ChunkStore) {
-	blob, err := createStorage(*format)
+	blob, err := CreateStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
