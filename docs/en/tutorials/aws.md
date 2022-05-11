@@ -17,7 +17,7 @@ As you can see from the previous documents, JuiceFS consists of the following th
 
 ### 1. Servers
 
-Amazon EC2 Cloud Server is one of the most basic and widely used cloud services on the AWS platform. It offers more than 400 instance sizes and 81 available zones in 25 data centers around the world, giving users flexibility to choose and adjust the configuration of EC2 instances according to their actual needs.
+Amazon EC2 Cloud Server is one of the most basic and widely used cloud services on the AWS platform. It offers more than 400 instance sizes and 81 availability zones in 25 data centers around the world, giving users the flexibility to choose and adjust the configuration of EC2 instances according to their actual needs.
 
 For new users, you don't need to think too much about JuiceFS configuration requirements because a JuiceFS file system can be easily created and then mounted even with the least configured EC2 instances. Usually, you only need to consider hardware requirements.
 
