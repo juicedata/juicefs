@@ -32,7 +32,7 @@ JuiceFS fully supports Amazon S3 and all S3-like object storage services, and yo
 Amazon S3 offers a range of storage classes for different use cases, mainly including:
 
 - Amazon S3 Standard: general-purpose storage for frequently accessed data
-- Amazon S3 Standard_IA: for data that is accessed less frequently and needs long-term storage 
+- Amazon S3 Standard_IA: for data that is long-term stored but infrequently accessed
 - Amazon S3 Glacier: for archiving data for long term
 
 Amazon S3 Standard classes is usually recommended for using JuiceFS because other classes may cost additional fee when retrieving data.
