@@ -65,6 +65,7 @@ func Main(args []string) error {
 			cmdGateway(),
 			cmdWebDav(),
 			cmdBench(),
+			cmdBenchForObj(),
 			cmdWarmup(),
 			cmdRmr(),
 			cmdSync(),

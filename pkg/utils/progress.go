@@ -139,6 +139,25 @@ func (p *Progress) AddByteSpinner(name string) *Bar {
 	return &Bar{Bar: b}
 }
 
+func (p *Progress) AddIoSpeedBar(name string, total int64) *Bar {
+	b := p.Progress.Add(0,
+		mpb.NewBarFiller(mpb.BarStyle()),
+		mpb.PrependDecorators(
+			decor.Name(name+": ", decor.WCSyncWidth),
+			decor.CountersKibiByte("% .1f / % .1f"),
+		),
+		mpb.AppendDecorators(
+			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
+			decor.OnComplete(
+				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 6}), "",
+			),
+		),
+	)
+	b.SetTotal(total, false)
+	p.bars = append(p.bars, b)
+	return &Bar{Bar: b}
+}
+
 func (p *Progress) AddDoubleSpinner(name string) *DoubleSpinner {
 	return &DoubleSpinner{
 		p.AddCountSpinner(name).Bar,

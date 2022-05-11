@@ -248,7 +248,7 @@ func (bm *benchmark) colorize(item string, value, cost float64, prec int) (strin
 	return svalue, scost
 }
 
-func (bm *benchmark) printResult(result [][3]string) {
+func printResult(result [][3]string, isatty bool) {
 	var rawmax, max [3]int
 	for _, l := range result {
 		for i := 0; i < 3; i++ {
@@ -258,7 +258,7 @@ func (bm *benchmark) printResult(result [][3]string) {
 		}
 	}
 	max = rawmax
-	if bm.tty {
+	if isatty {
 		max[1] -= 11 // no color chars
 		max[2] -= 11
 	}
@@ -457,6 +457,6 @@ func bench(ctx *cli.Context) error {
 		}
 		fmt.Printf(fmtString, diff("uptime"), diff("cpu_usage")*100/diff("uptime"), stats2["juicefs_memory"]/1024/1024)
 	}
-	bm.printResult(result)
+	printResult(result, bm.tty)
 	return nil
 }
