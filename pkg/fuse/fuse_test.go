@@ -274,9 +274,10 @@ func PosixLock(t *testing.T, mp string) {
 	}
 }
 
-func FdLeak(t *testing.T, mnt string) {
+func FdLeak(t *testing.T, mp string) {
 	t.Log("fdleak begin")
-	fn := mnt + "/file"
+	fn := mp + "/file"
+	t.Logf("fn is %s",fn)
 
 	if err := ioutil.WriteFile(fn, []byte("hello world"), 0755); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -290,7 +291,7 @@ func FdLeak(t *testing.T, mnt string) {
 
 	if runtime.GOOS == "linux" {
 		infos := listFds(0, "")
-		t.Logf("infos is %v",infos)
+		t.Log(strings.Join(infos, ";;"))
 		if len(infos) > 15 {
 			t.Errorf("found %d open file descriptors for 100x ReadFile: %v", len(infos), infos)
 		}
