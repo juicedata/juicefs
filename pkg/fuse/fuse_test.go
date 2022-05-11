@@ -283,6 +283,8 @@ func FdLeak(t *testing.T, mp string) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
+	fds := listFds(0, "")
+	t.Logf("before read,fds is ",strings.Join(fds, ";;"))
 	for i := 0; i < 100; i++ {
 		if _, err := ioutil.ReadFile(fn); err != nil {
 			t.Fatalf("ReadFile: %v", err)
@@ -291,7 +293,7 @@ func FdLeak(t *testing.T, mp string) {
 
 	if runtime.GOOS == "linux" {
 		infos := listFds(0, "")
-		t.Log(strings.Join(infos, ";;"))
+		t.Log("after read,infos is "strings.Join(infos, ";;"))
 		if len(infos) > 15 {
 			t.Errorf("found %d open file descriptors for 100x ReadFile: %v", len(infos), infos)
 		}
