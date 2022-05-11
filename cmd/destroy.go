@@ -119,7 +119,7 @@ func destroy(ctx *cli.Context) error {
 	if uuid := ctx.Args().Get(1); uuid != format.UUID {
 		logger.Fatalf("UUID %s != expected %s", uuid, format.UUID)
 	}
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("create object storage: %s", err)
 	}

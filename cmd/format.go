@@ -180,7 +180,7 @@ func fixObjectSize(s int) int {
 	return s
 }
 
-func createStorage(format *meta.Format) (object.ObjectStorage, error) {
+func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
 	}
@@ -405,7 +405,7 @@ func format(c *cli.Context) error {
 		}
 	}
 
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

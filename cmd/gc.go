@@ -101,7 +101,7 @@ func gc(ctx *cli.Context) error {
 		CacheDir:   "memory",
 	}
 
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

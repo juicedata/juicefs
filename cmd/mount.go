@@ -336,13 +336,13 @@ type storageHolder struct {
 }
 
 func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, error)) (object.ObjectStorage, error) {
-	blob, err := createStorage(format)
+	blob, err := createStorage(*format)
 	if err != nil {
 		return nil, err
 	}
 	holder := &storageHolder{blob}
 	go func() {
-		old := *format
+		old := *format // keep a copy, so it will not refreshed
 		for {
 			time.Sleep(time.Minute)
 			new, err := reload()
@@ -350,13 +350,9 @@ func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, erro
 				logger.Warnf("reload config: %s", err)
 				continue
 			}
-			if err := new.Decrypt(); err != nil {
-				logger.Warnf("format decrypt: %s", err)
-				continue
-			}
 			if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey {
 				logger.Infof("found new configuration: storage=%s bucket=%s ak=%s", new.Storage, new.Bucket, new.AccessKey)
-				newBlob, err := createStorage(new)
+				newBlob, err := createStorage(*new)
 				if err != nil {
 					logger.Warnf("object storage: %s", err)
 					continue
