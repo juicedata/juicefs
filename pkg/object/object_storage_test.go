@@ -23,7 +23,6 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
-	"github.com/go-redis/redis/v8"
 	"io/ioutil"
 	"math"
 	"os"
@@ -31,6 +30,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 func get(s ObjectStorage, k string, off, limit int64) (string, error) {
@@ -567,4 +568,9 @@ func TestNameString(t *testing.T) {
 	if s.String() != "mem://test/a/b/" {
 		t.Fatalf("name with two prefix does not match: %s", s.String())
 	}
+}
+
+func TestEtcd(t *testing.T) {
+	s, _ := newEtcd("127.0.0.1:2379", "", "")
+	testStorage(t, s)
 }
