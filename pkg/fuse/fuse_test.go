@@ -290,6 +290,7 @@ func FdLeak(t *testing.T, mnt string) {
 
 	if runtime.GOOS == "linux" {
 		infos := listFds(0, "")
+		t.Logf("infos is %v",infos)
 		if len(infos) > 15 {
 			t.Errorf("found %d open file descriptors for 100x ReadFile: %v", len(infos), infos)
 		}
@@ -318,7 +319,8 @@ func listFds(pid int, prefix string) []string {
 	// Note: Readdirnames filters "." and ".."
 	names, err := f.Readdirnames(0)
 	if err != nil {
-		log.Panic(err)
+		fmt.Printf("Readdirnames err: %v\n", err)
+		return nil
 	}
 	var out []string
 	var filtered []string
