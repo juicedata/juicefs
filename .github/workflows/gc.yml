@@ -57,8 +57,6 @@ jobs:
           mp=myjfs/
           name=myjfs
           juicefs=./juicefs
-          sudo mkdir /var/jfs/
-          sudo chmod 777 /var/jfs/
           $juicefs format $meta $name --trash-days 1
           $juicefs mount -d $meta $mp
           fio --name=abc --rw=randwrite --refill_buffers --size=4G --bs=256k --directory=$mp
