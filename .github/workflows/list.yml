@@ -109,8 +109,9 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test
           ls -lah
+          hello
 
-  list-sqlite3:
+  sqlite3-list:
     runs-on: ubuntu-latest   
     steps:
       - uses: actions/checkout@v3
