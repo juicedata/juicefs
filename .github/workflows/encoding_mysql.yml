@@ -80,7 +80,6 @@ jobs:
           ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
           cat backup.dump | grep file_果汁
           cat backup.dump | grep dir_果汁
-          cat backup.dump | grep attr_果汁
           cat backup.dump | grep softlink_果汁
           ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
           ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
@@ -256,7 +255,6 @@ jobs:
           ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
           cat backup.dump | grep file_果汁
           cat backup.dump | grep dir_果汁
-          cat backup.dump | grep attr_果汁
           cat backup.dump | grep softlink_果汁
           ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
           ./juicefs mount --no-usage-report --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
