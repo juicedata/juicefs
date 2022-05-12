@@ -600,8 +600,8 @@ func TestInternalFile(t *testing.T) {
 			internalFiles[string(e.Name)] = true
 		}
 	}
-	if len(internalFiles) != 4 {
-		t.Fatalf("there should be 4 internal files but got %d", len(internalFiles))
+	if len(internalFiles) != 3 {
+		t.Fatalf("there should be 3 internal files but got %d", len(internalFiles))
 	}
 	v.Releasedir(ctx, 1, fh)
 
