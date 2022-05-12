@@ -63,9 +63,9 @@ jobs:
           if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
           fi
-
-          filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
-          dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          
+          filename="file_\x9e\x9c\xe6\xb1\x81\xb9\xfb\xd6\xad\xe6\\\"%%\\\\"
+          dirname="dir_\xb9\xfb\xd6\xad\xe6\x9e\x9c\xe6\xb1\x81\\\"%%\\\\"
           attr_key=user.k
           attr_value_set="attr_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           data_write="data_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
@@ -78,7 +78,7 @@ jobs:
           setfattr -n $attr_key -v  $attr_value_set `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"`
           ln -s `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$filename"` `printf "${{steps.vars.outputs.MOUNT_POINT1}}/$soft_link"`
           ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
-
+          cat backup.dump | grep file_果汁
           ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
           ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
@@ -124,8 +124,8 @@ jobs:
           if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
           fi
-
-          filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          
+          filename="file_\xe6\x9e\x9c\xe6\xb1\x81\xb9\xfb\xd6\xad\\\"%%\\\\"
           filename2="file2_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           attr_key=user.k
@@ -227,8 +227,8 @@ jobs:
           if [ -d ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} ]; then
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
           fi
-
-          filename="file_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
+          #果汁（utf8）果汁(gbk)
+          filename="file_\xe6\x9e\x9c\xe6\xb1\x81\xb9\xfb\xd6\xad\\\"%%\\\\"
           dirname="dir_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
           attr_key=user.k
           attr_value_set="attr_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
@@ -251,6 +251,7 @@ jobs:
           # upgrade table schema
           ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d
           ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
+          cat backup.dump | grep file_果汁
           ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
           ./juicefs mount --no-usage-report --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
