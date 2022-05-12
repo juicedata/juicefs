@@ -64,7 +64,7 @@ jobs:
             rm ${{ steps.vars.outputs.BUCKET}}/${{ steps.vars.outputs.NAME}} -rf
           fi
           
-          filename="file_\x9e\x9c\xe6\xb1\x81\xb9\xfb\xd6\xad\xe6\\\"%%\\\\"
+          filename="file_\xe6\x9e\x9c\xe6\xb1\x81\xb9\xfb\xd6\xad\\\"%%\\\\"
           dirname="dir_\xb9\xfb\xd6\xad\xe6\x9e\x9c\xe6\xb1\x81\\\"%%\\\\"
           attr_key=user.k
           attr_value_set="attr_\xb9\xfb\xd6\xad\xca\xfd\xbe\xdd\\\"%%\\\\"
