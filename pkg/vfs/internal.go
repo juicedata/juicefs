@@ -47,8 +47,8 @@ type internalNode struct {
 }
 
 var internalNodes = []*internalNode{
-	{logInode, ".accesslog", &Attr{Mode: 0400}},
 	{controlInode, ".control", &Attr{Mode: 0666}},
+	{logInode, ".accesslog", &Attr{Mode: 0400}},
 	{statsInode, ".stats", &Attr{Mode: 0444}},
 	{configInode, ".config", &Attr{Mode: 0400}},
 	{trashInode, meta.TrashName, &Attr{Mode: 0555}},
