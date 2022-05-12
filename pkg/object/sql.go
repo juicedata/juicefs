@@ -37,8 +37,8 @@ import (
 
 type sqlStore struct {
 	DefaultObjectStorage
-	db  *xorm.Engine
-	uri string
+	db   *xorm.Engine
+	addr string
 }
 
 type blob struct {
@@ -50,7 +50,7 @@ type blob struct {
 }
 
 func (s *sqlStore) String() string {
-	return s.uri
+	return fmt.Sprintf("%s://%s/", s.db.DriverName(), s.addr)
 }
 
 func (s *sqlStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -143,18 +143,14 @@ func (s *sqlStore) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
-func newSQLStore(uri, user, password string) (ObjectStorage, error) {
+func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	var err error
-	p := strings.Index(uri, "://")
-	if p < 0 {
-		return nil, fmt.Errorf("invalid uri: %s", uri)
-	}
-	driver := uri[:p]
+	uri := addr
 	if user != "" {
-		uri = uri[:p+3] + user + ":" + password + "@" + uri[p+3:]
+		uri = user + ":" + password + "@" + addr
 	}
-	if driver != "posgres" {
-		uri = uri[p+3:]
+	if driver == "posgres" {
+		uri = "posgres://" + uri
 	}
 	engine, err := xorm.NewEngine(driver, uri)
 	if err != nil {
@@ -176,9 +172,25 @@ func newSQLStore(uri, user, password string) (ObjectStorage, error) {
 	if err := engine.Sync2(new(blob)); err != nil {
 		return nil, fmt.Errorf("create table blob: %s", err)
 	}
-	return &sqlStore{DefaultObjectStorage{}, engine, uri}, nil
+	return &sqlStore{DefaultObjectStorage{}, engine, addr}, nil
 }
 
 func init() {
-	Register("sql", newSQLStore)
+	Register("sqlite3", func(addr, user, pass string) (ObjectStorage, error) {
+		p := strings.Index(addr, "://")
+		if p > 0 {
+			addr = addr[p+3:]
+		}
+		return newSQLStore("sqlite3", addr, user, pass)
+	})
+	Register("mysql", func(addr, user, pass string) (ObjectStorage, error) {
+		p := strings.Index(addr, "://")
+		if p > 0 {
+			addr = addr[p+3:]
+		}
+		return newSQLStore("mysql", addr, user, pass)
+	})
+	Register("posgres", func(addr, user, pass string) (ObjectStorage, error) {
+		return newSQLStore("posgres", addr, user, pass)
+	})
 }

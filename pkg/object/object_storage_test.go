@@ -564,7 +564,7 @@ func TestSharding(t *testing.T) {
 }
 
 func TestSQLite(t *testing.T) {
-	s, err := newSQLStore("sqlite3:///tmp/teststore.db", "", "")
+	s, err := newSQLStore("sqlite3", "/tmp/teststore.db", "", "")
 	if err != nil {
 		t.Fatalf("create: %s", err)
 	}
@@ -572,14 +572,14 @@ func TestSQLite(t *testing.T) {
 }
 
 func TestPG(t *testing.T) {
-	s, err := newSQLStore("postgres://localhost:5432/test?sslmode=disable", "", "")
+	s, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable", "", "")
 	if err == nil {
 		testStorage(t, s)
 	}
 }
 
 func TestMySQL(t *testing.T) {
-	s, err := newSQLStore("mysql:///dev", "root", "")
+	s, err := newSQLStore("mysql", "/dev", "root", "")
 	if err == nil {
 		testStorage(t, s)
 	}
