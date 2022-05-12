@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -159,8 +160,15 @@ func newEtcd(addr, user, passwd string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %s", addr, err)
 	}
+	hosts := strings.Split(u.Host, ",")
+	for i, h := range hosts {
+		h, _, err := net.SplitHostPort(h)
+		if err != nil {
+			hosts[i] = net.JoinHostPort(h, "2379")
+		}
+	}
 	conf := etcd.Config{
-		Endpoints:        strings.Split(u.Host, ","),
+		Endpoints:        hosts,
 		Username:         user,
 		Password:         passwd,
 		AutoSyncInterval: time.Minute,
