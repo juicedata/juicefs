@@ -184,13 +184,15 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 		logger.Warnf("delayed upload only work in writeback mode")
 	}
 
-	chunkConf := getChunkConf(c, format)
-	blob, err := CreateStorage(*format)
+	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
+		return getFormat(c, metaCli)
+	})
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
 
+	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 

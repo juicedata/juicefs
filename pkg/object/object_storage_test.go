@@ -23,7 +23,6 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
-	"github.com/go-redis/redis/v8"
 	"io/ioutil"
 	"math"
 	"os"
@@ -31,6 +30,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 func get(s ObjectStorage, k string, off, limit int64) (string, error) {
