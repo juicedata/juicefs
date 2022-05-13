@@ -54,7 +54,7 @@ jobs:
 
       - name: Test rand read on big file with multiple threads
         run: |
-          meta=redis://localhost/1
+          meta=redis://localhost/2
           mp=myjfs/
           name=myjfs
           size=16G
