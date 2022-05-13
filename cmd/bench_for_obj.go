@@ -173,7 +173,7 @@ func benchForObj(ctx *cli.Context) error {
 			logger.Fatalf("get big object error: %v", err)
 		}
 		cost := time.Since(now).Seconds()
-		var bigPResult = [3]string{"gut big object", nspt, nspt}
+		var bigPResult = [3]string{"get big object", nspt, nspt}
 		bigPResult[1], bigPResult[2] = colorize("bigget", float64(bigFSize>>20)/cost, cost, 2, tty)
 		bigPResult[1] += " MiB/s"
 		bigPResult[2] += " s/file"
