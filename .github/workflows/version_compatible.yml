@@ -49,10 +49,7 @@ jobs:
                      -v /tmp/config:/root/.minio \
                      minio/minio server /data
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
-          chmod +x mc 
-          ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
-          ./mc admin user add minio juicedata juicedata
-          ./mc admin policy set minio consoleAdmin user=juicedata       
+          chmod +x mc  
 
       - name: Set Variable
         id: vars
@@ -112,6 +109,9 @@ jobs:
                       echo 'jfs_bin is ' $jfs_bin, "cmd is "  $jfs_cmd
                       case "$jfs_cmd" in
                         "format") 
+                            ./mc admin user remove minio juicedata
+                            ./mc admin user add minio juicedata juicedata
+                            ./mc admin policy set minio consoleAdmin user=juicedata  
                             sudo ./$jfs_bin format --trash-days 0 --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key juicedata --secret-key juicedata  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
                             echo "format finished" 
                             ;;
