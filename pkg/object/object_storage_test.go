@@ -569,3 +569,8 @@ func TestNameString(t *testing.T) {
 		t.Fatalf("name with two prefix does not match: %s", s.String())
 	}
 }
+
+func TestEtcd(t *testing.T) {
+	s, _ := newEtcd("127.0.0.1:2379", "", "")
+	testStorage(t, s)
+}
