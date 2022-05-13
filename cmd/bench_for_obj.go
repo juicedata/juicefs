@@ -22,8 +22,6 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"path"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,38 +38,17 @@ import (
 )
 
 func cmdBenchForObj() *cli.Command {
-	var defaultBucket = "/var/jfs"
-	switch runtime.GOOS {
-	case "linux":
-		if os.Getuid() == 0 {
-			break
-		}
-		fallthrough
-	case "darwin":
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			logger.Fatalf("%v", err)
-		}
-		defaultBucket = path.Join(homeDir, ".juicefs", "local")
-	case "windows":
-		defaultBucket = path.Join("C:/jfs/local")
-	}
 	return &cli.Command{
 		Name:      "benchforobj",
 		Action:    benchForObj,
 		Category:  "TOOL",
 		Usage:     "Run benchmark on a storage",
-		ArgsUsage: "PATH",
+		ArgsUsage: "Bucket URL",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "storage",
 				Value: "file",
 				Usage: "object storage type (e.g. s3, gcs, oss, cos)",
-			},
-			&cli.StringFlag{
-				Name:  "bucket",
-				Value: defaultBucket,
-				Usage: "the bucket URL of object storage to store data",
 			},
 			&cli.StringFlag{
 				Name:  "access-key",
@@ -107,7 +84,8 @@ func cmdBenchForObj() *cli.Command {
 }
 
 func benchForObj(ctx *cli.Context) error {
-	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.String("bucket"), ctx.String("access-key"), ctx.String("secret-key"))
+	setup(ctx, 1)
+	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ctx.String("access-key"), ctx.String("secret-key"))
 	if err != nil {
 		logger.Fatalf("create storage failed: %v", err)
 	}

@@ -33,7 +33,7 @@ func TestBench(t *testing.T) {
 }
 
 func TestBenchForObject(t *testing.T) {
-	if err := Main([]string{"", "benchforobj", "--bucket", testMountPoint + "/", "-p", "4"}); err != nil {
+	if err := Main([]string{"", "benchforobj", testMountPoint + "/", "-p", "4"}); err != nil {
 		t.Fatalf("test bench failed: %s", err)
 	}
 }
