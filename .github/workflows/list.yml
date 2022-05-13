@@ -47,6 +47,9 @@ jobs:
           cat META_10M_EMPTY_FILE.json.gz* >META_10M_EMPTY_FILE.json.gz
           gzip -dk  META_10M_EMPTY_FILE.json.gz
           ls -lah
+          mv META_10M_EMPTY_FILE.json ../
+          cd ../
+          ls -lah
       - name: Load
         uses: ./.github/actions/load
         with:
@@ -69,6 +72,9 @@ jobs:
           cd actionfile
           cat META_10M_EMPTY_FILE.json.gz* >META_10M_EMPTY_FILE.json.gz
           gzip -dk  META_10M_EMPTY_FILE.json.gz
+          ls -lah
+          mv META_10M_EMPTY_FILE.json ../
+          cd ../
           ls -lah
       - name: Load
         uses: ./.github/actions/load
@@ -109,6 +115,9 @@ jobs:
           cat META_10M_EMPTY_FILE.json.gz* >META_10M_EMPTY_FILE.json.gz
           gzip -dk  META_10M_EMPTY_FILE.json.gz
           ls -lah
+          mv META_10M_EMPTY_FILE.json ../
+          cd ../
+          ls -lah
       - name: Load
         uses: ./.github/actions/load
         with:
@@ -145,6 +154,9 @@ jobs:
           cd actionfile
           cat META_10M_EMPTY_FILE.json.gz* >META_10M_EMPTY_FILE.json.gz
           gzip -dk  META_10M_EMPTY_FILE.json.gz
+          ls -lah
+          mv META_10M_EMPTY_FILE.json ../
+          cd ../
           ls -lah
       - name: Load
         uses: ./.github/actions/load
