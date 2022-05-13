@@ -72,6 +72,7 @@ jobs:
           ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
           ./juicefs mount $meta_url $mount_point -d
           echo abc > $mount_point/abc.txt && echo "write success"
+          
           ./mc admin user remove minio juicedata
           ./mc admin user add minio juicedata juicedata1
           ./mc admin policy set minio consoleAdmin user=juicedata
