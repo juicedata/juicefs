@@ -24,6 +24,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -342,8 +343,15 @@ func newEtcdClient(addr string) (tkvClient, error) {
 		return nil, fmt.Errorf("parse %s: %s", addr, err)
 	}
 	passwd, _ := u.User.Password()
+	hosts := strings.Split(u.Host, ",")
+	for i, h := range hosts {
+		h, _, err := net.SplitHostPort(h)
+		if err != nil {
+			hosts[i] = net.JoinHostPort(h, "2379")
+		}
+	}
 	conf := etcd.Config{
-		Endpoints:        strings.Split(u.Host, ","),
+		Endpoints:        hosts,
 		Username:         u.User.Username(),
 		Password:         passwd,
 		AutoSyncInterval: time.Minute,

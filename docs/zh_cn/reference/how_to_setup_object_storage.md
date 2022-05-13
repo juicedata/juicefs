@@ -123,6 +123,7 @@ $ juicefs format \
 | [Apache Ozone](#apache-ozone)               | `s3`         |
 | [Redis](#redis)                             | `redis`      |
 | [TiKV](#tikv)                               | `tikv`       |
+| [etcd](#etcd)                               | `etcd`       |
 | [本地磁盘](#本地磁盘)                       | `file`       |
 
 ## Amazon S3
@@ -840,6 +841,47 @@ $ juicefs format \
     ... \
     myjfs
 ```
+
+## etcd
+
+[etcd](https://etcd.io) 是一个高可用高可靠的小规模键值数据库，既可以用作 JuiceFS 的元数据存储，也可以用于 JuiceFS 的数据存储。
+
+etcd 默认会限制单个请求不能超过 1.5MB，需要将 JuiceFS 的分块大小改成 1MB 甚至更低。
+
+`--bucket` 选项需要填 etcd 的地址，格式类似 `<host1>:<port>,<host2>:<port>,<host3>:<port>`，`--access-key` 和 `--secret-key` 填用户名和密码，当 etcd 没有设置用户认证时可以省略。例如：
+
+```bash
+$ juicefs format \
+    --storage etcd --block-size 1024 \
+    --bucket "<host1>:<port>,<host2>:<port>,<host3>:<port>/prefix" \
+    --access-key myname
+    --secret-key mypass
+    ... \
+    myjfs
+```
+
+### 设置 TLS
+
+如果需要开启 TLS，可以通过在 Bucket-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+
+| 配置项             | 值                    |
+|-------------------|-----------------------|
+| cacert            | CA 根证书              |
+| cert              | 证书文件路径            |
+| key               | 私钥文件路径            |
+| server-name       | 服务器名称              |
+| insecure-skip-verify | 1                  |
+
+例子：
+```bash
+$ juicefs format \
+    --storage etcd \
+    --bucket "<host>:<port>,<host>:<port>,<host>:<port>?cacert=/path/to/ca.pem&cert=/path/to/server.pem&key=/path/to/key.pem&server-name=etcd" \
+    ... \
+    myjfs
+```
+
+注意：证书的路径需要使用绝对路径，并且确保所有需要挂载的机器上能用该路径访问到它们。
 
 ## 本地磁盘
 
