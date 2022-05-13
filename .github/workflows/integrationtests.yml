@@ -79,6 +79,30 @@ jobs:
           sudo make -C fstests xattrs
           sudo make -C fstests flock
 
+      - name: Test rand read on big file with multiple threads
+        run: |
+          meta=redis://localhost/1
+          mp=myjfs/
+          name=myjfs
+          size=16G
+          juicefs=./juicefs
+          $juicefs format $meta $name 
+          $juicefs mount -d $meta $mp
+          
+          dd if=/dev/urandom of=tempfile iflag=fullblock,count_bytes bs=4k count=$size
+          go run resources/rand_read.go tempfile 4 | tee result.log
+          time1=$(cat result.log | grep time | awk -F: '{print $NF}' | xargs)
+
+          cp tempfile $mp/tempfile
+          dd if=/dev/urandom of=$mp/tempfile iflag=fullblock,count_bytes bs=4k count=$size
+          go run resources/rand_read.go $mp/tempfile 4 | tee result.log
+          time2=$(cat result.log | grep time | awk -F: '{print $NF}' | xargs)
+
+          ratio=$(expr $time2/$time1 | bc -l)
+          if [[ $ratio > 2 ]]; then 
+            echo "Fatal: rand read using juicefs is too slow"
+            exit 1
+          fi
 
       - name: Send Slack Notification
         if: ${{ failure() }}
