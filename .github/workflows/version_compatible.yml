@@ -110,7 +110,7 @@ jobs:
                       echo 'jfs_bin is ' $jfs_bin, "cmd is "  $jfs_cmd
                       case "$jfs_cmd" in
                         "format") 
-                            ./mc admin user remove minio juicedata
+                            ./mc admin user remove minio juicedata || true
                             ./mc admin user add minio juicedata juicedata
                             ./mc admin policy set minio consoleAdmin user=juicedata  
                             sudo ./$jfs_bin format --trash-days 0 --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key juicedata --secret-key juicedata  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
@@ -166,7 +166,7 @@ jobs:
                             ;;
                         "config")
                             encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                            ./mc admin user remove minio juicedata
+                            ./mc admin user remove minio juicedata || true
                             ./mc admin user add minio juicedata juicedata1
                             ./mc admin policy set minio consoleAdmin user=juicedata  
                             if [ -n "$encrypt" ]; then
