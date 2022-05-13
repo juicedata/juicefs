@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -430,7 +431,7 @@ func SshInteractive(user, instruction string, questions []string, echos []bool) 
 	return answers, nil
 }
 
-func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
+func newSftp(endpoint, username, pass string) (ObjectStorage, error) {
 	idx := strings.LastIndex(endpoint, ":")
 	host, port, err := net.SplitHostPort(endpoint[:idx])
 	if err != nil && strings.Contains(err.Error(), "missing port") {
@@ -448,6 +449,12 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 		root = root + dirSuffix
 	}
 
+	if username == "" {
+		u, _ := user.Current()
+		if u != nil {
+			username = u.Username
+		}
+	}
 	var auth []ssh.AuthMethod
 	if pass != "" {
 		auth = append(auth, ssh.Password(pass))
@@ -465,6 +472,23 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 			return nil, fmt.Errorf("unable to parse private key, error: %v", err)
 		}
 		auth = append(auth, ssh.PublicKeys(signer))
+	} else {
+		home := filepath.Join(os.Getenv("HOME"), ".ssh")
+		var algo = []string{"rsa", "dsa", "ecdsa", "ecdsa_sk", "ed25519", "xmss"}
+		for _, a := range algo {
+			key, err := ioutil.ReadFile(filepath.Join(home, "id_"+a))
+			if err != nil {
+				key, err = ioutil.ReadFile(filepath.Join(home, "id_"+a+"-cert"))
+			}
+			if err == nil {
+				signer, err := ssh.ParsePrivateKey(key)
+				if err == nil {
+					auth = append(auth, ssh.PublicKeys(signer))
+				} else {
+					logger.Debugf("load private key %s: %s", filepath.Join(home, "id_"+a), err)
+				}
+			}
+		}
 	}
 
 	socket := os.Getenv("SSH_AUTH_SOCK")
@@ -479,7 +503,7 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	}
 
 	config := &ssh.ClientConfig{
-		User:            user,
+		User:            username,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         time.Second * 3,
 		Auth:            auth,
@@ -492,6 +516,16 @@ func newSftp(endpoint, user, pass string) (ObjectStorage, error) {
 	}
 
 	c, err := f.getSftpConnection()
+	if err != nil && strings.Contains(err.Error(), "unable to authenticate") &&
+		pass == "" && os.Getenv("SSH_PRIVATE_KEY_PATH") == "" {
+		fmt.Printf("%s@%s's password: ", username, host)
+		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return nil, fmt.Errorf("Read password: %s", err.Error())
+		}
+		f.config.Auth = append(f.config.Auth, ssh.Password(string(bytePassword)))
+		c, err = f.getSftpConnection()
+	}
 	if err != nil {
 		logger.Errorf("connect to %s failed: %s", host, err)
 		return nil, err
