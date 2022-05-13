@@ -519,11 +519,12 @@ func newSftp(endpoint, username, pass string) (ObjectStorage, error) {
 	if err != nil && strings.Contains(err.Error(), "unable to authenticate") &&
 		pass == "" && os.Getenv("SSH_PRIVATE_KEY_PATH") == "" {
 		fmt.Printf("%s@%s's password: ", username, host)
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		var password []byte
+		password, err = term.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return nil, fmt.Errorf("Read password: %s", err.Error())
 		}
-		f.config.Auth = append(f.config.Auth, ssh.Password(string(bytePassword)))
+		f.config.Auth = append(f.config.Auth, ssh.Password(string(password)))
 		c, err = f.getSftpConnection()
 	}
 	if err != nil {
