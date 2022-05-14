@@ -151,7 +151,7 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			},
 			&cli.StringSliceFlag{
 				Name:  "worker",
-				Usage: "hosts (seperated by comma) to launch worker",
+				Usage: "hosts (separated by comma) to launch worker",
 			},
 			&cli.IntFlag{
 				Name:  "bwlimit",
