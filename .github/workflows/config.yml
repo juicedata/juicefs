@@ -72,7 +72,7 @@ jobs:
           ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
           ./juicefs mount $meta_url $mount_point -d
           echo abc > $mount_point/abc.txt && echo "write success"
-          
+
           ./mc admin user remove minio juicedata
           ./mc admin user add minio juicedata juicedata1
           ./mc admin policy set minio consoleAdmin user=juicedata
@@ -82,7 +82,7 @@ jobs:
 
           ./mc admin user remove minio juicedata
           ./mc admin user add minio juicedata1 juicedata1
-          ./mc admin policy set minio consoleAdmin user=juicedata
+          ./mc admin policy set minio consoleAdmin user=juicedata1
           ./juicefs config $meta_url --access-key juicedata1 --secret-key juicedata1
           echo abc > $mount_point/def.txt && echo "write success"
           cat $mount_point/def.txt | grep abc && echo "read success"
