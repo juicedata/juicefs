@@ -103,7 +103,7 @@ Once a file system is created, the relevant information including name, object s
 Since the "data" and "metadata" of this file system are stored in cloud services, the file system can be mounted on any computer with a JuiceFS client installed for shared reads and writes at the same time. For example:
 
 ```shell
-juicefs mount redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 mnt
+juicefs mount redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 ~/jfs
 ```
 
 #### Strong data consistency guarantee
@@ -123,7 +123,8 @@ juicefs mount
     --background \
     --cache-dir /mycache \
     --cache-size 512000 \
-    redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 mnt
+    redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 \
+    ~/jfs
 ```
 
 :::note
@@ -152,10 +153,10 @@ By default, CentOS 6 does not mount the network file system during boot, you nee
 
 ### 6. Unmounting the file system
 
-You can unmount the JuiceFS file system (assuming the mount point path is `mnt`) by the command `juicefs umount`.
+You can unmount the JuiceFS file system (assuming the mount point path is `~/jfs`) by the command `juicefs umount`.
 
 ```shell
-juicefs umount mnt
+juicefs umount ~/jfs
 ```
 
 #### Unmounting failure
@@ -163,7 +164,7 @@ juicefs umount mnt
 If the command fails to unmount the file system after execution, it will prompt `Device or resource busy`.
 
 ```shell
-2021-05-09 22:42:55.757097 I | fusermount: failed to unmount mnt: Device or resource busy
+2021-05-09 22:42:55.757097 I | fusermount: failed to unmount ~/jfs: Device or resource busy
 exit status 1
 ```
 
@@ -176,5 +177,5 @@ The following command may result in file corruption and loss, so be careful to u
 You can add the option `--force` or `-f` to force the file system unmounted if you are clear about the consequence of the operation.
 
 ```shell
-juicefs umount --force mnt
+juicefs umount --force ~/jfs
 ```
