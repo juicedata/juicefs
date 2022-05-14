@@ -22,17 +22,14 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/term"
 )
 
 func cmdSync() *cli.Command {
@@ -234,13 +231,6 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				parts := strings.Split(user, ":")
 				user = parts[0]
 				pass = parts[1]
-			} else if os.Getenv("SSH_PRIVATE_KEY_PATH") == "" && os.Getenv("SSH_AUTH_SOCK") == "" {
-				fmt.Printf("%s's password: ", uri)
-				bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-				if err != nil {
-					logger.Fatalf("Read password: %s", err.Error())
-				}
-				pass = string(bytePassword)
 			}
 			return object.CreateStorage("sftp", uri, user, pass)
 		}
