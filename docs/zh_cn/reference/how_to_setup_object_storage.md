@@ -124,6 +124,9 @@ $ juicefs format \
 | [Redis](#redis)                             | `redis`      |
 | [TiKV](#tikv)                               | `tikv`       |
 | [etcd](#etcd)                               | `etcd`       |
+| [SQLite](#sqlite)                           | `sqlite3`    |
+| [MySQL](#mysql)                             | `mysql`      |
+| [PostgreSQL](#postgresql)                   | `postgres`   |
 | [本地磁盘](#本地磁盘)                       | `file`       |
 
 ## Amazon S3
@@ -882,6 +885,68 @@ $ juicefs format \
 ```
 
 注意：证书的路径需要使用绝对路径，并且确保所有需要挂载的机器上能用该路径访问到它们。
+
+## SQLite
+
+[SQLite](https://sqlite.org) 是全球广泛使用的小巧、快速、单文件、可靠、全功能的单文件 SQL 数据库引擎。
+
+使用 SQLite 作为数据存储时只需要指定它的绝对路径即可。
+
+```shell
+$ juicefs format \
+    --storage sqlite3 \
+    --bucket /path/to/sqlite3.db
+    ... \
+    myjfs
+```
+
+:::note 注意
+由于 SQLite 是一款嵌入式数据库，只有数据库所在的主机可以访问它，不能用于多机共享场景。如果格式化时使用的是相对路径，会导致挂载时出问题，请使用绝对路径。
+:::
+
+## MySQL
+
+[MySQL](https://www.mysql.com/) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库，既可以作为 JuiceFS 的元数据引擎也可以用来存储文件数据。跟 MySQL 兼容的 [MariaDB](https://mariadb.org)、[TiDB](https://pingcap.com/) 等都可以用来作为数据存储。
+
+使用 MySQL 作为数据存储时，需要提前创建数据库并添加想要权限，通过`--bucket`参数指定访问地址，通过`--access-key`指定用户名，通过 `--secret-key`指定密码，示例如下：
+
+```shell
+$ juicefs format \
+    --storage mysql \
+    --bucket (<host>:3306)/<database-name> \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+创建文件系统后，JuiceFS 会在该数据库中创建名为 `jfs_blob` 的表用来存储数据。
+
+:::note 注意
+不要漏掉 `--bucket` 参数里的括号 `()` 。
+:::
+
+## PostgreSQL
+
+[PostgreSQL](https://www.postgresql.org/) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，既可以作为 JuiceFS 的元数据引擎也可以作为数据存储。其他跟 PostgreSQL 协议兼容的数据库（比如 CockroachDB 等) 也可以。
+
+创建文件系统时需要先创建好数据库并添加相应读写权限，使用 `--bucket` 来指定数据的地址，使用 `--access-key` 指定用户名，使用 `--secret-key`指定密码，实例如下：
+
+```shell
+$ juicefs format \
+    --storage postgres \
+    --bucket <host>:<port>/<db>[?parameters] \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+创建文件系统后，JuiceFS 会在该数据库中创建名为 `jfs_blob` 的表用来存储数据。
+
+### 故障排除
+
+JuiceFS 客户端默认采用 SSL 加密连接 PostgreSQL，如果连接时报错  `pq: SSL is not enabled on the server` 说明数据库没有启用 SSL。可以根据业务场景为 PostgreSQL 启用 SSL 加密，也可以在元数据 URL 中添加参数 `sslmode=disable` 禁用加密验证。
 
 ## 本地磁盘
 
