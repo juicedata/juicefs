@@ -1903,7 +1903,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
 		var nin, nout = node{Inode: fin}, node{Inode: fout}
-		ok, err := s.Get(&nin)
+		ok, err := s.ForUpdate().Get(&nin)
 		if err != nil {
 			return err
 		}
