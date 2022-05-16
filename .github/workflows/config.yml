@@ -76,10 +76,9 @@ jobs:
           ./mc admin user add minio juicedata1 juicedata1
           ./mc admin policy set minio consoleAdmin user=juicedata1
           ./juicefs config $meta_url --access-key juicedata1 --secret-key juicedata1
-          #sleep 60
+          sleep 60
           echo abc > abc.txt
           cp abc.txt $mount_point/abc.txt && echo "write success"
-          purge
           cat $mount_point/abc.txt | grep abc && echo "read success"
 
       - name: Send Slack Notification
