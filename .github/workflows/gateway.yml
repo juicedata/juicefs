@@ -50,7 +50,7 @@ jobs:
           for i in {1..1000}; do
             mkdir test_dir/sub_dir_$i
           done
-          ./juicefs sync test_dir/  s3://minioadmin:minioadmin@localhost:9000/$volume/test_dir/ --no-https -p 20
+          ./juicefs sync ./  s3://minioadmin:minioadmin@localhost:9000/$volume/source_dir/ --no-https -p 20
           ./juicefs mount -d $meta_url $mp
           rm -rf $mp/test_dir
           
