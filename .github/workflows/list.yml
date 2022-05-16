@@ -149,7 +149,7 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh
+          ls -lh |wc -l
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
