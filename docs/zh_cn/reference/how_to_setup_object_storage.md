@@ -220,7 +220,21 @@ $ juicefs format \
 
 ## Azure Blob 存储
 
-使用 Azure Blob 作为 JuiceFS 的数据存储，除了使用 `--access-key` 和 `--secret-key` 选项之外，你也可以使用 [连接字符串](https://docs.microsoft.com/zh-cn/azure/storage/common/storage-configure-connection-string) 并通过 `AZURE_STORAGE_CONNECTION_STRING` 环境变量进行设定。例如：
+使用 Azure Blob 存储作为 JuiceFS 的数据存储，请先 [查看文档](https://docs.microsoft.com/zh-cn/azure/storage/common/storage-account-keys-manage) 了解如何查看存储帐户的名称和密钥，它们分别对应 `--access-key` 和 `--secret-key` 选项的值。
+
+`--bucket` 选项的设置格式为 `https://<container>.<endpoint>`，请将其中的 `<container>` 替换为实际的 Blob 容器的名称，将 `<endpoint>` 替换为 `blob.core.windows.net`（Azure 全球）或 `blob.core.chinacloudapi.cn`（Azure 中国）。例如：
+
+```bash
+juicefs format \
+    --storage wasb \
+    --bucket https://<container>.<endpoint> \
+    --access-key <storage-account-name> \
+    --secret-key <storage-account-access-key> \
+    ... \
+    myjfs
+```
+
+除了使用 `--access-key` 和 `--secret-key` 选项之外，你也可以使用 [连接字符串](https://docs.microsoft.com/zh-cn/azure/storage/common/storage-configure-connection-string) 并通过 `AZURE_STORAGE_CONNECTION_STRING` 环境变量进行设定。例如：
 
 ```bash
 # Use connection string
@@ -233,7 +247,7 @@ $ juicefs format \
 ```
 
 :::note 注意
-Azure China 用户，`EndpointSuffix` 值为 `core.chinacloudapi.cn`。
+对于 Azure 中国用户，`EndpointSuffix` 的值为 `core.chinacloudapi.cn`。
 :::
 
 ## Backblaze B2
@@ -306,7 +320,7 @@ $ juicefs format \
 
 使用 Scaleway 对象存储作为 JuiceFS 数据存储，请先 [查看文档](https://www.scaleway.com/en/docs/generate-api-keys) 了解如何创建  `Access key` 和 `Secret key`。
 
-`--bucket` 选项的设置格式为 `https://<bucket>.s3.<region>.scw.cloud`，请将其中的  `<region>`  替换成实际的区域代码，例如：荷兰阿姆斯特丹的区域代码是 `nl-ams`。[点此查看](https://www.scaleway.com/en/docs/object-storage-feature/#-Core-Concepts) 所有可用的区域代码。
+`--bucket` 选项的设置格式为 `https://<bucket>.s3.<region>.scw.cloud`，请将其中的 `<region>` 替换成实际的区域代码，例如：荷兰阿姆斯特丹的区域代码是 `nl-ams`。[点此查看](https://www.scaleway.com/en/docs/object-storage-feature/#-Core-Concepts) 所有可用的区域代码。
 
 ```bash
 $ juicefs format \
@@ -320,7 +334,7 @@ $ juicefs format \
 
 使用 DigitalOcean Spaces 作为 JuiceFS 数据存储，请先 [查看文档](https://www.digitalocean.com/community/tutorials/how-to-create-a-digitalocean-space-and-api-key) 了解如何创建  `Access key` 和 `Secret key`。
 
-`--bucket` 选项的设置格式为 `https://<space-name>.<region>.digitaloceanspaces.com`，请将其中的  `<region>`  替换成实际的区域代码，例如：`nyc3`。[点此查看](https://www.digitalocean.com/docs/spaces/#regional-availability) 所有可用的区域代码。
+`--bucket` 选项的设置格式为 `https://<space-name>.<region>.digitaloceanspaces.com`，请将其中的 `<region>` 替换成实际的区域代码，例如：`nyc3`。[点此查看](https://www.digitalocean.com/docs/spaces/#regional-availability) 所有可用的区域代码。
 
 ```bash
 $ juicefs format \
