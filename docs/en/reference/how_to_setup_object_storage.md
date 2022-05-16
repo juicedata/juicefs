@@ -56,7 +56,7 @@ Some cloud computing platforms also distinguish between internal and public netw
 
 JuiceFS also provides flexible support for this object storage service that distinguishes between internal and public addresses. For scenarios where the same file system is shared, the object storage is accessed through internal Endpoint on the servers that meet the criteria, and other computers are accessed through public Endpoint, which can be used as follows:
 
-- **When creating a file system**: It is recommended to use internal Endpoint address for `--bucket` 
+- **When creating a file system**: It is recommended to use internal Endpoint address for `--bucket`
 - **When mounting a file system**: For clients that do not satisfy the internal line, you can specify a public Endpoint address to `--bucket`.
 
 Creating a file system using an internal Endpoint ensures better performance and lower latency, and for clients that cannot be accessed through an internal address, you can specify a public Endpoint to mount with the option `--bucket`.
@@ -214,6 +214,20 @@ $ juicefs format \
 As you can see, there is no need to include authentication information in the command, and the client will authenticate the access to the object storage through the JSON key file set in the previous environment variable. Also, since the bucket name is [globally unique](https://cloud.google.com/storage/docs/naming-buckets#considerations), when creating a file system, you only need to specify the bucket name in the option `--bucket`.
 
 ## Azure Blob Storage
+
+To use Azure Blob Storage as data storage of JuiceFS, please [check the documentation](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage) to learn how to view the storage account name and access key, which correspond to the values ​​of the `--access-key` and `--secret-key` options, respectively.
+
+The `--bucket` option is set in the format `https://<container>.<endpoint>`, please replace `<container>` with the name of the actual blob container and `<endpoint>` with `blob.core.windows.net` (Azure Global) or `blob.core.chinacloudapi.cn` (Azure China). For example:
+
+```bash
+juicefs format \
+    --storage wasb \
+    --bucket https://<container>.<endpoint> \
+    --access-key <storage-account-name> \
+    --secret-key <storage-account-access-key> \
+    ... \
+    myjfs
+```
 
 In addition to providing authorization information through the options `--access-key` and `--secret-key`, you could also create a [connection string](https://docs.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string) and set the environment variable `AZURE_STORAGE_CONNECTION_STRING`. For example:
 
