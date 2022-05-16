@@ -1,0 +1,62 @@
+name: "gateway-test"
+
+on:
+  push:
+    branches: 
+      - main
+      - release-**
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: 
+      - main
+      - release-**
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+
+jobs:
+  gateway-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: |
+          make juicefs
+
+      - name: Init 
+        run: |
+          sudo /etc/init.d/mysql start
+
+      - name: Test sync to gateway with multiple process
+        run: | 
+          meta_url="mysql://root:root@(127.0.0.1)/test_gateway"
+          volume=myjfs
+          mp=/tmp/myjfs
+          db_name=$(basename $meta_url)
+          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+          export MINIO_ROOT_USER=minioadmin
+          export MINIO_ROOT_PASSWORD=minioadmin
+          ./juicefs format $meta_url $volume
+          ./juicefs gateway $meta_url localhost:9000 &
+          ./juicefs sync ./juicefs-source/  s3://minioadmin:minioadmin@localhost:9000/$volume/juicefs-source/ --no-https -p 20
+          ./juicefs mount -d $meta_url $mp
+          rm -rf $mp/juicefs-source 
+          
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
