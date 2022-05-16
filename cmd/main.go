@@ -77,7 +77,6 @@ func Main(args []string) error {
 	}
 
 	return app.Run(reorderOptions(app, args))
-
 }
 
 func handleSysMountArgs(args []string) []string {
@@ -219,7 +218,7 @@ func reorderOptions(app *cli.App, args []string) []string {
 // Check number of positional arguments, set logger level and setup agent if needed
 func setup(c *cli.Context, n int) {
 	if c.NArg() < n {
-		logger.Errorf("This command requires at least %d arguments", n)
+		fmt.Printf("ERROR: This command requires at least %d arguments\n", n)
 		fmt.Printf("USAGE:\n   juicefs %s [command options] %s\n", c.Command.Name, c.Command.ArgsUsage)
 		os.Exit(1)
 	}
@@ -236,6 +235,7 @@ func setup(c *cli.Context, n int) {
 	if c.Bool("no-color") {
 		utils.DisableLogColor()
 	}
+	logger.Infof("Starting juicefs %s with version: %s", c.Command.Name, c.App.Version)
 
 	if !c.Bool("no-agent") {
 		go func() {
