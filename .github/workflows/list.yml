@@ -57,8 +57,18 @@ jobs:
           load_file: "META_7M_EMPTY_FILE.json"
       - name: List
         run: |
-          cd /tmp/juicefs-sync-test
+          cd /tmp/juicefs-sync-test/createfile/
           ls -lh | wc -l
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
 
   mysql-list:
     runs-on: ubuntu-latest
@@ -87,8 +97,17 @@ jobs:
           load_file: "META_7M_EMPTY_FILE.json"
       - name: List
         run: |
-          cd /tmp/juicefs-sync-test
+          cd /tmp/juicefs-sync-test/createfile/
           ls -lh | wc -l
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
 
   redis-list:
     runs-on: ubuntu-latest
@@ -129,7 +148,7 @@ jobs:
           load_file: "META_7M_EMPTY_FILE.json"
       - name: List
         run: |
-          cd /tmp/juicefs-sync-test
+          cd /tmp/juicefs-sync-test/createfile/
           ls -lh
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -168,5 +187,14 @@ jobs:
           load_file: "META_7M_EMPTY_FILE.json"
       - name: List
         run: |
-          cd /tmp/juicefs-sync-test
+          cd /tmp/juicefs-sync-test/createfile/
           ls -lh | wc -l
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
