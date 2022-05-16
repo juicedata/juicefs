@@ -46,13 +46,9 @@ jobs:
           export MINIO_ROOT_PASSWORD=minioadmin
           ./juicefs format $meta_url $volume
           ./juicefs gateway $meta_url localhost:9000 &
-          mkdir test_dir
-          for i in {1..1000}; do
-            mkdir test_dir/sub_dir_$i
-          done
           ./juicefs sync ./  s3://minioadmin:minioadmin@localhost:9000/$volume/source_dir/ --no-https -p 20
           ./juicefs mount -d $meta_url $mp
-          rm -rf $mp/test_dir
+          rm -rf $mp/source_dir
           
       - name: Send Slack Notification
         if: ${{ failure() }}
