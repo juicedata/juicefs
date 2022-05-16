@@ -77,6 +77,7 @@ jobs:
           ./mc admin user add minio juicedata juicedata1
           ./mc admin policy set minio consoleAdmin user=juicedata
           ./juicefs config $meta_url --access-key juicedata --secret-key juicedata1
+          sleep 70
           echo abc > $mount_point/def.txt && echo "write success"
           cat $mount_point/abc.txt | grep abc && echo "read success"
 
@@ -84,6 +85,7 @@ jobs:
           ./mc admin user add minio juicedata1 juicedata1
           ./mc admin policy set minio consoleAdmin user=juicedata1
           ./juicefs config $meta_url --access-key juicedata1 --secret-key juicedata1
+          sleep 70
           echo abc > $mount_point/def.txt && echo "write success"
           cat $mount_point/def.txt | grep abc && echo "read success"
 
