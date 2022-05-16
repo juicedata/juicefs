@@ -1671,7 +1671,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	return 0
 }
 
-func (m *dbMeta) doCleanStaleSession(sid uint64) error {
+func (m *dbMeta) doCleanStaleSession(sid uint64) (*SessionInfo, error) {
 	var fail bool
 	// release locks
 	if _, err := m.db.Delete(flock{Sid: sid}); err != nil {
@@ -1703,19 +1703,30 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 		fail = true
 	}
 
+	var s2 = session2{Sid: sid}
+	var sinfo SessionInfo
+	if ok, err := m.db.Get(&s2); err == nil && ok {
+		if err = json.Unmarshal(s2.Info, &sinfo); err != nil {
+			logger.Warnf("Corrupt session info; json error: %s", err)
+		}
+	} else if err != nil {
+		logger.Warnf("Get session info of sid %d: %s", sid, err)
+		fail = true
+	}
+
 	if fail {
-		return fmt.Errorf("failed to clean up sid %d", sid)
+		return &sinfo, fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
 		if n, err := m.db.Delete(&session2{Sid: sid}); err != nil {
-			return err
+			return &sinfo, err
 		} else if n == 1 {
-			return nil
+			return &sinfo, nil
 		}
 		ok, err := m.db.IsTableExist(&session{})
 		if err == nil && ok {
 			_, err = m.db.Delete(&session{Sid: sid})
 		}
-		return err
+		return &sinfo, err
 	}
 }
 
