@@ -129,21 +129,21 @@ func (p *withPrefix) Chmod(path string, mode os.FileMode) error {
 	if fs, ok := p.os.(FileSystem); ok {
 		return fs.Chmod(p.prefix+path, mode)
 	}
-	return nil
+	return notSupported
 }
 
 func (p *withPrefix) Chown(path string, owner, group string) error {
 	if fs, ok := p.os.(FileSystem); ok {
 		return fs.Chown(p.prefix+path, owner, group)
 	}
-	return nil
+	return notSupported
 }
 
 func (p *withPrefix) Chtimes(key string, mtime time.Time) error {
 	if fs, ok := p.os.(FileSystem); ok {
 		return fs.Chtimes(p.prefix+key, mtime)
 	}
-	return nil
+	return notSupported
 }
 
 func (p *withPrefix) CreateMultipartUpload(key string) (*MultipartUpload, error) {
