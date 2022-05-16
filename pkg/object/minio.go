@@ -72,7 +72,7 @@ func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	ses.Handlers.Build.PushFront(disableSha256Func)
 
 	if len(uri.Path) < 2 {
-		return nil, fmt.Errorf("no bucket name provided in %s: %s", endpoint, err)
+		return nil, fmt.Errorf("no bucket name provided in %s", endpoint)
 	}
 	bucket := uri.Path[1:]
 	if strings.Contains(bucket, "/") && strings.HasPrefix(bucket, "minio/") {
