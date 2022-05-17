@@ -45,13 +45,13 @@ const (
 )
 
 const (
-	TypeFile      = 1 // type for regular file
-	TypeDirectory = 2 // type for directory
-	TypeSymlink   = 3 // type for symlink
-	TypeFIFO      = 4 // type for FIFO node
-	TypeBlockDev  = 5 // type for block device
-	TypeCharDev   = 6 // type for character device
-	TypeSocket    = 7 // type for socket
+	TypeFile      = iota + 1 // type for regular file
+	TypeDirectory            // type for directory
+	TypeSymlink              // type for symlink
+	TypeFIFO                 // type for FIFO node
+	TypeBlockDev             // type for block device
+	TypeCharDev              // type for character device
+	TypeSocket               // type for socket
 )
 
 const (
