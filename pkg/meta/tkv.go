@@ -120,7 +120,7 @@ func (m *kvMeta) keyLen(args ...interface{}) int {
 		case string:
 			c += len(a)
 		default:
-			logger.Fatalf("invalid type %T, value %v", a, a)
+			panic(fmt.Sprintf("invalid type %T, value %v", a, a))
 		}
 	}
 	return c
@@ -141,7 +141,7 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
 		case string:
 			b.Put([]byte(a))
 		default:
-			logger.Fatalf("invalid type %T, value %v", a, a)
+			panic(fmt.Sprintf("invalid type %T, value %v", a, a))
 		}
 	}
 	return b.Bytes()
@@ -342,7 +342,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 
 	data, err := json.MarshalIndent(format, "", "")
 	if err != nil {
-		logger.Fatalf("json: %s", err)
+		return fmt.Errorf("json: %s", err)
 	}
 
 	m.fmt = format

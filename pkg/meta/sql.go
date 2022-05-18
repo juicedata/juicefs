@@ -226,22 +226,22 @@ func (m *dbMeta) doDeleteSlice(chunkid uint64, size uint32) error {
 
 func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.db.Sync2(new(setting), new(counter)); err != nil {
-		logger.Fatalf("create table setting, counter: %s", err)
+		return fmt.Errorf("create table setting, counter: %s", err)
 	}
 	if err := m.db.Sync2(new(edge)); err != nil && !strings.Contains(err.Error(), "Duplicate entry") {
-		logger.Fatalf("create table edge: %s", err)
+		return fmt.Errorf("create table edge: %s", err)
 	}
 	if err := m.db.Sync2(new(node), new(symlink), new(xattr)); err != nil {
-		logger.Fatalf("create table node, symlink, xattr: %s", err)
+		return fmt.Errorf("create table node, symlink, xattr: %s", err)
 	}
 	if err := m.db.Sync2(new(chunk), new(chunkRef), new(delslices)); err != nil {
-		logger.Fatalf("create table chunk, chunk_ref, delslices: %s", err)
+		return fmt.Errorf("create table chunk, chunk_ref, delslices: %s", err)
 	}
 	if err := m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
-		logger.Fatalf("create table session2, sustaind, delfile: %s", err)
+		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)
 	}
 	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
-		logger.Fatalf("create table flock, plock: %s", err)
+		return fmt.Errorf("create table flock, plock: %s", err)
 	}
 
 	var s = setting{Name: "format"}

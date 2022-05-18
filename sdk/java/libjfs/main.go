@@ -436,7 +436,8 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			return format, err
 		})
 		if err != nil {
-			logger.Fatalf("object storage: %s", err)
+			logger.Errorf("object storage: %s", err)
+			return nil
 		}
 		logger.Infof("Data use %s", blob)
 

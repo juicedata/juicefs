@@ -228,7 +228,7 @@ func (m *redisMeta) Init(format Format, force bool) error {
 		var old Format
 		err = json.Unmarshal(body, &old)
 		if err != nil {
-			logger.Fatalf("existing format is broken: %s", err)
+			return fmt.Errorf("existing format is broken: %s", err)
 		}
 		if err = format.update(&old, force); err != nil {
 			return err
@@ -237,7 +237,7 @@ func (m *redisMeta) Init(format Format, force bool) error {
 
 	data, err := json.MarshalIndent(format, "", "")
 	if err != nil {
-		logger.Fatalf("json: %s", err)
+		return fmt.Errorf("json: %s", err)
 	}
 	ts := time.Now().Unix()
 	attr := &Attr{
