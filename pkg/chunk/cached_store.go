@@ -441,8 +441,7 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 	n, err := store.compressor.Compress(buf.Data, block.Data)
 	block.Release()
 	if err != nil {
-		logger.Fatalf("Compress block key %s: %s", key, err)
-		return err
+		return fmt.Errorf("Compress block key %s: %s", key, err)
 	}
 	buf.Data = buf.Data[:n]
 
@@ -488,7 +487,7 @@ func (c *wChunk) upload(indx int) {
 			}
 		}
 		if off != blen {
-			logger.Fatalf("block length does not match: %v != %v", off, blen)
+			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
 		if c.store.conf.Writeback {
 			stagingPath, err := c.store.bcache.stage(key, block.Data, c.store.shouldCache(blen))
@@ -534,7 +533,7 @@ func (c *wChunk) Len() int {
 
 func (c *wChunk) FlushTo(offset int) error {
 	if offset < c.uploaded {
-		logger.Fatalf("Invalid offset: %d < %d", offset, c.uploaded)
+		panic(fmt.Sprintf("Invalid offset: %d < %d", offset, c.uploaded))
 	}
 	for i, block := range c.pages {
 		start := i * c.store.conf.BlockSize
