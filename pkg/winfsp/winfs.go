@@ -564,7 +564,7 @@ func (j *juice) Releasedir(path string, fh uint64) (e int) {
 	return
 }
 
-func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int) error {
+func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayClose int) {
 	var jfs juice
 	conf := v.Conf
 	jfs.conf = conf
@@ -593,5 +593,4 @@ func Serve(v *vfs.VFS, fuseOpt string, fileCacheTo float64, asRoot bool, delayCl
 	host.SetCapReaddirPlus(true)
 	logger.Debugf("mount point: %s, options: %s", conf.Meta.MountPoint, options)
 	_ = host.Mount(conf.Meta.MountPoint, []string{"-o", options})
-	return nil
 }

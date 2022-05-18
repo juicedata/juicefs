@@ -129,7 +129,9 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 			for _, obj := range objs {
 				key := obj.Key()
 				if !first && key <= lastkey {
-					logger.Fatalf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
+					logger.Errorf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
+					out <- nil
+					return
 				}
 				if end != "" && key > end {
 					break END
@@ -612,7 +614,7 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Con
 	return false
 }
 
-func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) {
+func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
 	start, end := config.Start, config.End
 	logger.Infof("Syncing from %s to %s", src, dst)
 	if start != "" {
@@ -625,12 +627,12 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 
 	srckeys, err := ListAll(src, start, end)
 	if err != nil {
-		logger.Fatal(err)
+		return fmt.Errorf("list %s: %s", src, err)
 	}
 
 	dstkeys, err := ListAll(dst, start, end)
 	if err != nil {
-		logger.Fatal(err)
+		return fmt.Errorf("list %s: %s", dst, err)
 	}
 	if len(config.Exclude) > 0 {
 		rules := parseIncludeRules(os.Args)
@@ -642,7 +644,11 @@ func producer(tasks chan<- object.Object, src, dst object.ObjectStorage, config 
 		srckeys = filter(srckeys, rules)
 		dstkeys = filter(dstkeys, rules)
 	}
+	go produce(tasks, src, dst, srckeys, dstkeys, config)
+	return nil
+}
 
+func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys, dstkeys <-chan object.Object, config *Config) {
 	defer close(tasks)
 	var dstobj object.Object
 	for obj := range srckeys {
@@ -799,7 +805,7 @@ func matchKey(rules []rule, key string) bool {
 			suffix := suffixForPattern(prefix+s, rule.pattern)
 			ok, err := path.Match(rule.pattern, suffix)
 			if err != nil {
-				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
+				panic(fmt.Sprintf("match %s with %s: %v", rule.pattern, suffix, err))
 			}
 			if ok {
 				if rule.include {
@@ -856,7 +862,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	if config.Manager == "" {
-		go producer(tasks, src, dst, config)
+		err := startProducer(tasks, src, dst, config)
+		if err != nil {
+			return err
+		}
 		if len(config.Workers) > 0 {
 			addr, err := startManager(tasks)
 			if err != nil {
