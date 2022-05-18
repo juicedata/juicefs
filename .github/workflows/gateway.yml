@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  gateway-test1:
+  upload-small-files:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -64,7 +64,7 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-  gateway-test2:
+  upload-big-files:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -109,7 +109,7 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-  gateway-test3:
+  sync-with-multithread:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -121,7 +121,7 @@ jobs:
         run: |
           make juicefs
 
-      - name: Test sync to gateway with multiple process
+      - name: Test sync to gateway with multithread
         run: | 
           meta_url="mysql://root:root@(127.0.0.1)/test_gateway"
           volume=myjfs
