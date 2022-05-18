@@ -91,10 +91,12 @@ func installHandler(mp string) {
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	go func() {
 		for {
-			<-signalChan
+			sig := <-signalChan
+			logger.Infof("Received signal %s, exiting...", sig.String())
 			go func() { _ = doUmount(mp, true) }()
 			go func() {
 				time.Sleep(time.Second * 3)
+				logger.Warnf("Umount not finished after 3 seconds, force exit")
 				os.Exit(1)
 			}()
 		}
