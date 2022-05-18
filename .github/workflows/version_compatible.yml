@@ -50,7 +50,6 @@ jobs:
                      minio/minio server /data
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc
-          ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
 
       - name: Set Variable
         id: vars
@@ -68,6 +67,7 @@ jobs:
 
       - name: Version Compatible Test
         run: |
+          ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
           tests=(
               "format:jfs_new, format:jfs_old, destroy:jfs_new"
               "format:jfs_new, format:jfs_old, destroy:jfs_old"
