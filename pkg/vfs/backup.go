@@ -104,6 +104,10 @@ func cleanupBackups(blob object.ObjectStorage, now time.Time) {
 	}
 	var objs []string
 	for o := range ch {
+		if o == nil {
+			logger.Warnf("list failed, skip cleanup")
+			return
+		}
 		if !o.IsDir() {
 			objs = append(objs, o.Key())
 		}
