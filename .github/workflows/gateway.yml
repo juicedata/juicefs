@@ -48,16 +48,20 @@ jobs:
           ./juicefs format $meta_url $volume
           ./juicefs gateway $meta_url localhost:9000 &
 
+          dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count='400K' > /dev/null
           mkdir data
-          dd if=/dev/urandom of=data/file iflag=fullblock,count_bytes bs=4k count='400K' > /dev/null
           for i in {1..1000}; do
-            cp data/file data/file$i
+            cp file data/file$i
           done
           md5deep -lr data/ > sum.md5
 
-          ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:9000/$volume/data/ --no-https -p 50
+          #./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:9000/$volume/data/ --no-https -p 50
+          ./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
+          ./mc mb minio/$volume
+          ./mc cp --recursive data/  minio/$volume/data
+
           ./juicefs mount -d $meta_url $mp
-          md5deep -lrX sum.md5 $mp/data/ && echo "check md5 succeed"
+          md5deep -lrX sum.md5 $mp/data/ && echo "check md5 succeed" || echo "check md5 failed"
 
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -102,7 +106,7 @@ jobs:
           ./mc cp --recursive data/  minio/$volume/data
           
           ./juicefs mount -d $meta_url $mp
-          md5deep -lrX sum.md5 $mp/data/ && echo "check md5 succeed"
+          md5deep -lrX sum.md5 $mp/data/ && echo "check md5 succeed" || echo "check md5 failed"
 
       - name: Setup upterm session
         if: ${{ failure() }}
