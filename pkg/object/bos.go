@@ -101,7 +101,11 @@ func (q *bosclient) Copy(dst, src string) error {
 }
 
 func (q *bosclient) Delete(key string) error {
-	return q.c.DeleteObject(q.bucket, key)
+	err := q.c.DeleteObject(q.bucket, key)
+	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
+		err = nil
+	}
+	return nil
 }
 
 func (q *bosclient) List(prefix, marker string, limit int64) ([]Object, error) {
