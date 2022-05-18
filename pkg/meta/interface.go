@@ -249,7 +249,7 @@ type Meta interface {
 	// CloseSession does cleanup and close the session.
 	CloseSession() error
 	// GetSession retrieves information of session with sid
-	GetSession(sid uint64) (*Session, error)
+	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes

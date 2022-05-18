@@ -69,6 +69,8 @@ type engine interface {
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
+
+	GetSession(sid uint64, detail bool) (*Session, error)
 }
 
 type baseMeta struct {
@@ -229,7 +231,12 @@ func (m *baseMeta) CleanStaleSessions() {
 		return
 	}
 	for _, sid := range sids {
-		logger.Infof("clean up stale session %d: %s", sid, m.en.doCleanStaleSession(sid))
+		s, err := m.en.GetSession(sid, false)
+		if err != nil {
+			logger.Warnf("Get session info %d: %s", sid, err)
+			s = &Session{Sid: sid}
+		}
+		logger.Infof("clean up stale session %d %+v: %s", sid, s.SessionInfo, m.en.doCleanStaleSession(sid))
 	}
 }
 
