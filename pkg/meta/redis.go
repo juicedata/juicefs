@@ -408,7 +408,7 @@ func (m *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 	return &s, nil
 }
 
-func (m *redisMeta) GetSession(sid uint64) (*Session, error) {
+func (m *redisMeta) GetSession(sid uint64, detail bool) (*Session, error) {
 	var legacy bool
 	key := strconv.FormatUint(sid, 10)
 	score, err := m.rdb.ZScore(Background, m.allSessions(), key).Result()
@@ -422,7 +422,7 @@ func (m *redisMeta) GetSession(sid uint64) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := m.getSession(key, true)
+	s, err := m.getSession(key, detail)
 	if err != nil {
 		return nil, err
 	}

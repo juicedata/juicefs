@@ -559,7 +559,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 	return &s, nil
 }
 
-func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
+func (m *kvMeta) GetSession(sid uint64, detail bool) (*Session, error) {
 	var legacy bool
 	value, err := m.get(m.sessionKey(sid))
 	if err == nil && value == nil {
@@ -572,7 +572,7 @@ func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
 	if value == nil {
 		return nil, fmt.Errorf("session not found: %d", sid)
 	}
-	s, err := m.getSession(sid, true)
+	s, err := m.getSession(sid, detail)
 	if err != nil {
 		return nil, err
 	}

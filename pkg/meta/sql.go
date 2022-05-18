@@ -420,12 +420,12 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 	return &s, nil
 }
 
-func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
+func (m *dbMeta) GetSession(sid uint64, detail bool) (*Session, error) {
 	row := session2{Sid: sid}
 	if ok, err := m.db.Get(&row); err != nil {
 		return nil, err
 	} else if ok {
-		return m.getSession(&row, true)
+		return m.getSession(&row, detail)
 	}
 	if ok, err := m.db.IsTableExist(&session{}); err != nil {
 		return nil, err
@@ -434,7 +434,7 @@ func (m *dbMeta) GetSession(sid uint64) (*Session, error) {
 		if ok, err := m.db.Get(&row); err != nil {
 			return nil, err
 		} else if ok {
-			return m.getSession(&row, true)
+			return m.getSession(&row, detail)
 		}
 	}
 	return nil, fmt.Errorf("session not found: %d", sid)
