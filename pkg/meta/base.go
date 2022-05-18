@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 )
 
 const (
@@ -166,6 +167,7 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 func (m *baseMeta) NewSession() error {
 	go m.refreshUsage()
 	if m.conf.ReadOnly {
+		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
 	}
 
@@ -183,7 +185,7 @@ func (m *baseMeta) NewSession() error {
 	if err = m.en.doNewSession(data); err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	logger.Infof("create session %d OK", m.sid)
+	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
 	go m.refreshSession()
 	if !m.conf.NoBGJob {

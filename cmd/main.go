@@ -235,7 +235,6 @@ func setup(c *cli.Context, n int) {
 	if c.Bool("no-color") {
 		utils.DisableLogColor()
 	}
-	logger.Infof("Starting juicefs %s with version: %s", c.Command.Name, c.App.Version)
 
 	if !c.Bool("no-agent") {
 		go func() {
