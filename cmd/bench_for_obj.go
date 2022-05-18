@@ -20,15 +20,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/vbauerster/mpb/v7"
-	"github.com/vbauerster/mpb/v7/decor"
 
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
@@ -59,19 +57,14 @@ func cmdBenchForObj() *cli.Command {
 				Usage: "secret key for object storage (env SECRET_KEY)",
 			},
 			&cli.UintFlag{
-				Name:  "big-file-size",
-				Value: 1024,
-				Usage: "size of each big file in MiB",
+				Name:  "file-size",
+				Value: 4,
+				Usage: "size of each small file in MiB",
 			},
 			&cli.UintFlag{
-				Name:  "small-file-size",
-				Value: 128,
-				Usage: "size of each small file in KiB",
-			},
-			&cli.UintFlag{
-				Name:  "small-file-count",
-				Value: 1000,
-				Usage: "number of small files per thread",
+				Name:  "file-count",
+				Value: 20,
+				Usage: "total number of files",
 			},
 			&cli.UintFlag{
 				Name:    "threads",
@@ -82,6 +75,8 @@ func cmdBenchForObj() *cli.Command {
 		},
 	}
 }
+
+var nspt, pass, failed = "not support", "pass", "failed"
 
 func benchForObj(ctx *cli.Context) error {
 	setup(ctx, 1)
@@ -95,72 +90,26 @@ func benchForObj(ctx *cli.Context) error {
 	defer func() {
 		_ = blobOrigin.Delete(tmpdir)
 	}()
-	bigFSize := int(ctx.Uint("big-file-size")) << 20
-	smlFSize := int(ctx.Uint("small-file-size")) << 10
+	FSize := int(ctx.Uint("file-size")) << 20
 	threads := int(ctx.Uint("threads"))
-	smlFCount := int(ctx.Uint("small-file-count"))
+	FCount := int(ctx.Uint("file-count"))
 	tty := isatty.IsTerminal(os.Stdout.Fd())
 	progress := utils.NewProgress(!tty, false)
-	nspt := "not support"
 	if tty {
-		nspt = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, "not support", RESET_SEQ)
+		nspt = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, "not support", RESET_SEQ)
+		pass = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, GREEN, "pass", RESET_SEQ)
+		failed = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, "failed", RESET_SEQ)
 	}
-	var result [][3]string
-	logger.Println("prepare data...")
-	smlContent = make([][]byte, smlFCount)
-	for i := 0; i < smlFCount; i++ {
-		smlContent[i] = make([]byte, smlFSize)
-		rand.Read(smlContent[i])
-	}
+	fmt.Println("Start Functional Testing...")
 
-	{
-		buf := make([]byte, int64(bigFSize))
-		rand.Read(buf)
-		bar := progress.Progress.AddBar(1,
-			mpb.PrependDecorators(
-				decor.Name("put big object: ", decor.WCSyncWidth),
-				decor.CountersNoUnit("%d / %d"),
-			),
-			mpb.AppendDecorators(
-				decor.OnComplete(decor.Spinner(nil, decor.WCSyncSpace), "done"),
-			),
-		)
-		now := time.Now()
-		if err = blob.Put("big-object", bytes.NewReader(buf)); err != nil {
-			logger.Fatalf("put big-object error: %v", err)
-		}
-		bar.Increment()
-		cost := time.Since(now).Seconds()
-		var bigPResult = [3]string{"put big object", nspt, nspt}
-		bigPResult[1], bigPResult[2] = colorize("bigput", float64(bigFSize>>20)/cost, cost, 2, tty)
-		bigPResult[1] += " MiB/s"
-		bigPResult[2] += " s/file"
-		result = append(result, bigPResult)
-	}
+	var result [][]string
+	result = append(result, []string{"ITEM", "RESULT"})
+	functionalTesting(blob, &result)
+	printResult(result, tty)
+	fmt.Println("\nStart Performance Testing ...")
 
-	{
-		bar := progress.AddIoSpeedBar("get big object", int64(bigFSize))
-		r, err := blob.Get("big-object", 0, -1)
-		if err != nil {
-			logger.Fatalf("get big object error: %v", err)
-		}
-		proxyReader := bar.ProxyReader(r)
-		defer proxyReader.Close()
-		now := time.Now()
-		if _, err = io.Copy(io.Discard, proxyReader); err != nil {
-			logger.Fatalf("get big object error: %v", err)
-		}
-		cost := time.Since(now).Seconds()
-		var bigPResult = [3]string{"get big object", nspt, nspt}
-		bigPResult[1], bigPResult[2] = colorize("bigget", float64(bigFSize>>20)/cost, cost, 2, tty)
-		bigPResult[1] += " MiB/s"
-		bigPResult[2] += " s/file"
-		result = append(result, bigPResult)
-	}
-
-	if err = blob.Delete("big-object"); err != nil {
-		logger.Fatalf("delete big-object error: %v", err)
-	}
+	result = result[:0]
+	result = append(result, []string{"ITEM", "VALUE", "COST"})
 
 	{
 		multiUploadFunc := func(key string, content [][]byte) error {
@@ -194,15 +143,16 @@ func benchForObj(ctx *cli.Context) error {
 			return blob.CompleteUpload(key, upload.UploadID, parts)
 		}
 
-		var uploadResult = [3]string{"multi-upload", nspt, nspt}
+		var uploadResult = []string{"multi-upload", nspt, nspt}
 		fname := fmt.Sprintf("__multi_upload__test__%d__", time.Now().UnixNano())
 		if err := blob.CompleteUpload("test", "fakeUploadId", []*object.Part{}); err != utils.ENOTSUP {
-			total := 100
+			total := 20
 			partSize := 5 << 20 // 5M
+			part := make([]byte, partSize)
+			rand.Read(part)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
-				content[i] = make([]byte, partSize)
-				rand.Read(content[i])
+				content[i] = part
 			}
 			start := time.Now()
 			if err := multiUploadFunc(fname, content); err != nil {
@@ -221,37 +171,37 @@ func benchForObj(ctx *cli.Context) error {
 
 	apis := []apiInfo{
 		{
-			name:   "smallput",
-			fcount: smlFCount,
-			title:  "put small object",
-			getResult: func(cost float64) [3]string {
-				line := [3]string{"put small file", nspt, nspt}
+			name:   "put",
+			fcount: FCount,
+			title:  "upload object",
+			getResult: func(cost float64) []string {
+				line := []string{"upload object", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallput", float64(smlFCount)/cost, cost*1000/float64(smlFCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1], line[2] = colorize("put", float64(FSize>>20*FCount)/cost, cost/float64(FCount), 2, tty)
+					line[1] += " MiB/s"
+					line[2] += " s/file"
 				}
 				return line
 			},
 		}, {
-			name:   "smallget",
-			fcount: smlFCount,
-			title:  "get small file",
-			getResult: func(cost float64) [3]string {
-				line := [3]string{"get small object", nspt, nspt}
+			name:   "get",
+			fcount: FCount,
+			title:  "download object",
+			getResult: func(cost float64) []string {
+				line := []string{"download object", failed, nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallget", float64(smlFCount)/cost, cost*1000/float64(smlFCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1], line[2] = colorize("get", float64(FSize>>20*FCount)/cost, cost/float64(FCount), 2, tty)
+					line[1] += " MiB/s"
+					line[2] += " s/file"
 				}
 				return line
 			},
 		}, {
 			name:   "list",
-			title:  "list object",
+			title:  "list operate",
 			fcount: 100,
-			getResult: func(cost float64) [3]string {
-				line := [3]string{"list object", nspt, nspt}
+			getResult: func(cost float64) []string {
+				line := []string{"list operate", failed, nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("list", 100/cost, cost*10, 2, tty)
 					line[1] += " op/s"
@@ -261,12 +211,12 @@ func benchForObj(ctx *cli.Context) error {
 			},
 		}, {
 			name:   "head",
-			fcount: smlFCount,
+			fcount: FCount,
 			title:  "head object",
-			getResult: func(cost float64) [3]string {
-				line := [3]string{"head object", nspt, nspt}
+			getResult: func(cost float64) []string {
+				line := []string{"head object", failed, nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("head", float64(smlFCount)/cost, cost*1000/float64(smlFCount), 1, tty)
+					line[1], line[2] = colorize("head", float64(FCount)/cost, cost*1000/float64(FCount), 1, tty)
 					line[1] += " files/s"
 					line[2] += " ms/file"
 				}
@@ -274,12 +224,12 @@ func benchForObj(ctx *cli.Context) error {
 			},
 		}, {
 			name:   "chtimes",
-			fcount: smlFCount,
+			fcount: FCount,
 			title:  "chtimes file",
-			getResult: func(cost float64) [3]string {
-				line := [3]string{"chtimes file", nspt, nspt}
+			getResult: func(cost float64) []string {
+				line := []string{"chtimes file", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chtimes", float64(smlFCount)/cost, cost*1000/float64(smlFCount), 1, tty)
+					line[1], line[2] = colorize("chtimes", float64(FCount)/cost, cost*1000/float64(FCount), 1, tty)
 					line[1] += " files/s"
 					line[2] += " ms/file"
 				}
@@ -287,12 +237,12 @@ func benchForObj(ctx *cli.Context) error {
 			},
 		}, {
 			name:   "chmod",
-			fcount: smlFCount,
+			fcount: FCount,
 			title:  "chmod file",
-			getResult: func(cost float64) [3]string {
-				line := [3]string{"chmod file", nspt, nspt}
+			getResult: func(cost float64) []string {
+				line := []string{"chmod file", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chmod", float64(smlFCount)/cost, cost*1000/float64(smlFCount), 1, tty)
+					line[1], line[2] = colorize("chmod", float64(FCount)/cost, cost*1000/float64(FCount), 1, tty)
 					line[1] += " files/s"
 					line[2] += " ms/file"
 				}
@@ -300,12 +250,12 @@ func benchForObj(ctx *cli.Context) error {
 			},
 		}, {
 			name:   "chown",
-			fcount: smlFCount,
+			fcount: FCount,
 			title:  "chown file",
-			getResult: func(cost float64) [3]string {
-				line := [3]string{"chown file", nspt, nspt}
+			getResult: func(cost float64) []string {
+				line := []string{"chown file", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chown", float64(smlFCount)/cost, cost*1000/float64(smlFCount), 1, tty)
+					line[1], line[2] = colorize("chown", float64(FCount)/cost, cost*1000/float64(FCount), 1, tty)
 					line[1] += " files/s"
 					line[2] += " ms/file"
 				}
@@ -313,12 +263,12 @@ func benchForObj(ctx *cli.Context) error {
 			},
 		}, {
 			name:   "delete",
-			fcount: smlFCount,
-			title:  "delete file",
-			getResult: func(cost float64) [3]string {
-				line := [3]string{"delete object", nspt, nspt}
+			fcount: FCount,
+			title:  "delete object",
+			getResult: func(cost float64) []string {
+				line := []string{"delete object", failed, nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("delete", float64(smlFCount)/cost, cost*1000/float64(smlFCount), 1, tty)
+					line[1], line[2] = colorize("delete", float64(FCount)/cost, cost*1000/float64(FCount), 1, tty)
 					line[1] += " files/s"
 					line[2] += " ms/file"
 				}
@@ -327,30 +277,32 @@ func benchForObj(ctx *cli.Context) error {
 		},
 	}
 
-	smallObj := &benchMarkObj{
+	bm := &benchMarkObj{
 		blob:        blob,
 		progressBar: progress,
 		threads:     threads,
+		content:     make([]byte, FSize),
 	}
+	rand.Read(bm.content)
 
 	for _, api := range apis {
-		result = append(result, smallObj.run(api))
+		result = append(result, bm.run(api))
 	}
 	progress.Done()
-	fmt.Println("Benchmark finished!")
-	fmt.Printf("BigFileSize: %d MiB, SmallFileSize: %d KiB, SmallFileCount: %d, NumThreads: %d\n", ctx.Uint("big-file-size"), ctx.Uint("small-file-size"), ctx.Uint("small-file-count"), ctx.Uint("threads"))
-	result[7], result[10] = result[10], result[7]
+	fmt.Printf("Benchmark finished! FileSize: %d MiB, FileCount: %d, NumThreads: %d\n", ctx.Uint("file-size"), ctx.Uint("file-count"), ctx.Uint("threads"))
+
+	// adjust the print order
+	result[1], result[2] = result[2], result[1]
+	result[6], result[9] = result[9], result[6]
 	printResult(result, tty)
 	return nil
 
 }
 
 var resultRangeForObj = map[string][4]float64{
-	"bigput":       {20, 30, 25, 40},
-	"bigget":       {40, 50, 20, 35},
+	"put":          {100, 150, 7, 14},
 	"multi-upload": {20, 40, 25, 40},
-	"smallput":     {100, 150, 7, 14},
-	"smallget":     {200, 250, 5, 10},
+	"get":          {200, 250, 5, 10},
 	"list":         {15, 25, 50, 70},
 	"head":         {500, 1000, 2, 4},
 	"delete":       {500, 1000, 2, 4},
@@ -392,49 +344,50 @@ type apiInfo struct {
 	name      string
 	title     string
 	fcount    int
-	getResult func(cost float64) [3]string
+	getResult func(cost float64) []string
 }
 
 type benchMarkObj struct {
 	progressBar *utils.Progress
 	blob        object.ObjectStorage
 	threads     int
+	content     []byte
 }
 
-func (bc *benchMarkObj) run(api apiInfo) [3]string {
+func (bm *benchMarkObj) run(api apiInfo) []string {
 	if api.name == "chown" || api.name == "chmod" || api.name == "chtimes" {
-		if err := bc.chmod("not_exists"); err == utils.ENOTSUP {
+		if err := bm.chmod("not_exists"); err == utils.ENOTSUP {
 			return api.getResult(-1)
 		}
 	}
 	var fn func(key string) error
 	switch api.name {
-	case "smallput":
-		fn = bc.put
-	case "smallget":
-		fn = bc.get
+	case "put":
+		fn = bm.put
+	case "get":
+		fn = bm.get
 	case "delete":
-		fn = bc.delete
+		fn = bm.delete
 	case "head":
-		fn = bc.head
+		fn = bm.head
 	case "list":
-		fn = bc.list
+		fn = bm.list
 	case "chown":
-		fn = bc.chown
+		fn = bm.chown
 	case "chmod":
-		fn = bc.chmod
+		fn = bm.chmod
 	case "chtimes":
-		fn = bc.chtimes
+		fn = bm.chtimes
 	}
 
 	var wg sync.WaitGroup
 	start := time.Now()
-	pool := make(chan struct{}, bc.threads)
+	pool := make(chan struct{}, bm.threads)
 	count := api.fcount
 	if api.fcount != 0 {
 		count = api.fcount
 	}
-	bar := bc.progressBar.AddCountBar(api.title, int64(count))
+	bar := bm.progressBar.AddCountBar(api.title, int64(count))
 	for i := 0; i < count; i++ {
 		pool <- struct{}{}
 		wg.Add(1)
@@ -455,15 +408,12 @@ func (bc *benchMarkObj) run(api apiInfo) [3]string {
 	return api.getResult(time.Since(start).Seconds())
 }
 
-var smlContent [][]byte
-
-func (bc *benchMarkObj) put(key string) error {
-	idx, _ := strconv.Atoi(key)
-	return bc.blob.Put(key, bytes.NewReader(smlContent[idx]))
+func (bm *benchMarkObj) put(key string) error {
+	return bm.blob.Put(key, bytes.NewReader(bm.content))
 }
 
-func (bc *benchMarkObj) get(key string) error {
-	r, err := bc.blob.Get(key, 0, -1)
+func (bm *benchMarkObj) get(key string) error {
+	r, err := bm.blob.Get(key, 0, -1)
 	if err != nil {
 		return err
 	}
@@ -472,28 +422,278 @@ func (bc *benchMarkObj) get(key string) error {
 	return err
 }
 
-func (bc *benchMarkObj) delete(key string) error {
-	return bc.blob.Delete(key)
+func (bm *benchMarkObj) delete(key string) error {
+	return bm.blob.Delete(key)
 }
 
-func (bc *benchMarkObj) head(key string) error {
-	_, err := bc.blob.Head(key)
+func (bm *benchMarkObj) head(key string) error {
+	_, err := bm.blob.Head(key)
 	return err
 }
 
-func (bc *benchMarkObj) list(key string) error {
-	_, err := osync.ListAll(bc.blob, "", "")
+func (bm *benchMarkObj) list(key string) error {
+	result, err := osync.ListAll(bm.blob, "", "")
+	for range result {
+	}
 	return err
 }
 
-func (bc *benchMarkObj) chown(key string) error {
-	return bc.blob.(object.FileSystem).Chown(key, "", "")
+func (bm *benchMarkObj) chown(key string) error {
+	return bm.blob.(object.FileSystem).Chown(key, "", "")
 }
 
-func (bc *benchMarkObj) chmod(key string) error {
-	return bc.blob.(object.FileSystem).Chmod(key, 0755)
+func (bm *benchMarkObj) chmod(key string) error {
+	return bm.blob.(object.FileSystem).Chmod(key, 0755)
 }
 
-func (bc *benchMarkObj) chtimes(key string) error {
-	return bc.blob.(object.FileSystem).Chtimes(key, time.Now())
+func (bm *benchMarkObj) chtimes(key string) error {
+	return bm.blob.(object.FileSystem).Chtimes(key, time.Now())
+}
+
+func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
+	r, err := s.List(prefix, marker, limit)
+	if err == nil {
+		return r, nil
+	}
+	ch, err := s.ListAll(prefix, marker)
+	if err == nil {
+		objs := make([]object.Object, 0)
+		for obj := range ch {
+			if len(objs) < int(limit) {
+				objs = append(objs, obj)
+			}
+		}
+		return objs, nil
+	}
+	return nil, err
+}
+
+func functionalTesting(blob object.ObjectStorage, result *[][]string) {
+	runCase := func(title string, fn func(blob object.ObjectStorage) error) {
+		r := pass
+		if err := fn(blob); err == utils.ENOTSUP {
+			r = nspt
+		} else if err != nil {
+			r = failed
+			logger.Debugf("%s", err)
+		}
+		*result = append(*result, []string{title, r})
+	}
+
+	get := func(s object.ObjectStorage, k string, off, limit int64) (string, error) {
+		r, err := s.Get(k, off, limit)
+		if err != nil {
+			return "", err
+		}
+		data, err := ioutil.ReadAll(r)
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
+	}
+	key := "put_test_file"
+
+	runCase("put and get test", func(blob object.ObjectStorage) error {
+		br := []byte("hello")
+		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
+			return fmt.Errorf("put object failed: %s", err)
+		}
+		defer blob.Delete(key)
+		if s, err := get(blob, key, 0, -1); err != nil && s != string(br) {
+			return fmt.Errorf("get object failed: %s", err)
+		}
+		return nil
+	})
+
+	runCase("put empty test", func(blob object.ObjectStorage) error {
+		// Copy empty objects
+		defer blob.Delete("empty_test_file")
+		if err := blob.Put("empty_test_file", bytes.NewReader([]byte{})); err != nil {
+			return fmt.Errorf("PUT empty object failed: %s", err.Error())
+		}
+
+		// Copy `/` suffixed object
+		defer blob.Delete("slash_test_file/")
+		if err := blob.Put("slash_test_file/", bytes.NewReader([]byte{})); err != nil {
+			return fmt.Errorf("PUT `/` suffixed object failed: %s", err.Error())
+		}
+		return nil
+	})
+
+	runCase("get not exists object test", func(blob object.ObjectStorage) error {
+		if _, err := blob.Get("not_exists_file", 0, -1); err == nil {
+			return fmt.Errorf("get not exists object should failed: %s", err)
+		}
+		return nil
+	})
+
+	runCase("random read test", func(blob object.ObjectStorage) error {
+		br := []byte("hello")
+		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
+			return fmt.Errorf("put object failed: %s", err)
+		}
+		defer blob.Delete(key)
+		if d, e := get(blob, key, 0, -1); d != "hello" {
+			return fmt.Errorf("expect hello, but got %v, error:%s", d, e)
+		}
+		if d, e := get(blob, key, 2, 3); d != "llo" {
+			return fmt.Errorf("expect llo, but got %v, error:%s", d, e)
+		}
+		if d, e := get(blob, key, 2, 2); d != "ll" {
+			return fmt.Errorf("expect ll, but got %v, error:%s", d, e)
+		}
+		if d, e := get(blob, key, 4, 2); d != "o" {
+			return fmt.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
+		}
+		return nil
+	})
+
+	runCase("head test", func(blob object.ObjectStorage) error {
+		br := []byte("hello")
+		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
+			return fmt.Errorf("put object failed: %s", err)
+		}
+		defer blob.Delete(key)
+		if h, err := blob.Head(key); err != nil {
+			return fmt.Errorf("check exists failed: %s", err)
+		} else {
+			if h.Key() != key {
+				return fmt.Errorf("expected get key is test but get: %s", h.Key())
+			}
+		}
+		return nil
+	})
+
+	runCase("delete test", func(blob object.ObjectStorage) error {
+		br := []byte("hello")
+		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
+			return fmt.Errorf("put object failed: %s", err)
+		}
+		if err := blob.Delete(key); err != nil {
+			return fmt.Errorf("delete failed: %s", err)
+		}
+		if _, err := blob.Head(key); err == nil {
+			return fmt.Errorf("expect err is not nil")
+		}
+
+		if err := blob.Delete(key); err != nil {
+			return fmt.Errorf("delete non exists: %v", err)
+		}
+		return nil
+	})
+
+	runCase("list test", func(blob object.ObjectStorage) error {
+		isFileSystem := true
+		fi, ok := blob.(object.FileSystem)
+		if ok {
+			if err := fi.Chmod("not_exists_file", 0755); err == utils.ENOTSUP {
+				isFileSystem = false
+			}
+		}
+		br := []byte("hello")
+		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
+			return fmt.Errorf("put object failed: %s", err)
+		}
+		defer blob.Delete(key)
+		if isFileSystem {
+			objs, err := listAll(blob, "", "", 2)
+			if err == nil {
+				if len(objs) != 2 {
+					return fmt.Errorf("list should return 2 keys, but got %d", len(objs))
+				}
+				if objs[0].Key() != "" {
+					return fmt.Errorf("first key should be empty string, but got %s", objs[0].Key())
+				}
+				if objs[0].Size() != 0 {
+					return fmt.Errorf("first object size should be 0, but got %d", objs[0].Size())
+				}
+				if objs[1].Key() != key {
+					return fmt.Errorf("first key should be test, but got %s", objs[1].Key())
+				}
+				if !strings.Contains(blob.String(), "encrypted") && objs[1].Size() != 5 {
+					return fmt.Errorf("size of first key shold be 5, but got %v", objs[1].Size())
+				}
+				now := time.Now()
+				if objs[1].Mtime().Before(now.Add(-30*time.Second)) || objs[1].Mtime().After(now.Add(time.Second*30)) {
+					return fmt.Errorf("mtime of key should be within 10 seconds, but got %s", objs[1].Mtime().Sub(now))
+				}
+			} else {
+				return fmt.Errorf("list failed: %s", err.Error())
+			}
+
+			objs, err = listAll(blob, "", "test2", 1)
+			if err != nil {
+				return fmt.Errorf("list failed: %s", err.Error())
+			} else if len(objs) != 0 {
+				return fmt.Errorf("list should not return anything, but got %d", len(objs))
+			}
+		} else {
+			objs, err2 := listAll(blob, "", "", 1)
+			if err2 == nil {
+				if len(objs) != 1 {
+					return fmt.Errorf("list should return 1 keys, but got %d", len(objs))
+				}
+				if objs[0].Key() != key {
+					return fmt.Errorf("first key should be test, but got %s", objs[0].Key())
+				}
+				if !strings.Contains(blob.String(), "encrypted") && objs[0].Size() != 5 {
+					return fmt.Errorf("size of first key shold be 5, but got %v", objs[0].Size())
+				}
+				now := time.Now()
+				if objs[0].Mtime().Before(now.Add(-30*time.Second)) || objs[0].Mtime().After(now.Add(time.Second*30)) {
+					return fmt.Errorf("mtime of key should be within 10 seconds, but got %s", objs[0].Mtime().Sub(now))
+				}
+			} else {
+				return fmt.Errorf("list failed: %s", err2.Error())
+			}
+
+			objs, err2 = listAll(blob, "", "test2", 1)
+			if err2 != nil {
+				return fmt.Errorf("list failed: %s", err2.Error())
+			} else if len(objs) != 0 {
+				return fmt.Errorf("list should not return anything, but got %d", len(objs))
+			}
+		}
+		return nil
+	})
+
+	runCase("multi test", func(blob object.ObjectStorage) error {
+		key := "multi_test_file"
+		if err := blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
+			defer blob.Delete(key) //nolint:errcheck
+			if uploader, err := blob.CreateMultipartUpload(key); err == nil {
+				partSize := uploader.MinPartSize
+				uploadID := uploader.UploadID
+				defer blob.AbortUpload(key, uploadID)
+
+				part1, err := blob.UploadPart(key, uploadID, 1, make([]byte, partSize))
+				if err != nil {
+					return fmt.Errorf("UploadPart 1 failed: %s", err)
+				}
+				part2Size := 1 << 20
+				_, err = blob.UploadPart(key, uploadID, 2, make([]byte, part2Size))
+				if err != nil {
+					return fmt.Errorf("UploadPart 2 failed: %s", err)
+				}
+				part2Size = 2 << 20
+				part2, err := blob.UploadPart(key, uploadID, 2, make([]byte, part2Size))
+				if err != nil {
+					return fmt.Errorf("UploadPart 2 failed: %s", err)
+				}
+
+				if err := blob.CompleteUpload(key, uploadID, []*object.Part{part1, part2}); err != nil {
+					return fmt.Errorf("CompleteMultipart failed: %s", err.Error())
+				}
+				if in, err := blob.Get(key, 0, -1); err != nil {
+					return fmt.Errorf("%s not exists", key)
+				} else if d, err := ioutil.ReadAll(in); err != nil {
+					return fmt.Errorf("fail to read %s", key)
+				} else if len(d) != partSize+part2Size {
+					return fmt.Errorf("size of %s file: %d != %d", key, len(d), partSize+part2Size)
+				}
+				return nil
+			}
+		}
+		return utils.ENOTSUP
+	})
 }

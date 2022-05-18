@@ -248,23 +248,32 @@ func (bm *benchmark) colorize(item string, value, cost float64, prec int) (strin
 	return svalue, scost
 }
 
-func printResult(result [][3]string, isatty bool) {
-	var rawmax, max [3]int
-	for _, l := range result {
-		for i := 0; i < 3; i++ {
+func printResult(result [][]string, isatty bool) {
+	if len(result) < 2 {
+		logger.Fatalf("result must not be empty")
+	}
+	colNum := len(result[0])
+	rawmax, max := make([]int, colNum), make([]int, colNum)
+	for idx, l := range result {
+		for i := 0; i < colNum; i++ {
 			if len(l[i]) > rawmax[i] {
+				if idx == 0 && isatty {
+					rawmax[i] = len(l[i]) + 11
+					continue
+				}
 				rawmax[i] = len(l[i])
 			}
 		}
 	}
-	max = rawmax
+	copy(max, rawmax)
 	if isatty {
-		max[1] -= 11 // no color chars
-		max[2] -= 11
+		for i := 1; i < colNum; i++ {
+			max[i] -= 11
+		}
 	}
 
 	var b strings.Builder
-	for i := 0; i < 3; i++ {
+	for i := 0; i < colNum; i++ {
 		b.WriteByte('+')
 		b.WriteString(strings.Repeat("-", max[i]+2))
 	}
@@ -273,8 +282,8 @@ func printResult(result [][3]string, isatty bool) {
 	fmt.Println(divider)
 
 	b.Reset()
-	header := []string{"ITEM", "VALUE", "COST"}
-	for i := 0; i < 3; i++ {
+	header := result[0]
+	for i := 0; i < colNum; i++ {
 		b.WriteString(" | ")
 		b.WriteString(padding(header[i], max[i], ' '))
 	}
@@ -282,9 +291,9 @@ func printResult(result [][3]string, isatty bool) {
 	fmt.Println(b.String()[1:])
 	fmt.Println(divider)
 
-	for _, l := range result {
+	for _, l := range result[1:] {
 		b.Reset()
-		for i := 0; i < 3; i++ {
+		for i := 0; i < colNum; i++ {
 			b.WriteString(" | ")
 			if spaces := rawmax[i] - len(l[i]); spaces > 0 {
 				b.WriteString(strings.Repeat(" ", spaces))
@@ -371,10 +380,12 @@ func bench(ctx *cli.Context) error {
 	if statsPath != "" {
 		stats = readStats(statsPath)
 	}
-	var result [][3]string
+	var result [][]string
+	result = append(result, []string{"ITEM", "VALUE", "COST"})
 	if b := bm.big; b != nil {
 		cost := b.run("write")
-		line := [3]string{"Write big file"}
+		line := make([]string, 3)
+		line[0] = "Write big file"
 		line[1], line[2] = bm.colorize("bigwr", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
 		line[1] += " MiB/s"
 		line[2] += " s/file"
@@ -390,7 +401,8 @@ func bench(ctx *cli.Context) error {
 	}
 	if s := bm.small; s != nil {
 		cost := s.run("write")
-		line := [3]string{"Write small file"}
+		line := make([]string, 3)
+		line[0] = "Write small file"
 		line[1], line[2] = bm.colorize("smallwr", float64(s.fcount*bm.threads)/cost, cost*1000/float64(s.fcount), 1)
 		line[1] += " files/s"
 		line[2] += " ms/file"
@@ -434,7 +446,8 @@ func bench(ctx *cli.Context) error {
 			if count > 0 {
 				cost = diff(item+"_sum") * 1000 / count
 			}
-			line := [3]string{title}
+			line := make([]string, 3)
+			line[0] = title
 			line[1], line[2] = bm.colorize(nick, count, cost, 0)
 			line[1] += " operations"
 			line[2] += " ms/op"
