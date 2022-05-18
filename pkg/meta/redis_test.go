@@ -1109,7 +1109,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	case *kvMeta:
 		sid = m.sid
 	}
-	s, err := m.GetSession(sid)
+	s, err := m.GetSession(sid, true)
 	if err != nil {
 		t.Fatalf("get session: %s", err)
 	} else {
@@ -1120,7 +1120,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	if err = m.CloseSession(); err != nil {
 		t.Fatalf("close session: %s", err)
 	}
-	if _, err = m.GetSession(sid); err == nil {
+	if _, err = m.GetSession(sid, true); err == nil {
 		t.Fatalf("get a deleted session: %s", err)
 	}
 	switch m := m.(type) {
