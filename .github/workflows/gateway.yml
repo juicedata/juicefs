@@ -29,6 +29,8 @@ jobs:
 
       - name: Install tools
         run: | 
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc 
           sudo apt install md5deep
 
       - name: Start mysql
