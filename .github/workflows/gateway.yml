@@ -47,16 +47,15 @@ jobs:
           export MINIO_ROOT_PASSWORD=minioadmin
           ./juicefs format $meta_url $volume
           ./juicefs gateway $meta_url localhost:9000 &
+
           mkdir data
+          dd if=/dev/urandom of=data/file iflag=fullblock,count_bytes bs=4k count='400K' > /dev/null
           for i in {1..1000}; do
-            dd if=/dev/urandom of=data/file_$i iflag=fullblock,count_bytes bs=4k count='400K' > /dev/null
+            cp data/file data/file$i
           done
-          
           md5deep -lr data/ > sum.md5
-          ./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
-          ./mc mb minio/$volume
-          ./mc cp --recursive data/  minio/$volume/data
-          
+
+          ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:9000/$volume/data/ --no-https -p 50
           ./juicefs mount -d $meta_url $mp
           md5deep -lrX sum.md5 $mp/data/ && echo "check md5 succeed"
 
@@ -93,7 +92,7 @@ jobs:
           ./juicefs format $meta_url $volume
           ./juicefs gateway $meta_url localhost:9000 &
           mkdir data
-          for i in {1..5}; do
+          for i in {1..1}; do
             dd if=/dev/urandom of=data/file_$i iflag=fullblock,count_bytes bs=4k count='1G' > /dev/null
           done
           
@@ -132,7 +131,7 @@ jobs:
           export MINIO_ROOT_PASSWORD=minioadmin
           ./juicefs format $meta_url $volume
           ./juicefs gateway $meta_url localhost:9000 &
-          ./juicefs sync ./  s3://minioadmin:minioadmin@localhost:9000/$volume/source_dir/ --no-https -p 20
+          ./juicefs sync --dirs ./  s3://minioadmin:minioadmin@localhost:9000/$volume/source_dir/ --no-https -p 20
           ./juicefs mount -d $meta_url $mp
           rm -rf $mp/source_dir
 
