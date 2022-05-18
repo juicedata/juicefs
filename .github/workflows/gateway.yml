@@ -55,13 +55,14 @@ jobs:
           done
           md5deep -lr data/ > sum.md5
 
-          #./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:9000/$volume/data/ --no-https -p 50
-          ./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
-          ./mc mb minio/$volume
-          ./mc cp --recursive data/  minio/$volume/data
+          ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:9000/$volume/data/ --no-https -p 50
+          #./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
+          #./mc mb minio/$volume
+          #./mc cp --recursive data/  minio/$volume/data
 
           ./juicefs mount -d $meta_url $mp
-          md5deep -lrX sum.md5 $mp/data/ && echo "check md5 succeed" || echo "check md5 failed"
+          count=$(md5deep -lrX sum.md5 || wc -l)
+          [ $count = 0 ] && echo "check md5 succeed" || echo "check md5 failed"
 
       - name: Setup upterm session
         if: ${{ failure() }}
