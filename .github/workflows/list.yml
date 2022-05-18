@@ -58,8 +58,8 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh |wc -l >count.log
-          cat count.log | grep 7000001
+          ls -lh |wc -l >/tmp/count.log
+          cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -100,8 +100,8 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh |wc -l >count.log
-          cat count.log | grep 7000001
+          ls -lh |wc -l >/tmp/count.log
+          cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -153,8 +153,8 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh |wc -l >count.log
-          cat count.log | grep 7000001
+          ls -lh |wc -l >/tmp/count.log
+          cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -194,8 +194,8 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh |wc -l >count.log
-          cat count.log | grep 7000001
+          ls -lh |wc -l >/tmp/count.log
+          cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
       - name: Send Slack Notification
         if: ${{ failure() }}
