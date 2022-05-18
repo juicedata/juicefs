@@ -27,13 +27,41 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Install tools
+        run: | 
+          sudo apt install md5deep
+
+      - name: Start mysql
+        run: |
+          sudo /etc/init.d/mysql start
+
       - name: Build linux target
         run: |
           make juicefs
 
-      - name: Init 
-        run: |
-          sudo /etc/init.d/mysql start
+      - name: Test copy small files with gateway
+          meta_url="mysql://root:root@(127.0.0.1)/test_gateway"
+          db_name=$(basename $meta_url)
+          volume=myjfs
+          mp=/tmp/myjfs
+          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+          export MINIO_ROOT_USER=minioadmin
+          export MINIO_ROOT_PASSWORD=minioadmin
+          ./juicefs format $meta_url $volume
+          ./juicefs gateway $meta_url localhost:9000 &
+          mkdir data
+          for i in {1..1000}; do
+            dd if=/dev/urandom of=data/file_$i iflag=fullblock,count_bytes bs=4k count='400K' > /dev/null
+          done
+          
+          md5deep -lr data/ > sum.md5
+          ./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
+          ./mc mb minio/$volume
+          ./mc cp --recursive data/  minio/$volume/data
+          
+          ./juicefs mount -d $meta_url $mp
+          md5deep -lrX sum.md5 $mp/data/ 
+
 
       - name: Test sync to gateway with multiple process
         run: | 
