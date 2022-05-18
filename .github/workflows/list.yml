@@ -46,10 +46,10 @@ jobs:
           cd actionfile
           cat META_7M_EMPTY_FILE.json.gz* >META_7M_EMPTY_FILE.json.gz
           gzip -dk  META_7M_EMPTY_FILE.json.gz
-          ls -lah
+          ls -lh
           mv META_7M_EMPTY_FILE.json ../
           cd ../
-          ls -lah
+          ls -lh
       - name: Load
         uses: ./.github/actions/load
         with:
@@ -58,7 +58,9 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh | wc -l
+          ls -lh |wc -l >count.log
+          cat count.log | grep 7000001
+          if [ $? != 0 ];then echo "file num is error";exit 1; fi
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -86,10 +88,10 @@ jobs:
           cd actionfile
           cat META_7M_EMPTY_FILE.json.gz* >META_7M_EMPTY_FILE.json.gz
           gzip -dk  META_7M_EMPTY_FILE.json.gz
-          ls -lah
+          ls -lh
           mv META_7M_EMPTY_FILE.json ../
           cd ../
-          ls -lah
+          ls -lh
       - name: Load
         uses: ./.github/actions/load
         with:
@@ -98,7 +100,9 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh | wc -l
+          ls -lh |wc -l >count.log
+          cat count.log | grep 7000001
+          if [ $? != 0 ];then echo "file num is error";exit 1; fi
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -137,10 +141,10 @@ jobs:
           cd actionfile
           cat META_7M_EMPTY_FILE.json.gz* >META_7M_EMPTY_FILE.json.gz
           gzip -dk  META_7M_EMPTY_FILE.json.gz
-          ls -lah
+          ls -lh
           mv META_7M_EMPTY_FILE.json ../
           cd ../
-          ls -lah
+          ls -lh
       - name: Load
         uses: ./.github/actions/load
         with:
@@ -149,7 +153,9 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh |wc -l
+          ls -lh |wc -l >count.log
+          cat count.log | grep 7000001
+          if [ $? != 0 ];then echo "file num is error";exit 1; fi
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -176,10 +182,10 @@ jobs:
           cd actionfile
           cat META_7M_EMPTY_FILE.json.gz* >META_7M_EMPTY_FILE.json.gz
           gzip -dk  META_7M_EMPTY_FILE.json.gz
-          ls -lah
+          ls -lh
           mv META_7M_EMPTY_FILE.json ../
           cd ../
-          ls -lah
+          ls -lh
       - name: Load
         uses: ./.github/actions/load
         with:
@@ -188,7 +194,9 @@ jobs:
       - name: List
         run: |
           cd /tmp/juicefs-sync-test/createfile/
-          ls -lh | wc -l
+          ls -lh |wc -l >count.log
+          cat count.log | grep 7000001
+          if [ $? != 0 ];then echo "file num is error";exit 1; fi
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
