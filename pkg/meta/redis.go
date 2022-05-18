@@ -1745,7 +1745,7 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 	return 0
 }
 
-func (m *redisMeta) doCleanStaleSession(sid uint64) (*SessionInfo, error) {
+func (m *redisMeta) doCleanStaleSession(sid uint64) error {
 	var fail bool
 	// release locks
 	var ctx = Background
@@ -1796,16 +1796,6 @@ func (m *redisMeta) doCleanStaleSession(sid uint64) (*SessionInfo, error) {
 		fail = true
 	}
 
-	var sinfo SessionInfo
-	if buf, err := m.rdb.HGet(ctx, m.sessionInfos(), ssid).Bytes(); err == nil {
-		if err = json.Unmarshal(buf, &sinfo); err != nil {
-			logger.Warnf("Corrupt session info; json error: %s", err)
-		}
-	} else if err != redis.Nil {
-		logger.Warnf("HGet sessionInfos %s: %s", ssid, err)
-		fail = true
-	}
-
 	if !fail {
 		if err := m.rdb.HDel(ctx, m.sessionInfos(), ssid).Err(); err != nil {
 			logger.Warnf("HDel sessionInfos %s: %s", ssid, err)
@@ -1813,14 +1803,14 @@ func (m *redisMeta) doCleanStaleSession(sid uint64) (*SessionInfo, error) {
 		}
 	}
 	if fail {
-		return &sinfo, fmt.Errorf("failed to clean up sid %d", sid)
+		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
 		if n, err := m.rdb.ZRem(ctx, m.allSessions(), ssid).Result(); err != nil {
-			return &sinfo, err
+			return err
 		} else if n == 1 {
-			return &sinfo, nil
+			return nil
 		}
-		return &sinfo, m.rdb.ZRem(ctx, legacySessions, ssid).Err()
+		return m.rdb.ZRem(ctx, legacySessions, ssid).Err()
 	}
 }
 

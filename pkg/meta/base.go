@@ -49,7 +49,7 @@ type engine interface {
 	doNewSession(sinfo []byte) error
 	doRefreshSession()
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
-	doCleanStaleSession(sid uint64) (*SessionInfo, error)
+	doCleanStaleSession(sid uint64) error
 
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
@@ -229,8 +229,7 @@ func (m *baseMeta) CleanStaleSessions() {
 		return
 	}
 	for _, sid := range sids {
-		sinfo, err := m.en.doCleanStaleSession(sid)
-		logger.Infof("clean up stale session %d %+v: %v", sid, sinfo, err)
+		logger.Infof("clean up stale session %d: %s", sid, m.en.doCleanStaleSession(sid))
 	}
 }
 
@@ -241,8 +240,7 @@ func (m *baseMeta) CloseSession() error {
 	m.Lock()
 	m.umounting = true
 	m.Unlock()
-	_, err := m.en.doCleanStaleSession(m.sid)
-	logger.Infof("close session %d: %v", m.sid, err)
+	logger.Infof("close session %d: %s", m.sid, m.en.doCleanStaleSession(m.sid))
 	return nil
 }
 

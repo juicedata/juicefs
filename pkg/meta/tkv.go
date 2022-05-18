@@ -399,7 +399,7 @@ func (m *kvMeta) doRefreshSession() {
 	_ = m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime()))
 }
 
-func (m *kvMeta) doCleanStaleSession(sid uint64) (*SessionInfo, error) {
+func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 	var fail bool
 	// release locks
 	if flocks, err := m.scanValues(m.fmtKey("F"), -1, nil); err == nil {
@@ -469,20 +469,10 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) (*SessionInfo, error) {
 		fail = true
 	}
 
-	var sinfo SessionInfo
-	if buf, err := m.get(m.sessionInfoKey(sid)); err == nil && buf != nil {
-		if err = json.Unmarshal(buf, &sinfo); err != nil {
-			logger.Warnf("Corrupt session info; json error: %s", err)
-		}
-	} else if err != nil {
-		logger.Warnf("Get session info of sid %d: %s", sid, err)
-		fail = true
-	}
-
 	if fail {
-		return &sinfo, fmt.Errorf("failed to clean up sid %d", sid)
+		return fmt.Errorf("failed to clean up sid %d", sid)
 	} else {
-		return &sinfo, m.deleteKeys(m.sessionKey(sid), m.legacySessionKey(sid), m.sessionInfoKey(sid))
+		return m.deleteKeys(m.sessionKey(sid), m.legacySessionKey(sid), m.sessionInfoKey(sid))
 	}
 }
 
