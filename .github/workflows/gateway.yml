@@ -40,6 +40,7 @@ jobs:
           make juicefs
 
       - name: Test copy small files with gateway
+        run: | 
           meta_url="mysql://root:root@(127.0.0.1)/test_gateway"
           db_name=$(basename $meta_url)
           volume=myjfs
