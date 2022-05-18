@@ -96,9 +96,10 @@ jobs:
           export MINIO_ROOT_PASSWORD=minioadmin
           ./juicefs format $meta_url $volume
           ./juicefs gateway $meta_url localhost:9000 &
+          dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count='1G' > /dev/null
           mkdir data
-          for i in {1..1}; do
-            dd if=/dev/urandom of=data/file_$i iflag=fullblock,count_bytes bs=4k count='1G' > /dev/null
+          for i in {1..5}; do
+            cp file data/file_$i
           done
           
           md5deep -lr data/ > sum.md5
