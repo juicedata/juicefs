@@ -85,6 +85,7 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
+	maxDeleting  chan struct{}
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 	newSpace     int64
@@ -113,6 +114,7 @@ func newBaseMeta(conf *Config) baseMeta {
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
+		maxDeleting:  make(chan struct{}, 100),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -789,9 +791,7 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		defer m.Unlock()
 		if m.removedFiles[inode] {
 			delete(m.removedFiles, inode)
-			go func() {
-				_ = m.en.doDeleteSustainedInode(m.sid, inode)
-			}()
+			_ = m.en.doDeleteSustainedInode(m.sid, inode)
 		}
 	}
 	return 0
@@ -852,7 +852,19 @@ func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 		m.removedFiles[inode] = true
 		m.Unlock()
 	} else {
-		go m.en.doDeleteFileData(inode, length)
+		m.tryDeleteFileData(inode, length)
+	}
+}
+
+func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
+	select {
+	case m.maxDeleting <- struct{}{}:
+		go func() {
+			m.en.doDeleteFileData(inode, length)
+			<-m.maxDeleting
+		}()
+	default:
+		// will be cleanup later
 	}
 }
 
