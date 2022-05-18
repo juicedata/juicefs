@@ -105,7 +105,7 @@ func (q *bosclient) Delete(key string) error {
 	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil
 	}
-	return nil
+	return err
 }
 
 func (q *bosclient) List(prefix, marker string, limit int64) ([]Object, error) {
