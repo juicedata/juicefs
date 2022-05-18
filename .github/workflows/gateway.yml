@@ -128,6 +128,12 @@ jobs:
 
       - name: Test sync to gateway with multithread
         run: | 
+          #test for PR: https://github.com/juicedata/juicefs/pull/2024
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc 
+          sudo apt install md5deep
+          sudo /etc/init.d/mysql start
+
           meta_url="mysql://root:root@(127.0.0.1)/test_gateway"
           volume=myjfs
           mp=/tmp/myjfs
