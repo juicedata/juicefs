@@ -1575,7 +1575,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		go m.doDeleteFileData(inode, attr.Length)
+		m.tryDeleteFileData(inode, attr.Length)
 	}
 	return err
 }
