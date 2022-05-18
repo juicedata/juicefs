@@ -58,8 +58,8 @@ jobs:
           ./mc cp --recursive data/  minio/$volume/data
           
           ./juicefs mount -d $meta_url $mp
-          md5deep -lrX sum.md5 $mp/data/ 
-          
+          md5deep -lrX sum.md5 $mp/data/ && echo "check md5 succeed"
+
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -103,7 +103,7 @@ jobs:
           ./mc cp --recursive data/  minio/$volume/data
           
           ./juicefs mount -d $meta_url $mp
-          md5deep -lrX sum.md5 $mp/data/ 
+          md5deep -lrX sum.md5 $mp/data/ && echo "check md5 succeed"
 
       - name: Setup upterm session
         if: ${{ failure() }}
