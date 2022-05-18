@@ -47,6 +47,10 @@
 							<pattern>org.json</pattern>
 							<shadedPattern>io.juicefs.shaded.org.json</shadedPattern>
 						</relocation>
+						<relocation>
+							<pattern>org.javassist</pattern>
+							<shadedPattern>io.juicefs.shaded.org.javassist</shadedPattern>
+						</relocation>
 					</relocations>
 				</configuration>
 			</plugin>
