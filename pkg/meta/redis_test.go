@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -1198,6 +1199,17 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "d"); st != 0 {
 		t.Fatalf("unlink d: %s", st)
 	}
+	lname := strings.Repeat("f", MaxName)
+	if st := m.Create(ctx, 1, lname, 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create %s: %s", lname, st)
+	}
+	if st := m.Unlink(ctx, 1, lname); st != 0 {
+		t.Fatalf("unlink %s: %s", lname, st)
+	}
+	tname := fmt.Sprintf("1-%d-%s", inode, lname)[:MaxName]
+	if st := m.Lookup(ctx, TrashInode+1, tname, &inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("lookup subTrash/%s: %s, attr %+v", tname, st, attr)
+	}
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
@@ -1209,7 +1221,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 7 {
+	if len(entries) != 8 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	ctx2 := NewContext(1000, 1, []uint32{1})

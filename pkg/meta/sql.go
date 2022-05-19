@@ -1178,7 +1178,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				return err
 			}
 			if trash > 0 {
-				if err = mustInsert(s, &edge{Parent: trash, Name: []byte(fmt.Sprintf("%d-%d-%s", parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); err != nil {
+				if err = mustInsert(s, &edge{Parent: trash, Name: []byte(m.trashEntry(parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); err != nil {
 					return err
 				}
 			}
@@ -1300,7 +1300,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			if _, err = s.Cols("ctime", "parent").Update(&n, &node{Inode: n.Inode}); err != nil {
 				return err
 			}
-			if err = mustInsert(s, &edge{Parent: trash, Name: []byte(fmt.Sprintf("%d-%d-%s", parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); err != nil {
+			if err = mustInsert(s, &edge{Parent: trash, Name: []byte(m.trashEntry(parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); err != nil {
 				return err
 			}
 		} else {
@@ -1506,7 +1506,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if _, err := s.Cols("ctime", "parent").Update(dn, &node{Inode: dino}); err != nil {
 						return err
 					}
-					name := fmt.Sprintf("%d-%d-%s", parentDst, dino, de.Name)
+					name := m.trashEntry(parentDst, dino, string(de.Name))
 					if err = mustInsert(s, &edge{Parent: trash, Name: []byte(name), Inode: dino, Type: de.Type}); err != nil {
 						return err
 					}
