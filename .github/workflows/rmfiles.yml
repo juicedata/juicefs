@@ -56,7 +56,7 @@ jobs:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable"
           load_file: "META_8M_EMPTY_FILE.json"
       - name: Rm 100w Files in Depth of 1 Directory
-          run: |
+        run: |
             cd /tmp/juicefs-sync-test/mkdir/
             echo "rm 100w files in depth of 1 directory"
             rm -rf aaa/
