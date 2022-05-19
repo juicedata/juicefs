@@ -74,10 +74,8 @@ jobs:
       - name: Generate Data
         run: |
           cd /home/runner/work/
-          git clone https://github.com/sanwan/ssb-dbgen.git
-          cd ssb-dbgen
-          make
-          ./dbgen -s 10 -T l -q
+          git clone git@github.com:sanwan/actiondata.git
+          cd actiondata
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
           ls -lrth
@@ -145,7 +143,7 @@ jobs:
                                      ENGINE = MergeTree ORDER BY S_SUPPKEY;"
       - name: Import Data
         run: |
-          cd /home/runner/work/ssb-dbgen/
+          cd /home/runner/work/actiondata/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
           clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
