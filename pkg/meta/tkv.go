@@ -190,8 +190,8 @@ func (m *kvMeta) sliceKey(chunkid uint64, size uint32) []byte {
 	return m.fmtKey("K", chunkid, size)
 }
 
-func (m *kvMeta) delSliceKey(chunkid uint64, ts int64) []byte {
-	return m.fmtKey("L", chunkid, uint64(ts))
+func (m *kvMeta) delSliceKey(ts int64, chunkid uint64) []byte {
+	return m.fmtKey("L", uint64(ts), chunkid)
 }
 
 func (m *kvMeta) symKey(inode Ino) []byte {
@@ -1968,7 +1968,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		// create the key to tracking it
 		tx.set(m.sliceKey(chunkid, size), make([]byte, 8))
 		if trash {
-			tx.set(m.delSliceKey(chunkid, time.Now().Unix()), dsbuf)
+			tx.set(m.delSliceKey(time.Now().Unix(), chunkid), dsbuf)
 		} else {
 			for _, s := range ss {
 				tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
