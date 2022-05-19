@@ -242,7 +242,7 @@ $ sudo kubectl apply -f ingress.yaml
 
 ![](../images/k3s-nginx-welcome.png)
 
-接下来查看一下容器是否成功挂载了 JuiceFS，执行命令查看 pod 状态：
+接下来查看一下容器是否成功挂载了 JuiceFS，执行命令查看 Pod 状态：
 
 ```shell
 $ sudo kubectl get pods
@@ -251,7 +251,7 @@ nginx-run-7d6fb7d6df-qhr2m   1/1     Running   0          28h
 nginx-run-7d6fb7d6df-5hpv7   1/1     Running   0          24h
 ```
 
-执行命令，查看任何一个 pods 的文件系统挂载情况：
+执行命令，查看任何一个 Pod 的文件系统挂载情况：
 
 ```shell
 $ sudo kubectl exec nginx-run-7d6fb7d6df-qhr2m -- df -Th
