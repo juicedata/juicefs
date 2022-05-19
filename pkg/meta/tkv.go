@@ -1851,26 +1851,26 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 }
 
 func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
-	// delayed slices: Lttttttttcccccccc
-	keys, err := m.scanKeys(m.fmtKey("L"))
-	if err != nil {
+	var keys [][]byte
+	if err := m.client.txn(func(tx kvTxn) error {
+		vals := tx.scanRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0))
+		for k := range vals {
+			if len(k) != 1+8+8 { // delayed slices: Lttttttttcccccccc
+				continue
+			}
+			keys = append(keys, []byte(k))
+		}
+		return nil
+	}); err != nil {
 		logger.Warnf("Scan delayed slices: %s", err)
 		return 0, err
 	}
 
-	klen := 1 + 8 + 8
 	var count int
 	var ss []Slice
 	var rs []int64
 	for _, key := range keys {
-		if len(key) != klen {
-			continue
-		}
-		if m.parseInt64(key[1:9]) >= edge {
-			continue
-		}
-
-		if err = m.txn(func(tx kvTxn) error {
+		if err := m.txn(func(tx kvTxn) error {
 			buf := tx.get(key)
 			if len(buf) == 0 {
 				return nil
