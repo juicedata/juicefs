@@ -36,13 +36,13 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func cmdBenchForObj() *cli.Command {
+func cmdObjbench() *cli.Command {
 	return &cli.Command{
 		Name:      "objbench",
-		Action:    benchForObj,
+		Action:    objbench,
 		Category:  "TOOL",
-		Usage:     "Run benchmark on a storage",
-		ArgsUsage: "Bucket URL",
+		Usage:     "Run benchmark on an object storage",
+		ArgsUsage: "Bucket",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "storage",
@@ -59,18 +59,18 @@ func cmdBenchForObj() *cli.Command {
 			},
 			&cli.UintFlag{
 				Name:  "block-size",
-				Value: 4,
-				Usage: "size of each IO block in MiB",
+				Value: 4096,
+				Usage: "size of IO blocks in KiB",
 			},
 			&cli.UintFlag{
-				Name:  "data-object-size",
+				Name:  "big-object-size",
 				Value: 1024,
-				Usage: "size of test data in MiB",
+				Usage: "size of big objects in MiB",
 			},
 			&cli.UintFlag{
 				Name:  "small-object-size",
 				Value: 128,
-				Usage: "size of each small object in KiB",
+				Usage: "size of small objects in KiB",
 			},
 			&cli.UintFlag{
 				Name:    "threads",
@@ -84,21 +84,21 @@ func cmdBenchForObj() *cli.Command {
 
 var nspt, pass = "not support", "pass"
 
-func benchForObj(ctx *cli.Context) error {
+func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
 	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ctx.String("access-key"), ctx.String("secret-key"))
 	if err != nil {
 		logger.Fatalf("create storage failed: %v", err)
 	}
 
-	tmpdir := fmt.Sprintf("__juicefs_benchmark_for_obj_%d__/", time.Now().UnixNano())
-	blob := object.WithPrefix(blobOrigin, tmpdir)
+	prefix := fmt.Sprintf("__juicefs_benchmark_%d__/", time.Now().UnixNano())
+	blob := object.WithPrefix(blobOrigin, prefix)
 	defer func() {
-		_ = blobOrigin.Delete(tmpdir)
+		_ = blobOrigin.Delete(prefix)
 	}()
-	bSize := int(ctx.Uint("block-size")) << 20
-	fsize := int(ctx.Uint("data-object-size")) << 20
-	smallBSize := int(ctx.Uint("small-object-size"))
+	bSize := int(ctx.Uint("block-size")) << 10
+	fsize := int(ctx.Uint("big-object-size")) << 20
+	smallBSize := int(ctx.Uint("small-object-size")) << 10
 	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
 	threads := int(ctx.Uint("threads"))
 	tty := isatty.IsTerminal(os.Stdout.Fd())
@@ -153,7 +153,7 @@ func benchForObj(ctx *cli.Context) error {
 		fname := fmt.Sprintf("__multi_upload__test__%d__", time.Now().UnixNano())
 		if err := blob.CompleteUpload("test", "fakeUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			total := bCount
-			part := make([]byte, 5<<20)
+			part := make([]byte, bSize)
 			rand.Read(part)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
@@ -166,7 +166,7 @@ func benchForObj(ctx *cli.Context) error {
 			cost := time.Since(start).Seconds()
 			uploadResult[1], uploadResult[2] = colorize("multi-upload", float64(total*bSize>>20)/cost, cost, 2, tty)
 			uploadResult[1] += " MiB/s"
-			uploadResult[2] += " s/file"
+			uploadResult[2] += " s/object"
 		}
 		pResult = append(pResult, uploadResult)
 		if err = blob.Delete(fname); err != nil {
@@ -178,69 +178,69 @@ func benchForObj(ctx *cli.Context) error {
 		{
 			name:  "put",
 			count: bCount,
-			title: "upload object",
+			title: "upload objects",
 			getResult: func(cost float64) []string {
-				line := []string{"upload object", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, cost/float64(bCount), 2, tty)
+					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, tty)
 					line[1] += " MiB/s"
-					line[2] += " s/file"
+					line[2] += " ms/object"
 				}
 				return line
 			},
 		}, {
 			name:  "get",
 			count: bCount,
-			title: "download object",
+			title: "download objects",
 			getResult: func(cost float64) []string {
-				line := []string{"download object", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, cost/float64(bCount), 2, tty)
+					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, tty)
 					line[1] += " MiB/s"
-					line[2] += " s/file"
+					line[2] += " ms/object"
 				}
 				return line
 			},
 		}, {
 			name:  "smallput",
 			count: bCount,
-			title: "put small object",
+			title: "put small objects",
 			getResult: func(cost float64) []string {
-				line := []string{"put small file", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("smallput", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1] += " objects/s"
+					line[2] += " ms/object"
 				}
 				return line
 			},
 		}, {
 			name:  "smallget",
 			count: bCount,
-			title: "get small file",
+			title: "get small objects",
 			after: func(blob object.ObjectStorage) {
 				for i := bCount; i < bCount*2; i++ {
 					_ = blob.Delete(strconv.Itoa(i))
 				}
 			},
 			getResult: func(cost float64) []string {
-				line := []string{"get small object", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("smallget", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1] += " objects/s"
+					line[2] += " ms/object"
 				}
 				return line
 			},
 		}, {
 			name:  "list",
-			title: "list operate",
+			title: "list objects",
 			count: 100,
 			getResult: func(cost float64) []string {
-				line := []string{"list operate", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("list", float64(bCount)*100/cost, cost*10, 2, tty)
-					line[1] += " files/s"
+					line[1] += " objects/s"
 					line[2] += " ms/op"
 				}
 				return line
@@ -248,65 +248,65 @@ func benchForObj(ctx *cli.Context) error {
 		}, {
 			name:  "head",
 			count: bCount,
-			title: "head object",
+			title: "head objects",
 			getResult: func(cost float64) []string {
-				line := []string{"head object", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("head", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1] += " objects/s"
+					line[2] += " ms/object"
 				}
 				return line
 			},
 		}, {
 			name:  "chtimes",
 			count: bCount,
-			title: "chtimes file",
+			title: "update mtime",
 			getResult: func(cost float64) []string {
-				line := []string{"chtimes file", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("chtimes", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1] += " objects/s"
+					line[2] += " ms/object"
 				}
 				return line
 			},
 		}, {
 			name:  "chmod",
 			count: bCount,
-			title: "chmod file",
+			title: "change permissions",
 			getResult: func(cost float64) []string {
-				line := []string{"chmod file", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("chmod", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1] += " objects/s"
+					line[2] += " ms/object"
 				}
 				return line
 			},
 		}, {
 			name:  "chown",
 			count: bCount,
-			title: "chown file",
+			title: "change owner/group",
 			getResult: func(cost float64) []string {
-				line := []string{"chown file", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("chown", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1] += " objects/s"
+					line[2] += " ms/object"
 				}
 				return line
 			},
 		}, {
 			name:  "delete",
 			count: bCount,
-			title: "delete object",
+			title: "delete objects",
 			getResult: func(cost float64) []string {
-				line := []string{"delete object", nspt, nspt}
+				line := []string{"", nspt, nspt}
 				if cost > 0 {
 					line[1], line[2] = colorize("delete", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " files/s"
-					line[2] += " ms/file"
+					line[1] += " objects/s"
+					line[2] += " ms/object"
 				}
 				return line
 			},
@@ -332,7 +332,8 @@ func benchForObj(ctx *cli.Context) error {
 		_ = bm.delete(strconv.Itoa(i))
 	}
 
-	fmt.Printf("Benchmark finished! block-size: %d MiB, data-object-size: %d MiB, small-object-size: %d KiB, NumThreads: %d\n", ctx.Uint("block-size"), ctx.Uint("data-object-size"), ctx.Uint("small-object-size"), ctx.Uint("threads"))
+	fmt.Printf("Benchmark finished! block-size: %d KiB, big-object-size: %d MiB, small-object-size: %d KiB, NumThreads: %d\n",
+		ctx.Uint("block-size"), ctx.Uint("big-object-size"), ctx.Uint("small-object-size"), ctx.Uint("threads"))
 
 	// adjust the print order
 	pResult[1], pResult[2] = pResult[2], pResult[1]
@@ -343,17 +344,17 @@ func benchForObj(ctx *cli.Context) error {
 }
 
 var resultRangeForObj = map[string][4]float64{
-	"put":          {100, 150, 0.02, 0.04},
-	"get":          {100, 150, 0.02, 0.04},
-	"smallput":     {100, 150, 7, 14},
-	"smallget":     {100, 150, 7, 14},
-	"multi-upload": {100, 150, 0.02, 0.04},
-	"list":         {20000, 30000, 5, 8},
-	"head":         {20000, 30000, 0.02, 0.04},
-	"delete":       {8000, 10000, 0.08, 0.1},
-	"chmod":        {20000, 30000, 0.04, 0.08},
-	"chown":        {20000, 30000, 0.04, 0.08},
-	"chtimes":      {20000, 30000, 0.04, 0.08},
+	"put":          {100, 150, 50, 150},
+	"get":          {100, 150, 50, 150},
+	"smallput":     {10, 30, 30, 100},
+	"smallget":     {10, 30, 30, 100},
+	"multi-upload": {100, 150, 20, 50},
+	"list":         {20000, 30000, 100, 200},
+	"head":         {10, 30, 30, 100},
+	"delete":       {10, 30, 30, 100},
+	"chmod":        {10, 30, 30, 100},
+	"chown":        {10, 30, 30, 100},
+	"chtimes":      {10, 30, 30, 100},
 }
 
 func colorize(item string, value, cost float64, prec int, isatty bool) (string, string) {
@@ -403,7 +404,9 @@ type benchMarkObj struct {
 func (bm *benchMarkObj) run(api apiInfo) []string {
 	if api.name == "chown" || api.name == "chmod" || api.name == "chtimes" {
 		if err := bm.chmod("not_exists"); err == utils.ENOTSUP {
-			return api.getResult(-1)
+			line := api.getResult(-1)
+			line[0] = api.title
+			return line
 		}
 	}
 	var fn func(key string) error
@@ -446,7 +449,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 				wg.Done()
 			}()
 			if err := fn(strconv.Itoa(key)); err != nil {
-				logger.Fatalf("%s test failed %s", api.name, err)
+				logger.Fatalf("%s test failed: %s", api.name, err)
 			}
 			bar.Increment()
 		}()
@@ -456,7 +459,9 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	if api.after != nil {
 		api.after(bm.blob)
 	}
-	return api.getResult(time.Since(start).Seconds())
+	line := api.getResult(time.Since(start).Seconds())
+	line[0] = api.title
+	return line
 }
 
 func (bm *benchMarkObj) put(key string) error {
@@ -494,7 +499,7 @@ func (bm *benchMarkObj) list(key string) error {
 }
 
 func (bm *benchMarkObj) chown(key string) error {
-	return bm.blob.(object.FileSystem).Chown(key, "", "")
+	return bm.blob.(object.FileSystem).Chown(key, "nobody", "nogroup")
 }
 
 func (bm *benchMarkObj) chmod(key string) error {
@@ -523,13 +528,19 @@ func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]obje
 	return nil, err
 }
 
+var syncTests = map[string]bool{
+	"put a big object":    true,
+	"put an empty object": true,
+	"multipart upload":    true,
+}
+
 func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string, tty bool) {
 	runCase := func(title string, fn func(blob object.ObjectStorage) error) {
 		r := pass
 		if err := fn(blob); err == utils.ENOTSUP {
 			r = nspt
 		} else if err != nil {
-			r = fmt.Sprintf("failed: %s", err)
+			r = err.Error()
 			if tty {
 				r = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, r, RESET_SEQ)
 			}
@@ -537,7 +548,7 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 		}
 
 		category := "basic"
-		if title == "list" || title == "multipartUpload" || strings.HasPrefix(title, "ch") {
+		if syncTests[title] || strings.HasPrefix(title, "change") {
 			category = "sync"
 		}
 
@@ -568,7 +579,21 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 	}
 	key := "put_test_file"
 
-	runCase("create bucket", func(blob object.ObjectStorage) error {
+	funFSCase := func(name string, fn func() error) {
+		runCase(name, func(blob object.ObjectStorage) error {
+			if !isFileSystem {
+				return utils.ENOTSUP
+			}
+			br := []byte("hello")
+			if err := blob.Put(key, bytes.NewReader(br)); err != nil {
+				return fmt.Errorf("put object failed: %s", err)
+			}
+			defer blob.Delete(key) //nolint:errcheck
+			return fn()
+		})
+	}
+
+	runCase("create a bucket", func(blob object.ObjectStorage) error {
 		created := true
 		if err := blob.Put(key, bytes.NewReader(nil)); err != nil {
 			created = false
@@ -577,7 +602,7 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 
 		if !created {
 			if err := blob.Create(); err != nil {
-				return fmt.Errorf("can't create bucket %s", err)
+				return fmt.Errorf("can't create bucket: %s", err)
 			}
 		}
 		if err := blob.Create(); err != nil {
@@ -586,91 +611,65 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 		return nil
 	})
 
-	runCase("put", func(blob object.ObjectStorage) error {
+	runCase("put an object", func(blob object.ObjectStorage) error {
 		br := []byte("hello")
 		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
-			return fmt.Errorf("put object failed %s", err)
+			return fmt.Errorf("put object failed: %s", err)
 		}
 		defer blob.Delete(key) //nolint:errcheck
 		return nil
 	})
 
-	runCase("put big", func(blob object.ObjectStorage) error {
-		fmt.Println("Testing upload a large object ...")
-		buffL := 1 << 20
-		buff := make([]byte, buffL)
-		rand.Read(buff)
-		count := int(math.Floor(float64(fsize) / float64(buffL)))
-		content := make([]byte, fsize)
-		for i := 0; i < count; i++ {
-			copy(content[i*buffL:(i+1)*buffL], buff)
-		}
-		if err := blob.Put(key, bytes.NewReader(content)); err != nil {
-			return fmt.Errorf("put big object failed %s", err)
-		}
-		defer blob.Delete(key) //nolint:errcheck
-		return nil
-	})
-
-	runCase("put empty", func(blob object.ObjectStorage) error {
-		// Copy empty objects
-		defer blob.Delete("empty_test_file") //nolint:errcheck
-		if err := blob.Put("empty_test_file", bytes.NewReader([]byte{})); err != nil {
-			return fmt.Errorf("put empty object failed %s", err)
-		}
-
-		// Copy `/` suffixed object
-		defer blob.Delete("slash_test_file/") //nolint:errcheck
-		if err := blob.Put("slash_test_file/", bytes.NewReader([]byte{})); err != nil {
-			return fmt.Errorf("put `/` suffixed object failed %s", err)
-		}
-		return nil
-	})
-
-	runCase("get", func(blob object.ObjectStorage) error {
+	runCase("get an object", func(blob object.ObjectStorage) error {
 		br := []byte("hello")
 		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
-			return fmt.Errorf("put object failed %s", err)
+			return fmt.Errorf("put object failed: %s", err)
 		}
 		defer blob.Delete(key) //nolint:errcheck
 		if s, err := get(blob, key, 0, -1); err != nil && s != string(br) {
-			return fmt.Errorf("get object failed %s", err)
+			return fmt.Errorf("get object failed: %s", err)
 		}
 		return nil
 	})
 
 	runCase("get non-exist", func(blob object.ObjectStorage) error {
 		if _, err := blob.Get("not_exists_file", 0, -1); err == nil {
-			return fmt.Errorf("get not exists object should failed %s", err)
+			return fmt.Errorf("get not exists object should failed: %s", err)
 		}
 		return nil
 	})
 
-	runCase("random get", func(blob object.ObjectStorage) error {
+	runCase("get partial object", func(blob object.ObjectStorage) error {
 		br := []byte("hello")
 		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
-			return fmt.Errorf("put object failed %s", err)
+			return fmt.Errorf("put object failed: %s", err)
 		}
 		defer blob.Delete(key) //nolint:errcheck
 		if d, e := get(blob, key, 0, -1); d != "hello" {
-			return fmt.Errorf("expect hello, but got %v, error:%s", d, e)
+			return fmt.Errorf("expect hello, but got %v, error: %s", d, e)
+		}
+		if d, e := get(blob, key, 2, -1); d != "llo" {
+			return fmt.Errorf("expect llo, but got %v, error: %s", d, e)
 		}
 		if d, e := get(blob, key, 2, 3); d != "llo" {
-			return fmt.Errorf("expect llo, but got %v, error:%s", d, e)
+			return fmt.Errorf("expect llo, but got %v, error: %s", d, e)
 		}
 		if d, e := get(blob, key, 2, 2); d != "ll" {
-			return fmt.Errorf("expect ll, but got %v, error:%s", d, e)
+			return fmt.Errorf("expect ll, but got %v, error: %s", d, e)
 		}
 		if d, e := get(blob, key, 4, 2); d != "o" {
-			return fmt.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
+			return fmt.Errorf("out-of-range get: 'o', but got %v, error: %s", len(d), e)
+		}
+		if d, e := get(blob, key, 6, 2); d != "" {
+			return fmt.Errorf("out-of-range get: '', but got %v, error: %s", len(d), e)
 		}
 		return nil
 	})
 
-	runCase("head", func(blob object.ObjectStorage) error {
+	runCase("head an object", func(blob object.ObjectStorage) error {
 		br := []byte("hello")
 		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
-			return fmt.Errorf("put object failed %s", err)
+			return fmt.Errorf("put object failed: %s", err)
 		}
 		defer blob.Delete(key) //nolint:errcheck
 		if h, err := blob.Head(key); err != nil {
@@ -683,13 +682,13 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 		return nil
 	})
 
-	runCase("delete", func(blob object.ObjectStorage) error {
+	runCase("delete an object", func(blob object.ObjectStorage) error {
 		br := []byte("hello")
 		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
-			return fmt.Errorf("put object failed %s", err)
+			return fmt.Errorf("put object failed: %s", err)
 		}
 		if err := blob.Delete(key); err != nil {
-			return fmt.Errorf("delete failed %s", err)
+			return fmt.Errorf("delete failed: %s", err)
 		}
 		if _, err := blob.Head(key); err == nil {
 			return fmt.Errorf("expect err is not nil")
@@ -708,7 +707,7 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 		return nil
 	})
 
-	runCase("list", func(blob object.ObjectStorage) error {
+	runCase("list objects", func(blob object.ObjectStorage) error {
 		br := []byte("hello")
 		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
 			return fmt.Errorf("put object failed: %s", err)
@@ -729,7 +728,7 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 				if objs[1].Key() != key {
 					return fmt.Errorf("first key should be test, but got %s", objs[1].Key())
 				}
-				if !strings.Contains(blob.String(), "encrypted") && objs[1].Size() != 5 {
+				if objs[1].Size() != 5 {
 					return fmt.Errorf("size of first key shold be 5, but got %v", objs[1].Size())
 				}
 				now := time.Now()
@@ -755,7 +754,7 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 				if objs[0].Key() != key {
 					return fmt.Errorf("first key should be test, but got %s", objs[0].Key())
 				}
-				if !strings.Contains(blob.String(), "encrypted") && objs[0].Size() != 5 {
+				if objs[0].Size() != 5 {
 					return fmt.Errorf("size of first key shold be 5, but got %v", objs[0].Size())
 				}
 				now := time.Now()
@@ -763,12 +762,12 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 					return fmt.Errorf("mtime of key should be within 10 seconds, but got %s", objs[0].Mtime().Sub(now))
 				}
 			} else {
-				return fmt.Errorf("list failed %s", err2)
+				return fmt.Errorf("list failed: %s", err2)
 			}
 
 			objs, err2 = listAll(blob, "", "test2", 1)
 			if err2 != nil {
-				return fmt.Errorf("list failed %s", err2)
+				return fmt.Errorf("list failed: %s", err2)
 			} else if len(objs) != 0 {
 				return fmt.Errorf("list should not return anything, but got %d", len(objs))
 			}
@@ -776,7 +775,39 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 		return nil
 	})
 
-	runCase("multipartUpload", func(blob object.ObjectStorage) error {
+	runCase("put a big object", func(blob object.ObjectStorage) error {
+		fmt.Println("Testing upload a large object ...")
+		buffL := 1 << 20
+		buff := make([]byte, buffL)
+		rand.Read(buff)
+		count := int(math.Floor(float64(fsize) / float64(buffL)))
+		content := make([]byte, fsize)
+		for i := 0; i < count; i++ {
+			copy(content[i*buffL:(i+1)*buffL], buff)
+		}
+		if err := blob.Put(key, bytes.NewReader(content)); err != nil {
+			return fmt.Errorf("put big object failed: %s", err)
+		}
+		defer blob.Delete(key) //nolint:errcheck
+		return nil
+	})
+
+	runCase("put an empty object", func(blob object.ObjectStorage) error {
+		// Copy empty objects
+		defer blob.Delete("empty_test_file") //nolint:errcheck
+		if err := blob.Put("empty_test_file", bytes.NewReader([]byte{})); err != nil {
+			return fmt.Errorf("put empty object failed: %s", err)
+		}
+
+		// Copy `/` suffixed object
+		defer blob.Delete("slash_test_file/") //nolint:errcheck
+		if err := blob.Put("slash_test_file/", bytes.NewReader([]byte{})); err != nil {
+			return fmt.Errorf("put `/` suffixed object failed: %s", err)
+		}
+		return nil
+	})
+
+	runCase("multipart upload", func(blob object.ObjectStorage) error {
 		key := "multi_test_file"
 		if err := blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			defer blob.Delete(key) //nolint:errcheck
@@ -787,21 +818,21 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 
 				part1, err := blob.UploadPart(key, uploadID, 1, make([]byte, partSize))
 				if err != nil {
-					return fmt.Errorf("uploadPart 1 failed %s", err)
+					return fmt.Errorf("uploadPart 1 failed: %s", err)
 				}
 				part2Size := 1 << 20
 				_, err = blob.UploadPart(key, uploadID, 2, make([]byte, part2Size))
 				if err != nil {
-					return fmt.Errorf("uploadPart 2 failed %s", err)
+					return fmt.Errorf("uploadPart 2 failed: %s", err)
 				}
 				part2Size = 2 << 20
 				part2, err := blob.UploadPart(key, uploadID, 2, make([]byte, part2Size))
 				if err != nil {
-					return fmt.Errorf("uploadPart 2 failed %s", err)
+					return fmt.Errorf("uploadPart 2 failed: %s", err)
 				}
 
 				if err := blob.CompleteUpload(key, uploadID, []*object.Part{part1, part2}); err != nil {
-					return fmt.Errorf("completeMultipart failed %s", err)
+					return fmt.Errorf("completeMultipart failed: %s", err)
 				}
 				if in, err := blob.Get(key, 0, -1); err != nil {
 					return fmt.Errorf("failed to download file,key=%s", key)
@@ -816,51 +847,42 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 		return utils.ENOTSUP
 	})
 
-	runCase("chown", func(blob object.ObjectStorage) error {
-		if !isFileSystem {
-			return utils.ENOTSUP
-		}
-		br := []byte("hello")
-		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
-			return fmt.Errorf("put object failed %s", err)
-		}
-		defer blob.Delete(key) //nolint:errcheck
-		if err := fi.Chown(key, "", ""); err != nil {
+	funFSCase("change owner/group", func() error {
+		if err := fi.Chown(key, "nobody", "nogroup"); err != nil {
 			return fmt.Errorf("failed to chown object %s", err)
 		}
+		if objInfo, err := blob.Head(key); err != nil {
+			return fmt.Errorf("failed to head object %s", err)
+		} else if info, ok := objInfo.(object.File); ok {
+			if info.Owner() != "nobody" {
+				return fmt.Errorf("expect owner nobody but got %s", info.Owner())
+			}
+			if info.Group() != "nogroup" {
+				return fmt.Errorf("expect group nogroup but got %s", info.Group())
+			}
+		}
 		return nil
 	})
 
-	runCase("chmod", func(blob object.ObjectStorage) error {
-		if !isFileSystem {
-			return utils.ENOTSUP
-		}
-		br := []byte("hello")
-		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
-			return fmt.Errorf("put object failed %s", err)
-		}
-		defer blob.Delete(key) //nolint:errcheck
+	funFSCase("change permission", func() error {
 		if err := fi.Chmod(key, 0777); err != nil {
-			return fmt.Errorf("failed to change file permissions %s", err)
+			return err
+		}
+		if objInfo, err := blob.Head(key); err != nil {
+			return fmt.Errorf("failed to head object %s", err)
+		} else if info, ok := objInfo.(object.File); ok {
+			if info.Mode()&0xFFF != 0777 {
+				return fmt.Errorf("expect mode %o but got %o", 0777, info.Mode())
+			}
 		}
 		return nil
 	})
 
-	runCase("chtimes", func(blob object.ObjectStorage) error {
-		if !isFileSystem {
-			return utils.ENOTSUP
-		}
-		br := []byte("hello")
-		if err := blob.Put(key, bytes.NewReader(br)); err != nil {
-			return fmt.Errorf("put object failed %s", err)
-		}
-		defer blob.Delete(key) //nolint:errcheck
-
+	funFSCase("change mtime", func() error {
 		mtime := time.Now().Add(-10 * time.Minute)
 		if err := fi.Chtimes(key, mtime); err != nil {
 			return fmt.Errorf("failed to chtimes %s", err)
 		}
-
 		if objInfo, err := blob.Head(key); err != nil {
 			return fmt.Errorf("failed to head object %s", err)
 		} else {
