@@ -35,7 +35,7 @@ type Context = LogContext
 
 const (
 	rootID      = 1
-	maxName     = 255
+	maxName     = meta.MaxName
 	maxSymlink  = 4096
 	maxFileSize = meta.ChunkSize << 31
 )

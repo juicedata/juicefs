@@ -914,6 +914,15 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 	return st
 }
 
+func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
+	s := fmt.Sprintf("%d-%d-%s", parent, inode, name)
+	if len(s) > MaxName {
+		s = s[:MaxName]
+		logger.Warnf("File name is too long as a trash entry, truncating it: %s -> %s", name, s)
+	}
+	return s
+}
+
 func (m *baseMeta) cleanupTrash() {
 	for {
 		utils.SleepWithJitter(time.Hour)

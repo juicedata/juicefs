@@ -73,6 +73,7 @@ const (
 	SetAttrMtimeNow
 )
 
+const MaxName = 255
 const TrashInode = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
 const TrashName = ".trash"
 
