@@ -35,5 +35,5 @@ You can create a branch of this repository through GitHub, add the titile and UR
 
 ### 2. Social media
 
-You can join JuiceFS official [Slack channel](https://juicefs.slack.com/), any staff member can contact contribution matters.
+You can join JuiceFS official [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-YD7e0JxWdesSEa9vY_f_DA), any staff member can contact contribution matters.
 
