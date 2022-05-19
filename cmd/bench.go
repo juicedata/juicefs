@@ -254,13 +254,9 @@ func printResult(result [][]string, isatty bool) {
 	}
 	colNum := len(result[0])
 	rawmax, max := make([]int, colNum), make([]int, colNum)
-	for idx, l := range result {
+	for _, l := range result {
 		for i := 0; i < colNum; i++ {
 			if len(l[i]) > rawmax[i] {
-				if idx == 0 && isatty {
-					rawmax[i] = len(l[i]) + 11
-					continue
-				}
 				rawmax[i] = len(l[i])
 			}
 		}

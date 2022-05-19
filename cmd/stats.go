@@ -76,6 +76,7 @@ const (
 	MAGENTA
 	CYAN
 	WHITE
+	DEFAULT = "00"
 )
 
 const (
