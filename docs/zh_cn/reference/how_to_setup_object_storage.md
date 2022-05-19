@@ -123,6 +123,10 @@ $ juicefs format \
 | [Apache Ozone](#apache-ozone)               | `s3`         |
 | [Redis](#redis)                             | `redis`      |
 | [TiKV](#tikv)                               | `tikv`       |
+| [etcd](#etcd)                               | `etcd`       |
+| [SQLite](#sqlite)                           | `sqlite3`    |
+| [MySQL](#mysql)                             | `mysql`      |
+| [PostgreSQL](#postgresql)                   | `postgres`   |
 | [本地磁盘](#本地磁盘)                       | `file`       |
 
 ## Amazon S3
@@ -216,7 +220,21 @@ $ juicefs format \
 
 ## Azure Blob 存储
 
-使用 Azure Blob 作为 JuiceFS 的数据存储，除了使用 `--access-key` 和 `--secret-key` 选项之外，你也可以使用 [连接字符串](https://docs.microsoft.com/zh-cn/azure/storage/common/storage-configure-connection-string) 并通过 `AZURE_STORAGE_CONNECTION_STRING` 环境变量进行设定。例如：
+使用 Azure Blob 存储作为 JuiceFS 的数据存储，请先 [查看文档](https://docs.microsoft.com/zh-cn/azure/storage/common/storage-account-keys-manage) 了解如何查看存储帐户的名称和密钥，它们分别对应 `--access-key` 和 `--secret-key` 选项的值。
+
+`--bucket` 选项的设置格式为 `https://<container>.<endpoint>`，请将其中的 `<container>` 替换为实际的 Blob 容器的名称，将 `<endpoint>` 替换为 `blob.core.windows.net`（Azure 全球）或 `blob.core.chinacloudapi.cn`（Azure 中国）。例如：
+
+```bash
+juicefs format \
+    --storage wasb \
+    --bucket https://<container>.<endpoint> \
+    --access-key <storage-account-name> \
+    --secret-key <storage-account-access-key> \
+    ... \
+    myjfs
+```
+
+除了使用 `--access-key` 和 `--secret-key` 选项之外，你也可以使用 [连接字符串](https://docs.microsoft.com/zh-cn/azure/storage/common/storage-configure-connection-string) 并通过 `AZURE_STORAGE_CONNECTION_STRING` 环境变量进行设定。例如：
 
 ```bash
 # Use connection string
@@ -229,7 +247,7 @@ $ juicefs format \
 ```
 
 :::note 注意
-Azure China 用户，`EndpointSuffix` 值为 `core.chinacloudapi.cn`。
+对于 Azure 中国用户，`EndpointSuffix` 的值为 `core.chinacloudapi.cn`。
 :::
 
 ## Backblaze B2
@@ -302,7 +320,7 @@ $ juicefs format \
 
 使用 Scaleway 对象存储作为 JuiceFS 数据存储，请先 [查看文档](https://www.scaleway.com/en/docs/generate-api-keys) 了解如何创建  `Access key` 和 `Secret key`。
 
-`--bucket` 选项的设置格式为 `https://<bucket>.s3.<region>.scw.cloud`，请将其中的  `<region>`  替换成实际的区域代码，例如：荷兰阿姆斯特丹的区域代码是 `nl-ams`。[点此查看](https://www.scaleway.com/en/docs/object-storage-feature/#-Core-Concepts) 所有可用的区域代码。
+`--bucket` 选项的设置格式为 `https://<bucket>.s3.<region>.scw.cloud`，请将其中的 `<region>` 替换成实际的区域代码，例如：荷兰阿姆斯特丹的区域代码是 `nl-ams`。[点此查看](https://www.scaleway.com/en/docs/object-storage-feature/#-Core-Concepts) 所有可用的区域代码。
 
 ```bash
 $ juicefs format \
@@ -316,7 +334,7 @@ $ juicefs format \
 
 使用 DigitalOcean Spaces 作为 JuiceFS 数据存储，请先 [查看文档](https://www.digitalocean.com/community/tutorials/how-to-create-a-digitalocean-space-and-api-key) 了解如何创建  `Access key` 和 `Secret key`。
 
-`--bucket` 选项的设置格式为 `https://<space-name>.<region>.digitaloceanspaces.com`，请将其中的  `<region>`  替换成实际的区域代码，例如：`nyc3`。[点此查看](https://www.digitalocean.com/docs/spaces/#regional-availability) 所有可用的区域代码。
+`--bucket` 选项的设置格式为 `https://<space-name>.<region>.digitaloceanspaces.com`，请将其中的 `<region>` 替换成实际的区域代码，例如：`nyc3`。[点此查看](https://www.digitalocean.com/docs/spaces/#regional-availability) 所有可用的区域代码。
 
 ```bash
 $ juicefs format \
@@ -840,6 +858,109 @@ $ juicefs format \
     ... \
     myjfs
 ```
+
+## etcd
+
+[etcd](https://etcd.io) 是一个高可用高可靠的小规模键值数据库，既可以用作 JuiceFS 的元数据存储，也可以用于 JuiceFS 的数据存储。
+
+etcd 默认会限制单个请求不能超过 1.5MB，需要将 JuiceFS 的分块大小改成 1MB 甚至更低。
+
+`--bucket` 选项需要填 etcd 的地址，格式类似 `<host1>:<port>,<host2>:<port>,<host3>:<port>`，`--access-key` 和 `--secret-key` 填用户名和密码，当 etcd 没有设置用户认证时可以省略。例如：
+
+```bash
+$ juicefs format \
+    --storage etcd --block-size 1024 \
+    --bucket "<host1>:<port>,<host2>:<port>,<host3>:<port>/prefix" \
+    --access-key myname
+    --secret-key mypass
+    ... \
+    myjfs
+```
+
+### 设置 TLS
+
+如果需要开启 TLS，可以通过在 Bucket-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+
+| 配置项             | 值                    |
+|-------------------|-----------------------|
+| cacert            | CA 根证书              |
+| cert              | 证书文件路径            |
+| key               | 私钥文件路径            |
+| server-name       | 服务器名称              |
+| insecure-skip-verify | 1                  |
+
+例子：
+```bash
+$ juicefs format \
+    --storage etcd \
+    --bucket "<host>:<port>,<host>:<port>,<host>:<port>?cacert=/path/to/ca.pem&cert=/path/to/server.pem&key=/path/to/key.pem&server-name=etcd" \
+    ... \
+    myjfs
+```
+
+注意：证书的路径需要使用绝对路径，并且确保所有需要挂载的机器上能用该路径访问到它们。
+
+## SQLite
+
+[SQLite](https://sqlite.org) 是全球广泛使用的小巧、快速、单文件、可靠、全功能的单文件 SQL 数据库引擎。
+
+使用 SQLite 作为数据存储时只需要指定它的绝对路径即可。
+
+```shell
+$ juicefs format \
+    --storage sqlite3 \
+    --bucket /path/to/sqlite3.db
+    ... \
+    myjfs
+```
+
+:::note 注意
+由于 SQLite 是一款嵌入式数据库，只有数据库所在的主机可以访问它，不能用于多机共享场景。如果格式化时使用的是相对路径，会导致挂载时出问题，请使用绝对路径。
+:::
+
+## MySQL
+
+[MySQL](https://www.mysql.com/) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库，既可以作为 JuiceFS 的元数据引擎也可以用来存储文件数据。跟 MySQL 兼容的 [MariaDB](https://mariadb.org)、[TiDB](https://pingcap.com/) 等都可以用来作为数据存储。
+
+使用 MySQL 作为数据存储时，需要提前创建数据库并添加想要权限，通过`--bucket`参数指定访问地址，通过`--access-key`指定用户名，通过 `--secret-key`指定密码，示例如下：
+
+```shell
+$ juicefs format \
+    --storage mysql \
+    --bucket (<host>:3306)/<database-name> \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+创建文件系统后，JuiceFS 会在该数据库中创建名为 `jfs_blob` 的表用来存储数据。
+
+:::note 注意
+不要漏掉 `--bucket` 参数里的括号 `()` 。
+:::
+
+## PostgreSQL
+
+[PostgreSQL](https://www.postgresql.org/) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，既可以作为 JuiceFS 的元数据引擎也可以作为数据存储。其他跟 PostgreSQL 协议兼容的数据库（比如 CockroachDB 等) 也可以。
+
+创建文件系统时需要先创建好数据库并添加相应读写权限，使用 `--bucket` 来指定数据的地址，使用 `--access-key` 指定用户名，使用 `--secret-key`指定密码，实例如下：
+
+```shell
+$ juicefs format \
+    --storage postgres \
+    --bucket <host>:<port>/<db>[?parameters] \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+创建文件系统后，JuiceFS 会在该数据库中创建名为 `jfs_blob` 的表用来存储数据。
+
+### 故障排除
+
+JuiceFS 客户端默认采用 SSL 加密连接 PostgreSQL，如果连接时报错  `pq: SSL is not enabled on the server` 说明数据库没有启用 SSL。可以根据业务场景为 PostgreSQL 启用 SSL 加密，也可以在元数据 URL 中添加参数 `sslmode=disable` 禁用加密验证。
 
 ## 本地磁盘
 

@@ -228,7 +228,7 @@ func (m *redisMeta) Init(format Format, force bool) error {
 		var old Format
 		err = json.Unmarshal(body, &old)
 		if err != nil {
-			logger.Fatalf("existing format is broken: %s", err)
+			return fmt.Errorf("existing format is broken: %s", err)
 		}
 		if err = format.update(&old, force); err != nil {
 			return err
@@ -237,7 +237,7 @@ func (m *redisMeta) Init(format Format, force bool) error {
 
 	data, err := json.MarshalIndent(format, "", "")
 	if err != nil {
-		logger.Fatalf("json: %s", err)
+		return fmt.Errorf("json: %s", err)
 	}
 	ts := time.Now().Unix()
 	attr := &Attr{
@@ -408,7 +408,7 @@ func (m *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 	return &s, nil
 }
 
-func (m *redisMeta) GetSession(sid uint64) (*Session, error) {
+func (m *redisMeta) GetSession(sid uint64, detail bool) (*Session, error) {
 	var legacy bool
 	key := strconv.FormatUint(sid, 10)
 	score, err := m.rdb.ZScore(Background, m.allSessions(), key).Result()
@@ -422,7 +422,7 @@ func (m *redisMeta) GetSession(sid uint64) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := m.getSession(key, true)
+	s, err := m.getSession(key, detail)
 	if err != nil {
 		return nil, err
 	}
@@ -1260,7 +1260,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			if attr.Nlink > 0 {
 				pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
 				if trash > 0 {
-					pipe.HSet(ctx, m.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
+					pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name), buf)
 				}
 			} else {
 				switch _type {
@@ -1372,7 +1372,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			}
 			if trash > 0 {
 				pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
-				pipe.HSet(ctx, m.entryKey(trash), fmt.Sprintf("%d-%d-%s", parent, inode, name), buf)
+				pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name), buf)
 			} else {
 				pipe.Del(ctx, m.inodeKey(inode))
 				pipe.Del(ctx, m.xattrKey(inode))
@@ -1562,7 +1562,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				if dino > 0 {
 					if trash > 0 {
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
-						pipe.HSet(ctx, m.entryKey(trash), fmt.Sprintf("%d-%d-%s", parentDst, dino, nameDst), dbuf)
+						pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parentDst, dino, nameDst), dbuf)
 					} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
 					} else {
@@ -1874,7 +1874,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		go m.doDeleteFileData(inode, attr.Length)
+		m.tryDeleteFileData(inode, attr.Length)
 	}
 	return err
 }

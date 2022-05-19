@@ -26,7 +26,7 @@ juicefs format [command options] META-URL NAME
 
 可见，格式化文件系统需要提供 3 种信息：
 
-1. **[command options]**：设定文件系统的存储介质，留空则**默认使用本地磁盘**作为存储介质，路径为 `"$HOME/.juicefs/local"` 或 `"/var/jfs"`；
+1. **[command options]**：设定文件系统的存储介质，留空则**默认使用本地磁盘**作为存储介质，路径为 `"$HOME/.juicefs/local"`，`"/var/jfs"` 或 `"C:/jfs/local"`；
 2. **META-URL**：用来设置元数据存储，即数据库相关的信息，通常是数据库的 URL 或文件路径；
 3. **NAME**：是文件系统的名称。
 
@@ -84,28 +84,28 @@ Windows 系统的挂载点（MOUNTPOINT）应该使用尚未占用的盘符，�
 由于 SQLite 是单文件数据库，挂载时要注意数据库文件的的路径，JuiceFS 同时支持相对路径和绝对路径。
 :::
 
-以下命令将 `myjfs` 文件系统挂载到当前目录下的 `mnt` 文件夹：
+以下命令将 `myjfs` 文件系统挂载到 `~/jfs` 文件夹：
 
 ```shell
-juicefs mount sqlite3://myjfs.db mnt
+juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
 ![](../images/sqlite-mount-local.png)
 
 默认情况下，客户端会在前台挂载文件系统。就像你在上图中看到的那样，程序会一直运行在当前终端进程中，使用 <kbd>Ctrl</kbd> + <kbd>C</kbd> 组合键或关闭终端窗口，文件系统会被卸载。
 
-为了让文件系统可以在后台保持挂载，你可以在挂载时指定 `-d` 或 `--background` 选项，即让客户端在守护进程中挂载文件系统。
+为了让文件系统可以在后台保持挂载，你可以在挂载时指定 `-d` 或 `--background` 选项，即让客户端在守护进程中挂载文件系统：
 
 ```shell
-juicefs mount sqlite3://myjfs.db mnt -d
+juicefs mount sqlite3://myjfs.db ~/jfs -d
 ```
 
-接下来，任何存入挂载点 `mnt` 的文件，都会按照 [JuiceFS 的文件存储格式](../introduction/architecture.md#如何存储文件)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
+接下来，任何存入挂载点 `~/jfs` 的文件，都会按照 [JuiceFS 的文件存储格式](../introduction/architecture.md#如何存储文件)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
 
-最后执行以下命令可以将挂载点 `mnt` 卸载：
+最后执行以下命令可以将挂载点 `~/jfs` 卸载：
 
 ```shell
-juicefs umount mnt
+juicefs umount ~/jfs
 ```
 
 ## 更进一步
@@ -120,8 +120,8 @@ JuiceFS 支持几乎所有的对象存储服务，查看「[JuiceFS 支持的存
 
 一般来说，创建对象存储通常只需要 2 个环节：
 
-1. 创建 `Bucket` 存储桶，拿到 Endpoint 地址；
-2. 创建 `Access Key ID` 和 `Access Key Secret`，即对象存储 API 的访问密钥。
+1. 创建 **Bucket** 存储桶，拿到 Endpoint 地址；
+2. 创建 **Access Key ID** 和 **Access Key Secret**，即对象存储 API 的访问密钥。
 
 以阿里云 OSS 为例，创建好的资源大概像下面这样：
 
@@ -130,7 +130,7 @@ JuiceFS 支持几乎所有的对象存储服务，查看「[JuiceFS 支持的存
 - **Access Key Secret**：`ZYXwvutsrqpoNMLkJiHgfeDCBA`
 
 :::note 注意
-创建对象存储时的过程各个平台会略有差别，建议查看云平台的帮助手册操作。另外，有些平台可能会针对内外网提供不同的 Endpoint 地址，由于本文要从本地访问对象存储，因此请选择使用面向外网访问的地址。
+创建对象存储的过程各个平台会略有差别，建议查看云平台的帮助手册操作。另外，有些平台可能会针对内外网提供不同的 Endpoint 地址，由于本文要从本地访问对象存储，因此请选择使用面向外网访问的地址。
 :::
 
 ### 上手实践
@@ -151,7 +151,7 @@ juicefs format --storage oss \
 
 在上述命令中，数据库和文件系统名称保持不变，增加了对象存储相关的信息：
 
-- `--storage`：设置存储类型，比如 oss、s3 等；
+- `--storage`：设置存储类型，比如 `oss`、`s3` 等；
 - `--bucket`：设置对象存储的 Endpoint 地址；
 - `--access-key`：设置对象存储 API 访问密钥 Access Key ID；
 - `--secret-key`：设置对象存储 API 访问密钥 Access Key Secret。
@@ -163,7 +163,7 @@ juicefs format --storage oss \
 创建完成即可进行挂载：
 
 ```shell
-juicefs mount sqlite3://myjfs.db mnt
+juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
 可以看到，挂载命令与使用本地存储时完全一样，因为 JuiceFS 已经把对象存储相关的信息写入了 `myjfs.db` 数据库，挂载时无需重复提供。

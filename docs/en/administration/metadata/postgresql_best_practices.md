@@ -18,19 +18,18 @@ It is recommended to configure and always enable SSL encryption on the database 
 
 ## Passing sensitive information via environment variables
 
-Although it is easy and convenient to set the database password directly in the metadata URL, the password may be leaked in logs or program output, and for data security, the database password should always be passed through an environment variable.
+Although it is easy and convenient to set the database password directly in the metadata URL, JuiceFS hides it from logging and process list, but it's still possible to leak in other ways. For data security, it's better to pass the database password through an environment variable.
 
-Environment variable names can be freely defined, e.g.
-
-```shell
-export $PG_PASSWD=mypassword
-```
-
-Passing the database password in the metadata URL via environment variables.
+`META_PASSWORD` is a predefined environment variable for it:
 
 ```shell
-juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs" /mnt/jfs
+export META_PASSWORD=mypassword
+juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
+
+## Authentication methods
+
+Authentication with PostgreSQL is currently possible with "md5" method.
 
 ## Backup periodically
 

@@ -1,6 +1,3 @@
-//go:build nowebdav
-// +build nowebdav
-
 /*
  * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
@@ -17,22 +14,20 @@
  * limitations under the License.
  */
 
-package cmd
+package main
 
 import (
-	"errors"
+	"os"
 
-	"github.com/urfave/cli/v2"
+	"github.com/juicedata/juicefs/cmd"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
-func cmdWebDav() *cli.Command {
-	return &cli.Command{
-		Name:        "webdav",
-		Category:    "SERVICE",
-		Usage:       "Start a WebDAV server (not included)",
-		Description: `This feature is not included. If you want it, recompile juicefs without "nowebdav" flag`,
-		Action: func(*cli.Context) error {
-			return errors.New("not supported")
-		},
+var logger = utils.GetLogger("juicefs")
+
+func main() {
+	err := cmd.Main(os.Args)
+	if err != nil {
+		logger.Fatal(err)
 	}
 }

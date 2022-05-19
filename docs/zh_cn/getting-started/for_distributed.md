@@ -42,7 +42,7 @@ JuiceFS 目前支持的基于网络的数据库有：
 
 ### 1. 安装客户端
 
-在所有需要挂载文件系统的计算机上安装 JuiceFS 客户端，详情参照[安装 & 升级](installation.md)。
+在所有需要挂载文件系统的计算机上安装 JuiceFS 客户端，详情参照[「安装 & 升级」](installation.md)。
 
 ### 2. 准备对象存储
 
@@ -103,7 +103,7 @@ juicefs format \
 由于这个文件系统的「数据」和「元数据」都存储在基于网络的云服务中，因此在任何安装了 JuiceFS 客户端的计算机上都可以同时挂载该文件系统进行共享读写。例如：
 
 ```shell
-juicefs mount redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 mnt
+juicefs mount redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 ~/jfs
 ```
 
 #### 数据强一致性保证
@@ -123,7 +123,8 @@ juicefs mount
     --background \
     --cache-dir /mycache \
     --cache-size 512000 \
-    redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 mnt
+    redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 \
+    ~/jfs
 ```
 
 :::note 注意
@@ -152,10 +153,10 @@ redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1    /mnt/myjfs 
 
 ### 6. 卸载文件系统
 
-你可以通过 `juicefs umount` 命令卸载 JuiceFS 文件系统（假设挂载点路径是 `mnt`）：
+你可以通过 `juicefs umount` 命令卸载 JuiceFS 文件系统（假设挂载点路径是 `~/jfs`）：
 
 ```shell
-juicefs umount mnt
+juicefs umount ~/jfs
 ```
 
 #### 卸载失败
@@ -163,7 +164,7 @@ juicefs umount mnt
 如果执行命令后，文件系统卸载失败，提示 `Device or resource busy`：
 
 ```shell
-2021-05-09 22:42:55.757097 I | fusermount: failed to unmount mnt: Device or resource busy
+2021-05-09 22:42:55.757097 I | fusermount: failed to unmount ~/jfs: Device or resource busy
 exit status 1
 ```
 
@@ -176,5 +177,5 @@ exit status 1
 当然，在你能够确保数据安全的前提下，也可以在卸载命令中添加 `--force` 或 `-f` 参数，强制卸载文件系统：
 
 ```shell
-juicefs umount --force mnt
+juicefs umount --force ~/jfs
 ```

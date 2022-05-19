@@ -85,7 +85,7 @@ func (b *wasb) Copy(dst, src string) error {
 func (b *wasb) Delete(key string) error {
 	_, err := b.container.NewBlockBlobClient(key).Delete(ctx, &azblob.DeleteBlobOptions{})
 	if err != nil && strings.Contains(err.Error(), string(azblob.StorageErrorCodeBlobNotFound)) {
-		return nil
+		err = nil
 	}
 	return err
 }

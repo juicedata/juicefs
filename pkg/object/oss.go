@@ -380,6 +380,7 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	client.Config.HTTPTimeout.HeaderTimeout = time.Second * 5    // 60s
 	client.Config.HTTPTimeout.LongTimeout = time.Second * 30     // 300s
 	client.Config.IsEnableCRC = false                            // CRC64ECMA is much slower than CRC32C
+	client.Config.UserAgent = UserAgent
 
 	bucket, err := client.Bucket(bucketName)
 	if err != nil {

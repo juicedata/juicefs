@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -697,11 +698,10 @@ func testLocks(t *testing.T, m Meta) {
 			time.Sleep(time.Millisecond)
 			count--
 			if count > 0 {
-				logger.Fatalf("count should be be zero but got %d", count)
+				t.Fatalf("count should be be zero but got %d", count)
 			}
 			if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, 0, 0xFFFF, uint32(i)); st != 0 {
-				logger.Fatalf("plock unlock: %s", st)
-				err = st
+				t.Fatalf("plock unlock: %s", st)
 			}
 		}(i)
 	}
@@ -1110,7 +1110,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	case *kvMeta:
 		sid = m.sid
 	}
-	s, err := m.GetSession(sid)
+	s, err := m.GetSession(sid, true)
 	if err != nil {
 		t.Fatalf("get session: %s", err)
 	} else {
@@ -1121,7 +1121,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	if err = m.CloseSession(); err != nil {
 		t.Fatalf("close session: %s", err)
 	}
-	if _, err = m.GetSession(sid); err == nil {
+	if _, err = m.GetSession(sid, true); err == nil {
 		t.Fatalf("get a deleted session: %s", err)
 	}
 	switch m := m.(type) {
@@ -1199,6 +1199,17 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "d"); st != 0 {
 		t.Fatalf("unlink d: %s", st)
 	}
+	lname := strings.Repeat("f", MaxName)
+	if st := m.Create(ctx, 1, lname, 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create %s: %s", lname, st)
+	}
+	if st := m.Unlink(ctx, 1, lname); st != 0 {
+		t.Fatalf("unlink %s: %s", lname, st)
+	}
+	tname := fmt.Sprintf("1-%d-%s", inode, lname)[:MaxName]
+	if st := m.Lookup(ctx, TrashInode+1, tname, &inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("lookup subTrash/%s: %s, attr %+v", tname, st, attr)
+	}
 	var entries []*Entry
 	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
@@ -1210,7 +1221,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 7 {
+	if len(entries) != 8 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	ctx2 := NewContext(1000, 1, []uint32{1})

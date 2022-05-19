@@ -114,7 +114,7 @@ jobs:
 
       - name: Build Juicefs
         run: |
-          go build -ldflags="-s -w" -o juicefs.exe ./cmd
+          go build -ldflags="-s -w" -o juicefs.exe .
 
       - name: Juicefs Format
         run: |

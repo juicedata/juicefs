@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"bufio"
@@ -103,7 +103,7 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 		logger.Fatalf("Write message: %s", err)
 	}
 	if background {
-		logger.Infof("Warm-up cache for %d paths in backgroud", count)
+		logger.Infof("Warm-up cache for %d paths in background", count)
 		return
 	}
 	var errs = make([]byte, 1)

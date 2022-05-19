@@ -1,0 +1,93 @@
+name: "config-test"
+
+on:
+  push:
+    branches: 
+      - main
+      - release-**
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches: 
+      - main
+      - release-**
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+  
+jobs:
+  config-test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17.x'
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Setup minio
+        run: |
+            docker run -d -p 9000:9000 --name minio \
+                     -e "MINIO_ACCESS_KEY=minioadmin" \
+                     -e "MINIO_SECRET_KEY=minioadmin" \
+                     -v /tmp/data:/data \
+                     -v /tmp/config:/root/.minio \
+                     minio/minio server /data     
+                     
+      - name: Download tool
+        run: | 
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc 
+          
+      - name: Test
+        run: |
+          meta_url=redis://127.0.0.1/1
+          mount_point=/tmp/sync-test/
+          ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
+          ./mc admin user add minio juicedata juicedata
+          ./mc admin policy set minio consoleAdmin user=juicedata
+          ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
+          ./juicefs mount $meta_url $mount_point -d --io-retries 1
+
+          ./mc admin user remove minio juicedata
+          ./mc admin user add minio juicedata1 juicedata1
+          ./mc admin policy set minio consoleAdmin user=juicedata1
+          ./juicefs config $meta_url --access-key juicedata1 --secret-key juicedata1
+          sleep 60
+          echo abc > abc.txt
+          cp abc.txt $mount_point/abc.txt && echo "write success"
+          cat $mount_point/abc.txt | grep abc && echo "read success"
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

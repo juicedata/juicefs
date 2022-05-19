@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"encoding/json"
@@ -73,7 +73,7 @@ func status(ctx *cli.Context) error {
 	format.RemoveSecret()
 
 	if sid := ctx.Uint64("session"); sid != 0 {
-		s, err := m.GetSession(sid)
+		s, err := m.GetSession(sid, true)
 		if err != nil {
 			logger.Fatalf("get session: %s", err)
 		}

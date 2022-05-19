@@ -120,7 +120,7 @@ func (m *kvMeta) keyLen(args ...interface{}) int {
 		case string:
 			c += len(a)
 		default:
-			logger.Fatalf("invalid type %T, value %v", a, a)
+			panic(fmt.Sprintf("invalid type %T, value %v", a, a))
 		}
 	}
 	return c
@@ -141,7 +141,7 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
 		case string:
 			b.Put([]byte(a))
 		default:
-			logger.Fatalf("invalid type %T, value %v", a, a)
+			panic(fmt.Sprintf("invalid type %T, value %v", a, a))
 		}
 	}
 	return b.Bytes()
@@ -342,7 +342,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 
 	data, err := json.MarshalIndent(format, "", "")
 	if err != nil {
-		logger.Fatalf("json: %s", err)
+		return fmt.Errorf("json: %s", err)
 	}
 
 	m.fmt = format
@@ -559,7 +559,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 	return &s, nil
 }
 
-func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
+func (m *kvMeta) GetSession(sid uint64, detail bool) (*Session, error) {
 	var legacy bool
 	value, err := m.get(m.sessionKey(sid))
 	if err == nil && value == nil {
@@ -572,7 +572,7 @@ func (m *kvMeta) GetSession(sid uint64) (*Session, error) {
 	if value == nil {
 		return nil, fmt.Errorf("session not found: %d", sid)
 	}
-	s, err := m.getSession(sid, true)
+	s, err := m.getSession(sid, detail)
 	if err != nil {
 		return nil, err
 	}
@@ -1141,7 +1141,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if attr.Nlink > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			if trash > 0 {
-				tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parent, inode, name)), buf)
+				tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
 			}
 		} else {
 			switch _type {
@@ -1234,7 +1234,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		tx.dels(m.entryKey(parent, name))
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
-			tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parent, inode, name)), buf)
+			tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
 		} else {
 			tx.dels(m.inodeKey(inode))
 			tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
@@ -1394,7 +1394,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if dino > 0 {
 				if trash > 0 {
 					tx.set(m.inodeKey(dino), m.marshal(&tattr))
-					tx.set(m.entryKey(trash, fmt.Sprintf("%d-%d-%s", parentDst, dino, nameDst)), dbuf)
+					tx.set(m.entryKey(trash, m.trashEntry(parentDst, dino, nameDst)), dbuf)
 				} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
 					tx.set(m.inodeKey(dino), m.marshal(&tattr))
 				} else {
@@ -1575,7 +1575,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		go m.doDeleteFileData(inode, attr.Length)
+		m.tryDeleteFileData(inode, attr.Length)
 	}
 	return err
 }

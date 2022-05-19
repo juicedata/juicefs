@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -90,10 +91,12 @@ func installHandler(mp string) {
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	go func() {
 		for {
-			<-signalChan
+			sig := <-signalChan
+			logger.Infof("Received signal %s, exiting...", sig.String())
 			go func() { _ = doUmount(mp, true) }()
 			go func() {
 				time.Sleep(time.Second * 3)
+				logger.Warnf("Umount not finished after 3 seconds, force exit")
 				os.Exit(1)
 			}()
 		}
@@ -167,10 +170,10 @@ func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry)
 	return registerer, registry
 }
 
-func getFormat(c *cli.Context, metaCli meta.Meta) *meta.Format {
+func getFormat(c *cli.Context, metaCli meta.Meta) (*meta.Format, error) {
 	format, err := metaCli.Load(true)
 	if err != nil {
-		logger.Fatalf("load setting: %s", err)
+		return nil, fmt.Errorf("load setting: %s", err)
 	}
 	if c.IsSet("bucket") {
 		format.Bucket = c.String("bucket")
@@ -178,7 +181,7 @@ func getFormat(c *cli.Context, metaCli meta.Meta) *meta.Format {
 	if c.IsSet("storage") {
 		format.Storage = c.String("storage")
 	}
-	return format
+	return format, nil
 }
 
 func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
@@ -281,16 +284,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	}
 }
 
-func newStore(format *meta.Format, chunkConf *chunk.Config, registerer prometheus.Registerer) (object.ObjectStorage, chunk.ChunkStore) {
-	blob, err := createStorage(*format)
-	if err != nil {
-		logger.Fatalf("object storage: %s", err)
-	}
-	logger.Infof("Data use %s", blob)
-	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
-	return blob, store
-}
-
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
 		BlockSize:  format.BlockSize * 1024,
@@ -307,6 +300,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		BufferSize:    c.Int("buffer-size") << 20,
 		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
 		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
+		UploadDelay:   duration(c.String("upload-delay")),
 
 		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
@@ -339,6 +333,40 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 	}
 }
 
+type storageHolder struct {
+	object.ObjectStorage
+}
+
+func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, error)) (object.ObjectStorage, error) {
+	blob, err := createStorage(*format)
+	if err != nil {
+		return nil, err
+	}
+	holder := &storageHolder{blob}
+	go func() {
+		old := *format // keep a copy, so it will not refreshed
+		for {
+			time.Sleep(time.Minute)
+			new, err := reload()
+			if err != nil {
+				logger.Warnf("reload config: %s", err)
+				continue
+			}
+			if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey {
+				logger.Infof("found new configuration: storage=%s bucket=%s ak=%s", new.Storage, new.Bucket, new.AccessKey)
+				newBlob, err := createStorage(*new)
+				if err != nil {
+					logger.Warnf("object storage: %s", err)
+					continue
+				}
+				holder.ObjectStorage = newBlob
+				old = *new
+			}
+		}
+	}()
+	return holder, nil
+}
+
 func mount(c *cli.Context) error {
 	setup(c, 2)
 	addr := c.Args().Get(0)
@@ -348,7 +376,10 @@ func mount(c *cli.Context) error {
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
 	metaCli := meta.NewClient(addr, metaConf)
-	format := getFormat(c, metaCli)
+	format, err := getFormat(c, metaCli)
+	if err != nil {
+		return err
+	}
 
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(mp, format.Name)
@@ -357,10 +388,16 @@ func mount(c *cli.Context) error {
 		logger.Warnf("delayed upload only work in writeback mode")
 	}
 
-	chunkConf := getChunkConf(c, format)
-	chunkConf.UploadDelay = duration(c.String("upload-delay"))
+	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
+		return getFormat(c, metaCli)
+	})
+	if err != nil {
+		return fmt.Errorf("object storage: %s", err)
+	}
+	logger.Infof("Data use %s", blob)
 
-	blob, store := newStore(format, chunkConf, registerer)
+	chunkConf := getChunkConf(c, format)
+	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
@@ -372,7 +409,7 @@ func mount(c *cli.Context) error {
 	}
 
 	removePassword(addr)
-	err := metaCli.NewSession()
+	err = metaCli.NewSession()
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}

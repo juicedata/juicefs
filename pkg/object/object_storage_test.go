@@ -22,8 +22,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/go-redis/redis/v8"
 	"io/ioutil"
 	"math"
 	"os"
@@ -31,6 +31,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-redis/redis/v8"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func get(s ObjectStorage, k string, off, limit int64) (string, error) {
@@ -47,7 +50,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 
 func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
 	r, err := s.List(prefix, marker, limit)
-	if err == nil {
+	if !errors.Is(err, notSupported) {
 		return r, nil
 	}
 	ch, err := s.ListAll(prefix, marker)
@@ -560,6 +563,28 @@ func TestSharding(t *testing.T) {
 	testStorage(t, s)
 }
 
+func TestSQLite(t *testing.T) {
+	s, err := newSQLStore("sqlite3", "/tmp/teststore.db", "", "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testStorage(t, s)
+}
+
+func TestPG(t *testing.T) {
+	s, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable", "", "")
+	if err == nil {
+		testStorage(t, s)
+	}
+}
+
+func TestMySQL(t *testing.T) {
+	s, err := newSQLStore("mysql", "/dev", "root", "")
+	if err == nil {
+		testStorage(t, s)
+	}
+}
+
 func TestNameString(t *testing.T) {
 	s, _ := newMem("test", "", "")
 	s = WithPrefix(s, "a/")
@@ -567,4 +592,9 @@ func TestNameString(t *testing.T) {
 	if s.String() != "mem://test/a/b/" {
 		t.Fatalf("name with two prefix does not match: %s", s.String())
 	}
+}
+
+func TestEtcd(t *testing.T) {
+	s, _ := newEtcd("127.0.0.1:2379", "", "")
+	testStorage(t, s)
 }

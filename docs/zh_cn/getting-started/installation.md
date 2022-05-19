@@ -231,7 +231,7 @@ CMD [ "juicefs" ]
 3. 编译客户端
 
    ```shell
-   go build -ldflags="-s -w" -o juicefs.exe ./cmd
+   go build -ldflags="-s -w" -o juicefs.exe .
    ```
 
 ### 在 Linux 中交叉编译 Windows 客户端

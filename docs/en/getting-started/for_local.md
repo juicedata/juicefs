@@ -26,7 +26,7 @@ juicefs format [command options] META-URL NAME
 
 As you can see, 3 types of information are required to format a file system.
 
-1. **[command options]**: used to set up the storage medium for the file system; **local disk** will be used by default, and default path is `"$HOME/.juicefs/local"` or `"/var/jfs"`.
+1. **[command options]**: used to set up the storage medium for the file system; **local disk** will be used by default, and default path is `"$HOME/.juicefs/local"`, `"/var/jfs"` or `"C:/jfs/local"`.
 2. **META-URL**: used to set up the metadata engine, usually a URL or the file path of a database.
 3. **NAME**: the name of the file system.
 
@@ -84,28 +84,28 @@ The mount point (MOUNTPOINT) on Windows systems should use a disk letter that is
 As SQLite is a single-file database, please pay attention to the path of the database file when mounting it. JuiceFS supports both relative and absolute paths.
 :::
 
-The following command mounts the `myjfs` file system to the `mnt` folder in the current directory.
+The following command mounts the `myjfs` file system to the `~/jfs` folder:
 
 ```shell
-juicefs mount sqlite3://myjfs.db mnt
+juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
 ![](../images/sqlite-mount-local.png)
 
 The client mounts the file system in the foreground by default. As you can see in the above image, the program keeps running in the current terminal. To unmount the file system, press <kbd>Ctrl</kbd> + <kbd>C</kbd> or close the terminal window.
 
-In order to keep the file system mounted in the background, you can specify the `-d` or `--background` option when mounting, i.e. to mount the file system in the daemon.
+In order to keep the file system mounted in the background, you can specify the `-d` or `--background` option when mounting, i.e. to mount the file system in the daemon:
 
 ```shell
-juicefs mount sqlite3://myjfs.db mnt -d
+juicefs mount sqlite3://myjfs.db ~/jfs -d
 ```
 
-Next, any files stored in the mount point `mnt` will be split into specific blocks according to [How JuiceFS Stores Files](../introduction/architecture.md#how-juicefs-stores-files), and stored in `$HOME/.juicefs/local/myjfs` directory; the corresponding metadata will be stored in the `myjfs.db` database.
+Next, any files stored in the mount point `~/jfs` will be split into specific blocks according to [How JuiceFS Stores Files](../introduction/architecture.md#how-juicefs-stores-files), and stored in `$HOME/.juicefs/local/myjfs` directory; the corresponding metadata will be stored in the `myjfs.db` database.
 
-In the end, the mount point `mnt` can be unmounted by executing the following command.
+In the end, the mount point `~/jfs` can be unmounted by executing the following command.
 
 ```shell
-juicefs umount mnt
+juicefs umount ~/jfs
 ```
 
 ## Go Further
@@ -120,8 +120,8 @@ JuiceFS supports almost all object storage services, see [JuiceFS supported stor
 
 In general, only 2 steps are required to create an object storage:
 
-1. Create a `Bucket` and get the Endpoint address.
-2. Create the `Access Key ID` and `Access Key Secret`, i.e., the access keys for the Object Storage API.
+1. Create a **Bucket** and get the Endpoint address.
+2. Create the **Access Key ID** and **Access Key Secret**, i.e., the access keys for the Object Storage API.
 
 Taking AWS S3 as an example, a resource that has been created would be like below.
 
@@ -151,7 +151,7 @@ juicefs format --storage s3 \
 
 The command above creates a file system using the same database name and file system name with the object storage options provided.
 
-- `--storage`: Used to set the storage type, e.g. oss, s3, etc.
+- `--storage`: Used to set the storage type, e.g. `oss`, `s3`, etc.
 - `--bucket`: Used to set the Endpoint address of the object storage.
 - `--access-key`: Used to set the Object Storage Access Key ID.
 - `--secret-key`: Used to set the Object Storage Access Key Secret.
@@ -163,7 +163,7 @@ Please replace the information in the above command with your own object storage
 You can mount the file system once it is created.
 
 ```shell
-juicefs mount sqlite3://myjfs.db mnt
+juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
 As you can see, the mount command is exactly the same as using the local storage because JuiceFS has already written the metadata of the object storage to the `myjfs.db` database, so there is no need to provide it again when mounting.

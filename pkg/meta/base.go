@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/version"
 )
 
 const (
@@ -69,6 +70,8 @@ type engine interface {
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
+
+	GetSession(sid uint64, detail bool) (*Session, error)
 }
 
 type baseMeta struct {
@@ -82,6 +85,7 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
+	maxDeleting  chan struct{}
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 	newSpace     int64
@@ -110,6 +114,7 @@ func newBaseMeta(conf *Config) baseMeta {
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
+		maxDeleting:  make(chan struct{}, 100),
 		symlinks:     &sync.Map{},
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
@@ -166,6 +171,7 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 func (m *baseMeta) NewSession() error {
 	go m.refreshUsage()
 	if m.conf.ReadOnly {
+		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
 	}
 
@@ -183,7 +189,7 @@ func (m *baseMeta) NewSession() error {
 	if err = m.en.doNewSession(data); err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
-	logger.Infof("create session %d OK", m.sid)
+	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
 	go m.refreshSession()
 	if !m.conf.NoBGJob {
@@ -229,7 +235,12 @@ func (m *baseMeta) CleanStaleSessions() {
 		return
 	}
 	for _, sid := range sids {
-		logger.Infof("clean up stale session %d: %s", sid, m.en.doCleanStaleSession(sid))
+		s, err := m.en.GetSession(sid, false)
+		if err != nil {
+			logger.Warnf("Get session info %d: %s", sid, err)
+			s = &Session{Sid: sid}
+		}
+		logger.Infof("clean up stale session %d %+v: %s", sid, s.SessionInfo, m.en.doCleanStaleSession(sid))
 	}
 }
 
@@ -780,9 +791,7 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		defer m.Unlock()
 		if m.removedFiles[inode] {
 			delete(m.removedFiles, inode)
-			go func() {
-				_ = m.en.doDeleteSustainedInode(m.sid, inode)
-			}()
+			_ = m.en.doDeleteSustainedInode(m.sid, inode)
 		}
 	}
 	return 0
@@ -843,12 +852,24 @@ func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
 		m.removedFiles[inode] = true
 		m.Unlock()
 	} else {
-		go m.en.doDeleteFileData(inode, length)
+		m.tryDeleteFileData(inode, length)
+	}
+}
+
+func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
+	select {
+	case m.maxDeleting <- struct{}{}:
+		go func() {
+			m.en.doDeleteFileData(inode, length)
+			<-m.maxDeleting
+		}()
+	default:
+		// will be cleanup later
 	}
 }
 
 func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
-	if err := m.newMsg(DeleteChunk, chunkid, size); err == nil {
+	if err := m.newMsg(DeleteChunk, chunkid, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
 		if err = m.en.doDeleteSlice(chunkid, size); err != nil {
 			logger.Errorf("delete slice %d: %s", chunkid, err)
 		}
@@ -891,6 +912,15 @@ func (m *baseMeta) checkTrash(parent Ino, trash *Ino) syscall.Errno {
 		st = 0
 	}
 	return st
+}
+
+func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
+	s := fmt.Sprintf("%d-%d-%s", parent, inode, name)
+	if len(s) > MaxName {
+		s = s[:MaxName]
+		logger.Warnf("File name is too long as a trash entry, truncating it: %s -> %s", name, s)
+	}
+	return s
 }
 
 func (m *baseMeta) cleanupTrash() {

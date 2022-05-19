@@ -94,7 +94,9 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 			for _, obj := range objs {
 				key := obj.Key()
 				if !first && key <= lastkey {
-					logger.Fatalf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
+					logger.Errorf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
+					out <- nil
+					return
 				}
 				lastkey = key
 				// logger.Debugf("found key: %s", key)

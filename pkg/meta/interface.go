@@ -73,6 +73,7 @@ const (
 	SetAttrMtimeNow
 )
 
+const MaxName = 255
 const TrashInode = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
 const TrashName = ".trash"
 
@@ -249,7 +250,7 @@ type Meta interface {
 	// CloseSession does cleanup and close the session.
 	CloseSession() error
 	// GetSession retrieves information of session with sid
-	GetSession(sid uint64) (*Session, error)
+	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
@@ -389,7 +390,7 @@ func NewClient(uri string, conf *Config) Meta {
 	}
 	m, err := f(driver, uri[p+3:], conf)
 	if err != nil {
-		logger.Fatalf("Meta is not available: %s", err)
+		logger.Fatalf("Meta %s is not available: %s", uri, err)
 	}
 	return m
 }
