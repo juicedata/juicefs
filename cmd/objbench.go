@@ -164,7 +164,7 @@ func objbench(ctx *cli.Context) error {
 				logger.Fatalf("multipart upload error: %v", err)
 			}
 			cost := time.Since(start).Seconds()
-			uploadResult[1], uploadResult[2] = colorize("multi-upload", float64(total*bSize>>20)/cost, cost, 2, tty)
+			uploadResult[1], uploadResult[2] = colorize("multi-upload", float64(total*5)/cost, cost, 2, tty)
 			uploadResult[1] += " MiB/s"
 			uploadResult[2] += " s/object"
 		}
@@ -202,9 +202,10 @@ func objbench(ctx *cli.Context) error {
 				return line
 			},
 		}, {
-			name:  "smallput",
-			count: bCount,
-			title: "put small objects",
+			name:     "smallput",
+			count:    bCount,
+			title:    "put small objects",
+			startKey: bCount,
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
@@ -390,6 +391,7 @@ type apiInfo struct {
 	name      string
 	title     string
 	count     int
+	startKey  int
 	getResult func(cost float64) []string
 	after     func(blob object.ObjectStorage)
 }
@@ -439,7 +441,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 		count = api.count
 	}
 	bar := bm.progressBar.AddCountBar(api.title, int64(count))
-	for i := 0; i < count; i++ {
+	for i := api.startKey; i < api.startKey+count; i++ {
 		pool <- struct{}{}
 		wg.Add(1)
 		key := i
