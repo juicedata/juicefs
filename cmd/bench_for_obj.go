@@ -59,8 +59,8 @@ func cmdBenchForObj() *cli.Command {
 			},
 			&cli.UintFlag{
 				Name:  "block-size",
-				Value: 4,
-				Usage: "size of each IO block in MiB",
+				Value: 4096,
+				Usage: "size of each IO block in KiB",
 			},
 			&cli.UintFlag{
 				Name:  "data-object-size",
@@ -96,9 +96,9 @@ func benchForObj(ctx *cli.Context) error {
 	defer func() {
 		_ = blobOrigin.Delete(tmpdir)
 	}()
-	bSize := int(ctx.Uint("block-size")) << 20
+	bSize := int(ctx.Uint("block-size")) << 10
 	fsize := int(ctx.Uint("data-object-size")) << 20
-	smallBSize := int(ctx.Uint("small-object-size"))
+	smallBSize := int(ctx.Uint("small-object-size")) << 10
 	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
 	threads := int(ctx.Uint("threads"))
 	tty := isatty.IsTerminal(os.Stdout.Fd())
@@ -153,7 +153,7 @@ func benchForObj(ctx *cli.Context) error {
 		fname := fmt.Sprintf("__multi_upload__test__%d__", time.Now().UnixNano())
 		if err := blob.CompleteUpload("test", "fakeUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			total := bCount
-			part := make([]byte, 5<<20)
+			part := make([]byte, 5<<20) // minio minimum requirement 5m
 			rand.Read(part)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
@@ -164,7 +164,7 @@ func benchForObj(ctx *cli.Context) error {
 				logger.Fatalf("multipart upload error: %v", err)
 			}
 			cost := time.Since(start).Seconds()
-			uploadResult[1], uploadResult[2] = colorize("multi-upload", float64(total*bSize>>20)/cost, cost, 2, tty)
+			uploadResult[1], uploadResult[2] = colorize("multi-upload", float64(total*5)/cost, cost, 2, tty)
 			uploadResult[1] += " MiB/s"
 			uploadResult[2] += " s/file"
 		}
@@ -202,9 +202,10 @@ func benchForObj(ctx *cli.Context) error {
 				return line
 			},
 		}, {
-			name:  "smallput",
-			count: bCount,
-			title: "put small object",
+			name:     "smallput",
+			count:    bCount,
+			title:    "put small object",
+			startKey: bCount,
 			getResult: func(cost float64) []string {
 				line := []string{"put small file", nspt, nspt}
 				if cost > 0 {
@@ -332,7 +333,7 @@ func benchForObj(ctx *cli.Context) error {
 		_ = bm.delete(strconv.Itoa(i))
 	}
 
-	fmt.Printf("Benchmark finished! block-size: %d MiB, data-object-size: %d MiB, small-object-size: %d KiB, NumThreads: %d\n", ctx.Uint("block-size"), ctx.Uint("data-object-size"), ctx.Uint("small-object-size"), ctx.Uint("threads"))
+	fmt.Printf("Benchmark finished! block-size: %d KiB, data-object-size: %d MiB, small-object-size: %d KiB, NumThreads: %d\n", ctx.Uint("block-size"), ctx.Uint("data-object-size"), ctx.Uint("small-object-size"), ctx.Uint("threads"))
 
 	// adjust the print order
 	pResult[1], pResult[2] = pResult[2], pResult[1]
@@ -389,6 +390,7 @@ type apiInfo struct {
 	name      string
 	title     string
 	count     int
+	startKey  int
 	getResult func(cost float64) []string
 	after     func(blob object.ObjectStorage)
 }
@@ -436,7 +438,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 		count = api.count
 	}
 	bar := bm.progressBar.AddCountBar(api.title, int64(count))
-	for i := 0; i < count; i++ {
+	for i := api.startKey; i < api.startKey+count; i++ {
 		pool <- struct{}{}
 		wg.Add(1)
 		key := i
