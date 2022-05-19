@@ -183,7 +183,7 @@ func warmup(ctx *cli.Context) error {
 			}
 			batch = append(batch, fmt.Sprintf("inode:%d", inode))
 		} else if strings.HasPrefix(path, mp) {
-			batch = append(batch, string(path[start:]))
+			batch = append(batch, path[start:])
 		} else {
 			logger.Errorf("Path %s is not under mount point %s", path, mp)
 			continue
