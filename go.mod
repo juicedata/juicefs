@@ -57,7 +57,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smartystreets/goconvey v1.7.2
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.34
-	github.com/tikv/client-go/v2 v2.0.0
+	github.com/tikv/client-go/v2 v2.0.1
 	github.com/upyun/go-sdk/v3 v3.0.2
 	github.com/urfave/cli/v2 v2.4.0
 	github.com/vbauerster/mpb/v7 v7.0.3
