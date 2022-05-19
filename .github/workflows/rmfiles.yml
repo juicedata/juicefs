@@ -44,31 +44,37 @@ jobs:
           sudo chmod 777 /var
           git clone https://github.com/sanwan/actionfile.git
           cd actionfile
-          cat META_7M_EMPTY_DEEP_DIR_FILE.json.gz* >META_7M_EMPTY_DEEP_DIR_FILE.json.gz
-          gzip -dk  META_7M_EMPTY_DEEP_DIR_FILE.json.gz
+          cat META_8M_EMPTY_FILE.json.gz* >META_8M_EMPTY_FILE.json.gz
+          gzip -dk  META_8M_EMPTY_FILE.json.gz
           ls -lh
-          mv META_7M_EMPTY_DEEP_DIR_FILE.json ../
+          mv META_8M_EMPTY_FILE.json ../
           cd ../
           ls -lh
       - name: Load
         uses: ./.github/actions/load
         with:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable"
-          load_file: "META_7M_EMPTY_FILE.json"
-      - name: Rm 100w
+          load_file: "META_8M_EMPTY_FILE.json"
+      - name: Rm 100w Files in Depth of 1 Directory
+          run: |
+            cd /tmp/juicefs-sync-test/mkdir/
+            echo "rm 100w files in depth of 1 directory"
+            rm -rf aaa/
+      - name: Rm 100w Files in Depth of 100 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 100w file in depth of 100 directory"
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 100 directory"
           rm -rf aaa0/
-      - name: Rm 100w
+      - name: Rm 100w Files in Depth of 200 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 100w file in depth of 200 directory"
-          rm -rf bbb0/
-      - name: Rm 500w
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 200 directory"
+          rm -rf aaa1/
+      - name: Rm 500w Files in Depth of 200 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 500w file in depth of 200 directory"
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 500w files in depth of 200 directory"
+          rm -rf aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -94,31 +100,37 @@ jobs:
           sudo /etc/init.d/mysql start
           git clone https://github.com/sanwan/actionfile.git
           cd actionfile
-          cat META_7M_EMPTY_FILE.json.gz* >META_7M_EMPTY_FILE.json.gz
-          gzip -dk  META_7M_EMPTY_FILE.json.gz
+          cat META_8M_EMPTY_FILE.json.gz* >META_8M_EMPTY_FILE.json.gz
+          gzip -dk  META_8M_EMPTY_FILE.json.gz
           ls -lh
-          mv META_7M_EMPTY_FILE.json ../
+          mv META_8M_EMPTY_FILE.json ../
           cd ../
           ls -lh
       - name: Load
         uses: ./.github/actions/load
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test"
-          load_file: "META_7M_EMPTY_FILE.json"
-      - name: Rm 100w
+          load_file: "META_8M_EMPTY_FILE.json"
+      - name: Rm 100w Files in Depth of 1 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 100w file in depth of 100 directory"
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 1 directory"
+          rm -rf aaa/
+      - name: Rm 100w Files in Depth of 100 Directory
+        run: |
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 100 directory"
           rm -rf aaa0/
-      - name: Rm 100w
+      - name: Rm 100w Files in Depth of 200 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 100w file in depth of 200 directory"
-          rm -rf bbb0/
-      - name: Rm 500w
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 200 directory"
+          rm -rf aaa1/
+      - name: Rm 500w Files in Depth of 200 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 500w file in depth of 200 directory"
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 500w files in depth of 200 directory"
+          rm -rf aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -155,31 +167,37 @@ jobs:
           sudo chmod 777 /var
           git clone https://github.com/sanwan/actionfile.git
           cd actionfile
-          cat META_7M_EMPTY_FILE.json.gz* >META_7M_EMPTY_FILE.json.gz
-          gzip -dk  META_7M_EMPTY_FILE.json.gz
+          cat META_8M_EMPTY_FILE.json.gz* >META_8M_EMPTY_FILE.json.gz
+          gzip -dk  META_8M_EMPTY_FILE.json.gz
           ls -lh
-          mv META_7M_EMPTY_FILE.json ../
+          mv META_8M_EMPTY_FILE.json ../
           cd ../
           ls -lh
       - name: Load
         uses: ./.github/actions/load
         with:
           meta_url: redis://127.0.0.1:6379/1
-          load_file: "META_7M_EMPTY_FILE.json"
-      - name: Rm 100w
+          load_file: "META_8M_EMPTY_FILE.json"
+      - name: Rm 100w Files in Depth of 1 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 100w file in depth of 100 directory"
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 1 directory"
+          rm -rf aaa/
+      - name: Rm 100w Files in Depth of 100 Directory
+        run: |
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 100 directory"
           rm -rf aaa0/
-      - name: Rm 100w
+      - name: Rm 100w Files in Depth of 200 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 100w file in depth of 200 directory"
-          rm -rf bbb0/
-      - name: Rm 500w
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 200 directory"
+          rm -rf aaa1/
+      - name: Rm 500w Files in Depth of 200 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 500w file in depth of 200 directory"
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 500w files in depth of 200 directory"
+          rm -rf aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -204,31 +222,37 @@ jobs:
           sudo chmod 777 /var
           git clone https://github.com/sanwan/actionfile.git
           cd actionfile
-          cat META_7M_EMPTY_FILE.json.gz* >META_7M_EMPTY_FILE.json.gz
-          gzip -dk  META_7M_EMPTY_FILE.json.gz
+          cat META_8M_EMPTY_FILE.json.gz* >META_8M_EMPTY_FILE.json.gz
+          gzip -dk  META_8M_EMPTY_FILE.json.gz
           ls -lh
-          mv META_7M_EMPTY_FILE.json ../
+          mv META_8M_EMPTY_FILE.json ../
           cd ../
           ls -lh
       - name: Load
         uses: ./.github/actions/load
         with:
           meta_url: sqlite3://sync-test.db
-          load_file: "META_7M_EMPTY_FILE.json"
-      - name: Rm 100w
+          load_file: "META_8M_EMPTY_FILE.json"
+      - name: Rm 100w Files in Depth of 1 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 100w file in depth of 100 directory"
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 1 directory"
+          rm -rf aaa/
+      - name: Rm 100w Files in Depth of 100 Directory
+        run: |
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 100 directory"
           rm -rf aaa0/
-      - name: Rm 100w
+      - name: Rm 100w Files in Depth of 200 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 100w file in depth of 200 directory"
-          rm -rf bbb0/
-      - name: Rm 500w
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 200 directory"
+          rm -rf aaa1/
+      - name: Rm 500w Files in Depth of 200 Directory
         run: |
-          cd /tmp/juicefs-sync-test/
-          echo "rm 500w file in depth of 200 directory"
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 500w files in depth of 200 directory"
+          rm -rf aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
