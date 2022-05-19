@@ -25,7 +25,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -44,16 +43,22 @@ $ juicefs rmr /mnt/jfs/foo`,
 	}
 }
 
-func openController(path string) *os.File {
-	f, err := os.OpenFile(filepath.Join(path, ".control"), os.O_RDWR, 0)
-	if err != nil && !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
-		logger.Errorf("%s", err)
-		return nil
+func openController(mp string) *os.File {
+	st, err := os.Stat(mp)
+	if err != nil {
+		logger.Fatal(err)
 	}
-	if err != nil && path != "/" {
-		return openController(filepath.Dir(path))
+	if !st.IsDir() {
+		mp = filepath.Dir(mp)
 	}
-	return f
+	for ; mp != "/"; mp = filepath.Dir(mp) {
+		f, err := os.OpenFile(filepath.Join(mp, ".control"), os.O_RDWR, 0)
+		if err == nil {
+			return f
+		}
+	}
+	logger.Fatalf("Path %s is not inside JuiceFS", mp)
+	panic("unreachable")
 }
 
 func rmr(ctx *cli.Context) error {

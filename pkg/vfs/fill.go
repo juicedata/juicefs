@@ -19,6 +19,7 @@ package vfs
 import (
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -74,8 +75,16 @@ func (v *VFS) fillCache(paths []string, concurrent int) {
 }
 
 func (v *VFS) resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
-	p = strings.Trim(p, "/")
 	ctx := meta.Background
+	var inodePrefix = "inode:"
+	if strings.HasPrefix(p, inodePrefix) {
+		i, err := strconv.ParseUint(p[len(inodePrefix):], 10, 64)
+		if err == nil {
+			*inode = meta.Ino(i)
+			return v.Meta.GetAttr(ctx, meta.Ino(i), attr)
+		}
+	}
+	p = strings.Trim(p, "/")
 	err := v.Meta.Resolve(ctx, 1, p, inode, attr)
 	if err != syscall.ENOTSUP {
 		return err
