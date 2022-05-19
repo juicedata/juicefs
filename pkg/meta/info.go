@@ -85,7 +85,7 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 		case "maxmemory_policy":
 			info.maxMemoryPolicy = val
 			if val != "noeviction" {
-				logger.Warnf("maxmemory_policy is %q, please set it to 'noeviction'.", val)
+				logger.Warnf("maxmemory_policy is %q,  we will try to reconfigure it to 'noeviction'.", val)
 			}
 		case "redis_version":
 			info.redisVersion = val

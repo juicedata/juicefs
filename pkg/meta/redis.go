@@ -2769,11 +2769,24 @@ func (m *redisMeta) checkServerConfig() {
 		logger.Warnf("parse info: %s", err)
 		return
 	}
-	_, err = checkRedisInfo(rawInfo)
+	rInfo, err := checkRedisInfo(rawInfo)
 	if err != nil {
 		logger.Warnf("parse info: %s", err)
 	}
+	if rInfo.maxMemoryPolicy != "noeviction" {
+		if _, err := m.rdb.ConfigSet(context.Background(), "maxmemory-policy", "noeviction").Result(); err != nil {
+			logger.Fatalf("try to reconfigure maxmemory-policy to 'noeviction' failed: %s", err)
+		}
+		result, err := m.rdb.ConfigGet(context.Background(), "maxmemory-policy").Result()
+		if err != nil {
+			logger.Fatalf("get config maxmemory-policy failed: %s", err)
+		}
+		if len(result) == 2 && result[1] != "noeviction" {
+			logger.Fatalf("try to reconfigure maxmemory-policy to 'noeviction' failed: %s", err)
+		}
+		logger.Infof("set maxmemory-policy to 'no eviction' successfully: %s", err)
 
+	}
 	start := time.Now()
 	_ = m.rdb.Ping(Background)
 	logger.Infof("Ping redis: %s", time.Since(start))
