@@ -26,6 +26,7 @@ Although it is easy and convenient to set the database password directly in the 
 export META_PASSWORD=mypassword
 juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
+
 ## Authentication methods
 
 Authentication with PostgreSQL is currently possible with "md5" method.
