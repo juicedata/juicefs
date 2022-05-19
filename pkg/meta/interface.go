@@ -404,6 +404,25 @@ func newSessionInfo() *SessionInfo {
 	return &SessionInfo{Version: version.Version(), HostName: host, ProcessID: os.Getpid()}
 }
 
+func changeParent(parent, newParent Ino, attr *Attr, pickParent func() (Ino, error)) (incr, decr Ino, err error) {
+	if attr.Parent == parent {
+		if newParent == 0 { // remove current parent
+			newParent, err = pickParent()
+			if err != nil {
+				return
+			}
+			decr = newParent
+		}
+		attr.Parent = newParent
+	} else {
+		decr = parent
+		if newParent > 0 {
+			incr = newParent
+		}
+	}
+	return
+}
+
 func timeit(start time.Time) {
 	opDist.Observe(time.Since(start).Seconds())
 }

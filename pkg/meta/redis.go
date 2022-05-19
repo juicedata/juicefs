@@ -49,6 +49,7 @@ import (
 /*
 	Node: i$inode -> Attribute{type,mode,uid,gid,atime,mtime,ctime,nlink,length,rdev}
 	Dir:   d$inode -> {name -> {inode,type}}
+	Parent: p$inode -> {parent -> count}
 	File:  c$inode_$indx -> [Slice{pos,id,length,off,len}]
 	Symlink: s$inode -> target
 	Xattr: x$inode -> {name -> value}
@@ -485,6 +486,10 @@ func (m *redisMeta) inodeKey(inode Ino) string {
 
 func (m *redisMeta) entryKey(parent Ino) string {
 	return m.prefix + "d" + parent.String()
+}
+
+func (m *redisMeta) parentKey(inode Ino) string {
+	return m.prefix + "p" + inode.String()
 }
 
 func (m *redisMeta) chunkKey(inode Ino, indx uint32) string {
@@ -1181,6 +1186,20 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	return errno(err)
 }
 
+func (m *redisMeta) pickParent(ctx Context, tx *redis.Tx, inode Ino) (Ino, error) {
+	vals, err := tx.HGetAll(ctx, m.parentKey(inode)).Result()
+	if err != nil {
+		return 0, err
+	}
+	for k, v := range vals {
+		if n, _ := strconv.Atoi(v); n > 0 {
+			ino, _ := strconv.ParseUint(k, 10, 64)
+			return Ino(ino), nil
+		}
+	}
+	return 0, nil // legacy client has no parent
+}
+
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var _type uint8
 	var trash, inode Ino
@@ -1233,6 +1252,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		}
 		attr = Attr{}
 		opened = false
+		var newParent Ino
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), &attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
@@ -1245,13 +1265,20 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				if _type == TypeFile && attr.Nlink == 0 {
 					opened = m.of.IsOpen(inode)
 				}
-			} else if attr.Nlink == 1 { // don't change parent if it has hard links
-				attr.Parent = trash
+			} else {
+				newParent = trash
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 			trash = 0
 		}
+		incr, decr, err := changeParent(parent, newParent, &attr, func() (Ino, error) {
+			return m.pickParent(ctx, tx, inode)
+		})
+		if err != nil {
+			return err
+		}
+
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, m.entryKey(parent), name)
 			if updateParent {
@@ -1261,6 +1288,12 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
 				if trash > 0 {
 					pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name), buf)
+				}
+				if incr > 0 {
+					pipe.HIncrBy(ctx, m.parentKey(inode), incr.String(), 1)
+				}
+				if decr > 0 {
+					pipe.HIncrBy(ctx, m.parentKey(inode), decr.String(), -1)
 				}
 			} else {
 				switch _type {
@@ -1285,6 +1318,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 					pipe.Decr(ctx, m.totalInodesKey())
 				}
 				pipe.Del(ctx, m.xattrKey(inode))
+				pipe.Del(ctx, m.parentKey(inode))
 			}
 			return nil
 		})
@@ -1468,6 +1502,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
 
 		var supdate, dupdate bool
+		var iincr, idecr, tincr, tdecr Ino
 		now := time.Now()
 		tattr = Attr{}
 		opened = false
@@ -1480,11 +1515,16 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
-				tattr.Parent = parentSrc
-				if dtyp == TypeDirectory && parentSrc != parentDst {
-					dattr.Nlink--
-					sattr.Nlink++
-					supdate, dupdate = true, true
+				if parentSrc != parentDst {
+					if dtyp == TypeDirectory {
+						tattr.Parent = parentSrc
+						dattr.Nlink--
+						sattr.Nlink++
+						supdate, dupdate = true, true
+					} else {
+						// parentSrc always > 0
+						tincr, tdecr, _ = changeParent(parentDst, parentSrc, &tattr, nil)
+					}
 				}
 			} else {
 				if dtyp == TypeDirectory {
@@ -1501,14 +1541,20 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						tattr.Parent = trash
 					}
 				} else {
+					var newParent Ino
 					if trash == 0 {
 						tattr.Nlink--
 						if dtyp == TypeFile && tattr.Nlink == 0 {
 							opened = m.of.IsOpen(dino)
 						}
 						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
-					} else if tattr.Nlink == 1 {
-						tattr.Parent = trash
+					} else {
+						newParent = trash
+					}
+					if tincr, tdecr, err = changeParent(parentDst, newParent, &tattr, func() (Ino, error) {
+						return m.pickParent(ctx, tx, dino)
+					}); err != nil {
+						return err
 					}
 				}
 			}
@@ -1525,10 +1571,15 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return syscall.EACCES
 		}
 
-		if typ == TypeDirectory && parentSrc != parentDst {
-			sattr.Nlink--
-			dattr.Nlink++
-			supdate, dupdate = true, true
+		if parentSrc != parentDst {
+			if typ == TypeDirectory {
+				iattr.Parent = parentDst
+				sattr.Nlink--
+				dattr.Nlink++
+				supdate, dupdate = true, true
+			} else {
+				iincr, idecr, _ = changeParent(parentSrc, parentDst, &iattr, nil)
+			}
 		}
 		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
 			sattr.Mtime = now.Unix()
@@ -1544,7 +1595,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			dattr.Ctimensec = uint32(now.Nanosecond())
 			dupdate = true
 		}
-		iattr.Parent = parentDst
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		if inode != nil {
@@ -1587,6 +1637,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							pipe.Decr(ctx, m.totalInodesKey())
 						}
 						pipe.Del(ctx, m.xattrKey(dino))
+						pipe.Del(ctx, m.parentKey(dino))
 					}
 				}
 			}
@@ -1594,6 +1645,18 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				pipe.Set(ctx, m.inodeKey(parentSrc), m.marshal(&sattr), 0)
 			}
 			pipe.Set(ctx, m.inodeKey(ino), m.marshal(&iattr), 0)
+			if iincr > 0 {
+				pipe.HIncrBy(ctx, m.parentKey(ino), iincr.String(), 1)
+			}
+			if idecr > 0 {
+				pipe.HIncrBy(ctx, m.parentKey(ino), idecr.String(), -1)
+			}
+			if tincr > 0 {
+				pipe.HIncrBy(ctx, m.parentKey(dino), tincr.String(), 1)
+			}
+			if tdecr > 0 {
+				pipe.HIncrBy(ctx, m.parentKey(dino), tdecr.String(), -1)
+			}
 			pipe.HSet(ctx, m.entryKey(parentDst), nameDst, buf)
 			if dupdate {
 				pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
@@ -1657,6 +1720,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&iattr), 0)
+			pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
 			return nil
 		})
 		if err == nil && attr != nil {
