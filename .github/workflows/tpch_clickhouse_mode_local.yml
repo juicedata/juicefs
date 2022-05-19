@@ -9,7 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'release-**'
+      - 'main'
     paths-ignore:
       - 'docs/**'
   schedule:
@@ -74,12 +74,14 @@ jobs:
       - name: Generate Data
         run: |
           cd /home/runner/work/
-          git clone git@github.com:sanwan/actiondata.git
+          git clone https://github.com/sanwan/actiondata.git
           cd actiondata
+          cat lineorder.tbl.gz* >lineorder.tbl.gz
+          gzip -dk lineorder.tbl.gz
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
           ls -lrth
-          sudo du -sh /home/runner/work/ssb-dbgen/
+          sudo du -sh /home/runner/work/actiondata/
 
 
       - name: Create Table
