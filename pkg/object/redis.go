@@ -53,6 +53,9 @@ func (r *redisStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	if off > int64(len(data)) {
+		off = int64(len(data))
+	}
 	data = data[off:]
 	if limit > 0 && limit < int64(len(data)) {
 		data = data[:limit]

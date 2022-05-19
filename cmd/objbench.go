@@ -152,8 +152,8 @@ func objbench(ctx *cli.Context) error {
 		var uploadResult = []string{"multi-upload", nspt, nspt}
 		fname := fmt.Sprintf("__multi_upload__test__%d__", time.Now().UnixNano())
 		if err := blob.CompleteUpload("test", "fakeUploadId", []*object.Part{}); err != utils.ENOTSUP {
-			total := bCount
-			part := make([]byte, bSize)
+			part := make([]byte, 5<<20)
+			total := int(math.Ceil(float64(fsize) / float64(len(part))))
 			rand.Read(part)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
@@ -350,7 +350,7 @@ var resultRangeForObj = map[string][4]float64{
 	"smallput":     {10, 30, 30, 100},
 	"smallget":     {10, 30, 30, 100},
 	"multi-upload": {100, 150, 20, 50},
-	"list":         {20000, 30000, 100, 200},
+	"list":         {1000, 10000, 100, 200},
 	"head":         {10, 30, 30, 100},
 	"delete":       {10, 30, 30, 100},
 	"chmod":        {10, 30, 30, 100},
