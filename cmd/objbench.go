@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -82,7 +83,12 @@ func cmdObjbench() *cli.Command {
 	}
 }
 
-var nspt, pass = "not support", "pass"
+var (
+	nspt    = "not support"
+	pass    = "pass"
+	skipped = "skipped"
+	failed  = "failed"
+)
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
@@ -104,8 +110,10 @@ func objbench(ctx *cli.Context) error {
 	tty := isatty.IsTerminal(os.Stdout.Fd())
 	progress := utils.NewProgress(!tty, false)
 	if tty {
-		nspt = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, "not support", RESET_SEQ)
-		pass = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, GREEN, "pass", RESET_SEQ)
+		nspt = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, nspt, RESET_SEQ)
+		skipped = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, skipped, RESET_SEQ)
+		pass = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, GREEN, pass, RESET_SEQ)
+		failed = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, failed, RESET_SEQ)
 	}
 	fmt.Println("Start Functional Testing ...")
 
@@ -410,6 +418,10 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 			line[0] = api.title
 			return line
 		}
+		if api.name == "chown" && strings.HasPrefix(bm.blob.String(), "file://") && os.Getuid() != 0 {
+			logger.Warnf("chown test should be ran by root")
+			return []string{api.title, skipped, skipped}
+		}
 	}
 	var fn func(key string) error
 	switch api.name {
@@ -441,25 +453,29 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 		count = api.count
 	}
 	bar := bm.progressBar.AddCountBar(api.title, int64(count))
+	var err error
 	for i := api.startKey; i < api.startKey+count; i++ {
 		pool <- struct{}{}
 		wg.Add(1)
-		key := i
-		go func() {
+		go func(key int) {
 			defer func() {
 				<-pool
 				wg.Done()
 			}()
-			if err := fn(strconv.Itoa(key)); err != nil {
-				logger.Fatalf("%s test failed: %s", api.name, err)
+			if e := fn(strconv.Itoa(key)); e != nil {
+				err = e
 			}
 			bar.Increment()
-		}()
+		}(i)
 	}
 	wg.Wait()
 	bar.Done()
 	if api.after != nil {
 		api.after(bm.blob)
+	}
+	if err != nil {
+		logger.Errorf("%s test failed: %s", api.name, err)
+		return []string{api.title, failed, failed}
 	}
 	line := api.getResult(time.Since(start).Seconds())
 	line[0] = api.title
@@ -850,6 +866,9 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 	})
 
 	funFSCase("change owner/group", func() error {
+		if strings.HasPrefix(blob.String(), "file://") && os.Getuid() != 0 {
+			return errors.New("root required")
+		}
 		if err := fi.Chown(key, "nobody", "nogroup"); err != nil {
 			return fmt.Errorf("failed to chown object %s", err)
 		}
