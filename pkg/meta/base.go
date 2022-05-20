@@ -962,7 +962,8 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 	}()
 
 	edge := now.Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
-	for _, e := range entries {
+	for len(entries) > 0 {
+		e := entries[0]
 		ts, err := time.Parse("2006-01-02-15", string(e.Name))
 		if err != nil {
 			logger.Warnf("bad entry as a subTrash: %s", e.Name)
@@ -996,6 +997,7 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name)); st != 0 {
 					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
 				}
+				entries = entries[1:]
 			}
 		} else {
 			break
