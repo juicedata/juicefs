@@ -550,7 +550,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 			if err == nil {
 				if mc, ok := dst.(object.MtimeChanger); ok {
-					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil {
+					if err = mc.Chtimes(obj.Key(), obj.Mtime()); err != nil && !errors.Is(err, utils.ENOTSUP) {
 						logger.Warnf("Update mtime of %s: %s", key, err)
 					}
 				}
