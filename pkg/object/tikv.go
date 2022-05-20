@@ -54,6 +54,9 @@ func (t *tikv) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	if off > int64(len(d)) {
+		off = int64(len(d))
+	}
 	data := d[off:]
 	if limit > 0 && limit < int64(len(data)) {
 		data = data[:limit]

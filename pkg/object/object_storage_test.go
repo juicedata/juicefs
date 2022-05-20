@@ -90,16 +90,22 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 
 	if d, e := get(s, "test", 0, -1); d != "hello" {
-		t.Fatalf("expect hello, but got %v, error:%s", d, e)
+		t.Fatalf("expect hello, but got %v, error: %s", d, e)
+	}
+	if d, e := get(s, "test", 2, -1); d != "llo" {
+		t.Fatalf("expect llo, but got %v, error: %s", d, e)
 	}
 	if d, e := get(s, "test", 2, 3); d != "llo" {
-		t.Fatalf("expect llo, but got %v, error:%s", d, e)
+		t.Fatalf("expect llo, but got %v, error: %s", d, e)
 	}
 	if d, e := get(s, "test", 2, 2); d != "ll" {
-		t.Fatalf("expect ll, but got %v, error:%s", d, e)
+		t.Fatalf("expect ll, but got %v, error: %s", d, e)
 	}
 	if d, e := get(s, "test", 4, 2); d != "o" {
-		t.Errorf("out-of-range get: 'o', but got %v, error:%s", len(d), e)
+		t.Errorf("out-of-range get: 'o', but got %v, error: %s", len(d), e)
+	}
+	if d, e := get(s, "test", 6, 2); d != "" {
+		t.Errorf("out-of-range get: '', but got %v, error: %s", len(d), e)
 	}
 	switch s.(*withPrefix).os.(type) {
 	case FileSystem:
