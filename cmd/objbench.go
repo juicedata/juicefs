@@ -43,7 +43,13 @@ func cmdObjbench() *cli.Command {
 		Action:    objbench,
 		Category:  "TOOL",
 		Usage:     "Run benchmark on an object storage",
-		ArgsUsage: "Bucket",
+		ArgsUsage: "BUCKET",
+		Description: `
+Run basic benchmark on the target object storage to test if it works as expected.
+
+Examples:
+# Run benchmark on S3
+$ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com -p 4`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "storage",
@@ -61,17 +67,17 @@ func cmdObjbench() *cli.Command {
 			&cli.UintFlag{
 				Name:  "block-size",
 				Value: 4096,
-				Usage: "size of IO blocks in KiB",
+				Usage: "size of each IO block in KiB",
 			},
 			&cli.UintFlag{
 				Name:  "big-object-size",
 				Value: 1024,
-				Usage: "size of big objects in MiB",
+				Usage: "size of each big object in MiB",
 			},
 			&cli.UintFlag{
 				Name:  "small-object-size",
 				Value: 128,
-				Usage: "size of small objects in KiB",
+				Usage: "size of each small object in KiB",
 			},
 			&cli.UintFlag{
 				Name:    "threads",
@@ -92,7 +98,14 @@ var (
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
-	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ctx.String("access-key"), ctx.String("secret-key"))
+	ak, sk := ctx.String("access-key"), ctx.String("secret-key")
+	if ak == "" {
+		ak = os.Getenv("ACCESS_KEY")
+	}
+	if sk == "" {
+		sk = os.Getenv("SECRET_KEY")
+	}
+	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ak, sk)
 	if err != nil {
 		logger.Fatalf("create storage failed: %v", err)
 	}
@@ -349,7 +362,6 @@ func objbench(ctx *cli.Context) error {
 	pResult[8], pResult[11] = pResult[11], pResult[8]
 	printResult(pResult, tty)
 	return nil
-
 }
 
 var resultRangeForObj = map[string][4]float64{
@@ -419,7 +431,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 			return line
 		}
 		if api.name == "chown" && strings.HasPrefix(bm.blob.String(), "file://") && os.Getuid() != 0 {
-			logger.Warnf("chown test should be ran by root")
+			logger.Warnf("chown test should be run by root")
 			return []string{api.title, skipped, skipped}
 		}
 	}
@@ -794,7 +806,6 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 	})
 
 	runCase("put a big object", func(blob object.ObjectStorage) error {
-		fmt.Println("Testing upload a large object ...")
 		buffL := 1 << 20
 		buff := make([]byte, buffL)
 		rand.Read(buff)
