@@ -57,24 +57,24 @@ jobs:
           load_file: "META_7M_EMPTY_SHALLOW_RM.json"
       - name: Rm 100w Files in Depth of 1 Directory
         run: |
-            cd /tmp/juicefs-sync-test/mkdir/
-            echo "rm 100w files in depth of 1 directory"
-            rm -rf aaa/
+          cd /tmp/juicefs-sync-test/mkdir/
+          echo "rm 100w files in depth of 1 directory"
+          sudo rm -rf aaa/
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 10 directory"
-          rm -rf aaa0/
+          sudo rm -rf aaa0/
       - name: Rm 100w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 20 directory"
-          rm -rf aaa1/
+          sudo rm -rf aaa1/
       - name: Rm 400w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 400w files in depth of 20 directory"
-          rm -rf aaa2/
+          sudo rm -rf aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -115,22 +115,22 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 1 directory"
-          rm -rf aaa/
+          sudo rm -rf aaa/
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 10 directory"
-          rm -rf aaa0/
+          sudo rm -rf aaa0/
       - name: Rm 100w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 20 directory"
-          rm -rf aaa1/
+          sudo rm -rf aaa1/
       - name: Rm 400w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 400w files in depth of 20 directory"
-          rm -rf aaa2/
+          sudo rm -rf aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -182,22 +182,22 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 1 directory"
-          rm -rf aaa/
+          sudo rm -rf aaa/
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 10 directory"
-          rm -rf aaa0/
+          sudo rm -rf aaa0/
       - name: Rm 100w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 20 directory"
-          rm -rf aaa1/
+          sudo rm -rf aaa1/
       - name: Rm 400w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 400w files in depth of 20 directory"
-          rm -rf aaa2/
+          sudo rm -rf aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -237,22 +237,22 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 1 directory"
-          rm -rf aaa/
+          sudo rm -rf aaa/
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 10 directory"
-          rm -rf aaa0/
+          sudo rm -rf aaa0/
       - name: Rm 100w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 20 directory"
-          rm -rf aaa1/
+          sudo rm -rf aaa1/
       - name: Rm 400w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 400w files in depth of 20 directory"
-          rm -rf aaa2/
+          sudo rm -rf aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
