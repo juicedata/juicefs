@@ -855,25 +855,16 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
-		var c chunk
-		var zeroChunks []uint32
+		var zeroChunks []chunk
 		var left, right = n.Length, length
 		if left > right {
 			right, left = left, right
 		}
 		if right/ChunkSize-left/ChunkSize > 1 {
-			rows, err := s.Where("inode = ? AND indx > ? AND indx < ?", inode, left/ChunkSize, right/ChunkSize).Cols("indx").ForUpdate().Rows(&c)
+			err := s.Where("inode = ? AND indx > ? AND indx < ?", inode, left/ChunkSize, right/ChunkSize).Cols("indx").ForUpdate().Find(&zeroChunks)
 			if err != nil {
 				return err
 			}
-			for rows.Next() {
-				if err = scanChunk(rows, &c); err != nil {
-					_ = rows.Close()
-					return err
-				}
-				zeroChunks = append(zeroChunks, c.Indx)
-			}
-			_ = rows.Close()
 		}
 
 		l := uint32(right - left)
@@ -884,8 +875,8 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return err
 		}
 		buf := marshalSlice(0, 0, 0, 0, ChunkSize)
-		for _, indx := range zeroChunks {
-			if err = m.appendSlice(s, inode, indx, buf); err != nil {
+		for _, c := range zeroChunks {
+			if err = m.appendSlice(s, inode, c.Indx, buf); err != nil {
 				return err
 			}
 		}
@@ -1769,17 +1760,14 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	var sids []uint64
 	_ = m.txn(func(ses *xorm.Session) error {
-		var s session2
-		rows, err := ses.Where("Expire < ?", time.Now().Unix()).Limit(limit, 0).Rows(&s)
+		var ss []session2
+		err := ses.Where("Expire < ?", time.Now().Unix()).Limit(limit, 0).Find(&ss)
 		if err != nil {
 			return err
 		}
-		for rows.Next() {
-			if rows.Scan(&s) == nil {
-				sids = append(sids, s.Sid)
-			}
+		for _, s := range ss {
+			sids = append(sids, s.Sid)
 		}
-		_ = rows.Close()
 		return nil
 	})
 
@@ -1792,17 +1780,14 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 		if ok, err := ses.IsTableExist(&session{}); err != nil {
 			return err
 		} else if ok {
-			var ls session
-			rows, err := ses.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Limit(limit, 0).Rows(&ls)
+			var ls []session
+			err := ses.Where("Heartbeat < ?", time.Now().Add(time.Minute*-5).Unix()).Limit(limit, 0).Find(&ls)
 			if err != nil {
 				return err
 			}
-			for rows.Next() {
-				if rows.Scan(&ls) == nil {
-					sids = append(sids, ls.Sid)
-				}
+			for _, l := range ls {
+				sids = append(sids, l.Sid)
 			}
-			_ = rows.Close()
 		}
 		return nil
 	})
@@ -2001,21 +1986,15 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		nout.Mtime = now
 		nout.Ctime = now
 
-		var c chunk
-		rows, err := s.Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).ForUpdate().Rows(&c)
+		var cs []chunk
+		err = s.Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).ForUpdate().Find(&cs)
 		if err != nil {
 			return err
 		}
 		chunks := make(map[uint32][]*slice)
-		for rows.Next() {
-			err = scanChunk(rows, &c)
-			if err != nil {
-				_ = rows.Close()
-				return err
-			}
+		for _, c := range cs {
 			chunks[c.Indx] = readSliceBuf(c.Slices)
 		}
-		_ = rows.Close()
 
 		ses := s
 		updateSlices := func(indx uint32, buf []byte, chunkid uint64, size uint32) error {
@@ -2085,17 +2064,14 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
 	files := make(map[Ino]uint64)
 	err := m.txn(func(s *xorm.Session) error {
-		var d delfile
-		rows, err := s.Where("expire < ?", ts).Limit(limit, 0).Rows(&d)
+		var ds []delfile
+		err := s.Where("expire < ?", ts).Limit(limit, 0).Find(&ds)
 		if err != nil {
 			return err
 		}
-		for rows.Next() {
-			if rows.Scan(&d) == nil {
-				files[d.Inode] = d.Length
-			}
+		for _, d := range ds {
+			files[d.Inode] = d.Length
 		}
-		_ = rows.Close()
 		return nil
 	})
 	return files, err
@@ -2104,18 +2080,7 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 func (m *dbMeta) doCleanupSlices() {
 	var cks []chunkRef
 	_ = m.txn(func(s *xorm.Session) error {
-		var ck chunkRef
-		rows, err := s.Where("refs <= 0").Rows(&ck)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			if rows.Scan(&ck) == nil {
-				cks = append(cks, ck)
-			}
-		}
-		_ = rows.Close()
-		return nil
+		return s.Where("refs <= 0").Find(&cks)
 	})
 	for _, ck := range cks {
 		m.deleteSlice(ck.Chunkid, ck.Size)
@@ -2167,25 +2132,14 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 }
 
 func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
-	var indexes []uint32
+	var indexes []chunk
 	_ = m.txn(func(s *xorm.Session) error {
-		var c = chunk{Inode: inode}
-		rows, err := s.Rows(&c)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			if scanChunk(rows, &c) == nil {
-				indexes = append(indexes, c.Indx)
-			}
-		}
-		_ = rows.Close()
-		return nil
+		return s.Find(&indexes, &chunk{Inode: inode})
 	})
-	for _, indx := range indexes {
-		err := m.deleteChunk(inode, indx)
+	for _, c := range indexes {
+		err := m.deleteChunk(inode, c.Indx)
 		if err != nil {
-			logger.Warnf("deleteChunk inode %d index %d error: %s", inode, indx, err)
+			logger.Warnf("deleteChunk inode %d index %d error: %s", inode, c.Indx, err)
 			return
 		}
 	}
@@ -2198,19 +2152,7 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	var result []delslices
 	_ = m.txn(func(s *xorm.Session) error {
-		var ds delslices
-		rows, err := s.Where("deleted < ?", edge).Limit(limit, 0).Rows(&ds)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			ds.Slices = ds.Slices[:0]
-			if rows.Scan(&ds) == nil {
-				result = append(result, ds)
-			}
-		}
-		_ = rows.Close()
-		return nil
+		return s.Where("deleted < ?", edge).Limit(limit, 0).Find(&result)
 	})
 
 	var count int
@@ -2409,19 +2351,7 @@ func dup(b []byte) []byte {
 func (m *dbMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	var cs []chunk
 	err := m.txn(func(s *xorm.Session) error {
-		var c chunk
-		rows, err := s.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Rows(&c)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			if scanChunk(rows, &c) == nil {
-				c.Slices = dup(c.Slices)
-				cs = append(cs, c)
-			}
-		}
-		_ = rows.Close()
-		return nil
+		return s.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Find(&cs)
 	})
 	if err != nil {
 		return errno(err)
@@ -2441,17 +2371,12 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		m.doCleanupSlices()
 	}
 	err := m.txn(func(s *xorm.Session) error {
-		var c chunk
-		rows, err := s.Rows(&c)
+		var cs []chunk
+		err := s.Find(&cs)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			err = scanChunk(rows, &c)
-			if err != nil {
-				return err
-			}
+		for _, c := range cs {
 			ss := readSliceBuf(c.Slices)
 			for _, s := range ss {
 				if s.chunkid > 0 {
@@ -2477,30 +2402,26 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		} else if !ok {
 			return nil
 		}
-		var ds delslices
-		rows, err := s.Rows(&ds)
+		var dss []delslices
+		err := s.Find(&dss)
 		if err != nil {
 			return err
 		}
 		var ss []Slice
-		for rows.Next() {
-			ds.Slices = ds.Slices[:0]
-			if rows.Scan(&ds) == nil {
-				ss = ss[:0]
-				m.decodeDelayedSlices(ds.Slices, &ss)
-				if showProgress != nil {
-					for range ss {
-						showProgress()
-					}
+		for _, ds := range dss {
+			ss = ss[:0]
+			m.decodeDelayedSlices(ds.Slices, &ss)
+			if showProgress != nil {
+				for range ss {
+					showProgress()
 				}
-				for _, s := range ss {
-					if s.Chunkid > 0 {
-						slices[1] = append(slices[1], s)
-					}
+			}
+			for _, s := range ss {
+				if s.Chunkid > 0 {
+					slices[1] = append(slices[1], s)
 				}
 			}
 		}
-		_ = rows.Close()
 		return nil
 	})
 	return errno(err)
@@ -2527,18 +2448,13 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 	defer timeit(time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.txn(func(s *xorm.Session) error {
-		var x = xattr{Inode: inode}
-		rows, err := s.Where("inode = ?", inode).Rows(&x)
+		var xs []xattr
+		err := s.Where("inode = ?", inode).Find(&xs, &xattr{Inode: inode})
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
 		*names = nil
-		for rows.Next() {
-			err = rows.Scan(&x)
-			if err != nil {
-				return err
-			}
+		for _, x := range xs {
 			*names = append(*names, []byte(x.Name)...)
 			*names = append(*names, 0)
 		}

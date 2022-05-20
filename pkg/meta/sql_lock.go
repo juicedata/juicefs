@@ -44,7 +44,8 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 				}
 				return err
 			}
-			rows, err := s.ForUpdate().Rows(&flock{Inode: inode})
+			var fs []flock
+			err := s.ForUpdate().Find(&fs, &flock{Inode: inode})
 			if err != nil {
 				return err
 			}
@@ -53,13 +54,9 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 				o   int64
 			}
 			var locks = make(map[key]flock)
-			var l flock
-			for rows.Next() {
-				if rows.Scan(&l) == nil {
-					locks[key{l.Sid, l.Owner}] = l
-				}
+			for _, l := range fs {
+				locks[key{l.Sid, l.Owner}] = l
 			}
-			_ = rows.Close()
 
 			if ltype == F_RDLCK {
 				for _, l := range locks {
@@ -186,7 +183,8 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				}
 				return err
 			}
-			rows, err := s.ForUpdate().Rows(&plock{Inode: inode})
+			var ps []plock
+			err := s.ForUpdate().Find(&ps, &plock{Inode: inode})
 			if err != nil {
 				return err
 			}
@@ -195,14 +193,9 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				owner int64
 			}
 			var locks = make(map[key][]byte)
-			var l plock
-			for rows.Next() {
-				l.Records = nil
-				if rows.Scan(&l) == nil {
-					locks[key{l.Sid, l.Owner}] = dup(l.Records)
-				}
+			for _, l := range ps {
+				locks[key{l.Sid, l.Owner}] = dup(l.Records)
 			}
-			_ = rows.Close()
 			lkey := key{m.sid, owner}
 			for k, d := range locks {
 				if k == lkey {
