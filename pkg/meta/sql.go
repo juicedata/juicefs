@@ -1268,9 +1268,6 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if err != nil {
 			return err
 		}
-		if !ok {
-			return syscall.ENOENT
-		}
 		exist, err := s.ForUpdate().Exist(&edge{Parent: e.Inode})
 		if err != nil {
 			return err
@@ -1906,16 +1903,26 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	var newSpace int64
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
-		var nin, nout = node{Inode: fin}, node{Inode: fout}
-		ok, err := s.ForUpdate().Get(&nin)
+		var t node
+		rows, err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).Rows(&t)
 		if err != nil {
 			return err
 		}
-		ok2, err2 := s.ForUpdate().Get(&nout)
-		if err2 != nil {
-			return err2
+		var nin, nout node
+		for rows.Next() {
+			if err := rows.Scan(&t); err != nil {
+				return err
+			}
+			if t.Inode == fin {
+				nin = t
+			}
+			if t.Inode == fout {
+				nout = t
+			}
 		}
-		if !ok || !ok2 {
+		_ = rows.Close()
+
+		if nin.Inode == 0 || nout.Inode == 0 {
 			return syscall.ENOENT
 		}
 		if nin.Type != TypeFile {
@@ -1945,7 +1952,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		nout.Ctime = now
 
 		var c chunk
-		rows, err := s.Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).ForUpdate().Rows(&c)
+		rows, err = s.Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).ForUpdate().Rows(&c)
 		if err != nil {
 			return err
 		}
