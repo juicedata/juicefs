@@ -66,6 +66,7 @@ func testMeta(t *testing.T, m Meta) {
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
+	testParents(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -1244,6 +1245,70 @@ func testTrash(t *testing.T, m Meta) {
 	}
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
+	}
+}
+
+func testParents(t *testing.T, m Meta) {
+	if err := m.Init(Format{Name: "test"}, false); err != nil {
+		t.Fatalf("init: %s", err)
+	}
+	ctx := Background
+	var inode, parent Ino
+	var attr = &Attr{}
+	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	if st := m.Link(ctx, inode, 1, "l1", attr); st != 0 {
+		t.Fatalf("link l1 -> f: %s", st)
+	}
+	if st := m.Mkdir(ctx, 1, "d", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	if st := m.Link(ctx, inode, parent, "l2", attr); st != 0 {
+		t.Fatalf("link l2 -> f: %s", st)
+	}
+	if st := m.Link(ctx, inode, parent, "l3", attr); st != 0 {
+		t.Fatalf("link l3 -> f: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "f"); st != 0 {
+		t.Fatalf("unlink f: %s", st)
+	}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 {
+		t.Fatalf("getattr %d: %s", inode, st)
+	}
+	if attr.Parent != 1 && attr.Parent != parent {
+		t.Fatalf("expect parent 1 or %d, but got %d", parent, attr.Parent)
+	}
+	if st := m.Create(ctx, 1, "f2", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f2: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f2", 1, "l1", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename f2 -> l1: %s", st)
+	}
+	if st := m.Lookup(ctx, parent, "l2", &inode, attr); st != 0 {
+		t.Fatalf("lookup d/l2: %s", st)
+	}
+	if attr.Parent != parent {
+		t.Fatalf("expect parent %d, but got %d", parent, attr.Parent)
+	}
+	if st := m.Unlink(ctx, parent, "l2"); st != 0 {
+		t.Fatalf("unlink d/l2: %s", st)
+	}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 {
+		t.Fatalf("getattr %d: %s", inode, st)
+	}
+	if attr.Parent != parent {
+		t.Fatalf("expect parent %d, but got %d", parent, attr.Parent)
+	}
+	// clean up
+	if st := m.Unlink(ctx, 1, "l1"); st != 0 {
+		t.Fatalf("unlink l1: %s", st)
+	}
+	if st := m.Unlink(ctx, parent, "l3"); st != 0 {
+		t.Fatalf("unlink d/l3: %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
+		t.Fatalf("rmdir d: %s", st)
 	}
 }
 
