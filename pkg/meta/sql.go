@@ -1641,10 +1641,13 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 	}))
 }
 
-func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	dbSession := m.db.Table(&edge{})
 	if plus != 0 {
 		dbSession = dbSession.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+	}
+	if limit > 0 {
+		dbSession = dbSession.Limit(limit, 0)
 	}
 	var nodes []namedNode
 	if err := dbSession.Find(&nodes, &edge{Parent: inode}); err != nil {

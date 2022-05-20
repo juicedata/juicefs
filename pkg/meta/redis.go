@@ -1666,7 +1666,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 	}, m.inodeKey(inode), m.entryKey(parent), m.inodeKey(parent)))
 }
 
-func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	err := m.hscan(ctx, m.entryKey(inode), func(keys []string) error {
 		newEntries := make([]Entry, len(keys)/2)
 		newAttrs := make([]Attr, len(keys)/2)
@@ -1682,6 +1682,9 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 			ent.Attr = &newAttrs[i/2]
 			ent.Attr.Typ = typ
 			*entries = append(*entries, ent)
+			if limit > 0 && len(*entries) > limit {
+				return nil
+			}
 		}
 		return nil
 	})
