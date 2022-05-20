@@ -567,7 +567,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		// MySQL, MariaDB or TiDB
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later")
 	case "postgres":
-		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected")
+		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") || strings.Contains(msg, "duplicate key value")
 	default:
 		return false
 	}
