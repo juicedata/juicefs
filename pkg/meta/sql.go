@@ -246,8 +246,8 @@ func (m *dbMeta) Init(format Format, force bool) error {
 
 	var s = setting{Name: "format"}
 	var ok bool
-	err := m.txn(func(s *xorm.Session) (err error) {
-		ok, err = s.Get(&s)
+	err := m.txn(func(ses *xorm.Session) (err error) {
+		ok, err = ses.Get(&s)
 		return err
 	})
 	if err != nil {
@@ -996,14 +996,14 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 }
 
 func (m *dbMeta) doReadlink(ctx Context, inode Ino) (target []byte, err error) {
-	err = errno(m.txn(func(s *xorm.Session) error {
+	err = m.txn(func(s *xorm.Session) error {
 		var l = symlink{Inode: inode}
-		_, err := s.Get(&l)
-		if err == nil {
+		ok, err := s.Get(&l)
+		if err == nil && ok {
 			target = []byte(l.Target)
 		}
 		return err
-	}))
+	})
 	return
 }
 
@@ -1732,30 +1732,20 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 		fail = true
 	}
 
+	var sus []sustained
 	err = m.txn(func(ses *xorm.Session) error {
-		var s = sustained{Sid: sid}
-		if rows, err := ses.Rows(&s); err == nil {
-			var inodes []Ino
-			for rows.Next() {
-				if rows.Scan(&s) == nil {
-					inodes = append(inodes, s.Inode)
-				}
-			}
-			_ = rows.Close()
-			for _, inode := range inodes {
-				if err = m.doDeleteSustainedInode(sid, inode); err != nil {
-					logger.Warnf("Delete sustained inode %d of sid %d: %s", inode, sid, err)
-					fail = true
-				}
-			}
-			return nil
-		} else {
-			return err
-		}
+		return ses.Find(&sus, &sustained{Sid: sid})
 	})
 	if err != nil {
 		logger.Warnf("Scan sustained with sid %d: %s", sid, err)
 		fail = true
+	} else {
+		for _, su := range sus {
+			if err = m.doDeleteSustainedInode(sid, su.Inode); err != nil {
+				logger.Warnf("Delete sustained inode %d of sid %d: %s", su.Inode, sid, err)
+				fail = true
+			}
+		}
 	}
 
 	if fail {
