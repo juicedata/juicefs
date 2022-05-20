@@ -75,6 +75,7 @@ jobs:
           git clone https://github.com/sanwan/actiondata.git
           cd actiondata
           cat lineorder.tbl.gz* >lineorder.tbl.gz
+          md5sum lineorder.tbl.gz
           gzip -dk lineorder.tbl.gz
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
