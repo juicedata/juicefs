@@ -960,7 +960,7 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 			logger.Debugf("cleanup trash: nothing to delete")
 		}
 	}()
-
+	batch := 1000000
 	edge := now.Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
 	for len(entries) > 0 {
 		e := entries[0]
@@ -971,11 +971,14 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 		}
 		if ts.Before(edge) || force {
 			var subEntries []*Entry
-			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries, 1000000); st != 0 {
+			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries, batch); st != 0 {
 				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
 				continue
 			}
-			rmdir := len(subEntries) < 1000000
+			rmdir := len(subEntries) < batch
+			if rmdir {
+				entries = entries[1:]
+			}
 			for _, se := range subEntries {
 				if se.Attr.Typ == TypeDirectory {
 					st = m.en.doRmdir(ctx, e.Inode, string(se.Name))
@@ -997,7 +1000,6 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name)); st != 0 {
 					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
 				}
-				entries = entries[1:]
 			}
 		} else {
 			break
