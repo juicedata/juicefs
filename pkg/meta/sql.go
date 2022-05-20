@@ -597,7 +597,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		// MySQL, MariaDB or TiDB
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later")
 	case "postgres":
-		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected")
+		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") || strings.Contains(msg, "duplicate key value")
 	default:
 		return false
 	}
@@ -1294,6 +1294,11 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if e.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		var n = node{Inode: e.Inode}
+		ok, err = s.ForUpdate().Get(&n)
+		if err != nil {
+			return err
+		}
 		exist, err := s.ForUpdate().Exist(&edge{Parent: e.Inode})
 		if err != nil {
 			return err
@@ -1301,12 +1306,6 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if exist {
 			return syscall.ENOTEMPTY
 		}
-		var n = node{Inode: e.Inode}
-		ok, err = s.ForUpdate().Get(&n)
-		if err != nil {
-			return err
-		}
-
 		now := time.Now().UnixNano() / 1e3
 		if ok {
 			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
@@ -1364,6 +1363,30 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dn node
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
+		var t node
+		rows, err := s.ForUpdate().Where("inode IN (?,?)", parentSrc, parentDst).Rows(&t)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var spn, dpn node
+		for rows.Next() {
+			if err := rows.Scan(&t); err != nil {
+				return err
+			}
+			if t.Inode == parentSrc {
+				spn = t
+			}
+			if t.Inode == parentDst {
+				dpn = t
+			}
+		}
+		if spn.Inode == 0 || dpn.Inode == 0 {
+			return syscall.ENOENT
+		}
+		if spn.Type != TypeDirectory || dpn.Type != TypeDirectory {
+			return syscall.ENOTDIR
+		}
 		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
 		ok, err := s.ForUpdate().Get(&se)
 		if err != nil {
@@ -1385,28 +1408,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				*inode = se.Inode
 			}
 			return nil
-		}
-		var spn = node{Inode: parentSrc}
-		ok, err = s.ForUpdate().Get(&spn)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return syscall.ENOENT
-		}
-		if spn.Type != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		var dpn = node{Inode: parentDst}
-		ok, err = s.ForUpdate().Get(&dpn)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return syscall.ENOENT
-		}
-		if dpn.Type != TypeDirectory {
-			return syscall.ENOTDIR
 		}
 		var sn = node{Inode: se.Inode}
 		ok, err = s.ForUpdate().Get(&sn)
@@ -1948,16 +1949,26 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	var newSpace int64
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
-		var nin, nout = node{Inode: fin}, node{Inode: fout}
-		ok, err := s.ForUpdate().Get(&nin)
+		var t node
+		rows, err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).Rows(&t)
 		if err != nil {
 			return err
 		}
-		ok2, err2 := s.ForUpdate().Get(&nout)
-		if err2 != nil {
-			return err2
+		var nin, nout node
+		for rows.Next() {
+			if err := rows.Scan(&t); err != nil {
+				return err
+			}
+			if t.Inode == fin {
+				nin = t
+			}
+			if t.Inode == fout {
+				nout = t
+			}
 		}
-		if !ok || !ok2 {
+		_ = rows.Close()
+
+		if nin.Inode == 0 || nout.Inode == 0 {
 			return syscall.ENOENT
 		}
 		if nin.Type != TypeFile {
