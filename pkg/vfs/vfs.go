@@ -70,7 +70,7 @@ var (
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
 	var inode Ino
 	var attr = &Attr{}
-	if parent == rootID {
+	if parent == rootID || name == ".control" {
 		n := getInternalNodeByName(name)
 		if n != nil {
 			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -86,8 +87,8 @@ func readControl(cf *os.File, resp []byte) int {
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, batch []string, count int, threads uint, background bool) {
-	paths := strings.Join(batch[:count], "\n")
+func sendCommand(cf *os.File, batch []string, threads uint, background bool) {
+	paths := strings.Join(batch, "\n")
 	var back uint8
 	if background {
 		back = 1
@@ -103,7 +104,7 @@ func sendCommand(cf *os.File, batch []string, count int, threads uint, backgroun
 		logger.Fatalf("Write message: %s", err)
 	}
 	if background {
-		logger.Infof("Warm-up cache for %d paths in background", count)
+		logger.Infof("Warm-up cache for %d paths in background", len(batch))
 		return
 	}
 	var errs = make([]byte, 1)
@@ -150,59 +151,52 @@ func warmup(ctx *cli.Context) error {
 
 	// find mount point
 	first := paths[0]
-	st, err := os.Stat(first)
-	if err != nil {
-		logger.Fatalf("Failed to stat path %s: %s", first, err)
+	controller := openController(first)
+	if controller == nil {
+		logger.Fatalf("open control file for %s", first)
 	}
-	var mp string
-	if st.IsDir() {
-		mp = first
-	} else {
-		mp = filepath.Dir(first)
-	}
+	defer controller.Close()
+
+	mp := first
 	for ; mp != "/"; mp = filepath.Dir(mp) {
 		inode, err := utils.GetFileInode(mp)
 		if err != nil {
-			logger.Fatalf("Failed to lookup inode for %s: %s", mp, err)
+			logger.Fatalf("lookup inode for %s: %s", mp, err)
 		}
 		if inode == 1 {
 			break
 		}
 	}
-	if mp == "/" {
-		logger.Fatalf("Path %s is not inside JuiceFS", first)
-	}
-
-	controller := openController(mp)
-	if controller == nil {
-		logger.Fatalf("Failed to open control file under %s", mp)
-	}
-	defer controller.Close()
 
 	threads := ctx.Uint("threads")
 	background := ctx.Bool("background")
 	start := len(mp)
-	batch := make([]string, batchMax)
+	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background, false)
 	bar := progress.AddCountBar("Warmed up paths", int64(len(paths)))
-	var index int
 	for _, path := range paths {
-		if strings.HasPrefix(path, mp) {
-			batch[index] = path[start:]
-			index++
+		if mp == "/" {
+			inode, err := utils.GetFileInode(path)
+			if err != nil {
+				logger.Errorf("lookup inode for %s: %s", mp, err)
+				continue
+			}
+			batch = append(batch, fmt.Sprintf("inode:%d", inode))
+		} else if strings.HasPrefix(path, mp) {
+			batch = append(batch, path[start:])
 		} else {
-			logger.Warnf("Path %s is not under mount point %s", path, mp)
+			logger.Errorf("Path %s is not under mount point %s", path, mp)
 			continue
 		}
-		if index >= batchMax {
-			sendCommand(controller, batch, index, threads, background)
-			bar.IncrBy(index)
-			index = 0
+		if len(batch) >= batchMax {
+			sendCommand(controller, batch, threads, background)
+			bar.IncrBy(len(batch))
+			batch = batch[0:]
 		}
 	}
-	if index > 0 {
-		sendCommand(controller, batch, index, threads, background)
-		bar.IncrBy(index)
+	if len(batch) > 0 {
+		sendCommand(controller, batch, threads, background)
+		bar.IncrBy(len(batch))
 	}
 	progress.Done()
 	if !background {
