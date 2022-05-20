@@ -63,6 +63,9 @@ func (s *sqlStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if !ok {
 		return nil, errors.New("not found")
 	}
+	if off > int64(len(b.Data)) {
+		off = int64(len(b.Data))
+	}
 	data := b.Data[off:]
 	if limit > 0 && limit < int64(len(data)) {
 		data = data[:limit]

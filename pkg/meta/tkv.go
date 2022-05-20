@@ -1481,9 +1481,9 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 	}))
 }
 
-func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	// TODO: handle big directory
-	vals, err := m.scanValues(m.entryKey(inode, ""), -1, nil)
+	vals, err := m.scanValues(m.entryKey(inode, ""), limit, nil)
 	if err != nil {
 		return errno(err)
 	}

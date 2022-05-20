@@ -215,7 +215,7 @@ func (e *encrypted) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	l := int64(len(plain))
 	if off > l {
-		return nil, io.EOF
+		off = l
 	}
 	if limit == -1 || off+limit > l {
 		limit = l - off

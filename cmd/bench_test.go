@@ -31,3 +31,9 @@ func TestBench(t *testing.T) {
 		t.Fatalf("test bench failed: %s", err)
 	}
 }
+
+func TestBenchForObject(t *testing.T) {
+	if err := Main([]string{"", "objbench", testMountPoint + "/", "-p", "4"}); err != nil {
+		t.Fatalf("test bench failed: %s", err)
+	}
+}
