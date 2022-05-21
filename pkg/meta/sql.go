@@ -1940,16 +1940,13 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	var newSpace int64
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
-		var t node
-		rows, err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).Rows(&t)
+		var ts []node
+		err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).Find(&ts)
 		if err != nil {
 			return err
 		}
 		var nin, nout node
-		for rows.Next() {
-			if err := rows.Scan(&t); err != nil {
-				return err
-			}
+		for _, t := range ts {
 			if t.Inode == fin {
 				nin = t
 			}
@@ -1957,7 +1954,6 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 				nout = t
 			}
 		}
-		_ = rows.Close()
 
 		if nin.Inode == 0 || nout.Inode == 0 {
 			return syscall.ENOENT
@@ -1989,7 +1985,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		nout.Ctime = now
 
 		var cs []chunk
-		err = s.Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).ForUpdate().Find(&cs)
+		err = s.Table(&chunk{}).Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).ForUpdate().Find(&cs)
 		if err != nil {
 			return err
 		}
