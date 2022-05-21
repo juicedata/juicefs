@@ -194,7 +194,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 			}
 			var locks = make(map[key][]byte)
 			for _, l := range ps {
-				locks[key{l.Sid, l.Owner}] = dup(l.Records)
+				locks[key{l.Sid, l.Owner}] = l.Records
 			}
 			lkey := key{m.sid, owner}
 			for k, d := range locks {

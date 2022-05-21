@@ -323,16 +323,16 @@ func (m *dbMeta) Reset() error {
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
-	err = m.txn(func(s *xorm.Session) error {
-		if ok, err := s.IsTableExist(&setting{}); err != nil {
+	err = m.txn(func(ses *xorm.Session) error {
+		if ok, err := ses.IsTableExist(&setting{}); err != nil {
 			return err
 		} else if !ok {
 			return nil
 		}
-		set := setting{Name: "format"}
-		_, err := s.Get(&set)
-		if err == nil {
-			data = []byte(set.Value)
+		s := setting{Name: "format"}
+		ok, err := ses.Get(&s)
+		if err == nil && ok {
+			data = []byte(s.Value)
 		}
 		return err
 	})
@@ -1684,7 +1684,7 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		}
 		var nodes []namedNode
 		if err := s.Find(&nodes, &edge{Parent: inode}); err != nil {
-			return errno(err)
+			return err
 		}
 		for _, n := range nodes {
 			if len(n.Name) == 0 {
@@ -2145,7 +2145,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	var indexes []chunk
 	_ = m.txn(func(s *xorm.Session) error {
-		return s.Find(&indexes, &chunk{Inode: inode})
+		return s.Cols("indx").Find(&indexes, &chunk{Inode: inode})
 	})
 	for _, c := range indexes {
 		err := m.deleteChunk(inode, c.Indx)
@@ -2679,6 +2679,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 
 		entry.Name = string(e.Name)
 		if e.Type == TypeDirectory {
+			logger.Infof("dump dir %d %s -> %d", inode, e.Name, e.Inode)
 			err = m.dumpDir(e.Inode, entry, bw, depth+2, showProgress)
 		} else {
 			err = entry.writeJSON(bw, depth+2)
@@ -2716,7 +2717,7 @@ func (m *dbMeta) makeSnap(bar *utils.Bar) error {
 		}
 
 		bufferSize := 10000
-		if err := ses.BufferSize(bufferSize).Iterate(new(node), func(idx int, bean interface{}) error {
+		if err := ses.Table(&node{}).BufferSize(bufferSize).Iterate(new(node), func(idx int, bean interface{}) error {
 			n := bean.(*node)
 			snap.node[n.Inode] = n
 			bar.Increment()
@@ -2725,7 +2726,7 @@ func (m *dbMeta) makeSnap(bar *utils.Bar) error {
 			return err
 		}
 
-		if err := ses.BufferSize(bufferSize).Iterate(new(symlink), func(idx int, bean interface{}) error {
+		if err := ses.Table(&symlink{}).BufferSize(bufferSize).Iterate(new(symlink), func(idx int, bean interface{}) error {
 			s := bean.(*symlink)
 			snap.symlink[s.Inode] = s
 			bar.Increment()
@@ -2733,7 +2734,7 @@ func (m *dbMeta) makeSnap(bar *utils.Bar) error {
 		}); err != nil {
 			return err
 		}
-		if err := ses.BufferSize(bufferSize).Iterate(new(edge), func(idx int, bean interface{}) error {
+		if err := ses.Table(&edge{}).BufferSize(bufferSize).Iterate(new(edge), func(idx int, bean interface{}) error {
 			e := bean.(*edge)
 			snap.edges[e.Parent] = append(snap.edges[e.Parent], e)
 			bar.Increment()
@@ -2742,7 +2743,7 @@ func (m *dbMeta) makeSnap(bar *utils.Bar) error {
 			return err
 		}
 
-		if err := ses.BufferSize(bufferSize).Iterate(new(xattr), func(idx int, bean interface{}) error {
+		if err := ses.Table(&xattr{}).BufferSize(bufferSize).Iterate(new(xattr), func(idx int, bean interface{}) error {
 			x := bean.(*xattr)
 			snap.xattr[x.Inode] = append(snap.xattr[x.Inode], x)
 			bar.Increment()
@@ -2751,7 +2752,7 @@ func (m *dbMeta) makeSnap(bar *utils.Bar) error {
 			return err
 		}
 
-		if err := ses.BufferSize(bufferSize).Iterate(new(chunk), func(idx int, bean interface{}) error {
+		if err := ses.Table(&chunk{}).BufferSize(bufferSize).Iterate(new(chunk), func(idx int, bean interface{}) error {
 			c := bean.(*chunk)
 			snap.chunk[fmt.Sprintf("%d-%d", c.Inode, c.Indx)] = c
 			bar.Increment()
@@ -2810,7 +2811,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return s.Find(&srows)
 	})
 	if err != nil {
-		return nil
+		return err
 	}
 	dels := make([]*DumpedDelFile, 0, len(drows))
 	for _, row := range drows {
