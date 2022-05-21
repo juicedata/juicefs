@@ -817,15 +817,6 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	return err
 }
 
-func scanChunk(rows *xorm.Rows, c *chunk) error {
-	// FIXME: there is a bug in xorm, which will fill existing slice with partial result
-	// see line 582 in session.go:582 of xorm
-	if len(c.Slices) > 0 {
-		c.Slices = c.Slices[:0]
-	}
-	return rows.Scan(c)
-}
-
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
 	defer timeit(time.Now())
 	f := m.of.find(inode)
