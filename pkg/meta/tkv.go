@@ -160,6 +160,7 @@ All keys:
   C...               counter
   AiiiiiiiiI         inode attribute
   AiiiiiiiiD...      dentry
+  AiiiiiiiiPiiiiiiii parents // for hard links
   AiiiiiiiiCnnnn     file chunks
   AiiiiiiiiS         symlink target
   AiiiiiiiiX...      extented attribute
@@ -180,6 +181,10 @@ func (m *kvMeta) inodeKey(inode Ino) []byte {
 
 func (m *kvMeta) entryKey(parent Ino, name string) []byte {
 	return m.fmtKey("A", parent, "D", name)
+}
+
+func (m *kvMeta) parentKey(inode, parent Ino) []byte {
+	return m.fmtKey("A", inode, "P", parent)
 }
 
 func (m *kvMeta) chunkKey(inode Ino, indx uint32) []byte {
@@ -1068,6 +1073,18 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	return errno(err)
 }
 
+func (m *kvMeta) pickParent(ctx Context, tx kvTxn, inode Ino) (Ino, error) {
+	vals := tx.scanValues(m.fmtKey("A", inode, "P"), 1, func(k, v []byte) bool {
+		// parents: AiiiiiiiiPiiiiiiii
+		return len(k) == 1+8+1+8 && parseCounter(v) > 0
+	})
+	var ino Ino
+	for k := range vals {
+		ino = m.decodeInode([]byte(k[10:]))
+	}
+	return ino, nil
+}
+
 func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1105,6 +1122,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		attr = Attr{}
 		opened = false
 		now := time.Now()
+		var newParent Ino
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
@@ -1117,13 +1135,17 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				if _type == TypeFile && attr.Nlink == 0 {
 					opened = m.of.IsOpen(inode)
 				}
-			} else if attr.Nlink == 1 {
-				attr.Parent = trash
+			} else {
+				newParent = trash
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 			trash = 0
 		}
+		incr, decr, _ := changeParent(parent, newParent, &attr, func() (Ino, error) {
+			return m.pickParent(ctx, tx, inode)
+		})
+
 		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 		var updateParent bool
 		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
@@ -1142,6 +1164,12 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			if trash > 0 {
 				tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
+			}
+			if incr > 0 {
+				tx.incrBy(m.parentKey(inode, incr), 1)
+			}
+			if decr > 0 {
+				tx.incrBy(m.parentKey(inode, decr), -1)
 			}
 		} else {
 			switch _type {
@@ -1162,6 +1190,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				newSpace, newInode = -align4K(0), -1
 			}
 			tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
+			tx.dels(tx.scanKeys(m.fmtKey("A", inode, "P"))...)
 		}
 		return nil
 	})
@@ -1299,6 +1328,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		var supdate, dupdate bool
+		var iincr, idecr, tincr, tdecr Ino
 		now := time.Now()
 		tattr = Attr{}
 		opened = false
@@ -1316,11 +1346,15 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
-				tattr.Parent = parentSrc
-				if dtyp == TypeDirectory && parentSrc != parentDst {
-					dattr.Nlink--
-					sattr.Nlink++
-					supdate, dupdate = true, true
+				if parentSrc != parentDst {
+					if dtyp == TypeDirectory {
+						tattr.Parent = parentSrc
+						dattr.Nlink--
+						sattr.Nlink++
+						supdate, dupdate = true, true
+					} else {
+						tincr, tdecr, _ = changeParent(parentDst, parentSrc, &tattr, nil)
+					}
 				}
 			} else {
 				if dtyp == TypeDirectory {
@@ -1333,15 +1367,19 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tattr.Parent = trash
 					}
 				} else {
+					var newParent Ino
 					if trash == 0 {
 						tattr.Nlink--
 						if dtyp == TypeFile && tattr.Nlink == 0 {
 							opened = m.of.IsOpen(dino)
 						}
 						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
-					} else if tattr.Nlink == 1 {
-						tattr.Parent = trash
+					} else {
+						newParent = trash
 					}
+					tincr, tdecr, _ = changeParent(parentDst, newParent, &tattr, func() (Ino, error) {
+						return m.pickParent(ctx, tx, dino)
+					})
 				}
 			}
 			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
@@ -1357,10 +1395,15 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return syscall.EACCES
 		}
 
-		if typ == TypeDirectory && parentSrc != parentDst {
-			sattr.Nlink--
-			dattr.Nlink++
-			supdate, dupdate = true, true
+		if parentSrc != parentDst {
+			if typ == TypeDirectory {
+				iattr.Parent = parentDst
+				sattr.Nlink--
+				dattr.Nlink++
+				supdate, dupdate = true, true
+			} else {
+				iincr, idecr, _ = changeParent(parentSrc, parentDst, &iattr, nil)
+			}
 		}
 		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
 			sattr.Mtime = now.Unix()
@@ -1376,7 +1419,6 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			dattr.Ctimensec = uint32(now.Nanosecond())
 			dupdate = true
 		}
-		iattr.Parent = parentDst
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		if inode != nil {
@@ -1415,6 +1457,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						newSpace, newInode = -align4K(0), -1
 					}
 					tx.dels(tx.scanKeys(m.xattrKey(dino, ""))...)
+					tx.dels(tx.scanKeys(m.fmtKey("A", dino, "P"))...)
 				}
 			}
 		}
@@ -1422,6 +1465,18 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			tx.set(m.inodeKey(parentSrc), m.marshal(&sattr))
 		}
 		tx.set(m.inodeKey(ino), m.marshal(&iattr))
+		if iincr > 0 {
+			tx.incrBy(m.parentKey(ino, iincr), 1)
+		}
+		if idecr > 0 {
+			tx.incrBy(m.parentKey(ino, idecr), -1)
+		}
+		if tincr > 0 {
+			tx.incrBy(m.parentKey(dino, tincr), 1)
+		}
+		if tdecr > 0 {
+			tx.incrBy(m.parentKey(dino, tdecr), -1)
+		}
 		tx.set(m.entryKey(parentDst, nameDst), buf)
 		if dupdate {
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
@@ -1474,6 +1529,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		tx.set(m.inodeKey(inode), m.marshal(&iattr))
+		tx.incrBy(m.parentKey(inode, parent), 1)
 		if attr != nil {
 			*attr = iattr
 		}
