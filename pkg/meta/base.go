@@ -70,6 +70,7 @@ type engine interface {
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
+	doGetParents(ctx Context, inode Ino) map[Ino]int
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
@@ -844,6 +845,22 @@ func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 
 	defer timeit(time.Now())
 	return m.en.doRemoveXattr(ctx, m.checkRoot(inode), name)
+}
+
+func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
+	if inode == 1 {
+		return map[Ino]int{1: 1}
+	}
+	var attr Attr
+	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+		logger.Warnf("GetAttr inode %d: %s", inode, st)
+		return nil
+	}
+	if attr.Parent > 0 {
+		return map[Ino]int{attr.Parent: 1}
+	} else {
+		return m.en.doGetParents(ctx, inode)
+	}
 }
 
 func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {

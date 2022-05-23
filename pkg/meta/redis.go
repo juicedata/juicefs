@@ -1186,20 +1186,6 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	return errno(err)
 }
 
-func (m *redisMeta) pickParent(ctx Context, tx *redis.Tx, inode Ino) (Ino, error) {
-	vals, err := tx.HGetAll(ctx, m.parentKey(inode)).Result()
-	if err != nil {
-		return 0, err
-	}
-	for k, v := range vals {
-		if n, _ := strconv.Atoi(v); n > 0 {
-			ino, _ := strconv.ParseUint(k, 10, 64)
-			return Ino(ino), nil
-		}
-	}
-	return 0, nil // legacy client has no parent
-}
-
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var _type uint8
 	var trash, inode Ino
@@ -1252,7 +1238,6 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		}
 		attr = Attr{}
 		opened = false
-		var newParent Ino
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), &attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
@@ -1265,18 +1250,12 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				if _type == TypeFile && attr.Nlink == 0 {
 					opened = m.of.IsOpen(inode)
 				}
-			} else {
-				newParent = trash
+			} else if attr.Parent > 0 {
+				attr.Parent = trash
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 			trash = 0
-		}
-		incr, decr, err := changeParent(parent, newParent, &attr.Parent, func() (Ino, error) {
-			return m.pickParent(ctx, tx, inode)
-		})
-		if err != nil {
-			return err
 		}
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -1288,12 +1267,12 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
 				if trash > 0 {
 					pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name), buf)
+					if attr.Parent == 0 {
+						pipe.HIncrBy(ctx, m.parentKey(inode), trash.String(), 1)
+					}
 				}
-				if incr > 0 {
-					pipe.HIncrBy(ctx, m.parentKey(inode), incr.String(), 1)
-				}
-				if decr > 0 {
-					pipe.HIncrBy(ctx, m.parentKey(inode), decr.String(), -1)
+				if attr.Parent == 0 {
+					pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), -1)
 				}
 			} else {
 				switch _type {
@@ -1318,7 +1297,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 					pipe.Decr(ctx, m.totalInodesKey())
 				}
 				pipe.Del(ctx, m.xattrKey(inode))
-				pipe.Del(ctx, m.parentKey(inode))
+				if attr.Parent == 0 {
+					pipe.Del(ctx, m.parentKey(inode))
+				}
 			}
 			return nil
 		})
@@ -1502,7 +1483,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
 
 		var supdate, dupdate bool
-		var iincr, idecr, tincr, tdecr Ino
 		now := time.Now()
 		tattr = Attr{}
 		opened = false
@@ -1521,9 +1501,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						dattr.Nlink--
 						sattr.Nlink++
 						supdate, dupdate = true, true
-					} else {
-						// parentSrc always > 0
-						tincr, tdecr, _ = changeParent(parentDst, parentSrc, &tattr.Parent, nil)
+					} else if tattr.Parent > 0 {
+						tattr.Parent = parentSrc
 					}
 				}
 			} else {
@@ -1541,20 +1520,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						tattr.Parent = trash
 					}
 				} else {
-					var newParent Ino
 					if trash == 0 {
 						tattr.Nlink--
 						if dtyp == TypeFile && tattr.Nlink == 0 {
 							opened = m.of.IsOpen(dino)
 						}
 						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
-					} else {
-						newParent = trash
-					}
-					if tincr, tdecr, err = changeParent(parentDst, newParent, &tattr.Parent, func() (Ino, error) {
-						return m.pickParent(ctx, tx, dino)
-					}); err != nil {
-						return err
+					} else if tattr.Parent > 0 {
+						tattr.Parent = trash
 					}
 				}
 			}
@@ -1577,8 +1550,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				sattr.Nlink--
 				dattr.Nlink++
 				supdate, dupdate = true, true
-			} else {
-				iincr, idecr, _ = changeParent(parentSrc, parentDst, &iattr.Parent, nil)
+			} else if iattr.Parent > 0 {
+				iattr.Parent = parentDst
 			}
 		}
 		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
@@ -1607,14 +1580,25 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if exchange { // dbuf, tattr are valid
 				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
 				pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
+				if parentSrc != parentDst && tattr.Parent == 0 {
+					pipe.HIncrBy(ctx, m.parentKey(dino), parentSrc.String(), 1)
+					pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
+				}
 			} else {
 				pipe.HDel(ctx, m.entryKey(parentSrc), nameSrc)
 				if dino > 0 {
 					if trash > 0 {
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
 						pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parentDst, dino, nameDst), dbuf)
+						if tattr.Parent == 0 {
+							pipe.HIncrBy(ctx, m.parentKey(dino), trash.String(), 1)
+							pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
+						}
 					} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
+						if tattr.Parent == 0 {
+							pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
+						}
 					} else {
 						if dtyp == TypeFile {
 							if opened {
@@ -1637,26 +1621,22 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							pipe.Decr(ctx, m.totalInodesKey())
 						}
 						pipe.Del(ctx, m.xattrKey(dino))
-						pipe.Del(ctx, m.parentKey(dino))
+						if tattr.Parent == 0 {
+							pipe.Del(ctx, m.parentKey(dino))
+						}
 					}
 				}
 			}
-			if parentDst != parentSrc && !isTrash(parentSrc) && supdate {
-				pipe.Set(ctx, m.inodeKey(parentSrc), m.marshal(&sattr), 0)
+			if parentDst != parentSrc {
+				if !isTrash(parentSrc) && supdate {
+					pipe.Set(ctx, m.inodeKey(parentSrc), m.marshal(&sattr), 0)
+				}
+				if iattr.Parent == 0 {
+					pipe.HIncrBy(ctx, m.parentKey(ino), parentDst.String(), 1)
+					pipe.HIncrBy(ctx, m.parentKey(ino), parentSrc.String(), -1)
+				}
 			}
 			pipe.Set(ctx, m.inodeKey(ino), m.marshal(&iattr), 0)
-			if iincr > 0 {
-				pipe.HIncrBy(ctx, m.parentKey(ino), iincr.String(), 1)
-			}
-			if idecr > 0 {
-				pipe.HIncrBy(ctx, m.parentKey(ino), idecr.String(), -1)
-			}
-			if tincr > 0 {
-				pipe.HIncrBy(ctx, m.parentKey(dino), tincr.String(), 1)
-			}
-			if tdecr > 0 {
-				pipe.HIncrBy(ctx, m.parentKey(dino), tdecr.String(), -1)
-			}
 			pipe.HSet(ctx, m.entryKey(parentDst), nameDst, buf)
 			if dupdate {
 				pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
@@ -1701,6 +1681,8 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		if iattr.Typ == TypeDirectory {
 			return syscall.EPERM
 		}
+		oldParent := iattr.Parent
+		iattr.Parent = 0
 		iattr.Ctime = now.Unix()
 		iattr.Ctimensec = uint32(now.Nanosecond())
 		iattr.Nlink++
@@ -1720,6 +1702,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&iattr), 0)
+			if oldParent > 0 {
+				pipe.HIncrBy(ctx, m.parentKey(inode), oldParent.String(), 1)
+			}
 			pipe.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
 			return nil
 		})
@@ -2145,6 +2130,22 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		m.updateStats(newSpace, 0)
 	}
 	return errno(err)
+}
+
+func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
+	vals, err := m.rdb.HGetAll(ctx, m.parentKey(inode)).Result()
+	if err != nil {
+		logger.Warnf("Scan parent key of inode %d: %s", inode, err)
+		return nil
+	}
+	ps := make(map[Ino]int)
+	for k, v := range vals {
+		if n, _ := strconv.Atoi(v); n > 0 {
+			ino, _ := strconv.ParseUint(k, 10, 64)
+			ps[Ino(ino)] = n
+		}
+	}
+	return ps
 }
 
 // For now only deleted files

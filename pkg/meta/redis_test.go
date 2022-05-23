@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1258,9 +1259,26 @@ func testParents(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
+	if attr.Parent != 1 {
+		t.Fatalf("expect parent 1, but got %d", attr.Parent)
+	}
+	checkParents := func(inode Ino, expect map[Ino]int) {
+		if ps := m.GetParents(ctx, inode); ps == nil {
+			t.Fatalf("get parents of inode %d returns nil", inode)
+		} else if !reflect.DeepEqual(ps, expect) {
+			t.Fatalf("expect parents %v, but got %v", expect, ps)
+		}
+	}
+	checkParents(inode, map[Ino]int{1: 1})
+
 	if st := m.Link(ctx, inode, 1, "l1", attr); st != 0 {
 		t.Fatalf("link l1 -> f: %s", st)
 	}
+	if attr.Parent != 0 {
+		t.Fatalf("expect parent 0, but got %d", attr.Parent)
+	}
+	checkParents(inode, map[Ino]int{1: 2})
+
 	if st := m.Mkdir(ctx, 1, "d", 0755, 022, 0, &parent, attr); st != 0 {
 		t.Fatalf("mkdir d: %s", st)
 	}
@@ -1270,14 +1288,10 @@ func testParents(t *testing.T, m Meta) {
 	if st := m.Link(ctx, inode, parent, "l3", attr); st != 0 {
 		t.Fatalf("link l3 -> f: %s", st)
 	}
+	checkParents(inode, map[Ino]int{1: 2, parent: 2})
+
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
-	}
-	if st := m.GetAttr(ctx, inode, attr); st != 0 {
-		t.Fatalf("getattr %d: %s", inode, st)
-	}
-	if attr.Parent != 1 && attr.Parent != parent {
-		t.Fatalf("expect parent 1 or %d, but got %d", parent, attr.Parent)
 	}
 	if st := m.Create(ctx, 1, "f2", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f2: %s", st)
@@ -1285,21 +1299,14 @@ func testParents(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", 1, "l1", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> l1: %s", st)
 	}
-	if st := m.Lookup(ctx, parent, "l2", &inode, attr); st != 0 {
-		t.Fatalf("lookup d/l2: %s", st)
-	}
-	if attr.Parent != parent {
-		t.Fatalf("expect parent %d, but got %d", parent, attr.Parent)
-	}
 	if st := m.Unlink(ctx, parent, "l2"); st != 0 {
 		t.Fatalf("unlink d/l2: %s", st)
 	}
-	if st := m.GetAttr(ctx, inode, attr); st != 0 {
-		t.Fatalf("getattr %d: %s", inode, st)
+	if st := m.Lookup(ctx, parent, "l3", &inode, attr); st != 0 {
+		t.Fatalf("lookup d/l3: %s", st)
 	}
-	if attr.Parent != parent {
-		t.Fatalf("expect parent %d, but got %d", parent, attr.Parent)
-	}
+	checkParents(inode, map[Ino]int{parent: 1})
+
 	// clean up
 	if st := m.Unlink(ctx, 1, "l1"); st != 0 {
 		t.Fatalf("unlink l1: %s", st)
