@@ -565,9 +565,11 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
 	case "mysql":
 		// MySQL, MariaDB or TiDB
-		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later")
+		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later") ||
+			strings.Contains(msg, "Duplicate entry")
 	case "postgres":
-		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") || strings.Contains(msg, "duplicate key value")
+		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
+			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access due to concurrent update")
 	default:
 		return false
 	}
