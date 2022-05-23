@@ -51,13 +51,21 @@ jobs:
           mp=myjfs/
           name=myjfs
           juicefs=./juicefs
-          openssl genrsa -out my-priv-key.pem -aes256 -passout pass:12345678 2048 
-          export JFS_RSA_PASSPHRASE=12345678
-          $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key my-priv-key.pem
+          export JFS_RSA_PASSPHRASE=abc123
+          $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key resources/my-priv-key-2048-abc123.pem
           $juicefs mount -d $meta $mp
-          dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
-          cp file $mp/file
-          diff -u file $mp/file
+          dd if=/dev/urandom of=file1 iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
+          cp file $mp/file1
+          diff -u file1 $mp/file1
+          $juicefs umount $mp
+
+          export JFS_RSA_PASSPHRASE=def456
+          $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key resources/my-priv-key-2048-def456.pem
+          $juicefs mount -d $meta $mp
+          dd if=/dev/urandom of=file2 iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
+          cp file2 $mp/file2
+          diff -u file2 $mp/file2
+          $juicefs umount $mp
 
       - name: Send Slack Notification
         if: ${{ failure() }}
