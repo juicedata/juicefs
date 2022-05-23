@@ -1,5 +1,7 @@
 ---
-sidebar_label: Use JuiceFS on Colab with Google CloudSQL and GCS sidebar_position: 4 slug: /juicefs_on_colab
+sidebar_label: Use JuiceFS on Colab with Google CloudSQL and GCS
+sidebar_position: 4
+slug: /juicefs_on_colab
 ---
 
 # Use JuiceFS on Colab with Google CloudSQL and GCS
