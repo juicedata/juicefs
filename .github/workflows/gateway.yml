@@ -430,25 +430,6 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
 
-  upload-big-file-with-oceanbase-read-committed:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: install ob
-        run: |
-          docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
-          mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
-          file_size: "1G"
-          file_count: 5
-          isolation_level: "read committed"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
   upload-big-file-with-oceanbase-repeatable-read:
     runs-on: ubuntu-latest
     steps:
