@@ -125,14 +125,14 @@ func (s *sqlStore) List(prefix, marker string, limit int64) ([]Object, error) {
 	if marker == "" {
 		marker = prefix
 	}
-	var b blob
-	rows, err := s.db.Where("key >= ?", marker).Limit(int(limit)).Cols("key", "size", "modified").Rows(&b)
+	var bs []blob
+	err := s.db.Where("key >= ?", marker).Limit(int(limit)).Cols("key", "size", "modified").OrderBy("key").Find(&bs)
 	if err != nil {
 		return nil, err
 	}
 	var objs []Object
-	for rows.Next() {
-		if rows.Scan(&b) == nil && strings.HasPrefix(b.Key, prefix) {
+	for _, b := range bs {
+		if strings.HasPrefix(b.Key, prefix) {
 			objs = append(objs, &obj{
 				key:   b.Key,
 				size:  b.Size,
