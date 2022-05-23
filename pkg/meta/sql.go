@@ -2444,36 +2444,28 @@ func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 
 func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
+		var k = &xattr{Inode: inode, Name: name}
 		var x = xattr{Inode: inode, Name: name, Value: value}
-		var err error
-		var n int64
+		ok, err := s.ForUpdate().Get(k)
+		if err != nil {
+			return err
+		}
 		switch flags {
 		case XattrCreate:
-			n, err = s.Insert(&x)
-			if err != nil || n == 0 {
-				err = syscall.EEXIST
+			if ok {
+				return syscall.EEXIST
 			}
+			err = mustInsert(s, &x)
 		case XattrReplace:
-			n, err = s.Update(&x, &xattr{Inode: inode, Name: name})
-			if err == nil && n == 0 {
-				err = ENOATTR
+			if !ok {
+				return ENOATTR
 			}
+			_, err = s.Update(&x, k)
 		default:
-			if m.db.DriverName() == "postgres" {
-				var r sql.Result
-				r, err = s.Exec("INSERT INTO jfs_xattr(inode, name, value) VALUES(?, ?, ?) "+
-					"ON CONFLICT (inode, name) DO UPDATE SET value=? ", inode, name, value, value)
-				if err == nil {
-					n, err = r.RowsAffected()
-				}
+			if ok {
+				_, err = s.Update(&x, k)
 			} else {
-				n, err = s.Insert(&x)
-				if err != nil || n == 0 {
-					n, err = s.Update(&x, &xattr{Inode: inode, Name: name})
-				}
-			}
-			if err == nil && n == 0 {
-				err = errors.New("not inserted or updated")
+				err = mustInsert(s, &x)
 			}
 		}
 		return err
