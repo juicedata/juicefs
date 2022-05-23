@@ -61,6 +61,12 @@ type edge struct {
 	Type   uint8  `xorm:"notnull"`
 }
 
+type linkParent struct {
+	Id     int64 `xorm:"pk bigserial"`
+	Inode  Ino   `xorm:"notnull"`
+	Parent Ino   `xorm:"notnull"`
+}
+
 type node struct {
 	Inode  Ino    `xorm:"pk"`
 	Type   uint8  `xorm:"notnull"`
@@ -228,8 +234,8 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.db.Sync2(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
 	}
-	if err := m.db.Sync2(new(edge)); err != nil && !strings.Contains(err.Error(), "Duplicate entry") {
-		return fmt.Errorf("create table edge: %s", err)
+	if err := m.db.Sync2(new(edge), new(linkParent)); err != nil && !strings.Contains(err.Error(), "Duplicate entry") {
+		return fmt.Errorf("create table edge, linkParent: %s", err)
 	}
 	if err := m.db.Sync2(new(node), new(symlink), new(xattr)); err != nil {
 		return fmt.Errorf("create table node, symlink, xattr: %s", err)
@@ -312,7 +318,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 
 func (m *dbMeta) Reset() error {
 	return m.db.DropTables(&setting{}, &counter{},
-		&node{}, &edge{}, &symlink{}, &xattr{},
+		&node{}, &edge{}, &linkParent{}, &symlink{}, &xattr{},
 		&chunk{}, &chunkRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
 		&flock{}, &plock{})
@@ -330,9 +336,9 @@ func (m *dbMeta) doLoad() ([]byte, error) {
 }
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
-	err := m.db.Sync2(new(session2), new(delslices))
+	err := m.db.Sync2(new(session2), new(delslices), new(linkParent))
 	if err != nil {
-		return fmt.Errorf("update table session2, delslices: %s", err)
+		return fmt.Errorf("update table session2, delslices, linkParent: %s", err)
 	}
 	// add primary key
 	if err = m.db.Sync2(new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
@@ -1092,6 +1098,18 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	return errno(err)
 }
 
+func (m *dbMeta) pickParent(ctx Context, s *xorm.Session, inode Ino) (Ino, error) {
+	var rows []linkParent
+	if err := s.Limit(1, 0).ForUpdate().Find(&rows, &linkParent{Inode: inode}); err != nil {
+		return 0, err
+	}
+	var ino Ino
+	if len(rows) > 0 {
+		ino = rows[0].Parent
+	}
+	return ino, nil
+}
+
 func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
@@ -1138,6 +1156,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return err
 		}
 		now := time.Now().UnixNano() / 1e3
+		var newParent Ino
 		opened = false
 		if ok {
 			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
@@ -1149,13 +1168,16 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				if n.Type == TypeFile && n.Nlink == 0 {
 					opened = m.of.IsOpen(e.Inode)
 				}
-			} else if n.Nlink == 1 {
-				n.Parent = trash
+			} else {
+				newParent = trash
 			}
 		} else {
 			logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
 			trash = 0
 		}
+		incr, decr, _ := changeParent(parent, newParent, &n.Parent, func() (Ino, error) {
+			return m.pickParent(ctx, s, e.Inode)
+		})
 		defer func() { m.of.InvalidateChunk(e.Inode, 0xFFFFFFFE) }()
 
 		var updateParent bool
@@ -1179,6 +1201,16 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 			if trash > 0 {
 				if err = mustInsert(s, &edge{Parent: trash, Name: []byte(m.trashEntry(parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); err != nil {
+					return err
+				}
+			}
+			if incr > 0 {
+				if err = mustInsert(s, &linkParent{Inode: e.Inode, Parent: incr}); err != nil {
+					return err
+				}
+			}
+			if decr > 0 {
+				if _, err = s.Limit(1, 0).Delete(&linkParent{Inode: e.Inode, Parent: decr}); err != nil {
 					return err
 				}
 			}
@@ -1213,6 +1245,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				newSpace, newInode = -align4K(0), -1
 			}
 			if _, err := s.Delete(&xattr{Inode: e.Inode}); err != nil {
+				return err
+			}
+			if _, err = s.Delete(&linkParent{Inode: e.Inode}); err != nil {
 				return err
 			}
 		}
@@ -1400,6 +1435,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		var supdate, dupdate bool
+		var iincr, idecr, tincr, tdecr Ino
 		now := time.Now().UnixNano() / 1e3
 		opened = false
 		dn = node{Inode: de.Inode}
@@ -1418,11 +1454,15 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			dn.Ctime = now
 			if exchange {
-				dn.Parent = parentSrc
-				if de.Type == TypeDirectory && parentSrc != parentDst {
-					dpn.Nlink--
-					spn.Nlink++
-					supdate, dupdate = true, true
+				if parentSrc != parentDst {
+					if de.Type == TypeDirectory {
+						dn.Parent = parentSrc
+						dpn.Nlink--
+						spn.Nlink++
+						supdate, dupdate = true, true
+					} else {
+						tincr, tdecr, _ = changeParent(parentDst, parentSrc, &dn.Parent, nil)
+					}
 				}
 			} else {
 				if de.Type == TypeDirectory {
@@ -1439,15 +1479,19 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						dn.Parent = trash
 					}
 				} else {
+					var newParent Ino
 					if trash == 0 {
 						dn.Nlink--
 						if de.Type == TypeFile && dn.Nlink == 0 {
 							opened = m.of.IsOpen(dn.Inode)
 						}
 						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
-					} else if dn.Nlink == 1 {
-						dn.Parent = trash
+					} else {
+						newParent = trash
 					}
+					tincr, tdecr, _ = changeParent(parentDst, newParent, &dn.Parent, func() (Ino, error) {
+						return m.pickParent(ctx, s, dino)
+					})
 				}
 			}
 			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
@@ -1463,10 +1507,15 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return syscall.EACCES
 		}
 
-		if se.Type == TypeDirectory && parentSrc != parentDst {
-			spn.Nlink--
-			dpn.Nlink++
-			supdate, dupdate = true, true
+		if parentSrc != parentDst {
+			if se.Type == TypeDirectory {
+				sn.Parent = parentDst
+				spn.Nlink--
+				dpn.Nlink++
+				supdate, dupdate = true, true
+			} else {
+				iincr, idecr, _ = changeParent(parentSrc, parentDst, &sn.Parent, nil)
+			}
 		}
 		if supdate || time.Duration(now-spn.Mtime)*1e3 >= minUpdateTime {
 			spn.Mtime = now
@@ -1478,7 +1527,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			dpn.Ctime = now
 			dupdate = true
 		}
-		sn.Parent = parentDst
 		sn.Ctime = now
 		if inode != nil {
 			*inode = sn.Inode
@@ -1511,7 +1559,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						return err
 					}
 				} else if de.Type != TypeDirectory && dn.Nlink > 0 {
-					if _, err := s.Cols("ctime", "nlink").Update(dn, &node{Inode: dino}); err != nil {
+					if _, err := s.Cols("ctime", "nlink", "parent").Update(dn, &node{Inode: dino}); err != nil {
 						return err
 					}
 				} else {
@@ -1546,6 +1594,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					if _, err := s.Delete(&xattr{Inode: dino}); err != nil {
 						return err
 					}
+					if _, err = s.Delete(&linkParent{Inode: dino}); err != nil {
+						return err
+					}
 				}
 				if _, err := s.Delete(&edge{Parent: parentDst, Name: de.Name}); err != nil {
 					return err
@@ -1562,6 +1613,26 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		if _, err := s.Cols("ctime", "parent").Update(&sn, &node{Inode: sn.Inode}); err != nil {
 			return err
+		}
+		if iincr > 0 {
+			if err = mustInsert(s, &linkParent{Inode: sn.Inode, Parent: iincr}); err != nil {
+				return err
+			}
+		}
+		if idecr > 0 {
+			if _, err = s.Limit(1, 0).Delete(&linkParent{Inode: sn.Inode, Parent: idecr}); err != nil {
+				return err
+			}
+		}
+		if tincr > 0 {
+			if err = mustInsert(s, &linkParent{Inode: dino, Parent: tincr}); err != nil {
+				return err
+			}
+		}
+		if tdecr > 0 {
+			if _, err = s.Limit(1, 0).Delete(&linkParent{Inode: dino, Parent: tdecr}); err != nil {
+				return err
+			}
 		}
 		if dupdate {
 			if _, err := s.Cols("nlink", "mtime", "ctime").Update(&dpn, &node{Inode: parentDst}); err != nil {
@@ -1632,6 +1703,9 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			}
 		}
 		if _, err := s.Cols("nlink", "ctime").Update(&n, node{Inode: inode}); err != nil {
+			return err
+		}
+		if err = mustInsert(s, &linkParent{Inode: inode, Parent: parent}); err != nil {
 			return err
 		}
 		if err == nil {

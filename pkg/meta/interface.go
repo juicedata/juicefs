@@ -404,8 +404,8 @@ func newSessionInfo() *SessionInfo {
 	return &SessionInfo{Version: version.Version(), HostName: host, ProcessID: os.Getpid()}
 }
 
-func changeParent(parent, newParent Ino, attr *Attr, pickParent func() (Ino, error)) (incr, decr Ino, err error) {
-	if attr.Parent == parent {
+func changeParent(parent, newParent Ino, attrParent *Ino, pickParent func() (Ino, error)) (incr, decr Ino, err error) {
+	if *attrParent == parent {
 		if newParent == 0 { // remove current parent
 			newParent, err = pickParent()
 			if err != nil {
@@ -413,7 +413,7 @@ func changeParent(parent, newParent Ino, attr *Attr, pickParent func() (Ino, err
 			}
 			decr = newParent
 		}
-		attr.Parent = newParent
+		*attrParent = newParent
 	} else {
 		decr = parent
 		if newParent > 0 {

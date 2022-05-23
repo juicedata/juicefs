@@ -1272,7 +1272,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			logger.Warnf("no attribute for inode %d (%d, %s)", inode, parent, name)
 			trash = 0
 		}
-		incr, decr, err := changeParent(parent, newParent, &attr, func() (Ino, error) {
+		incr, decr, err := changeParent(parent, newParent, &attr.Parent, func() (Ino, error) {
 			return m.pickParent(ctx, tx, inode)
 		})
 		if err != nil {
@@ -1523,7 +1523,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						supdate, dupdate = true, true
 					} else {
 						// parentSrc always > 0
-						tincr, tdecr, _ = changeParent(parentDst, parentSrc, &tattr, nil)
+						tincr, tdecr, _ = changeParent(parentDst, parentSrc, &tattr.Parent, nil)
 					}
 				}
 			} else {
@@ -1551,7 +1551,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					} else {
 						newParent = trash
 					}
-					if tincr, tdecr, err = changeParent(parentDst, newParent, &tattr, func() (Ino, error) {
+					if tincr, tdecr, err = changeParent(parentDst, newParent, &tattr.Parent, func() (Ino, error) {
 						return m.pickParent(ctx, tx, dino)
 					}); err != nil {
 						return err
@@ -1578,7 +1578,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				dattr.Nlink++
 				supdate, dupdate = true, true
 			} else {
-				iincr, idecr, _ = changeParent(parentSrc, parentDst, &iattr, nil)
+				iincr, idecr, _ = changeParent(parentSrc, parentDst, &iattr.Parent, nil)
 			}
 		}
 		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
