@@ -1,0 +1,106 @@
+name: 'JuiceFS Gateway Action'
+description: 'JuiceFS gateway action'
+inputs:
+  meta_url:  
+    description: 'meta url'
+    required: true
+    default: ''
+  file_count:  
+    description: 'count of files to upload to gateway'
+    required: true
+    default: '100'
+  file_size:
+    description: 'size of each file in human read format, eg 1K, 1M, 1G.'
+    required: true
+    default: '4K'
+  threads:
+    description: 'thread number for juicefs sync command'
+    required: true
+    default: 30
+  isolation_level:
+    description: 'isolation level for mysql, include read uncommitted, read committed, repeatable read, serializable'
+    required: true
+    default: "repeatable read"
+  
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+          
+    - name: Build linux target
+      run: |
+        make juicefs 
+        #wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
+        #tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
+      shell: bash
+
+    - name: Install tools
+      run: | 
+        wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+        chmod +x mc 
+      shell: bash
+
+    - name: Test
+      run: |
+        meta_url=${{inputs.meta_url}}
+        file_size=${{inputs.file_size}}
+        file_count=${{inputs.file_count}}
+        threads=${{inputs.threads}}
+        isolation_level="${{inputs.isolation_level}}"
+        echo meta_url is: $meta_url, file_size is $file_size, file_count is $file_count, isolation_level is $isolation_level
+        
+        db_name=$(basename $meta_url | awk -F? '{print $1}')
+        if [[ "$meta_url" == mysql* ]]; then
+          mysql -uroot -proot -e "set global transaction isolation level $isolation_level;" 
+          mysql -uroot -proot -e "show variables like '%isolation%;'" 
+          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+        elif [[ "$meta_url" == postgres* ]]; then
+          export PGPASSWORD="postgres"
+          printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+          printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$isolation_level';" |  psql -U postgres -h localhost
+        fi
+        volume=myjfs
+        mp=/tmp/myjfs
+        export MINIO_ROOT_USER=minioadmin
+        export MINIO_ROOT_PASSWORD=minioadmin
+        ./juicefs format $meta_url $volume
+        if [[ "$meta_url" == badger* ]]; then
+          ./juicefs gateway $meta_url localhost:8080 &
+        else
+          ./juicefs gateway $meta_url localhost:9000 --access-log /tmp/access1.log &
+          ./juicefs gateway $meta_url localhost:9001 --access-log /tmp/access2.log &
+          sudo cp .github/workflows/resources/load-balancer.conf /etc/nginx/conf.d/load-balancer.conf
+          sudo rm /etc/nginx/sites-enabled/default
+          sudo systemctl restart nginx
+        fi
+        
+        dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
+        mkdir data
+        for i in $(seq 1 $file_count); do
+          cp file data/file$i
+        done
+        start=`date +%s`
+        declare -a pids        
+        ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
+        pids+=($!)
+        ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
+        pids+=($!)
+        ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
+        pids+=($!)
+        wait "${pids[@]}"
+        #./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
+        #./mc mb minio/$volume
+        #./mc cp --recursive data/  minio/$volume/data
+        end=`date +%s`
+        time=$((end-start))
+        echo time cost is: $time second
+        #stop juicefs gateway
+        killall juicefs 
+        sleep 3
+        ./juicefs mount -d $meta_url $mp
+        diff -ur data/ $mp/data/ && echo "diff succeed"
+        rm $mp/data/ -rf
+      shell: bash
