@@ -60,6 +60,11 @@ func cmdGateway() *cli.Command {
 			Value: "022",
 			Usage: "umask for new file in octal",
 		},
+		&cli.DurationFlag{
+			Name:  "tmp-file-expiry",
+			Value: 24 * time.Hour,
+			Usage: "expiry time for temporary files",
+		},
 	}
 
 	compoundFlags := [][]cli.Flag{
@@ -168,8 +173,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	if err != nil {
 		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
 	}
-
-	return jfsgateway.NewJFSGateway(conf, m, store, &jfsgateway.Config{MultiBucket: c.Bool("multi-buckets"), KeepEtag: c.Bool("keep-etag"), Mode: uint16(0777 &^ umask)})
+	return jfsgateway.NewJFSGateway(conf, m, store, &jfsgateway.Config{MultiBucket: c.Bool("multi-buckets"), KeepEtag: c.Bool("keep-etag"), Mode: uint16(0777 &^ umask), TmpFileExpiry: c.Duration("tmp-file-expiry")})
 }
 
 func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
