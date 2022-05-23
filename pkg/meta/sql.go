@@ -1717,6 +1717,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 
 	var sus []sustained
 	err = m.txn(func(ses *xorm.Session) error {
+		sus = nil
 		return ses.Find(&sus, &sustained{Sid: sid})
 	})
 	if err != nil {
@@ -1985,7 +1986,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		nout.Ctime = now
 
 		var cs []chunk
-		err = s.Table(&chunk{}).Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).ForUpdate().Find(&cs)
+		err = s.Where("inode = ? AND indx >= ? AND indx <= ?", fin, offIn/ChunkSize, (offIn+size)/ChunkSize).ForUpdate().Find(&cs)
 		if err != nil {
 			return err
 		}
@@ -2078,6 +2079,7 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 func (m *dbMeta) doCleanupSlices() {
 	var cks []chunkRef
 	_ = m.txn(func(s *xorm.Session) error {
+		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
 	})
 	for _, ck := range cks {
@@ -2132,6 +2134,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	var indexes []chunk
 	_ = m.txn(func(s *xorm.Session) error {
+		indexes = nil
 		return s.Cols("indx").Find(&indexes, &chunk{Inode: inode})
 	})
 	for _, c := range indexes {
@@ -2150,6 +2153,7 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	var result []delslices
 	_ = m.txn(func(s *xorm.Session) error {
+		result = nil
 		return s.Where("deleted < ?", edge).Limit(limit, 0).Find(&result)
 	})
 
@@ -2349,6 +2353,7 @@ func dup(b []byte) []byte {
 func (m *dbMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	var cs []chunk
 	err := m.txn(func(s *xorm.Session) error {
+		cs = nil
 		return s.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Find(&cs)
 	})
 	if err != nil {
@@ -2513,9 +2518,9 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 
 func (m *dbMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
-	return e, m.txn(func(db *xorm.Session) error {
+	return e, m.txn(func(s *xorm.Session) error {
 		n := &node{Inode: inode}
-		ok, err := db.Get(n)
+		ok, err := s.Get(n)
 		if err != nil {
 			return err
 		}
@@ -2529,7 +2534,7 @@ func (m *dbMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 		e.Attr.Inode = inode
 
 		var rows []xattr
-		if err = db.Find(&rows, &xattr{Inode: inode}); err != nil {
+		if err = s.Find(&rows, &xattr{Inode: inode}); err != nil {
 			return err
 		}
 		if len(rows) > 0 {
@@ -2544,7 +2549,7 @@ func (m *dbMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 		if attr.Typ == TypeFile {
 			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 				c := &chunk{Inode: inode, Indx: indx}
-				if ok, err = db.Get(c); err != nil {
+				if ok, err = s.Get(c); err != nil {
 					return err
 				}
 				if !ok {
@@ -2560,7 +2565,7 @@ func (m *dbMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 			}
 		} else if attr.Typ == TypeSymlink {
 			l := &symlink{Inode: inode}
-			ok, err = db.Get(l)
+			ok, err = s.Get(l)
 			if err != nil {
 				return err
 			}
@@ -2633,6 +2638,7 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		edges = m.snap.edges[inode]
 	} else {
 		err := m.txn(func(s *xorm.Session) error {
+			edges = nil
 			return s.Find(&edges, &edge{Parent: inode})
 		})
 		if err != nil {
@@ -2789,12 +2795,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	var crows []counter
 	var srows []sustained
 	err = m.txn(func(s *xorm.Session) error {
+		drows = nil
 		if err := s.Find(&drows); err != nil {
 			return err
 		}
+		crows = nil
 		if err = s.Find(&crows); err != nil {
 			return err
 		}
+		srows = nil
 		return s.Find(&srows)
 	})
 	if err != nil {
