@@ -2450,6 +2450,7 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 		if err != nil {
 			return err
 		}
+		k.Value = nil
 		switch flags {
 		case XattrCreate:
 			if ok {
