@@ -569,7 +569,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 			strings.Contains(msg, "Duplicate entry")
 	case "postgres":
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
-			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access due to concurrent update")
+			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access")
 	default:
 		return false
 	}
