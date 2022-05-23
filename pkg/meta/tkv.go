@@ -2152,14 +2152,15 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 }
 
 func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
-	value, err := m.get(m.xattrKey(inode, name))
-	if err != nil {
-		return errno(err)
-	}
-	if value == nil {
-		return ENOATTR
-	}
-	return errno(m.deleteKeys(m.xattrKey(inode, name)))
+	key := m.xattrKey(inode, name)
+	return errno(m.txn(func(tx kvTxn) error {
+		value := tx.get(key)
+		if value == nil {
+			return ENOATTR
+		}
+		tx.dels(key)
+		return nil
+	}))
 }
 
 func (m *kvMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
