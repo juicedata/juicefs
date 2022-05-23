@@ -1,0 +1,71 @@
+name: "encrypt-test"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  workflow_dispatch:
+  
+jobs:
+  encrypt-test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:        
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Install Tools
+        run: | 
+          sudo apt install redis-tools
+          
+      - name: Test Encrypt
+        run: |
+          meta=redis://localhost/1
+          mp=myjfs/
+          name=myjfs
+          juicefs=./juicefs
+          openssl genrsa -out my-priv-key.pem -aes256 -passout pass:12345678 2048 
+          export JFS_RSA_PASSPHRASE=12345678
+          $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key my-priv-key.pem
+          $juicefs mount -d $meta $mp
+          dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
+          cp file $mp/file
+          diff -u file $mp/file
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
