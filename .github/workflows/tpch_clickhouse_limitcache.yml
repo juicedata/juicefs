@@ -1,4 +1,4 @@
-name: "tpch_clickhouse_mode"
+name: "tpch_clickhouse_limitcache"
 
 on:
   push:
@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  tpchchmode:
+  tpchchlimitcache:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
