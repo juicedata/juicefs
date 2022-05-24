@@ -3011,18 +3011,25 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := e.Attr
 	n := &node{
-		Inode:  inode,
-		Type:   typeFromString(attr.Type),
-		Mode:   attr.Mode,
-		Uid:    attr.Uid,
-		Gid:    attr.Gid,
-		Atime:  attr.Atime*1e6 + int64(attr.Atimensec)/1e3,
-		Mtime:  attr.Mtime*1e6 + int64(attr.Atimensec)/1e3,
-		Ctime:  attr.Ctime*1e6 + int64(attr.Atimensec)/1e3,
-		Nlink:  attr.Nlink,
-		Rdev:   attr.Rdev,
-		Parent: e.Parent,
-	} // Length not set
+		Inode: inode,
+		Type:  typeFromString(attr.Type),
+		Mode:  attr.Mode,
+		Uid:   attr.Uid,
+		Gid:   attr.Gid,
+		Atime: attr.Atime*1e6 + int64(attr.Atimensec)/1e3,
+		Mtime: attr.Mtime*1e6 + int64(attr.Atimensec)/1e3,
+		Ctime: attr.Ctime*1e6 + int64(attr.Atimensec)/1e3,
+		Nlink: attr.Nlink,
+		Rdev:  attr.Rdev,
+	} // Length and Parent not set
+	numParents := len(e.Parents)
+	if numParents == 1 {
+		n.Parent = e.Parents[0]
+	} else if numParents == 0 {
+		logger.Fatalf("No parent for inode: %d", inode)
+	} else if n.Type == TypeDirectory {
+		logger.Fatalf("Too many parents for directory inode %d: %v", inode, e.Parents)
+	}
 	if n.Type == TypeFile {
 		n.Length = attr.Length
 		bar.IncrTotal(int64(len(e.Chunks)))
@@ -3083,6 +3090,12 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			beansCh <- &xattr{Inode: inode, Name: x.Name, Value: unescape(x.Value)}
 		}
 	}
+	if numParents > 1 {
+		bar.IncrTotal(int64(len(e.Parents)))
+		for _, parent := range e.Parents {
+			beansCh <- &linkParent{Inode: inode, Parent: parent}
+		}
+	}
 	beansCh <- n
 }
 
@@ -3097,8 +3110,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.db.Sync2(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
 	}
-	if err = m.db.Sync2(new(node), new(edge), new(symlink), new(xattr)); err != nil {
-		return fmt.Errorf("create table node, edge, symlink, xattr: %s", err)
+	if err = m.db.Sync2(new(node), new(edge), new(linkParent), new(symlink), new(xattr)); err != nil {
+		return fmt.Errorf("create table node, edge, linkParent, symlink, xattr: %s", err)
 	}
 	if err = m.db.Sync2(new(chunk), new(chunkRef), new(delslices)); err != nil {
 		return fmt.Errorf("create table chunk, chunk_ref, delslices: %s", err)
