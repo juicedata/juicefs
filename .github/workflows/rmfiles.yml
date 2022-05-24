@@ -57,6 +57,7 @@ jobs:
       - name: Rm 100w Files in Depth of 1 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
+          sudo chmod 777 ..
           echo "rm 100w files in depth of 1 directory"
           git clone git@github.com:juicedata/juicefs.git
           cd juicefs
@@ -113,6 +114,7 @@ jobs:
       - name: Rm 100w Files in Depth of 1 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
+          sudo chmod 777 ..
           echo "rm 100w files in depth of 1 directory"
           git clone git@github.com:juicedata/juicefs.git
           cd juicefs
@@ -181,6 +183,7 @@ jobs:
       - name: Rm 100w Files in Depth of 1 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
+          sudo chmod 777 ..
           echo "rm 100w files in depth of 1 directory"
           git clone git@github.com:juicedata/juicefs.git
           cd juicefs
@@ -236,6 +239,7 @@ jobs:
       - name: Rm 100w Files in Depth of 1 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
+          sudo chmod 777 ..
           echo "rm 100w files in depth of 1 directory"
           git clone git@github.com:juicedata/juicefs.git
           cd juicefs
