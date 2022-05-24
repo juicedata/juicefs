@@ -57,18 +57,22 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 1 directory"
-          sudo rm -rf aaa/
+          git clone git@github.com:juicedata/juicefs.git
+          cd juicefs
+          make
+          sudo ./juicefs rmr ../aaa/
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 10 directory"
-          sudo rm -rf aaa0/
+          cd juicefs
+          sudo ./juicefs rmr ../aaa0/
       - name: Rm 200w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 200w files in depth of 20 directory"
-          sudo rm -rf aaa2/
-      - name: Send Slack Notification
+          cd juicefs
+          sudo ./juicefs rmr ../aaa2/
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
@@ -108,17 +112,22 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 1 directory"
-          sudo rm -rf aaa/
+          git clone git@github.com:juicedata/juicefs.git
+          cd juicefs
+          make
+          sudo ./juicefs rmr ../aaa/
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 10 directory"
-          sudo rm -rf aaa0/
+          cd juicefs
+          sudo ./juicefs rmr ../aaa0/
       - name: Rm 200w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 200w files in depth of 20 directory"
-          sudo rm -rf aaa2/
+          cd juicefs
+          sudo ./juicefs rmr ../aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -171,17 +180,22 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 1 directory"
-          sudo rm -rf aaa/
+          git clone git@github.com:juicedata/juicefs.git
+          cd juicefs
+          make
+          sudo ./juicefs rmr ../aaa/
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 10 directory"
-          sudo rm -rf aaa0/
+          cd juicefs
+          sudo ./juicefs rmr ../aaa0/
       - name: Rm 200w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 200w files in depth of 20 directory"
-          sudo rm -rf aaa2/
+          cd juicefs
+          sudo ./juicefs rmr ../aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -221,17 +235,22 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 1 directory"
-          sudo rm -rf aaa/
+          git clone git@github.com:juicedata/juicefs.git
+          cd juicefs
+          make
+          sudo ./juicefs rmr ../aaa/
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 100w files in depth of 10 directory"
-          sudo rm -rf aaa0/
+          cd juicefs
+          sudo ./juicefs rmr ../aaa0/
       - name: Rm 200w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-sync-test/mkdir/
           echo "rm 200w files in depth of 20 directory"
-          sudo rm -rf aaa2/
+          cd juicefs
+          sudo ./juicefs rmr ../aaa2/
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
