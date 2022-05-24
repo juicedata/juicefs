@@ -87,6 +87,7 @@ jobs:
           ls -lrth
           sudo du -sh /data/jfs/
           df -lh
+          hello
 
       - name: Create Table
         run: |
