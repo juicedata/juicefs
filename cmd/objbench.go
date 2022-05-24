@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
 	"errors"
 	"fmt"
 	"io"
@@ -26,7 +25,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -100,6 +98,11 @@ var (
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
+	for _, name := range []string{"block-size", "big-object-size", "small-object-size", "threads"} {
+		if ctx.Uint(name) == 0 {
+			logger.Fatalf("%s should not be set to zero", name)
+		}
+	}
 	ak, sk := ctx.String("access-key"), ctx.String("secret-key")
 	if ak == "" {
 		ak = os.Getenv("ACCESS_KEY")
@@ -140,32 +143,15 @@ func objbench(ctx *cli.Context) error {
 	var pResult [][]string
 	pResult = append(pResult, []string{"ITEM", "VALUE", "COST"})
 
-	makeData := func(length, size int) [][]byte {
-		content := make([][]byte, length)
-		if size > 0 {
-			for i := 0; i < length; i++ {
-				content[i] = make([]byte, size)
-				if i == 0 {
-					rand.Read(content[i])
-					continue
-				}
-				idx := i % size
-				copy(content[i][:size-idx], content[0][idx:size])
-				copy(content[i][size-idx:size], content[0][:idx])
-			}
-		}
-		return content
-	}
-
 	{
-		multiUploadFunc := func(key string, content [][]byte) error {
-			total := len(content)
+		multiUploadFunc := func(key string, seed []byte, total int) error {
 			bar := progress.AddCountBar("multi-upload", int64(total))
 			defer bar.Done()
 			upload, err := blob.CreateMultipartUpload(key)
 			if err != nil {
 				return err
 			}
+
 			parts := make([]*object.Part, total)
 			pool := make(chan struct{}, threads)
 			var wg sync.WaitGroup
@@ -179,7 +165,7 @@ func objbench(ctx *cli.Context) error {
 						wg.Done()
 						bar.Increment()
 					}()
-					parts[num-1], err = blob.UploadPart(key, upload.UploadID, num, content[num-1])
+					parts[num-1], err = blob.UploadPart(key, upload.UploadID, num, getMockData(seed, num-1))
 					if err != nil {
 						logger.Fatalf("multipart upload error: %v", err)
 					}
@@ -194,9 +180,10 @@ func objbench(ctx *cli.Context) error {
 		if err := blob.CompleteUpload("test", "fakeUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			partSize := 5 << 20
 			total := int(math.Ceil(float64(fsize) / float64(partSize)))
-			content := makeData(total, partSize)
+			seed := make([]byte, partSize)
+			rand.Read(seed)
 			start := time.Now()
-			if err := multiUploadFunc(fname, content); err != nil {
+			if err = multiUploadFunc(fname, seed, total); err != nil {
 				logger.Fatalf("multipart upload error: %v", err)
 			}
 			cost := time.Since(start).Seconds()
@@ -204,18 +191,31 @@ func objbench(ctx *cli.Context) error {
 			uploadResult[1] += " MiB/s"
 			uploadResult[2] += " s/object"
 
-			logger.Infof("downloading the multipart upload file and checking its contents ...")
-			r, err := blob.Get(fname, 0, -1)
-			if err != nil {
-				logger.Fatalf("failed to get multipart upload file: %v", err)
+			bar := progress.AddCountBar("check multi-upload", int64(total))
+			for i := 0; i < total; i++ {
+				r, err := blob.Get(fname, int64(i*partSize), int64(partSize))
+				if err != nil {
+					logger.Fatalf("failed to get multipart upload file: %v", err)
+				}
+				part := make([]byte, partSize)
+				if i == 0 {
+					part = seed
+				} else {
+					idx := i % partSize
+					copy(part[:partSize-idx], seed[idx:partSize])
+					copy(part[partSize-idx:partSize], seed[:idx])
+				}
+				buff, err := io.ReadAll(r)
+				if err != nil {
+					logger.Fatalf("failed to get multipart upload file: %v", err)
+				}
+				checkN := 10
+				if len(buff) != partSize || !bytes.Equal(part[:checkN], buff[:checkN]) {
+					logger.Fatal("the content of the multipart upload file is incorrect")
+				}
+				bar.Increment()
 			}
-			cnt, err := io.ReadAll(r)
-			if err != nil {
-				logger.Fatalf("failed to get multipart upload file: %v", err)
-			}
-			if !reflect.DeepEqual(md5.Sum(bytes.Join(content, nil)), md5.Sum(cnt)) {
-				logger.Fatal("the content of the multipart upload file is incorrect")
-			}
+			bar.Done()
 		}
 		pResult = append(pResult, uploadResult)
 		if err = blob.Delete(fname); err != nil {
@@ -368,10 +368,11 @@ func objbench(ctx *cli.Context) error {
 		blob:        blob,
 		progressBar: progress,
 		threads:     threads,
+		seed:        make([]byte, bSize),
+		smallSeed:   make([]byte, smallBSize),
 	}
-
-	bm.content = makeData(bCount, bSize)
-	bm.smallContent = makeData(bCount, smallBSize)
+	rand.Read(bm.seed)
+	rand.Read(bm.smallSeed)
 
 	for _, api := range apis {
 		pResult = append(pResult, bm.run(api))
@@ -379,7 +380,7 @@ func objbench(ctx *cli.Context) error {
 	progress.Done()
 
 	for i := bCount; i < bCount*2; i++ {
-		_ = bm.delete(strconv.Itoa(i))
+		_ = bm.delete(strconv.Itoa(i), 0)
 	}
 
 	fmt.Printf("Benchmark finished! block-size: %d KiB, big-object-size: %d MiB, small-object-size: %d KiB, NumThreads: %d\n",
@@ -445,15 +446,15 @@ type apiInfo struct {
 }
 
 type benchMarkObj struct {
-	progressBar           *utils.Progress
-	blob                  object.ObjectStorage
-	threads               int
-	content, smallContent [][]byte
+	progressBar     *utils.Progress
+	blob            object.ObjectStorage
+	threads         int
+	seed, smallSeed []byte
 }
 
 func (bm *benchMarkObj) run(api apiInfo) []string {
 	if api.name == "chown" || api.name == "chmod" || api.name == "chtimes" {
-		if err := bm.chmod("not_exists"); err == utils.ENOTSUP {
+		if err := bm.chmod("not_exists", 0); err == utils.ENOTSUP {
 			line := api.getResult(-1)
 			line[0] = api.title
 			return line
@@ -463,7 +464,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 			return []string{api.title, skipped, skipped}
 		}
 	}
-	var fn func(key string) error
+	var fn func(key string, startKey int) error
 	switch api.name {
 	case "put":
 		fn = bm.put
@@ -488,7 +489,6 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	}
 
 	var wg sync.WaitGroup
-	start := time.Now()
 	pool := make(chan struct{}, bm.threads)
 	count := api.count
 	if api.count != 0 {
@@ -496,6 +496,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	}
 	bar := bm.progressBar.AddCountBar(api.title, int64(count))
 	var err error
+	start := time.Now()
 	for i := api.startKey; i < api.startKey+count; i++ {
 		pool <- struct{}{}
 		wg.Add(1)
@@ -504,7 +505,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 				<-pool
 				wg.Done()
 			}()
-			if e := fn(strconv.Itoa(key)); e != nil {
+			if e := fn(strconv.Itoa(key), api.startKey); e != nil {
 				err = e
 			}
 			bar.Increment()
@@ -512,6 +513,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	}
 	wg.Wait()
 	bar.Done()
+	line := api.getResult(time.Since(start).Seconds())
 	if api.after != nil {
 		api.after(bm.blob)
 	}
@@ -519,22 +521,37 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 		logger.Errorf("%s test failed: %s", api.name, err)
 		return []string{api.title, failed, failed}
 	}
-	line := api.getResult(time.Since(start).Seconds())
 	line[0] = api.title
 	return line
 }
 
-func (bm *benchMarkObj) put(key string) error {
-	idx, _ := strconv.Atoi(key)
-	return bm.blob.Put(key, bytes.NewReader(bm.content[idx]))
+func getMockData(seed []byte, idx int) []byte {
+	size := len(seed)
+	if size == 0 {
+		return nil
+	}
+	content := make([]byte, size)
+	if idx == 0 {
+		content = seed
+	} else {
+		i := idx % size
+		copy(content[:size-i], seed[i:size])
+		copy(content[size-i:size], seed[:i])
+	}
+	return content
 }
 
-func (bm *benchMarkObj) smallPut(key string) error {
+func (bm *benchMarkObj) put(key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
-	return bm.blob.Put(key, bytes.NewReader(bm.smallContent[idx-len(bm.content)]))
+	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.seed, idx)))
 }
 
-func getAndCheckN(blob object.ObjectStorage, key string, orgContent [][]byte, getOrgIdx func(idx int) int) error {
+func (bm *benchMarkObj) smallPut(key string, startKey int) error {
+	idx, _ := strconv.Atoi(key)
+	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.smallSeed, idx-startKey)))
+}
+
+func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, getOrgIdx func(idx int) int) error {
 	idx, _ := strconv.Atoi(key)
 	r, err := blob.Get(key, 0, -1)
 	if err != nil {
@@ -547,53 +564,53 @@ func getAndCheckN(blob object.ObjectStorage, key string, orgContent [][]byte, ge
 	}
 	orgIdx := getOrgIdx(idx)
 	checkN := 10
-	l := len(orgContent[orgIdx])
+	l := len(seed)
 	if l < checkN {
 		checkN = l
 	}
-	if len(content) != len(orgContent[orgIdx]) || !bytes.Equal(content[:checkN], orgContent[orgIdx][:checkN]) {
+	if len(content) != len(seed) || !bytes.Equal(content[:checkN], getMockData(seed, orgIdx)[:checkN]) {
 		return fmt.Errorf("the downloaded content is incorrect")
 	}
 	return nil
 }
 
-func (bm *benchMarkObj) get(key string) error {
-	return getAndCheckN(bm.blob, key, bm.content, func(idx int) int {
+func (bm *benchMarkObj) get(key string, startKey int) error {
+	return getAndCheckN(bm.blob, key, bm.seed, func(idx int) int {
 		return idx
 	})
 }
 
-func (bm *benchMarkObj) smallGet(key string) error {
-	return getAndCheckN(bm.blob, key, bm.smallContent, func(idx int) int {
-		return idx - len(bm.content)
+func (bm *benchMarkObj) smallGet(key string, startKey int) error {
+	return getAndCheckN(bm.blob, key, bm.smallSeed, func(idx int) int {
+		return idx - startKey
 	})
 }
 
-func (bm *benchMarkObj) delete(key string) error {
+func (bm *benchMarkObj) delete(key string, startKey int) error {
 	return bm.blob.Delete(key)
 }
 
-func (bm *benchMarkObj) head(key string) error {
+func (bm *benchMarkObj) head(key string, startKey int) error {
 	_, err := bm.blob.Head(key)
 	return err
 }
 
-func (bm *benchMarkObj) list(key string) error {
+func (bm *benchMarkObj) list(key string, startKey int) error {
 	result, err := osync.ListAll(bm.blob, "", "")
 	for range result {
 	}
 	return err
 }
 
-func (bm *benchMarkObj) chown(key string) error {
+func (bm *benchMarkObj) chown(key string, startKey int) error {
 	return bm.blob.(object.FileSystem).Chown(key, "nobody", "nogroup")
 }
 
-func (bm *benchMarkObj) chmod(key string) error {
+func (bm *benchMarkObj) chmod(key string, startKey int) error {
 	return bm.blob.(object.FileSystem).Chmod(key, 0755)
 }
 
-func (bm *benchMarkObj) chtimes(key string) error {
+func (bm *benchMarkObj) chtimes(key string, startKey int) error {
 	return bm.blob.(object.FileSystem).Chtimes(key, time.Now())
 }
 
