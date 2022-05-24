@@ -428,12 +428,13 @@ jobs:
           isolation_level: "read committed" 
       - name: CleanUp
         if: ${{ always() }}
-        ./juicefs umount -f /tmp/myjfs
-        UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-        if [ -n "$UUID" ];then
-          ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-        fi
-        rm -rf /var/jfs/myjfs/
+        run: | 
+          ./juicefs umount -f /tmp/myjfs
+          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+          fi
+          rm -rf /var/jfs/myjfs/
 
   upload-big-file-with-oceanbase-repeatable-read:
     runs-on: [self-hosted, daily-build, bench-01]
@@ -452,12 +453,13 @@ jobs:
           isolation_level: "repeatable read"   
       - name: CleanUp
         if: ${{ always() }}
-        ./juicefs umount -f /tmp/myjfs
-        UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-        if [ -n "$UUID" ];then
-          ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-        fi
-        rm -rf /var/jfs/myjfs/ 
+        run: | 
+          ./juicefs umount -f /tmp/myjfs
+          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+          fi
+          rm -rf /var/jfs/myjfs/ 
 
   upload-big-file-with-oceanbase-serializable:
     runs-on: [self-hosted, daily-build, bench-01]
@@ -476,12 +478,13 @@ jobs:
           isolation_level: "serializable"    
       - name: CleanUp
         if: ${{ always() }}
-        ./juicefs umount -f /tmp/myjfs
-        UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-        if [ -n "$UUID" ];then
-          ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-        fi
-        rm -rf /var/jfs/myjfs/
+        run: |
+          ./juicefs umount -f /tmp/myjfs
+          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+          if [ -n "$UUID" ];then
+            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+          fi
+          rm -rf /var/jfs/myjfs/
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest
