@@ -684,11 +684,15 @@ func (m *dbMeta) flushStats() {
 func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		s = s.Table(&edge{})
+		nn := namedNode{node: node{Parent: parent}, Name: []byte(name)}
+		var exist bool
+		var err error
 		if attr != nil {
 			s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")
+			exist, err = s.Select("jfs_node.*").Get(&nn)
+		} else {
+			exist, err = s.Select("*").Get(&nn)
 		}
-		nn := namedNode{node: node{Parent: parent}, Name: []byte(name)}
-		exist, err := s.Select("*").Get(&nn)
 		if err != nil {
 			return err
 		}

@@ -1302,11 +1302,14 @@ func testParents(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", 1, "l1", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> l1: %s", st)
 	}
+	if st := m.Lookup(ctx, parent, "l2", &inode, attr); st != 0 {
+		t.Fatalf("lookup d/l2: %s", st)
+	}
+	if attr.Parent != 0 {
+		t.Fatalf("expect parent 0, but got %d", attr.Parent)
+	}
 	if st := m.Unlink(ctx, parent, "l2"); st != 0 {
 		t.Fatalf("unlink d/l2: %s", st)
-	}
-	if st := m.Lookup(ctx, parent, "l3", &inode, attr); st != 0 {
-		t.Fatalf("lookup d/l3: %s", st)
 	}
 	checkParents(inode, map[Ino]int{parent: 1})
 
