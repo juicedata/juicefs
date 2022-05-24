@@ -255,7 +255,7 @@ jobs:
                                      ORDER BY
                                          year ASC,
                                          C_NATION ASC;"
-
+          df -lh
 
 
       - name: Send Slack Notification
