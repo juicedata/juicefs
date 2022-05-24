@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -138,6 +140,23 @@ func objbench(ctx *cli.Context) error {
 	var pResult [][]string
 	pResult = append(pResult, []string{"ITEM", "VALUE", "COST"})
 
+	makeData := func(length, size int) [][]byte {
+		content := make([][]byte, length)
+		if size > 0 {
+			for i := 0; i < length; i++ {
+				content[i] = make([]byte, size)
+				if i == 0 {
+					rand.Read(content[i])
+					continue
+				}
+				idx := i % size
+				copy(content[i][:size-idx], content[0][idx:size])
+				copy(content[i][size-idx:size], content[0][:idx])
+			}
+		}
+		return content
+	}
+
 	{
 		multiUploadFunc := func(key string, content [][]byte) error {
 			total := len(content)
@@ -173,13 +192,9 @@ func objbench(ctx *cli.Context) error {
 		var uploadResult = []string{"multi-upload", nspt, nspt}
 		fname := fmt.Sprintf("__multi_upload__test__%d__", time.Now().UnixNano())
 		if err := blob.CompleteUpload("test", "fakeUploadId", []*object.Part{}); err != utils.ENOTSUP {
-			part := make([]byte, 5<<20)
-			total := int(math.Ceil(float64(fsize) / float64(len(part))))
-			rand.Read(part)
-			content := make([][]byte, total)
-			for i := 0; i < total; i++ {
-				content[i] = part
-			}
+			partSize := 5 << 20
+			total := int(math.Ceil(float64(fsize) / float64(partSize)))
+			content := makeData(total, partSize)
 			start := time.Now()
 			if err := multiUploadFunc(fname, content); err != nil {
 				logger.Fatalf("multipart upload error: %v", err)
@@ -188,6 +203,19 @@ func objbench(ctx *cli.Context) error {
 			uploadResult[1], uploadResult[2] = colorize("multi-upload", float64(total*5)/cost, cost, 2, tty)
 			uploadResult[1] += " MiB/s"
 			uploadResult[2] += " s/object"
+
+			logger.Infof("downloading the multipart upload file and checking its contents ...")
+			r, err := blob.Get(fname, 0, -1)
+			if err != nil {
+				logger.Fatalf("failed to get multipart upload file: %v", err)
+			}
+			cnt, err := io.ReadAll(r)
+			if err != nil {
+				logger.Fatalf("failed to get multipart upload file: %v", err)
+			}
+			if !reflect.DeepEqual(md5.Sum(bytes.Join(content, nil)), md5.Sum(cnt)) {
+				logger.Fatal("the content of the multipart upload file is incorrect")
+			}
 		}
 		pResult = append(pResult, uploadResult)
 		if err = blob.Delete(fname); err != nil {
@@ -237,9 +265,10 @@ func objbench(ctx *cli.Context) error {
 				return line
 			},
 		}, {
-			name:  "smallget",
-			count: bCount,
-			title: "get small objects",
+			name:     "smallget",
+			count:    bCount,
+			title:    "get small objects",
+			startKey: bCount,
 			after: func(blob object.ObjectStorage) {
 				for i := bCount; i < bCount*2; i++ {
 					_ = blob.Delete(strconv.Itoa(i))
@@ -336,14 +365,13 @@ func objbench(ctx *cli.Context) error {
 	}
 
 	bm := &benchMarkObj{
-		blob:         blob,
-		progressBar:  progress,
-		threads:      threads,
-		content:      make([]byte, bSize),
-		smallContent: make([]byte, smallBSize),
+		blob:        blob,
+		progressBar: progress,
+		threads:     threads,
 	}
-	rand.Read(bm.content)
-	rand.Read(bm.smallContent)
+
+	bm.content = makeData(bCount, bSize)
+	bm.smallContent = makeData(bCount, smallBSize)
 
 	for _, api := range apis {
 		pResult = append(pResult, bm.run(api))
@@ -420,7 +448,7 @@ type benchMarkObj struct {
 	progressBar           *utils.Progress
 	blob                  object.ObjectStorage
 	threads               int
-	content, smallContent []byte
+	content, smallContent [][]byte
 }
 
 func (bm *benchMarkObj) run(api apiInfo) []string {
@@ -439,10 +467,12 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 	switch api.name {
 	case "put":
 		fn = bm.put
-	case "smallget", "get":
+	case "get":
 		fn = bm.get
 	case "smallput":
 		fn = bm.smallPut
+	case "smallget":
+		fn = bm.smallGet
 	case "delete":
 		fn = bm.delete
 	case "head":
@@ -495,21 +525,48 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 }
 
 func (bm *benchMarkObj) put(key string) error {
-	return bm.blob.Put(key, bytes.NewReader(bm.content))
+	idx, _ := strconv.Atoi(key)
+	return bm.blob.Put(key, bytes.NewReader(bm.content[idx]))
 }
 
 func (bm *benchMarkObj) smallPut(key string) error {
-	return bm.blob.Put(key, bytes.NewReader(bm.smallContent))
+	idx, _ := strconv.Atoi(key)
+	return bm.blob.Put(key, bytes.NewReader(bm.smallContent[idx-len(bm.content)]))
 }
 
-func (bm *benchMarkObj) get(key string) error {
-	r, err := bm.blob.Get(key, 0, -1)
+func getAndCheckN(blob object.ObjectStorage, key string, orgContent [][]byte, getOrgIdx func(idx int) int) error {
+	idx, _ := strconv.Atoi(key)
+	r, err := blob.Get(key, 0, -1)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
-	_, err = io.Copy(io.Discard, r)
-	return err
+	content, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	orgIdx := getOrgIdx(idx)
+	checkN := 10
+	l := len(orgContent[orgIdx])
+	if l < checkN {
+		checkN = l
+	}
+	if len(content) != len(orgContent[orgIdx]) || !bytes.Equal(content[:checkN], orgContent[orgIdx][:checkN]) {
+		return fmt.Errorf("the downloaded content is incorrect")
+	}
+	return nil
+}
+
+func (bm *benchMarkObj) get(key string) error {
+	return getAndCheckN(bm.blob, key, bm.content, func(idx int) int {
+		return idx
+	})
+}
+
+func (bm *benchMarkObj) smallGet(key string) error {
+	return getAndCheckN(bm.blob, key, bm.smallContent, func(idx int) int {
+		return idx - len(bm.content)
+	})
 }
 
 func (bm *benchMarkObj) delete(key string) error {
