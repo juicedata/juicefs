@@ -352,6 +352,52 @@ $ juicefs format --storage s3 \
 sudo juicefs mount -d "tikv://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" /mnt/jfs
 ```
 
+## etcd
+
+[etcd](https://etcd.io) 是一个高可用高可靠的小规模键值数据库，可以用作 JuiceFS 的元数据存储。
+
+### 创建文件系统
+
+使用 etcd 作为元数据引擎时，需要使用如下格式来指定 `Meta-URL` 参数：
+
+```shell
+etcd://[user:password@]<addr>[,<addr>...]/<prefix>
+```
+
+其中 `user` 和 `password` 是当 `etcd` 开启了用户认证时需要的。 `prefix` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 etcd 集群时，设置前缀可以避免混淆和冲突。示例如下：
+
+```bash
+$ juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs pics
+```
+
+### 设置 TLS
+
+如果需要开启 TLS，可以通过在 Meta-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+
+| 配置项             | 值                    |
+|-------------------|-----------------------|
+| cacert            | CA 根证书              |
+| cert              | 证书文件路径            |
+| key               | 私钥文件路径            |
+| server-name       | 服务器名称              |
+| insecure-skip-verify | 1                  |
+
+例子：
+```bash
+$ juicefs format --storage s3 \
+    ...
+    "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?ca=/path/to/ca.pem&cacert=/path/to/etcd-server.pem&key=/path/to/etcd-key.pem&server-name=etcd" \
+    pics
+```
+
+### 挂载文件系统
+
+```shell
+sudo juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" /mnt/jfs
+```
+
+注意：挂载到后台时，证书的路径需要使用绝对路径。
+
 ## FoundationDB
 
 即将推出......

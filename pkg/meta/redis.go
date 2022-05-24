@@ -1715,7 +1715,8 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 	}, m.inodeKey(inode), m.entryKey(parent), m.inodeKey(parent)))
 }
 
-func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
+	var stop = errors.New("stop")
 	err := m.hscan(ctx, m.entryKey(inode), func(keys []string) error {
 		newEntries := make([]Entry, len(keys)/2)
 		newAttrs := make([]Attr, len(keys)/2)
@@ -1731,9 +1732,15 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 			ent.Attr = &newAttrs[i/2]
 			ent.Attr.Typ = typ
 			*entries = append(*entries, ent)
+			if limit > 0 && len(*entries) >= limit {
+				return stop
+			}
 		}
 		return nil
 	})
+	if errors.Is(err, stop) {
+		err = nil
+	}
 	if err != nil {
 		return errno(err)
 	}
@@ -2834,11 +2841,21 @@ func (m *redisMeta) checkServerConfig() {
 		logger.Warnf("parse info: %s", err)
 		return
 	}
-	_, err = checkRedisInfo(rawInfo)
+	rInfo, err := checkRedisInfo(rawInfo)
 	if err != nil {
 		logger.Warnf("parse info: %s", err)
 	}
-
+	if rInfo.maxMemoryPolicy != "noeviction" {
+		if _, err := m.rdb.ConfigSet(Background, "maxmemory-policy", "noeviction").Result(); err != nil {
+			logger.Errorf("try to reconfigure maxmemory-policy to 'noeviction' failed: %s", err)
+		} else if result, err := m.rdb.ConfigGet(Background, "maxmemory-policy").Result(); err != nil {
+			logger.Warnf("get config maxmemory-policy failed: %s", err)
+		} else if len(result) == 2 && result[1] != "noeviction" {
+			logger.Warnf("reconfigured maxmemory-policy to 'noeviction', but it's still %s", result[1])
+		} else {
+			logger.Infof("set maxmemory-policy to 'noeviction' successfully")
+		}
+	}
 	start := time.Now()
 	_ = m.rdb.Ping(Background)
 	logger.Infof("Ping redis: %s", time.Since(start))

@@ -466,6 +466,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.SetXattr(ctx, inode, "a", []byte("v3"), XattrCreate); st != syscall.EEXIST {
 		t.Fatalf("setxattr: %s", st)
 	}
+	if st := m.SetXattr(ctx, inode, "a", []byte("v3"), XattrReplace); st != 0 {
+		t.Fatalf("setxattr: %s", st)
+	}
 	if st := m.SetXattr(ctx, inode, "a", []byte("v4"), XattrReplace); st != 0 {
 		t.Fatalf("setxattr: %s", st)
 	}

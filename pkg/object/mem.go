@@ -85,6 +85,9 @@ func (m *memStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if !ok {
 		return nil, errors.New("not exists")
 	}
+	if off > int64(len(d.data)) {
+		off = int64(len(d.data))
+	}
 	data := d.data[off:]
 	if limit > 0 && limit < int64(len(data)) {
 		data = data[:limit]

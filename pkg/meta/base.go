@@ -66,7 +66,7 @@ type engine interface {
 	doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string) syscall.Errno
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
-	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno
+	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
@@ -390,7 +390,7 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 
 func (m *baseMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	var entries []*Entry
-	_ = m.en.doReaddir(ctx, parent, 0, &entries)
+	_ = m.en.doReaddir(ctx, parent, 0, &entries, -1)
 	for _, e := range entries {
 		n := string(e.Name)
 		if strings.EqualFold(name, n) {
@@ -820,7 +820,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	return m.en.doReaddir(ctx, inode, plus, entries)
+	return m.en.doReaddir(ctx, inode, plus, entries, -1)
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
@@ -964,7 +964,7 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 	now := time.Now()
 	var st syscall.Errno
 	var entries []*Entry
-	if st = m.en.doReaddir(ctx, TrashInode, 0, &entries); st != 0 {
+	if st = m.en.doReaddir(ctx, TrashInode, 0, &entries, -1); st != 0 {
 		logger.Warnf("readdir trash %d: %s", TrashInode, st)
 		return
 	}
@@ -977,9 +977,10 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 			logger.Debugf("cleanup trash: nothing to delete")
 		}
 	}()
-
+	batch := 1000000
 	edge := now.Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
-	for _, e := range entries {
+	for len(entries) > 0 {
+		e := entries[0]
 		ts, err := time.Parse("2006-01-02-15", string(e.Name))
 		if err != nil {
 			logger.Warnf("bad entry as a subTrash: %s", e.Name)
@@ -987,11 +988,14 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 		}
 		if ts.Before(edge) || force {
 			var subEntries []*Entry
-			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries); st != 0 {
+			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries, batch); st != 0 {
 				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
 				continue
 			}
-			rmdir := true
+			rmdir := len(subEntries) < batch
+			if rmdir {
+				entries = entries[1:]
+			}
 			for _, se := range subEntries {
 				if se.Attr.Typ == TypeDirectory {
 					st = m.en.doRmdir(ctx, e.Inode, string(se.Name))

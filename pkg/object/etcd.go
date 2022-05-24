@@ -54,6 +54,9 @@ func (c *etcdClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	for _, pair := range resp.Kvs {
 		if string(pair.Key) == key {
+			if off > int64(len(pair.Value)) {
+				off = int64(len(pair.Value))
+			}
 			data := pair.Value[off:]
 			if limit > 0 && limit < int64(len(data)) {
 				data = data[:limit]

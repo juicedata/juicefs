@@ -1530,9 +1530,9 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 	}))
 }
 
-func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	// TODO: handle big directory
-	vals, err := m.scanValues(m.entryKey(inode, ""), -1, nil)
+	vals, err := m.scanValues(m.entryKey(inode, ""), limit, nil)
 	if err != nil {
 		return errno(err)
 	}
@@ -1916,26 +1916,26 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 }
 
 func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
-	// delayed slices: Lttttttttcccccccc
-	keys, err := m.scanKeys(m.fmtKey("L"))
-	if err != nil {
+	var keys [][]byte
+	if err := m.client.txn(func(tx kvTxn) error {
+		vals := tx.scanRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0))
+		for k := range vals {
+			if len(k) != 1+8+8 { // delayed slices: Lttttttttcccccccc
+				continue
+			}
+			keys = append(keys, []byte(k))
+		}
+		return nil
+	}); err != nil {
 		logger.Warnf("Scan delayed slices: %s", err)
 		return 0, err
 	}
 
-	klen := 1 + 8 + 8
 	var count int
 	var ss []Slice
 	var rs []int64
 	for _, key := range keys {
-		if len(key) != klen {
-			continue
-		}
-		if m.parseInt64(key[1:9]) >= edge {
-			continue
-		}
-
-		if err = m.txn(func(tx kvTxn) error {
+		if err := m.txn(func(tx kvTxn) error {
 			buf := tx.get(key)
 			if len(buf) == 0 {
 				return nil
@@ -2217,14 +2217,15 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 }
 
 func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
-	value, err := m.get(m.xattrKey(inode, name))
-	if err != nil {
-		return errno(err)
-	}
-	if value == nil {
-		return ENOATTR
-	}
-	return errno(m.deleteKeys(m.xattrKey(inode, name)))
+	key := m.xattrKey(inode, name)
+	return errno(m.txn(func(tx kvTxn) error {
+		value := tx.get(key)
+		if value == nil {
+			return ENOATTR
+		}
+		tx.dels(key)
+		return nil
+	}))
 }
 
 func (m *kvMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
