@@ -2793,7 +2793,6 @@ func (m *dbMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 
 		entry.Name = string(e.Name)
 		if e.Type == TypeDirectory {
-			logger.Infof("dump dir %d %s -> %d", inode, e.Name, e.Inode)
 			err = m.dumpDir(e.Inode, entry, bw, depth+2, showProgress)
 		} else {
 			err = entry.writeJSON(bw, depth+2)
