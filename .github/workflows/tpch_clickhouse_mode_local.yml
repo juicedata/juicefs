@@ -86,6 +86,7 @@ jobs:
           mv actionfile/*.tbl .
           ls -lrth
           sudo du -sh /home/runner/work/actiondata/
+          df -lh
 
 
       - name: Create Table

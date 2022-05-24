@@ -84,6 +84,7 @@ jobs:
           mv actionfile/*.tbl .
           ls -lrth
           sudo du -sh /data/jfs/
+          df -lh
 
       - name: Create Table
         run: |
