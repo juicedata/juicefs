@@ -50,10 +50,9 @@ var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
 type Config struct {
-	MultiBucket   bool
-	KeepEtag      bool
-	Mode          uint16
-	TmpFileExpiry time.Duration
+	MultiBucket bool
+	KeepEtag    bool
+	Mode        uint16
 }
 
 func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, gConf *Config) (minio.ObjectLayer, error) {
@@ -920,7 +919,7 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 }
 
 func (n *jfsObjects) cleanup() {
-	for t := range time.Tick(6 * time.Hour) {
+	for t := range time.Tick(24 * time.Hour) {
 		var tmpDirs []string
 		if n.gConf.MultiBucket {
 			buckets, err := n.ListBuckets(context.Background())
@@ -946,7 +945,7 @@ func (n *jfsObjects) cleanup() {
 				if _, err := uuid.Parse(string(entry.Name)); err != nil {
 					continue
 				}
-				if t.Sub(time.Unix(entry.Attr.Mtime, 0)) > n.gConf.TmpFileExpiry {
+				if t.Sub(time.Unix(entry.Attr.Mtime, 0)) > 7*24*time.Hour {
 					p := n.path(dir, string(entry.Name))
 					if errno := n.fs.Rmr(mctx, p); errno != 0 {
 						logger.Errorf("failed to delete expired temporary files path: %s,", p)
