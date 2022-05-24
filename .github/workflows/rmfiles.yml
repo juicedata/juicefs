@@ -74,6 +74,7 @@ jobs:
           echo "rm 200w files in depth of 20 directory"
           cd juicefs
           sudo ./juicefs rmr ../aaa2/
+      - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
