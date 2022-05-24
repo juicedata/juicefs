@@ -412,7 +412,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-oceanbase-read-committed:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -425,13 +425,18 @@ jobs:
           meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
           file_size: "8K"
           file_count: 10000
-          isolation_level: "read committed"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+          isolation_level: "read committed" 
+      - name: CleanUp
+        if: ${{ always() }}
+        ./juicefs umount -f /tmp/myjfs
+        UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+        if [ -n "$UUID" ];then
+          ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+        fi
+        rm -rf /var/jfs/myjfs/
 
   upload-big-file-with-oceanbase-repeatable-read:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -444,13 +449,18 @@ jobs:
           meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
           file_size: "1G"
           file_count: 5
-          isolation_level: "repeatable read"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+          isolation_level: "repeatable read"   
+      - name: CleanUp
+        if: ${{ always() }}
+        ./juicefs umount -f /tmp/myjfs
+        UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+        if [ -n "$UUID" ];then
+          ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+        fi
+        rm -rf /var/jfs/myjfs/ 
 
   upload-big-file-with-oceanbase-serializable:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -464,9 +474,14 @@ jobs:
           file_size: "1G"
           file_count: 5
           isolation_level: "serializable"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+      - name: CleanUp
+        if: ${{ always() }}
+        ./juicefs umount -f /tmp/myjfs
+        UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
+        if [ -n "$UUID" ];then
+          ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
+        fi
+        rm -rf /var/jfs/myjfs/
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest
