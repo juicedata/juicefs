@@ -59,7 +59,7 @@ jobs:
           cd /tmp/juicefs-sync-test/mkdir/
           sudo chmod 777 ..
           echo "rm 100w files in depth of 1 directory"
-          git clone git@github.com:juicedata/juicefs.git
+          git clone https://github.com/juicedata/juicefs.git
           cd juicefs
           make
           sudo ./juicefs rmr ../aaa/
@@ -116,7 +116,7 @@ jobs:
           cd /tmp/juicefs-sync-test/mkdir/
           sudo chmod 777 ..
           echo "rm 100w files in depth of 1 directory"
-          git clone git@github.com:juicedata/juicefs.git
+          git clone https://github.com/juicedata/juicefs.git
           cd juicefs
           make
           sudo ./juicefs rmr ../aaa/
@@ -185,7 +185,7 @@ jobs:
           cd /tmp/juicefs-sync-test/mkdir/
           sudo chmod 777 ..
           echo "rm 100w files in depth of 1 directory"
-          git clone git@github.com:juicedata/juicefs.git
+          git clone https://github.com/juicedata/juicefs.git
           cd juicefs
           make
           sudo ./juicefs rmr ../aaa/
@@ -241,7 +241,7 @@ jobs:
           cd /tmp/juicefs-sync-test/mkdir/
           sudo chmod 777 ..
           echo "rm 100w files in depth of 1 directory"
-          git clone git@github.com:juicedata/juicefs.git
+          git clone https://github.com/juicedata/juicefs.git
           cd juicefs
           make
           sudo ./juicefs rmr ../aaa/
