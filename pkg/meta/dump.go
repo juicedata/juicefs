@@ -88,7 +88,7 @@ type DumpedXattr struct {
 
 type DumpedEntry struct {
 	Name    string                  `json:"-"`
-	Parent  Ino                     `json:"-"`
+	Parents []Ino                   `json:"-"`
 	Attr    *DumpedAttr             `json:"attr,omitempty"`
 	Symlink string                  `json:"symlink,omitempty"`
 	Xattrs  []*DumpedXattr          `json:"xattrs,omitempty"`
@@ -317,8 +317,10 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress fun
 			return fmt.Errorf("inode conflict: %d", inode)
 		}
 		eattr.Nlink++
+		exist.Parents = append(exist.Parents, e.Parents...)
 		if eattr.Ctime*1e9+int64(eattr.Ctimensec) < attr.Ctime*1e9+int64(attr.Ctimensec) {
 			attr.Nlink = eattr.Nlink
+			e.Parents = exist.Parents
 			entries[inode] = e
 		}
 		return nil
@@ -329,12 +331,12 @@ func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress fun
 		e.Attr.Nlink = 1 // reset
 	} else if typ == TypeDirectory {
 		if inode == 1 || inode == TrashInode { // root or trash inode
-			e.Parent = 1
+			e.Parents = []Ino{1}
 		}
 		e.Attr.Nlink = 2
 		for name, child := range e.Entries {
 			child.Name = name
-			child.Parent = inode
+			child.Parents = []Ino{inode}
 			if child.Attr == nil {
 				logger.Warnf("ignore empty entry: %s/%s", inode, name)
 				continue

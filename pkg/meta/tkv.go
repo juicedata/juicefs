@@ -2513,7 +2513,14 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 	inode := e.Attr.Inode
 	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := loadAttr(e.Attr)
-	attr.Parent = e.Parent
+	numParents := len(e.Parents)
+	if numParents == 1 {
+		attr.Parent = e.Parents[0]
+	} else if numParents == 0 {
+		logger.Fatalf("No parent for inode: %d", inode)
+	} else if attr.Typ == TypeDirectory {
+		logger.Fatalf("Too many parents for directory inode %d: %v", inode, e.Parents)
+	}
 	return m.txn(func(tx kvTxn) error {
 		if attr.Typ == TypeFile {
 			attr.Length = e.Attr.Length
@@ -2561,6 +2568,11 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]i
 
 		for _, x := range e.Xattrs {
 			tx.set(m.xattrKey(inode, x.Name), []byte(unescape(x.Value)))
+		}
+		if numParents > 1 {
+			for _, parent := range e.Parents {
+				tx.incrBy(m.parentKey(inode, parent), 1)
+			}
 		}
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil

@@ -3261,7 +3261,14 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	ctx := Background
 	attr := loadAttr(e.Attr)
-	attr.Parent = e.Parent
+	numParents := len(e.Parents)
+	if numParents == 1 {
+		attr.Parent = e.Parents[0]
+	} else if numParents == 0 {
+		logger.Fatalf("No parent for inode: %d", inode)
+	} else if attr.Typ == TypeDirectory {
+		logger.Fatalf("Too many parents for directory inode %d: %v", inode, e.Parents)
+	}
 	batch := 100
 	if attr.Typ == TypeFile {
 		attr.Length = e.Attr.Length
@@ -3322,6 +3329,11 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 			xattrs[x.Name] = unescape(x.Value)
 		}
 		p.HSet(ctx, m.xattrKey(inode), xattrs)
+	}
+	if numParents > 1 {
+		for _, parent := range e.Parents {
+			p.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
+		}
 	}
 	p.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 }
