@@ -48,7 +48,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --cache-size 3072 --no-usage-report &
 
       - name: Install ClickHouse
         run: |
@@ -76,14 +76,10 @@ jobs:
           git clone https://github.com/sanwan/actiondata.git
           cd actiondata
           cat lineorder.tbl.gz* >lineorder.tbl.gz
-          echo "md5sum lineorder.tbl.gz"
-          md5sum lineorder.tbl.gz
           gzip -dk lineorder.tbl.gz
-          rm lineorder.tbl.gz*
-          echo "md5sum lineorder.tbl"
-          md5sum lineorder.tbl
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
+          rm lineorder.tbl.gz*
           ls -lrth
           sudo du -sh /data/jfs/
           df -lh

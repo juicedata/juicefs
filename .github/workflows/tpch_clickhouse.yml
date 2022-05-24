@@ -71,23 +71,17 @@ jobs:
 
       - name: Generate Data
         run: |
-          df -lh
           cd /data/jfs/
           git clone https://github.com/sanwan/actiondata.git
           cd actiondata
           cat lineorder.tbl.gz* >lineorder.tbl.gz
-          echo "md5sum lineorder.tbl.gz"
-          md5sum lineorder.tbl.gz
           gzip -dk lineorder.tbl.gz
-          rm lineorder.tbl.gz*
-          echo "md5sum lineorder.tbl"
-          md5sum lineorder.tbl
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
+          rm lineorder.tbl.gz*
           ls -lrth
           sudo du -sh /data/jfs/
           df -lh
-          hello
 
       - name: Create Table
         run: |
