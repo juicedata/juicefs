@@ -63,7 +63,7 @@ type edge struct {
 
 type linkParent struct {
 	Id     int64 `xorm:"pk bigserial"`
-	Inode  Ino   `xorm:"notnull"`
+	Inode  Ino   `xorm:"index notnull"`
 	Parent Ino   `xorm:"notnull"`
 }
 
@@ -2173,7 +2173,10 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 
 func (m *dbMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	var rows []linkParent
-	if err := m.db.Find(&rows, &linkParent{Inode: inode}); err != nil {
+	if err := m.roTxn(func(s *xorm.Session) error {
+		rows = nil
+		return s.Find(&rows, &linkParent{Inode: inode})
+	}); err != nil {
 		logger.Warnf("Scan parent key of inode %d: %s", inode, err)
 		return nil
 	}
