@@ -19,6 +19,36 @@ on:
   workflow_dispatch:
 
 jobs:
+
+
+ 
+  upload-big-file-with-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "redis://localhost/1"
+          file_size: "1G"
+          file_count: 5
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1    
+
   upload-small-files-with-mysql-read-uncommitted:
     runs-on: ubuntu-latest
     steps:
@@ -109,34 +139,6 @@ jobs:
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
- 
-  upload-big-file-with-redis:
-    runs-on: ubuntu-latest
-    services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "redis://localhost/1"
-          file_size: "1G"
-          file_count: 5
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
 
   upload-big-files-with-mysql-read-uncommitted:
     runs-on: ubuntu-latest          
@@ -198,6 +200,24 @@ jobs:
           file_size: "1G"
           file_count: 5
           isolaction: "serializable"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1    
+
+  upload-big-files-with-mariadb-read-committed:
+    runs-on: ubuntu-latest          
+    steps:
+      - uses: actions/checkout@v3
+      - name: install 
+        run: | 
+          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root! -d mariadb:latest
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
+          file_size: "1G"
+          file_count: 5
+          isolaction: "read committed"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -412,7 +432,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-oceanbase-read-committed:
-    runs-on: [self-hosted, daily-build, bench-01]
+    runs-on: [self-hosted, daily-build]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -430,7 +450,7 @@ jobs:
           isolation_level: "read committed" 
 
   upload-big-file-with-oceanbase-read-committed:
-    runs-on: [self-hosted, daily-build, bench-01]
+    runs-on: [self-hosted, daily-build]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -448,7 +468,7 @@ jobs:
           isolation_level: "read committed"   
 
   upload-big-file-with-oceanbase-repeatable-read:
-    runs-on: [self-hosted, daily-build, bench-01]
+    runs-on: [self-hosted, daily-build]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -466,7 +486,7 @@ jobs:
           isolation_level: "repeatable read"   
 
   upload-big-file-with-oceanbase-serializable:
-    runs-on: [self-hosted, daily-build, bench-01]
+    runs-on: [self-hosted, daily-build]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -484,7 +504,7 @@ jobs:
           isolation_level: "serializable"    
 
   upload-small-files-with-tikv:
-    runs-on: [self-hosted, daily-build, bench-01]
+    runs-on: [self-hosted, daily-build]
     steps:
       - uses: actions/checkout@v3
       - name: Test
@@ -495,7 +515,7 @@ jobs:
           file_count: 10000
 
   upload-big-files-with-tikv:
-    runs-on: [self-hosted, daily-build, bench-01]
+    runs-on: [self-hosted, daily-build]
     steps:
       - uses: actions/checkout@v3
       - name: Test
