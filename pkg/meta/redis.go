@@ -2510,10 +2510,11 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		for _, s := range ss {
 			buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
 		}
+	} else {
+		rs = make([]*redis.IntCmd, len(ss))
 	}
 	key := m.chunkKey(inode, indx)
 	errno := errno(m.txn(ctx, func(tx *redis.Tx) error {
-		rs = nil
 		vals2, err := tx.LRange(ctx, key, 0, int64(len(vals)-1)).Result()
 		if err != nil {
 			return err
@@ -2537,8 +2538,10 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			if trash {
 				pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", chunkid, time.Now().Unix()), buf)
 			} else {
-				for _, s := range ss {
-					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.chunkid, s.size), -1))
+				for i, s := range ss {
+					if s.chunkid > 0 {
+						rs[i] = pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.chunkid, s.size), -1)
+					}
 				}
 			}
 			return nil
@@ -2563,7 +2566,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.cleanupZeroRef(m.sliceKey(chunkid, size))
 		if !trash {
 			for i, s := range ss {
-				if rs[i].Err() == nil && rs[i].Val() < 0 {
+				if s.chunkid > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
 					m.deleteSlice(s.chunkid, s.size)
 				}
 			}
