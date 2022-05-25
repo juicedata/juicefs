@@ -81,9 +81,9 @@ runs:
         
         db_name=$(basename $meta_url | awk -F? '{print $1}')
         if [[ "$meta_url" == mysql* ]]; then
-          mysql -uroot -proot -e "set global transaction isolation level $isolation_level;" 
-          mysql -uroot -proot -e "show variables like '%isolation%;'" 
-          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+          mysql -uroot -proot -h 127.0.0.1 -e "set global transaction isolation level $isolation_level;" 
+          mysql -uroot -proot -h 127.0.0.1 -e "show variables like '%isolation%;'" 
+          mysql -uroot -proot -h 127.0.0.1 -e "drop database if exists $db_name; create database $db_name;" 
         elif [[ "$meta_url" == postgres* ]]; then
           export PGPASSWORD="postgres"
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
