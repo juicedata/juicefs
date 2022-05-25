@@ -59,9 +59,7 @@ runs:
         meta_url=${{inputs.meta_url}}
         volume=${{inputs.volume_name}}
         test -d $mp && ./juicefs umount -f $mp
-        set +e
-        UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4)
-        set -e
+        ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
         if [ -n "$UUID" ];then
           ./juicefs destroy --force $meta_url $UUID
         fi
