@@ -50,6 +50,7 @@ jobs:
           meta=redis://localhost/1
           mp=myjfs/
           name=myjfs
+          file_size='1G'
           juicefs=./juicefs
           export JFS_RSA_PASSPHRASE=abc123
           $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key .github/workflows/resources/my-priv-key-2048-abc123.pem
