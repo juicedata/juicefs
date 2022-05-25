@@ -427,15 +427,23 @@ jobs:
           file_size: "8K"
           file_count: 10000
           isolation_level: "read committed" 
-      - name: CleanUp
-        if: ${{ always() }}
-        run: | 
-          ./juicefs umount -f /tmp/myjfs
-          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-          fi
-          rm -rf /var/jfs/myjfs/
+
+  upload-big-file-with-oceanbase-read-committed:
+    runs-on: [self-hosted, daily-build, bench-01]
+    steps:
+      - uses: actions/checkout@v3
+      - name: install ob
+        run: |
+          docker rm obstandalone --force || echo "remove obstandalone failed"
+          docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+          mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
+          file_size: "1G"
+          file_count: 5
+          isolation_level: "read committed"   
 
   upload-big-file-with-oceanbase-repeatable-read:
     runs-on: [self-hosted, daily-build, bench-01]
@@ -453,15 +461,6 @@ jobs:
           file_size: "1G"
           file_count: 5
           isolation_level: "repeatable read"   
-      - name: CleanUp
-        if: ${{ always() }}
-        run: | 
-          ./juicefs umount -f /tmp/myjfs
-          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-          fi
-          rm -rf /var/jfs/myjfs/ 
 
   upload-big-file-with-oceanbase-serializable:
     runs-on: [self-hosted, daily-build, bench-01]
@@ -479,15 +478,28 @@ jobs:
           file_size: "1G"
           file_count: 5
           isolation_level: "serializable"    
-      - name: CleanUp
-        if: ${{ always() }}
-        run: |
-          ./juicefs umount -f /tmp/myjfs
-          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-          fi
-          rm -rf /var/jfs/myjfs/
+
+  upload-small-files-with-tikv:
+    runs-on: [self-hosted, daily-build, bench-01]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
+          file_size: "8K"
+          file_count: 10000
+
+  upload-big-files-with-tikv:
+    runs-on: [self-hosted, daily-build, bench-01]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
+          file_size: "1G"
+          file_count: 5
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest

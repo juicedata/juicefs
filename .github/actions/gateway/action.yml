@@ -21,6 +21,14 @@ inputs:
     description: 'isolation level for mysql, include read uncommitted, read committed, repeatable read, serializable'
     required: true
     default: "repeatable read"
+  mount_point:
+    description: 'mount point'
+    required: true
+    default: /tmp/myjfs
+  volume_name:
+    description: 'volume name'
+    required: true
+    default: myjfs
   
 runs:
   using: "composite"
@@ -43,6 +51,18 @@ runs:
         chmod +x mc 
       shell: bash
 
+    - name: Init
+      run: | 
+        mp=${{inputs.mount_point}}
+        meta_url=${{inputs.meta_url}}
+        volume=${{inputs.volume_name}}
+        test -d $mp && ./juicefs umount -f $mp
+        UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4)
+        if [ -n "$UUID" ];then
+          ./juicefs destroy --force $meta_url $UUID
+        fi
+        test -d /var/jfs/$volume && rm -rf /var/jfs/$volume
+
     - name: Test
       run: |
         meta_url=${{inputs.meta_url}}
@@ -50,6 +70,8 @@ runs:
         file_count=${{inputs.file_count}}
         threads=${{inputs.threads}}
         isolation_level="${{inputs.isolation_level}}"
+        mp=${{inputs.mount_point}}
+        volume=${{inputs.volume_name}}
         echo meta_url is: $meta_url, file_size is $file_size, file_count is $file_count, isolation_level is $isolation_level
         
         db_name=$(basename $meta_url | awk -F? '{print $1}')
@@ -62,8 +84,7 @@ runs:
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
           printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$isolation_level';" |  psql -U postgres -h localhost
         fi
-        volume=myjfs
-        mp=/tmp/myjfs
+        
         export MINIO_ROOT_USER=minioadmin
         export MINIO_ROOT_PASSWORD=minioadmin
         ./juicefs format $meta_url $volume
