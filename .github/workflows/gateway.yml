@@ -419,6 +419,7 @@ jobs:
         run: |
           docker rm obstandalone --force || echo "remove obstandalone failed"
           docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+          sleep 60
           mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
       - name: Test
         uses: ./.github/actions/gateway
@@ -436,6 +437,7 @@ jobs:
         run: |
           docker rm obstandalone --force || echo "remove obstandalone failed"
           docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+          sleep 60
           mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
       - name: Test
         uses: ./.github/actions/gateway
@@ -453,6 +455,7 @@ jobs:
         run: |
           docker rm obstandalone --force || echo "remove obstandalone failed"
           docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+          sleep 60
           mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
       - name: Test
         uses: ./.github/actions/gateway
@@ -470,6 +473,7 @@ jobs:
         run: |
           docker rm obstandalone --force || echo "remove obstandalone failed"
           docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+          sleep 60
           mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
       - name: Test
         uses: ./.github/actions/gateway
