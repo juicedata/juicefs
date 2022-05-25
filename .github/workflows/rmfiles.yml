@@ -75,6 +75,10 @@ jobs:
           echo "rm 200w files in depth of 20 directory"
           cd juicefs
           sudo ./juicefs rmr ../aaa2/
+      - name: Log
+        if: ${{ failure() }}
+        run: |
+          sudo tail -n 100 /var/log/juicefs.log
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -132,6 +136,10 @@ jobs:
           echo "rm 200w files in depth of 20 directory"
           cd juicefs
           sudo ./juicefs rmr ../aaa2/
+      - name: Log
+        if: ${{ failure() }}
+        run: |
+          sudo tail -n 100 /var/log/juicefs.log
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -201,6 +209,10 @@ jobs:
           echo "rm 200w files in depth of 20 directory"
           cd juicefs
           sudo ./juicefs rmr ../aaa2/
+      - name: Log
+        if: ${{ failure() }}
+        run: |
+          sudo tail -n 100 /var/log/juicefs.log
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -258,11 +270,10 @@ jobs:
           echo "rm 200w files in depth of 20 directory"
           cd juicefs
           sudo ./juicefs rmr ../aaa2/
-      - name: Send Slack Notification
+      - name: Log
         if: ${{ failure() }}
         run: |
           sudo tail -n 100 /var/log/juicefs.log
-          dmesg
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
