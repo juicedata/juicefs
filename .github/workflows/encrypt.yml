@@ -56,7 +56,7 @@ jobs:
           $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key .github/workflows/resources/my-priv-key-2048-abc123.pem
           $juicefs mount -d $meta $mp
           dd if=/dev/urandom of=file1 iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
-          cp file $mp/file1
+          cp file1 $mp/file1
           diff -u file1 $mp/file1
           $juicefs umount $mp
 
