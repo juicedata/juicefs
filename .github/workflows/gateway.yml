@@ -210,7 +210,7 @@ jobs:
       - uses: actions/checkout@v3
       - name: install 
         run: | 
-          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root! -d mariadb:latest
+          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
       - name: Test
         uses: ./.github/actions/gateway
         with:
