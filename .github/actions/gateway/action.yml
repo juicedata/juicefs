@@ -62,7 +62,8 @@ runs:
           ./juicefs destroy --force $meta_url $UUID
         fi
         test -d /var/jfs/$volume && rm -rf /var/jfs/$volume
-
+      shell: bash
+      
     - name: Test
       run: |
         meta_url=${{inputs.meta_url}}
