@@ -2236,6 +2236,9 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		ss = readSliceBuf(c.Slices)
 		for _, sc := range ss {
+			if sc.chunkid == 0 {
+				continue
+			}
 			_, err = s.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? AND size=?", sc.chunkid, sc.size)
 			if err != nil {
 				return err
@@ -2252,6 +2255,9 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", inode, err)
 	}
 	for _, s := range ss {
+		if s.chunkid == 0 {
+			continue
+		}
 		var ref = chunkRef{Chunkid: s.chunkid}
 		err := m.roTxn(func(s *xorm.Session) error {
 			ok, err := s.Get(&ref)
@@ -2420,6 +2426,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		} else {
 			for _, s_ := range ss {
+				if s_.chunkid == 0 {
+					continue
+				}
 				if _, err := s.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s_.chunkid, s_.size); err != nil {
 					return err
 				}
@@ -2453,6 +2462,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.of.InvalidateChunk(inode, indx)
 		if !trash {
 			for _, s := range ss {
+				if s.chunkid == 0 {
+					continue
+				}
 				var ref = chunkRef{Chunkid: s.chunkid}
 				var ok bool
 				err := m.roTxn(func(s *xorm.Session) error {
