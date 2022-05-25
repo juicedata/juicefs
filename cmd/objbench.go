@@ -71,13 +71,22 @@ $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3 --
 			},
 			&cli.UintFlag{
 				Name:  "big-object-size",
-				Value: 1024,
+				Value: 256,
 				Usage: "size of each big object in MiB",
 			},
 			&cli.UintFlag{
 				Name:  "small-object-size",
 				Value: 128,
 				Usage: "size of each small object in KiB",
+			},
+			&cli.UintFlag{
+				Name:  "small-object-number",
+				Value: 1000,
+				Usage: "number of small object",
+			},
+			&cli.BoolFlag{
+				Name:  "skip-functional-test",
+				Usage: "skip functional test",
 			},
 			&cli.UintFlag{
 				Name:    "threads",
@@ -98,7 +107,7 @@ var (
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
-	for _, name := range []string{"block-size", "big-object-size", "small-object-size", "threads"} {
+	for _, name := range []string{"big-object-size", "small-object-size", "block-size", "small-object-number", "threads"} {
 		if ctx.Uint(name) == 0 {
 			logger.Fatalf("%s should not be set to zero", name)
 		}
@@ -124,6 +133,7 @@ func objbench(ctx *cli.Context) error {
 	fsize := int(ctx.Uint("big-object-size")) << 20
 	smallBSize := int(ctx.Uint("small-object-size")) << 10
 	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
+	sCount := int(ctx.Uint("small-object-number"))
 	threads := int(ctx.Uint("threads"))
 	tty := isatty.IsTerminal(os.Stdout.Fd())
 	progress := utils.NewProgress(!tty, false)
@@ -137,97 +147,46 @@ func objbench(ctx *cli.Context) error {
 
 	var result [][]string
 	result = append(result, []string{"CATEGORY", "TEST", "RESULT"})
-	functionalTesting(blob, fsize, &result, tty)
+	if !ctx.IsSet("skip-functional-test") {
+		functionalTesting(blob, fsize, &result, tty)
+	}
 	printResult(result, tty)
 	fmt.Println("\nStart Performance Testing ...")
 	var pResult [][]string
 	pResult = append(pResult, []string{"ITEM", "VALUE", "COST"})
 
-	{
-		multiUploadFunc := func(key string, seed []byte, total int) error {
-			bar := progress.AddCountBar("multi-upload", int64(total))
-			defer bar.Done()
-			upload, err := blob.CreateMultipartUpload(key)
-			if err != nil {
-				return err
-			}
-
-			parts := make([]*object.Part, total)
-			pool := make(chan struct{}, threads)
-			var wg sync.WaitGroup
-			for i := 1; i <= total; i++ {
-				pool <- struct{}{}
-				wg.Add(1)
-				num := i
-				go func() {
-					defer func() {
-						<-pool
-						wg.Done()
-						bar.Increment()
-					}()
-					parts[num-1], err = blob.UploadPart(key, upload.UploadID, num, getMockData(seed, num-1))
-					if err != nil {
-						logger.Fatalf("multipart upload error: %v", err)
-					}
-				}()
-			}
-			wg.Wait()
-			return blob.CompleteUpload(key, upload.UploadID, parts)
-		}
-
-		var uploadResult = []string{"multi-upload", nspt, nspt}
-		fname := fmt.Sprintf("__multi_upload__test__%d__", time.Now().UnixNano())
-		if err := blob.CompleteUpload("test", "fakeUploadId", []*object.Part{}); err != utils.ENOTSUP {
-			partSize := 5 << 20
-			total := int(math.Ceil(float64(fsize) / float64(partSize)))
-			seed := make([]byte, partSize)
-			rand.Read(seed)
-			start := time.Now()
-			if err = multiUploadFunc(fname, seed, total); err != nil {
-				logger.Fatalf("multipart upload error: %v", err)
-			}
-			cost := time.Since(start).Seconds()
-			uploadResult[1], uploadResult[2] = colorize("multi-upload", float64(total*5)/cost, cost, 2, tty)
-			uploadResult[1] += " MiB/s"
-			uploadResult[2] += " s/object"
-
-			bar := progress.AddCountBar("check multi-upload", int64(total))
-			for i := 0; i < total; i++ {
-				r, err := blob.Get(fname, int64(i*partSize), int64(partSize))
-				if err != nil {
-					logger.Fatalf("failed to get multipart upload file: %v", err)
-				}
-				part := make([]byte, partSize)
-				if i == 0 {
-					part = seed
-				} else {
-					idx := i % partSize
-					copy(part[:partSize-idx], seed[idx:partSize])
-					copy(part[partSize-idx:partSize], seed[:idx])
-				}
-				buff, err := io.ReadAll(r)
-				if err != nil {
-					logger.Fatalf("failed to get multipart upload file: %v", err)
-				}
-				checkN := 10
-				if len(buff) != partSize || !bytes.Equal(part[:checkN], buff[:checkN]) {
-					logger.Fatal("the content of the multipart upload file is incorrect")
-				}
-				bar.Increment()
-			}
-			bar.Done()
-		}
-		pResult = append(pResult, uploadResult)
-		if err = blob.Delete(fname); err != nil {
-			logger.Fatalf("delete %s error: %v", fname, err)
-		}
-	}
-
 	apis := []apiInfo{
 		{
-			name:  "put",
-			count: bCount,
-			title: "upload objects",
+			name:  "smallput",
+			count: sCount,
+			title: "put small objects",
+			getResult: func(cost float64) []string {
+				line := []string{"", nspt, nspt}
+				if cost > 0 {
+					line[1], line[2] = colorize("smallput", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1] += " objects/s"
+					line[2] += " ms/object"
+				}
+				return line
+			},
+		}, {
+			name:  "smallget",
+			count: sCount,
+			title: "get small objects",
+			getResult: func(cost float64) []string {
+				line := []string{"", nspt, nspt}
+				if cost > 0 {
+					line[1], line[2] = colorize("smallget", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1] += " objects/s"
+					line[2] += " ms/object"
+				}
+				return line
+			},
+		}, {
+			name:     "put",
+			count:    bCount,
+			title:    "upload objects",
+			startKey: sCount,
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
@@ -238,47 +197,20 @@ func objbench(ctx *cli.Context) error {
 				return line
 			},
 		}, {
-			name:  "get",
-			count: bCount,
-			title: "download objects",
-			getResult: func(cost float64) []string {
-				line := []string{"", nspt, nspt}
-				if cost > 0 {
-					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, tty)
-					line[1] += " MiB/s"
-					line[2] += " ms/object"
-				}
-				return line
-			},
-		}, {
-			name:     "smallput",
+			name:     "get",
 			count:    bCount,
-			title:    "put small objects",
-			startKey: bCount,
-			getResult: func(cost float64) []string {
-				line := []string{"", nspt, nspt}
-				if cost > 0 {
-					line[1], line[2] = colorize("smallput", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " objects/s"
-					line[2] += " ms/object"
-				}
-				return line
-			},
-		}, {
-			name:     "smallget",
-			count:    bCount,
-			title:    "get small objects",
-			startKey: bCount,
+			title:    "download objects",
+			startKey: sCount,
 			after: func(blob object.ObjectStorage) {
-				for i := bCount; i < bCount*2; i++ {
+				for i := sCount; i < sCount+bCount; i++ {
 					_ = blob.Delete(strconv.Itoa(i))
 				}
 			},
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallget", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
-					line[1] += " objects/s"
+					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, tty)
+					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
 				return line
@@ -290,7 +222,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("list", float64(bCount)*100/cost, cost*10, 2, tty)
+					line[1], line[2] = colorize("list", float64(sCount)*100/cost, cost*10, 2, tty)
 					line[1] += " objects/s"
 					line[2] += " ms/op"
 				}
@@ -298,12 +230,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "head",
-			count: bCount,
+			count: sCount,
 			title: "head objects",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("head", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
+					line[1], line[2] = colorize("head", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -311,12 +243,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "chtimes",
-			count: bCount,
+			count: sCount,
 			title: "update mtime",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chtimes", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
+					line[1], line[2] = colorize("chtimes", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -324,12 +256,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "chmod",
-			count: bCount,
+			count: sCount,
 			title: "change permissions",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chmod", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
+					line[1], line[2] = colorize("chmod", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -337,12 +269,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "chown",
-			count: bCount,
+			count: sCount,
 			title: "change owner/group",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chown", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
+					line[1], line[2] = colorize("chown", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -350,12 +282,12 @@ func objbench(ctx *cli.Context) error {
 			},
 		}, {
 			name:  "delete",
-			count: bCount,
+			count: sCount,
 			title: "delete objects",
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("delete", float64(bCount)/cost, cost*1000/float64(bCount), 1, tty)
+					line[1], line[2] = colorize("delete", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -383,12 +315,13 @@ func objbench(ctx *cli.Context) error {
 		_ = bm.delete(strconv.Itoa(i), 0)
 	}
 
-	fmt.Printf("Benchmark finished! block-size: %d KiB, big-object-size: %d MiB, small-object-size: %d KiB, NumThreads: %d\n",
-		ctx.Uint("block-size"), ctx.Uint("big-object-size"), ctx.Uint("small-object-size"), ctx.Uint("threads"))
+	fmt.Printf("Benchmark finished! block-size: %d KiB, big-object-size: %d MiB, small-object-size: %d KiB, small-object-number: %d, NumThreads: %d\n",
+		ctx.Uint("block-size"), ctx.Uint("big-object-size"), ctx.Uint("small-object-size"), sCount, threads)
 
 	// adjust the print order
-	pResult[1], pResult[2] = pResult[2], pResult[1]
-	pResult[8], pResult[11] = pResult[11], pResult[8]
+	pResult[1], pResult[3] = pResult[3], pResult[1]
+	pResult[2], pResult[4] = pResult[4], pResult[2]
+	pResult[7], pResult[10] = pResult[10], pResult[7]
 	printResult(pResult, tty)
 	return nil
 }
@@ -543,12 +476,12 @@ func getMockData(seed []byte, idx int) []byte {
 
 func (bm *benchMarkObj) put(key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
-	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.seed, idx)))
+	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.seed, idx-startKey)))
 }
 
 func (bm *benchMarkObj) smallPut(key string, startKey int) error {
 	idx, _ := strconv.Atoi(key)
-	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.smallSeed, idx-startKey)))
+	return bm.blob.Put(key, bytes.NewReader(getMockData(bm.smallSeed, idx)))
 }
 
 func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, getOrgIdx func(idx int) int) error {
@@ -576,13 +509,13 @@ func getAndCheckN(blob object.ObjectStorage, key string, seed []byte, getOrgIdx 
 
 func (bm *benchMarkObj) get(key string, startKey int) error {
 	return getAndCheckN(bm.blob, key, bm.seed, func(idx int) int {
-		return idx
+		return idx - startKey
 	})
 }
 
 func (bm *benchMarkObj) smallGet(key string, startKey int) error {
 	return getAndCheckN(bm.blob, key, bm.smallSeed, func(idx int) int {
-		return idx - startKey
+		return idx
 	})
 }
 
@@ -914,38 +847,57 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 		key := "multi_test_file"
 		if err := blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			defer blob.Delete(key) //nolint:errcheck
-			if uploader, err := blob.CreateMultipartUpload(key); err == nil {
-				partSize := uploader.MinPartSize
-				uploadID := uploader.UploadID
-				defer blob.AbortUpload(key, uploadID)
-
-				part1, err := blob.UploadPart(key, uploadID, 1, make([]byte, partSize))
-				if err != nil {
-					return fmt.Errorf("uploadPart 1 failed: %s", err)
-				}
-				part2Size := 1 << 20
-				_, err = blob.UploadPart(key, uploadID, 2, make([]byte, part2Size))
-				if err != nil {
-					return fmt.Errorf("uploadPart 2 failed: %s", err)
-				}
-				part2Size = 2 << 20
-				part2, err := blob.UploadPart(key, uploadID, 2, make([]byte, part2Size))
-				if err != nil {
-					return fmt.Errorf("uploadPart 2 failed: %s", err)
-				}
-
-				if err := blob.CompleteUpload(key, uploadID, []*object.Part{part1, part2}); err != nil {
-					return fmt.Errorf("completeMultipart failed: %s", err)
-				}
-				if in, err := blob.Get(key, 0, -1); err != nil {
-					return fmt.Errorf("failed to download file,key=%s", key)
-				} else if d, err := ioutil.ReadAll(in); err != nil {
-					return fmt.Errorf("failed to read downloaded content key=%s", key)
-				} else if len(d) != partSize+part2Size {
-					return fmt.Errorf("size of %s file: %d != %d", key, len(d), partSize+part2Size)
-				}
-				return nil
+			partSize := 5 << 20
+			total := 10
+			seed := make([]byte, partSize)
+			rand.Read(seed)
+			upload, err := blob.CreateMultipartUpload(key)
+			if err != nil {
+				return fmt.Errorf("create multipart upload failed: %s", err)
 			}
+			parts := make([]*object.Part, total)
+			content := make([][]byte, total)
+			for i := 0; i < total; i++ {
+				content[i] = getMockData(seed, i)
+			}
+			pool := make(chan struct{}, 4)
+			var wg sync.WaitGroup
+			for i := 1; i <= total; i++ {
+				pool <- struct{}{}
+				wg.Add(1)
+				num := i
+				go func() {
+					defer func() {
+						<-pool
+						wg.Done()
+					}()
+					parts[num-1], err = blob.UploadPart(key, upload.UploadID, num, content[num-1])
+					if err != nil {
+						logger.Fatalf("multipart upload error: %v", err)
+					}
+				}()
+			}
+			wg.Wait()
+			// overwrite part
+			if parts[total-1], err = blob.UploadPart(key, upload.UploadID, total, getMockData(seed, total)); err != nil {
+				logger.Fatalf("multipart upload error: %v", err)
+			}
+			if err = blob.CompleteUpload(key, upload.UploadID, parts); err != nil {
+				logger.Fatalf("failed to complete multipart upload: %v", err)
+			}
+			r, err := blob.Get(key, 0, -1)
+			if err != nil {
+				logger.Fatalf("failed to get multipart upload file: %v", err)
+			}
+			cnt, err := io.ReadAll(r)
+			if err != nil {
+				logger.Fatalf("failed to get multipart upload file: %v", err)
+			}
+			content[total-1] = getMockData(seed, total)
+			if !bytes.Equal(cnt, bytes.Join(content, nil)) {
+				logger.Fatal("the content of the multipart upload file is incorrect")
+			}
+			return nil
 		}
 		return utils.ENOTSUP
 	})
