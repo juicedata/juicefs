@@ -29,6 +29,10 @@ inputs:
     description: 'volume name'
     required: true
     default: myjfs
+  port:
+    description: 'port'
+    required: true
+    default: 3306
   
 runs:
   using: "composite"
@@ -77,13 +81,14 @@ runs:
         isolation_level="${{inputs.isolation_level}}"
         mp=${{inputs.mount_point}}
         volume=${{inputs.volume_name}}
+        port=${{inputs.port}}
         echo meta_url is: $meta_url, file_size is $file_size, file_count is $file_count, isolation_level is $isolation_level
         
         db_name=$(basename $meta_url | awk -F? '{print $1}')
         if [[ "$meta_url" == mysql* ]]; then
-          mysql -uroot -proot -h 127.0.0.1 -e "set global transaction isolation level $isolation_level;" 
-          mysql -uroot -proot -h 127.0.0.1 -e "show variables like '%isolation%;'" 
-          mysql -uroot -proot -h 127.0.0.1 -e "drop database if exists $db_name; create database $db_name;" 
+          mysql -uroot -proot -h 127.0.0.1 -p $port -e "set global transaction isolation level $isolation_level;" 
+          mysql -uroot -proot -h 127.0.0.1 -p $port -e "show variables like '%isolation%;'" 
+          mysql -uroot -proot -h 127.0.0.1 -p $port -e "drop database if exists $db_name; create database $db_name;" 
         elif [[ "$meta_url" == postgres* ]]; then
           export PGPASSWORD="postgres"
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost

@@ -445,6 +445,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
+          port: 2881
           file_size: "8K"
           file_count: 10000
           isolation_level: "read committed" 
@@ -463,6 +464,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
+          port: 2881
           file_size: "1G"
           file_count: 5
           isolation_level: "read committed"   
@@ -481,6 +483,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
+          port: 2881
           file_size: "1G"
           file_count: 5
           isolation_level: "repeatable read"   
@@ -499,6 +502,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
+          port: 2881
           file_size: "1G"
           file_count: 5
           isolation_level: "serializable"    
