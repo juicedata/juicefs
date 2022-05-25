@@ -212,6 +212,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
 
+
   sqlite3-rm:
     runs-on: ubuntu-latest
     steps:
@@ -257,6 +258,11 @@ jobs:
           echo "rm 200w files in depth of 20 directory"
           cd juicefs
           sudo ./juicefs rmr ../aaa2/
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        run: |
+          sudo tail -n 100 /var/log/juicefs.log
+          dmesg
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
