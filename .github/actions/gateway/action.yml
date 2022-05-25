@@ -84,9 +84,9 @@ runs:
           host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
           port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
           test -z "$port" && port="3306"
-          mysql -uroot -proot -h $host -p $port -e "set global transaction isolation level $isolation_level;" 
-          mysql -uroot -proot -h $host -p $port -e "show variables like '%isolation%;'" 
-          mysql -uroot -proot -h $host -p $port -e "drop database if exists $db_name; create database $db_name;" 
+          mysql -uroot -proot -h $host -P $port -e "set global transaction isolation level $isolation_level;" 
+          mysql -uroot -proot -h $host -P $port -e "show variables like '%isolation%;'" 
+          mysql -uroot -proot -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
         elif [[ "$meta_url" == postgres* ]]; then
           export PGPASSWORD="postgres"
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
