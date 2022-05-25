@@ -20,34 +20,41 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0-dev (2021-12-27 3462bdbf)
+   1.0.0-dev+2022-05-25.b0034f37
 
 COMMANDS:
-   format   format a volume
-   mount    mount a volume
-   umount   unmount a volume
-   gateway  S3-compatible gateway
-   sync     sync between two storage
-   rmr      remove directories recursively
-   info     show internal information for paths or inodes
-   bench    run benchmark to read/write/stat big/small files
-   gc       collect any leaked objects
-   fsck     Check consistency of file system
-   profile  analyze access log
-   stats    show runtime statistics
-   status   show status of JuiceFS
-   warmup   build cache for target directories/files
-   dump     dump metadata into a JSON file
-   load     load metadata from a previously dumped JSON file
-   config   change config of a volume
-   destroy  destroy an existing volume
-   help, h  Shows a list of commands or help for one command
+   ADMIN:
+     format   Format a volume
+     config   Change configuration of a volume
+     destroy  Destroy an existing volume
+     gc       Garbage collector of objects in data storage
+     fsck     Check consistency of a volume
+     dump     Dump metadata into a JSON file
+     load     Load metadata from a previously dumped JSON file
+   INSPECTOR:
+     status   Show status of a volume
+     stats    Show real time performance statistics of JuiceFS
+     profile  Show profiling of operations completed in JuiceFS
+     info     Show internal information of a path or inode
+   SERVICE:
+     mount    Mount a volume
+     umount   Unmount a volume
+     gateway  Start an S3-compatible gateway
+     webdav   Start a WebDAV server
+   TOOL:
+     bench     Run benchmark on a path
+     objbench  Run benchmark on an object storage
+     warmup    Build cache for target directories/files
+     rmr       Remove directories recursively
+     sync      Sync between two storages
 
 GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
    --quiet, -q             only warning and errors (default: false)
    --trace                 enable trace log (default: false)
-   --no-agent              Disable pprof (:6060) and gops (:6070) agent (default: false)
+   --no-agent              disable pprof (:6060) and gops (:6070) agent (default: false)
+   --pyroscope value       pyroscope address
+   --no-color              disable colors (default: false)
    --help, -h              show help (default: false)
    --version, -V           print only the version (default: false)
 
@@ -639,6 +646,43 @@ number of small files (default: 100)
 
 `--threads value, -p value`<br />
 number of concurrent threads (default: 1)
+
+### juicefs objbench
+
+#### Description
+
+Run basic benchmark on the target object storage to test if it works as expected.
+
+#### Synopsis
+
+```shell
+juicefs objbench [command options] BUCKET
+```
+
+#### Options
+`--storage`<br />
+object storage type (e.g. s3, gcs, oss, cos) (default: "file")
+
+`--access-key`<br />
+access key for object storage (env ACCESS_KEY)
+
+`--secret-key`<br />
+secret key for object storage (env SECRET_KEY)
+
+`--block-size`<br />
+size of each IO block in KiB (default: 4096)
+
+`--big-object-size`<br />
+size of each big object in MiB (default: 1024)
+
+`--small-object-size`<br />
+size of each small object in KiB (default: 128)
+
+`--skip-functional-tests`<br />
+skip functional tests (default: false)
+
+`--threads`<br />
+number of concurrent threads (default: 4)
 
 ### juicefs gc
 
