@@ -2317,19 +2317,23 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 		var slices []*slice
 		var rs []*redis.IntCmd
 		err := m.txn(ctx, func(tx *redis.Tx) error {
-			slices = nil
 			vals, err := tx.LRange(ctx, key, 0, 100).Result()
 			if err == redis.Nil {
 				return nil
 			}
+			slices = nil
+			rs = nil
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				for _, v := range vals {
+					pipe.LPop(ctx, key)
 					rb := utils.ReadBuffer([]byte(v))
 					_ = rb.Get32() // pos
 					chunkid := rb.Get64()
+					if chunkid == 0 {
+						continue
+					}
 					size := rb.Get32()
 					slices = append(slices, &slice{chunkid: chunkid, size: size})
-					pipe.LPop(ctx, key)
 					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(chunkid, size), -1))
 				}
 				return nil
@@ -2507,10 +2511,11 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		for _, s := range ss {
 			buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
 		}
+	} else {
+		rs = make([]*redis.IntCmd, len(ss))
 	}
 	key := m.chunkKey(inode, indx)
 	errno := errno(m.txn(ctx, func(tx *redis.Tx) error {
-		rs = nil
 		vals2, err := tx.LRange(ctx, key, 0, int64(len(vals)-1)).Result()
 		if err != nil {
 			return err
@@ -2534,8 +2539,10 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			if trash {
 				pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", chunkid, time.Now().Unix()), buf)
 			} else {
-				for _, s := range ss {
-					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.chunkid, s.size), -1))
+				for i, s := range ss {
+					if s.chunkid > 0 {
+						rs[i] = pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.chunkid, s.size), -1)
+					}
 				}
 			}
 			return nil
@@ -2560,7 +2567,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.cleanupZeroRef(m.sliceKey(chunkid, size))
 		if !trash {
 			for i, s := range ss {
-				if rs[i].Err() == nil && rs[i].Val() < 0 {
+				if s.chunkid > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
 					m.deleteSlice(s.chunkid, s.size)
 				}
 			}

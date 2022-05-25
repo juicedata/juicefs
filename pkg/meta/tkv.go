@@ -1871,8 +1871,7 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 		slices := readSliceBuf(buf)
 		tx.dels(key)
 		for _, s := range slices {
-			r := tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
-			if r < 0 {
+			if s.chunkid > 0 && tx.incrBy(m.sliceKey(s.chunkid, s.size), -1) < 0 {
 				todel = append(todel, s)
 			}
 		}
@@ -2036,7 +2035,9 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			tx.set(m.delSliceKey(time.Now().Unix(), chunkid), dsbuf)
 		} else {
 			for _, s := range ss {
-				tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+				if s.chunkid > 0 {
+					tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+				}
 			}
 		}
 		return nil
@@ -2064,7 +2065,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		if !trash {
 			var refs int64
 			for _, s := range ss {
-				if m.client.txn(func(tx kvTxn) error {
+				if s.chunkid > 0 && m.client.txn(func(tx kvTxn) error {
 					refs = tx.incrBy(m.sliceKey(s.chunkid, s.size), 0)
 					return nil
 				}) == nil && refs < 0 {
