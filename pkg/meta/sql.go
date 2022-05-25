@@ -230,23 +230,31 @@ func (m *dbMeta) doDeleteSlice(chunkid uint64, size uint32) error {
 	})
 }
 
+func (m *dbMeta) syncTable(beans ...interface{}) error {
+	err := m.db.Sync2(beans...)
+	if err != nil && strings.Contains(err.Error(), "Duplicate key") {
+		err = nil
+	}
+	return err
+}
+
 func (m *dbMeta) Init(format Format, force bool) error {
-	if err := m.db.Sync2(new(setting), new(counter)); err != nil {
+	if err := m.syncTable(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
 	}
-	if err := m.db.Sync2(new(edge), new(linkParent)); err != nil && !strings.Contains(err.Error(), "Duplicate entry") {
+	if err := m.syncTable(new(edge), new(linkParent)); err != nil {
 		return fmt.Errorf("create table edge, linkParent: %s", err)
 	}
-	if err := m.db.Sync2(new(node), new(symlink), new(xattr)); err != nil {
+	if err := m.syncTable(new(node), new(symlink), new(xattr)); err != nil {
 		return fmt.Errorf("create table node, symlink, xattr: %s", err)
 	}
-	if err := m.db.Sync2(new(chunk), new(chunkRef), new(delslices)); err != nil {
+	if err := m.syncTable(new(chunk), new(chunkRef), new(delslices)); err != nil {
 		return fmt.Errorf("create table chunk, chunk_ref, delslices: %s", err)
 	}
-	if err := m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
+	if err := m.syncTable(new(session2), new(sustained), new(delfile)); err != nil {
 		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)
 	}
-	if err := m.db.Sync2(new(flock), new(plock)); err != nil {
+	if err := m.syncTable(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
 
@@ -346,16 +354,17 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 }
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
-	err := m.db.Sync2(new(session2), new(delslices), new(linkParent))
+	// add new table
+	err := m.syncTable(new(session2), new(delslices), new(linkParent))
 	if err != nil {
 		return fmt.Errorf("update table session2, delslices, linkParent: %s", err)
 	}
 	// add primary key
-	if err = m.db.Sync2(new(edge), new(chunk), new(xattr), new(sustained)); err != nil && !strings.Contains(err.Error(), "Duplicate entry") {
+	if err = m.syncTable(new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
 		return fmt.Errorf("update table edge, chunk, xattr, sustained: %s", err)
 	}
 	// update the owner from uint64 to int64
-	if err = m.db.Sync2(new(flock), new(plock)); err != nil && !strings.Contains(err.Error(), "Duplicate entry") {
+	if err = m.syncTable(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("update table flock, plock: %s", err)
 	}
 
@@ -3106,19 +3115,19 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if len(tables) > 0 {
 		return fmt.Errorf("Database %s is not empty", m.Name())
 	}
-	if err = m.db.Sync2(new(setting), new(counter)); err != nil {
+	if err = m.syncTable(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
 	}
-	if err = m.db.Sync2(new(node), new(edge), new(linkParent), new(symlink), new(xattr)); err != nil {
+	if err = m.syncTable(new(node), new(edge), new(linkParent), new(symlink), new(xattr)); err != nil {
 		return fmt.Errorf("create table node, edge, linkParent, symlink, xattr: %s", err)
 	}
-	if err = m.db.Sync2(new(chunk), new(chunkRef), new(delslices)); err != nil {
+	if err = m.syncTable(new(chunk), new(chunkRef), new(delslices)); err != nil {
 		return fmt.Errorf("create table chunk, chunk_ref, delslices: %s", err)
 	}
-	if err = m.db.Sync2(new(session2), new(sustained), new(delfile)); err != nil {
+	if err = m.syncTable(new(session2), new(sustained), new(delfile)); err != nil {
 		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)
 	}
-	if err = m.db.Sync2(new(flock), new(plock)); err != nil {
+	if err = m.syncTable(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
 
