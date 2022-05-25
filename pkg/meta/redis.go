@@ -2317,13 +2317,15 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 		var slices []*slice
 		var rs []*redis.IntCmd
 		err := m.txn(ctx, func(tx *redis.Tx) error {
-			slices = nil
 			vals, err := tx.LRange(ctx, key, 0, 100).Result()
 			if err == redis.Nil {
 				return nil
 			}
+			slices = nil
+			rs = nil
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				for _, v := range vals {
+					pipe.LPop(ctx, key)
 					rb := utils.ReadBuffer([]byte(v))
 					_ = rb.Get32() // pos
 					chunkid := rb.Get64()
@@ -2332,7 +2334,6 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 					}
 					size := rb.Get32()
 					slices = append(slices, &slice{chunkid: chunkid, size: size})
-					pipe.LPop(ctx, key)
 					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(chunkid, size), -1))
 				}
 				return nil
