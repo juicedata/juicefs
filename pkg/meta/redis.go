@@ -2327,6 +2327,9 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 					rb := utils.ReadBuffer([]byte(v))
 					_ = rb.Get32() // pos
 					chunkid := rb.Get64()
+					if chunkid == 0 {
+						continue
+					}
 					size := rb.Get32()
 					slices = append(slices, &slice{chunkid: chunkid, size: size})
 					pipe.LPop(ctx, key)
