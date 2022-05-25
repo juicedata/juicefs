@@ -55,6 +55,7 @@ runs:
 
     - name: Init
       run: | 
+        set -x
         mp=${{inputs.mount_point}}
         meta_url=${{inputs.meta_url}}
         volume=${{inputs.volume_name}}
@@ -63,7 +64,8 @@ runs:
         if [ -n "$UUID" ];then
           ./juicefs destroy --force $meta_url $UUID
         fi
-        test -d /var/jfs/$volume && rm -rf /var/jfs/$volume
+        test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
+        echo finished
       shell: bash
 
     - name: Test
