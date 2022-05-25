@@ -9,7 +9,6 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -222,7 +221,6 @@ jobs:
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
-
 
 
   sqlite3-rm:
