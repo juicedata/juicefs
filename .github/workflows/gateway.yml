@@ -432,7 +432,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-oceanbase-read-committed:
-    runs-on: [self-hosted, daily-build]
+    runs-on: [self-hosted, daily-build, bench-03]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -450,7 +450,7 @@ jobs:
           isolation_level: "read committed" 
 
   upload-big-file-with-oceanbase-read-committed:
-    runs-on: [self-hosted, daily-build]
+    runs-on: [self-hosted, daily-build, bench-03]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -468,7 +468,7 @@ jobs:
           isolation_level: "read committed"   
 
   upload-big-file-with-oceanbase-repeatable-read:
-    runs-on: [self-hosted, daily-build]
+    runs-on: [self-hosted, daily-build, bench-03]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -486,7 +486,7 @@ jobs:
           isolation_level: "repeatable read"   
 
   upload-big-file-with-oceanbase-serializable:
-    runs-on: [self-hosted, daily-build]
+    runs-on: [self-hosted, daily-build, bench-03]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
