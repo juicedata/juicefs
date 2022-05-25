@@ -53,7 +53,8 @@ jobs:
           file_size='1G'
           juicefs=./juicefs
           export JFS_RSA_PASSPHRASE=abc123
-          $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key .github/workflows/resources/my-priv-key-2048-abc123.pem
+          cp .github/workflows/resources/my-priv-key-2048-abc123.pem my-priv-key.pem
+          $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key  my-priv-key.pem
           $juicefs mount -d $meta $mp
           dd if=/dev/urandom of=file1 iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
           cp file1 $mp/file1
@@ -61,7 +62,8 @@ jobs:
           $juicefs umount $mp
 
           export JFS_RSA_PASSPHRASE=def456
-          $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key .github/workflows/resources/my-priv-key-2048-def456.pem
+          cp .github/workflows/resources/my-priv-key-2048-def456.pem my-priv-key.pem
+          $juicefs format $meta $name --trash-days 1 --encrypt-rsa-key my-priv-key.pem
           $juicefs mount -d $meta $mp
           dd if=/dev/urandom of=file2 iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
           cp file2 $mp/file2
