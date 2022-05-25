@@ -71,7 +71,7 @@ $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3 --
 			},
 			&cli.UintFlag{
 				Name:  "big-object-size",
-				Value: 256,
+				Value: 1024,
 				Usage: "size of each big object in MiB",
 			},
 			&cli.UintFlag{
@@ -80,18 +80,18 @@ $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3 --
 				Usage: "size of each small object in KiB",
 			},
 			&cli.UintFlag{
-				Name:  "small-object-number",
-				Value: 1000,
+				Name:  "small-objects",
+				Value: 100,
 				Usage: "number of small object",
 			},
 			&cli.BoolFlag{
-				Name:  "skip-functional-test",
-				Usage: "skip functional test",
+				Name:  "skip-functional-tests",
+				Usage: "skip functional tests",
 			},
 			&cli.UintFlag{
 				Name:    "threads",
 				Aliases: []string{"p"},
-				Value:   1,
+				Value:   4,
 				Usage:   "number of concurrent threads",
 			},
 		},
@@ -107,7 +107,7 @@ var (
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
-	for _, name := range []string{"big-object-size", "small-object-size", "block-size", "small-object-number", "threads"} {
+	for _, name := range []string{"big-object-size", "small-object-size", "block-size", "small-objects", "threads"} {
 		if ctx.Uint(name) == 0 {
 			logger.Fatalf("%s should not be set to zero", name)
 		}
@@ -133,7 +133,7 @@ func objbench(ctx *cli.Context) error {
 	fsize := int(ctx.Uint("big-object-size")) << 20
 	smallBSize := int(ctx.Uint("small-object-size")) << 10
 	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
-	sCount := int(ctx.Uint("small-object-number"))
+	sCount := int(ctx.Uint("small-objects"))
 	threads := int(ctx.Uint("threads"))
 	tty := isatty.IsTerminal(os.Stdout.Fd())
 	progress := utils.NewProgress(!tty, false)
@@ -147,8 +147,8 @@ func objbench(ctx *cli.Context) error {
 
 	var result [][]string
 	result = append(result, []string{"CATEGORY", "TEST", "RESULT"})
-	if !ctx.IsSet("skip-functional-test") {
-		functionalTesting(blob, fsize, &result, tty)
+	if !ctx.IsSet("skip-functional-tests") {
+		functionalTesting(blob, &result, tty)
 	}
 	printResult(result, tty)
 	fmt.Println("\nStart Performance Testing ...")
@@ -315,7 +315,7 @@ func objbench(ctx *cli.Context) error {
 		_ = bm.delete(strconv.Itoa(i), 0)
 	}
 
-	fmt.Printf("Benchmark finished! block-size: %d KiB, big-object-size: %d MiB, small-object-size: %d KiB, small-object-number: %d, NumThreads: %d\n",
+	fmt.Printf("Benchmark finished! block-size: %d KiB, big-object-size: %d MiB, small-object-size: %d KiB, small-objects: %d, NumThreads: %d\n",
 		ctx.Uint("block-size"), ctx.Uint("big-object-size"), ctx.Uint("small-object-size"), sCount, threads)
 
 	// adjust the print order
@@ -571,7 +571,7 @@ var syncTests = map[string]bool{
 	"multipart upload":    true,
 }
 
-func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string, tty bool) {
+func functionalTesting(blob object.ObjectStorage, result *[][]string, tty bool) {
 	runCase := func(title string, fn func(blob object.ObjectStorage) error) {
 		r := pass
 		if err := fn(blob); err == utils.ENOTSUP {
@@ -813,7 +813,8 @@ func functionalTesting(blob object.ObjectStorage, fsize int, result *[][]string,
 	})
 
 	runCase("put a big object", func(blob object.ObjectStorage) error {
-		buffL := 1 << 20
+		fsize := 256 << 20
+		buffL := 4 << 20
 		buff := make([]byte, buffL)
 		rand.Read(buff)
 		count := int(math.Floor(float64(fsize) / float64(buffL)))
