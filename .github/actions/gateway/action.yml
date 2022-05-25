@@ -40,6 +40,8 @@ runs:
           
     - name: Build linux target
       run: |
+        #if it is self ruuner
+        hostname | grep bench && export GOPATH=/usr/local/go; export HOME=/root
         make juicefs 
         #wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
         #tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
@@ -63,7 +65,7 @@ runs:
         fi
         test -d /var/jfs/$volume && rm -rf /var/jfs/$volume
       shell: bash
-      
+
     - name: Test
       run: |
         meta_url=${{inputs.meta_url}}
