@@ -147,16 +147,16 @@ compression algorithm (lz4, zstd, none) (default: "none")
 store the blocks into N buckets by hash of key (default: 0)
 
 `--storage value`<br />
-Object storage type (e.g. s3, gcs, oss, cos) (default: "file")
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
 
 `--bucket value`<br />
 A bucket URL to store data (default: `"$HOME/.juicefs/local"` or `"/var/jfs"`)
 
 `--access-key value`<br />
-Access key for object storage (env `ACCESS_KEY`)
+Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`)
 
 `--secret-key value`<br />
-Secret key for object storage (env `SECRET_KEY`)
+Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`)
 
 `--encrypt-rsa-key value`<br />
 A path to RSA private key (PEM)
@@ -630,6 +630,8 @@ Run benchmark, including read/write/stat for big and small files.
 juicefs bench [command options] PATH
 ```
 
+For a detailed introduction to the `bench` subcommand, please refer to the [documentation](../benchmark/performance_evaluation_guide.md#juicefs-bench).
+
 #### Options
 
 `--block-size value`<br />
@@ -659,29 +661,32 @@ Run basic benchmarks on the target object storage to test if it works as expecte
 juicefs objbench [command options] BUCKET
 ```
 
+For a detailed introduction to the `objbench` subcommand, please refer to the [documentation](../benchmark/performance_evaluation_guide.md#juicefs-objbench).
+
 #### Options
-`--storage`<br />
-object storage type (e.g. s3, gcs, oss, cos) (default: "file")
 
-`--access-key`<br />
-access key for object storage (env ACCESS_KEY)
+`--storage value`<br />
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
 
-`--secret-key`<br />
-secret key for object storage (env SECRET_KEY)
+`--access-key value`<br />
+Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`)
 
-`--block-size`<br />
+`--secret-key value`<br />
+Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`)
+
+`--block-size value`<br />
 size of each IO block in KiB (default: 4096)
 
-`--big-object-size`<br />
+`--big-object-size value`<br />
 size of each big object in MiB (default: 1024)
 
-`--small-object-size`<br />
+`--small-object-size value`<br />
 size of each small object in KiB (default: 128)
 
 `--skip-functional-tests`<br />
 skip functional tests (default: false)
 
-`--threads`<br />
+`--threads value, -p value`<br />
 number of concurrent threads (default: 4)
 
 ### juicefs gc

@@ -147,16 +147,16 @@ juicefs format [command options] META-URL NAME
 将数据块根据名字哈希存入 N 个桶中 (默认: 0)
 
 `--storage value`<br />
-对象存储类型 (例如 s3, gcs, oss, cos) (默认: "file")
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--bucket value`<br />
 存储数据的桶路径 (默认: `"$HOME/.juicefs/local"` 或 `"/var/jfs"`)
 
 `--access-key value`<br />
-对象存储的 Access key (env `ACCESS_KEY`)
+对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)
 
 `--secret-key value`<br />
-对象存储的 Secret key (env `SECRET_KEY`)
+对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)
 
 `--encrypt-rsa-key value`<br />
 RSA 私钥的路径 (PEM)
@@ -628,6 +628,8 @@ juicefs info [command options] PATH or INODE
 juicefs bench [command options] PATH
 ```
 
+有关 `bench` 子命令的详细介绍，请参考[文档](../benchmark/performance_evaluation_guide.md#juicefs-bench)。
+
 #### 选项
 
 `--block-size value`<br />
@@ -657,33 +659,35 @@ juicefs bench [command options] PATH
 juicefs objbench [command options] BUCKET
 ```
 
+有关 `objbench` 子命令的详细介绍，请参考[文档](../benchmark/performance_evaluation_guide.md#juicefs-objbench)。
+
 #### 选项
 
-`--storage`<br /> 
-对象存储类型，默认 file
+`--storage value`<br />
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
-`--access-key`<br />
-对象存储的 Access key (env `ACCESS_KEY`)
+`--access-key value`<br />
+对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)
 
-`--secret-key`<br />
-对象存储的 Secret key (env `SECRET_KEY`)
+`--secret-key value`<br />
+对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)
 
-`--block-size`<br />
+`--block-size value`<br />
 每个 IO 块的大小（以 KiB 为单位）（默认值：4096）
 
-`--big-object-size`<br />
+`--big-object-size value`<br />
 大文件的大小（以 MiB 为单位）（默认值：1024）
 
-`--small-object-size`<br />
+`--small-object-size value`<br />
 每个小文件的大小（以 KiB 为单位）（默认值：128）
 
-`--small-objects`<br />
+`--small-objects value`<br />
 小文件的数量（以 KiB 为单位）（默认值：100）
 
 `--skip-functional-tests`<br />
 跳过功能测试（默认值：false）
 
-`--threads`<br />
+`--threads value, -p value`<br />
 上传下载等操作的并发数（默认值：4）
 
 ### juicefs gc
