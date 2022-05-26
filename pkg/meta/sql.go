@@ -628,8 +628,8 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	if len(inodes) > 0 {
-		m.lock(int(inodes[0]))
-		defer m.unlock(int(inodes[0]))
+		m.txLock(int(inodes[0]))
+		defer m.txUnlock(int(inodes[0]))
 	}
 	var err error
 	for i := 0; i < 50; i++ {

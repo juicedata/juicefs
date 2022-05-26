@@ -773,8 +773,8 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	h := int(khash.Sum32())
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
-	m.lock(h)
-	defer m.unlock(h)
+	m.txLock(h)
+	defer m.txUnlock(h)
 	// TODO: enable retry for some of idempodent transactions
 	var retryOnFailture = false
 	for i := 0; i < 50; i++ {
