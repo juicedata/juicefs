@@ -621,12 +621,16 @@ func (m *dbMeta) shouldRetry(err error) bool {
 	}
 }
 
-func (m *dbMeta) txn(f func(s *xorm.Session) error) error {
+func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
+	if len(inodes) > 0 {
+		m.txLock(int(inodes[0]))
+		defer m.txUnlock(int(inodes[0]))
+	}
 	var err error
 	for i := 0; i < 50; i++ {
 		_, err = m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
@@ -1159,7 +1163,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		m.parseAttr(&n, attr)
 		return nil
-	})
+	}, parent)
 	if err == nil {
 		m.updateStats(align4K(0), 1)
 	}
@@ -1306,7 +1310,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 		}
 		return err
-	})
+	}, parent)
 	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
 			m.fileDeleted(opened, n.Inode, n.Length)
@@ -1403,7 +1407,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			_, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: pn.Inode})
 		}
 		return err
-	})
+	}, parent)
 	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
 	}
@@ -1699,7 +1703,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		return err
-	})
+	}, parentSrc)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
 			m.fileDeleted(opened, dino, dn.Length)
@@ -1778,7 +1782,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			m.parseAttr(&n, attr)
 		}
 		return err
-	}))
+	}, parent))
 }
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
@@ -2038,7 +2042,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			needCompact = (len(ck.Slices)/sliceBytes)%100 == 99
 		}
 		return err
-	})
+	}, inode)
 	if err == nil {
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
