@@ -611,10 +611,11 @@ func (m *dbMeta) shouldRetry(err error) bool {
 	case "mysql":
 		// MySQL, MariaDB or TiDB
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later") ||
-			strings.Contains(msg, "Duplicate entry")
+			strings.Contains(msg, "duplicate entry")
 	case "postgres":
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
-			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access")
+			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access") ||
+			strings.Contains(msg, "bad connection")
 	default:
 		return false
 	}
