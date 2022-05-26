@@ -11,7 +11,7 @@ slug: /command_reference
 
 在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
 
-```shell
+```bash
 $ juicefs -h
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
@@ -20,36 +20,43 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0-dev (2021-12-27 3462bdbf)
+   1.0.0-dev+2022-05-25.b0034f37
 
 COMMANDS:
-   format   format a volume
-   mount    mount a volume
-   umount   unmount a volume
-   gateway  S3-compatible gateway
-   sync     sync between two storage
-   rmr      remove directories recursively
-   info     show internal information for paths or inodes
-   bench    run benchmark to read/write/stat big/small files
-   gc       collect any leaked objects
-   fsck     Check consistency of file system
-   profile  analyze access log
-   stats    show runtime statistics
-   status   show status of JuiceFS
-   warmup   build cache for target directories/files
-   dump     dump metadata into a JSON file
-   load     load metadata from a previously dumped JSON file
-   config   change config of a volume
-   destroy  destroy an existing volume
-   help, h  Shows a list of commands or help for one command
+   ADMIN:
+     format   Format a volume
+     config   Change configuration of a volume
+     destroy  Destroy an existing volume
+     gc       Garbage collector of objects in data storage
+     fsck     Check consistency of a volume
+     dump     Dump metadata into a JSON file
+     load     Load metadata from a previously dumped JSON file
+   INSPECTOR:
+     status   Show status of a volume
+     stats    Show real time performance statistics of JuiceFS
+     profile  Show profiling of operations completed in JuiceFS
+     info     Show internal information of a path or inode
+   SERVICE:
+     mount    Mount a volume
+     umount   Unmount a volume
+     gateway  Start an S3-compatible gateway
+     webdav   Start a WebDAV server
+   TOOL:
+     bench     Run benchmarks on a path
+     objbench  Run benchmarks on an object storage
+     warmup    Build cache for target directories/files
+     rmr       Remove directories recursively
+     sync      Sync between two storages
 
 GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
-   --quiet, -q             only warning and errors (default: false)
+   --quiet, -q             show warning and errors only (default: false)
    --trace                 enable trace log (default: false)
-   --no-agent              Disable pprof (:6060) and gops (:6070) agent (default: false)
+   --no-agent              disable pprof (:6060) and gops (:6070) agent (default: false)
+   --pyroscope value       pyroscope address
+   --no-color              disable colors (default: false)
    --help, -h              show help (default: false)
-   --version, -V           print only the version (default: false)
+   --version, -V           print version only (default: false)
 
 COPYRIGHT:
    Apache License 2.0
@@ -140,16 +147,16 @@ juicefs format [command options] META-URL NAME
 将数据块根据名字哈希存入 N 个桶中 (默认: 0)
 
 `--storage value`<br />
-对象存储类型 (例如 s3, gcs, oss, cos) (默认: "file")
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--bucket value`<br />
 存储数据的桶路径 (默认: `"$HOME/.juicefs/local"` 或 `"/var/jfs"`)
 
 `--access-key value`<br />
-对象存储的 Access key (env `ACCESS_KEY`)
+对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)
 
 `--secret-key value`<br />
-对象存储的 Secret key (env `SECRET_KEY`)
+对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)
 
 `--encrypt-rsa-key value`<br />
 RSA 私钥的路径 (PEM)
@@ -621,6 +628,8 @@ juicefs info [command options] PATH or INODE
 juicefs bench [command options] PATH
 ```
 
+有关 `bench` 子命令的详细介绍，请参考[文档](../benchmark/performance_evaluation_guide.md#juicefs-bench)。
+
 #### 选项
 
 `--block-size value`<br />
@@ -637,6 +646,49 @@ juicefs bench [command options] PATH
 
 `--threads value, -p value`<br />
 并发线程数 (默认: 1)
+
+### juicefs objbench
+
+#### 描述
+
+测试对象存储接口的正确性与基本性能
+
+#### 使用
+
+```shell
+juicefs objbench [command options] BUCKET
+```
+
+有关 `objbench` 子命令的详细介绍，请参考[文档](../benchmark/performance_evaluation_guide.md#juicefs-objbench)。
+
+#### 选项
+
+`--storage value`<br />
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+
+`--access-key value`<br />
+对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)
+
+`--secret-key value`<br />
+对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)
+
+`--block-size value`<br />
+每个 IO 块的大小（以 KiB 为单位）（默认值：4096）
+
+`--big-object-size value`<br />
+大文件的大小（以 MiB 为单位）（默认值：1024）
+
+`--small-object-size value`<br />
+每个小文件的大小（以 KiB 为单位）（默认值：128）
+
+`--small-objects value`<br />
+小文件的数量（以 KiB 为单位）（默认值：100）
+
+`--skip-functional-tests`<br />
+跳过功能测试（默认值：false）
+
+`--threads value, -p value`<br />
+上传下载等操作的并发数（默认值：4）
 
 ### juicefs gc
 

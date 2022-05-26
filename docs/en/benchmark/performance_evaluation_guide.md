@@ -3,6 +3,7 @@ sidebar_label: Performance Evaluation Guide
 sidebar_position: 2
 slug: /performance_evaluation_guide
 ---
+
 # JuiceFS Performance Evaluation Guide
 
 Before starting performance testing, it is a good idea to write down a general description of usage scenario, including:
@@ -35,7 +36,7 @@ JuiceFS v1.0+ has Trash enabled by default, which means the benchmark tools will
 
 ### JuiceFS Bench
 
-The JuiceFS `bench` command can help you do a quick performance test on a standalone machine. With the test results, it is easy to evaluate if your environment configuration and JuiceFS performance are normal. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server, execute the following command for this test (the `-p` option is recommended to set to the number of CPU cores on the server). If you need help with initializing or mounting JuiceFS, please refer to the [Quick Start Guide](../getting-started/for_local.md))
+The JuiceFS [`bench`](../reference/command_reference.md#juicefs-bench) command can help you do a quick performance test on a standalone machine. With the test results, it is easy to evaluate if your environment configuration and JuiceFS performance are normal. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server, execute the following command for this test (the `-p` option is recommended to set to the number of CPU cores on the server). If you need help with initializing or mounting JuiceFS, please refer to the [Quick Start Guide](../getting-started/for_local.md))
 
 ```bash
 juicefs bench /mnt/jfs -p 4
@@ -76,13 +77,65 @@ Prices refer to [AWS US East, Ohio Region](https://aws.amazon.com/ebs/pricing/?n
 The data above is from [AWS official documentation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html), and the performance metrics are their maximum values. The actual performance of EBS is related to its volume capacity and instance type of mounted EC2. In general, the larger the volume and the higher the specification of EC2, the better the EBS performance will be, but not exceeding the maximum value mentioned above.
 :::
 
+### JuiceFS Objbench
+
+JuiceFS provides the [`objbench`](../reference/command_reference.md#juicefs-objbench) subcommand to run some tests on object storage to evaluate how well it performs as a backend storage for JuiceFS. Take testing Amazon S3 as an example:
+
+```bash
+juicefs objbench \
+    --storage s3 \
+    --access-key myAccessKey \
+    --secret-key mySecretKey \
+    --bucket https://mybucket.s3.us-east-2.amazonaws.com
+```
+
+The test results are shown in the figure below:
+
+![JuiceFS Bench](../images/objbench.png)
+
+#### Test flow
+
+First perform object storage function test, the following are test cases:
+
+1. Create bucket
+2. Upload an object
+3. Download an object
+4. Download non-existent object
+5. Get object part content
+6. Get an object metadata
+7. Delete an object
+8. Delete non-existent object
+9. List objects
+10. Upload a large object
+11. Upload a empty object
+12. Multipart upload
+13. Change the owner/group of a file (requires `root` permission)
+14. Change permission
+15. Change mtime (last modified time)
+
+And then perform performance testing:
+
+1. Upload `--small-objects` objects of `--small-object-size` size with `--threads` concurrency
+2. Download the objects uploaded in step 1 and check the contents
+3. Split the `--big-object-size` object of size according to the size of `--block-size` and upload it concurrently with `--threads`
+4. Download the objects uploaded in step 3 and check the content, then clean up all objects uploaded to the object store in step 3
+5. List all objects in the object store 100 times with `--threads` concurrency
+6. Get meta information of all objects uploaded in step 1 with `--threads` concurrency
+7. Change mtime (last modified time) of all objects uploaded in step 1 by `--threads` concurrency
+8. Change permission of all objects uploaded in step 1 by `--threads` concurrency
+9. Change owner/group of all objects uploaded in step 1 by `--threads` concurrency (requires `root` permission)
+10. Remove all objects uploaded in step 1 with `--threads` concurrency
+
+Finally clean up the test files.
+
+
 ## Performance Observation and Analysis Tools
 
 The next two performance observation and analysis tools are essential tools for testing, using, and tuning JuiceFS.
 
 ### JuiceFS Stats
 
-JuiceFS `stats` is a tool for real-time statistics of JuiceFS performance metrics, similar to the `dstat` command on Linux systems. It can display changes of metrics for JuiceFS clients in real-time (see [documentation](stats_watcher.md) for details). For this,  create a new session and execute the following command when the command `juicefs bench` is running, 
+JuiceFS `stats` is a tool for real-time statistics of JuiceFS performance metrics, similar to the `dstat` command on Linux systems. It can display changes of metrics for JuiceFS clients in real-time (see [documentation](stats_watcher.md) for details). For this,  create a new session and execute the following command when the command `juicefs bench` is running,
 
 ```bash
 juicefs stats /mnt/jfs --verbosity 1

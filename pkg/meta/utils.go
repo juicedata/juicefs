@@ -285,7 +285,7 @@ func Remove(r Meta, ctx Context, parent Ino, name string) syscall.Errno {
 	if attr.Typ != TypeDirectory {
 		return r.Unlink(ctx, parent, name)
 	}
-	concurrent := make(chan int, 50)
+	concurrent := make(chan int, 10)
 	return emptyEntry(r, ctx, parent, name, inode, concurrent)
 }
 

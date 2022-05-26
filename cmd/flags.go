@@ -36,7 +36,7 @@ func globalFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:    "quiet",
 			Aliases: []string{"q"},
-			Usage:   "only warning and errors",
+			Usage:   "show warning and errors only",
 		},
 		&cli.BoolFlag{
 			Name:  "trace",

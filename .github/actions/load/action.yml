@@ -37,9 +37,9 @@ runs:
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
         fi
         echo "start load..."
-        ./juicefs load $meta_url $load_file
+        sudo ./juicefs load $meta_url $load_file
         echo "finish load..."
-        ./juicefs mount $meta_url $mount_point -d 
+        sudo ./juicefs mount $meta_url $mount_point -d
         if [ -d data/ ]; then
           rm data/{*,.*} -rf || true
         else

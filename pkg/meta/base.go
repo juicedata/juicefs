@@ -886,6 +886,9 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
 }
 
 func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
+	if chunkid == 0 {
+		return
+	}
 	if err := m.newMsg(DeleteChunk, chunkid, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
 		if err = m.en.doDeleteSlice(chunkid, size); err != nil {
 			logger.Errorf("delete slice %d: %s", chunkid, err)

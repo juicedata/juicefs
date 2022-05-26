@@ -611,10 +611,11 @@ func (m *dbMeta) shouldRetry(err error) bool {
 	case "mysql":
 		// MySQL, MariaDB or TiDB
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later") ||
-			strings.Contains(msg, "Duplicate entry")
+			strings.Contains(msg, "duplicate entry")
 	case "postgres":
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
-			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access")
+			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access") ||
+			strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
 	default:
 		return false
 	}
@@ -1420,17 +1421,13 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dn node
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
-		var t node
-		rows, err := s.ForUpdate().Where("inode IN (?,?)", parentSrc, parentDst).Rows(&t)
+		var ns []node
+		err := s.ForUpdate().Where("inode IN (?,?)", parentSrc, parentDst).OrderBy("inode").Find(&ns)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
 		var spn, dpn node
-		for rows.Next() {
-			if err := rows.Scan(&t); err != nil {
-				return err
-			}
+		for _, t := range ns {
 			if t.Inode == parentSrc {
 				spn = t
 			}
@@ -2062,7 +2059,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
 		var ts []node
-		err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).Find(&ts)
+		err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).OrderBy("inode").Find(&ts)
 		if err != nil {
 			return err
 		}
@@ -2236,6 +2233,9 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		ss = readSliceBuf(c.Slices)
 		for _, sc := range ss {
+			if sc.chunkid == 0 {
+				continue
+			}
 			_, err = s.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? AND size=?", sc.chunkid, sc.size)
 			if err != nil {
 				return err
@@ -2252,6 +2252,9 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", inode, err)
 	}
 	for _, s := range ss {
+		if s.chunkid == 0 {
+			continue
+		}
 		var ref = chunkRef{Chunkid: s.chunkid}
 		err := m.roTxn(func(s *xorm.Session) error {
 			ok, err := s.Get(&ref)
@@ -2420,6 +2423,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		} else {
 			for _, s_ := range ss {
+				if s_.chunkid == 0 {
+					continue
+				}
 				if _, err := s.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s_.chunkid, s_.size); err != nil {
 					return err
 				}
@@ -2453,6 +2459,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.of.InvalidateChunk(inode, indx)
 		if !trash {
 			for _, s := range ss {
+				if s.chunkid == 0 {
+					continue
+				}
 				var ref = chunkRef{Chunkid: s.chunkid}
 				var ok bool
 				err := m.roTxn(func(s *xorm.Session) error {
