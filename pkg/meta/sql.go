@@ -1410,6 +1410,21 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
+func (m *dbMeta) getNodesForUpdate(s *xorm.Session, nodes ...*node) error {
+	// sort them to avoid deadlock
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Inode < nodes[j].Inode })
+	for i := range nodes {
+		ok, err := s.ForUpdate().Get(nodes[i])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+	}
+	return nil
+}
+
 func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
@@ -1421,22 +1436,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dn node
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
-		var ns []node
-		err := s.ForUpdate().Where("inode IN (?,?)", parentSrc, parentDst).OrderBy("inode").Find(&ns)
+		var spn = node{Inode: parentSrc}
+		var dpn = node{Inode: parentDst}
+		err := m.getNodesForUpdate(s, &spn, &dpn)
 		if err != nil {
 			return err
-		}
-		var spn, dpn node
-		for _, t := range ns {
-			if t.Inode == parentSrc {
-				spn = t
-			}
-			if t.Inode == parentDst {
-				dpn = t
-			}
-		}
-		if spn.Inode == 0 || dpn.Inode == 0 {
-			return syscall.ENOENT
 		}
 		if spn.Type != TypeDirectory || dpn.Type != TypeDirectory {
 			return syscall.ENOTDIR
@@ -2058,23 +2062,11 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	var newSpace int64
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
-		var ts []node
-		err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).OrderBy("inode").Find(&ts)
+		var nin = node{Inode: fin}
+		var nout = node{Inode: fout}
+		err := m.getNodesForUpdate(s, &nin, &nout)
 		if err != nil {
 			return err
-		}
-		var nin, nout node
-		for _, t := range ts {
-			if t.Inode == fin {
-				nin = t
-			}
-			if t.Inode == fout {
-				nout = t
-			}
-		}
-
-		if nin.Inode == 0 || nout.Inode == 0 {
-			return syscall.ENOENT
 		}
 		if nin.Type != TypeFile {
 			return syscall.EINVAL
