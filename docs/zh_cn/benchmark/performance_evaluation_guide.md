@@ -3,6 +3,7 @@ sidebar_label: 性能评估指南
 sidebar_position: 2
 slug: /performance_evaluation_guide
 ---
+
 # JuiceFS 性能评估指南
 
 在进行性能测试之前，最好写下该使用场景的大致描述，包括：
@@ -35,7 +36,7 @@ JuiceFS v1.0+ 默认启用了回收站，基准测试会在文件系统中创建
 
 ### JuiceFS Bench
 
-JuiceFS `bench` 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[快速上手指南](../getting-started/for_local.md)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
+JuiceFS [`bench`](../reference/command_reference.md#juicefs-bench) 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[快速上手指南](../getting-started/for_local.md)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
 
 ```bash
 juicefs bench /mnt/jfs -p 4
@@ -75,6 +76,58 @@ Amazon EFS 的性能与容量线性相关（[参考官方文档](https://docs.aw
 :::note 注
 以上数据来自 [AWS 官方文档](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html)，性能指标为最大值，EBS 的实际性能与卷容量和挂载 EC2 实例类型相关，总的来说是越大容量，搭配约高配置的 EC2，得到的 EBS 性能越好，但不超过上面提到的最大值。
 :::
+
+### JuiceFS Objbench
+
+JuiceFS 提供了 [`objbench`](../reference/command_reference.md#juicefs-objbench) 子命令来运行一些关于对象存储的测试，用以评估其作为 JuiceFS 的后端存储时的运行情况。以测试 Amazon S3 为例：
+
+```bash
+juicefs objbench \
+    --storage s3 \
+    --access-key myAccessKey \
+    --secret-key mySecretKey \
+    --bucket https://mybucket.s3.us-east-2.amazonaws.com
+```
+
+测试结果如下图所示：
+
+![JuiceFS Bench](../images/objbench.png)
+
+#### 测试流程
+
+首先会对对象存储的接口进行功能测试，以下为测试用例：
+
+1. 创建 bucket
+2. 上传对象
+3. 下载对象
+4. 下载不存在的对象
+5. 获取对象部分内容
+6. 获取对象元信息
+7. 删除对象
+8. 删除不存在对象
+9. 列举对象
+10. 上传大对象
+11. 上传空对象
+12. 分块上传
+13. 更改文件拥有者与所属组（需要 `root` 权限运行）
+14. 更改文件权限
+15. 更改文件的 mtime（最后修改时间）
+
+然后进行性能测试：
+
+1. 将 `--small-objects` 个 `--small-object-size` 大小的对象，以 `--threads` 个并发上传
+2. 下载步骤 1 中上传的对象并检查内容
+3. 将 `--big-object-size` 大小的对象按照 `--block-size` 的大小拆分后以 `--threads` 并发度上传
+4. 下载步骤 3 中上传的对象并检查内容，然后清理步骤 3 上传到对象存储的所有对象
+5. 以 `--threads` 并发度列举对象存储中所有的对象 100 次
+6. 以 `--threads` 并发度获取步骤 1 中上传的所有对象的元信息
+7. 以 `--threads` 并发度更改步骤 1 中上传的所有对象的 mtime（最后修改时间）
+8. 以 `--threads` 并发度更改步骤 1 中上传的所有对象的权限
+9. 以 `--threads` 并发度更改步骤 1 中上传的所有对象的拥有者与所属组（需要 `root` 权限运行）
+10. 以 `--threads` 并发度删除步骤 1 中上传的所有对象
+
+最后清理测试的文件。
+
 
 ## 性能观测和分析工具
 

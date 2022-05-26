@@ -38,7 +38,7 @@ var logger = utils.GetLogger("juicefs")
 func Main(args []string) error {
 	cli.VersionFlag = &cli.BoolFlag{
 		Name: "version", Aliases: []string{"V"},
-		Usage: "print only the version",
+		Usage: "print version only",
 	}
 	app := &cli.App{
 		Name:                 "juicefs",
