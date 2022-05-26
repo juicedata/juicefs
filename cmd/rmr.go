@@ -56,6 +56,9 @@ func openController(mp string) *os.File {
 		if err == nil {
 			return f
 		}
+		if !os.IsNotExist(err) {
+			logger.Fatal(err)
+		}
 	}
 	logger.Fatalf("Path %s is not inside JuiceFS", mp)
 	panic("unreachable")
