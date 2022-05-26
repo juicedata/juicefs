@@ -342,10 +342,15 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		in, err = src.Get(key, 0, -1)
 		if err != nil {
 			if _, e := src.Head(key); e != nil {
-				logger.Debugf("Head src %s: %s", key, err)
-				copied.IncrInt64(-1)
-				copiedBytes.IncrInt64(size * (-1))
-				return nil
+				for _, eStr := range []string{"404", "not found", "not exist", "no such file or directory"} {
+					if strings.Contains(strings.ToLower(e.Error()), eStr) {
+						logger.Debugf("Head src %s: %s", key, err)
+						copied.IncrInt64(-1)
+						copiedBytes.IncrInt64(size * (-1))
+						return nil
+					}
+				}
+				return e
 			}
 			return err
 		}
