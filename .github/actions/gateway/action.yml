@@ -16,7 +16,7 @@ inputs:
   threads:
     description: 'thread number for juicefs sync command'
     required: true
-    default: 30
+    default: 10
   isolation_level:
     description: 'isolation level for mysql, include read uncommitted, read committed, repeatable read, serializable'
     required: true
