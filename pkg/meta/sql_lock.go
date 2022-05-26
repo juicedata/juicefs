@@ -82,7 +82,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 				err = fmt.Errorf("insert/update failed")
 			}
 			return err
-		}))
+		}, inode))
 
 		if !block || err != syscall.EAGAIN {
 			break
@@ -221,7 +221,7 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 				err = fmt.Errorf("insert/update failed")
 			}
 			return err
-		}))
+		}, inode))
 
 		if !block || err != syscall.EAGAIN {
 			break

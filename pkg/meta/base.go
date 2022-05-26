@@ -35,6 +35,7 @@ const (
 	inodeBatch    = 100
 	chunkIDBatch  = 1000
 	minUpdateTime = time.Millisecond * 10
+	nlocks        = 1024
 )
 
 type engine interface {
@@ -81,6 +82,7 @@ type baseMeta struct {
 	fmt  Format
 
 	root         Ino
+	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict on Redis
 	subTrash     internalNode
 	sid          uint64
 	of           *openfiles
@@ -132,6 +134,14 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 	default:
 		return inode
 	}
+}
+
+func (r *baseMeta) txLock(idx int) {
+	r.txlocks[idx%nlocks].Lock()
+}
+
+func (r *baseMeta) txUnlock(idx int) {
+	r.txlocks[idx%nlocks].Unlock()
 }
 
 func (r *baseMeta) OnMsg(mtype uint32, cb MsgCallback) {

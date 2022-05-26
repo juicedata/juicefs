@@ -632,12 +632,16 @@ func (m *kvMeta) shouldRetry(err error) bool {
 	return m.client.shouldRetry(err)
 }
 
-func (m *kvMeta) txn(f func(tx kvTxn) error) error {
+func (m *kvMeta) txn(f func(tx kvTxn) error, inodes ...Ino) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
+	if len(inodes) > 0 {
+		m.lock(int(inodes[0]))
+		defer m.unlock(int(inodes[0]))
+	}
 	var err error
 	for i := 0; i < 50; i++ {
 		if err = m.client.txn(f); m.shouldRetry(err) {
@@ -1066,7 +1070,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			tx.set(m.symKey(ino), []byte(path))
 		}
 		return nil
-	})
+	}, parent)
 	if err == nil {
 		m.updateStats(align4K(0), 1)
 	}
@@ -1179,7 +1183,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			}
 		}
 		return nil
-	})
+	}, parent)
 	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
 			m.fileDeleted(opened, inode, attr.Length)
@@ -1255,7 +1259,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
 		}
 		return nil
-	})
+	}, parent)
 	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
 	}
@@ -1470,7 +1474,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
 		return nil
-	})
+	}, parentSrc)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, dino, tattr.Length)
@@ -1527,7 +1531,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			*attr = iattr
 		}
 		return nil
-	}))
+	}, parent))
 }
 
 func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
@@ -1693,7 +1697,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
@@ -1876,7 +1880,7 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 			}
 		}
 		return nil
-	})
+	}, inode)
 	if err != nil {
 		return err
 	}
