@@ -11,7 +11,7 @@ slug: /command_reference
 
 在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
 
-```shell
+```bash
 $ juicefs -h
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
@@ -42,21 +42,21 @@ COMMANDS:
      gateway  Start an S3-compatible gateway
      webdav   Start a WebDAV server
    TOOL:
-     bench     Run benchmark on a path
-     objbench  Run benchmark on an object storage
+     bench     Run benchmarks on a path
+     objbench  Run benchmarks on an object storage
      warmup    Build cache for target directories/files
      rmr       Remove directories recursively
      sync      Sync between two storages
 
 GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
-   --quiet, -q             only warning and errors (default: false)
+   --quiet, -q             show warning and errors only (default: false)
    --trace                 enable trace log (default: false)
    --no-agent              disable pprof (:6060) and gops (:6070) agent (default: false)
    --pyroscope value       pyroscope address
    --no-color              disable colors (default: false)
    --help, -h              show help (default: false)
-   --version, -V           print only the version (default: false)
+   --version, -V           print version only (default: false)
 
 COPYRIGHT:
    Apache License 2.0

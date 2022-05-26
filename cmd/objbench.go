@@ -42,13 +42,13 @@ func cmdObjbench() *cli.Command {
 		Name:      "objbench",
 		Action:    objbench,
 		Category:  "TOOL",
-		Usage:     "Run benchmark on an object storage",
+		Usage:     "Run benchmarks on an object storage",
 		ArgsUsage: "BUCKET",
 		Description: `
-Run basic benchmark on the target object storage to test if it works as expected.
+Run basic benchmarks on the target object storage to test if it works as expected.
 
 Examples:
-# Run benchmark on S3
+# Run benchmarks on S3
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com -p 4`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
