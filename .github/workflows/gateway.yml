@@ -432,7 +432,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-oceanbase-read-committed:
-    runs-on: [self-hosted, daily-build, bench-03]
+    runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -450,7 +450,7 @@ jobs:
           isolation_level: "read committed" 
 
   upload-big-file-with-oceanbase-read-committed:
-    runs-on: [self-hosted, daily-build, bench-03]
+    runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
@@ -467,63 +467,63 @@ jobs:
           file_count: 5
           isolation_level: "read committed"   
 
-  upload-big-file-with-oceanbase-repeatable-read:
-    runs-on: [self-hosted, daily-build, bench-03]
-    steps:
-      - uses: actions/checkout@v3
-      - name: install ob
-        run: |
-          docker rm obstandalone --force || echo "remove obstandalone failed"
-          docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
-          sleep 60
-          mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:@\\(localhost:2881\\)/test"
-          file_size: "1G"
-          file_count: 5
-          isolation_level: "repeatable read"   
+  # upload-big-file-with-oceanbase-repeatable-read:
+  #   runs-on: [self-hosted, daily-build, bench-03]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: install ob
+  #       run: |
+  #         docker rm obstandalone --force || echo "remove obstandalone failed"
+  #         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+  #         sleep 60
+  #         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
+  #     - name: Test
+  #       uses: ./.github/actions/gateway
+  #       with:
+  #         meta_url: "mysql://root:@\\(localhost:2881\\)/test"
+  #         file_size: "1G"
+  #         file_count: 5
+  #         isolation_level: "repeatable read"   
 
-  upload-big-file-with-oceanbase-serializable:
-    runs-on: [self-hosted, daily-build, bench-03]
-    steps:
-      - uses: actions/checkout@v3
-      - name: install ob
-        run: |
-          docker rm obstandalone --force || echo "remove obstandalone failed"
-          docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
-          sleep 60
-          mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:@\\(localhost:2881\\)/test"
-          file_size: "1G"
-          file_count: 5
-          isolation_level: "serializable"    
+  # upload-big-file-with-oceanbase-serializable:
+  #   runs-on: [self-hosted, daily-build, bench-03]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: install ob
+  #       run: |
+  #         docker rm obstandalone --force || echo "remove obstandalone failed"
+  #         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+  #         sleep 60
+  #         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
+  #     - name: Test
+  #       uses: ./.github/actions/gateway
+  #       with:
+  #         meta_url: "mysql://root:@\\(localhost:2881\\)/test"
+  #         file_size: "1G"
+  #         file_count: 5
+  #         isolation_level: "serializable"    
 
-  upload-small-files-with-tikv:
-    runs-on: [self-hosted, daily-build]
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
-          file_size: "8K"
-          file_count: 10000
+  # upload-small-files-with-tikv:
+  #   runs-on: [self-hosted, daily-build]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Test
+  #       uses: ./.github/actions/gateway
+  #       with:
+  #         meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
+  #         file_size: "8K"
+  #         file_count: 10000
 
-  upload-big-files-with-tikv:
-    runs-on: [self-hosted, daily-build]
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
-          file_size: "1G"
-          file_count: 5
+  # upload-big-files-with-tikv:
+  #   runs-on: [self-hosted, daily-build]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Test
+  #       uses: ./.github/actions/gateway
+  #       with:
+  #         meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
+  #         file_size: "1G"
+  #         file_count: 5
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest
