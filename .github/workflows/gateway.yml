@@ -19,6 +19,36 @@ on:
   workflow_dispatch:
 
 jobs:
+
+
+ 
+  upload-big-file-with-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "redis://localhost/1"
+          file_size: "1G"
+          file_count: 5
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1    
+
   upload-small-files-with-mysql-read-uncommitted:
     runs-on: ubuntu-latest
     steps:
@@ -109,34 +139,6 @@ jobs:
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
- 
-  upload-big-file-with-redis:
-    runs-on: ubuntu-latest
-    services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "redis://localhost/1"
-          file_size: "1G"
-          file_count: 5
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
 
   upload-big-files-with-mysql-read-uncommitted:
     runs-on: ubuntu-latest          
@@ -198,6 +200,24 @@ jobs:
           file_size: "1G"
           file_count: 5
           isolaction: "serializable"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1    
+
+  upload-big-files-with-mariadb-read-committed:
+    runs-on: ubuntu-latest          
+    steps:
+      - uses: actions/checkout@v3
+      - name: install 
+        run: | 
+          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
+          file_size: "1G"
+          file_count: 5
+          isolaction: "read committed"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -417,74 +437,93 @@ jobs:
       - uses: actions/checkout@v3
       - name: install ob
         run: |
+          docker rm obstandalone --force || echo "remove obstandalone failed"
           docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+          sleep 60
           mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
       - name: Test
         uses: ./.github/actions/gateway
         with:
-          meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
+          meta_url: "mysql://root:@\\(localhost:2881\\)/test"
           file_size: "8K"
           file_count: 10000
           isolation_level: "read committed" 
-      - name: CleanUp
-        if: ${{ always() }}
-        run: | 
-          ./juicefs umount -f /tmp/myjfs
-          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-          fi
-          rm -rf /var/jfs/myjfs/
 
-  upload-big-file-with-oceanbase-repeatable-read:
+  upload-big-file-with-oceanbase-read-committed:
     runs-on: [self-hosted, daily-build, bench-01]
     steps:
       - uses: actions/checkout@v3
       - name: install ob
         run: |
+          docker rm obstandalone --force || echo "remove obstandalone failed"
           docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+          sleep 60
           mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
       - name: Test
         uses: ./.github/actions/gateway
         with:
-          meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
+          meta_url: "mysql://root:@\\(localhost:2881\\)/test"
           file_size: "1G"
           file_count: 5
-          isolation_level: "repeatable read"   
-      - name: CleanUp
-        if: ${{ always() }}
-        run: | 
-          ./juicefs umount -f /tmp/myjfs
-          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-          fi
-          rm -rf /var/jfs/myjfs/ 
+          isolation_level: "read committed"   
 
-  upload-big-file-with-oceanbase-serializable:
-    runs-on: [self-hosted, daily-build, bench-01]
+  # upload-big-file-with-oceanbase-repeatable-read:
+  #   runs-on: [self-hosted, daily-build, bench-03]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: install ob
+  #       run: |
+  #         docker rm obstandalone --force || echo "remove obstandalone failed"
+  #         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+  #         sleep 60
+  #         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
+  #     - name: Test
+  #       uses: ./.github/actions/gateway
+  #       with:
+  #         meta_url: "mysql://root:@\\(localhost:2881\\)/test"
+  #         file_size: "1G"
+  #         file_count: 5
+  #         isolation_level: "repeatable read"   
+
+  # upload-big-file-with-oceanbase-serializable:
+  #   runs-on: [self-hosted, daily-build, bench-03]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: install ob
+  #       run: |
+  #         docker rm obstandalone --force || echo "remove obstandalone failed"
+  #         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+  #         sleep 60
+  #         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
+  #     - name: Test
+  #       uses: ./.github/actions/gateway
+  #       with:
+  #         meta_url: "mysql://root:@\\(localhost:2881\\)/test"
+  #         file_size: "1G"
+  #         file_count: 5
+  #         isolation_level: "serializable"    
+
+  upload-small-files-with-tikv:
+    runs-on: [self-hosted, daily-build]
     steps:
       - uses: actions/checkout@v3
-      - name: install ob
-        run: |
-          docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
-          mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
       - name: Test
         uses: ./.github/actions/gateway
         with:
-          meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
+          meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
+          file_size: "8K"
+          file_count: 10000
+
+  upload-big-files-with-tikv:
+    runs-on: [self-hosted, daily-build]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
           file_size: "1G"
           file_count: 5
-          isolation_level: "serializable"    
-      - name: CleanUp
-        if: ${{ always() }}
-        run: |
-          ./juicefs umount -f /tmp/myjfs
-          UUID=$(./juicefs status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-          if [ -n "$UUID" ];then
-            ./juicefs destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-          fi
-          rm -rf /var/jfs/myjfs/
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest

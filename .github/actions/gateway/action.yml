@@ -21,6 +21,14 @@ inputs:
     description: 'isolation level for mysql, include read uncommitted, read committed, repeatable read, serializable'
     required: true
     default: "repeatable read"
+  mount_point:
+    description: 'mount point'
+    required: true
+    default: /tmp/myjfs
+  volume_name:
+    description: 'volume name'
+    required: true
+    default: myjfs
   
 runs:
   using: "composite"
@@ -32,6 +40,8 @@ runs:
           
     - name: Build linux target
       run: |
+        #if it is self ruuner
+        hostname | grep bench && export GOPATH=/usr/local/go && export HOME=/root
         make juicefs 
         #wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
         #tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
@@ -43,6 +53,21 @@ runs:
         chmod +x mc 
       shell: bash
 
+    - name: Init
+      run: | 
+        set -x
+        mp=${{inputs.mount_point}}
+        meta_url=${{inputs.meta_url}}
+        volume=${{inputs.volume_name}}
+        test -d $mp && ./juicefs umount -f $mp
+        ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
+        if [ -n "$UUID" ];then
+          ./juicefs destroy --force $meta_url $UUID
+        fi
+        test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
+        echo finished
+      shell: bash
+
     - name: Test
       run: |
         meta_url=${{inputs.meta_url}}
@@ -50,31 +75,36 @@ runs:
         file_count=${{inputs.file_count}}
         threads=${{inputs.threads}}
         isolation_level="${{inputs.isolation_level}}"
+        mp=${{inputs.mount_point}}
+        volume=${{inputs.volume_name}}
         echo meta_url is: $meta_url, file_size is $file_size, file_count is $file_count, isolation_level is $isolation_level
         
         db_name=$(basename $meta_url | awk -F? '{print $1}')
         if [[ "$meta_url" == mysql* ]]; then
-          mysql -uroot -proot -e "set global transaction isolation level $isolation_level;" 
-          mysql -uroot -proot -e "show variables like '%isolation%;'" 
-          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+          host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
+          port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
+          test -z "$port" && port="3306"
+          mysql -uroot -proot -h $host -P $port -e "set global transaction isolation level $isolation_level;" 
+          mysql -uroot -proot -h $host -P $port -e "show variables like '%isolation%;'" 
+          mysql -uroot -proot -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
         elif [[ "$meta_url" == postgres* ]]; then
           export PGPASSWORD="postgres"
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
           printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$isolation_level';" |  psql -U postgres -h localhost
         fi
-        volume=myjfs
-        mp=/tmp/myjfs
+        
         export MINIO_ROOT_USER=minioadmin
         export MINIO_ROOT_PASSWORD=minioadmin
         ./juicefs format $meta_url $volume
         if [[ "$meta_url" == badger* ]]; then
           ./juicefs gateway $meta_url localhost:8080 &
         else
-          ./juicefs gateway $meta_url localhost:9000 --access-log /tmp/access1.log &
-          ./juicefs gateway $meta_url localhost:9001 --access-log /tmp/access2.log &
-          sudo cp .github/workflows/resources/load-balancer.conf /etc/nginx/conf.d/load-balancer.conf
-          sudo rm /etc/nginx/sites-enabled/default
-          sudo systemctl restart nginx
+          ./juicefs gateway $meta_url localhost:8080 --access-log /tmp/access1.log &
+          #./juicefs gateway $meta_url localhost:9000 --access-log /tmp/access1.log &
+          #./juicefs gateway $meta_url localhost:9001 --access-log /tmp/access2.log &
+          #sudo cp .github/workflows/resources/load-balancer.conf /etc/nginx/conf.d/load-balancer.conf
+          #sudo rm /etc/nginx/sites-enabled/default
+          #sudo systemctl restart nginx
         fi
         set -x 
         dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
