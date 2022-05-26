@@ -76,6 +76,49 @@ Prices refer to [AWS US East, Ohio Region](https://aws.amazon.com/ebs/pricing/?n
 The data above is from [AWS official documentation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html), and the performance metrics are their maximum values. The actual performance of EBS is related to its volume capacity and instance type of mounted EC2. In general, the larger the volume and the higher the specification of EC2, the better the EBS performance will be, but not exceeding the maximum value mentioned above.
 :::
 
+## JuiceFS Objbench
+
+JuiceFS provides the `objbench` subcommand to run some tests on object storage to evaluate how well it performs as a backend storage for JuiceFS.
+
+```bash
+juicefs objbench --storage s3 --access-key myAccessKey --secret-key mySecretKey --bucket https://mybucket.s3.us-east-2.amazonaws.com 
+```
+
+![JuiceFS Bench](../images/objbench.png)
+
+### Test Flow
+First perform object storage function test, the following are test cases:
+1. create bucket
+2. upload an object
+3. download an object
+4. download non-existent object
+5. get object part content
+6. get an object metadata
+7. delete an object
+8. delete non-existent object
+9. list objects
+10. upload a large object
+11. upload a empty object
+12. multipart upload
+13. change the owner/group of a file（requires `root` permission）
+14. change permission
+15. change mtime
+
+And then perform performance testing:
+1. upload `small-objects` objects of `small-object-size` size with `threads` concurrency
+2. download the object uploaded in step 1 and check the contents
+3. split the `big-object-size` object of size according to the size of `block-size` and upload it concurrently with `threads`
+4. download the objects uploaded in step 3 and check the content, then clean up all objects uploaded to the object store in step 3
+5. list all objects in the object store 100 times with `threads` concurrency 
+6. get meta information of all objects uploaded in step 1 with `threads` concurrency
+7. change mtime of all objects uploaded in step 1 by `threads` concurrency
+8. change permission of all objects uploaded in step 1 by `threads` concurrency
+9. change owner/group of all objects uploaded in step 1 by `threads` concurrency（requires `root` permission）
+10. remove all objects uploaded in step 1 with `threads` concurrency
+
+Finally clean up the test files.
+
+
 ## Performance Observation and Analysis Tools
 
 The next two performance observation and analysis tools are essential tools for testing, using, and tuning JuiceFS.

@@ -77,7 +77,11 @@ Amazon EFS 的性能与容量线性相关（[参考官方文档](https://docs.aw
 :::
 
 ### JuiceFS Objbench
-JuiceFS 提供了 `objbench`  子命令来运行一些关于对象存储的测试，用以评估其作为 JuiceFS 的后端存储时的运行情况：
+JuiceFS 提供了 `objbench`  子命令来运行一些关于对象存储的测试，用以评估其作为 JuiceFS 的后端存储时的运行情况。
+
+```bash
+juicefs objbench --storage s3 --access-key myAccessKey --secret-key mySecretKey --bucket https://mybucket.s3.us-east-2.amazonaws.com 
+```
 
 ![JuiceFS Bench](../images/objbench.png)
 
@@ -100,7 +104,7 @@ JuiceFS 提供了 `objbench`  子命令来运行一些关于对象存储的测�
 15. 更改文件的 mtime
 
 然后进行性能测试
-1. 将 `small-objects` 个 `small-object-size` 大小的对象，以 `threads` 并发度上传
+1. 将 `small-objects` 个 `small-object-size` 大小的对象，以 `threads` 个并发上传
 2. 下载步骤 1 中上传的对象并检查内容
 3. 将 `big-object-size` 大小的对象按照 `block-size` 的大小拆分后以 `threads` 并发度上传
 4. 下载步骤 3 中上传的对象并检查内容，然后清理步骤 3 上传到对象存储的所有对象
