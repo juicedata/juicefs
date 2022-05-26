@@ -1420,17 +1420,13 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dn node
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
-		var t node
-		rows, err := s.ForUpdate().Where("inode IN (?,?)", parentSrc, parentDst).Rows(&t)
+		var ns []node
+		err := s.ForUpdate().Where("inode IN (?,?)", parentSrc, parentDst).OrderBy("inode").Find(&ns)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
 		var spn, dpn node
-		for rows.Next() {
-			if err := rows.Scan(&t); err != nil {
-				return err
-			}
+		for _, t := range ns {
 			if t.Inode == parentSrc {
 				spn = t
 			}
@@ -2062,7 +2058,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
 		var ts []node
-		err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).Find(&ts)
+		err := s.ForUpdate().Where("inode IN (?,?)", fin, fout).OrderBy("inode").Find(&ts)
 		if err != nil {
 			return err
 		}
