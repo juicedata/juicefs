@@ -20,17 +20,13 @@
 package object
 
 import (
-	"errors"
-	"io/fs"
 	"os"
 	"os/user"
 	"strconv"
 	"sync"
 	"syscall"
 
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/sftp"
-	"golang.org/x/sys/unix"
 )
 
 var uids = make(map[int]string)
@@ -102,26 +98,4 @@ func lookupGroup(name string) int {
 	}
 	groups[name] = gid
 	return gid
-}
-
-func (d *filestore) Head(key string) (Object, error) {
-	p := d.path(key)
-
-	fi, err := os.Stat(p)
-	if err != nil {
-		if e, ok := err.(*fs.PathError); ok && errors.Is(e.Err, unix.ENOENT) {
-			err = utils.ENOTEXISTS
-		}
-		return nil, err
-	}
-	size := fi.Size()
-	if fi.IsDir() {
-		size = 0
-	}
-	return &obj{
-		key,
-		size,
-		fi.ModTime(),
-		fi.IsDir(),
-	}, nil
 }
