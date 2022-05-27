@@ -20,6 +20,7 @@ For users of JuiceFS:
 | [Trip.com](https://us.trip.com/)                                                        | Production  | Big Data, File Sharing |
 | [vivo](https://www.vivo.com)                                                            | Production  | AI, File Sharing       |
 | [Horizon Robotics](https://horizon.ai)                                                  | Production  | AI                     |
+| [SenseTime](https://www.sensetime.com/en)                                               | Production  | File Sharing           |
 | [Volcano Engine](https://www.volcengine.com)                                            | Testing     | File Sharing           |
 | [Dingdong Fresh](https://www.100.me)                                                    | Testing     | Big Data               |
 | [SF-Express](https://www.sf-express.com)                                                | Testing     | Big Data, File Sharing |
