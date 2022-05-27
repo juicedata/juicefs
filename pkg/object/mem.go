@@ -27,6 +27,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type mobj struct {
@@ -57,7 +59,7 @@ func (m *memStore) Head(key string) (Object, error) {
 	}
 	o, ok := m.objects[key]
 	if !ok {
-		return nil, errors.New("not exists")
+		return nil, utils.ENOTEXISTS
 	}
 	f := &file{
 		obj{

@@ -24,9 +24,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+
+	"github.com/NetEase-Object-Storage/nos-golang-sdk/noserror"
 
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/config"
 	noslogger "github.com/NetEase-Object-Storage/nos-golang-sdk/logger"
@@ -51,6 +56,9 @@ func (s *nos) Head(key string) (Object, error) {
 	}
 	r, err := s.client.GetObjectMetaData(objectRequest)
 	if err != nil {
+		if e, ok := err.(*noserror.ServerError); ok && e.StatusCode == http.StatusNotFound {
+			err = utils.ENOTEXISTS
+		}
 		return nil, err
 	}
 	lastModified := r.Metadata["Last-Modified"]

@@ -31,6 +31,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/pkg/errors"
 	etcd "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/pkg/transport"
@@ -91,7 +93,7 @@ func (c *etcdClient) Head(key string) (Object, error) {
 			}, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, utils.ENOTEXISTS
 }
 
 func (c *etcdClient) Delete(key string) error {

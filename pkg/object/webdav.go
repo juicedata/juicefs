@@ -28,6 +28,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	gowebdav "github.com/emersion/go-webdav"
 )
 
@@ -48,6 +50,9 @@ func (w *webdav) Create() error {
 func (w *webdav) Head(key string) (Object, error) {
 	info, err := w.c.Stat(key)
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			err = utils.ENOTEXISTS
+		}
 		return nil, err
 	}
 	return &obj{

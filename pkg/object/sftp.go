@@ -22,6 +22,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/pkg/errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -170,6 +172,9 @@ func (f *sftpStore) Head(key string) (Object, error) {
 
 	info, err := c.sftpClient.Stat(f.path(key))
 	if err != nil {
+		if err == os.ErrNotExist {
+			err = utils.ENOTEXISTS
+		}
 		return nil, err
 	}
 	return fileInfo(key, info), nil

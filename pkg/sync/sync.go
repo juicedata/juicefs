@@ -341,7 +341,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	} else {
 		in, err = src.Get(key, 0, -1)
 		if err != nil {
-			if _, e := src.Head(key); e != nil {
+			if _, e := src.Head(key); e == utils.ENOTEXISTS {
 				logger.Debugf("Head src %s: %s", key, err)
 				copied.IncrInt64(-1)
 				copiedBytes.IncrInt64(size * (-1))

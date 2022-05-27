@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
@@ -56,6 +58,10 @@ func (c *COS) Head(key string) (Object, error) {
 	resp, err := c.c.Object.Head(ctx, key, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, utils.ENOTEXISTS
 	}
 
 	header := resp.Header

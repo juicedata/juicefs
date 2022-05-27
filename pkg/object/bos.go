@@ -22,10 +22,13 @@ package object
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
@@ -55,6 +58,9 @@ func (q *bosclient) Create() error {
 func (q *bosclient) Head(key string) (Object, error) {
 	r, err := q.c.GetObjectMeta(q.bucket, key)
 	if err != nil {
+		if e, ok := err.(*bce.BceServiceError); ok && e.StatusCode == http.StatusNotFound {
+			err = utils.ENOTEXISTS
+		}
 		return nil, err
 	}
 	mtime, _ := time.Parse(time.RFC1123, r.LastModified)

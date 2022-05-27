@@ -24,8 +24,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/ks3sdklib/aws-sdk-go/aws/awserr"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -59,6 +62,9 @@ func (s *ks3) Head(key string) (Object, error) {
 
 	r, err := s.s3.HeadObject(&param)
 	if err != nil {
+		if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
+			err = utils.ENOTEXISTS
+		}
 		return nil, err
 	}
 

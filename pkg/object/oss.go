@@ -33,6 +33,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
@@ -69,6 +71,9 @@ func (o *ossClient) checkError(err error) error {
 
 func (o *ossClient) Head(key string) (Object, error) {
 	r, err := o.bucket.GetObjectMeta(key)
+	if e, ok := err.(oss.ServiceError); ok && e.StatusCode == http.StatusNotFound {
+		return nil, utils.ENOTEXISTS
+	}
 	if o.checkError(err) != nil {
 		return nil, err
 	}

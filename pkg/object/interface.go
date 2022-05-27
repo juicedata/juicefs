@@ -60,6 +60,8 @@ type PendingPart struct {
 	Created  time.Time
 }
 
+type NotExists error
+
 // ObjectStorage is the interface for object storage.
 // all of these API should be idempotent.
 type ObjectStorage interface {

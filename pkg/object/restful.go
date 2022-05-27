@@ -32,6 +32,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/viki-org/dnscache"
 )
 
@@ -158,6 +160,9 @@ func (s *RestfulStorage) Head(key string) (Object, error) {
 	resp, err := s.request("HEAD", key, nil, nil)
 	if err != nil {
 		return nil, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, utils.ENOTEXISTS
 	}
 	defer cleanup(resp)
 	if resp.StatusCode != 200 {

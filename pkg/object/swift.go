@@ -91,6 +91,9 @@ func (s *swiftOSS) List(prefix, marker string, limit int64) ([]Object, error) {
 
 func (s *swiftOSS) Head(key string) (Object, error) {
 	object, _, err := s.conn.Object(s.container, key)
+	if err == swift.ObjectNotFound {
+		err = utils.ENOTEXISTS
+	}
 	return &obj{
 		key,
 		object.Bytes,

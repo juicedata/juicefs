@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/go-redis/redis/v8"
 )
 
@@ -148,6 +150,9 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 
 func (t *redisStore) Head(key string) (Object, error) {
 	data, err := t.rdb.Get(context.TODO(), key).Bytes()
+	if err == redis.Nil {
+		return nil, utils.ENOTEXISTS
+	}
 	return &obj{
 		key,
 		int64(len(data)),

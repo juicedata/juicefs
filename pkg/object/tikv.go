@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	plog "github.com/pingcap/log"
 	"github.com/sirupsen/logrus"
 	"github.com/tikv/client-go/v2/config"
@@ -74,6 +76,9 @@ func (t *tikv) Put(key string, in io.Reader) error {
 
 func (t *tikv) Head(key string) (Object, error) {
 	data, err := t.c.Get(context.TODO(), []byte(key))
+	if err == nil && data == nil {
+		return nil, utils.ENOTEXISTS
+	}
 	return &obj{
 		key,
 		int64(len(data)),

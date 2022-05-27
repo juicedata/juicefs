@@ -24,8 +24,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/IBM/ibm-cos-sdk-go/aws/awserr"
 
 	"github.com/IBM/ibm-cos-sdk-go/aws"
 	"github.com/IBM/ibm-cos-sdk-go/aws/credentials/ibmiam"
@@ -109,6 +112,9 @@ func (s *ibmcos) Head(key string) (Object, error) {
 	}
 	r, err := s.s3.HeadObject(&param)
 	if err != nil {
+		if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
+			err = utils.ENOTEXISTS
+		}
 		return nil, err
 	}
 	return &obj{

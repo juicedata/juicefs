@@ -22,9 +22,12 @@ package object
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 
 	"gopkg.in/kothar/go-backblaze.v0"
 )
@@ -46,6 +49,11 @@ func (c *b2client) Create() error {
 func (c *b2client) getFileInfo(key string) (*backblaze.File, error) {
 	f, r, err := c.bucket.DownloadFileRangeByName(key, &backblaze.FileRange{Start: 0, End: 1})
 	if err != nil {
+		if e, ok := err.(backblaze.B2Error); ok {
+			if e.Status == http.StatusNotFound {
+				err = utils.ENOTEXISTS
+			}
+		}
 		return nil, err
 	}
 	var buf [2]byte

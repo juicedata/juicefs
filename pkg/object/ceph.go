@@ -31,6 +31,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/ceph/go-ceph/rados"
 )
 
@@ -165,6 +167,22 @@ func (c *ceph) Delete(key string) error {
 	return c.do(func(ctx *rados.IOContext) error {
 		return ctx.Delete(key)
 	})
+}
+
+func (c *ceph) Head(key string) (Object, error) {
+	var o *obj
+	err := c.do(func(ctx *rados.IOContext) error {
+		stat, err := ctx.Stat(key)
+		if err != nil {
+			return err
+		}
+		o = &obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/")}
+		return nil
+	})
+	if err == rados.ErrObjectExists {
+		err = utils.ENOTEXISTS
+	}
+	return o, err
 }
 
 func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {

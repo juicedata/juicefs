@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
@@ -106,7 +108,7 @@ func (s *sqlStore) Head(key string) (Object, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, utils.ENOTEXISTS
 	}
 	return &obj{
 		key,

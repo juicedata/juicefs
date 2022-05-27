@@ -27,6 +27,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/pkg/errors"
 
 	"google.golang.org/api/iterator"
@@ -92,6 +94,9 @@ func (g *gs) Create() error {
 func (g *gs) Head(key string) (Object, error) {
 	attrs, err := g.client.Bucket(g.bucket).Object(key).Attrs(ctx)
 	if err != nil {
+		if err == storage.ErrObjectNotExist {
+			err = utils.ENOTEXISTS
+		}
 		return nil, err
 	}
 
