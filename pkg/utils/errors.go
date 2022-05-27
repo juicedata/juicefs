@@ -18,9 +18,10 @@ package utils
 
 import (
 	"errors"
+	"os"
 )
 
 var (
 	ENOTSUP    = errors.New("not supported")
-	ENOTEXISTS = errors.New("not exists")
+	ENOTEXISTS = os.ErrNotExist
 )
