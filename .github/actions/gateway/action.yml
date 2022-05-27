@@ -95,9 +95,9 @@ runs:
         
         export MINIO_ROOT_USER=minioadmin
         export MINIO_ROOT_PASSWORD=minioadmin
-        ./juicefs format $meta_url $volume
+        ./juicefs format $meta_url $volume --trash-days 0
         if [[ "$meta_url" == badger* ]]; then
-          ./juicefs gateway $meta_url localhost:8080 &
+          ./juicefs gateway $meta_url localhost:8080 --no-usage-report &
         else
           ./juicefs gateway $meta_url localhost:8080 --access-log /tmp/access1.log &
           #./juicefs gateway $meta_url localhost:9000 --access-log /tmp/access1.log &
@@ -121,6 +121,9 @@ runs:
         ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
         pids+=($!)
         wait "${pids[@]}"
+        mkdir emptydir
+        ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/ --delete-dst --no-https -p $threads
+        rm -rf $HOME/.juicefs/cache/
         #./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
         #./mc mb minio/$volume
         #./mc cp --recursive data/  minio/$volume/data
