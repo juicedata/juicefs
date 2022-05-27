@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -66,6 +67,9 @@ func (s *obsClient) Head(key string) (Object, error) {
 	}
 	r, err := s.c.GetObjectMetadata(params)
 	if err != nil {
+		if e, ok := err.(obs.ObsError); ok && e.BaseModel.StatusCode == http.StatusNotFound {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 	return &obj{

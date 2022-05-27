@@ -70,6 +70,9 @@ func (o *ossClient) checkError(err error) error {
 func (o *ossClient) Head(key string) (Object, error) {
 	r, err := o.bucket.GetObjectMeta(key)
 	if o.checkError(err) != nil {
+		if e, ok := err.(oss.ServiceError); ok && e.StatusCode == http.StatusNotFound {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 

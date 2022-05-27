@@ -57,7 +57,7 @@ func (m *memStore) Head(key string) (Object, error) {
 	}
 	o, ok := m.objects[key]
 	if !ok {
-		return nil, errors.New("not exists")
+		return nil, os.ErrNotExist
 	}
 	f := &file{
 		obj{

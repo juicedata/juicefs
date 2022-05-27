@@ -23,11 +23,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/Arvintian/scs-go-sdk/pkg/client"
 	"github.com/Arvintian/scs-go-sdk/scs"
 )
 
@@ -53,6 +56,9 @@ func (s *scsClient) Create() error {
 func (s *scsClient) Head(key string) (Object, error) {
 	om, err := s.b.Head(key)
 	if err != nil {
+		if e, ok := err.(*client.Error); ok && e.StatusCode == http.StatusNotFound {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 	mtime, err := time.Parse(time.RFC1123, om.LastModified)

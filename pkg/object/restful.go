@@ -159,6 +159,9 @@ func (s *RestfulStorage) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, os.ErrNotExist
+	}
 	defer cleanup(resp)
 	if resp.StatusCode != 200 {
 		return nil, parseError(resp)

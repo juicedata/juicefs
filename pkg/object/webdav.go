@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 
@@ -48,6 +49,9 @@ func (w *webdav) Create() error {
 func (w *webdav) Head(key string) (Object, error) {
 	info, err := w.c.Stat(key)
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 	return &obj{

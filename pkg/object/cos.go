@@ -58,6 +58,10 @@ func (c *COS) Head(key string) (Object, error) {
 		return nil, err
 	}
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, os.ErrNotExist
+	}
+
 	header := resp.Header
 	var size int64
 	if val, ok := header["Content-Length"]; ok {

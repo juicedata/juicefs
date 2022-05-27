@@ -24,7 +24,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -32,6 +34,7 @@ import (
 	noslogger "github.com/NetEase-Object-Storage/nos-golang-sdk/logger"
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/model"
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/nosclient"
+	"github.com/NetEase-Object-Storage/nos-golang-sdk/noserror"
 )
 
 type nos struct {
@@ -51,6 +54,9 @@ func (s *nos) Head(key string) (Object, error) {
 	}
 	r, err := s.client.GetObjectMetaData(objectRequest)
 	if err != nil {
+		if e, ok := err.(*noserror.ServerError); ok && e.StatusCode == http.StatusNotFound {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 	lastModified := r.Metadata["Last-Modified"]

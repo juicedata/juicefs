@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -55,7 +56,9 @@ func (q *qingstor) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	if *r.StatusCode == http.StatusNotFound {
+		return nil, os.ErrNotExist
+	}
 	return &obj{
 		key,
 		*r.ContentLength,
