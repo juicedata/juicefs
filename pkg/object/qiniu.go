@@ -32,6 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/qiniu/go-sdk/v7/auth"
 	"github.com/qiniu/go-sdk/v7/storage"
 )
@@ -74,9 +75,14 @@ func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
+var notexist = "no such file or directory"
+
 func (q *qiniu) Head(key string) (Object, error) {
 	r, err := q.bm.Stat(q.bucket, key)
 	if err != nil {
+		if strings.Contains(err.Error(), notexist) {
+			err = utils.ENOTEXISTS
+		}
 		return nil, err
 	}
 
@@ -122,7 +128,11 @@ func (q *qiniu) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 }
 
 func (q *qiniu) Delete(key string) error {
-	return q.bm.Delete(q.bucket, key)
+	err := q.bm.Delete(q.bucket, key)
+	if err != nil && strings.Contains(err.Error(), notexist) {
+		return nil
+	}
+	return err
 }
 
 func (q *qiniu) List(prefix, marker string, limit int64) ([]Object, error) {
@@ -155,14 +165,6 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]Object, error) {
 		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/")}
 	}
 	return objs, nil
-}
-
-var publicRegions = map[string]*storage.Zone{
-	"cn-east-1":      &storage.ZoneHuadong,
-	"cn-north-1":     &storage.ZoneHuabei,
-	"cn-south-1":     &storage.ZoneHuanan,
-	"us-west-1":      &storage.ZoneBeimei,
-	"ap-southeast-1": &storage.ZoneXinjiapo,
 }
 
 func newQiniu(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
@@ -205,8 +207,8 @@ func newQiniu(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	cfg := storage.Config{
 		UseHTTPS: uri.Scheme == "https",
 	}
-	zone, ok := publicRegions[region]
-	if !ok {
+	zone, err := storage.GetZone(accessKey, bucket)
+	if err != nil {
 		domain := strings.SplitN(endpoint, "-", 2)[1]
 		zone = &storage.Zone{
 			RsHost:     "rs-" + domain,
