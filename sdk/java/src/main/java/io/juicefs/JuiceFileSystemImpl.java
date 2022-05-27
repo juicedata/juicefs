@@ -1011,6 +1011,8 @@ public class JuiceFileSystemImpl extends FileSystem {
       Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 1);
       buf.putByte(0, (byte) b);
       int done = lib.jfs_write(Thread.currentThread().getId(), fd, buf, 1);
+      if (done == EINVAL)
+        throw new IOException("stream was closed");
       if (done < 0)
         throw error(done, path);
       if (done < 1)
