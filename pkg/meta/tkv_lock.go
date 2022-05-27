@@ -83,7 +83,7 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 				tx.set(ikey, marshalFlock(ls))
 			}
 			return nil
-		})
+		}, inode)
 
 		if !block || err != syscall.EAGAIN {
 			break
@@ -205,7 +205,7 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 				tx.set(ikey, marshalPlock(owners))
 			}
 			return nil
-		})
+		}, inode)
 
 		if !block || err != syscall.EAGAIN {
 			break
