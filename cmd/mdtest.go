@@ -3,9 +3,13 @@ package cmd
 import (
 	"fmt"
 	_ "net/http/pprof"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/mattn/go-isatty"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
@@ -32,7 +36,7 @@ func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
 	return nil
 }
 
-func createFile(jfs *fs.FileSystem, np int, root string, d int, width, files, bytes int) error {
+func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, width, files, bytes int) error {
 	for i := 0; i < files; i++ {
 		fn := filepath.Join(root, fmt.Sprintf("file.mdtest.%d.%d", np, i))
 		f, err := jfs.Create(ctx, fn, 0644)
@@ -50,11 +54,12 @@ func createFile(jfs *fs.FileSystem, np int, root string, d int, width, files, by
 			}
 		}
 		f.Close(ctx)
+		bar.Increment()
 	}
 	if d > 0 {
 		for i := 0; i < width; i++ {
 			dn := filepath.Join(root, fmt.Sprintf("mdtest_tree.%d", i))
-			if err := createFile(jfs, np, dn, d-1, width, files, bytes); err != nil {
+			if err := createFile(jfs, bar, np, dn, d-1, width, files, bytes); err != nil {
 				return err
 			}
 		}
@@ -62,7 +67,7 @@ func createFile(jfs *fs.FileSystem, np int, root string, d int, width, files, by
 	return nil
 }
 
-func runTest(m meta.Meta, jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes int) {
+func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes int) {
 	dirs := 0
 	w := width
 	z := depth
@@ -71,7 +76,9 @@ func runTest(m meta.Meta, jfs *fs.FileSystem, rootDir string, np, width, depth, 
 		w = w * width
 		z--
 	}
-	var total int = dirs * np * files
+	var total = dirs * np * files
+	progress := utils.NewProgress(!isatty.IsTerminal(os.Stdout.Fd()), false)
+	bar := progress.AddCountBar("create file", int64(total))
 	logger.Infof("Create %d files in %d dirs", total, dirs)
 
 	start := time.Now()
@@ -93,13 +100,14 @@ func runTest(m meta.Meta, jfs *fs.FileSystem, rootDir string, np, width, depth, 
 	for i := 0; i < np; i++ {
 		g.Add(1)
 		go func(np int) {
-			if err := createFile(jfs, np, root, depth, width, files, bytes); err != nil {
+			if err := createFile(jfs, bar, np, root, depth, width, files, bytes); err != nil {
 				logger.Errorf("Create: %s", err)
 			}
 			g.Done()
 		}(i)
 	}
 	g.Wait()
+	progress.Done()
 	logger.Infof("Created %d files in %s", total, time.Since(start)-t1)
 }
 
@@ -206,6 +214,6 @@ func mdtest(c *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("initialize failed: %s", err)
 	}
-	runTest(m, jfs, rootDir, c.Int("threads"), c.Int("dirs"), c.Int("depth"), c.Int("files"), c.Int("write"))
+	runTest(jfs, rootDir, c.Int("threads"), c.Int("dirs"), c.Int("depth"), c.Int("files"), c.Int("write"))
 	return m.CloseSession()
 }
