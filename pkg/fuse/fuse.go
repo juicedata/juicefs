@@ -437,7 +437,7 @@ func Serve(v *vfs.VFS, options string, xattrs bool) error {
 	for _, n := range strings.Split(options, ",") {
 		if n == "allow_other" || n == "allow_root" {
 			opt.AllowOther = true
-		} else if n == "nonempty" {
+		} else if n == "nonempty" || n == "ro" {
 		} else if n == "debug" {
 			opt.Debug = true
 		} else if n == "writeback_cache" || n == "writeback" {
@@ -445,9 +445,6 @@ func Serve(v *vfs.VFS, options string, xattrs bool) error {
 		} else if strings.TrimSpace(n) != "" {
 			opt.Options = append(opt.Options, n)
 		}
-	}
-	if conf.Meta.ReadOnly && !utils.StringContains(opt.Options, "ro") {
-		opt.Options = append(opt.Options, "ro")
 	}
 	opt.Options = append(opt.Options, "default_permissions")
 	if runtime.GOOS == "darwin" {
