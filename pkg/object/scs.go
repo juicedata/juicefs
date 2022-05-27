@@ -29,11 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/Arvintian/scs-go-sdk/pkg/client"
-
 	"github.com/Arvintian/scs-go-sdk/scs"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type scsClient struct {

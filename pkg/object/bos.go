@@ -28,11 +28,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const bosDefaultRegion = "bj"

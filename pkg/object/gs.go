@@ -27,15 +27,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
-	"github.com/pkg/errors"
-
-	"google.golang.org/api/iterator"
-
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/iterator"
 )
 
 type gs struct {

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/pkg/errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"

@@ -28,7 +28,6 @@ import (
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/upyun/go-sdk/v3/upyun"
 )
 

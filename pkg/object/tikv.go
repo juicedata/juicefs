@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-
 	plog "github.com/pingcap/log"
 	"github.com/sirupsen/logrus"
 	"github.com/tikv/client-go/v2/config"

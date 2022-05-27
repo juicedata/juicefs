@@ -29,14 +29,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
-	"github.com/NetEase-Object-Storage/nos-golang-sdk/noserror"
-
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/config"
 	noslogger "github.com/NetEase-Object-Storage/nos-golang-sdk/logger"
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/model"
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/nosclient"
+	"github.com/NetEase-Object-Storage/nos-golang-sdk/noserror"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type nos struct {

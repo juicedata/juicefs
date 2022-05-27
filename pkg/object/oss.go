@@ -33,9 +33,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const ossDefaultRegionID = "cn-hangzhou"

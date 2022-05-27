@@ -29,9 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/go-redis/redis/v8"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 // redisStore stores data chunks into Redis.

@@ -28,9 +28,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	gowebdav "github.com/emersion/go-webdav"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type webdav struct {

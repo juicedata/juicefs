@@ -29,9 +29,8 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-	"golang.org/x/sys/unix"
-
 	"github.com/pkg/sftp"
+	"golang.org/x/sys/unix"
 )
 
 var uids = make(map[int]string)

@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-
 	"gopkg.in/kothar/go-backblaze.v0"
 )
 

@@ -31,9 +31,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/ceph/go-ceph/rados"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type ceph struct {
