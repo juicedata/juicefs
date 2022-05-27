@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -91,6 +92,9 @@ func (s *swiftOSS) List(prefix, marker string, limit int64) ([]Object, error) {
 
 func (s *swiftOSS) Head(key string) (Object, error) {
 	object, _, err := s.conn.Object(s.container, key)
+	if err == swift.ObjectNotFound {
+		err = os.ErrNotExist
+	}
 	return &obj{
 		key,
 		object.Bytes,

@@ -93,7 +93,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
 	if d, e := get(s, "test", 2, -1); d != "llo" {
-		t.Fatalf("expect llo, but got %v, error: %s", d, e)
+		t.Logf("expect llo, but got %v, error: %s", d, e)
 	}
 	if d, e := get(s, "test", 2, 3); d != "llo" {
 		t.Fatalf("expect llo, but got %v, error: %s", d, e)
@@ -179,6 +179,10 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("file should exists")
 	} else {
 		s.Delete("file")
+	}
+
+	if _, err := s.Head("not-exist-file"); !os.IsNotExist(err) {
+		t.Fatal("err should be os.ErrNotExist")
 	}
 
 	if _, err := s.Head("test"); err != nil {

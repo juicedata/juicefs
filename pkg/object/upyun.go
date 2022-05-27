@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/upyun/go-sdk/v3/upyun"
@@ -48,6 +49,9 @@ func (u *up) Create() error {
 func (u *up) Head(key string) (Object, error) {
 	info, err := u.c.GetInfo("/" + key)
 	if err != nil {
+		if upyun.IsNotExist(err) {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 	return &obj{
