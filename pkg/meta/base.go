@@ -82,7 +82,7 @@ type baseMeta struct {
 	fmt  Format
 
 	root         Ino
-	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict on Redis
+	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
 	subTrash     internalNode
 	sid          uint64
 	of           *openfiles
