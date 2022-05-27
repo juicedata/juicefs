@@ -29,7 +29,6 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
@@ -92,7 +91,7 @@ func (g *gs) Head(key string) (Object, error) {
 	attrs, err := g.client.Bucket(g.bucket).Object(key).Attrs(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

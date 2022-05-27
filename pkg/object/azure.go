@@ -28,7 +28,6 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type wasb struct {
@@ -54,7 +53,7 @@ func (b *wasb) Head(key string) (Object, error) {
 	properties, err := b.container.NewBlobClient(key).GetProperties(ctx, &azblob.GetBlobPropertiesOptions{})
 	if err != nil {
 		if strings.Contains(err.Error(), string(azblob.StorageErrorCodeBlobNotFound)) {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

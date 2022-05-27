@@ -21,10 +21,8 @@ package object
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -36,7 +34,6 @@ import (
 
 	"github.com/colinmarc/hdfs/v2"
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 var superuser = "hdfs"
@@ -59,9 +56,6 @@ func (h *hdfsclient) path(key string) string {
 func (h *hdfsclient) Head(key string) (Object, error) {
 	info, err := h.c.Stat(h.path(key))
 	if err != nil {
-		if e, ok := err.(*fs.PathError); ok && errors.Is(e.Err, os.ErrNotExist) {
-			err = utils.ENOTEXISTS
-		}
 		return nil, err
 	}
 

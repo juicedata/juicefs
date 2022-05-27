@@ -85,7 +85,7 @@ func (s *s3client) Head(key string) (Object, error) {
 	r, err := s.s3.HeadObject(&param)
 	if err != nil {
 		if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

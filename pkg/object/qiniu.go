@@ -32,7 +32,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/qiniu/go-sdk/v7/auth"
 	"github.com/qiniu/go-sdk/v7/storage"
 )
@@ -81,7 +80,7 @@ func (q *qiniu) Head(key string) (Object, error) {
 	r, err := q.bm.Stat(q.bucket, key)
 	if err != nil {
 		if strings.Contains(err.Error(), notexist) {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

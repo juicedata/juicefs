@@ -178,8 +178,8 @@ func (c *ceph) Head(key string) (Object, error) {
 		o = &obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/")}
 		return nil
 	})
-	if err == rados.ErrObjectExists {
-		err = utils.ENOTEXISTS
+	if err == rados.ErrNotFound {
+		err = os.ErrNotExist
 	}
 	return o, err
 }

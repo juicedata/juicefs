@@ -25,13 +25,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/Arvintian/scs-go-sdk/pkg/client"
 	"github.com/Arvintian/scs-go-sdk/scs"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type scsClient struct {
@@ -57,7 +57,7 @@ func (s *scsClient) Head(key string) (Object, error) {
 	om, err := s.b.Head(key)
 	if err != nil {
 		if e, ok := err.(*client.Error); ok && e.StatusCode == http.StatusNotFound {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

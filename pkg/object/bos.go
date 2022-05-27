@@ -31,7 +31,6 @@ import (
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
 	"github.com/baidubce/bce-sdk-go/services/bos/api"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const bosDefaultRegion = "bj"
@@ -58,7 +57,7 @@ func (q *bosclient) Head(key string) (Object, error) {
 	r, err := q.c.GetObjectMeta(q.bucket, key)
 	if err != nil {
 		if e, ok := err.(*bce.BceServiceError); ok && e.StatusCode == http.StatusNotFound {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

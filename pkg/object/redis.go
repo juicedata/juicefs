@@ -25,12 +25,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 // redisStore stores data chunks into Redis.
@@ -150,7 +150,7 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 func (t *redisStore) Head(key string) (Object, error) {
 	data, err := t.rdb.Get(context.TODO(), key).Bytes()
 	if err == redis.Nil {
-		return nil, utils.ENOTEXISTS
+		return nil, os.ErrNotExist
 	}
 	return &obj{
 		key,

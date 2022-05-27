@@ -21,6 +21,5 @@ import (
 )
 
 var (
-	ENOTSUP    = errors.New("not supported")
-	ENOTEXISTS = errors.New("not exists")
+	ENOTSUP = errors.New("not supported")
 )

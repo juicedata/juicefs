@@ -22,15 +22,14 @@ package object
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
 	plog "github.com/pingcap/log"
 	"github.com/sirupsen/logrus"
 	"github.com/tikv/client-go/v2/config"
@@ -50,7 +49,7 @@ func (t *tikv) String() string {
 func (t *tikv) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	d, err := t.c.Get(context.TODO(), []byte(key))
 	if len(d) == 0 {
-		err = errors.New("not found")
+		err = os.ErrNotExist
 	}
 	if err != nil {
 		return nil, err
@@ -76,7 +75,7 @@ func (t *tikv) Put(key string, in io.Reader) error {
 func (t *tikv) Head(key string) (Object, error) {
 	data, err := t.c.Get(context.TODO(), []byte(key))
 	if err == nil && data == nil {
-		return nil, utils.ENOTEXISTS
+		return nil, os.ErrNotExist
 	}
 	return &obj{
 		key,

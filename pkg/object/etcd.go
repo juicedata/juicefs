@@ -28,11 +28,10 @@ import (
 	"io/ioutil"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/errors"
 	etcd "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/pkg/transport"
 )
@@ -65,7 +64,7 @@ func (c *etcdClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 			return ioutil.NopCloser(bytes.NewBuffer(data)), nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, os.ErrNotExist
 }
 
 func (c *etcdClient) Put(key string, in io.Reader) error {
@@ -92,7 +91,7 @@ func (c *etcdClient) Head(key string) (Object, error) {
 			}, nil
 		}
 	}
-	return nil, utils.ENOTEXISTS
+	return nil, os.ErrNotExist
 }
 
 func (c *etcdClient) Delete(key string) error {

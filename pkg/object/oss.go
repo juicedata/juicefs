@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const ossDefaultRegionID = "cn-hangzhou"
@@ -70,10 +69,10 @@ func (o *ossClient) checkError(err error) error {
 
 func (o *ossClient) Head(key string) (Object, error) {
 	r, err := o.bucket.GetObjectMeta(key)
-	if e, ok := err.(oss.ServiceError); ok && e.StatusCode == http.StatusNotFound {
-		return nil, utils.ENOTEXISTS
-	}
 	if o.checkError(err) != nil {
+		if e, ok := err.(oss.ServiceError); ok && e.StatusCode == http.StatusNotFound {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 

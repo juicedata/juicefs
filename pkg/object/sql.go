@@ -26,10 +26,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
@@ -62,7 +62,7 @@ func (s *sqlStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, os.ErrNotExist
 	}
 	if off > int64(len(b.Data)) {
 		off = int64(len(b.Data))
@@ -107,14 +107,14 @@ func (s *sqlStore) Head(key string) (Object, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, utils.ENOTEXISTS
+		return nil, os.ErrNotExist
 	}
 	return &obj{
 		key,
 		b.Size,
 		b.Modified,
 		strings.HasSuffix(key, "/"),
-	}, err
+	}, nil
 }
 
 func (s *sqlStore) Delete(key string) error {

@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/juicedata/juicefs/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -182,8 +181,8 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		s.Delete("file")
 	}
 
-	if _, err := s.Head("not-exist-file"); err != utils.ENOTEXISTS {
-		t.Fatal("err should be utils.ENOTEXISTS")
+	if _, err := s.Head("not-exist-file"); !os.IsNotExist(err) {
+		t.Fatal("err should be os.ErrNotExist")
 	}
 
 	if _, err := s.Head("test"); err != nil {

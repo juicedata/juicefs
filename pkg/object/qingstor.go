@@ -57,7 +57,7 @@ func (q *qingstor) Head(key string) (Object, error) {
 		return nil, err
 	}
 	if *r.StatusCode == http.StatusNotFound {
-		return nil, utils.ENOTEXISTS
+		return nil, os.ErrNotExist
 	}
 	return &obj{
 		key,

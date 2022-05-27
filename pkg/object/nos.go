@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -34,7 +35,6 @@ import (
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/model"
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/nosclient"
 	"github.com/NetEase-Object-Storage/nos-golang-sdk/noserror"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type nos struct {
@@ -55,7 +55,7 @@ func (s *nos) Head(key string) (Object, error) {
 	r, err := s.client.GetObjectMetaData(objectRequest)
 	if err != nil {
 		if e, ok := err.(*noserror.ServerError); ok && e.StatusCode == http.StatusNotFound {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

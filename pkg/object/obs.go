@@ -68,7 +68,7 @@ func (s *obsClient) Head(key string) (Object, error) {
 	r, err := s.c.GetObjectMetadata(params)
 	if err != nil {
 		if e, ok := err.(obs.ObsError); ok && e.BaseModel.StatusCode == http.StatusNotFound {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

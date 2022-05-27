@@ -25,11 +25,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 
 	gowebdav "github.com/emersion/go-webdav"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type webdav struct {
@@ -50,7 +50,7 @@ func (w *webdav) Head(key string) (Object, error) {
 	info, err := w.c.Stat(key)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "not found") {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

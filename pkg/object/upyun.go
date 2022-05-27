@@ -25,9 +25,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/upyun/go-sdk/v3/upyun"
 )
 
@@ -50,7 +50,7 @@ func (u *up) Head(key string) (Object, error) {
 	info, err := u.c.GetInfo("/" + key)
 	if err != nil {
 		if upyun.IsNotExist(err) {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}

@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/IBM/ibm-cos-sdk-go/aws"
@@ -112,7 +113,7 @@ func (s *ibmcos) Head(key string) (Object, error) {
 	r, err := s.s3.HeadObject(&param)
 	if err != nil {
 		if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
-			err = utils.ENOTEXISTS
+			err = os.ErrNotExist
 		}
 		return nil, err
 	}
