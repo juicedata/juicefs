@@ -154,6 +154,7 @@ func cmdMdtest() *cli.Command {
 		Name:      "mdtest",
 		Action:    mdtest,
 		Category:  "TOOL",
+		Hidden:    true,
 		Usage:     "run test on meta engines",
 		ArgsUsage: "META-URL PATH",
 		Description: `
