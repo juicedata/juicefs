@@ -628,6 +628,10 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	if len(inodes) > 0 {
+		if m.db.DriverName() == "sqlite3" {
+			// sqlite only allow one writer at a time
+			inodes[0] = 1
+		}
 		m.txLock(int(inodes[0]))
 		defer m.txUnlock(int(inodes[0]))
 	}
