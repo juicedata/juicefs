@@ -63,7 +63,9 @@ jobs:
           make
           cd ../.trash/
           pwd
-          sudo /tmp/juicefs-sync-test/juicefs/juicefs rmr *
+          ls -d -1 */ >/tmp/list
+          sudo chmod 777 /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh
+          /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh /tmp/list
       - name: Log
         if: ${{ failure() }}
         run: |
@@ -113,7 +115,9 @@ jobs:
           make
           cd ../.trash/
           pwd
-          sudo /tmp/juicefs-sync-test/juicefs/juicefs rmr *
+          ls -d -1 */ >/tmp/list
+          sudo chmod 777 /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh
+          /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh /tmp/list
       - name: Log
         if: ${{ failure() }}
         run: |
@@ -175,7 +179,9 @@ jobs:
           make
           cd ../.trash/
           pwd
-          sudo /tmp/juicefs-sync-test/juicefs/juicefs rmr *
+          ls -d -1 */ >/tmp/list
+          sudo chmod 777 /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh
+          /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh /tmp/list
       - name: Log
         if: ${{ failure() }}
         run: |
@@ -224,7 +230,9 @@ jobs:
           make
           cd ../.trash/
           pwd
-          sudo /tmp/juicefs-sync-test/juicefs/juicefs rmr *
+          ls -d -1 */ >/tmp/list
+          sudo chmod 777 /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh
+          /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh /tmp/list
       - name: Log
         if: ${{ failure() }}
         run: |
