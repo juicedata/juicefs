@@ -503,27 +503,27 @@ jobs:
   #         file_count: 5
   #         isolation_level: "serializable"    
 
-  upload-small-files-with-tikv:
-    runs-on: [self-hosted, daily-build]
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
-          file_size: "8K"
-          file_count: 10000
+  # upload-small-files-with-tikv:
+  #   runs-on: [self-hosted, daily-build]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Test
+  #       uses: ./.github/actions/gateway
+  #       with:
+  #         meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
+  #         file_size: "8K"
+  #         file_count: 10000
 
-  upload-big-files-with-tikv:
-    runs-on: [self-hosted, daily-build]
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
-          file_size: "200M"
-          file_count: 5
+  # upload-big-files-with-tikv:
+  #   runs-on: [self-hosted, daily-build]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Test
+  #       uses: ./.github/actions/gateway
+  #       with:
+  #         meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
+  #         file_size: "200M"
+  #         file_count: 5
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest
