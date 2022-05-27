@@ -444,7 +444,7 @@ jobs:
       - name: Test
         uses: ./.github/actions/gateway
         with:
-          meta_url: "mysql://root:@\\(localhost:2881\\)/test"
+          meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
           file_size: "8K"
           file_count: 10000
           isolation_level: "read committed" 
@@ -462,7 +462,7 @@ jobs:
       - name: Test
         uses: ./.github/actions/gateway
         with:
-          meta_url: "mysql://root:@\\(localhost:2881\\)/test"
+          meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
           file_size: "200M"
           file_count: 5
           isolation_level: "read committed"   
