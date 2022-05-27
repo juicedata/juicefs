@@ -32,6 +32,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/go-redis/redis/v8"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -181,6 +183,10 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		s.Delete("file")
 	}
 
+	if _, err := s.Head("not-exist-file"); err != utils.ENOTEXISTS {
+		t.Fatal("err should be utils.ENOTEXISTS")
+	}
+
 	if _, err := s.Head("test"); err != nil {
 		t.Fatalf("check exists failed: %s", err.Error())
 	}
@@ -252,11 +258,7 @@ func TestMem(t *testing.T) {
 
 func TestDisk(t *testing.T) {
 	s, _ := newDisk("/tmp/abc/", "", "")
-	_, err := s.Head("not")
-	if err != nil {
-		fmt.Println(err)
-	}
-	//testStorage(t, s)
+	testStorage(t, s)
 }
 
 func TestQingStor(t *testing.T) {
