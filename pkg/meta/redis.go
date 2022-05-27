@@ -74,9 +74,8 @@ type redisMeta struct {
 	baseMeta
 	rdb        redis.UniversalClient
 	prefix     string
-	txlocks    [1024]sync.Mutex // Pessimistic locks to reduce conflict on Redis
-	shaLookup  string           // The SHA returned by Redis for the loaded `scriptLookup`
-	shaResolve string           // The SHA returned by Redis for the loaded `scriptResolve`
+	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
+	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
 	snap       *redisSnap
 }
 
@@ -771,11 +770,11 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	var err error
 	var khash = fnv.New32()
 	_, _ = khash.Write([]byte(keys[0]))
-	l := &m.txlocks[int(khash.Sum32())%len(m.txlocks)]
+	h := int(khash.Sum32())
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
-	l.Lock()
-	defer l.Unlock()
+	m.txLock(h)
+	defer m.txUnlock(h)
 	// TODO: enable retry for some of idempodent transactions
 	var retryOnFailture = false
 	for i := 0; i < 50; i++ {
