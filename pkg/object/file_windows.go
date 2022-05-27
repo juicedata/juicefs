@@ -16,7 +16,13 @@
 
 package object
 
-import "os"
+import (
+	"errors"
+	"io/fs"
+	"os"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+)
 
 func getOwnerGroup(info os.FileInfo) (string, string) {
 	return "", ""
@@ -28,4 +34,27 @@ func lookupUser(name string) int {
 
 func lookupGroup(name string) int {
 	return 0
+}
+
+func (d *filestore) Head(key string) (Object, error) {
+	p := d.path(key)
+
+	fi, err := os.Stat(p)
+	if err != nil {
+		// todo: check not exists error value
+		if e, ok := err.(*fs.PathError); ok && errors.Is(e.Err, windows.ERROR_FILE_NOT_FOUND) {
+			err = utils.ENOTEXISTS
+		}
+		return nil, err
+	}
+	size := fi.Size()
+	if fi.IsDir() {
+		size = 0
+	}
+	return &obj{
+		key,
+		size,
+		fi.ModTime(),
+		fi.IsDir(),
+	}, nil
 }

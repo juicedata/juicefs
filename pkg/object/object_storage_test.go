@@ -252,12 +252,11 @@ func TestMem(t *testing.T) {
 
 func TestDisk(t *testing.T) {
 	s, _ := newDisk("/tmp/abc/", "", "")
-	_, err := s.Head("notex")
+	_, err := s.Head("not")
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	testStorage(t, s)
+	//testStorage(t, s)
 }
 
 func TestQingStor(t *testing.T) {
@@ -287,20 +286,16 @@ func TestS3(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) {
-	//if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
-	//	t.SkipNow()
-	//}
-	//bucketName := "test"
-	//if b := os.Getenv("OSS_TEST_BUCKET"); b != "" {
-	//	bucketName = b
-	//}
-	s, _ := newOSS("zhijian-test-01.oss-cn-hangzhou.aliyuncs.com",
-		"LTAI3VH1JuAnXaYZ", "iZJpLAmbp1B9Hc13FYwZzqtl1d4GhB")
-	_, err := s.Head("not-ext")
-	if err != nil {
-		fmt.Println(err)
+	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
+		t.SkipNow()
 	}
-	//testStorage(t, s)
+	bucketName := "test"
+	if b := os.Getenv("OSS_TEST_BUCKET"); b != "" {
+		bucketName = b
+	}
+	s, _ := newOSS(fmt.Sprintf("https://%s", bucketName),
+		os.Getenv("ALICLOUD_ACCESS_KEY_ID"), os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"))
+	testStorage(t, s)
 }
 
 func TestUFile(t *testing.T) {
@@ -321,21 +316,15 @@ func TestGS(t *testing.T) {
 }
 
 func TestQiniu(t *testing.T) {
-	//if os.Getenv("QINIU_ACCESS_KEY") == "" {
-	//	t.SkipNow()
-	//}
-	//qiniu, _ := newQiniu("https://test.cn-east-1-s3.qiniu.com",
-	//	os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
-	//testStorage(t, qiniu)
-	//qiniu, _ = newQiniu("https://test.cn-north-1-s3.qiniu.com",
-	//	os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
-	qiniu, _ := newQiniu("http://zhijian-test.s3-cn-east-2.qiniucs.com",
-		"bpzQD3Z0tnR9YPnmq8fA7oi65jzj1QzCQe6EbsXZ", "82EqUdejlIUejmo3R5Dwdxg8B-PCq6jxILwW6CLk")
-	_, err := qiniu.Head("wwww")
-	if err != nil {
-		fmt.Println(err)
+	if os.Getenv("QINIU_ACCESS_KEY") == "" {
+		t.SkipNow()
 	}
-	//testStorage(t, qiniu)
+	qiniu, _ := newQiniu("https://test.cn-east-1-s3.qiniu.com",
+		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
+	testStorage(t, qiniu)
+	qiniu, _ = newQiniu("https://test.cn-north-1-s3.qiniu.com",
+		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
+	testStorage(t, qiniu)
 }
 
 func TestKS3(t *testing.T) {
@@ -431,24 +420,20 @@ func TestBOS(t *testing.T) {
 }
 
 func TestSftp(t *testing.T) {
-	//if os.Getenv("SFTP_HOST") == "" {
-	//	t.SkipNow()
-	//}
-	b, _ := newSftp("localhost:2222:/upload/", "root", "password")
-	_, err := b.Head("not")
-	fmt.Println(err)
-	//testStorage(t, b)
+	if os.Getenv("SFTP_HOST") == "" {
+		t.SkipNow()
+	}
+	b, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
+	testStorage(t, b)
 }
 
 func TestOBS(t *testing.T) {
-	//if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
-	//	t.SkipNow()
-	//}
-	b, _ := newOBS("zhijian-test.obs.cn-east-3.myhuaweicloud.com",
-		"HTS0ACBYIWHXH4WDBK7V", "0PSp5uYD1I7DIK0GSg01eEjZW2bvbaNY8YTIwI5m")
-	_, err := b.Head("not")
-	fmt.Println(err)
-	//testStorage(t, b)
+	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
+		t.SkipNow()
+	}
+	b, _ := newOBS(fmt.Sprintf("https://%s", os.Getenv("OBS_TEST_BUCKET")),
+		os.Getenv("HWCLOUD_ACCESS_KEY"), os.Getenv("HWCLOUD_SECRET_KEY"))
+	testStorage(t, b)
 }
 
 func TestHDFS(t *testing.T) {
@@ -477,16 +462,10 @@ func TestScw(t *testing.T) {
 }
 
 func TestMinIO(t *testing.T) {
-	//if os.Getenv("MINIO_TEST_BUCKET") == "" {
-	//	t.SkipNow()
-	//}
-	//objbench --storage minio --access-key testUser --secret-key testUserPassword http://127.0.0.1:9000/testbucket
-	b, _ := newMinio("http://127.0.0.1:9000/testbucket", "testUser", "testUserPassword")
-	_, err := b.Head("nothing")
-	if err != nil {
-		fmt.Println(err)
+	if os.Getenv("MINIO_TEST_BUCKET") == "" {
+		t.SkipNow()
 	}
-
+	b, _ := newMinio(fmt.Sprintf("http://%s/some/path", os.Getenv("MINIO_TEST_BUCKET")), "", "")
 	testStorage(t, b)
 }
 
@@ -541,15 +520,11 @@ func TestSwift(t *testing.T) {
 }
 
 func TestWebDAV(t *testing.T) {
-	//if os.Getenv("WEBDAV_TEST_BUCKET") == "" {
-	//	t.SkipNow()
-	//}
-	s, _ := newWebDAV("http://localhost:9081", "", "")
-	_, err := s.Head("not")
-	if err != nil {
-		fmt.Println(err)
+	if os.Getenv("WEBDAV_TEST_BUCKET") == "" {
+		t.SkipNow()
 	}
-	//testStorage(t, s)
+	s, _ := newWebDAV(os.Getenv("WEBDAV_TEST_BUCKET"), "", "")
+	testStorage(t, s)
 }
 
 func TestEncrypted(t *testing.T) {

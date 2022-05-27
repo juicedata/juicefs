@@ -18,7 +18,6 @@ package object
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -32,9 +31,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/juicedata/juicefs/pkg/utils"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -76,28 +72,6 @@ func (d *filestore) path(key string) string {
 		return filepath.Join(d.root, key)
 	}
 	return d.root + key
-}
-
-func (d *filestore) Head(key string) (Object, error) {
-	p := d.path(key)
-
-	fi, err := os.Stat(p)
-	if err != nil {
-		if e, ok := err.(*fs.PathError); ok && errors.Is(e.Err, unix.ENOENT) {
-			err = utils.ENOTEXISTS
-		}
-		return nil, err
-	}
-	size := fi.Size()
-	if fi.IsDir() {
-		size = 0
-	}
-	return &obj{
-		key,
-		size,
-		fi.ModTime(),
-		fi.IsDir(),
-	}, nil
 }
 
 func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
