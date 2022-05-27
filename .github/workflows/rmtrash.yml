@@ -60,7 +60,7 @@ jobs:
           echo "rm 400w files in a directory of 400 children directory"
           git clone https://github.com/juicedata/juicefs.git
           cd juicefs
-          git checkout 352bf73
+          git checkout cd58c4e
           make
           cd ../.trash/
           pwd
@@ -113,7 +113,7 @@ jobs:
           echo "rm 400w files in a directory of 400 children directory"
           git clone https://github.com/juicedata/juicefs.git
           cd juicefs
-          git checkout 352bf73
+          git checkout cd58c4e
           make
           cd ../.trash/
           pwd
@@ -178,7 +178,7 @@ jobs:
           echo "rm 400w files in a directory of 400 children directory"
           git clone https://github.com/juicedata/juicefs.git
           cd juicefs
-          git checkout 352bf73
+          git checkout cd58c4e
           make
           cd ../.trash/
           pwd
@@ -230,7 +230,7 @@ jobs:
           echo "rm 400w files in a directory of 400 children directory"
           git clone https://github.com/juicedata/juicefs.git
           cd juicefs
-          git checkout 352bf73
+          git checkout cd58c4e
           make
           cd ../.trash/
           pwd

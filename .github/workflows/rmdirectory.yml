@@ -232,4 +232,4 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
       - name: Setup upterm session
         if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1         
+        uses: lhotari/action-upterm@v1
