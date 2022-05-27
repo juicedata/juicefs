@@ -16,9 +16,7 @@
 
 package object
 
-import (
-	"os"
-)
+import "os"
 
 func getOwnerGroup(info os.FileInfo) (string, string) {
 	return "", ""
@@ -30,24 +28,4 @@ func lookupUser(name string) int {
 
 func lookupGroup(name string) int {
 	return 0
-}
-
-func (d *filestore) Head(key string) (Object, error) {
-	p := d.path(key)
-
-	fi, err := os.Stat(p)
-	if err != nil {
-		// todo: check not exists error value
-		return nil, err
-	}
-	size := fi.Size()
-	if fi.IsDir() {
-		size = 0
-	}
-	return &obj{
-		key,
-		size,
-		fi.ModTime(),
-		fi.IsDir(),
-	}, nil
 }
