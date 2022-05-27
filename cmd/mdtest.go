@@ -1,0 +1,211 @@
+package cmd
+
+import (
+	"fmt"
+	_ "net/http/pprof"
+	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/fs"
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/metric"
+	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/urfave/cli/v2"
+)
+
+var ctx = meta.Background
+
+func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
+	if err := jfs.Mkdir(ctx, root, 0755); err != 0 {
+		return fmt.Errorf("Mkdir %s: %s", root, err)
+	}
+	if d > 0 {
+		for i := 0; i < width; i++ {
+			dn := filepath.Join(root, fmt.Sprintf("mdtest_tree.%d", i))
+			if err := createDir(jfs, dn, d-1, width); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func createFile(jfs *fs.FileSystem, np int, root string, d int, width, files, bytes int) error {
+	for i := 0; i < files; i++ {
+		fn := filepath.Join(root, fmt.Sprintf("file.mdtest.%d.%d", np, i))
+		f, err := jfs.Create(ctx, fn, 0644)
+		if err != 0 {
+			return fmt.Errorf("create %s: %s", fn, err)
+		}
+		if bytes > 0 {
+			m := jfs.Meta()
+			var chunkid uint64
+			if st := m.NewChunk(ctx, &chunkid); st != 0 {
+				return fmt.Errorf("writechunk %s: %s", fn, st)
+			}
+			if st := m.Write(ctx, f.Inode(), 0, 0, meta.Slice{Size: uint32(bytes), Len: uint32(bytes)}); st != 0 {
+				return fmt.Errorf("writeend %s: %s", fn, st)
+			}
+		}
+		f.Close(ctx)
+	}
+	if d > 0 {
+		for i := 0; i < width; i++ {
+			dn := filepath.Join(root, fmt.Sprintf("mdtest_tree.%d", i))
+			if err := createFile(jfs, np, dn, d-1, width, files, bytes); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func runTest(m meta.Meta, jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes int) {
+	dirs := 0
+	w := width
+	z := depth
+	for z > 0 {
+		dirs += w
+		w = w * width
+		z--
+	}
+	var total int = dirs * np * files
+	logger.Infof("Create %d files in %d dirs", total, dirs)
+
+	start := time.Now()
+	if err := jfs.Mkdir(ctx, rootDir, 0755); err != 0 {
+		logger.Errorf("mkdir %s: %s", rootDir, err)
+	}
+	root := filepath.Join(rootDir, "test-dir.0-0")
+	if err := jfs.Mkdir(ctx, root, 0755); err != 0 {
+		logger.Fatalf("Mkdir %s: %s", root, err)
+	}
+	root = filepath.Join(root, "mdtest_tree.0")
+	if err := createDir(jfs, root, depth, width); err != nil {
+		logger.Fatalf("initialize: %s", err)
+	}
+	t1 := time.Since(start)
+	logger.Infof("Created %d dirs in %s", dirs, t1)
+
+	var g sync.WaitGroup
+	for i := 0; i < np; i++ {
+		g.Add(1)
+		go func(np int) {
+			if err := createFile(jfs, np, root, depth, width, files, bytes); err != nil {
+				logger.Errorf("Create: %s", err)
+			}
+			g.Done()
+		}(i)
+	}
+	g.Wait()
+	logger.Infof("Created %d files in %s", total, time.Since(start)-t1)
+}
+
+func cmdMdtest() *cli.Command {
+	selfFlags := []cli.Flag{
+		&cli.IntFlag{
+			Name:  "threads",
+			Value: 1,
+			Usage: "number of threads",
+		},
+		&cli.IntFlag{
+			Name:  "dirs",
+			Value: 3,
+			Usage: "number of subdir",
+		},
+		&cli.IntFlag{
+			Name:  "depth",
+			Value: 2,
+			Usage: "levels of tree",
+		},
+		&cli.IntFlag{
+			Name:  "files",
+			Value: 10,
+			Usage: "number of files",
+		},
+		&cli.IntFlag{
+			Name:  "write",
+			Value: 0,
+			Usage: "number of bytes",
+		},
+		&cli.StringFlag{
+			Name:  "access-log",
+			Usage: "path for JuiceFS access log",
+		},
+	}
+	compoundFlags := [][]cli.Flag{
+		clientFlags(),
+		cacheFlags(0),
+		shareInfoFlags(),
+		selfFlags,
+	}
+
+	return &cli.Command{
+		Name:      "mdtest",
+		Action:    mdtest,
+		Category:  "TOOL",
+		Usage:     "run test on meta engines",
+		ArgsUsage: "META-URL PATH",
+		Description: `
+Examples:
+$ juicefs mdtest redis://localhost /test1`,
+		Flags: expandFlags(compoundFlags),
+	}
+}
+
+func initForMdtest(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
+	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
+	m := meta.NewClient(metaUrl, metaConf)
+	format, err := m.Load(true)
+	if err != nil {
+		logger.Fatalf("load setting: %s", err)
+	}
+	registerer, registry := wrapRegister(mp, format.Name)
+	if !c.Bool("writeback") && c.IsSet("upload-delay") {
+		logger.Warnf("delayed upload only work in writeback mode")
+	}
+
+	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
+		return getFormat(c, m)
+	})
+	if err != nil {
+		logger.Fatalf("object storage: %s", err)
+	}
+	logger.Infof("Data use %s", blob)
+
+	chunkConf := getChunkConf(c, format)
+	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
+	registerMetaMsg(m, store, chunkConf)
+
+	err = m.NewSession()
+	if err != nil {
+		logger.Fatalf("new session: %s", err)
+	}
+
+	conf := getVfsConf(c, metaConf, format, chunkConf)
+	conf.AccessLog = c.String("access-log")
+	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
+	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
+	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
+
+	metricsAddr := exposeMetrics(c, m, registerer, registry)
+	if c.IsSet("consul") {
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, conf.Meta.MountPoint)
+	}
+	return m, store, conf
+}
+
+func mdtest(c *cli.Context) error {
+	setup(c, 2)
+	metaUrl := c.Args().Get(0)
+	rootDir := c.Args().Get(1)
+	m, store, conf := initForMdtest(c, "mdtest", metaUrl)
+	jfs, err := fs.NewFileSystem(conf, m, store)
+	if err != nil {
+		logger.Fatalf("initialize failed: %s", err)
+	}
+	runTest(m, jfs, rootDir, c.Int("threads"), c.Int("dirs"), c.Int("depth"), c.Int("files"), c.Int("write"))
+	return m.CloseSession()
+}
