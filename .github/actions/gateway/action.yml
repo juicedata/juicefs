@@ -123,7 +123,7 @@ runs:
         wait "${pids[@]}"
         mkdir emptydir
         ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/ --delete-dst --no-https -p $threads
-        rm -rf $HOME/.juicefs/cache/
+        rm -rf $HOME/.juicefs/cache/ || true
         #./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
         #./mc mb minio/$volume
         #./mc cp --recursive data/  minio/$volume/data
