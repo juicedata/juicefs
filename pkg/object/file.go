@@ -76,20 +76,27 @@ func (d *filestore) path(key string) string {
 
 func (d *filestore) Head(key string) (Object, error) {
 	p := d.path(key)
-
 	fi, err := os.Stat(p)
 	if err != nil {
 		return nil, err
 	}
 	size := fi.Size()
+	var isSymlink bool
 	if fi.IsDir() {
 		size = 0
 	}
-	return &obj{
-		key,
-		size,
-		fi.ModTime(),
-		fi.IsDir(),
+	owner, group := getOwnerGroup(fi)
+	return &file{
+		obj{
+			key,
+			size,
+			fi.ModTime(),
+			fi.IsDir(),
+		},
+		owner,
+		group,
+		fi.Mode(),
+		isSymlink,
 	}, nil
 }
 
@@ -269,6 +276,13 @@ func (m *mEntry) Info() (os.FileInfo, error) {
 		return m.fi, nil
 	}
 	return m.DirEntry.Info()
+}
+
+func (m *mEntry) IsDir() bool {
+	if m.fi != nil {
+		return m.fi.IsDir()
+	}
+	return m.DirEntry.IsDir()
 }
 
 // readDirSorted reads the directory named by dirname and returns
