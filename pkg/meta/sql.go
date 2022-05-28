@@ -2927,10 +2927,10 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		tree.Name = "FSTree"
 
 		var drows []delfile
-		if err := s.Find(&drows); err != nil {
+		// the statement remembers the table of last Iterator
+		if err := s.Table(&delfile{}).Find(&drows); err != nil {
 			return err
 		}
-
 		dels := make([]*DumpedDelFile, 0, len(drows))
 		for _, row := range drows {
 			dels = append(dels, &DumpedDelFile{row.Inode, row.Length, row.Expire})
