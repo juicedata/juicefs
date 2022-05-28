@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"math/rand"
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
@@ -50,7 +49,7 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 			if st := m.NewChunk(ctx, &chunkid); st != 0 {
 				return fmt.Errorf("writechunk %s: %s", fn, st)
 			}
-			if st := m.Write(ctx, f.Inode(), 0, 0, meta.Slice{Chunkid: chunkid, Size: uint32(bytes), Len: uint32(bytes)}); st != 0 {
+			if st := m.Write(ctx, f.Inode(), 0, 0, meta.Slice{Size: uint32(bytes), Len: uint32(bytes)}); st != 0 {
 				return fmt.Errorf("writeend %s: %s", fn, st)
 			}
 		}
@@ -58,15 +57,8 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 		bar.Increment()
 	}
 	if d > 0 {
-		dirs := make([]int, width)
 		for i := 0; i < width; i++ {
-			dirs[i] = i
-		}
-		rand.Shuffle(width, func(i, j int) {
-			dirs[i], dirs[j] = dirs[j], dirs[i]
-		})
-		for i := range dirs {
-			dn := filepath.Join(root, fmt.Sprintf("mdtest_tree.%d", dirs[i]))
+			dn := filepath.Join(root, fmt.Sprintf("mdtest_tree.%d", i))
 			if err := createFile(jfs, bar, np, dn, d-1, width, files, bytes); err != nil {
 				return err
 			}
@@ -89,7 +81,6 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 	bar := progress.AddCountBar("create file", int64(total))
 	logger.Infof("Create %d files in %d dirs", total, dirs)
 
-	ctx = meta.NewContext(1, uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
 	start := time.Now()
 	if err := jfs.Mkdir(ctx, rootDir, 0755); err != 0 {
 		logger.Errorf("mkdir %s: %s", rootDir, err)
@@ -103,9 +94,8 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 		logger.Fatalf("initialize: %s", err)
 	}
 	t1 := time.Since(start)
-	logger.Infof("Created %d dirs in %s (%d dirs/s)", dirs, t1, int(float64(dirs)/t1.Seconds()))
+	logger.Infof("Created %d dirs in %s", dirs, t1)
 
-	rand.Seed(time.Now().Unix())
 	var g sync.WaitGroup
 	for i := 0; i < np; i++ {
 		g.Add(1)
@@ -118,8 +108,7 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 	}
 	g.Wait()
 	progress.Done()
-	used := time.Since(start) - t1
-	logger.Infof("Created %d files in %s (%d files/s)", total, used, int(float64(total)/used.Seconds()))
+	logger.Infof("Created %d files in %s", total, time.Since(start)-t1)
 }
 
 func cmdMdtest() *cli.Command {
