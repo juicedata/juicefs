@@ -77,11 +77,12 @@ func testMeta(t *testing.T, m Meta) {
 	testCompaction(t, m, true)
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
-	base.conf.CaseInsensi = true
-	testCaseIncensi(t, m)
+	testConcurrentDir(t, m)
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
 	testOpenCache(t, m)
+	base.conf.CaseInsensi = true
+	testCaseIncensi(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
 }
@@ -483,7 +484,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	if totalspace != 1<<50 || iavail != 10<<20 {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
-	if err = m.Init(Format{Name: "test", Capacity: 1 << 20, Inodes: 100}, false); err != nil {
+	format.Capacity = 1 << 20
+	format.Inodes = 100
+	if err = m.Init(*format, false); err != nil {
 		t.Fatalf("set quota failed: %s", err)
 	}
 	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
@@ -703,10 +706,10 @@ func testLocks(t *testing.T, m Meta) {
 			time.Sleep(time.Millisecond)
 			count--
 			if count > 0 {
-				t.Fatalf("count should be be zero but got %d", count)
+				panic(fmt.Errorf("count should be be zero but got %d", count))
 			}
 			if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, 0, 0xFFFF, uint32(i)); st != 0 {
-				t.Fatalf("plock unlock: %s", st)
+				panic(fmt.Errorf("plock unlock: %s", st))
 			}
 		}(i)
 	}
@@ -972,7 +975,10 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(Format{Name: "test"}, false)
+	// remove quota
+	format, _ := m.Load(false)
+	format.Capacity = 0
+	_ = m.Init(*format, false)
 
 	ctx := Background
 	var inode Ino
@@ -1378,4 +1384,75 @@ func testReadOnly(t *testing.T, m Meta) {
 	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != syscall.EROFS {
 		t.Fatalf("open f: %s", st)
 	}
+}
+
+func testConcurrentDir(t *testing.T, m Meta) {
+	ctx := Background
+	var g sync.WaitGroup
+	var err error
+	format, err := m.Load(false)
+	format.Capacity = 0
+	format.Inodes = 0
+	if err = m.Init(*format, false); err != nil {
+		t.Fatalf("set quota failed: %s", err)
+	}
+	for i := 0; i < 100; i++ {
+		g.Add(1)
+		go func(i int) {
+			defer g.Done()
+			var d1, d2 Ino
+			var attr = new(Attr)
+			if st := m.Mkdir(ctx, 1, "d1", 0640, 022, 0, &d1, attr); st != 0 && st != syscall.EEXIST {
+				panic(fmt.Errorf("mkdir d1: %s", st))
+			} else if st == syscall.EEXIST {
+				st = m.Lookup(ctx, 1, "d1", &d1, attr)
+				if st != 0 {
+					panic(fmt.Errorf("lookup d1: %s", st))
+				}
+			}
+			if st := m.Mkdir(ctx, 1, "d2", 0640, 022, 0, &d2, attr); st != 0 && st != syscall.EEXIST {
+				panic(fmt.Errorf("mkdir d2: %s", st))
+			} else if st == syscall.EEXIST {
+				st = m.Lookup(ctx, 1, "d2", &d2, attr)
+				if st != 0 {
+					panic(fmt.Errorf("lookup d2: %s", st))
+				}
+			}
+			name := fmt.Sprintf("file%d", i)
+			var f Ino
+			if st := m.Create(ctx, d1, name, 0664, 0, 0, &f, attr); st != 0 {
+				panic(fmt.Errorf("create d1/%s: %s", name, st))
+			}
+			if st := m.Rename(ctx, d1, name, d2, name, 0, &f, attr); st != 0 {
+				panic(fmt.Errorf("rename d1/%s -> d2/%s: %s", name, name, st))
+			}
+		}(i)
+	}
+	g.Wait()
+	if err != nil {
+		t.Fatalf("concurrent dir: %s", err)
+	}
+	for i := 0; i < 100; i++ {
+		g.Add(1)
+		go func(i int) {
+			defer g.Done()
+			var d2 Ino
+			var attr = new(Attr)
+			st := m.Lookup(ctx, 1, "d2", &d2, attr)
+			if st != 0 {
+				panic(fmt.Errorf("lookup d2: %s", st))
+			}
+			name := fmt.Sprintf("file%d", i)
+			if st := m.Unlink(ctx, d2, name); st != 0 {
+				panic(fmt.Errorf("unlink d2/%s: %s", name, st))
+			}
+			if st := m.Rmdir(ctx, 1, "d1"); st != 0 && st != syscall.ENOTEMPTY && st != syscall.ENOENT {
+				panic(fmt.Errorf("rmdir d1: %s", st))
+			}
+			if st := m.Rmdir(ctx, 1, "d2"); st != 0 && st != syscall.ENOTEMPTY && st != syscall.ENOENT {
+				panic(fmt.Errorf("rmdir d2: %s", st))
+			}
+		}(i)
+	}
+	g.Wait()
 }
