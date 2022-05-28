@@ -1436,13 +1436,9 @@ func testConcurrentDir(t *testing.T, m Meta) {
 		g.Add(1)
 		go func(i int) {
 			defer g.Done()
-			var d1, d2 Ino
+			var d2 Ino
 			var attr = new(Attr)
-			st := m.Lookup(ctx, 1, "d1", &d1, attr)
-			if st != 0 {
-				panic(fmt.Errorf("lookup d1: %s", st))
-			}
-			st = m.Lookup(ctx, 1, "d2", &d2, attr)
+			st := m.Lookup(ctx, 1, "d2", &d2, attr)
 			if st != 0 {
 				panic(fmt.Errorf("lookup d2: %s", st))
 			}
