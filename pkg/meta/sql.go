@@ -2843,8 +2843,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 		}
 	}
 
-	bufferSize := 10000
-	if err := ses.Table(&node{}).BufferSize(bufferSize).Iterate(new(node), func(idx int, bean interface{}) error {
+	if err := ses.Table(&node{}).Iterate(new(node), func(idx int, bean interface{}) error {
 		n := bean.(*node)
 		snap.node[n.Inode] = n
 		bar.Increment()
@@ -2853,7 +2852,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 		return err
 	}
 
-	if err := ses.Table(&symlink{}).BufferSize(bufferSize).Iterate(new(symlink), func(idx int, bean interface{}) error {
+	if err := ses.Table(&symlink{}).Iterate(new(symlink), func(idx int, bean interface{}) error {
 		s := bean.(*symlink)
 		snap.symlink[s.Inode] = s
 		bar.Increment()
@@ -2861,7 +2860,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 	}); err != nil {
 		return err
 	}
-	if err := ses.Table(&edge{}).BufferSize(bufferSize).Iterate(new(edge), func(idx int, bean interface{}) error {
+	if err := ses.Table(&edge{}).Iterate(new(edge), func(idx int, bean interface{}) error {
 		e := bean.(*edge)
 		snap.edges[e.Parent] = append(snap.edges[e.Parent], e)
 		bar.Increment()
@@ -2870,7 +2869,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 		return err
 	}
 
-	if err := ses.Table(&xattr{}).BufferSize(bufferSize).Iterate(new(xattr), func(idx int, bean interface{}) error {
+	if err := ses.Table(&xattr{}).Iterate(new(xattr), func(idx int, bean interface{}) error {
 		x := bean.(*xattr)
 		snap.xattr[x.Inode] = append(snap.xattr[x.Inode], x)
 		bar.Increment()
@@ -2879,7 +2878,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 		return err
 	}
 
-	if err := ses.Table(&chunk{}).BufferSize(bufferSize).Iterate(new(chunk), func(idx int, bean interface{}) error {
+	if err := ses.Table(&chunk{}).Iterate(new(chunk), func(idx int, bean interface{}) error {
 		c := bean.(*chunk)
 		snap.chunk[fmt.Sprintf("%d-%d", c.Inode, c.Indx)] = c
 		bar.Increment()
