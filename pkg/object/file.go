@@ -76,7 +76,7 @@ func (d *filestore) path(key string) string {
 
 func (d *filestore) Head(key string) (Object, error) {
 	p := d.path(key)
-	fi, err := os.Lstat(p)
+	fi, err := os.Stat(p)
 	if err != nil {
 		return nil, err
 	}
@@ -84,12 +84,6 @@ func (d *filestore) Head(key string) (Object, error) {
 	var isSymlink bool
 	if fi.IsDir() {
 		size = 0
-	} else if !fi.Mode().IsRegular() {
-		isSymlink = true
-		// follow symlink
-		if fi2, e := os.Stat(key); e == nil {
-			fi = fi2
-		}
 	}
 	owner, group := getOwnerGroup(fi)
 	return &file{
