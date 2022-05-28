@@ -78,6 +78,13 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			t.Fatalf("PUT object `%s` failed: %q", key, err)
 		}
 	}
+	if o, err := s.Head("x/"); err != nil {
+		t.Fatalf("Head x/: %s", err)
+	} else if f, ok := o.(File); !ok {
+		t.Fatalf("Head should return File")
+	} else if !f.IsDir() {
+		t.Fatalf("x/ should be a dir")
+	}
 	// cleanup
 	defer func() {
 		// delete reversely, directory only can be deleted when it's empty

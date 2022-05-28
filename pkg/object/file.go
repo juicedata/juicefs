@@ -85,11 +85,18 @@ func (d *filestore) Head(key string) (Object, error) {
 	if fi.IsDir() {
 		size = 0
 	}
-	return &obj{
-		key,
-		size,
-		fi.ModTime(),
-		fi.IsDir(),
+	owner, group := getOwnerGroup(fi)
+	return &file{
+		obj{
+			key,
+			size,
+			fi.ModTime(),
+			fi.IsDir(),
+		},
+		owner,
+		group,
+		fi.Mode(),
+		false,
 	}, nil
 }
 
