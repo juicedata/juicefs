@@ -661,8 +661,12 @@ func (m *dbMeta) roTxn(f func(s *xorm.Session) error) error {
 	var err error
 	s := m.db.NewSession()
 	defer s.Close()
+	var opt = sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	}
 	for i := 0; i < 50; i++ {
-		if err := s.BeginTx(&sql.TxOptions{sql.LevelRepeatableRead, true}); err != nil {
+		if err := s.BeginTx(&opt); err != nil {
 			logger.Debugf("Start transaction failed, try again (tried %d): %s", i+1, err)
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
