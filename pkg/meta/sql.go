@@ -2997,14 +2997,16 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			bar.IncrInt64(currentIncr)
 		}
 		if err = m.dumpDir(s, root, tree, bw, 1, showProgress); err != nil {
-			return err
+			logger.Errorf("dump dir %d failed: %s", root, err)
+			return fmt.Errorf("dump dir %d failed", root) // don't retry
 		}
 		if trash != nil {
 			if _, err = bw.WriteString(","); err != nil {
 				return err
 			}
 			if err = m.dumpDir(s, TrashInode, trash, bw, 1, showProgress); err != nil {
-				return err
+				logger.Errorf("dump trash failed: %s", err)
+				return fmt.Errorf("dump trash failed") // don't retry
 			}
 		}
 		if _, err = bw.WriteString("\n}\n"); err != nil {
