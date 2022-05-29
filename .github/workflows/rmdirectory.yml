@@ -63,6 +63,8 @@ jobs:
           cd juicefs
           make
           sudo ./juicefs rmr ../mkdir/
+          cd ..
+          ls -lah |wc -l | grep 8
       - name: Log
         if: ${{ failure() }}
         run: |
@@ -112,6 +114,8 @@ jobs:
           cd juicefs
           make
           sudo ./juicefs rmr ../mkdir/
+          cd ..
+          ls -lah |wc -l | grep 8
       - name: Log
         if: ${{ failure() }}
         run: |
@@ -174,8 +178,7 @@ jobs:
           make
           sudo ./juicefs rmr ../mkdir/
           cd ..
-          ls -lah
-          ls -lah |wc -l
+          ls -lah |wc -l | grep 8
       - name: Log
         if: ${{ failure() }}
         run: |
@@ -223,6 +226,8 @@ jobs:
           cd juicefs
           make
           sudo ./juicefs rmr ../mkdir/
+          cd ..
+          ls -lah |wc -l | grep 8
       - name: Log
         if: ${{ failure() }}
         run: |
