@@ -173,6 +173,9 @@ jobs:
           cd juicefs
           make
           sudo ./juicefs rmr ../mkdir/
+          cd ..
+          ls -lah
+          ls -lah |wc -l
       - name: Log
         if: ${{ failure() }}
         run: |
