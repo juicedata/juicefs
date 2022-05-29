@@ -57,7 +57,6 @@ jobs:
       - name: Rm 400w Files in a Directory of 400 Children Directory
         run: |
           cd /tmp/juicefs-sync-test/
-          hello
           echo "rm 400w files in a directory of 400 children directory"
           git clone https://github.com/juicedata/juicefs.git
           cd juicefs
@@ -112,7 +111,6 @@ jobs:
         run: |
           cd /tmp/juicefs-sync-test/
           sudo ls -la .trash/
-          hello
           echo "rm 400w files in a directory of 400 children directory"
           git clone https://github.com/juicedata/juicefs.git
           cd juicefs
@@ -178,7 +176,6 @@ jobs:
       - name: Rm 400w Files in a Directory of 400 Children Directory
         run: |
           cd /tmp/juicefs-sync-test/
-          hello
           echo "rm 400w files in a directory of 400 children directory"
           git clone https://github.com/juicedata/juicefs.git
           cd juicefs
@@ -187,6 +184,7 @@ jobs:
           cd ../.trash/
           pwd
           ls -d -1 */ >/tmp/list
+          hello
           sudo chmod 777 /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh
           /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh /tmp/list
       - name: Log
@@ -239,9 +237,9 @@ jobs:
           cd ../.trash/
           pwd
           ls -d -1 */ >/tmp/list
+          hello
           sudo chmod 777 /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh
           /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh /tmp/list
-          hello
       - name: Log
         if: ${{ failure() }}
         run: |
