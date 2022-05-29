@@ -175,6 +175,7 @@ jobs:
       - name: Rm 400w Files in a Directory of 400 Children Directory
         run: |
           cd /tmp/juicefs-sync-test/
+          hello
           echo "rm 400w files in a directory of 400 children directory"
           git clone https://github.com/juicedata/juicefs.git
           cd juicefs
@@ -237,6 +238,7 @@ jobs:
           ls -d -1 */ >/tmp/list
           sudo chmod 777 /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh
           /tmp/juicefs-sync-test/juicefs/.github/workflows/bash/rm_trash.sh /tmp/list
+          hello
       - name: Log
         if: ${{ failure() }}
         run: |
