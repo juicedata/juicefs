@@ -137,6 +137,7 @@ runs:
         killall juicefs 
         sleep 3
         ./juicefs mount -d $meta_url $mp
-        diff -ur data/ $mp/data/ && echo "diff succeed"
+        diff -ur data/ $mp/data/ 
+        echo "diff succeed"
         rm $mp/data/ -rf
       shell: bash
