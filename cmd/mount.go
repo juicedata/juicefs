@@ -267,6 +267,8 @@ func prepareMp(mp string) {
 		if ino <= 1 && fi.Size() == 0 {
 			// a broken mount point, umount it
 			_ = doUmount(mp, true)
+		} else if ino == 1 {
+			logger.Warnf("%s is already mounted by juicefs, maybe you should umount it first.", mp)
 		}
 	}
 }
