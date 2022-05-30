@@ -2519,7 +2519,7 @@ type pair struct {
 	value []byte
 }
 
-func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, parents map[Ino][]Ino, refs map[chunkKey]int64, kv chan *pair) error {
+func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) error {
 	inode := e.Attr.Inode
 	attr := loadAttr(e.Attr)
 	attr.Parent = e.Parents[0]
@@ -2552,7 +2552,8 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, parents map[Ino][
 	return nil
 }
 
-func (m *kvMeta) decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino, refs map[chunkKey]int64, kv chan *pair, show_progress func(int64)) (*DumpedEntry, error) {
+func (m *kvMeta) decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino,
+	refs map[chunkKey]int64, kv chan *pair, showProgress func(int64)) (*DumpedEntry, error) {
 	if _, err := dec.Token(); err != nil {
 		return nil, err
 	}
@@ -2608,7 +2609,7 @@ func (m *kvMeta) decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, 
 						break
 					}
 					var child *DumpedEntry
-					child, err = m.decodeEntry(dec, e.Attr.Inode, cs, parents, refs, kv, show_progress)
+					child, err = m.decodeEntry(dec, e.Attr.Inode, cs, parents, refs, kv, showProgress)
 					if err != nil {
 						break
 					}
@@ -2637,8 +2638,8 @@ func (m *kvMeta) decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, 
 		}
 	}
 	if len(e.Parents) == 1 {
-		_ = m.loadEntry(&e, cs, parents, refs, kv)
-		show_progress(1)
+		_ = m.loadEntry(&e, kv)
+		showProgress(1)
 	}
 	_, err := dec.Token()
 	if err != nil {
