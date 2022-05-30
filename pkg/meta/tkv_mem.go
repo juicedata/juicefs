@@ -277,7 +277,7 @@ func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) erro
 	end := string(nextKey(prefix))
 	c.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
 		it := i.(*kvItem)
-		if it.key >= end {
+		if end != "" && it.key >= end {
 			return false
 		}
 		handler([]byte(it.key), it.value)
