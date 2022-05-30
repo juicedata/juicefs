@@ -26,6 +26,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -33,8 +34,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
-	"github.com/google/btree"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -64,7 +63,7 @@ type tkvClient interface {
 type kvMeta struct {
 	baseMeta
 	client tkvClient
-	snap   *memKV
+	snap   map[Ino]*DumpedEntry
 }
 
 var drivers = make(map[string]func(string) (tkvClient, error))
@@ -2233,17 +2232,22 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *kvMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
-	e := &DumpedEntry{}
-	f := func(tx kvTxn) error {
+func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
+	if m.snap != nil {
+		return nil
+	}
+	return m.client.txn(func(tx kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			logger.Warnf("inode %d not found", inode)
 		}
 
-		attr := &Attr{Typ: typ, Nlink: 1}
+		attr := &Attr{Nlink: 1}
 		m.parseAttr(a, attr)
-		e.Attr = dumpAttr(attr)
+		if a == nil && e.Attr != nil {
+			attr.Typ = typeFromString(e.Attr.Type)
+		}
+		e.Attr = dumpAttr(attr) // TODO: reduce memory allocation
 		e.Attr.Inode = inode
 
 		vals := tx.scanValues(m.xattrKey(inode, ""), -1, nil)
@@ -2257,7 +2261,7 @@ func (m *kvMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 		}
 
 		if attr.Typ == TypeFile {
-			vals = tx.scanRange(m.chunkKey(inode, 0), m.chunkKey(inode, uint32(attr.Length/ChunkSize)+1))
+			vals := tx.scanRange(m.chunkKey(inode, 0), m.chunkKey(inode, uint32(attr.Length/ChunkSize)+1))
 			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 				v, ok := vals[string(m.chunkKey(inode, indx))]
 				if !ok {
@@ -2278,12 +2282,7 @@ func (m *kvMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 			e.Symlink = string(l)
 		}
 		return nil
-	}
-	if m.snap != nil {
-		return e, m.snap.txn(f)
-	} else {
-		return e, m.txn(f)
-	}
+	})
 }
 
 func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
@@ -2292,40 +2291,46 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			panic(err)
 		}
 	}
-	var vals map[string][]byte
+	var entries map[string]*DumpedEntry
 	var err error
-	if m.snap != nil {
-		err = m.snap.txn(func(tx kvTxn) error {
-			vals = tx.scanValues(m.entryKey(inode, ""), -1, nil)
-			return nil
-		})
-	} else {
-		vals, err = m.scanValues(m.entryKey(inode, ""), -1, nil)
-	}
-	if err != nil {
-		return err
-	}
-	if showProgress != nil {
-		showProgress(int64(len(vals)), 0)
-	}
-	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
-		return err
-	}
 	var sortedName []string
-	for k := range vals {
-		sortedName = append(sortedName, k)
-	}
-	sort.Slice(sortedName, func(i, j int) bool { return sortedName[i][10:] < sortedName[j][10:] })
-
-	for idx, name := range sortedName {
-		typ, inode := m.parseEntry(vals[name])
-		var entry *DumpedEntry
-		entry, err = m.dumpEntry(inode, typ)
+	if m.snap != nil {
+		e := m.snap[inode]
+		entries = e.Entries
+		for n := range e.Entries {
+			sortedName = append(sortedName, n)
+		}
+	} else {
+		vals, err := m.scanValues(m.entryKey(inode, ""), -1, nil)
 		if err != nil {
 			return err
 		}
-		entry.Name = name[10:]
-		if typ == TypeDirectory {
+		entries = map[string]*DumpedEntry{}
+		for k, value := range vals {
+			name := k[10:]
+			typ, inode := m.parseEntry(value)
+			sortedName = append(sortedName, name)
+			entries[name] = &DumpedEntry{Name: name, Attr: &DumpedAttr{Inode: inode, Type: typeToString(typ)}}
+		}
+	}
+	sort.Slice(sortedName, func(i, j int) bool { return sortedName[i] < sortedName[j] })
+	if showProgress != nil && m.snap == nil {
+		showProgress(int64(len(entries)), 0)
+	}
+
+	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
+		return err
+	}
+
+	for idx, name := range sortedName {
+		entry := entries[name]
+		entry.Name = name
+		inode := entry.Attr.Inode
+		err = m.dumpEntry(inode, entry)
+		if err != nil {
+			return err
+		}
+		if entry.Attr.Type == "directory" {
 			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
 		} else {
 			err = entry.writeJSON(bw, depth+2)
@@ -2333,7 +2338,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		if err != nil {
 			return err
 		}
-		if idx != len(vals)-1 {
+		if idx != len(entries)-1 {
 			bwWrite(",")
 		}
 		if showProgress != nil {
@@ -2347,6 +2352,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
+			debug.PrintStack()
 			if e, ok := p.(error); ok {
 				err = e
 			} else {
@@ -2372,46 +2378,86 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	progress := utils.NewProgress(false, false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
+
 	if root == 1 { // make snap
-		switch c := m.client.(type) {
-		case *memKV:
-			m.snap = c
-		default:
-			defer func() { m.snap = nil }()
-			m.snap = &memKV{items: btree.New(2), temp: &kvItem{}}
-			bar := progress.AddCountBar("Snapshot keys", 0)
-			bUsed, _ := m.get(m.counterKey(usedSpace))
-			bInodes, _ := m.get(m.counterKey(totalInodes))
-			used := parseCounter(bUsed)
-			inodeTotal := parseCounter(bInodes)
-			var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
-			if inodeTotal > 0 {
-				guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
-			}
-			bar.SetCurrent(0) // Reset
-			bar.SetTotal(guessKeyTotal)
-			threshold := 0.1
-			err := m.client.scan(nil, func(key, value []byte) {
-				m.snap.set(string(key), value)
-				if bar.Current() > int64(math.Ceil(float64(guessKeyTotal)*(1-threshold))) {
-					guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
-					bar.SetTotal(guessKeyTotal)
+		m.snap = make(map[Ino]*DumpedEntry)
+		defer func() {
+			m.snap = nil
+		}()
+		bar := progress.AddCountBar("Scan keys", 0)
+		bUsed, _ := m.get(m.counterKey(usedSpace))
+		bInodes, _ := m.get(m.counterKey(totalInodes))
+		used := parseCounter(bUsed)
+		inodeTotal := parseCounter(bInodes)
+		var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
+		if inodeTotal > 0 {
+			guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
+		}
+		bar.SetCurrent(0) // Reset
+		bar.SetTotal(guessKeyTotal)
+		threshold := 0.1
+		var cnt int
+		err := m.client.scan(nil, func(key, value []byte) {
+			if len(key) > 9 && key[0] == 'A' {
+				ino := m.decodeInode(key[1:9])
+				e := m.snap[ino]
+				if e == nil {
+					e = &DumpedEntry{}
+					m.snap[ino] = e
 				}
-				bar.Increment()
-			})
-			if err != nil {
-				return err
+				switch key[9] {
+				case 'I':
+					attr := &Attr{Nlink: 1}
+					m.parseAttr(value, attr)
+					e.Attr = dumpAttr(attr)
+					e.Attr.Inode = ino
+				case 'C':
+					indx := binary.BigEndian.Uint32(key[10:])
+					ss := readSliceBuf(value)
+					slices := make([]*DumpedSlice, 0, len(ss))
+					for _, s := range ss {
+						slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+					}
+					e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
+				case 'D':
+					name := string(key[10:])
+					_, inode := m.parseEntry(value)
+					child := m.snap[inode]
+					if child == nil {
+						child = &DumpedEntry{}
+						m.snap[inode] = child
+					}
+					if e.Entries == nil {
+						e.Entries = map[string]*DumpedEntry{}
+					}
+					e.Entries[name] = child
+				case 'X':
+					e.Xattrs = append(e.Xattrs, &DumpedXattr{string(key[10:]), string(value)})
+				case 'S':
+					e.Symlink = string(value)
+				}
 			}
-			bar.Done()
+			cnt++
+			if cnt%100 == 0 && bar.Current() > int64(math.Ceil(float64(guessKeyTotal)*(1-threshold))) {
+				guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
+				bar.SetTotal(guessKeyTotal)
+			}
+			bar.Increment()
+		})
+		if err != nil {
+			return err
 		}
-		if trash, err = m.dumpEntry(TrashInode, TypeDirectory); err != nil {
-			trash = nil
+		bar.Done()
+		tree = m.snap[root]
+		trash = m.snap[TrashInode]
+	} else {
+		tree = &DumpedEntry{}
+		if err = m.dumpEntry(root, tree); err != nil {
+			return err
 		}
 	}
-	if tree, err = m.dumpEntry(root, TypeDirectory); err != nil {
-		return err
-	}
-	if tree == nil {
+
+	if tree == nil || tree.Attr == nil {
 		return errors.New("The entry of the root inode was not found")
 	}
 	tree.Name = "FSTree"
@@ -2436,14 +2482,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		}
 	}
 
-	if root == 1 {
-		err = m.snap.txn(func(tx kvTxn) error {
-			vals = tx.scanValues(m.fmtKey("SS"), -1, nil)
-			return nil
-		})
-	} else {
-		vals, err = m.scanValues(m.fmtKey("SS"), -1, nil)
-	}
+	vals, err = m.scanValues(m.fmtKey("SS"), -1, nil)
 	if err != nil {
 		return err
 	}
@@ -2486,6 +2525,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
 	bar.Increment()
+	bar.SetTotal(int64(len(m.snap)))
 	if trash != nil {
 		trash.Name = "Trash"
 		bar.IncrTotal(1)

@@ -208,6 +208,7 @@ func (de *DumpedEntry) writeJSON(bw *bufio.Writer, depth int) error {
 	write(fmt.Sprintf("\n%s}", prefix))
 	return nil
 }
+
 func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error {
 	prefix := strings.Repeat(jsonIndent, depth)
 	fieldPrefix := prefix + jsonIndent
