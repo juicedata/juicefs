@@ -41,7 +41,7 @@ runs:
         ./juicefs format $meta_url1 load-test --trash-days 0
         dir_name=test 
         echo "start mdtest..."
-        ./juicefs mdtest $meta_url1 $dir_name --dirs 10 --depth 3 --files 100 --thread 50 --write 8192
+        ./juicefs mdtest $meta_url1 $dir_name --dirs 10 --depth 3 --files 100 --threads 50 --write 8192
         echo "finish mdtest"
         echo "start dump..."
         ./juicefs dump $meta_url1 dump.json
