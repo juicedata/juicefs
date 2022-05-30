@@ -83,6 +83,7 @@ jobs:
           sudo du -sh /data/jfs/
           df -lh
 
+
       - name: Create Table
         run: |
           clickhouse-client --query "CREATE TABLE customer
