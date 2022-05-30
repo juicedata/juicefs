@@ -146,7 +146,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "read uncommitted"
+          isolation_level: "read uncommitted"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -162,7 +162,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "read committed"
+          isolation_level: "read committed"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -178,7 +178,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "repeatable read"
+          isolation_level: "repeatable read"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -194,7 +194,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "serializable"
+          isolation_level: "serializable"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -212,7 +212,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "read committed"
+          isolation_level: "read committed"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
