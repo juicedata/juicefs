@@ -153,7 +153,6 @@ jobs:
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
           time clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
           sudo du -sh /data/jfs/
-          sudo du -sh /var/jfsCache/
           df -lh
 
       - name: ClickHouse Test
@@ -255,7 +254,6 @@ jobs:
                                      ORDER BY
                                          year ASC,
                                          C_NATION ASC;"
-          sudo du -sh /var/jfsCache/
           sudo du -sh /data/jfs/
           df -lh
 
