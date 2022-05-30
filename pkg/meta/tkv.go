@@ -62,8 +62,8 @@ type tkvClient interface {
 
 type kvMeta struct {
 	baseMeta
-	client  tkvClient
-	entries map[Ino]*DumpedEntry
+	client tkvClient
+	snap   map[Ino]*DumpedEntry
 }
 
 var drivers = make(map[string]func(string) (tkvClient, error))
@@ -2233,8 +2233,7 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 }
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
-	if m.entries != nil {
-		sort.Slice(e.Chunks, func(i, j int) bool { return e.Chunks[i].Index < e.Chunks[j].Index })
+	if m.snap != nil {
 		return nil
 	}
 	return m.client.txn(func(tx kvTxn) error {
@@ -2295,8 +2294,8 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	var entries map[string]*DumpedEntry
 	var err error
 	var sortedName []string
-	if m.entries != nil {
-		e := m.entries[inode]
+	if m.snap != nil {
+		e := m.snap[inode]
 		entries = e.Entries
 		for n := range e.Entries {
 			sortedName = append(sortedName, n)
@@ -2315,7 +2314,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		}
 	}
 	sort.Slice(sortedName, func(i, j int) bool { return sortedName[i] < sortedName[j] })
-	if showProgress != nil && m.entries == nil {
+	if showProgress != nil && m.snap == nil {
 		showProgress(int64(len(entries)), 0)
 	}
 
@@ -2381,16 +2380,16 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	root = m.checkRoot(root)
 
 	if root == 1 { // make snap
-		m.entries = make(map[Ino]*DumpedEntry)
+		m.snap = make(map[Ino]*DumpedEntry)
 		defer func() {
-			m.entries = nil
+			m.snap = nil
 		}()
-		bar := progress.AddCountBar("Snapshot keys", 0)
+		bar := progress.AddCountBar("Scan keys", 0)
 		bUsed, _ := m.get(m.counterKey(usedSpace))
 		bInodes, _ := m.get(m.counterKey(totalInodes))
 		used := parseCounter(bUsed)
 		inodeTotal := parseCounter(bInodes)
-		var guessKeyTotal int64 = 3 // entry, attr, chunk
+		var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
 		if inodeTotal > 0 {
 			guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
 		}
@@ -2401,10 +2400,10 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		err := m.client.scan(nil, func(key, value []byte) {
 			if len(key) > 9 && key[0] == 'A' {
 				ino := m.decodeInode(key[1:9])
-				e := m.entries[ino]
+				e := m.snap[ino]
 				if e == nil {
 					e = &DumpedEntry{}
-					m.entries[ino] = e
+					m.snap[ino] = e
 				}
 				switch key[9] {
 				case 'I':
@@ -2423,10 +2422,10 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 				case 'D':
 					name := string(key[10:])
 					_, inode := m.parseEntry(value)
-					child := m.entries[inode]
+					child := m.snap[inode]
 					if child == nil {
 						child = &DumpedEntry{}
-						m.entries[inode] = child
+						m.snap[inode] = child
 					}
 					if e.Entries == nil {
 						e.Entries = map[string]*DumpedEntry{}
@@ -2449,8 +2448,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			return err
 		}
 		bar.Done()
-		tree = m.entries[root]
-		trash = m.entries[TrashInode]
+		tree = m.snap[root]
+		trash = m.snap[TrashInode]
 	} else {
 		tree = &DumpedEntry{}
 		if err = m.dumpEntry(root, tree); err != nil {
@@ -2526,7 +2525,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
 	bar.Increment()
-	bar.SetTotal(int64(len(m.entries)))
+	bar.SetTotal(int64(len(m.snap)))
 	if trash != nil {
 		trash.Name = "Trash"
 		bar.IncrTotal(1)
