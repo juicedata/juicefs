@@ -26,6 +26,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -2244,7 +2245,10 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 
 		attr := &Attr{Nlink: 1}
 		m.parseAttr(a, attr)
-		e.Attr = dumpAttr(attr)
+		if a == nil && e.Attr != nil {
+			attr.Typ = typeFromString(e.Attr.Type)
+		}
+		e.Attr = dumpAttr(attr) // TODO: reduce memory allocation
 		e.Attr.Inode = inode
 
 		vals := tx.scanValues(m.xattrKey(inode, ""), -1, nil)
@@ -2349,6 +2353,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
+			debug.PrintStack()
 			if e, ok := p.(error); ok {
 				err = e
 			} else {
@@ -2385,7 +2390,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		bInodes, _ := m.get(m.counterKey(totalInodes))
 		used := parseCounter(bUsed)
 		inodeTotal := parseCounter(bInodes)
-		var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
+		var guessKeyTotal int64 = 3 // entry, attr, chunk
 		if inodeTotal > 0 {
 			guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
 		}
@@ -2401,14 +2406,13 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 					e = &DumpedEntry{}
 					m.entries[ino] = e
 				}
-				if len(key) == 10 && key[9] == 'I' {
+				switch key[9] {
+				case 'I':
 					attr := &Attr{Nlink: 1}
 					m.parseAttr(value, attr)
 					e.Attr = dumpAttr(attr)
 					e.Attr.Inode = ino
-				} else if len(key) > 10 && key[9] == 'X' {
-					e.Xattrs = append(e.Xattrs, &DumpedXattr{string(key[10:]), string(value)})
-				} else if len(key) == 14 && key[9] == 'C' {
+				case 'C':
 					indx := binary.BigEndian.Uint32(key[10:])
 					ss := readSliceBuf(value)
 					slices := make([]*DumpedSlice, 0, len(ss))
@@ -2416,7 +2420,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 						slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
 					e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
-				} else if len(key) > 10 && key[9] == 'D' {
+				case 'D':
 					name := string(key[10:])
 					_, inode := m.parseEntry(value)
 					child := m.entries[inode]
@@ -2428,7 +2432,9 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 						e.Entries = map[string]*DumpedEntry{}
 					}
 					e.Entries[name] = child
-				} else if len(key) == 10 && key[9] == 'S' {
+				case 'X':
+					e.Xattrs = append(e.Xattrs, &DumpedXattr{string(key[10:]), string(value)})
+				case 'S':
 					e.Symlink = string(value)
 				}
 			}
@@ -2452,7 +2458,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		}
 	}
 
-	if tree.Attr == nil {
+	if tree == nil || tree.Attr == nil {
 		return errors.New("The entry of the root inode was not found")
 	}
 	tree.Name = "FSTree"
