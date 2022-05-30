@@ -146,7 +146,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "read uncommitted"
+          isolation_level: "read uncommitted"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -162,7 +162,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "read committed"
+          isolation_level: "read committed"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -178,7 +178,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "repeatable read"
+          isolation_level: "repeatable read"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -194,7 +194,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "serializable"
+          isolation_level: "serializable"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -212,7 +212,7 @@ jobs:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "200M"
           file_count: 5
-          isolaction: "read committed"
+          isolation_level: "read committed"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -480,27 +480,49 @@ jobs:
   #         file_count: 5
   #         isolation_level: "serializable"    
 
-  # upload-small-files-with-tikv:
-  #   runs-on: [self-hosted, daily-build]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Test
-  #       uses: ./.github/actions/gateway
-  #       with:
-  #         meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
-  #         file_size: "8K"
-  #         file_count: 10000
+  upload-small-files-with-tikv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.bash_profile
+          source /home/runner/.profile
+          tiup playground --mode tikv-slim &
+          sleep 5
 
-  # upload-big-files-with-tikv:
-  #   runs-on: [self-hosted, daily-build]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Test
-  #       uses: ./.github/actions/gateway
-  #       with:
-  #         meta_url: "tikv://172.27.0.1:2379,172.27.0.2:2379,172.27.0.3:2379/test"
-  #         file_size: "200M"
-  #         file_count: 5
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "tikv://127.0.0.1:2379"
+          file_size: "8K"
+          file_count: 10000
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  upload-big-files-with-tikv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.bash_profile
+          source /home/runner/.profile
+          tiup playground --mode tikv-slim &
+          sleep 5
+
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "tikv://127.0.0.1:2379"
+          file_size: "200M"
+          file_count: 5
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest

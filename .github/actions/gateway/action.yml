@@ -124,19 +124,20 @@ runs:
         ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
         pids+=($!)
         wait "${pids[@]}"
-        mkdir emptydir
-        ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/ --delete-dst --no-https -p $threads
+        # mkdir emptydir
+        # ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/ --delete-dst --no-https -p $threads
         rm -rf $HOME/.juicefs/cache/ || true
-        #./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
-        #./mc mb minio/$volume
-        #./mc cp --recursive data/  minio/$volume/data
+        # ./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
+        # ./mc mb minio/$volume
+        # ./mc cp --recursive data/  minio/$volume/data
         end=`date +%s`
         time=$((end-start))
         echo time cost is: $time second
-        #stop juicefs gateway
+        # stop juicefs gateway
         killall juicefs 
         sleep 3
         ./juicefs mount -d $meta_url $mp
-        diff -ur data/ $mp/data/ && echo "diff succeed"
+        diff -ur data/ $mp/data/ 
+        echo "diff succeed"
         rm $mp/data/ -rf
       shell: bash
