@@ -33,11 +33,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 1
-          
     - name: Build linux target
       run: |
         #if it is self ruuner
