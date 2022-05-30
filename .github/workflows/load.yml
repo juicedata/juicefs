@@ -117,8 +117,8 @@ jobs:
       - name: Load
         uses: ./.github/actions/load
         with:
-          meta_url: sqlite3://load-test1.db
-          meta_url: sqlite3://load-test2.db
+          meta_url1: sqlite3://load-test1.db
+          meta_url2: sqlite3://load-test2.db
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -137,8 +137,8 @@ jobs:
       - name: Test
         uses: ./.github/actions/load
         with:
-          meta_url: "tikv://127.0.0.1:2379/load_test1"
-          meta_url: "tikv://127.0.0.1:2379/load_test2"
+          meta_url1: "tikv://127.0.0.1:2379/load_test1"
+          meta_url2: "tikv://127.0.0.1:2379/load_test2"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -151,8 +151,8 @@ jobs:
       - name: Test
         uses: ./.github/actions/load
         with:
-          meta_url: "badger://load-test1"
-          meta_url: "badger://load-test2"
+          meta_url1: "badger://load-test1"
+          meta_url2: "badger://load-test2"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -167,8 +167,8 @@ jobs:
       - name: Test
         uses: ./.github/actions/load
         with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/load-test1"
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/load-test2"
+          meta_url1: "mysql://root:root@\\(127.0.0.1\\)/load-test1"
+          meta_url2: "mysql://root:root@\\(127.0.0.1\\)/load-test2"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
