@@ -1,12 +1,12 @@
 name: 'Load Action'
 description: 'Juicefs load action'
 inputs:
-  meta_url:  
-    description: 'meta url'
+  meta_url1:  
+    description: 'meta url to dump'
     required: true
     default: ''
-  load_file:  
-    description: 'path of the file to load'
+  meta_url2:  
+    description: 'meta url to load'
     required: true
     default: ''
   
@@ -25,27 +25,33 @@ runs:
 
     - name: Test
       run: |
-        mount_point=/tmp/juicefs-sync-test
-        meta_url=${{inputs.meta_url}}
-        load_file=${{inputs.load_file}}
-        echo meta_url is: $meta_url
-        db_name=$(basename $meta_url | awk -F? '{print $1}')
-        if [[ "$meta_url" == mysql* ]]; then
-          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
-        elif [[ "$meta_url" == postgres* ]]; then
+        meta_url1=${{inputs.meta_url1}}
+        meta_url2=${{inputs.meta_url2}}
+        echo meta_url1 is: $meta_url1, meta_url2 is: $meta_url2
+        db_name1=$(basename $meta_url1 | awk -F? '{print $1}')
+        db_name2=$(basename $meta_url2 | awk -F? '{print $1}')
+        if [[ "$meta_url1" == mysql* ]]; then
+          mysql -uroot -proot -e "drop database if exists $db_name1; create database $db_name1;" 
+          mysql -uroot -proot -e "drop database if exists $db_name2; create database $db_name2;" 
+        elif [[ "$meta_url1" == postgres* ]]; then
           export PGPASSWORD="postgres"
-          printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+          printf "\set AUTOCOMMIT on\ndrop database if exists $db_name1; create database $db_name1; " |  psql -U postgres -h localhost
+          printf "\set AUTOCOMMIT on\ndrop database if exists $db_name2; create database $db_name2; " |  psql -U postgres -h localhost
         fi
+        ./juicefs format $meta_url1 load-test --trash-days 0
+        dir_name=test 
+        echo "start mdtest..."
+        ./juicefs mdtest $meta_url1 $dir_name --dirs 10 --depth 3 --files 100 --thread 50 --write 8192
+        echo "finish mdtest"
+        echo "start dump..."
+        ./juicefs dump $meta_url1 dump.json
+        echo "finish dump"
         echo "start load..."
-        sudo ./juicefs load $meta_url $load_file
-        echo "finish load..."
-        sudo ./juicefs mount $meta_url $mount_point -d
-        if [ -d data/ ]; then
-          rm data/{*,.*} -rf || true
-        else
-          mkdir data
-        fi
-        echo "start sync..."
-        ./juicefs sync $mount_point/t1 data/t1 --exclude '.accesslog'
-        echo "finish sync..." 
+        sudo ./juicefs load $meta_url2 dump.json
+        echo "finish load"
+        ./juicefs mount -d $meta_url1 /tmp/load-test-1
+        ./juicefs mount -d $meta_url2 /tmp/load-test-2
+        echo "start diff..."
+        diff -ur /tmp/load-test-1/$dir_name /tmp/load-test-2/$dir_name 
+        echo "finish diff"
       shell: bash
