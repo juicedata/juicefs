@@ -2562,6 +2562,7 @@ type pair struct {
 func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) error {
 	inode := e.Attr.Inode
 	attr := loadAttr(e.Attr)
+	attr.Nlink = 1
 	attr.Parent = e.Parents[0]
 	if attr.Typ == TypeFile {
 		attr.Length = e.Attr.Length
@@ -2577,9 +2578,14 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) error {
 		}
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
+		nlink := uint32(2)
 		for name, c := range e.Entries {
 			kv <- &pair{m.entryKey(inode, string(unescape(name))), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)}
+			if c.Attr.Type == "directory" {
+				nlink++
+			}
 		}
+		attr.Nlink = nlink
 	} else if attr.Typ == TypeSymlink {
 		symL := unescape(e.Symlink)
 		attr.Length = uint64(len(symL))
@@ -2793,6 +2799,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	_, _ = dec.Token() // }
 	close(kv)
 	w.Wait()
+	progress.Done()
 
 	format, err := json.MarshalIndent(dm.Setting, "", "")
 	if err != nil {
@@ -2816,7 +2823,8 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		for i, ps := range parents {
 			if len(ps) > 1 {
 				a := tx.get(m.inodeKey(i))
-				// reset parent
+				// reset nlink and parent
+				binary.BigEndian.PutUint32(a[47:51], uint32(len(ps))) // nlink
 				binary.BigEndian.PutUint64(a[63:71], 0)
 				tx.set(m.inodeKey(i), a)
 				for k := range st {

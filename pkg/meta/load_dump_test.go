@@ -136,6 +136,9 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	if st := m.GetAttr(ctx, 4, attr); st != 0 || attr.Nlink != 2 { // hard link
 		t.Fatalf("getattr: %s, %d", st, attr.Nlink)
 	}
+	if ps := m.GetParents(ctx, 4); len(ps) != 2 || ps[1] != 1 || ps[3] != 1 {
+		t.Fatalf("getparents: %+v != {1:1, 3:1}", ps)
+	}
 	var target []byte
 
 	if st := m.ReadLink(ctx, 5, &target); st == 0 { // symlink
