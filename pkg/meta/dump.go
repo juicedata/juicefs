@@ -23,6 +23,8 @@ import (
 	"io"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const (
@@ -298,6 +300,164 @@ func loadAttr(d *DumpedAttr) *Attr {
 		Rdev:      d.Rdev,
 		Full:      true,
 	} // Length and Parent not set
+}
+
+type chunkKey struct {
+	id   uint64
+	size uint32
+}
+
+func loadEntries(r io.Reader, counters *DumpedCounters, load func(*DumpedEntry)) (
+	dm *DumpedMeta, parents map[Ino][]Ino, refs map[chunkKey]int64, err error) {
+	logger.Infoln("Loading from file ...")
+	dec := json.NewDecoder(r)
+	if _, err = dec.Token(); err != nil {
+		return
+	}
+
+	progress := utils.NewProgress(false, false)
+	bar := progress.AddCountBar("Loaded entries", 1) // with root
+	dm = &DumpedMeta{}
+	parents = make(map[Ino][]Ino)
+	refs = make(map[chunkKey]int64)
+	var name json.Token
+	for dec.More() {
+		name, err = dec.Token()
+		if err != nil {
+			err = fmt.Errorf("parse name: %s", err)
+			return
+		}
+		switch name {
+		case "Setting":
+			if err = dec.Decode(&dm.Setting); err == nil {
+				_, err = json.MarshalIndent(dm.Setting, "", "")
+			}
+		case "Counters":
+			if err = dec.Decode(&dm.Counters); err == nil {
+				bar.SetTotal(dm.Counters.UsedInodes) // TODO
+			}
+		case "Sustained":
+			err = dec.Decode(&dm.Sustained)
+		case "DelFiles":
+			err = dec.Decode(&dm.DelFiles)
+		case "FSTree":
+			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load)
+		case "Trash":
+			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load)
+		}
+		if err != nil {
+			err = fmt.Errorf("load %v: %s", name, err)
+			return
+		}
+	}
+	_, _ = dec.Token() // }
+	progress.Done()
+	logger.Infof("Dumped counters: %+v", *dm.Counters)
+	logger.Infof("Loaded counters: %+v", *counters)
+	return
+}
+
+func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino,
+	refs map[chunkKey]int64, bar *utils.Bar, load func(*DumpedEntry)) (*DumpedEntry, error) {
+	if _, err := dec.Token(); err != nil {
+		return nil, err
+	}
+	var e = DumpedEntry{}
+	for dec.More() {
+		name, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		switch name {
+		case "attr":
+			err = dec.Decode(&e.Attr)
+			if err == nil {
+				inode := e.Attr.Inode
+				if typeFromString(e.Attr.Type) == TypeDirectory {
+					e.Attr.Nlink = 2
+				} else {
+					e.Attr.Nlink = 1
+				}
+				e.Parents = append(parents[inode], parent)
+				parents[inode] = e.Parents
+				if len(e.Parents) == 1 {
+					if inode > 1 && inode != TrashInode {
+						cs.UsedSpace += align4K(e.Attr.Length)
+						cs.UsedInodes += 1
+					}
+					if inode < TrashInode {
+						if cs.NextInode <= int64(inode) {
+							cs.NextInode = int64(inode) + 1
+						}
+					} else {
+						if cs.NextTrash < int64(inode)-TrashInode {
+							cs.NextTrash = int64(inode) - TrashInode
+						}
+					}
+				}
+			}
+		case "chunks":
+			err = dec.Decode(&e.Chunks)
+			if err == nil && len(e.Parents) == 1 {
+				for _, c := range e.Chunks {
+					for _, s := range c.Slices {
+						refs[chunkKey{s.Chunkid, s.Size}]++
+						if cs.NextChunk <= int64(s.Chunkid) {
+							cs.NextChunk = int64(s.Chunkid) + 1
+						}
+					}
+				}
+			}
+		case "entries":
+			e.Entries = make(map[string]*DumpedEntry)
+			_, err = dec.Token()
+			if err == nil {
+				for dec.More() {
+					var n json.Token
+					n, err = dec.Token()
+					if err != nil {
+						break
+					}
+					var child *DumpedEntry
+					child, err = decodeEntry(dec, e.Attr.Inode, cs, parents, refs, bar, load)
+					if err != nil {
+						break
+					}
+					if typeFromString(child.Attr.Type) == TypeDirectory {
+						e.Attr.Nlink++
+					}
+					e.Entries[n.(string)] = &DumpedEntry{
+						Attr: &DumpedAttr{
+							Inode: child.Attr.Inode,
+							Type:  child.Attr.Type,
+						},
+					}
+				}
+				if err == nil {
+					var t json.Token
+					t, err = dec.Token()
+					if err == nil && t != json.Delim('}') {
+						err = fmt.Errorf("unexpected %v", t)
+					}
+				}
+			}
+		case "symlink":
+			err = dec.Decode(&e.Symlink)
+		case "xattrs":
+			err = dec.Decode(&e.Xattrs)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("decode %v: %s", name, err)
+		}
+	}
+	if len(e.Parents) == 1 {
+		load(&e)
+		bar.Increment()
+	}
+	if _, err := dec.Token(); err != nil {
+		return nil, err
+	}
+	return &e, nil
 }
 
 func collectEntry(e *DumpedEntry, entries map[Ino]*DumpedEntry, showProgress func(totalIncr, currentIncr int64)) error {
