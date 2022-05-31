@@ -3262,30 +3262,21 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	return bw.Flush()
 }
 
-func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(), cs *DumpedCounters, refs map[string]int) {
-	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
+func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func()) {
 	ctx := Background
+	inode := e.Attr.Inode
 	attr := loadAttr(e.Attr)
-	numParents := len(e.Parents)
-	if numParents == 1 {
-		attr.Parent = e.Parents[0]
-	} else if numParents == 0 {
-		logger.Fatalf("No parent for inode: %d", inode)
-	} else if attr.Typ == TypeDirectory {
-		logger.Fatalf("Too many parents for directory inode %d: %v", inode, e.Parents)
-	}
+	attr.Parent = e.Parents[0]
 	batch := 100
 	if attr.Typ == TypeFile {
 		attr.Length = e.Attr.Length
 		for _, c := range e.Chunks {
+			if len(c.Slices) == 0 {
+				continue
+			}
 			slices := make([]string, 0, len(c.Slices))
 			for _, s := range c.Slices {
 				slices = append(slices, string(marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)))
-				refs[m.sliceKey(s.Chunkid, s.Size)]++
-				if cs.NextChunk < int64(s.Chunkid) {
-					cs.NextChunk = int64(s.Chunkid)
-				}
 				if len(slices) > batch {
 					p.RPush(ctx, m.chunkKey(inode, c.Index), slices)
 					tryExec()
@@ -3299,9 +3290,8 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
 		dentries := make(map[string]interface{}, batch)
-		for k := range e.Entries {
-			entry := e.Entries[k]
-			dentries[string(unescape(k))] = m.packEntry(typeFromString(entry.Attr.Type), entry.Attr.Inode)
+		for name, c := range e.Entries {
+			dentries[string(unescape(name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			if len(dentries) >= batch {
 				p.HSet(ctx, m.entryKey(inode), dentries)
 				tryExec()
@@ -3316,30 +3306,13 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 		attr.Length = uint64(len(symL))
 		p.Set(ctx, m.symKey(inode), symL, 0)
 	}
-	if inode > 1 && inode != TrashInode {
-		cs.UsedSpace += align4K(attr.Length)
-		cs.UsedInodes += 1
-	}
-	if inode < TrashInode {
-		if cs.NextInode < int64(inode) {
-			cs.NextInode = int64(inode)
-		}
-	} else {
-		if cs.NextTrash < int64(inode)-TrashInode {
-			cs.NextTrash = int64(inode) - TrashInode
-		}
-	}
+
 	if len(e.Xattrs) > 0 {
 		xattrs := make(map[string]interface{})
 		for _, x := range e.Xattrs {
 			xattrs[x.Name] = unescape(x.Value)
 		}
 		p.HSet(ctx, m.xattrKey(inode), xattrs)
-	}
-	if numParents > 1 {
-		for _, parent := range e.Parents {
-			p.HIncrBy(ctx, m.parentKey(inode), parent.String(), 1)
-		}
 	}
 	p.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 }
@@ -3363,39 +3336,6 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 		}
 	}
 
-	logger.Infoln("Reading file ...")
-	dec := json.NewDecoder(r)
-	dm := &DumpedMeta{}
-	if err = dec.Decode(dm); err != nil {
-		return err
-	}
-	format, err := json.MarshalIndent(dm.Setting, "", "")
-	if err != nil {
-		return err
-	}
-
-	progress := utils.NewProgress(false, false)
-	bar := progress.AddCountBar("Collected entries", 1) // with root
-	showProgress := func(totalIncr, currentIncr int64) {
-		bar.IncrTotal(totalIncr)
-		bar.IncrInt64(currentIncr)
-	}
-	dm.FSTree.Attr.Inode = 1
-	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries, showProgress); err != nil {
-		return err
-	}
-	if dm.Trash != nil {
-		bar.IncrTotal(1)
-		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
-			return err
-		}
-	}
-	bar.Done()
-
-	counters := &DumpedCounters{}
-	refs := make(map[string]int)
-	bar = progress.AddCountBar("Loaded entries", int64(len(entries)))
 	p := m.rdb.TxPipeline()
 	tryExec := func() {
 		if p.Len() > 1000 {
@@ -3419,28 +3359,33 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 			}
 		}
 	}()
-	for _, entry := range entries {
-		bar.Increment()
-		m.loadEntry(entry, p, tryExec, counters, refs)
-		tryExec()
-	}
-	progress.Done()
 
-	logger.Infof("Dumped counters: %+v", *dm.Counters)
-	logger.Infof("Loaded counters: %+v", *counters)
+	counters := &DumpedCounters{
+		NextInode: 2,
+		NextChunk: 1,
+	}
+	dm, parents, refs, err := loadEntries(r, counters, func(e *DumpedEntry) { m.loadEntry(e, p, tryExec) })
+	if err != nil {
+		return err
+	}
+
+	format, _ := json.MarshalIndent(dm.Setting, "", "")
 	p.Set(ctx, m.setting(), format, 0)
 	cs := make(map[string]interface{})
 	cs[m.prefix+usedSpace] = counters.UsedSpace
 	cs[m.prefix+totalInodes] = counters.UsedInodes
-	cs[m.prefix+"nextinode"] = counters.NextInode
-	cs[m.prefix+"nextchunk"] = counters.NextChunk
+	cs[m.prefix+"nextinode"] = counters.NextInode - 1
+	cs[m.prefix+"nextchunk"] = counters.NextChunk - 1
 	cs[m.prefix+"nextsession"] = counters.NextSession
 	cs[m.prefix+"nextTrash"] = counters.NextTrash
 	p.MSet(ctx, cs)
-	if len(dm.DelFiles) > 0 {
-		zs := make([]*redis.Z, 0, len(dm.DelFiles))
+	if l := len(dm.DelFiles); l > 0 {
+		if l > 100 {
+			l = 100
+		}
+		zs := make([]*redis.Z, 0, l)
 		for _, d := range dm.DelFiles {
-			if len(zs) > 100 {
+			if len(zs) >= 100 {
 				p.ZAdd(ctx, m.delfiles(), zs...)
 				tryExec()
 				zs = zs[:0]
@@ -3460,11 +3405,34 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 				tryExec()
 				slices = make(map[string]interface{})
 			}
-			slices[k] = v - 1
+			slices[m.sliceKey(k.id, k.size)] = v - 1
 		}
 	}
 	if len(slices) > 0 {
 		p.HSet(ctx, m.sliceRefs(), slices)
+	}
+	if _, err = p.Exec(ctx); err != nil {
+		return err
+	}
+	// update nlinks and parents for hardlinks
+	st := make(map[Ino]int64)
+	for i, ps := range parents {
+		if len(ps) > 1 {
+			a, _ := m.rdb.Get(ctx, m.inodeKey(i)).Bytes()
+			// reset nlink and parent
+			binary.BigEndian.PutUint32(a[47:51], uint32(len(ps))) // nlink
+			binary.BigEndian.PutUint64(a[63:71], 0)
+			p.Set(ctx, m.inodeKey(i), a, 0)
+			for k := range st {
+				delete(st, k)
+			}
+			for _, p := range ps {
+				st[p] = st[p] + 1
+			}
+			for parent, c := range st {
+				p.HIncrBy(ctx, m.parentKey(i), parent.String(), c)
+			}
+		}
 	}
 	_, err = p.Exec(ctx)
 	return err
