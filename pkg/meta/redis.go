@@ -3360,11 +3360,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 		}
 	}()
 
-	counters := &DumpedCounters{
-		NextInode: 2,
-		NextChunk: 1,
-	}
-	dm, parents, refs, err := loadEntries(r, counters, func(e *DumpedEntry) { m.loadEntry(e, p, tryExec) })
+	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, p, tryExec) })
 	if err != nil {
 		return err
 	}

@@ -307,8 +307,8 @@ type chunkKey struct {
 	size uint32
 }
 
-func loadEntries(r io.Reader, counters *DumpedCounters, load func(*DumpedEntry)) (
-	dm *DumpedMeta, parents map[Ino][]Ino, refs map[chunkKey]int64, err error) {
+func loadEntries(r io.Reader, load func(*DumpedEntry)) (dm *DumpedMeta,
+	counters *DumpedCounters, parents map[Ino][]Ino, refs map[chunkKey]int64, err error) {
 	logger.Infoln("Loading from file ...")
 	dec := json.NewDecoder(r)
 	if _, err = dec.Token(); err != nil {
@@ -318,6 +318,10 @@ func loadEntries(r io.Reader, counters *DumpedCounters, load func(*DumpedEntry))
 	progress := utils.NewProgress(false, false)
 	bar := progress.AddCountBar("Loaded entries", 1) // with root
 	dm = &DumpedMeta{}
+	counters = &DumpedCounters{ // rebuild counters
+		NextInode: 2,
+		NextChunk: 1,
+	}
 	parents = make(map[Ino][]Ino)
 	refs = make(map[chunkKey]int64)
 	var name json.Token
