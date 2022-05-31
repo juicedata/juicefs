@@ -2562,7 +2562,6 @@ type pair struct {
 func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) error {
 	inode := e.Attr.Inode
 	attr := loadAttr(e.Attr)
-	attr.Nlink = 1
 	attr.Parent = e.Parents[0]
 	if attr.Typ == TypeFile {
 		attr.Length = e.Attr.Length
@@ -2578,14 +2577,9 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) error {
 		}
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
-		nlink := uint32(2)
 		for name, c := range e.Entries {
 			kv <- &pair{m.entryKey(inode, string(unescape(name))), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)}
-			if c.Attr.Type == "directory" {
-				nlink++
-			}
 		}
-		attr.Nlink = nlink
 	} else if attr.Typ == TypeSymlink {
 		symL := unescape(e.Symlink)
 		attr.Length = uint64(len(symL))
@@ -2614,6 +2608,11 @@ func (m *kvMeta) decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, 
 			err = dec.Decode(&e.Attr)
 			if err == nil {
 				inode := e.Attr.Inode
+				if typeFromString(e.Attr.Type) == TypeDirectory {
+					e.Attr.Nlink = 2
+				} else {
+					e.Attr.Nlink = 1
+				}
 				e.Parents = append(parents[inode], parent)
 				parents[inode] = e.Parents
 				if len(e.Parents) == 1 {
@@ -2658,6 +2657,9 @@ func (m *kvMeta) decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, 
 					child, err = m.decodeEntry(dec, e.Attr.Inode, cs, parents, refs, kv, showProgress)
 					if err != nil {
 						break
+					}
+					if typeFromString(child.Attr.Type) == TypeDirectory {
+						e.Attr.Nlink++
 					}
 					e.Entries[n.(string)] = &DumpedEntry{
 						Attr: &DumpedAttr{
@@ -2724,11 +2726,11 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	if m.Name() == "etcd" {
 		batch = 128
 	}
-	var w sync.WaitGroup
+	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
-		w.Add(1)
+		wg.Add(1)
 		go func() {
-			defer w.Done()
+			defer wg.Done()
 			var buffer []*pair
 			for p := range kv {
 				buffer = append(buffer, p)
@@ -2759,9 +2761,9 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		}()
 	}
 
-	logger.Infoln("loading from file ...")
+	logger.Infoln("Loading from file ...")
 	progress := utils.NewProgress(false, false)
-	bar := progress.AddCountBar("loaded", 1) // with root
+	bar := progress.AddCountBar("Loaded entries", 1) // with root
 	showProgress := func(currentIncr int64) {
 		bar.IncrInt64(currentIncr)
 	}
@@ -2770,6 +2772,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	if _, err := dec.Token(); err != nil {
 		return err
 	}
+	var format []byte
 	for dec.More() {
 		name, err := dec.Token()
 		if err != nil {
@@ -2778,6 +2781,9 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		switch name {
 		case "Setting":
 			err = dec.Decode(&dm.Setting)
+			if err == nil {
+				format, err = json.MarshalIndent(dm.Setting, "", "")
+			}
 		case "Counters":
 			err = dec.Decode(&dm.Counters)
 			if err == nil {
@@ -2798,13 +2804,9 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	}
 	_, _ = dec.Token() // }
 	close(kv)
-	w.Wait()
+	wg.Wait()
 	progress.Done()
 
-	format, err := json.MarshalIndent(dm.Setting, "", "")
-	if err != nil {
-		return err
-	}
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
 	return m.txn(func(tx kvTxn) error {
