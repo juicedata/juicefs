@@ -22,7 +22,7 @@ runs:
         make juicefs 
       shell: bash
 
-    - name: Test
+    - name: Test mdtest && load && load
       run: |
         meta_url1=${{inputs.meta_url1}}
         meta_url2=${{inputs.meta_url2}}
@@ -50,9 +50,4 @@ runs:
         echo `date`: "start load..."
         ./juicefs load $meta_url2 dump.json
         echo `date`: "finish load"
-        ./juicefs mount -d $meta_url1 /tmp/load-test-1
-        ./juicefs mount -d $meta_url2 /tmp/load-test-2
-        # echo `date`: "start diff..."
-        # diff -ur /tmp/load-test-1/$dir_name /tmp/load-test-2/$dir_name 
-        # echo `date`: "finish diff"
       shell: bash
