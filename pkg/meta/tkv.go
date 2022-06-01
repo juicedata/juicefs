@@ -2648,28 +2648,28 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
+	format, _ := json.MarshalIndent(dm.Setting, "", "")
+	kv <- &pair{m.fmtKey("setting"), format}
+	kv <- &pair{m.counterKey(usedSpace), packCounter(counters.UsedSpace)}
+	kv <- &pair{m.counterKey(totalInodes), packCounter(counters.UsedInodes)}
+	kv <- &pair{m.counterKey("nextInode"), packCounter(counters.NextInode)}
+	kv <- &pair{m.counterKey("nextChunk"), packCounter(counters.NextChunk)}
+	kv <- &pair{m.counterKey("nextSession"), packCounter(counters.NextSession)}
+	kv <- &pair{m.counterKey("nextTrash"), packCounter(counters.NextTrash)}
+	for _, d := range dm.DelFiles {
+		kv <- &pair{m.delfileKey(d.Inode, d.Length), m.packInt64(d.Expire)}
+	}
+	for k, v := range refs {
+		if v > 1 {
+			kv <- &pair{m.chunkKey(Ino(k.id), k.size), packCounter(v - 1)}
+		}
+	}
 	close(kv)
 	wg.Wait()
 
-	format, _ := json.MarshalIndent(dm.Setting, "", "")
+	// update nlinks and parents for hardlinks
+	st := make(map[Ino]int64)
 	return m.txn(func(tx kvTxn) error {
-		tx.set(m.fmtKey("setting"), format)
-		tx.set(m.counterKey(usedSpace), packCounter(counters.UsedSpace))
-		tx.set(m.counterKey(totalInodes), packCounter(counters.UsedInodes))
-		tx.set(m.counterKey("nextInode"), packCounter(counters.NextInode))
-		tx.set(m.counterKey("nextChunk"), packCounter(counters.NextChunk))
-		tx.set(m.counterKey("nextSession"), packCounter(counters.NextSession))
-		tx.set(m.counterKey("nextTrash"), packCounter(counters.NextTrash))
-		for _, d := range dm.DelFiles {
-			tx.set(m.delfileKey(d.Inode, d.Length), m.packInt64(d.Expire))
-		}
-		for k, v := range refs {
-			if v > 1 {
-				tx.set(m.chunkKey(Ino(k.id), k.size), packCounter(v-1))
-			}
-		}
-		// update nlinks and parents for hardlinks
-		st := make(map[Ino]int64)
 		for i, ps := range parents {
 			if len(ps) > 1 {
 				a := tx.get(m.inodeKey(i))
