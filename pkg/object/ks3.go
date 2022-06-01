@@ -133,6 +133,9 @@ func (s *ks3) Delete(key string) error {
 		Key:    &key,
 	}
 	_, err := s.s3.DeleteObject(&param)
+	if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
+		return nil
+	}
 	return err
 }
 

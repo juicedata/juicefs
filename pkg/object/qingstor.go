@@ -32,6 +32,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/qingstor/qingstor-sdk-go/v4/config"
+	"github.com/qingstor/qingstor-sdk-go/v4/request/errors"
 	qs "github.com/qingstor/qingstor-sdk-go/v4/service"
 )
 
@@ -54,10 +55,9 @@ func (q *qingstor) Create() error {
 func (q *qingstor) Head(key string) (Object, error) {
 	r, err := q.bucket.HeadObject(key, nil)
 	if err != nil {
-		return nil, err
-	}
-	if *r.StatusCode == http.StatusNotFound {
-		return nil, os.ErrNotExist
+		if e, ok := err.(*errors.QingStorError); ok && e.StatusCode == http.StatusNotFound {
+			return nil, os.ErrNotExist
+		}
 	}
 	return &obj{
 		key,
