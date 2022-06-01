@@ -15,6 +15,11 @@ on:
   schedule:
     - cron:  '0 3 * * *'
   workflow_dispatch:
+    inputs:
+      files:
+        description: 'file count to load'
+        required: true
+        default: 5000000
 
 jobs:
   load-to-pg:
@@ -40,13 +45,15 @@ jobs:
       - name: Init
         run: |
           sudo chmod 777 /var
-          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
-        uses: ./.github/actions/load
+        uses: ./.github/actions/load2
         with:
-          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
-          load_file: "meta_with_4M_Empty_files.json"            
+          meta_url1: "postgres://postgres:postgres@127.0.0.1:5432/load_test1?sslmode=disable" 
+          meta_url2: "postgres://postgres:postgres@127.0.0.1:5432/load_test2?sslmode=disable"
+          files: ${{ github.event.inputs.files }} 
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
           
   load-to-mysql:
     runs-on: ubuntu-latest
@@ -60,13 +67,15 @@ jobs:
         run: |
           sudo chmod 777 /var
           sudo /etc/init.d/mysql start
-          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
-        uses: ./.github/actions/load
+        uses: ./.github/actions/load2
         with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test" 
-          load_file: "meta_with_4M_Empty_files.json"      
+          meta_url1: "mysql://root:root@\\(127.0.0.1\\)/load_test1" 
+          meta_url2: "mysql://root:root@\\(127.0.0.1\\)/load_test2" 
+          files: ${{ github.event.inputs.files }} 
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
             
   load-to-redis:
     runs-on: ubuntu-latest
@@ -92,13 +101,15 @@ jobs:
       - name: Init
         run: |
           sudo chmod 777 /var
-          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
-        uses: ./.github/actions/load
+        uses: ./.github/actions/load2
         with:
-          meta_url: redis://127.0.0.1:6379/1 
-          load_file: "meta_with_4M_Empty_files.json"      
+          meta_url1: redis://127.0.0.1:6379/1 
+          meta_url2: redis://127.0.0.1:6379/2
+          files: ${{ github.event.inputs.files }} 
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
 
   load-to-sqlite3:
     runs-on: ubuntu-latest   
@@ -111,11 +122,65 @@ jobs:
       - name: Init
         run: |
           sudo chmod 777 /var
-          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
-        uses: ./.github/actions/load
+        uses: ./.github/actions/load2
         with:
-          meta_url: sqlite3://sync-test.db
-          load_file: "meta_with_4M_Empty_files.json"      
-    
+          meta_url1: sqlite3://load-test1.db
+          meta_url2: sqlite3://load-test2.db
+          files: ${{ github.event.inputs.files }} 
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  load-to-tikv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.bash_profile
+          source /home/runner/.profile
+          tiup playground --mode tikv-slim &
+          sleep 5
+      - name: Test
+        uses: ./.github/actions/load2
+        with:
+          meta_url1: "tikv://127.0.0.1:2379/load_test1"
+          meta_url2: "tikv://127.0.0.1:2379/load_test2"
+          files: ${{ github.event.inputs.files }} 
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  load-to-badgerdb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: sudo go get github.com/dgraph-io/badger/v3
+      - name: Test
+        uses: ./.github/actions/load2
+        with:
+          meta_url1: "badger://load-test1"
+          meta_url2: "badger://load-test2"
+          files: ${{ github.event.inputs.files }} 
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  load-to-mariadb:
+    runs-on: ubuntu-latest          
+    steps:
+      - uses: actions/checkout@v3
+      - name: install 
+        run: | 
+          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+      - name: Test
+        uses: ./.github/actions/load2
+        with:
+          meta_url1: "mysql://root:root@\\(127.0.0.1\\)/test1"
+          meta_url2: "mysql://root:root@\\(127.0.0.1\\)/test2"
+          files: ${{ github.event.inputs.files }} 
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
