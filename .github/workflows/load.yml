@@ -15,6 +15,11 @@ on:
   schedule:
     - cron:  '0 3 * * *'
   workflow_dispatch:
+    inputs:
+      files:
+        description: 'file count to load'
+        required: true
+        default: 5000000
 
 jobs:
   load-to-pg:
@@ -44,7 +49,8 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url1: "postgres://postgres:postgres@127.0.0.1:5432/load_test1?sslmode=disable" 
-          meta_url2: "postgres://postgres:postgres@127.0.0.1:5432/load_test2?sslmode=disable" 
+          meta_url2: "postgres://postgres:postgres@127.0.0.1:5432/load_test2?sslmode=disable"
+          files: ${{ github.event.inputs.files }} 
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -66,6 +72,7 @@ jobs:
         with:
           meta_url1: "mysql://root:root@\\(127.0.0.1\\)/load_test1" 
           meta_url2: "mysql://root:root@\\(127.0.0.1\\)/load_test2" 
+          files: ${{ github.event.inputs.files }} 
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -99,6 +106,7 @@ jobs:
         with:
           meta_url1: redis://127.0.0.1:6379/1 
           meta_url2: redis://127.0.0.1:6379/2
+          files: ${{ github.event.inputs.files }} 
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -119,6 +127,7 @@ jobs:
         with:
           meta_url1: sqlite3://load-test1.db
           meta_url2: sqlite3://load-test2.db
+          files: ${{ github.event.inputs.files }} 
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -139,6 +148,7 @@ jobs:
         with:
           meta_url1: "tikv://127.0.0.1:2379/load_test1"
           meta_url2: "tikv://127.0.0.1:2379/load_test2"
+          files: ${{ github.event.inputs.files }} 
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -153,6 +163,7 @@ jobs:
         with:
           meta_url1: "badger://load-test1"
           meta_url2: "badger://load-test2"
+          files: ${{ github.event.inputs.files }} 
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -169,6 +180,7 @@ jobs:
         with:
           meta_url1: "mysql://root:root@\\(127.0.0.1\\)/load-test1"
           meta_url2: "mysql://root:root@\\(127.0.0.1\\)/load-test2"
+          files: ${{ github.event.inputs.files }} 
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
