@@ -106,7 +106,6 @@ $ juicefs format \
 | [华为云 OBS](#华为云-obs)                   | `obs`        |
 | [百度云 BOS](#百度云-bos)                   | `bos`        |
 | [金山云 KS3](#金山云-ks3)                   | `ks3`        |
-| [美团云 MMS](#美团云-mms)                   | `mss`        |
 | [网易云 NOS](#网易云-nos)                   | `nos`        |
 | [青云 QingStor](#青云-qingstor)             | `qingstor`   |
 | [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`      |
@@ -508,20 +507,6 @@ $ juicefs format \
 ```bash
 $ juicefs format \
     --storage ks3 \
-    --bucket https://<bucket>.<endpoint> \
-    ... \
-    myjfs
-```
-
-## 美团云 MMS
-
-使用美团云 MMS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.mtyun.com/doc/api/mss/mss/fang-wen-kong-zhi) 了解如何创建 `Access key` 和 `Secret key`。
-
-`--bucket` 选项的格式为 `https://<bucket>.<endpoint>`，请将 `<endpoint>` 替换成你实际地址，例如：`mtmss.com`。[点此查看](https://www.mtyun.com/doc/products/storage/mss/index#%E5%8F%AF%E7%94%A8%E5%8C%BA%E5%9F%9F) 所有可用的 endpoint 地址。例如：
-
-```bash
-$ juicefs format \
-    --storage mss \
     --bucket https://<bucket>.<endpoint> \
     ... \
     myjfs

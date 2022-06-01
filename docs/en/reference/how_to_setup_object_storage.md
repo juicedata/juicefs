@@ -509,20 +509,6 @@ $ juicefs format \
     myjfs
 ```
 
-## Mtyun Storage Service
-
-Please follow [this document](https://www.mtyun.com/doc/api/mss/mss/fang-wen-kong-zhi) to learn how to get access key and secret key.
-
-The `--bucket` option format is `https://<bucket>.<endpoint>`, and please replace `<endpoint>` with specific value, e.g. `mtmss.com`. You could find all available endpoints [here](https://www.mtyun.com/doc/products/storage/mss/index#%E5%8F%AF%E7%94%A8%E5%8C%BA%E5%9F%9F). For example:
-
-```bash
-$ juicefs format \
-    --storage mss \
-    --bucket https://<bucket>.<endpoint> \
-    ... \
-    myjfs
-```
-
 ## NetEase Object Storage
 
 Please follow [this document](https://www.163yun.com/help/documents/55485278220111872) to learn how to get access key and secret key.
