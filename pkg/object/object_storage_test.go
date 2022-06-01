@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func get(s ObjectStorage, k string, off, limit int64) (string, error) {
@@ -369,18 +368,9 @@ func TestNOS(t *testing.T) {
 	if os.Getenv("NOS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	nos, _ := newNOS("https://test.nos-eastchina1.126.net",
+	nos, _ := newNOS(os.Getenv("NOS_ENDPOINT"),
 		os.Getenv("NOS_ACCESS_KEY"), os.Getenv("NOS_SECRET_KEY"))
 	testStorage(t, nos)
-}
-
-func TestMSS(t *testing.T) {
-	if os.Getenv("MSS_ACCESS_KEY") == "" {
-		t.SkipNow()
-	}
-	mss, _ := newMSS("https://test.mtmss.com",
-		os.Getenv("MSS_ACCESS_KEY"), os.Getenv("MSS_SECRET_KEY"))
-	testStorage(t, mss)
 }
 
 func TestJSS(t *testing.T) {
@@ -396,7 +386,7 @@ func TestSpeedy(t *testing.T) {
 	if os.Getenv("SPEEDY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	cos, _ := newSpeedy("https://test.oss-cn-beijing.speedycloud.org",
+	cos, _ := newSpeedy(os.Getenv("SPEEDY_ENDPOINT"),
 		os.Getenv("SPEEDY_ACCESS_KEY"), os.Getenv("SPEEDY_SECRET_KEY"))
 	testStorage(t, cos)
 }
@@ -596,9 +586,11 @@ func TestPG(t *testing.T) {
 		t.SkipNow()
 	}
 	s, err := newSQLStore("postgres", os.Getenv("PG_ADDR"), os.Getenv("PG_USER"), os.Getenv("PG_PASSWORD"))
-	if err == nil {
-		testStorage(t, s)
+	if err != nil {
+		t.Fatalf("create: %s", err)
 	}
+	testStorage(t, s)
+
 }
 
 func TestMySQL(t *testing.T) {
@@ -606,9 +598,10 @@ func TestMySQL(t *testing.T) {
 		t.SkipNow()
 	}
 	s, err := newSQLStore("mysql", os.Getenv("MYSQL_ADDR"), os.Getenv("MYSQL_USER"), os.Getenv("MYSQL_PASSWORD"))
-	if err == nil {
-		testStorage(t, s)
+	if err != nil {
+		t.Fatalf("create: %s", err)
 	}
+	testStorage(t, s)
 }
 
 func TestNameString(t *testing.T) {
