@@ -119,3 +119,51 @@ jobs:
           meta_url: sqlite3://sync-test.db
           load_file: "meta_with_4M_Empty_files.json"      
     
+  load-to-tikv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.bash_profile
+          source /home/runner/.profile
+          tiup playground --mode tikv-slim &
+          sleep 5
+      - name: Test
+        uses: ./.github/actions/load2
+        with:
+          meta_url: "tikv://127.0.0.1:2379/load_test"
+          load_file: "meta_with_4M_Empty_files.json"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  load-to-badgerdb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: sudo go get github.com/dgraph-io/badger/v3
+      - name: Test
+        uses: ./.github/actions/load2
+        with:
+          meta_url: "badger://load_test"
+          load_file: "meta_with_4M_Empty_files.json"    
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  load-to-mariadb:
+    runs-on: ubuntu-latest          
+    steps:
+      - uses: actions/checkout@v3
+      - name: install 
+        run: | 
+          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+      - name: Test
+        uses: ./.github/actions/load2
+        with:
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/load_test"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
