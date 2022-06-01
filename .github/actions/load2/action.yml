@@ -50,4 +50,5 @@ runs:
         echo `date`: "start load..."
         ./juicefs load $meta_url2 dump.json
         echo `date`: "finish load"
+        exit 1
       shell: bash
