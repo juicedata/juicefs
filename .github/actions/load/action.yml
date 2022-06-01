@@ -55,4 +55,5 @@ runs:
         echo "start diff..."
         diff -ur /tmp/load-test-1/$dir_name /tmp/load-test-2/$dir_name 
         echo "finish diff"
+        exit 1
       shell: bash
