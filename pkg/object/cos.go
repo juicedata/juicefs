@@ -55,13 +55,11 @@ func (c *COS) Create() error {
 func (c *COS) Head(key string) (Object, error) {
 	resp, err := c.c.Object.Head(ctx, key, nil)
 	if err != nil {
+		if exist, err := c.c.Object.IsExist(ctx, key); err == nil && !exist {
+			return nil, os.ErrNotExist
+		}
 		return nil, err
 	}
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, os.ErrNotExist
-	}
-
 	header := resp.Header
 	var size int64
 	if val, ok := header["Content-Length"]; ok {
