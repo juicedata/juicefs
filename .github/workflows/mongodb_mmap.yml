@@ -71,10 +71,10 @@ jobs:
           git clone https://github.com/sanwan/mongodb-performance-test.git
           cd mongodb-performance-test
           jarfile=./latest-version/mongodb-performance-test.jar
-          time java -jar $jarfile -m insert -o 10000000 -t 10 -db test -c perf
+          time java -jar $jarfile -m insert -o 60000000 -t 10 -db test -c perf >insert_result
           du -sh /jfs/mongodb/
           echo "test update and read"
-          java -jar $jarfile -m update_one iterate_many -d 600 -t 20 -db test -c perf
+          java -jar $jarfile -m update_one iterate_many -d 600 -t 20 20 -db test -c perf >update_result
 
 
 
