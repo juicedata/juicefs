@@ -52,7 +52,7 @@ runs:
         echo `date`: "finish load"
         ./juicefs mount -d $meta_url1 /tmp/load-test-1
         ./juicefs mount -d $meta_url2 /tmp/load-test-2
-        echo `date`: "start diff..."
-        diff -ur /tmp/load-test-1/$dir_name /tmp/load-test-2/$dir_name 
-        echo `date`: "finish diff"
+        # echo `date`: "start diff..."
+        # diff -ur /tmp/load-test-1/$dir_name /tmp/load-test-2/$dir_name 
+        # echo `date`: "finish diff"
       shell: bash
