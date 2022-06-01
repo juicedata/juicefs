@@ -474,14 +474,6 @@ func TestMinIO(t *testing.T) {
 // 	testStorage(t, s)
 // }
 
-func TestYovole(t *testing.T) {
-	if os.Getenv("OS2_TEST_BUCKET") == "" {
-		t.SkipNow()
-	}
-	s, _ := newYovole(os.Getenv("OS2_TEST_BUCKET"), os.Getenv("OS2_ACCESS_KEY"), os.Getenv("OS2_SECRET_KEY"))
-	testStorage(t, s)
-}
-
 func TestTiKV(t *testing.T) {
 	if os.Getenv("TIKV_ADDR") == "" {
 		t.SkipNow()
