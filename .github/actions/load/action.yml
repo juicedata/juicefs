@@ -42,7 +42,7 @@ runs:
         echo "start mdtest..."
         total_files=${{inputs.files}}
         files=$(expr $total_files/1110/50 | bc)
-        ./juicefs mdtest $meta_url1 $dir_name --dirs 10 --depth 3 --files $files   --threads 50 --write 8192
+        ./juicefs mdtest $meta_url1 $dir_name --dirs 10 --depth 3 --files $files   --threads 50 --write 0
         echo "finish mdtest"
         echo "start dump..."
         ./juicefs dump $meta_url1 dump.json
