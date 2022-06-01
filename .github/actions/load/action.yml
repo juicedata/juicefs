@@ -39,20 +39,20 @@ runs:
         fi
         ./juicefs format $meta_url1 load-test --trash-days 0
         dir_name=test 
-        echo "start mdtest..."
+        echo `date`: "start mdtest..."
         total_files=${{inputs.files}}
         files=$(expr $total_files/1110/50 | bc)
         ./juicefs mdtest $meta_url1 $dir_name --dirs 10 --depth 3 --files $files   --threads 50 --write 0
-        echo "finish mdtest"
-        echo "start dump..."
+        echo `date`: "finish mdtest"
+        echo `date`: "start dump..."
         ./juicefs dump $meta_url1 dump.json
-        echo "finish dump"
-        echo "start load..."
+        echo `date`: "finish dump"
+        echo `date`: "start load..."
         ./juicefs load $meta_url2 dump.json
-        echo "finish load"
+        echo `date`: "finish load"
         ./juicefs mount -d $meta_url1 /tmp/load-test-1
         ./juicefs mount -d $meta_url2 /tmp/load-test-2
-        echo "start diff..."
+        echo `date`: "start diff..."
         diff -ur /tmp/load-test-1/$dir_name /tmp/load-test-2/$dir_name 
-        echo "finish diff"
+        echo `date`: "finish diff"
       shell: bash
