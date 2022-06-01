@@ -2554,74 +2554,149 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	return bw.Flush()
 }
 
-func (m *kvMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[string]int64) error {
+type pair struct {
+	key   []byte
+	value []byte
+}
+
+func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) error {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := loadAttr(e.Attr)
-	numParents := len(e.Parents)
-	if numParents == 1 {
-		attr.Parent = e.Parents[0]
-	} else if numParents == 0 {
-		logger.Fatalf("No parent for inode: %d", inode)
+	attr.Nlink = 1
+	attr.Parent = e.Parents[0]
+	if attr.Typ == TypeFile {
+		attr.Length = e.Attr.Length
+		for _, c := range e.Chunks {
+			if len(c.Slices) == 0 {
+				continue
+			}
+			slices := make([]byte, 0, sliceBytes*len(c.Slices))
+			for _, s := range c.Slices {
+				slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
+			}
+			kv <- &pair{m.chunkKey(inode, c.Index), slices}
+		}
 	} else if attr.Typ == TypeDirectory {
-		logger.Fatalf("Too many parents for directory inode %d: %v", inode, e.Parents)
+		attr.Length = 4 << 10
+		nlink := uint32(2)
+		for name, c := range e.Entries {
+			kv <- &pair{m.entryKey(inode, string(unescape(name))), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)}
+			if c.Attr.Type == "directory" {
+				nlink++
+			}
+		}
+		attr.Nlink = nlink
+	} else if attr.Typ == TypeSymlink {
+		symL := unescape(e.Symlink)
+		attr.Length = uint64(len(symL))
+		kv <- &pair{m.symKey(inode), []byte(symL)}
 	}
-	return m.txn(func(tx kvTxn) error {
-		if attr.Typ == TypeFile {
-			attr.Length = e.Attr.Length
-			for _, c := range e.Chunks {
-				if len(c.Slices) == 0 {
-					continue
-				}
-				slices := make([]byte, 0, sliceBytes*len(c.Slices))
-				m.Lock()
-				for _, s := range c.Slices {
-					slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
-					refs[string(m.sliceKey(s.Chunkid, s.Size))]++
-					if cs.NextChunk <= int64(s.Chunkid) {
-						cs.NextChunk = int64(s.Chunkid) + 1
+	for _, x := range e.Xattrs {
+		kv <- &pair{m.xattrKey(inode, x.Name), []byte(unescape(x.Value))}
+	}
+	kv <- &pair{m.inodeKey(inode), m.marshal(attr)}
+	return nil
+}
+
+func (m *kvMeta) decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino,
+	refs map[chunkKey]int64, kv chan *pair, showProgress func(int64)) (*DumpedEntry, error) {
+	if _, err := dec.Token(); err != nil {
+		return nil, err
+	}
+	var e = DumpedEntry{}
+	for dec.More() {
+		name, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		switch name {
+		case "attr":
+			err = dec.Decode(&e.Attr)
+			if err == nil {
+				inode := e.Attr.Inode
+				e.Parents = append(parents[inode], parent)
+				parents[inode] = e.Parents
+				if len(e.Parents) == 1 {
+					if inode > 1 && inode != TrashInode {
+						cs.UsedSpace += align4K(e.Attr.Length)
+						cs.UsedInodes += 1
+					}
+					if inode < TrashInode {
+						if cs.NextInode <= int64(inode) {
+							cs.NextInode = int64(inode) + 1
+						}
+					} else {
+						if cs.NextTrash < int64(inode)-TrashInode {
+							cs.NextTrash = int64(inode) - TrashInode
+						}
 					}
 				}
-				m.Unlock()
-				tx.set(m.chunkKey(inode, c.Index), slices)
 			}
-		} else if attr.Typ == TypeDirectory {
-			attr.Length = 4 << 10
-			for _, c := range e.Entries {
-				tx.set(m.entryKey(inode, string(unescape(c.Name))), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode))
+		case "chunks":
+			err = dec.Decode(&e.Chunks)
+			if err == nil && len(e.Parents) == 1 {
+				for _, c := range e.Chunks {
+					for _, s := range c.Slices {
+						refs[chunkKey{s.Chunkid, s.Size}]++
+						if cs.NextChunk <= int64(s.Chunkid) {
+							cs.NextChunk = int64(s.Chunkid) + 1
+						}
+					}
+				}
 			}
-		} else if attr.Typ == TypeSymlink {
-			symL := unescape(e.Symlink)
-			attr.Length = uint64(len(symL))
-			tx.set(m.symKey(inode), []byte(symL))
+		case "entries":
+			e.Entries = make(map[string]*DumpedEntry)
+			_, err = dec.Token()
+			if err == nil {
+				for dec.More() {
+					var n json.Token
+					n, err = dec.Token()
+					if err != nil {
+						break
+					}
+					var child *DumpedEntry
+					child, err = m.decodeEntry(dec, e.Attr.Inode, cs, parents, refs, kv, showProgress)
+					if err != nil {
+						break
+					}
+					e.Entries[n.(string)] = &DumpedEntry{
+						Attr: &DumpedAttr{
+							Inode: child.Attr.Inode,
+							Type:  child.Attr.Type,
+						},
+					}
+				}
+				if err == nil {
+					var t json.Token
+					t, err = dec.Token()
+					if err == nil && t != json.Delim('}') {
+						err = fmt.Errorf("unexpected %v", t)
+					}
+				}
+			}
+		case "symlink":
+			err = dec.Decode(&e.Symlink)
+		case "xattrs":
+			err = dec.Decode(&e.Xattrs)
 		}
-		m.Lock()
-		if inode > 1 && inode != TrashInode {
-			cs.UsedSpace += align4K(attr.Length)
-			cs.UsedInodes += 1
+		if err != nil {
+			return nil, fmt.Errorf("decode %v: %s", name, err)
 		}
-		if inode < TrashInode {
-			if cs.NextInode <= int64(inode) {
-				cs.NextInode = int64(inode) + 1
-			}
-		} else {
-			if cs.NextTrash < int64(inode)-TrashInode {
-				cs.NextTrash = int64(inode) - TrashInode
-			}
-		}
-		m.Unlock()
+	}
+	if len(e.Parents) == 1 {
+		_ = m.loadEntry(&e, kv)
+		showProgress(1)
+	}
+	_, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
 
-		for _, x := range e.Xattrs {
-			tx.set(m.xattrKey(inode, x.Name), []byte(unescape(x.Value)))
-		}
-		if numParents > 1 {
-			for _, parent := range e.Parents {
-				tx.incrBy(m.parentKey(inode, parent), 1)
-			}
-		}
-		tx.set(m.inodeKey(inode), m.marshal(attr))
-		return nil
-	})
+type chunkKey struct {
+	id   uint64
+	size uint32
 }
 
 func (m *kvMeta) LoadMeta(r io.Reader) error {
@@ -2637,81 +2712,101 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return fmt.Errorf("Database %s is not empty", m.Name())
 	}
 
-	logger.Infoln("Reading file ...")
-	dec := json.NewDecoder(r)
 	dm := &DumpedMeta{}
-	if err := dec.Decode(dm); err != nil {
-		return err
-	}
-	format, err := json.MarshalIndent(dm.Setting, "", "")
-	if err != nil {
-		return err
-	}
-
-	progress := utils.NewProgress(false, false)
-	bar := progress.AddCountBar("Collected entries", 1) // with root
-	showProgress := func(totalIncr, currentIncr int64) {
-		bar.IncrTotal(totalIncr)
-		bar.IncrInt64(currentIncr)
-	}
-	dm.FSTree.Attr.Inode = 1
-	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries, showProgress); err != nil {
-		return err
-	}
-	if dm.Trash != nil {
-		bar.IncrTotal(1)
-		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
-			return err
-		}
-	}
-	bar.Done()
-
 	counters := &DumpedCounters{
 		NextInode: 2,
 		NextChunk: 1,
 	}
-	refs := make(map[string]int64)
-	bar = progress.AddCountBar("Loaded entries", int64(len(entries)))
-	maxNum := 100
-	pool := make(chan struct{}, maxNum)
-	errCh := make(chan error, 100)
-	done := make(chan struct{}, 1)
-	var wg sync.WaitGroup
-	for _, entry := range entries {
-		select {
-		case err = <-errCh:
-			return err
-		default:
-		}
-		pool <- struct{}{}
-		wg.Add(1)
-		go func(entry *DumpedEntry) {
-			defer func() {
-				wg.Done()
-				bar.Increment()
-				<-pool
-			}()
-			if err = m.loadEntry(entry, counters, refs); err != nil {
-				errCh <- err
+	parents := make(map[Ino][]Ino)
+	refs := make(map[chunkKey]int64)
+	kv := make(chan *pair, 10000)
+	batch := 10000
+	if m.Name() == "etcd" {
+		batch = 128
+	}
+	var w sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		w.Add(1)
+		go func() {
+			defer w.Done()
+			var buffer []*pair
+			for p := range kv {
+				buffer = append(buffer, p)
+				if len(buffer) >= batch {
+					err := m.txn(func(tx kvTxn) error {
+						for _, p := range buffer {
+							tx.set(p.key, p.value)
+						}
+						return nil
+					})
+					if err != nil {
+						logger.Fatalf("write %d pairs: %s", len(buffer), err)
+					}
+					buffer = buffer[:0]
+				}
 			}
-		}(entry)
+			if len(buffer) > 0 {
+				err := m.txn(func(tx kvTxn) error {
+					for _, p := range buffer {
+						tx.set(p.key, p.value)
+					}
+					return nil
+				})
+				if err != nil {
+					logger.Fatalf("write %d pairs: %s", len(buffer), err)
+				}
+			}
+		}()
 	}
 
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
+	logger.Infoln("loading from file ...")
+	progress := utils.NewProgress(false, false)
+	bar := progress.AddCountBar("loaded", 1) // with root
+	showProgress := func(currentIncr int64) {
+		bar.IncrInt64(currentIncr)
+	}
 
-	select {
-	case err = <-errCh:
+	dec := json.NewDecoder(r)
+	if _, err := dec.Token(); err != nil {
 		return err
-	case <-done:
 	}
+	for dec.More() {
+		name, err := dec.Token()
+		if err != nil {
+			return fmt.Errorf("parse name: %s", err)
+		}
+		switch name {
+		case "Setting":
+			err = dec.Decode(&dm.Setting)
+		case "Counters":
+			err = dec.Decode(&dm.Counters)
+			if err == nil {
+				bar.SetTotal(dm.Counters.UsedInodes)
+			}
+		case "Sustained":
+			err = dec.Decode(&dm.Sustained)
+		case "DelFiles":
+			err = dec.Decode(&dm.DelFiles)
+		case "FSTree":
+			_, err = m.decodeEntry(dec, 1, counters, parents, refs, kv, showProgress)
+		case "Trash":
+			_, err = m.decodeEntry(dec, 1, counters, parents, refs, kv, showProgress)
+		}
+		if err != nil {
+			return fmt.Errorf("load %v: %s", name, err)
+		}
+	}
+	_, _ = dec.Token() // }
+	close(kv)
+	w.Wait()
 	progress.Done()
+
+	format, err := json.MarshalIndent(dm.Setting, "", "")
+	if err != nil {
+		return err
+	}
 	logger.Infof("Dumped counters: %+v", *dm.Counters)
 	logger.Infof("Loaded counters: %+v", *counters)
-
 	return m.txn(func(tx kvTxn) error {
 		tx.set(m.fmtKey("setting"), format)
 		tx.set(m.counterKey(usedSpace), packCounter(counters.UsedSpace))
@@ -2723,9 +2818,29 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		for _, d := range dm.DelFiles {
 			tx.set(m.delfileKey(d.Inode, d.Length), m.packInt64(d.Expire))
 		}
+		// update parents for hardlinks
+		st := make(map[Ino]int64)
+		for i, ps := range parents {
+			if len(ps) > 1 {
+				a := tx.get(m.inodeKey(i))
+				// reset nlink and parent
+				binary.BigEndian.PutUint32(a[47:51], uint32(len(ps))) // nlink
+				binary.BigEndian.PutUint64(a[63:71], 0)
+				tx.set(m.inodeKey(i), a)
+				for k := range st {
+					delete(st, k)
+				}
+				for _, p := range ps {
+					st[p] = st[p] + 1
+				}
+				for p, c := range st {
+					tx.set(m.parentKey(i, p), packCounter(c))
+				}
+			}
+		}
 		for k, v := range refs {
 			if v > 1 {
-				tx.set([]byte(k), packCounter(v-1))
+				tx.set(m.chunkKey(Ino(k.id), k.size), packCounter(v-1))
 			}
 		}
 		return nil
