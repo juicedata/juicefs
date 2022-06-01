@@ -48,7 +48,7 @@ runs:
         ./juicefs dump $meta_url1 dump.json
         echo "finish dump"
         echo "start load..."
-        sudo ./juicefs load $meta_url2 dump.json
+        ./juicefs load $meta_url2 dump.json
         echo "finish load"
         ./juicefs mount -d $meta_url1 /tmp/load-test-1
         ./juicefs mount -d $meta_url2 /tmp/load-test-2
