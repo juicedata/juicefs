@@ -178,8 +178,8 @@ jobs:
       - name: Test
         uses: ./.github/actions/load
         with:
-          meta_url1: "mysql://root:root@\\(127.0.0.1\\)/load-test1"
-          meta_url2: "mysql://root:root@\\(127.0.0.1\\)/load-test2"
+          meta_url1: "mysql://root:root@\\(127.0.0.1\\)/test1"
+          meta_url2: "mysql://root:root@\\(127.0.0.1\\)/test2"
           files: ${{ github.event.inputs.files }} 
       - name: Setup upterm session
         if: ${{ failure() }}
