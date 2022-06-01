@@ -30,6 +30,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -3016,33 +3017,26 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	})
 }
 
-func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*chunkRef, beansCh chan interface{}, bar *utils.Bar) {
+func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}) {
 	inode := e.Attr.Inode
-	logger.Debugf("Loading entry inode %d name %s", inode, unescape(e.Name))
 	attr := e.Attr
 	n := &node{
-		Inode: inode,
-		Type:  typeFromString(attr.Type),
-		Mode:  attr.Mode,
-		Uid:   attr.Uid,
-		Gid:   attr.Gid,
-		Atime: attr.Atime*1e6 + int64(attr.Atimensec)/1e3,
-		Mtime: attr.Mtime*1e6 + int64(attr.Atimensec)/1e3,
-		Ctime: attr.Ctime*1e6 + int64(attr.Atimensec)/1e3,
-		Nlink: attr.Nlink,
-		Rdev:  attr.Rdev,
-	} // Length and Parent not set
-	numParents := len(e.Parents)
-	if numParents == 1 {
-		n.Parent = e.Parents[0]
-	} else if numParents == 0 {
-		logger.Fatalf("No parent for inode: %d", inode)
-	} else if n.Type == TypeDirectory {
-		logger.Fatalf("Too many parents for directory inode %d: %v", inode, e.Parents)
-	}
+		Inode:  inode,
+		Type:   typeFromString(attr.Type),
+		Mode:   attr.Mode,
+		Uid:    attr.Uid,
+		Gid:    attr.Gid,
+		Atime:  attr.Atime*1e6 + int64(attr.Atimensec)/1e3,
+		Mtime:  attr.Mtime*1e6 + int64(attr.Atimensec)/1e3,
+		Ctime:  attr.Ctime*1e6 + int64(attr.Atimensec)/1e3,
+		Nlink:  attr.Nlink,
+		Rdev:   attr.Rdev,
+		Parent: e.Parents[0],
+	} // Length not set
+
+	// chs: node, edge, chunk, chunkRef, xattr, others
 	if n.Type == TypeFile {
 		n.Length = attr.Length
-		bar.IncrTotal(int64(len(e.Chunks)))
 		for _, c := range e.Chunks {
 			if len(c.Slices) == 0 {
 				continue
@@ -3050,63 +3044,28 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, cs *DumpedCounters, refs map[uint64]*
 			slices := make([]byte, 0, sliceBytes*len(c.Slices))
 			for _, s := range c.Slices {
 				slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
-				if refs[s.Chunkid] == nil {
-					refs[s.Chunkid] = &chunkRef{s.Chunkid, s.Size, 1}
-				} else {
-					refs[s.Chunkid].Refs++
-				}
-				if cs.NextChunk <= int64(s.Chunkid) {
-					cs.NextChunk = int64(s.Chunkid) + 1
-				}
 			}
-			beansCh <- &chunk{Inode: inode, Indx: c.Index, Slices: slices}
+			chs[2] <- &chunk{Inode: inode, Indx: c.Index, Slices: slices}
 		}
 	} else if n.Type == TypeDirectory {
 		n.Length = 4 << 10
-		if len(e.Entries) > 0 {
-			bar.IncrTotal(int64(len(e.Entries)))
-			for _, c := range e.Entries {
-				beansCh <- &edge{
-					Parent: inode,
-					Name:   unescape(c.Name),
-					Inode:  c.Attr.Inode,
-					Type:   typeFromString(c.Attr.Type),
-				}
+		for name, c := range e.Entries {
+			chs[1] <- &edge{
+				Parent: inode,
+				Name:   unescape(name),
+				Inode:  c.Attr.Inode,
+				Type:   typeFromString(c.Attr.Type),
 			}
 		}
 	} else if n.Type == TypeSymlink {
 		symL := unescape(e.Symlink)
 		n.Length = uint64(len(symL))
-		bar.IncrTotal(1)
-		beansCh <- &symlink{inode, symL}
+		chs[5] <- &symlink{inode, symL}
 	}
-	if inode > 1 && inode != TrashInode {
-		cs.UsedSpace += align4K(n.Length)
-		cs.UsedInodes += 1
+	for _, x := range e.Xattrs {
+		chs[4] <- &xattr{Inode: inode, Name: x.Name, Value: unescape(x.Value)}
 	}
-	if inode < TrashInode {
-		if cs.NextInode <= int64(inode) {
-			cs.NextInode = int64(inode) + 1
-		}
-	} else {
-		if cs.NextTrash < int64(inode)-TrashInode {
-			cs.NextTrash = int64(inode) - TrashInode
-		}
-	}
-
-	if len(e.Xattrs) > 0 {
-		bar.IncrTotal(int64(len(e.Xattrs)))
-		for _, x := range e.Xattrs {
-			beansCh <- &xattr{Inode: inode, Name: x.Name, Value: unescape(x.Value)}
-		}
-	}
-	if numParents > 1 {
-		bar.IncrTotal(int64(len(e.Parents)))
-		for _, parent := range e.Parents {
-			beansCh <- &linkParent{Inode: inode, Parent: parent}
-		}
-	}
-	beansCh <- n
+	chs[0] <- n
 }
 
 func (m *dbMeta) LoadMeta(r io.Reader) error {
@@ -3133,155 +3092,95 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
 
-	logger.Infoln("Reading file ...")
-	dec := json.NewDecoder(r)
-	dm := &DumpedMeta{}
-	if err = dec.Decode(dm); err != nil {
-		return err
+	var batch int
+	switch m.db.DriverName() {
+	case "sqlite3":
+		batch = 999 / MaxFieldsCountOfTable
+	case "mysql":
+		batch = 65535 / MaxFieldsCountOfTable
+	case "postgres":
+		batch = 1000
 	}
-	format, err := json.MarshalIndent(dm.Setting, "", "")
+	chs := make([]chan interface{}, 6) // node, edge, chunk, chunkRef, xattr, others
+	insert := func(index int, beans []interface{}) error {
+		return m.txn(func(s *xorm.Session) error {
+			var n int64
+			var err error
+			if index == len(chs)-1 { // multiple tables
+				n, err = s.Insert(beans...)
+			} else { // one table only
+				n, err = s.Insert(beans)
+			}
+			if err == nil && int(n) != len(beans) {
+				err = fmt.Errorf("only %d records inserted", n)
+			}
+			return err
+		})
+	}
+	var wg sync.WaitGroup
+	for i := range chs {
+		chs[i] = make(chan interface{}, batch*2)
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			buffer := make([]interface{}, 0, batch)
+			for bean := range chs[i] {
+				buffer = append(buffer, bean)
+				if len(buffer) >= batch {
+					if err := insert(i, buffer); err != nil {
+						logger.Fatalf("Write %d beans in channel %d: %s", len(buffer), i, err)
+					}
+					buffer = buffer[:0]
+				}
+			}
+			if len(buffer) > 0 {
+				if err := insert(i, buffer); err != nil {
+					logger.Fatalf("Write %d beans in channel %d: %s", len(buffer), i, err)
+				}
+			}
+		}(i)
+	}
+
+	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, chs) })
 	if err != nil {
 		return err
 	}
+	format, _ := json.MarshalIndent(dm.Setting, "", "")
+	chs[5] <- &setting{"format", string(format)}
+	chs[5] <- &counter{usedSpace, counters.UsedSpace}
+	chs[5] <- &counter{totalInodes, counters.UsedInodes}
+	chs[5] <- &counter{"nextInode", counters.NextInode}
+	chs[5] <- &counter{"nextChunk", counters.NextChunk}
+	chs[5] <- &counter{"nextSession", counters.NextSession}
+	chs[5] <- &counter{"nextTrash", counters.NextTrash}
+	for _, d := range dm.DelFiles {
+		chs[5] <- &delfile{d.Inode, d.Length, d.Expire}
+	}
+	for k, v := range refs {
+		chs[3] <- &chunkRef{k.id, k.size, int(v)}
+	}
+	for _, c := range chs {
+		close(c)
+	}
+	wg.Wait()
 
-	progress := utils.NewProgress(false, false)
-	cbar := progress.AddCountBar("Collected entries", 1) // with root
-	showProgress := func(totalIncr, currentIncr int64) {
-		cbar.IncrTotal(totalIncr)
-		cbar.IncrInt64(currentIncr)
-	}
-	dm.FSTree.Attr.Inode = 1
-	entries := make(map[Ino]*DumpedEntry)
-	if err = collectEntry(dm.FSTree, entries, showProgress); err != nil {
-		return err
-	}
-	if dm.Trash != nil {
-		cbar.IncrTotal(1)
-		if err = collectEntry(dm.Trash, entries, showProgress); err != nil {
-			return err
-		}
-	}
-	cbar.Done()
-
-	counters := &DumpedCounters{
-		NextInode: 2,
-		NextChunk: 1,
-	}
-	refs := make(map[uint64]*chunkRef)
-
-	var batchSize int
-	switch m.db.DriverName() {
-	case "sqlite3":
-		batchSize = 999 / MaxFieldsCountOfTable
-	case "mysql":
-		batchSize = 65535 / MaxFieldsCountOfTable
-	case "postgres":
-		batchSize = 1000
-	}
-	beansCh := make(chan interface{}, batchSize*2)
-	lbar := progress.AddCountBar("Loaded records", int64(len(entries)))
-	go func() {
-		defer close(beansCh)
-		for _, entry := range entries {
-			m.loadEntry(entry, counters, refs, beansCh, lbar)
-		}
-		lbar.IncrTotal(8)
-		beansCh <- &setting{"format", string(format)}
-		beansCh <- &counter{"usedSpace", counters.UsedSpace}
-		beansCh <- &counter{"totalInodes", counters.UsedInodes}
-		beansCh <- &counter{"nextInode", counters.NextInode}
-		beansCh <- &counter{"nextChunk", counters.NextChunk}
-		beansCh <- &counter{"nextSession", counters.NextSession}
-		beansCh <- &counter{"nextTrash", counters.NextTrash}
-		beansCh <- &counter{"nextCleanupSlices", 0}
-		if len(dm.DelFiles) > 0 {
-			lbar.IncrTotal(int64(len(dm.DelFiles)))
-			for _, d := range dm.DelFiles {
-				beansCh <- &delfile{d.Inode, d.Length, d.Expire}
+	// update nlinks and parents for hardlinks
+	return m.txn(func(s *xorm.Session) error {
+		for i, ps := range parents {
+			if len(ps) > 1 {
+				_, err := s.Cols("nlink", "parent").Update(&node{Nlink: uint32(len(ps))}, &node{Inode: i})
+				if err != nil {
+					return err
+				}
+				lps := make([]*linkParent, 0, len(ps))
+				for _, p := range ps {
+					lps = append(lps, &linkParent{Inode: i, Parent: p})
+				}
+				if err = mustInsert(s, lps); err != nil {
+					return err
+				}
 			}
-		}
-		if len(refs) > 0 {
-			lbar.IncrTotal(int64(len(refs)))
-			for _, v := range refs {
-				beansCh <- v
-			}
-		}
-	}()
-
-	chunkBatch := make([]interface{}, 0, batchSize)
-	edgeBatch := make([]interface{}, 0, batchSize)
-	xattrBatch := make([]interface{}, 0, batchSize)
-	nodeBatch := make([]interface{}, 0, batchSize)
-	chunkRefBatch := make([]interface{}, 0, batchSize)
-
-	insertBatch := func(beanSlice []interface{}) error {
-		var n int64
-		err := m.txn(func(s *xorm.Session) error {
-			var err error
-			if n, err = s.Insert(beanSlice); err != nil {
-				return err
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		} else if d := len(beanSlice) - int(n); d > 0 {
-			return fmt.Errorf("%d records not inserted: %+v", d, beanSlice)
-		}
-		lbar.IncrInt64(n)
-		return nil
-	}
-
-	addToBatch := func(batch *[]interface{}, bean interface{}) error {
-		*batch = append(*batch, bean)
-		if len(*batch) >= batchSize {
-			if err := insertBatch(*batch); err != nil {
-				return err
-			}
-			*batch = (*batch)[:0]
 		}
 		return nil
-	}
-
-	for bean := range beansCh {
-		switch bean.(type) {
-		case *chunk:
-			if err := addToBatch(&chunkBatch, bean); err != nil {
-				return err
-			}
-		case *edge:
-			if err := addToBatch(&edgeBatch, bean); err != nil {
-				return err
-			}
-		case *xattr:
-			if err := addToBatch(&xattrBatch, bean); err != nil {
-				return err
-			}
-		case *node:
-			if err := addToBatch(&nodeBatch, bean); err != nil {
-				return err
-			}
-		case *chunkRef:
-			if err := addToBatch(&chunkRefBatch, bean); err != nil {
-				return err
-			}
-		default:
-			if err := insertBatch([]interface{}{bean}); err != nil {
-				return err
-			}
-		}
-	}
-	for _, one := range [][]interface{}{chunkBatch, edgeBatch, xattrBatch, nodeBatch, chunkRefBatch} {
-		if len(one) > 0 {
-			if err := insertBatch(one); err != nil {
-				return err
-			}
-		}
-	}
-
-	progress.Done()
-	logger.Infof("Dumped counters: %+v", *dm.Counters)
-	logger.Infof("Loaded counters: %+v", *counters)
-	return nil
-
+	})
 }
