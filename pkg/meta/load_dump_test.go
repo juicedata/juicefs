@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"testing"
 
@@ -187,13 +188,13 @@ func testLoadDump(t *testing.T, name, addr string) {
 
 func TestLoadDump(t *testing.T) {
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	// testLoadDump(t, "redis cluster", "redis://127.0.0.1:7001/10")
-	// testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
-	// testLoadDump(t, "mysql", "mysql://root:@/dev")
-	// testLoadDump(t, "postgres", "postgres://localhost:5432/test?sslmode=disable")
-	// testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-duimp-testdb"))
-	// testLoadDump(t, "etcd", "etcd://127.0.0.1:2379/jfs-load-dump")
-	// testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
+	testLoadDump(t, "redis cluster", "redis://127.0.0.1:7001/10")
+	testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
+	testLoadDump(t, "mysql", "mysql://root:@/dev")
+	testLoadDump(t, "postgres", "postgres://localhost:5432/test?sslmode=disable")
+	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-duimp-testdb"))
+	testLoadDump(t, "etcd", "etcd://127.0.0.1:2379/jfs-load-dump")
+	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
 }
 
 func TestLoadDump_MemKV(t *testing.T) {

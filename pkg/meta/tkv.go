@@ -2247,7 +2247,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 		if a == nil && e.Attr != nil {
 			attr.Typ = typeFromString(e.Attr.Type)
 		}
-		e.Attr = dumpAttr(attr) // TODO: reduce memory allocation
+		dumpAttr(attr, e.Attr)
 		e.Attr.Inode = inode
 
 		vals := tx.scanValues(m.xattrKey(inode, ""), -1, nil)
@@ -2409,7 +2409,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 				case 'I':
 					attr := &Attr{Nlink: 1}
 					m.parseAttr(value, attr)
-					e.Attr = dumpAttr(attr)
+					e.Attr = &DumpedAttr{}
+					dumpAttr(attr, e.Attr)
 					e.Attr.Inode = ino
 				case 'C':
 					indx := binary.BigEndian.Uint32(key[10:])
