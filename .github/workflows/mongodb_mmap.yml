@@ -63,7 +63,7 @@ jobs:
           nohup ./bin/mongod --dbpath /jfs/mongodb &
 
 
-      - name: Mongodb Test
+      - name: Insert Data
         run: |
           df -lh
           java -version
@@ -71,9 +71,12 @@ jobs:
           git clone https://github.com/sanwan/mongodb-performance-test.git
           cd mongodb-performance-test
           jarfile=./latest-version/mongodb-performance-test.jar
-          time java -jar $jarfile -m insert -o 10000000 -t 10 -db test -c perf >insert_result
+          time java -jar $jarfile -m insert -o 1000000 -t 10 -db test -c perf >insert_result
           du -sh /jfs/mongodb/
-          echo "test update and read"
+
+      - name: Read and Update
+        run: |
+          cd /jfs/mongodb-performance-test/
           java -jar $jarfile -m update_one iterate_many -d 60 -t 20 20 -db test -c perf >update_result
 
 
