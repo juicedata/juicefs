@@ -76,7 +76,7 @@ jobs:
       - name: Read and Update
         run: |
           cd /jfs/mongodb-performance-test/
-          java -jar ./latest-version/mongodb-performance-test.jar -m update_one iterate_many -d 180 -t 20 20 -db test -c perf >update_result
+          java -jar ./latest-version/mongodb-performance-test.jar -m update_one iterate_many -d 180 -t 10 10 -db test -c perf >update_result
 
 
 
