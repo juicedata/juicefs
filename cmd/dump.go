@@ -54,6 +54,7 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 
 func dump(ctx *cli.Context) error {
 	setup(ctx, 1)
+	removePassword(ctx.Args().Get(0))
 	var fp io.WriteCloser
 	if ctx.Args().Len() == 1 {
 		fp = os.Stdout
@@ -65,7 +66,6 @@ func dump(ctx *cli.Context) error {
 		}
 		defer fp.Close()
 	}
-	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
 	if _, err := m.Load(true); err != nil {
 		return err

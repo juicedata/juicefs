@@ -161,7 +161,6 @@ func (g *GateWay) Production() bool {
 func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	c := g.ctx
 	addr := c.Args().Get(0)
-	removePassword(addr)
 	m, store, conf := initForSvc(c, "s3gateway", addr)
 
 	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
@@ -173,6 +172,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 }
 
 func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
+	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	format, err := metaCli.Load(true)
