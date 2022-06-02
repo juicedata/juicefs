@@ -116,6 +116,7 @@ func sendCommand(cf *os.File, batch []string, threads uint, background bool) {
 
 func warmup(ctx *cli.Context) error {
 	setup(ctx, 0)
+	removePassword("")
 	var paths []string
 	for _, p := range ctx.Args().Slice() {
 		if abs, err := filepath.Abs(p); err == nil {

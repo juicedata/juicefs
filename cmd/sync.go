@@ -306,6 +306,7 @@ func isS3PathType(endpoint string) bool {
 
 func doSync(c *cli.Context) error {
 	setup(c, 2)
+	removePassword("")
 	if c.IsSet("include") && !c.IsSet("exclude") {
 		logger.Warnf("The include option needs to be used with the exclude option, otherwise the result of the current sync may not match your expectations")
 	}

@@ -67,6 +67,7 @@ func info(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
+	removePassword("")
 	var recursive uint8
 	if ctx.Bool("recursive") {
 		recursive = 1
