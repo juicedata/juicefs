@@ -221,6 +221,7 @@ func mdtest(c *cli.Context) error {
 	setup(c, 2)
 	metaUrl := c.Args().Get(0)
 	rootDir := c.Args().Get(1)
+	removePassword(metaUrl)
 	m, store, conf := initForMdtest(c, "mdtest", metaUrl)
 	jfs, err := fs.NewFileSystem(conf, m, store)
 	if err != nil {
