@@ -31,14 +31,20 @@ func newOpenFiles(expire time.Duration) *openfiles {
 func (o *openfiles) cleanup() {
 	for {
 		o.Lock()
-		cutoff := time.Now().Add(-time.Hour)
+		cutoff := time.Now().Add(-time.Hour).Add(time.Second * time.Duration(len(o.files)/1e4))
+		var cnt, expired int
 		for ino, of := range o.files {
 			if of.refs <= 0 && of.lastCheck.Before(cutoff) {
 				delete(o.files, ino)
+				expired++
+			}
+			cnt++
+			if cnt > 1e3 {
+				break
 			}
 		}
 		o.Unlock()
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-expired*2)/(cnt+1)))
 	}
 }
 
