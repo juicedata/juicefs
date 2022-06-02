@@ -3141,7 +3141,9 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		}(i)
 	}
 
-	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, chs) })
+	dm, counters, parents, refs, err := loadEntries(r,
+		func(e *DumpedEntry) { m.loadEntry(e, chs) },
+		func(ck *chunkKey) { chs[3] <- &chunkRef{ck.id, ck.size, 1} })
 	if err != nil {
 		return err
 	}
@@ -3156,14 +3158,24 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	for _, d := range dm.DelFiles {
 		chs[5] <- &delfile{d.Inode, d.Length, d.Expire}
 	}
-	for k, v := range refs {
-		chs[3] <- &chunkRef{k.id, k.size, int(v)}
-	}
 	for _, c := range chs {
 		close(c)
 	}
 	wg.Wait()
 
+	// update chunkRefs
+	if err = m.txn(func(s *xorm.Session) error {
+		for k, v := range refs {
+			if v > 1 {
+				if _, e := s.Cols("refs").Update(&chunkRef{Refs: int(v)}, &chunkRef{Chunkid: k.id}); e != nil {
+					return e
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
 	// update nlinks and parents for hardlinks
 	return m.txn(func(s *xorm.Session) error {
 		for i, ps := range parents {

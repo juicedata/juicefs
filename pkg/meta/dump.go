@@ -307,7 +307,7 @@ type chunkKey struct {
 	size uint32
 }
 
-func loadEntries(r io.Reader, load func(*DumpedEntry)) (dm *DumpedMeta,
+func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey)) (dm *DumpedMeta,
 	counters *DumpedCounters, parents map[Ino][]Ino, refs map[chunkKey]int64, err error) {
 	logger.Infoln("Loading from file ...")
 	dec := json.NewDecoder(r)
@@ -345,9 +345,9 @@ func loadEntries(r io.Reader, load func(*DumpedEntry)) (dm *DumpedMeta,
 		case "DelFiles":
 			err = dec.Decode(&dm.DelFiles)
 		case "FSTree":
-			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load)
+			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load, addChunk)
 		case "Trash":
-			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load)
+			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load, addChunk)
 		}
 		if err != nil {
 			err = fmt.Errorf("load %v: %s", name, err)
@@ -362,7 +362,7 @@ func loadEntries(r io.Reader, load func(*DumpedEntry)) (dm *DumpedMeta,
 }
 
 func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino,
-	refs map[chunkKey]int64, bar *utils.Bar, load func(*DumpedEntry)) (*DumpedEntry, error) {
+	refs map[chunkKey]int64, bar *utils.Bar, load func(*DumpedEntry), addChunk func(*chunkKey)) (*DumpedEntry, error) {
 	if _, err := dec.Token(); err != nil {
 		return nil, err
 	}
@@ -405,7 +405,11 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 			if err == nil && len(e.Parents) == 1 {
 				for _, c := range e.Chunks {
 					for _, s := range c.Slices {
-						refs[chunkKey{s.Chunkid, s.Size}]++
+						ck := chunkKey{s.Chunkid, s.Size}
+						refs[ck]++
+						if addChunk != nil && refs[ck] == 1 {
+							addChunk(&ck)
+						}
 						if cs.NextChunk <= int64(s.Chunkid) {
 							cs.NextChunk = int64(s.Chunkid) + 1
 						}
@@ -423,7 +427,7 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 						break
 					}
 					var child *DumpedEntry
-					child, err = decodeEntry(dec, e.Attr.Inode, cs, parents, refs, bar, load)
+					child, err = decodeEntry(dec, e.Attr.Inode, cs, parents, refs, bar, load, addChunk)
 					if err != nil {
 						break
 					}

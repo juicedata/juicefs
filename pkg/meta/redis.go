@@ -3360,7 +3360,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 		}
 	}()
 
-	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, p, tryExec) })
+	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, p, tryExec) }, nil)
 	if err != nil {
 		return err
 	}

@@ -2644,7 +2644,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		}()
 	}
 
-	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, kv) })
+	dm, counters, parents, refs, err := loadEntries(r, func(e *DumpedEntry) { m.loadEntry(e, kv) }, nil)
 	if err != nil {
 		return err
 	}
