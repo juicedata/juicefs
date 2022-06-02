@@ -84,7 +84,12 @@ func (o *openfiles) Close(ino Ino) bool {
 	of, ok := o.files[ino]
 	if ok {
 		of.refs--
-		return of.refs <= 0
+		if of.refs <= 0 {
+			delete(o.files, ino)
+			return true
+		} else {
+			return false
+		}
 	}
 	return true
 }
