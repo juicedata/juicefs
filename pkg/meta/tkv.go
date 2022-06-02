@@ -2661,7 +2661,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	}
 	for k, v := range refs {
 		if v > 1 {
-			kv <- &pair{m.chunkKey(Ino(k.id), k.size), packCounter(v - 1)}
+			kv <- &pair{m.sliceKey(k.id, k.size), packCounter(v - 1)}
 		}
 	}
 	close(kv)
