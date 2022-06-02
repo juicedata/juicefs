@@ -2452,7 +2452,12 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		tree = m.snap[root]
 		trash = m.snap[TrashInode]
 	} else {
-		tree = &DumpedEntry{}
+		tree = &DumpedEntry{
+			Attr: &DumpedAttr{
+				Inode: root,
+				Type:  "directory",
+			},
+		}
 		if err = m.dumpEntry(root, tree); err != nil {
 			return err
 		}

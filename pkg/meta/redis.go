@@ -2875,7 +2875,7 @@ var entryPool = sync.Pool{
 	},
 }
 
-func (m *redisMeta) dumpEntry(es []*DumpedEntry) error {
+func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 	ctx := Background
 	var keys []string
 	for _, e := range es {
@@ -2962,7 +2962,6 @@ func (m *redisMeta) dumpEntry(es []*DumpedEntry) error {
 					ce := entryPool.Get().(*DumpedEntry)
 					ce.Attr.Inode = inode
 					ce.Attr.Type = typeToString(t)
-					ce.Attr.Length = 0
 					e.Entries[name] = ce
 				}
 			case TypeSymlink:
@@ -3029,7 +3028,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 					if len(es) > batch {
 						es = es[:batch]
 					}
-					e := m.dumpEntry(es)
+					e := m.dumpEntries(es...)
 					ms[c].Lock()
 					ready[c] = len(es)
 					if e != nil {
@@ -3114,33 +3113,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
 
-	progress := utils.NewProgress(false, false)
-	root = m.checkRoot(root)
-	var tree = &DumpedEntry{
-		Name: "FSTree",
-		Attr: &DumpedAttr{
-			Inode: root,
-			Type:  typeToString(TypeDirectory),
-		},
-	}
-	var es = []*DumpedEntry{tree}
-	if err = m.dumpEntry(es); err != nil {
-		return err
-	}
-	var trash *DumpedEntry
-	if root == 1 {
-		trash = &DumpedEntry{
-			Name: "Trash",
-			Attr: &DumpedAttr{
-				Inode: TrashInode,
-				Type:  typeToString(TypeDirectory),
-			},
-		}
-		if err = m.dumpEntry([]*DumpedEntry{trash}); err != nil {
-			return err
-		}
-	}
-
 	names := []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextTrash"}
 	for i := range names {
 		names[i] = m.prefix + names[i]
@@ -3197,16 +3169,37 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		return err
 	}
 
-	bar := progress.AddCountBar("Dumped entries", 1) // with root
-	bar.SetTotal(dm.Counters.UsedInodes)
-	bar.Increment()
+	progress := utils.NewProgress(false, false)
+	bar := progress.AddCountBar("Dumped entries", dm.Counters.UsedInodes) // with root
 	showProgress := func(currentIncr int64) {
 		bar.IncrInt64(currentIncr)
+	}
+
+	root = m.checkRoot(root)
+	var tree = &DumpedEntry{
+		Name: "FSTree",
+		Attr: &DumpedAttr{
+			Inode: root,
+			Type:  typeToString(TypeDirectory),
+		},
+	}
+	if err = m.dumpEntries(tree); err != nil {
+		return err
 	}
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err
 	}
-	if trash != nil {
+	if root == 1 {
+		trash := &DumpedEntry{
+			Name: "Trash",
+			Attr: &DumpedAttr{
+				Inode: TrashInode,
+				Type:  typeToString(TypeDirectory),
+			},
+		}
+		if err = m.dumpEntries(trash); err != nil {
+			return err
+		}
 		if _, err = bw.WriteString(","); err != nil {
 			return err
 		}
