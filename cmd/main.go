@@ -36,6 +36,8 @@ import (
 var logger = utils.GetLogger("juicefs")
 
 func Main(args []string) error {
+	// we have to call this because gspt removes all arguments
+	gspt.SetProcTitle(strings.Join(os.Args, " "))
 	cli.VersionFlag = &cli.BoolFlag{
 		Name: "version", Aliases: []string{"V"},
 		Usage: "print version only",
@@ -277,19 +279,17 @@ func setup(c *cli.Context, n int) {
 }
 
 func removePassword(uri string) {
-	if uri != "" {
-		var uri2 string
-		if strings.Contains(uri, "://") {
-			uri2 = utils.RemovePassword(uri)
-		} else {
-			uri2 = utils.RemovePassword("redis://" + uri)
-		}
-		if uri2 != uri {
-			for i, a := range os.Args {
-				if a == uri {
-					os.Args[i] = uri2
-					break
-				}
+	var uri2 string
+	if strings.Contains(uri, "://") {
+		uri2 = utils.RemovePassword(uri)
+	} else {
+		uri2 = utils.RemovePassword("redis://" + uri)
+	}
+	if uri2 != uri {
+		for i, a := range os.Args {
+			if a == uri {
+				os.Args[i] = uri2
+				break
 			}
 		}
 	}

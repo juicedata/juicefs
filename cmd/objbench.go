@@ -109,7 +109,6 @@ var (
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
-	removePassword("")
 	for _, name := range []string{"big-object-size", "small-object-size", "block-size", "small-objects", "threads"} {
 		if ctx.Uint(name) == 0 {
 			logger.Fatalf("%s should not be set to zero", name)

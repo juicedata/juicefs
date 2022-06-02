@@ -70,7 +70,6 @@ func rmr(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
-	removePassword("")
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
 		p, err := filepath.Abs(path)

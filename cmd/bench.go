@@ -304,7 +304,6 @@ func printResult(result [][]string, isatty bool) {
 
 func bench(ctx *cli.Context) error {
 	setup(ctx, 1)
-	removePassword("")
 	/* --- Pre-check --- */
 	if ctx.Uint("block-size") == 0 || ctx.Uint("threads") == 0 {
 		return os.ErrInvalid

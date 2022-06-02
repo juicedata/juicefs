@@ -89,7 +89,6 @@ func doUmount(mp string, force bool) error {
 
 func umount(ctx *cli.Context) error {
 	setup(ctx, 1)
-	removePassword("")
 	mp := ctx.Args().Get(0)
 	force := ctx.Bool("force")
 	return doUmount(mp, force)

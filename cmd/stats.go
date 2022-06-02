@@ -368,7 +368,6 @@ func readStats(path string) map[string]float64 {
 
 func stats(ctx *cli.Context) error {
 	setup(ctx, 1)
-	removePassword("")
 	mp := ctx.Args().First()
 	inode, err := utils.GetFileInode(mp)
 	if err != nil {
