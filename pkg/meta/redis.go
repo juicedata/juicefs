@@ -32,6 +32,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -76,7 +77,6 @@ type redisMeta struct {
 	prefix     string
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
-	snap       *redisSnap
 }
 
 var _ Meta = &redisMeta{}
@@ -2867,23 +2867,46 @@ func (m *redisMeta) checkServerConfig() {
 	logger.Infof("Ping redis: %s", time.Since(start))
 }
 
-func (m *redisMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
+func (m *redisMeta) dumpEntry(e *DumpedEntry) error {
 	ctx := Background
-	e := &DumpedEntry{}
-	return e, m.txn(ctx, func(tx *redis.Tx) error {
-		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+	inode := e.Attr.Inode
+	typ := typeFromString(e.Attr.Type)
+	return m.txn(ctx, func(tx *redis.Tx) error {
+		p := tx.Pipeline()
+		ar := p.Get(ctx, m.inodeKey(inode))
+		xr := p.HGetAll(ctx, m.xattrKey(inode))
+		var sr *redis.StringCmd
+		var cr *redis.StringSliceCmd
+		var dr *redis.StringStringMapCmd
+		switch typ {
+		case TypeFile:
+			cr = p.LRange(ctx, m.chunkKey(inode, 0), 0, 1000000)
+		case TypeDirectory:
+			dr = p.HGetAll(ctx, m.entryKey(inode))
+		case TypeSymlink:
+			sr = p.Get(ctx, m.symKey(inode))
+		}
+		if _, err := p.Exec(ctx); err != nil {
+			return err
+		}
+		a, err := ar.Bytes()
 		if err != nil {
 			if err != redis.Nil {
 				return err
 			}
 			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
 		}
+
 		attr := &Attr{Typ: typ, Nlink: 1}
 		m.parseAttr(a, attr)
+		if attr.Typ != typ {
+			typ = attr.Typ
+			return redis.TxFailedErr // retry
+		}
 		e.Attr = dumpAttr(attr)
 		e.Attr.Inode = inode
 
-		keys, err := tx.HGetAll(ctx, m.xattrKey(inode)).Result()
+		keys, err := xr.Result()
 		if err != nil {
 			return err
 		}
@@ -2896,9 +2919,22 @@ func (m *redisMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 			e.Xattrs = xattrs
 		}
 
-		if attr.Typ == TypeFile {
-			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
-				vals, err := tx.LRange(ctx, m.chunkKey(inode, indx), 0, 1000000).Result()
+		switch typ {
+		case TypeFile:
+			var rs = make([]*redis.StringSliceCmd, (attr.Length+ChunkSize-1)/ChunkSize)
+			if len(rs) > 0 {
+				rs[0] = cr
+			}
+			if attr.Length > ChunkSize {
+				for indx := uint32(1); uint64(indx)*ChunkSize < attr.Length; indx++ {
+					rs[indx] = p.LRange(ctx, m.chunkKey(inode, indx), 0, 1000000)
+				}
+				if _, err := p.Exec(ctx); err != nil {
+					return err
+				}
+			}
+			for i := range rs {
+				vals, err := rs[i].Result()
 				if err != nil {
 					return err
 				}
@@ -2907,10 +2943,25 @@ func (m *redisMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 				for _, s := range ss {
 					slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 				}
-				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
+				e.Chunks = append(e.Chunks, &DumpedChunk{uint32(i), slices})
 			}
-		} else if attr.Typ == TypeSymlink {
-			if e.Symlink, err = tx.Get(ctx, m.symKey(inode)).Result(); err != nil {
+		case TypeDirectory:
+			dirs, err := dr.Result()
+			if err != nil {
+				return err
+			}
+			e.Entries = make(map[string]*DumpedEntry)
+			for name := range dirs {
+				t, inode := m.parseEntry([]byte(dirs[name]))
+				e.Entries[name] = &DumpedEntry{
+					Attr: &DumpedAttr{
+						Inode: inode,
+						Type:  typeToString(t),
+					},
+				}
+			}
+		case TypeSymlink:
+			if e.Symlink, err = sr.Result(); err != nil {
 				if err != redis.Nil {
 					return err
 				}
@@ -2921,205 +2972,77 @@ func (m *redisMeta) dumpEntry(inode Ino, typ uint8) (*DumpedEntry, error) {
 	}, m.inodeKey(inode))
 }
 
-func (m *redisMeta) dumpEntryFast(inode Ino, typ uint8) *DumpedEntry {
-	e := &DumpedEntry{}
-	a := []byte(m.snap.stringMap[m.inodeKey(inode)])
-	if len(a) == 0 {
-		if inode != TrashInode {
-			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
-		}
-	}
-	attr := &Attr{Typ: typ, Nlink: 1}
-	m.parseAttr(a, attr)
-	e.Attr = dumpAttr(attr)
-	e.Attr.Inode = inode
-
-	keys := m.snap.hashMap[m.xattrKey(inode)]
-	if len(keys) > 0 {
-		xattrs := make([]*DumpedXattr, 0, len(keys))
-		for k, v := range keys {
-			xattrs = append(xattrs, &DumpedXattr{k, v})
-		}
-		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
-		e.Xattrs = xattrs
-	}
-
-	if attr.Typ == TypeFile {
-		for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
-			vals := m.snap.listMap[m.chunkKey(inode, indx)]
-			ss := readSlices(vals)
-			slices := make([]*DumpedSlice, 0, len(ss))
-			for _, s := range ss {
-				slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
-			}
-			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
-		}
-	} else if attr.Typ == TypeSymlink {
-		if m.snap.stringMap[m.symKey(inode)] == "" {
-			logger.Warnf("The symlink of inode %d is not found", inode)
-		}
-		e.Symlink = m.snap.stringMap[m.symKey(inode)]
-	}
-	return e
-}
-
-func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
 		}
 	}
 	var err error
-	var dirs map[string]string
-	if m.snap != nil {
-		dirs = m.snap.hashMap[m.entryKey(inode)]
-	} else {
-		dirs, err = m.rdb.HGetAll(context.Background(), m.entryKey(inode)).Result()
-		if err != nil {
-			return err
-		}
-	}
-
-	if showProgress != nil {
-		showProgress(int64(len(dirs)), 0)
+	var entries []*DumpedEntry
+	for name, e := range tree.Entries {
+		e.Name = name
+		entries = append(entries, e)
 	}
 	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
 		return err
 	}
-	var sortedName []string
-	for name := range dirs {
-		sortedName = append(sortedName, name)
-	}
-	sort.Slice(sortedName, func(i, j int) bool { return sortedName[i] < sortedName[j] })
-	for idx, name := range sortedName {
-		typ, inode := m.parseEntry([]byte(dirs[name]))
-		var entry *DumpedEntry
-		if m.snap != nil {
-			entry = m.dumpEntryFast(inode, typ)
-		} else {
-			entry, err = m.dumpEntry(inode, typ)
-			if err != nil {
-				return err
-			}
-		}
-		if entry == nil {
-			continue
-		}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	var batch = 50
+	ms := make([]sync.Mutex, batch)
+	conds := make([]*sync.Cond, batch)
+	ready := make([]bool, batch)
+	for i := 0; i < batch; i++ {
+		conds[i] = sync.NewCond(&ms[i])
+		if i < len(entries) {
+			go func(i int) {
+				for ; i < len(entries); i += batch {
+					e := m.dumpEntry(entries[i])
+					ms[i%batch].Lock()
+					ready[i%batch] = true
+					if e != nil {
+						err = e
+					}
+					conds[i%batch].Signal()
+					ms[i%batch].Unlock()
 
-		entry.Name = name
-		if typ == TypeDirectory {
-			err = m.dumpDir(inode, entry, bw, depth+2, showProgress)
-		} else {
-			err = entry.writeJSON(bw, depth+2)
+					ms[i%batch].Lock()
+					for ready[i%batch] {
+						conds[i%batch].Wait()
+					}
+					ms[i%batch].Unlock()
+				}
+			}(i)
 		}
+	}
+	for i, e := range entries {
+		ms[i%batch].Lock()
+		for !ready[i%batch] {
+			conds[i%batch].Wait()
+		}
+		ready[i%batch] = false
+		conds[i%batch].Signal()
+		ms[i%batch].Unlock()
 		if err != nil {
 			return err
 		}
-		if idx != len(sortedName)-1 {
+		if e.Attr.Type == "directory" {
+			err = m.dumpDir(inode, e, bw, depth+2, showProgress)
+		} else {
+			err = e.writeJSON(bw, depth+2)
+		}
+		entries[i] = nil
+		if err != nil {
+			return err
+		}
+		if i != len(entries)-1 {
 			bwWrite(",")
 		}
 		if showProgress != nil {
-			showProgress(0, 1)
+			showProgress(1)
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
-	return nil
-}
-
-type redisSnap struct {
-	stringMap map[string]string            //i* s*
-	listMap   map[string][]string          //c*
-	hashMap   map[string]map[string]string //d*(included delfiles) x*
-}
-
-func (m *redisMeta) makeSnap(bar *utils.Bar) error {
-	m.snap = &redisSnap{
-		stringMap: make(map[string]string),
-		listMap:   make(map[string][]string),
-		hashMap:   make(map[string]map[string]string),
-	}
-	ctx := context.Background()
-
-	listType := func(keys []string) error {
-		p := m.rdb.Pipeline()
-		for _, key := range keys {
-			p.LRange(ctx, key, 0, -1)
-		}
-		cmds, err := p.Exec(ctx)
-		if err != nil {
-			return err
-		}
-		for _, cmd := range cmds {
-			if sliceCmd, ok := cmd.(*redis.StringSliceCmd); ok {
-				if key, ok := cmd.Args()[1].(string); ok {
-					m.snap.listMap[key] = sliceCmd.Val()
-				}
-			}
-			bar.Increment()
-		}
-
-		return nil
-	}
-
-	stringType := func(keys []string) error {
-		values, err := m.rdb.MGet(ctx, keys...).Result()
-		if err != nil {
-			return err
-		}
-		for i := 0; i < len(keys); i++ {
-			if s, ok := values[i].(string); ok {
-				m.snap.stringMap[keys[i]] = s
-			}
-			bar.Increment()
-		}
-		return nil
-	}
-
-	hashType := func(keys []string) error {
-		p := m.rdb.Pipeline()
-		for _, key := range keys {
-			if key == m.delfiles() {
-				continue
-			}
-			p.HGetAll(ctx, key)
-		}
-		cmds, err := p.Exec(ctx)
-		if err != nil {
-			return err
-		}
-		for _, cmd := range cmds {
-			if stringMapCmd, ok := cmd.(*redis.StringStringMapCmd); ok {
-				if key, ok := cmd.Args()[1].(string); ok {
-					m.snap.hashMap[key] = stringMapCmd.Val()
-				}
-			}
-			bar.Increment()
-		}
-		return nil
-	}
-
-	typeMap := map[string]func([]string) error{
-		"c*": listType,
-		"i*": stringType,
-		"s*": stringType,
-		"d*": hashType,
-		"x*": hashType,
-	}
-
-	scanner := func(match string, handlerKey func([]string) error) error {
-		return m.scan(ctx, match, func(keys []string) error {
-			if err := handlerKey(keys); err != nil {
-				return err
-			}
-			return nil
-		})
-	}
-
-	for match, typ := range typeMap {
-		if err := scanner(match, typ); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -3127,6 +3050,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
+				debug.PrintStack()
 				err = e
 			} else {
 				err = errors.Errorf("DumpMeta error: %v", p)
@@ -3151,26 +3075,33 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	progress := utils.NewProgress(false, false)
-	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
-	if root == 1 {
-		defer func() { m.snap = nil }()
-		bar := progress.AddCountBar("Snapshot keys", m.rdb.DBSize(ctx).Val())
-		if err = m.makeSnap(bar); err != nil {
-			return errors.Errorf("Fetch all metadata from Redis: %s", err)
-		}
-		bar.Done()
-		tree = m.dumpEntryFast(root, TypeDirectory)
-		trash = m.dumpEntryFast(TrashInode, TypeDirectory)
-	} else {
-		if tree, err = m.dumpEntry(root, TypeDirectory); err != nil {
-			return err
-		}
+	var tree = &DumpedEntry{
+		Name: "FSTree",
+		Attr: &DumpedAttr{
+			Inode: root,
+			Type:  typeToString(TypeDirectory),
+		},
+	}
+	if err = m.dumpEntry(tree); err != nil {
+		return err
 	}
 	if tree == nil {
 		return errors.New("The entry of the root inode was not found")
 	}
-	tree.Name = "FSTree"
+	var trash *DumpedEntry
+	if root == 1 {
+		trash = &DumpedEntry{
+			Name: "Trash",
+			Attr: &DumpedAttr{
+				Inode: TrashInode,
+				Type:  typeToString(TypeDirectory),
+			},
+		}
+		if err = m.dumpEntry(trash); err != nil {
+			return err
+		}
+	}
 
 	names := []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextTrash"}
 	for i := range names {
@@ -3192,13 +3123,9 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	for _, k := range keys {
 		sid, _ := strconv.ParseUint(k, 10, 64)
 		var ss []string
-		if root == 1 {
-			ss = m.snap.listMap[m.sustained(sid)]
-		} else {
-			ss, err = m.rdb.SMembers(ctx, m.sustained(sid)).Result()
-			if err != nil {
-				return err
-			}
+		ss, err = m.rdb.SMembers(ctx, m.sustained(sid)).Result()
+		if err != nil {
+			return err
 		}
 		if len(ss) > 0 {
 			inodes := make([]Ino, 0, len(ss))
@@ -3233,14 +3160,9 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	}
 
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
+	bar.SetTotal(dm.Counters.UsedInodes)
 	bar.Increment()
-	if trash != nil {
-		trash.Name = "Trash"
-		bar.IncrTotal(1)
-		bar.Increment()
-	}
-	showProgress := func(totalIncr, currentIncr int64) {
-		bar.IncrTotal(totalIncr)
+	showProgress := func(currentIncr int64) {
 		bar.IncrInt64(currentIncr)
 	}
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
