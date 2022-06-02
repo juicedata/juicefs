@@ -70,14 +70,13 @@ jobs:
           cd /jfs/
           git clone https://github.com/sanwan/mongodb-performance-test.git
           cd mongodb-performance-test
-          jarfile=./latest-version/mongodb-performance-test.jar
-          time java -jar $jarfile -m insert -o 1000000 -t 10 -db test -c perf >insert_result
+          time java -jar ./latest-version/mongodb-performance-test.jar -m insert -o 1000000 -t 10 -db test -c perf >insert_result
           du -sh /jfs/mongodb/
 
       - name: Read and Update
         run: |
           cd /jfs/mongodb-performance-test/
-          java -jar $jarfile -m update_one iterate_many -d 60 -t 20 20 -db test -c perf >update_result
+          java -jar ./latest-version/mongodb-performance-test.jar -m update_one iterate_many -d 60 -t 20 20 -db test -c perf >update_result
 
 
 
