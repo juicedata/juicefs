@@ -52,8 +52,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: download data
-        wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-        gzip -dk  meta_with_4M_Empty_files.json.gz
+        run: |
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: start mysql
         run: |
           # sudo chmod 777 /var
@@ -96,8 +97,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: download data
-        wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-        gzip -dk  meta_with_4M_Empty_files.json.gz
+        run: |
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
         uses: ./.github/actions/load
         with:
@@ -109,8 +111,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: download data
-        wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-        gzip -dk  meta_with_4M_Empty_files.json.gz
+        run: |
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Install TiKV
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
@@ -132,8 +135,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: download data
-        wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-        gzip -dk  meta_with_4M_Empty_files.json.gz
+        run: |
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
       - run: sudo go get github.com/dgraph-io/badger/v3
       - name: Test
         uses: ./.github/actions/load
@@ -149,8 +153,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: download data
-        wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-        gzip -dk  meta_with_4M_Empty_files.json.gz
+        run: |
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: install 
         run: | 
           docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
