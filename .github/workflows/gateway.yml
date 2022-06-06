@@ -404,9 +404,9 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
           source /home/runner/.profile
-          tiup playground nightly &
+          tiup playground 5.4.0 &
           sleep 5
-          mysql -h127.0.0.1 -P2881 -uroot -e "set global tidb_enable_noop_functions=1;"
+          mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
       - name: Test
         uses: ./.github/actions/gateway
         with:
@@ -425,9 +425,9 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
           source /home/runner/.profile
-          tiup playground nightly &
+          tiup playground 5.4.0 &
           sleep 5
-          mysql -h127.0.0.1 -P2881 -uroot -e "set global tidb_enable_noop_functions=1;"
+          mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
       - name: Test
         uses: ./.github/actions/gateway
         with:
@@ -448,7 +448,7 @@ jobs:
           source /home/runner/.profile
           tiup playground nightly &
           sleep 5
-          mysql -h127.0.0.1 -P2881 -uroot -e "set global tidb_enable_noop_functions=1;"
+          mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
       - name: Test
         uses: ./.github/actions/gateway
         with:
