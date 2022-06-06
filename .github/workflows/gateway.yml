@@ -396,6 +396,63 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
 
+  upload-big-files-with-tidb-read-committed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TiDB
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source ~/.bash_profile
+          tiup playground nightly &
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/test"
+          file_size: "200M"
+          file_count: 10
+          isolation_level: "read committed"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1   
+  upload-big-files-with-tidb-repeatable-read:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TiDB
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source ~/.bash_profile
+          tiup playground nightly &
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/test"
+          file_size: "200M"
+          file_count: 10
+          isolation_level: "repeatable read"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1   
+  upload-big-files-with-tidb-serializable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TiDB
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source ~/.bash_profile
+          tiup playground nightly &
+      - name: Test
+        uses: ./.github/actions/gateway
+        with:
+          meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/test"
+          file_size: "200M"
+          file_count: 10
+          isolation_level: "serializable"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1   
   upload-small-files-with-etcd:
     runs-on: ubuntu-latest
     steps:
