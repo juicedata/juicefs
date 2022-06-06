@@ -255,7 +255,6 @@ jobs:
                                      ORDER BY
                                          year ASC,
                                          C_NATION ASC;"
-          sudo du -sh /data/jfs/
           df -lh
 
 
