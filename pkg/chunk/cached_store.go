@@ -289,7 +289,8 @@ func (c *rChunk) Remove() error {
 		// there could be multiple clients try to remove the same chunk in the same time,
 		// any of them should succeed if any blocks is removed
 		key := c.key(i)
-		c.store.removeStaging(key)
+		c.store.removePending(key)
+		c.store.bcache.remove(key)
 	}
 
 	if c.store.conf.MaxDeletes == 0 {
@@ -854,7 +855,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 
 	if err = store.upload(key, block, nil); err == nil {
 		store.bcache.uploaded(key, blen)
-		store.removeStaging(key)
+		store.removePending(key)
 		if os.Remove(stagingPath) == nil {
 			stageBlocks.Sub(1)
 			stageBlockBytes.Sub(float64(blen))
@@ -876,11 +877,10 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 	return false
 }
 
-func (store *cachedStore) removeStaging(key string) {
+func (store *cachedStore) removePending(key string) {
 	store.pendingMutex.Lock()
 	delete(store.pendingKeys, key)
 	store.pendingMutex.Unlock()
-	store.bcache.remove(key)
 }
 
 func (store *cachedStore) scanDelayedStaging() {
