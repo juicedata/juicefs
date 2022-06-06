@@ -9,6 +9,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
+      - 'main'
       - 'release-*'
     paths-ignore:
       - 'docs/**'
@@ -76,7 +77,7 @@ jobs:
           cd /jfs/
           git clone https://github.com/sanwan/SVHNClassifier
           cd SVHNClassifier
-          git checkout c06b126
+          git checkout 3429204
           mkdir data
           cd data
           wget -O train.tar.gz -nv http://ufldl.stanford.edu/housenumbers/train.tar.gz
