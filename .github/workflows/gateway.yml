@@ -403,7 +403,7 @@ jobs:
       - name: Install TiDB
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source ~/.bash_profile
+          source /home/runner/.profile
           tiup playground nightly &
       - name: Test
         uses: ./.github/actions/gateway
@@ -422,7 +422,7 @@ jobs:
       - name: Install TiDB
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source ~/.bash_profile
+          source /home/runner/.profile
           tiup playground nightly &
       - name: Test
         uses: ./.github/actions/gateway
@@ -441,7 +441,7 @@ jobs:
       - name: Install TiDB
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source ~/.bash_profile
+          source /home/runner/.profile
           tiup playground nightly &
       - name: Test
         uses: ./.github/actions/gateway
