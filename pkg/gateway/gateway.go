@@ -920,7 +920,8 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 
 func (n *jfsObjects) cleanup() {
 	for t := range time.Tick(24 * time.Hour) {
-		var tmpDirs []string
+		// default bucket tmp dirs
+		tmpDirs := []string{".sys/tmp/", ".sys/uploads/"}
 		if n.gConf.MultiBucket {
 			buckets, err := n.ListBuckets(context.Background())
 			if err != nil {
@@ -931,9 +932,6 @@ func (n *jfsObjects) cleanup() {
 				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/tmp", bucket.Name))
 				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/uploads", bucket.Name))
 			}
-		} else {
-			tmpDirs = append(tmpDirs, ".sys/tmp/")
-			tmpDirs = append(tmpDirs, ".sys/uploads/")
 		}
 		for _, dir := range tmpDirs {
 			f, errno := n.fs.Open(mctx, dir, 0)
