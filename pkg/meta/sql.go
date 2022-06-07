@@ -640,7 +640,14 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 		}
 		if m.shouldRetry(err) {
 			txRestart.Add(1)
-			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			msg := fmt.Sprintf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			if i+1 == 10 {
+				logger.Infof(msg)
+			} else if (i+1)%10 == 0 {
+				logger.Warnf(msg)
+			} else {
+				logger.Debugf(msg)
+			}
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		}

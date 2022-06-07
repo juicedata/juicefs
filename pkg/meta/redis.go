@@ -781,7 +781,14 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 		err = m.rdb.Watch(ctx, txf, keys...)
 		if m.shouldRetry(err, retryOnFailture) {
 			txRestart.Add(1)
-			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			msg := fmt.Sprintf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			if i+1 == 10 {
+				logger.Infof(msg)
+			} else if (i+1)%10 == 0 {
+				logger.Warnf(msg)
+			} else {
+				logger.Debugf(msg)
+			}
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		}

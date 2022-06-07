@@ -645,7 +645,14 @@ func (m *kvMeta) txn(f func(tx kvTxn) error, inodes ...Ino) error {
 	for i := 0; i < 50; i++ {
 		if err = m.client.txn(f); m.shouldRetry(err) {
 			txRestart.Add(1)
-			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			msg := fmt.Sprintf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			if i+1 == 10 {
+				logger.Infof(msg)
+			} else if (i+1)%10 == 0 {
+				logger.Warnf(msg)
+			} else {
+				logger.Debugf(msg)
+			}
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
 		}
