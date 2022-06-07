@@ -622,12 +622,6 @@ func (m *kvMeta) ListSessions() ([]*Session, error) {
 }
 
 func (m *kvMeta) shouldRetry(err error) bool {
-	if err == nil {
-		return false
-	}
-	if _, ok := err.(syscall.Errno); ok {
-		return false
-	}
 	return m.client.shouldRetry(err)
 }
 
@@ -641,30 +635,25 @@ func (m *kvMeta) txn(f func(tx kvTxn) error, inodes ...Ino) error {
 		m.txLock(int(inodes[0]))
 		defer m.txUnlock(int(inodes[0]))
 	}
-	var err error
+	var lastErr error
 	for i := 0; i < 50; i++ {
-		if err = m.client.txn(f); m.shouldRetry(err) {
-			txRestart.Add(1)
-			msg := fmt.Sprintf("Transaction failed, restart it (tried %d): %s", i+1, err)
-			if i+1 == 10 {
-				logger.Infof(msg)
-			} else if (i+1)%10 == 0 {
-				logger.Warnf(msg)
-			} else {
-				logger.Debugf(msg)
-			}
-			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
-			continue
-		} else if err == nil && i > 0 {
-			logger.Warnf("Transaction succeeded after %d tries, inodes: %v", i+1, inodes)
-		}
+		err := m.client.txn(f)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
+		if err != nil && m.shouldRetry(err) {
+			txRestart.Add(1)
+			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			lastErr = err
+			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
+			continue
+		} else if err == nil && i > 1 {
+			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, error: %s", i+1, time.Since(start), inodes, lastErr)
+		}
 		return err
 	}
-	logger.Warnf("Already tried 50 times, returning: %s", err)
-	return err
+	logger.Warnf("Already tried 50 times, returning: %s", lastErr)
+	return lastErr
 }
 
 func (m *kvMeta) setValue(key, value []byte) error {
