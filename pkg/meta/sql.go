@@ -588,13 +588,6 @@ func mustInsert(s *xorm.Session, beans ...interface{}) error {
 var errBusy error
 
 func (m *dbMeta) shouldRetry(err error) bool {
-	if err == nil {
-		return false
-	}
-	if _, ok := err.(syscall.Errno); ok {
-		return false
-	}
-	// TODO: add other retryable errors here
 	msg := strings.ToLower(err.Error())
 	if strings.Contains(msg, "too many connections") || strings.Contains(msg, "too many clients") {
 		logger.Warnf("transaction failed: %s, will retry it. please increase the max number of connections in your database, or use a connection pool.", msg)
@@ -630,57 +623,64 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 		m.txLock(int(inodes[0]))
 		defer m.txUnlock(int(inodes[0]))
 	}
-	var err error
+	var lastErr error
 	for i := 0; i < 50; i++ {
-		_, err = m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
+		_, err := m.db.Transaction(func(s *xorm.Session) (interface{}, error) {
 			return nil, f(s)
 		})
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
-		if m.shouldRetry(err) {
+		if err != nil && m.shouldRetry(err) {
 			txRestart.Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
+		} else if err == nil && i > 1 {
+			logger.Warnf("Transaction succeeded after %d tries (%s), inodes: %v, last error: %s", i+1, time.Since(start), inodes, lastErr)
 		}
 		return err
 	}
-	logger.Warnf("Already tried 50 times, returning: %s", err)
-	return err
+	logger.Warnf("Already tried 50 times, returning: %s", lastErr)
+	return lastErr
 }
 
 func (m *dbMeta) roTxn(f func(s *xorm.Session) error) error {
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
-	var err error
 	s := m.db.NewSession()
 	defer s.Close()
 	var opt = sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 		ReadOnly:  true,
 	}
+	var lastErr error
 	for i := 0; i < 50; i++ {
 		if err := s.BeginTx(&opt); err != nil {
 			logger.Debugf("Start transaction failed, try again (tried %d): %s", i+1, err)
+			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		}
-		err = f(s)
+		err := f(s)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
 		_ = s.Rollback()
-		if m.shouldRetry(err) {
+		if err != nil && m.shouldRetry(err) {
 			txRestart.Add(1)
-			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			logger.Debugf("Read transaction failed, restart it (tried %d): %s", i+1, err)
+			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
+		} else if err == nil && i > 1 {
+			logger.Warnf("Read transaction succeeded after %d tries (%s), last error: %s", i+1, time.Since(start), lastErr)
 		}
 		return err
 	}
-	logger.Warnf("Already tried 50 times, returning: %s", err)
-	return err
+	logger.Warnf("Already tried 50 times, returning: %s", lastErr)
+	return lastErr
 }
 
 func (m *dbMeta) parseAttr(n *node, attr *Attr) {
