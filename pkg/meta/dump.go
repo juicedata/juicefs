@@ -262,25 +262,24 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	return bw, nil
 }
 
-func dumpAttr(a *Attr) *DumpedAttr {
-	d := &DumpedAttr{
-		Type:      typeToString(a.Typ),
-		Mode:      a.Mode,
-		Uid:       a.Uid,
-		Gid:       a.Gid,
-		Atime:     a.Atime,
-		Mtime:     a.Mtime,
-		Ctime:     a.Ctime,
-		Atimensec: a.Atimensec,
-		Mtimensec: a.Mtimensec,
-		Ctimensec: a.Ctimensec,
-		Nlink:     a.Nlink,
-		Rdev:      a.Rdev,
-	}
+func dumpAttr(a *Attr, d *DumpedAttr) {
+	d.Type = typeToString(a.Typ)
+	d.Mode = a.Mode
+	d.Uid = a.Uid
+	d.Gid = a.Gid
+	d.Atime = a.Atime
+	d.Mtime = a.Mtime
+	d.Ctime = a.Ctime
+	d.Atimensec = a.Atimensec
+	d.Mtimensec = a.Mtimensec
+	d.Ctimensec = a.Ctimensec
+	d.Nlink = a.Nlink
+	d.Rdev = a.Rdev
 	if a.Typ == TypeFile {
 		d.Length = a.Length
+	} else {
+		d.Length = 0
 	}
-	return d
 }
 
 func loadAttr(d *DumpedAttr) *Attr {

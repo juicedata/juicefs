@@ -2605,7 +2605,8 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 	} else {
 		m.parseAttr(n, attr)
 	}
-	e.Attr = dumpAttr(attr)
+	e.Attr = &DumpedAttr{}
+	dumpAttr(attr, e.Attr)
 	e.Attr.Inode = inode
 
 	var rows []xattr
@@ -2662,7 +2663,8 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 
 	attr := &Attr{Typ: typ, Nlink: 1}
 	m.parseAttr(n, attr)
-	e.Attr = dumpAttr(attr)
+	e.Attr = &DumpedAttr{}
+	dumpAttr(attr, e.Attr)
 	e.Attr.Inode = inode
 
 	rows, ok := m.snap.xattr[inode]
