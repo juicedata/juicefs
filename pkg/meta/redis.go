@@ -710,9 +710,6 @@ type timeoutError interface {
 }
 
 func (m *redisMeta) shouldRetry(err error, retryOnFailure bool) bool {
-	if _, ok := err.(syscall.Errno); ok {
-		return false
-	}
 	switch err {
 	case redis.TxFailedErr:
 		return true
@@ -767,7 +764,6 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 			panic(fmt.Sprintf("Invalid key %s not starts with prefix %s", k, m.prefix))
 		}
 	}
-	var err error
 	var khash = fnv.New32()
 	_, _ = khash.Write([]byte(keys[0]))
 	h := int(khash.Sum32())
@@ -777,21 +773,25 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	defer m.txUnlock(h)
 	// TODO: enable retry for some of idempodent transactions
 	var retryOnFailture = false
+	var lastErr error
 	for i := 0; i < 50; i++ {
-		err = m.rdb.Watch(ctx, txf, keys...)
-		if m.shouldRetry(err, retryOnFailture) {
-			txRestart.Add(1)
-			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
-			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
-			continue
-		}
+		err := m.rdb.Watch(ctx, txf, keys...)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
+		if err != nil && m.shouldRetry(err, retryOnFailture) {
+			txRestart.Add(1)
+			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			lastErr = err
+			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
+			continue
+		} else if err == nil && i > 1 {
+			logger.Warnf("Transaction succeeded after %d tries (%s), keys: %v, last error: %s", i+1, time.Since(start), keys, lastErr)
+		}
 		return err
 	}
-	logger.Warnf("Already tried 50 times, returning: %s", err)
-	return err
+	logger.Warnf("Already tried 50 times, returning: %s", lastErr)
+	return lastErr
 }
 
 func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
