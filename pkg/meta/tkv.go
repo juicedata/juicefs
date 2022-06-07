@@ -655,6 +655,8 @@ func (m *kvMeta) txn(f func(tx kvTxn) error, inodes ...Ino) error {
 			}
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
+		} else if err == nil && i > 0 {
+			logger.Warnf("Transaction succeeded after %d tries, inodes: %v", i+1, inodes)
 		}
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil

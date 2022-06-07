@@ -650,6 +650,8 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 			}
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
+		} else if err == nil && i > 0 {
+			logger.Warnf("Transaction succeeded after %d tries, inodes: %v", i+1, inodes)
 		}
 		return err
 	}
@@ -680,9 +682,18 @@ func (m *dbMeta) roTxn(f func(s *xorm.Session) error) error {
 		_ = s.Rollback()
 		if m.shouldRetry(err) {
 			txRestart.Add(1)
-			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
+			msg := fmt.Sprintf("RoTransaction failed, restart it (tried %d): %s", i+1, err)
+			if i+1 == 10 {
+				logger.Infof(msg)
+			} else if (i+1)%10 == 0 {
+				logger.Warnf(msg)
+			} else {
+				logger.Debugf(msg)
+			}
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
+		} else if err == nil && i > 0 {
+			logger.Warnf("RoTransaction succeeded after %d tries", i+1)
 		}
 		return err
 	}

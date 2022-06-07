@@ -791,6 +791,8 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 			}
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
 			continue
+		} else if err == nil && i > 0 {
+			logger.Warnf("Transaction succeeded after %d tries, keys: %v", i+1, keys)
 		}
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
