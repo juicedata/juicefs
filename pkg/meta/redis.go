@@ -2926,7 +2926,6 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				return redis.TxFailedErr // retry
 			}
 			dumpAttr(&attr, e.Attr)
-			e.Attr.Inode = inode
 
 			keys, err := xr[i].Result()
 			if err != nil {
@@ -2973,7 +2972,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				}
 			}
 		}
-		if largeFile || true {
+		if largeFile {
 			if _, err := p.Exec(ctx); err != nil {
 				return err
 			}
@@ -2998,14 +2997,14 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 	}, keys...)
 }
 
-func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(currentIncr int64)) error {
+func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, bar *utils.Bar) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
 		}
 	}
 	var err error
-	var entries []*DumpedEntry
+	entries := make([]*DumpedEntry, 0, len(tree.Entries))
 	for name, e := range tree.Entries {
 		e.Name = name
 		entries = append(entries, e)
@@ -3021,7 +3020,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	ready := make([]int, concurrent)
 	for c := 0; c < concurrent; c++ {
 		conds[c] = sync.NewCond(&ms[c])
-		if c < len(entries) {
+		if c*batch < len(entries) {
 			go func(c int) {
 				for i := c * batch; i < len(entries); i += concurrent * batch {
 					es := entries[i:]
@@ -3054,13 +3053,15 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			conds[c].Wait()
 		}
 		ready[c]--
-		conds[c].Signal()
+		if ready[c] == 0 {
+			conds[c].Signal()
+		}
 		ms[c].Unlock()
 		if err != nil {
 			return err
 		}
 		if e.Attr.Type == "directory" {
-			err = m.dumpDir(inode, e, bw, depth+2, showProgress)
+			err = m.dumpDir(inode, e, bw, depth+2, bar)
 		} else {
 			err = e.writeJSON(bw, depth+2)
 		}
@@ -3077,8 +3078,8 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		if i != len(entries)-1 {
 			bwWrite(",")
 		}
-		if showProgress != nil {
-			showProgress(1)
+		if bar != nil {
+			bar.IncrInt64(1)
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
@@ -3171,9 +3172,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 
 	progress := utils.NewProgress(false, false)
 	bar := progress.AddCountBar("Dumped entries", dm.Counters.UsedInodes) // with root
-	showProgress := func(currentIncr int64) {
-		bar.IncrInt64(currentIncr)
-	}
 
 	root = m.checkRoot(root)
 	var tree = &DumpedEntry{
@@ -3186,7 +3184,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	if err = m.dumpEntries(tree); err != nil {
 		return err
 	}
-	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
+	if err = m.dumpDir(root, tree, bw, 1, bar); err != nil {
 		return err
 	}
 	if root == 1 {
@@ -3203,7 +3201,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		if _, err = bw.WriteString(","); err != nil {
 			return err
 		}
-		if err = m.dumpDir(TrashInode, trash, bw, 1, showProgress); err != nil {
+		if err = m.dumpDir(TrashInode, trash, bw, 1, bar); err != nil {
 			return err
 		}
 	}
