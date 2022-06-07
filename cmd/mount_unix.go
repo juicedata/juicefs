@@ -36,7 +36,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func checkMountpoint(name, mp, logPath string) {
+func checkMountpoint(name, mp, logPath string, background bool) {
 	for i := 0; i < 20; i++ {
 		time.Sleep(time.Millisecond * 500)
 		st, err := os.Stat(mp)
@@ -50,7 +50,11 @@ func checkMountpoint(name, mp, logPath string) {
 		_ = os.Stdout.Sync()
 	}
 	_, _ = os.Stdout.WriteString("\n")
-	logger.Fatalf("fail to mount after 10 seconds, please check the log (%s) or re-mount in foreground", logPath)
+	if background {
+		logger.Fatalf("The mount point is not ready in 10 seconds, please check the log (%s) or re-mount in foreground", logPath)
+	} else {
+		logger.Fatalf("The mount point is not ready in 10 seconds, exit it")
+	}
 }
 
 func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
@@ -60,7 +64,7 @@ func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 		if stage != 0 {
 			return nil
 		}
-		checkMountpoint(name, mp, logfile)
+		checkMountpoint(name, mp, logfile, true)
 		return nil
 	}
 
