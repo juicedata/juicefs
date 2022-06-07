@@ -407,7 +407,7 @@ func mount(c *cli.Context) error {
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		daemonRun(c, addr, vfsConf, metaCli)
 	} else {
-		go checkMountpoint(vfsConf.Format.Name, mp, c.String("log"))
+		go checkMountpoint(vfsConf.Format.Name, mp, c.String("log"), false)
 	}
 
 	removePassword(addr)
