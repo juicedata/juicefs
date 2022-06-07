@@ -84,12 +84,15 @@ func RemovePassword(uri string) string {
 	if p < 0 {
 		return uri
 	}
-	sp := strings.Index(uri, "://")
-	cp := strings.Index(uri[sp+3:], ":")
-	if cp < 0 || sp+3+cp > p {
+	sp := strings.Index(uri, "://") + 3
+	if sp == 2 {
+		sp = 0
+	}
+	cp := strings.Index(uri[sp:], ":")
+	if cp < 0 || sp+cp > p {
 		return uri
 	}
-	return uri[:sp+3+cp] + ":****" + uri[p:]
+	return uri[:sp+cp] + ":****" + uri[p:]
 }
 
 func GuessMimeType(key string) string {

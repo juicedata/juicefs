@@ -78,6 +78,7 @@ type engine interface {
 
 type baseMeta struct {
 	sync.Mutex
+	addr string
 	conf *Config
 	fmt  Format
 
@@ -104,7 +105,7 @@ type baseMeta struct {
 	en engine
 }
 
-func newBaseMeta(conf *Config) baseMeta {
+func newBaseMeta(addr string, conf *Config) baseMeta {
 	if conf.Retries == 0 {
 		conf.Retries = 10
 	}
@@ -112,6 +113,7 @@ func newBaseMeta(conf *Config) baseMeta {
 		conf.Heartbeat = 12 * time.Second
 	}
 	return baseMeta{
+		addr:         utils.RemovePassword(addr),
 		conf:         conf,
 		root:         1,
 		of:           newOpenFiles(conf.OpenCache),
