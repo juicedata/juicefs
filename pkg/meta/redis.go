@@ -3266,6 +3266,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func())
 		p.HSet(ctx, m.xattrKey(inode), xattrs)
 	}
 	p.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
+	tryExec()
 }
 
 func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
