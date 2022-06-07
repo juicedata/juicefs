@@ -167,3 +167,27 @@ jobs:
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
+
+  load-to-tidb:
+    runs-on: ubuntu-latest          
+    steps:
+      - uses: actions/checkout@v3
+      - name: download data
+        run: |
+          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
+          gzip -dk  meta_with_4M_Empty_files.json.gz
+      - name: install 
+        run: | 
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.profile
+          tiup playground 5.4.0 &
+          sleep 120
+          mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
+      - name: Test
+        uses: ./.github/actions/load
+        with:
+          meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/load_test"
+          load_file: "meta_with_4M_Empty_files.json"   
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
