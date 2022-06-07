@@ -84,7 +84,7 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 	// TODO: ping server and check latency > Millisecond
 	// logger.Warnf("The latency to database is too high: %s", time.Since(start))
 	m := &kvMeta{
-		baseMeta: newBaseMeta(conf),
+		baseMeta: newBaseMeta(addr, conf),
 		client:   client,
 	}
 	m.en = m
@@ -2605,7 +2605,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	if exist {
-		return fmt.Errorf("Database %s is not empty", m.Name())
+		return fmt.Errorf("Database %s://%s is not empty", m.Name(), m.addr)
 	}
 
 	kv := make(chan *pair, 10000)

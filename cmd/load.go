@@ -17,10 +17,12 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"os"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -59,6 +61,9 @@ func load(ctx *cli.Context) error {
 		defer fp.Close()
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	if format, err := m.Load(false); err == nil {
+		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(ctx.Args().Get(0)), format.Name)
+	}
 	if err := m.LoadMeta(fp); err != nil {
 		return err
 	}
