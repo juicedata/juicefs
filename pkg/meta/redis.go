@@ -196,7 +196,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 
 	m := &redisMeta{
-		baseMeta: newBaseMeta(conf),
+		baseMeta: newBaseMeta(addr, conf),
 		rdb:      rdb,
 		prefix:   prefix,
 	}
@@ -3283,7 +3283,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 			return err
 		}
 		if dbsize > 0 {
-			return fmt.Errorf("Database %s is not empty", m.Name())
+			return fmt.Errorf("Database redis://%s is not empty", m.addr)
 		}
 	}
 

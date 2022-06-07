@@ -201,7 +201,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	engine.DB().SetConnMaxIdleTime(time.Minute * 5)
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	m := &dbMeta{
-		baseMeta: newBaseMeta(conf),
+		baseMeta: newBaseMeta(addr, conf),
 		db:       engine,
 	}
 	m.en = m
@@ -3010,7 +3010,11 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		return err
 	}
 	if len(tables) > 0 {
-		return fmt.Errorf("Database %s is not empty", m.Name())
+		addr := m.addr
+		if !strings.Contains(addr, "://") {
+			addr = fmt.Sprintf("%s://%s", m.Name(), addr)
+		}
+		return fmt.Errorf("Database %s is not empty", addr)
 	}
 	if err = m.syncTable(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
