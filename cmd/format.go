@@ -397,11 +397,15 @@ func format(c *cli.Context) error {
 	} else {
 		logger.Fatalf("Load metadata: %s", err)
 	}
-	if format.Storage == "file" {
-		if p, err := filepath.Abs(format.Bucket); err == nil {
-			format.Bucket = p + "/"
+	if format.Storage == "file" || format.Storage == "sqlite3" {
+		p, err := filepath.Abs(format.Bucket)
+		if err == nil {
+			format.Bucket = p
 		} else {
 			logger.Fatalf("Failed to get absolute path of %s: %s", format.Bucket, err)
+		}
+		if format.Storage == "file" {
+			format.Bucket += "/"
 		}
 	}
 
