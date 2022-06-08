@@ -205,7 +205,7 @@ func reorderOptions(app *cli.App, args []string) []string {
 		option := args[i]
 		if ok, hasValue := isFlag(cmdFlags, option); ok {
 			newArgs = append(newArgs, option)
-			if hasValue {
+			if hasValue && len(args[i+1:]) > 0 {
 				i++
 				newArgs = append(newArgs, args[i])
 			}
