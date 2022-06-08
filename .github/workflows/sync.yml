@@ -114,7 +114,10 @@ jobs:
           fetch-depth: 1
 
       - name: Build linux target
-        run: make juicefs
+        run: |
+          # make juicefs
+          wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
+          tar -zxf juicefs-1.0.0-beta3-linux-amd64.tar.gz
 
       - name: Checkout source code for test
         uses: actions/checkout@v2
@@ -139,7 +142,7 @@ jobs:
           ./juicefs format --trash-days 0 $meta_url --storage minio --bucket http://localhost:9000/sync-test --access-key minioadmin --secret-key minioadmin  sync-test
           ./juicefs mount --no-usage-report $meta_url $mount_point -d
           mkdir $mount_point/jfs_source/
-          ./juicefs sync jfs_source/ $mount_point/jfs_source/ & 
+          ./juicefs sync --dirs jfs_source/ $mount_point/jfs_source/ & 
           docker stop minio
           sleep 3
           docker start minio
