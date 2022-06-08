@@ -142,6 +142,7 @@ jobs:
           ./juicefs format --trash-days 0 $meta_url --storage minio --bucket http://localhost:9000/sync-test --access-key minioadmin --secret-key minioadmin  sync-test
           ./juicefs mount --no-usage-report $meta_url $mount_point -d
           mkdir $mount_point/jfs_source/
+          sudo chmod 000 jfs_source/LICENSE
           ./juicefs sync --dirs jfs_source/ $mount_point/jfs_source/ & 
           docker stop minio
           sleep 3
