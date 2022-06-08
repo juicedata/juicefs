@@ -38,6 +38,7 @@ func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
 }
 
 func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, width, files, bytes int) error {
+	m := jfs.Meta()
 	for i := 0; i < files; i++ {
 		fn := filepath.Join(root, fmt.Sprintf("file.mdtest.%d.%d", np, i))
 		f, err := jfs.Create(ctx, fn, 0644)
@@ -45,13 +46,18 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 			return fmt.Errorf("create %s: %s", fn, err)
 		}
 		if bytes > 0 {
-			m := jfs.Meta()
-			var chunkid uint64
-			if st := m.NewChunk(ctx, &chunkid); st != 0 {
-				return fmt.Errorf("writechunk %s: %s", fn, st)
-			}
-			if st := m.Write(ctx, f.Inode(), 0, 0, meta.Slice{Chunkid: chunkid, Size: uint32(bytes), Len: uint32(bytes)}); st != 0 {
-				return fmt.Errorf("writeend %s: %s", fn, st)
+			for indx := 0; indx*meta.ChunkSize < bytes; indx++ {
+				var chunkid uint64
+				if st := m.NewChunk(ctx, &chunkid); st != 0 {
+					return fmt.Errorf("writechunk %s: %s", fn, st)
+				}
+				size := meta.ChunkSize
+				if bytes < (indx+1)*meta.ChunkSize {
+					size = bytes - indx*meta.ChunkSize
+				}
+				if st := m.Write(ctx, f.Inode(), uint32(indx), 0, meta.Slice{Chunkid: chunkid, Size: uint32(size), Len: uint32(size)}); st != 0 {
+					return fmt.Errorf("writeend %s: %s", fn, st)
+				}
 			}
 		}
 		f.Close(ctx)
