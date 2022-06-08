@@ -155,3 +155,42 @@ jobs:
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
+
+  lost-file-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: |
+          make juicefs
+
+      - name: Checkout source code for test
+        uses: actions/checkout@v2
+        with:
+          repository: juicedata/juicefs
+          path: jfs_source
+
+      - name: Test
+        run: |
+          meta_url=sqlite3://test.db
+          mount_point=/tmp/sync-test/
+          ./juicefs format --trash-days 0 $meta_url sync-test
+          ./juicefs mount --no-usage-report $meta_url $mount_point -d
+          mkdir $mount_point/jfs_source/
+          ./juicefs sync jfs_source/ $mount_point/jfs_source/  -u=true --perms=true --check-all=true --bwlimit=81920 --dirs=true --threads=30 --debug  
+          diff -ur jfs_source/ $mount_point/jfs_source
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
