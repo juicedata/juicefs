@@ -92,75 +92,6 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-  lost-file-test:
-    runs-on: ubuntu-latest
-    services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
-
-      - name: Build linux target
-        run: |
-          # make juicefs
-          wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
-          tar -zxf juicefs-1.0.0-beta3-linux-amd64.tar.gz
-
-      - name: Checkout source code for test
-        uses: actions/checkout@v2
-        with:
-          repository: juicedata/juicefs
-          path: jfs_source
-
-      - name: Setup minio
-        run: |
-          docker run -d -p 9000:9000 --name minio \
-                     -e "MINIO_ACCESS_KEY=minioadmin" \
-                     -e "MINIO_SECRET_KEY=minioadmin" \
-                     -v /tmp/data:/data \
-                     -v /tmp/config:/root/.minio \
-                     minio/minio server /data
-
-      - name: Test
-        run: |
-          # issue link : https://github.com/juicedata/juicefs/issues/2088
-          meta_url=redis://127.0.0.1/1
-          mount_point=/tmp/sync-test/
-          ./juicefs format --trash-days 0 $meta_url --storage minio --bucket http://localhost:9000/sync-test --access-key minioadmin --secret-key minioadmin  sync-test
-          ./juicefs mount --no-usage-report $meta_url $mount_point -d
-          mkdir $mount_point/jfs_source/
-          sudo chmod 000 jfs_source/LICENSE
-          ./juicefs sync --dirs jfs_source/ $mount_point/jfs_source/ & 
-          docker stop minio
-          sleep 3
-          docker start minio
-          wait
-          diff -ur jfs_source/ $mount_point/jfs_source
-
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
-
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
-
   file-head-test:
     runs-on: ubuntu-latest
     steps:
@@ -171,9 +102,9 @@ jobs:
 
       - name: Build linux target
         run: |
-          # make juicefs
-          wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
-          tar -zxf juicefs-1.0.0-beta3-linux-amd64.tar.gz
+          make juicefs
+          # wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
+          # tar -zxf juicefs-1.0.0-beta3-linux-amd64.tar.gz
 
       - name: Checkout source code for test
         uses: actions/checkout@v2
