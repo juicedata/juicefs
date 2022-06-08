@@ -133,6 +133,7 @@ jobs:
 
       - name: Test
         run: |
+          # issue link : https://github.com/juicedata/juicefs/issues/2088
           meta_url=redis://127.0.0.1/1
           mount_point=/tmp/sync-test/
           ./juicefs format --trash-days 0 $meta_url --storage minio --bucket http://localhost:9000/sync-test --access-key minioadmin --secret-key minioadmin  sync-test
@@ -156,7 +157,7 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-  lost-file-test:
+  file-head-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -176,6 +177,7 @@ jobs:
 
       - name: Test
         run: |
+          # issue link: https://github.com/juicedata/juicefs/issues/2125
           meta_url=sqlite3://test.db
           mount_point=/tmp/sync-test/
           ./juicefs format --trash-days 0 $meta_url sync-test
