@@ -2886,7 +2886,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 		var ar = make([]*redis.StringCmd, len(es))
 		var xr = make([]*redis.StringStringMapCmd, len(es))
 		var sr = make([]*redis.StringCmd, len(es))
-		var cr = make([][]*redis.StringSliceCmd, len(es))
+		var cr = make([]*redis.StringSliceCmd, len(es))
 		var dr = make([]*redis.StringStringMapCmd, len(es))
 		for i, e := range es {
 			inode := e.Attr.Inode
@@ -2894,7 +2894,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 			xr[i] = p.HGetAll(ctx, m.xattrKey(inode))
 			switch e.Attr.Type {
 			case "regular":
-				cr[i] = []*redis.StringSliceCmd{p.LRange(ctx, m.chunkKey(inode, 0), 0, 1000000)}
+				cr[i] = p.LRange(ctx, m.chunkKey(inode, 0), 0, 1000000)
 			case "directory":
 				dr[i] = p.HGetAll(ctx, m.entryKey(inode))
 			case "symlink":
@@ -2905,7 +2905,12 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 			return err
 		}
 
-		var largeFile bool
+		type lchunk struct {
+			inode Ino
+			indx  uint32
+			i     uint32
+		}
+		var lcs []*lchunk
 		for i, e := range es {
 			inode := e.Attr.Inode
 			typ := typeFromString(e.Attr.Type)
@@ -2941,14 +2946,24 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 			}
 			switch typ {
 			case TypeFile:
-				if attr.Length > ChunkSize {
-					largeFile = true
-					var rs = make([]*redis.StringSliceCmd, (attr.Length+ChunkSize-1)/ChunkSize)
-					rs[0] = cr[i][0]
-					for indx := uint32(1); uint64(indx)*ChunkSize < attr.Length; indx++ {
-						rs[indx] = p.LRange(ctx, m.chunkKey(inode, indx), 0, 1000000)
+				if attr.Length > 0 {
+					vals, err := cr[i].Result()
+					if err != nil {
+						return err
 					}
-					cr[i] = rs
+					if len(vals) > 0 {
+						ss := readSlices(vals)
+						slices := make([]*DumpedSlice, 0, len(ss))
+						for _, s := range ss {
+							slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						}
+						e.Chunks = append(e.Chunks, &DumpedChunk{0, slices})
+					}
+				}
+				if attr.Length > ChunkSize {
+					for indx := uint32(1); uint64(indx)*ChunkSize < attr.Length; indx++ {
+						lcs = append(lcs, &lchunk{inode, indx, uint32(i)})
+					}
 				}
 			case TypeDirectory:
 				dirs, err := dr[i].Result()
@@ -2972,26 +2987,35 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				}
 			}
 		}
-		if largeFile {
+
+		cr = make([]*redis.StringSliceCmd, len(es)*3)
+		for len(lcs) > 0 {
+			if len(cr) > len(lcs) {
+				cr = cr[:len(lcs)]
+			}
+			for i := range cr {
+				c := lcs[i]
+				cr[i] = p.LRange(ctx, m.chunkKey(c.inode, c.indx), 0, 1000000)
+			}
 			if _, err := p.Exec(ctx); err != nil {
 				return err
 			}
-		}
-		for i, e := range es {
-			if e.Attr.Type == "regular" && e.Attr.Length > 0 {
-				for j, r := range cr[i] {
-					vals, err := r.Result()
-					if err != nil {
-						return err
-					}
+			for i := range cr {
+				vals, err := cr[i].Result()
+				if err != nil {
+					return err
+				}
+				if len(vals) > 0 {
 					ss := readSlices(vals)
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
 						slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
-					e.Chunks = append(e.Chunks, &DumpedChunk{uint32(j), slices})
+					e := es[lcs[i].i]
+					e.Chunks = append(e.Chunks, &DumpedChunk{lcs[i].indx, slices})
 				}
 			}
+			lcs = lcs[len(cr):]
 		}
 		return nil
 	}, keys...)
