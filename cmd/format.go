@@ -173,8 +173,10 @@ func fixObjectSize(s int) int {
 	}
 	s = s << bits
 	if s < min {
+		logger.Warnf("block size is too small: %d, use %d instead", s, min)
 		s = min
 	} else if s > max {
+		logger.Warnf("block size is too large: %d, use %d instead", s, max)
 		s = max
 	}
 	return s
@@ -319,7 +321,9 @@ func format(c *cli.Context) error {
 	if v := c.Int("trash-days"); v < 0 {
 		logger.Fatalf("Invalid trash days: %d", v)
 	}
-
+	if v := c.Int("shards"); v > 256 {
+		logger.Fatalf("too many shards: %d", v)
+	}
 	loadEncrypt := func(keyPath string) string {
 		if keyPath == "" {
 			return ""
