@@ -169,6 +169,10 @@ func warmup(ctx *cli.Context) error {
 	}
 
 	threads := ctx.Uint("threads")
+	if threads == 0 {
+		logger.Warnf("threads should be larger than 0, reset it to 1")
+		threads = 1
+	}
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, 0, batchMax)

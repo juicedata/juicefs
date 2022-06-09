@@ -603,7 +603,7 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Con
 		logger.Debug("Ignore deleting dst directory ", dstobj.Key())
 		return false
 	}
-	if config.Limit != -1 {
+	if config.Limit >= 0 {
 		if config.Limit == 0 {
 			return true
 		}
@@ -660,7 +660,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
-		if config.Limit != -1 {
+		if config.Limit >= 0 {
 			if config.Limit == 0 {
 				return
 			}

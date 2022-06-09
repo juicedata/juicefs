@@ -233,13 +233,17 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 }
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
-	return &vfs.Config{
+	cfg := &vfs.Config{
 		Meta:       metaConf,
 		Format:     format,
 		Version:    version.Version(),
 		Chunk:      chunkConf,
 		BackupMeta: duration(c.String("backup-meta")),
 	}
+	if cfg.BackupMeta < time.Minute*5 {
+		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
+	}
+	return cfg
 }
 
 func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Config) {
@@ -274,7 +278,7 @@ func prepareMp(mp string) {
 }
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
-	return &meta.Config{
+	cfg := &meta.Config{
 		Retries:    c.Int("io-retries"),
 		Strict:     true,
 		ReadOnly:   readOnly,
@@ -284,6 +288,15 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 	}
+	if cfg.Heartbeat < time.Second {
+		logger.Warnf("heartbeat should not be less than 1 second")
+		cfg.Heartbeat = time.Second
+	}
+	if cfg.Heartbeat > time.Minute*10 {
+		logger.Warnf("heartbeat shouldd not be greater than 10 minutes")
+		cfg.Heartbeat = time.Minute * 10
+	}
+	return cfg
 }
 
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
@@ -310,6 +323,14 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
+	}
+	if chunkConf.MaxUpload <= 0 {
+		logger.Warnf("max-uploads should be greater than 0, set it to 1")
+		chunkConf.MaxUpload = 1
+	}
+	if chunkConf.BufferSize <= 32<<20 {
+		logger.Warnf("buffer-size should be more than 32 MiB")
+		chunkConf.BufferSize = 32 << 20
 	}
 
 	if chunkConf.CacheDir != "memory" {

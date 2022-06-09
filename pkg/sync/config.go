@@ -47,11 +47,11 @@ type Config struct {
 }
 
 func NewConfigFromCli(c *cli.Context) *Config {
-	if c.IsSet("limits") && c.Int64("limits") < 0 {
-		logger.Fatal("The limits parameter must be a non-negative integer")
+	if c.IsSet("limit") && c.Int64("limit") < 0 {
+		logger.Fatal("limit should not be less than 0")
 	}
 
-	return &Config{
+	cfg := &Config{
 		Start:       c.String("start"),
 		End:         c.String("end"),
 		Threads:     c.Int("threads"),
@@ -75,4 +75,9 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		CheckAll:    c.Bool("check-all"),
 		CheckNew:    c.Bool("check-new"),
 	}
+	if cfg.Threads <= 0 {
+		logger.Warnf("threads should be larger than 0, reset it to 1")
+		cfg.Threads = 1
+	}
+	return cfg
 }
