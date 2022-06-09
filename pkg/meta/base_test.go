@@ -749,11 +749,11 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/f: %s", st)
 	}
-	if p, st := GetPath(m, ctx, parent); st != 0 || p != "/d" {
-		t.Fatalf("get path /d: %s, %s", st, p)
+	if ps := GetPaths(m, ctx, parent); len(ps) == 0 || ps[0] != "/d" {
+		t.Fatalf("get path /d: %v", ps)
 	}
-	if p, st := GetPath(m, ctx, inode); st != 0 || p != "/d/f" {
-		t.Fatalf("get path /d/f: %s, %s", st, p)
+	if ps := GetPaths(m, ctx, inode); len(ps) == 0 || ps[0] != "/d/f" {
+		t.Fatalf("get path /d/f: %v", ps)
 	}
 	for i := 0; i < 4096; i++ {
 		if st := m.Create(ctx, 1, "f"+strconv.Itoa(i), 0644, 0, 0, &inode, attr); st != 0 {
