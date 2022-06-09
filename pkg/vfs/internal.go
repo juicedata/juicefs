@@ -184,15 +184,20 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 		fmt.Fprintf(w, " dirs:\t%d\n", summary.Dirs)
 		fmt.Fprintf(w, " length:\t%d\n", summary.Length)
 		fmt.Fprintf(w, " size:\t%d\n", summary.Size)
+		ps := meta.GetPaths(v.Meta, ctx, inode)
+		switch len(ps) {
+		case 0:
+			fmt.Fprintf(w, " path:\t%s\n", "unknown")
+		case 1:
+			fmt.Fprintf(w, " path:\t%s\n", ps[0])
+		default:
+			fmt.Fprintf(w, " paths:\n")
+			for _, p := range ps {
+				fmt.Fprintf(w, "\t%s\n", p)
+			}
+		}
 
 		if summary.Files == 1 && summary.Dirs == 0 {
-			var ps []Ino
-			for k, v := range v.Meta.GetParents(ctx, inode) {
-				for i := 0; i < v; i++ {
-					ps = append(ps, k)
-				}
-			}
-			fmt.Fprintf(w, " parents:\t%v\n", ps)
 			fmt.Fprintf(w, " chunks:\n")
 			for indx := uint64(0); indx*meta.ChunkSize < summary.Length; indx++ {
 				var cs []meta.Slice
