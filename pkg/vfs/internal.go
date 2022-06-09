@@ -186,6 +186,13 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 		fmt.Fprintf(w, " size:\t%d\n", summary.Size)
 
 		if summary.Files == 1 && summary.Dirs == 0 {
+			var ps []Ino
+			for k, v := range v.Meta.GetParents(ctx, inode) {
+				for i := 0; i < v; i++ {
+					ps = append(ps, k)
+				}
+			}
+			fmt.Fprintf(w, " parents:\t%v\n", ps)
 			fmt.Fprintf(w, " chunks:\n")
 			for indx := uint64(0); indx*meta.ChunkSize < summary.Length; indx++ {
 				var cs []meta.Slice
