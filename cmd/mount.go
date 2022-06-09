@@ -311,6 +311,14 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
 	}
+	if chunkConf.MaxUpload <= 0 {
+		logger.Warnf("max-uploads should be greater than 0, set it to 1")
+		chunkConf.MaxUpload = 1
+	}
+	if chunkConf.BufferSize <= 32<<20 {
+		logger.Warnf("buffer-size should be more than 32 MiB")
+		chunkConf.BufferSize = 32 << 20
+	}
 
 	if chunkConf.CacheDir != "memory" {
 		ds := utils.SplitDir(chunkConf.CacheDir)
