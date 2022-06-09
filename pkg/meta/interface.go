@@ -413,15 +413,19 @@ func timeit(start time.Time) {
 // Get full path of an inode; a random one is picked if it has multiple hard links
 func GetPath(m Meta, ctx Context, inode Ino) (string, syscall.Errno) {
 	var names []string
-	var attr Attr
 	for inode != 1 {
-		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
-			logger.Debugf("getattr inode %d: %s", inode, st)
-			return "", st
+		var parent Ino
+		for k, v := range m.GetParents(ctx, inode) {
+			if v > 0 {
+				parent = k
+				break
+			}
 		}
-
+		if parent == 0 {
+			return "", syscall.ENOENT
+		}
 		var entries []*Entry
-		if st := m.Readdir(ctx, attr.Parent, 0, &entries); st != 0 {
+		if st := m.Readdir(ctx, parent, 0, &entries); st != 0 {
 			return "", st
 		}
 		var name string
@@ -435,7 +439,7 @@ func GetPath(m Meta, ctx Context, inode Ino) (string, syscall.Errno) {
 			return "", syscall.ENOENT
 		}
 		names = append(names, name)
-		inode = attr.Parent
+		inode = parent
 	}
 
 	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
