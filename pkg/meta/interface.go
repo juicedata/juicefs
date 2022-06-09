@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -410,40 +411,68 @@ func timeit(start time.Time) {
 	opDist.Observe(time.Since(start).Seconds())
 }
 
-// Get full path of an inode; a random one is picked if it has multiple hard links
-func GetPath(m Meta, ctx Context, inode Ino) (string, syscall.Errno) {
-	var names []string
-	for inode != 1 {
-		var parent Ino
-		for k, v := range m.GetParents(ctx, inode) {
-			if v > 0 {
-				parent = k
-				break
+// Get all paths of an inode
+func GetPaths(m Meta, ctx Context, inode Ino) []string {
+	getDirPath := func(ino Ino) (string, error) {
+		var names []string
+		var attr Attr
+		for ino != 1 {
+			if st := m.GetAttr(ctx, ino, &attr); st != 0 {
+				return "", fmt.Errorf("getattr inode %d: %s", ino, st)
 			}
+			if attr.Typ != TypeDirectory {
+				return "", fmt.Errorf("inode %d is not a directory", ino)
+			}
+			var entries []*Entry
+			if st := m.Readdir(ctx, attr.Parent, 0, &entries); st != 0 {
+				return "", fmt.Errorf("readdir inode %d: %s", ino, st)
+			}
+			var name string
+			for _, e := range entries {
+				if e.Inode == ino {
+					name = string(e.Name)
+					break
+				}
+			}
+			if name == "" {
+				return "", fmt.Errorf("entry %d/%d not found", attr.Parent, ino)
+			}
+			names = append(names, name)
+			ino = attr.Parent
 		}
-		if parent == 0 {
-			return "", syscall.ENOENT
+		names = append(names, "/") // add root
+
+		for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
+			names[i], names[j] = names[j], names[i]
+		}
+		return path.Join(names...), nil
+	}
+
+	var paths []string
+	for parent, count := range m.GetParents(ctx, inode) {
+		if count <= 0 {
+			continue
+		}
+		dir, err := getDirPath(parent)
+		if err != nil {
+			logger.Warnf("Get directory path: %s", err)
+			continue
 		}
 		var entries []*Entry
 		if st := m.Readdir(ctx, parent, 0, &entries); st != 0 {
-			return "", st
+			logger.Warnf("Readdir inode %d: %s", parent, st)
+			continue
 		}
-		var name string
+		var c int
 		for _, e := range entries {
 			if e.Inode == inode {
-				name = string(e.Name)
-				break
+				c++
+				paths = append(paths, path.Join(dir, string(e.Name)))
 			}
 		}
-		if name == "" {
-			return "", syscall.ENOENT
+		if c != count {
+			logger.Warnf("Expect to find %d entries under parent %d, but got %d", count, parent, c)
 		}
-		names = append(names, name)
-		inode = parent
 	}
-
-	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
-		names[i], names[j] = names[j], names[i]
-	}
-	return "/" + strings.Join(names, "/"), 0
+	return paths
 }

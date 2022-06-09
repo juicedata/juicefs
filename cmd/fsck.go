@@ -131,11 +131,10 @@ func fsck(ctx *cli.Context) error {
 				if _, ok := blocks[key]; !ok {
 					if _, err := blob.Head(key); err != nil {
 						if _, ok := brokens[inode]; !ok {
-							if p, st := meta.GetPath(m, meta.Background, inode); st == 0 {
-								brokens[inode] = p
+							if ps := meta.GetPaths(m, meta.Background, inode); len(ps) > 0 {
+								brokens[inode] = ps[0]
 							} else {
-								logger.Warnf("getpath of inode %d: %s", inode, st)
-								brokens[inode] = st.Error()
+								brokens[inode] = fmt.Sprintf("inode:%d", inode)
 							}
 						}
 						logger.Errorf("can't find block %s for file %s: %s", key, brokens[inode], err)
