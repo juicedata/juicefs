@@ -156,13 +156,28 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 	return w.Bytes()
 }
 
-func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
+func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *[]byte) {
 	switch cmd {
 	case meta.Rmr:
-		inode := Ino(r.Get64())
-		name := string(r.Get(int(r.Get8())))
-		r := meta.Remove(v.Meta, ctx, inode, name)
-		return []byte{uint8(r)}
+		*data = append(*data, 0xFE) // progress start
+		ch := make(chan uint32)
+		var st syscall.Errno
+		go func() {
+			inode := Ino(r.Get64())
+			name := string(r.Get(int(r.Get8())))
+			st = meta.Remove(v.Meta, ctx, inode, name, ch)
+		}()
+		wb := utils.NewBuffer(4)
+		for n := range ch {
+			if n > 0 {
+				wb.Put32(n)
+				*data = append(*data, wb.Bytes()...)
+				wb.Seek(0)
+			}
+		}
+		wb.Put32(0) // progress end
+		*data = append(*data, wb.Bytes()...)
+		*data = append(*data, uint8(st))
 	case meta.Info:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
@@ -176,7 +191,10 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
-			return append(wb.Bytes(), []byte(msg)...)
+			*data = append(*data, wb.Bytes()...)
+			*data = append(*data, msg...)
+			return
+			//return append(wb.Bytes(), []byte(msg)...)
 		}
 		var w = bytes.NewBuffer(nil)
 		fmt.Fprintf(w, " inode: %d\n", inode)
@@ -208,7 +226,9 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 			}
 		}
 		wb.Put32(uint32(w.Len()))
-		return append(wb.Bytes(), w.Bytes()...)
+		//return append(wb.Bytes(), w.Bytes()...)
+		*data = append(*data, wb.Bytes()...)
+		*data = append(*data, w.Bytes()...)
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
@@ -218,9 +238,11 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 		} else {
 			go v.fillCache(paths, int(concurrent))
 		}
-		return []byte{uint8(0)}
+		//return []byte{uint8(0)}
+		*data = append(*data, uint8(0))
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
-		return []byte{uint8(syscall.EINVAL & 0xff)}
+		// return []byte{uint8(syscall.EINVAL & 0xff)}
+		*data = append(*data, uint8(syscall.EINVAL&0xff))
 	}
 }

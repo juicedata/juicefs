@@ -70,6 +70,8 @@ func rmr(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
+	progress := utils.NewProgress(false, false)
+	spin := progress.AddCountSpinner("Removed entries")
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
 		p, err := filepath.Abs(path)
@@ -100,6 +102,20 @@ func rmr(ctx *cli.Context) error {
 		}
 		var errs = make([]byte, 1)
 		_ = readControl(f, errs)
+		if errs[0] == 0xFE {
+			for {
+				b := utils.NewBuffer(4)
+				_ = readControl(f, b.Buffer())
+				n := b.Get32()
+				if n == 0 {
+					break
+				} else {
+					spin.IncrBy(int(n))
+				}
+				b.Seek(0)
+			}
+			_ = readControl(f, errs)
+		}
 		if errs[0] != 0 {
 			errno := syscall.Errno(errs[0])
 			if runtime.GOOS == "windows" {
@@ -109,5 +125,6 @@ func rmr(ctx *cli.Context) error {
 		}
 		_ = f.Close()
 	}
+	progress.Done()
 	return nil
 }

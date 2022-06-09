@@ -438,7 +438,12 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
 	if err != 0 {
 		return
 	}
-	err = meta.Remove(fs.m, ctx, parent.inode, path.Base(p))
+	ch := make(chan uint32)
+	go func() {
+		for range ch {
+		}
+	}()
+	err = meta.Remove(fs.m, ctx, parent.inode, path.Base(p), ch)
 	fs.invalidateEntry(parent.inode, path.Base(p))
 	return
 }
