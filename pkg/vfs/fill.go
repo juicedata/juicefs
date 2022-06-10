@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -33,7 +34,7 @@ type _file struct {
 	size uint64
 }
 
-func (v *VFS) fillCache(paths []string, concurrent int) {
+func (v *VFS) fillCache(paths []string, concurrent int, count *uint32) {
 	logger.Infof("start to warmup %d paths with %d workers", len(paths), concurrent)
 	start := time.Now()
 	todo := make(chan _file, 10240)
@@ -46,8 +47,9 @@ func (v *VFS) fillCache(paths []string, concurrent int) {
 				if f.ino == 0 {
 					break
 				}
-				err := v.fillInode(f.ino, f.size)
-				if err != nil { // TODO: print path instead of inode
+				if err := v.fillInode(f.ino, f.size); err == nil {
+					atomic.AddUint32(count, 1)
+				} else { // TODO: print path instead of inode
 					logger.Errorf("Inode %d could be corrupted: %s", f.ino, err)
 				}
 			}

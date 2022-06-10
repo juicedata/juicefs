@@ -121,7 +121,7 @@ END:
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, batch []string, threads uint, background bool) {
+func sendCommand(cf *os.File, batch []string, threads uint, background bool, spin *utils.Bar) {
 	paths := strings.Join(batch, "\n")
 	var back uint8
 	if background {
@@ -141,10 +141,8 @@ func sendCommand(cf *os.File, batch []string, threads uint, background bool) {
 		logger.Infof("Warm-up cache for %d paths in background", len(batch))
 		return
 	}
-	var errs = make([]byte, 1)
-	_ = readControl(cf, errs) // 0 < n <= 1
-	if errs[0] != 0 {
-		logger.Fatalf("Warm up failed: %d", errs[0])
+	if errno := readProgress(cf, spin); errno != 0 {
+		logger.Fatalf("Warm up failed: %s", errno)
 	}
 }
 
@@ -211,7 +209,7 @@ func warmup(ctx *cli.Context) error {
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background, false)
-	bar := progress.AddCountBar("Warmed up paths", int64(len(paths)))
+	spin := progress.AddCountSpinner("Warmup up files")
 	for _, path := range paths {
 		if mp == "/" {
 			inode, err := utils.GetFileInode(path)
@@ -227,18 +225,16 @@ func warmup(ctx *cli.Context) error {
 			continue
 		}
 		if len(batch) >= batchMax {
-			sendCommand(controller, batch, threads, background)
-			bar.IncrBy(len(batch))
+			sendCommand(controller, batch, threads, background, spin)
 			batch = batch[0:]
 		}
 	}
 	if len(batch) > 0 {
-		sendCommand(controller, batch, threads, background)
-		bar.IncrBy(len(batch))
+		sendCommand(controller, batch, threads, background, spin)
 	}
 	progress.Done()
 	if !background {
-		logger.Infof("Successfully warmed up %d paths", bar.Current())
+		logger.Infof("Successfully warmed up %d files", spin.Current())
 	}
 
 	return nil

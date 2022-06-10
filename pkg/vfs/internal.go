@@ -250,17 +250,23 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 		*data = append(*data, wb.Bytes()...)
 		*data = append(*data, w.Bytes()...)
 	case meta.FillCache:
+		var count uint32
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
 		background := r.Get8()
 		if background == 0 {
-			v.fillCache(paths, int(concurrent))
+			done := make(chan struct{})
+			go func() {
+				v.fillCache(paths, int(concurrent), &count)
+				close(done)
+			}()
+			writeProgress(&count, data, done)
 		} else {
-			go v.fillCache(paths, int(concurrent))
+			go v.fillCache(paths, int(concurrent), &count)
 		}
-		*data = append(*data, uint8(0))
+		*data = append(*data, CSTATUS, uint8(0))
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
-		*data = append(*data, uint8(syscall.EINVAL&0xff))
+		*data = append(*data, CSTATUS, uint8(syscall.EINVAL&0xff))
 	}
 }
