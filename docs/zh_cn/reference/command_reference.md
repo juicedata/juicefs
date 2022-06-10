@@ -254,7 +254,7 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 后台异步上传对象 (默认: false)
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)
 
 `--cache-size value`<br />
 缓存对象的总大小；单位为 MiB (默认: 102400)
@@ -342,7 +342,7 @@ juicefs gateway [command options] META-URL ADDRESS
 后台异步上传对象 (默认: false)
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
 
 `--cache-size value`<br />
 缓存对象的总大小；单位为 MiB (默认: 102400)
@@ -442,7 +442,7 @@ juicefs webdav [command options] META-URL ADDRESS
 数据上传到对象存储的延迟时间,支持秒分时精度，对应格式分别为("s", "m", "h")，默认为 0 秒
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用冒号隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
 
 `--cache-size value`<br />
 缓存对象的总大小；单位为 MiB (默认: 102400)
