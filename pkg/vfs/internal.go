@@ -42,10 +42,7 @@ const (
 )
 
 // Type of control messages
-const (
-	CSTATUS   = 0x00 // 1 byte: status code
-	CPROGRESS = 0x01 // 4 bytes: progress increment
-)
+const CPROGRESS = 0xFE // 4 bytes: progress increment
 
 type internalNode struct {
 	inode Ino
@@ -199,7 +196,7 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 			close(done)
 		}()
 		writeProgress(&count, data, done)
-		*data = append(*data, CSTATUS, uint8(st))
+		*data = append(*data, uint8(st))
 	case meta.Info:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
@@ -264,9 +261,9 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 		} else {
 			go v.fillCache(paths, int(concurrent), &count)
 		}
-		*data = append(*data, CSTATUS, uint8(0))
+		*data = append(*data, uint8(0))
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
-		*data = append(*data, CSTATUS, uint8(syscall.EINVAL&0xff))
+		*data = append(*data, uint8(syscall.EINVAL&0xff))
 	}
 }

@@ -99,12 +99,6 @@ END:
 		case 1: // legacy, only status code
 			errno = syscall.Errno(resp[0])
 			break END
-		case 2: // [type status, status code]
-			if resp[0] != vfs.CSTATUS {
-				logger.Fatalf("Bad response: %d %v", n, resp)
-			}
-			errno = syscall.Errno(resp[1])
-			break END
 		case 5: // [type progress, value]
 			if resp[0] != vfs.CPROGRESS {
 				logger.Fatalf("Bad response: %d %v", n, resp)

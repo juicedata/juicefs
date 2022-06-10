@@ -723,9 +723,9 @@ func TestInternalFile(t *testing.T) {
 	}
 	var off uint64 = uint64(len(buf))
 	resp := make([]byte, 1024*10)
-	if n, e := readControl(resp, off); e != 0 || n != 2 {
+	if n, e := readControl(resp, off); e != 0 || n != 1 {
 		t.Fatalf("read result: %s %d", e, n)
-	} else if resp[0] != byte(CSTATUS) || resp[1] != byte(syscall.ENOENT) {
+	} else if resp[0] != byte(syscall.ENOENT) {
 		t.Fatalf("rmr result: %s", string(buf[:n]))
 	} else {
 		off += uint64(n)
@@ -766,9 +766,9 @@ func TestInternalFile(t *testing.T) {
 	}
 	off += uint64(len(buf))
 	resp = make([]byte, 1024*10)
-	if n, e = readControl(resp, off); e != 0 || n != 2 {
+	if n, e = readControl(resp, off); e != 0 || n != 1 {
 		t.Fatalf("read result: %s %d", e, n)
-	} else if resp[0] != byte(CSTATUS) || resp[1] != 0 {
+	} else if resp[0] != 0 {
 		t.Fatalf("fill result: %s", string(buf[:n]))
 	}
 	off += uint64(n)
