@@ -173,9 +173,11 @@ func writeProgress(count, bytes *uint64, data *[]byte, done chan struct{}) {
 			wb.Seek(1)
 		case <-done:
 			ticker.Stop()
-			wb.Put64(atomic.LoadUint64(count))
-			wb.Put64(atomic.LoadUint64(bytes))
-			*data = append(*data, wb.Bytes()...)
+			if *count > 0 || *bytes > 0 {
+				wb.Put64(atomic.LoadUint64(count))
+				wb.Put64(atomic.LoadUint64(bytes))
+				*data = append(*data, wb.Bytes()...)
+			}
 			return
 		}
 	}
@@ -208,8 +210,7 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
-			*data = append(*data, wb.Bytes()...)
-			*data = append(*data, msg...)
+			*data = append(*data, append(wb.Bytes(), msg...)...)
 			return
 		}
 		var w = bytes.NewBuffer(nil)
@@ -242,8 +243,7 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 			}
 		}
 		wb.Put32(uint32(w.Len()))
-		*data = append(*data, wb.Bytes()...)
-		*data = append(*data, w.Bytes()...)
+		*data = append(*data, append(wb.Bytes(), w.Bytes()...)...)
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
