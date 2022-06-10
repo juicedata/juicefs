@@ -46,8 +46,7 @@ linux-arm64: libjfs-arm64.so
 	gzip -c libjfs-arm64.so > target/libjfs-arm64.so.gz
 
 libjfs-arm64.so: *.go ../../../pkg/*/*.go
-	GOARCH=arm64 CGO_ENABLED=1 go build -buildmode=c-shared -ldflags="$(LDFLAGS)" -o libjfs-arm64.so .
-
+	GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc go build -buildmode=c-shared -ldflags="$(LDFLAGS)" -o libjfs-arm64.so .
 
 mac: libjfs.dylib
 	mkdir -p target
