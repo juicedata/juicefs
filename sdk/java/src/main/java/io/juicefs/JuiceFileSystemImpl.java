@@ -504,18 +504,29 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
-    String resource = "libjfs.so.gz";
-    String name = "libjfs.5.so";
+
+    int soVer = 6;
+    String osId = "so";
+    String archId = "amd64";
+    String resourceFormat = "libjfs-%s.%s.gz";
+    String nameFormat = "libjfs-%s.%d.%s";
+
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
+    String arch = System.getProperty("os.arch");
+    if (arch.contains("aarch64")) {
+      archId = "arm64";
+    }
     if (os.toLowerCase().contains("windows")) {
-      resource = "libjfs.dll.gz";
-      name = "libjfs5.dll";
+      osId = "dll";
       dir = new File(System.getProperty("java.io.tmpdir"));
     } else if (os.toLowerCase().contains("mac")) {
-      resource = "libjfs.dylib.gz";
-      name = "libjfs5.dylib";
+      osId = "dylib";
     }
+
+    String resource = String.format(resourceFormat, archId, osId);
+    String name = String.format(nameFormat, archId, soVer, osId);
+
     File libFile = new File(dir, name);
 
     URL res = null;
