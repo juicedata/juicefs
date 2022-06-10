@@ -50,10 +50,10 @@ libjfs-arm64.so: *.go ../../../pkg/*/*.go
 
 mac: libjfs.dylib
 	mkdir -p target
-	gzip -c libjfs.dylib > target/libjfs.dylib.gz
+	gzip -c libjfs-amd64.dylib > target/libjfs-amd64.dylib.gz
 
 libjfs.dylib: *.go ../../../pkg/*/*.go
-	GOOS=darwin CGO_ENABLED=1 CC=o64-clang go build -o libjfs.dylib \
+	GOOS=darwin CGO_ENABLED=1 CC=o64-clang go build -o libjfs-amd64.dylib \
 	-buildmode=c-shared -ldflags="$(LDFLAGS)"
 
 mac-arm64: libjfs-arm64.dylib
@@ -66,8 +66,8 @@ libjfs-arm64.dylib: *.go ../../../pkg/*/*.go
 
 win: libjfs.dll
 	mkdir -p target
-	gzip -c libjfs.dll > target/libjfs.dll.gz
+	gzip -c libjfs-amd64.dll > target/libjfs-amd64.dll.gz
 
 libjfs.dll: *.go ../../../pkg/*/*.go
-	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o libjfs.dll \
+	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o libjfs-amd64.dll \
 	-buildmode=c-shared -ldflags="$(LDFLAGS)"
