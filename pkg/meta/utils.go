@@ -222,7 +222,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	return ls
 }
 
-func emptyDir(r Meta, ctx Context, inode Ino, cp *ControlProgress, concurrent chan int) syscall.Errno {
+func emptyDir(r Meta, ctx Context, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
 	if st := r.Access(ctx, inode, 3, nil); st != 0 {
 		return st
 	}
@@ -242,22 +242,21 @@ func emptyDir(r Meta, ctx Context, inode Ino, cp *ControlProgress, concurrent ch
 				wg.Add(1)
 				go func(child Ino, name string) {
 					defer wg.Done()
-					e := emptyEntry(r, ctx, inode, name, child, cp, concurrent)
+					e := emptyEntry(r, ctx, inode, name, child, count, concurrent)
 					if e != 0 {
 						status = e
 					}
 					<-concurrent
 				}(e.Inode, string(e.Name))
 			default:
-				if st := emptyEntry(r, ctx, inode, string(e.Name), e.Inode, cp, concurrent); st != 0 {
+				if st := emptyEntry(r, ctx, inode, string(e.Name), e.Inode, count, concurrent); st != 0 {
 					return st
 				}
 			}
 		} else {
 			if st := r.Unlink(ctx, inode, string(e.Name)); st == 0 {
-				if cp != nil {
-					atomic.AddUint64(&cp.Count, 1)
-					atomic.AddUint64(&cp.Bytes, e.Attr.Length)
+				if count != nil {
+					atomic.AddUint64(count, 1)
 				}
 			} else {
 				return st
@@ -268,23 +267,22 @@ func emptyDir(r Meta, ctx Context, inode Ino, cp *ControlProgress, concurrent ch
 	return status
 }
 
-func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, cp *ControlProgress, concurrent chan int) syscall.Errno {
-	st := emptyDir(r, ctx, inode, cp, concurrent)
+func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
+	st := emptyDir(r, ctx, inode, count, concurrent)
 	if st == 0 {
 		st = r.Rmdir(ctx, parent, name)
 		if st == 0 {
-			if cp != nil {
-				atomic.AddUint64(&cp.Count, 1)
-				atomic.AddUint64(&cp.Bytes, 4096)
+			if count != nil {
+				atomic.AddUint64(count, 1)
 			}
 		} else if st == syscall.ENOTEMPTY {
-			st = emptyEntry(r, ctx, parent, name, inode, cp, concurrent)
+			st = emptyEntry(r, ctx, parent, name, inode, count, concurrent)
 		}
 	}
 	return st
 }
 
-func Remove(r Meta, ctx Context, parent Ino, name string, cp *ControlProgress) syscall.Errno {
+func Remove(r Meta, ctx Context, parent Ino, name string, count *uint64) syscall.Errno {
 	if st := r.Access(ctx, parent, 3, nil); st != 0 {
 		return st
 	}
@@ -295,14 +293,13 @@ func Remove(r Meta, ctx Context, parent Ino, name string, cp *ControlProgress) s
 	}
 	if attr.Typ != TypeDirectory {
 		st := r.Unlink(ctx, parent, name)
-		if st == 0 && cp != nil {
-			atomic.AddUint64(&cp.Count, 1)
-			atomic.AddUint64(&cp.Bytes, attr.Length)
+		if st == 0 && count != nil {
+			atomic.AddUint64(count, 1)
 		}
 		return st
 	}
 	concurrent := make(chan int, 50)
-	return emptyEntry(r, ctx, parent, name, inode, cp, concurrent)
+	return emptyEntry(r, ctx, parent, name, inode, count, concurrent)
 }
 
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
