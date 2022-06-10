@@ -2,8 +2,8 @@ name: release
 
 on:
   push:
-    tags:
-      - v*
+    branches:
+      - sdk_arm_dis
 
 jobs:
   releaser:
