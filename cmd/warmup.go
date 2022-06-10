@@ -208,7 +208,7 @@ func warmup(ctx *cli.Context) error {
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
-	progress := utils.NewProgress(background, false)
+	progress := utils.NewProgress(background, true)
 	spin := progress.AddCountSpinner("Warmup up files")
 	for _, path := range paths {
 		if mp == "/" {

@@ -107,15 +107,15 @@ func newSpinner() mpb.BarFiller {
 }
 
 func (p *Progress) AddCountSpinner(name string) *Bar {
-	placeholders := []decor.WC{decor.WCSyncSpaceR}
-	if p.showSpeed { // no real speed; just add an empty placeholder for now
-		placeholders = append(placeholders, decor.WCSyncSpaceR)
+	decors := []decor.Decorator{
+		decor.Name(name+" count: ", decor.WCSyncWidth),
+		decor.Merge(decor.CurrentNoUnit("%d", decor.WCSyncSpaceR), decor.WCSyncSpaceR),
+	}
+	if p.showSpeed {
+		decors = append(decors, decor.AverageSpeed(0, "  %.2f/s", decor.WCSyncSpaceR))
 	}
 	b := p.Progress.Add(0, newSpinner(),
-		mpb.PrependDecorators(
-			decor.Name(name+" count: ", decor.WCSyncWidth),
-			decor.Merge(decor.CurrentNoUnit("%d", decor.WCSyncSpaceR), placeholders...),
-		),
+		mpb.PrependDecorators(decors...),
 		mpb.BarFillerClearOnComplete(),
 	)
 	p.bars = append(p.bars, b)
