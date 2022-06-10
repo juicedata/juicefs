@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -70,6 +69,8 @@ func rmr(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
+	progress := utils.NewProgress(false, true)
+	spin := progress.AddCountSpinner("Removed entries")
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
 		p, err := filepath.Abs(path)
@@ -98,16 +99,13 @@ func rmr(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-		var errs = make([]byte, 1)
-		_ = readControl(f, errs)
-		if errs[0] != 0 {
-			errno := syscall.Errno(errs[0])
-			if runtime.GOOS == "windows" {
-				errno += 0x20000000
-			}
+		if errno := readProgress(f, func(count, bytes uint64) {
+			spin.SetCurrent(int64(count))
+		}); errno != 0 {
 			logger.Fatalf("RMR %s: %s", path, errno)
 		}
 		_ = f.Close()
 	}
+	progress.Done()
 	return nil
 }

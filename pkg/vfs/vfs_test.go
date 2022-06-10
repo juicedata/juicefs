@@ -700,10 +700,17 @@ func TestInternalFile(t *testing.T) {
 	if e != 0 {
 		t.Fatalf("open .stats: %s", e)
 	}
-	readControl := func(resp []byte, off uint64) (int, syscall.Errno) {
+	readControl := func(resp []byte, off *uint64) (int, syscall.Errno) {
 		for {
-			if n, errno := v.Read(ctx, fe.Inode, resp, off, fh); n == 0 {
+			if n, errno := v.Read(ctx, fe.Inode, resp, *off, fh); n == 0 {
 				time.Sleep(time.Millisecond * 300)
+			} else if n%17 == 0 {
+				*off += uint64(n)
+				continue
+			} else if n%17 == 1 {
+				*off += uint64(n / 17 * 17)
+				resp[0] = resp[n-1]
+				return 1, errno
 			} else {
 				return n, errno
 			}
@@ -723,7 +730,7 @@ func TestInternalFile(t *testing.T) {
 	}
 	var off uint64 = uint64(len(buf))
 	resp := make([]byte, 1024*10)
-	if n, e := readControl(resp, off); e != 0 || n != 1 {
+	if n, e := readControl(resp, &off); e != 0 || n != 1 {
 		t.Fatalf("read result: %s %d", e, n)
 	} else if resp[0] != byte(syscall.ENOENT) {
 		t.Fatalf("rmr result: %s", string(buf[:n]))
@@ -741,8 +748,8 @@ func TestInternalFile(t *testing.T) {
 	}
 	off += uint64(len(buf))
 	buf = make([]byte, 1024*10)
-	if n, e = readControl(buf, off); e != 0 {
-		t.Fatalf("read result: %s", e)
+	if n, e = readControl(buf, &off); e != 0 {
+		t.Fatalf("read result: %s %d", e, n)
 	} else if !strings.Contains(string(buf[:n]), "dirs:") {
 		t.Fatalf("info result: %s", string(buf[:n]))
 	} else {
@@ -766,8 +773,8 @@ func TestInternalFile(t *testing.T) {
 	}
 	off += uint64(len(buf))
 	resp = make([]byte, 1024*10)
-	if n, e = readControl(resp, off); e != 0 || n != 1 {
-		t.Fatalf("read result: %s", e)
+	if n, e = readControl(resp, &off); e != 0 || n != 1 {
+		t.Fatalf("read result: %s %d", e, n)
 	} else if resp[0] != 0 {
 		t.Fatalf("fill result: %s", string(buf[:n]))
 	}

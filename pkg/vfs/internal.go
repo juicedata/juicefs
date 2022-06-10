@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -156,13 +157,46 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 	return w.Bytes()
 }
 
-func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte {
+func writeProgress(count, bytes *uint64, data *[]byte, done chan struct{}) {
+	wb := utils.NewBuffer(17)
+	wb.Put8(meta.CPROGRESS)
+	if bytes == nil {
+		bytes = new(uint64)
+	}
+	ticker := time.NewTicker(time.Millisecond * 300)
+	for {
+		select {
+		case <-ticker.C:
+			wb.Put64(atomic.LoadUint64(count))
+			wb.Put64(atomic.LoadUint64(bytes))
+			*data = append(*data, wb.Bytes()...)
+			wb.Seek(1)
+		case <-done:
+			ticker.Stop()
+			if *count > 0 || *bytes > 0 {
+				wb.Put64(atomic.LoadUint64(count))
+				wb.Put64(atomic.LoadUint64(bytes))
+				*data = append(*data, wb.Bytes()...)
+			}
+			return
+		}
+	}
+}
+
+func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *[]byte) {
 	switch cmd {
 	case meta.Rmr:
-		inode := Ino(r.Get64())
-		name := string(r.Get(int(r.Get8())))
-		r := meta.Remove(v.Meta, ctx, inode, name)
-		return []byte{uint8(r)}
+		done := make(chan struct{})
+		var count uint64
+		var st syscall.Errno
+		go func() {
+			inode := Ino(r.Get64())
+			name := string(r.Get(int(r.Get8())))
+			st = meta.Remove(v.Meta, ctx, inode, name, &count)
+			close(done)
+		}()
+		writeProgress(&count, nil, data, done)
+		*data = append(*data, uint8(st))
 	case meta.Info:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
@@ -176,7 +210,8 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
-			return append(wb.Bytes(), []byte(msg)...)
+			*data = append(*data, append(wb.Bytes(), msg...)...)
+			return
 		}
 		var w = bytes.NewBuffer(nil)
 		fmt.Fprintf(w, " inode: %d\n", inode)
@@ -208,19 +243,25 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer) []byte
 			}
 		}
 		wb.Put32(uint32(w.Len()))
-		return append(wb.Bytes(), w.Bytes()...)
+		*data = append(*data, append(wb.Bytes(), w.Bytes()...)...)
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
 		background := r.Get8()
 		if background == 0 {
-			v.fillCache(paths, int(concurrent))
+			var count, bytes uint64
+			done := make(chan struct{})
+			go func() {
+				v.fillCache(paths, int(concurrent), &count, &bytes)
+				close(done)
+			}()
+			writeProgress(&count, &bytes, data, done)
 		} else {
-			go v.fillCache(paths, int(concurrent))
+			go v.fillCache(paths, int(concurrent), nil, nil)
 		}
-		return []byte{uint8(0)}
+		*data = append(*data, uint8(0))
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
-		return []byte{uint8(syscall.EINVAL & 0xff)}
+		*data = append(*data, uint8(syscall.EINVAL&0xff))
 	}
 }
