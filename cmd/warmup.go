@@ -18,15 +18,19 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -84,6 +88,36 @@ func readControl(cf *os.File, resp []byte) int {
 			logger.Fatalf("Read message: %d %s", n, err)
 		}
 	}
+}
+
+func readProgress(cf *os.File, spin *utils.Bar) (errno syscall.Errno) {
+	var resp = make([]byte, 5)
+END:
+	for {
+		n := readControl(cf, resp)
+		switch n {
+		case 1: // legacy, only status code
+			errno = syscall.Errno(resp[0])
+			break END
+		case 2: // [type status, status code]
+			if resp[0] != vfs.CSTATUS {
+				logger.Fatalf("Bad response: %d %v", n, resp)
+			}
+			errno = syscall.Errno(resp[1])
+			break END
+		case 5: // [type progress, value]
+			if resp[0] != vfs.CPROGRESS {
+				logger.Fatalf("Bad response: %d %v", n, resp)
+			}
+			spin.IncrBy(int(binary.BigEndian.Uint32(resp[1:5])))
+		default:
+			logger.Fatalf("Bad response: %d %v", n, resp)
+		}
+	}
+	if errno != 0 && runtime.GOOS == "windows" {
+		errno += 0x20000000
+	}
+	return
 }
 
 // send fill-cache command to controller file

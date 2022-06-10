@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -100,27 +99,7 @@ func rmr(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-		var errs = make([]byte, 1)
-		_ = readControl(f, errs)
-		if errs[0] == 0xFE {
-			for {
-				b := utils.NewBuffer(4)
-				_ = readControl(f, b.Buffer())
-				n := b.Get32()
-				if n == 0 {
-					break
-				} else {
-					spin.IncrBy(int(n))
-				}
-				b.Seek(0)
-			}
-			_ = readControl(f, errs)
-		}
-		if errs[0] != 0 {
-			errno := syscall.Errno(errs[0])
-			if runtime.GOOS == "windows" {
-				errno += 0x20000000
-			}
+		if errno := readProgress(f, spin); errno != 0 {
 			logger.Fatalf("RMR %s: %s", path, errno)
 		}
 		_ = f.Close()

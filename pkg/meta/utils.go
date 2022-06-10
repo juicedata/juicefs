@@ -278,46 +278,24 @@ func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, count *
 	return st
 }
 
-func Remove(r Meta, ctx Context, parent Ino, name string, ch chan<- uint32) syscall.Errno {
+func Remove(r Meta, ctx Context, parent Ino, name string, count *uint32) syscall.Errno {
 	if st := r.Access(ctx, parent, 3, nil); st != 0 {
-		close(ch)
 		return st
 	}
 	var inode Ino
 	var attr Attr
 	if st := r.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
-		close(ch)
 		return st
 	}
 	if attr.Typ != TypeDirectory {
 		st := r.Unlink(ctx, parent, name)
 		if st == 0 {
-			ch <- 1
+			atomic.AddUint32(count, 1)
 		}
-		close(ch)
 		return st
 	}
-
-	done := make(chan struct{})
-	var count uint32
-	go func() {
-		ticker := time.NewTicker(time.Millisecond * 300)
-		for {
-			select {
-			case <-ticker.C:
-				ch <- atomic.SwapUint32(&count, 0)
-			case <-done:
-				ticker.Stop()
-				ch <- atomic.LoadUint32(&count)
-				close(ch)
-				return
-			}
-		}
-	}()
 	concurrent := make(chan int, 50)
-	st := emptyEntry(r, ctx, parent, name, inode, &count, concurrent)
-	close(done)
-	return st
+	return emptyEntry(r, ctx, parent, name, inode, count, concurrent)
 }
 
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {

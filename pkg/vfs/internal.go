@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -38,6 +39,12 @@ const (
 	statsInode      = minInternalNode + 3
 	configInode     = minInternalNode + 4
 	trashInode      = meta.TrashInode
+)
+
+// Type of control messages
+const (
+	CSTATUS   = 0x00 // 1 byte: status code
+	CPROGRESS = 0x01 // 4 bytes: progress increment
 )
 
 type internalNode struct {
@@ -156,28 +163,43 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 	return w.Bytes()
 }
 
+func writeProgress(count *uint32, data *[]byte, done chan struct{}) {
+	wb := utils.NewBuffer(5)
+	wb.Put8(CPROGRESS)
+	ticker := time.NewTicker(time.Millisecond * 300)
+	for {
+		select {
+		case <-ticker.C:
+			if n := atomic.SwapUint32(count, 0); n > 0 {
+				wb.Put32(n)
+				*data = append(*data, wb.Bytes()...)
+				wb.Seek(1)
+			}
+		case <-done:
+			ticker.Stop()
+			if n := atomic.LoadUint32(count); n > 0 {
+				wb.Put32(n)
+				*data = append(*data, wb.Bytes()...)
+			}
+			return
+		}
+	}
+}
+
 func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *[]byte) {
 	switch cmd {
 	case meta.Rmr:
-		*data = append(*data, 0xFE) // progress start
-		ch := make(chan uint32)
+		done := make(chan struct{})
+		var count uint32
 		var st syscall.Errno
 		go func() {
 			inode := Ino(r.Get64())
 			name := string(r.Get(int(r.Get8())))
-			st = meta.Remove(v.Meta, ctx, inode, name, ch)
+			st = meta.Remove(v.Meta, ctx, inode, name, &count)
+			close(done)
 		}()
-		wb := utils.NewBuffer(4)
-		for n := range ch {
-			if n > 0 {
-				wb.Put32(n)
-				*data = append(*data, wb.Bytes()...)
-				wb.Seek(0)
-			}
-		}
-		wb.Put32(0) // progress end
-		*data = append(*data, wb.Bytes()...)
-		*data = append(*data, uint8(st))
+		writeProgress(&count, data, done)
+		*data = append(*data, CSTATUS, uint8(st))
 	case meta.Info:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
