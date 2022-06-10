@@ -70,17 +70,17 @@ JuiceFS 的 Windows 客户端也是一个独立的二进制程序，下载解压
 
 1. 安装依赖程序
 
-   由于 Windows 没有原生支持 FUSE 接口，首先需要下载安装 [WinFsp](http://www.secfs.net/winfsp/) 才能实现对 FUSE 的支持。
+   由于 Windows 没有原生支持 FUSE 接口，首先需要下载安装 [WinFsp](https://winfsp.dev) 才能实现对 FUSE 的支持。
 
    :::tip 提示
-   **[WinFsp](https://github.com/billziss-gh/winfsp)** 是一个开源的 Windows 文件系统代理，它提供了一个 FUSE 仿真层，使得 JuiceFS 客户端可以将文件系统挂载到 Windows 系统中使用。
+   **[WinFsp](https://github.com/winfsp/winfsp)** 是一个开源的 Windows 文件系统代理，它提供了一个 FUSE 仿真层，使得 JuiceFS 客户端可以将文件系统挂载到 Windows 系统中使用。
    :::
 
 2. 安装客户端
 
    以 Windows 10 系统为例，下载文件名包含 `windows-amd64` 的压缩包，解压后得到 `juicefs.exe` 即是 JuiceFS 的客户端程序。
 
-   为了便于使用，可以在 `C：\` 盘根目录创建一个名为 `juicefs` 的文件夹，把 `juicefs.exe` 解压到该文件夹中。然后将 `C:\juicefs` 文件夹路径添加到系统的环境变量，重启系统让设置生效以后，可直接使用使用系统自带的 `命令提示符` 或 `PowerShell` 等终端程序运行 `juicefs` 命令。
+   为了便于使用，可以在 `C:\` 盘根目录创建一个名为 `juicefs` 的文件夹，把 `juicefs.exe` 解压到该文件夹中。然后将 `C:\juicefs` 文件夹路径添加到系统的环境变量，重启系统让设置生效以后，可直接使用使用系统自带的「命令提示符」或「PowerShell」等终端程序运行 `juicefs` 命令。
 
    ![Windows ENV path](../images/windows-path.png)
 
@@ -174,7 +174,7 @@ CMD [ "juicefs" ]
 
 3. 切换分支
 
-   源代码默认使用 `main` 分支，你可以切换到任何正式发布的版本，比如切换到最新发布的`v1.0.0-beta2`(2022年三月发布)：
+   源代码默认使用 `main` 分支，你可以切换到任何正式发布的版本，比如切换到 `v1.0.0-beta2` 版本：
 
    ```shell
    git checkout v1.0.0-beta2
@@ -238,7 +238,7 @@ CMD [ "juicefs" ]
 
 为 Windows 编译特定版本客户端的过程与[类 Unix 客户端](#类-unix-客户端)基本一致，可以直接在 Linux 系统中进行编译，但除了 `go` 和 `gcc` 必须安装以外，还需要安装：
 
-- [mingw-w64](https://www.mingw-w64.org/downloads/)
+- [MinGW-w64](https://www.mingw-w64.org/downloads)
 
 安装 Linux 发行版包管理器提供的最新版本即可，例如 Ubuntu 20.04+ 可以直接安装：
 

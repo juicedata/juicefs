@@ -235,7 +235,7 @@ sudo juicefs mount --cache-dir /mnt/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 
 ### 多缓存目录
 
-JuiceFS 支持同时设置多个缓存目录，从而解决缓存空间不足的问题，使用 `:` 分割多个路径，例如：
+JuiceFS 支持同时设置多个缓存目录，从而解决缓存空间不足的问题，使用 `:`（Linux、macOS）或 `;`（Windows）分割多个路径，例如：
 
 ```shell
 sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs

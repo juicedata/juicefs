@@ -254,7 +254,7 @@ prefetch N blocks in parallel (default: 1)
 upload objects in background (default: false)
 
 `--cache-dir value`<br />
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`)
+directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`)
 
 `--cache-size value`<br />
 size of cached objects in MiB (default: 102400)
@@ -342,7 +342,7 @@ prefetch N blocks in parallel (default: 1)
 upload objects in background (default: false)
 
 `--cache-dir value`<br />
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
+directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
 
 `--cache-size value`<br />
 size of cached objects in MiB (default: 102400)
@@ -444,7 +444,7 @@ upload objects in background (default: false)
 delayed duration for uploading objects ("s", "m", "h") (default: 0s)
 
 `--cache-dir value`<br />
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
+directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
 
 `--cache-size value`<br />
 size of cached objects in MiB (default: 102400)
