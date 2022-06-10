@@ -216,7 +216,6 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 			*data = append(*data, wb.Bytes()...)
 			*data = append(*data, msg...)
 			return
-			//return append(wb.Bytes(), []byte(msg)...)
 		}
 		var w = bytes.NewBuffer(nil)
 		fmt.Fprintf(w, " inode: %d\n", inode)
@@ -248,7 +247,6 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 			}
 		}
 		wb.Put32(uint32(w.Len()))
-		//return append(wb.Bytes(), w.Bytes()...)
 		*data = append(*data, wb.Bytes()...)
 		*data = append(*data, w.Bytes()...)
 	case meta.FillCache:
@@ -260,11 +258,9 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 		} else {
 			go v.fillCache(paths, int(concurrent))
 		}
-		//return []byte{uint8(0)}
 		*data = append(*data, uint8(0))
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
-		// return []byte{uint8(syscall.EINVAL & 0xff)}
 		*data = append(*data, uint8(syscall.EINVAL&0xff))
 	}
 }
