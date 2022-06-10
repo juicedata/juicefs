@@ -9,24 +9,27 @@ LDFLAGS += -X $(PKG).revision=$(REVISION) \
 		-X $(PKG).revisionDate=$(REVISIONDATE)
 GOROOT=$(shell go env GOROOT)
 
-LIBFILE := libjfs.so
-OSNAME := linux
-
 ifeq ($(OS),Windows_NT)
     uname_S := Windows
 else
     uname_S := $(shell uname -s)
+    uname_m := $(shell uname -m)
 endif
 
+ARCHNAME := amd64
+
+ifeq ($(uname_m), aarch64)
+    ARCHNAME = arm64
+endif
+
+LIBFILE := libjfs-$(ARCHNAME).so
 ifeq ($(uname_S), Windows)
-    LIBFILE = libjfs.dll
-    OSNAME = windows
+    LIBFILE = libjfs-$(ARCHNAME).dll
     CC = /usr/bin/musl-gcc
     export CC
 endif
 ifeq ($(uname_S), Darwin)
-    LIBFILE = libjfs.dylib
-    OSNAME = darwin
+    LIBFILE = libjfs-$(ARCHNAME).dylib
 endif
 
 all: default
