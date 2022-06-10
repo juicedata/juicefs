@@ -34,7 +34,7 @@ type _file struct {
 	size uint64
 }
 
-func (v *VFS) fillCache(paths []string, concurrent int, count *uint32) {
+func (v *VFS) fillCache(paths []string, concurrent int, progress *meta.ControlProgress) {
 	logger.Infof("start to warmup %d paths with %d workers", len(paths), concurrent)
 	start := time.Now()
 	todo := make(chan _file, 10240)
@@ -48,7 +48,10 @@ func (v *VFS) fillCache(paths []string, concurrent int, count *uint32) {
 					break
 				}
 				if err := v.fillInode(f.ino, f.size); err == nil {
-					atomic.AddUint32(count, 1)
+					if progress != nil {
+						atomic.AddUint64(&progress.Count, 1)
+						atomic.AddUint64(&progress.Bytes, f.size)
+					}
 				} else { // TODO: print path instead of inode
 					logger.Errorf("Inode %d could be corrupted: %s", f.ino, err)
 				}

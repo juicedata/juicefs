@@ -87,6 +87,13 @@ type internalNode struct {
 	name  string
 }
 
+// Type of control messages
+const CPROGRESS = 0xFE // 4 bytes: progress increment
+
+type ControlProgress struct {
+	Count, Bytes uint64
+}
+
 // MsgCallback is a callback for messages from meta service.
 type MsgCallback func(...interface{}) error
 

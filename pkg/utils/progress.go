@@ -69,6 +69,11 @@ func (s *DoubleSpinner) Current() (int64, int64) {
 	return s.count.Current(), s.bytes.Current()
 }
 
+func (s *DoubleSpinner) SetCurrent(count, bytes int64) {
+	s.count.SetCurrent(count)
+	s.bytes.SetCurrent(bytes)
+}
+
 func NewProgress(quiet, showSpeed bool) *Progress {
 	var p *Progress
 	if quiet || os.Getenv("DISPLAY_PROGRESSBAR") == "false" || !isatty.IsTerminal(os.Stdout.Fd()) {

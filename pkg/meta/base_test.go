@@ -737,7 +737,7 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
-	if st := Remove(m, ctx, 1, "f"); st != 0 {
+	if st := Remove(m, ctx, 1, "f", nil); st != 0 {
 		t.Fatalf("rmr f: %s", st)
 	}
 	if st := m.Mkdir(ctx, 1, "d", 0755, 0, 0, &parent, attr); st != 0 {
@@ -766,7 +766,7 @@ func testRemove(t *testing.T, m Meta) {
 	} else if len(entries) != 4099 {
 		t.Fatalf("entries: %d", len(entries))
 	}
-	if st := Remove(m, ctx, 1, "d"); st != 0 {
+	if st := Remove(m, ctx, 1, "d", nil); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
 }

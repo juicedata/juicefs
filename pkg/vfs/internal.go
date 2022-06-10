@@ -41,9 +41,6 @@ const (
 	trashInode      = meta.TrashInode
 )
 
-// Type of control messages
-const CPROGRESS = 0xFE // 4 bytes: progress increment
-
 type internalNode struct {
 	inode Ino
 	name  string
@@ -160,24 +157,22 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 	return w.Bytes()
 }
 
-func writeProgress(count *uint32, data *[]byte, done chan struct{}) {
-	wb := utils.NewBuffer(5)
-	wb.Put8(CPROGRESS)
+func writeProgress(cp *meta.ControlProgress, data *[]byte, done chan struct{}) {
+	wb := utils.NewBuffer(17)
+	wb.Put8(meta.CPROGRESS)
 	ticker := time.NewTicker(time.Millisecond * 300)
 	for {
 		select {
 		case <-ticker.C:
-			if n := atomic.SwapUint32(count, 0); n > 0 {
-				wb.Put32(n)
-				*data = append(*data, wb.Bytes()...)
-				wb.Seek(1)
-			}
+			wb.Put64(atomic.LoadUint64(&cp.Count))
+			wb.Put64(atomic.LoadUint64(&cp.Bytes))
+			*data = append(*data, wb.Bytes()...)
+			wb.Seek(1)
 		case <-done:
 			ticker.Stop()
-			if n := atomic.LoadUint32(count); n > 0 {
-				wb.Put32(n)
-				*data = append(*data, wb.Bytes()...)
-			}
+			wb.Put64(atomic.LoadUint64(&cp.Count))
+			wb.Put64(atomic.LoadUint64(&cp.Bytes))
+			*data = append(*data, wb.Bytes()...)
 			return
 		}
 	}
@@ -187,15 +182,15 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 	switch cmd {
 	case meta.Rmr:
 		done := make(chan struct{})
-		var count uint32
+		var cp meta.ControlProgress
 		var st syscall.Errno
 		go func() {
 			inode := Ino(r.Get64())
 			name := string(r.Get(int(r.Get8())))
-			st = meta.Remove(v.Meta, ctx, inode, name, &count)
+			st = meta.Remove(v.Meta, ctx, inode, name, &cp)
 			close(done)
 		}()
-		writeProgress(&count, data, done)
+		writeProgress(&cp, data, done)
 		*data = append(*data, uint8(st))
 	case meta.Info:
 		var summary meta.Summary
@@ -247,19 +242,19 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 		*data = append(*data, wb.Bytes()...)
 		*data = append(*data, w.Bytes()...)
 	case meta.FillCache:
-		var count uint32
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
 		background := r.Get8()
 		if background == 0 {
+			var cp meta.ControlProgress
 			done := make(chan struct{})
 			go func() {
-				v.fillCache(paths, int(concurrent), &count)
+				v.fillCache(paths, int(concurrent), &cp)
 				close(done)
 			}()
-			writeProgress(&count, data, done)
+			writeProgress(&cp, data, done)
 		} else {
-			go v.fillCache(paths, int(concurrent), &count)
+			go v.fillCache(paths, int(concurrent), nil)
 		}
 		*data = append(*data, uint8(0))
 	default:

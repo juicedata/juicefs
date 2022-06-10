@@ -30,7 +30,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -90,22 +89,22 @@ func readControl(cf *os.File, resp []byte) int {
 	}
 }
 
-func readProgress(cf *os.File, spin *utils.Bar) (errno syscall.Errno) {
-	var resp = make([]byte, 5)
+func readProgress(cf *os.File, showProgress func(uint64, uint64)) (errno syscall.Errno) {
+	var resp = make([]byte, 1024)
 END:
 	for {
 		n := readControl(cf, resp)
-		switch n {
-		case 1: // legacy, only status code
-			errno = syscall.Errno(resp[0])
-			break END
-		case 5: // [type progress, value]
-			if resp[0] != vfs.CPROGRESS {
-				logger.Fatalf("Bad response: %d %v", n, resp)
+		for off := 0; off < n; {
+			if off+1 == n {
+				errno = syscall.Errno(resp[off])
+				break END
+			} else if off+17 <= n && resp[off] == meta.CPROGRESS {
+				showProgress(binary.BigEndian.Uint64(resp[off+1:off+9]), binary.BigEndian.Uint64(resp[off+9:off+17]))
+				off += 17
+			} else {
+				logger.Errorf("Bad response off %d n %d: %v", off, n, resp)
+				break
 			}
-			spin.IncrBy(int(binary.BigEndian.Uint32(resp[1:5])))
-		default:
-			logger.Fatalf("Bad response: %d %v", n, resp)
 		}
 	}
 	if errno != 0 && runtime.GOOS == "windows" {
@@ -115,7 +114,7 @@ END:
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, batch []string, threads uint, background bool, spin *utils.Bar) {
+func sendCommand(cf *os.File, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) {
 	paths := strings.Join(batch, "\n")
 	var back uint8
 	if background {
@@ -135,7 +134,9 @@ func sendCommand(cf *os.File, batch []string, threads uint, background bool, spi
 		logger.Infof("Warm-up cache for %d paths in background", len(batch))
 		return
 	}
-	if errno := readProgress(cf, spin); errno != 0 {
+	if errno := readProgress(cf, func(count, bytes uint64) {
+		dspin.SetCurrent(int64(count), int64(bytes))
+	}); errno != 0 {
 		logger.Fatalf("Warm up failed: %s", errno)
 	}
 }
@@ -203,7 +204,7 @@ func warmup(ctx *cli.Context) error {
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background, true)
-	spin := progress.AddCountSpinner("Warmup up files")
+	dspin := progress.AddDoubleSpinner("Warmed up")
 	for _, path := range paths {
 		if mp == "/" {
 			inode, err := utils.GetFileInode(path)
@@ -219,16 +220,17 @@ func warmup(ctx *cli.Context) error {
 			continue
 		}
 		if len(batch) >= batchMax {
-			sendCommand(controller, batch, threads, background, spin)
+			sendCommand(controller, batch, threads, background, dspin)
 			batch = batch[0:]
 		}
 	}
 	if len(batch) > 0 {
-		sendCommand(controller, batch, threads, background, spin)
+		sendCommand(controller, batch, threads, background, dspin)
 	}
 	progress.Done()
 	if !background {
-		logger.Infof("Successfully warmed up %d files", spin.Current())
+		count, bytes := dspin.Current()
+		logger.Infof("Successfully warmed up %d files (%d bytes)", count, bytes)
 	}
 
 	return nil
