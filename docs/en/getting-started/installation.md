@@ -70,17 +70,17 @@ The Windows client of JuiceFS is also a standalone binary. Once downloaded and u
 
 1. Installing Dependencies
 
-   Since Windows does not natively support the FUSE interface, you need to download and install [WinFsp](http://www.secfs.net/winfsp/) first in order to implement FUSE support.
+   Since Windows does not natively support the FUSE interface, you need to download and install [WinFsp](https://winfsp.dev) first in order to implement FUSE support.
 
    :::tip
-   **[WinFsp](https://github.com/billziss-gh/winfsp)** is an open source Windows file system agent that provides a FUSE emulation layer that allows JuiceFS clients to mount file systems on Windows systems for use.
+   **[WinFsp](https://github.com/winfsp/winfsp)** is an open source Windows file system agent that provides a FUSE emulation layer that allows JuiceFS clients to mount file systems on Windows systems for use.
    :::
 
 2. Install the client
 
    Take Windows 10 system as an example, download the file with the filename `windows-amd64`, unzip it and get `juicefs.exe` which is the JuiceFS client binary.
 
-   To make it easier to use, it is recommended to create a folder named `juicefs` in the root directory of the `C:\` disk, and extract `juicefs.exe` to that folder. Then add `C:\juicefs` to the environment variables of your system, and restart the system to let the settings take effect. Lastly, you can run `juicefs` commands directly using the `Command Prompt` or `PowerShell` terminal that comes with your system.
+   To make it easier to use, it is recommended to create a folder named `juicefs` in the root directory of the `C:\` disk, and extract `juicefs.exe` to that folder. Then add `C:\juicefs` to the environment variables of your system, and restart the system to let the settings take effect. Lastly, you can run `juicefs` commands directly using the "Command Prompt" or "PowerShell" terminal that comes with your system.
 
    ![Windows ENV path](../images/windows-path-en.png)
 
@@ -174,7 +174,7 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 3. Switching the branch
 
-   The source code uses the `main` branch by default, and you can switch to any official release, for example to the latest release `v1.0.0-beta2`(release on March 2022).
+   The source code uses the `main` branch by default, and you can switch to any official release, for example to the release `v1.0.0-beta2`:
 
    ```shell
    git checkout v1.0.0-beta2
@@ -238,7 +238,7 @@ Download MinGW-w64 and add its `bin` directory to the system environment variabl
 
 Compiling a specific version of the client for Windows is essentially the same as [Unix-like Client](#unix-like-client) and can be done directly on a Linux system. However, in addition to `go` and `gcc`, you also need to install:
 
-- [mingw-w64](https://www.mingw-w64.org/downloads/)
+- [MinGW-w64](https://www.mingw-w64.org/downloads)
 
 The latest version can be installed from software repositories on many Linux distributions. Take an example of Ubuntu 20.04+: `mingw-w64` can be installed as follows.
 
