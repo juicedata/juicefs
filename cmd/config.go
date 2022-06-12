@@ -43,10 +43,10 @@ Examples:
 $ juicefs config redis://localhost
 
 # Change volume "quota"
-$ juicefs conifg redis://localhost --inode 10000000 --capacity 1048576
+$ juicefs config redis://localhost --inode 10000000 --capacity 1048576
 
 # Change maximum days before files in trash are deleted
-$ juicefs conifg redis://localhost --trash-days 7
+$ juicefs config redis://localhost --trash-days 7
 
 # Limit client version that is allowed to connect
 $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0`,
