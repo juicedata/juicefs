@@ -70,7 +70,7 @@ func rmr(ctx *cli.Context) error {
 		return nil
 	}
 	progress := utils.NewProgress(false, true)
-	spin := progress.AddCountSpinner("Removed entries")
+	spin := progress.AddCountSpinner("Removing entries")
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
 		p, err := filepath.Abs(path)

@@ -47,15 +47,11 @@ func (v *VFS) fillCache(ctx meta.Context, paths []string, concurrent int, count,
 				if f.ino == 0 {
 					break
 				}
-				if err := v.fillInode(ctx, f.ino, f.size); err == nil {
-					if count != nil {
-						atomic.AddUint64(count, 1)
-					}
-					if bytes != nil {
-						atomic.AddUint64(bytes, f.size)
-					}
-				} else { // TODO: print path instead of inode
+				if err := v.fillInode(ctx, f.ino, f.size, bytes); err != nil {
 					logger.Errorf("Inode %d could be corrupted: %s", f.ino, err)
+				}
+				if count != nil {
+					atomic.AddUint64(count, 1)
 				}
 				if ctx.Canceled() {
 					break
@@ -182,19 +178,22 @@ func (v *VFS) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
 	}
 }
 
-func (v *VFS) fillInode(ctx meta.Context, inode Ino, size uint64) error {
+func (v *VFS) fillInode(ctx meta.Context, inode Ino, size uint64, bytes *uint64) error {
 	var slices []meta.Slice
 	for indx := uint64(0); indx*meta.ChunkSize < size; indx++ {
 		if st := v.Meta.Read(ctx, inode, uint32(indx), &slices); st != 0 {
 			return fmt.Errorf("Failed to get slices of inode %d index %d: %d", inode, indx, st)
 		}
 		for _, s := range slices {
+			if bytes != nil {
+				atomic.AddUint64(bytes, uint64(s.Size))
+			}
 			if err := v.Store.FillCache(s.Chunkid, s.Size); err != nil {
 				return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Chunkid, err)
 			}
-		}
-		if ctx.Canceled() {
-			return syscall.EINTR
+			if ctx.Canceled() {
+				return syscall.EINTR
+			}
 		}
 	}
 	return nil
