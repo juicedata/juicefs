@@ -179,15 +179,23 @@ func typeFromString(s string) uint8 {
 }
 
 // SMode is the file mode including type and unix permission.
-func (a Attr) SMode() uint32 {
+func (a *Attr) SMode() uint32 {
 	return typeToStatType(a.Typ) | uint32(a.Mode)
 }
 
 // Entry is an entry inside a directory.
 type Entry struct {
 	Inode Ino
+	Typ   uint8
 	Name  []byte
 	Attr  *Attr
+}
+
+func (e *Entry) SMode() uint32 {
+	if e.Attr != nil {
+		return e.Attr.SMode()
+	}
+	return typeToStatType(e.Typ)
 }
 
 // Slice is a slice of a chunk.

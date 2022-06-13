@@ -824,12 +824,14 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		{
 			Inode: inode,
 			Name:  []byte("."),
+			Typ:   TypeDirectory,
 			Attr:  &Attr{Typ: TypeDirectory},
 		},
 	}
 	*entries = append(*entries, &Entry{
 		Inode: attr.Parent,
 		Name:  []byte(".."),
+		Typ:   TypeDirectory,
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
 	return m.en.doReaddir(ctx, inode, plus, entries, -1)

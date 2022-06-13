@@ -1547,7 +1547,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		*entries = append(*entries, &Entry{
 			Inode: ino,
 			Name:  []byte(name)[prefix:],
-			Attr:  &Attr{Typ: typ},
+			Typ:   typ,
 		})
 	}
 
@@ -1566,8 +1566,11 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 				return err
 			}
 			for j, re := range rs {
+				es[j].Attr = &Attr{}
 				if re != nil {
 					m.parseAttr(re, es[j].Attr)
+				} else {
+					es[j].Attr.Typ = es[j].Typ
 				}
 			}
 			return nil

@@ -352,7 +352,7 @@ func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse
 	for _, e := range entries {
 		de.Ino = uint64(e.Inode)
 		de.Name = string(e.Name)
-		de.Mode = e.Attr.SMode()
+		de.Mode = e.SMode()
 		if !out.AddDirEntry(de) {
 			break
 		}
@@ -368,7 +368,7 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 	for _, e := range entries {
 		de.Ino = uint64(e.Inode)
 		de.Name = string(e.Name)
-		de.Mode = e.Attr.SMode()
+		de.Mode = e.SMode()
 		eo := out.AddDirLookupEntry(de)
 		if eo == nil {
 			break

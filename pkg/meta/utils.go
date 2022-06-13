@@ -235,16 +235,16 @@ func emptyDir(r Meta, ctx Context, inode Ino, count *uint64, concurrent chan int
 	// try directories first to increase parallel
 	var dirs int
 	for i, e := range entries {
-		if e.Attr.Typ == TypeDirectory {
+		if e.Typ == TypeDirectory {
 			entries[dirs], entries[i] = entries[i], entries[dirs]
 			dirs++
 		}
 	}
-	for _, e := range entries {
+	for i, e := range entries {
 		if e.Inode == inode || len(e.Name) == 2 && string(e.Name) == ".." {
 			continue
 		}
-		if e.Attr.Typ == TypeDirectory {
+		if e.Typ == TypeDirectory {
 			select {
 			case concurrent <- 1:
 				wg.Add(1)
@@ -272,6 +272,7 @@ func emptyDir(r Meta, ctx Context, inode Ino, count *uint64, concurrent chan int
 		if ctx.Canceled() {
 			return syscall.EINTR
 		}
+		entries[i] = nil // release memory
 	}
 	wg.Wait()
 	return status

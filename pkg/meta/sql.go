@@ -1752,12 +1752,11 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			entry := &Entry{
 				Inode: n.Inode,
 				Name:  n.Name,
-				Attr:  &Attr{},
+				Typ:   n.Type,
 			}
 			if plus != 0 {
+				entry.Attr = &Attr{}
 				m.parseAttr(&n.node, entry.Attr)
-			} else {
-				entry.Attr.Typ = n.Type
 			}
 			*entries = append(*entries, entry)
 		}

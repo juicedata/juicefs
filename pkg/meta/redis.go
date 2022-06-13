@@ -1721,7 +1721,10 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 	var stop = errors.New("stop")
 	err := m.hscan(ctx, m.entryKey(inode), func(keys []string) error {
 		newEntries := make([]Entry, len(keys)/2)
-		newAttrs := make([]Attr, len(keys)/2)
+		var newAttrs []Attr
+		if plus != 0 {
+			newAttrs = make([]Attr, len(keys)/2)
+		}
 		for i := 0; i < len(keys); i += 2 {
 			typ, ino := m.parseEntry([]byte(keys[i+1]))
 			if keys[i] == "" {
@@ -1731,8 +1734,11 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 			ent := &newEntries[i/2]
 			ent.Inode = ino
 			ent.Name = []byte(keys[i])
-			ent.Attr = &newAttrs[i/2]
-			ent.Attr.Typ = typ
+			ent.Typ = typ
+			if plus != 0 {
+				ent.Attr = &newAttrs[i/2]
+				ent.Attr.Typ = typ
+			}
 			*entries = append(*entries, ent)
 			if limit > 0 && len(*entries) >= limit {
 				return stop
