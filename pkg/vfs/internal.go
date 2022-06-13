@@ -254,14 +254,13 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		if background == 0 {
 			var count, bytes uint64
 			done := make(chan struct{})
-			ctx := meta.Background
 			go func() {
 				v.fillCache(ctx, paths, int(concurrent), &count, &bytes)
 				close(done)
 			}()
 			writeProgress(&count, &bytes, data, done)
 		} else {
-			go v.fillCache(ctx, paths, int(concurrent), nil, nil)
+			go v.fillCache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), paths, int(concurrent), nil, nil)
 		}
 		*data = append(*data, uint8(0))
 	default:
