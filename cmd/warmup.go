@@ -204,7 +204,7 @@ func warmup(ctx *cli.Context) error {
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background, true)
-	dspin := progress.AddDoubleSpinner("Warmed up")
+	dspin := progress.AddDoubleSpinner("Warming up")
 	for _, path := range paths {
 		if mp == "/" {
 			inode, err := utils.GetFileInode(path)
