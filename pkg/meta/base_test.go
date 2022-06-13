@@ -108,19 +108,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err != nil || len(ses) != 1 {
 		t.Fatalf("list sessions %+v: %s", ses, err)
 	}
-	switch r := m.(type) {
-	case *redisMeta:
-		if r.sid != ses[0].Sid {
-			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
-		}
-	case *dbMeta:
-		if r.sid != ses[0].Sid {
-			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
-		}
-	case *kvMeta:
-		if r.sid != ses[0].Sid {
-			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
-		}
+	base := m.getBase()
+	if base.sid != ses[0].Sid {
+		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
 	}
 	go m.CleanStaleSessions()
 
@@ -729,7 +719,7 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
-	if st := Remove(m, ctx, 1, "f", nil); st != 0 {
+	if st := m.Remove(ctx, 1, "f", nil); st != 0 {
 		t.Fatalf("rmr f: %s", st)
 	}
 	if st := m.Mkdir(ctx, 1, "d", 0755, 0, 0, &parent, attr); st != 0 {
@@ -758,7 +748,7 @@ func testRemove(t *testing.T, m Meta) {
 	} else if len(entries) != 4099 {
 		t.Fatalf("entries: %d", len(entries))
 	}
-	if st := Remove(m, ctx, 1, "d", nil); st != 0 {
+	if st := m.Remove(ctx, 1, "d", nil); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
 }
@@ -1104,15 +1094,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
 	}
-	var sid uint64
-	switch m := m.(type) {
-	case *redisMeta:
-		sid = m.sid
-	case *dbMeta:
-		sid = m.sid
-	case *kvMeta:
-		sid = m.sid
-	}
+	sid := m.getBase().sid
 	s, err := m.GetSession(sid, true)
 	if err != nil {
 		t.Fatalf("get session: %s", err)
@@ -1237,14 +1219,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename d -> f: %s", st)
 	}
-	switch bm := m.(type) {
-	case *redisMeta:
-		bm.doCleanupTrash(true)
-	case *dbMeta:
-		bm.doCleanupTrash(true)
-	case *kvMeta:
-		bm.doCleanupTrash(true)
-	}
+	m.getBase().doCleanupTrash(true)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
 	}

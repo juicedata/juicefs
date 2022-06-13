@@ -438,7 +438,7 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
 	if err != 0 {
 		return
 	}
-	err = meta.Remove(fs.m, ctx, parent.inode, path.Base(p), nil)
+	err = fs.m.Remove(ctx, parent.inode, path.Base(p), nil)
 	fs.invalidateEntry(parent.inode, path.Base(p))
 	return
 }

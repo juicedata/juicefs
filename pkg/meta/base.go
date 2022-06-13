@@ -127,10 +127,6 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 	}
 }
 
-func (m *baseMeta) getEngine() engine {
-	return m.en
-}
-
 func (m *baseMeta) getBase() *baseMeta {
 	return m
 }

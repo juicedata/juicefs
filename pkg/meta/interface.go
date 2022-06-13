@@ -337,6 +337,8 @@ type Meta interface {
 	CompactAll(ctx Context, bar *utils.Bar) syscall.Errno
 	// ListSlices returns all slices used by all files.
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
+	// Remove all files and directories recursively.
+	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
@@ -345,8 +347,7 @@ type Meta interface {
 	DumpMeta(w io.Writer, root Ino) error
 	LoadMeta(r io.Reader) error
 
-	// getEngine return the actual engine.
-	getEngine() engine
+	// getBase return the base engine.
 	getBase() *baseMeta
 }
 
