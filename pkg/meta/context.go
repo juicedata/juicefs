@@ -58,9 +58,10 @@ var Background Context = &emptyContext{context.Background()}
 
 type myContext struct {
 	context.Context
-	pid  uint32
-	uid  uint32
-	gids []uint32
+	pid      uint32
+	uid      uint32
+	gids     []uint32
+	canceled bool
 }
 
 func (c *myContext) Uid() uint32 {
@@ -79,10 +80,12 @@ func (c *myContext) Pid() uint32 {
 	return c.pid
 }
 
-func (c *myContext) Cancel() {}
+func (c *myContext) Cancel() {
+	c.canceled = true
+}
 
 func (c *myContext) Canceled() bool {
-	return false
+	return c.canceled
 }
 
 func (c *myContext) WithValue(k, v interface{}) {
@@ -90,5 +93,5 @@ func (c *myContext) WithValue(k, v interface{}) {
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
-	return &myContext{context.Background(), pid, uid, gids}
+	return &myContext{context.Background(), pid, uid, gids, false}
 }

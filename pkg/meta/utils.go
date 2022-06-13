@@ -262,6 +262,9 @@ func emptyDir(r Meta, ctx Context, inode Ino, count *uint64, concurrent chan int
 				return st
 			}
 		}
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
 	}
 	wg.Wait()
 	return status
