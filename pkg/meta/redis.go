@@ -775,6 +775,9 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	var retryOnFailture = false
 	var lastErr error
 	for i := 0; i < 50; i++ {
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
 		err := m.rdb.Watch(ctx, txf, keys...)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil

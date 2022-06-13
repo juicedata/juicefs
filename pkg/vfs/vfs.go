@@ -573,7 +573,8 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		h.data = append(h.data, h.pending...)
 		h.pending = h.pending[:0]
 		if rb.Left() == size {
-			go v.handleInternalMsg(ctx, cmd, rb, &h.data)
+			h.bctx = meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids())
+			go v.handleInternalMsg(h.bctx, cmd, rb, &h.data)
 		} else {
 			logger.Warnf("broken message: %d %d < %d", cmd, size, rb.Left())
 			h.data = append(h.data, uint8(syscall.EIO&0xff))
@@ -709,13 +710,16 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 }
 
 func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err syscall.Errno) {
-	if IsSpecialNode(ino) {
-		return
-	}
 	defer func() { logit(ctx, "flush (%d): %s", ino, strerr(err)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
+		return
+	}
+	if IsSpecialNode(ino) {
+		if ino == controlInode && h.bctx != nil {
+			h.bctx.Cancel()
+		}
 		return
 	}
 
