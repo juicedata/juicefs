@@ -183,7 +183,7 @@ func writeProgress(count, bytes *uint64, data *[]byte, done chan struct{}) {
 	}
 }
 
-func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *[]byte) {
+func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, data *[]byte) {
 	switch cmd {
 	case meta.Rmr:
 		done := make(chan struct{})
@@ -193,6 +193,9 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 			inode := Ino(r.Get64())
 			name := string(r.Get(int(r.Get8())))
 			st = meta.Remove(v.Meta, ctx, inode, name, &count)
+			if st != 0 {
+				logger.Errorf("remove %d/%s: %s", inode, name, st)
+			}
 			close(done)
 		}()
 		writeProgress(&count, nil, data, done)
@@ -252,12 +255,12 @@ func (v *VFS) handleInternalMsg(ctx Context, cmd uint32, r *utils.Buffer, data *
 			var count, bytes uint64
 			done := make(chan struct{})
 			go func() {
-				v.fillCache(paths, int(concurrent), &count, &bytes)
+				v.fillCache(ctx, paths, int(concurrent), &count, &bytes)
 				close(done)
 			}()
 			writeProgress(&count, &bytes, data, done)
 		} else {
-			go v.fillCache(paths, int(concurrent), nil, nil)
+			go v.fillCache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), paths, int(concurrent), nil, nil)
 		}
 		*data = append(*data, uint8(0))
 	default:
