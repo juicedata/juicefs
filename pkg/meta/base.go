@@ -105,14 +105,14 @@ type baseMeta struct {
 	en engine
 }
 
-func newBaseMeta(addr string, conf *Config) baseMeta {
+func newBaseMeta(addr string, conf *Config) *baseMeta {
 	if conf.Retries == 0 {
 		conf.Retries = 10
 	}
 	if conf.Heartbeat == 0 {
 		conf.Heartbeat = 12 * time.Second
 	}
-	return baseMeta{
+	return &baseMeta{
 		addr:         utils.RemovePassword(addr),
 		conf:         conf,
 		root:         1,
@@ -125,6 +125,14 @@ func newBaseMeta(addr string, conf *Config) baseMeta {
 			callbacks: make(map[uint32]MsgCallback),
 		},
 	}
+}
+
+func (m *baseMeta) getEngine() engine {
+	return m.en
+}
+
+func (m *baseMeta) getBase() *baseMeta {
+	return m
 }
 
 func (m *baseMeta) checkRoot(inode Ino) Ino {

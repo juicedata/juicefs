@@ -55,15 +55,6 @@ func testMeta(t *testing.T, m Meta) {
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
-	var base *baseMeta
-	switch m := m.(type) {
-	case *redisMeta:
-		base = &m.baseMeta
-	case *dbMeta:
-		base = &m.baseMeta
-	case *kvMeta:
-		base = &m.baseMeta
-	}
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
@@ -78,6 +69,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
 	testConcurrentDir(t, m)
+	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
 	testOpenCache(t, m)

@@ -344,6 +344,10 @@ type Meta interface {
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino) error
 	LoadMeta(r io.Reader) error
+
+	// getEngine return the actual engine.
+	getEngine() engine
+	getBase() *baseMeta
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)
