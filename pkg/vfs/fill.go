@@ -47,15 +47,14 @@ func (v *VFS) fillCache(ctx meta.Context, paths []string, concurrent int, count,
 				if f.ino == 0 {
 					break
 				}
-				if err := v.fillInode(ctx, f.ino, f.size); err == nil {
-					if count != nil {
-						atomic.AddUint64(count, 1)
-					}
-					if bytes != nil {
-						atomic.AddUint64(bytes, f.size)
-					}
-				} else { // TODO: print path instead of inode
+				if err := v.fillInode(ctx, f.ino, f.size); err != nil {
 					logger.Errorf("Inode %d could be corrupted: %s", f.ino, err)
+				}
+				if count != nil {
+					atomic.AddUint64(count, 1)
+				}
+				if bytes != nil {
+					atomic.AddUint64(bytes, f.size)
 				}
 				if ctx.Canceled() {
 					break
