@@ -232,6 +232,14 @@ func emptyDir(r Meta, ctx Context, inode Ino, count *uint64, concurrent chan int
 	}
 	var wg sync.WaitGroup
 	var status syscall.Errno
+	// try directories first to increase parallel
+	var dirs int
+	for i, e := range entries {
+		if e.Attr.Typ == TypeDirectory {
+			entries[dirs], entries[i] = entries[i], entries[dirs]
+			dirs++
+		}
+	}
 	for _, e := range entries {
 		if e.Inode == inode || len(e.Name) == 2 && string(e.Name) == ".." {
 			continue
