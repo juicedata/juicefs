@@ -155,7 +155,7 @@ type delfile struct {
 }
 
 type dbMeta struct {
-	baseMeta
+	*baseMeta
 	db   *xorm.Engine
 	snap *dbSnap
 }

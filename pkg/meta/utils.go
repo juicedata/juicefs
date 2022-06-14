@@ -222,67 +222,72 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	return ls
 }
 
-func emptyDir(r Meta, ctx Context, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
-	if st := r.Access(ctx, inode, 3, nil); st != 0 {
+func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
+	if st := m.Access(ctx, inode, 3, nil); st != 0 {
 		return st
 	}
-	var entries []*Entry
-	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
-		return st
-	}
-	var wg sync.WaitGroup
-	var status syscall.Errno
-	// try directories first to increase parallel
-	var dirs int
-	for i, e := range entries {
-		if e.Attr.Typ == TypeDirectory {
-			entries[dirs], entries[i] = entries[i], entries[dirs]
-			dirs++
+	for {
+		var entries []*Entry
+		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 {
+			return st
 		}
-	}
-	for _, e := range entries {
-		if e.Inode == inode || len(e.Name) == 2 && string(e.Name) == ".." {
-			continue
+		if len(entries) == 0 {
+			return 0
 		}
-		if e.Attr.Typ == TypeDirectory {
-			select {
-			case concurrent <- 1:
-				wg.Add(1)
-				go func(child Ino, name string) {
-					defer wg.Done()
-					e := emptyEntry(r, ctx, inode, name, child, count, concurrent)
-					if e != 0 {
-						status = e
+		var wg sync.WaitGroup
+		var status syscall.Errno
+		// try directories first to increase parallel
+		var dirs int
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				entries[dirs], entries[i] = entries[i], entries[dirs]
+				dirs++
+			}
+		}
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				select {
+				case concurrent <- 1:
+					wg.Add(1)
+					go func(child Ino, name string) {
+						defer wg.Done()
+						e := m.emptyEntry(ctx, inode, name, child, count, concurrent)
+						if e != 0 {
+							status = e
+						}
+						<-concurrent
+					}(e.Inode, string(e.Name))
+				default:
+					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, count, concurrent); st != 0 {
+						return st
 					}
-					<-concurrent
-				}(e.Inode, string(e.Name))
-			default:
-				if st := emptyEntry(r, ctx, inode, string(e.Name), e.Inode, count, concurrent); st != 0 {
+				}
+			} else {
+				if count != nil {
+					atomic.AddUint64(count, 1)
+				}
+				if st := m.Unlink(ctx, inode, string(e.Name)); st != 0 {
 					return st
 				}
 			}
-		} else {
-			if count != nil {
-				atomic.AddUint64(count, 1)
+			if ctx.Canceled() {
+				return syscall.EINTR
 			}
-			if st := r.Unlink(ctx, inode, string(e.Name)); st != 0 {
-				return st
-			}
+			entries[i] = nil // release memory
 		}
-		if ctx.Canceled() {
-			return syscall.EINTR
+		wg.Wait()
+		if status != 0 {
+			return status
 		}
 	}
-	wg.Wait()
-	return status
 }
 
-func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
-	st := emptyDir(r, ctx, inode, count, concurrent)
+func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
+	st := m.emptyDir(ctx, inode, count, concurrent)
 	if st == 0 {
-		st = r.Rmdir(ctx, parent, name)
+		st = m.Rmdir(ctx, parent, name)
 		if st == syscall.ENOTEMPTY {
-			st = emptyEntry(r, ctx, parent, name, inode, count, concurrent)
+			st = m.emptyEntry(ctx, parent, name, inode, count, concurrent)
 		} else if count != nil {
 			atomic.AddUint64(count, 1)
 		}
@@ -290,23 +295,24 @@ func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, count *
 	return st
 }
 
-func Remove(r Meta, ctx Context, parent Ino, name string, count *uint64) syscall.Errno {
-	if st := r.Access(ctx, parent, 3, nil); st != 0 {
+func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno {
+	parent = m.checkRoot(parent)
+	if st := m.Access(ctx, parent, 3, nil); st != 0 {
 		return st
 	}
 	var inode Ino
 	var attr Attr
-	if st := r.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+	if st := m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
 		return st
 	}
 	if attr.Typ != TypeDirectory {
 		if count != nil {
 			atomic.AddUint64(count, 1)
 		}
-		return r.Unlink(ctx, parent, name)
+		return m.Unlink(ctx, parent, name)
 	}
 	concurrent := make(chan int, 50)
-	return emptyEntry(r, ctx, parent, name, inode, count, concurrent)
+	return m.emptyEntry(ctx, parent, name, inode, count, concurrent)
 }
 
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {

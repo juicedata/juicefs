@@ -72,7 +72,7 @@ import (
 */
 
 type redisMeta struct {
-	baseMeta
+	*baseMeta
 	rdb        redis.UniversalClient
 	prefix     string
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`

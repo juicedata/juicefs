@@ -192,7 +192,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		go func() {
 			inode := Ino(r.Get64())
 			name := string(r.Get(int(r.Get8())))
-			st = meta.Remove(v.Meta, ctx, inode, name, &count)
+			st = v.Meta.Remove(ctx, inode, name, &count)
 			if st != 0 {
 				logger.Errorf("remove %d/%s: %s", inode, name, st)
 			}

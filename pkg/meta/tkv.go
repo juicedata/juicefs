@@ -61,7 +61,7 @@ type tkvClient interface {
 }
 
 type kvMeta struct {
-	baseMeta
+	*baseMeta
 	client tkvClient
 	snap   map[Ino]*DumpedEntry
 }
