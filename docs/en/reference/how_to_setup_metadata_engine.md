@@ -209,7 +209,7 @@ To connect to a TLS enabled MySQL server, pass the `tls=true` parameter (or `tls
 ```shell
 $ juicefs format --storage s3 \
     ...
-    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs&tls=true" \
+    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?tls=true" \
     pics
 ```
 
@@ -229,7 +229,7 @@ $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 To connect to a TLS enabled MySQL server, pass the `tls=true` parameter (or `tls=skip-verify` if using a self-signed certificate).
 
 ```shell
-sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs&tls=true" /mnt/jfs
+sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?tls=true" /mnt/jfs
 ```
 
 For more examples of MySQL database address format, please refer to [Go-MySQL-Driver](https://github.com/Go-SQL-Driver/MySQL/#examples).
@@ -269,10 +269,10 @@ To connect to a TLS enabled MariaDB server, pass the `tls=true` parameter (or `t
 $ export META_PASSWORD="mypassword"
 $ juicefs format --storage s3 \
     ...
-    "mysql://user@(192.168.1.6:3306)/juicefs&tls=true" \
+    "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" \
     pics
 
-$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs&tls=true" /mnt/jfs
+$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" /mnt/jfs
 ```
 
 For more examples of MariaDB database address format, please refer to [Go-MySQL-Driver](https://github.com/Go-SQL-Driver/MySQL/#examples).
