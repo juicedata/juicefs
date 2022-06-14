@@ -530,7 +530,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     File libFile = new File(dir, name);
 
     URL res = null;
-    String jarPath = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+    String jarPath;
+    try {
+      jarPath = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
+    } catch (URISyntaxException e) {
+      throw new IOException("get jar path failed", e);
+    }
     Enumeration<URL> resources = JuiceFileSystemImpl.class.getClassLoader().getResources(resource);
     while (resources.hasMoreElements()) {
       res = resources.nextElement();
