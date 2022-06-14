@@ -587,20 +587,15 @@ func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 				logger.Warnf("load script %s: %s", op, err2)
 				return syscall.ENOTSUP
 			}
-		}
-
-		fields := strings.Fields(msg)
-		lastError := fields[len(fields)-1]
-		switch lastError {
-		case "ENOENT":
+		} else if strings.Contains(msg, "ENOENT") {
 			return syscall.ENOENT
-		case "EACCESS":
+		} else if strings.Contains(msg, "EACCESS") {
 			return syscall.EACCES
-		case "ENOTDIR":
+		} else if strings.Contains(msg, "ENOTDIR") {
 			return syscall.ENOTDIR
-		case "ENOTSUP":
+		} else if strings.Contains(msg, "ENOTSUP") {
 			return syscall.ENOTSUP
-		default:
+		} else {
 			logger.Warnf("unexpected error for %s: %s", op, msg)
 			switch op {
 			case "lookup":
