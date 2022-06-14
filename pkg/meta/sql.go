@@ -715,7 +715,7 @@ func (m *dbMeta) flushStats() {
 		newInodes := atomic.SwapInt64(&m.newInodes, 0)
 		if newSpace != 0 || newInodes != 0 {
 			err := m.txn(func(s *xorm.Session) error {
-				_, err := s.Exec("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN ? ELSE ? END) AS "+inttype+") WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes)
+				_, err := s.Exec(fmt.Sprintf("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN %d ELSE %d END) AS %s) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes, inttype))
 				return err
 			})
 			if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
