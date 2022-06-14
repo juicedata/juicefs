@@ -2904,7 +2904,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				sr[i] = p.Get(ctx, m.symKey(inode))
 			}
 		}
-		if _, err := p.Exec(ctx); err != nil {
+		if _, err := p.Exec(ctx); err != nil && err != redis.Nil {
 			return err
 		}
 
