@@ -30,7 +30,7 @@ var (
 		major:      1,
 		minor:      0,
 		patch:      0,
-		preRelease: "alpha4",
+		preRelease: "rc1",
 		build:      fmt.Sprintf("%s.%s", revisionDate, revision),
 	}
 )
