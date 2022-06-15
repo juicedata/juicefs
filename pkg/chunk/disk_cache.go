@@ -301,9 +301,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	} else {
 		cache.keys[key] = cacheItem{size, atime}
 	}
-	if size > 0 {
-		cache.used += int64(size + 4096)
-	}
+	cache.used += int64(size + 4096)
 
 	if cache.used > cache.capacity {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
