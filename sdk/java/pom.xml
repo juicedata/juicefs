@@ -3,6 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.juicefs</groupId>
 	<name>juicefs-hadoop</name>
+	<url>https://github.com/juicedata/juicefs</url>
 	<description>Hadoop FileSystem implementation for JuiceFS</description>
 	<artifactId>juicefs-hadoop</artifactId>
 	<version>1.0-dev</version>
@@ -11,6 +12,13 @@
 		<hadoop.version>3.1.4</hadoop.version>
 		<argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.library.path=${project.basedir}/../mount/libjfs:${java.library.path} -Djdk.attach.allowAttachSelf=true</argLine>
 	</properties>
+
+	<developers>
+		<developer>
+			<name>tommy</name>
+			<email>tommy@juicedata.io</email>
+		</developer>
+	</developers>
 
 	<licenses>
 		<license>
@@ -88,6 +96,20 @@
 					<autoReleaseAfterClose>true</autoReleaseAfterClose>
 				</configuration>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>2.9.1</version>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-source-plugin</artifactId>
