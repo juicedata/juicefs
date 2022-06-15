@@ -58,6 +58,7 @@ func Main(args []string) error {
 			cmdFsck(),
 			cmdDump(),
 			cmdLoad(),
+			cmdVersion(),
 			cmdStatus(),
 			cmdStats(),
 			cmdProfile(),
