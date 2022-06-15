@@ -72,8 +72,8 @@ jobs:
       - name: Generate Data
         run: |
           cd /data/jfs/
-          git clone https://github.com/sanwan/actiondata.git
-          cd actiondata
+          git clone https://github.com/sanwan/chdata.git
+          cd chdata
           cat lineorder.tbl.gz* >lineorder.tbl.gz
           gzip -dk lineorder.tbl.gz
           git clone https://github.com/sanwan/actionfile.git
@@ -147,7 +147,7 @@ jobs:
 
       - name: Import Data
         run: |
-          cd /data/jfs/actiondata/
+          cd /data/jfs/chdata/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
           clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
