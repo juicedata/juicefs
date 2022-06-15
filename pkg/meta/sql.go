@@ -2333,7 +2333,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	trash := m.toTrash(0)
 	if trash {
 		for _, s := range ss {
-			buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			if s.chunkid > 0 {
+				buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			}
 		}
 	}
 	err = m.txn(func(s *xorm.Session) error {
@@ -2356,8 +2358,10 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return err
 		}
 		if trash {
-			if err = mustInsert(s, &delslices{chunkid, time.Now().Unix(), buf}); err != nil {
-				return err
+			if len(buf) > 0 {
+				if err = mustInsert(s, &delslices{chunkid, time.Now().Unix(), buf}); err != nil {
+					return err
+				}
 			}
 		} else {
 			for _, s_ := range ss {
