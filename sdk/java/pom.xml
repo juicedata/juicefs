@@ -30,8 +30,8 @@
 
 	<scm>
 		<url>https://github.com/juicedata/juicefs</url>
-		<connection>git@github.com:juicedata/juicefs.git</connection>
-		<developerConnection>scm:git:git@github.com:juicedata/juicefs.git</developerConnection>
+		<connection>https://github.com/juicedata/juicefs</connection>
+		<developerConnection>scm:git:https://github.com/juicedata/juicefs</developerConnection>
 	</scm>
 
 	<build>
