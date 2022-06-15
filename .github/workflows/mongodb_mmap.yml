@@ -73,6 +73,7 @@ jobs:
           time java -jar ./latest-version/mongodb-performance-test.jar -m insert -o 10000000 -t 10 -db test -c perf >insert_result
           du -sh /jfs/mongodb/
 
+
       - name: Read and Update
         run: |
           hello
