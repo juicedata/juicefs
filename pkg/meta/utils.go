@@ -228,7 +228,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent ch
 	}
 	for {
 		var entries []*Entry
-		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 {
+		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 && st != syscall.ENOENT {
 			return st
 		}
 		if len(entries) == 0 {
@@ -252,13 +252,13 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent ch
 					go func(child Ino, name string) {
 						defer wg.Done()
 						e := m.emptyEntry(ctx, inode, name, child, count, concurrent)
-						if e != 0 {
+						if e != 0 && e != syscall.ENOENT {
 							status = e
 						}
 						<-concurrent
 					}(e.Inode, string(e.Name))
 				default:
-					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, count, concurrent); st != 0 {
+					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, count, concurrent); st != 0 && st != syscall.ENOENT {
 						return st
 					}
 				}
@@ -266,7 +266,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent ch
 				if count != nil {
 					atomic.AddUint64(count, 1)
 				}
-				if st := m.Unlink(ctx, inode, string(e.Name)); st != 0 {
+				if st := m.Unlink(ctx, inode, string(e.Name)); st != 0 && st != syscall.ENOENT {
 					return st
 				}
 			}
