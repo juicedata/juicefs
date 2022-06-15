@@ -694,17 +694,6 @@ public class TestDFSIO extends Main.Command {
     return System.currentTimeMillis() - tStart;
   }
 
-  /**
-   * Mapper class for random reads.
-   * The mapper chooses a position in the file and reads bufferSize
-   * bytes starting at the chosen position.
-   * It stops after reading the totalSize bytes, specified by -size.
-   * <p>
-   * There are three type of reads.
-   * 1) Random read always chooses a random position to read from: skipSize = 0
-   * 2) Backward read reads file in reverse order                : skipSize < 0
-   * 3) Skip-read skips skipSize bytes after every read          : skipSize > 0
-   */
   public static class RandomReadMapper extends IOStatMapper {
     private ThreadLocalRandom rnd;
     private long fileSize;
