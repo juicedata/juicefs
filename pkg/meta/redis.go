@@ -2506,7 +2506,9 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	trash := m.toTrash(0)
 	if trash {
 		for _, s := range ss {
-			buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			if s.chunkid > 0 {
+				buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			}
 		}
 	} else {
 		rs = make([]*redis.IntCmd, len(ss))
@@ -2534,7 +2536,9 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 			pipe.HSet(ctx, m.sliceRefs(), m.sliceKey(chunkid, size), "0") // create the key to tracking it
 			if trash {
-				pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", chunkid, time.Now().Unix()), buf)
+				if len(buf) > 0 {
+					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", chunkid, time.Now().Unix()), buf)
+				}
 			} else {
 				for i, s := range ss {
 					if s.chunkid > 0 {

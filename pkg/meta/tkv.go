@@ -2018,7 +2018,9 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	trash := m.toTrash(0)
 	if trash {
 		for _, s := range ss {
-			dsbuf = append(dsbuf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			if s.chunkid > 0 {
+				dsbuf = append(dsbuf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			}
 		}
 	}
 	err = m.txn(func(tx kvTxn) error {
@@ -2033,7 +2035,9 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		// create the key to tracking it
 		tx.set(m.sliceKey(chunkid, size), make([]byte, 8))
 		if trash {
-			tx.set(m.delSliceKey(time.Now().Unix(), chunkid), dsbuf)
+			if len(dsbuf) > 0 {
+				tx.set(m.delSliceKey(time.Now().Unix(), chunkid), dsbuf)
+			}
 		} else {
 			for _, s := range ss {
 				if s.chunkid > 0 {
