@@ -64,10 +64,14 @@ libjfs-arm64.dylib: *.go ../../../pkg/*/*.go
 	GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 CC=o64-clang go build -o libjfs-arm64.dylib \
 	-buildmode=c-shared -ldflags="$(LDFLAGS)"
 
+/usr/local/include/winfsp:
+	mkdir -p /usr/local/include/winfsp
+	cp ../../../hack/winfsp_headers/* /usr/local/include/winfsp
+
 win: libjfs.dll
 	mkdir -p target
 	gzip -c libjfs-amd64.dll > target/libjfs-amd64.dll.gz
 
-libjfs.dll: *.go ../../../pkg/*/*.go
+libjfs.dll: /usr/local/include/winfsp *.go ../../../pkg/*/*.go
 	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o libjfs-amd64.dll \
 	-buildmode=c-shared -ldflags="$(LDFLAGS)"
