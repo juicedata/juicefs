@@ -65,8 +65,8 @@ libjfs-arm64.dylib: *.go ../../../pkg/*/*.go
 	-buildmode=c-shared -ldflags="$(LDFLAGS)"
 
 /usr/local/include/winfsp:
-	sudo mkdir -p /usr/local/include/winfsp
-	sudo cp hack/winfsp_headers/* /usr/local/include/winfsp
+	mkdir -p /usr/local/include/winfsp
+	cp ../../../hack/winfsp_headers/* /usr/local/include/winfsp
 
 win: libjfs.dll
 	mkdir -p target
