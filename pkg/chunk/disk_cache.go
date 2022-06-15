@@ -220,8 +220,10 @@ func (cache *cacheStore) createDir(dir string) {
 func (cache *cacheStore) remove(key string) {
 	cache.Lock()
 	path := cache.cachePath(key)
-	if cache.keys[key].atime > 0 {
-		cache.used -= int64(cache.keys[key].size + 4096)
+	if it, ok := cache.keys[key]; ok {
+		if it.size > 0 {
+			cache.used -= int64(it.size + 4096)
+		}
 		delete(cache.keys, key)
 	} else if cache.scanned {
 		path = "" // not existed
@@ -257,8 +259,10 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 			// update atime
 			cache.keys[key] = cacheItem{it.size, uint32(time.Now().Unix())}
 		}
-	} else if cache.keys[key].atime > 0 {
-		cache.used -= int64(cache.keys[key].size + 4096)
+	} else if it, ok := cache.keys[key]; ok {
+		if it.size > 0 {
+			cache.used -= int64(it.size + 4096)
+		}
 		delete(cache.keys, key)
 	}
 	return f, err
@@ -301,7 +305,9 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 	} else {
 		cache.keys[key] = cacheItem{size, atime}
 	}
-	cache.used += int64(size + 4096)
+	if size > 0 {
+		cache.used += int64(size + 4096)
+	}
 
 	if cache.used > cache.capacity {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
