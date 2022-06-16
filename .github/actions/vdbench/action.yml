@@ -80,5 +80,5 @@ runs:
     - name: vdbench
       shell: bash
       run: |
-        vdbench/vdbench -f ./.github/resources/vdbench_big_file.conf
-        vdbench/vdbench -f ./.github/resources/vdbench_small_file.conf
+        vdbench/vdbench -f ./.github/workflows/resources/vdbench_big_file.conf
+        vdbench/vdbench -f ./.github/workflows/resources/vdbench_small_file.conf
