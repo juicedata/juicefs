@@ -29,6 +29,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -102,6 +103,12 @@ type baseMeta struct {
 	freeInodes freeID
 	freeChunks freeID
 
+	usedSpaceG  prometheus.Gauge
+	usedInodesG prometheus.Gauge
+	txDist      prometheus.Histogram
+	txRestart   prometheus.Counter
+	opDist      prometheus.Histogram
+
 	en engine
 }
 
@@ -124,7 +131,57 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
+
+		usedSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "used_space",
+			Help: "Total used space in bytes.",
+		}),
+		usedInodesG: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "used_inodes",
+			Help: "Total number of inodes.",
+		}),
+		txDist: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "transaction_durations_histogram_seconds",
+			Help:    "Transactions latency distributions.",
+			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+		}),
+		txRestart: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "transaction_restart",
+			Help: "The number of times a transaction is restarted.",
+		}),
+		opDist: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "meta_ops_durations_histogram_seconds",
+			Help:    "Operation latency distributions.",
+			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+		}),
 	}
+}
+
+func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
+	if reg == nil {
+		return
+	}
+	reg.MustRegister(m.usedSpaceG)
+	reg.MustRegister(m.usedInodesG)
+	reg.MustRegister(m.txDist)
+	reg.MustRegister(m.txRestart)
+	reg.MustRegister(m.opDist)
+
+	go func() {
+		for {
+			var totalSpace, availSpace, iused, iavail uint64
+			err := m.StatFS(Background, &totalSpace, &availSpace, &iused, &iavail)
+			if err == 0 {
+				m.usedSpaceG.Set(float64(totalSpace - availSpace))
+				m.usedInodesG.Set(float64(iused))
+			}
+			utils.SleepWithJitter(time.Second * 10)
+		}
+	}()
+}
+
+func (m *baseMeta) timeit(start time.Time) {
+	m.opDist.Observe(time.Since(start).Seconds())
 }
 
 func (m *baseMeta) getBase() *baseMeta {
@@ -351,7 +408,7 @@ func (m *baseMeta) cleanupSlices() {
 }
 
 func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	var used, inodes int64
 	var err error
 	err = utils.WithTimeout(func() error {
@@ -420,7 +477,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	if inode == nil || attr == nil {
 		return syscall.EINVAL // bad request
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	parent = m.checkRoot(parent)
 	if name == ".." {
 		if parent == m.root {
@@ -584,7 +641,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
 		return 0
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	var err syscall.Errno
 	if inode == 1 {
 		e := utils.WithTimeout(func() error {
@@ -641,7 +698,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		return syscall.ENOENT
 	}
 
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	if m.checkQuota(4<<10, 1) {
 		return syscall.ENOSPC
 	}
@@ -684,7 +741,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 		return syscall.ENOENT
 	}
 
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	parent = m.checkRoot(parent)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return m.en.doLink(ctx, inode, parent, name, attr)
@@ -695,7 +752,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		*path = target.([]byte)
 		return 0
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	target, err := m.en.doReadlink(ctx, inode)
 	if err != nil {
 		return errno(err)
@@ -716,7 +773,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.EROFS
 	}
 
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	return m.en.doUnlink(ctx, m.checkRoot(parent), name)
 }
 
@@ -734,7 +791,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		return syscall.EROFS
 	}
 
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	return m.en.doRmdir(ctx, m.checkRoot(parent), name)
 }
 
@@ -759,7 +816,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		return syscall.EINVAL
 	}
 
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	return m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
 }
 
@@ -820,7 +877,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	if inode == m.root {
 		attr.Parent = m.root
 	}
@@ -847,7 +904,7 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 		return syscall.EINVAL
 	}
 
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	return m.en.doSetXattr(ctx, m.checkRoot(inode), name, value, flags)
 }
 
@@ -859,7 +916,7 @@ func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 		return syscall.EINVAL
 	}
 
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	return m.en.doRemoveXattr(ctx, m.checkRoot(inode), name)
 }
 

@@ -672,7 +672,7 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 	if len(m.shaResolve) == 0 || m.conf.CaseInsensi || m.prefix != "" {
 		return syscall.ENOTSUP
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	parent = m.checkRoot(parent)
 	args := []string{parent.String(), path,
 		strconv.FormatUint(uint64(ctx.Uid()), 10),
@@ -763,7 +763,7 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	_, _ = khash.Write([]byte(keys[0]))
 	h := uint(khash.Sum32())
 	start := time.Now()
-	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
+	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 	m.txLock(h)
 	defer m.txUnlock(h)
 	// TODO: enable retry for some of idempodent transactions
@@ -778,7 +778,7 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 			err = nil
 		}
 		if err != nil && m.shouldRetry(err, retryOnFailture) {
-			txRestart.Add(1)
+			m.txRestart.Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
@@ -793,7 +793,7 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 }
 
 func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -907,7 +907,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -976,7 +976,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 }
 
 func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
@@ -1942,7 +1942,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 		*chunks = cs
 		return 0
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, 1000000).Result()
 	if err != nil {
 		return errno(err)
@@ -1957,7 +1957,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) s
 }
 
 func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -2016,7 +2016,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 }
 
 func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	f := m.of.find(fout)
 	if f != nil {
 		f.Lock()
@@ -2778,7 +2778,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 }
 
 func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
 	var err error
 	*vbuff, err = m.rdb.HGet(ctx, m.xattrKey(inode), name).Bytes()
@@ -2789,7 +2789,7 @@ func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte)
 }
 
 func (m *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
 	vals, err := m.rdb.HKeys(ctx, m.xattrKey(inode)).Result()
 	if err != nil {

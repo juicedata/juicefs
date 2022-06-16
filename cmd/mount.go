@@ -111,7 +111,7 @@ func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer
 		logger.Fatalf("metrics format error: %v", err)
 	}
 
-	meta.InitMetrics(registerer)
+	m.InitMetrics(registerer)
 	vfs.InitMetrics(registerer)
 	go metric.UpdateMetrics(m, registerer)
 	http.Handle("/metrics", promhttp.HandlerFor(

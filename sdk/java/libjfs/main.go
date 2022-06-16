@@ -415,7 +415,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			if jConf.PushGateway != "" {
 				push2Gateway(jConf.PushGateway, jConf.PushAuth, interval, registry, commonLabels)
 			}
-			meta.InitMetrics(registerer)
+			m.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(m, registerer)
 		}
@@ -506,6 +506,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			go usage.ReportUsage(m, "java-sdk "+version.Version())
 		}
 		jfs, err := fs.NewFileSystem(conf, m, store)
+		jfs.InitMetrics(registerer)
 		if err != nil {
 			logger.Errorf("Initialize failed: %s", err)
 			return nil
