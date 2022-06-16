@@ -28,7 +28,7 @@ inputs:
   mount_point: 
     description: 'mount_point'
     required: true
-    default: '/tmp/vdbench-test'
+    default: '/tmp/vdbench'
   version_count:
     description: 'how many version to test besides dev'
     required: true
@@ -65,7 +65,15 @@ runs:
       run: |
         make juicefs
       
-    - name: Clean Before
+
+    - name: mount 
+      shell: bash
+      run: | 
+        ./juicefs format ${{inputs.meta_url}} vdbench-big
+        ./juicefs mount -d ${{inputs.meta_url}} ${{ inputs.mount_point }}
+        vdbench/vdbench -f ./.github/workflows/resources/vdbench_big_file.conf
+
+    - name: clean
       shell: bash
       run: |
         rm /var/jfsCache/ -rf || true
@@ -76,9 +84,10 @@ runs:
         if [ -n "$uuid" ];then
           sudo ./juicefs destroy --force ${{ inputs.meta_url }} $uuid
         fi
-      
+
     - name: vdbench
       shell: bash
       run: |
-        vdbench/vdbench -f ./.github/workflows/resources/vdbench_big_file.conf
+        ./juicefs format ${{inputs.meta_url}} vdbench-big
+        ./juicefs mount -d ${{inputs.meta_url}} ${{ inputs.mount_point }}        
         vdbench/vdbench -f ./.github/workflows/resources/vdbench_small_file.conf
