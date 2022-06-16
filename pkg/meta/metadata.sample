@@ -4,20 +4,13 @@
     "UUID": "faa27c8f-edab-4791-a4e0-1620b732b343",
     "Storage": "file",
     "Bucket": "/Users/juicefs/.juicefs/local/",
-    "AccessKey": "",
     "SecretKey": "removed",
     "BlockSize": 4096,
     "Compression": "none",
-    "Shards": 0,
-    "HashPrefix": false,
-    "Capacity": 0,
-    "Inodes": 0,
     "EncryptKey": "AQSttslKOSE/hQT/gmaMniCsdPF8JdPRfoYK6zFkdUOnifYwBA==",
     "KeyEncrypted": true,
     "TrashDays": 1,
-    "MetaVersion": 1,
-    "MinClientVersion": "",
-    "MaxClientVersion": ""
+    "MetaVersion": 1
   },
   "Counters": {
     "usedSpace": 115392512,
