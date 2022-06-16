@@ -761,7 +761,7 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	}
 	var khash = fnv.New32()
 	_, _ = khash.Write([]byte(keys[0]))
-	h := int(khash.Sum32())
+	h := uint(khash.Sum32())
 	start := time.Now()
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	m.txLock(h)

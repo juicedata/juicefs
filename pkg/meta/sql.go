@@ -620,8 +620,8 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 			// sqlite only allow one writer at a time
 			inodes[0] = 1
 		}
-		m.txLock(int(inodes[0]))
-		defer m.txUnlock(int(inodes[0]))
+		m.txLock(uint(inodes[0]))
+		defer m.txUnlock(uint(inodes[0]))
 	}
 	var lastErr error
 	for i := 0; i < 50; i++ {
