@@ -86,8 +86,10 @@ jobs:
           ls -lah
           time tar -zxf train.tar.gz
           time tar -zxf test.tar.gz
-          rm train.tar.gz
-          rm test.tar.gz
+          mkdir extra
+          mv test/1.png extra/
+          cp test/digitStruct.mat extra/
+          cp test/see_bboxes.m extra/
           ls -lah
           du -sh
           cd ..
