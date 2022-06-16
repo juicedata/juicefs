@@ -272,7 +272,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "sqlite3://test.db"
-          file_size: "100M"
+          file_size: "200M"
           file_count: 10    
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -463,7 +463,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "etcd://localhost:2379/jfs"
-          file_size: "100M"
+          file_size: "200M"
           file_count: 10    
       - name: Setup upterm session
         if: ${{ failure() }}
