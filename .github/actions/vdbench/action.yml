@@ -46,6 +46,7 @@ runs:
   using: "composite"
   steps:
     - name: Install tools
+      shell: bash
       run: |
         wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
         chmod +x mc 
@@ -58,13 +59,14 @@ runs:
                      -v /tmp/data:/data \
                      -v /tmp/config:/root/.minio \
                      minio/minio server /data
-      shell: bash
+      
     - name: Build linux target
+      shell: bash
       run: |
         make juicefs
-      shell: bash
-
+      
     - name: Clean Before
+      shell: bash
       run: |
         rm /var/jfsCache/ -rf || true
         if [ -d ${{ inputs.mount_point }} ]; then
@@ -74,9 +76,9 @@ runs:
         if [ -n "$uuid" ];then
           sudo ./juicefs destroy --force ${{ inputs.meta_url }} $uuid
         fi
-      shell: bash
-
+      
     - name: vdbench
+      shell: bash
       run: |
         vdbench/vdbench -f ./.github/resources/vdbench_big_file.conf
         vdbench/vdbench -f ./.github/resources/vdbench_small_file.conf
