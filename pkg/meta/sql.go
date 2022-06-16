@@ -307,8 +307,15 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		if ok {
 			_, err = s.Update(&setting{"format", string(data)}, &setting{Name: "format"})
 			return err
+		} else {
+			var set = &setting{"format", string(data)}
+			if n, err := s.Insert(set); err != nil {
+				return err
+			} else if n == 0 {
+				return fmt.Errorf("format is not inserted")
+			}
 		}
-		var set = &setting{"format", string(data)}
+
 		n.Inode = 1
 		n.Mode = 0777
 		var cs = []counter{
@@ -319,7 +326,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 			{"totalInodes", 0},
 			{"nextCleanupSlices", 0},
 		}
-		return mustInsert(s, set, n, &cs)
+		return mustInsert(s, n, &cs)
 	})
 }
 
