@@ -1,13 +1,6 @@
 name: "fio-benchmark"
 
 on:
-  push:
-    branches: 
-      - release-**
-  pull_request:
-    #The branches below must be a subset of the branches above
-    branches: 
-      - release-**
   schedule:
     - cron:  '0 0 * * *'
   workflow_dispatch:
