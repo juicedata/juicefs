@@ -57,8 +57,11 @@ jobs:
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-load-test/mkdir/
+          sudo chmod 777 ../mkdir
           echo "rm 100w files in depth of 10 directory"
+          git clone https://github.com/juicedata/juicefs.git
           cd juicefs
+          make
           sudo ./juicefs rmr ../aaa0/
       - name: Log
         if: ${{ failure() }}
@@ -103,8 +106,11 @@ jobs:
       - name: Rm 100w Files in Depth of 10 Directory
         run: |
           cd /tmp/juicefs-load-test/mkdir/
+          sudo chmod 777 ../mkdir
           echo "rm 100w files in depth of 10 directory"
+          git clone https://github.com/juicedata/juicefs.git
           cd juicefs
+          make
           sudo ./juicefs rmr ../aaa0/
       - name: Log
         if: ${{ failure() }}
@@ -221,8 +227,11 @@ jobs:
       - name: Rm 200w Files in Depth of 20 Directory
         run: |
           cd /tmp/juicefs-load-test/mkdir/
+          sudo chmod 777 ../mkdir
           echo "rm 200w files in depth of 20 directory"
+          git clone https://github.com/juicedata/juicefs.git
           cd juicefs
+          make
           sudo ./juicefs rmr ../aaa2/
       - name: Log
         if: ${{ failure() }}
