@@ -201,9 +201,11 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 }
 
 func (fs *FileSystem) InitMetrics(reg prometheus.Registerer) {
-	reg.MustRegister(fs.readSizeHistogram)
-	reg.MustRegister(fs.writtenSizeHistogram)
-	reg.MustRegister(fs.opsDurationsHistogram)
+	if reg != nil {
+		reg.MustRegister(fs.readSizeHistogram)
+		reg.MustRegister(fs.writtenSizeHistogram)
+		reg.MustRegister(fs.opsDurationsHistogram)
+	}
 }
 
 func (fs *FileSystem) cleanupCache() {
