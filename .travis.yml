@@ -69,7 +69,7 @@ script:
   - cd sdk/java
   - sudo `which mvn` compile -B --quiet || sudo `which mvn` compile -B --quiet
   - sudo `which mvn` test -B
-  - sudo `which mvn` package -B -Dmaven.test.skip=true --quiet || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet
+  - sudo `which mvn` package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true || sudo `which mvn` package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
   - cd ../../
   - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
   - sudo ./juicefs gc localhost
