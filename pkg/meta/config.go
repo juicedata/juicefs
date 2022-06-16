@@ -22,6 +22,7 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -47,26 +48,25 @@ type Format struct {
 	UUID             string
 	Storage          string
 	Bucket           string
-	AccessKey        string
+	AccessKey        string `json:",omitempty"`
 	SecretKey        string `json:",omitempty"`
 	BlockSize        int
-	Compression      string
-	Shards           int
-	HashPrefix       bool
-	Capacity         uint64
-	Inodes           uint64
+	Compression      string `json:",omitempty"`
+	Shards           int    `json:",omitempty"`
+	HashPrefix       bool   `json:",omitempty"`
+	Capacity         uint64 `json:",omitempty"`
+	Inodes           uint64 `json:",omitempty"`
 	EncryptKey       string `json:",omitempty"`
-	KeyEncrypted     bool
-	TrashDays        int
-	MetaVersion      int
-	MinClientVersion string
-	MaxClientVersion string
+	KeyEncrypted     bool   `json:",omitempty"`
+	TrashDays        int    `json:",omitempty"`
+	MetaVersion      int    `json:",omitempty"`
+	MinClientVersion string `json:",omitempty"`
+	MaxClientVersion string `json:",omitempty"`
 }
 
 func (f *Format) update(old *Format, force bool) error {
 	if force {
-		old.RemoveSecret()
-		logger.Warnf("Existing volume will be overwrited: %+v", *old)
+		logger.Warnf("Existing volume will be overwrited: %s", old)
 	} else {
 		var args []interface{}
 		switch {
@@ -101,6 +101,13 @@ func (f *Format) RemoveSecret() {
 	if f.EncryptKey != "" {
 		f.EncryptKey = "removed"
 	}
+}
+
+func (f *Format) String() string {
+	t := *f
+	t.RemoveSecret()
+	s, _ := json.MarshalIndent(t, "", "  ")
+	return string(s)
 }
 
 func (f *Format) CheckVersion() error {

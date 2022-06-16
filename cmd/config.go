@@ -124,8 +124,7 @@ func config(ctx *cli.Context) error {
 		return err
 	}
 	if len(ctx.LocalFlagNames()) == 0 {
-		format.RemoveSecret()
-		printJson(format)
+		fmt.Println(format)
 		return nil
 	}
 

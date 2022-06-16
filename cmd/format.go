@@ -454,7 +454,6 @@ func format(c *cli.Context) error {
 		}
 		logger.Fatalf("format: %s", err)
 	}
-	format.RemoveSecret()
-	logger.Infof("Volume is formatted as %+v", *format)
+	logger.Infof("Volume is formatted as %s", format)
 	return nil
 }
