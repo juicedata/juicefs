@@ -82,14 +82,11 @@ jobs:
           cd data
           wget -O train.tar.gz -nv http://ufldl.stanford.edu/housenumbers/train.tar.gz
           wget -O test.tar.gz -nv http://ufldl.stanford.edu/housenumbers/test.tar.gz
-          wget -O extra.tar.gz -nv http://ufldl.stanford.edu/housenumbers/extra.tar.gz
           ls -lah
           time tar -zxf train.tar.gz
           time tar -zxf test.tar.gz
-          time tar -zxf extra.tar.gz
           rm train.tar.gz
           rm test.tar.gz
-          rm extra.tar.gz
           ls -lah
           du -sh
           cd ..
