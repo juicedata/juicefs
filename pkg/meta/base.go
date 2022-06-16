@@ -142,11 +142,11 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 	}
 }
 
-func (r *baseMeta) txLock(idx int) {
+func (r *baseMeta) txLock(idx uint) {
 	r.txlocks[idx%nlocks].Lock()
 }
 
-func (r *baseMeta) txUnlock(idx int) {
+func (r *baseMeta) txUnlock(idx uint) {
 	r.txlocks[idx%nlocks].Unlock()
 }
 
