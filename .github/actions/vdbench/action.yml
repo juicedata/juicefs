@@ -66,12 +66,17 @@ runs:
         make juicefs
       
 
-    - name: mount 
+    - name: vdbench-big 
       shell: bash
       run: | 
         ./juicefs format ${{inputs.meta_url}} vdbench-big
         ./juicefs mount -d ${{inputs.meta_url}} ${{ inputs.mount_point }}
         vdbench/vdbench -f ./.github/workflows/resources/vdbench_big_file.conf
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: output-big
+        path: output
 
     - name: clean
       shell: bash
@@ -85,14 +90,14 @@ runs:
           sudo ./juicefs destroy --force ${{ inputs.meta_url }} $uuid
         fi
 
-    - name: vdbench
+    - name: vdbench-small
       shell: bash
       run: |
-        ./juicefs format ${{inputs.meta_url}} vdbench-big
+        ./juicefs format ${{inputs.meta_url}} vdbench-small
         ./juicefs mount -d ${{inputs.meta_url}} ${{ inputs.mount_point }}        
         vdbench/vdbench -f ./.github/workflows/resources/vdbench_small_file.conf
 
     - uses: actions/upload-artifact@v3
       with:
-        name: output
+        name: output-small
         path: output
