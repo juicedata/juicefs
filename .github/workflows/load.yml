@@ -45,7 +45,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
-          load_file: "meta_with_4M_Empty_files.json"            
+          load_file: "2M_emtpy_files.dump"            
           
   load-to-mysql:
     runs-on: ubuntu-latest
@@ -63,7 +63,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test" 
-          load_file: "meta_with_4M_Empty_files.json"      
+          load_file: "2M_emtpy_files.dump"      
             
   load-to-redis:
     runs-on: ubuntu-latest
@@ -90,7 +90,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: redis://127.0.0.1:6379/1 
-          load_file: "meta_with_4M_Empty_files.json"      
+          load_file: "2M_emtpy_files.dump"      
 
   load-to-sqlite3:
     runs-on: ubuntu-latest   
@@ -104,7 +104,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: sqlite3://sync-test.db
-          load_file: "meta_with_4M_Empty_files.json"      
+          load_file: "2M_emtpy_files.dump"      
     
   load-to-tikv:
     runs-on: ubuntu-latest
@@ -125,7 +125,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: "tikv://127.0.0.1:2379/load_test"
-          load_file: "meta_with_4M_Empty_files.json"
+          load_file: "2M_emtpy_files.dump"
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -143,7 +143,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: "badger://load_test"
-          load_file: "meta_with_4M_Empty_files.json"    
+          load_file: "2M_emtpy_files.dump"    
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -163,7 +163,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/load_test"
-          load_file: "meta_with_4M_Empty_files.json"   
+          load_file: "2M_emtpy_files.dump"   
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -187,7 +187,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/load_test"
-          load_file: "meta_with_4M_Empty_files.json"   
+          load_file: "2M_emtpy_files.dump"   
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
