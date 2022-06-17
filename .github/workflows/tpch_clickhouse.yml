@@ -256,6 +256,15 @@ jobs:
                                          C_NATION ASC;"
           df -lh
 
+      - name: err
+        if: ${{ failure() }}
+        run: |
+          hello
+
+      - name: Log
+        if: ${{ failure() }}
+        run: |
+          sudo tail -n 100 /var/log/juicefs.log
 
       - name: Send Slack Notification
         if: ${{ failure() }}
