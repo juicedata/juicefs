@@ -4,11 +4,13 @@ on:
   push:
     branches:
     - main
+    - 'release-**'
     paths:
     - '**.go'
   pull_request:
     branches:
-    - main
+    - 'main'
+    - 'release-**'
     paths:
     - '**.yml'
     - '**.go'
