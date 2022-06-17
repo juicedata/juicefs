@@ -181,10 +181,8 @@ runs:
         mp=${{inputs.mount_point}}
         ./juicefs mdtest $meta_url test2 --dirs 10 --depth 3 --files 30 --threads 10 --no-usage-report
         ./juicefs mount -d $meta_url $mp
-        ./juicefs rmr $mp/test2/
+        # ./juicefs rmr $mp/test2/
         declare -a pidlist  
-        ./juicefs rmr $mp/test2/ &
-        pidlist+=($!)
         ./juicefs rmr $mp/test2/ &
         pidlist+=($!)
         ./juicefs rmr $mp/test2/ &
