@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -40,6 +41,21 @@ const (
 	configInode     = minInternalNode + 4
 	trashInode      = meta.TrashInode
 )
+
+var controlMutex sync.Mutex
+var controlHandlers = make(map[uint32]uint64)
+
+func (v *VFS) getControlHandle(pid uint32) uint64 {
+	controlMutex.Lock()
+	defer controlMutex.Unlock()
+	fh := controlHandlers[pid]
+	if fh == 0 {
+		h := v.newHandle(controlInode)
+		fh = h.fh
+		controlHandlers[pid] = fh
+	}
+	return fh
+}
 
 type internalNode struct {
 	inode Ino
