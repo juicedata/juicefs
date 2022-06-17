@@ -19,26 +19,26 @@ package meta
 import "testing"
 
 func TestRemoveSecret(t *testing.T) {
-	format := Format{Name: "test", SecretKey: "testSecret", EncryptKey: "testEncrypt"}
+	format := Format{Name: "test", SecretKey: "testSecret", EncryptKey: "testEncrypt", SessionToken: "token"}
 
 	format.RemoveSecret()
-	if format.SecretKey != "removed" || format.EncryptKey != "removed" {
+	if format.SecretKey != "removed" || format.EncryptKey != "removed" || format.SessionToken != "removed" {
 		t.Fatalf("invalid format: %+v", format)
 	}
 }
 
 func TestEncrypt(t *testing.T) {
-	format := Format{Name: "test", SecretKey: "testSecret", EncryptKey: "testEncrypt"}
+	format := Format{Name: "test", SecretKey: "testSecret", SessionToken: "token", EncryptKey: "testEncrypt"}
 	if err := format.Encrypt(); err != nil {
 		t.Fatalf("Format encrypt: %s", err)
 	}
-	if format.SecretKey == "testSecret" || format.EncryptKey == "testEncrypt" {
+	if format.SecretKey == "testSecret" || format.SessionToken == "token" || format.EncryptKey == "testEncrypt" {
 		t.Fatalf("invalid format: %+v", format)
 	}
 	if err := format.Decrypt(); err != nil {
 		t.Fatalf("Format decrypt: %s", err)
 	}
-	if format.SecretKey != "testSecret" || format.EncryptKey != "testEncrypt" {
+	if format.SecretKey != "testSecret" || format.SessionToken != "token" || format.EncryptKey != "testEncrypt" {
 		t.Fatalf("invalid format: %+v", format)
 	}
 }

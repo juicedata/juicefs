@@ -104,7 +104,7 @@ var defaultConf = Config{
 }
 
 func TestStoreDefault(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	_ = os.RemoveAll(defaultConf.CacheDir)
 	store := NewCachedStore(mem, defaultConf, nil)
 	testStore(t, store)
@@ -117,7 +117,7 @@ func TestStoreDefault(t *testing.T) {
 }
 
 func TestStoreMemCache(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.CacheDir = "memory"
 	store := NewCachedStore(mem, conf, nil)
@@ -130,7 +130,7 @@ func TestStoreMemCache(t *testing.T) {
 	}
 }
 func TestStoreCompressed(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.Compress = "lz4"
 	conf.AutoCreate = false
@@ -139,7 +139,7 @@ func TestStoreCompressed(t *testing.T) {
 }
 
 func TestStoreLimited(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.UploadLimit = 1 << 20
 	conf.DownloadLimit = 1 << 20
@@ -148,7 +148,7 @@ func TestStoreLimited(t *testing.T) {
 }
 
 func TestStoreFull(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.FreeSpace = 0.9999
 	store := NewCachedStore(mem, conf, nil)
@@ -156,7 +156,7 @@ func TestStoreFull(t *testing.T) {
 }
 
 func TestStoreSmallBuffer(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.BufferSize = 1 << 20
 	store := NewCachedStore(mem, conf, nil)
@@ -164,7 +164,7 @@ func TestStoreSmallBuffer(t *testing.T) {
 }
 
 func TestStoreAsync(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.Writeback = true
 	p := filepath.Join(conf.CacheDir, stagingDir, "chunks/0/0/123_0_4")
@@ -186,7 +186,7 @@ func TestStoreAsync(t *testing.T) {
 }
 
 func TestStoreDelayed(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.Writeback = true
 	conf.UploadDelay = time.Millisecond * 200
@@ -204,7 +204,7 @@ func TestStoreDelayed(t *testing.T) {
 }
 
 func TestStoreMultiBuckets(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.HashPrefix = true
 	store := NewCachedStore(mem, conf, nil)
@@ -212,7 +212,7 @@ func TestStoreMultiBuckets(t *testing.T) {
 }
 
 func TestFillCache(t *testing.T) {
-	mem, _ := object.CreateStorage("mem", "", "", "")
+	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.CacheSize = 10
 	_ = os.RemoveAll(conf.CacheDir)
@@ -246,7 +246,7 @@ func TestFillCache(t *testing.T) {
 }
 
 func BenchmarkCachedRead(b *testing.B) {
-	blob, _ := object.CreateStorage("mem", "", "", "")
+	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	config := defaultConf
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
@@ -269,7 +269,7 @@ func BenchmarkCachedRead(b *testing.B) {
 }
 
 func BenchmarkUncachedRead(b *testing.B) {
-	blob, _ := object.CreateStorage("mem", "", "", "")
+	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	config := defaultConf
 	config.BlockSize = 4 << 20
 	config.CacheSize = 0

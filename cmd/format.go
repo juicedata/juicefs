@@ -140,6 +140,10 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Usage: "secret key for object storage (env SECRET_KEY)",
 			},
 			&cli.StringFlag{
+				Name:  "session-token",
+				Usage: "session token for object storage",
+			},
+			&cli.StringFlag{
 				Name:  "encrypt-rsa-key",
 				Usage: "a path to RSA private key (PEM)",
 			},
@@ -207,9 +211,9 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
 	}
 	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.Shards)
+		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
 	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
+		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
 	}
 	if err != nil {
 		return nil, err
@@ -353,8 +357,12 @@ func format(c *cli.Context) error {
 				format.AccessKey = c.String(flag)
 			case "secret-key":
 				encrypted = format.KeyEncrypted
+				format.Decrypt()
 				format.SecretKey = c.String(flag)
-				format.KeyEncrypted = false
+			case "session-key":
+				encrypted = format.KeyEncrypted
+				format.Decrypt()
+				format.SessionToken = c.String(flag)
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
@@ -374,21 +382,22 @@ func format(c *cli.Context) error {
 	} else if err.Error() == "database is not formatted" {
 		create = true
 		format = &meta.Format{
-			Name:        name,
-			UUID:        uuid.New().String(),
-			Storage:     c.String("storage"),
-			Bucket:      c.String("bucket"),
-			AccessKey:   c.String("access-key"),
-			SecretKey:   c.String("secret-key"),
-			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
-			Shards:      c.Int("shards"),
-			HashPrefix:  c.Bool("hash-prefix"),
-			Capacity:    c.Uint64("capacity") << 30,
-			Inodes:      c.Uint64("inodes"),
-			BlockSize:   fixObjectSize(c.Int("block-size")),
-			Compression: c.String("compress"),
-			TrashDays:   c.Int("trash-days"),
-			MetaVersion: 1,
+			Name:         name,
+			UUID:         uuid.New().String(),
+			Storage:      c.String("storage"),
+			Bucket:       c.String("bucket"),
+			AccessKey:    c.String("access-key"),
+			SecretKey:    c.String("secret-key"),
+			SessionToken: c.String("session-token"),
+			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
+			Shards:       c.Int("shards"),
+			HashPrefix:   c.Bool("hash-prefix"),
+			Capacity:     c.Uint64("capacity") << 30,
+			Inodes:       c.Uint64("inodes"),
+			BlockSize:    fixObjectSize(c.Int("block-size")),
+			Compression:  c.String("compress"),
+			TrashDays:    c.Int("trash-days"),
+			MetaVersion:  1,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -397,6 +406,10 @@ func format(c *cli.Context) error {
 		if format.SecretKey == "" && os.Getenv("SECRET_KEY") != "" {
 			format.SecretKey = os.Getenv("SECRET_KEY")
 			_ = os.Unsetenv("SECRET_KEY")
+		}
+		if format.SessionToken == "" && os.Getenv("SESSION_TOKEN") != "" {
+			format.SessionToken = os.Getenv("SESSION_TOKEN")
+			_ = os.Unsetenv("SESSION_TOKEN")
 		}
 	} else {
 		logger.Fatalf("Load metadata: %s", err)

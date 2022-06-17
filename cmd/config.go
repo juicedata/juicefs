@@ -71,6 +71,10 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 				Name:  "secret-key",
 				Usage: "secret key for object storage",
 			},
+			&cli.StringFlag{
+				Name:  "session-token",
+				Usage: "session token for object storage",
+			},
 			&cli.BoolFlag{
 				Name:  "encrypt-secret",
 				Usage: "encrypt the secret key if it was previously stored in plain format",
@@ -167,8 +171,18 @@ func config(ctx *cli.Context) error {
 		case "secret-key": // always update
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
 			encrypted = format.KeyEncrypted
+			if err := format.Decrypt(); err != nil {
+				logger.Fatalf("decrypt secrets: %s", err)
+			}
 			format.SecretKey = ctx.String(flag)
-			format.KeyEncrypted = false
+			storage = true
+		case "session-token": // always update
+			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
+			encrypted = format.KeyEncrypted
+			if err := format.Decrypt(); err != nil {
+				logger.Fatalf("decrypt secrets: %s", err)
+			}
+			format.SessionToken = ctx.String(flag)
 			storage = true
 		case "trash-days":
 			if new := ctx.Int(flag); new != format.TrashDays {

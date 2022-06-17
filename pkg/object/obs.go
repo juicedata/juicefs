@@ -253,14 +253,14 @@ func (s *obsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func autoOBSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
+func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {
 	region := obsDefaultRegion
 	if r := os.Getenv("HWCLOUD_DEFAULT_REGION"); r != "" {
 		region = r
 	}
 	endpoint := fmt.Sprintf("https://obs.%s.myhuaweicloud.com", region)
 
-	obsCli, err := obs.New(accessKey, secretKey, endpoint)
+	obsCli, err := obs.New(accessKey, secretKey, endpoint, obs.WithSecurityToken(token))
 	if err != nil {
 		return "", err
 	}
@@ -279,7 +279,7 @@ func autoOBSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	return "", fmt.Errorf("bucket %q does not exist", bucketName)
 }
 
-func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -300,7 +300,7 @@ func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 
 	var region string
 	if len(hostParts) == 1 {
-		if endpoint, err = autoOBSEndpoint(bucketName, accessKey, secretKey); err != nil {
+		if endpoint, err = autoOBSEndpoint(bucketName, accessKey, secretKey, token); err != nil {
 			return nil, fmt.Errorf("cannot get location of bucket %s: %q", bucketName, err)
 		}
 		if !strings.HasPrefix(endpoint, "http") {
@@ -325,7 +325,8 @@ func newOBS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 
 	// Empty proxy url string has no effect
 	// there is a bug in the retry of PUT (did not call Seek(0,0) before retry), so disable the retry here
-	c, err := obs.New(accessKey, secretKey, endpoint, obs.WithProxyUrl(urlString), obs.WithMaxRetryCount(0))
+	c, err := obs.New(accessKey, secretKey, endpoint, obs.WithSecurityToken(token),
+		obs.WithProxyUrl(urlString), obs.WithMaxRetryCount(0))
 	if err != nil {
 		return nil, fmt.Errorf("fail to initialize OBS: %q", err)
 	}

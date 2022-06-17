@@ -263,12 +263,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 }
 
 func TestMem(t *testing.T) {
-	m, _ := newMem("", "", "")
+	m, _ := newMem("", "", "", "")
 	testStorage(t, m)
 }
 
 func TestDisk(t *testing.T) {
-	s, _ := newDisk("/tmp/abc/", "", "")
+	s, _ := newDisk("/tmp/abc/", "", "", "")
 	testStorage(t, s)
 }
 
@@ -277,7 +277,7 @@ func TestQingStor(t *testing.T) {
 		t.SkipNow()
 	}
 	s, _ := newQingStor(os.Getenv("QY_ENDPOINT"),
-		os.Getenv("QY_ACCESS_KEY"), os.Getenv("QY_SECRET_KEY"))
+		os.Getenv("QY_ACCESS_KEY"), os.Getenv("QY_SECRET_KEY"), "")
 	testStorage(t, s)
 
 	//private cloud
@@ -285,7 +285,7 @@ func TestQingStor(t *testing.T) {
 		t.SkipNow()
 	}
 	s2, _ := newQingStor("http://test.jn1.is.shanhe.com",
-		os.Getenv("PRIVATE_QY_ACCESS_KEY"), os.Getenv("PRIVATE_QY_SECRET_KEY"))
+		os.Getenv("PRIVATE_QY_ACCESS_KEY"), os.Getenv("PRIVATE_QY_SECRET_KEY"), "")
 	testStorage(t, s2)
 }
 
@@ -294,7 +294,9 @@ func TestS3(t *testing.T) {
 		t.SkipNow()
 	}
 	s, _ := newS3(os.Getenv("AWS_ENDPOINT"),
-		os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"))
+		os.Getenv("AWS_ACCESS_KEY_ID"),
+		os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		os.Getenv("AWS_SESSION_TOKEN"))
 	testStorage(t, s)
 }
 
@@ -303,7 +305,8 @@ func TestOSS(t *testing.T) {
 		t.SkipNow()
 	}
 	s, _ := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
-		os.Getenv("ALICLOUD_ACCESS_KEY_ID"), os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"))
+		os.Getenv("ALICLOUD_ACCESS_KEY_ID"),
+		os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"), "")
 	testStorage(t, s)
 }
 
@@ -312,7 +315,7 @@ func TestUFile(t *testing.T) {
 		t.SkipNow()
 	}
 	ufile, _ := newUFile(os.Getenv("UCLOUD_ENDPOINT"),
-		os.Getenv("UCLOUD_PUBLIC_KEY"), os.Getenv("UCLOUD_PRIVATE_KEY"))
+		os.Getenv("UCLOUD_PUBLIC_KEY"), os.Getenv("UCLOUD_PRIVATE_KEY"), "")
 	testStorage(t, ufile)
 }
 
@@ -320,7 +323,7 @@ func TestGS(t *testing.T) {
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		t.SkipNow()
 	}
-	gs, _ := newGS(os.Getenv("GOOGLE_ENDPOINT"), "", "")
+	gs, _ := newGS(os.Getenv("GOOGLE_ENDPOINT"), "", "", "")
 	testStorage(t, gs)
 }
 
@@ -329,7 +332,7 @@ func TestQiniu(t *testing.T) {
 		t.SkipNow()
 	}
 	qiniu, _ := newQiniu(os.Getenv("QINIU_ENDPOINT"),
-		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
+		os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"), "")
 	testStorage(t, qiniu)
 	//qiniu, _ = newQiniu("https://test.cn-north-1-s3.qiniu.com",
 	//	os.Getenv("QINIU_ACCESS_KEY"), os.Getenv("QINIU_SECRET_KEY"))
@@ -341,7 +344,7 @@ func TestKS3(t *testing.T) {
 		t.SkipNow()
 	}
 	ks3, _ := newKS3(os.Getenv("KS3_ENDPOINT"),
-		os.Getenv("KS3_ACCESS_KEY"), os.Getenv("KS3_SECRET_KEY"))
+		os.Getenv("KS3_ACCESS_KEY"), os.Getenv("KS3_SECRET_KEY"), "")
 	testStorage(t, ks3)
 }
 
@@ -351,7 +354,7 @@ func TestCOS(t *testing.T) {
 	}
 	cos, _ := newCOS(
 		os.Getenv("COS_ENDPOINT"),
-		os.Getenv("COS_SECRETID"), os.Getenv("COS_SECRETKEY"))
+		os.Getenv("COS_SECRETID"), os.Getenv("COS_SECRETKEY"), "")
 	testStorage(t, cos)
 }
 
@@ -360,7 +363,7 @@ func TestAzure(t *testing.T) {
 		t.SkipNow()
 	}
 	abs, _ := newWabs(os.Getenv("AZURE_ENDPOINT"),
-		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"))
+		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"), "")
 	testStorage(t, abs)
 }
 
@@ -369,7 +372,7 @@ func TestNOS(t *testing.T) {
 		t.SkipNow()
 	}
 	nos, _ := newNOS(os.Getenv("NOS_ENDPOINT"),
-		os.Getenv("NOS_ACCESS_KEY"), os.Getenv("NOS_SECRET_KEY"))
+		os.Getenv("NOS_ACCESS_KEY"), os.Getenv("NOS_SECRET_KEY"), "")
 	testStorage(t, nos)
 }
 
@@ -378,7 +381,7 @@ func TestJSS(t *testing.T) {
 		t.SkipNow()
 	}
 	jss, _ := newJSS(os.Getenv("JSS_ENDPOINT"),
-		os.Getenv("JSS_ACCESS_KEY"), os.Getenv("JSS_SECRET_KEY"))
+		os.Getenv("JSS_ACCESS_KEY"), os.Getenv("JSS_SECRET_KEY"), "")
 	testStorage(t, jss)
 }
 
@@ -387,7 +390,7 @@ func TestSpeedy(t *testing.T) {
 		t.SkipNow()
 	}
 	cos, _ := newSpeedy(os.Getenv("SPEEDY_ENDPOINT"),
-		os.Getenv("SPEEDY_ACCESS_KEY"), os.Getenv("SPEEDY_SECRET_KEY"))
+		os.Getenv("SPEEDY_ACCESS_KEY"), os.Getenv("SPEEDY_SECRET_KEY"), "")
 	testStorage(t, cos)
 }
 
@@ -395,7 +398,7 @@ func TestB2(t *testing.T) {
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
 	}
-	b, err := newB2(os.Getenv("B2_ENDPOINT"), os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"))
+	b, err := newB2(os.Getenv("B2_ENDPOINT"), os.Getenv("B2_ACCOUNT_ID"), os.Getenv("B2_APP_KEY"), "")
 	if err != nil {
 		t.Fatalf("create B2: %s", err)
 	}
@@ -406,7 +409,7 @@ func TestSpace(t *testing.T) {
 	if os.Getenv("SPACE_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b, _ := newSpace(os.Getenv("SPACE_ENDPOINT"), os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"))
+	b, _ := newSpace(os.Getenv("SPACE_ENDPOINT"), os.Getenv("SPACE_ACCESS_KEY"), os.Getenv("SPACE_SECRET_KEY"), "")
 	testStorage(t, b)
 }
 
@@ -415,7 +418,7 @@ func TestBOS(t *testing.T) {
 		t.SkipNow()
 	}
 	b, _ := newBOS(os.Getenv("BDCLOUD_ENDPOINT"),
-		os.Getenv("BDCLOUD_ACCESS_KEY"), os.Getenv("BDCLOUD_SECRET_KEY"))
+		os.Getenv("BDCLOUD_ACCESS_KEY"), os.Getenv("BDCLOUD_SECRET_KEY"), "")
 	testStorage(t, b)
 }
 
@@ -423,7 +426,7 @@ func TestSftp(t *testing.T) {
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
-	b, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
+	b, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
 	testStorage(t, b)
 }
 
@@ -432,7 +435,7 @@ func TestOBS(t *testing.T) {
 		t.SkipNow()
 	}
 	b, _ := newOBS(os.Getenv("HWCLOUD_ENDPOINT"),
-		os.Getenv("HWCLOUD_ACCESS_KEY"), os.Getenv("HWCLOUD_SECRET_KEY"))
+		os.Getenv("HWCLOUD_ACCESS_KEY"), os.Getenv("HWCLOUD_SECRET_KEY"), "")
 	testStorage(t, b)
 }
 
@@ -440,7 +443,7 @@ func TestHDFS(t *testing.T) {
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}
-	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
+	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
 	testStorage(t, dfs)
 }
 
@@ -449,7 +452,7 @@ func TestOOS(t *testing.T) {
 		t.SkipNow()
 	}
 	b, _ := newOOS(os.Getenv("OOS_ENDPOINT"),
-		os.Getenv("OOS_ACCESS_KEY"), os.Getenv("OOS_SECRET_KEY"))
+		os.Getenv("OOS_ACCESS_KEY"), os.Getenv("OOS_SECRET_KEY"), "")
 	testStorage(t, b)
 }
 
@@ -457,7 +460,7 @@ func TestScw(t *testing.T) {
 	if os.Getenv("SCW_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	b, _ := newScw(os.Getenv("SCW_ENDPOINT"), os.Getenv("SCW_ACCESS_KEY"), os.Getenv("SCW_SECRET_KEY"))
+	b, _ := newScw(os.Getenv("SCW_ENDPOINT"), os.Getenv("SCW_ACCESS_KEY"), os.Getenv("SCW_SECRET_KEY"), "")
 	testStorage(t, b)
 }
 
@@ -465,7 +468,7 @@ func TestMinIO(t *testing.T) {
 	if os.Getenv("MINIO_TEST_BUCKET") == "" {
 		t.SkipNow()
 	}
-	b, _ := newMinio(os.Getenv("MINIO_TEST_BUCKET"), os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"))
+	b, _ := newMinio(os.Getenv("MINIO_TEST_BUCKET"), os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"), "")
 	testStorage(t, b)
 }
 
@@ -478,7 +481,7 @@ func TestTiKV(t *testing.T) {
 	if os.Getenv("TIKV_ADDR") == "" {
 		t.SkipNow()
 	}
-	s, err := newTiKV(os.Getenv("TIKV_ADDR"), "", "")
+	s, err := newTiKV(os.Getenv("TIKV_ADDR"), "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -493,7 +496,7 @@ func TestRedis(t *testing.T) {
 	rdb := redis.NewClient(opt)
 	_ = rdb.FlushDB(context.Background())
 
-	s, err := newRedis(os.Getenv("REDIS_ADDR"), "", "")
+	s, err := newRedis(os.Getenv("REDIS_ADDR"), "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +507,7 @@ func TestSwift(t *testing.T) {
 	if os.Getenv("SWIFT_ADDR") == "" {
 		t.SkipNow()
 	}
-	s, err := newSwiftOSS(os.Getenv("SWIFT_ADDR"), "", "")
+	s, err := newSwiftOSS(os.Getenv("SWIFT_ADDR"), "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,12 +518,12 @@ func TestWebDAV(t *testing.T) {
 	if os.Getenv("WEBDAV_TEST_BUCKET") == "" {
 		t.SkipNow()
 	}
-	s, _ := newWebDAV(os.Getenv("WEBDAV_TEST_BUCKET"), "", "")
+	s, _ := newWebDAV(os.Getenv("WEBDAV_TEST_BUCKET"), "", "", "")
 	testStorage(t, s)
 }
 
 func TestEncrypted(t *testing.T) {
-	s, _ := CreateStorage("mem", "", "", "")
+	s, _ := CreateStorage("mem", "", "", "", "")
 	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	kc := NewRSAEncryptor(privkey)
 	dc := NewAESEncryptor(kc)
@@ -532,7 +535,7 @@ func TestMarsharl(t *testing.T) {
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}
-	s, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
+	s, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
 	if err := s.Put("hello", bytes.NewReader([]byte("world"))); err != nil {
 		t.Fatalf("PUT failed: %s", err)
 	}
@@ -561,7 +564,7 @@ func TestMarsharl(t *testing.T) {
 }
 
 func TestSharding(t *testing.T) {
-	s, _ := NewSharded("mem", "%d", "", "", 10)
+	s, _ := NewSharded("mem", "%d", "", "", "", 10)
 	testStorage(t, s)
 }
 
@@ -597,7 +600,7 @@ func TestMySQL(t *testing.T) {
 }
 
 func TestNameString(t *testing.T) {
-	s, _ := newMem("test", "", "")
+	s, _ := newMem("test", "", "", "")
 	s = WithPrefix(s, "a/")
 	s = WithPrefix(s, "b/")
 	if s.String() != "mem://test/a/b/" {
@@ -609,7 +612,7 @@ func TestEtcd(t *testing.T) {
 	if os.Getenv("ETCD_ADDR") == "" {
 		t.SkipNow()
 	}
-	s, _ := newEtcd(os.Getenv("ETCD_ADDR"), "", "")
+	s, _ := newEtcd(os.Getenv("ETCD_ADDR"), "", "", "")
 	testStorage(t, s)
 }
 
@@ -625,7 +628,7 @@ func TestEOS(t *testing.T) {
 	if os.Getenv("EOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	s, _ := newEos(os.Getenv("EOS_ENDPOINT"), os.Getenv("EOS_ACCESS_KEY"), os.Getenv("EOS_SECRET_KEY"))
+	s, _ := newEos(os.Getenv("EOS_ENDPOINT"), os.Getenv("EOS_ACCESS_KEY"), os.Getenv("EOS_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 
@@ -633,7 +636,7 @@ func TestWASABI(t *testing.T) {
 	if os.Getenv("WASABI_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	s, _ := newWasabi(os.Getenv("WASABI_ENDPOINT"), os.Getenv("WASABI_ACCESS_KEY"), os.Getenv("WASABI_SECRET_KEY"))
+	s, _ := newWasabi(os.Getenv("WASABI_ENDPOINT"), os.Getenv("WASABI_ACCESS_KEY"), os.Getenv("WASABI_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 
@@ -641,7 +644,7 @@ func TestSCS(t *testing.T) {
 	if os.Getenv("SCS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	s, _ := newSCS(os.Getenv("SCS_ENDPOINT"), os.Getenv("SCS_ACCESS_KEY"), os.Getenv("SCS_SECRET_KEY"))
+	s, _ := newSCS(os.Getenv("SCS_ENDPOINT"), os.Getenv("SCS_ACCESS_KEY"), os.Getenv("SCS_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 
@@ -649,7 +652,7 @@ func TestIBMCOS(t *testing.T) {
 	if os.Getenv("IBMCOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	s, _ := newIBMCOS(os.Getenv("IBMCOS_ENDPOINT"), os.Getenv("IBMCOS_ACCESS_KEY"), os.Getenv("IBMCOS_SECRET_KEY"))
+	s, _ := newIBMCOS(os.Getenv("IBMCOS_ENDPOINT"), os.Getenv("IBMCOS_ACCESS_KEY"), os.Getenv("IBMCOS_SECRET_KEY"), "")
 	testStorage(t, s)
 }
 

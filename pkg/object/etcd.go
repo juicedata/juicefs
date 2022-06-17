@@ -155,7 +155,7 @@ func buildTlsConfig(u *url.URL) (*tls.Config, error) {
 	return nil, nil
 }
 
-func newEtcd(addr, user, passwd string) (ObjectStorage, error) {
+func newEtcd(addr, user, passwd, token string) (ObjectStorage, error) {
 	if !strings.Contains(addr, "://") {
 		addr = "http://" + addr
 	}

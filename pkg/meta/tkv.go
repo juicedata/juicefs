@@ -2526,6 +2526,10 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
 	}
+	if dm.Setting.SessionToken != "" {
+		dm.Setting.SessionToken = "removed"
+		logger.Warnf("Session token is removed for the sake of safety")
+	}
 	bw, err := dm.writeJsonWithOutTree(w)
 	if err != nil {
 		return err

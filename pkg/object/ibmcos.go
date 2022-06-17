@@ -233,7 +233,7 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func newIBMCOS(endpoint, apiKey, serviceInstanceID string) (ObjectStorage, error) {
+func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

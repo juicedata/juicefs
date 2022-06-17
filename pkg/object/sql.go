@@ -184,21 +184,21 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 }
 
 func init() {
-	Register("sqlite3", func(addr, user, pass string) (ObjectStorage, error) {
+	Register("sqlite3", func(addr, user, pass, token string) (ObjectStorage, error) {
 		p := strings.Index(addr, "://")
 		if p > 0 {
 			addr = addr[p+3:]
 		}
 		return newSQLStore("sqlite3", addr, user, pass)
 	})
-	Register("mysql", func(addr, user, pass string) (ObjectStorage, error) {
+	Register("mysql", func(addr, user, pass, token string) (ObjectStorage, error) {
 		p := strings.Index(addr, "://")
 		if p > 0 {
 			addr = addr[p+3:]
 		}
 		return newSQLStore("mysql", addr, user, pass)
 	})
-	Register("postgres", func(addr, user, pass string) (ObjectStorage, error) {
+	Register("postgres", func(addr, user, pass, token string) (ObjectStorage, error) {
 		return newSQLStore("postgres", addr, user, pass)
 	})
 }

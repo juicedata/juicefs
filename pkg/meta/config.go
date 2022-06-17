@@ -50,6 +50,7 @@ type Format struct {
 	Bucket           string
 	AccessKey        string `json:",omitempty"`
 	SecretKey        string `json:",omitempty"`
+	SessionToken     string `json:",omitempty"`
 	BlockSize        int
 	Compression      string `json:",omitempty"`
 	Shards           int    `json:",omitempty"`
@@ -97,6 +98,9 @@ func (f *Format) update(old *Format, force bool) error {
 func (f *Format) RemoveSecret() {
 	if f.SecretKey != "" {
 		f.SecretKey = "removed"
+	}
+	if f.SessionToken != "" {
+		f.SessionToken = "removed"
 	}
 	if f.EncryptKey != "" {
 		f.EncryptKey = "removed"
@@ -149,37 +153,37 @@ func (f *Format) Encrypt() error {
 	if err != nil {
 		return fmt.Errorf("new GCM: %s", err)
 	}
-	nonce := make([]byte, 12)
-	encrypt := func(k string) string {
-		ciphertext := aesgcm.Seal(nil, nonce, []byte(k), nil)
+	encrypt := func(k *string) {
+		if *k == "" {
+			return
+		}
+		nonce := make([]byte, 12)
+		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+			logger.Fatalf("generate nonce for secret key: %s", err)
+		}
+		ciphertext := aesgcm.Seal(nil, nonce, []byte(*k), nil)
 		buf := make([]byte, 12+len(ciphertext))
 		copy(buf, nonce)
 		copy(buf[12:], ciphertext)
-		return base64.StdEncoding.EncodeToString(buf)
+		*k = base64.StdEncoding.EncodeToString(buf)
 	}
 
-	if f.SecretKey != "" {
-		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-			return fmt.Errorf("generate nonce for secret key: %s", err)
-		}
-		f.SecretKey = encrypt(f.SecretKey)
-	}
-	if f.EncryptKey != "" {
-		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-			return fmt.Errorf("generate nonce for encrypt key: %s", err)
-		}
-		f.EncryptKey = encrypt(f.EncryptKey)
-	}
+	encrypt(&f.SecretKey)
+	encrypt(&f.SessionToken)
+	encrypt(&f.EncryptKey)
 	f.KeyEncrypted = true
 	return nil
 }
 
 func (f *Format) Decrypt() error {
-	if !f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" {
+	if !f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" && f.SessionToken == "" {
 		return nil
 	}
 	if f.SecretKey == "removed" {
 		return fmt.Errorf("secret key was removed; please correct it with `config` command")
+	}
+	if f.SessionToken == "removed" {
+		return fmt.Errorf("session token was removed; please correct it with `config` command")
 	}
 	key := md5.Sum([]byte(f.UUID))
 	block, err := aes.NewCipher(key[:])
@@ -191,6 +195,9 @@ func (f *Format) Decrypt() error {
 		return fmt.Errorf("new GCM: %s", err)
 	}
 	decrypt := func(k *string) error {
+		if *k == "" {
+			return nil
+		}
 		buf, err := base64.StdEncoding.DecodeString(*k)
 		if err != nil {
 			return fmt.Errorf("decode key: %s", err)
@@ -203,15 +210,14 @@ func (f *Format) Decrypt() error {
 		return nil
 	}
 
-	if f.SecretKey != "" {
-		if err = decrypt(&f.SecretKey); err != nil {
-			return err
-		}
+	if err = decrypt(&f.SecretKey); err != nil {
+		return err
 	}
-	if f.EncryptKey != "" {
-		if err = decrypt(&f.EncryptKey); err != nil {
-			return err
-		}
+	if err = decrypt(&f.EncryptKey); err != nil {
+		return err
+	}
+	if err = decrypt(&f.SessionToken); err != nil {
+		return err
 	}
 	f.KeyEncrypted = false
 	return nil

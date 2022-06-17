@@ -33,7 +33,7 @@ func TestSync(t *testing.T) {
 	minioDir := "synctest"
 	localDir := "/tmp/synctest"
 	defer os.RemoveAll(localDir)
-	storage, err := object.CreateStorage("minio", os.Getenv("MINIO_TEST_BUCKET"), os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"))
+	storage, err := object.CreateStorage("minio", os.Getenv("MINIO_TEST_BUCKET"), os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"), "")
 	if err != nil {
 		t.Fatalf("create storage failed: %v", err)
 	}

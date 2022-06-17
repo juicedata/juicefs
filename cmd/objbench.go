@@ -66,6 +66,10 @@ Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs
 				Name:  "secret-key",
 				Usage: "secret key for object storage (env SECRET_KEY)",
 			},
+			&cli.StringFlag{
+				Name:  "session-token",
+				Usage: "session token for object storage",
+			},
 			&cli.UintFlag{
 				Name:  "block-size",
 				Value: 4096,
@@ -114,14 +118,17 @@ func objbench(ctx *cli.Context) error {
 			logger.Fatalf("%s should not be set to zero", name)
 		}
 	}
-	ak, sk := ctx.String("access-key"), ctx.String("secret-key")
+	ak, sk, token := ctx.String("access-key"), ctx.String("secret-key"), ctx.String("session-token")
 	if ak == "" {
 		ak = os.Getenv("ACCESS_KEY")
 	}
 	if sk == "" {
 		sk = os.Getenv("SECRET_KEY")
 	}
-	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ak, sk)
+	if token == "" {
+		token = os.Getenv("SESSION_TOKEN")
+	}
+	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ak, sk, token)
 	if err != nil {
 		logger.Fatalf("create storage failed: %v", err)
 	}

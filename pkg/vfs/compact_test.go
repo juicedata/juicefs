@@ -35,7 +35,7 @@ func TestCompact(t *testing.T) {
 		CacheSize:  10,
 		CacheDir:   "memory",
 	}
-	blob, _ := object.CreateStorage("mem", "", "", "")
+	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(blob, cconf, nil)
 
 	// prepare the slices
