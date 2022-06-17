@@ -55,14 +55,6 @@ var (
 	}, func() float64 {
 		return time.Since(start).Seconds()
 	})
-	usedSpace = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "used_space",
-		Help: "Total used space in bytes.",
-	})
-	usedInodes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "used_inodes",
-		Help: "Total number of inodes.",
-	})
 )
 
 func UpdateMetrics(m meta.Meta, registerer prometheus.Registerer) {
@@ -72,18 +64,6 @@ func UpdateMetrics(m meta.Meta, registerer prometheus.Registerer) {
 	registerer.MustRegister(cpu)
 	registerer.MustRegister(memory)
 	registerer.MustRegister(uptime)
-	registerer.MustRegister(usedSpace)
-	registerer.MustRegister(usedInodes)
-
-	for {
-		var totalSpace, availSpace, iused, iavail uint64
-		err := m.StatFS(meta.Background, &totalSpace, &availSpace, &iused, &iavail)
-		if err == 0 {
-			usedSpace.Set(float64(totalSpace - availSpace))
-			usedInodes.Set(float64(iused))
-		}
-		utils.SleepWithJitter(time.Second * 10)
-	}
 }
 
 func RegisterToConsul(consulAddr, metricsAddr, mountPoint string) {

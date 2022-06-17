@@ -16,7 +16,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/metric"
-	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -181,7 +180,7 @@ $ juicefs mdtest redis://localhost /test1`,
 	}
 }
 
-func initForMdtest(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
+func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	m := meta.NewClient(metaUrl, metaConf)
 	format, err := m.Load(true)
@@ -220,7 +219,12 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, conf.Meta.MountPoint)
 	}
-	return m, store, conf
+	jfs, err := fs.NewFileSystem(conf, m, store)
+	if err != nil {
+		logger.Fatalf("initialize failed: %s", err)
+	}
+	jfs.InitMetrics(registerer)
+	return jfs
 }
 
 func mdtest(c *cli.Context) error {
@@ -228,11 +232,7 @@ func mdtest(c *cli.Context) error {
 	metaUrl := c.Args().Get(0)
 	rootDir := c.Args().Get(1)
 	removePassword(metaUrl)
-	m, store, conf := initForMdtest(c, "mdtest", metaUrl)
-	jfs, err := fs.NewFileSystem(conf, m, store)
-	if err != nil {
-		logger.Fatalf("initialize failed: %s", err)
-	}
+	jfs := initForMdtest(c, "mdtest", metaUrl)
 	runTest(jfs, rootDir, c.Int("threads"), c.Int("dirs"), c.Int("depth"), c.Int("files"), c.Int("write"))
-	return m.CloseSession()
+	return jfs.Meta().CloseSession()
 }
