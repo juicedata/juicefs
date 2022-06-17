@@ -357,11 +357,15 @@ func format(c *cli.Context) error {
 				format.AccessKey = c.String(flag)
 			case "secret-key":
 				encrypted = format.KeyEncrypted
-				format.Decrypt()
+				if err := format.Decrypt(); err != nil {
+					logger.Fatalf("decrypt secrets: %s", err)
+				}
 				format.SecretKey = c.String(flag)
 			case "session-key":
 				encrypted = format.KeyEncrypted
-				format.Decrypt()
+				if err := format.Decrypt(); err != nil {
+					logger.Fatalf("decrypt secrets: %s", err)
+				}
 				format.SessionToken = c.String(flag)
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
