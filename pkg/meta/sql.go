@@ -672,7 +672,8 @@ func (m *dbMeta) roTxn(f func(s *xorm.Session) error) error {
 		if err != nil && opt.ReadOnly && (strings.Contains(err.Error(), "READ") || strings.Contains(err.Error(), "driver does not support read-only transactions")) {
 			logger.Warnf("the database does not support read-only transaction")
 			m.noReadOnlyTxn = true
-			err = s.Begin() // use default level
+			opt = sql.TxOptions{} // use default level
+			err = s.BeginTx(&opt)
 		}
 		if err != nil {
 			logger.Debugf("Start transaction failed, try again (tried %d): %s", i+1, err)
