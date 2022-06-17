@@ -158,6 +158,8 @@ type dbMeta struct {
 	*baseMeta
 	db   *xorm.Engine
 	snap *dbSnap
+
+	noReadOnlyTxn bool
 }
 
 type dbSnap struct {
@@ -658,19 +660,27 @@ func (m *dbMeta) roTxn(f func(s *xorm.Session) error) error {
 	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
 	s := m.db.NewSession()
 	defer s.Close()
-	var opt = sql.TxOptions{
-		Isolation: sql.LevelRepeatableRead,
-		ReadOnly:  true,
+	var opt sql.TxOptions
+	if !m.noReadOnlyTxn {
+		opt.ReadOnly = true
+		opt.Isolation = sql.LevelRepeatableRead
 	}
+
 	var lastErr error
 	for i := 0; i < 50; i++ {
-		if err := s.BeginTx(&opt); err != nil {
+		err := s.BeginTx(&opt)
+		if err != nil && opt.ReadOnly && (strings.Contains(err.Error(), "READ") || strings.Contains(err.Error(), "driver does not support read-only transactions")) {
+			logger.Warnf("the database does not support read-only transaction")
+			m.noReadOnlyTxn = true
+			err = s.Begin() // use default level
+		}
+		if err != nil {
 			logger.Debugf("Start transaction failed, try again (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(i*i))
 			continue
 		}
-		err := f(s)
+		err = f(s)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
