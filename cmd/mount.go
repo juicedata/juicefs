@@ -212,14 +212,16 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 			}
 		}
 	}
-	sqliteScheme := "sqlite3://"
-	if strings.HasPrefix(addr, sqliteScheme) {
-		path := addr[len(sqliteScheme):]
-		path2, err := filepath.Abs(path)
-		if err == nil && path2 != path {
-			for i, a := range os.Args {
-				if a == addr {
-					os.Args[i] = sqliteScheme + path2
+	embeddedSchemes := []string{"sqlite3://", "badger://"}
+	for _, es := range embeddedSchemes {
+		if strings.HasPrefix(addr, es) {
+			path := addr[len(es):]
+			path2, err := filepath.Abs(path)
+			if err == nil && path2 != path {
+				for i, a := range os.Args {
+					if a == addr {
+						os.Args[i] = es + path2
+					}
 				}
 			}
 		}
