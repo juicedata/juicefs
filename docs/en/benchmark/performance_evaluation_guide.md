@@ -86,7 +86,7 @@ juicefs objbench \
     --storage s3 \
     --access-key myAccessKey \
     --secret-key mySecretKey \
-    --bucket https://mybucket.s3.us-east-2.amazonaws.com
+    https://mybucket.s3.us-east-2.amazonaws.com
 ```
 
 The test results are shown in the figure below:
