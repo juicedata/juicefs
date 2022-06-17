@@ -38,7 +38,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "redis://localhost/1"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 5
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -66,7 +66,7 @@ jobs:
         with:
           meta_url: "redis://localhost/1"
           file_size: "8K"
-          file_count: 10000
+          file_count: 2500
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -81,7 +81,7 @@ jobs:
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "8K"
-          file_count: 10000
+          file_count: 2500
           isolation_level: "read uncommitted"    
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -97,7 +97,7 @@ jobs:
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "8K"
-          file_count: 10000
+          file_count: 2500
           isolation_level: "read committed"    
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -113,7 +113,7 @@ jobs:
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "8K"
-          file_count: 10000
+          file_count: 2500
           isolation_level: "repeatable read"   
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -129,7 +129,7 @@ jobs:
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
           file_size: "8K"
-          file_count: 10000
+          file_count: 2500
           isolation_level: "serializable"     
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -144,7 +144,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 5
           isolation_level: "read uncommitted"
       - name: Setup upterm session
@@ -160,7 +160,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 5
           isolation_level: "read committed"
       - name: Setup upterm session
@@ -176,7 +176,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 5
           isolation_level: "repeatable read"
       - name: Setup upterm session
@@ -192,7 +192,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 5
           isolation_level: "serializable"
       - name: Setup upterm session
@@ -210,7 +210,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 5
           isolation_level: "read committed"
       - name: Setup upterm session
@@ -226,7 +226,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "badger://badger-data"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 1
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -242,7 +242,7 @@ jobs:
         with:
           meta_url: "badger://badger-data"
           file_size: "8K"
-          file_count: 10000
+          file_count: 2500
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -258,7 +258,7 @@ jobs:
         with:
           meta_url: "sqlite3://test.db"
           file_size: "8K"
-          file_count: 10000    
+          file_count: 2500    
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -272,8 +272,8 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "sqlite3://test.db"
-          file_size: "200M"
-          file_count: 10    
+          file_size: "100M"
+          file_count: 5    
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -300,7 +300,7 @@ jobs:
         with:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
           file_size: "8K"
-          file_count: 10000
+          file_count: 2500
           threads: 10    
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -327,7 +327,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 3
           threads: 10
           isolation_level: "read committed"
@@ -357,8 +357,8 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
-          file_size: "200M"
-          file_count: 10
+          file_size: "100M"
+          file_count: 5
           threads: 10
           isolation_level: "repeatable read"
 
@@ -387,8 +387,8 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
-          file_size: "200M"
-          file_count: 10
+          file_size: "100M"
+          file_count: 5
           threads: 10
           isolation_level: "serializable"
 
@@ -411,8 +411,8 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/test"
-          file_size: "200M"
-          file_count: 10
+          file_size: "100M"
+          file_count: 5
           isolation_level: "read committed"
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -432,8 +432,8 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/test"
-          file_size: "200M"
-          file_count: 10
+          file_size: "100M"
+          file_count: 5
           isolation_level: "repeatable read"
       - name: Setup upterm session
         if: ${{ failure() }}
@@ -449,7 +449,7 @@ jobs:
         with:
           meta_url: "etcd://localhost:2379/jfs"
           file_size: "8K"
-          file_count: 10000    
+          file_count: 2500    
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -464,7 +464,7 @@ jobs:
         with:
           meta_url: "etcd://localhost:2379/jfs"
           file_size: "200M"
-          file_count: 10    
+          file_count: 5    
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1    
@@ -540,7 +540,7 @@ jobs:
         with:
           meta_url: "tikv://127.0.0.1:2379"
           file_size: "8K"
-          file_count: 10000
+          file_count: 2500
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
@@ -561,7 +561,7 @@ jobs:
         uses: ./.github/actions/gateway
         with:
           meta_url: "tikv://127.0.0.1:2379"
-          file_size: "200M"
+          file_size: "100M"
           file_count: 5
       - name: Setup upterm session
         if: ${{ failure() }}

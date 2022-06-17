@@ -43,8 +43,8 @@ runs:
         #if it is self ruuner
         hostname | grep bench && export GOPATH=/usr/local/go && export HOME=/root
         make juicefs 
-        #wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
-        #tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
+        # wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
+        # tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
       shell: bash
 
     - name: Install tools
@@ -55,7 +55,6 @@ runs:
 
     - name: Init
       run: | 
-        set -x
         mp=${{inputs.mount_point}}
         meta_url=${{inputs.meta_url}}
         volume=${{inputs.volume_name}}
@@ -109,7 +108,6 @@ runs:
           #sudo rm /etc/nginx/sites-enabled/default
           #sudo systemctl restart nginx
         fi
-        set -x 
         dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
         mkdir data
         for i in $(seq 1 $file_count); do
