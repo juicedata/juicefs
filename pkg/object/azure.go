@@ -180,7 +180,7 @@ func newWabs(endpoint, accountName, accountKey string) (ObjectStorage, error) {
 	var domain string
 	if len(hostParts) > 1 {
 		// Arguments from command line take precedence
-		domain = hostParts[1]
+		domain = fmt.Sprintf("blob.%s", hostParts[1])
 	} else if domain, err = autoWasbEndpoint(containerName, accountName, uri.Scheme, credential); err != nil {
 		return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
 	}

@@ -217,7 +217,7 @@ As you can see, there is no need to include authentication information in the co
 
 To use Azure Blob Storage as data storage of JuiceFS, please [check the documentation](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage) to learn how to view the storage account name and access key, which correspond to the values ​​of the `--access-key` and `--secret-key` options, respectively.
 
-The `--bucket` option is set in the format `https://<container>.<endpoint>`, please replace `<container>` with the name of the actual blob container and `<endpoint>` with `blob.core.windows.net` (Azure Global) or `blob.core.chinacloudapi.cn` (Azure China). For example:
+The `--bucket` option is set in the format `https://<container>.<endpoint>`, please replace `<container>` with the name of the actual blob container and `<endpoint>` with `core.windows.net` (Azure Global) or `core.chinacloudapi.cn` (Azure China). For example:
 
 ```bash
 juicefs format \

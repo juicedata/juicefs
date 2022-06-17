@@ -359,7 +359,7 @@ func TestAzure(t *testing.T) {
 	if os.Getenv("AZURE_STORAGE_ACCOUNT") == "" {
 		t.SkipNow()
 	}
-	//https://containersName.blob.core.windows.net
+	//https://containersName.core.windows.net
 	abs, _ := newWabs(os.Getenv("AZURE_ENDPOINT"),
 		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"))
 	testStorage(t, abs)
