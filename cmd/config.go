@@ -133,8 +133,8 @@ func config(ctx *cli.Context) error {
 	}
 
 	var quota, storage, trash, clientVer bool
-	var encrypted bool
 	var msg strings.Builder
+	encrypted := format.KeyEncrypted
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
@@ -170,7 +170,6 @@ func config(ctx *cli.Context) error {
 			}
 		case "secret-key": // always update
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
-			encrypted = format.KeyEncrypted
 			if err := format.Decrypt(); err != nil {
 				logger.Fatalf("decrypt secrets: %s", err)
 			}
@@ -178,7 +177,6 @@ func config(ctx *cli.Context) error {
 			storage = true
 		case "session-token": // always update
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
-			encrypted = format.KeyEncrypted
 			if err := format.Decrypt(); err != nil {
 				logger.Fatalf("decrypt secrets: %s", err)
 			}

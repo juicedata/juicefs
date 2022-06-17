@@ -141,7 +141,7 @@ func (f *Format) CheckVersion() error {
 }
 
 func (f *Format) Encrypt() error {
-	if f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" {
+	if f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" && f.SessionToken == "" {
 		return nil
 	}
 	key := md5.Sum([]byte(f.UUID))
