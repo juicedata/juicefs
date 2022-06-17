@@ -28,6 +28,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -349,6 +350,7 @@ type Meta interface {
 
 	// getBase return the base engine.
 	getBase() *baseMeta
+	InitMetrics(registerer prometheus.Registerer)
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)
@@ -413,10 +415,6 @@ func newSessionInfo() *SessionInfo {
 		host = ""
 	}
 	return &SessionInfo{Version: version.Version(), HostName: host, ProcessID: os.Getpid()}
-}
-
-func timeit(start time.Time) {
-	opDist.Observe(time.Since(start).Seconds())
 }
 
 // Get all paths of an inode

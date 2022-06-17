@@ -630,7 +630,7 @@ func (m *kvMeta) txn(f func(tx kvTxn) error, inodes ...Ino) error {
 		return syscall.EROFS
 	}
 	start := time.Now()
-	defer func() { txDist.Observe(time.Since(start).Seconds()) }()
+	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 	if len(inodes) > 0 {
 		m.txLock(uint(inodes[0]))
 		defer m.txUnlock(uint(inodes[0]))
@@ -642,7 +642,7 @@ func (m *kvMeta) txn(f func(tx kvTxn) error, inodes ...Ino) error {
 			err = nil
 		}
 		if err != nil && m.shouldRetry(err) {
-			txRestart.Add(1)
+			m.txRestart.Add(1)
 			logger.Debugf("Transaction failed, restart it (tried %d): %s", i+1, err)
 			lastErr = err
 			time.Sleep(time.Millisecond * time.Duration(rand.Int()%((i+1)*(i+1))))
@@ -736,7 +736,7 @@ func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
 	return errno(m.txn(func(tx kvTxn) error {
@@ -807,7 +807,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 }
 
 func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -888,7 +888,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1640,7 +1640,7 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 		*chunks = cs
 		return 0
 	}
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	val, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
 		return errno(err)
@@ -1658,7 +1658,7 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 }
 
 func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1705,7 +1705,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 }
 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	var newSpace int64
 	f := m.of.find(fout)
 	if f != nil {
@@ -2173,7 +2173,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 }
 
 func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
 	buf, err := m.get(m.xattrKey(inode, name))
 	if err != nil {
@@ -2187,7 +2187,7 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 }
 
 func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
-	defer timeit(time.Now())
+	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
 	keys, err := m.scanKeys(m.xattrKey(inode, ""))
 	if err != nil {

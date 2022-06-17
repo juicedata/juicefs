@@ -34,7 +34,6 @@ import (
 	"github.com/minio/minio-go/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -55,11 +54,7 @@ type Config struct {
 	Mode        uint16
 }
 
-func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, gConf *Config) (minio.ObjectLayer, error) {
-	jfs, err := fs.NewFileSystem(conf, m, store)
-	if err != nil {
-		return nil, fmt.Errorf("Initialize failed: %s", err)
-	}
+func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
 	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: gConf}
 	go jfsObj.cleanup()

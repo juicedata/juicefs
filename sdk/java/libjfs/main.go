@@ -415,7 +415,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			if jConf.PushGateway != "" {
 				push2Gateway(jConf.PushGateway, jConf.PushAuth, interval, registry, commonLabels)
 			}
-			meta.InitMetrics(registerer)
+			m.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(m, registerer)
 		}
@@ -510,6 +510,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			logger.Errorf("Initialize failed: %s", err)
 			return nil
 		}
+		jfs.InitMetrics(registerer)
 		return jfs
 	})
 }
