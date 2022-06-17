@@ -12,7 +12,7 @@ inputs:
   bucket:  
     description: 'bucket'
     required: true
-    default: 'http://localhost:9000/fio-test'
+    default: 'http://localhost:9000/vdbench-test'
   access_key:  
     description: 'access_key'
     required: true
@@ -50,7 +50,7 @@ runs:
       run: |
         wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
         chmod +x mc 
-        wget -q https://s.juicefs.com/static/vdbench50407.zip
+        wget -q https://s.juicefs.com/static/bench/vdbench50407.zip
         unzip vdbench50407.zip -d vdbench
         [[ ${{ inputs.meta_url }} == redis://* ]] && docker run --name my-redis -p 6379:6379 -d redis
         [[ ${{ inputs.storage }} == minio ]] && docker run -d -p 9000:9000 --name minio \
@@ -91,3 +91,8 @@ runs:
         ./juicefs format ${{inputs.meta_url}} vdbench-big
         ./juicefs mount -d ${{inputs.meta_url}} ${{ inputs.mount_point }}        
         vdbench/vdbench -f ./.github/workflows/resources/vdbench_small_file.conf
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: output
+        path: output
