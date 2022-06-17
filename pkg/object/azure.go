@@ -104,12 +104,16 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]Object, error) {
 
 	limit32 := int32(limit)
 	pager := b.container.ListBlobsFlat(&azblob.ContainerListBlobFlatSegmentOptions{Prefix: &prefix, Marker: &marker, Maxresults: &(limit32)})
+	if pager.Err() != nil {
+		return nil, pager.Err()
+	}
+	var n int
 	if pager.NextPage(ctx) {
 		b.marker = *pager.PageResponse().NextMarker
+		n = len(pager.PageResponse().Segment.BlobItems)
 	} else {
 		b.marker = ""
 	}
-	n := len(pager.PageResponse().Segment.BlobItems)
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		blob := pager.PageResponse().Segment.BlobItems[i]
@@ -159,51 +163,29 @@ func newWabs(endpoint, accountName, accountKey string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("Invalid endpoint: %v, error: %v", endpoint, err)
 	}
 	hostParts := strings.SplitN(uri.Host, ".", 2)
-
-	scheme := ""
-	domain := ""
+	containerName := hostParts[0]
 	// Connection string support: DefaultEndpointsProtocol=[http|https];AccountName=***;AccountKey=***;EndpointSuffix=[core.windows.net|core.chinacloudapi.cn]
 	if connString := os.Getenv("AZURE_STORAGE_CONNECTION_STRING"); connString != "" {
-		items := strings.Split(connString, ";")
-		for _, item := range items {
-			if item = strings.TrimSpace(item); item == "" {
-				continue
-			}
-			parts := strings.SplitN(item, "=", 2)
-			if len(parts) != 2 {
-				return nil, fmt.Errorf("Invalid connection string item: %s", item)
-			}
-			// Arguments from command line take precedence
-			if parts[0] == "DefaultEndpointsProtocol" && scheme == "" {
-				scheme = parts[1]
-			} else if parts[0] == "AccountName" && accountName == "" {
-				accountName = parts[1]
-			} else if parts[0] == "AccountKey" && accountKey == "" {
-				accountKey = parts[1]
-			} else if parts[0] == "EndpointSuffix" && domain == "" {
-				domain = parts[1]
-			}
+		var client azblob.ContainerClient
+		if client, err = azblob.NewContainerClientFromConnectionString(connString, containerName, nil); err != nil {
+			return nil, err
 		}
+		return &wasb{container: &client, cName: containerName}, nil
 	}
+
 	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
 	if err != nil {
 		return nil, err
 	}
-
-	if scheme == "" {
-		scheme = "https"
-	}
-	containerName := hostParts[0]
+	var domain string
 	if len(hostParts) > 1 {
 		// Arguments from command line take precedence
 		domain = hostParts[1]
-	} else if domain == "" {
-		if domain, err = autoWasbEndpoint(containerName, accountName, scheme, credential); err != nil {
-			return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
-		}
+	} else if domain, err = autoWasbEndpoint(containerName, accountName, uri.Scheme, credential); err != nil {
+		return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
 	}
 
-	client, err := azblob.NewContainerClientWithSharedKey(fmt.Sprintf("%s://%s.%s/%s", scheme, accountName, domain, containerName), credential, nil)
+	client, err := azblob.NewContainerClientWithSharedKey(fmt.Sprintf("%s://%s.%s/%s", uri.Scheme, accountName, domain, containerName), credential, nil)
 	if err != nil {
 		return nil, err
 	}
