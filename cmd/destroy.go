@@ -145,7 +145,7 @@ func destroy(ctx *cli.Context) error {
 		fmt.Printf("data storage: %s\n", blob)
 		fmt.Printf("  used bytes: %d\n", totalSpace-availSpace)
 		fmt.Printf(" used inodes: %d\n", iused)
-		warn("The target volume will be destoried permanently, including:")
+		warn("The target volume will be permanently destroyed, including:")
 		warn("1. ALL objects in the data storage: %s", blob)
 		warn("2. ALL entries in the metadata engine: %s", utils.RemovePassword(uri))
 		if !userConfirmed() {
