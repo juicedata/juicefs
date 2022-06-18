@@ -367,6 +367,13 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 }
 
 func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
+	defer func() {
+		if entry != nil {
+			logit(ctx, "open (%d): %s [fh:%d]", ino, strerr(err), fh)
+		} else {
+			logit(ctx, "open (%d): %s", ino, strerr(err))
+		}
+	}()
 	var attr = &Attr{}
 	if IsSpecialNode(ino) {
 		if ino != controlInode && (flags&O_ACCMODE) != syscall.O_RDONLY {
@@ -392,13 +399,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		}
 		return
 	}
-	defer func() {
-		if entry != nil {
-			logit(ctx, "open (%d): %s [fh:%d]", ino, strerr(err), fh)
-		} else {
-			logit(ctx, "open (%d): %s", ino, strerr(err))
-		}
-	}()
+
 	err = v.Meta.Open(ctx, ino, flags, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
@@ -444,6 +445,8 @@ func (v *VFS) ReleaseHandler(ino Ino, fh uint64) {
 }
 
 func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
+	var err syscall.Errno
+	defer func() { logit(ctx, "release (%d): %s", ino, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		if ino == logInode {
 			closeAccessLog(fh)
@@ -451,8 +454,6 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 		v.releaseHandle(ino, fh)
 		return
 	}
-	var err syscall.Errno
-	defer func() { logit(ctx, "release (%d): %s", ino, strerr(err)) }()
 	if fh > 0 {
 		f := v.findHandle(ino, fh)
 		if f != nil {
@@ -486,6 +487,9 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		if ino == logInode {
 			n = readAccessLog(fh, buf)
 		} else {
+			if ino == controlInode && runtime.GOOS == "darwin" {
+				fh = v.getControlHandle(ctx.Pid())
+			}
 			h := v.findHandle(ino, fh)
 			if h == nil {
 				err = syscall.EBADF
@@ -509,6 +513,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 				h.off += 1 << 20
 				h.data = h.data[1<<20:]
 			}
+			logit(ctx, "read (%d,%d,%d,%d): %s (%d)", ino, size, off, fh, strerr(err), n)
 		}
 		return
 	}
@@ -550,7 +555,10 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 
 func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno) {
 	size := uint64(len(buf))
-	defer func() { logit(ctx, "write (%d,%d,%d): %s", ino, size, off, strerr(err)) }()
+	if ino == controlInode && runtime.GOOS == "darwin" {
+		fh = v.getControlHandle(ctx.Pid())
+	}
+	defer func() { logit(ctx, "write (%d,%d,%d,%d): %s", ino, size, off, fh, strerr(err)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
@@ -710,7 +718,11 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 }
 
 func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err syscall.Errno) {
-	defer func() { logit(ctx, "flush (%d): %s", ino, strerr(err)) }()
+	if ino == controlInode && runtime.GOOS == "darwin" {
+		fh = v.getControlHandle(ctx.Pid())
+		defer v.releaseControlHandle(ctx.Pid())
+	}
+	defer func() { logit(ctx, "flush (%d,%d): %s", ino, fh, strerr(err)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
