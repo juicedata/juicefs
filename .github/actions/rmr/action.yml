@@ -58,7 +58,6 @@ runs:
         elif [[ "$meta_url" == postgres* ]]; then
           export PGPASSWORD="postgres"
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
-          printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$isolation_level';" |  psql -U postgres -h localhost
         fi      
 
     - name: Rmr
@@ -66,7 +65,6 @@ runs:
       run: |
         meta_url=${{inputs.meta_url}}
         mp=${{inputs.mount_point}}
-        ./juicefs format $meta_url rmr-test
         # wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
         # gzip -dk  2M_emtpy_files.dump.gz
         git clone https://github.com/sanwan/actionfile.git
