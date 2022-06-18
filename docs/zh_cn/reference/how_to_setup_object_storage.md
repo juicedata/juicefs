@@ -221,7 +221,7 @@ $ juicefs format \
 
 使用 Azure Blob 存储作为 JuiceFS 的数据存储，请先 [查看文档](https://docs.microsoft.com/zh-cn/azure/storage/common/storage-account-keys-manage) 了解如何查看存储帐户的名称和密钥，它们分别对应 `--access-key` 和 `--secret-key` 选项的值。
 
-`--bucket` 选项的设置格式为 `https://<container>.<endpoint>`，请将其中的 `<container>` 替换为实际的 Blob 容器的名称，将 `<endpoint>` 替换为 `blob.core.windows.net`（Azure 全球）或 `blob.core.chinacloudapi.cn`（Azure 中国）。例如：
+`--bucket` 选项的设置格式为 `https://<container>.<endpoint>`，请将其中的 `<container>` 替换为实际的 Blob 容器的名称，将 `<endpoint>` 替换为 `core.windows.net`（Azure 全球）或 `core.chinacloudapi.cn`（Azure 中国）。例如：
 
 ```bash
 juicefs format \
