@@ -107,12 +107,14 @@ func (b *wasb) List(prefix, marker string, limit int64) ([]Object, error) {
 	if pager.Err() != nil {
 		return nil, pager.Err()
 	}
-	var n int
 	if pager.NextPage(ctx) {
 		b.marker = *pager.PageResponse().NextMarker
-		n = len(pager.PageResponse().Segment.BlobItems)
 	} else {
 		b.marker = ""
+	}
+	var n int
+	if pager.PageResponse().Segment != nil {
+		n = len(pager.PageResponse().Segment.BlobItems)
 	}
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
