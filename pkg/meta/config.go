@@ -176,14 +176,8 @@ func (f *Format) Encrypt() error {
 }
 
 func (f *Format) Decrypt() error {
-	if !f.KeyEncrypted || f.SecretKey == "" && f.EncryptKey == "" && f.SessionToken == "" {
+	if !f.KeyEncrypted {
 		return nil
-	}
-	if f.SecretKey == "removed" {
-		return fmt.Errorf("secret key was removed; please correct it with `config` command")
-	}
-	if f.SessionToken == "removed" {
-		return fmt.Errorf("session token was removed; please correct it with `config` command")
 	}
 	key := md5.Sum([]byte(f.UUID))
 	block, err := aes.NewCipher(key[:])
@@ -194,31 +188,30 @@ func (f *Format) Decrypt() error {
 	if err != nil {
 		return fmt.Errorf("new GCM: %s", err)
 	}
-	decrypt := func(k *string) error {
+	decrypt := func(k *string) {
 		if *k == "" {
-			return nil
+			return
 		}
-		buf, err := base64.StdEncoding.DecodeString(*k)
-		if err != nil {
-			return fmt.Errorf("decode key: %s", err)
+		if *k == "removed" {
+			err = fmt.Errorf("secret was removed; please correct it with `config` command")
+			return
 		}
-		plaintext, err := aesgcm.Open(nil, buf[:12], buf[12:], nil)
-		if err != nil {
-			return fmt.Errorf("open cipher: %s", err)
+		buf, e := base64.StdEncoding.DecodeString(*k)
+		if e != nil {
+			err = fmt.Errorf("decode key: %s", e)
+			return
+		}
+		plaintext, e := aesgcm.Open(nil, buf[:12], buf[12:], nil)
+		if e != nil {
+			err = fmt.Errorf("open cipher: %s", e)
+			return
 		}
 		*k = string(plaintext)
-		return nil
 	}
 
-	if err = decrypt(&f.SecretKey); err != nil {
-		return err
-	}
-	if err = decrypt(&f.EncryptKey); err != nil {
-		return err
-	}
-	if err = decrypt(&f.SessionToken); err != nil {
-		return err
-	}
+	decrypt(&f.EncryptKey)
+	decrypt(&f.SecretKey)
+	decrypt(&f.SessionToken)
 	f.KeyEncrypted = false
-	return nil
+	return err
 }

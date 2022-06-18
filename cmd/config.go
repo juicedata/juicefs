@@ -170,15 +170,15 @@ func config(ctx *cli.Context) error {
 			}
 		case "secret-key": // always update
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
-			if err := format.Decrypt(); err != nil {
-				logger.Fatalf("decrypt secrets: %s", err)
+			if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
+				logger.Warnf("decrypt secrets: %s", err)
 			}
 			format.SecretKey = ctx.String(flag)
 			storage = true
 		case "session-token": // always update
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
-			if err := format.Decrypt(); err != nil {
-				logger.Fatalf("decrypt secrets: %s", err)
+			if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
+				logger.Warnf("decrypt secrets: %s", err)
 			}
 			format.SessionToken = ctx.String(flag)
 			storage = true

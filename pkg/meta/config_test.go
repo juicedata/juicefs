@@ -16,14 +16,24 @@
 
 package meta
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRemoveSecret(t *testing.T) {
 	format := Format{Name: "test", SecretKey: "testSecret", EncryptKey: "testEncrypt", SessionToken: "token"}
+	if err := format.Encrypt(); err != nil {
+		t.Fatal(err)
+	}
 
 	format.RemoveSecret()
 	if format.SecretKey != "removed" || format.EncryptKey != "removed" || format.SessionToken != "removed" {
 		t.Fatalf("invalid format: %+v", format)
+	}
+
+	if err := format.Decrypt(); err != nil && !strings.Contains(err.Error(), "secret was removed") {
+		t.Fatal(err)
 	}
 }
 
