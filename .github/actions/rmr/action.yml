@@ -61,7 +61,7 @@ runs:
           printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$isolation_level';" |  psql -U postgres -h localhost
         fi      
 
-    -name: Rmr
+    - name: Rmr
       shell: bash
       run: |
         meta_url=${{inputs.meta_url}}
