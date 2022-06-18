@@ -39,7 +39,7 @@ func (s *eos) String() string {
 	return fmt.Sprintf("eos://%s/", s.s3client.bucket)
 }
 
-func newEos(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -59,6 +59,9 @@ func newEos(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if secretKey == "" {
 		secretKey = os.Getenv("EOS_SECRET_KEY")
 	}
+	if token == "" {
+		token = os.Getenv("EOS_TOKEN")
+	}
 
 	awsConfig := &aws.Config{
 		Endpoint:         &endpoint,
@@ -66,7 +69,7 @@ func newEos(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		DisableSSL:       aws.Bool(!ssl),
 		S3ForcePathStyle: aws.Bool(false),
 		HTTPClient:       httpClient,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
+		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 
 	ses, err := session.NewSession(awsConfig)

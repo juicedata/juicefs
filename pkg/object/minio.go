@@ -39,7 +39,7 @@ func (m *minio) String() string {
 	return fmt.Sprintf("minio://%s/%s/", *m.s3client.ses.Config.Endpoint, m.s3client.bucket)
 }
 
-func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
@@ -62,7 +62,7 @@ func newMinio(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		secretKey = os.Getenv("MINIO_SECRET_KEY")
 	}
 	if accessKey != "" {
-		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
+		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, token)
 	}
 
 	ses, err := session.NewSession(awsConfig)

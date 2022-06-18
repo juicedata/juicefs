@@ -103,7 +103,7 @@ func (s *swiftOSS) Head(key string) (Object, error) {
 	}, err
 }
 
-func newSwiftOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
@@ -126,9 +126,10 @@ func newSwiftOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	authURL := uri.Scheme + "://" + host + "/auth/v1.0"
 
 	conn := swift.Connection{
-		UserName: accessKey,
-		ApiKey:   secretKey,
-		AuthUrl:  authURL,
+		UserName:  username,
+		ApiKey:    apiKey,
+		AuthToken: token,
+		AuthUrl:   authURL,
 	}
 	err = conn.Authenticate()
 	if err != nil {

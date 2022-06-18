@@ -38,7 +38,7 @@ func collectAll(c <-chan object.Object) []string {
 
 // nolint:errcheck
 func TestIterator(t *testing.T) {
-	m, _ := object.CreateStorage("mem", "", "", "")
+	m, _ := object.CreateStorage("mem", "", "", "", "")
 	m.Put("a", bytes.NewReader([]byte("a")))
 	m.Put("b", bytes.NewReader([]byte("a")))
 	m.Put("aa", bytes.NewReader([]byte("a")))
@@ -54,7 +54,7 @@ func TestIterator(t *testing.T) {
 	}
 
 	// Single object
-	s, _ := object.CreateStorage("mem", "", "", "")
+	s, _ := object.CreateStorage("mem", "", "", "", "")
 	s.Put("a", bytes.NewReader([]byte("a")))
 	ch, _ = ListAll(s, "", "")
 	keys = collectAll(ch)
@@ -67,7 +67,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 	// utils.SetLogLevel(logrus.DebugLevel)
 
 	// Construct mem storage
-	s, _ := object.CreateStorage("mem", "", "", "")
+	s, _ := object.CreateStorage("mem", "", "", "", "")
 	err := s.Put("abc", bytes.NewReader([]byte("abc")))
 	if err != nil {
 		t.Fatalf("Put error: %q", err)
@@ -109,14 +109,14 @@ func TestSync(t *testing.T) {
 		Quiet:     true,
 	}
 	os.Args = []string{"--include", "a[1-9]", "--exclude", "a*", "--exclude", "c*"}
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
 	a.Put("a1", bytes.NewReader([]byte("a1")))
 	a.Put("a2", bytes.NewReader([]byte("a2")))
 	a.Put("abc", bytes.NewReader([]byte("abc")))
 	a.Put("c1", bytes.NewReader([]byte("c1")))
 	a.Put("c2", bytes.NewReader([]byte("c2")))
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
 	b.Put("a1", bytes.NewReader([]byte("a1")))
 	b.Put("ba", bytes.NewReader([]byte("a1")))
 
@@ -193,8 +193,8 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 		Quiet:     true,
 		Exclude:   []string{"1"},
 	}
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
 
 	simple := []string{"a1/z1/z2", "a2", "ab1", "ab2", "b1", "b2", "c1", "c2"}
 	testCases := []struct {
@@ -310,14 +310,14 @@ func TestSyncLink(t *testing.T) {
 		_ = os.RemoveAll("/tmp/b")
 	}()
 
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
 	a.Put("a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
 	as.Symlink("/tmp/a/a1", "l1")
 	as.Symlink("./../a1", "d1/l2")
 	as.Symlink("./../notExist", "l3")
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
 	bs := b.(object.SupportSymlink)
 	bs.Symlink("/tmp/b/a1", "l1")
 
@@ -369,13 +369,13 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 		_ = os.RemoveAll("/tmp/b")
 	}()
 
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
 	a.Put("a1", bytes.NewReader([]byte("test")))
 	as := a.(object.SupportSymlink)
 	as.Symlink("/tmp/a/a1", "l1")
 	as.Symlink("./../notExist", "l3")
 
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
 
 	if err := Sync(a, b, &Config{
 		Threads:     50,
@@ -409,8 +409,8 @@ func TestSingleLink(t *testing.T) {
 		_ = os.RemoveAll("/tmp/b")
 	}()
 	_ = os.Symlink("/tmp/aa", "/tmp/a")
-	a, _ := object.CreateStorage("file", "/tmp/a", "", "")
-	b, _ := object.CreateStorage("file", "/tmp/b", "", "")
+	a, _ := object.CreateStorage("file", "/tmp/a", "", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b", "", "", "")
 	if err := Sync(a, b, &Config{
 		Threads:     50,
 		Update:      true,
@@ -439,9 +439,9 @@ func TestLimits(t *testing.T) {
 		_ = os.RemoveAll("/tmp/b/")
 		_ = os.RemoveAll("/tmp/c/")
 	}()
-	a, _ := object.CreateStorage("file", "/tmp/a/", "", "")
-	b, _ := object.CreateStorage("file", "/tmp/b/", "", "")
-	c, _ := object.CreateStorage("file", "/tmp/c/", "", "")
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
+	c, _ := object.CreateStorage("file", "/tmp/c/", "", "", "")
 	put := func(storage object.ObjectStorage, keys []string) {
 		for _, key := range keys {
 			if key != "" {

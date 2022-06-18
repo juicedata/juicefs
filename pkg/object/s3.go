@@ -341,7 +341,7 @@ func parseRegion(endpoint string) string {
 	return region
 }
 
-func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		if len(strings.Split(endpoint, ".")) > 1 && !strings.HasSuffix(endpoint, ".amazonaws.com") {
 			endpoint = fmt.Sprintf("http://%s", endpoint)
@@ -436,7 +436,7 @@ func newS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	if accessKey == "anonymous" {
 		awsConfig.Credentials = credentials.AnonymousCredentials
 	} else if accessKey != "" {
-		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
+		awsConfig.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, token)
 	}
 	if ep != "" {
 		awsConfig.Endpoint = aws.String(ep)
