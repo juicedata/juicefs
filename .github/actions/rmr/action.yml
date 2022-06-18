@@ -65,11 +65,8 @@ runs:
       run: |
         meta_url=${{inputs.meta_url}}
         mp=${{inputs.mount_point}}
-        # wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-        # gzip -dk  2M_emtpy_files.dump.gz
-        git clone https://github.com/sanwan/actionfile.git
-        cat actionfile/META_50W_EMPTY_FILE.json* > META_50W_EMPTY_FILE.json
-        ./juicefs load $meta_url META_50W_EMPTY_FILE.json
+        wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+        gzip -dk  2M_emtpy_files.dump.gz
         # ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 30 --threads 10 --no-usage-report
         ./juicefs mount -d $meta_url $mp
         sleep 3
