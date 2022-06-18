@@ -57,6 +57,16 @@ func (v *VFS) getControlHandle(pid uint32) uint64 {
 	return fh
 }
 
+func (v *VFS) releaseControlHandle(pid uint32) {
+	controlMutex.Lock()
+	defer controlMutex.Unlock()
+	fh := controlHandlers[pid]
+	if fh != 0 {
+		v.releaseHandle(controlInode, fh)
+		delete(controlHandlers, pid)
+	}
+}
+
 type internalNode struct {
 	inode Ino
 	name  string

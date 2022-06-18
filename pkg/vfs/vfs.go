@@ -720,6 +720,7 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err syscall.Errno) {
 	if ino == controlInode && runtime.GOOS == "darwin" {
 		fh = v.getControlHandle(ctx.Pid())
+		defer v.releaseControlHandle(ctx.Pid())
 	}
 	defer func() { logit(ctx, "flush (%d,%d): %s", ino, fh, strerr(err)) }()
 	h := v.findHandle(ino, fh)
