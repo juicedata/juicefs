@@ -144,7 +144,7 @@ func (c *b2client) List(prefix, marker string, limit int64) ([]Object, error) {
 
 // TODO: support multipart upload using S3 client
 
-func newB2(endpoint, keyID, applicationKey string) (ObjectStorage, error) {
+func newB2(endpoint, keyID, applicationKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

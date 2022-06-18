@@ -192,11 +192,12 @@ func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, result.NextKeyMarker, nil
 }
 
-func autoCOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
+func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {
 	client := cos.NewClient(nil, &http.Client{
 		Transport: &cos.AuthorizationTransport{
-			SecretID:  accessKey,
-			SecretKey: secretKey,
+			SecretID:     accessKey,
+			SecretKey:    secretKey,
+			SessionToken: token,
 		},
 	})
 	client.UserAgent = UserAgent
@@ -215,7 +216,7 @@ func autoCOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	return "", fmt.Errorf("bucket %q doesnot exist", bucketName)
 }
 
-func newCOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -231,7 +232,7 @@ func newCOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 
 	if len(hostParts) == 1 {
-		if endpoint, err = autoCOSEndpoint(hostParts[0], accessKey, secretKey); err != nil {
+		if endpoint, err = autoCOSEndpoint(hostParts[0], accessKey, secretKey, token); err != nil {
 			return nil, fmt.Errorf("Unable to get endpoint of bucket %s: %s", hostParts[0], err)
 		}
 		if uri, err = url.ParseRequestURI(endpoint); err != nil {
@@ -243,9 +244,10 @@ func newCOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	b := &cos.BaseURL{BucketURL: uri}
 	client := cos.NewClient(b, &http.Client{
 		Transport: &cos.AuthorizationTransport{
-			SecretID:  accessKey,
-			SecretKey: secretKey,
-			Transport: httpClient.Transport,
+			SecretID:     accessKey,
+			SecretKey:    secretKey,
+			SessionToken: token,
+			Transport:    httpClient.Transport,
 		},
 	})
 	client.UserAgent = UserAgent

@@ -251,7 +251,7 @@ var ks3Regions = map[string]string{
 	"sgp":          "SINGAPORE",
 }
 
-func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -281,7 +281,7 @@ func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		DisableSSL:       !ssl,
 		HTTPClient:       httpClient,
 		S3ForcePathStyle: true,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
+		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 
 	return &ks3{bucket, s3.New(awsConfig), nil}, nil

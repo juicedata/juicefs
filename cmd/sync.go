@@ -232,7 +232,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				user = parts[0]
 				pass = parts[1]
 			}
-			return object.CreateStorage("sftp", uri, user, pass)
+			return object.CreateStorage("sftp", uri, user, pass, "")
 		}
 	}
 	u, err := url.Parse(uri)
@@ -267,7 +267,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		endpoint += u.Path
 	}
 
-	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey)
+	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, "")
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
 	}

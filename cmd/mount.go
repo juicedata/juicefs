@@ -377,7 +377,7 @@ func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, erro
 				logger.Warnf("reload config: %s", err)
 				continue
 			}
-			if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey {
+			if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken {
 				logger.Infof("found new configuration: storage=%s bucket=%s ak=%s", new.Storage, new.Bucket, new.AccessKey)
 				newBlob, err := createStorage(*new)
 				if err != nil {

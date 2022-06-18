@@ -156,7 +156,7 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 	return endpoint, nil
 }
 
-func newWabs(endpoint, accountName, accountKey string) (ObjectStorage, error) {
+func newWabs(endpoint, accountName, accountKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

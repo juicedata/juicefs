@@ -44,7 +44,7 @@ func testKeysEqual(objs []Object, expectedKeys []string) error {
 }
 
 func TestDisk2(t *testing.T) {
-	s, _ := newDisk("/tmp/abc/", "", "")
+	s, _ := newDisk("/tmp/abc/", "", "", "")
 	testFileSystem(t, s)
 }
 
@@ -52,7 +52,7 @@ func TestSftp2(t *testing.T) {
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
-	sftp, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
+	sftp, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
 	testFileSystem(t, sftp)
 }
 
@@ -60,7 +60,7 @@ func TestHDFS2(t *testing.T) {
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.Skip()
 	}
-	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
+	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
 	testFileSystem(t, dfs)
 }
 

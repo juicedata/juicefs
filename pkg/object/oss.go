@@ -325,7 +325,7 @@ func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (st
 	return fmt.Sprintf("https://%s.aliyuncs.com", bucketLocation), nil
 }
 
-func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -341,12 +341,12 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		domain = uri.Scheme + "://" + hostParts[1]
 	}
 
-	securityToken := ""
+	var refresh bool
 	if accessKey == "" {
 		// try environment variable
 		accessKey = os.Getenv("ALICLOUD_ACCESS_KEY_ID")
 		secretKey = os.Getenv("ALICLOUD_ACCESS_KEY_SECRET")
-		securityToken = os.Getenv("SECURITY_TOKEN")
+		token = os.Getenv("SECURITY_TOKEN")
 
 		if accessKey == "" {
 			if cred, err := fetchStsToken(); err != nil {
@@ -354,24 +354,20 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 			} else {
 				accessKey = cred.AccessKeyId
 				secretKey = cred.AccessKeySecret
-				securityToken = cred.SecurityToken
+				token = cred.SecurityToken
+				refresh = true
 			}
 		}
 	}
 
 	if domain == "" {
-		if domain, err = autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken); err != nil {
+		if domain, err = autoOSSEndpoint(bucketName, accessKey, secretKey, token); err != nil {
 			return nil, fmt.Errorf("Unable to get endpoint of bucket %s: %s", bucketName, err)
 		}
 		logger.Debugf("Use endpoint %q", domain)
 	}
 
-	var client *oss.Client
-	if securityToken == "" {
-		client, err = oss.New(domain, accessKey, secretKey)
-	} else {
-		client, err = oss.New(domain, accessKey, secretKey, oss.SecurityToken(securityToken))
-	}
+	client, err := oss.New(domain, accessKey, secretKey, oss.SecurityToken(token))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create OSS client with endpoint %s: %s", endpoint, err)
 	}
@@ -391,7 +387,7 @@ func newOSS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 	}
 
 	o := &ossClient{client: client, bucket: bucket}
-	if securityToken != "" {
+	if token != "" && refresh {
 		go func() {
 			for {
 				next := o.refreshToken()

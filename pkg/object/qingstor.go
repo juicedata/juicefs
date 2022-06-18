@@ -256,7 +256,7 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func newQingStor(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

@@ -321,7 +321,7 @@ func (u *ufile) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, out.NextMarker, nil
 }
 
-func newUFile(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newUFile(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

@@ -166,7 +166,7 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
-func newQiniu(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -189,7 +189,7 @@ func newQiniu(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		region = endpoint[:strings.LastIndex(endpoint, "-")]
 	}
 	awsConfig := &aws.Config{
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
+		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 		Endpoint:         &endpoint,
 		Region:           &region,
 		DisableSSL:       aws.Bool(uri.Scheme == "http"),

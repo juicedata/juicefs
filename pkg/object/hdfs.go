@@ -315,7 +315,7 @@ func (h *hdfsclient) Chown(key string, owner, group string) error {
 	return h.c.Chown(h.path(key), owner, group)
 }
 
-func newHDFS(addr, username, sk string) (ObjectStorage, error) {
+func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 	conf, err := hadoopconf.LoadFromEnvironment()
 	if err != nil {
 		return nil, fmt.Errorf("Problem loading configuration: %s", err)
