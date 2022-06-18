@@ -42,7 +42,10 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-      run: sudo /etc/init.d/mysql start
+      - name: start mysql
+        run: |
+          sudo /etc/init.d/mysql start
+
       - name: Rmr
         uses: ./.github/actions/rmr
         with:
@@ -59,7 +62,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-      run: docker run --name my-redis -p 6379:6379 -d redis
+
+      - name: start redis
+        run: |
+          docker run --name my-redis -p 6379:6379 -d redis
+
       - name: Rmr
         uses: ./.github/actions/rmr
         with:
@@ -69,7 +76,7 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-  rmr-with-redis:
+  rmr-with-sqlite:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -89,7 +96,11 @@ jobs:
   rmr-with-tikv:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          
       - name: Install TiKV
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
