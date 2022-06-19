@@ -26,19 +26,6 @@ runs:
         # tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
       shell: bash
 
-    - name: Init
-      run: | 
-        mp=${{inputs.mount_point}}
-        meta_url=${{inputs.meta_url}}
-        volume=${{inputs.volume_name}}
-        test -d $mp && ./juicefs umount -f $mp
-        ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
-        if [ -n "$UUID" ];then
-          ./juicefs destroy --force $meta_url $UUID
-        fi
-        test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
-      shell: bash
-
     - name: create database
       shell: bash
       run: | 
@@ -63,11 +50,14 @@ runs:
     - name: Rmr
       shell: bash
       run: |
+        sudo chmod 777 /var
         meta_url=${{inputs.meta_url}}
         mp=${{inputs.mount_point}}
         wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
         gzip -dk  2M_emtpy_files.dump.gz
-        # ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 30 --threads 10 --no-usage-report
+        ./juicefs format $meta_url rmr-test
+        # ./juicefs load $meta_url 2M_emtpy_files.dump
+        ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 50 --threads 10 --no-usage-report
         ./juicefs mount -d $meta_url $mp
         sleep 3
         declare -a pidlist
