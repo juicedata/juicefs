@@ -43,8 +43,8 @@ runs:
         #if it is self ruuner
         hostname | grep bench && export GOPATH=/usr/local/go && export HOME=/root
         make juicefs 
-        # wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
-        # tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
+        #wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
+        #tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
       shell: bash
 
     - name: Install tools
@@ -54,7 +54,9 @@ runs:
       shell: bash
 
     - name: Init
+      shell: bash
       run: | 
+        set -x
         mp=${{inputs.mount_point}}
         meta_url=${{inputs.meta_url}}
         volume=${{inputs.volume_name}}
@@ -65,19 +67,12 @@ runs:
         fi
         test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
         echo finished
+      
+    - name: create database
       shell: bash
-
-    - name: Test
-      run: |
+      run: | 
         meta_url=${{inputs.meta_url}}
-        file_size=${{inputs.file_size}}
-        file_count=${{inputs.file_count}}
-        threads=${{inputs.threads}}
         isolation_level="${{inputs.isolation_level}}"
-        mp=${{inputs.mount_point}}
-        volume=${{inputs.volume_name}}
-        echo meta_url is: $meta_url, file_size is $file_size, file_count is $file_count, isolation_level is $isolation_level
-        
         db_name=$(basename $meta_url | awk -F? '{print $1}')
         if [[ "$meta_url" == mysql* ]]; then
           user=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $1}')
@@ -93,13 +88,19 @@ runs:
           export PGPASSWORD="postgres"
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
           printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$isolation_level';" |  psql -U postgres -h localhost
-        fi
-        
+        fi      
+      
+    - name: start gateway
+      shell: bash
+      run: |
+        meta_url=${{inputs.meta_url}}
+        mp=${{inputs.mount_point}}
+        volume=${{inputs.volume_name}}
         export MINIO_ROOT_USER=minioadmin
         export MINIO_ROOT_PASSWORD=minioadmin
         ./juicefs format $meta_url $volume --trash-days 0
         if [[ "$meta_url" == badger* ]]; then
-          ./juicefs gateway $meta_url localhost:8080 --no-usage-report &
+          ./juicefs gateway $meta_url localhost:8080 --no-usage-report /tmp/access1.log &
         else
           ./juicefs gateway $meta_url localhost:8080 --access-log /tmp/access1.log &
           #./juicefs gateway $meta_url localhost:9000 --access-log /tmp/access1.log &
@@ -108,13 +109,24 @@ runs:
           #sudo rm /etc/nginx/sites-enabled/default
           #sudo systemctl restart nginx
         fi
+      
+    - name: Sync with multiple process
+      shell: bash
+      run: |
+        meta_url=${{inputs.meta_url}}
+        file_size=${{inputs.file_size}}
+        file_count=${{inputs.file_count}}
+        threads=${{inputs.threads}}
+        mp=${{inputs.mount_point}}
+        volume=${{inputs.volume_name}}
+        
         dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
         mkdir data
         for i in $(seq 1 $file_count); do
           cp file data/file$i
         done
         start=`date +%s`
-        declare -a pids        
+        declare -a pids   
         ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
         pids+=($!)
         ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
@@ -122,8 +134,6 @@ runs:
         ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
         pids+=($!)
         wait "${pids[@]}"
-        # mkdir emptydir
-        # ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/ --delete-dst --no-https -p $threads
         rm -rf $HOME/.juicefs/cache/ || true
         # ./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
         # ./mc mb minio/$volume
@@ -131,11 +141,36 @@ runs:
         end=`date +%s`
         time=$((end-start))
         echo time cost is: $time second
-        # stop juicefs gateway
         killall juicefs 
         sleep 3
         ./juicefs mount -d $meta_url $mp
         diff -ur data/ $mp/data/ 
         echo "diff succeed"
-        rm $mp/data/ -rf
+        ./juicefs umount  $mp --force
+      
+    - name: Sync with empty dir
+      run: |
+        meta_url=${{inputs.meta_url}}
+        threads=${{inputs.threads}}
+        mp=${{inputs.mount_point}}
+        volume=${{inputs.volume_name}}
+        export MINIO_ROOT_USER=minioadmin
+        export MINIO_ROOT_PASSWORD=minioadmin
+        ./juicefs mdtest $meta_url test --dirs 10 --depth 2 --files 10 --threads 10 --no-usage-report
+        ./juicefs gateway $meta_url localhost:8080 --access-log /tmp/access1.log &
+        sleep 10
+        mkdir emptydir
+        declare -a pids  
+        ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/test/ --delete-dst --no-https -p $threads &
+        pids+=($!)
+        ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/test/ --delete-dst --no-https -p $threads &
+        pids+=($!)
+        ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/test/ --delete-dst --no-https -p $threads &
+        pids+=($!)
+        wait "${pids[@]}"
+        killall juicefs
+        sleep 3
+        ./juicefs mount -d $meta_url $mp
+        [ -d "$mp/test/" ] && exit 1 
+        ./juicefs umount  $mp --force
       shell: bash
