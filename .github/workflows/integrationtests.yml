@@ -79,6 +79,16 @@ jobs:
           sudo make -C fstests xattrs
           sudo make -C fstests flock
 
+      - name: Hdfs
+        run: |
+          mvn --version
+          chmod +x travis-setup-hdfs.sh
+          ./travis-setup-hdfs.sh
+          make -C sdk/java/libjfs
+          mvn compile -B --quiet
+          mvn test -B
+          mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
+
 
       - name: Send Slack Notification
         if: ${{ failure() }}
