@@ -91,11 +91,13 @@ jobs:
 
       - name: Hdfs Test
         run: |
+          pwd
           java -version
           mvn --version
           chmod +x travis-setup-hdfs.sh
           ./travis-setup-hdfs.sh
           make -C sdk/java/libjfs
+          cd sdk/java
           echo "mvn compile -B --quiet"
           mvn compile -B --quiet
           echo "mvn test -B"
