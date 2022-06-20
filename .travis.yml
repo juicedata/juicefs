@@ -30,6 +30,7 @@ addons:
       - lsof
       - gcc-mingw-w64 # for windows
 before_install:
+  - go env
   - source ./check-changed.sh
   - if [ $SKIP_TEST == true ]; then exit 0; fi
 install: true
