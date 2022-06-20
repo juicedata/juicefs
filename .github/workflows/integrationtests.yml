@@ -96,8 +96,11 @@ jobs:
           chmod +x travis-setup-hdfs.sh
           ./travis-setup-hdfs.sh
           make -C sdk/java/libjfs
+          echo "mvn compile -B --quiet"
           mvn compile -B --quiet
+          echo "mvn test -B"
           mvn test -B
+          echo "mvn package"
           mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
 
 
