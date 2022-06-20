@@ -28,11 +28,7 @@ jobs:
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
-        with:
-        distribution: 'adopt'
-        java-version: '8'
+
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -41,11 +37,19 @@ jobs:
 
       - name: Build linux target
         run: |
+          java -version
           make juicefs
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'adopt'
+          java-version: '8'
 
 
       - name: Run Redis
         run: |
+          java -version
           sudo docker run -d --name redis -v redis-data:/data  \
           -p 6379:6379  redis redis-server --appendonly yes
 
