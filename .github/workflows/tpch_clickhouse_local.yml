@@ -1,4 +1,4 @@
-name: "tpch_clickhouse"
+name: "tpch_clickhouse_local"
 
 on:
   push:
@@ -13,12 +13,12 @@ on:
     paths-ignore:
       - 'docs/**'
   schedule:
-    - cron:  '30 20 * * *'
+    - cron:  '59 * * * *'
 
   workflow_dispatch:
 
 jobs:
-  tpchch:
+  tpchch_local:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -34,21 +34,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build linux target
-        run: make juicefs
-
-      - name: Run Redis
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
-
-      - name: Juicefs Format
-        run: |
-          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
-
-      - name: Juicefs Mount
-        run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs --no-usage-report &
 
       - name: Install ClickHouse
         run: |
@@ -61,6 +46,8 @@ jobs:
 
       - name: Change Datadir
         run: |
+          sudo mkdir -p /data/jfs/
+          sudo chmod -R 777 /data/
           sudo chmod 777 /etc/clickhouse-server/
           sudo chmod 777 /etc/clickhouse-server/config.xml
           sudo sed -i "s?<path>/var/lib/clickhouse/</path>?<path>/data/jfs/</path>?" /etc/clickhouse-server/config.xml
@@ -256,18 +243,13 @@ jobs:
                                          C_NATION ASC;"
           df -lh
 
-      - name: Log
-        if: ${{ always() }}
-        run: |
-          sudo tail -n 100 /var/log/juicefs.log
-
 
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Setup upterm session
         if: ${{ failure() }}
