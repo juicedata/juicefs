@@ -77,7 +77,6 @@ jobs:
           sudo mvn compile -B --quiet
           echo "mvn test -B"
           sudo mvn test -B
-          echo "mvn package"
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
 
 
