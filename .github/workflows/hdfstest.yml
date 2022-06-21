@@ -75,7 +75,6 @@ jobs:
           cd sdk/java
           echo "mvn compile -B --quiet"
           sudo mvn compile -B --quiet
-          echo "mvn test -B"
           sudo mvn test -B
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
 
