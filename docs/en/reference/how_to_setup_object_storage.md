@@ -573,12 +573,12 @@ $ juicefs format \
 
 Please follow [this document](https://www.ctyun.cn/help2/10000101/10473683) to learn how to get access key and secret key.
 
-The `--bucket` option format is `https://<bucket>.oss-<region>.ctyunapi.cn`, replace `<region>` with specific region code. E.g. the region code of Chengdu is `sccd`. You could find all available region codes [here](https://www.ctyun.cn/help2/10000101/10474062). For example:
+The `--bucket` option format is `https://<bucket>.<endpoint>`,  For example:
 
 ```bash
 $ juicefs format \
     --storage oos \
-    --bucket https://<bucket>.oss-<region>.ctyunapi.cn \
+    --bucket https://<bucket>.<endpoint> \
     ... \
     myjfs
 ```

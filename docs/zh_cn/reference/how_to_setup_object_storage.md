@@ -576,12 +576,12 @@ $ juicefs format \
 
 使用天翼云 OOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.ctyun.cn/help2/10000101/10473683) 了解如何创建 `Access key` 和 `Secret key`。
 
-`--bucket` 选项的格式为 `https://<bucket>.oss-<region>.ctyunapi.cn`，请将 `<region>` 替换成你实际使用的存储区域，例如：成都的区域代码为 `sccd`。[点此查看](https://www.ctyun.cn/help2/10000101/10474062) 所有可用的区域代码。例如：
+`--bucket` 选项的格式为 `https://<bucket>.<endpoint>`，例如：
 
 ```bash
 $ juicefs format \
     --storage oos \
-    --bucket https://<bucket>.oss-<region>.ctyunapi.cn \
+    --bucket https://<bucket>.<endpoint> \
     ... \
     myjfs
 ```
