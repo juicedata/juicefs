@@ -40,11 +40,11 @@ jobs:
           java -version
           make juicefs
 
-      #- name: Set up Java
-      #  uses: actions/setup-java@v3
-      #  with:
-      #    distribution: 'adopt'
-      #    java-version: '8'
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'adopt'
+          java-version: '8'
 
 
       - name: Run Redis
@@ -67,13 +67,12 @@ jobs:
           pwd
           java -version
           mvn --version
-          chmod +x travis-setup-hdfs.sh
-          ./travis-setup-hdfs.sh
+          #chmod +x travis-setup-hdfs.sh
+          #./travis-setup-hdfs.sh
           echo "java version"
           java -version
           make -C sdk/java/libjfs
           cd sdk/java
-          echo "mvn compile -B --quiet"
           sudo mvn compile -B --quiet
           sudo mvn test -B
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
