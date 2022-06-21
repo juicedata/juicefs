@@ -99,11 +99,11 @@ jobs:
           make -C sdk/java/libjfs
           cd sdk/java
           echo "mvn compile -B --quiet"
-          mvn compile -B --quiet
+          sudo mvn compile -B --quiet
           echo "mvn test -B"
-          mvn test -B
+          sudo mvn test -B
           echo "mvn package"
-          mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
+          sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
 
 
       - name: Send Slack Notification
