@@ -64,13 +64,6 @@ jobs:
 
       - name: Hdfs Test
         run: |
-          pwd
-          java -version
-          mvn --version
-          #chmod +x travis-setup-hdfs.sh
-          #./travis-setup-hdfs.sh
-          echo "java version"
-          java -version
           make -C sdk/java/libjfs
           cd sdk/java
           sudo mvn compile -B --quiet

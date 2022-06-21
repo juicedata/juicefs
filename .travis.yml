@@ -65,7 +65,6 @@ script:
   - cat cov2.out >> coverage.txt
   - cd /home/travis/gopath/src/github.com/juicedata/juicefs
   - sudo DURATION=10 make -C fstests fsracer
-  - make -C sdk/java/libjfs
   - sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
   - sudo ./juicefs gc localhost
   - sudo ./juicefs fsck localhost
