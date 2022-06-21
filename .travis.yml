@@ -54,7 +54,7 @@ before_script:
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
   - make
   - sudo make -C fstests setup
-  - for i in {2222,3306,5432,8020,9000,9007,2379} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+  - for i in {2222,3306,5432,9000,9007,2379} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
   - sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 script:
   - sudo chmod 777 /var/jfsCache
