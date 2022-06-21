@@ -55,11 +55,11 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format  redis://127.0.0.1:6379/1 dev
+          sudo ./juicefs format  localhost dev
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          sudo ./juicefs mount -d localhost /jfs/ --enable-xattr --no-usage-report &
 
 
       - name: Fslock Test
