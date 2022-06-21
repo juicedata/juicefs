@@ -1,4 +1,4 @@
-name: "hdfstest"
+name: "sdktest"
 
 on:
   push:
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  hdfstest:
+  sdktest:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -37,7 +37,6 @@ jobs:
 
       - name: Build linux target
         run: |
-          java -version
           make juicefs
 
       - name: Set up Java
@@ -49,7 +48,6 @@ jobs:
 
       - name: Run Redis
         run: |
-          java -version
           sudo docker run -d --name redis -v redis-data:/data  \
           -p 6379:6379  redis redis-server --appendonly yes
 
@@ -57,16 +55,11 @@ jobs:
         run: |
           sudo ./juicefs format  localhost dev
 
-      - name: Juicefs Mount
-        run: |
-          sudo ./juicefs mount -d localhost /jfs/ --enable-xattr --no-usage-report &
 
-
-      - name: Hdfs Test
+      - name: Sdk Test
         run: |
           make -C sdk/java/libjfs
           cd sdk/java
-          sudo mvn compile -B --quiet
           sudo mvn test -B
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
 
