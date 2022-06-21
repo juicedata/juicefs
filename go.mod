@@ -18,7 +18,6 @@ require (
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/emersion/go-webdav v0.3.1
 	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-sql-driver/mysql v1.6.0
@@ -55,6 +54,7 @@ require (
 	github.com/qiniu/go-sdk/v7 v7.11.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smartystreets/goconvey v1.7.2
+	github.com/studio-b12/gowebdav v0.0.0-20220128162035-c7b1ff8a5e62
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.34
 	github.com/tikv/client-go/v2 v2.0.1
 	github.com/upyun/go-sdk/v3 v3.0.2
