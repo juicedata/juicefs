@@ -3,7 +3,7 @@
 For users of JuiceFS:
 
 | Company/Team                                                                            | Environment | Use Cases              |
-| :---                                                                                    | :---        | :---                   |
+|:----------------------------------------------------------------------------------------|:------------|:-----------------------|
 | [Xiaomi](https://www.mi.com)                                                            | Production  | AI                     |
 | [Li Auto Inc.](https://www.lixiang.com)                                                 | Production  | Big Data, AI           |
 | [Shopee](https://shopee.com)                                                            | Production  | Big Data               |
@@ -21,6 +21,7 @@ For users of JuiceFS:
 | [vivo](https://www.vivo.com)                                                            | Production  | AI, File Sharing       |
 | [Horizon Robotics](https://horizon.ai)                                                  | Production  | AI                     |
 | [SenseTime](https://www.sensetime.com/en)                                               | Production  | File Sharing           |
+| [DP Technology](https://www.dp.tech)                                                    | Production  | File Sharing           |
 | [Volcano Engine](https://www.volcengine.com)                                            | Testing     | File Sharing           |
 | [Dingdong Fresh](https://www.100.me)                                                    | Testing     | Big Data               |
 | [SF-Express](https://www.sf-express.com)                                                | Testing     | Big Data, File Sharing |
