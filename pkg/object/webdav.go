@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/studio-b12/gowebdav"
 )
@@ -64,6 +65,31 @@ func (w *webdav) Head(key string) (Object, error) {
 	}, nil
 }
 
+// limitedReadCloser wraps a io.ReadCloser and limits the number of bytes that can be read from it.
+type limitedReadCloser struct {
+	rc        io.ReadCloser
+	remaining int
+}
+
+func (l *limitedReadCloser) Read(buf []byte) (int, error) {
+	if l.remaining <= 0 {
+		return 0, io.EOF
+	}
+
+	if len(buf) > l.remaining {
+		buf = buf[0:l.remaining]
+	}
+
+	n, err := l.rc.Read(buf)
+	l.remaining -= n
+
+	return n, err
+}
+
+func (l *limitedReadCloser) Close() error {
+	return l.rc.Close()
+}
+
 func (w *webdav) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if off == 0 && limit <= 0 {
 		return w.c.ReadStream(key)
@@ -87,10 +113,22 @@ func (w *webdav) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 && resp.StatusCode != 206 {
-		return nil, parseError(resp)
+	if resp.StatusCode == http.StatusPartialContent {
+		// server supported partial content, return as-is.
+		return resp.Body, nil
 	}
-	return resp.Body, nil
+
+	// server returned success, but did not support partial content, so we have the whole
+	// stream in rs.Body
+	if resp.StatusCode == 200 {
+		if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, off)); err != nil {
+			return nil, &os.PathError{Op: "ReadStreamRange", Path: key, Err: err}
+		}
+		// return a io.ReadCloser that is limited to `length` bytes.
+		return &limitedReadCloser{resp.Body, int(limit)}, nil
+	}
+	_ = resp.Body.Close()
+	return nil, &os.PathError{Op: "ReadStreamRange", Path: key, Err: err}
 }
 
 func (w *webdav) Put(key string, in io.Reader) error {
@@ -104,7 +142,26 @@ func (w *webdav) Put(key string, in io.Reader) error {
 }
 
 func (w *webdav) Delete(key string) error {
-	return w.c.RemoveAll(key)
+	info, err := w.c.Stat(key)
+	if gowebdav.IsErrNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		infos, err := w.c.ReadDir(key)
+		if err != nil {
+			if gowebdav.IsErrNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		if len(infos) != 0 {
+			return nil
+		}
+	}
+	return w.c.Remove(key)
 }
 
 func (w *webdav) Copy(dst, src string) error {
@@ -113,20 +170,62 @@ func (w *webdav) Copy(dst, src string) error {
 
 type WebDAVWalkFunc func(path string, info fs.FileInfo, err error) error
 
+type webDAVFile struct {
+	name     string
+	size     int64
+	modified time.Time
+	isdir    bool
+}
+
+func (f webDAVFile) Name() string {
+	return f.name
+}
+
+func (f webDAVFile) Size() int64 {
+	return f.size
+}
+
+func (f webDAVFile) Mode() os.FileMode {
+	if f.isdir {
+		return 0775 | os.ModeDir
+	}
+	return 0664
+}
+
+func (f webDAVFile) ModTime() time.Time {
+	return f.modified
+}
+
+func (f webDAVFile) IsDir() bool {
+	return f.isdir
+}
+
+func (f webDAVFile) Sys() interface{} {
+	return nil
+}
+
 func webdavWalk(client *gowebdav.Client, path string, info fs.FileInfo, walkFn WebDAVWalkFunc) error {
 	if !info.IsDir() {
 		return walkFn(path, info, nil)
 	}
 	infos, err := client.ReadDir(path)
-	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].Name() < infos[j].Name()
+	sortedInfos := make([]os.FileInfo, len(infos))
+	for idx, o := range infos {
+		f := &webDAVFile{name: o.Name(), size: o.Size(), modified: o.ModTime(), isdir: o.IsDir()}
+		if o.IsDir() {
+			f.name = o.Name() + dirSuffix
+		}
+		sortedInfos[idx] = f
+	}
+	sort.Slice(sortedInfos, func(i, j int) bool {
+		return sortedInfos[i].Name() < sortedInfos[j].Name()
 	})
 	err1 := walkFn(path, info, err)
 	if err != nil || err1 != nil {
 		return err1
 	}
 
-	for _, info := range infos {
+	for _, info := range sortedInfos {
 		filename := filepath.Join(path, info.Name())
 		if !strings.HasPrefix(filename, dirSuffix) {
 			filename = dirSuffix + filename
@@ -171,10 +270,6 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 			walkRoot = path.Dir(prefix)
 		}
 
-		if !strings.HasPrefix(prefix, dirSuffix) {
-			prefix = dirSuffix + prefix
-		}
-
 		_ = w.Walk(walkRoot, func(path string, info fs.FileInfo, err error) error {
 			if err != nil {
 				if gowebdav.IsErrNotFound(err) {
@@ -186,9 +281,6 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 				return nil
 			}
 			if info.IsDir() {
-				if !strings.Contains(prefix, dirSuffix) {
-					prefix = dirSuffix + prefix
-				}
 				if !strings.HasSuffix(path, dirSuffix) {
 					path += dirSuffix
 				}
