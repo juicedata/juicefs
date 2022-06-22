@@ -55,6 +55,7 @@ jobs:
           name=myjfs
           ./juicefs format $meta $name
           ./juicefs webdav $meta localhost:9007 &
+          sleep 5
           litmus -k localhost:9007
 
       - name: Send Slack Notification
