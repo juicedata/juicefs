@@ -43,7 +43,7 @@ jobs:
 
       - name: Install Tools
         run: | 
-          git clone git@github.com:tolsen/litmus.git
+          git clone https://github.com/tolsen/litmus.git
           cd litmus
           ./configure && make && make install
           cd -
