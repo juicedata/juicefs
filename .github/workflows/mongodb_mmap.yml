@@ -73,7 +73,7 @@ jobs:
           ls -lah
           git clone https://github.com/sanwan/mongodb-performance-test.git
           cd mongodb-performance-test
-          time java -jar ./latest-version/mongodb-performance-test.jar -m insert -o 1000000 -t 10 -db test -c perf >insert_result
+          time java -jar ./latest-version/mongodb-performance-test.jar -m insert -o 3000000 -t 10 -db test -c perf >insert_result
           du -sh /jfs/mongodb/
           cd /jfs/mongodb-performance-test/latest-version/
           ls -lah
@@ -81,7 +81,6 @@ jobs:
 
       - name: Read and Update
         run: |
-          hello
           ps -aux | grep mongo
           cd /jfs/mongodb-performance-test/
           java -jar ./latest-version/mongodb-performance-test.jar -m update_one iterate_many -d 60 -t 10 10 -db test -c perf >update_result
