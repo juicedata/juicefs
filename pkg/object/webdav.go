@@ -28,6 +28,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/studio-b12/gowebdav"
@@ -117,7 +118,9 @@ func webdavWalk(client *gowebdav.Client, path string, info fs.FileInfo, walkFn W
 		return walkFn(path, info, nil)
 	}
 	infos, err := client.ReadDir(path)
-
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].Name() < infos[j].Name()
+	})
 	err1 := walkFn(path, info, err)
 	if err != nil || err1 != nil {
 		return err1
