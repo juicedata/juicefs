@@ -158,7 +158,7 @@ func (w *webdav) Delete(key string) error {
 			return err
 		}
 		if len(infos) != 0 {
-			return nil
+			return fmt.Errorf("not empty")
 		}
 	}
 	return w.c.Remove(key)
@@ -171,37 +171,32 @@ func (w *webdav) Copy(dst, src string) error {
 type WebDAVWalkFunc func(path string, info fs.FileInfo, err error) error
 
 type webDAVFile struct {
-	name     string
-	size     int64
-	modified time.Time
-	isdir    bool
+	f    os.FileInfo
+	name string
 }
 
-func (f webDAVFile) Name() string {
-	return f.name
+func (w webDAVFile) Name() string {
+	return w.name
 }
 
-func (f webDAVFile) Size() int64 {
-	return f.size
+func (w webDAVFile) Size() int64 {
+	return w.f.Size()
 }
 
-func (f webDAVFile) Mode() os.FileMode {
-	if f.isdir {
-		return 0775 | os.ModeDir
-	}
-	return 0664
+func (w webDAVFile) Mode() fs.FileMode {
+	return w.f.Mode()
 }
 
-func (f webDAVFile) ModTime() time.Time {
-	return f.modified
+func (w webDAVFile) ModTime() time.Time {
+	return w.f.ModTime()
 }
 
-func (f webDAVFile) IsDir() bool {
-	return f.isdir
+func (w webDAVFile) IsDir() bool {
+	return w.f.IsDir()
 }
 
-func (f webDAVFile) Sys() interface{} {
-	return nil
+func (w webDAVFile) Sys() interface{} {
+	return w.f.Sys()
 }
 
 func webdavWalk(client *gowebdav.Client, path string, info fs.FileInfo, walkFn WebDAVWalkFunc) error {
@@ -211,7 +206,7 @@ func webdavWalk(client *gowebdav.Client, path string, info fs.FileInfo, walkFn W
 	infos, err := client.ReadDir(path)
 	sortedInfos := make([]os.FileInfo, len(infos))
 	for idx, o := range infos {
-		f := &webDAVFile{name: o.Name(), size: o.Size(), modified: o.ModTime(), isdir: o.IsDir()}
+		f := &webDAVFile{name: o.Name(), f: o}
 		if o.IsDir() {
 			f.name = o.Name() + dirSuffix
 		}
