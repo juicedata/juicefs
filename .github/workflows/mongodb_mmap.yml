@@ -65,30 +65,6 @@ jobs:
 
 
 
-      - name: Insert Local Data
-        run: |
-          pwd
-          df -lh
-          java -version
-          mkdir jfs
-          cd jfs
-          git clone https://github.com/sanwan/mongodb-performance-test.git
-          echo "11111"
-          df -lh
-          cd mongodb-performance-test
-          time java -jar ./latest-version/mongodb-performance-test.jar -m insert -o 10000000 -t 10 -db test -c perf >insert_result
-          du -sh
-          df -lh
-
-      - name: Read and Update
-        run: |
-          df -lh
-          cd jfs/mongodb-performance-test/
-          ps -aux | grep mongo
-          java -jar ./latest-version/mongodb-performance-test.jar -m update_one iterate_many -d 60 -t 10 10 -db test -c perf >update_result
-          df -lh
-
-
       - name: Insert Data
         run: |
           df -lh
