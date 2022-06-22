@@ -70,10 +70,13 @@ jobs:
           df -lh
           java -version
           cd /jfs/
+          ls -lah
           git clone https://github.com/sanwan/mongodb-performance-test.git
           cd mongodb-performance-test
           time java -jar ./latest-version/mongodb-performance-test.jar -m insert -o 10000000 -t 10 -db test -c perf >insert_result
           du -sh /jfs/mongodb/
+          cd /jfs/mongodb-performance-test/latest-version/
+          ls -lah
 
 
       - name: Read and Update
