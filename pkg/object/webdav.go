@@ -192,10 +192,10 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 				if !strings.HasSuffix(path, dirSuffix) {
 					path += dirSuffix
 				}
-				if !strings.HasPrefix(prefix, path) && !strings.HasPrefix(path, prefix) {
-					return fs.SkipDir
+				if strings.HasPrefix(prefix, path) || strings.HasPrefix(path, prefix) {
+					return nil
 				}
-				return nil
+				return fs.SkipDir
 			}
 			if !strings.HasPrefix(path, prefix) || (marker != "" && path <= marker) {
 				return nil
