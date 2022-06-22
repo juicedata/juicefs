@@ -62,7 +62,6 @@ runs:
         sleep 3
         ./juicefs rmr $mp/test/ 
         [ -d "$mp/test/" ] && exit 1
-        ./juicefs umount  $mp --force
 
     - name: Clear
       run: | 
@@ -99,7 +98,6 @@ runs:
         pidlist+=($!)
         wait "${pidlist[@]}"
         [ -d "$mp/test/" ] && exit 1
-        ./juicefs umount  $mp --force
 
     - name: Log
       if: ${{ failure() }}
