@@ -45,7 +45,7 @@ jobs:
         run: | 
           git clone https://github.com/tolsen/litmus.git
           cd litmus
-          ./configure && make && make install
+          ./configure && make && sudo make install
           cd -
 
       - name: Test WebDav
