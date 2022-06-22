@@ -53,7 +53,7 @@ runs:
         sudo chmod 777 /var
         meta_url=${{inputs.meta_url}}
         mp=${{inputs.mount_point}}
-        ./juicefs format $meta_url ${{inputs.volume_name}}
+        # ./juicefs format $meta_url ${{inputs.volume_name}}
         wget -q https://s.juicefs.com/static/bench/500K_empty_files.dump.gz
         gzip -dk  500K_empty_files.dump.gz
         ./juicefs load $meta_url 500K_empty_files.dump
