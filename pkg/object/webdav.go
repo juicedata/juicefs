@@ -92,36 +92,18 @@ func (w *webdav) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func (w *webdav) isNotExist(key string) bool {
-	if _, err := w.c.Stat(key); err != nil {
-		return gowebdav.IsErrNotFound(err)
-	}
-	return false
-}
-
-func (w *webdav) path(key string) string {
-	return "/" + key
-}
-
 func (w *webdav) Put(key string, in io.Reader) error {
-	p := w.path(key)
-	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(w.endpoint.Path, dirSuffix) {
-		return w.c.MkdirAll(p, 0)
+	if key == "" {
+		return nil
 	}
-	if w.isNotExist(path.Dir(key)) {
-		if err := w.c.MkdirAll(path.Dir(key), 0); err != nil {
-			return err
-		}
+	if strings.HasSuffix(key, dirSuffix) {
+		return w.c.MkdirAll(key, 0)
 	}
 	return w.c.WriteStream(key, in, 0)
 }
 
 func (w *webdav) Delete(key string) error {
-	err := w.c.RemoveAll(key)
-	if err != nil && w.isNotExist(key) {
-		err = nil
-	}
-	return err
+	return w.c.RemoveAll(key)
 }
 
 func (w *webdav) Copy(dst, src string) error {
