@@ -1,0 +1,69 @@
+name: "webdav-test"
+
+on:
+  push:
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  workflow_dispatch:
+  
+jobs:
+  webdav-test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:        
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: make juicefs
+
+      - name: Install Tools
+        run: | 
+          wget -q http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
+          tar -xzf litmus-0.13.tar.gz
+          cd litmus-0.13 && ./configure 
+          make 
+          make install
+          cd -
+
+      - name: Test WebDav
+        run: |
+          meta=redis://localhost/1
+          mp=myjfs/
+          name=myjfs
+          ./juicefs format $meta $name
+          ./juicefs webdav $meta localhost:9007
+          litmus -k localhost:9007
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
