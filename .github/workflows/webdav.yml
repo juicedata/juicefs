@@ -43,11 +43,9 @@ jobs:
 
       - name: Install Tools
         run: | 
-          wget -q http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
-          tar -xzf litmus-0.13.tar.gz
-          cd litmus-0.13 && ./configure 
-          make 
-          make install
+          git clone git@github.com:tolsen/litmus.git
+          cd litmus
+          ./configure && make && make install
           cd -
 
       - name: Test WebDav
