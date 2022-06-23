@@ -21,7 +21,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -237,7 +236,7 @@ func (s *RestfulStorage) Delete(key string) error {
 }
 
 func (s *RestfulStorage) List(prefix, marker string, limit int64) ([]Object, error) {
-	return nil, errors.New("Not implemented")
+	return nil, notSupported
 }
 
 var _ ObjectStorage = &RestfulStorage{}
