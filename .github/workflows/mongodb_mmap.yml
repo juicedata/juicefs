@@ -48,7 +48,7 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report &
 
 
 
@@ -70,22 +70,21 @@ jobs:
           df -lh
           java -version
           cd /jfs/
-          ls -lah
-          git clone https://github.com/sanwan/mongodb-performance-test.git
-          cd mongodb-performance-test
-          time java -jar ./latest-version/mongodb-performance-test.jar -m insert -o 3000000 -t 10 -db test -c perf >insert_result
-          du -sh /jfs/mongodb/
-          cd /jfs/mongodb-performance-test/latest-version/
-          ls -lah
+          wget -O ycsb.tar.gz https://github.com/brianfrankcooper/YCSB/releases/download/0.5.0/ycsb-0.5.0.tar.gz
+          tar -zxvf ycsb.tar.gz
+          ls -lh
+          cd ycsb
+          ./bin/ycsb load mongodb -s -P workloads/workloadf > outputLoad.txt
+          echo "run read modify update"
+          ./bin/ycsb run mongodb -s -P workloads/workloadf > outputRun.txt
+
 
 
       - name: Read and Update
         run: |
           df -lh
           ps -aux | grep mongo
-          cd /jfs/mongodb-performance-test/
-          java -jar ./latest-version/mongodb-performance-test.jar -m update_one iterate_one  -d 60 -t 10 10 -db test -c perf >update_result
-          df -lh
+
 
       - name: Log
         if: ${{ failure() }}
