@@ -67,9 +67,9 @@ jobs:
 
       - name: Insert Data
         uses: actions/setup-python@v4
-          with:
-            python-version: '2.7'
-            architecture: 'x64'
+        with:
+          python-version: '2.7'
+          architecture: 'x64'
         run: |
           df -lh
           java -version
