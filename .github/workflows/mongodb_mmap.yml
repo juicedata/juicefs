@@ -82,7 +82,7 @@ jobs:
           ls -lh
           cd ycsb-0.5.0
           sed -i "s?recordcount=1000?recordcount=1000000?" workloads/workloadf
-          sed -i "s?operationcount=1000?operationcount=1000000?" workloads/workloadf
+          sed -i "s?operationcount=1000?operationcount=30000?" workloads/workloadf
           cat workloads/workloadf
           time ./bin/ycsb load mongodb -s -P workloads/workloadf  -threads 10 > outputLoad.txt
 
