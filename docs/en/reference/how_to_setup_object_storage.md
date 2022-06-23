@@ -48,6 +48,29 @@ $ juicefs format --storage s3 \
 
 Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
 
+## Use temporary access credentials
+
+Permanent access credentials generally have two parts, accessKey, secretKey, while temporary access credentials generally include three parts, accessKey, secretKey and token, and temporary access credentials have an expiration time, usually between a few minutes and a few hours.
+
+### How to get temporary credentials
+
+Different cloud vendors have different access methods. Generally, the accessKey, secretKey and the ARN representing the permission boundary of the temporary access credential are used as parameters to request to the STS server of the cloud service vendor to obtain the temporary access credential. This process can be simplified by the SDK provided by the cloud vendor. For example, AWS S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://help.aliyun.com/document_detail/100624.html).
+
+### How to setup object storage with temporary access credentials
+
+The way temporary credentials are used is not much different than permanent credentials. In the `format` filesystem step, set the accessKey, secretKey, and token of the temporary credential through the --access-key, --secret-key, --session-token parameters, respectively. For example:
+
+```bash
+$ juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379 /1 test1
+````
+
+Since temporary credentials expire quickly, the key is how to update the temporary credentials that juicefs uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
+
+1. Before the temporary certificate expires, apply for a new temporary certificate
+2. Without stopping the running juicefs, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials
+
+Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the juicefs service can access the object storage normally.
+
 ## Internal and Public Endpoint
 
 Typically, object storage services provide a unified URL for access, but the cloud platform usually provides both internal and external endpoints. For example, the platform cloud services that meet the criteria will automatically resolve requests to the internal endpoint of the object storage. This offers you a lower latency, and internal network traffic is free.
