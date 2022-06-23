@@ -122,7 +122,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 	return &baseMeta{
 		addr:         utils.RemovePassword(addr),
 		conf:         conf,
-		root:         1,
+		root:         RootInode,
 		of:           newOpenFiles(conf.OpenCache),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
