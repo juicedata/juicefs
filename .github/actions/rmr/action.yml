@@ -60,7 +60,8 @@ runs:
         ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 10 --threads 10 --no-usage-report
         ./juicefs mount -d $meta_url $mp
         sleep 3
-        ./juicefs rmr $mp/test/ 
+        ./juicefs rmr $mp/test/
+        sleep 3 
         [ -d "$mp/test/" ] && exit 1
 
     - name: Clear
