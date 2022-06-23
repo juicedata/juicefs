@@ -66,17 +66,22 @@ jobs:
 
 
       - name: Insert Data
+        uses: actions/setup-python@v4
+          with:
+            python-version: '2.7'
+            architecture: 'x64'
         run: |
           df -lh
           java -version
+          python --version
           cd /jfs/
-          wget -O ycsb.tar.gz https://github.com/brianfrankcooper/YCSB/releases/download/0.5.0/ycsb-0.5.0.tar.gz
+          wget -O ycsb.tar.gz -q https://github.com/brianfrankcooper/YCSB/releases/download/0.5.0/ycsb-0.5.0.tar.gz
           tar -zxvf ycsb.tar.gz
           ls -lh
-          cd ycsb
-          ./bin/ycsb load mongodb -s -P workloads/workloadf > outputLoad.txt
+          cd ycsb-0.5.0
+          time ./bin/ycsb load mongodb -s -P workloads/workloadf > outputLoad.txt
           echo "run read modify update"
-          ./bin/ycsb run mongodb -s -P workloads/workloadf > outputRun.txt
+          time ./bin/ycsb run mongodb -s -P workloads/workloadf > outputRun.txt
 
 
 
