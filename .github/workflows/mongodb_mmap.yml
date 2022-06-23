@@ -24,6 +24,12 @@ jobs:
         with:
           go-version: '1.17.x'
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '2.7'
+          architecture: 'x64'
+
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
@@ -66,10 +72,6 @@ jobs:
 
 
       - name: Insert Data
-        uses: actions/setup-python@v4
-        with:
-          python-version: '2.7'
-          architecture: 'x64'
         run: |
           df -lh
           java -version
