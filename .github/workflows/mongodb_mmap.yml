@@ -94,6 +94,7 @@ jobs:
           ps -aux | grep mongo
           echo "run read modify update"
           time ./bin/ycsb run mongodb -s -P workloads/workloadf -threads 10 > outputRun.txt
+          hello
 
 
       - name: Log
