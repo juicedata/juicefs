@@ -243,19 +243,19 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			return
 		}
 		var w = bytes.NewBuffer(nil)
-		fmt.Fprintf(w, " inode: %d\n", inode)
-		fmt.Fprintf(w, " files:\t%d\n", summary.Files)
-		fmt.Fprintf(w, " dirs:\t%d\n", summary.Dirs)
-		fmt.Fprintf(w, " length:\t%d\n", summary.Length)
-		fmt.Fprintf(w, " size:\t%d\n", summary.Size)
+		fmt.Fprintf(w, "  inode: %d\n", inode)
+		fmt.Fprintf(w, "  files: %d\n", summary.Files)
+		fmt.Fprintf(w, "   dirs: %d\n", summary.Dirs)
+		fmt.Fprintf(w, " length: %s\n", utils.FormatBytes(summary.Length))
+		fmt.Fprintf(w, "   size: %s\n", utils.FormatBytes(summary.Size))
 		ps := meta.GetPaths(v.Meta, ctx, inode)
 		switch len(ps) {
 		case 0:
-			fmt.Fprintf(w, " path:\t%s\n", "unknown")
+			fmt.Fprintf(w, "   path: %s\n", "unknown")
 		case 1:
-			fmt.Fprintf(w, " path:\t%s\n", ps[0])
+			fmt.Fprintf(w, "   path: %s\n", ps[0])
 		default:
-			fmt.Fprintf(w, " paths:\n")
+			fmt.Fprintf(w, "  paths:\n")
 			for _, p := range ps {
 				fmt.Fprintf(w, "\t%s\n", p)
 			}
