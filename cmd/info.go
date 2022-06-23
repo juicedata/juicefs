@@ -90,7 +90,9 @@ func info(ctx *cli.Context) error {
 			logger.Errorf("lookup inode for %s: %s", path, err)
 			continue
 		}
-
+		if inode < uint64(meta.RootInode) {
+			logger.Fatalf("inode number should't be less than %d\n", meta.RootInode)
+		}
 		f := openController(d)
 		if f == nil {
 			logger.Errorf("%s is not inside JuiceFS", path)
