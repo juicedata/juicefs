@@ -393,8 +393,8 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 							cs.NextInode = int64(inode) + 1
 						}
 					} else {
-						if cs.NextTrash < int64(inode)-TrashInode {
-							cs.NextTrash = int64(inode) - TrashInode
+						if cs.NextTrash < int64(inode-TrashInode) {
+							cs.NextTrash = int64(inode - TrashInode)
 						}
 					}
 				}

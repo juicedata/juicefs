@@ -109,7 +109,7 @@ func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscal
 		if len(name) == 0 {
 			continue
 		}
-		if parent == 1 && i == len(ss)-1 && IsSpecialName(name) {
+		if parent == meta.RootInode && i == len(ss)-1 && IsSpecialName(name) {
 			*inode, attr = GetInternalNodeByName(name)
 			parent = *inode
 			break
@@ -138,7 +138,7 @@ func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscal
 		}
 		parent = *inode
 	}
-	if parent == 1 {
+	if parent == meta.RootInode {
 		*inode = parent
 		if err = v.Meta.GetAttr(ctx, *inode, attr); err != 0 {
 			return err
