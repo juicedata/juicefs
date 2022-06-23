@@ -1,23 +1,12 @@
-name: "rm-test"
+name: "rmr-test"
 
 on:
-#  push:
-#    branches:
-#      - 'release-**'
-#    paths-ignore:
-#      - 'docs/**'
-#  pull_request:
-#    #The branches below must be a subset of the branches above
-#    branches:
-#      - 'release-**'
-#    paths-ignore:
-#      - 'docs/**'
   schedule:
     - cron:  '0 20 * * *'
   workflow_dispatch:
 
 jobs:
-  pg-rm:
+  rmr-with-pg:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -32,200 +21,99 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - uses: actions/checkout@v3
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
-      - name: Init
-        run: |
-          sudo chmod 777 /var
-          git clone https://github.com/sanwan/actionfile.git
-          cd actionfile
-          cat META_50W_EMPTY_FILE.json* >META_50W_EMPTY_FILE.json
-          ls -lh
-          mv META_50W_EMPTY_FILE.json ../
-          cd ../
-          ls -lh
-      - name: Load
-        uses: ./.github/actions/load
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
         with:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable"
-          load_file: "META_50W_EMPTY_FILE.json"
-      - name: Rm 50w Files
-        run: |
-          cd /tmp/juicefs-load-test/
-          sudo chmod 777 createfile/
-          echo "rm 50w files"
-          git clone https://github.com/juicedata/juicefs.git
-          cd juicefs
-          make
-          sudo ./juicefs rmr ../createfile/
-      - name: Log
-        if: ${{ failure() }}
-        run: |
-          sudo tail -n 100 /var/log/juicefs.log
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-
-  mysql-rm:
+  rmr-with-mysql:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
-      - name: Init
+      - name: start mysql
         run: |
-          sudo chmod 777 /var
           sudo /etc/init.d/mysql start
-          git clone https://github.com/sanwan/actionfile.git
-          cd actionfile
-          cat META_50W_EMPTY_FILE.json* >META_50W_EMPTY_FILE.json
-          ls -lh
-          mv META_50W_EMPTY_FILE.json ../
-          cd ../
-          ls -lh
-      - name: Load
-        uses: ./.github/actions/load
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test"
-          load_file: "META_50W_EMPTY_FILE.json"
-      - name: Rm 50w Files
-        run: |
-          cd /tmp/juicefs-load-test/
-          sudo chmod 777 createfile/
-          echo "rm 50w files"
-          git clone https://github.com/juicedata/juicefs.git
-          cd juicefs
-          make
-          sudo ./juicefs rmr ../createfile/
-      - name: Log
-        if: ${{ failure() }}
-        run: |
-          sudo tail -n 100 /var/log/juicefs.log
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-
-  redis-rm:
+  rmr-with-redis:
     runs-on: ubuntu-latest
-    services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
     steps:
-      - uses: actions/checkout@v3
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
-      - name: Init
+
+      - name: start redis
         run: |
-          sudo chmod 777 /var
-          git clone https://github.com/sanwan/actionfile.git
-          cd actionfile
-          cat META_50W_EMPTY_FILE.json* >META_50W_EMPTY_FILE.json
-          ls -lh
-          mv META_50W_EMPTY_FILE.json ../
-          cd ../
-          ls -lh
-      - name: Load
-        uses: ./.github/actions/load
+          docker run --name my-redis -p 6379:6379 -d redis
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
         with:
-          meta_url: redis://127.0.0.1:6379/1
-          load_file: "META_50W_EMPTY_FILE.json"
-      - name: Rm 50w Files
-        run: |
-          cd /tmp/juicefs-load-test/
-          sudo chmod 777 createfile/
-          echo "rm 50w files"
-          git clone https://github.com/juicedata/juicefs.git
-          cd juicefs
-          make
-          sudo ./juicefs rmr ../createfile/
-      - name: Log
-        if: ${{ failure() }}
-        run: |
-          sudo tail -n 100 /var/log/juicefs.log
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+          meta_url: "redis://localhost/1"
+
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-
-  sqlite3-rm:
+  rmr-with-sqlite:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
-      - name: Init
-        run: |
-          sudo chmod 777 /var
-          git clone https://github.com/sanwan/actionfile.git
-          cd actionfile
-          cat META_50W_EMPTY_FILE.json* >META_50W_EMPTY_FILE.json
-          ls -lh
-          mv META_50W_EMPTY_FILE.json ../
-          cd ../
-          ls -lh
-      - name: Load
-        uses: ./.github/actions/load
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
         with:
-          meta_url: sqlite3://sync-test.db
-          load_file: "META_50W_EMPTY_FILE.json"
-      - name: Rm 50w Files
-        run: |
-          cd /tmp/juicefs-load-test/
-          sudo chmod 777 createfile/
-          echo "rm 50w files"
-          git clone https://github.com/juicedata/juicefs.git
-          cd juicefs
-          make
-          sudo ./juicefs rmr ../createfile/
-      - name: Log
+          meta_url: "sqlite3://test.db"
+
+      - name: Setup upterm session
         if: ${{ failure() }}
-        run: |
-          sudo tail -n 100 /var/log/juicefs.log
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
+        uses: lhotari/action-upterm@v1
+
+  rmr-with-tikv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+          fetch-depth: 1
+          
+      - name: Install TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.bash_profile
+          source /home/runner/.profile
+          tiup playground --mode tikv-slim &
+          sleep 5
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
+        with:
+          meta_url: "tikv://127.0.0.1:2379"
+          
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
