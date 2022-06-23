@@ -63,7 +63,7 @@ runs:
         ls -l $mp/test
         ./juicefs rmr $mp/test/
         sleep 3 
-        ls -l $mp/test
+        ls -l $mp/test || true
         [ -d "$mp/test/" ] && exit 1
 
     - name: Clear
