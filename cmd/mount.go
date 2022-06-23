@@ -270,10 +270,10 @@ func prepareMp(mp string) {
 		}
 	} else if err == nil {
 		ino, _ := utils.GetFileInode(mp)
-		if ino <= 1 && fi.Size() == 0 {
+		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
 			// a broken mount point, umount it
 			_ = doUmount(mp, true)
-		} else if ino == 1 {
+		} else if ino == uint64(meta.RootInode) {
 			logger.Warnf("%s is already mounted by juicefs, maybe you should umount it first.", mp)
 		}
 	}

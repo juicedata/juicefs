@@ -2865,7 +2865,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	root = m.checkRoot(root)
 
 	return m.roTxn(func(s *xorm.Session) error {
-		if root == 1 {
+		if root == RootInode {
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
 			if err = m.makeSnap(s, bar); err != nil {

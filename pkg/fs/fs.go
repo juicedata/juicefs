@@ -730,7 +730,7 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 		if len(name) == 0 {
 			continue
 		}
-		if parent == 1 && i == len(ss)-1 && vfs.IsSpecialName(name) {
+		if parent == meta.RootInode && i == len(ss)-1 && vfs.IsSpecialName(name) {
 			inode, attr := vfs.GetInternalNodeByName(name)
 			fi = AttrToFileInfo(inode, attr)
 			parent = inode
@@ -774,7 +774,7 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 		}
 		parent = inode
 	}
-	if parent == 1 {
+	if parent == meta.RootInode {
 		err = fs.m.GetAttr(ctx, parent, attr)
 		if err != 0 {
 			return

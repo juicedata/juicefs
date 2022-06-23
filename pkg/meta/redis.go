@@ -2620,6 +2620,8 @@ func (m *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 	var ctx = Background
 	var foundInodes = make(map[Ino]struct{})
+	foundInodes[RootInode] = struct{}{}
+	foundInodes[TrashInode] = struct{}{}
 	cutoff := time.Now().Add(time.Hour * -1)
 	prefix := len(m.prefix)
 
@@ -2627,7 +2629,7 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 		for _, key := range keys {
 			ino, _ := strconv.Atoi(key[prefix+1:])
 			var entries []*Entry
-			eno := m.Readdir(ctx, Ino(ino), 0, &entries)
+			eno := m.doReaddir(ctx, Ino(ino), 0, &entries, 0)
 			if eno != syscall.ENOENT && eno != 0 {
 				logger.Errorf("readdir %d: %s", ino, eno)
 				return eno
@@ -3217,7 +3219,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 	if err = m.dumpDir(root, tree, bw, 1, bar); err != nil {
 		return err
 	}
-	if root == 1 {
+	if root == RootInode {
 		trash := &DumpedEntry{
 			Name: "Trash",
 			Attr: &DumpedAttr{

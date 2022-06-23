@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
@@ -343,7 +344,7 @@ func profile(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("Failed to lookup inode for %s: %s", logPath, err)
 		}
-		if inode != 1 {
+		if inode != uint64(meta.RootInode) {
 			logger.Fatalf("Path %s is not a mount point!", logPath)
 		}
 		logPath = path.Join(logPath, ".accesslog")
