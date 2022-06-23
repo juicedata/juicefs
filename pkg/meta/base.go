@@ -191,8 +191,8 @@ func (m *baseMeta) getBase() *baseMeta {
 func (m *baseMeta) checkRoot(inode Ino) Ino {
 	switch inode {
 	case 0:
-		return 1 // force using Root inode
-	case 1:
+		return RootInode // force using Root inode
+	case RootInode:
 		return m.root
 	default:
 		return inode
@@ -503,7 +503,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		*inode = parent
 		return 0
 	}
-	if parent == 1 && name == TrashName {
+	if parent == RootInode && name == TrashName {
 		if st := m.GetAttr(ctx, TrashInode, attr); st != 0 {
 			return st
 		}
@@ -643,7 +643,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	defer m.timeit(time.Now())
 	var err syscall.Errno
-	if inode == 1 {
+	if inode == RootInode {
 		e := utils.WithTimeout(func() error {
 			err = m.en.doGetAttr(ctx, inode, attr)
 			return nil
@@ -688,7 +688,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
-	if parent == 1 && name == TrashName {
+	if parent == RootInode && name == TrashName {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -731,7 +731,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
-	if parent == 1 && name == TrashName {
+	if parent == RootInode && name == TrashName {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -766,7 +766,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	if parent == 1 && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
+	if parent == RootInode && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -784,7 +784,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if name == ".." {
 		return syscall.ENOTEMPTY
 	}
-	if parent == 1 && name == TrashName || parent == TrashInode || isTrash(parent) && ctx.Uid() != 0 {
+	if parent == RootInode && name == TrashName || parent == TrashInode || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
 	if m.conf.ReadOnly {
@@ -796,7 +796,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	if parentSrc == 1 && nameSrc == TrashName || parentDst == 1 && nameDst == TrashName {
+	if parentSrc == RootInode && nameSrc == TrashName || parentDst == RootInode && nameDst == TrashName {
 		return syscall.EPERM
 	}
 	if isTrash(parentDst) || isTrash(parentSrc) && ctx.Uid() != 0 {
@@ -921,7 +921,7 @@ func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 }
 
 func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
-	if inode == 1 {
+	if inode == RootInode {
 		return map[Ino]int{1: 1}
 	}
 	var attr Attr

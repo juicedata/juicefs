@@ -190,7 +190,7 @@ func warmup(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("lookup inode for %s: %s", mp, err)
 		}
-		if inode == 1 {
+		if inode == uint64(meta.RootInode) {
 			break
 		}
 	}
