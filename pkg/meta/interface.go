@@ -475,6 +475,9 @@ func GetPaths(m Meta, ctx Context, inode Ino) []string {
 				c++
 				paths = append(paths, path.Join(dir, string(e.Name)))
 			}
+			if inode == 1 {
+				break
+			}
 		}
 		if c != count {
 			logger.Warnf("Expect to find %d entries under parent %d, but got %d", count, parent, c)
