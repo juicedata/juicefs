@@ -140,25 +140,23 @@ func (w *webdav) Put(key string, in io.Reader) error {
 }
 
 func (w *webdav) Delete(key string) error {
-	if strings.HasSuffix(key, dirSuffix) {
-		info, err := w.c.Stat(key)
-		if gowebdav.IsErrNotFound(err) {
-			return nil
-		}
+	info, err := w.c.Stat(key)
+	if gowebdav.IsErrNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		infos, err := w.c.ReadDir(key)
 		if err != nil {
+			if gowebdav.IsErrNotFound(err) {
+				return nil
+			}
 			return err
 		}
-		if info.IsDir() {
-			infos, err := w.c.ReadDir(key)
-			if err != nil {
-				if gowebdav.IsErrNotFound(err) {
-					return nil
-				}
-				return err
-			}
-			if len(infos) != 0 {
-				return fmt.Errorf("not empty")
-			}
+		if len(infos) != 0 {
+			return fmt.Errorf("%s is non-empty directory", key)
 		}
 	}
 	return w.c.Remove(key)
