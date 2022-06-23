@@ -50,7 +50,7 @@ runs:
     - name: Rmr
       shell: bash
       run: |
-        sudo chmod 777 /var
+        set -x 
         meta_url=${{inputs.meta_url}}
         mp=${{inputs.mount_point}}
         # wget -q https://s.juicefs.com/static/bench/500K_empty_files.dump.gz
@@ -60,8 +60,10 @@ runs:
         ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 10 --threads 10 --no-usage-report
         ./juicefs mount -d $meta_url $mp
         sleep 3
+        ls -l $mp/test
         ./juicefs rmr $mp/test/
         sleep 3 
+        ls -l $mp/test
         [ -d "$mp/test/" ] && exit 1
 
     - name: Clear
