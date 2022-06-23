@@ -63,7 +63,7 @@ runs:
         ls -l $mp/test
         ./juicefs rmr $mp/test/
         sleep 3 
-        ls -l $mp/test && exit 1
+        ls -l $mp/test && exit 1 || true
        
     - name: Clear
       run: | 
@@ -99,7 +99,7 @@ runs:
         ./juicefs rmr $mp/test/ || true &
         pidlist+=($!)
         wait "${pidlist[@]}"
-        [ -d "$mp/test/" ] && exit 1
+        ls -l $mp/test && exit 1 || true
 
     - name: Log
       if: ${{ failure() }}
