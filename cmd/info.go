@@ -91,7 +91,7 @@ func info(ctx *cli.Context) error {
 			continue
 		}
 		if inode < uint64(meta.RootInode) {
-			logger.Fatalf("inode number should't be less than %d\n", meta.RootInode)
+			logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
 		}
 		f := openController(d)
 		if f == nil {
