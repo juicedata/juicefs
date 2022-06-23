@@ -74,34 +74,32 @@ jobs:
       - name: Insert Data
         run: |
           df -lh
-          java -version
-          python --version
           cd /jfs/
           wget -O ycsb.tar.gz -q https://github.com/brianfrankcooper/YCSB/releases/download/0.5.0/ycsb-0.5.0.tar.gz
           tar -zxvf ycsb.tar.gz
           ls -lh
           cd ycsb-0.5.0
           sed -i "s?recordcount=1000?recordcount=1000000?" workloads/workloadf
-          sed -i "s?operationcount=1000?operationcount=30000?" workloads/workloadf
+          sed -i "s?operationcount=1000?operationcount=15000?" workloads/workloadf
           cat workloads/workloadf
           time ./bin/ycsb load mongodb -s -P workloads/workloadf  -threads 10 > outputLoad.txt
 
 
-      - name: Read Modify and Update
+      - name: Read Modify and Write
         run: |
           df -lh
           cd /jfs/ycsb-0.5.0/
           ps -aux | grep mongo
-          echo "run read modify update"
+          echo "run read modify write"
           time ./bin/ycsb run mongodb -s -P workloads/workloadf -threads 10 > outputRun.txt
-          hello
+          df -lh
 
 
       - name: Log
         if: ${{ failure() }}
         run: |
           echo "juicefs log"
-          tail -n 1000 /var/log/juicefs.log
+          sudo tail -n 1000 /var/log/juicefs.log
 
       - name: Send Slack Notification
         if: ${{ failure() }}
