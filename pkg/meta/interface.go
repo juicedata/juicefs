@@ -420,18 +420,24 @@ func newSessionInfo() *SessionInfo {
 
 // Get all paths of an inode
 func GetPaths(m Meta, ctx Context, inode Ino) []string {
+	if inode == RootInode {
+		return []string{"/"}
+	}
+
+	base := m.getBase()
+	outside := "path not shown because it's outside of the mounted root"
 	getDirPath := func(ino Ino) (string, error) {
 		var names []string
 		var attr Attr
-		for ino != 1 {
-			if st := m.GetAttr(ctx, ino, &attr); st != 0 {
+		for ino != RootInode && ino != base.root {
+			if st := base.en.doGetAttr(ctx, ino, &attr); st != 0 {
 				return "", fmt.Errorf("getattr inode %d: %s", ino, st)
 			}
 			if attr.Typ != TypeDirectory {
 				return "", fmt.Errorf("inode %d is not a directory", ino)
 			}
 			var entries []*Entry
-			if st := m.Readdir(ctx, attr.Parent, 0, &entries); st != 0 {
+			if st := base.en.doReaddir(ctx, attr.Parent, 0, &entries, -1); st != 0 {
 				return "", fmt.Errorf("readdir inode %d: %s", ino, st)
 			}
 			var name string
@@ -447,6 +453,9 @@ func GetPaths(m Meta, ctx Context, inode Ino) []string {
 			names = append(names, name)
 			ino = attr.Parent
 		}
+		if base.root != RootInode && ino == RootInode {
+			return outside, nil
+		}
 		names = append(names, "/") // add root
 
 		for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
@@ -456,17 +465,21 @@ func GetPaths(m Meta, ctx Context, inode Ino) []string {
 	}
 
 	var paths []string
+	// inode != RootInode, parent is the real parent inode
 	for parent, count := range m.GetParents(ctx, inode) {
 		if count <= 0 {
 			continue
 		}
 		dir, err := getDirPath(parent)
 		if err != nil {
-			logger.Warnf("Get directory path: %s", err)
+			logger.Warnf("Get directory path of %d: %s", parent, err)
+			continue
+		} else if dir == outside {
+			paths = append(paths, outside)
 			continue
 		}
 		var entries []*Entry
-		if st := m.Readdir(ctx, parent, 0, &entries); st != 0 {
+		if st := base.en.doReaddir(ctx, parent, 0, &entries, -1); st != 0 {
 			logger.Warnf("Readdir inode %d: %s", parent, st)
 			continue
 		}
@@ -475,9 +488,6 @@ func GetPaths(m Meta, ctx Context, inode Ino) []string {
 			if e.Inode == inode {
 				c++
 				paths = append(paths, path.Join(dir, string(e.Name)))
-			}
-			if inode == 1 {
-				break
 			}
 		}
 		if c != count {
