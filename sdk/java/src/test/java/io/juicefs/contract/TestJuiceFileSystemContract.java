@@ -33,7 +33,6 @@ public class TestJuiceFileSystemContract extends FileSystemContractBaseTest {
   public void setUp() throws Exception {
     Configuration cfg = new Configuration();
     cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
-    Thread.currentThread().interrupt();
     fs = FileSystem.get(cfg);
     assumeNotNull(fs);
   }
