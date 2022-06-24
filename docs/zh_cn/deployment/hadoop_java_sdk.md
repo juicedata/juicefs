@@ -625,11 +625,13 @@ JuiceFS 可以使用本地磁盘作为缓存加速数据访问，以下数据是
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-common</artifactId>
         <version>{HADOOP_VERSION}</version>
+        <scope>provided</scope>
     </dependency>
     <dependency>
         <groupId>io.juicefs</groupId>
         <artifactId>juicefs-hadoop</artifactId>
         <version>{JUICEFS_VERSION}</version>
+        <scope>provided</scope>
     </dependency>
   ```
 

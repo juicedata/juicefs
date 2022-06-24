@@ -608,11 +608,13 @@ JuiceFS can use local disk as a cache to accelerate data access, the following d
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-common</artifactId>
         <version>{HADOOP_VERSION}</version>
+        <scope>provided</scope>
     </dependency>
     <dependency>
         <groupId>io.juicefs</groupId>
         <artifactId>juicefs-hadoop</artifactId>
         <version>{JUICEFS_VERSION}</version>
+        <scope>provided</scope>
     </dependency>
   ```
 
