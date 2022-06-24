@@ -52,7 +52,7 @@ see [instructions for starting a GCE VM on Colab via GCP Marketplace](https://re
 
 So in order to follow this guide you will need to have these resources ready:
 
-* A Google Cloud Platform account ready and also a *porject* created. In our case we will use GCP project
+* A Google Cloud Platform account ready and also a *project* created. In our case we will use GCP project
   as `juicefs-learning` for the demo
 * A CloudSQL (Postgres) ready to be used. In this demo uses instance
   `juicefs-learning:europe-west1:juicefs-sql-example-1` as the metadata service
