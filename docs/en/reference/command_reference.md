@@ -158,6 +158,9 @@ Access Key for object storage (can also be set via the environment variable `ACC
 `--secret-key value`<br />
 Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`)
 
+`--session-token value`<br />
+session token for object storage
+
 `--encrypt-rsa-key value`<br />
 A path to RSA private key (PEM)
 
@@ -877,6 +880,9 @@ access key for object storage
 
 `--secret-key value`<br />
 secret key for object storage
+
+`--session-token value`<br />
+session token for object storage
 
 `--trash-days value`<br />
 number of days after which removed files will be permanently deleted

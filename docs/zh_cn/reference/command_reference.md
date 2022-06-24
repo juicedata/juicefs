@@ -158,6 +158,9 @@ juicefs format [command options] META-URL NAME
 `--secret-key value`<br />
 对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)
 
+`--session-token value`<br />
+对象存储的 session token 
+
 `--encrypt-rsa-key value`<br />
 RSA 私钥的路径 (PEM)
 
@@ -882,6 +885,9 @@ juicefs config [command options] META-URL
 
 `--secret-key value`<br />
 对象存储的 Secret key
+
+`--session-token value`<br />
+对象存储的 session token
 
 `--trash-days value`<br />
 文件被自动清理前在回收站内保留的天数
