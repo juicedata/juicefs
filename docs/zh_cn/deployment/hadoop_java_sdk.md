@@ -617,6 +617,34 @@ JuiceFS 可以使用本地磁盘作为缓存加速数据访问，以下数据是
 
 ![parquet](../images/spark_sql_parquet.png)
 
+## 在开发环境使用 JuiceFS
+
+1. 导入 maven 依赖
+  ```xml
+    <dependency>
+        <groupId>org.apache.hadoop</groupId>
+        <artifactId>hadoop-common</artifactId>
+        <version>{HADOOP_VERSION}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.juicefs</groupId>
+        <artifactId>juicefs-hadoop</artifactId>
+        <version>{JUICEFS_VERSION}</version>
+    </dependency>
+  ```
+
+2. 代码
+    ```
+    Configuration conf = new Configuration();
+    conf.set("fs.jfs.impl", "io.juicefs.JuiceFileSystem");
+    conf.set("juicefs.meta", "redis://127.0.0.1:6379/0");
+    Path p = new Path("jfs://dev/");
+    FileSystem jfs = p.getFileSystem(conf);
+    FileStatus[] fileStatuses = jfs.listStatus(p);
+    for (FileStatus status : fileStatuses) {
+      System.out.println(status.getPath());
+    }
+    ```
 
 ## FAQ
 
