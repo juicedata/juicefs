@@ -77,7 +77,7 @@ jobs:
         if: ${{ failure() }}
         run: |
           echo "juicefs log"
-          tail -n 1000 /var/log/juicefs.log
+          sudo tail -n 1000 /var/log/juicefs.log
 
       - name: Send Slack Notification
         if: ${{ failure() }}
