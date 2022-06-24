@@ -116,13 +116,13 @@ Note that the follow commands are run in Colab environment so there is a
 ! tar -xf juicefs.tar.gz
 ```
 
-1. Set up Google Cloud credentials
+2. Set up Google Cloud credentials
 
 ```
 ! gcloud auth application-default login
 ```
 
-1. Open cloud_sql_proxy
+3. Open cloud_sql_proxy
 
 ```
 ! wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
@@ -130,7 +130,7 @@ Note that the follow commands are run in Colab environment so there is a
 ! GOOGLE_APPLICATION_CREDENTIALS=/content/.config/application_default_credentials.json nohup ./cloud_sql_proxy -instances=juicefs-learning:europe-west1:juicefs-sql-example-1=tcp:0.0.0.0:5432 >> cloud_sql_proxy.log &
 ```
 
-1. Mount JuiceFS filesystem `myvolumn` onto folder `mnt`
+4. Mount JuiceFS filesystem `myvolumn` onto folder `mnt`
 
 ```
 ! GOOGLE_APPLICATION_CREDENTIALS=/content/.config/application_default_credentials.json nohup ./juicefs mount  "postgres://postgres:mushroom1@localhost:5432/juicefs?sslmode=disable" mnt > juicefs.log &
