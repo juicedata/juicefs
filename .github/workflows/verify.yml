@@ -58,7 +58,7 @@ jobs:
     - name: build libjfs.dll
       run: GOPATH=$HOME/go make -C sdk/java/libjfs libjfs.dll
 
-    - name: build lite
+    - name: build ceph
       run: |
         sudo apt-get update
         sudo apt-get install librados-dev
