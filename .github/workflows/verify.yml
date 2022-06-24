@@ -57,3 +57,6 @@ jobs:
 
     - name: build libjfs.dll
       run: GOPATH=$HOME/go make -C sdk/java/libjfs libjfs.dll
+
+    - name: build lite
+      run: GOPATH=$HOME/go make juicefs.ceph
