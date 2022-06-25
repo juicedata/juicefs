@@ -12,7 +12,6 @@ There are many commands to help you manage your file system. This page provides 
 If you run `juicefs` by itself, it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information of it, e.g., `juicefs format -h`.
 
 ```bash
-$ juicefs -h
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
 
@@ -20,7 +19,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0.0-dev+2022-05-25.b0034f37
+   1.0.0-rc2+2022-06-24.fc6b1206
 
 COMMANDS:
    ADMIN:
@@ -31,6 +30,7 @@ COMMANDS:
      fsck     Check consistency of a volume
      dump     Dump metadata into a JSON file
      load     Load metadata from a previously dumped JSON file
+     version  Show version
    INSPECTOR:
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
@@ -157,6 +157,9 @@ Access Key for object storage (can also be set via the environment variable `ACC
 
 `--secret-key value`<br />
 Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`)
+
+`--session-token value`<br />
+session token for object storage
 
 `--encrypt-rsa-key value`<br />
 A path to RSA private key (PEM)
@@ -877,6 +880,9 @@ access key for object storage
 
 `--secret-key value`<br />
 secret key for object storage
+
+`--session-token value`<br />
+session token for object storage
 
 `--trash-days value`<br />
 number of days after which removed files will be permanently deleted
