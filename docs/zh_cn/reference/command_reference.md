@@ -12,7 +12,6 @@ slug: /command_reference
 在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
 
 ```bash
-$ juicefs -h
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
 
@@ -20,7 +19,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0.0-dev+2022-05-25.b0034f37
+   1.0.0-rc2+2022-06-24.fc6b1206
 
 COMMANDS:
    ADMIN:
@@ -31,6 +30,7 @@ COMMANDS:
      fsck     Check consistency of a volume
      dump     Dump metadata into a JSON file
      load     Load metadata from a previously dumped JSON file
+     version  Show version
    INSPECTOR:
      status   Show status of a volume
      stats    Show real time performance statistics of JuiceFS
@@ -157,6 +157,9 @@ juicefs format [command options] META-URL NAME
 
 `--secret-key value`<br />
 对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)
+
+`--session-token value`<br />
+对象存储的 session token 
 
 `--encrypt-rsa-key value`<br />
 RSA 私钥的路径 (PEM)
@@ -882,6 +885,9 @@ juicefs config [command options] META-URL
 
 `--secret-key value`<br />
 对象存储的 Secret key
+
+`--session-token value`<br />
+对象存储的 session token
 
 `--trash-days value`<br />
 文件被自动清理前在回收站内保留的天数
