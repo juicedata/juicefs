@@ -3,6 +3,10 @@ sidebar_label: Hadoop 使用 JuiceFS
 sidebar_position: 3
 slug: /hadoop_java_sdk
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # 在 Hadoop 生态使用 JuiceFS 存储
 
 JuiceFS 提供与 HDFS 接口[高度兼容](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html)的 Java 客户端，Hadoop 生态中的各种应用都可以在不改变代码的情况下，平滑地使用 JuiceFS 存储数据。
@@ -303,10 +307,10 @@ HDFS、Hue、ZooKeeper 等服务无需重启。
 
 JuiceFS Java 客户端部署完成以后，可以采用以下方式验证部署是否成功。
 
-### Hadoop
+### Hadoop CLI
 
 ```bash
-$ hadoop fs -ls jfs://{JFS_NAME}/
+hadoop fs -ls jfs://{JFS_NAME}/
 ```
 
 :::info 说明
@@ -322,6 +326,73 @@ CREATE TABLE IF NOT EXISTS person
   age INT
 ) LOCATION 'jfs://{JFS_NAME}/tmp/person';
 ```
+
+### Java/Scala 项目
+
+1. 新增 Maven 或 Gradle 依赖：
+
+   <Tabs>
+     <TabItem value="maven" label="Maven">
+
+   ```xml
+   <dependency>
+       <groupId>org.apache.hadoop</groupId>
+       <artifactId>hadoop-common</artifactId>
+       <version>{HADOOP_VERSION}</version>
+       <scope>provided</scope>
+   </dependency>
+   <dependency>
+       <groupId>io.juicefs</groupId>
+       <artifactId>juicefs-hadoop</artifactId>
+       <version>{JUICEFS_HADOOP_VERSION}</version>
+       <scope>provided</scope>
+   </dependency>
+   ```
+
+     </TabItem>
+     <TabItem value="gradle" label="Gradle">
+
+   ```groovy
+   dependencies {
+     implementation 'org.apache.hadoop:hadoop-common:${hadoopVersion}'
+     implementation 'io.juicefs:juicefs-hadoop:${juicefsHadoopVersion}'
+   }
+   ```
+
+     </TabItem>
+   </Tabs>
+
+2. 使用以下示例代码验证：
+
+   <Tabs>
+     <TabItem value="java" label="Java">
+
+   ```java
+   package demo;
+
+   import org.apache.hadoop.conf.Configuration;
+   import org.apache.hadoop.fs.FileStatus;
+   import org.apache.hadoop.fs.FileSystem;
+   import org.apache.hadoop.fs.Path;
+
+   public class JuiceFSDemo {
+       public static void main(String[] args) throws Exception {
+           Configuration conf = new Configuration();
+           conf.set("fs.jfs.impl", "io.juicefs.JuiceFileSystem");
+           conf.set("juicefs.meta", "redis://127.0.0.1:6379/0");  // JuiceFS 元数据引擎地址
+           Path p = new Path("jfs://{JFS_NAME}/");  // 请替换 {JFS_NAME} 为正确的值
+           FileSystem jfs = p.getFileSystem(conf);
+           FileStatus[] fileStatuses = jfs.listStatus(p);
+           // 遍历 JuiceFS 文件系统并打印文件路径
+           for (FileStatus status : fileStatuses) {
+               System.out.println(status.getPath());
+           }
+       }
+   }
+   ```
+
+     </TabItem>
+   </Tabs>
 
 ## 监控指标收集
 
@@ -616,7 +687,6 @@ JuiceFS 可以使用本地磁盘作为缓存加速数据访问，以下数据是
 | q10     | 24              | 28             | 38   |
 
 ![parquet](../images/spark_sql_parquet.png)
-
 
 ## FAQ
 
