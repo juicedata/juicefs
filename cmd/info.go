@@ -156,8 +156,10 @@ func printChunks(resp string, raw bool) {
 	cs := strings.Split(resp, "\n")
 	result := make([][]string, len(cs))
 	result[0] = []string{"chunkIndex", "objectName", "size", "offset", "length"}
+	leftAlign := 1
 	if raw {
 		result[0][1] = "sliceID"
+		leftAlign = -1
 	}
 	for i := 1; i < len(result); i++ {
 		result[i] = make([]string, 5) // len(result[0])
@@ -169,11 +171,8 @@ func printChunks(resp string, raw bool) {
 			if j == 0 {
 				p = p[:len(p)-1] // remove the last ':'
 			}
-			if !raw && j == 1 && p != "" {
-				p = "chunks/" + p
-			}
 			result[i+1][j] = p
 		}
 	}
-	printResult(result, 1, false)
+	printResult(result, leftAlign, false)
 }

@@ -225,9 +225,9 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 	bsize := uint32(v.Conf.Chunk.BlockSize)
 	var prefix string
 	if v.Conf.Chunk.HashPrefix {
-		prefix = fmt.Sprintf("%02X/%v/%v", id%256, id/1000/1000, id)
+		prefix = fmt.Sprintf("%s/chunks/%02X/%v/%v", v.Conf.Format.Name, id%256, id/1000/1000, id)
 	} else {
-		prefix = fmt.Sprintf("%v/%v/%v", id/1000/1000, id/1000, id)
+		prefix = fmt.Sprintf("%s/chunks/%v/%v/%v", v.Conf.Format.Name, id/1000/1000, id/1000, id)
 	}
 	first := offset / bsize
 	last := (offset + length - 1) / bsize
