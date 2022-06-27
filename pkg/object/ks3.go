@@ -159,25 +159,6 @@ func (s *ks3) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
-func (s *ks3) ListWithDelimiter(prefix, delimiter string) ([]Object, error) {
-	param := s3.ListObjectsInput{
-		Bucket:    &s.bucket,
-		Prefix:    &prefix,
-		Delimiter: &delimiter,
-	}
-	resp, err := s.s3.ListObjects(&param)
-	if err != nil {
-		return nil, err
-	}
-	n := len(resp.Contents)
-	objs := make([]Object, n)
-	for i := 0; i < n; i++ {
-		o := resp.Contents[i]
-		objs[i] = &obj{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
-	}
-	return objs, nil
-}
-
 func (s *ks3) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }

@@ -177,26 +177,6 @@ func (s *obsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
-func (s *obsClient) ListWithDelimiter(prefix, delimiter string) ([]Object, error) {
-	input := &obs.ListObjectsInput{
-		Bucket: s.bucket,
-	}
-	input.Prefix = prefix
-	input.MaxKeys = 1000
-	input.Delimiter = delimiter
-	resp, err := s.c.ListObjects(input)
-	if err != nil {
-		return nil, err
-	}
-	n := len(resp.Contents)
-	objs := make([]Object, n)
-	for i := 0; i < n; i++ {
-		o := resp.Contents[i]
-		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
-	}
-	return objs, nil
-}
-
 func (s *obsClient) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }

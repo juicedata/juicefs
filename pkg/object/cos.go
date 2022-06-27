@@ -143,10 +143,6 @@ func (c *COS) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
-func (c *COS) ListWithDelimiter(prefix, delimiter string) ([]Object, error) {
-	return nil, notSupported
-}
-
 func (c *COS) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }

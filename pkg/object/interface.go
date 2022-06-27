@@ -81,8 +81,6 @@ type ObjectStorage interface {
 	// ListAll returns all the objects as an channel.
 	ListAll(prefix, marker string) (<-chan Object, error)
 
-	ListWithDelimiter(prefix, delimiter string) ([]Object, error)
-
 	// CreateMultipartUpload starts to upload a large object part by part.
 	CreateMultipartUpload(key string) (*MultipartUpload, error)
 	// UploadPart upload a part of an object.

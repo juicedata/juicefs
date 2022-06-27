@@ -122,10 +122,6 @@ func (s *scsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
-func (s *scsClient) ListWithDelimiter(prefix, delimiter string) ([]Object, error) {
-	return nil, notSupported
-}
-
 func (s *scsClient) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
