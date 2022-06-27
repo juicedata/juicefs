@@ -216,7 +216,7 @@ type obj struct {
 
 func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 	if id == 0 {
-		return []*obj{{"zeros", size, offset, length}}
+		return []*obj{{"", size, offset, length}}
 	}
 	if length == 0 || offset+length > size {
 		logger.Warnf("Corrupt slice id %d size %d offset %d length %d", id, size, offset, length)
@@ -231,47 +231,19 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 	}
 	first := offset / bsize
 	last := (offset + length - 1) / bsize
-	fo := &obj{fmt.Sprintf("%s_%d_%d", prefix, first, bsize), bsize, 0, bsize}
+	objs := make([]*obj, 0, last-first+1)
+	for indx := first; indx <= last; indx++ {
+		objs = append(objs, &obj{fmt.Sprintf("%s_%d_%d", prefix, indx, bsize), bsize, 0, bsize})
+	}
+	fo, lo := objs[0], objs[len(objs)-1]
 	fo.off = offset - first*bsize
 	fo.len = fo.size - fo.off
-	lo := fo
-	if last > first {
-		lo = &obj{fmt.Sprintf("%s_%d_%d", prefix, last, bsize), bsize, 0, bsize}
-	}
 	if (last+1)*bsize > size {
 		lo.size = size - last*bsize
 		lo.key = fmt.Sprintf("%s_%d_%d", prefix, last, lo.size)
 	}
 	lo.len = (offset + length) - last*bsize - lo.off
 
-	objs := make([]*obj, 0, 3)
-	switch last - first {
-	case 0:
-		objs = append(objs, fo)
-	case 1:
-		if fo.size == lo.size && fo.off == lo.off && fo.len == lo.len {
-			objs = append(objs, &obj{fmt.Sprintf("%s_{%d..%d}_%d", prefix, first, last, fo.size), fo.size, fo.off, fo.len})
-		} else {
-			objs = append(objs, fo, lo)
-		}
-	default:
-		start, end := first, last // indexes for merged
-		if fo.size != bsize || fo.off != 0 || fo.len != bsize {
-			objs = append(objs, fo)
-			start++
-		}
-		if lo.size != bsize || lo.off != 0 || lo.len != bsize {
-			end--
-		}
-		if start == end {
-			objs = append(objs, &obj{fmt.Sprintf("%s_%d_%d", prefix, start, bsize), bsize, 0, bsize})
-		} else {
-			objs = append(objs, &obj{fmt.Sprintf("%s_{%d..%d}_%d", prefix, start, end, bsize), bsize, 0, bsize})
-		}
-		if end != last {
-			objs = append(objs, lo)
-		}
-	}
 	return objs
 }
 

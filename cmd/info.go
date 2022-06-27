@@ -169,11 +169,11 @@ func printChunks(resp string, raw bool) {
 			if j == 0 {
 				p = p[:len(p)-1] // remove the last ':'
 			}
-			if !raw && j == 1 && p != "zeros" {
+			if !raw && j == 1 && p != "" {
 				p = "chunks/" + p
 			}
 			result[i+1][j] = p
 		}
 	}
-	printResult(result, false)
+	printResult(result, 1, false)
 }
