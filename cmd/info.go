@@ -134,6 +134,7 @@ func info(ctx *cli.Context) error {
 		var p int
 		if p = strings.Index(resp, "chunks:\n"); p > 0 {
 			p += 8
+			raw = 1 // legacy clients always return chunks
 		} else if p = strings.Index(resp, "objects:\n"); p > 0 {
 			p += 9
 		}
@@ -142,7 +143,7 @@ func info(ctx *cli.Context) error {
 		} else {
 			fmt.Println(resp[:p-1])
 			if len(resp[p:]) > 0 {
-				printChunks(resp[p:], ctx.Bool("raw"))
+				printChunks(resp[p:], raw == 1)
 			}
 		}
 		_ = f.Close()
@@ -167,6 +168,9 @@ func printChunks(resp string, raw bool) {
 		for j, p := range ps {
 			if j == 0 {
 				p = p[:len(p)-1] // remove the last ':'
+			}
+			if !raw && j == 1 {
+				p = "chunks/" + p
 			}
 			result[i+1][j] = p
 		}
