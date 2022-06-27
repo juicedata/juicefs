@@ -225,19 +225,47 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 	bsize := uint32(v.Conf.Chunk.BlockSize)
 	first := offset / bsize
 	last := (offset + length - 1) / bsize
-	objs := make([]*obj, 0, last-first+1)
-	for indx := first; indx <= last; indx++ {
-		objs = append(objs, &obj{fmt.Sprintf("%d_%d_%d", id, indx, bsize), bsize, 0, bsize})
-	}
-	fo, lo := objs[0], objs[len(objs)-1]
+	fo := &obj{fmt.Sprintf("%d_%d_%d", id, first, bsize), bsize, 0, bsize}
 	fo.off = offset - first*bsize
 	fo.len = fo.size - fo.off
+	lo := fo
+	if last > first {
+		lo = &obj{fmt.Sprintf("%d_%d_%d", id, last, bsize), bsize, 0, bsize}
+	}
 	if (last+1)*bsize > size {
 		lo.size = size - last*bsize
 		lo.key = fmt.Sprintf("%d_%d_%d", id, last, lo.size)
 	}
 	lo.len = (offset + length) - last*bsize - lo.off
 
+	objs := make([]*obj, 0, 3)
+	switch last - first {
+	case 0:
+		objs = append(objs, fo)
+	case 1:
+		if fo.size == lo.size && fo.off == lo.off && fo.len == lo.len {
+			objs = append(objs, &obj{fmt.Sprintf("%d_{%d..%d}_%d", id, first, last, fo.size), fo.size, fo.off, fo.len})
+		} else {
+			objs = append(objs, fo, lo)
+		}
+	default:
+		start, end := first, last // indexes for merged
+		if fo.size != bsize || fo.off != 0 || fo.len != bsize {
+			objs = append(objs, fo)
+			start++
+		}
+		if lo.size != bsize || lo.off != 0 || lo.len != bsize {
+			end--
+		}
+		if start == end {
+			objs = append(objs, &obj{fmt.Sprintf("%d_%d_%d", id, start, bsize), bsize, 0, bsize})
+		} else {
+			objs = append(objs, &obj{fmt.Sprintf("%d_{%d..%d}_%d", id, start, end, bsize), bsize, 0, bsize})
+		}
+		if end != last {
+			objs = append(objs, lo)
+		}
+	}
 	return objs
 }
 
