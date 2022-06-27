@@ -223,18 +223,24 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 		return nil
 	}
 	bsize := uint32(v.Conf.Chunk.BlockSize)
+	var prefix string
+	if v.Conf.Chunk.HashPrefix {
+		prefix = fmt.Sprintf("%02X/%v/%v", id%256, id/1000/1000, id)
+	} else {
+		prefix = fmt.Sprintf("%v/%v/%v", id/1000/1000, id/1000, id)
+	}
 	first := offset / bsize
 	last := (offset + length - 1) / bsize
-	fo := &obj{fmt.Sprintf("%d_%d_%d", id, first, bsize), bsize, 0, bsize}
+	fo := &obj{fmt.Sprintf("%s_%d_%d", prefix, first, bsize), bsize, 0, bsize}
 	fo.off = offset - first*bsize
 	fo.len = fo.size - fo.off
 	lo := fo
 	if last > first {
-		lo = &obj{fmt.Sprintf("%d_%d_%d", id, last, bsize), bsize, 0, bsize}
+		lo = &obj{fmt.Sprintf("%s_%d_%d", prefix, last, bsize), bsize, 0, bsize}
 	}
 	if (last+1)*bsize > size {
 		lo.size = size - last*bsize
-		lo.key = fmt.Sprintf("%d_%d_%d", id, last, lo.size)
+		lo.key = fmt.Sprintf("%s_%d_%d", prefix, last, lo.size)
 	}
 	lo.len = (offset + length) - last*bsize - lo.off
 
@@ -244,7 +250,7 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 		objs = append(objs, fo)
 	case 1:
 		if fo.size == lo.size && fo.off == lo.off && fo.len == lo.len {
-			objs = append(objs, &obj{fmt.Sprintf("%d_{%d..%d}_%d", id, first, last, fo.size), fo.size, fo.off, fo.len})
+			objs = append(objs, &obj{fmt.Sprintf("%s_{%d..%d}_%d", prefix, first, last, fo.size), fo.size, fo.off, fo.len})
 		} else {
 			objs = append(objs, fo, lo)
 		}
@@ -258,9 +264,9 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 			end--
 		}
 		if start == end {
-			objs = append(objs, &obj{fmt.Sprintf("%d_%d_%d", id, start, bsize), bsize, 0, bsize})
+			objs = append(objs, &obj{fmt.Sprintf("%s_%d_%d", prefix, start, bsize), bsize, 0, bsize})
 		} else {
-			objs = append(objs, &obj{fmt.Sprintf("%d_{%d..%d}_%d", id, start, end, bsize), bsize, 0, bsize})
+			objs = append(objs, &obj{fmt.Sprintf("%s_{%d..%d}_%d", prefix, start, end, bsize), bsize, 0, bsize})
 		}
 		if end != last {
 			objs = append(objs, lo)
