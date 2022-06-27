@@ -119,11 +119,12 @@ func (c *COS) Delete(key string) error {
 	return err
 }
 
-func (c *COS) List(prefix, marker string, limit int64) ([]Object, error) {
+func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := cos.BucketGetOptions{
-		Prefix:  prefix,
-		Marker:  marker,
-		MaxKeys: int(limit),
+		Prefix:    prefix,
+		Marker:    marker,
+		MaxKeys:   int(limit),
+		Delimiter: delimiter,
 	}
 	resp, _, err := c.c.Bucket.Get(ctx, &param)
 	for err == nil && len(resp.Contents) == 0 && resp.IsTruncated {

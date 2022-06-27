@@ -81,11 +81,11 @@ func (p *withPrefix) Delete(key string) error {
 	return p.os.Delete(p.prefix + key)
 }
 
-func (p *withPrefix) List(prefix, marker string, limit int64) ([]Object, error) {
+func (p *withPrefix) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
-	objs, err := p.os.List(p.prefix+prefix, marker, limit)
+	objs, err := p.os.List(p.prefix+prefix, marker, delimiter, limit)
 	ln := len(p.prefix)
 	for _, o := range objs {
 		switch p := o.(type) {

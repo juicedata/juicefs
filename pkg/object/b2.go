@@ -114,7 +114,7 @@ func (c *b2client) Delete(key string) error {
 	return err
 }
 
-func (c *b2client) List(prefix, marker string, limit int64) ([]Object, error) {
+func (c *b2client) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -122,7 +122,7 @@ func (c *b2client) List(prefix, marker string, limit int64) ([]Object, error) {
 		marker = c.nextMarker
 		c.nextMarker = ""
 	}
-	resp, err := c.bucket.ListFileNamesWithPrefix(marker, int(limit), prefix, "")
+	resp, err := c.bucket.ListFileNamesWithPrefix(marker, int(limit), prefix, delimiter)
 	if err != nil {
 		return nil, err
 	}

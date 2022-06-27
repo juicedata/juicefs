@@ -112,12 +112,12 @@ func (q *bosclient) Delete(key string) error {
 	return err
 }
 
-func (q *bosclient) List(prefix, marker string, limit int64) ([]Object, error) {
+func (q *bosclient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	limit_ := int(limit)
-	out, err := q.c.SimpleListObjects(q.bucket, prefix, limit_, marker, "")
+	out, err := q.c.SimpleListObjects(q.bucket, prefix, limit_, marker, delimiter)
 	if err != nil {
 		return nil, err
 	}

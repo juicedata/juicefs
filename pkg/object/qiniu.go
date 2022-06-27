@@ -134,7 +134,7 @@ func (q *qiniu) Delete(key string) error {
 	return err
 }
 
-func (q *qiniu) List(prefix, marker string, limit int64) ([]Object, error) {
+func (q *qiniu) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -144,9 +144,9 @@ func (q *qiniu) List(prefix, marker string, limit int64) ([]Object, error) {
 		// last page
 		return nil, nil
 	}
-	entries, _, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, "", q.marker, int(limit))
+	entries, _, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, q.marker, int(limit))
 	for err == nil && len(entries) == 0 && hasNext {
-		entries, _, markerOut, hasNext, err = q.bm.ListFiles(q.bucket, prefix, "", markerOut, int(limit))
+		entries, _, markerOut, hasNext, err = q.bm.ListFiles(q.bucket, prefix, delimiter, markerOut, int(limit))
 	}
 	q.marker = markerOut
 	if len(entries) > 0 || err == io.EOF {

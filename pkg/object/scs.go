@@ -89,7 +89,7 @@ func (s *scsClient) Delete(key string) error {
 	return s.b.Delete(key)
 }
 
-func (s *scsClient) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *scsClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if marker != "" {
 		if s.marker == "" {
 			// last page
@@ -97,7 +97,7 @@ func (s *scsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 		}
 		marker = s.marker
 	}
-	list, err := s.b.List("", prefix, marker, limit)
+	list, err := s.b.List(delimiter, prefix, marker, limit)
 	if err != nil {
 		s.marker = ""
 		return nil, err

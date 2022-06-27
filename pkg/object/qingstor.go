@@ -161,15 +161,16 @@ func (q *qingstor) Delete(key string) error {
 	return err
 }
 
-func (q *qingstor) List(prefix, marker string, limit int64) ([]Object, error) {
+func (q *qingstor) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	limit_ := int(limit)
 	input := &qs.ListObjectsInput{
-		Prefix: &prefix,
-		Marker: &marker,
-		Limit:  &limit_,
+		Prefix:    &prefix,
+		Marker:    &marker,
+		Limit:     &limit_,
+		Delimiter: &delimiter,
 	}
 	out, err := q.bucket.ListObjects(input)
 	if err != nil {

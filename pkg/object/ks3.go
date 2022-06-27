@@ -139,12 +139,13 @@ func (s *ks3) Delete(key string) error {
 	return err
 }
 
-func (s *ks3) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := s3.ListObjectsInput{
-		Bucket:  &s.bucket,
-		Prefix:  &prefix,
-		Marker:  &marker,
-		MaxKeys: &limit,
+		Bucket:    &s.bucket,
+		Prefix:    &prefix,
+		Marker:    &marker,
+		MaxKeys:   &limit,
+		Delimiter: &delimiter,
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {

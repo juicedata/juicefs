@@ -130,12 +130,13 @@ func (s *nos) Delete(key string) error {
 	return s.client.DeleteObject(&param)
 }
 
-func (s *nos) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *nos) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := model.ListObjectsRequest{
-		Bucket:  s.bucket,
-		Prefix:  prefix,
-		Marker:  marker,
-		MaxKeys: int(limit),
+		Bucket:    s.bucket,
+		Prefix:    prefix,
+		Marker:    marker,
+		MaxKeys:   int(limit),
+		Delimiter: delimiter,
 	}
 	resp, err := s.client.ListObjects(&param)
 	if err != nil {

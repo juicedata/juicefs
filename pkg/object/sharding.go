@@ -80,7 +80,7 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 	startTime := time.Now()
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, err := store.List(prefix, marker, maxResults)
+	objs, err := store.List(prefix, marker, "", maxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
@@ -112,12 +112,12 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			objs, err = store.List(prefix, marker, maxResults)
+			objs, err = store.List(prefix, marker, "", maxResults)
 			for err != nil {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, err = store.List(prefix, marker, maxResults)
+				objs, err = store.List(prefix, marker, "", maxResults)
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 		}

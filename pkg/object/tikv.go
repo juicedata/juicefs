@@ -89,7 +89,7 @@ func (t *tikv) Delete(key string) error {
 	return t.c.Delete(context.TODO(), []byte(key))
 }
 
-func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
+func (t *tikv) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if marker == "" {
 		marker = prefix
 	}
@@ -97,7 +97,7 @@ func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
 		limit = int64(rawkv.MaxRawKVScanLimit)
 	}
 	// TODO: key only
-	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), nil, int(limit))
+	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), []byte(delimiter), int(limit))
 	if err != nil {
 		return nil, err
 	}

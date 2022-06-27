@@ -75,11 +75,15 @@ func (s *swiftOSS) Delete(key string) error {
 	return err
 }
 
-func (s *swiftOSS) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 10000 {
 		limit = 10000
 	}
-	objects, err := s.conn.Objects(s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Limit: int(limit)})
+	var delimiter_ rune
+	if len([]rune(delimiter)) == 1 {
+		delimiter_ = []rune(delimiter)[0]
+	}
+	objects, err := s.conn.Objects(s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Delimiter: delimiter_, Limit: int(limit)})
 	if err != nil {
 		return nil, err
 	}

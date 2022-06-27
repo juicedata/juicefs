@@ -67,7 +67,7 @@ func isExists(err error) bool {
 }
 
 func (s *s3client) Create() error {
-	if _, err := s.List("", "", 1); err == nil {
+	if _, err := s.List("", "", "", 1); err == nil {
 		return nil
 	}
 	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
@@ -168,12 +168,13 @@ func (s *s3client) Delete(key string) error {
 	return err
 }
 
-func (s *s3client) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *s3client) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := s3.ListObjectsInput{
-		Bucket:  &s.bucket,
-		Prefix:  &prefix,
-		Marker:  &marker,
-		MaxKeys: &limit,
+		Bucket:    &s.bucket,
+		Prefix:    &prefix,
+		Marker:    &marker,
+		MaxKeys:   &limit,
+		Delimiter: &delimiter,
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {

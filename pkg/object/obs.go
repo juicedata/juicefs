@@ -157,13 +157,14 @@ func (s *obsClient) Delete(key string) error {
 	return err
 }
 
-func (s *obsClient) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *obsClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	input := &obs.ListObjectsInput{
 		Bucket: s.bucket,
 		Marker: marker,
 	}
 	input.Prefix = prefix
 	input.MaxKeys = int(limit)
+	input.Delimiter = delimiter
 	resp, err := s.c.ListObjects(input)
 	if err != nil {
 		return nil, err

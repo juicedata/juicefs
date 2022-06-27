@@ -77,7 +77,7 @@ type ObjectStorage interface {
 	// Head returns some information about the object or an error if not found.
 	Head(key string) (Object, error)
 	// List returns a list of objects.
-	List(prefix, marker string, limit int64) ([]Object, error)
+	List(prefix, marker, delimiter string, limit int64) ([]Object, error)
 	// ListAll returns all the objects as an channel.
 	ListAll(prefix, marker string) (<-chan Object, error)
 

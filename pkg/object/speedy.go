@@ -53,12 +53,14 @@ func (s *speedy) String() string {
 	return fmt.Sprintf("speedy://%s/", uri.Host)
 }
 
-func (s *speedy) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *speedy) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	uri, _ := url.ParseRequestURI(s.endpoint)
 
 	query := url.Values{}
 	query.Add("prefix", prefix)
 	query.Add("marker", marker)
+	query.Add("delimiter", delimiter)
+
 	if limit > 100000 {
 		limit = 100000
 	}

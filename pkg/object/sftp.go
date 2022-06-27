@@ -390,7 +390,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 	}
 }
 
-func (f *sftpStore) List(prefix, marker string, limit int64) ([]Object, error) {
+func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
 

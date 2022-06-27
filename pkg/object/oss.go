@@ -128,12 +128,12 @@ func (o *ossClient) Delete(key string) error {
 	return o.checkError(o.bucket.DeleteObject(key))
 }
 
-func (o *ossClient) List(prefix, marker string, limit int64) ([]Object, error) {
+func (o *ossClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	result, err := o.bucket.ListObjects(oss.Prefix(prefix),
-		oss.Marker(marker), oss.MaxKeys(int(limit)))
+		oss.Marker(marker), oss.Delimiter(delimiter), oss.MaxKeys(int(limit)))
 	if o.checkError(err) != nil {
 		return nil, err
 	}
