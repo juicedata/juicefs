@@ -159,7 +159,7 @@ func objbench(ctx *cli.Context) error {
 	if !ctx.IsSet("skip-functional-tests") {
 		functionalTesting(blob, &result, tty)
 	}
-	printResult(result, tty)
+	printResult(result, -1, tty)
 	fmt.Println("\nStart Performance Testing ...")
 	var pResult [][]string
 	pResult = append(pResult, []string{"ITEM", "VALUE", "COST"})
@@ -331,7 +331,7 @@ func objbench(ctx *cli.Context) error {
 	pResult[1], pResult[3] = pResult[3], pResult[1]
 	pResult[2], pResult[4] = pResult[4], pResult[2]
 	pResult[7], pResult[10] = pResult[10], pResult[7]
-	printResult(pResult, tty)
+	printResult(pResult, -1, tty)
 	return nil
 }
 
