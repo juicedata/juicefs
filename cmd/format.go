@@ -199,16 +199,16 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		return nil, err
 	}
 	values := u.Query()
-	if len(values) != 0 {
+	if values.Get("tls-insecure-skip-verify") != "" {
 		var tlsSkipVerify bool
 		if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
 			return nil, err
 		}
 		object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
 		values.Del("tls-insecure-skip-verify")
+		u.RawQuery = values.Encode()
+		format.Bucket = u.String()
 	}
-	u.RawQuery = values.Encode()
-	format.Bucket = u.String()
 
 	if format.Shards > 1 {
 		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
