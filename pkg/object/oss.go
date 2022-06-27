@@ -146,6 +146,10 @@ func (o *ossClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
+func (o *ossClient) ListWithDelimiter(prefix, delimiter string) ([]Object, error) {
+	return nil, notSupported
+}
+
 func (o *ossClient) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }

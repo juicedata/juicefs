@@ -189,6 +189,10 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
+func (s *qingstor) ListWithDelimiter(prefix, delimiter string) ([]Object, error) {
+	return nil, notSupported
+}
+
 func (q *qingstor) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }

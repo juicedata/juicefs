@@ -140,6 +140,10 @@ func (s DefaultObjectStorage) ListAll(prefix, marker string) (<-chan Object, err
 	return nil, notSupported
 }
 
+func (s DefaultObjectStorage) ListWithDelimiter(prefix, delimiter string) ([]Object, error) {
+	return nil, notSupported
+}
+
 type Creator func(bucket, accessKey, secretKey, token string) (ObjectStorage, error)
 
 var storages = make(map[string]Creator)

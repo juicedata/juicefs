@@ -98,6 +98,10 @@ func (p *withPrefix) List(prefix, marker string, limit int64) ([]Object, error) 
 	return objs, err
 }
 
+func (p *withPrefix) ListWithDelimiter(prefix, delimiter string) ([]Object, error) {
+	return p.os.ListWithDelimiter(p.prefix+prefix, delimiter)
+}
+
 func (p *withPrefix) ListAll(prefix, marker string) (<-chan Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
