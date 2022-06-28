@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -144,9 +145,9 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64) ([]Object, e
 		// last page
 		return nil, nil
 	}
-	entries, _, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, q.marker, int(limit))
+	entries, prefixes, markerOut, hasNext, err := q.bm.ListFiles(q.bucket, prefix, delimiter, q.marker, int(limit))
 	for err == nil && len(entries) == 0 && hasNext {
-		entries, _, markerOut, hasNext, err = q.bm.ListFiles(q.bucket, prefix, delimiter, markerOut, int(limit))
+		entries, prefixes, markerOut, hasNext, err = q.bm.ListFiles(q.bucket, prefix, delimiter, markerOut, int(limit))
 	}
 	q.marker = markerOut
 	if len(entries) > 0 || err == io.EOF {
@@ -162,6 +163,12 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64) ([]Object, e
 		entry := entries[i]
 		mtime := entry.PutTime / 10000000
 		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/")}
+	}
+	if delimiter != "" {
+		for _, p := range prefixes {
+			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

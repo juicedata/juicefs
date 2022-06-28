@@ -119,6 +119,12 @@ func (s *scsClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 			isDir: strings.HasSuffix(ob.Name, "/"),
 		}
 	}
+	if delimiter != "" {
+		for _, p := range list.CommonPrefixes {
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
+	}
 	return objs, nil
 }
 

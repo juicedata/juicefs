@@ -170,6 +170,23 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
+	if err := s.Put("a/a", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("a/a")
+	if err := s.Put("b/b", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("b/b")
+	if obs, err := s.List("", "", "/", 10); err != nil && !errors.Is(err, notSupported) {
+		t.Fatalf("list with delimiter: %s", err)
+	} else if len(obs) != 3 {
+		for i, o := range obs {
+			t.Logf("%d %s", i, o.Key())
+		}
+		t.Fatalf("list with delimiter returned: %d  %+v", len(obs), obs)
+	}
+
 	f, _ := ioutil.TempFile("", "test")
 	f.Write([]byte("this is a file"))
 	f.Seek(0, 0)
@@ -301,12 +318,15 @@ func TestS3(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) {
-	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
+	if os.Getenv("OSS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
-	s, _ := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
-		os.Getenv("ALICLOUD_ACCESS_KEY_ID"),
-		os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"), "")
+	s, err := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
+		os.Getenv("OSS_ACCESS_KEY"),
+		os.Getenv("OSS_SECRET_KEY"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	testStorage(t, s)
 }
 

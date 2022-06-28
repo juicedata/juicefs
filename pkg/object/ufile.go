@@ -201,7 +201,6 @@ type uFileListObjectsOutput struct {
 }
 
 func (u *ufile) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	//todo
 	if delimiter != "" {
 		return nil, notSupportedDelimiter
 	}

@@ -28,7 +28,9 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -193,6 +195,12 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64) ([]Object
 			*o.LastModified,
 			strings.HasSuffix(*o.Key, "/"),
 		}
+	}
+	if delimiter != "" {
+		for _, p := range resp.CommonPrefixes {
+			objs = append(objs, &obj{*p.Prefix, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

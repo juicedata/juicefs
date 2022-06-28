@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -142,6 +143,12 @@ func (o *ossClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	for i := 0; i < n; i++ {
 		o := result.Objects[i]
 		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
+	}
+	if delimiter != "" {
+		for _, o := range result.CommonPrefixes {
+			objs = append(objs, &obj{o, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

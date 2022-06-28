@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -186,6 +187,12 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64) ([]Object
 			time.Unix(int64(*k.Modified), 0),
 			strings.HasSuffix(*k.Key, "/"),
 		}
+	}
+	if delimiter != "" {
+		for _, p := range out.CommonPrefixes {
+			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

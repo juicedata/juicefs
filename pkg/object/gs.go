@@ -136,11 +136,14 @@ func (g *gs) Delete(key string) error {
 }
 
 func (g *gs) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupported
+	}
 	if marker != "" && g.pageToken == "" {
 		// last page
 		return nil, nil
 	}
-	objectIterator := g.client.Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter})
+	objectIterator := g.client.Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix})
 	pager := iterator.NewPager(objectIterator, int(limit), g.pageToken)
 	var entries []*storage.ObjectAttrs
 	nextPageToken, err := pager.NextPage(&entries)
