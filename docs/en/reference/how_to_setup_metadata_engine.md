@@ -38,7 +38,11 @@ JuiceFS requires Redis 4.0+
 When using Redis as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
+# use tcp
 redis[s]://[<username>:<password>@]<host>[:<port>]/<db>
+
+# use unix socket 
+unix://[<username>:<password>@]<socket-file-path>?db=<db>
 ```
 
 Where `[]` enclosed are optional and the rest are mandatory.
@@ -119,7 +123,11 @@ Other PostgreSQL-compatible databases (such as CockroachDB) can also be used as 
 When using PostgreSQL as the metadata storage engine, you need to create a database manually before creating the file system by following the format below:
 
 ```shell
+# use tcp
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
+
+# use unix socket
+postgres:///<database-name>?host=<socket-directories-path>
 ```
 
 Where `[]` enclosed are optional and the rest are mandatory.
@@ -178,7 +186,11 @@ Additional parameters can be appended to the metadata URL. More details can be s
 When using MySQL as the metadata storage engine, you need to create a database manually before create the file system. The command with the following format is usually used to access the database:
 
 ```shell
+# use tcp
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
+
+#use unix socket 
+mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 ```
 
 :::note
