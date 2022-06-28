@@ -184,7 +184,7 @@ $ juicefs format --storage s3 \
 使用 MySQL 作为元数据存储引擎时，需要提前手动创建数据库，通常使用以下格式访问数据库：
 
 ```shell
-#使用 tcp 方式
+# 使用 tcp 方式
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
 
 #使用 unix socket 方式

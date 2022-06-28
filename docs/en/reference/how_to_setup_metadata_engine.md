@@ -189,7 +189,7 @@ When using MySQL as the metadata storage engine, you need to create a database m
 # use tcp
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
 
-#use unix socket 
+# use unix socket 
 mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 ```
 
