@@ -61,7 +61,7 @@ type freeID struct {
 var logger = utils.GetLogger("juicefs")
 
 type queryMap struct {
-	url.Values
+	*url.Values
 }
 
 func (qm *queryMap) duration(key string, d time.Duration) time.Duration {
@@ -69,6 +69,7 @@ func (qm *queryMap) duration(key string, d time.Duration) time.Duration {
 	if val == "" {
 		return d
 	}
+	qm.Del(key)
 	if dur, err := time.ParseDuration(val); err == nil {
 		return dur
 	} else {
