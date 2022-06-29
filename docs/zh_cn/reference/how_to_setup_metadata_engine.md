@@ -187,7 +187,7 @@ $ juicefs format --storage s3 \
 # 使用 tcp 方式
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
 
-#使用 unix socket 方式
+# 使用 unix socket 方式
 mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 ```
 
