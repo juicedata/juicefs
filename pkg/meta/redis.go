@@ -96,10 +96,11 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	values := u.Query()
 	query := queryMap{&values}
-	minRetryBackoff := query.duration("min-retry-backoff", time.Millisecond*20)
-	maxRetryBackoff := query.duration("max-retry-backoff", time.Second*10)
-	readTimeout := query.duration("read-timeout", time.Second*30)
-	writeTimeout := query.duration("write-timeout", time.Second*5)
+	minRetryBackoff := query.duration("min-retry-backoff", "min_retry_backoff", time.Millisecond*20)
+	maxRetryBackoff := query.duration("max-retry-backoff", "max_retry_backoff", time.Second*10)
+	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
+	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
+	routeRead := query.pop("route-read")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -152,7 +153,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.WriteTimeout = opt.WriteTimeout
 		if conf.ReadOnly {
 			// NOTE: RouteByLatency and RouteRandomly are not supported since they require cluster client
-			fopt.SlaveOnly = query.Get("route-read") == "replica"
+			fopt.SlaveOnly = routeRead == "replica"
 		}
 		rdb = redis.NewFailoverClient(&fopt)
 	} else {
@@ -178,7 +179,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			copt.ReadTimeout = opt.ReadTimeout
 			copt.WriteTimeout = opt.WriteTimeout
 			if conf.ReadOnly {
-				switch query.Get("route-read") {
+				switch routeRead {
 				case "random":
 					copt.RouteRandomly = true
 				case "latency":
