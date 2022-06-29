@@ -84,27 +84,27 @@ var _ Meta = &redisMeta{}
 func init() {
 	Register("redis", newRedisMeta)
 	Register("rediss", newRedisMeta)
+	Register("unix", newRedisMeta)
 }
 
 // newRedisMeta return a meta store using Redis.
 func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	uri := driver + "://" + addr
-	var query queryMap
-	if p := strings.Index(uri, "?"); p > 0 && p+1 < len(uri) {
-		if q, err := url.ParseQuery(uri[p+1:]); err == nil {
-			logger.Debugf("parsed query parameters: %v", q)
-			query = queryMap{q}
-			uri = uri[:p]
-		} else {
-			return nil, fmt.Errorf("parse query %s: %s", uri[p+1:], err)
-		}
-	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, fmt.Errorf("url parse %s: %s", uri, err)
 	}
+	values := u.Query()
+	query := queryMap{&values}
+	minRetryBackoff := query.duration("min-retry-backoff", "min_retry_backoff", time.Millisecond*20)
+	maxRetryBackoff := query.duration("max-retry-backoff", "max_retry_backoff", time.Second*10)
+	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
+	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
+	routeRead := query.pop("route-read")
+	u.RawQuery = values.Encode()
+
 	hosts := u.Host
-	opt, err := redis.ParseURL(uri)
+	opt, err := redis.ParseURL(u.String())
 	if err != nil {
 		return nil, fmt.Errorf("redis parse %s: %s", uri, err)
 	}
@@ -118,10 +118,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	if opt.MaxRetries == 0 {
 		opt.MaxRetries = -1 // Redis use -1 to disable retries
 	}
-	opt.MinRetryBackoff = query.duration("min-retry-backoff", time.Millisecond*20)
-	opt.MaxRetryBackoff = query.duration("max-retry-backoff", time.Second*10)
-	opt.ReadTimeout = query.duration("read-timeout", time.Second*30)
-	opt.WriteTimeout = query.duration("write-timeout", time.Second*5)
+	opt.MinRetryBackoff = minRetryBackoff
+	opt.MaxRetryBackoff = maxRetryBackoff
+	opt.ReadTimeout = readTimeout
+	opt.WriteTimeout = writeTimeout
 	var rdb redis.UniversalClient
 	var prefix string
 	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
@@ -153,7 +153,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.WriteTimeout = opt.WriteTimeout
 		if conf.ReadOnly {
 			// NOTE: RouteByLatency and RouteRandomly are not supported since they require cluster client
-			fopt.SlaveOnly = query.Get("route-read") == "replica"
+			fopt.SlaveOnly = routeRead == "replica"
 		}
 		rdb = redis.NewFailoverClient(&fopt)
 	} else {
@@ -179,7 +179,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			copt.ReadTimeout = opt.ReadTimeout
 			copt.WriteTimeout = opt.WriteTimeout
 			if conf.ReadOnly {
-				switch query.Get("route-read") {
+				switch routeRead {
 				case "random":
 					copt.RouteRandomly = true
 				case "latency":

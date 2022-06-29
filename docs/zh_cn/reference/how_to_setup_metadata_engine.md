@@ -36,7 +36,11 @@ JuiceFS 要求 Redis 4.0+ 版本
 使用 Redis 作为元数据存储引擎时，通常使用以下格式访问数据库：
 
 ```shell
+# 使用 tcp 方式
 redis[s]://[<username>:<password>@]<host>[:<port>]/<db>
+
+# 使用 unix socket 方式
+unix://[<username>:<password>@]<socket-file-path>?db=<db>
 ```
 
 其中，`[]` 括起来的是可选项，其它部分为必选项。
@@ -117,7 +121,11 @@ KeyDB 的数据复制是异步的，使用 `Active Active` "双活"功能可能�
 使用 PostgreSQL 作为元数据引擎时，需要提前手动创建数据库，使用如下的格式来指定参数：
 
 ```shell
+# tcp 方式
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
+
+# 使用 unix socket 方式
+postgres:///<database-name>?host=<socket-directories-path>
 ```
 
 其中，`[]` 括起来的是可选项，其它部分为必选项。
@@ -176,7 +184,11 @@ $ juicefs format --storage s3 \
 使用 MySQL 作为元数据存储引擎时，需要提前手动创建数据库，通常使用以下格式访问数据库：
 
 ```shell
+# 使用 tcp 方式
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
+
+# 使用 unix socket 方式
+mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 ```
 
 :::note 注意
