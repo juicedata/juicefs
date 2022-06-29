@@ -394,6 +394,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = b.run("read")
+		line = make([]string, 3)
 		line[0] = "Read big file"
 		line[1], line[2] = bm.colorize("bigrd", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
 		line[1] += " MiB/s"
@@ -411,6 +412,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = s.run("read")
+		line = make([]string, 3)
 		line[0] = "Read small file"
 		line[1], line[2] = bm.colorize("smallrd", float64(s.fcount*bm.threads)/cost, cost*1000/float64(s.fcount), 1)
 		line[1] += " files/s"
@@ -419,6 +421,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = s.run("stat")
+		line = make([]string, 3)
 		line[0] = "Stat file"
 		line[1], line[2] = bm.colorize("stat", float64(s.fcount*bm.threads)/cost, cost*1000/float64(s.fcount), 1)
 		line[1] += " files/s"
