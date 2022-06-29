@@ -827,7 +827,7 @@ $ juicefs format \
 :::note
 Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects
 and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys
-even they has different prefixes. Btw, it's recommmended to enable [Titan](https://tikv.org/docs/3.0/tasks/configure/titan/) in TiKV for data cluster.
+even they has different prefixes. Btw, it's recommmended to enable [Titan](https://tikv.org/docs/5.1/deploy/configure/titan/) in TiKV for data cluster.
 :::
 
 ### Set up TLS

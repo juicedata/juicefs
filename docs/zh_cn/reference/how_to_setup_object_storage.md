@@ -827,7 +827,7 @@ $ juicefs format \
 
 :::note 注意
 不要使用同一个集群来存储元数据和数据，因为 JuiceFS 是使用不同的协议来存储元数据（支持事务的TxnKV) 和数据 (不支持事务的 RawKV)，TxnKV 的对象名会被编码后存储，
-即使添加了不同的前缀也可能导致它们的名字冲突。另外，建议启用 [Titan](https://tikv.org/docs/3.0/tasks/configure/titan/) 来提升存储数据的集群的性能。
+即使添加了不同的前缀也可能导致它们的名字冲突。另外，建议启用 [Titan](https://tikv.org/docs/5.1/deploy/configure/titan/) 来提升存储数据的集群的性能。
 :::
 
 ### 设置 TLS
