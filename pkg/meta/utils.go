@@ -61,20 +61,31 @@ type freeID struct {
 var logger = utils.GetLogger("juicefs")
 
 type queryMap struct {
-	url.Values
+	*url.Values
 }
 
-func (qm *queryMap) duration(key string, d time.Duration) time.Duration {
+func (qm *queryMap) duration(key, originalKey string, d time.Duration) time.Duration {
 	val := qm.Get(key)
 	if val == "" {
-		return d
+		oVal := qm.Get(originalKey)
+		if oVal == "" {
+			return d
+		}
+		val = oVal
 	}
+
+	qm.Del(key)
 	if dur, err := time.ParseDuration(val); err == nil {
 		return dur
 	} else {
 		logger.Warnf("Parse duration %s for key %s: %s", val, key, err)
 		return d
 	}
+}
+
+func (qm *queryMap) pop(key string) string {
+	defer qm.Del(key)
+	return qm.Get(key)
 }
 
 func errno(err error) syscall.Errno {
