@@ -140,7 +140,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 		err = r.txn(ctx, func(tx *redis.Tx) error {
 			if ltype == F_UNLCK {
 				d, err := tx.HGet(ctx, ikey, lkey).Result()
-				if err != nil {
+				if err != nil && err != redis.Nil {
 					return err
 				}
 				ls := loadLocks([]byte(d))

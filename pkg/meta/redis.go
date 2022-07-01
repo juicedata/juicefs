@@ -2224,7 +2224,7 @@ func (m *redisMeta) cleanupZeroRef(key string) {
 	var ctx = Background
 	_ = m.txn(ctx, func(tx *redis.Tx) error {
 		v, err := tx.HGet(ctx, m.sliceRefs(), key).Int()
-		if err != nil {
+		if err != nil && err != redis.Nil {
 			return err
 		}
 		if v != 0 {

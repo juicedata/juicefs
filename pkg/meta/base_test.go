@@ -635,6 +635,9 @@ func testLocks(t *testing.T, m Meta) {
 	}
 
 	// POSIX locks
+	if st := m.Setlk(ctx, inode, o1, false, syscall.F_UNLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("plock unlock: %s", st)
+	}
 	if st := m.Setlk(ctx, inode, o1, false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
 		t.Fatalf("plock rlock: %s", st)
 	}
