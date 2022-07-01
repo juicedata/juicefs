@@ -90,6 +90,9 @@ func (c *fuseContext) Cancel() {
 }
 
 func (c *fuseContext) Canceled() bool {
+	if c.Duration() < time.Second {
+		return false
+	}
 	if c.canceled {
 		return true
 	}
