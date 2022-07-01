@@ -326,6 +326,153 @@ func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, erro
 	return equal, err
 }
 
+type token struct{}
+
+type preRead struct {
+	key            string
+	src            object.ObjectStorage
+	blockSize      int64
+	concurrent     int
+	cache          [][]byte
+	fidx           int64
+	fsize          int64
+	once           sync.Once
+	preCh, readyCh []chan token
+}
+
+func (r *preRead) WriteTo(w io.Writer) (int64, error) {
+	concurrent := r.concurrent
+	blockSize := r.blockSize
+	if concurrent < 1 || blockSize < 1 {
+		return 0, fmt.Errorf("concurrent and blockSize must be positive integer")
+	}
+	fsize := r.fsize
+	var err error
+	r.cache = make([][]byte, concurrent)
+	for i := 0; i < concurrent; i++ {
+		r.preCh = append(r.preCh, make(chan token))
+		r.readyCh = append(r.readyCh, make(chan token))
+	}
+	for c := 0; c < concurrent; c++ {
+		go func(c int) {
+			var i int64
+			for i = int64(c) * blockSize; i < fsize; i += int64(concurrent) * blockSize {
+				readClose, e := r.src.Get(r.key, i, blockSize)
+				if e != nil {
+					err = e
+				} else {
+					var e2 error
+					if r.cache[i/blockSize%int64(concurrent)], e2 = io.ReadAll(readClose); e2 != nil {
+						err = e2
+					}
+					_ = readClose.Close()
+				}
+				r.readyCh[c] <- token{}
+				r.preCh[c] <- token{}
+			}
+		}(c)
+	}
+	var counter int64
+	for i := 0; i < int(fsize/blockSize); i++ {
+		if err != nil {
+			return counter, err
+		}
+		c := i % r.concurrent
+		<-r.readyCh[c]
+		n, err := w.Write(r.cache[c])
+		if err != nil {
+			return counter, err
+		}
+		counter += int64(n)
+		<-r.preCh[c]
+	}
+
+	if fsize%blockSize != 0 {
+		if err != nil {
+			return counter, err
+		}
+
+		c := int(fsize/blockSize) % r.concurrent
+		<-r.readyCh[c]
+		n, err := w.Write(r.cache[c][:fsize%blockSize])
+		if err != nil {
+			return counter, err
+		}
+		counter += int64(n)
+	}
+	return counter, nil
+}
+
+func (r *preRead) Read(b []byte) (int, error) {
+	if r.fidx >= r.fsize {
+		return 0, io.EOF
+	}
+	concurrent := r.concurrent
+	blockSize := r.blockSize
+	if concurrent < 1 || blockSize < 1 {
+		return 0, fmt.Errorf("concurrent and blockSize must be positive integer")
+	}
+	fsize := r.fsize
+	var err error
+	r.once.Do(func() {
+		r.cache = make([][]byte, concurrent)
+		for i := 0; i < concurrent; i++ {
+			r.preCh = append(r.preCh, make(chan token))
+			r.readyCh = append(r.readyCh, make(chan token))
+		}
+		for c := 0; c < concurrent; c++ {
+			go func(c int) {
+				var i int64
+				for i = int64(c) * blockSize; i < fsize; i += int64(concurrent) * blockSize {
+					readClose, e := r.src.Get(r.key, i, blockSize)
+					if e != nil {
+						err = e
+					} else {
+						var e2 error
+						if r.cache[i/blockSize%int64(concurrent)], e2 = io.ReadAll(readClose); e2 != nil {
+							err = e2
+						}
+						_ = readClose.Close()
+					}
+					r.readyCh[c] <- token{}
+					r.preCh[c] <- token{}
+				}
+			}(c)
+		}
+
+	})
+	total := int64(len(b))
+	if total > fsize-r.fidx {
+		total = fsize - r.fidx
+	}
+	var bidx int64
+	for {
+		if r.fidx < fsize && bidx < total {
+			c := r.fidx / r.blockSize % int64(r.concurrent)
+			blockIdx := r.fidx % r.blockSize
+			length := r.blockSize - blockIdx
+			if blockIdx == 0 {
+				<-r.readyCh[c]
+				if err != nil {
+					copy(b, make([]byte, len(b)))
+					return 0, err
+				}
+			}
+			var n int
+			if total-bidx >= length {
+				n = copy(b[bidx:], r.cache[c][blockIdx:])
+				<-r.preCh[c]
+			} else {
+				n = copy(b[bidx:], r.cache[c][blockIdx:blockIdx+total-bidx])
+			}
+			bidx += int64(n)
+			r.fidx += int64(n)
+		} else {
+			return int(bidx), nil
+		}
+	}
+}
+
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	if limiter != nil {
 		limiter.Wait(size)
@@ -334,6 +481,18 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	defer func() {
 		<-concurrent
 	}()
+	if size > maxBlock && strings.HasPrefix(dst.String(), "file://") {
+		if err := dst.Put(key, &preRead{key: key, src: src, fsize: size, blockSize: 10 << 20, concurrent: 10}); err != nil {
+			if _, e := src.Head(key); os.IsNotExist(e) {
+				logger.Debugf("Head src %s: %s", key, err)
+				copied.IncrInt64(-1)
+				copiedBytes.IncrInt64(size * (-1))
+				err = nil
+			}
+			return err
+		}
+		return nil
+	}
 	var in io.ReadCloser
 	var err error
 	if size == 0 {
