@@ -242,7 +242,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("incorrect passphrase: %s", err)
 		}
-		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.EncryptAglo)
+		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.EncryptAlgo)
 		if err != nil {
 			return nil, err
 		}
@@ -385,7 +385,7 @@ func format(c *cli.Context) error {
 				format.HashPrefix = c.Bool(flag)
 			case "storage":
 				format.Storage = c.String(flag)
-			case "encrypt-rsa-key":
+			case "encrypt-rsa-key", "encrypt-algo":
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
 		}
@@ -400,7 +400,7 @@ func format(c *cli.Context) error {
 			SecretKey:    c.String("secret-key"),
 			SessionToken: c.String("session-token"),
 			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
-			EncryptAglo:  c.String("encrypt-aglo"),
+			EncryptAlgo:  c.String("encrypt-algo"),
 			Shards:       c.Int("shards"),
 			HashPrefix:   c.Bool("hash-prefix"),
 			Capacity:     c.Uint64("capacity") << 30,

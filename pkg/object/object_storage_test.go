@@ -527,7 +527,7 @@ func TestEncrypted(t *testing.T) {
 	s, _ := CreateStorage("mem", "", "", "", "")
 	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	kc := NewRSAEncryptor(privkey)
-	dc := NewDataEncryptor(kc, AES256GCM_RSA)
+	dc, _ := NewDataEncryptor(kc, AES256GCM_RSA)
 	es := NewEncrypted(s, dc)
 	testStorage(t, es)
 }

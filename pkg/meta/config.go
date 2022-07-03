@@ -58,7 +58,7 @@ type Format struct {
 	Capacity         uint64 `json:",omitempty"`
 	Inodes           uint64 `json:",omitempty"`
 	EncryptKey       string `json:",omitempty"`
-	EncryptAglo      string `json:",omitempty"`
+	EncryptAlgo      string `json:",omitempty"`
 	KeyEncrypted     bool   `json:",omitempty"`
 	TrashDays        int    `json:",omitempty"`
 	MetaVersion      int    `json:",omitempty"`
