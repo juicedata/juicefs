@@ -126,7 +126,7 @@ func BenchmarkRSA4096Decrypt(b *testing.B) {
 
 func TestAESGCM(t *testing.T) {
 	kc := NewRSAEncryptor(testkey)
-	dc := NewDataEncryptor(kc, false)
+	dc := NewDataEncryptor(kc, AES256GCM_RSA)
 	data := []byte("hello")
 	ciphertext, _ := dc.Encrypt(data)
 	plaintext, _ := dc.Decrypt(ciphertext)
@@ -139,7 +139,7 @@ func TestAESGCM(t *testing.T) {
 func TestEncryptedStore(t *testing.T) {
 	s, _ := CreateStorage("mem", "", "", "", "")
 	kc := NewRSAEncryptor(testkey)
-	dc := NewDataEncryptor(kc, false)
+	dc := NewDataEncryptor(kc, AES256GCM_RSA)
 	es := NewEncrypted(s, dc)
 	_ = es.Put("a", bytes.NewReader([]byte("hello")))
 	r, err := es.Get("a", 1, 2)

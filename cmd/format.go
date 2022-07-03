@@ -147,9 +147,10 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Name:  "encrypt-rsa-key",
 				Usage: "a path to RSA private key (PEM)",
 			},
-			&cli.BoolFlag{
-				Name:  "chacha20",
-				Usage: "encrypt use chacha20 instead of aes",
+			&cli.StringFlag{
+				Name:  "encrypt-algo",
+				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
+				Value: object.AES256GCM_RSA,
 			},
 			&cli.IntFlag{
 				Name:  "trash-days",
@@ -241,7 +242,10 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("incorrect passphrase: %s", err)
 		}
-		encryptor := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.ChaCha20)
+		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.EncryptAglo)
+		if err != nil {
+			return nil, err
+		}
 		blob = object.NewEncrypted(blob, encryptor)
 	}
 	return blob, nil
@@ -396,7 +400,7 @@ func format(c *cli.Context) error {
 			SecretKey:    c.String("secret-key"),
 			SessionToken: c.String("session-token"),
 			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
-			ChaCha20:     c.Bool("chacha20"),
+			EncryptAglo:  c.String("encrypt-aglo"),
 			Shards:       c.Int("shards"),
 			HashPrefix:   c.Bool("hash-prefix"),
 			Capacity:     c.Uint64("capacity") << 30,

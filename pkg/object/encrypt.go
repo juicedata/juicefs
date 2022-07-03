@@ -122,18 +122,26 @@ type dataEncryptor struct {
 	aead         func(key []byte) (cipher.AEAD, error)
 }
 
-func NewDataEncryptor(keyEncryptor Encryptor, chacha20 bool) Encryptor {
-	if chacha20 {
-		return &dataEncryptor{keyEncryptor, chacha20poly1305.KeySize, chacha20poly1305.New}
-	}
-	aead := func(key []byte) (cipher.AEAD, error) {
-		block, err := aes.NewCipher(key)
-		if err != nil {
-			return nil, err
+const (
+	AES256GCM_RSA = "aes256gcm-rsa"
+	CHACHA20_RSA  = "chacha20-rsa"
+)
+
+func NewDataEncryptor(keyEncryptor Encryptor, algo string) (Encryptor, error) {
+	switch algo {
+	case "", AES256GCM_RSA:
+		aead := func(key []byte) (cipher.AEAD, error) {
+			block, err := aes.NewCipher(key)
+			if err != nil {
+				return nil, err
+			}
+			return cipher.NewGCM(block)
 		}
-		return cipher.NewGCM(block)
+		return &dataEncryptor{keyEncryptor, 32, aead}, nil
+	case CHACHA20_RSA:
+		return &dataEncryptor{keyEncryptor, chacha20poly1305.KeySize, chacha20poly1305.New}, nil
 	}
-	return &dataEncryptor{keyEncryptor, 32, aead} //  AES-256-GCM
+	return nil, fmt.Errorf("unsupport cipher: %s", algo)
 }
 
 func (e *dataEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
