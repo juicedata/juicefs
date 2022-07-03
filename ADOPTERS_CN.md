@@ -22,6 +22,9 @@
 | [地平线](https://horizon.ai)                     | Production | AI                                                                                  |
 | [商汤科技](https://www.sensetime.com/cn)         | Production | 共享文件存储                                                                        |
 | [深势科技](https://www.dp.tech)                  | Production | 共享文件存储                                                                        |
+| [嘉谊互娱](http://www.joyient.com)               | Prodcution | 共享文件存储, 渲染 |
+| [DJI 大疆创新](https://www.dji.com/cn)           | Production | AI            |
+| [移动云](https://ecloud.he.chinamobile.com/)    | Testing | 大数据（[案例](https://juicefs.com/blog/cn/posts/juicefs-support-hbase-at-chinamobile-cloud/)）  |
 | [火山引擎](https://www.volcengine.com)           | Testing    | 共享文件存储                                                                        |
 | [叮咚买菜](https://www.100.me)                   | Testing    | 大数据                                                                              |
 | [顺丰速运](https://www.sf-express.com)           | Testing    | 大数据，共享文件存储                                                                |
