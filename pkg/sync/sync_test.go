@@ -673,6 +673,15 @@ func TestPreRead(t *testing.T) {
 				t.Fatalf("err should be io.EOF or n should equal 0")
 			}
 		}},
+
+		{config: config{fsize: 100, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *preRead, content []byte) {
+			res := make([]byte, 1)
+			pr.key = "notExist"
+			n, err := pr.Read(res)
+			if !os.IsNotExist(err) || n != 0 {
+				t.Fatalf("err should be ErrNotExist or n should equal 0")
+			}
+		}},
 	}
 
 	for _, c := range tcases {
@@ -703,5 +712,12 @@ func TestPreRead(t *testing.T) {
 		if !bytes.Equal(content, buf.Bytes()) {
 			t.Fatalf("content is wrong")
 		}
+	}
+
+	pr := &preRead{key: "notExist", src: a, blockSize: 10, concurrent: 4, fsize: 1024}
+	var buf bytes.Buffer
+	n, err := pr.WriteTo(&buf) //nolint:typecheck
+	if !os.IsNotExist(err) || n != 0 {
+		t.Fatalf("write to func should succeed")
 	}
 }
