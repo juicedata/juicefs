@@ -666,6 +666,28 @@ func TestPreRead(t *testing.T) {
 			}
 		}},
 
+		{config: config{fsize: 1000, concurrent: 3, blockSize: 5}, tfunc: func(t *testing.T, pr *preRead, content []byte) {
+			res := make([]byte, 10)
+			n, err := pr.Read(res)
+
+			if err != nil || n != 10 || res[0] != content[0] {
+				t.Fatalf("read 10 byte should succeed")
+			}
+			n, err = pr.Read(res)
+			if err != nil || n != 10 || res[0] != content[10] {
+				t.Fatalf("read 10 byte should succeed")
+			}
+			_ = a.Delete(key)
+			_, err = pr.Read(res)
+			if err != nil {
+				t.Fatalf("read 10 byte should succeed")
+			}
+			n, err = pr.Read(res)
+			if !os.IsNotExist(err) || n != 0 {
+				t.Fatalf("err should be ErrNotExist or n should equal 0")
+			}
+		}},
+
 		{config: config{fsize: 0, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *preRead, content []byte) {
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
