@@ -823,8 +823,10 @@ func matchKey(rules []rule, key string) bool {
 func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
 		major, minor := utils.GetKernelVersion()
-		// copy_file_range() system call first appeared in Linux 4.5
-		if major > 4 || major == 4 && minor > 4 {
+		// copy_file_range() system call first appeared in Linux 4.5, and reworked in 5.3
+		// Go requires kernel >= 5.3 to use copy_file_range(), see:
+		// https://github.com/golang/go/blob/go1.17.11/src/internal/poll/copy_file_range_linux.go#L58-L66
+		if major > 5 || (major == 5 && minor >= 3) {
 			d1 := utils.GetDev(src.String()[7:]) // remove prefix "file://"
 			d2 := utils.GetDev(dst.String()[7:])
 			if d1 != -1 && d1 == d2 {
