@@ -336,15 +336,15 @@ type preRead struct {
 	cache      [][]byte
 	fidx       int64
 	fsize      int64
-	sync.RWMutex
+	sync.Mutex
 	err            error
 	once           sync.Once
 	preCh, readyCh []chan token
 }
 
 func (r *preRead) hasErr() bool {
-	r.RLock()
-	defer r.RUnlock()
+	r.Lock()
+	defer r.Unlock()
 	return r.err != nil
 }
 
