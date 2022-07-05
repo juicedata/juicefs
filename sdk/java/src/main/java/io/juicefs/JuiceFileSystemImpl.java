@@ -1173,6 +1173,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FileChecksum getFileChecksum(Path f, long length) throws IOException {
     statistics.incrementReadOps(1);
+    long orgLen = length;
     if (!fileChecksumEnabled)
       return null;
     String combineMode = getConf().get("dfs.checksum.combine.mode", "MD5MD5CRC");
@@ -1190,7 +1191,8 @@ public class JuiceFileSystemImpl extends FileSystem {
     DataOutputBuffer crcBuf = new DataOutputBuffer();
     byte[] buf = new byte[bytesPerCrc];
     FSDataInputStream in = open(f, 1 << 20);
-    while (length > 0) {
+    boolean eof = false;
+    while (length > 0 && !eof) {
       for (int i = 0; i < blocksize / bytesPerCrc && length > 0; i++) {
         int n;
         if (length < bytesPerCrc) {
@@ -1199,7 +1201,7 @@ public class JuiceFileSystemImpl extends FileSystem {
           n = in.read(buf);
         }
         if (n <= 0) {
-          length = 0; // EOF
+          eof = true;
         } else {
           summer.update(buf, 0, n);
           summer.writeValue(crcBuf, true);
@@ -1210,9 +1212,6 @@ public class JuiceFileSystemImpl extends FileSystem {
         MD5Hash blockMd5 = MD5Hash.digest(crcBuf.getData(), 0, crcBuf.getLength());
         blockMd5.write(checksumBuf);
         crcBuf.reset();
-        if (length > 0) { // more than one block
-          crcPerBlock = blocksize / bytesPerCrc;
-        }
       }
     }
     in.close();
@@ -1220,6 +1219,9 @@ public class JuiceFileSystemImpl extends FileSystem {
       return new MD5MD5CRC32GzipFileChecksum(0, 0, MD5Hash.digest(new byte[32]));
     }
     MD5Hash md5 = MD5Hash.digest(checksumBuf.getData());
+    if (orgLen - length > blocksize) { // more than one block
+      crcPerBlock = blocksize / bytesPerCrc;
+    }
     if (ctype == DataChecksum.Type.CRC32C) {
       return new MD5MD5CRC32CastagnoliFileChecksum(bytesPerCrc, crcPerBlock, md5);
     } else {
