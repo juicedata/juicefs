@@ -11,7 +11,7 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见
 ## JuiceFS CSI 驱动
 
 :::tip 提示
-推荐使用 JuiceFS CSI 驱动的方式进行安装和部署，了解更多关于 JuiceFS CSI 驱动的信息请访问[项目主页](https://juicefs.com/docs/zh/csi/introduction)。
+推荐在 Kubernetes 中使用 JuiceFS CSI 驱动的部署方式，了解更多关于 JuiceFS CSI 驱动的信息请访问[项目主页](https://juicefs.com/docs/zh/csi/introduction)。
 :::
 
 [JuiceFS CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)遵循 [CSI](https://github.com/container-storage-interface/spec/blob/master/spec.md) 规范，实现了容器编排系统与 JuiceFS 文件系统之间的接口，支持动态配置 JuiceFS 卷提供给 Pod 使用。
@@ -42,6 +42,10 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
 
    创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`backend` 部分是 JuiceFS 文件系统相关的信息，你可以参照[「JuiceFS 快速上手指南」](../getting-started/for_local.md)了解相关内容。如果使用的是已经提前创建好的 JuiceFS 卷，则只需填写 `name` 和 `metaurl` 这两项即可。`mountPod` 部分可以对使用此驱动的 Pod 设置 CPU 和内存的资源配置。不需要的项可以删除，或者将它的值留空。
 
+   :::info 说明
+   请参考[文档](https://github.com/juicedata/charts/blob/main/charts/juicefs-csi-driver/README.md#values)了解 JuiceFS CSI 驱动的 Helm chart 支持的所有配置项
+   :::
+
    ```yaml title="values.yaml"
    storageClasses:
    - name: juicefs-sc
@@ -54,6 +58,8 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
        accessKey: "<access-key>"
        secretKey: "<secret-key>"
        bucket: "<bucket>"
+       # 如果需要设置 JuiceFS Mount Pod 的时区请将下一行的注释符号删除，默认为 UTC 时间。
+       # envs: "{TZ: Asia/Shanghai}"
      mountPod:
        resources:
          limits:
@@ -145,35 +151,39 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
 
 2. 部署
 
-   **如果上一步检查命令返回的结果不为空**，则代表 kubelet 的根目录（`--root-dir`）不是默认值（`/var/lib/kubelet`），因此需要在 CSI 驱动的部署文件中更新 `kubeletDir` 路径并部署：
+   - **如果上一步检查命令返回的结果不为空**，则代表 kubelet 的根目录（`--root-dir`）不是默认值（`/var/lib/kubelet`），因此需要在 CSI 驱动的部署文件中更新 `kubeletDir` 路径并部署：
 
-   ```shell
-   # Kubernetes 版本 >= v1.18
-   curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     :::note 注意
+     请将下述命令中的 `{{KUBELET_DIR}}` 替换成 kubelet 当前的根目录路径。
+     :::
 
-   # Kubernetes 版本 < v1.18
-   curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
-   ```
+     ```shell
+     # Kubernetes 版本 >= v1.18
+     curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     ```
 
-   :::note 注意
-   请将上述命令中 `{{KUBELET_DIR}}` 替换成 kubelet 当前的根目录路径。
-   :::
+     ```shell
+     # Kubernetes 版本 < v1.18
+     curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     ```
 
-   **如果前面检查命令返回的结果为空**，无需修改配置，可直接部署：
+   - **如果前面检查命令返回的结果为空**，无需修改配置，可直接部署：
 
-   ```shell
-   # Kubernetes 版本 >= v1.18
-   kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+     ```shell
+     # Kubernetes 版本 >= v1.18
+     kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+     ```
 
-   # Kubernetes 版本 < v1.18
-   kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml
-   ```
+     ```shell
+     # Kubernetes 版本 < v1.18
+     kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml
+     ```
 
 3. 创建存储类
 
    参考以下内容创建一个配置文件，例如：`juicefs-sc.yaml`，在 `stringData` 部分填写 JuiceFS 文件系统的配置信息：
 
-   ```yaml title="juicefs-sc.yaml" {7-13}
+   ```yaml title="juicefs-sc.yaml" {7-15}
    apiVersion: v1
    kind: Secret
    metadata:
@@ -187,6 +197,8 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
      bucket: "https://juicefs-test.s3.us-east-1.amazonaws.com"
      access-key: ""
      secret-key: ""
+     # 如果需要设置 JuiceFS Mount Pod 的时区请将下一行的注释符号删除，默认为 UTC 时间。
+     # envs: "{TZ: Asia/Shanghai}"
    ---
    apiVersion: storage.k8s.io/v1
    kind: StorageClass
