@@ -423,6 +423,16 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals(new MD5MD5CRC32CastagnoliFileChecksum(512, 0, new MD5Hash("05a157db1cc7549c82ec6f31f63fdb46")),
             sum);
 
+    f = new Path("/medium");
+    out = fs.create(f, true);
+    byte[] bytes = new byte[(128 << 20) - 1];
+    out.write(bytes);
+    out.close();
+    sum = fs.getFileChecksum(f);
+    assertEquals(
+            new MD5MD5CRC32CastagnoliFileChecksum(512, 0, new MD5Hash("1cf326bae8274fd824ec69ece3e4082f")),
+            sum);
+
     f = new Path("/big");
     out = fs.create(f, true);
     byte[] zeros = new byte[1024 * 1000];
