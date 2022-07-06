@@ -47,10 +47,12 @@ func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
 	}
 }
 
-func (fs *fileSystem) replyEntry(out *fuse.EntryOut, e *meta.Entry) fuse.Status {
+func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.Entry) fuse.Status {
 	out.NodeId = uint64(e.Inode)
 	out.Generation = 1
-	out.SetAttrTimeout(fs.conf.AttrTimeout)
+	if e.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(e.Inode, ctx.start) {
+		out.SetAttrTimeout(fs.conf.AttrTimeout)
+	}
 	if e.Attr.Typ == meta.TypeDirectory {
 		out.SetEntryTimeout(fs.conf.DirEntryTimeout)
 	} else {
@@ -70,7 +72,7 @@ func (fs *fileSystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
@@ -85,9 +87,10 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 		return fuse.Status(err)
 	}
 	attrToStat(entry.Inode, entry.Attr, &out.Attr)
-	out.AttrValid = uint64(fs.conf.AttrTimeout.Seconds())
 	if vfs.IsSpecialNode(Ino(in.NodeId)) {
-		out.AttrValid = 3600
+		out.SetTimeout(time.Hour)
+	} else if entry.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(entry.Inode, ctx.start) {
+		out.SetTimeout(fs.conf.AttrTimeout)
 	}
 	return 0
 }
@@ -103,11 +106,12 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	out.AttrValid = uint64(fs.conf.AttrTimeout.Seconds())
-	if vfs.IsSpecialNode(entry.Inode) {
-		out.AttrValid = 3600
-	}
 	attrToStat(entry.Inode, entry.Attr, &out.Attr)
+	if vfs.IsSpecialNode(Ino(in.NodeId)) {
+		out.SetTimeout(time.Hour)
+	} else if entry.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(entry.Inode, ctx.start) {
+		out.SetTimeout(fs.conf.AttrTimeout)
+	}
 	return 0
 }
 
@@ -118,7 +122,7 @@ func (fs *fileSystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name strin
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out *fuse.EntryOut) (code fuse.Status) {
@@ -128,7 +132,7 @@ func (fs *fileSystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name strin
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) Unlink(cancel <-chan struct{}, header *fuse.InHeader, name string) (code fuse.Status) {
@@ -159,7 +163,7 @@ func (fs *fileSystem) Link(cancel <-chan struct{}, in *fuse.LinkIn, name string,
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) Symlink(cancel <-chan struct{}, header *fuse.InHeader, target string, name string, out *fuse.EntryOut) (code fuse.Status) {
@@ -169,7 +173,7 @@ func (fs *fileSystem) Symlink(cancel <-chan struct{}, header *fuse.InHeader, tar
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) Readlink(cancel <-chan struct{}, header *fuse.InHeader) (out []byte, code fuse.Status) {
@@ -223,7 +227,7 @@ func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name str
 		return fuse.Status(err)
 	}
 	out.Fh = fh
-	return fs.replyEntry(&out.EntryOut, entry)
+	return fs.replyEntry(ctx, &out.EntryOut, entry)
 }
 
 func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
@@ -375,7 +379,7 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 		}
 		if e.Attr.Full {
 			fs.v.UpdateLength(e.Inode, e.Attr)
-			fs.replyEntry(eo, e)
+			fs.replyEntry(ctx, eo, e)
 		} else {
 			eo.Ino = uint64(e.Inode)
 			eo.Generation = 1
