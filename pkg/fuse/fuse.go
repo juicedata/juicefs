@@ -52,6 +52,8 @@ func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.E
 	out.Generation = 1
 	if e.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(e.Inode, ctx.start) {
 		out.SetAttrTimeout(fs.conf.AttrTimeout)
+	} else {
+		logger.Infof("no attr cache for %d", e.Inode)
 	}
 	if e.Attr.Typ == meta.TypeDirectory {
 		out.SetEntryTimeout(fs.conf.DirEntryTimeout)
@@ -91,6 +93,8 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 		out.SetTimeout(time.Hour)
 	} else if entry.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(entry.Inode, ctx.start) {
 		out.SetTimeout(fs.conf.AttrTimeout)
+	} else {
+		logger.Infof("no attr cache for %d", entry.Inode)
 	}
 	return 0
 }
@@ -111,6 +115,8 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 		out.SetTimeout(time.Hour)
 	} else if entry.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(entry.Inode, ctx.start) {
 		out.SetTimeout(fs.conf.AttrTimeout)
+	} else {
+		logger.Infof("no attr cache for %d", entry.Inode)
 	}
 	return 0
 }
@@ -351,7 +357,7 @@ func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse
 func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entries, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, false)
+	entries, _, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, false)
 	var de fuse.DirEntry
 	for _, e := range entries {
 		de.Ino = uint64(e.Inode)
@@ -367,7 +373,8 @@ func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse
 func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entries, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
+	entries, readAt, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
+	ctx.start = readAt
 	var de fuse.DirEntry
 	for _, e := range entries {
 		de.Ino = uint64(e.Inode)
@@ -379,6 +386,7 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 		}
 		if e.Attr.Full {
 			fs.v.UpdateLength(e.Inode, e.Attr)
+
 			fs.replyEntry(ctx, eo, e)
 		} else {
 			eo.Ino = uint64(e.Inode)

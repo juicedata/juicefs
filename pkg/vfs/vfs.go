@@ -292,7 +292,7 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 	}
 }
 
-func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, err syscall.Errno) {
+func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
 	defer func() { logit(ctx, "readdir (%d,%d,%d): %s (%d)", ino, size, off, strerr(err), len(entries)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
@@ -304,6 +304,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 
 	if h.children == nil || off == 0 {
 		var inodes []*meta.Entry
+		h.readAt = time.Now()
 		err = v.Meta.Readdir(ctx, ino, 1, &inodes)
 		if err == syscall.EACCES {
 			err = v.Meta.Readdir(ctx, ino, 0, &inodes)
@@ -326,6 +327,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	if off < len(h.children) {
 		entries = h.children[off:]
 	}
+	readAt = h.readAt
 	return
 }
 
@@ -746,6 +748,7 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 			return
 		}
 
+		v.modify(ino)
 		err = h.writer.Flush(ctx)
 		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 			err = syscall.EBADF
@@ -782,6 +785,7 @@ func (v *VFS) Fsync(ctx Context, ino Ino, datasync int, fh uint64) (err syscall.
 		defer h.Wunlock()
 		defer h.removeOp(ctx)
 
+		v.modify(ino)
 		err = h.writer.Flush(ctx)
 		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 			err = syscall.EBADF
