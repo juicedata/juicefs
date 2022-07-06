@@ -50,11 +50,6 @@ func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
 func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.Entry) fuse.Status {
 	out.NodeId = uint64(e.Inode)
 	out.Generation = 1
-	if e.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(e.Inode, ctx.start) {
-		out.SetAttrTimeout(fs.conf.AttrTimeout)
-	} else {
-		logger.Infof("no attr cache for %d", e.Inode)
-	}
 	if e.Attr.Typ == meta.TypeDirectory {
 		out.SetEntryTimeout(fs.conf.DirEntryTimeout)
 	} else {
@@ -62,7 +57,12 @@ func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.E
 	}
 	if vfs.IsSpecialNode(e.Inode) {
 		out.SetAttrTimeout(time.Hour)
+	} else if e.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(e.Inode, ctx.start) {
+		out.SetAttrTimeout(fs.conf.AttrTimeout)
+	} else {
+		logger.Infof("no attr cache for %d", e.Inode)
 	}
+	fs.v.UpdateLength(e.Inode, e.Attr)
 	attrToStat(e.Inode, e.Attr, &out.Attr)
 	return 0
 }
@@ -385,8 +385,6 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 			break
 		}
 		if e.Attr.Full {
-			fs.v.UpdateLength(e.Inode, e.Attr)
-
 			fs.replyEntry(ctx, eo, e)
 		} else {
 			eo.Ino = uint64(e.Inode)

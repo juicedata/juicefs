@@ -86,7 +86,6 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 	}
 	err = v.Meta.Lookup(ctx, parent, name, &inode, attr)
 	if err == 0 {
-		v.UpdateLength(inode, attr)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
 	return
@@ -102,7 +101,6 @@ func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, er
 	var attr = &Attr{}
 	err = v.Meta.GetAttr(ctx, ino, attr)
 	if err == 0 {
-		v.UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return
@@ -270,7 +268,6 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 	var attr = &Attr{}
 	err = v.Meta.Link(ctx, ino, newparent, newname, attr)
 	if err == 0 {
-		v.UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return
@@ -438,7 +435,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 	if err == 0 {
 		v.writer.Truncate(ino, uint64(size))
 		v.reader.Truncate(ino, uint64(size))
-		v.modify(ino)
+		v.invalidateLength(ino)
 	}
 	return 0
 }
@@ -474,6 +471,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 			f.Unlock()
 			if f.writer != nil {
 				_ = f.writer.Flush(ctx)
+				v.invalidateLength(ino)
 			}
 			if locks&1 != 0 {
 				_ = v.Meta.Flock(ctx, ino, owner, F_UNLCK, false)
@@ -613,7 +611,6 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	if err == 0 {
 		writtenSizeHistogram.Observe(float64(len(buf)))
 		v.reader.Truncate(ino, v.writer.GetLength(ino))
-		v.modify(ino)
 	}
 	return
 }
@@ -649,7 +646,6 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh 
 	defer h.removeOp(ctx)
 
 	err = v.Meta.Fallocate(ctx, ino, mode, uint64(off), uint64(length))
-	v.modify(ino)
 	return
 }
 
@@ -718,7 +714,7 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	err = v.Meta.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied)
 	if err == 0 {
 		v.reader.Invalidate(nodeOut, offOut, size)
-		v.modify(nodeOut)
+		v.invalidateLength(nodeOut)
 	}
 	return
 }
@@ -748,7 +744,6 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 			return
 		}
 
-		v.modify(ino)
 		err = h.writer.Flush(ctx)
 		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 			err = syscall.EBADF
@@ -785,7 +780,6 @@ func (v *VFS) Fsync(ctx Context, ino Ino, datasync int, fh uint64) (err syscall.
 		defer h.Wunlock()
 		defer h.removeOp(ctx)
 
-		v.modify(ino)
 		err = h.writer.Flush(ctx)
 		if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 			err = syscall.EBADF
@@ -914,8 +908,8 @@ type VFS struct {
 	hanleM  sync.Mutex
 	nextfh  uint64
 
-	modM     sync.Mutex
-	modified map[Ino]time.Time
+	modM       sync.Mutex
+	modifiedAt map[Ino]time.Time
 
 	handlersGause  prometheus.GaugeFunc
 	usedBufferSize prometheus.GaugeFunc
@@ -928,15 +922,15 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	writer := NewDataWriter(conf, m, store, reader)
 
 	v := &VFS{
-		Conf:     conf,
-		Meta:     m,
-		Store:    store,
-		reader:   reader,
-		writer:   writer,
-		handles:  make(map[Ino][]*handle),
-		modified: make(map[meta.Ino]time.Time),
-		nextfh:   1,
-		registry: registry,
+		Conf:       conf,
+		Meta:       m,
+		Store:      store,
+		reader:     reader,
+		writer:     writer,
+		handles:    make(map[Ino][]*handle),
+		modifiedAt: make(map[meta.Ino]time.Time),
+		nextfh:     1,
+		registry:   registry,
 	}
 
 	n := getInternalNode(configInode)
@@ -952,15 +946,15 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	return v
 }
 
-func (v *VFS) modify(ino Ino) {
+func (v *VFS) invalidateLength(ino Ino) {
 	v.modM.Lock()
-	v.modified[ino] = time.Now()
+	v.modifiedAt[ino] = time.Now()
 	v.modM.Unlock()
 }
 
 func (v *VFS) ModifiedSince(ino Ino, start time.Time) bool {
 	v.modM.Lock()
-	t, ok := v.modified[ino]
+	t, ok := v.modifiedAt[ino]
 	v.modM.Unlock()
 	return ok && t.After(start)
 }
@@ -970,9 +964,9 @@ func (v *VFS) cleanupModified() {
 		v.modM.Lock()
 		expire := time.Now().Add(time.Second * -5)
 		var cnt int
-		for i, t := range v.modified {
+		for i, t := range v.modifiedAt {
 			if t.Before(expire) {
-				delete(v.modified, i)
+				delete(v.modifiedAt, i)
 			}
 			cnt++
 			if cnt > 100 {
