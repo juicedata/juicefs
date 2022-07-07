@@ -518,7 +518,7 @@ func (j *juice) Readdir(path string,
 		return
 	}
 	ctx := j.newContext()
-	entries, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
+	entries, _, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
 	if err != 0 {
 		e = -int(err)
 		return
