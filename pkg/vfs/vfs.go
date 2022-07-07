@@ -962,19 +962,20 @@ func (v *VFS) ModifiedSince(ino Ino, start time.Time) bool {
 func (v *VFS) cleanupModified() {
 	for {
 		v.modM.Lock()
-		expire := time.Now().Add(time.Second * -5)
-		var cnt int
+		expire := time.Now().Add(time.Second * -30)
+		var cnt, deleted int
 		for i, t := range v.modifiedAt {
 			if t.Before(expire) {
 				delete(v.modifiedAt, i)
+				deleted++
 			}
 			cnt++
-			if cnt > 100 {
+			if cnt > 1000 {
 				break
 			}
 		}
 		v.modM.Unlock()
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-deleted*2)/(cnt+1)))
 	}
 }
 
