@@ -32,6 +32,7 @@ type handle struct {
 
 	// for dir
 	children []*meta.Entry
+	readAt   time.Time
 
 	// for file
 	locks      uint8
