@@ -47,6 +47,26 @@ func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
 	}
 }
 
+type setTimeout func(time.Duration)
+
+func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.Attr, set setTimeout) {
+	if vfs.IsSpecialNode(entry.Inode) {
+		set(time.Hour)
+	} else if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
+		logger.Debugf("refresh attr for %d", entry.Inode)
+		var attr meta.Attr
+		st := fs.v.Meta.GetAttr(ctx, entry.Inode, &attr)
+		if st == 0 {
+			*entry.Attr = attr
+			set(fs.conf.AttrTimeout)
+		}
+	} else {
+		set(fs.conf.AttrTimeout)
+	}
+	fs.v.UpdateLength(entry.Inode, entry.Attr)
+	attrToStat(entry.Inode, entry.Attr, attr)
+}
+
 func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.Entry) fuse.Status {
 	out.NodeId = uint64(e.Inode)
 	out.Generation = 1
@@ -55,15 +75,9 @@ func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.E
 	} else {
 		out.SetEntryTimeout(fs.conf.EntryTimeout)
 	}
-	fs.v.UpdateLength(e.Inode, e.Attr)
-	attrToStat(e.Inode, e.Attr, &out.Attr)
-	if vfs.IsSpecialNode(e.Inode) {
-		out.SetAttrTimeout(time.Hour)
-	} else if e.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(e.Inode, ctx.start) {
-		out.SetAttrTimeout(fs.conf.AttrTimeout)
-	} else {
-		logger.Infof("no attr cache for %d", e.Inode)
-	}
+	fs.replyAttr(ctx, e, &out.Attr, func(d time.Duration) {
+		out.SetAttrTimeout(d)
+	})
 	return 0
 }
 
@@ -88,15 +102,9 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	fs.v.UpdateLength(entry.Inode, entry.Attr)
-	attrToStat(entry.Inode, entry.Attr, &out.Attr)
-	if vfs.IsSpecialNode(Ino(in.NodeId)) {
-		out.SetTimeout(time.Hour)
-	} else if entry.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(entry.Inode, ctx.start) {
-		out.SetTimeout(fs.conf.AttrTimeout)
-	} else {
-		logger.Infof("no attr cache for %d", entry.Inode)
-	}
+	fs.replyAttr(ctx, entry, &out.Attr, func(d time.Duration) {
+		out.SetTimeout(d)
+	})
 	return 0
 }
 
@@ -111,14 +119,9 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	attrToStat(entry.Inode, entry.Attr, &out.Attr)
-	if vfs.IsSpecialNode(Ino(in.NodeId)) {
-		out.SetTimeout(time.Hour)
-	} else if entry.Attr.Typ != meta.TypeFile || !fs.v.ModifiedSince(entry.Inode, ctx.start) {
-		out.SetTimeout(fs.conf.AttrTimeout)
-	} else {
-		logger.Infof("no attr cache for %d", entry.Inode)
-	}
+	fs.replyAttr(ctx, entry, &out.Attr, func(d time.Duration) {
+		out.SetTimeout(d)
+	})
 	return 0
 }
 
