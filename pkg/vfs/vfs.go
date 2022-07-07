@@ -86,7 +86,6 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 	}
 	err = v.Meta.Lookup(ctx, parent, name, &inode, attr)
 	if err == 0 {
-		v.UpdateLength(inode, attr)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
 	return
@@ -102,7 +101,6 @@ func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, er
 	var attr = &Attr{}
 	err = v.Meta.GetAttr(ctx, ino, attr)
 	if err == 0 {
-		v.UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return
@@ -270,7 +268,6 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 	var attr = &Attr{}
 	err = v.Meta.Link(ctx, ino, newparent, newname, attr)
 	if err == 0 {
-		v.UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return
@@ -292,7 +289,7 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 	}
 }
 
-func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, err syscall.Errno) {
+func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
 	defer func() { logit(ctx, "readdir (%d,%d,%d): %s (%d)", ino, size, off, strerr(err), len(entries)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
@@ -304,6 +301,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 
 	if h.children == nil || off == 0 {
 		var inodes []*meta.Entry
+		h.readAt = time.Now()
 		err = v.Meta.Readdir(ctx, ino, 1, &inodes)
 		if err == syscall.EACCES {
 			err = v.Meta.Readdir(ctx, ino, 0, &inodes)
@@ -326,6 +324,7 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 	if off < len(h.children) {
 		entries = h.children[off:]
 	}
+	readAt = h.readAt
 	return
 }
 
@@ -436,6 +435,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 	if err == 0 {
 		v.writer.Truncate(ino, uint64(size))
 		v.reader.Truncate(ino, uint64(size))
+		v.invalidateLength(ino)
 	}
 	return 0
 }
@@ -471,6 +471,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 			f.Unlock()
 			if f.writer != nil {
 				_ = f.writer.Flush(ctx)
+				v.invalidateLength(ino)
 			}
 			if locks&1 != 0 {
 				_ = v.Meta.Flock(ctx, ino, owner, F_UNLCK, false)
@@ -713,6 +714,7 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	err = v.Meta.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied)
 	if err == 0 {
 		v.reader.Invalidate(nodeOut, offOut, size)
+		v.invalidateLength(nodeOut)
 	}
 	return
 }
@@ -906,6 +908,9 @@ type VFS struct {
 	hanleM  sync.Mutex
 	nextfh  uint64
 
+	modM       sync.Mutex
+	modifiedAt map[Ino]time.Time
+
 	handlersGause  prometheus.GaugeFunc
 	usedBufferSize prometheus.GaugeFunc
 	storeCacheSize prometheus.GaugeFunc
@@ -917,14 +922,15 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	writer := NewDataWriter(conf, m, store, reader)
 
 	v := &VFS{
-		Conf:     conf,
-		Meta:     m,
-		Store:    store,
-		reader:   reader,
-		writer:   writer,
-		handles:  make(map[Ino][]*handle),
-		nextfh:   1,
-		registry: registry,
+		Conf:       conf,
+		Meta:       m,
+		Store:      store,
+		reader:     reader,
+		writer:     writer,
+		handles:    make(map[Ino][]*handle),
+		modifiedAt: make(map[meta.Ino]time.Time),
+		nextfh:     1,
+		registry:   registry,
 	}
 
 	n := getInternalNode(configInode)
@@ -935,8 +941,42 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 		internalNodes = internalNodes[:len(internalNodes)-1]
 	}
 
+	go v.cleanupModified()
 	initVFSMetrics(v, writer, registerer)
 	return v
+}
+
+func (v *VFS) invalidateLength(ino Ino) {
+	v.modM.Lock()
+	v.modifiedAt[ino] = time.Now()
+	v.modM.Unlock()
+}
+
+func (v *VFS) ModifiedSince(ino Ino, start time.Time) bool {
+	v.modM.Lock()
+	t, ok := v.modifiedAt[ino]
+	v.modM.Unlock()
+	return ok && t.After(start)
+}
+
+func (v *VFS) cleanupModified() {
+	for {
+		v.modM.Lock()
+		expire := time.Now().Add(time.Second * -30)
+		var cnt, deleted int
+		for i, t := range v.modifiedAt {
+			if t.Before(expire) {
+				delete(v.modifiedAt, i)
+				deleted++
+			}
+			cnt++
+			if cnt > 1000 {
+				break
+			}
+		}
+		v.modM.Unlock()
+		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-deleted*2)/(cnt+1)))
+	}
 }
 
 func initVFSMetrics(v *VFS, writer DataWriter, registerer prometheus.Registerer) {
