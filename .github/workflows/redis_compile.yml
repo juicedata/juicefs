@@ -57,7 +57,7 @@ jobs:
 
 
       - name: Log
-        if: ${{ failure() }}
+        if: ${{ always() }}
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
