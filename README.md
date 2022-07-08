@@ -6,7 +6,7 @@
     <a href="https://juicefs.com/docs/community/introduction"><img alt="English doc" src="https://img.shields.io/badge/docs-Doc%20Center-brightgreen" /></a>
 </p>
 
-**JuiceFS** is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under Apache License 2.0, particularly designed for the cloud-native environment. The data, stored via JuiceFS, will be persisted in object storage (e.g. Amazon S3), and the corresponding metadata can be persisted in various database engines such as Redis, MySQL, and SQLite based on the scenarios and requirements.
+**JuiceFS** is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under Apache License 2.0, particularly designed for the cloud-native environment. The data, stored via JuiceFS, will be persisted in object storage (e.g. Amazon S3), and the corresponding metadata can be persisted in various database engines such as Redis, MySQL, and TiKV based on the scenarios and requirements.
 
 With JuiceFS, massive cloud storage can be directly connected to big data, machine learning, artificial intelligence, and various application platforms in production environments. Without modifying code, the massive cloud storage can be used as efficiently as local storage.
 
@@ -19,7 +19,7 @@ With JuiceFS, massive cloud storage can be directly connected to big data, machi
 1. **Fully POSIX-compatible**: Use as a local file system, seamlessly docking with existing applications without breaking business workflow.
 2. **Fully Hadoop-compatible**: JuiceFS' [Hadoop Java SDK](docs/en/deployment/hadoop_java_sdk.md) is compatible with Hadoop 2.x and Hadoop 3.x as well as a variety of components in the Hadoop ecosystems.
 3. **S3-compatible**:  JuiceFS' [S3 Gateway](docs/en/deployment/s3_gateway.md) provides an S3-compatible interface.
-4. **Cloud Native**: A [Kubernetes CSI driver](docs/en/deployment/how_to_use_on_kubernetes.md) is provided for easily using JuiceFS in Kubernetes.
+4. **Cloud Native**: A [Kubernetes CSI Driver](docs/en/deployment/how_to_use_on_kubernetes.md) is provided for easily using JuiceFS in Kubernetes.
 5. **Shareable**: JuiceFS is a shared file storage that can be read and written by thousands of clients.
 6. **Strong Consistency**: The confirmed modification will be immediately visible on all the servers mounted with the same file system.
 7. **Outstanding Performance**: The latency can be as low as a few milliseconds, and the throughput can be expanded nearly unlimitedly (depending on the size of the object storage). [Test results](docs/en/benchmark/benchmark.md)
@@ -85,7 +85,7 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/deployment/h
 - [Using JuiceFS on Windows](docs/en/juicefs_on_windows.md)
 - [S3 Gateway](docs/en/deployment/s3_gateway.md)
 
-Please refer to [JuiceFS User Manual](docs/en/README.md) for more information.
+Please refer to [JuiceFS Document Center](https://juicefs.com/docs/community/introduction) for more information.
 
 ## POSIX Compatibility
 
@@ -216,9 +216,9 @@ The design of JuiceFS was inspired by [Google File System](https://research.goog
 
 JuiceFS supports many object storage. Please check out [this list](docs/en/reference/how_to_setup_object_storage.md#supported-object-storage) first. If the object storage you want to use is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
-### Can I use Redis cluster?
+### Can I use Redis Cluster as metadata engine?
 
-The simple answer is no. JuiceFS uses [Redis transaction](https://redis.io/topics/transactions) to guarantee the atomicity of metadata operations, which is not well supported by cluster mode. For this, sentinal or other Redis HA solution are needed.
+Yes. Since [v1.0.0 Beta3](https://github.com/juicedata/juicefs/releases/tag/v1.0.0-beta3) JuiceFS supports the use of [Redis Cluster](https://redis.io/docs/manual/scaling) as the metadata engine, but it should be noted that Redis Cluster requires that the keys of all operations in a transaction must be in the same hash slot, so a JuiceFS file system can only use one hash slot.
 
 See ["Redis Best Practices"](docs/en/administration/metadata/redis_best_practices.md) for more information.
 
