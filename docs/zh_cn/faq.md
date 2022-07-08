@@ -4,9 +4,9 @@
 
 已经支持了绝大部分对象存储，参考这个[列表](reference/how_to_setup_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
-## 是否可以使用 Redis 集群版？
+## 是否可以使用 Redis 集群版作为元数据引擎？
 
-不可以。JuiceFS 使用了 Redis 的[事务功能](https://redis.io/topics/transactions)来保证元数据操作的原子性，而分布式版还不支持分布式事务。哨兵节点或者其它的 Redis 高可用方法是需要的。
+可以。自 [v1.0.0 Beta3](https://github.com/juicedata/juicefs/releases/tag/v1.0.0-beta3) 版本开始 JuiceFS 支持使用 [Redis 集群版](https://redis.io/docs/manual/scaling)作为元数据引擎，不过需要注意的是 Redis 集群版要求一个事务中所有操作的 key 必须在同一个 hash slot 中，因此一个 JuiceFS 文件系统只能使用一个 hash slot。
 
 请查看[「Redis 最佳实践」](administration/metadata/redis_best_practices.md)了解更多信息。
 
