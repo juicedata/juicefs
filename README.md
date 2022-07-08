@@ -3,17 +3,16 @@
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-YD7e0JxWdesSEa9vY_f_DA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
     <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
-    <a href="https://juicefs.com/docs/community/introduction/"><img alt="English doc" src="https://img.shields.io/badge/docs-Doc%20Center-brightgreen" /></a>
-    <a href="README_CN.md"><img alt="中文手册" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87%E6%89%8B%E5%86%8C-brightgreen" /></a>
+    <a href="https://juicefs.com/docs/community/introduction"><img alt="English doc" src="https://img.shields.io/badge/docs-Doc%20Center-brightgreen" /></a>
 </p>
 
 **JuiceFS** is a high-performance [POSIX](https://en.wikipedia.org/wiki/POSIX) file system released under Apache License 2.0, particularly designed for the cloud-native environment. The data, stored via JuiceFS, will be persisted in object storage (e.g. Amazon S3), and the corresponding metadata can be persisted in various database engines such as Redis, MySQL, and SQLite based on the scenarios and requirements.
 
-With JuiceFS, massive cloud storage can be directly connected to big data, machine learning, artificial intelligence, and various application platforms in production environments. Without modifying code, the massive cloud storage can be used as efficiently as local storage. 
+With JuiceFS, massive cloud storage can be directly connected to big data, machine learning, artificial intelligence, and various application platforms in production environments. Without modifying code, the massive cloud storage can be used as efficiently as local storage.
 
 📺 **Video**: [What is JuiceFS?](https://www.youtube.com/watch?v=8RdZoBG-D6Y)
 
-📖 **Document**: [Quick start guide](https://juicefs.com/docs/community/quick_start_guide)
+📖 **Document**: [Quick Start Guide](https://juicefs.com/docs/community/quick_start_guide)
 
 ## Highlighted Features
 
@@ -62,7 +61,7 @@ Before you begin, make sure you have:
 2. Object storage for storing data blocks
 3. [JuiceFS Client](https://juicefs.com/docs/community/installation) downloaded and installed
 
-Please refer to [Quick Start Guide](https://juicefs.com/docs/community/quick_start_guide) in the community doc (or doc in [this repo](docs/en/getting-started/for_local.md)) to start using JuiceFS right away!
+Please refer to [Quick Start Guide](https://juicefs.com/docs/community/quick_start_guide) to start using JuiceFS right away!
 
 ### Command Reference
 
@@ -124,7 +123,7 @@ JuiceFS provides a subcommand that can run a few basic benchmarks to help you un
 
 ### Throughput
 
-A sequential read/write benchmark has also been performed on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio). 
+A sequential read/write benchmark has also been performed on JuiceFS, [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) by [fio](https://github.com/axboe/fio).
 
 ![Sequential Read Write Benchmark](docs/en/images/sequential-read-write-benchmark.svg)
 
@@ -176,7 +175,7 @@ You are also welcome to share your experience of using JuiceFS with us and other
 
 - Stabilize storage format
 - Support FoundationDB as metadata engine
-- User and group quotas 
+- User and group quotas
 - Directory quotas
 - Snapshot
 - Write once read many (WORM)
@@ -195,12 +194,12 @@ Welcome to join the [Discussions](https://github.com/juicedata/juicefs/discussio
 
 ## Usage Tracking
 
-JuiceFS collects **anonymous** usage data by default to help us better understand how the community is using JuiceFS. Only core metrics (e.g. version number) will be reported, and user data and any other sensitive data will not be included. The related code can be viwed [here](pkg/usage/usage.go). 
+JuiceFS collects **anonymous** usage data by default to help us better understand how the community is using JuiceFS. Only core metrics (e.g. version number) will be reported, and user data and any other sensitive data will not be included. The related code can be viwed [here](pkg/usage/usage.go).
 
 You could also disable reporting easily by command line option `--no-usage-report`:
 
 ```bash
-$ ./juicefs mount --no-usage-report
+juicefs mount --no-usage-report
 ```
 
 ## License
@@ -228,8 +227,6 @@ See ["Redis Best Practices"](docs/en/administration/metadata/redis_best_practice
 See ["Comparison with Others"](docs/en/comparison) for more information.
 
 For more FAQs, please see the [full list](docs/en/faq.md).
-
-
 
 ## Stargazers over time
 

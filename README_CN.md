@@ -3,13 +3,14 @@
     <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
     <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-YD7e0JxWdesSEa9vY_f_DA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
     <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
-    <a href="README.md"><img alt="English Docs" src="https://img.shields.io/badge/docs-English-informational" /></a>
+    <a href="https://juicefs.com/docs/zh/community/introduction"><img alt="English doc" src="https://img.shields.io/badge/docs-文档中心-brightgreen" /></a>
 </p>
-
 
 JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 Apache 2.0 开源协议下发布。使用 JuiceFS 存储数据，数据本身会被持久化在对象存储（例如，Amazon S3），而数据所对应的元数据可以根据场景需求被持久化在 Redis、MySQL、SQLite 等多种数据库引擎中。JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
 
-📺 **视频**: [什么是 JuiceFS?](https://www.bilibili.com/video/BV1HK4y197va/)
+📺 **视频**：[什么是 JuiceFS?](https://www.bilibili.com/video/BV1HK4y197va/)
+
+📖 **文档**：[快速上手指南](https://juicefs.com/docs/zh/community/quick_start_guide)
 
 ## 核心特性
 
@@ -52,13 +53,13 @@ JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高�
 
 ## 开始使用
 
-创建 JuiceFS ，需要以下 3 个方面的准备：
+创建 JuiceFS，需要以下 3 个方面的准备：
 
 1. 准备 Redis 数据库
 2. 准备对象存储
-3. 下载安装 JuiceFS 客户端
+3. 下载安装 [JuiceFS 客户端](https://juicefs.com/docs/zh/community/installation)
 
-请参照 [快速上手指南](docs/zh_cn/getting-started/for_local.md) 立即开始使用 JuiceFS！
+请参照 [快速上手指南](https://juicefs.com/docs/zh/community/quick_start_guide) 立即开始使用 JuiceFS！
 
 ### 命令索引
 
@@ -196,7 +197,7 @@ JuiceFS 的客户端会收集 **匿名** 使用数据来帮助我们更好地了
 你也可以通过下面的方式禁用它：
 
 ```bash
-$ ./juicefs mount --no-usage-report
+juicefs mount --no-usage-report
 ```
 
 ## 开源协议
@@ -224,3 +225,7 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 请查看[「同类技术对比」](docs/zh_cn/comparison)文档了解更多信息。
 
 更多 FAQ 请查看[完整列表](docs/zh_cn/faq.md)。
+
+## 历史加星
+
+[![Stargazers over time](https://starchart.cc/juicedata/juicefs.svg)](https://starchart.cc/juicedata/juicefs)
