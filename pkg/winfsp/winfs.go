@@ -1,6 +1,3 @@
-//go:build windows
-// +build windows
-
 /*
  * JuiceFS, Copyright 2020 Juicedata, Inc.
  *
@@ -537,7 +534,7 @@ func (j *juice) Readdir(path string,
 	for _, e := range entries {
 		name := string(e.Name)
 		if full {
-			if j.vfs.ModifiedSince(readAt) {
+			if j.vfs.ModifiedSince(e.Inode, readAt) {
 				if e2, err := j.vfs.GetAttr(ctx, e.Inode, 0); err == 0 {
 					e.Attr = e2.Attr
 				}
