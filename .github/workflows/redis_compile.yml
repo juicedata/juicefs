@@ -9,7 +9,6 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -57,7 +56,7 @@ jobs:
 
 
       - name: Log
-        if: ${{ always() }}
+        if: ${{ failure() }}
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
