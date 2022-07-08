@@ -152,15 +152,16 @@ func objbench(ctx *cli.Context) error {
 		pass = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, GREEN, pass, RESET_SEQ)
 		failed = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, failed, RESET_SEQ)
 	}
-	fmt.Println("Start Functional Testing ...")
 
-	var result [][]string
-	result = append(result, []string{"CATEGORY", "TEST", "RESULT"})
 	if !ctx.IsSet("skip-functional-tests") {
+		var result [][]string
+		result = append(result, []string{"CATEGORY", "TEST", "RESULT"})
+		fmt.Println("Start Functional Testing ...")
 		functionalTesting(blob, &result, tty)
+		printResult(result, -1, tty)
+		fmt.Println()
 	}
-	printResult(result, -1, tty)
-	fmt.Println("\nStart Performance Testing ...")
+	fmt.Println("Start Performance Testing ...")
 	var pResult [][]string
 	pResult = append(pResult, []string{"ITEM", "VALUE", "COST"})
 
