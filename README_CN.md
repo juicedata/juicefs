@@ -1,22 +1,26 @@
 <p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="docs/zh_cn/images/juicefs-logo.png" width="50%" /></a></p>
 <p align="center">
-    <a href="https://travis-ci.com/juicedata/juicefs"><img alt="Build Status" src="https://travis-ci.com/juicedata/juicefs.svg?token=jKSPwswpc2ph4uMtwpHa&branch=main" /></a>
-    <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-YD7e0JxWdesSEa9vY_f_DA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/Join%20JuiceFS/0abd59?icon=slack" /></a>
+    <a href="https://app.travis-ci.com/github/juicedata/juicefs"><img alt="Travis CI Status" src="https://img.shields.io/travis/com/juicedata/juicefs/main?label=Unit%20Testing" /></a>
+    <a href="https://github.com/juicedata/juicefs/actions/workflows/integrationtests.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/juicedata/juicefs/integrationtests?label=Integration%20Testing" /></a>
     <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
-    <a href="README.md"><img alt="English Docs" src="https://img.shields.io/badge/docs-English-informational" /></a>
+    <a href="https://juicefs.com/docs/zh/community/introduction"><img alt="English doc" src="https://img.shields.io/badge/docs-文档中心-brightgreen" /></a>
+    <a href="https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-YD7e0JxWdesSEa9vY_f_DA"><img alt="Join Slack" src="https://badgen.net/badge/Slack/加入%20JuiceFS/0abd59?icon=slack" /></a>
 </p>
 
+JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 Apache 2.0 开源协议下发布。使用 JuiceFS 存储数据，数据本身会被持久化在对象存储（例如 Amazon S3），而数据所对应的元数据可以根据场景需求被持久化在 Redis、MySQL、TiKV 等多种数据库引擎中。
 
-JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件系统，针对云原生环境特别优化设计，在 Apache 2.0 开源协议下发布。使用 JuiceFS 存储数据，数据本身会被持久化在对象存储（例如，Amazon S3），而数据所对应的元数据可以根据场景需求被持久化在 Redis、MySQL、SQLite 等多种数据库引擎中。JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
+JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
 
-📺 **视频**: [什么是 JuiceFS?](https://www.bilibili.com/video/BV1HK4y197va/)
+📺 **视频**：[什么是 JuiceFS?](https://www.bilibili.com/video/BV1HK4y197va/)
+
+📖 **文档**：[快速上手指南](https://juicefs.com/docs/zh/community/quick_start_guide)
 
 ## 核心特性
 
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
 2. **HDFS 兼容**：完整兼容 [HDFS API](docs/zh_cn/deployment/hadoop_java_sdk.md)，提供更强的元数据性能；
-3. **S3 兼容**：提供 [S3 Gateway](docs/zh_cn/deployment/s3_gateway.md) 实现 S3 协议兼容的访问接口；
-4. **云原生**：通过 [Kubernetes CSI driver](docs/zh_cn/deployment/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
+3. **S3 兼容**：提供 [S3 网关](docs/zh_cn/deployment/s3_gateway.md) 实现 S3 协议兼容的访问接口；
+4. **云原生**：通过 [Kubernetes CSI 驱动](docs/zh_cn/deployment/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
 5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
 7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](docs/zh_cn/benchmark/benchmark.md)；
@@ -52,13 +56,13 @@ JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高�
 
 ## 开始使用
 
-创建 JuiceFS ，需要以下 3 个方面的准备：
+创建 JuiceFS，需要以下 3 个方面的准备：
 
 1. 准备 Redis 数据库
 2. 准备对象存储
-3. 下载安装 JuiceFS 客户端
+3. 下载安装 [JuiceFS 客户端](https://juicefs.com/docs/zh/community/installation)
 
-请参照 [快速上手指南](docs/zh_cn/getting-started/for_local.md) 立即开始使用 JuiceFS！
+请参照 [快速上手指南](https://juicefs.com/docs/zh/community/quick_start_guide) 立即开始使用 JuiceFS！
 
 ### 命令索引
 
@@ -82,7 +86,7 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/deployment/hadoop_java_sdk.md) 与 H
 - [在 Windows 中使用 JuiceFS](docs/zh_cn/juicefs_on_windows.md)
 - [S3 网关](docs/zh_cn/deployment/s3_gateway.md)
 
-请查阅 [JuiceFS 用户手册](docs/zh_cn/README.md) 了解更多信息。
+请查阅 [JuiceFS 文档中心](https://juicefs.com/docs/zh/community/introduction) 了解更多信息。
 
 ## POSIX 兼容性测试
 
@@ -196,7 +200,7 @@ JuiceFS 的客户端会收集 **匿名** 使用数据来帮助我们更好地了
 你也可以通过下面的方式禁用它：
 
 ```bash
-$ ./juicefs mount --no-usage-report
+juicefs mount --no-usage-report
 ```
 
 ## 开源协议
@@ -213,9 +217,9 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 已经支持了绝大部分对象存储，参考这个[列表](docs/zh_cn/reference/how_to_setup_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
-### 是否可以使用 Redis 集群版？
+### 是否可以使用 Redis 集群版作为元数据引擎？
 
-不可以。JuiceFS 使用了 Redis 的[事务功能](https://redis.io/topics/transactions)来保证元数据操作的原子性，而分布式版还不支持分布式事务。哨兵节点或者其他的 Redis 高可用方法是需要的。
+可以。自 [v1.0.0 Beta3](https://github.com/juicedata/juicefs/releases/tag/v1.0.0-beta3) 版本开始 JuiceFS 支持使用 [Redis 集群版](https://redis.io/docs/manual/scaling)作为元数据引擎，不过需要注意的是 Redis 集群版要求一个事务中所有操作的 key 必须在同一个 hash slot 中，因此一个 JuiceFS 文件系统只能使用一个 hash slot。
 
 请查看[「Redis 最佳实践」](docs/zh_cn/administration/metadata/redis_best_practices.md)了解更多信息。
 
@@ -224,3 +228,7 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 请查看[「同类技术对比」](docs/zh_cn/comparison)文档了解更多信息。
 
 更多 FAQ 请查看[完整列表](docs/zh_cn/faq.md)。
+
+## 历史加星
+
+[![Stargazers over time](https://starchart.cc/juicedata/juicefs.svg)](https://starchart.cc/juicedata/juicefs)
