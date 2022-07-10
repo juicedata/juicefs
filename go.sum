@@ -598,8 +598,8 @@ github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
-github.com/juicedata/go-fuse/v2 v2.1.1-0.20220720062817-183cb227b353 h1:cIwY+HZQiRQAYoCItVNCkpFDyPahgZzJeNM3rMgZSOE=
-github.com/juicedata/go-fuse/v2 v2.1.1-0.20220720062817-183cb227b353/go.mod h1:oRyA5eK+pvJyv5otpO/DgccS8y/RvYMaO00GgRLGryc=
+github.com/juicedata/go-fuse/v2 v2.1.1-0.20220822092405-ece777deb343 h1:fbMz7gSlX5eYwuWNB3Z1+dK2q2Ekg5tw6uSYYTOdZrw=
+github.com/juicedata/go-fuse/v2 v2.1.1-0.20220822092405-ece777deb343/go.mod h1:oRyA5eK+pvJyv5otpO/DgccS8y/RvYMaO00GgRLGryc=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3PTt7OSoahYc4nM0HY67SvK0YyS0GLwA=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
 github.com/juicedata/minio v0.0.0-20220613143934-cee0571a1b03 h1:+0jiEkr6qE5Zm2+LilAv5pV/+V+V1XZ5KUv0pmXZHhQ=

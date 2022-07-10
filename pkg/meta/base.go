@@ -834,6 +834,19 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 	if attr != nil && !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}
+	if attr.Flags&FlagImmutable != 0 {
+		if flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0 {
+			return syscall.EPERM
+		}
+	}
+	if attr.Flags&FlagAppend != 0 {
+		if (flags&(syscall.O_WRONLY|syscall.O_RDWR)) != 0 && (flags&syscall.O_APPEND) == 0 {
+			return syscall.EPERM
+		}
+		if flags&syscall.O_TRUNC != 0 {
+			return syscall.EPERM
+		}
+	}
 	if err == 0 {
 		m.of.Open(inode, attr)
 	}

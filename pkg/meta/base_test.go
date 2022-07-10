@@ -69,6 +69,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
 	testConcurrentDir(t, m)
+	testAttrFlags(t, m)
 	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
@@ -1425,4 +1426,161 @@ func testConcurrentDir(t *testing.T, m Meta) {
 		}(i)
 	}
 	g.Wait()
+}
+
+func testAttrFlags(t *testing.T, m Meta) {
+	ctx := Background
+	var attr = &Attr{}
+	var inode Ino
+	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, nil); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	attr.Flags = FlagAppend
+	if st := m.SetAttr(ctx, inode, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_WRONLY, attr); st != syscall.EPERM {
+		t.Fatalf("open f: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_WRONLY|syscall.O_APPEND, attr); st != 0 {
+		t.Fatalf("open f: %s", st)
+	}
+	attr.Flags = FlagAppend | FlagImmutable
+	if st := m.SetAttr(ctx, inode, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_WRONLY, attr); st != syscall.EPERM {
+		t.Fatalf("open f: %s", st)
+	}
+	if st := m.Open(ctx, inode, syscall.O_WRONLY|syscall.O_APPEND, attr); st != syscall.EPERM {
+		t.Fatalf("open f: %s", st)
+	}
+
+	var d Ino
+	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &d, attr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	attr.Flags = FlagAppend
+	if st := m.SetAttr(ctx, d, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr d: %s", st)
+	}
+	if st := m.Create(ctx, d, "f", 0644, 022, 0, &inode, nil); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	if st := m.Unlink(ctx, d, "f"); st != syscall.EPERM {
+		t.Fatalf("unlink f: %s", st)
+	}
+	attr.Flags = FlagAppend | FlagImmutable
+	if st := m.SetAttr(ctx, d, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr d: %s", st)
+	}
+	if st := m.Create(ctx, d, "f2", 0644, 022, 0, &inode, nil); st != syscall.EPERM {
+		t.Fatalf("create f2: %s", st)
+	}
+
+	var Immutable Ino
+	if st := m.Mkdir(ctx, 1, "ImmutFile", 0640, 022, 0, &Immutable, attr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	attr.Flags = FlagImmutable
+	if st := m.SetAttr(ctx, Immutable, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr d: %s", st)
+	}
+	if st := m.Create(ctx, Immutable, "f2", 0644, 022, 0, &inode, nil); st != syscall.EPERM {
+		t.Fatalf("create f2: %s", st)
+	}
+
+	var src1, dst1, mfile Ino
+	attr.Flags = 0
+	if st := m.Mkdir(ctx, 1, "src1", 0640, 022, 0, &src1, attr); st != 0 {
+		t.Fatalf("mkdir src1: %s", st)
+	}
+	if st := m.Create(ctx, src1, "mfile", 0644, 022, 0, &mfile, nil); st != 0 {
+		t.Fatalf("create mfile: %s", st)
+	}
+	if st := m.Mkdir(ctx, 1, "dst1", 0640, 022, 0, &dst1, attr); st != 0 {
+		t.Fatalf("mkdir dst1: %s", st)
+	}
+
+	attr.Flags = FlagAppend
+	if st := m.SetAttr(ctx, src1, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr d: %s", st)
+	}
+	if st := m.Rename(ctx, src1, "mfile", dst1, "mfile", 0, &mfile, attr); st != syscall.EPERM {
+		t.Fatalf("rename d: %s", st)
+	}
+
+	attr.Flags = FlagImmutable
+	if st := m.SetAttr(ctx, src1, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr d: %s", st)
+	}
+	if st := m.Rename(ctx, src1, "mfile", dst1, "mfile", 0, &mfile, attr); st != syscall.EPERM {
+		t.Fatalf("rename d: %s", st)
+	}
+
+	if st := m.SetAttr(ctx, dst1, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr d: %s", st)
+	}
+	if st := m.Rename(ctx, src1, "mfile", dst1, "mfile", 0, &mfile, attr); st != syscall.EPERM {
+		t.Fatalf("rename d: %s", st)
+	}
+
+	var delFile Ino
+	if st := m.Create(ctx, 1, "delfile", 0644, 022, 0, &delFile, nil); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	attr.Flags = FlagImmutable | FlagAppend
+	if st := m.SetAttr(ctx, delFile, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr d: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "delfile"); st != syscall.EPERM {
+		t.Fatalf("unlink f: %s", st)
+	}
+
+	var fallocFile Ino
+	if st := m.Create(ctx, 1, "fallocfile", 0644, 022, 0, &fallocFile, nil); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	attr.Flags = FlagAppend
+	if st := m.SetAttr(ctx, fallocFile, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize, 0, 1024); st != 0 {
+		t.Fatalf("fallocate f: %s", st)
+	}
+	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize|fallocZeroRange, 0, 1024); st != syscall.EPERM {
+		t.Fatalf("fallocate f: %s", st)
+	}
+	attr.Flags = FlagImmutable
+	if st := m.SetAttr(ctx, fallocFile, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize, 0, 1024); st != syscall.EPERM {
+		t.Fatalf("fallocate f: %s", st)
+	}
+
+	var copysrcFile, copydstFile Ino
+	if st := m.Create(ctx, 1, "copysrcfile", 0644, 022, 0, &copysrcFile, nil); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	if st := m.Create(ctx, 1, "copydstfile", 0644, 022, 0, &copydstFile, nil); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	if st := m.Fallocate(ctx, copysrcFile, 0, 0, 1024); st != 0 {
+		t.Fatalf("fallocate f: %s", st)
+	}
+	attr.Flags = FlagAppend
+	if st := m.SetAttr(ctx, copydstFile, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil); st != syscall.EPERM {
+		t.Fatalf("copy_file_range f: %s", st)
+	}
+	attr.Flags = FlagImmutable
+	if st := m.SetAttr(ctx, copydstFile, SetAttrFlag, 0, attr); st != 0 {
+		t.Fatalf("setattr f: %s", st)
+	}
+	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil); st != syscall.EPERM {
+		t.Fatalf("copy_file_range f: %s", st)
+	}
 }
