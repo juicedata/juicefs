@@ -125,7 +125,7 @@ KeyDB 的数据复制是异步的，使用 `Active Active` "双活"功能可能�
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
 
 # 使用 unix socket 方式
-postgres:///<database-name>?host=<socket-directories-path>
+postgres:///<database-name>?host=<socket-directories-path>[&user=<user>&password=<password>]
 ```
 
 其中，`[]` 括起来的是可选项，其它部分为必选项。
