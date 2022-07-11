@@ -619,6 +619,9 @@ juicefs info [command options] PATH or INODE
 `--recursive, -r`<br />
 递归获取所有子目录的概要信息（注意：当指定一个目录结构很复杂的路径时可能会耗时很长） (默认: false)
 
+`--raw (默认: false)`<br />
+打印内部的原始信息
+
 ### juicefs bench
 
 #### 描述
