@@ -677,7 +677,7 @@ F${inode} -> flocks
 type flock struct {
 	sid   uint64
 	owner uint64
-    ltype uint8
+	ltype uint8
 }
 ```
 
@@ -691,10 +691,10 @@ P${inode} -> plocks
 
 ```go
 type plock struct {
-    sid 	uint64
-    owner 	uint64
-    size 	uint32
-    records []byte
+	sid 	uint64
+	owner 	uint64
+	size 	uint32
+	records []byte
 }
 ```
 
@@ -854,4 +854,4 @@ objects:
 +------------+---------------------------------+----------+---------+----------+
 ```
 
-表中空的 objectName 表示文件空洞，读取时均为 0。可以看到，输出结果与上述分析一致。
+表中空的 objectName 表示文件空洞，读取时均为 0。可以看到，输出结果与之前分析一致。
