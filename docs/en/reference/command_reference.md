@@ -621,6 +621,9 @@ use inode instead of path (current dir should be inside JuiceFS) (default: false
 `--recursive, -r`<br />
 get summary of directories recursively (NOTE: it may take a long time for huge trees) (default: false)
 
+`--raw (default: false)`<br />
+show internal raw information
+
 ### juicefs bench
 
 #### Description
