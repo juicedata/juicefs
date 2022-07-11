@@ -166,7 +166,7 @@ parentInode, name -> type, inode
 inode -> parentInode, links
 ```
 
-其中 links 是 parentInode 的计数，因为硬链接可创建在与源文件相同目录下。
+其中 links 是 parentInode 的计数，因为一个目录中可以创建多个硬链接，这些硬连接共享 inode。
 
 #### 3.1.8 Chunk
 
@@ -735,17 +735,17 @@ SS${sid}${inode} -> 1
 
 这里 Value 值仅用来占位。
 
-## 2 数据对象
+## 4 数据对象
 
-默认情况下 Block 的最大 size 为 4 MiB，每个 Block 上传后即为对象存储中的一个对象，其命名格式为 `${fsname}/chunks/${hash}/${basename}`，其中：
+Block 是 JuiceFS 管理数据的基本单元，其大小默认为 4 MiB，且可在文件系统格式化时配置，允许调整的区间范围为 [64 KiB, 16 MiB]。每个 Block 上传后即为对象存储中的一个对象，其命名格式为 `${fsname}/chunks/${hash}/${basename}`，其中：
 
 - fsname 是文件系统名称
 - “chunks” 为固定字符串，代表 JuiceFS 的数据对象
 - hash 是根据 basename 算出来的哈希值，起到一定的隔离管理的作用
 - basename 是对象的有效名称，格式为 `${sliceID}_${index}_${size}`，其中：
   - sliceID 为该对象所属 Slice 的 ID，JuiceFS 中每个 Slice 都有一个全局唯一的 ID
-  - index 是该对象在所属 Slice 中的序号，一个 Slice 最多能拆成 16 个 Blocks，因此其取值范围为 [0, 16)
-  - size 是该 Block 的大小，其取值范围为 (0, 4 MiB]
+  - index 是该对象在所属 Slice 中的序号，默认一个 Slice 最多能拆成 16 个 Blocks，因此其取值范围为 [0, 16)
+  - size 是该 Block 的大小，默认情况下其取值范围为 (0, 4 MiB]
 
 目前使用的 hash 算法有两种，以 basename 中的 sliceID 为参数，根据文件系统格式化时的 [HashPrefix](#3.1.1-Setting) 配置选择：
 
@@ -766,11 +766,11 @@ jfstest/chunks/0/0/1_1_4194304
 jfstest/chunks/0/0/1_2_2097152
 ```
 
-值得一提的是，这里的 size 是 Block 的大小，不一定与对象存储中实际对象的大小相等。当启用了数据压缩或数据加密功能后，Block 的大小不变，但对象的大小会发生变化。
+值得一提的是，这里的 size 是 Block 中原始数据的大小，不一定与对象存储中实际对象的大小相等。当启用了数据压缩或数据加密功能后，Block 的大小不变，但对象的大小会发生变化。
 
-## 4 解析元数据和数据
+## 5 解析元数据和数据
 
-### 4.1 根据路径查找文件
+### 5.1 根据路径查找文件
 
 根据 [Edge](#3.1.6-Edge) 的设计，元数据引擎中只记录了每个目录的直接子节点。当应用提供一个路径来访问文件时，JuiceFS 需要逐级查找。现在假设应用想打开文件 `/dir1/dir2/testfile`，则需要：
 
@@ -781,7 +781,7 @@ jfstest/chunks/0/0/1_2_2097152
 
 在以上步骤中，任何一步搜寻失败都会导致该路径指向的文件未找到。
 
-### 4.2 构建文件内容
+### 5.2 构建文件内容
 
 上一节中，我们已经可以根据文件的路径找到此文件，并获取到其属性。根据文件属性中的 inode 和 size 字段，即可找到跟文件内容相关的元数据。现在假设有个文件的 inode 为 100，size 为 160 MiB，那么该文件一共有 `(size-1) / 64 MiB + 1 = 3` 个 Chunks，如下：
 
