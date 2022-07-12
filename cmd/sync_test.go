@@ -64,7 +64,7 @@ func TestSync(t *testing.T) {
 	}
 }
 
-func Test_isS3PathType(t *testing.T) {
+func Test_isPathType(t *testing.T) {
 
 	tests := []struct {
 		endpoint string
@@ -83,11 +83,16 @@ func Test_isS3PathType(t *testing.T) {
 		{"s3-ap-southeast-1amazonaws.com:8080", false},
 		{"s3-ap-southeast-1", false},
 		{"s3-ap-southeast-1:8080", false},
+
+		{"ks3-cn-beijing.ksyuncs.com", true},
+		{".ks3-cn-beijing.ksyuncs.com", false},
+		{"zhijian-test.ks3-cn-beijing.ksyuncs.com", false},
+		{"zhijian-test.test2.ks3-cn-beijing.ksyuncs.com", false},
 	}
 	for _, tt := range tests {
 		t.Run("Test host", func(t *testing.T) {
-			if got := isS3PathType(tt.endpoint); got != tt.want {
-				t.Errorf("isS3PathType() = %v, want %v", got, tt.want)
+			if got := isPathType(tt.endpoint); got != tt.want {
+				t.Errorf("isPathType() = %v, want %v", got, tt.want)
 			}
 		})
 	}

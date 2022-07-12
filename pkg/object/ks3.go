@@ -270,6 +270,7 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		bucket = hostParts[0]
 		edp = hostParts[1]
 	}
+	bucket = strings.Split(bucket, "/")[0]
 	region := strings.Split(edp, ".")[0][3:]
 	region = strings.TrimLeft(region, "-")
 	if strings.HasSuffix(uri.Host, "ksyun.com") {

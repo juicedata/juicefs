@@ -252,7 +252,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		conf.Links = false
 	}
 
-	isS3PathTypeUrl := isS3PathType(endpoint)
+	isPathTypeUrl := isPathType(endpoint)
 
 	if name == "file" {
 		endpoint = u.Path
@@ -262,7 +262,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	} else {
 		endpoint = "http://" + endpoint
 	}
-	if name == "minio" || name == "s3" && isS3PathTypeUrl {
+	if name == "minio" || name == "s3" && isPathTypeUrl || name == "ks3" && isPathTypeUrl {
 		// bucket name is part of path
 		endpoint += u.Path
 	}
@@ -284,8 +284,8 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			// skip bucket name
 			store = object.WithPrefix(store, strings.SplitN(u.Path[1:], "/", 2)[1])
 		}
-	case "s3":
-		if isS3PathTypeUrl && strings.Count(u.Path, "/") > 1 {
+	case "s3", "ks3":
+		if isPathTypeUrl && strings.Count(u.Path, "/") > 1 {
 			store = object.WithPrefix(store, strings.SplitN(u.Path[1:], "/", 2)[1])
 		} else if len(u.Path) > 1 {
 			store = object.WithPrefix(store, u.Path[1:])
@@ -298,9 +298,9 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	return store, nil
 }
 
-func isS3PathType(endpoint string) bool {
+func isPathType(endpoint string) bool {
 	//localhost[:8080] 127.0.0.1[:8080]  s3.ap-southeast-1.amazonaws.com[:8080] s3-ap-southeast-1.amazonaws.com[:8080]
-	pattern := `^((localhost)|(s3[.-].*\.amazonaws\.com)|((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|[1-9])\.((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.){2}(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)))?(:\d*)?$`
+	pattern := `^(([^\.]*\.)?ksyuncs.com$|(localhost)|(s3[.-].*\.amazonaws\.com)|((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|[1-9])\.((1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.){2}(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)))?(:\d*)?$`
 	return regexp.MustCompile(pattern).MatchString(endpoint)
 }
 
