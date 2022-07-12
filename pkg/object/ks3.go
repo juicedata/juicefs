@@ -257,9 +257,20 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	}
 	uri, _ := url.ParseRequestURI(endpoint)
 	ssl := strings.ToLower(uri.Scheme) == "https"
-	hostParts := strings.Split(uri.Host, ".")
-	bucket := hostParts[0]
-	region := hostParts[1][3:]
+	var pathStyle bool
+	if uri.Path != "" {
+		pathStyle = true
+	}
+	var edp, bucket string
+	if pathStyle {
+		edp = uri.Host
+		bucket = strings.TrimLeft(uri.Path, "/")
+	} else {
+		hostParts := strings.SplitN(uri.Host, ".", 2)
+		bucket = hostParts[0]
+		edp = hostParts[1]
+	}
+	region := strings.Split(edp, ".")[0][3:]
 	region = strings.TrimLeft(region, "-")
 	if strings.HasSuffix(uri.Host, "ksyun.com") {
 		region = strings.TrimSuffix(region, "-internal")
@@ -277,10 +288,10 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	}
 	awsConfig := &aws.Config{
 		Region:           region,
-		Endpoint:         strings.SplitN(uri.Host, ".", 2)[1],
+		Endpoint:         edp,
 		DisableSSL:       !ssl,
 		HTTPClient:       httpClient,
-		S3ForcePathStyle: true,
+		S3ForcePathStyle: pathStyle,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 

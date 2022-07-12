@@ -528,10 +528,26 @@ $ juicefs format \
 
 金山云 KS3 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://docs.ksyun.com/documents/6761)，你可以根据实际的场景选用。
 
+金山云 KS3 同时支持两种风格的 bucket 格式，这两种格式都可以被正确解析，但稍有区别，如果 bucket 格式设置为虚拟托管类型，则 juicefs 对金山云 KS3 的请求同样为虚拟托管类型，否则为路径类型。
+据我们所知金山云 KS3 对新创建的 bucket 仅支持虚拟托管风格的请求，所以在使用前请确认 bucket 对请求类型的支持情况。
+
+- 虚拟托管类型：`https://<bucket>.<endpoint>`
+- 路径类型：`https://<endpoint>/<bucket>`
+
 ```bash
+# 虚拟托管类型
 $ juicefs format \
     --storage ks3 \
     --bucket https://<bucket>.<endpoint> \
+    ... \
+    myjfs
+```
+
+```bash
+# 路径类型
+$ juicefs format \
+    --storage ks3 \
+    --bucket https://<endpoint>/<bucket> \
     ... \
     myjfs
 ```

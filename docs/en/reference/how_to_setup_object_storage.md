@@ -524,10 +524,26 @@ Please follow [this document](https://docs.ksyun.com/documents/1386) to learn ho
 
 KS3 provides [multiple endpoints](https://docs.ksyun.com/documents/6761) for each region, depending on your network (e.g. public or internal). Please choose an appropriate endpoint. For example:
 
+KS3 supports both styles of bucket formats at the same time. Both formats can be parsed correctly, but there is a slight difference. If the bucket format is set to a virtual hosting type, the juicefs request for KS3 is also a virtual-host-style type, otherwise it is a path-style type.
+As far as we know, KS3 only supports virtual-hosting-style requests for newly created buckets, so please confirm bucket's scope of support for request types before use.
+
+- Virtual-hosted-style：`https://<bucket>.<endpoint>`
+- Path-style：`https://<endpoint>/<bucket>`
+
 ```bash
+# Virtual-hosted-style
 $ juicefs format \
     --storage ks3 \
     --bucket https://<bucket>.<endpoint> \
+    ... \
+    myjfs
+```
+
+```bash
+# Path-style
+$ juicefs format \
+    --storage ks3 \
+    --bucket https://<endpoint>/<bucket> \
     ... \
     myjfs
 ```
