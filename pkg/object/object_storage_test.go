@@ -363,7 +363,7 @@ func TestAzure(t *testing.T) {
 		t.SkipNow()
 	}
 	//https://containersName.core.windows.net
-	abs, _ := newWabs(os.Getenv("AZURE_ENDPOINT"),
+	abs, _ := newWasb(os.Getenv("AZURE_ENDPOINT"),
 		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"), "")
 	testStorage(t, abs)
 }
