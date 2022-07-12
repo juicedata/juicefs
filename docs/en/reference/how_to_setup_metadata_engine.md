@@ -127,7 +127,7 @@ When using PostgreSQL as the metadata storage engine, you need to create a datab
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
 
 # use unix socket
-postgres:///<database-name>?host=<socket-directories-path>
+postgres:///<database-name>?host=<socket-directories-path>[&user=<user>&password=<password>]
 ```
 
 Where `[]` enclosed are optional and the rest are mandatory.
