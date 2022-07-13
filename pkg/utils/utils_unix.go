@@ -21,6 +21,8 @@ package utils
 
 import (
 	"os"
+	"os/exec"
+	"strings"
 	"syscall"
 )
 
@@ -44,4 +46,16 @@ func GetDev(fpath string) int { // ID of device containing file
 		return int(sst.Dev)
 	}
 	return -1
+}
+
+func GetKernelInfo() (string, error) {
+	kernel, err := exec.Command("uname", "-a").Output()
+	if err != nil {
+		return "", err
+	}
+
+	// Ignore hostname information
+	tmp := strings.Split(string(kernel), " ")
+	result := strings.Join(append(tmp[:1], tmp[2:]...), " ")
+	return result, nil
 }
