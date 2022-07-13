@@ -116,6 +116,7 @@ func FormatBytes(n uint64) string {
 	if n < 1024 {
 		return fmt.Sprintf("%d Bytes", n)
 	}
+
 	units := []string{"K", "M", "G", "T", "P", "E"}
 	m := n
 	i := 0
