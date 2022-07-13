@@ -226,7 +226,7 @@ func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
 func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	body, err := m.en.doLoad()
 	if err == nil && len(body) == 0 {
-		err = fmt.Errorf("database is not formatted")
+		err = fmt.Errorf("database is not formatted, please run `juicefs format ...` first")
 	}
 	if err != nil {
 		return nil, err
