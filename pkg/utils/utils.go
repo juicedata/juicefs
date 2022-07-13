@@ -114,15 +114,14 @@ func StringContains(s []string, e string) bool {
 
 func FormatBytes(n uint64) string {
 	if n < 1024 {
-
 		return fmt.Sprintf("%d Bytes", n)
 	}
-
 	units := []string{"K", "M", "G", "T", "P", "E"}
 	m := n
 	i := 0
 	for ; i < len(units)-1 && m >= 1<<20; i++ {
 		m = m >> 10
 	}
+
 	return fmt.Sprintf("%.2f %siB (%d Bytes)", float64(m)/1024.0, units[i], n)
 }
