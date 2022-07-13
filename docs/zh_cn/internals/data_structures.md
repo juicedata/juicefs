@@ -735,42 +735,9 @@ SS${sid}${inode} -> 1
 
 这里 Value 值仅用来占位。
 
-## 4 数据对象
+## 4 解析元数据
 
-Block 是 JuiceFS 管理数据的基本单元，其大小默认为 4 MiB，且可在文件系统格式化时配置，允许调整的区间范围为 [64 KiB, 16 MiB]。每个 Block 上传后即为对象存储中的一个对象，其命名格式为 `${fsname}/chunks/${hash}/${basename}`，其中：
-
-- fsname 是文件系统名称
-- “chunks” 为固定字符串，代表 JuiceFS 的数据对象
-- hash 是根据 basename 算出来的哈希值，起到一定的隔离管理的作用
-- basename 是对象的有效名称，格式为 `${sliceID}_${index}_${size}`，其中：
-  - sliceID 为该对象所属 Slice 的 ID，JuiceFS 中每个 Slice 都有一个全局唯一的 ID
-  - index 是该对象在所属 Slice 中的序号，默认一个 Slice 最多能拆成 16 个 Blocks，因此其取值范围为 [0, 16)
-  - size 是该 Block 的大小，默认情况下其取值范围为 (0, 4 MiB]
-
-目前使用的 hash 算法有两种，以 basename 中的 sliceID 为参数，根据文件系统格式化时的 [HashPrefix](#3.1.1-Setting) 配置选择：
-
-```go
-func hash(sliceID int) string {
-	if HashPrefix {
-		return fmt.Sprintf("%02X/%d", sliceID%256, sliceID/1000/1000)
-	}
-	return fmt.Sprintf("%d/%d", sliceID/1000/1000, sliceID/1000)
-}
-```
-
-假设现在一个名为 `jfstest` 的文件系统中写入了一段连续的 10 MiB 数据，内部赋予的 SliceID 为 1，且未开启 HashPrefix，那么在对象存储中则会产生以下三个对象：
-
-```
-jfstest/chunks/0/0/1_0_4194304
-jfstest/chunks/0/0/1_1_4194304
-jfstest/chunks/0/0/1_2_2097152
-```
-
-值得一提的是，这里的 size 是 Block 中原始数据的大小，不一定与对象存储中实际对象的大小相等。当启用了数据压缩或数据加密功能后，Block 的大小不变，但对象的大小会发生变化。
-
-## 5 解析元数据和数据
-
-### 5.1 根据路径查找文件
+### 4.1 根据路径查找文件
 
 根据 [Edge](#3.1.6-Edge) 的设计，元数据引擎中只记录了每个目录的直接子节点。当应用提供一个路径来访问文件时，JuiceFS 需要逐级查找。现在假设应用想打开文件 `/dir1/dir2/testfile`，则需要：
 
@@ -781,7 +748,7 @@ jfstest/chunks/0/0/1_2_2097152
 
 在以上步骤中，任何一步搜寻失败都会导致该路径指向的文件未找到。
 
-### 5.2 构建文件内容
+### 4.2 构建文件内容
 
 上一节中，我们已经可以根据文件的路径找到此文件，并获取到其属性。根据文件属性中的 inode 和 size 字段，即可找到跟文件内容相关的元数据。现在假设有个文件的 inode 为 100，size 为 160 MiB，那么该文件一共有 `(size-1) / 64 MiB + 1 = 3` 个 Chunks，如下：
 
@@ -826,7 +793,7 @@ Slice{id: 10, size: 30M, off: 26M, len:  4M}
 Slice{id:  0, size: 24M, off:   0, len: 24M} // 实际这一段也会省去
 ```
 
-根据[数据对象命名规则](#4-数据对象)，即可得到此 Chunk 全 64MiB 的数据分布如下：
+根据[数据对象命名规则](#4.3-数据对象)，即可得到此 Chunk 全 64MiB 的数据分布如下：
 
 ```
  0 ~ 10M: 补零
@@ -866,3 +833,46 @@ objects:
 ```
 
 表中空的 objectName 表示文件空洞，读取时均为 0。可以看到，输出结果与之前分析一致。
+
+### 4.3 数据对象
+
+Block 是 JuiceFS 管理数据的基本单元，其大小默认为 4 MiB，且可在文件系统格式化时配置，允许调整的区间范围为 [64 KiB, 16 MiB]。每个 Block 上传后即为对象存储中的一个对象，其命名格式为 `${fsname}/chunks/${hash}/${basename}`，其中：
+
+- fsname 是文件系统名称
+- “chunks” 为固定字符串，代表 JuiceFS 的数据对象
+- hash 是根据 basename 算出来的哈希值，起到一定的隔离管理的作用
+- basename 是对象的有效名称，格式为 `${sliceID}_${index}_${size}`，其中：
+  - sliceID 为该对象所属 Slice 的 ID，JuiceFS 中每个 Slice 都有一个全局唯一的 ID
+  - index 是该对象在所属 Slice 中的序号，默认一个 Slice 最多能拆成 16 个 Blocks，因此其取值范围为 [0, 16)
+  - size 是该 Block 的大小，默认情况下其取值范围为 (0, 4 MiB]
+
+目前使用的 hash 算法有两种，以 basename 中的 sliceID 为参数，根据文件系统格式化时的 [HashPrefix](#3.1.1-Setting) 配置选择：
+
+```go
+func hash(sliceID int) string {
+	if HashPrefix {
+		return fmt.Sprintf("%02X/%d", sliceID%256, sliceID/1000/1000)
+	}
+	return fmt.Sprintf("%d/%d", sliceID/1000/1000, sliceID/1000)
+}
+```
+
+假设现在一个名为 `jfstest` 的文件系统中写入了一段连续的 10 MiB 数据，内部赋予的 SliceID 为 1，且未开启 HashPrefix，那么在对象存储中则会产生以下三个对象：
+
+```
+jfstest/chunks/0/0/1_0_4194304
+jfstest/chunks/0/0/1_1_4194304
+jfstest/chunks/0/0/1_2_2097152
+```
+
+值得一提的是，这里的 size 是 Block 中原始数据的大小，而不是对象存储中实际对象的大小。默认情况下，原始数据拆分后直接写到对象存储，此时 size 与对象大小是相等的。但当开启了数据压缩或数据加密功能后，实际对象的大小会发生变化，此时其与 size 很可能不再相同。
+
+#### 4.3.1 数据压缩
+
+在文件系统格式化时可以通过 `--compress <value>` 参数配置压缩算法（支持 lz4 和 zstd），使得此文件系统的所有数据 Block 会经过压缩后再上传到对象存储。此时对象名称仍与默认配置相同，且内容为原始数据经压缩算法后的结果，不携带任何其它元信息。因此，文件[文统格式化信息](#3.1.1-Setting)中的压缩算法不允许修改，否则会导致读取已有数据失败。
+
+#### 4.3.2 数据加密
+
+在文件系统格式化时可以通过 `--encrypt-rsa-key <value>` 参数配置 RSA 私钥以开启[静态数据加密](https://juicefs.com/docs/zh/community/security/encrypt#%E9%9D%99%E6%80%81%E6%95%B0%E6%8D%AE%E5%8A%A0%E5%AF%86)功能，使得此文件系统的所有数据 Block 会经过加密后再上传到对象存储。此时对象名称仍与默认配置相同，内容为一段 header 加上数据经加密算法后的结果。这段 header 里记录了用来解密的对称密钥以及随机种子，而对称密钥本身又经过 RSA 私钥加密。因此，文件[文统格式化信息](#3.1.1-Setting)中的 RSA 私钥目前不允许修改，否则会导致读取已有数据失败。
+
+**备注**：若同时开启压缩和加密，原始数据会先压缩再加密后上传到对象存储。
