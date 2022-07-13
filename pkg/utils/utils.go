@@ -100,6 +100,7 @@ func GuessMimeType(key string) string {
 	if !strings.ContainsRune(mimeType, '/') {
 		mimeType = "application/octet-stream"
 	}
+
 	return mimeType
 }
 
