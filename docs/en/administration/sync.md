@@ -24,10 +24,14 @@ Arguments:
 
 Address syntax follows `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`.
 
+:::tip
+Minio only supports path style, and the address format is `minio://[ACCESS_KEY:SECRET_KEY@]ENDPOINT/BUCKET[/PREFIX]`
+:::
+
 Explanation:
 
 - `NAME` is the storage type like `s3` or `oss`. See [available storage services](../reference/how_to_setup_object_storage.md#supported-object-storage) for more details;
-- `ACCESS_KEY` and `SECRET_KEY` are the credentials for accessing object storage APIs;
+- `ACCESS_KEY` and `SECRET_KEY` are the credentials for accessing object storage APIs; If special characters are included, it needs to be escaped and replaced manually. For example, `/` needs to be replaced with its escape character `%2F`.
 - `BUCKET[.ENDPOINT]` is the address of the object storage;
 - `PREFIX` is the common prefix of the directories to synchronize, optional.
 
