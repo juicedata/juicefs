@@ -381,7 +381,7 @@ func format(c *cli.Context) error {
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
 		}
-	} else if err.Error() == "database is not formatted" {
+	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
 		create = true
 		format = &meta.Format{
 			Name:         name,
