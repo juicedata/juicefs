@@ -921,7 +921,7 @@ func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 }
 
 func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
-	if inode == RootInode {
+	if inode == RootInode || inode == TrashInode {
 		return map[Ino]int{1: 1}
 	}
 	var attr Attr
