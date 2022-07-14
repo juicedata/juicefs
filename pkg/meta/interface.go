@@ -424,6 +424,10 @@ func GetPaths(m Meta, ctx Context, inode Ino) []string {
 		return []string{"/"}
 	}
 
+	if inode == TrashInode {
+		return []string{"/.trash"}
+	}
+
 	base := m.getBase()
 	outside := "path not shown because it's outside of the mounted root"
 	getDirPath := func(ino Ino) (string, error) {
@@ -446,6 +450,9 @@ func GetPaths(m Meta, ctx Context, inode Ino) []string {
 					name = string(e.Name)
 					break
 				}
+			}
+			if attr.Parent == RootInode && ino == TrashInode {
+				name = TrashName
 			}
 			if name == "" {
 				return "", fmt.Errorf("entry %d/%d not found", attr.Parent, ino)
