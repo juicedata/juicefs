@@ -95,12 +95,12 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		return nil, fmt.Errorf("url parse %s: %s", uri, err)
 	}
 	values := u.Query()
-	query := utils.QueryMap{Values: &values}
-	minRetryBackoff := query.Duration("min-retry-backoff", "min_retry_backoff", time.Millisecond*20)
-	maxRetryBackoff := query.Duration("max-retry-backoff", "max_retry_backoff", time.Second*10)
-	readTimeout := query.Duration("read-timeout", "read_timeout", time.Second*30)
-	writeTimeout := query.Duration("write-timeout", "write_timeout", time.Second*5)
-	routeRead := query.Pop("route-read")
+	query := queryMap{&values}
+	minRetryBackoff := query.duration("min-retry-backoff", "min_retry_backoff", time.Millisecond*20)
+	maxRetryBackoff := query.duration("max-retry-backoff", "max_retry_backoff", time.Second*10)
+	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
+	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
+	routeRead := query.pop("route-read")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host

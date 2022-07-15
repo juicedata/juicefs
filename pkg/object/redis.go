@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 // redisStore stores data chunks into Redis.
@@ -169,14 +168,6 @@ func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("url parse %s: %s", uri, err)
 	}
-	values := u.Query()
-	query := utils.QueryMap{Values: &values}
-	minRetryBackoff := query.Duration("min-retry-backoff", "min_retry_backoff", time.Millisecond*20)
-	maxRetryBackoff := query.Duration("max-retry-backoff", "max_retry_backoff", time.Second*10)
-	readTimeout := query.Duration("read-timeout", "read_timeout", time.Second*30)
-	writeTimeout := query.Duration("write-timeout", "write_timeout", time.Second*5)
-	u.RawQuery = values.Encode()
-
 	hosts := u.Host
 	opt, err := redis.ParseURL(u.String())
 	if err != nil {
@@ -191,10 +182,6 @@ func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
 	if opt.MaxRetries == 0 {
 		opt.MaxRetries = -1 // Redis use -1 to disable retries
 	}
-	opt.MinRetryBackoff = minRetryBackoff
-	opt.MaxRetryBackoff = maxRetryBackoff
-	opt.ReadTimeout = readTimeout
-	opt.WriteTimeout = writeTimeout
 	var rdb redis.UniversalClient
 	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
 		var fopt redis.FailoverOptions
@@ -233,7 +220,8 @@ func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
 			} else {
 				rdb = c
 			}
-		} else {
+		}
+		if rdb == nil {
 			logger.Fatalf("cluster mode redis is not supported as object storage for the time being")
 		}
 	}
