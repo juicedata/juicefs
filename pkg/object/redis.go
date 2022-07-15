@@ -25,24 +25,28 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 // redisStore stores data chunks into Redis.
 type redisStore struct {
 	DefaultObjectStorage
-	rdb *redis.Client
+	rdb redis.UniversalClient
+	uri string
 }
 
 var c = context.TODO()
 
 func (r *redisStore) String() string {
-	return fmt.Sprintf("redis://%s/", r.rdb.Options().Addr)
+	return r.uri + "/"
 }
 
 func (r *redisStore) Create() error {
@@ -160,10 +164,23 @@ func (t *redisStore) Head(key string) (Object, error) {
 	}, err
 }
 
-func newRedis(url, user, passwd, token string) (ObjectStorage, error) {
-	opt, err := redis.ParseURL(url)
+func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
+	u, err := url.Parse(uri)
 	if err != nil {
-		return nil, fmt.Errorf("parse %s: %s", url, err)
+		return nil, fmt.Errorf("url parse %s: %s", uri, err)
+	}
+	values := u.Query()
+	query := utils.QueryMap{Values: &values}
+	minRetryBackoff := query.Duration("min-retry-backoff", "min_retry_backoff", time.Millisecond*20)
+	maxRetryBackoff := query.Duration("max-retry-backoff", "max_retry_backoff", time.Second*10)
+	readTimeout := query.Duration("read-timeout", "read_timeout", time.Second*30)
+	writeTimeout := query.Duration("write-timeout", "write_timeout", time.Second*5)
+	u.RawQuery = values.Encode()
+
+	hosts := u.Host
+	opt, err := redis.ParseURL(u.String())
+	if err != nil {
+		return nil, fmt.Errorf("redis parse %s: %s", uri, err)
 	}
 	if user != "" {
 		opt.Username = user
@@ -171,8 +188,57 @@ func newRedis(url, user, passwd, token string) (ObjectStorage, error) {
 	if passwd != "" {
 		opt.Password = passwd
 	}
-	rdb := redis.NewClient(opt)
-	return &redisStore{DefaultObjectStorage{}, rdb}, nil
+	if opt.MaxRetries == 0 {
+		opt.MaxRetries = -1 // Redis use -1 to disable retries
+	}
+	opt.MinRetryBackoff = minRetryBackoff
+	opt.MaxRetryBackoff = maxRetryBackoff
+	opt.ReadTimeout = readTimeout
+	opt.WriteTimeout = writeTimeout
+	var rdb redis.UniversalClient
+	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
+		var fopt redis.FailoverOptions
+		ps := strings.Split(hosts, ",")
+		fopt.MasterName = ps[0]
+		fopt.SentinelAddrs = ps[1:]
+		_, port, _ := net.SplitHostPort(fopt.SentinelAddrs[len(fopt.SentinelAddrs)-1])
+		if port == "" {
+			port = "26379"
+		}
+		for i, addr := range fopt.SentinelAddrs {
+			h, p, e := net.SplitHostPort(addr)
+			if e != nil {
+				fopt.SentinelAddrs[i] = net.JoinHostPort(addr, port)
+			} else if p == "" {
+				fopt.SentinelAddrs[i] = net.JoinHostPort(h, port)
+			}
+		}
+		fopt.SentinelPassword = os.Getenv("SENTINEL_PASSWORD_FOR_OBJ")
+		fopt.DB = opt.DB
+		fopt.Username = opt.Username
+		fopt.Password = opt.Password
+		fopt.TLSConfig = opt.TLSConfig
+		fopt.MaxRetries = opt.MaxRetries
+		fopt.MinRetryBackoff = opt.MinRetryBackoff
+		fopt.MaxRetryBackoff = opt.MaxRetryBackoff
+		fopt.ReadTimeout = opt.ReadTimeout
+		fopt.WriteTimeout = opt.WriteTimeout
+		rdb = redis.NewFailoverClient(&fopt)
+	} else {
+		if !strings.Contains(hosts, ",") {
+			c := redis.NewClient(opt)
+			info, err := c.ClusterInfo(context.Background()).Result()
+			if err != nil && strings.Contains(err.Error(), "cluster mode") || err == nil && strings.Contains(info, "cluster_state:") {
+				logger.Infof("redis %s is in cluster mode", hosts)
+			} else {
+				rdb = c
+			}
+		} else {
+			logger.Fatalf("cluster mode redis is not supported as object storage for the time being")
+		}
+	}
+	u.User = new(url.Userinfo)
+	return &redisStore{DefaultObjectStorage{}, rdb, u.String()}, nil
 }
 
 func init() {

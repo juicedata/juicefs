@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"mime"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -123,4 +124,34 @@ func FormatBytes(n uint64) string {
 		m = m >> 10
 	}
 	return fmt.Sprintf("%.2f %siB (%d Bytes)", float64(m)/1024.0, units[i], n)
+}
+
+type QueryMap struct {
+	*url.Values
+}
+
+var logger = GetLogger("juicefs")
+
+func (qm *QueryMap) Duration(key, originalKey string, d time.Duration) time.Duration {
+	val := qm.Get(key)
+	if val == "" {
+		oVal := qm.Get(originalKey)
+		if oVal == "" {
+			return d
+		}
+		val = oVal
+	}
+
+	qm.Del(key)
+	if dur, err := time.ParseDuration(val); err == nil {
+		return dur
+	} else {
+		logger.Warnf("Parse duration %s for key %s: %s", val, key, err)
+		return d
+	}
+}
+
+func (qm *QueryMap) Pop(key string) string {
+	defer qm.Del(key)
+	return qm.Get(key)
 }
