@@ -1792,7 +1792,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Block Cache Hit Rate",
+      "title": "Block Cache Hit Ratio",
       "tooltip": {
         "shared": false,
         "sort": 0,
