@@ -6,10 +6,11 @@ on:
 #      - 'release-**'
 #    paths-ignore:
 #      - 'docs/**'
-#  pull_request:
-#    #The branches below must be a subset of the branches above
-#    branches:
-#      - 'release-**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'main'
+      - 'release-**'
 #    paths-ignore:
 #      - 'docs/**'
   schedule:
@@ -131,8 +132,18 @@ jobs:
           --driver-memory 2G \
           --executor-cores 1 \
           --conf spark.sql.shuffle.partitions=10 \
+          -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_run.scala \
+          || spark-shell \
+          --jars /tmp/spark-sql-perf/target/scala-2.12/spark-sql-perf*.jar \
+          --master spark://localhost:7077 \
+          --deploy-mode client \
+          --executor-memory 2G \
+          --driver-memory 2G \
+          --executor-cores 1 \
+          --conf spark.sql.shuffle.partitions=10 \
           -i ~/work/juicefs/juicefs/.github/workflows/resources/tpcds_run.scala
-          
+
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
