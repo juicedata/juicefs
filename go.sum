@@ -607,8 +607,8 @@ github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
 github.com/juicedata/minio v0.0.0-20220613143934-cee0571a1b03 h1:+0jiEkr6qE5Zm2+LilAv5pV/+V+V1XZ5KUv0pmXZHhQ=
 github.com/juicedata/minio v0.0.0-20220613143934-cee0571a1b03/go.mod h1:ILQUt98Xz3GF9KgJKeGQ81c0RFaRSrUZmZ8oSb/7QxU=
-github.com/juicedata/mpb/v7 v7.0.4-0.20220718072945-23f63cb1194a h1:S1b9i4ncDbKYaOWv8ZNgUEX8uNJGvOA+mXs2u3/rOUs=
-github.com/juicedata/mpb/v7 v7.0.4-0.20220718072945-23f63cb1194a/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
+github.com/juicedata/mpb/v7 v7.0.4-0.20220719014258-68df1356cfba h1:YSCPvyONPDp/ivKgRanFpNEHh3N5/0UsKmwbbKQIuGE=
+github.com/juicedata/mpb/v7 v7.0.4-0.20220719014258-68df1356cfba/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
 github.com/juju/ratelimit v1.0.1 h1:+7AIFJVQ0EQgq/K9+0Krm7m530Du7tIz0METWzN0RgY=
 github.com/juju/ratelimit v1.0.1/go.mod h1:qapgC/Gy+xNh9UxzV13HGGl/6UXNN+ct+vwSgWNm/qk=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
