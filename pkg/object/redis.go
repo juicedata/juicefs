@@ -222,7 +222,18 @@ func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
 			}
 		}
 		if rdb == nil {
-			logger.Fatalf("cluster mode redis is not supported as object storage for the time being")
+			var copt redis.ClusterOptions
+			copt.Addrs = strings.Split(hosts, ",")
+			copt.MaxRedirects = 1
+			copt.Username = opt.Username
+			copt.Password = opt.Password
+			copt.TLSConfig = opt.TLSConfig
+			copt.MaxRetries = opt.MaxRetries
+			copt.MinRetryBackoff = opt.MinRetryBackoff
+			copt.MaxRetryBackoff = opt.MaxRetryBackoff
+			copt.ReadTimeout = opt.ReadTimeout
+			copt.WriteTimeout = opt.WriteTimeout
+			rdb = redis.NewClusterClient(&copt)
 		}
 	}
 	u.User = new(url.Userinfo)
