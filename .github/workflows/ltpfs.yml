@@ -54,6 +54,7 @@ jobs:
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
 
       - name: LTP FS
+        timeout-minutes: 50
         run: |
           wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20210927.tar.gz
           mkdir ltp
@@ -73,7 +74,7 @@ jobs:
           hello
 
       - name: Log
-        if: ${{ failure() }}
+        if: ${{ always() }}
         run: |
           sudo tail -n 100 /opt/ltp/output/result.log.failed
 
