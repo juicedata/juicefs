@@ -1,6 +1,6 @@
 ---
-sidebar_label: Read/Write/Delete Processing Flow
-sidebar_position: 2
+sidebar_label: Data Processing Flow
+sidebar_position: 3
 slug: /internals/io_processing
 ---
 # An introduction to the workflow of processing read and write

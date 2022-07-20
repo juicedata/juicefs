@@ -1,9 +1,9 @@
 ---
 sidebar_label: 读写请求处理流程
-sidebar_position: 2
+sidebar_position: 3
 slug: /internals/io_processing
 ---
-# JuiceFS 读写请求处理流程介绍
+# 读写请求处理流程介绍
 
 ## 写入流程
 
