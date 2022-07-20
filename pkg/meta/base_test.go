@@ -154,7 +154,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	_ = m.Close(ctx, inode)
 	var tino Ino
-	if st := m.Lookup(ctx, inode, ".", &tino, attr); st != syscall.ENOTDIR {
+	if st := m.Lookup(ctx, inode, ".", &tino, attr); st != 0 {
 		t.Fatalf("lookup /d/f/.: %s", st)
 	}
 	if st := m.Lookup(ctx, inode, "..", &tino, attr); st != syscall.ENOTDIR {
