@@ -44,6 +44,8 @@ used_memory_dataset_perc: 70.12%
 JuiceFS 使用 「[Redis 事务](https://redis.io/docs/manual/transactions)」保证元数据操作的原子性。但由于 Redis Cluster 集群模式不支持事务（Transactions），因此 Redis 集群不可用作 JuiceFS 元数据存储。如有 Redis 高可用需求，请使用 Sentinel 哨兵模式。
 :::
 
+### Sentinel 模式
+
 [Redis 哨兵](https://redis.io/docs/manual/sentinel) 是 Redis 官方的高可用解决方案，它提供以下功能：
 
 - **监控**，哨兵会不断检查您的 master 实例和 replica 实例是否按预期工作。
@@ -78,6 +80,18 @@ juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 
 需要注意由于 Redis 主节点的数据是异步复制到副本节点，因此有可能读到的元数据不是最新的。
 :::
+
+### Cluster 模式
+Juicefs 同样支持 cluster 模式的 redis 作为元数据引擎，redis cluster 模式的 `META-URL` 为 `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/DB]`，例如：
+
+```shell
+juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002 ~/jfs
+```
+
+:::tip 提示
+Redis cluster 虽然不支持 db 隔离机制，但是在其作为元数据引擎的时候，Juicefs 利用 redis cluster [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) 的特性，通过将 `{db}` 作为 key 的前缀实现了 cluster 模式下的隔离与事务保证，因此 cluster 模式下的 db 仍旧有隔离的效果。可以通过设置不同的 `db` 让一个 redis cluster 同时作为多个文件系统的元数据库。
+:::
+
 
 ## 数据持久性
 
