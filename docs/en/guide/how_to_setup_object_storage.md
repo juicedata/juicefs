@@ -1,6 +1,6 @@
 ---
 sidebar_label: How to Setup Object Storage
-sidebar_position: 4
+sidebar_position: 2
 slug: /how_to_setup_object_storage
 ---
 

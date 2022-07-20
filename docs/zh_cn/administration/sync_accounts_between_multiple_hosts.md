@@ -1,10 +1,10 @@
 ---
 sidebar_label: 多主机间同步账户
-sidebar_position: 10
+sidebar_position: 6
 slug: /sync_accounts_between_multiple_hosts
 ---
 
-# JuiceFS 多主机间同步账户
+# 多主机间同步账户
 
 JuiceFS 支持 POSIX 兼容的 ACL，以目录或文件的粒度管理权限。该行为与本地文件系统相同。
 

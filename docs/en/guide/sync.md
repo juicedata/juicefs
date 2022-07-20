@@ -1,5 +1,6 @@
 ---
 sidebar_label: Synchronization
+position: 4
 ---
 
 # Migrate and Synchronize Data across Clouds with JuiceFS Sync

@@ -1,6 +1,6 @@
 ---
 sidebar_label: Cache
-sidebar_position: 5
+sidebar_position: 3
 slug: /cache_management
 ---
 # Cache

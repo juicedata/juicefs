@@ -1,9 +1,9 @@
 ---
 sidebar_label: 如何设置元数据引擎
-sidebar_position: 3
+sidebar_position: 1
 slug: /databases_for_metadata
 ---
-# JuiceFS 如何设置元数据引擎
+# 如何设置元数据引擎
 
 :::tip 版本提示
 本文档使用的环境变量 `META_PASSWORD` 是 JuiceFS v1.0 新增功能，旧版客户端需要升级后才能使用。

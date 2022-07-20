@@ -1,8 +1,8 @@
 ---
 sidebar_label: 存储配额
-sidebar_position: 7
+sidebar_position: 5
 ---
-# JuiceFS 存储配额
+# 存储配额
 
 JuiceFS v0.14.2 开始支持文件系统级别的存储配额，该功能包括：
 

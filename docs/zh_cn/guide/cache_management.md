@@ -1,6 +1,6 @@
 ---
 sidebar_label: 缓存
-sidebar_position: 5
+sidebar_position: 3
 slug: /cache_management
 ---
 # 缓存
