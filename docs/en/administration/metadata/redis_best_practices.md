@@ -11,6 +11,8 @@ This is a guide about Redis best practices. Redis is a critical component in Jui
 It's highly recommended to use Redis service managed by public cloud provider if possible. See ["Recommended Managed Redis Service"](#recommended-managed-redis-service) for more information.
 :::
 
+### Sentinel mode
+
 If you still want to operate Redis by yourself in production environment, please keep in mind that JuiceFS requires Redis version 4.0+. Moreover, it's recommended to pick an [official stable version](https://redis.io/download), and read the following contents before deploying Redis.
 
 :::note
@@ -77,6 +79,18 @@ For v0.16+, the `PASSWORD` in the URL will be used to connect Redis server, the 
 Since JuiceFS v1.0.0, it is supported to connect only Redis replica nodes when mounting file systems to reduce the load on Redis master node. In order to enable this feature, you must mount the JuiceFS file system in read-only mode (that is, set the `--read-only` mount option), and connect to the metadata engine through the Redis Sentinel. Finally, you need to add `?route-read=replica` to the end of the metadata URL. For example: `redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2?route-read=replica`.
 
 It should be noted that since the data of the Redis master node is asynchronously replicated to the replica nodes, it is possible that the metadata read may not be the latest.
+:::
+
+
+### Cluster mode
+Juicefs also supports redis of cluster mode as meta engine, the `META-URL` format is `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/DB]`. For example:
+
+```shell
+juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/1 ~/jfs
+```
+
+:::tip 
+Although Redis cluster does not support db isolation mechanism, when it is a metadata engine, Juicefs uses the function of redis cluster [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) to implement isolation and transaction assurance in cluster mode by using `{db}` as the prefix of key, so db in cluster mode still has an isolation effect.
 :::
 
 ## Data Durability

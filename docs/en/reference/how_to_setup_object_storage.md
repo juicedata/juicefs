@@ -819,12 +819,39 @@ $ juicefs format \
 
 [Redis](https://redis.io) can be used as both metadata storage for JuiceFS and as data storage, but when using Redis as a data storage, it is recommended not to store large-scale data.
 
+### Standalone
 The `--bucket` option format is `redis://<host>:<port>/<db>`. The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
 ```bash
 $ juicefs format \
     --storage redis \
     --bucket redis://<host>:<port>/<db> \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+### Redis sentinel
+In Redis Sentinel mode, the format of '--bucket' option is `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`. The sentinel password is declared using the 'SENTINEL_PASSWORD_FOR_OBJ' environment variable. For example:
+
+```bash
+$ export SENTINEL_PASSWORD_FOR_OBJ=sentinel_password
+$ juicefs format \
+    --storage redis \
+    --bucket redis://masterName,1.2.3.4,1.2.5.6:26379/2  \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+### Redis cluster
+In Redis cluster mode, the format of `--bucket` option is `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`. For example:
+
+```bash
+$ juicefs format \
+    --storage redis \
+    --bucket redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002  \
     --access-key <username> \
     --secret-key <password> \
     ... \
