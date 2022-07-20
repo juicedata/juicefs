@@ -72,6 +72,11 @@ jobs:
           sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
           hello
 
+      - name: Log
+        if: ${{ failure() }}
+        run: |
+          sudo tail -n 100 /opt/ltp/output/result.log.failed
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
