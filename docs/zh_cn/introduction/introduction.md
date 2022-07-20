@@ -1,12 +1,10 @@
 ---
-title: JuiceFS 是什么？
-sidebar_label: JuiceFS 是什么？
+title: JuiceFS 简介
+sidebar_label: JuiceFS 简介
 sidebar_position: 1
 slug: .
 ---
-#
-
-![JuiceFS LOGO](../images/juicefs-logo.png)
+# 简介
 
 **JuiceFS** 是一款面向云原生设计的高性能共享文件系统，在 Apache 2.0 开源协议下发布。提供完备的 [POSIX](https://en.wikipedia.org/wiki/POSIX) 兼容性，可将几乎所有对象存储接入本地作为海量本地磁盘使用，亦可同时在跨平台、跨地区的不同主机上挂载读写。
 
@@ -26,29 +24,6 @@ JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析�
 8. **数据安全**：支持传输中加密（encryption in transit）和静态加密（encryption at rest），[查看详情](../security/encrypt.md)；
 9. **文件锁**：支持 BSD 锁（flock）和 POSIX 锁（fcntl）；
 10. **数据压缩**：支持 [LZ4](https://lz4.github.io/lz4) 和 [Zstandard](https://facebook.github.io/zstd) 压缩算法，节省存储空间。
-
-## 技术架构
-
-JuiceFS 文件系统由三个部分组成：
-
-1. **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes CSI Driver、S3 Gateway 等文件系统接口的实现；
-2. **数据存储**：存储数据本身，支持本地磁盘、公有云或私有云对象存储、HDFS 等介质；
-3. **元数据引擎**：存储数据对应的元数据（metadata）包含文件名、文件大小、权限组、创建修改时间和目录结构等，支持 Redis、MySQL、TiKV 等多种引擎；
-
-![image](../images/juicefs-arch-new.png)
-
-作为文件系统，JuiceFS 会分别处理数据及其对应的元数据，数据会被存储在对象存储中，元数据会被存储在元数据引擎中。
-
-在 **数据存储** 方面，JuiceFS 支持几乎所有的公有云对象存储，同时也支持 OpenStack Swift、Ceph、MinIO 等支持私有化部署的开源对象存储。
-
-在 **元数据存储** 方面，JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等作为元数据服务引擎，也将陆续实现更多元数据存储引擎。欢迎 [提交 Issue](https://github.com/juicedata/juicefs/issues) 反馈你的需求。
-
-在 **文件系统接口** 实现方面：
-
-- 通过 **FUSE**，JuiceFS 文件系统能够以 POSIX 兼容的方式挂载到服务器，将海量云端存储直接当做本地存储来使用。
-- 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。
-- 通过 **Kubernetes CSI Driver**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。
-- 通过 **S3 Gateway**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。
 
 ## 应用场景
 
