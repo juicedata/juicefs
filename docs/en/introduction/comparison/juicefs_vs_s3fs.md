@@ -20,7 +20,7 @@ In addition, when it comes to large files, although S3FS can solve the problem o
 
 JuiceFS avoids such problems by splitting individual files into chunks locally according to specific rules (default 4MiB) before uploading, regardless of their size. Any rewriting and appending of files eventually becomes the generation of new data blocks instead of modifying already generated data blocks, greatly reducing the waste of time and bandwidth resources.
 
-For a detailed description of the architecture of JuiceFS, please refer to [documentation](../introduction/architecture.md).
+For a detailed description of the architecture of JuiceFS, please refer to [documentation](../../introduction/architecture.md).
 
 ## Caching
 
@@ -30,7 +30,7 @@ S3FS does not limit the cache space limit by default, for larger bucket may caus
 
 JuiceFS uses a completely different caching approach than S3FS. First, JuiceFS guarantees data consistency. Secondly, JuiceFS defines a default disk cache usage limit of 100GiB, which can be freely adjusted by users as needed, and by default ensures that no more space is used when disk free space falls below 10%. When the cache usage limit is reached, JuiceFS will automatically clean up using an LRU-like algorithm to ensure that cache is always available for subsequent read and write operations.
 
-For more on JuiceFS caching, see [documentation](../administration/cache_management.md).
+For more on JuiceFS caching, see [documentation](../../administration/cache_management.md).
 
 ## Features
 

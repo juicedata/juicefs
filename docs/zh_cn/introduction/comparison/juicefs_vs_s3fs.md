@@ -20,7 +20,7 @@ JuiceFS 采用数据和元数据分离的技术架构，任何文件都会先按
 
 JuiceFS 则规避了此类问题，不论单个文件尺寸多大，在上传之前都会预先在本地按照特定规则拆分成数据块（默认 4MiB）。对任何文件的改写和追加最终都会变成生成新的数据块，而不是修改已生成的数据块，大大减少了时间和带宽资源的浪费。
 
-有关 JuiceFS 的详细架构介绍请参考[文档](../introduction/architecture.md)。
+有关 JuiceFS 的详细架构介绍请参考[文档](../../introduction/architecture.md)。
 
 ## 缓存机制
 
@@ -30,7 +30,7 @@ S3FS 默认不限制缓存空间上限，对于较大的 Buket 可能导致缓�
 
 在缓存方面，JuiceFS 与 S3FS 完全不同，首先，JuiceFS 是保证数据一致性的。其次，JuiceFS 默认定义了 100GiB 的磁盘缓存使用上限，用户可以根据需要自由调整该值，而且默认会确保磁盘剩余空间低于 10% 时不再使用更多空间。当缓存用量达到上限，JuiceFS 会采用类似 LRU 的算法自动进行清理，确保后续的读写操作始终有缓存可用。
 
-有关 JuiceFS 缓存的更多内容请参考[文档](../administration/cache_management.md)。
+有关 JuiceFS 缓存的更多内容请参考[文档](../../administration/cache_management.md)。
 
 ## 功能特性
 
