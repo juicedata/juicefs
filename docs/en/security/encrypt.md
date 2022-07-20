@@ -1,3 +1,6 @@
+---
+sidebar_position: 1
+---
 # Data Encryption
 
 JuiceFS provides data encrytion from two aspects:
