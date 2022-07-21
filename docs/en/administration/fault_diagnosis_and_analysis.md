@@ -1,6 +1,6 @@
 ---
 sidebar_label: Fault Diagnosis and Analysis
-sidebar_position: 9
+sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
 

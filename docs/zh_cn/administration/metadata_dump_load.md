@@ -1,9 +1,9 @@
 ---
 sidebar_label: 元数据备份和恢复
-sidebar_position: 4
+sidebar_position: 2
 slug: /metadata_dump_load
 ---
-# JuiceFS 元数据备份和恢复
+# 元数据备份和恢复
 
 :::tip 提示
 - JuiceFS v0.15.2 开始支持元数据手动备份、恢复和引擎间迁移。

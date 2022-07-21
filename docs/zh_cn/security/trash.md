@@ -1,3 +1,6 @@
+---
+sidebar_position: 2
+---
 # 回收站
 
 :::note 注意

@@ -3,7 +3,7 @@ sidebar_label: 技术架构
 sidebar_position: 2
 slug: /architecture
 ---
-# JuiceFS 技术架构
+# 技术架构
 
 本文介绍 JuiceFS 的核心架构，以及 JuiceFS 存储文件的原理。
 

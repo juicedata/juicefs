@@ -1,6 +1,6 @@
 ---
 sidebar_label: Sync Accounts between Multiple Hosts
-sidebar_position: 10
+sidebar_position: 6
 slug: /sync_accounts_between_multiple_hosts
 ---
 
