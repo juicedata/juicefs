@@ -1,10 +1,10 @@
 ---
 sidebar_label: 故障诊断和分析
-sidebar_position: 9
+sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
 
-# JuiceFS 故障诊断和分析
+# 故障诊断和分析
 
 ## 客户端日志
 
