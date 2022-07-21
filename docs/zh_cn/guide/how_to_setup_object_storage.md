@@ -821,12 +821,40 @@ $ juicefs format \
 
 Redis 既可以作为 JuiceFS 的元数据存储，也可以作为数据存储，但当使用 Redis 作为数据存储时，建议不要存储大规模数据。
 
+### 单机模式
 `--bucket` 选项格式为 `redis://<host>:<port>/<db>`。`--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 
 ```bash
 $ juicefs format \
     --storage redis \
     --bucket redis://<host>:<port>/<db> \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+### Redis sentinel
+Redis sentinel 模式下，`--bucket` 选项格式为 `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`。sentinel 的密码则需要通过 `SENTINEL_PASSWORD_FOR_OBJ` 环境变量来声明。例如：
+
+```bash
+$ export SENTINEL_PASSWORD_FOR_OBJ=sentinel_password
+$ juicefs format \
+    --storage redis \
+    --bucket redis://masterName,1.2.3.4,1.2.5.6:26379/2  \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+### Redis cluster
+Redis cluster 模式下，`--bucket` 选项格式为 `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`。例如：
+
+```bash
+$ juicefs format \
+    --storage redis \
+    --bucket redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002  \
     --access-key <username> \
     --secret-key <password> \
     ... \

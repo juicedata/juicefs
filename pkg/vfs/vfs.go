@@ -77,6 +77,12 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 			return
 		}
 	}
+	if IsSpecialNode(parent) && name == "." {
+		if n := getInternalNode(parent); n != nil {
+			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
+			return
+		}
+	}
 	defer func() {
 		logit(ctx, "lookup (%d,%s): %s%s", parent, name, strerr(err), (*Entry)(entry))
 	}()

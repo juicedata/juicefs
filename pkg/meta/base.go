@@ -497,9 +497,6 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		if st := m.GetAttr(ctx, parent, attr); st != 0 {
 			return st
 		}
-		if attr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
 		*inode = parent
 		return 0
 	}
