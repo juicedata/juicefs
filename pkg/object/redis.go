@@ -38,8 +38,10 @@ import (
 // redisStore stores data chunks into Redis.
 type redisStore struct {
 	DefaultObjectStorage
-	rdb redis.UniversalClient
-	uri string
+	rdb       redis.UniversalClient
+	uri       string
+	isCluster bool
+	opt       *redis.Options
 }
 
 var c = context.TODO()
@@ -80,28 +82,59 @@ func (r *redisStore) Delete(key string) error {
 }
 
 func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
+	var scanCli []redis.UniversalClient
+	if t.isCluster {
+		/**
+		ClusterNodes result sample:
+		cluster nodes: a43f22ff3b2d07ed46db8964bcd68be22b1bf3b8 127.0.0.1:7001@17001 master - 0 1658404421000 2 connected 5461-10922
+		411d0d6e1ac7b0276400362971073f69e68fa195 127.0.0.1:7000@17000 master - 0 1658404422183 1 connected 0-5460
+		d5a92ff5fdcfaa5d8d15195a2742a1ceae0a5f79 127.0.0.1:7002@17002 myself,master - 0 1658404420000 3 connected 10923-16383 [29-<-411d0d6e1ac7b0276400362971073f69e68fa195]
+		cbc49ef4b24df6ee5a2dbedfc22e7e6970a18305 127.0.0.1:7003@17003 slave a43f22ff3b2d07ed46db8964bcd68be22b1bf3b8 0 1658404421177 2 connected
+		*/
+		nodes := strings.Split(strings.TrimPrefix(t.rdb.ClusterNodes(context.Background()).String(), "cluster nodes: "), "\n")
+		for _, node := range nodes {
+			infos := strings.SplitN(node, " ", 4)
+			if len(infos) >= 3 && strings.Contains(infos[2], "master") {
+				opt := new(redis.Options)
+				*opt = *t.opt
+				opt.Addr = strings.Split(infos[1], "@")[0]
+				scanCli = append(scanCli, redis.NewClient(opt))
+			}
+		}
+		if len(scanCli) == 0 {
+			return nil, fmt.Errorf("not found master node of redis cluster")
+		}
+		defer func() {
+			for _, mCli := range scanCli {
+				_ = mCli.Close()
+			}
+		}()
+	} else {
+		scanCli = append(scanCli, t.rdb)
+	}
 	batch := 1000
 	var objs = make(chan Object, batch)
 	var keyList []string
 	var cursor uint64
-	for {
-		// FIXME: this will be really slow for many objects
-		keys, c, err := t.rdb.Scan(context.TODO(), cursor, prefix+"*", int64(batch)).Result()
-		if err != nil {
-			logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
-			return nil, err
-		}
-		for _, key := range keys {
-			if key > marker {
-				keyList = append(keyList, key)
+	for _, mCli := range scanCli {
+		for {
+			// FIXME: this will be really slow for many objects
+			keys, c, err := mCli.Scan(context.TODO(), cursor, prefix+"*", int64(batch)).Result()
+			if err != nil {
+				logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
+				return nil, err
 			}
+			for _, key := range keys {
+				if key > marker {
+					keyList = append(keyList, key)
+				}
+			}
+			if c == 0 {
+				break
+			}
+			cursor = c
 		}
-		if c == 0 {
-			break
-		}
-		cursor = c
 	}
-
 	sort.Strings(keyList)
 
 	go func() {
@@ -183,6 +216,7 @@ func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
 		opt.MaxRetries = -1 // Redis use -1 to disable retries
 	}
 	var rdb redis.UniversalClient
+	var isCluster bool
 	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
 		var fopt redis.FailoverOptions
 		ps := strings.Split(hosts, ",")
@@ -234,10 +268,11 @@ func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
 			copt.ReadTimeout = opt.ReadTimeout
 			copt.WriteTimeout = opt.WriteTimeout
 			rdb = redis.NewClusterClient(&copt)
+			isCluster = true
 		}
 	}
 	u.User = new(url.Userinfo)
-	return &redisStore{DefaultObjectStorage{}, rdb, u.String()}, nil
+	return &redisStore{DefaultObjectStorage{}, rdb, u.String(), isCluster, opt}, nil
 }
 
 func init() {
